@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 mod error;
-mod message;
+pub mod message;
 pub mod request_manager;
 mod state;
 
@@ -18,9 +18,11 @@ pub mod utils;
 
 pub use self::{
     error::{Error, ErrorKind},
+    state::{restore, StateSyncConfiguration},
     synchronization_graph::{
-        SharedSynchronizationGraph, SyncGraphStatistics, SynchronizationGraph,
-        SynchronizationGraphInner, SynchronizationGraphNode,
+        SharedSynchronizationGraph, SyncGraphConfig, SyncGraphStatistics,
+        SynchronizationGraph, SynchronizationGraphInner,
+        SynchronizationGraphNode,
     },
     synchronization_phases::{
         CatchUpCheckpointPhase, CatchUpRecoverBlockFromDbPhase,
@@ -30,24 +32,43 @@ pub use self::{
     },
     synchronization_protocol_handler::{
         LocalMessageTask, ProtocolConfiguration, SyncHandlerWorkType,
-        SynchronizationProtocolHandler,
+        SynchronizationProtocolHandler, CHECK_RPC_REQUEST_TIMER,
     },
     synchronization_service::{
         SharedSynchronizationService, SynchronizationService,
     },
     synchronization_state::{SynchronizationPeerState, SynchronizationState},
 };
+use network::service::ProtocolVersion;
+
+/// The current version of the synchronization protocol.
+///
+/// Bump the version for incompatible changes. Before the version is too
+/// high, transit to a new protocol name for the next generation of the
+/// protocol.
+///
+/// To update messages within the protocol, we would like to be
+/// backward-compatible as much as possible. DO NOT UPDATE directly on the
+/// message. Instead, create a new message, mark the old one for
+/// deprecation.
+///
+/// Do NOT make this const pub.
+const SYNCHRONIZATION_PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion(2);
+/// Support at most this number of old versions.
+const SYNCHRONIZATION_PROTOCOL_OLD_VERSIONS_TO_SUPPORT: u8 = 2;
+/// The version to pass to Message for their lifetime declaration.
+pub const SYNC_PROTO_V1: ProtocolVersion = ProtocolVersion(1);
+pub const SYNC_PROTO_V2: ProtocolVersion = ProtocolVersion(2);
 
 pub mod random {
     use rand;
-    pub fn new() -> rand::ThreadRng { rand::thread_rng() }
+    pub fn new() -> rand::prelude::ThreadRng { rand::thread_rng() }
 }
 
 pub mod msg_sender {
     use super::message::msgid;
-    use crate::message::Message;
+    use crate::message::MsgId;
     use metrics::{register_meter_with_group, Meter};
-    use network::{Error as NetworkError, NetworkContext, PeerId};
     use std::sync::Arc;
 
     pub const NULL: usize = !0;
@@ -271,112 +292,117 @@ pub mod msg_sender {
                 "get_block_txn_counter"
             );
     }
-
-    pub fn send_message(
-        io: &dyn NetworkContext, peer: PeerId, msg: &dyn Message,
-    ) -> Result<(), NetworkError> {
-        send_message_with_throttling(
-            io, peer, msg, false, /* throttling_disabled */
-        )
+    lazy_static! {
+        static ref GET_TRANSACTIONS_FROM_TX_HASHES_METER: Arc<dyn Meter> =
+            register_meter_with_group(
+                "network_connection_data",
+                "get_transactions_from_tx_hashes"
+            );
+        static ref GET_TRANSACTIONS_FROM_TX_HASHES_COUNTRER: Arc<dyn Meter> =
+            register_meter_with_group(
+                "network_connection_data_counter",
+                "get_transactions_from_tx_hashes_counter"
+            );
+        static ref GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE_METER: Arc<dyn Meter> =
+            register_meter_with_group(
+                "network_connection_data",
+                "get_transactions_from_tx_hashes_response"
+            );
+        static ref GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE_COUNTER: Arc<dyn Meter> =
+            register_meter_with_group(
+                "network_connection_data_counter",
+                "get_transactions_from_tx_hashes_response_counter"
+            );
     }
 
-    pub fn send_message_with_throttling(
-        io: &dyn NetworkContext, peer: PeerId, msg: &dyn Message,
-        throttling_disabled: bool,
-    ) -> Result<(), NetworkError>
-    {
-        let size = msg.send_with_throttling(io, peer, throttling_disabled)?;
-
-        if peer != NULL {
-            match msg.msg_id().into() {
-                msgid::STATUS => ON_STATUS_METER.mark(size),
-                msgid::GET_BLOCK_HEADERS_RESPONSE => {
-                    GET_BLOCK_HEADER_RESPONSE_METER.mark(size);
-                    GET_BLOCK_HEADER_RESPONSE_COUNTER.mark(1);
-                }
-                msgid::GET_BLOCK_HEADERS => {
-                    GET_BLOCK_HEADERS_METER.mark(size);
-                    GET_BLOCK_HEADERS_COUNTER.mark(1);
-                }
-                msgid::GET_BLOCK_HEADER_CHAIN => {
-                    GET_BLOCK_HEADER_CHAIN_METER.mark(size);
-                    GET_BLOCK_HEADER_CHAIN_COUNTER.mark(1);
-                }
-                msgid::NEW_BLOCK => {
-                    NEW_BLOCK_METER.mark(size);
-                    NEW_BLOCK_COUNTER.mark(1);
-                }
-                msgid::NEW_BLOCK_HASHES => {
-                    NEW_BLOCK_HASHES_METER.mark(size);
-                    NEW_BLOCK_HASHES_COUNTER.mark(1);
-                }
-                msgid::GET_BLOCKS_RESPONSE => {
-                    GET_BLOCKS_RESPONSE_METER.mark(size);
-                    GET_BLOCKS_RESPONSE_COUNTER.mark(1);
-                }
-                msgid::GET_BLOCKS_WITH_PUBLIC_RESPONSE => {
-                    GET_BLOCKS_WITH_PUBLIC_RESPONSE_METER.mark(size);
-                    GET_BLOCKS_WITH_PUBLIC_RESPONSE_COUNTER.mark(1);
-                }
-                msgid::GET_BLOCKS => {
-                    GET_BLOCKS_METER.mark(size);
-                    GET_BLOCKS_COUNTER.mark(1);
-                }
-                msgid::GET_TERMINAL_BLOCK_HASHES_RESPONSE => {
-                    GET_TERMINAL_BLOCK_HASHES_RESPONSE_METER.mark(size);
-                    GET_TERMINAL_BLOCK_HASHES_RESPONSE_COUNTER.mark(1);
-                }
-                msgid::GET_TERMINAL_BLOCK_HASHES => {
-                    GET_TERMINAL_BLOCK_HASHES_METER.mark(size);
-                    GET_TERMINAL_BLOCK_HASHES_COUNTER.mark(1);
-                }
-                msgid::GET_CMPCT_BLOCKS => {
-                    GET_CMPCT_BLOCKS_METER.mark(size);
-                    GET_CMPCT_BLOCKS_COUNTER.mark(1);
-                }
-                msgid::GET_CMPCT_BLOCKS_RESPONSE => {
-                    GET_CMPCT_BLOCKS_RESPONSE_METER.mark(size);
-                    GET_CMPCT_BLOCKS_RESPONSE_COUNTER.mark(1);
-                }
-                msgid::GET_BLOCK_TXN => {
-                    GET_BLOCK_TXN_METER.mark(size);
-                    GET_BLOCK_TXN_COUNTER.mark(1);
-                }
-                msgid::GET_BLOCK_TXN_RESPONSE => {
-                    GET_BLOCK_TXN_RESPOPNSE_METER.mark(size);
-                    GET_BLOCK_TXN_RESPOPNSE_COUNTER.mark(1);
-                }
-                msgid::DYNAMIC_CAPABILITY_CHANGE => {
-                    DYNAMIC_CAPABILITY_CHANGE_METER.mark(size);
-                    DYNAMIC_CAPABILITY_CHANGE_COUNTER.mark(1);
-                }
-                msgid::TRANSACTION_DIGESTS => {
-                    TRANSACTION_DIGESTS_METER.mark(size);
-                    TRANSACTION_DIGESTS_COUNTER.mark(1);
-                }
-                msgid::GET_TRANSACTIONS => {
-                    GET_TRANSACTIONS_METER.mark(size);
-                    GET_TRANSACTIONS_COUNTER.mark(1);
-                }
-                msgid::GET_TRANSACTIONS_RESPONSE => {
-                    GET_TRANSACTIONS_RESPONSE_METER.mark(size);
-                    GET_TRANSACTIONS_RESPONSE_COUNTER.mark(1);
-                }
-                msgid::GET_BLOCK_HASHES_BY_EPOCH => {
-                    GET_BLOCK_HASHES_BY_EPOCH_METER.mark(size);
-                    GET_BLOCK_HASHES_BY_EPOCH_COUNTER.mark(1);
-                }
-                msgid::GET_BLOCK_HASHES_RESPONSE => {
-                    GET_BLOCK_HASHES_RESPONSE_METER.mark(size);
-                    GET_BLOCK_HASHES_RESPONSE_COUNTER.mark(1);
-                }
-                _ => {
-                    OTHER_HIGH_METER.mark(size);
-                    OTHER_HIGH_COUNTER.mark(1);
-                }
+    pub fn metric_message(msg_id: MsgId, size: usize) {
+        match msg_id {
+            msgid::STATUS_DEPRECATED => ON_STATUS_METER.mark(size),
+            msgid::STATUS_V2 => ON_STATUS_METER.mark(size),
+            msgid::GET_BLOCK_HEADERS_RESPONSE => {
+                GET_BLOCK_HEADER_RESPONSE_METER.mark(size);
+                GET_BLOCK_HEADER_RESPONSE_COUNTER.mark(1);
+            }
+            msgid::GET_BLOCK_HEADERS => {
+                GET_BLOCK_HEADERS_METER.mark(size);
+                GET_BLOCK_HEADERS_COUNTER.mark(1);
+            }
+            msgid::GET_BLOCK_HEADER_CHAIN => {
+                GET_BLOCK_HEADER_CHAIN_METER.mark(size);
+                GET_BLOCK_HEADER_CHAIN_COUNTER.mark(1);
+            }
+            msgid::NEW_BLOCK => {
+                NEW_BLOCK_METER.mark(size);
+                NEW_BLOCK_COUNTER.mark(1);
+            }
+            msgid::NEW_BLOCK_HASHES => {
+                NEW_BLOCK_HASHES_METER.mark(size);
+                NEW_BLOCK_HASHES_COUNTER.mark(1);
+            }
+            msgid::GET_BLOCKS_RESPONSE => {
+                GET_BLOCKS_RESPONSE_METER.mark(size);
+                GET_BLOCKS_RESPONSE_COUNTER.mark(1);
+            }
+            msgid::GET_BLOCKS_WITH_PUBLIC_RESPONSE => {
+                GET_BLOCKS_WITH_PUBLIC_RESPONSE_METER.mark(size);
+                GET_BLOCKS_WITH_PUBLIC_RESPONSE_COUNTER.mark(1);
+            }
+            msgid::GET_BLOCKS => {
+                GET_BLOCKS_METER.mark(size);
+                GET_BLOCKS_COUNTER.mark(1);
+            }
+            msgid::GET_TERMINAL_BLOCK_HASHES_RESPONSE => {
+                GET_TERMINAL_BLOCK_HASHES_RESPONSE_METER.mark(size);
+                GET_TERMINAL_BLOCK_HASHES_RESPONSE_COUNTER.mark(1);
+            }
+            msgid::GET_TERMINAL_BLOCK_HASHES => {
+                GET_TERMINAL_BLOCK_HASHES_METER.mark(size);
+                GET_TERMINAL_BLOCK_HASHES_COUNTER.mark(1);
+            }
+            msgid::GET_CMPCT_BLOCKS => {
+                GET_CMPCT_BLOCKS_METER.mark(size);
+                GET_CMPCT_BLOCKS_COUNTER.mark(1);
+            }
+            msgid::GET_CMPCT_BLOCKS_RESPONSE => {
+                GET_CMPCT_BLOCKS_RESPONSE_METER.mark(size);
+                GET_CMPCT_BLOCKS_RESPONSE_COUNTER.mark(1);
+            }
+            msgid::GET_BLOCK_TXN => {
+                GET_BLOCK_TXN_METER.mark(size);
+                GET_BLOCK_TXN_COUNTER.mark(1);
+            }
+            msgid::GET_BLOCK_TXN_RESPONSE => {
+                GET_BLOCK_TXN_RESPOPNSE_METER.mark(size);
+                GET_BLOCK_TXN_RESPOPNSE_COUNTER.mark(1);
+            }
+            msgid::DYNAMIC_CAPABILITY_CHANGE => {
+                DYNAMIC_CAPABILITY_CHANGE_METER.mark(size);
+                DYNAMIC_CAPABILITY_CHANGE_COUNTER.mark(1);
+            }
+            msgid::TRANSACTION_DIGESTS => {
+                TRANSACTION_DIGESTS_METER.mark(size);
+                TRANSACTION_DIGESTS_COUNTER.mark(1);
+            }
+            msgid::GET_TRANSACTIONS => {
+                GET_TRANSACTIONS_METER.mark(size);
+                GET_TRANSACTIONS_COUNTER.mark(1);
+            }
+            msgid::GET_TRANSACTIONS_RESPONSE => {
+                GET_TRANSACTIONS_RESPONSE_METER.mark(size);
+                GET_TRANSACTIONS_RESPONSE_COUNTER.mark(1);
+            }
+            msgid::GET_BLOCK_HASHES_BY_EPOCH => {
+                GET_BLOCK_HASHES_BY_EPOCH_METER.mark(size);
+                GET_BLOCK_HASHES_BY_EPOCH_COUNTER.mark(1);
+            }
+            msgid::GET_BLOCK_HASHES_RESPONSE => {
+                GET_BLOCK_HASHES_RESPONSE_METER.mark(size);
+                GET_BLOCK_HASHES_RESPONSE_COUNTER.mark(1);
+            }
+            _ => {
+                OTHER_HIGH_METER.mark(size);
+                OTHER_HIGH_COUNTER.mark(1);
             }
         }
-
-        Ok(())
     }
 }

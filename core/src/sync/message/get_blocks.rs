@@ -7,10 +7,10 @@ use crate::{
     parameters::sync::MAX_PACKET_SIZE,
     sync::{
         message::{
-            Context, GetBlocksResponse, GetBlocksWithPublicResponse,
+            msgid, Context, GetBlocksResponse, GetBlocksWithPublicResponse,
             Handleable, Key, KeyContainer,
         },
-        request_manager::Request,
+        request_manager::{AsAny, Request},
         Error, ErrorKind, ProtocolConfiguration,
     },
 };
@@ -26,19 +26,24 @@ pub struct GetBlocks {
     pub hashes: Vec<H256>,
 }
 
-impl Request for GetBlocks {
-    fn as_message(&self) -> &dyn Message { self }
-
+impl AsAny for GetBlocks {
     fn as_any(&self) -> &dyn Any { self }
 
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+}
+
+impl Request for GetBlocks {
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
         conf.blocks_request_timeout
     }
 
     fn on_removed(&self, inflight_keys: &KeyContainer) {
-        let mut inflight_keys = inflight_keys.write(self.msg_id());
+        let mut inflight_blocks = inflight_keys.write(self.msg_id());
+        let mut net_inflight_blocks =
+            inflight_keys.write(msgid::NET_INFLIGHT_BLOCKS);
         for hash in self.hashes.iter() {
-            inflight_keys.remove(&Key::Hash(*hash));
+            inflight_blocks.remove(&Key::Hash(*hash));
+            net_inflight_blocks.remove(&Key::Hash(*hash));
         }
     }
 
@@ -56,6 +61,7 @@ impl Request for GetBlocks {
 
 impl GetBlocks {
     fn get_blocks(&self, ctx: &Context, with_public: bool) -> Vec<Block> {
+        debug!("Received GetBlocks: {:?}", self);
         let mut blocks = Vec::new();
         let mut packet_size_left = MAX_PACKET_SIZE;
 
@@ -83,7 +89,7 @@ impl GetBlocks {
         &self, ctx: &Context, blocks: Vec<Block>,
     ) -> Result<(), Error> {
         let mut response = GetBlocksWithPublicResponse {
-            request_id: self.request_id.clone(),
+            request_id: self.request_id,
             blocks,
         };
 
@@ -113,7 +119,7 @@ impl GetBlocks {
         &self, ctx: &Context, blocks: Vec<Block>,
     ) -> Result<(), Error> {
         let mut response = GetBlocksResponse {
-            request_id: self.request_id.clone(),
+            request_id: self.request_id,
             blocks,
         };
 

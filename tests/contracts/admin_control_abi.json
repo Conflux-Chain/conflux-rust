@@ -1,0 +1,1 @@
+[{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"destroy","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"},{"internalType":"address","name":"","type":"address"}],"name":"set_admin","outputs":[],"stateMutability":"nonpayable","type":"function"}]

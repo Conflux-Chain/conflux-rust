@@ -7,18 +7,20 @@ use crate::{
     node_database::NodeDatabase,
     node_table::{NodeId, *},
     service::{UdpIoContext, MAX_DATAGRAM_SIZE, UDP_PROTOCOL_DISCOVERY},
-    Error, ErrorKind, IpFilter, NODE_TAG_ARCHIVE, NODE_TAG_NODE_TYPE,
+    Error, ErrorKind, IpFilter, ThrottlingReason, NODE_TAG_ARCHIVE,
+    NODE_TAG_NODE_TYPE,
 };
 use cfx_bytes::Bytes;
 use cfx_types::{H256, H520};
-use keylib::{recover, sign, KeyPair, Secret};
+use cfxkey::{recover, sign, KeyPair, Secret};
 use rlp::{Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+use throttling::time_window_bucket::TimeWindowBucket;
 
 const DISCOVER_PROTOCOL_VERSION: u32 = 1;
 
@@ -35,6 +37,10 @@ const EXPIRY_TIME: Duration = Duration::from_secs(20);
 
 pub const DISCOVER_NODES_COUNT: u32 = 16;
 const MAX_NODES_PING: usize = 32; // Max nodes to add/ping at once
+
+const DEFAULT_THROTTLING_INTERVAL: Duration = Duration::from_secs(1);
+const DEFAULT_THROTTLING_LIMIT_PING: usize = 20;
+const DEFAULT_THROTTLING_LIMIT_FIND_NODES: usize = 10;
 
 struct PingRequest {
     // Time when the request was sent
@@ -85,6 +91,10 @@ pub struct Discovery {
     adding_nodes: Vec<NodeEntry>,
     ip_filter: IpFilter,
     pub disc_option: DiscoveryOption,
+
+    // Limits the response for PING/FIND_NODE packets
+    ping_throttling: TimeWindowBucket<IpAddr>,
+    find_nodes_throttling: TimeWindowBucket<IpAddr>,
 }
 
 impl Discovery {
@@ -108,6 +118,14 @@ impl Discovery {
                 general: true,
                 archive: false,
             },
+            ping_throttling: TimeWindowBucket::new(
+                DEFAULT_THROTTLING_INTERVAL,
+                DEFAULT_THROTTLING_LIMIT_PING,
+            ),
+            find_nodes_throttling: TimeWindowBucket::new(
+                DEFAULT_THROTTLING_INTERVAL,
+                DEFAULT_THROTTLING_LIMIT_FIND_NODES,
+            ),
         }
     }
 
@@ -182,7 +200,7 @@ impl Discovery {
     ) -> Result<H256, Error>
     {
         let packet = assemble_packet(packet_id, payload, &self.secret)?;
-        let hash = H256::from(&packet[1..(1 + 32)]);
+        let hash = H256::from_slice(&packet[1..=32]);
         self.send_to(uio, packet, address.clone());
         Ok(hash)
     }
@@ -214,7 +232,7 @@ impl Discovery {
         let rlp = Rlp::new(&signed[1..]);
         match packet_id {
             PACKET_PING => {
-                self.on_ping(uio, &rlp, &node_id, &from, &hash_signed)
+                self.on_ping(uio, &rlp, &node_id, &from, hash_signed.as_bytes())
             }
             PACKET_PONG => self.on_pong(uio, &rlp, &node_id, &from),
             PACKET_FIND_NODE => self.on_find_node(uio, &rlp, &node_id, &from),
@@ -246,6 +264,14 @@ impl Discovery {
     ) -> Result<(), Error>
     {
         trace!("Got Ping from {:?}", &from);
+
+        if !self.ping_throttling.try_acquire(from.ip()) {
+            return Err(ErrorKind::Throttling(
+                ThrottlingReason::PacketThrottled("PING"),
+            )
+            .into());
+        }
+
         let ping_from = NodeEndpoint::from_rlp(&rlp.at(1)?)?;
         let ping_to = NodeEndpoint::from_rlp(&rlp.at(2)?)?;
         let timestamp: u64 = rlp.val_at(3)?;
@@ -271,7 +297,7 @@ impl Discovery {
 
         let entry = NodeEntry {
             id: node_id.clone(),
-            endpoint: pong_to.clone(),
+            endpoint: pong_to,
         };
         // TODO handle the error before sending pong
         if !entry.endpoint.is_valid() {
@@ -318,7 +344,7 @@ impl Discovery {
         };
 
         if let Some(node) = expected_node {
-            uio.node_db.write().insert_with_promotion(node);
+            uio.node_db.write().insert_with_conditional_promotion(node);
             Ok(())
         } else {
             debug!("Got unexpected Pong from {:?} ; request not found", &from);
@@ -332,6 +358,14 @@ impl Discovery {
     ) -> Result<(), Error>
     {
         trace!("Got FindNode from {:?}", &from);
+
+        if !self.find_nodes_throttling.try_acquire(from.ip()) {
+            return Err(ErrorKind::Throttling(
+                ThrottlingReason::PacketThrottled("FIND_NODES"),
+            )
+            .into());
+        }
+
         let msg: FindNodeMessage = rlp.as_val()?;
         self.check_timestamp(msg.expire_timestamp)?;
         let neighbors = msg.sample(&*uio.node_db.read(), &self.ip_filter)?;
@@ -511,7 +545,7 @@ impl Discovery {
 
         if self.discovery_round.is_some() {
             self.discover(uio);
-        } else if self.in_flight_pings.len() == 0 && !self.discovery_initiated {
+        } else if self.in_flight_pings.is_empty() && !self.discovery_initiated {
             // Start discovering if the first pings have been sent (or timed
             // out)
             self.discovery_initiated = true;
@@ -628,7 +662,7 @@ fn assemble_packet(
     };
     packet[(1 + 32)..(1 + 32 + 65)].copy_from_slice(&signature[..]);
     let signed_hash = keccak(&packet[(1 + 32)..]);
-    packet[1..(1 + 32)].copy_from_slice(&signed_hash);
+    packet[1..=32].copy_from_slice(signed_hash.as_bytes());
     Ok(packet)
 }
 

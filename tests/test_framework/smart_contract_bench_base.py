@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-from test_framework.blocktools import create_transaction
+from test_framework.blocktools import create_transaction, wait_for_initial_nonce_for_privkey, \
+    wait_for_initial_nonce_for_address
 from conflux.messages import Transactions
 from eth_utils import decode_hex
 from test_framework.block_gen_thread import BlockGenThread
@@ -7,13 +8,14 @@ from test_framework.util import *
 from test_framework.mininode import *
 from test_framework.test_framework import ConfluxTestFramework
 from conflux.rpc import RpcClient
-from conflux.utils import ec_random_keys, privtoaddr, encode_hex_0x
+from conflux.transactions import CONTRACT_DEFAULT_GAS
+from conflux.utils import ec_random_keys, priv_to_addr, encode_hex_0x
 from http.client import CannotSendRequest
 
 
 class SmartContractBenchBase(ConfluxTestFramework):
     REQUEST_BASE = {
-        'gas': 50000000,
+        'gas': CONTRACT_DEFAULT_GAS,
         'gasPrice': 1,
         'chainId': 1,
     }
@@ -29,7 +31,6 @@ class SmartContractBenchBase(ConfluxTestFramework):
         )
 
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 1
 
     def setup_network(self):
@@ -43,9 +44,6 @@ class SmartContractBenchBase(ConfluxTestFramework):
         pass
 
     def run_test(self):
-        # Prevent easysolc from configuring the root logger to print to stderr
-        self.log.propagate = False
-
         start_p2p_connection(self.nodes)
         block_gen_thread = BlockGenThread(self.nodes, self.log)
         block_gen_thread.start()
@@ -58,25 +56,24 @@ class SmartContractBenchBase(ConfluxTestFramework):
         super().__init__()
         self.nonce_map = {}
         self.default_account_key = default_config["GENESIS_PRI_KEY"]
-        self.default_account_address = privtoaddr(self.default_account_key)
+        self.default_account_address = priv_to_addr(self.default_account_key)
 
     def get_nonce(self, sender):
-        sender = sender.lower()
         if sender not in self.nonce_map:
-            self.nonce_map[sender] = 0
+            self.nonce_map[sender] = wait_for_initial_nonce_for_address(self.nodes[0], sender)
         else:
             self.nonce_map[sender] += 1
         return self.nonce_map[sender]
 
     def call_contract_function(self, contract, name, args, sender_key, contract_addr=None, wait=False,
-                               check_status=False):
+                               check_status=False, storage_limit=0):
         # If contract address is empty, call the constructor.
         if contract_addr:
             func = getattr(contract.functions, name)
         else:
             func = getattr(contract, name)
         attributes = {
-            'nonce': self.get_nonce(privtoaddr(sender_key)),
+            'nonce': self.get_nonce(priv_to_addr(sender_key)),
             ** SmartContractBenchBase.REQUEST_BASE
         }
         if contract_addr:
@@ -88,6 +85,7 @@ class SmartContractBenchBase(ConfluxTestFramework):
         tx_data['data'] = decode_hex(tx_data['data'])
         tx_data['pri_key'] = sender_key
         tx_data['gas_price'] = tx_data['gasPrice']
+        tx_data['storage_limit'] = storage_limit
         tx_data.pop('gasPrice', None)
         tx_data.pop('chainId', None)
         tx_data.pop('to', None)
@@ -99,12 +97,12 @@ class SmartContractBenchBase(ConfluxTestFramework):
         results = []
         for _ in range(count):
             pri_key, pub_key = ec_random_keys()
-            transaction = self.transfer(self.default_account_key, privtoaddr(pri_key), amount, wait, check_status)
+            transaction = self.transfer(self.default_account_key, priv_to_addr(pri_key), amount, wait, check_status)
             results.append([pri_key, transaction])
         return results
 
     def transfer(self, sender_key, receiver, amount, wait=False, check_status=False):
-        nonce = self.get_nonce(privtoaddr(sender_key))
+        nonce = self.get_nonce(priv_to_addr(sender_key))
         transaction = create_transaction(nonce, 1, 21000, amount, receiver, pri_key=sender_key)
         self._send_transaction(transaction, wait, check_status)
         return transaction
@@ -135,7 +133,7 @@ class SmartContractBenchBase(ConfluxTestFramework):
         client = RpcClient(self.nodes[0])
         for _ in range(5):
             client.generate_block()
-        receipts = [self.nodes[0].gettransactionreceipt(tx.hash_hex()) for tx in all_txs]
+        receipts = [client.get_transaction_receipt(tx.hash_hex()) for tx in all_txs]
         self.log.debug("Receipts received: {}".format(receipts))
         if check_status:
             map(lambda x: assert_equal(x['outcomeStatus'], 0), receipts)

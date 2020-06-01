@@ -3,7 +3,12 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::{Receipt, Transaction, H160, H256, U256};
-use cfxcore::consensus::ConsensusGraphInner;
+use cfx_types::U256 as CfxU256;
+use cfxcore::{
+    block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
+    consensus::ConsensusGraphInner,
+    SharedConsensusGraph,
+};
 use jsonrpc_core::Error as RpcError;
 use primitives::{
     receipt::{
@@ -11,8 +16,8 @@ use primitives::{
         TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
-    Block as PrimitiveBlock, BlockHeaderBuilder, StateRootWithAuxInfo,
-    TransactionAddress,
+    Block as PrimitiveBlock, BlockHeader as PrimitiveBlockHeader,
+    BlockHeaderBuilder, TransactionIndex,
 };
 use serde::{
     de::{Deserialize, Deserializer, Error, Unexpected},
@@ -88,8 +93,6 @@ pub struct Block {
     pub miner: H160,
     /// State root hash
     pub deferred_state_root: H256,
-    /// The state_root_with_aux not considering blame
-    pub deferred_state_root_with_aux: StateRootWithAuxInfo,
     /// Root hash of all receipts in this block's epoch
     pub deferred_receipts_root: H256,
     /// Hash of aggregated bloom filter of all receipts in this block's epoch
@@ -109,10 +112,11 @@ pub struct Block {
     pub timestamp: U256,
     /// Difficulty
     pub difficulty: U256,
+    // TODO: We should change python test script and remove this field
+    /// PoW Quality
+    pub pow_quality: Option<U256>,
     /// Referee hashes
     pub referee_hashes: Vec<H256>,
-    /// Stable
-    pub stable: Option<bool>,
     /// Adaptive
     pub adaptive: bool,
     /// Nonce of the block
@@ -126,7 +130,7 @@ pub struct Block {
 impl Block {
     pub fn new(
         b: &PrimitiveBlock, consensus_inner: &ConsensusGraphInner,
-        include_txs: bool,
+        data_man: &Arc<BlockDataManager>, include_txs: bool,
     ) -> Self
     {
         let transactions = match include_txs {
@@ -138,14 +142,19 @@ impl Block {
             ),
             true => {
                 let tx_vec = match consensus_inner
-                    .block_receipts_by_hash(&b.hash(), false /* update_cache */)
+                    .block_execution_results_by_hash(&b.hash(), false /* update_cache */)
                 {
-                    Some(receipts) => b
+                    Some(BlockExecutionResultWithEpoch(_, execution_result)) => b
                         .transactions
                         .iter()
                         .enumerate()
                         .map(|(idx, tx)| {
-                            let receipt = receipts.get(idx).unwrap();
+                            let receipt = execution_result.block_receipts.receipts.get(idx).unwrap();
+                            let prior_gas_used = if idx == 0 {
+                                 CfxU256::zero()
+                            } else {
+                                execution_result.block_receipts.receipts.get(idx - 1).unwrap().accumulated_gas_used
+                            };
                             match receipt.outcome_status {
                                 TRANSACTION_OUTCOME_SUCCESS
                                 | TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING => {
@@ -154,10 +163,15 @@ impl Block {
                                         Some(Receipt::new(
                                             (**tx).clone(),
                                             receipt.clone(),
-                                            TransactionAddress {
+                                            TransactionIndex {
                                                 block_hash: b.hash(),
                                                 index: idx,
                                             },
+                                            prior_gas_used,
+                                            // TODO: set these fields below.
+                                            /* maybe_epoch_number = */
+                                            None,
+                                            /* maybe_state_root = */ None,
                                         )),
                                     )
                                 }
@@ -179,18 +193,22 @@ impl Block {
                 BlockTransactions::Full(tx_vec)
             }
         };
+
+        let block_hash = b.block_header.hash();
+
+        let epoch_number = consensus_inner
+            .get_block_epoch_number(&block_hash)
+            .or_else(|| data_man.block_epoch_number(&block_hash))
+            .map(Into::into);
+
         Block {
-            hash: H256::from(b.block_header.hash().clone()),
+            hash: H256::from(block_hash),
             parent_hash: H256::from(b.block_header.parent_hash().clone()),
             height: b.block_header.height().into(),
             miner: H160::from(b.block_header.author().clone()),
             deferred_state_root: H256::from(
                 b.block_header.deferred_state_root().clone(),
             ),
-            deferred_state_root_with_aux: b
-                .block_header
-                .deferred_state_root_with_aux_info()
-                .clone(),
             deferred_receipts_root: H256::from(
                 b.block_header.deferred_receipts_root().clone(),
             ),
@@ -202,18 +220,12 @@ impl Block {
                 b.block_header.transactions_root().clone(),
             ),
             // PrimitiveBlock does not contain this information
-            epoch_number: consensus_inner
-                .get_block_epoch_number(&b.block_header.hash())
-                .map_or(None, |x| match x {
-                    std::u64::MAX => None,
-                    _ => Some(x.into()),
-                }),
+            epoch_number,
             // fee system
             gas_limit: b.block_header.gas_limit().into(),
             timestamp: b.block_header.timestamp().into(),
             difficulty: b.block_header.difficulty().clone().into(),
-            // PrimitiveBlock does not contain this information
-            stable: consensus_inner.is_stable(&b.block_header.hash()),
+            pow_quality: Some(b.block_header.pow_quality.clone().into()),
             adaptive: b.block_header.adaptive(),
             referee_hashes: b
                 .block_header
@@ -240,9 +252,6 @@ impl Block {
                     .with_author(self.miner.into())
                     .with_transactions_root(self.transactions_root.into())
                     .with_deferred_state_root(self.deferred_state_root.into())
-                    .with_deferred_state_root_with_aux_info(
-                        self.deferred_state_root_with_aux.clone(),
-                    )
                     .with_deferred_receipts_root(
                         self.deferred_receipts_root.into(),
                     )
@@ -259,7 +268,7 @@ impl Block {
                             .map(|x| x.clone().into())
                             .collect(),
                     )
-                    .with_nonce(self.nonce.as_usize() as u64)
+                    .with_nonce(self.nonce.into())
                     .build(),
                 {
                     let mut transactions = Vec::new();
@@ -281,7 +290,7 @@ impl Block {
 #[serde(rename_all = "camelCase")]
 pub struct Header {
     /// Hash of the block
-    pub hash: Option<H256>,
+    pub hash: H256,
     /// Hash of the parent
     pub parent_hash: H256,
     /// Distance to genesis
@@ -290,8 +299,6 @@ pub struct Header {
     pub miner: H160,
     /// State root hash
     pub deferred_state_root: H256,
-    /// The state_root_with_aux not considering blame
-    pub deferred_state_root_with_aux: StateRootWithAuxInfo,
     /// Root hash of all receipts in this block's epoch
     pub deferred_receipts_root: H256,
     /// Hash of aggregrated bloom filter of all receipts in the block's epoch
@@ -311,21 +318,57 @@ pub struct Header {
     pub timestamp: U256,
     /// Difficulty
     pub difficulty: U256,
+    // TODO: We should change python test script and remove this field
+    /// PoW Quality
+    pub pow_quality: Option<U256>,
     /// Referee hashes
     pub referee_hashes: Vec<H256>,
-    /// Stable
-    pub stable: Option<bool>,
     /// Adaptive
     pub adaptive: bool,
     /// Nonce of the block
     pub nonce: U256,
-    /// Size in bytes
-    pub size: Option<U256>,
+}
+
+impl Header {
+    pub fn new(
+        h: &PrimitiveBlockHeader, consensus: SharedConsensusGraph,
+    ) -> Self {
+        let hash = h.hash();
+
+        let epoch_number = consensus
+            .get_block_epoch_number(&hash)
+            .or_else(|| consensus.get_data_manager().block_epoch_number(&hash))
+            .map(Into::into);
+
+        let referee_hashes =
+            h.referee_hashes().iter().map(|x| H256::from(*x)).collect();
+
+        Header {
+            hash: H256::from(hash),
+            parent_hash: H256::from(*h.parent_hash()),
+            height: h.height().into(),
+            miner: H160::from(*h.author()),
+            deferred_state_root: H256::from(*h.deferred_state_root()),
+            deferred_receipts_root: H256::from(*h.deferred_receipts_root()),
+            deferred_logs_bloom_hash: H256::from(*h.deferred_logs_bloom_hash()),
+            blame: h.blame(),
+            transactions_root: H256::from(*h.transactions_root()),
+            epoch_number,
+            gas_limit: h.gas_limit().into(),
+            timestamp: h.timestamp().into(),
+            difficulty: h.difficulty().into(),
+            adaptive: h.adaptive(),
+            referee_hashes,
+            nonce: h.nonce().into(),
+            pow_quality: Some(h.pow_quality.into()), /* TODO(thegaram):
+                                                      * include custom */
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Block, BlockTransactions};
+    use super::{Block, BlockTransactions, Header};
     use crate::rpc::types::{Transaction, H160, H256, U256};
     use keccak_hash::KECCAK_EMPTY_LIST_RLP;
     use serde_json;
@@ -334,19 +377,17 @@ mod tests {
     fn test_serialize_block_transactions() {
         let t = BlockTransactions::Full(vec![Transaction::default()]);
         let serialized = serde_json::to_string(&t).unwrap();
-        assert_eq!(serialized, r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","contractCreated":null,"data":"0x","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#);
+        assert_eq!(serialized, r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","contractCreated":null,"data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x0","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#);
 
-        let t = BlockTransactions::Hashes(vec![H256::default().into()]);
+        let t = BlockTransactions::Hashes(vec![H256::default()]);
         let serialized = serde_json::to_string(&t).unwrap();
         assert_eq!(serialized, r#"["0x0000000000000000000000000000000000000000000000000000000000000000"]"#);
     }
 
     #[test]
     fn test_deserialize_block_transactions() {
-        let result_block_transactions = BlockTransactions::Hashes(vec![
-            H256::default().into(),
-            H256::default().into(),
-        ]);
+        let result_block_transactions =
+            BlockTransactions::Hashes(vec![H256::default(), H256::default()]);
         let serialized = r#"["0x0000000000000000000000000000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000000000000000000000000000"]"#;
         let deserialized_block_transactions: BlockTransactions =
             serde_json::from_str(serialized).unwrap();
@@ -354,7 +395,7 @@ mod tests {
 
         let result_block_transactions =
             BlockTransactions::Full(vec![Transaction::default()]);
-        let serialized = r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","data":"0x","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#;
+        let serialized = r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x0","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#;
         let deserialized_block_transactions: BlockTransactions =
             serde_json::from_str(serialized).unwrap();
         assert_eq!(result_block_transactions, deserialized_block_transactions);
@@ -368,7 +409,6 @@ mod tests {
             height: 0.into(),
             miner: H160::default(),
             deferred_state_root: Default::default(),
-            deferred_state_root_with_aux: Default::default(),
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP.into(),
             deferred_logs_bloom_hash: cfx_types::KECCAK_EMPTY_BLOOM.into(),
             blame: 0,
@@ -377,28 +417,27 @@ mod tests {
             gas_limit: U256::default(),
             timestamp: 0.into(),
             difficulty: U256::default(),
+            pow_quality: None,
             referee_hashes: Vec::new(),
-            stable: None,
             adaptive: false,
             nonce: 0.into(),
-            transactions: BlockTransactions::Hashes(vec![].into()),
+            transactions: BlockTransactions::Hashes(vec![]),
             size: Some(69.into()),
         };
         let serialized_block = serde_json::to_string(&block).unwrap();
 
-        assert_eq!(serialized_block, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredStateRootWithAux":{"stateRoot":{"snapshotRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","intermediateDeltaRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deltaRoot":"0x0000000000000000000000000000000000000000000000000000000000000000"},"auxInfo":{"previousSnapshotRoot":"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470","intermediateDeltaEpochId":"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"}},"deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":0,"transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"stable":null,"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45"}"#);
+        assert_eq!(serialized_block, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":0,"transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45"}"#);
     }
 
     #[test]
     fn test_deserialize_block() {
-        let serialized = r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredStateRootWithAux":{"stateRoot":{"snapshotRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","intermediateDeltaRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deltaRoot":"0x0000000000000000000000000000000000000000000000000000000000000000"},"auxInfo":{"previousSnapshotRoot":"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470","intermediateDeltaEpochId":"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"}},"deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":0,"transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":"0x0","gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"stable":null,"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45"}"#;
+        let serialized = r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":0,"transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":"0x0","gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"stable":null,"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45"}"#;
         let result_block = Block {
             hash: H256::default(),
             parent_hash: H256::default(),
             height: 0.into(),
             miner: H160::default(),
             deferred_state_root: Default::default(),
-            deferred_state_root_with_aux: Default::default(),
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP.into(),
             deferred_logs_bloom_hash: cfx_types::KECCAK_EMPTY_BLOOM.into(),
             blame: 0,
@@ -407,15 +446,41 @@ mod tests {
             gas_limit: U256::default(),
             timestamp: 0.into(),
             difficulty: U256::default(),
+            pow_quality: None,
             referee_hashes: Vec::new(),
-            stable: None,
             adaptive: false,
             nonce: 0.into(),
-            transactions: BlockTransactions::Full(vec![].into()),
+            transactions: BlockTransactions::Full(vec![]),
             size: Some(69.into()),
         };
         let deserialized_block: Block =
             serde_json::from_str(serialized).unwrap();
         assert_eq!(deserialized_block, result_block);
+    }
+
+    #[test]
+    fn test_serialize_header() {
+        let header = Header {
+            hash: H256::default(),
+            parent_hash: H256::default(),
+            height: 0.into(),
+            miner: H160::default(),
+            deferred_state_root: Default::default(),
+            deferred_receipts_root: KECCAK_EMPTY_LIST_RLP.into(),
+            deferred_logs_bloom_hash: cfx_types::KECCAK_EMPTY_BLOOM.into(),
+            blame: 0,
+            transactions_root: KECCAK_EMPTY_LIST_RLP.into(),
+            epoch_number: None,
+            gas_limit: U256::default(),
+            timestamp: 0.into(),
+            difficulty: U256::default(),
+            pow_quality: None,
+            referee_hashes: Vec::new(),
+            adaptive: false,
+            nonce: 0.into(),
+        };
+        let serialized_header = serde_json::to_string(&header).unwrap();
+
+        assert_eq!(serialized_header, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":0,"transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0"}"#);
     }
 }

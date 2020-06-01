@@ -2,21 +2,27 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub type SnapshotMptValue = (Box<[u8]>, Box<[u8]>, i64);
-
-pub struct SnapshotMpt<
-    DbType: KeyValueDbTraitOwnedRead + ?Sized,
-    BorrowType: Borrow<DbType>,
-> {
+pub struct SnapshotMpt<DbType: ?Sized, BorrowType: BorrowMut<DbType>> {
     pub db: BorrowType,
+    pub merkle_root: MerkleHash,
     pub _marker_db_type: std::marker::PhantomData<DbType>,
 }
 
-fn mpt_node_path_to_db_key(path: &dyn CompressedPathTrait) -> Vec<u8> {
-    let path_slice = path.path_slice();
-    let end_mask = path.end_mask();
+pub trait SnapshotMptLoadNode {
+    fn load_node_rlp(
+        &mut self, key: &[u8],
+    ) -> Result<Option<SnapshotMptDbValue>>;
+}
 
-    let full_slice = if end_mask == 0 {
+pub fn mpt_node_path_to_db_key(path: &dyn CompressedPathTrait) -> Vec<u8> {
+    let path_slice = path.path_slice();
+    let path_mask = path.path_mask();
+    debug_assert_eq!(
+        CompressedPathRaw::second_nibble(path_mask),
+        CompressedPathRaw::NO_MISSING_NIBBLE
+    );
+
+    let full_slice = if CompressedPathRaw::has_second_nibble(path_mask) {
         path_slice
     } else {
         &path_slice[0..path_slice.len() - 1]
@@ -31,7 +37,7 @@ fn mpt_node_path_to_db_key(path: &dyn CompressedPathTrait) -> Vec<u8> {
         result.push(CompressedPathRaw::first_nibble(*full_byte));
         result.push(CompressedPathRaw::second_nibble(*full_byte));
     }
-    if end_mask != 0 {
+    if CompressedPathRaw::no_second_nibble(path_mask) {
         result
             .push(CompressedPathRaw::first_nibble(*path_slice.last().unwrap()));
     }
@@ -39,23 +45,23 @@ fn mpt_node_path_to_db_key(path: &dyn CompressedPathTrait) -> Vec<u8> {
     result
 }
 
-fn mpt_node_path_from_db_key(db_key: &[u8]) -> Result<CompressedPathRaw> {
+pub fn mpt_node_path_from_db_key(db_key: &[u8]) -> Result<CompressedPathRaw> {
     // The 'p' letter.
     let mut offset = 1;
 
     let last_offset = db_key.len() - 1;
     let mut path = CompressedPathRaw::new_zeroed(
         (db_key.len() / 2).try_into()?,
-        // When last_offset is odd, 0xff is passed to first_nibble, otherwise
+        // When last_offset is odd, 0xf0 is set to path_mask, otherwise
         // 0.
-        CompressedPathRaw::first_nibble(0xff * ((last_offset & 1) as u8)),
+        CompressedPathRaw::second_nibble_mask() * ((last_offset & 1) as u8),
     );
     let path_mut = path.path_slice_mut();
 
     let mut path_index = 0;
     while offset < last_offset {
         path_mut[path_index] = CompressedPathRaw::set_second_nibble(
-            db_key[offset],
+            CompressedPathRaw::from_first_nibble(db_key[offset]),
             db_key[offset + 1],
         );
         offset += 2;
@@ -65,33 +71,56 @@ fn mpt_node_path_from_db_key(db_key: &[u8]) -> Result<CompressedPathRaw> {
     // A half-byte at the end.
     if offset == last_offset {
         path_mut[path_index] =
-            CompressedPathRaw::set_second_nibble(db_key[offset], 0);
+            CompressedPathRaw::from_first_nibble(db_key[offset]);
     }
 
     Ok(path)
 }
 
-impl<
-        DbType: KeyValueDbTraitOwnedRead + ?Sized,
-        BorrowType: BorrowMut<DbType>,
-    > SnapshotMptTraitReadOnly for SnapshotMpt<DbType, BorrowType>
-where DbType:
-        for<'db> KeyValueDbIterableTrait<'db, SnapshotMptValue, Error, [u8]>
+impl<DbType: SnapshotMptLoadNode + ?Sized, BorrowType: BorrowMut<DbType>>
+    SnapshotMpt<DbType, BorrowType>
 {
-    fn get_merkle_root(&self) -> &MerkleHash { unimplemented!() }
+    pub fn new(db: BorrowType) -> Result<Self> {
+        let mut mpt = Self {
+            db,
+            merkle_root: MERKLE_NULL_NODE,
+            _marker_db_type: Default::default(),
+        };
+        if let Some(rlp) = mpt.db.borrow_mut().load_node_rlp(
+            &mpt_node_path_to_db_key(&CompressedPathRaw::default()),
+        )? {
+            mpt.merkle_root =
+                *SnapshotMptNode(Rlp::new(&rlp).as_val()?).get_merkle();
+        }
+        Ok(mpt)
+    }
+
+    pub fn get_merkle_root_impl(&self) -> MerkleHash { self.merkle_root }
+}
+
+impl<DbType: SnapshotMptLoadNode + ?Sized, BorrowType: BorrowMut<DbType>>
+    SnapshotMptTraitRead for SnapshotMpt<DbType, BorrowType>
+{
+    fn get_merkle_root(&self) -> MerkleHash { self.get_merkle_root_impl() }
 
     fn load_node(
         &mut self, path: &dyn CompressedPathTrait,
-    ) -> Result<Option<VanillaTrieNode<MerkleHash>>> {
+    ) -> Result<Option<SnapshotMptNode>> {
         let key = mpt_node_path_to_db_key(path);
-        match self.db.borrow_mut().get_mut(&key)? {
+        match self.db.borrow_mut().load_node_rlp(&key)? {
             None => Ok(None),
-            Some(rlp) => Ok(Some(VanillaTrieNode::<MerkleHash>::decode(
-                &Rlp::new(&rlp),
-            )?)),
+            Some(rlp) => Ok(Some(SnapshotMptNode(Rlp::new(&rlp).as_val()?))),
         }
     }
+}
 
+impl<
+        DbType: SnapshotMptLoadNode
+            + for<'db> KeyValueDbIterableTrait<'db, SnapshotMptValue, Error, [u8]>
+            + ?Sized,
+        BorrowType: BorrowMut<DbType>,
+    > SnapshotMptTraitReadAndIterate for SnapshotMpt<DbType, BorrowType>
+{
     fn iterate_subtree_trie_nodes_without_root(
         &mut self, path: &dyn CompressedPathTrait,
     ) -> Result<Box<dyn SnapshotMptIteraterTrait + '_>> {
@@ -105,35 +134,23 @@ where DbType:
             self.db
                 .borrow_mut()
                 .iter_range_excl(&begin_key_excl, &end_key_excl)?
-                .map(|(key, value, subtree_size)| {
+                .map(|(key, value)| {
                     Ok((
                         mpt_node_path_from_db_key(&key)?,
-                        VanillaTrieNode::<MerkleHash>::decode(&Rlp::new(
-                            &value,
-                        ))?,
-                        subtree_size,
+                        SnapshotMptNode::decode(&Rlp::new(&value))?,
                     ))
                 }),
         ))
     }
-
-    fn get_manifest(
-        &self, _start_chunk: &ChunkKey,
-    ) -> Result<Option<RangedManifest>> {
-        unimplemented!()
-    }
-
-    fn get_chunk(&self, _key: &ChunkKey) -> Result<Option<Chunk>> {
-        unimplemented!()
-    }
 }
 
 impl<
-        DbType: KeyValueDbTraitSingleWriter + ?Sized,
+        DbType: SnapshotMptLoadNode
+            + KeyValueDbTraitSingleWriter<ValueType = SnapshotMptDbValue>
+            + for<'db> KeyValueDbIterableTrait<'db, SnapshotMptValue, Error, [u8]>
+            + ?Sized,
         BorrowType: BorrowMut<DbType>,
-    > SnapshotMptTraitSingleWriter for SnapshotMpt<DbType, BorrowType>
-where DbType:
-        for<'db> KeyValueDbIterableTrait<'db, SnapshotMptValue, Error, [u8]>
+    > SnapshotMptTraitRw for SnapshotMpt<DbType, BorrowType>
 {
     fn delete_node(&mut self, path: &dyn CompressedPathTrait) -> Result<()> {
         let key = mpt_node_path_to_db_key(path);
@@ -142,39 +159,28 @@ where DbType:
     }
 
     fn write_node(
-        &mut self, path: &dyn CompressedPathTrait,
-        trie_node: &VanillaTrieNode<MerkleHash>,
-    ) -> Result<()>
-    {
+        &mut self, path: &dyn CompressedPathTrait, trie_node: &SnapshotMptNode,
+    ) -> Result<()> {
         let key = mpt_node_path_to_db_key(path);
-        self.db.borrow_mut().put(&key, &trie_node.rlp_bytes())?;
+        self.db
+            .borrow_mut()
+            .put(&key, &trie_node.rlp_bytes().into_boxed_slice())?;
         Ok(())
     }
 }
 
-use super::{
-    super::{
-        super::storage_db::{
-            key_value_db::{
-                KeyValueDbIterableTrait, KeyValueDbTraitOwnedRead,
-                KeyValueDbTraitSingleWriter,
-            },
-            snapshot_mpt::{
-                SnapshotMptIteraterTrait, SnapshotMptTraitReadOnly,
-                SnapshotMptTraitSingleWriter,
-            },
-        },
+use crate::storage::{
+    impls::{
         errors::*,
-        multi_version_merkle_patricia_trie::merkle_patricia_trie::{
-            trie_node::VanillaTrieNode, CompressedPathRaw, CompressedPathTrait,
-        },
+        merkle_patricia_trie::{CompressedPathRaw, CompressedPathTrait},
     },
-    snapshot_sync::{Chunk, ChunkKey, RangedManifest},
+    storage_db::{
+        key_value_db::{KeyValueDbIterableTrait, KeyValueDbTraitSingleWriter},
+        snapshot_mpt::*,
+        SnapshotMptTraitRead,
+    },
 };
 use fallible_iterator::FallibleIterator;
-use primitives::MerkleHash;
+use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;
-use std::{
-    borrow::{Borrow, BorrowMut},
-    convert::TryInto,
-};
+use std::{borrow::BorrowMut, convert::TryInto};

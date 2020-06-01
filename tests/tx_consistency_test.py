@@ -5,6 +5,7 @@ import threading
 import time
 
 from conflux.rpc import RpcClient
+from test_framework.blocktools import wait_for_account_stable, wait_for_initial_nonce_for_privkey
 from test_framework.test_framework import DefaultConfluxTestFramework
 from test_framework.util import assert_greater_than_or_equal, assert_equal, assert_is_hash_string, sync_blocks
 
@@ -36,7 +37,7 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
         retry = num_txs
         for sender in senders:
             while True:
-                receipt = client.get_receipt(sender.last_tx_hash)
+                receipt = client.get_transaction_receipt(sender.last_tx_hash)
                 if receipt is not None:
                     break
 
@@ -67,7 +68,7 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
             node_client = RpcClient(self.nodes[idx])
 
             for tx_hash in [sent_tx.hash_hex() for sent_tx in txs]:
-                receipt = node_client.get_receipt(tx_hash)
+                receipt = node_client.get_transaction_receipt(tx_hash)
                 assert_equal(receipt is None, False)
 
         # check balance and nonce for all accounts
@@ -79,6 +80,7 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
             node_client = RpcClient(self.nodes[idx])
             for account in all_accounts:
                 assert_equal(node_client.get_balance(account.address), account.balance)
+            for account in senders:
                 assert_equal(node_client.get_nonce(account.address), account.nonce)
 
     def init_senders(self, num_accounts):
@@ -93,7 +95,11 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
             tx = client.new_tx(receiver=to, value=init_balance)
             client.send_tx(tx, True)
             accounts.append(Account(to, priv_key, init_balance))
-
+        # Ensure accounts have stable start nonce
+        client.generate_blocks(10)
+        wait_for_account_stable()
+        for account in accounts:
+            account.nonce = wait_for_initial_nonce_for_privkey(self.nodes[0], account.priv_key)
         return accounts
 
     def init_receivers(self, num_accounts):

@@ -22,7 +22,9 @@ use crate::{
     worker::{SocketWorker, Work, WorkType, Worker},
     IoError, IoHandler,
 };
-use crossbeam::sync::chase_lev;
+use crossbeam_deque;
+use lazy_static::lazy_static;
+use metrics::{register_meter_with_group, Meter, MeterTimer};
 use mio::{
     deprecated::{EventLoop, EventLoopBuilder, Handler, Sender},
     timer::Timeout,
@@ -40,6 +42,7 @@ use std::{
     time::Duration,
 };
 
+// FIXME: Use a enum type instead for function calls.
 /// Timer ID
 pub type TimerToken = usize;
 /// Timer ID
@@ -50,6 +53,11 @@ pub type HandlerId = usize;
 /// Maximum number of tokens a handler can use
 pub const TOKENS_PER_HANDLER: usize = 16384;
 const MAX_HANDLERS: usize = 8;
+
+lazy_static! {
+    static ref NET_POLL_THREAD_TIMER: Arc<dyn Meter> =
+        register_meter_with_group("timer", "service_mio::network_poll_thread");
+}
 
 /// Messages used to communicate with the event loop from other threads.
 #[derive(Clone)]
@@ -91,6 +99,12 @@ where Message: Send + Sized
     },
     /// Broadcast a message across all protocol handlers.
     UserMessage(Arc<Message>),
+    /// Handle a message received from a peer by a specified protocol handler
+    RemoteMessage {
+        peer: StreamToken,
+        handler_id: HandlerId,
+        msg: Arc<Message>,
+    },
 }
 
 /// IO access point. This is passed to all IO handlers and provides an interface
@@ -204,6 +218,16 @@ where Message: Send + Sync + 'static
         Ok(())
     }
 
+    pub fn handle(
+        &self, peer: usize, handler_id: HandlerId, msg: Message,
+    ) -> Result<(), IoError> {
+        self.channel.send_io(IoMessage::RemoteMessage {
+            peer,
+            handler_id,
+            msg: Arc::new(msg),
+        })
+    }
+
     /// Get message channel
     pub fn channel(&self) -> IoChannel<Message> { self.channel.clone() }
 
@@ -237,9 +261,10 @@ where Message: Send + Sync
     timers: Arc<RwLock<HashMap<HandlerId, UserTimer>>>,
     handlers: Arc<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>,
     workers: Vec<Worker>,
-    worker_channel: chase_lev::Worker<Work<Message>>,
+    worker_channel: crossbeam_deque::Worker<Work<Message>>,
     work_ready: Arc<SCondvar>,
     socket_workers: Vec<(AsyncSender<Work<Message>>, SocketWorker)>,
+    network_poll: Arc<Poll>,
 }
 
 impl<Message> IoManager<Message>
@@ -249,9 +274,11 @@ where Message: Send + Sync + 'static
     pub fn start(
         event_loop: &mut EventLoop<IoManager<Message>>,
         handlers: Arc<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>,
+        network_poll: Arc<Poll>,
     ) -> Result<(), IoError>
     {
-        let (worker, stealer) = chase_lev::deque();
+        let worker = crossbeam_deque::Worker::new_fifo();
+        let stealer = worker.stealer();
         let num_workers = 4;
         let work_ready_mutex = Arc::new(SMutex::new(()));
         let work_ready = Arc::new(SCondvar::new());
@@ -295,6 +322,7 @@ where Message: Send + Sync + 'static
             workers,
             work_ready,
             socket_workers,
+            network_poll,
         };
         event_loop.run(&mut io)?;
         Ok(())
@@ -307,51 +335,9 @@ where Message: Send + Sync + 'static
     type Message = IoMessage<Message>;
     type Timeout = Token;
 
-    fn ready(
-        &mut self, _event_loop: &mut EventLoop<Self>, token: Token,
-        events: Ready,
-    )
-    {
-        let handler_index = token.0 / TOKENS_PER_HANDLER;
-        let token_id = token.0 % TOKENS_PER_HANDLER;
-        if let Some(handler) = self.handlers.read().get(handler_index) {
-            let worker_id = token_id % 4;
-            if events.is_hup() {
-                self.socket_workers[worker_id]
-                    .0
-                    .send(Work {
-                        work_type: WorkType::Hup,
-                        token: token_id,
-                        handler: handler.clone(),
-                        handler_id: handler_index,
-                    })
-                    .unwrap();
-            } else {
-                if events.is_readable() {
-                    self.socket_workers[worker_id]
-                        .0
-                        .send(Work {
-                            work_type: WorkType::Readable,
-                            token: token_id,
-                            handler: handler.clone(),
-                            handler_id: handler_index,
-                        })
-                        .unwrap();
-                }
-                if events.is_writable() {
-                    self.socket_workers[worker_id]
-                        .0
-                        .send(Work {
-                            work_type: WorkType::Writable,
-                            token: token_id,
-                            handler: handler.clone(),
-                            handler_id: handler_index,
-                        })
-                        .unwrap();
-                }
-            }
-        }
-    }
+    // All network reading and writing is now handled by the network_poll, so
+    // this event loop will not have any ready event.
+    //    fn ready(...
 
     fn timeout(&mut self, event_loop: &mut EventLoop<Self>, token: Token) {
         let handler_index = token.0 / TOKENS_PER_HANDLER;
@@ -392,6 +378,7 @@ where Message: Send + Sync + 'static
                     handler_id <= MAX_HANDLERS,
                     "Too many handlers registered"
                 );
+                trace!("add handler {}", handler_id);
                 handler.initialize(&IoContext::new(
                     IoChannel::new(
                         event_loop.channel(),
@@ -447,17 +434,20 @@ where Message: Send + Sync + 'static
                 }
             }
             IoMessage::RegisterStream { handler_id, token } => {
+                trace!("register stream {} {}", handler_id, token);
                 if let Some(handler) = self.handlers.read().get(handler_id) {
+                    trace!("do register stream {} {}", handler_id, token);
                     handler.register_stream(
                         token,
                         Token(token + handler_id * TOKENS_PER_HANDLER),
-                        event_loop,
+                        self.network_poll.as_ref(),
                     );
                 }
             }
             IoMessage::DeregisterStream { handler_id, token } => {
                 if let Some(handler) = self.handlers.read().get(handler_id) {
-                    handler.deregister_stream(token, event_loop);
+                    handler
+                        .deregister_stream(token, self.network_poll.as_ref());
                     // unregister a timer associated with the token (if any)
                     let timer_id = token + handler_id * TOKENS_PER_HANDLER;
                     if let Some(timer) = self.timers.write().remove(&timer_id) {
@@ -470,7 +460,7 @@ where Message: Send + Sync + 'static
                     handler.update_stream(
                         token,
                         Token(token + handler_id * TOKENS_PER_HANDLER),
-                        event_loop,
+                        self.network_poll.as_ref(),
                     );
                 }
             }
@@ -488,6 +478,24 @@ where Message: Send + Sync + 'static
                     }
                 }
                 self.work_ready.notify_all();
+            }
+            IoMessage::RemoteMessage {
+                peer,
+                handler_id,
+                msg,
+            } => {
+                let worker_id = peer % 4;
+                if let Some(handler) = self.handlers.read().get(handler_id) {
+                    self.socket_workers[worker_id]
+                        .0
+                        .send(Work {
+                            work_type: WorkType::Message(msg),
+                            token: peer,
+                            handler: handler.clone(),
+                            handler_id,
+                        })
+                        .expect("fail to send message to socket_worker");
+                }
             }
         }
     }
@@ -573,7 +581,10 @@ where Message: Send + Sync + 'static
     /// Send low level io message
     pub fn send_io(&self, message: IoMessage<Message>) -> Result<(), IoError> {
         if let Some(ref channel) = self.channel {
-            channel.send(message)?
+            if let Err(e) = channel.send(message) {
+                warn!("Error sending message to eventloop channel, err={}", e);
+                return Err(e.into());
+            }
         }
         Ok(())
     }
@@ -616,23 +627,30 @@ where Message: Send + Sync + 'static
     thread: Mutex<Option<JoinHandle<()>>>,
     host_channel: Mutex<Sender<IoMessage<Message>>>,
     handlers: Arc<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>,
+    network_poll_thread: Mutex<Option<JoinHandle<()>>>,
+    network_poll_stopped: Arc<(Registration, SetReadiness)>,
 }
 
 impl<Message> IoService<Message>
 where Message: Send + Sync + 'static
 {
     /// Starts IO event loop
-    pub fn start() -> Result<IoService<Message>, IoError> {
+    pub fn start(
+        network_poll: Arc<Poll>,
+    ) -> Result<IoService<Message>, IoError> {
+        debug!("start IoService");
         let mut config = EventLoopBuilder::new();
         config.messages_per_tick(1024);
+        config.notify_capacity(20960);
         let mut event_loop = config.build().expect("Error creating event loop");
         let channel = event_loop.channel();
         let handlers = Arc::new(RwLock::new(Slab::with_capacity(MAX_HANDLERS)));
         let h = handlers.clone();
+
         let thread = thread::Builder::new()
             .name("io_service".into())
             .spawn(move || {
-                IoManager::<Message>::start(&mut event_loop, h)
+                IoManager::<Message>::start(&mut event_loop, h, network_poll)
                     .expect("Error starting IO service");
             })
             .expect("only one io_service thread, so it should not fail");
@@ -640,11 +658,25 @@ where Message: Send + Sync + 'static
             thread: Mutex::new(Some(thread)),
             host_channel: Mutex::new(channel),
             handlers,
+            network_poll_thread: Mutex::new(None),
+            network_poll_stopped: Arc::new(Registration::new2()),
         })
     }
 
     pub fn stop(&self) {
-        trace!(target: "shutdown", "[IoService] Closing...");
+        debug!("[IoService] Closing...");
+        // Network poll should be closed before the main EventLoop, otherwise it
+        // will send messages to a closed EventLoop.
+        self.network_poll_stopped
+            .1
+            .set_readiness(Ready::readable())
+            .expect("Set network_poll_stopped readiness failure");
+        if let Some(thread) = self.network_poll_thread.lock().take() {
+            thread.join().unwrap_or_else(|e| match e.downcast_ref::<&'static str>() {
+                Some(e) => error!("Error joining network poll thread: {}", e),
+                None => error!("Error joining network poll thread: Unknown error: {:?}", e),
+            });
+        }
         // Clear handlers so that shared pointers are not stuck on stack
         // in Channel::send_sync
         self.handlers.write().clear();
@@ -653,11 +685,79 @@ where Message: Send + Sync + 'static
             .send(IoMessage::Shutdown)
             .unwrap_or_else(|e| warn!("Error on IO service shutdown: {:?}", e));
         if let Some(thread) = self.thread.lock().take() {
-            thread.join().unwrap_or_else(|e| {
-                debug!(target: "shutdown", "Error joining IO service event loop thread: {:?}", e);
+            thread.join().unwrap_or_else(|e| match e.downcast_ref::<&'static str>() {
+                Some(e) => error!("Error joining IO service event loop thread: {}", e),
+                None => error!("Error joining IO service event loop thread: Unknown error: {:?}", e),
             });
         }
-        trace!(target: "shutdown", "[IoService] Closed.");
+        debug!("[IoService] Closed.");
+    }
+
+    pub fn start_network_poll(
+        &self, network_poll: Arc<Poll>, handler: Arc<dyn IoHandler<Message>>,
+        main_event_loop_channel: IoChannel<Message>, max_sessions: usize,
+        stop_token: usize,
+    )
+    {
+        network_poll
+            .register(
+                &self.network_poll_stopped.0,
+                Token(stop_token),
+                Ready::readable(),
+                PollOpt::edge(),
+            )
+            .expect("network_poll register failure");
+        let thread = thread::Builder::new()
+            .name("network_eventloop".into())
+            .spawn(move || {
+                let mut events = Events::with_capacity(max_sessions);
+                loop {
+                    network_poll
+                        .poll(&mut events, None)
+                        .expect("Network poll failure");
+                    let _timer =
+                        MeterTimer::time_func(NET_POLL_THREAD_TIMER.as_ref());
+                    for event in &events {
+                        // IoService is dropped and we should stop this thread
+                        if event.token().0 == stop_token {
+                            assert!(event.readiness().is_readable());
+                            return;
+                        }
+
+                        let handler_id = 0;
+                        let token_id = event.token().0 % TOKENS_PER_HANDLER;
+                        if event.readiness().is_readable() {
+                            handler.stream_readable(
+                                &IoContext::new(
+                                    main_event_loop_channel.clone(),
+                                    handler_id,
+                                ),
+                                token_id,
+                            );
+                        }
+                        if event.readiness().is_writable() {
+                            handler.stream_writable(
+                                &IoContext::new(
+                                    main_event_loop_channel.clone(),
+                                    handler_id,
+                                ),
+                                token_id,
+                            );
+                        }
+                        if event.readiness().is_hup() {
+                            handler.stream_hup(
+                                &IoContext::new(
+                                    main_event_loop_channel.clone(),
+                                    handler_id,
+                                ),
+                                token_id,
+                            );
+                        }
+                    }
+                }
+            })
+            .expect("only one io_service thread, so it should not fail");
+        *self.network_poll_thread.lock() = Some(thread);
     }
 
     /// Regiter an IO handler with the event loop.

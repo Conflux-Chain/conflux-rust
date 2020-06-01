@@ -2,6 +2,24 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::{
+    consensus::SharedConsensusGraph,
+    light_protocol::{
+        common::{max_of_collection, FullPeerFilter, FullPeerState, Peers},
+        handler::sync::headers::Headers,
+        message::{msgid, GetBlockHashesByEpoch},
+        Error,
+    },
+    message::{Message, RequestId},
+    network::NetworkContext,
+    parameters::light::{
+        EPOCH_REQUEST_BATCH_SIZE, EPOCH_REQUEST_TIMEOUT,
+        MAX_PARALLEL_EPOCH_REQUESTS, NUM_EPOCHS_TO_REQUEST,
+        NUM_WAITING_HEADERS_THRESHOLD,
+    },
+    UniqueId,
+};
+use network::node_table::NodeId;
 use parking_lot::RwLock;
 use std::{
     cmp,
@@ -10,27 +28,8 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc,
     },
-    time::{Duration, Instant},
+    time::Instant,
 };
-
-use crate::{
-    consensus::ConsensusGraph,
-    light_protocol::{
-        common::{max_of_collection, Peers, UniqueId},
-        handler::FullPeerState,
-        message::GetBlockHashesByEpoch,
-        Error,
-    },
-    message::{Message, RequestId},
-    network::{NetworkContext, PeerId},
-    parameters::light::{
-        EPOCH_REQUEST_BATCH_SIZE, EPOCH_REQUEST_TIMEOUT_MS,
-        MAX_PARALLEL_EPOCH_REQUESTS, NUM_EPOCHS_TO_REQUEST,
-        NUM_WAITING_HEADERS_THRESHOLD,
-    },
-};
-
-use super::headers::Headers;
 
 #[derive(Debug)]
 struct Statistics {
@@ -52,9 +51,9 @@ impl EpochRequest {
     }
 }
 
-pub(super) struct Epochs {
+pub struct Epochs {
     // shared consensus graph
-    consensus: Arc<ConsensusGraph>,
+    consensus: SharedConsensusGraph,
 
     // header sync manager
     headers: Arc<Headers>,
@@ -74,7 +73,7 @@ pub(super) struct Epochs {
 
 impl Epochs {
     pub fn new(
-        consensus: Arc<ConsensusGraph>, headers: Arc<Headers>,
+        consensus: SharedConsensusGraph, headers: Arc<Headers>,
         peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
     ) -> Self
     {
@@ -143,7 +142,7 @@ impl Epochs {
 
     pub fn clean_up(&self) {
         let mut in_flight = self.in_flight.write();
-        let timeout = Duration::from_millis(EPOCH_REQUEST_TIMEOUT_MS);
+        let timeout = *EPOCH_REQUEST_TIMEOUT;
 
         // collect timed-out requests
         let ids: Vec<_> = in_flight
@@ -162,9 +161,9 @@ impl Epochs {
 
     #[inline]
     fn request_epochs(
-        &self, io: &dyn NetworkContext, peer: PeerId, epochs: Vec<u64>,
+        &self, io: &dyn NetworkContext, peer: &NodeId, epochs: Vec<u64>,
     ) -> Result<Option<RequestId>, Error> {
-        info!("request_epochs peer={:?} epochs={:?}", peer, epochs);
+        debug!("request_epochs peer={:?} epochs={:?}", peer, epochs);
 
         if epochs.is_empty() {
             return Ok(None);
@@ -180,7 +179,7 @@ impl Epochs {
     }
 
     pub fn sync(&self, io: &dyn NetworkContext) {
-        info!("epoch sync statistics: {:?}", self.get_statistics());
+        debug!("epoch sync statistics: {:?}", self.get_statistics());
 
         if self.headers.num_waiting() >= NUM_WAITING_HEADERS_THRESHOLD {
             return;
@@ -195,8 +194,12 @@ impl Epochs {
             let max = max_of_collection(batch.iter()).expect("chunk not empty");
 
             // choose random peer that has the epochs we need
-            let predicate = |s: &FullPeerState| s.best_epoch >= *max;
-            let peer = match self.peers.random_peer_satisfying(predicate) {
+            let matched_peer =
+                FullPeerFilter::new(msgid::GET_BLOCK_HASHES_BY_EPOCH)
+                    .with_min_best_epoch(*max)
+                    .select(self.peers.clone());
+
+            let peer = match matched_peer {
                 Some(peer) => peer,
                 None => {
                     warn!("No peers available; aborting sync");
@@ -205,7 +208,7 @@ impl Epochs {
             };
 
             // request epoch batch
-            match self.request_epochs(io, peer, batch.to_vec()) {
+            match self.request_epochs(io, &peer, batch.to_vec()) {
                 Ok(None) => {}
                 Ok(Some(id)) => {
                     self.insert_in_flight(id, batch.to_vec());

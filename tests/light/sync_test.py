@@ -15,7 +15,6 @@ LIGHTNODE = 2
 
 class LightSyncTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 3
 
     def setup_network(self):
@@ -44,7 +43,7 @@ class LightSyncTest(ConfluxTestFramework):
     def generate_blocks(self, num):
         for _ in range(num):
             chosen_peer = self.random_full_node()
-            block_hash = self.nodes[chosen_peer].generate(1, 0)
+            block_hash = self.nodes[chosen_peer].generate_empty_blocks(1)
             self.log.info("%s generate block %s", chosen_peer, block_hash)
 
     def run_test(self):
@@ -62,14 +61,14 @@ class LightSyncTest(ConfluxTestFramework):
 
         self.connect_light_node([FULLNODE0, FULLNODE1])
         wait_for_block_count(self.nodes[LIGHTNODE], 1 * block_batch_size + 1)
-        self.log.info(f"Pass 1 - catch up {block_batch_size} blocks from 2 peers")
+        self.log.info(f"Pass 1 - catch up {block_batch_size} blocks from 2 peers\n")
 
         # keep up
         self.generate_blocks(block_batch_size)
         wait_for_block_count(self.nodes[FULLNODE0], 2 * block_batch_size + 1)
         wait_for_block_count(self.nodes[FULLNODE1], 2 * block_batch_size + 1)
         wait_for_block_count(self.nodes[LIGHTNODE], 2 * block_batch_size + 1)
-        self.log.info(f"Pass 2 - keep up with 2 peers for {block_batch_size} blocks")
+        self.log.info(f"Pass 2 - keep up with 2 peers for {block_batch_size} blocks\n")
 
         # catch up again
         self.disconnect_light_node([FULLNODE0, FULLNODE1])
@@ -80,7 +79,7 @@ class LightSyncTest(ConfluxTestFramework):
 
         self.connect_light_node([FULLNODE0])
         wait_for_block_count(self.nodes[LIGHTNODE], 3 * block_batch_size + 1)
-        self.log.info(f"Pass 3 - catch up {block_batch_size} blocks from 1 peer")
+        self.log.info(f"Pass 3 - catch up {block_batch_size} blocks from 1 peer\n")
 
 
 if __name__ == "__main__":

@@ -5,7 +5,11 @@
 extern crate tempdir;
 
 use self::tempdir::TempDir;
-use crate::archive::{ArchiveClient, ArchiveClientHandle, Configuration};
+use crate::{
+    archive::{ArchiveClient, ArchiveClientExtraComponents},
+    common::{client_methods, ClientComponents},
+    configuration::Configuration,
+};
 use blockgen::BlockGenerator;
 use parking_lot::{Condvar, Mutex};
 use std::{
@@ -14,13 +18,15 @@ use std::{
     time::{Duration, Instant},
 };
 
-fn test_mining_10_epochs_inner(handle: &ArchiveClientHandle) {
-    let bgen = handle.blockgen.clone();
+fn test_mining_10_epochs_inner(
+    handle: &ClientComponents<BlockGenerator, ArchiveClientExtraComponents>,
+) {
+    let bgen = handle.blockgen.clone().unwrap();
     //println!("Pow Config: {:?}", bgen.pow_config());
     thread::spawn(move || {
         BlockGenerator::start_mining(bgen, 0);
     });
-    let sync_graph = handle.sync.get_synchronization_graph();
+    let sync_graph = handle.other_components.sync.get_synchronization_graph();
     let best_block_hash = sync_graph.consensus.best_block_hash();
     let start_height =
         sync_graph.block_height_by_hash(&best_block_hash).unwrap();
@@ -36,7 +42,7 @@ fn test_mining_10_epochs_inner(handle: &ArchiveClientHandle) {
             .unwrap();
         info!("{}", end_height - start_height);
         if end_height - start_height >= 10 {
-            BlockGenerator::stop(&handle.blockgen);
+            handle.blockgen.as_ref().unwrap().stop();
             return;
         }
         thread::sleep(sleep_duration);
@@ -45,7 +51,7 @@ fn test_mining_10_epochs_inner(handle: &ArchiveClientHandle) {
     let end_height = sync_graph
         .block_height_by_hash(&new_best_block_hash)
         .unwrap();
-    BlockGenerator::stop(&handle.blockgen);
+    handle.blockgen.as_ref().unwrap().stop();
     panic!(
         "Mined too few blocks, delta height is only {}.",
         end_height - start_height
@@ -55,18 +61,18 @@ fn test_mining_10_epochs_inner(handle: &ArchiveClientHandle) {
 #[test]
 fn test_mining_10_epochs() {
     let mut conf = Configuration::default();
-    conf.raw_conf.test_mode = true;
+    conf.raw_conf.mode = Some("test".to_owned());
     conf.raw_conf.initial_difficulty = Some(10_000);
 
     let tmp_dir = TempDir::new("conflux-test").unwrap();
-    conf.raw_conf.db_dir = Some(
-        tmp_dir
-            .path()
-            .join("db")
-            .into_os_string()
-            .into_string()
-            .unwrap(),
-    );
+    conf.raw_conf.conflux_data_dir =
+        tmp_dir.path().to_str().unwrap().to_string() + "/";
+    conf.raw_conf.block_db_dir = tmp_dir
+        .path()
+        .join("db")
+        .into_os_string()
+        .into_string()
+        .unwrap();
     conf.raw_conf.netconf_dir = Some(
         tmp_dir
             .path()
@@ -75,15 +81,15 @@ fn test_mining_10_epochs() {
             .into_string()
             .unwrap(),
     );
-    conf.raw_conf.port = Some(13001);
+    conf.raw_conf.tcp_port = 13001;
     conf.raw_conf.jsonrpc_http_port = Some(18001);
     conf.raw_conf.mining_author =
         Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into());
 
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
-    let handle = ArchiveClient::start(conf, exit.clone()).unwrap();
+    let handle = ArchiveClient::start(conf, exit).unwrap();
 
     test_mining_10_epochs_inner(&handle);
 
-    ArchiveClient::close(handle);
+    client_methods::shutdown(handle);
 }

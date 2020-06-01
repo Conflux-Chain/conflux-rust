@@ -1,0 +1,70 @@
+{
+    "abi": [
+        {
+            "constant": false,
+            "inputs": [
+                {
+                    "internalType": "address[]",
+                    "name": "",
+                    "type": "address[]"
+                }
+            ],
+            "name": "add_privilege",
+            "outputs": [],
+            "payable": false,
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "constant": false,
+            "inputs": [
+                {
+                    "internalType": "address[]",
+                    "name": "",
+                    "type": "address[]"
+                }
+            ],
+            "name": "remove_privilege",
+            "outputs": [],
+            "payable": false,
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "constant": false,
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "contract_addr",
+                    "type": "address"
+                }
+            ],
+            "name": "set_sponsor_for_collateral",
+            "outputs": [],
+            "payable": true,
+            "stateMutability": "payable",
+            "type": "function"
+        },
+        {
+            "constant": false,
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "contract_addr",
+                    "type": "address"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "upper_bound",
+                    "type": "uint256"
+                }
+            ],
+            "name": "set_sponsor_for_gas",
+            "outputs": [],
+            "payable": true,
+            "stateMutability": "payable",
+            "type": "function"
+        }
+    ],
+    "bytecode": "608060405234801561001057600080fd5b506102a2806100206000396000f3fe60806040526004361061003f5760003560e01c80630862bf681461004457806344c0bd2114610088578063e9ac3d4a1461014d578063fe15156c1461019b575b600080fd5b6100866004803603602081101561005a57600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190505050610260565b005b34801561009457600080fd5b5061014b600480360360208110156100ab57600080fd5b81019080803590602001906401000000008111156100c857600080fd5b8201836020820111156100da57600080fd5b803590602001918460208302840111640100000000831117156100fc57600080fd5b919080806020026020016040519081016040528093929190818152602001838360200280828437600081840152601f19601f820116905080830192505050505050509192919290505050610263565b005b6101996004803603604081101561016357600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff16906020019092919080359060200190929190505050610266565b005b3480156101a757600080fd5b5061025e600480360360208110156101be57600080fd5b81019080803590602001906401000000008111156101db57600080fd5b8201836020820111156101ed57600080fd5b8035906020019184602083028401116401000000008311171561020f57600080fd5b919080806020026020016040519081016040528093929190818152602001838360200280828437600081840152601f19601f82011690508083019250505050505050919291929050505061026a565b005b50565b50565b5050565b5056fea265627a7a723158201d9b65e7ea9159cf734a011d991bb04026835e8728329e907cda0f2bf855b97664736f6c63430005100032"
+}

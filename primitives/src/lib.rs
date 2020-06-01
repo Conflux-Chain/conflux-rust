@@ -4,12 +4,14 @@
 
 extern crate cfx_bytes as bytes;
 extern crate keccak_hash as hash;
-extern crate keylib;
 extern crate rlp;
 #[macro_use]
 extern crate rlp_derive;
+extern crate cfxkey as keylib;
 extern crate log;
 extern crate unexpected;
+#[macro_use]
+extern crate lazy_static;
 
 pub mod account;
 pub mod block;
@@ -19,20 +21,28 @@ pub mod filter;
 pub mod log_entry;
 pub mod receipt;
 pub mod state_root;
+pub mod storage;
+pub mod storage_key;
 pub mod transaction;
-pub mod transaction_address;
+pub mod transaction_index;
 
 pub use crate::{
-    account::Account,
+    account::{
+        Account, CodeInfo, DepositInfo, DepositList, SponsorInfo,
+        VoteStakeInfo, VoteStakeList,
+    },
     block::{Block, BlockNumber},
     block_header::{BlockHeader, BlockHeaderBuilder},
-    epoch::{EpochId, EpochNumber},
+    epoch::{BlockHashOrEpochNumber, EpochId, EpochNumber, NULL_EPOCH},
     log_entry::LogEntry,
-    receipt::Receipt,
+    receipt::{BlockReceipts, Receipt},
     state_root::*,
+    storage::{StorageLayout, StorageRoot, StorageValue},
+    storage_key::*,
     transaction::{
-        Action, SignedTransaction, Transaction, TransactionWithSignature,
+        Action, ChainIdParams, SignedTransaction, Transaction,
+        TransactionWithSignature, TransactionWithSignatureSerializePart,
         TxPropagateId,
     },
-    transaction_address::TransactionAddress,
+    transaction_index::TransactionIndex,
 };

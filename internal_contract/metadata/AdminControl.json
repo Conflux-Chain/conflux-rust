@@ -1,0 +1,40 @@
+{
+    "abi": [
+        {
+            "constant": false,
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "",
+                    "type": "address"
+                }
+            ],
+            "name": "destroy",
+            "outputs": [],
+            "payable": false,
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "constant": false,
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "",
+                    "type": "address"
+                },
+                {
+                    "internalType": "address",
+                    "name": "",
+                    "type": "address"
+                }
+            ],
+            "name": "set_admin",
+            "outputs": [],
+            "payable": false,
+            "stateMutability": "nonpayable",
+            "type": "function"
+        }
+    ],
+    "bytecode": "608060405234801561001057600080fd5b50610114806100206000396000f3fe6080604052348015600f57600080fd5b506004361060315760003560e01c8062f55d9d14603657806373e80cba146077575b600080fd5b607560048036036020811015604a57600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff16906020019092919050505060d8565b005b60d660048036036040811015608b57600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190803573ffffffffffffffffffffffffffffffffffffffff16906020019092919050505060db565b005b50565b505056fea265627a7a723158202b974493b69b170252b7cb8446c8190ba807c62f6b1948682b6c3f14e6543fe464736f6c63430005100032"
+}

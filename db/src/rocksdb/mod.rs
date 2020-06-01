@@ -19,25 +19,21 @@
 // See http://www.gnu.org/licenses/
 
 extern crate core;
-extern crate kvdb;
 extern crate kvdb_rocksdb;
 
-use self::{
-    kvdb::KeyValueDB,
-    kvdb_rocksdb::{CompactionProfile, Database, DatabaseConfig},
-};
+use self::kvdb_rocksdb::{CompactionProfile, Database, DatabaseConfig};
 use std::{io, path::Path, str::FromStr, sync::Arc};
 
 pub struct SystemDB {
     // This is the general db that will be shared and used by
     // all the special db at upper layer.
-    key_value: Arc<dyn KeyValueDB>,
+    key_value: Arc<Database>,
 }
 
 impl SystemDB {
-    pub fn key_value(&self) -> &Arc<dyn KeyValueDB> { &self.key_value }
+    pub fn key_value(&self) -> &Arc<Database> { &self.key_value }
 
-    pub fn new(kvdb: Arc<dyn KeyValueDB>) -> Self { Self { key_value: kvdb } }
+    pub fn new(kvdb: Arc<Database>) -> Self { Self { key_value: kvdb } }
 }
 
 /// db compaction profile
@@ -83,13 +79,14 @@ pub fn compaction_profile(
 
 pub fn db_config(
     path: &Path, db_cache_size: Option<usize>,
-    db_compaction: DatabaseCompactionProfile, columns: Option<u32>,
+    db_compaction: DatabaseCompactionProfile, columns: u32, disable_wal: bool,
 ) -> DatabaseConfig
 {
     let mut db_config = DatabaseConfig::with_columns(columns);
 
     db_config.memory_budget = db_cache_size;
     db_config.compaction = compaction_profile(&db_compaction, &path);
+    db_config.disable_wal = disable_wal;
 
     db_config
 }
@@ -108,9 +105,7 @@ pub fn open_database(
         }
     };
 
-    let sys_db = SystemDB {
-        key_value: Arc::new(db),
-    };
+    let sys_db = SystemDB::new(Arc::new(db));
 
     Ok(Arc::new(sys_db))
 }

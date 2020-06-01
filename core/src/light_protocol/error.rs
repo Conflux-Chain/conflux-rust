@@ -2,12 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use rlp::DecoderError;
-
 use crate::{
-    message::MsgId,
-    network::{self, NetworkContext, PeerId, UpdateNodeOperation},
+    message::{Message, MsgId},
+    network::{self, NetworkContext, UpdateNodeOperation},
+    sync::message::Throttled,
 };
+use network::node_table::NodeId;
+use primitives::ChainIdParams;
+use rlp::DecoderError;
 
 error_chain! {
     links {
@@ -22,6 +24,11 @@ error_chain! {
         GenesisMismatch {
             description("Genesis mismatch"),
             display("Genesis mismatch"),
+        }
+
+        ChainIdMismatch{ours: ChainIdParams, theirs: ChainIdParams} {
+            description("ChainId mismatch"),
+            display("ChainId mismatch, ours {:?}, theirs {:?}.", ours, theirs),
         }
 
         NoResponse {
@@ -62,6 +69,11 @@ error_chain! {
         InvalidStateRoot {
             description("Invalid state root"),
             display("Invalid state root"),
+        }
+
+        InvalidTxInfo {
+            description("Invalid tx info"),
+            display("Invalid tx info"),
         }
 
         InvalidTxRoot {
@@ -123,16 +135,27 @@ error_chain! {
             description("Validation failed"),
             display("Validation failed"),
         }
+
+        AlreadyThrottled(msg_name: &'static str) {
+            description("packet already throttled"),
+            display("packet already throttled: {:?}", msg_name),
+        }
+
+        Throttled(msg_name: &'static str, response: Throttled) {
+            description("packet throttled"),
+            display("packet {:?} throttled: {:?}", msg_name, response),
+        }
     }
 }
 
-pub fn handle(io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
+pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
     warn!(
-        "Error while handling message, peer={}, msg_id={:?}, error={:?}",
+        "Error while handling message, peer={}, msg_id={:?}, error={}",
         peer, msg_id, e
     );
 
     let mut disconnect = true;
+    let reason = format!("{}", e.0);
     let mut op = None;
 
     // NOTE: do not use wildcard; this way, the compiler
@@ -163,6 +186,7 @@ pub fn handle(io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
         | ErrorKind::UnknownMessage => disconnect = false,
 
         ErrorKind::GenesisMismatch
+        | ErrorKind::ChainIdMismatch{..}
         | ErrorKind::UnexpectedMessage
         | ErrorKind::UnexpectedPeerType
         | ErrorKind::UnknownPeer => op = Some(UpdateNodeOperation::Failure),
@@ -177,13 +201,37 @@ pub fn handle(io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
         | ErrorKind::InvalidReceipts
         | ErrorKind::InvalidStateProof
         | ErrorKind::InvalidStateRoot
+        | ErrorKind::InvalidTxInfo
         | ErrorKind::InvalidTxRoot
         | ErrorKind::InvalidTxSignature
         | ErrorKind::ValidationFailed
+        | ErrorKind::AlreadyThrottled(_)
         | ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
+
+        ErrorKind::Throttled(_, resp) => {
+            disconnect = false;
+
+            if let Err(e) = resp.send(io, peer) {
+                error!("failed to send throttled packet: {:?}", e);
+                disconnect = true;
+            }
+        }
 
         // network errors
         ErrorKind::Network(kind) => match kind {
+            network::ErrorKind::SendUnsupportedMessage{..} => {
+                unreachable!("This is a bug in protocol version maintenance. {:?}", kind);
+            }
+
+            network::ErrorKind::MessageDeprecated{..} => {
+                op = Some(UpdateNodeOperation::Failure);
+                error!(
+                    "Peer sent us a deprecated message {:?}. Either it's a bug \
+                    in protocol version maintenance or the peer is malicious.",
+                    kind,
+                );
+            }
+
             network::ErrorKind::AddressParse
             | network::ErrorKind::AddressResolve(_)
             | network::ErrorKind::Auth
@@ -212,6 +260,6 @@ pub fn handle(io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
     };
 
     if disconnect {
-        io.disconnect_peer(peer, op, None /* reason */);
+        io.disconnect_peer(peer, op, reason.as_str());
     }
 }

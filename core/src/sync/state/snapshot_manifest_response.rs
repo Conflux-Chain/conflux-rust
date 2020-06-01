@@ -3,29 +3,49 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    message::{Message, MsgId},
-    storage::RangedManifest,
+    block_data_manager::BlockExecutionResult,
+    message::{GetMaybeRequestId, Message, MessageProtocolVersionBound, MsgId},
     sync::{
         message::{msgid, Context, Handleable},
-        state::SnapshotManifestRequest,
-        Error, ErrorKind,
+        state::{storage::RangedManifest, SnapshotManifestRequest},
+        Error, ErrorKind, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
 };
 use cfx_types::H256;
+use network::service::ProtocolVersion;
+use primitives::{MerkleHash, StateRoot};
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::any::Any;
 
-#[derive(RlpDecodable, RlpEncodable)]
+#[derive(RlpDecodable, RlpEncodable, Default)]
 pub struct SnapshotManifestResponse {
     pub request_id: u64,
-    pub checkpoint: H256,
     pub manifest: RangedManifest,
-    pub state_blame_vec: Vec<H256>,
+    // FIXME: this TODO must be addressed before release, or we must have a
+    // FIXME: protocol version field
+    //
+    // We actually need state_root_blame_vec for two epochs: snapshot_epoch_id
+    // and its next snapshot + 1 epoch; and the state_root of snapshot_epoch_id
+    // and the state root of its next snapshot + 1 epoch to get
+    // snapshot_merkle_root of snapshot_epoch_id. The
+    // current implementation passes state_blame_vec for the entire range of
+    // snapshot_epoch_id to its next snapshot's trusted blame block,
+    // which should be improved.
+    //
+    // TODO: reduce the data to pass over network.
+    pub state_root_vec: Vec<StateRoot>,
     pub receipt_blame_vec: Vec<H256>,
     pub bloom_blame_vec: Vec<H256>,
+    pub block_receipts: Vec<BlockExecutionResult>,
+
+    // Debug only field.
+    // TODO: can be deleted later.
+    pub snapshot_merkle_root: MerkleHash,
 }
 
-build_msg_impl! { SnapshotManifestResponse, msgid::GET_SNAPSHOT_MANIFEST_RESPONSE, "SnapshotManifestResponse" }
+build_msg_impl! {
+    SnapshotManifestResponse, msgid::GET_SNAPSHOT_MANIFEST_RESPONSE,
+    "SnapshotManifestResponse", SYNC_PROTO_V1, SYNC_PROTO_V2
+}
 
 impl Handleable for SnapshotManifestResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
@@ -34,19 +54,18 @@ impl Handleable for SnapshotManifestResponse {
         let request = message.downcast_ref::<SnapshotManifestRequest>(
             ctx.io,
             &ctx.manager.request_manager,
-            true,
         )?;
 
         if let Err(e) = self.validate(ctx, request) {
             ctx.manager
                 .request_manager
-                .remove_mismatch_request(ctx.io, &message);
+                .resend_request_to_another_peer(ctx.io, &message);
             return Err(e);
         }
 
         ctx.manager
             .state_sync
-            .handle_snapshot_manifest_response(ctx, self);
+            .handle_snapshot_manifest_response(ctx, self, &request)?;
 
         Ok(())
     }
@@ -54,39 +73,22 @@ impl Handleable for SnapshotManifestResponse {
 
 impl SnapshotManifestResponse {
     fn validate(
-        &self, ctx: &Context, request: &SnapshotManifestRequest,
+        &self, _: &Context, request: &SnapshotManifestRequest,
     ) -> Result<(), Error> {
-        if self.checkpoint != request.checkpoint {
-            debug!(
-                "Responded snapshot manifest checkpoint mismatch, requested = {:?}, responded = {:?}",
-                request.checkpoint,
-                self.checkpoint,
-            );
-            bail!(ErrorKind::Invalid);
-        }
-
-        let root = ctx.must_get_state_root(&self.checkpoint);
-
-        if let Err(e) = self
-            .manifest
-            .validate(&root.snapshot_root, &request.start_chunk)
-        {
-            debug!("failed to validate snapshot manifest, error = {:?}", e);
-            bail!(ErrorKind::Invalid);
-        }
-
-        if request.trusted_blame_block.is_some()
-            && self.state_blame_vec.is_empty()
-        {
+        if request.is_initial_request() && self.state_root_vec.is_empty() {
             debug!("Responded snapshot manifest has empty blame states");
-            bail!(ErrorKind::Invalid);
+            bail!(ErrorKind::InvalidSnapshotManifest(
+                "state blame vector not found".into()
+            ));
         }
 
-        if self.state_blame_vec.len() != self.receipt_blame_vec.len()
-            || self.state_blame_vec.len() != self.bloom_blame_vec.len()
+        if self.state_root_vec.len() != self.receipt_blame_vec.len()
+            || self.state_root_vec.len() != self.bloom_blame_vec.len()
         {
             debug!("Responded snapshot manifest has mismatch blame states/receipts/blooms");
-            bail!(ErrorKind::Invalid);
+            bail!(ErrorKind::InvalidSnapshotManifest(
+                "blame vector length mismatch".into()
+            ));
         }
 
         Ok(())

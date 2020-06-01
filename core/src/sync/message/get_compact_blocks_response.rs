@@ -44,15 +44,20 @@ impl Handleable for GetCompactBlocksResponse {
             self.blocks.len()
         );
 
-        let req = ctx.match_request(self.request_id)?;
-        let mut failed_blocks = HashSet::new();
-        let mut completed_blocks = Vec::new();
+        if ctx.manager.is_block_queue_full() {
+            warn!("recover_public_queue is full, discard GetCompactBlocksResponse");
+            return Ok(());
+        }
 
-        let mut requested_blocks: HashSet<H256> = req
+        let req = ctx.match_request(self.request_id)?;
+        let delay = req.delay;
+        let mut to_relay_blocks = Vec::new();
+        let mut received_reconstructed_blocks = Vec::new();
+
+        let mut requested_except_inflight_txn: HashSet<H256> = req
             .downcast_ref::<GetCompactBlocks>(
                 ctx.io,
                 &ctx.manager.request_manager,
-                true,
             )?
             .hashes
             .iter()
@@ -62,7 +67,7 @@ impl Handleable for GetCompactBlocksResponse {
         for mut cmpct in self.compact_blocks {
             let hash = cmpct.hash();
 
-            if !requested_blocks.remove(&hash) {
+            if !requested_except_inflight_txn.contains(&hash) {
                 warn!("Response has not requested compact block {:?}", hash);
                 continue;
             }
@@ -91,60 +96,88 @@ impl Handleable for GetCompactBlocksResponse {
                 continue;
             }
 
-            debug!("Cmpct block Processing, hash={}", hash);
+            debug!("Cmpct block Processing, hash={:?}", hash);
 
             let missing = {
                 let _timer =
                     MeterTimer::time_func(CMPCT_BLOCK_RECOVER_TIMER.as_ref());
-                ctx.manager.graph.data_man.build_partial(&mut cmpct)
+                ctx.manager
+                    .graph
+                    .data_man
+                    .find_missing_tx_indices_encoded(&mut cmpct)
             };
             if !missing.is_empty() {
                 debug!("Request {} missing tx in {}", missing.len(), hash);
                 ctx.manager.graph.data_man.insert_compact_block(cmpct);
-                ctx.manager
-                    .request_manager
-                    .request_blocktxn(ctx.io, ctx.peer, hash, missing);
+                ctx.manager.request_manager.request_blocktxn(
+                    ctx.io,
+                    ctx.node_id.clone(),
+                    hash,
+                    missing,
+                    None,
+                );
+                // The block remains inflight.
+                requested_except_inflight_txn.remove(&hash);
             } else {
                 let trans = cmpct
-                    .reconstructed_txes
+                    .reconstructed_txns
                     .into_iter()
                     .map(|tx| tx.unwrap())
                     .collect();
-                let (success, to_relay) = ctx.manager.graph.insert_block(
-                    Block::new(header, trans),
-                    true,  // need_to_verify
+                let block = Block::new(header, trans);
+                debug!("transaction received by block: ratio=0");
+                debug!(
+                    "new block received: block_header={:?}, tx_count={}, block_size={}",
+                    block.block_header,
+                    block.transactions.len(),
+                    block.size(),
+                );
+                let insert_result = ctx.manager.graph.insert_block(
+                    block, true,  // need_to_verify
                     true,  // persistent
                     false, // recover_from_db
                 );
-                // May fail due to transactions hash collision
-                if !success {
-                    failed_blocks.insert(hash);
+
+                if !insert_result.request_again() {
+                    received_reconstructed_blocks.push(hash);
                 }
-                if to_relay {
-                    completed_blocks.push(hash);
+                if insert_result.should_relay() {
+                    to_relay_blocks.push(hash);
                 }
             }
         }
 
+        // We cannot just mark `self.blocks` as completed here because they
+        // might be invalid.
+        let mut received_full_blocks = HashSet::new();
+        let mut compact_block_responded_requests =
+            requested_except_inflight_txn;
+        for block in &self.blocks {
+            received_full_blocks.insert(block.hash());
+            compact_block_responded_requests.remove(&block.hash());
+        }
+
         ctx.manager.blocks_received(
             ctx.io,
-            failed_blocks,
-            completed_blocks.clone().into_iter().collect(),
+            compact_block_responded_requests.clone(),
+            received_reconstructed_blocks.iter().cloned().collect(),
             true,
-            Some(ctx.peer),
+            Some(ctx.node_id.clone()),
+            delay,
         );
 
         ctx.manager.recover_public_queue.dispatch(
             ctx.io,
             RecoverPublicTask::new(
                 self.blocks,
-                requested_blocks,
-                ctx.peer,
+                received_full_blocks,
+                ctx.node_id.clone(),
                 true,
+                delay,
             ),
         );
 
         // Broadcast completed block_header_ready blocks
-        ctx.manager.relay_blocks(ctx.io, completed_blocks)
+        ctx.manager.relay_blocks(ctx.io, to_relay_blocks)
     }
 }

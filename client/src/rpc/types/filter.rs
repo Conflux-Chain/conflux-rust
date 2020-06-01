@@ -2,8 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{EpochNumber, H160, H256, U64};
-use cfx_types::U64 as CfxU64;
+use super::EpochNumber;
+use cfx_types::{H160, H256, U64};
 use primitives::filter::Filter as PrimitiveFilter;
 
 use serde::{
@@ -109,20 +109,6 @@ where A: Clone + Into<B> {
     src.clone().map(|x| x.into_iter().map(Into::into).collect())
 }
 
-impl Into<u64> for U64 {
-    fn into(self) -> u64 {
-        let x: CfxU64 = self.into();
-        x.as_u64()
-    }
-}
-
-impl Into<usize> for U64 {
-    fn into(self) -> usize {
-        let x: CfxU64 = self.into();
-        x.as_usize()
-    }
-}
-
 impl Filter {
     pub fn into_primitive(self) -> PrimitiveFilter {
         let address = self.address.and_then(Into::into);
@@ -149,7 +135,7 @@ impl Filter {
             block_hashes: maybe_vec_into(&self.block_hashes),
             address: maybe_vec_into(&address),
             topics: topics.iter().map(maybe_vec_into).collect(),
-            limit: self.limit.map(Into::into),
+            limit: self.limit.map(|x| x.as_u64() as usize),
         }
     }
 }
@@ -161,11 +147,13 @@ impl Into<PrimitiveFilter> for Filter {
 #[cfg(test)]
 mod tests {
     use super::{EpochNumber, Filter, VariadicValue};
+    use cfx_types::{Address, H160, H256, U64};
     use primitives::{
         epoch::EpochNumber as PrimitiveEpochNumber,
         filter::Filter as PrimitiveFilter,
     };
     use serde_json;
+    use std::str::FromStr;
 
     #[test]
     fn test_serialize_variadic_value() {
@@ -241,21 +229,21 @@ mod tests {
             from_epoch: Some(1000.into()),
             to_epoch: Some(EpochNumber::LatestState),
             block_hashes: Some(vec![
-                "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470".into(),
-                "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347".into()
+                H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
+                H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
             ]),
             address: Some(VariadicValue::Multiple(vec![
-                "0x0000000000000000000000000000000000000000".into(),
-                "0x0000000000000000000000000000000000000001".into()
+                Address::from_str("0000000000000000000000000000000000000000").unwrap(),
+                Address::from_str("0000000000000000000000000000000000000001").unwrap()
             ])),
             topics: Some(vec![
-                VariadicValue::Single("0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into()),
+                VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
                 VariadicValue::Multiple(vec![
-                    "0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into(),
-                    "0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into(),
+                    H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+                    H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
                 ]),
             ]),
-            limit: Some(2.into()),
+            limit: Some(U64::from(2)),
         };
 
         let serialized_filter = serde_json::to_string(&filter).unwrap();
@@ -309,21 +297,21 @@ mod tests {
             from_epoch: Some(1000.into()),
             to_epoch: Some(EpochNumber::LatestState),
             block_hashes: Some(vec![
-                "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470".into(),
-                "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347".into()
+                H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
+                H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
             ]),
             address: Some(VariadicValue::Multiple(vec![
-                "0x0000000000000000000000000000000000000000".into(),
-                "0x0000000000000000000000000000000000000001".into()
+                H160::from_str("0000000000000000000000000000000000000000").unwrap(),
+                H160::from_str("0000000000000000000000000000000000000001").unwrap()
             ])),
             topics: Some(vec![
-                VariadicValue::Single("0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into()),
+                VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
                 VariadicValue::Multiple(vec![
-                    "0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into(),
-                    "0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into(),
+                    H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+                    H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
                 ]),
             ]),
-            limit: Some(2.into()),
+            limit: Some(U64::from(2)),
         };
 
         let deserialized_filter: Filter =
@@ -337,44 +325,44 @@ mod tests {
             from_epoch: None,
             to_epoch: None,
             block_hashes: Some(vec![
-                "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470".into(),
-                "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347".into()
+                H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
+                H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
             ]),
             address: Some(VariadicValue::Multiple(vec![
-                "0x0000000000000000000000000000000000000000".into(),
-                "0x0000000000000000000000000000000000000001".into()
+                H160::from_str("0000000000000000000000000000000000000000").unwrap(),
+                H160::from_str("0000000000000000000000000000000000000001").unwrap()
             ])),
             topics: Some(vec![
-                VariadicValue::Single("0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into()),
+                VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
                 VariadicValue::Multiple(vec![
-                    "0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into(),
-                    "0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into(),
+                    H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+                    H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
                 ]),
             ]),
-            limit: Some(2.into()),
+            limit: Some(U64::from(2)),
         };
 
         let primitive_filter = PrimitiveFilter {
             from_epoch: PrimitiveEpochNumber::Earliest,
             to_epoch: PrimitiveEpochNumber::LatestMined,
             block_hashes: Some(vec![
-                "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470".into(),
-                "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347".into()
+                H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
+                H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
             ]),
             address: Some(vec![
-                "0x0000000000000000000000000000000000000000".into(),
-                "0x0000000000000000000000000000000000000001".into()
+                H160::from_str("0000000000000000000000000000000000000000").unwrap(),
+                H160::from_str("0000000000000000000000000000000000000001").unwrap()
             ]),
             topics: vec![
-                Some(vec!["0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into()]),
+                Some(vec![H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()]),
                 Some(vec![
-                    "0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into(),
-                    "0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into(),
+                    H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+                    H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
                 ]),
                 None,
                 None,
             ],
-            limit: Some(2 as usize),
+            limit: Some(2),
         };
 
         assert_eq!(filter.into_primitive(), primitive_filter);

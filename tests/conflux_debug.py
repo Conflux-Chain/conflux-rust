@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from conflux.utils import convert_to_nodeid, privtoaddr, parse_as_int
+from conflux.utils import convert_to_nodeid, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import  create_transaction
 from test_framework.test_framework import ConfluxTestFramework
@@ -10,7 +10,6 @@ from test_framework.util import *
 
 class MessageTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 0
         self.conf_parameters = {"log_level":"\"error\""}
 
@@ -32,8 +31,7 @@ class MessageTest(ConfluxTestFramework):
 
         # Start rpc connection
         self.rpc = get_simple_rpc_proxy(
-            "http://127.0.0.1:12537",
-            1)
+            "http://127.0.0.1:12537")
         challenge = random.randint(0, 2**32-1)
         signature = self.rpc.getnodeid(list(int_to_bytes(challenge)))
         node_id, x, y = convert_to_nodeid(signature, challenge)
@@ -44,7 +42,7 @@ class MessageTest(ConfluxTestFramework):
         genesis_key = default_config["GENESIS_PRI_KEY"]
         balance_map = {genesis_key: default_config["TOTAL_COIN"]}
         self.log.info("Initial State: (sk:%d, addr:%s, balance:%d)", bytes_to_int(genesis_key),
-                      eth_utils.encode_hex(privtoaddr(genesis_key)), balance_map[genesis_key])
+                      eth_utils.encode_hex(priv_to_addr(genesis_key)), balance_map[genesis_key])
         nonce_map = {genesis_key: 0}
         '''Test Random Transactions'''
         all_txs = []
@@ -67,7 +65,7 @@ class MessageTest(ConfluxTestFramework):
                 balance_map[receiver_sk] += value
             # not enough transaction fee (gas_price * gas_limit) should not happen for now
             assert balance_map[sender_key] >= value + gas_price * 21000
-            tx = create_transaction(pri_key=sender_key, receiver=privtoaddr(receiver_sk), value=value, nonce=nonce,
+            tx = create_transaction(pri_key=sender_key, receiver=priv_to_addr(receiver_sk), value=value, nonce=nonce,
                                     gas_price=gas_price)
             all_txs.append(tx)
             nonce_map[sender_key] = nonce + 1
@@ -90,7 +88,7 @@ class MessageTest(ConfluxTestFramework):
         self.node.send_protocol_msg(msg)
 
     def check_account(self, k, balance_map):
-        addr = eth_utils.encode_hex(privtoaddr(k))
+        addr = eth_utils.encode_hex(priv_to_addr(k))
         try:
             balance = parse_as_int(self.rpc.cfx_getBalance(addr))
         except Exception as e:

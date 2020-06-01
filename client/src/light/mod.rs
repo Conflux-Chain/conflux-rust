@@ -2,67 +2,52 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::{
-    any::Any,
-    sync::{Arc, Weak},
-    thread,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, thread, time::Duration};
 
-use cfx_types::U256;
-use ctrlc::CtrlC;
-use db::SystemDB;
+use cfx_types::{Address, U256};
 use network::NetworkService;
 use parking_lot::{Condvar, Mutex};
+use runtime::Runtime;
 use secret_store::SecretStore;
 use threadpool::ThreadPool;
 
-use cfxcore::{
-    block_data_manager::BlockDataManager, genesis, statistics::Statistics,
-    storage::StorageManager, transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
-    vm_factory::VmFactory, ConsensusGraph, LightQueryService,
-    SynchronizationGraph, TransactionPool, WORKER_COMPUTATION_PARALLELISM,
-};
+use jsonrpc_http_server::Server as HttpServer;
+use jsonrpc_tcp_server::Server as TcpServer;
+use jsonrpc_ws_server::Server as WsServer;
 
 use crate::{
     configuration::Configuration,
     rpc::{
         extractor::RpcExtractor,
-        impls::{common::RpcImpl as CommonImpl, light::RpcImpl},
+        impls::{
+            common::RpcImpl as CommonImpl, light::RpcImpl, pubsub::PubSubClient,
+        },
         setup_debug_rpc_apis_light, setup_public_rpc_apis_light,
     },
 };
-
-use super::{
-    http::Server as HttpServer, tcp::Server as TcpServer, TESTNET_VERSION,
+use cfxcore::{
+    block_data_manager::BlockDataManager, genesis, statistics::Statistics,
+    storage::StorageManager, vm_factory::VmFactory, ConsensusGraph,
+    LightQueryService, Notifications, SynchronizationGraph, TransactionPool,
+    WORKER_COMPUTATION_PARALLELISM,
 };
+use std::str::FromStr;
 
-pub struct LightClientHandle {
+use super::TESTNET_VERSION;
+use crate::common::ClientComponents;
+use blockgen::BlockGenerator;
+use cfxcore::{genesis::genesis_block, machine::new_machine_with_builtin};
+
+pub struct LightClientExtraComponents {
     pub consensus: Arc<ConsensusGraph>,
     pub debug_rpc_http_server: Option<HttpServer>,
-    pub ledger_db: Weak<SystemDB>,
     pub light: Arc<LightQueryService>,
     pub rpc_http_server: Option<HttpServer>,
     pub rpc_tcp_server: Option<TcpServer>,
+    pub rpc_ws_server: Option<WsServer>,
+    pub runtime: Runtime,
     pub secret_store: Arc<SecretStore>,
     pub txpool: Arc<TransactionPool>,
-}
-
-impl LightClientHandle {
-    pub fn into_be_dropped(self) -> (Weak<SystemDB>, Box<dyn Any>) {
-        (
-            self.ledger_db,
-            Box::new((
-                self.consensus,
-                self.debug_rpc_http_server,
-                self.light,
-                self.rpc_http_server,
-                self.rpc_tcp_server,
-                self.secret_store,
-                self.txpool,
-            )),
-        )
-    }
 }
 
 pub struct LightClient {}
@@ -71,19 +56,13 @@ impl LightClient {
     // Start all key components of Conflux and pass out their handles
     pub fn start(
         conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
-    ) -> Result<LightClientHandle, String> {
+    ) -> Result<
+        Box<ClientComponents<BlockGenerator, LightClientExtraComponents>>,
+        String,
+    > {
         info!("Working directory: {:?}", std::env::current_dir());
 
-        if conf.raw_conf.metrics_enabled {
-            metrics::enable();
-            let reporter = metrics::FileReporter::new(
-                conf.raw_conf.metrics_output_file.clone(),
-            );
-            metrics::report_async(
-                reporter,
-                Duration::from_millis(conf.raw_conf.metrics_report_interval_ms),
-            );
-        }
+        metrics::initialize(conf.metrics_config());
 
         let worker_thread_pool = Arc::new(Mutex::new(ThreadPool::with_name(
             "Tx Recover".into(),
@@ -94,17 +73,15 @@ impl LightClient {
         let cache_config = conf.cache_config();
 
         let db_config = conf.db_config();
-        let ledger_db = db::open_database(
-            conf.raw_conf.db_dir.as_ref().unwrap(),
-            &db_config,
-        )
-        .map_err(|e| format!("Failed to open database {:?}", e))?;
+        let ledger_db =
+            db::open_database(conf.raw_conf.block_db_dir.as_str(), &db_config)
+                .map_err(|e| format!("Failed to open database {:?}", e))?;
 
         let secret_store = Arc::new(SecretStore::new());
-        let storage_manager = Arc::new(StorageManager::new(
-            ledger_db.clone(),
-            conf.storage_config(),
-        ));
+        let storage_manager = Arc::new(
+            StorageManager::new(conf.storage_config())
+                .expect("Failed to initialize storage."),
+        );
         {
             let storage_manager_log_weak_ptr = Arc::downgrade(&storage_manager);
             let exit_clone = exit.clone();
@@ -126,21 +103,24 @@ impl LightClient {
             });
         }
 
-        let genesis_accounts = if conf.raw_conf.test_mode {
-            match conf.raw_conf.genesis_accounts {
-                Some(ref file) => genesis::load_file(file)?,
-                None => genesis::default(secret_store.as_ref()),
+        let genesis_accounts = if conf.is_test_mode() {
+            match conf.raw_conf.genesis_secrets {
+                Some(ref file) => {
+                    genesis::load_secrets_file(file, secret_store.as_ref())?
+                }
+                None => genesis::default(conf.is_test_or_dev_mode()),
             }
         } else {
-            genesis::default(secret_store.as_ref())
+            match conf.raw_conf.genesis_accounts {
+                Some(ref file) => genesis::load_file(file)?,
+                None => genesis::default(conf.is_test_or_dev_mode()),
+            }
         };
 
-        // FIXME: move genesis block to a dedicated directory near all conflux
-        // FIXME: parameters.
-        let genesis_block = storage_manager.initialize(
+        let genesis_block = genesis_block(
+            &storage_manager,
             genesis_accounts,
-            DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
-            TESTNET_VERSION.into(),
+            Address::from_str(TESTNET_VERSION).unwrap(),
             U256::zero(),
         );
         debug!("Initialize genesis_block={:?}", genesis_block);
@@ -154,32 +134,45 @@ impl LightClient {
             conf.data_mananger_config(),
         ));
 
-        let txpool = Arc::new(TransactionPool::with_capacity(
-            conf.raw_conf.tx_pool_size,
+        let machine = Arc::new(new_machine_with_builtin());
+
+        let txpool = Arc::new(TransactionPool::new(
+            conf.txpool_config(),
+            conf.verification_config(),
             data_man.clone(),
+            machine.clone(),
         ));
 
         let statistics = Arc::new(Statistics::new());
 
         let vm = VmFactory::new(1024 * 32);
         let pow_config = conf.pow_config();
+        let notifications = Notifications::init();
+
         let consensus = Arc::new(ConsensusGraph::new(
             conf.consensus_config(),
-            vm.clone(),
+            vm,
             txpool.clone(),
-            statistics.clone(),
+            statistics,
             data_man.clone(),
             pow_config.clone(),
+            notifications.clone(),
+            conf.execution_config(),
+            conf.verification_config(),
         ));
 
         let _protocol_config = conf.protocol_config();
         let verification_config = conf.verification_config();
+        let sync_config = conf.sync_graph_config();
 
         let sync_graph = Arc::new(SynchronizationGraph::new(
             consensus.clone(),
             verification_config,
             pow_config,
+            sync_config,
+            notifications.clone(),
             false,
+            machine.clone(),
         ));
 
         let network = {
@@ -190,126 +183,98 @@ impl LightClient {
 
         let light = Arc::new(LightQueryService::new(
             consensus.clone(),
-            sync_graph.clone(),
+            sync_graph,
             network.clone(),
+            conf.raw_conf.throttling_conf.clone(),
         ));
         light.register().unwrap();
 
-        let rpc_impl = Arc::new(RpcImpl::new(consensus.clone(), light.clone()));
+        let rpc_impl = Arc::new(RpcImpl::new(light.clone()));
 
         let common_impl = Arc::new(CommonImpl::new(
             exit,
             consensus.clone(),
-            network.clone(),
+            network,
             txpool.clone(),
         ));
 
+        let runtime = Runtime::with_default_thread_count();
+        let pubsub = PubSubClient::new(
+            runtime.executor(),
+            consensus.clone(),
+            notifications,
+        );
+
         let debug_rpc_http_server = super::rpc::start_http(
-            super::rpc::HttpConfiguration::new(
-                Some((127, 0, 0, 1)),
-                conf.raw_conf.jsonrpc_local_http_port,
-                conf.raw_conf.jsonrpc_cors.clone(),
-                conf.raw_conf.jsonrpc_http_keep_alive,
+            conf.local_http_config(),
+            setup_debug_rpc_apis_light(
+                common_impl.clone(),
+                rpc_impl.clone(),
+                None,
             ),
-            setup_debug_rpc_apis_light(common_impl.clone(), rpc_impl.clone()),
         )?;
 
         let rpc_tcp_server = super::rpc::start_tcp(
-            super::rpc::TcpConfiguration::new(
-                None,
-                conf.raw_conf.jsonrpc_tcp_port,
-            ),
-            if conf.raw_conf.test_mode {
+            conf.tcp_config(),
+            if conf.is_test_mode() {
                 setup_debug_rpc_apis_light(
                     common_impl.clone(),
                     rpc_impl.clone(),
+                    Some(pubsub.clone()),
                 )
             } else {
                 setup_public_rpc_apis_light(
                     common_impl.clone(),
                     rpc_impl.clone(),
+                    Some(pubsub.clone()),
+                    &conf,
+                )
+            },
+            RpcExtractor,
+        )?;
+
+        let rpc_ws_server = super::rpc::start_ws(
+            conf.ws_config(),
+            if conf.is_test_mode() {
+                setup_debug_rpc_apis_light(
+                    common_impl.clone(),
+                    rpc_impl.clone(),
+                    Some(pubsub),
+                )
+            } else {
+                setup_public_rpc_apis_light(
+                    common_impl.clone(),
+                    rpc_impl.clone(),
+                    Some(pubsub),
+                    &conf,
                 )
             },
             RpcExtractor,
         )?;
 
         let rpc_http_server = super::rpc::start_http(
-            super::rpc::HttpConfiguration::new(
-                None,
-                conf.raw_conf.jsonrpc_http_port,
-                conf.raw_conf.jsonrpc_cors.clone(),
-                conf.raw_conf.jsonrpc_http_keep_alive,
-            ),
-            if conf.raw_conf.test_mode {
-                setup_debug_rpc_apis_light(
-                    common_impl.clone(),
-                    rpc_impl.clone(),
-                )
+            conf.http_config(),
+            if conf.is_test_mode() {
+                setup_debug_rpc_apis_light(common_impl, rpc_impl, None)
             } else {
-                setup_public_rpc_apis_light(
-                    common_impl.clone(),
-                    rpc_impl.clone(),
-                )
+                setup_public_rpc_apis_light(common_impl, rpc_impl, None, &conf)
             },
         )?;
 
-        Ok(LightClientHandle {
-            consensus,
-            debug_rpc_http_server,
-            ledger_db: Arc::downgrade(&ledger_db),
-            light,
-            rpc_http_server,
-            rpc_tcp_server,
-            secret_store,
-            txpool,
-        })
-    }
-
-    /// Use a Weak pointer to ensure that other Arc pointers are released
-    fn wait_for_drop<T>(w: Weak<T>) {
-        let sleep_duration = Duration::from_secs(1);
-        let warn_timeout = Duration::from_secs(5);
-        let max_timeout = Duration::from_secs(10);
-        let instant = Instant::now();
-        let mut warned = false;
-        while instant.elapsed() < max_timeout {
-            if w.upgrade().is_none() {
-                return;
-            }
-            if !warned && instant.elapsed() > warn_timeout {
-                warned = true;
-                warn!("Shutdown is taking longer than expected.");
-            }
-            thread::sleep(sleep_duration);
-        }
-        eprintln!("Shutdown timeout reached, exiting uncleanly.");
-    }
-
-    pub fn close(handle: LightClientHandle) {
-        let (ledger_db, to_drop) = handle.into_be_dropped();
-        drop(to_drop);
-
-        // Make sure ledger_db is properly dropped, so rocksdb can be closed
-        // cleanly
-        LightClient::wait_for_drop(ledger_db);
-    }
-
-    pub fn run_until_closed(
-        exit: Arc<(Mutex<bool>, Condvar)>, keep_alive: LightClientHandle,
-    ) {
-        CtrlC::set_handler({
-            let e = exit.clone();
-            move || {
-                *e.0.lock() = true;
-                e.1.notify_all();
-            }
-        });
-
-        let mut lock = exit.0.lock();
-        if !*lock {
-            let _ = exit.1.wait(&mut lock);
-        }
-
-        LightClient::close(keep_alive);
+        Ok(Box::new(ClientComponents {
+            data_manager_weak_ptr: Arc::downgrade(&data_man),
+            blockgen: None,
+            other_components: LightClientExtraComponents {
+                consensus,
+                debug_rpc_http_server,
+                light,
+                rpc_http_server,
+                rpc_tcp_server,
+                rpc_ws_server,
+                runtime,
+                secret_store,
+                txpool,
+            },
+        }))
     }
 }

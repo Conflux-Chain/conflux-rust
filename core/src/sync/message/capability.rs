@@ -2,40 +2,38 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{Context, Handleable},
-    msg_sender::send_message,
-    Error, SynchronizationState,
+use crate::{
+    message::Message,
+    sync::{
+        message::{Context, Handleable},
+        Error, SynchronizationState,
+    },
 };
-use cfx_types::H256;
-use network::{NetworkContext, PeerId};
+use network::{node_table::NodeId, NetworkContext};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodableWrapper, RlpEncodableWrapper};
-use std::collections::HashMap;
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum DynamicCapability {
-    TxRelay(bool),                 // provide tx relay
-    ServeHeaders(bool),            // provide block header downloads
-    ServeCheckpoint(Option<H256>), // provide checkpoint downloads
+    NormalPhase(bool),  // provide tx relay
+    ServeHeaders(bool), // provide block header downloads
 }
 
 impl DynamicCapability {
     fn code(&self) -> u8 {
         match self {
-            DynamicCapability::TxRelay(_) => 0,
+            DynamicCapability::NormalPhase(_) => 0,
             DynamicCapability::ServeHeaders(_) => 1,
-            DynamicCapability::ServeCheckpoint(_) => 2,
         }
     }
 
     pub fn broadcast_with_peers(
-        self, io: &dyn NetworkContext, peers: Vec<PeerId>,
+        self, io: &dyn NetworkContext, peers: Vec<NodeId>,
     ) {
         let msg = DynamicCapabilityChange { changed: self };
 
         for peer in peers {
-            if let Err(e) = send_message(io, peer, &msg) {
+            if let Err(e) = msg.send(io, &peer) {
                 debug!("Failed to send capability change message, peer = {}, message = {:?}, err = {:?}", peer, msg, e);
             }
         }
@@ -54,9 +52,8 @@ impl Encodable for DynamicCapability {
         s.begin_list(2).append(&self.code());
 
         match self {
-            DynamicCapability::TxRelay(enabled) => s.append(enabled),
+            DynamicCapability::NormalPhase(enabled) => s.append(enabled),
             DynamicCapability::ServeHeaders(enabled) => s.append(enabled),
-            DynamicCapability::ServeCheckpoint(cp) => s.append(cp),
         };
     }
 }
@@ -68,9 +65,8 @@ impl Decodable for DynamicCapability {
         }
 
         match rlp.val_at::<u8>(0)? {
-            0 => Ok(DynamicCapability::TxRelay(rlp.val_at(1)?)),
+            0 => Ok(DynamicCapability::NormalPhase(rlp.val_at(1)?)),
             1 => Ok(DynamicCapability::ServeHeaders(rlp.val_at(1)?)),
-            2 => Ok(DynamicCapability::ServeCheckpoint(rlp.val_at(1)?)),
             _ => Err(DecoderError::Custom("invalid capability code")),
         }
     }
@@ -78,16 +74,16 @@ impl Decodable for DynamicCapability {
 
 #[derive(Debug, Default)]
 pub struct DynamicCapabilitySet {
-    caps: HashMap<u8, DynamicCapability>,
+    caps: [Option<DynamicCapability>; 3],
 }
 
 impl DynamicCapabilitySet {
     pub fn insert(&mut self, cap: DynamicCapability) {
-        self.caps.insert(cap.code(), cap);
+        self.caps[cap.code() as usize] = Some(cap);
     }
 
     pub fn contains(&self, cap: DynamicCapability) -> bool {
-        match self.caps.get(&cap.code()) {
+        match self.caps[cap.code() as usize].as_ref() {
             Some(cur_cap) => cur_cap == &cap,
             None => return false,
         }
@@ -101,17 +97,12 @@ pub struct DynamicCapabilityChange {
 
 impl Handleable for DynamicCapabilityChange {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        let peer = ctx.manager.syn.get_peer_info(&ctx.peer)?;
+        debug!(
+            "handle dynamic_capability_change: msg={:?}, peer={}",
+            self, ctx.node_id
+        );
+        let peer = ctx.manager.syn.get_peer_info(&ctx.node_id)?;
         peer.write().capabilities.insert(self.changed);
-
-        if let DynamicCapability::ServeCheckpoint(Some(checkpoint)) =
-            self.changed
-        {
-            ctx.manager
-                .state_sync
-                .on_checkpoint_served(ctx, &checkpoint);
-        }
-
         Ok(())
     }
 }

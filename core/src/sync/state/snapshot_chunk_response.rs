@@ -3,16 +3,15 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    message::{Message, MsgId},
-    storage::Chunk,
+    message::{GetMaybeRequestId, Message, MessageProtocolVersionBound, MsgId},
     sync::{
         message::{msgid, Context, Handleable},
-        state::SnapshotChunkRequest,
-        Error, ErrorKind,
+        state::{storage::Chunk, SnapshotChunkRequest},
+        Error, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
 };
+use network::service::ProtocolVersion;
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::any::Any;
 
 #[derive(RlpDecodable, RlpEncodable)]
 pub struct SnapshotChunkResponse {
@@ -20,7 +19,10 @@ pub struct SnapshotChunkResponse {
     pub chunk: Chunk,
 }
 
-build_msg_impl! { SnapshotChunkResponse, msgid::GET_SNAPSHOT_CHUNK_RESPONSE, "SnapshotChunkResponse" }
+build_msg_impl! {
+    SnapshotChunkResponse, msgid::GET_SNAPSHOT_CHUNK_RESPONSE,
+    "SnapshotChunkResponse", SYNC_PROTO_V1, SYNC_PROTO_V2
+}
 
 impl Handleable for SnapshotChunkResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
@@ -29,26 +31,29 @@ impl Handleable for SnapshotChunkResponse {
         let request = message.downcast_ref::<SnapshotChunkRequest>(
             ctx.io,
             &ctx.manager.request_manager,
-            true,
         )?;
 
-        let root = ctx.must_get_state_root(&request.checkpoint);
+        debug!(
+            "handle_snapshot_chunk_response key={:?} chunk_len={}",
+            request.chunk_key,
+            self.chunk.keys.len()
+        );
 
-        if let Err(e) =
-            self.chunk.validate(&request.chunk_key, &root.snapshot_root)
-        {
-            debug!("failed to validate the snapshot chunk, error = {:?}", e);
+        if let Err(e) = self.chunk.validate(&request.chunk_key) {
+            debug!("failed to validate the snapshot chunk, error = {}", e);
+            // TODO: is the "other" peer guaranteed to have the chunk?
+            // How did we pass the peer list?
             ctx.manager
                 .request_manager
-                .remove_mismatch_request(ctx.io, &message);
-            bail!(ErrorKind::Invalid);
+                .resend_request_to_another_peer(ctx.io, &message);
+            return Err(e);
         }
 
         ctx.manager.state_sync.handle_snapshot_chunk_response(
             ctx,
             request.chunk_key.clone(),
             self.chunk,
-        );
+        )?;
 
         Ok(())
     }

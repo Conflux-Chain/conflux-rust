@@ -3,11 +3,11 @@ use crate::{
     node_database::NodeDatabase,
     node_table::{NodeContact, NodeId},
 };
-use rand::{thread_rng, Rng, ThreadRng};
+use rand::{prelude::ThreadRng, thread_rng, Rng};
 use std::time::Duration;
 
 /// NodeBucket is used to manage the nodes that grouped by subnet,
-/// and support to sample any node from bucket.
+/// and support to sample any node from bucket in O(1) time complexity.
 #[derive(Default, Debug)]
 pub struct NodeBucket {
     nodes: SampleHashSet<NodeId>,

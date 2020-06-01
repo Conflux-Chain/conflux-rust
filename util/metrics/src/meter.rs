@@ -1,3 +1,7 @@
+// Copyright 2019 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 use crate::{
     ewma::EWMA,
     metrics::{is_enabled, Metric, ORDER},
@@ -29,7 +33,7 @@ pub trait Meter: Send + Sync {
 struct NoopMeter;
 impl Meter for NoopMeter {}
 
-pub fn register_meter(name: &'static str) -> Arc<dyn Meter> {
+pub fn register_meter(name: &str) -> Arc<dyn Meter> {
     if !is_enabled() {
         return Arc::new(NoopMeter);
     }
@@ -43,9 +47,7 @@ pub fn register_meter(name: &'static str) -> Arc<dyn Meter> {
     meter
 }
 
-pub fn register_meter_with_group(
-    group: &'static str, name: &'static str,
-) -> Arc<dyn Meter> {
+pub fn register_meter_with_group(group: &str, name: &str) -> Arc<dyn Meter> {
     if !is_enabled() {
         return Arc::new(NoopMeter);
     }
@@ -161,7 +163,7 @@ impl Meter for StandardMeter {
 }
 
 impl Metric for StandardMeter {
-    fn get_type(&self) -> &'static str { "Meter" }
+    fn get_type(&self) -> &str { "Meter" }
 }
 
 impl Drop for StandardMeter {
@@ -224,6 +226,6 @@ impl MeterTimer {
 impl Drop for MeterTimer {
     fn drop(&mut self) {
         self.meter
-            .mark((Instant::now() - self.start).as_micros() as usize)
+            .mark((Instant::now() - self.start).as_nanos() as usize)
     }
 }

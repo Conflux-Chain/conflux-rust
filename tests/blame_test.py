@@ -8,7 +8,6 @@ from conflux.rpc import RpcClient
 
 class BlameTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 2
 
     def setup_network(self):
@@ -18,7 +17,7 @@ class BlameTest(ConfluxTestFramework):
         time.sleep(7)
         client0 = RpcClient(self.nodes[0])
         client1 = RpcClient(self.nodes[1])
-        genesis = self.nodes[0].getbestblockhash()
+        genesis = self.nodes[0].best_block_hash()
         self.log.info(genesis)
 
         blame_info = {}
@@ -26,11 +25,11 @@ class BlameTest(ConfluxTestFramework):
         blame_info['deferredStateRoot'] = "0x1111111111111111111111111111111111111111111111111111111111111111"
 
         self.nodes[0].test_generateblockwithblameinfo(1, 0, blame_info)
-        h = self.nodes[0].generate(1, 0)
+        h = self.nodes[0].generate_empty_blocks(1)
         hash_a = h[0]
         block_a = client0.block_by_hash(hash_a)
         assert(block_a['blame'] == 1)
-        h = self.nodes[0].generate(1, 0)
+        h = self.nodes[0].generate_empty_blocks(1)
         hash_b = h[0]
         block_b = client0.block_by_hash(hash_b)
         assert(block_b['blame'] == 0)
@@ -44,7 +43,7 @@ class BlameTest(ConfluxTestFramework):
         self.nodes[0].test_generateblockwithblameinfo(1, 0, blame_info)
         self.nodes[0].test_generateblockwithblameinfo(1, 0, blame_info)
         sync_blocks(self.nodes[0:2])
-        h = self.nodes[1].generate(1, 0)
+        h = self.nodes[1].generate_empty_blocks(1)
         hash_c = h[0]
         block_c1 = client1.block_by_hash(hash_c)
         assert(block_c1['blame'] == 3)

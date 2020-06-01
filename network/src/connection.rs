@@ -9,108 +9,129 @@ use crate::{
 };
 use bytes::{Bytes, BytesMut};
 use lazy_static::lazy_static;
-use metrics::{register_meter_with_group, Meter};
-use mio::{deprecated::*, tcp::*, *};
+use metrics::{
+    register_meter_with_group, Gauge, GaugeUsize, Histogram, Meter, Sample,
+};
+use mio::{tcp::*, *};
 use priority_send_queue::{PrioritySendQueue, SendQueuePriority};
 use serde_derive::Serialize;
 use std::{
     io::{self, Read, Write},
     net::SocketAddr,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
+        atomic::{AtomicBool, Ordering as AtomicOrdering},
         Arc,
     },
+    time::Instant,
 };
 
 lazy_static! {
     static ref READ_METER: Arc<dyn Meter> =
-        register_meter_with_group("network_connection_data", "read");
+        register_meter_with_group("network_system_data", "read");
     static ref WRITE_METER: Arc<dyn Meter> =
-        register_meter_with_group("network_connection_data", "write");
+        register_meter_with_group("network_system_data", "write");
     static ref SEND_METER: Arc<dyn Meter> =
-        register_meter_with_group("network_connection_data", "send");
+        register_meter_with_group("network_system_data", "send");
     static ref SEND_LOW_PRIORITY_METER: Arc<dyn Meter> =
-        register_meter_with_group("network_connection_data", "send_low");
+        register_meter_with_group("network_system_data", "send_low");
+    static ref SEND_NORMAL_PRIORITY_METER: Arc<dyn Meter> =
+        register_meter_with_group("network_system_data", "send_normal");
     static ref SEND_HIGH_PRIORITY_METER: Arc<dyn Meter> =
-        register_meter_with_group("network_connection_data", "send_high");
+        register_meter_with_group("network_system_data", "send_high");
+    static ref HIGH_PACKET_SEND_TO_WRITE_ELAPSED_TIME: Arc<dyn Histogram> =
+        Sample::ExpDecay(0.015).register_with_group(
+            "network_system_data",
+            "high_packet_wait_time",
+            1024
+        );
+    static ref LOW_PACKET_SEND_TO_WRITE_ELAPSED_TIME: Arc<dyn Histogram> =
+        Sample::ExpDecay(0.015).register_with_group(
+            "network_system_data",
+            "low_packet_wait_time",
+            1024
+        );
+    static ref WRITABLE_COUNTER: Arc<dyn Meter> =
+        register_meter_with_group("network_system_data", "writable_counter");
+    static ref WRITABLE_YIELD_SEND_RIGHT_COUNTER: Arc<dyn Meter> =
+        register_meter_with_group(
+            "network_system_data",
+            "writable_yield_send_right_counter"
+        );
+    static ref WRITABLE_ZERO_COUNTER: Arc<dyn Meter> =
+        register_meter_with_group(
+            "network_system_data",
+            "writable_zero_counter"
+        );
+    static ref WRITABLE_PACKET_COUNTER: Arc<dyn Meter> =
+        register_meter_with_group(
+            "network_system_data",
+            "writable_packet_counter"
+        );
+    static ref NETWORK_SEND_QUEUE_SIZE: Arc<dyn Gauge<usize>> =
+        GaugeUsize::register_with_group(
+            "network_system_data",
+            "send_queue_size"
+        );
 }
 
+/// Connection write status.
 #[derive(Debug, PartialEq, Eq)]
 pub enum WriteStatus {
+    /// Some data is still pending for current packet.
     Ongoing,
-    LowPriority,
+    /// All data sent.
     Complete,
 }
 
 const MAX_PAYLOAD_SIZE: usize = (1 << 24) - 1;
 
-static HIGH_PRIORITY_PACKETS: AtomicUsize = AtomicUsize::new(0);
-
-fn incr_high_priority_packets() {
-    assert_ne!(
-        HIGH_PRIORITY_PACKETS.fetch_add(1, AtomicOrdering::SeqCst),
-        std::usize::MAX
-    );
-}
-
-fn decr_high_priority_packets() {
-    assert_ne!(
-        HIGH_PRIORITY_PACKETS.fetch_sub(1, AtomicOrdering::SeqCst),
-        0
-    );
-}
-
-fn has_high_priority_packets() -> bool {
-    HIGH_PRIORITY_PACKETS.load(AtomicOrdering::SeqCst) > 0
-}
-
-pub fn get_high_priority_packets() -> usize {
-    HIGH_PRIORITY_PACKETS.load(AtomicOrdering::SeqCst)
-}
-
 pub trait GenericSocket: Read + Write {}
 
 impl GenericSocket for TcpStream {}
 
+/// Trait to assemble/load packet with extra information.
+/// E.g. prefix packet with length information
 pub trait PacketAssembler: Send + Sync {
+    /// Check if the specified packet `len` is oversized.
     fn is_oversized(&self, len: usize) -> bool;
+
+    /// Assemble packet with extra information.
     fn assemble(&self, data: &mut Vec<u8>) -> Result<(), Error>;
+
+    /// Load packet and remove the extra information from the specified buffer.
     fn load(&self, buf: &mut BytesMut) -> Option<BytesMut>;
 }
 
 /// Packet with guard to automatically update throttling and high priority
 /// packets counter.
-#[derive(Default)]
+
 struct Packet {
+    // data to write to socket
     data: Vec<u8>,
+    // current data position to write to socket.
     sending_pos: usize,
-    is_high_priority: bool,
+    original_is_high_priority: bool,
     throttling_size: usize,
+    creation_time: Instant,
 }
 
 impl Packet {
     fn new(data: Vec<u8>, priority: SendQueuePriority) -> Result<Self, Error> {
+        // update throttling
         let throttling_size = data.len();
-        THROTTLING_SERVICE.write().on_enqueue(throttling_size)?;
+        THROTTLING_SERVICE
+            .write()
+            .on_enqueue(throttling_size, priority == SendQueuePriority::High)?;
 
         let is_high_priority = priority == SendQueuePriority::High;
-        if is_high_priority {
-            incr_high_priority_packets();
-        }
 
         Ok(Packet {
             data,
             sending_pos: 0,
-            is_high_priority,
+            original_is_high_priority: is_high_priority,
             throttling_size,
+            creation_time: Instant::now(),
         })
-    }
-
-    fn set_high_priority(&mut self) {
-        if !self.is_high_priority {
-            incr_high_priority_packets();
-            self.is_high_priority = true;
-        }
     }
 
     fn write(&mut self, writer: &mut dyn Write) -> Result<usize, Error> {
@@ -128,10 +149,16 @@ impl Packet {
 
 impl Drop for Packet {
     fn drop(&mut self) {
-        THROTTLING_SERVICE.write().on_dequeue(self.throttling_size);
+        THROTTLING_SERVICE
+            .write()
+            .on_dequeue(self.throttling_size, self.original_is_high_priority);
 
-        if self.is_high_priority {
-            decr_high_priority_packets();
+        if self.original_is_high_priority {
+            HIGH_PACKET_SEND_TO_WRITE_ELAPSED_TIME
+                .update_since(self.creation_time);
+        } else {
+            LOW_PACKET_SEND_TO_WRITE_ELAPSED_TIME
+                .update_since(self.creation_time)
         }
     }
 }
@@ -143,21 +170,36 @@ pub struct SendQueueStatus {
 }
 
 pub struct GenericConnection<Socket: GenericSocket> {
+    /// Connection id (token)
     token: StreamToken,
+    /// Network socket
     socket: Socket,
+    /// Receive buffer
     recv_buf: BytesMut,
-    // Pending packet that is not prefixed with length.
+    /// Packets that waiting for sending out.
     send_queue: PrioritySendQueue<Packet>,
-    // Sending packet that prefixed with length.
+    /// Sending packet.
     sending_packet: Option<Packet>,
+    /// Event flags this connection interested
     interest: Ready,
+    /// Registered flag
     registered: AtomicBool,
+    /// Assemble packet with extra information before sending out.
     assembler: Box<dyn PacketAssembler>,
 }
 
 impl<Socket: GenericSocket> GenericConnection<Socket> {
+    /// Readable IO handler. Called when there is some data to be read.
     pub fn readable(&mut self) -> io::Result<Option<Bytes>> {
         let mut buf: [u8; 1024] = [0; 1024];
+
+        // Read until the socket has no data to read.
+        // This is to avoid accumulating too much data in kernal.
+        //
+        // In this way, N packets may be read at a time, and Readable IO event
+        // will not be triggered again if no more data sent to socket. So, the
+        // caller should guarantee to read all packets in a loop when Readable
+        // IO event triggered.
         loop {
             match self.socket.read(&mut buf) {
                 Ok(size) => {
@@ -172,13 +214,14 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
                     }
                     self.recv_buf.extend_from_slice(&buf[0..size]);
                 }
-                Err(e) => {
-                    if e.kind() != io::ErrorKind::WouldBlock {
+                Err(e) => match e.kind() {
+                    io::ErrorKind::Interrupted => continue,
+                    io::ErrorKind::WouldBlock => break,
+                    _ => {
                         debug!("Failed to read socket data, token = {}, err = {:?}", self.token, e);
                         return Err(e);
                     }
-                    break;
-                }
+                },
             }
         }
 
@@ -195,6 +238,7 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
         Ok(packet.map(|p| p.freeze()))
     }
 
+    /// Send the specified data out immediately
     pub fn write_raw_data(
         &mut self, mut data: Vec<u8>,
     ) -> Result<usize, Error> {
@@ -218,29 +262,16 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
         Ok(size)
     }
 
+    /// Continue to send out the uncompleted packet, or pop new packet from
+    /// queue to send out.
     fn write_next_from_queue(&mut self) -> Result<WriteStatus, Error> {
+        // In case of last packet is all sent out.
         if self.sending_packet.is_none() {
-            // give up to send low priority packet
-            if self.send_queue.is_send_queue_empty(SendQueuePriority::High)
-                && has_high_priority_packets()
-            {
-                trace!("Give up to send socket data due to low priority, token = {}", self.token);
-                return Ok(WriteStatus::LowPriority);
-            }
-
             // get packet from queue to send
-            let (mut packet, priority) = match self.send_queue.pop_front() {
+            let (mut packet, _) = match self.send_queue.pop_front() {
                 Some(item) => item,
                 None => return Ok(WriteStatus::Complete),
             };
-
-            if priority != SendQueuePriority::High {
-                trace!(
-                    "Low priority packet promoted to high priority, token = {}",
-                    self.token
-                );
-                packet.set_high_priority();
-            }
 
             // assemble packet to send, e.g. prefix length to packet
             self.assembler.assemble(&mut packet.data)?;
@@ -260,6 +291,9 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
             .expect("should pop packet from send queue");
 
         let size = packet.write(&mut self.socket)?;
+        if size == 0 {
+            WRITABLE_ZERO_COUNTER.mark(1);
+        }
 
         trace!(
             "Succeed to send socket data, token = {}, size = {}",
@@ -268,16 +302,20 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
         );
 
         WRITE_METER.mark(size);
-
+        WRITABLE_COUNTER.mark(1);
         if packet.is_send_completed() {
             trace!("Packet sent, token = {}", self.token);
             self.sending_packet = None;
+
+            WRITABLE_PACKET_COUNTER.mark(1);
+
             Ok(WriteStatus::Complete)
         } else {
             Ok(WriteStatus::Ongoing)
         }
     }
 
+    /// Writable IO handler. Called when the socket is ready to send.
     pub fn writable<Message: Sync + Send + Clone + 'static>(
         &mut self, io: &IoContext<Message>,
     ) -> Result<WriteStatus, Error> {
@@ -286,12 +324,12 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
         if self.sending_packet.is_none() && self.send_queue.is_empty() {
             self.interest.remove(Ready::writable());
         }
-
+        NETWORK_SEND_QUEUE_SIZE.update(self.send_queue.len());
         io.update_registration(self.token)?;
-
         Ok(status)
     }
 
+    /// Add a packet to send queue.
     pub fn send<Message: Sync + Send + Clone + 'static>(
         &mut self, io: &IoContext<Message>, data: Vec<u8>,
         priority: SendQueuePriority,
@@ -305,15 +343,18 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
 
             trace!("Sending packet, token = {}, size = {}", self.token, size);
 
-            SEND_METER.mark(size);
             let packet = Packet::new(data, priority)?;
             self.send_queue.push_back(packet, priority);
 
+            SEND_METER.mark(size);
             match priority {
                 SendQueuePriority::High => {
                     SEND_HIGH_PRIORITY_METER.mark(size);
                 }
                 SendQueuePriority::Normal => {
+                    SEND_NORMAL_PRIORITY_METER.mark(size);
+                }
+                SendQueuePriority::Low => {
                     SEND_LOW_PRIORITY_METER.mark(size);
                 }
             }
@@ -340,7 +381,7 @@ impl Connection {
             token,
             socket,
             recv_buf: BytesMut::new(),
-            send_queue: PrioritySendQueue::new(),
+            send_queue: PrioritySendQueue::default(),
             sending_packet: None,
             interest: Ready::hup() | Ready::readable(),
             registered: AtomicBool::new(false),
@@ -348,8 +389,9 @@ impl Connection {
         }
     }
 
-    pub fn register_socket<H: Handler>(
-        &self, reg: Token, event_loop: &mut EventLoop<H>,
+    /// Register this connection with the IO event loop.
+    pub fn register_socket(
+        &self, reg: Token, event_loop: &Poll,
     ) -> io::Result<()> {
         if self.registered.load(AtomicOrdering::SeqCst) {
             return Ok(());
@@ -376,8 +418,10 @@ impl Connection {
         Ok(())
     }
 
-    pub fn update_socket<H: Handler>(
-        &self, reg: Token, event_loop: &mut EventLoop<H>,
+    /// Update connection registration. Should be called at the end of the IO
+    /// handler.
+    pub fn update_socket(
+        &self, reg: Token, event_loop: &Poll,
     ) -> io::Result<()> {
         trace!(
             "Connection reregister, token = {}, reg = {:?}",
@@ -396,9 +440,9 @@ impl Connection {
         }
     }
 
-    pub fn deregister_socket<H: Handler>(
-        &self, event_loop: &mut EventLoop<H>,
-    ) -> io::Result<()> {
+    /// Delete connection registration. Should be called at the end of the IO
+    /// handler.
+    pub fn deregister_socket(&self, event_loop: &Poll) -> io::Result<()> {
         trace!("Connection deregister, token = {}", self.token);
         event_loop.deregister(&self.socket).ok();
         Ok(())
@@ -438,6 +482,7 @@ impl Connection {
     }
 }
 
+/// User friendly connection information that used by Debug RPC.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionDetails {
@@ -450,6 +495,10 @@ pub struct ConnectionDetails {
     pub registered: bool,
 }
 
+/// Assembler that prefix packet with length information.
+///
+/// To avoid memory copy, the first n-bytes will be swapped into the end, and
+/// use the first n-bytes for packet length information.
 pub struct PacketWithLenAssembler {
     data_len_bytes: usize,
     max_data_len: usize,
@@ -540,7 +589,7 @@ impl PacketAssembler for PacketWithLenAssembler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{io::*, throttling::THROTTLING_SERVICE};
+    use crate::io::*;
     use mio::Ready;
     use std::{
         cmp,
@@ -617,9 +666,9 @@ mod tests {
     impl TestConnection {
         fn new() -> Self {
             TestConnection {
-                token: 1234567890usize,
+                token: 1_234_567_890usize,
                 socket: TestSocket::new(),
-                send_queue: PrioritySendQueue::new(),
+                send_queue: PrioritySendQueue::default(),
                 sending_packet: None,
                 recv_buf: BytesMut::new(),
                 interest: Ready::hup() | Ready::readable(),
@@ -639,18 +688,14 @@ mod tests {
         let status = connection.writable(&test_io());
         assert!(status.is_ok());
         let status = status.unwrap();
-        assert!(
-            WriteStatus::Complete == status
-                || WriteStatus::LowPriority == status
-        );
+        assert!(WriteStatus::Complete == status);
     }
 
     #[test]
     fn connection_write_is_buffered() {
         let mut connection = TestConnection::new();
         connection.socket = TestSocket::with_buf(10);
-        let packet =
-            Packet::new(vec![0; 60].into(), SendQueuePriority::High).unwrap();
+        let packet = Packet::new(vec![0; 60], SendQueuePriority::High).unwrap();
         connection
             .send_queue
             .push_back(packet, SendQueuePriority::High);
@@ -691,27 +736,6 @@ mod tests {
             assert!(status.is_ok());
             assert!(status.unwrap().is_none());
         }
-    }
-
-    #[test]
-    fn test_packet_drop() {
-        let cur_queue_size = THROTTLING_SERVICE.write().on_enqueue(0).unwrap();
-        let cur_packets = get_high_priority_packets();
-
-        {
-            let _p = Packet::new(vec![1, 2, 3], SendQueuePriority::High);
-            assert_eq!(
-                THROTTLING_SERVICE.write().on_enqueue(0).unwrap(),
-                cur_queue_size + 3
-            );
-            assert_eq!(get_high_priority_packets(), cur_packets + 1);
-        }
-
-        assert_eq!(
-            THROTTLING_SERVICE.write().on_enqueue(0).unwrap(),
-            cur_queue_size
-        );
-        assert_eq!(get_high_priority_packets(), cur_packets);
     }
 
     #[test]

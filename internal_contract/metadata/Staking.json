@@ -1,0 +1,55 @@
+{
+    "abi": [
+        {
+            "constant": false,
+            "inputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "amount",
+                    "type": "uint256"
+                }
+            ],
+            "name": "deposit",
+            "outputs": [],
+            "payable": false,
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "constant": false,
+            "inputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "amount",
+                    "type": "uint256"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "unlock_block_number",
+                    "type": "uint256"
+                }
+            ],
+            "name": "vote_lock",
+            "outputs": [],
+            "payable": false,
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "constant": false,
+            "inputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "amount",
+                    "type": "uint256"
+                }
+            ],
+            "name": "withdraw",
+            "outputs": [],
+            "payable": false,
+            "stateMutability": "nonpayable",
+            "type": "function"
+        }
+    ],
+    "bytecode": "608060405234801561001057600080fd5b5061010c806100206000396000f3fe6080604052348015600f57600080fd5b5060043610603c5760003560e01c80632e1a7d4d1460415780635547dedb14606c578063b6b55f251460a1575b600080fd5b606a60048036036020811015605557600080fd5b810190808035906020019092919050505060cc565b005b609f60048036036040811015608057600080fd5b81019080803590602001909291908035906020019092919050505060cf565b005b60ca6004803603602081101560b557600080fd5b810190808035906020019092919050505060d3565b005b50565b5050565b5056fea264697066735822122043deff4e635036f11f81a9f05162d5c1e5518bd05f51fc084450828fa4eaf0b264736f6c63430006060033"
+}

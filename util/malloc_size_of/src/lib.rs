@@ -12,8 +12,12 @@
 //! WebRender.
 
 use cfg_if::cfg_if;
-use cfx_types::{H256, H512};
+use cfx_types::{H160, H256, H512, U256, U512};
+use hashbrown::HashMap as FastHashMap;
+use parking_lot;
+use slab::Slab;
 use std::{
+    collections::{BinaryHeap, HashSet, VecDeque},
     hash::{BuildHasher, Hash},
     mem::{self, size_of},
     ops::Range,
@@ -34,6 +38,8 @@ pub struct MallocSizeOfOps {
     /// memory measurements will actually be computed estimates rather than
     /// real and accurate measurements.
     pub enclosing_size_of_op: Option<VoidPtrToSizeFn>,
+
+    pub visited: HashSet<usize>,
 }
 
 impl MallocSizeOfOps {
@@ -45,6 +51,7 @@ impl MallocSizeOfOps {
         MallocSizeOfOps {
             size_of_op: size_of,
             enclosing_size_of_op: malloc_enclosing_size_of,
+            visited: HashSet::new(),
         }
     }
 
@@ -58,7 +65,7 @@ impl MallocSizeOfOps {
         // larger than the required alignment, but small enough that it is
         // always in the first page of memory and therefore not a legitimate
         // address.
-        return ptr as *const usize as usize <= 256;
+        ptr as *const usize as usize <= 256
     }
 
     /// Call `size_of_op` on `ptr`, first checking that the allocation isn't
@@ -227,11 +234,70 @@ impl<T: MallocSizeOf> MallocSizeOf for Vec<T> {
     }
 }
 
+#[allow(dead_code)]
+#[derive(Clone)]
+enum Entry<T> {
+    Vacant(usize),
+    Occupied(T),
+}
+
+impl<T> MallocShallowSizeOf for Slab<T> {
+    fn shallow_size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
+        mem::size_of::<Entry<T>>() * self.capacity()
+    }
+}
+
+impl<T: MallocSizeOf> MallocSizeOf for Slab<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let mut n = self.shallow_size_of(ops);
+        for (_, elem) in self.iter() {
+            n += elem.size_of(ops);
+        }
+        n
+    }
+}
+
+impl<T> MallocShallowSizeOf for BinaryHeap<T> {
+    fn shallow_size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
+        mem::size_of::<T>() * self.capacity()
+    }
+}
+
+impl<T: MallocSizeOf> MallocSizeOf for BinaryHeap<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let mut n = self.shallow_size_of(ops);
+        for elem in self.iter() {
+            n += elem.size_of(ops);
+        }
+        n
+    }
+}
+
+impl<T> MallocShallowSizeOf for VecDeque<T> {
+    fn shallow_size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
+        mem::size_of::<T>() * self.capacity()
+    }
+}
+
+impl<T: MallocSizeOf> MallocSizeOf for VecDeque<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let mut n = self.shallow_size_of(ops);
+        for elem in self.iter() {
+            n += elem.size_of(ops);
+        }
+        n
+    }
+}
+
 /// This is only for estimating memory size in Cache Manager
 impl<T: MallocSizeOf> MallocSizeOf for Arc<T> {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        (mem::size_of::<T>() + self.as_ref().size_of(ops))
-            / Arc::strong_count(self)
+        let ptr = self.as_ref() as *const T as usize;
+        if ops.visited.contains(&ptr) {
+            return 0;
+        }
+        ops.visited.insert(ptr);
+        mem::size_of::<T>() + self.as_ref().size_of(ops)
     }
 }
 
@@ -317,11 +383,58 @@ macro_rules! malloc_size_of_hash_map {
 }
 
 malloc_size_of_hash_map!(std::collections::HashMap<K, V, S>);
+malloc_size_of_hash_map!(FastHashMap<K, V, S>);
 
 // PhantomData is always 0.
 impl<T> MallocSizeOf for std::marker::PhantomData<T> {
     fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
+
+impl<T: MallocSizeOf> MallocSizeOf for std::sync::Mutex<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.lock().unwrap().size_of(ops)
+    }
+}
+
+impl<T: MallocSizeOf> MallocSizeOf for parking_lot::Mutex<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.lock().size_of(ops)
+    }
+}
+
+impl<T: MallocSizeOf> MallocSizeOf for std::sync::RwLock<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.read().unwrap().size_of(ops)
+    }
+}
+
+impl<T: MallocSizeOf> MallocSizeOf for parking_lot::RwLock<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.read().size_of(ops)
+    }
+}
+
+macro_rules! impl_smallvec {
+    ($size:expr) => {
+        impl<T> MallocSizeOf for smallvec::SmallVec<[T; $size]>
+        where T: MallocSizeOf
+        {
+            fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+                let mut n = if self.spilled() {
+                    self.capacity() * core::mem::size_of::<T>()
+                } else {
+                    0
+                };
+                for elem in self.iter() {
+                    n += elem.size_of(ops);
+                }
+                n
+            }
+        }
+    };
+}
+
+impl_smallvec!(32); // kvdb uses this
 
 /// For use on types where size_of() returns 0.
 #[macro_export]
@@ -380,7 +493,7 @@ malloc_size_of_is_0!(
 );
 malloc_size_of_is_0!(Range<f32>, Range<f64>);
 
-malloc_size_of_is_0!(H256, H512);
+malloc_size_of_is_0!(H256, U256, H512, H160, U512);
 
 mod usable_size {
 

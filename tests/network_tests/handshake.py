@@ -10,7 +10,6 @@ from test_framework.util import wait_until, connect_nodes
 
 class HandshakeTests(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 2
 
     def setup_network(self):
@@ -24,7 +23,7 @@ class HandshakeTests(ConfluxTestFramework):
         wait_until(lambda: peer.had_status, timeout=3)
 
         # full node handshake
-        connect_nodes(self.nodes, 0, 1)
+        connect_nodes(self.nodes, 0, 1, timeout=3)
 
 if __name__ == "__main__":
     HandshakeTests().main()

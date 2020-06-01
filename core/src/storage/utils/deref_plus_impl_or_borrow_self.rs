@@ -23,18 +23,17 @@ pub trait DerefMutPlusSelf {
 /// the compiler can not rule out the possibility for D: Deref + Sized with
 /// D::Target == D. For a local type, compiler will first check if Deref is
 /// implemented for that type, and if D::Target == D.
-#[allow(unused)]
 macro_rules! enable_deref_for_self {
     ($type:ty) => {
         impl DerefPlusSelf for $type {
-            type Target = $type;
+            type Target = Self;
 
-            fn deref(&self) -> &$type { self }
+            fn deref(&self) -> &Self { self }
         }
         impl DerefMutPlusSelf for $type {
-            type Target = $type;
+            type Target = Self;
 
-            fn deref_mut(&mut self) -> &mut $type { self }
+            fn deref_mut(&mut self) -> &mut Self { self }
         }
     };
 }

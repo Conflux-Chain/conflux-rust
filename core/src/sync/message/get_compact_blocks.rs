@@ -3,14 +3,14 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    message::{Message, RequestId},
+    message::RequestId,
     parameters::sync::{MAX_BLOCKS_TO_SEND, MAX_HEADERS_TO_SEND},
     sync::{
         message::{
             msgid, Context, GetBlocks, GetCompactBlocksResponse, Handleable,
             Key, KeyContainer,
         },
-        request_manager::Request,
+        request_manager::{AsAny, Request},
         Error, ProtocolConfiguration,
     },
 };
@@ -24,19 +24,24 @@ pub struct GetCompactBlocks {
     pub hashes: Vec<H256>,
 }
 
-impl Request for GetCompactBlocks {
-    fn as_message(&self) -> &dyn Message { self }
-
+impl AsAny for GetCompactBlocks {
     fn as_any(&self) -> &dyn Any { self }
 
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+}
+
+impl Request for GetCompactBlocks {
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
         conf.blocks_request_timeout
     }
 
     fn on_removed(&self, inflight_keys: &KeyContainer) {
-        let mut inflight_keys = inflight_keys.write(msgid::GET_BLOCKS);
+        let mut inflight_blocks = inflight_keys.write(msgid::GET_BLOCKS);
+        let mut net_inflight_blocks =
+            inflight_keys.write(msgid::NET_INFLIGHT_BLOCKS);
         for hash in self.hashes.iter() {
-            inflight_keys.remove(&Key::Hash(*hash));
+            inflight_blocks.remove(&Key::Hash(*hash));
+            net_inflight_blocks.remove(&Key::Hash(*hash));
         }
     }
 
@@ -74,15 +79,15 @@ impl Handleable for GetCompactBlocks {
                     blocks.push(block.as_ref().clone());
                 }
             } else {
-                warn!(
+                debug!(
                     "Peer {} requested non-existent compact block {}",
-                    ctx.peer, hash
+                    ctx.node_id, hash
                 );
             }
         }
 
         let response = GetCompactBlocksResponse {
-            request_id: self.request_id.clone(),
+            request_id: self.request_id,
             compact_blocks,
             blocks,
         };

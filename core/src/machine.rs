@@ -3,10 +3,13 @@
 // See http://www.gnu.org/licenses/
 
 use super::builtin::Builtin;
-use crate::vm::Spec;
-use cfx_types::{Address, U256};
+use crate::{
+    builtin::{builtin_factory, Linear},
+    vm::Spec,
+};
+use cfx_types::{Address, H256, U256};
 use primitives::BlockNumber;
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, str::FromStr, sync::Arc};
 
 #[derive(Debug, PartialEq, Default)]
 pub struct CommonParams {
@@ -44,9 +47,12 @@ impl CommonParams {
             network_id: 0x1,
             chain_id: 0x1,
             subprotocol_name: "cfx".into(),
-            min_gas_limit: 0x1387.into(),
+            min_gas_limit: 10_000_000.into(),
             gas_limit_bound_divisor: 0x0400.into(),
-            registrar: "0xc6d9d2cd449a754c494264e1809c50e34d64562b".into(),
+            registrar: Address::from_str(
+                "c6d9d2cd449a754c494264e1809c50e34d64562b",
+            )
+            .unwrap(),
             node_permission_contract: None,
             max_code_size: 24576,
             max_code_size_transition: 0,
@@ -100,6 +106,47 @@ pub fn new_machine() -> Machine {
     Machine {
         params: CommonParams::common_params(),
         builtins: Arc::new(BTreeMap::new()),
+        spec_rules: None,
+    }
+}
+
+pub fn new_machine_with_builtin() -> Machine {
+    let mut btree = BTreeMap::new();
+    btree.insert(
+        Address::from(H256::from_low_u64_be(1)),
+        Builtin::new(
+            Box::new(Linear::new(3000, 0)),
+            builtin_factory("ecrecover"),
+            0,
+        ),
+    );
+    btree.insert(
+        Address::from(H256::from_low_u64_be(2)),
+        Builtin::new(
+            Box::new(Linear::new(60, 12)),
+            builtin_factory("sha256"),
+            0,
+        ),
+    );
+    btree.insert(
+        Address::from(H256::from_low_u64_be(3)),
+        Builtin::new(
+            Box::new(Linear::new(600, 120)),
+            builtin_factory("ripemd160"),
+            0,
+        ),
+    );
+    btree.insert(
+        Address::from(H256::from_low_u64_be(4)),
+        Builtin::new(
+            Box::new(Linear::new(15, 3)),
+            builtin_factory("identity"),
+            0,
+        ),
+    );
+    Machine {
+        params: CommonParams::common_params(),
+        builtins: Arc::new(btree),
         spec_rules: None,
     }
 }

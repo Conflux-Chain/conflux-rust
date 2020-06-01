@@ -3,68 +3,46 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_types::{Bloom, H256};
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 use super::NodeType;
 use crate::{message::RequestId, storage::StateProof};
 
 use primitives::{
-    BlockHeader as PrimitiveBlockHeader, Receipt as PrimitiveReceipt,
+    BlockHeader as PrimitiveBlockHeader, BlockReceipts, ChainIdParams,
     SignedTransaction, StateRoot as PrimitiveStateRoot,
 };
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
-pub struct StateRootWithProof {
-    pub root: PrimitiveStateRoot,
-    pub proof: Vec<H256>, // witness + blamed deferred state root hashes
-}
-
-#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
-pub struct StatusPing {
+pub struct StatusPingDeprecatedV1 {
     pub genesis_hash: H256,
-    pub network_id: u8,
     pub node_type: NodeType,
     pub protocol_version: u8,
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
-pub struct StatusPong {
+pub struct StatusPongDeprecatedV1 {
     pub best_epoch: u64,
     pub genesis_hash: H256,
-    pub network_id: u8,
     pub node_type: NodeType,
     pub protocol_version: u8,
     pub terminals: Vec<H256>,
 }
 
-#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
-pub struct GetStateRoot {
-    pub request_id: RequestId,
-    pub epoch: u64,
+#[derive(Clone, Debug, RlpEncodable, RlpDecodable)]
+pub struct StatusPingV2 {
+    pub chain_id: ChainIdParams,
+    pub genesis_hash: H256,
+    pub node_type: NodeType,
 }
 
-#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
-pub struct StateRoot {
-    pub request_id: RequestId,
-    pub pivot_hash: H256,
-    pub state_root: StateRootWithProof,
-}
-
-#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
-pub struct GetStateEntry {
-    pub request_id: RequestId,
-    pub epoch: u64,
-    pub key: Vec<u8>,
-}
-
-#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
-pub struct StateEntry {
-    pub request_id: RequestId,
-    pub pivot_hash: H256,
-    pub state_root: StateRootWithProof,
-    pub entry: Option<Vec<u8>>,
-    pub proof: StateProof,
+#[derive(Clone, Debug, RlpEncodable, RlpDecodable)]
+pub struct StatusPongV2 {
+    pub best_epoch: u64,
+    pub chain_id: ChainIdParams,
+    pub genesis_hash: H256,
+    pub node_type: NodeType,
+    pub terminals: Vec<H256>,
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
@@ -107,36 +85,10 @@ pub struct GetReceipts {
     pub epochs: Vec<u64>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct ReceiptsWithEpoch {
     pub epoch: u64,
-    pub receipts: Vec<Vec<PrimitiveReceipt>>,
-}
-
-impl Encodable for ReceiptsWithEpoch {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream.begin_list(2);
-        stream.append(&self.epoch);
-
-        stream.begin_list(self.receipts.len());
-        for r in &self.receipts {
-            stream.append_list(r);
-        }
-    }
-}
-
-impl Decodable for ReceiptsWithEpoch {
-    fn decode(rlp: &Rlp) -> Result<ReceiptsWithEpoch, DecoderError> {
-        let epoch = rlp.val_at(0)?;
-
-        let receipts = rlp
-            .at(1)?
-            .into_iter()
-            .map(|x| Ok(x.as_list()?))
-            .collect::<Result<_, _>>()?;
-
-        Ok(ReceiptsWithEpoch { epoch, receipts })
-    }
+    pub epoch_receipts: Vec<BlockReceipts>,
 }
 
 #[derive(Clone, Debug, RlpEncodable, RlpDecodable)]
@@ -166,9 +118,9 @@ pub struct GetWitnessInfo {
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct WitnessInfoWithHeight {
     pub height: u64,
+    pub state_roots: Vec<H256>,
     pub receipt_hashes: Vec<H256>,
     pub bloom_hashes: Vec<H256>,
-    // TODO(thegaram): send state roots as well
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
@@ -211,4 +163,71 @@ pub struct BlockTxsWithHash {
 pub struct BlockTxs {
     pub request_id: RequestId,
     pub block_txs: Vec<BlockTxsWithHash>,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct GetStateRoots {
+    pub request_id: RequestId,
+    pub epochs: Vec<u64>,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct StateRootWithEpoch {
+    pub epoch: u64,
+    pub state_root: PrimitiveStateRoot,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct StateRoots {
+    pub request_id: RequestId,
+    pub state_roots: Vec<StateRootWithEpoch>,
+}
+
+#[derive(
+    Clone, Debug, Default, PartialEq, Eq, Hash, RlpEncodable, RlpDecodable,
+)]
+pub struct StateKey {
+    pub epoch: u64,
+    pub key: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct GetStateEntries {
+    pub request_id: RequestId,
+    pub keys: Vec<StateKey>,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct StateEntryWithKey {
+    pub key: StateKey,
+    pub entry: Option<Vec<u8>>,
+    pub proof: StateProof,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct StateEntries {
+    pub request_id: RequestId,
+    pub entries: Vec<StateEntryWithKey>,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct GetTxInfos {
+    pub request_id: RequestId,
+    pub hashes: Vec<H256>,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct TxInfo {
+    pub epoch: u64,
+    pub block_hash: H256,
+    pub index: usize,
+    pub epoch_receipts: Vec<BlockReceipts>,
+    pub block_txs: Vec<SignedTransaction>,
+    pub tx_hash: H256,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct TxInfos {
+    pub request_id: RequestId,
+    pub infos: Vec<TxInfo>,
 }

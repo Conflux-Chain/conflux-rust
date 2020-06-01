@@ -8,11 +8,14 @@ edition = "2018"
 
 [dependencies]
 fnv = "1.0"
-mio = { version = "0.6.8" }
-crossbeam = "0.3"
-parking_lot = "0.6"
-log = "0.3"
+mio = { version = "0.6.19" }
+crossbeam-deque = "0.7"
+parking_lot = "0.10"
+log = "0.4"
 slab = "0.4"
 num_cpus = "1.8"
 timer = "0.2"
 time = "0.1"
+metrics = { path = "../metrics" }
+lazy_static = "1.3"
+

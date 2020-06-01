@@ -12,7 +12,7 @@ function check_build {
     pushd $ROOT_DIR > /dev/null
 
     local result
-    result=`cargo build -v && (cd core/benchmark/storage && cargo build -v)`
+    result=`cargo build -v --release && (cd core/benchmark/storage && cargo build -v --release)`
     local exit_code=$?
 
     popd $ROOT_DIR > /dev/null

@@ -18,7 +18,10 @@ function check_build {
     pushd $ROOT_DIR > /dev/null
 
     local result
-    result=`cargo build --release && cargo test --release --all --no-run && cargo bench --all --no-run && ( cd core/src/storage && cargo build --release )`
+
+    result=`cargo build --release && cargo test --release --all --no-run && cargo bench --all --no-run \
+    && ( cd core/benchmark/storage && RUSTFLAGS="" cargo build --release )`
+
     local exit_code=$?
 
     popd > /dev/null
@@ -27,6 +30,27 @@ function check_build {
         result="Build failed."$'\n'"$result"
     else
         result="Build succeeded."
+    fi
+    inner_result=($exit_code "$result")
+}
+
+function check_fmt_and_clippy {
+    local -n inner_result=$1
+
+    pushd $ROOT_DIR > /dev/null
+    local result
+    SAVED_RUSTFLAGS=$RUSTFLAGS
+    SAVED_CARGO_DIR=$CARGO_TARGET_DIR
+    export RUSTFLAGS="-g"
+    export CARGO_TARGET_DIR="$ROOT_DIR/build_clippy"
+    result=`./cargo_fmt.sh -- --check && cargo clippy --release --all -- -A warnings`
+    export RUSTFLAGS=$SAVED_RUSTFLAGS
+    export CARGO_TARGET_DIR=$SAVED_CARGO_DIR
+    local exit_code=$?
+    popd > /dev/null
+
+    if [[ $exit_code -ne 0 ]]; then
+        result="fmt and clippy tests failed."$'\n'"$result"
     fi
     inner_result=($exit_code "$result")
 }
@@ -83,6 +107,8 @@ mkdir -p $ROOT_DIR/build
 
 # Build
 declare -a test_result; check_build test_result; save_test_result test_result
+# fmt and clippy tests
+declare -a test_result; check_fmt_and_clippy test_result; save_test_result test_result
 # Unit tests
 declare -a test_result; check_unit_tests test_result; save_test_result test_result
 # Integration test

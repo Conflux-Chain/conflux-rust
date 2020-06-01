@@ -1,3 +1,7 @@
+// Copyright 2019 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 use crate::metrics::Metric;
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
@@ -35,10 +39,8 @@ impl GroupingRegistry {
         metric: Arc<dyn Metric>,
     )
     {
-        let group_entry = self
-            .groups
-            .entry(group_name)
-            .or_insert_with(|| HashMap::new());
+        let group_entry =
+            self.groups.entry(group_name).or_insert_with(HashMap::new);
         assert!(!group_entry.contains_key(&metric_name));
         group_entry.insert(metric_name, metric);
     }

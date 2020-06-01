@@ -3,23 +3,14 @@
 // See http://www.gnu.org/licenses/
 
 mod ledger_info;
-mod ledger_proof;
 mod peers;
-mod unique_id;
-mod validate;
 
 pub use ledger_info::LedgerInfo;
-pub use ledger_proof::LedgerProof;
-pub use peers::Peers;
-pub use unique_id::UniqueId;
-pub use validate::Validate;
+pub use peers::{FullPeerFilter, FullPeerState, LightPeerState, Peers};
 
-extern crate futures;
-use crate::parameters::light::{MAX_POLL_TIME_MS, POLL_PERIOD_MS};
-use futures::{Async, Stream};
+use super::{Error, ErrorKind};
+use primitives::ChainIdParams;
 use std::cmp;
-
-use crate::light_protocol::{Error, ErrorKind};
 
 pub fn max_of_collection<I, T: Ord>(collection: I) -> Option<T>
 where I: Iterator<Item = T> {
@@ -29,38 +20,17 @@ where I: Iterator<Item = T> {
     })
 }
 
-pub fn poll_next<T: Stream>(stream: &mut T) -> Result<Option<T::Item>, Error>
-where
-    T::Item: std::fmt::Debug,
-    T::Error: std::fmt::Debug,
-{
-    // poll stream result
-    // TODO(thegaram): come up with something better
-    // we can consider returning the stream/future directly
-    let max_poll_num = MAX_POLL_TIME_MS / POLL_PERIOD_MS;
-
-    for ii in 0..max_poll_num {
-        trace!("poll number {}", ii);
-        match stream.poll() {
-            Ok(Async::Ready(resp)) => {
-                trace!("poll result: {:?}", resp);
-                return Ok(resp);
-            }
-            Ok(Async::NotReady) => {
-                trace!("poll result: NotReady");
-                ()
-            }
-            Err(e) => {
-                trace!("poll result: Error");
-                return Err(ErrorKind::Msg(format!("{:?}", e)).into());
-            }
-        }
-
-        trace!("sleeping...");
-        let d = std::time::Duration::from_millis(POLL_PERIOD_MS);
-        std::thread::sleep(d);
+pub fn validate_chain_id(
+    ours: &ChainIdParams, theirs: &ChainIdParams,
+) -> Result<(), Error> {
+    if ours != theirs {
+        let error_kind = ErrorKind::ChainIdMismatch {
+            ours: ours.clone(),
+            theirs: theirs.clone(),
+        };
+        debug!("{:?}", error_kind);
+        bail!(error_kind);
+    } else {
+        Ok(())
     }
-
-    trace!("poll timeout");
-    Err(ErrorKind::NoResponse.into())
 }

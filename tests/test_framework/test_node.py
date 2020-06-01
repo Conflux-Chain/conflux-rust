@@ -11,6 +11,8 @@ import os
 import re
 import subprocess
 import tempfile
+import shutil
+
 import requests
 import time
 import urllib.parse
@@ -18,6 +20,7 @@ import urllib.parse
 import eth_utils
 
 from conflux.utils import get_nodeid, sha3, encode_int32
+from conflux.config import DEFAULT_PY_TEST_CHAIN_ID
 from .authproxy import JSONRPCException
 from .util import *
 
@@ -34,14 +37,19 @@ class ErrorMatch(Enum):
 
 class TestNode:
     def __init__(self, index, datadir, rpchost, confluxd, rpc_timeout=None, remote=False, ip=None, user=None,
-                 rpcport=None):
+                 rpcport=None, auto_recovery=False, recovery_timeout=30, chain_id=DEFAULT_PY_TEST_CHAIN_ID):
+        self.chain_id = chain_id
         self.index = index
         self.datadir = datadir
         self.stdout_dir = os.path.join(self.datadir, "stdout")
         self.stderr_dir = os.path.join(self.datadir, "stderr")
         self.log = os.path.join(self.datadir, "node" + str(index) + ".log")
         self.remote = remote
+        # FIXME: When will it be False?
+        self.no_pssh = True
         self.rpchost = rpchost
+        self.auto_recovery = auto_recovery
+        self.recovery_timeout = recovery_timeout
         if remote:
             self.ip = ip
             self.user = user
@@ -49,6 +57,7 @@ class TestNode:
         else:
             self.ip = "127.0.0.1"
             self.rpcport = rpc_port(self.index)
+            self.pubsubport = pubsub_port(self.index)
         self.port = str(p2p_port(index))
         if self.rpchost is None:
             self.rpchost = ip  # + ":" + str(rpc_port(index))
@@ -91,12 +100,14 @@ class TestNode:
                 print(self.ip, self.index, subprocess.Popen(
                     cli_kill, shell=True).wait())
 
-
     def __getattr__(self, name):
         """Dispatches any unrecognised messages to the RPC connection."""
         assert self.rpc_connected and self.rpc is not None, self._node_msg(
             "Error: no RPC connection")
         return getattr(self.rpc, name)
+
+    def best_block_hash(self) -> str:
+        return self.cfx_getBestBlockHash()
 
     def start(self, extra_args=None, *, stdout=None, stderr=None, **kwargs):
         # Add a new stdout and stderr file each time conflux is started
@@ -123,19 +134,32 @@ class TestNode:
         delete_cookie_file(self.datadir)
         my_env = os.environ.copy()
         my_env["RUST_BACKTRACE"] = "full"
-        if not self.remote:
-            # ssh_args = '-o "StrictHostKeyChecking no"'
-            # cli_mkdir = "ssh {} {}@{} mkdir -p {};".format(
-            #     ssh_args, self.user, self.ip, self.datadir)
-            # cli_conf = "scp {3} -r {0} {1}@{2}:`dirname {0}`;".format(
-            #     self.datadir, self.user, self.ip, ssh_args)
-            # self.args[0] = "~/conflux"
-            # cli_exe = "ssh {} {}@{} \"{} > /dev/null\"".format(
-            #     ssh_args, self.user, self.ip, "cd {} && export RUST_BACKTRACE=full && ".format(self.datadir) + " ".join(self.args))
-            # print(cli_mkdir + cli_conf + cli_exe)
-            # self.process = subprocess.Popen(cli_mkdir + cli_conf + cli_exe,
-            #                                 stdout=stdout, stderr=stderr, cwd=self.datadir, shell=True, **kwargs)
-        # else:
+        if self.remote and self.no_pssh:
+            ssh_args = '-o "StrictHostKeyChecking no"'
+            cli_mkdir = "ssh {} {}@{} mkdir -p {};".format(
+                ssh_args, self.user, self.ip, self.datadir
+            )
+            cli_conf = "scp {3} -r {0} {1}@{2}:`dirname {0}`;".format(
+                self.datadir, self.user, self.ip, ssh_args
+            )
+            cli_kill = "ssh {}@{} killall conflux;".format(self.user, self.ip)
+            cli_exe = 'ssh {} {}@{} "{} > ~/stdout"'.format(
+                ssh_args,
+                self.user,
+                self.ip,
+                "cd {} && export RUST_BACKTRACE=full && ".format(self.datadir)
+                + " ".join(self.args),
+                )
+            print(cli_mkdir + cli_kill + cli_conf + cli_exe)
+            self.process = subprocess.Popen(
+                cli_mkdir + cli_kill + cli_conf + cli_exe,
+                stdout=stdout,
+                stderr=stderr,
+                cwd=self.datadir,
+                shell=True,
+                **kwargs,
+                )
+        else:
             self.process = subprocess.Popen(
                 self.args, stdout=stdout, stderr=stderr, cwd=self.datadir, env=my_env, **kwargs)
 
@@ -155,9 +179,9 @@ class TestNode:
             try:
                 self.rpc = get_simple_rpc_proxy(
                     rpc_url(self.index, self.rpchost, self.rpcport),
-                    self.index,
+                    node=self,
                     timeout=self.rpc_timeout)
-                self.rpc.getbestblockhash()
+                self.rpc.cfx_getBestBlockHash()
                 # If the call to get_best_block_hash() succeeds then the RPC connection is up
                 self.rpc_connected = True
                 self.url = self.rpc.url
@@ -174,6 +198,9 @@ class TestNode:
                     raise  # unknown JSON RPC exception
             except ValueError as e:  # cookie file not found and no rpcuser or rpcassword. bitcoind still starting
                 if "No RPC credentials" not in str(e):
+                    raise
+            except jsonrpcclient.exceptions.ReceivedNon2xxResponseError as e:
+                if e.code != 500:
                     raise
             time.sleep(1.0 / poll_per_s)
         self._raise_assertion_error("failed to get RPC proxy: index = {}, ip = {}, rpchost = {}, p2pport={}, rpcport = {}, rpc_url = {}".format(
@@ -193,16 +220,24 @@ class TestNode:
             retry += 1
 
         if retry > max_retry:
-            raise AssertionError(f"Node did not reach any of {phases} after {wait_time} seconds")
+            current_phase = self.current_sync_phase()
+            raise AssertionError(f"Node did not reach any of {phases} after {wait_time} seconds, current phase is {current_phase}")
 
     def wait_for_nodeid(self):
         pubkey, x, y = get_nodeid(self)
         self.key = eth_utils.encode_hex(pubkey)
-        self.addr = sha3(encode_int32(x) + encode_int32(y))[12:]
+        addr_tmp = bytearray(sha3(encode_int32(x) + encode_int32(y))[12:])
+        addr_tmp[0] &= 0x0f
+        addr_tmp[0] |= 0x10
+        self.addr = addr_tmp
         self.log.debug("Get node {} nodeid {}".format(self.index, self.key))
 
+    def clean_data(self):
+        shutil.rmtree(os.path.join(self.datadir, "blockchain_db"))
+        shutil.rmtree(os.path.join(self.datadir, "storage_db"))
+        self.log.info("Cleanup data for node %d", self.index)
 
-    def stop_node(self, expected_stderr='', kill=False):
+    def stop_node(self, expected_stderr='', kill=False, wait=True):
         """Stop the node."""
         if not self.running:
             return
@@ -215,6 +250,8 @@ class TestNode:
         except http.client.CannotSendRequest:
             self.log.exception("Unable to stop node.")
 
+        if wait:
+            self.wait_until_stopped()
         # Check that stderr is as expected
         self.stderr.seek(0)
         stderr = self.stderr.read().decode('utf-8').strip()
@@ -249,7 +286,7 @@ class TestNode:
         self.log.debug("Node stopped")
         return True
 
-    def wait_until_stopped(self, timeout=CONFLUX_RPC_WAIT_TIMEOUT):
+    def wait_until_stopped(self, timeout=CONFLUX_GRACEFUL_SHUTDOWN_TIMEOUT):
         wait_until(self.is_node_stopped, timeout=timeout)
 
     def assert_start_raises_init_error(self,
@@ -318,6 +355,8 @@ class TestNode:
             kwargs['dstport'] = int(self.port)
         if 'dstaddr' not in kwargs:
             kwargs['dstaddr'] = self.ip
+
+        p2p_conn.set_chain_id(self.chain_id)
 
         # if self.ip is not None:
         #     kwargs['dstaddr'] = self.ip

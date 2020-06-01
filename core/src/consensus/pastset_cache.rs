@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use hibitset::BitSet;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use std::collections::{HashMap, HashSet};
 
 const MAX_PASTSET_CACHE_CAP: usize = 256;
@@ -11,6 +12,12 @@ const MAX_PASTSET_CACHE_CAP: usize = 256;
 pub struct PastSetCache {
     cache: HashMap<usize, (BitSet, u64)>,
     entry: u64,
+}
+
+impl MallocSizeOf for PastSetCache {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.cache.size_of(ops)
+    }
 }
 
 impl PastSetCache {
@@ -31,12 +38,18 @@ impl PastSetCache {
         self.entry += 1;
     }
 
-    pub fn get(&mut self, me: usize, update_cache: bool) -> Option<&BitSet> {
+    pub fn get_and_update_cache(&mut self, me: usize) -> Option<&BitSet> {
         if let Some(v) = self.cache.get_mut(&me) {
-            if update_cache {
-                v.1 = self.entry;
-                self.entry += 1;
-            }
+            v.1 = self.entry;
+            self.entry += 1;
+            Some(&v.0)
+        } else {
+            None
+        }
+    }
+
+    pub fn get(&self, me: usize) -> Option<&BitSet> {
+        if let Some(v) = self.cache.get(&me) {
             Some(&v.0)
         } else {
             None

@@ -2,38 +2,39 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate futures;
+extern crate lru_time_cache;
 
 use cfx_types::Bloom;
-use futures::Future;
+use lru_time_cache::LruCache;
 use parking_lot::RwLock;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{future::Future, sync::Arc};
 
 use crate::{
-    consensus::ConsensusGraph,
+    hash::keccak,
     light_protocol::{
-        common::{Peers, UniqueId, Validate},
-        handler::FullPeerState,
-        message::{BloomWithEpoch, GetBlooms},
-        Error,
+        common::{FullPeerState, Peers},
+        message::{msgid, BloomWithEpoch, GetBlooms},
+        Error, ErrorKind,
     },
-    message::Message,
-    network::{NetworkContext, PeerId},
+    message::{Message, RequestId},
+    network::NetworkContext,
     parameters::light::{
-        BLOOM_REQUEST_BATCH_SIZE, BLOOM_REQUEST_TIMEOUT_MS,
+        BLOOM_REQUEST_BATCH_SIZE, BLOOM_REQUEST_TIMEOUT, CACHE_TIMEOUT,
         MAX_BLOOMS_IN_FLIGHT,
     },
+    UniqueId,
 };
 
 use super::{
-    future_item::FutureItem, missing_item::KeyOrdered,
-    sync_manager::SyncManager,
+    common::{FutureItem, KeyOrdered, PendingItem, SyncManager},
+    witnesses::Witnesses,
 };
+use network::node_table::NodeId;
 
 #[derive(Debug)]
 struct Statistics {
+    cached: usize,
     in_flight: usize,
-    verified: usize,
     waiting: usize,
 }
 
@@ -47,46 +48,49 @@ pub struct Blooms {
     // sync and request manager
     sync_manager: SyncManager<u64, MissingBloom>,
 
-    // helper API for validating ledger and state information
-    validate: Validate,
-
     // bloom filters received from full node
-    verified: Arc<RwLock<HashMap<u64, Bloom>>>,
+    verified: Arc<RwLock<LruCache<u64, PendingItem<Bloom>>>>,
+
+    // witness sync manager
+    witnesses: Arc<Witnesses>,
 }
 
 impl Blooms {
-    pub(super) fn new(
-        consensus: Arc<ConsensusGraph>, peers: Arc<Peers<FullPeerState>>,
-        request_id_allocator: Arc<UniqueId>,
+    pub fn new(
+        peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
+        witnesses: Arc<Witnesses>,
     ) -> Self
     {
-        let sync_manager = SyncManager::new(peers.clone());
-        let validate = Validate::new(consensus.clone());
-        let verified = Arc::new(RwLock::new(HashMap::new()));
+        let sync_manager = SyncManager::new(peers.clone(), msgid::GET_BLOOMS);
 
-        verified.write().insert(0, Bloom::zero());
+        let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
+        let verified = Arc::new(RwLock::new(cache));
 
         Blooms {
             request_id_allocator,
             sync_manager,
-            validate,
             verified,
+            witnesses,
         }
     }
 
     #[inline]
     fn get_statistics(&self) -> Statistics {
         Statistics {
+            cached: self.verified.read().len(),
             in_flight: self.sync_manager.num_in_flight(),
-            verified: self.verified.read().len(),
             waiting: self.sync_manager.num_waiting(),
         }
     }
 
     #[inline]
-    pub fn request(
-        &self, epoch: u64,
-    ) -> impl Future<Item = Bloom, Error = Error> {
+    pub fn request(&self, epoch: u64) -> impl Future<Output = Bloom> {
+        if epoch == 0 {
+            self.verified
+                .write()
+                .insert(0, PendingItem::ready(Bloom::zero()));
+        }
+
         if !self.verified.read().contains_key(&epoch) {
             let missing = MissingBloom::new(epoch);
             self.sync_manager.insert_waiting(std::iter::once(missing));
@@ -96,54 +100,106 @@ impl Blooms {
     }
 
     #[inline]
-    pub(super) fn receive(
-        &self, blooms: impl Iterator<Item = BloomWithEpoch>,
-    ) -> Result<(), Error> {
+    pub fn receive(
+        &self, peer: &NodeId, id: RequestId,
+        blooms: impl Iterator<Item = BloomWithEpoch>,
+    ) -> Result<(), Error>
+    {
         for BloomWithEpoch { epoch, bloom } in blooms {
-            info!("Validating bloom {:?} with epoch {}", bloom, epoch);
-            self.validate.bloom_with_local_info(epoch, bloom)?;
+            debug!("Validating bloom {:?} with epoch {}", bloom, epoch);
 
-            self.verified.write().insert(epoch, bloom);
-            self.sync_manager.remove_in_flight(&epoch);
+            match self.sync_manager.check_if_requested(peer, id, &epoch)? {
+                None => continue,
+                Some(_) => self.validate_and_store(epoch, bloom)?,
+            };
         }
 
         Ok(())
     }
 
     #[inline]
-    pub(super) fn clean_up(&self) {
-        let timeout = Duration::from_millis(BLOOM_REQUEST_TIMEOUT_MS);
+    pub fn validate_and_store(
+        &self, epoch: u64, bloom: Bloom,
+    ) -> Result<(), Error> {
+        // validate bloom
+        self.validate_bloom(epoch, bloom)?;
+
+        // store bloom by epoch
+        self.verified
+            .write()
+            .entry(epoch)
+            .or_insert(PendingItem::pending())
+            .set(bloom);
+
+        self.sync_manager.remove_in_flight(&epoch);
+        Ok(())
+    }
+
+    #[inline]
+    pub fn clean_up(&self) {
+        // remove timeout in-flight requests
+        let timeout = *BLOOM_REQUEST_TIMEOUT;
         let blooms = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(blooms.into_iter());
+
+        // trigger cache cleanup
+        self.verified.write().get(&Default::default());
     }
 
     #[inline]
     fn send_request(
-        &self, io: &dyn NetworkContext, peer: PeerId, epochs: Vec<u64>,
-    ) -> Result<(), Error> {
-        info!("send_request peer={:?} epochs={:?}", peer, epochs);
+        &self, io: &dyn NetworkContext, peer: &NodeId, epochs: Vec<u64>,
+    ) -> Result<Option<RequestId>, Error> {
+        debug!("send_request peer={:?} epochs={:?}", peer, epochs);
 
         if epochs.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
 
-        let msg: Box<dyn Message> = Box::new(GetBlooms {
-            request_id: self.request_id_allocator.next(),
-            epochs,
-        });
+        let request_id = self.request_id_allocator.next();
+        let msg: Box<dyn Message> = Box::new(GetBlooms { request_id, epochs });
 
         msg.send(io, peer)?;
-        Ok(())
+        Ok(Some(request_id))
     }
 
     #[inline]
-    pub(super) fn sync(&self, io: &dyn NetworkContext) {
-        info!("bloom sync statistics: {:?}", self.get_statistics());
+    pub fn sync(&self, io: &dyn NetworkContext) {
+        debug!("bloom sync statistics: {:?}", self.get_statistics());
 
         self.sync_manager.sync(
             MAX_BLOOMS_IN_FLIGHT,
             BLOOM_REQUEST_BATCH_SIZE,
             |peer, epochs| self.send_request(io, peer, epochs),
         );
+    }
+
+    #[inline]
+    fn validate_bloom(&self, epoch: u64, bloom: Bloom) -> Result<(), Error> {
+        // calculate received bloom hash
+        let received = keccak(bloom);
+
+        // retrieve local bloom hash
+        let local = match self.witnesses.root_hashes_of(epoch) {
+            Some((_, _, bloom_hash)) => bloom_hash,
+            None => {
+                warn!(
+                    "Bloom hash not found, epoch={}, bloom={:?}",
+                    epoch, bloom
+                );
+                return Err(ErrorKind::InternalError.into());
+            }
+        };
+
+        // check
+        if received != local {
+            warn!(
+                "Bloom validation failed, received={:?}, local={:?}",
+                received, local
+            );
+            return Err(ErrorKind::InvalidBloom.into());
+        }
+
+        Ok(())
     }
 }

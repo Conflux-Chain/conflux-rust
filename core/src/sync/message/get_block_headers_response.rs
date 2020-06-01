@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    message::RequestId,
+    message::{Message, RequestId},
     parameters::{
         block::ACCEPTABLE_TIME_DRIFT, sync::LOCAL_BLOCK_INFO_QUERY_THRESHOLD,
     },
@@ -12,17 +12,18 @@ use crate::{
             metrics::BLOCK_HEADER_HANDLE_TIMER, Context, GetBlockHeaders,
             Handleable,
         },
-        msg_sender::NULL,
+        synchronization_state::PeerFilter,
         Error,
     },
 };
 use cfx_types::H256;
 use metrics::MeterTimer;
+use network::node_table::NodeId;
 use primitives::BlockHeader;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{
     collections::HashSet,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 #[derive(Debug, PartialEq, Default, RlpDecodable, RlpEncodable)]
@@ -35,21 +36,40 @@ impl Handleable for GetBlockHeadersResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         let _timer = MeterTimer::time_func(BLOCK_HEADER_HANDLE_TIMER.as_ref());
 
-        debug!("on_block_headers_response, msg=:{:?}", self);
+        for header in &self.headers {
+            debug!(
+                "new block headers received: block_header={:?}, tx_count={}, block_size={}",
+                header,
+                0,
+                0,
+            );
+        }
 
-        if ctx.peer == NULL {
-            let requested =
-                self.headers.iter().map(|h| h.hash().clone()).collect();
+        if ctx.io.is_peer_self(&ctx.node_id) {
+            let requested = self.headers.iter().map(|h| h.hash()).collect();
 
-            self.handle_block_headers(ctx, &self.headers, requested, None);
+            self.handle_block_headers(
+                ctx,
+                &self.headers,
+                requested,
+                None,
+                None,
+            );
+            return Ok(());
+        }
+
+        // We may receive some messages from peer during recover from db
+        // phase. We should ignore it, since it may cause some
+        // inconsistency.
+        if ctx.manager.in_recover_from_db_phase() {
             return Ok(());
         }
 
         let req = ctx.match_request(self.request_id)?;
+        let delay = req.delay;
         let req = req.downcast_ref::<GetBlockHeaders>(
             ctx.io,
             &ctx.manager.request_manager,
-            true,
         )?;
 
         // keep first time drift validation error to return later
@@ -75,16 +95,22 @@ impl Handleable for GetBlockHeadersResponse {
             };
 
         let chosen_peer = if timestamp_validation_result.is_ok() {
-            Some(ctx.peer)
+            Some(ctx.node_id.clone())
         } else {
-            let mut exclude = HashSet::new();
-            exclude.insert(ctx.peer);
-            ctx.manager.syn.get_random_peer(&exclude)
+            PeerFilter::new(self.msg_id())
+                .exclude(ctx.node_id.clone())
+                .select(&ctx.manager.syn)
         };
 
         // re-request headers requested but not received
-        let requested: Vec<H256> = req.hashes.iter().cloned().collect();
-        self.handle_block_headers(ctx, &self.headers, requested, chosen_peer);
+        let requested: HashSet<H256> = req.hashes.iter().cloned().collect();
+        self.handle_block_headers(
+            ctx,
+            &self.headers,
+            requested,
+            chosen_peer,
+            delay,
+        );
 
         timestamp_validation_result
     }
@@ -94,13 +120,16 @@ impl GetBlockHeadersResponse {
     // FIXME Remove recursive call if block headers exist db
     fn handle_block_headers(
         &self, ctx: &Context, block_headers: &Vec<BlockHeader>,
-        requested: Vec<H256>, chosen_peer: Option<usize>,
+        requested: HashSet<H256>, chosen_peer: Option<NodeId>,
+        delay: Option<Duration>,
     )
     {
-        let mut hashes = HashSet::new();
+        // This stores the block hashes for blocks without block body.
+        let mut hashes = Vec::new();
         let mut dependent_hashes_bounded = HashSet::new();
         let mut dependent_hashes_unbounded = HashSet::new();
-        let mut need_to_relay = HashSet::new();
+        // This stores the block hashes for blocks which can relay to peers.
+        let mut need_to_relay = Vec::new();
         let mut returned_headers = HashSet::new();
         let best_height = ctx.manager.graph.consensus.best_epoch_number();
         let now_timestamp = SystemTime::now()
@@ -109,16 +138,23 @@ impl GetBlockHeadersResponse {
             .as_secs();
         for header in block_headers {
             let hash = header.hash();
+            returned_headers.insert(hash);
             if ctx.manager.graph.contains_block_header(&hash) {
                 // A block header might be loaded from db and sent to the local
                 // queue multiple times, but we should only
                 // process it and request its dependence once.
                 continue;
             }
-            returned_headers.insert(hash);
-            // check timestamp drift
+
+            // Check timestamp drift
+            // See comments in verify_header_graph_ready_block()
             if ctx.manager.graph.verification_config.verify_timestamp {
-                if header.timestamp() > now_timestamp + ACCEPTABLE_TIME_DRIFT {
+                let header_timestamp = header.timestamp();
+                if header_timestamp > now_timestamp {
+                    debug!("Block {} timestamp {} is ahead of the current time {}. Potential time drift!", hash, header_timestamp, now_timestamp);
+                }
+                if header_timestamp > now_timestamp + ACCEPTABLE_TIME_DRIFT {
+                    warn!("The drift is more than the acceptable range ({}s). The processing of block {} will be delayed.", ACCEPTABLE_TIME_DRIFT, hash);
                     ctx.manager.future_blocks.insert(header.clone());
                     continue;
                 }
@@ -138,14 +174,15 @@ impl GetBlockHeadersResponse {
             }
 
             // insert into sync graph
-            let (valid, to_relay) = ctx.manager.graph.insert_block_header(
-                &mut header.clone(),
-                true,
-                false,
-                ctx.manager.insert_header_to_consensus(),
-                true,
-            );
-            if !valid {
+            let (insert_result, to_relay) =
+                ctx.manager.graph.insert_block_header(
+                    &mut header.clone(),
+                    true,  /* need_to_verify */
+                    false, /* bench_mode */
+                    ctx.manager.insert_header_to_consensus(),
+                    true, /* persistent */
+                );
+            if !insert_result.is_new_valid() {
                 continue;
             }
 
@@ -171,13 +208,11 @@ impl GetBlockHeadersResponse {
 
             // check block body
             if !ctx.manager.graph.contains_block(&hash) {
-                hashes.insert(hash);
+                hashes.push(hash);
             }
         }
 
         // do not request headers we just received
-        dependent_hashes_bounded.remove(&H256::default());
-        dependent_hashes_unbounded.remove(&H256::default());
         for hash in &returned_headers {
             dependent_hashes_bounded.remove(hash);
             dependent_hashes_unbounded.remove(hash);
@@ -193,37 +228,34 @@ impl GetBlockHeadersResponse {
 
         ctx.manager.request_manager.headers_received(
             ctx.io,
-            requested.into_iter().collect(),
+            requested,
             returned_headers,
+            delay,
         );
 
         // request missing headers. We do not need to request more headers on
         // the pivot chain after the request_epoch mechanism is applied.
         ctx.manager.request_block_headers(
             ctx.io,
-            chosen_peer,
+            chosen_peer.clone(),
             dependent_hashes_bounded.into_iter().collect(),
             true, /* ignore_db */
         );
         ctx.manager.request_block_headers(
             ctx.io,
-            chosen_peer,
+            chosen_peer.clone(),
             dependent_hashes_unbounded.into_iter().collect(),
             false, /* ignore_db */
         );
 
         if ctx.manager.need_requesting_blocks() {
             // request missing blocks
-            ctx.manager.request_missing_blocks(
-                ctx.io,
-                chosen_peer,
-                hashes.into_iter().collect(),
-            );
+            ctx.manager
+                .request_missing_blocks(ctx.io, chosen_peer, hashes)
+                .ok();
 
             // relay if necessary
-            ctx.manager
-                .relay_blocks(ctx.io, need_to_relay.into_iter().collect())
-                .ok();
+            ctx.manager.relay_blocks(ctx.io, need_to_relay).ok();
         }
     }
 }

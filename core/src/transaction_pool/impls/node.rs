@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use std::{
     cmp::Ordering,
     mem,
@@ -16,6 +17,19 @@ pub struct Node<K, V, W> {
     priority: u64,
     pub left: Option<Box<Node<K, V, W>>>,
     pub right: Option<Box<Node<K, V, W>>>,
+}
+
+impl<K: MallocSizeOf, V: MallocSizeOf, W: MallocSizeOf> MallocSizeOf
+    for Node<K, V, W>
+{
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.key.size_of(ops)
+            + self.value.size_of(ops)
+            + self.weight.size_of(ops)
+            + self.sum_weight.size_of(ops)
+            + self.left.size_of(ops)
+            + self.right.size_of(ops)
+    }
 }
 
 impl<K: Ord, V: Clone, W: Add<Output = W> + Sub<Output = W> + Ord + Clone>

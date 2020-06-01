@@ -12,7 +12,6 @@ from test_framework.util import *
 
 class MessageTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 4
 
     def setup_network(self):
@@ -24,11 +23,10 @@ class MessageTest(ConfluxTestFramework):
         default_node = start_p2p_connection([self.nodes[0]])[0]
 
         # Use the mininode and blocktools functionality to manually build a block
-        # Calling the generate() rpc is easier, but this allows us to exactly
+        # Calling the generate_empty_blocks() rpc is easier, but this allows us to exactly
         # control the blocks and transactions.
         blocks = [default_node.genesis.block_header.hash]
         new_block = create_block(blocks[0], 1)
-        new_transaction = create_transaction(gas_price = 1000)
 
         # This message is not used in current Conflux sync protocol
         # self.log.info("Send GetBlockHashes message")
@@ -93,13 +91,6 @@ class MessageTest(ConfluxTestFramework):
         p2p = start_p2p_connection([self.nodes[0]])[0]
         p2p.send_packet(PACKET_PROTOCOL, b'')
         wait_until(lambda: p2p.state != "connected", timeout=3)
-
-        # legel payload
-        p2p = start_p2p_connection([self.nodes[0]])[0]
-        p2p.send_packet(PACKET_PING, b'')
-        p2p.send_packet(PACKET_PONG, b'')
-        wait_until(lambda: p2p.state == "connected", timeout=3)
-
 
 if __name__ == "__main__":
     MessageTest().main()

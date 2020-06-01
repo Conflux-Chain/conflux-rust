@@ -10,7 +10,7 @@ import eth_utils
 from conflux.config import default_config
 from conflux.filter import Filter
 from conflux.rpc import RpcClient
-from conflux.utils import sha3 as keccak, privtoaddr
+from conflux.utils import sha3 as keccak, priv_to_addr
 from test_framework.blocktools import create_transaction, encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import assert_equal, assert_is_hex_string, assert_is_hash_string
@@ -27,7 +27,6 @@ LIGHTNODE = 2
 
 class LogFilteringTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 3
 
     def setup_network(self):
@@ -56,7 +55,7 @@ class LogFilteringTest(ConfluxTestFramework):
 
     def run_test(self):
         priv_key = default_config["GENESIS_PRI_KEY"]
-        sender = eth_utils.encode_hex(privtoaddr(priv_key))
+        sender = eth_utils.encode_hex(priv_to_addr(priv_key))
 
         # deploy contract
         bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), CONTRACT_PATH)
@@ -94,6 +93,10 @@ class LogFilteringTest(ConfluxTestFramework):
         self.log.info("syncing light node...")
         sync_blocks(self.nodes[:])
 
+        # retrieve contract code
+        self.log.info("retrieving contract code...")
+        self.check_code(contractAddr, contract_epoch)
+
         # apply filter, we expect a single log with 2 topics
         self.log.info("testing filter range...")
         self.check_filter(Filter(from_epoch="earliest", to_epoch=contract_epoch))
@@ -101,9 +104,8 @@ class LogFilteringTest(ConfluxTestFramework):
         self.check_filter(Filter())
         self.check_filter(Filter(from_epoch="0x0", to_epoch="0x0"))
 
-        # TODO(thegaram): support this
         # apply filter for specific block, we expect a single log with 3 topics
-        # self.check_filter(Filter(block_hashes=[receipt["blockHash"]]))
+        self.check_filter(Filter(block_hashes=[receipt["blockHash"]]))
 
         # apply filter for specific topics
         self.log.info("testing filter topics...")
@@ -126,16 +128,19 @@ class LogFilteringTest(ConfluxTestFramework):
     def check_filter(self, filter):
         assert_equal(self.rpc[LIGHTNODE].get_logs(filter), self.rpc[FULLNODE0].get_logs(filter))
 
+    def check_code(self, address, epoch):
+        assert_equal(self.rpc[LIGHTNODE].get_code(address, epoch), self.rpc[FULLNODE0].get_code(address, epoch))
+
     def address_to_topic(self, address):
         return "0x" + address[2:].zfill(64)
 
     def number_to_topic(self, number):
         return "0x" + ("%x" % number).zfill(64)
 
-    def deploy_contract(self, sender, priv_key, data_hex):
-        tx = self.rpc[FULLNODE0].new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key)
+    def deploy_contract(self, sender, priv_key, data_hex, epoch_height = 0):
+        tx = self.rpc[FULLNODE0].new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key, epoch_height = epoch_height, storage_limit=20000)
         assert_equal(self.rpc[FULLNODE0].send_tx(tx, True), tx.hash_hex())
-        receipt = self.rpc[FULLNODE0].get_receipt(tx.hash_hex())
+        receipt = self.rpc[FULLNODE0].get_transaction_receipt(tx.hash_hex())
         address = receipt["contractCreated"]
         assert_is_hex_string(address)
         return receipt, address
@@ -143,7 +148,7 @@ class LogFilteringTest(ConfluxTestFramework):
     def call_contract(self, sender, priv_key, contract, data_hex):
         tx = self.rpc[FULLNODE0].new_contract_tx(receiver=contract, data_hex=data_hex, sender=sender, priv_key=priv_key)
         assert_equal(self.rpc[FULLNODE0].send_tx(tx, True), tx.hash_hex())
-        receipt = self.rpc[FULLNODE0].get_receipt(tx.hash_hex())
+        receipt = self.rpc[FULLNODE0].get_transaction_receipt(tx.hash_hex())
         return receipt
 
 if __name__ == "__main__":

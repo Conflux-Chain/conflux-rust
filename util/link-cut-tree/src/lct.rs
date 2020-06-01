@@ -1,3 +1,5 @@
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+
 pub const NULL: usize = !0;
 
 pub trait DefaultLinkCutTreeTrait {
@@ -57,18 +59,23 @@ macro_rules! define_lct_node {
     ($name:ident, $($element:ident : $ty:ty),*) => {
         #[derive(Clone, Debug)]
         struct $name {
-            /// if current node is the root node of a Auxiliary Tree, parent
+            /// if current node is the root node of an Auxiliary Tree, parent
             /// points to the parent node in actual tree, otherwise parent
             /// points to the parent node in a Auxiliary Tree
             parent: usize,
             /// left and right children in the Auxiliary Tree
             child: [usize; 2],
-            /// if node `o` is the topmost node in a preferred path, its acutal
-            /// value equals to `o.value + o.path_parent.caterpillar_value`
+            /// if node `o` is the topmost node in a preferred path,
+            /// and let `r` be the root node of the Auxiliary Tree,
+            /// the actual value of `o` equals to
+            /// `o.value + r.parent.caterpillar_value`,
             /// otherwise the actual value equals to `o.value`
             value: i128,
             /// minimum subtree value of current node in the Auxiliary Tree
             min: i128,
+            /// The delta needs to be applied to `value` and `min` of the
+            /// nodes in the subtree of the Auxiliary Tree rooted at this
+            /// node excluding the node itself.
             delta: i128,
             $($element: $ty),*
         }
@@ -101,7 +108,10 @@ macro_rules! construct_link_cut_tree {
 
         impl $lct_name {
             /// return whether node `o` is the left or right child of its
-            /// parent
+            /// parent (left: 0; right: 1)
+            /// Assumption:
+            ///   If `o` is the root node of an Auxiliary Tree, the return
+            ///   value is meaningless.
             #[inline]
             fn direction(&mut self, o: usize) -> usize {
                 let parent = self.tree[o].parent;
@@ -112,7 +122,9 @@ macro_rules! construct_link_cut_tree {
                 }
             }
 
-            /// whether node `o` is the root of a Auxiliary Tree
+            /// whether node `o` is the root of an Auxiliary Tree
+            /// Assumption:
+            ///   The children of a leaf node of an Auxiliary Tree are NULLs.
             #[inline]
             fn is_root(&mut self, o: usize) -> bool {
                 let parent = self.tree[o].parent;
@@ -121,8 +133,8 @@ macro_rules! construct_link_cut_tree {
                         && self.tree[parent].child[1] != o)
             }
 
-            /// make node `c` become the child of node `o`, `d = 0` means left
-            /// child, `d = 1` means right child
+            /// make node `c` the child of node `o` in the Auxiliary Tree,
+            /// `d = 0` means left child, `d = 1` means right child.
             #[inline]
             fn set_child(&mut self, o: usize, c: usize, d: usize) {
                 self.tree[o].child[d] = c;
@@ -147,6 +159,9 @@ macro_rules! construct_link_cut_tree {
             ///    o(p) T4    <==>     T2 p(o)
             ///    / \                    / \
             ///   T2 T3                  T3 T4
+            ///
+            /// Assumption:
+            ///   apply_delta() must be invoked for parent of `o` before.
             fn rotate(&mut self, o: usize) {
                 if o == NULL || self.is_root(o) {
                     return;
@@ -171,6 +186,7 @@ macro_rules! construct_link_cut_tree {
             /// 2. gp -> p -> o the same direction: zig-zig
             /// 3. gp -> p -> o not the same direction: zig-zag
             fn splay(&mut self, o: usize) {
+                assert!(o != NULL);
                 // apply `delta` and `caterpillar_delta` along the path
                 // from `o` to the root of the Auxiliary Tree
                 let mut path = Vec::new();
@@ -201,6 +217,7 @@ macro_rules! construct_link_cut_tree {
             /// make the path from node `o` to the root become a preferred path
             /// return
             fn access(&mut self, o: usize) -> usize {
+                assert!(o != NULL);
                 let mut last = NULL;
                 let mut now = o;
                 while now != NULL {
@@ -275,8 +292,8 @@ macro_rules! construct_link_cut_tree {
 macro_rules! impl_default_lct_func {
     ($lct_name:ident) => {
         impl $lct_name {
-            /// apply `delta` and `caterpillar_delta` to children in a Auxiliary
-            /// Tree
+            /// Apply `delta` to children in a Auxiliary Tree.
+            /// This clears the `delta` of `o`.
             #[inline]
             fn apply_delta(&mut self, o: usize) {
                 if self.tree[o].delta != 0 {
@@ -311,6 +328,8 @@ macro_rules! impl_default_lct_func {
 macro_rules! impl_default_update_func {
     ($lct_name:ident) => {
         impl $lct_name {
+            /// Assumption: `delta` of `o` must be 0, i.e.,
+            /// apply_delta() must be invoked for `o` before invoking update()
             #[inline]
             fn update(&mut self, o: usize) {
                 self.tree[o].min = self.tree[o].value;
@@ -372,6 +391,26 @@ impl_default_lct_func!(MinLinkCutTreeInner);
 impl_default_lct_func!(SizeMinLinkCutTreeInner);
 impl_default_caterpillar_link_cut_tree_trait!(MinLinkCutTreeInner);
 impl_default_caterpillar_link_cut_tree_trait!(SizeMinLinkCutTreeInner);
+
+impl MallocSizeOf for SizeMinLinkCutTreeInner {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.tree.size_of(ops)
+    }
+}
+
+impl MallocSizeOf for SizeMinNode {
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
+}
+
+impl MallocSizeOf for CaterpillarMinLinkCutTreeInner {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.tree.size_of(ops)
+    }
+}
+
+impl MallocSizeOf for CaterpillarMinNode {
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
+}
 
 impl SizeMinLinkCutTreeInner {
     #[inline]
@@ -486,6 +525,34 @@ impl CaterpillarMinLinkCutTreeInner {
 }
 
 impl CaterpillarLinkCutTreeTrait for CaterpillarMinLinkCutTreeInner {
+    ///            ||
+    ///            V3
+    ///         /  ||  \
+    ///      V'2   V2  V"2
+    ///         /  ||  \
+    ///      V'1   V1  V"1
+    ///         /  |   \
+    ///      V'0   V0  V"0
+    ///
+    /// In the above figure, we use "/", "|", and "\" to represent light
+    /// edges, and "||" to represent heavy edges.
+    ///
+    /// The caterpillar delta/value represents the caterpillar effect of
+    /// a node V on all its children connected to V through light edges.
+    /// The caterpillar effect of V on its child connected through heavy
+    /// edge should already be applied through the delta/value of the child.
+    /// This is because when accessing a node, it must be on the preferred
+    /// path and its value should already be the final value with caterpillar
+    /// effect integrated.
+    ///
+    /// Specifically, when calling caterpillar_apply(V1, caterpillar_delta),
+    /// The edges between V1 and all its children become light edges.
+    /// The caterpillar_value of V1 represents its caterpillar effect on
+    /// V'0, V0, and V"0. The caterpillar_delta of V1 helps maintain the
+    /// caterpillar effects of V2 on V'1 and V"1, and V3 on V'2 and V"2,
+    /// and so on upwards. The value of V1 has already integrated the
+    /// caterpillar effect of V2 on it, and the delta of V1 helps maintain
+    /// the integrated caterpillar effects of V3 on V2, and so on upwards.
     fn caterpillar_apply(&mut self, v: usize, caterpillar_delta: i128) {
         self.access(v);
 

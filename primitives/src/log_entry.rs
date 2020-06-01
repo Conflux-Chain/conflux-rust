@@ -7,10 +7,21 @@
 use crate::{block::BlockNumber, bytes::Bytes};
 use cfx_types::{Address, Bloom, BloomInput, H256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use serde_derive::{Deserialize, Serialize};
 use std::ops::Deref;
 
 /// A record of execution for a `LOG` operation.
-#[derive(Default, Debug, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable)]
+#[derive(
+    Default,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    RlpEncodable,
+    RlpDecodable,
+    Serialize,
+    Deserialize,
+)]
 pub struct LogEntry {
     /// The address of the contract executing at the point of the `LOG`
     /// operation.
@@ -31,9 +42,9 @@ impl LogEntry {
     /// Calculates the bloom of this log entry.
     pub fn bloom(&self) -> Bloom {
         self.topics.iter().fold(
-            Bloom::from(BloomInput::Raw(&self.address)),
+            Bloom::from(BloomInput::Raw(self.address.as_bytes())),
             |mut b, t| {
-                b.accrue(BloomInput::Raw(t));
+                b.accrue(BloomInput::Raw(t.as_bytes()));
                 b
             },
         )
@@ -47,13 +58,13 @@ pub struct LocalizedLogEntry {
     pub entry: LogEntry,
     /// Block in which this log was created.
     pub block_hash: H256,
-    /// Block number.
-    pub block_number: BlockNumber,
+    /// Epoch number.
+    pub epoch_number: BlockNumber,
     /// Hash of transaction in which this log was created.
     pub transaction_hash: H256,
     /// Index of transaction within block.
     pub transaction_index: usize,
-    /// Log position in the block.
+    /// Log position in the epoch.
     pub log_index: usize,
     /// Log position in the transaction.
     pub transaction_log_index: usize,

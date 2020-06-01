@@ -29,8 +29,9 @@ use byteorder::{BigEndian, ByteOrder};
 use num::{BigUint, One, Zero};
 use parity_crypto::digest;
 
-use crate::{bytes::BytesRef, hash::keccak};
+use crate::bytes::BytesRef;
 use cfx_types::{H256, U256};
+use cfxkey::{public_to_address, Address};
 use keylib::{recover as ec_recover, Signature};
 
 /// Execution error.
@@ -61,9 +62,15 @@ pub trait Pricer: Send + Sync {
 /// A linear pricing model. This computes a price using a base cost and a cost
 /// per-word.
 #[allow(dead_code)]
-struct Linear {
+pub(crate) struct Linear {
     base: usize,
     word: usize,
+}
+
+impl Linear {
+    pub(crate) fn new(base: usize, word: usize) -> Linear {
+        Linear { base, word }
+    }
 }
 
 /// A special pricing model for modular exponentiation.
@@ -104,7 +111,7 @@ impl Pricer for ModexpPricer {
             reader
                 .read_exact(&mut buf[..])
                 .expect("reading from zero-extended memory cannot fail; qed");
-            U256::from(H256::from_slice(&buf[..]))
+            U256::from_big_endian(&buf[..])
         };
         let base_len = read_len();
         let exp_len = read_len();
@@ -133,7 +140,7 @@ impl Pricer for ModexpPricer {
             reader
                 .read_exact(&mut buf[(32 - len)..])
                 .expect("reading from zero-extended memory cannot fail; qed");
-            U256::from(H256::from_slice(&buf[..]))
+            U256::from_big_endian(&buf[..])
         };
 
         let adjusted_exp_len = Self::adjusted_exp_len(exp_len, exp_low);
@@ -197,10 +204,19 @@ impl Builtin {
 
     /// Whether the builtin is activated at the given cardinal number.
     pub fn is_active(&self, at: u64) -> bool { at >= self.activate_at }
+
+    pub fn new(
+        pricer: Box<dyn Pricer>, native: Box<dyn Impl>, activate_at: u64,
+    ) -> Builtin {
+        Builtin {
+            pricer,
+            native,
+            activate_at,
+        }
+    }
 }
 
 /// Built-in instruction factory.
-#[allow(dead_code)]
 pub fn builtin_factory(name: &str) -> Box<dyn Impl> {
     match name {
         "identity" => Box::new(Identity) as Box<dyn Impl>,
@@ -277,6 +293,7 @@ impl Impl for EcRecover {
         let s = H256::from_slice(&input[96..128]);
 
         let bit = match v[31] {
+            0 | 1 if &v.0[..31] == &[0; 31] => v[31],
             27 | 28 if &v.0[..31] == &[0; 31] => v[31] - 27,
             _ => {
                 return Ok(());
@@ -286,9 +303,10 @@ impl Impl for EcRecover {
         let s = Signature::from_rsv(&r, &s, bit);
         if s.is_valid() {
             if let Ok(p) = ec_recover(&s, &hash) {
-                let r = keccak(p);
+                // We use public_to_address() here
+                let addr = public_to_address(&p);
                 output.write(0, &[0; 12]);
-                output.write(12, &r[12..r.len()]);
+                output.write(12, &addr[0..Address::len_bytes()]);
             }
         }
 
@@ -489,7 +507,7 @@ impl Impl for Bn128AddImpl {
                 .expect("Cannot fail since 0..32 is 32-byte length");
             sum.y()
                 .to_big_endian(&mut write_buf[32..64])
-                .expect("Cannot fail since 32..64 is 32-byte length");;
+                .expect("Cannot fail since 32..64 is 32-byte length");
         }
         output.write(0, &write_buf);
 
@@ -517,7 +535,7 @@ impl Impl for Bn128MulImpl {
                 .expect("Cannot fail since 0..32 is 32-byte length");
             sum.y()
                 .to_big_endian(&mut write_buf[32..64])
-                .expect("Cannot fail since 32..64 is 32-byte length");;
+                .expect("Cannot fail since 32..64 is 32-byte length");
         }
         output.write(0, &write_buf);
         Ok(())
@@ -774,7 +792,14 @@ mod tests {
         let mut o = [255u8; 32];
         f.execute(&i[..], &mut BytesRef::Fixed(&mut o[..]))
             .expect("Builtin should not fail");
-        assert_eq!(&o[..], &(FromHex::from_hex("000000000000000000000000c08b5542d177ac6686946920409741463a15dddb").unwrap())[..]);
+        assert_eq!(&o[..], &(FromHex::from_hex("000000000000000000000000108b5542d177ac6686946920409741463a15dddb").unwrap())[..]);
+
+        let i2 = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad0000000000000000000000000000000000000000000000000000000000000000650acf9d3f5f0a2c799776a1254355d5f4061762a237396a99a0e0e3fc2bcd6729514a0dacb2e623ac4abd157cb18163ff942280db4d5caad66ddf941ba12e03").unwrap();
+
+        let mut o2 = [255u8; 32];
+        f.execute(&i2[..], &mut BytesRef::Fixed(&mut o2[..]))
+            .expect("Builtin should not fail");
+        assert_eq!(&o2[..], &(FromHex::from_hex("000000000000000000000000108b5542d177ac6686946920409741463a15dddb").unwrap())[..]);
 
         let mut o8 = [255u8; 8];
         f.execute(&i[..], &mut BytesRef::Fixed(&mut o8[..]))
@@ -787,7 +812,7 @@ mod tests {
         let mut o34 = [255u8; 34];
         f.execute(&i[..], &mut BytesRef::Fixed(&mut o34[..]))
             .expect("Builtin should not fail");
-        assert_eq!(&o34[..], &(FromHex::from_hex("000000000000000000000000c08b5542d177ac6686946920409741463a15dddbffff").unwrap())[..]);
+        assert_eq!(&o34[..], &(FromHex::from_hex("000000000000000000000000108b5542d177ac6686946920409741463a15dddbffff").unwrap())[..]);
 
         let i_bad = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad000000000000000000000000000000000000000000000000000000000000001a650acf9d3f5f0a2c799776a1254355d5f4061762a237396a99a0e0e3fc2bcd6729514a0dacb2e623ac4abd157cb18163ff942280db4d5caad66ddf941ba12e03").unwrap();
         let mut o = [255u8; 32];

@@ -5,24 +5,27 @@
 #![allow(unused)]
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
-    block_data_manager::{BlockDataManager, DataManagerConfiguration},
+    block_data_manager::{BlockDataManager, DataManagerConfiguration, DbType},
     cache_config::CacheConfig,
     cache_manager::CacheManager,
-    consensus::{ConsensusConfig, ConsensusGraph, ConsensusInnerConfig},
+    consensus::{
+        ConsensusConfig, ConsensusGraph, ConsensusGraphTrait,
+        ConsensusInnerConfig,
+    },
     consensus_parameters::*,
     db::NUM_COLUMNS,
     pow::ProofOfWorkConfig,
     statistics::Statistics,
-    storage::{state_manager::StorageConfiguration, StorageManager},
+    storage::{StorageConfiguration, StorageManager},
     sync::{
         request_manager::tx_handler::ReceivedTransactionContainer,
         utils::{
             create_simple_block, create_simple_block_impl,
             initialize_synchronization_graph,
+            initialize_synchronization_graph_with_data_manager,
         },
         SynchronizationGraph,
     },
-    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     verification::VerificationConfig,
     vm_factory::VmFactory,
     TransactionPool, WORKER_COMPUTATION_PARALLELISM,
@@ -44,6 +47,8 @@ use std::{
     thread, time,
 };
 use threadpool::ThreadPool;
+
+pub const CHECKER_SLEEP_PERIOD: u64 = 50;
 
 fn initialize_logger(log_file: &str, log_level: LevelFilter) {
     let log_config = {
@@ -92,59 +97,74 @@ fn initialize_logger(log_file: &str, log_level: LevelFilter) {
 fn check_results(
     start: usize, end: usize, consensus: Arc<ConsensusGraph>,
     hashes: &Vec<H256>, valid_indices: &HashMap<usize, i32>,
-    stable_indices: &HashMap<usize, i32>,
+    timer_indices: &HashMap<usize, i32>,
     adaptive_indices: &HashMap<usize, i32>,
 )
 {
+    let mut pending_cnt = 0;
+    let consensus_read = consensus.inner.read();
     for i in start..end {
-        let pending = consensus.inner.read().is_pending(&hashes[i]);
+        let pending = consensus_read.is_pending(&hashes[i]);
         if pending == None {
             //println!("Block {} is skipped!", i);
             continue;
         }
         if let Some(true) = pending {
-            println!("Block {} is pending, skip the checking!", i);
+            pending_cnt += 1;
             continue;
         }
-        let partial_invalid = consensus
-            .inner
-            .read()
-            .is_partial_invalid(&hashes[i])
-            .unwrap();
+        let partial_invalid_opt = consensus_read.is_partial_invalid(&hashes[i]);
+        // This one is outside the era and eliminated. We will skip and count it
+        // as pending as well.
+        if partial_invalid_opt.is_none() {
+            pending_cnt += 1;
+            continue;
+        }
+        let partial_invalid = partial_invalid_opt.unwrap();
         let valid = *valid_indices.get(&i).unwrap();
         let invalid = (valid == 0);
         if valid != -1 {
-            assert!(partial_invalid == invalid, "Block {} partial invalid status: Consensus graph {} != actual {}", i, partial_invalid, invalid);
+            assert!(partial_invalid == invalid, "Block {} {} partial invalid status: Consensus graph {} != actual {}", i, hashes[i], partial_invalid, invalid);
         }
-        let stable0 = consensus.inner.read().is_stable(&hashes[i]).unwrap();
-        let stable_v = *stable_indices.get(&i).unwrap();
-        if !invalid && stable_v != -1 {
-            let stable1 = (stable_v == 1);
+        let timer0 = consensus_read.is_timer_block(&hashes[i]).unwrap();
+        let timer_v = *timer_indices.get(&i).unwrap();
+        if !invalid && timer_v != -1 {
+            let timer1 = (timer_v == 1);
             assert!(
-                stable0 == stable1,
-                "Block {} stable status: Consensus graph {} != actual {}",
+                timer0 == timer1,
+                "Block {} {} timer status: Consensus graph {} != actual {}",
                 i,
-                stable0,
-                stable1
+                hashes[i],
+                timer0,
+                timer1
             );
         }
-        let adaptive0 = consensus.inner.read().is_adaptive(&hashes[i]).unwrap();
+        let adaptive0 = consensus_read.is_adaptive(&hashes[i]).unwrap();
         let adaptive_v = *adaptive_indices.get(&i).unwrap();
         if !invalid && adaptive_v != -1 {
             let adaptive1 = (adaptive_v == 1);
             assert!(
                 adaptive0 == adaptive1,
-                "Block {} adaptive status: Consensus graph {} != actual {}",
+                "Block {} {} adaptive status: Consensus graph {} != actual {}",
                 i,
+                hashes[i],
                 adaptive0,
                 adaptive1
             );
         }
     }
+    if pending_cnt > 0 {
+        println!(
+            "There are {} blocks pending, skipped checking.",
+            pending_cnt
+        );
+    }
 }
 
 fn main() {
-    // initialize_logger("./__consensus_bench.log", LevelFilter::Debug);
+    if let Ok(_) = env::var("DEBUGLOG") {
+        initialize_logger("./__consensus_bench.log", LevelFilter::Debug);
+    }
 
     let args: Vec<String> = env::args().collect();
     let mut input_file = "./seq.in";
@@ -156,12 +176,12 @@ fn main() {
     // Parse adaptive weight parameters
     let content = fs::read_to_string(input_file)
         .expect("Cannot open the block sequence input file!");
-    let mut lines = content.split("\n");
+    let mut lines = content.split('\n');
     let line = lines.next().unwrap();
     let mut tokens = line.split_whitespace();
-    let alpha_num = u64::from_str(tokens.next().unwrap())
+    let timer_ratio = u64::from_str(tokens.next().unwrap())
         .expect("Cannot parse the input file!");
-    let alpha_den = u64::from_str(tokens.next().unwrap())
+    let timer_beta = u64::from_str(tokens.next().unwrap())
         .expect("Cannot parse the input file!");
     let beta = u64::from_str(tokens.next().unwrap())
         .expect("Cannot parse the input file!");
@@ -170,18 +190,20 @@ fn main() {
     let era_epoch_count = u64::from_str(tokens.next().unwrap())
         .expect("Cannot parse the input file!");
     println!(
-        "alpha = {}/{} beta = {} h = {} era_epoch_count = {}",
-        alpha_num, alpha_den, beta, h_ratio, era_epoch_count
+        "timer_ratio = {}, timer_beta = {}, beta = {} h = {} era_epoch_count = {}",
+        timer_ratio, timer_beta, beta, h_ratio, era_epoch_count
     );
 
-    let (sync, consensus, genesis_block) = initialize_synchronization_graph(
-        db_dir,
-        alpha_den,
-        alpha_num,
-        beta,
-        h_ratio,
-        era_epoch_count,
-    );
+    let (sync, consensus, data_man, genesis_block) =
+        initialize_synchronization_graph(
+            db_dir,
+            beta,
+            h_ratio,
+            timer_ratio,
+            timer_beta,
+            era_epoch_count,
+            DbType::Sqlite,
+        );
 
     let mut hashes = Vec::new();
     hashes.push(genesis_block.hash());
@@ -192,6 +214,10 @@ fn main() {
     let mut valid_indices = HashMap::new();
     let mut stable_indices = HashMap::new();
     let mut adaptive_indices = HashMap::new();
+    let mut block_heights = Vec::new();
+    block_heights.push(0);
+    let mut blocks = Vec::new();
+    blocks.push((*genesis_block).clone());
     let mut check_batch_size = era_epoch_count as usize;
     let mut last_checked = 1;
 
@@ -241,11 +267,17 @@ fn main() {
         for ref_idx in ref_idxs.iter() {
             ref_hashes.push(hashes[*ref_idx]);
         }
+        let adaptive_fill = is_adaptive == 1;
+        let parent_height = block_heights[parent_idx];
+        let height = parent_height + 1;
+        block_heights.push(height);
         let (new_hash, mut new_block) = create_simple_block(
             sync.clone(),
             hashes[parent_idx],
             ref_hashes,
+            height,
             block_weight,
+            adaptive_fill,
         );
         hashes.push(new_hash);
         sync.insert_block_header(
@@ -255,6 +287,7 @@ fn main() {
             false, // insert_to_consensus
             true,  // persistent
         );
+        blocks.push(new_block.clone());
         sync.insert_block(
             new_block, false, /* need_to_verify */
             false, /* persistent */
@@ -277,10 +310,15 @@ fn main() {
         }
 
         let n = hashes.len();
+        let mut last_checked_count = 0;
         if (n != 0) && (n % check_batch_size == 0) {
             let last_hash = hashes[n - 1];
-            while consensus.get_processed_block_count() != n - 1 {
-                thread::sleep(time::Duration::from_millis(100));
+            let checked_count = consensus.get_processed_block_count();
+            if checked_count != n - 1 && last_checked_count != checked_count {
+                last_checked_count = checked_count;
+                thread::sleep(time::Duration::from_millis(
+                    CHECKER_SLEEP_PERIOD,
+                ));
             }
             check_results(
                 last_checked,
@@ -291,13 +329,13 @@ fn main() {
                 &stable_indices,
                 &adaptive_indices,
             );
-            last_checked = n;
+            last_checked = checked_count + 1;
         }
     }
 
     let n = hashes.len();
     let last_hash = hashes[n - 1];
-    while consensus.get_processed_block_count() != n - 1 {
+    while sync.is_consensus_worker_busy() {
         if last_check_time.elapsed().unwrap().as_secs() >= 5 {
             let last_time_elapsed =
                 last_check_time.elapsed().unwrap().as_millis() as f64 / 1_000.0;
@@ -313,7 +351,7 @@ fn main() {
             );
             last_consensus_block_cnt = consensus_block_cnt;
         }
-        thread::sleep(time::Duration::from_millis(100));
+        thread::sleep(time::Duration::from_millis(CHECKER_SLEEP_PERIOD));
     }
     check_results(
         last_checked,
@@ -333,4 +371,68 @@ fn main() {
         "Elapsed {}",
         start_time.elapsed().unwrap().as_millis() as f64 / 1_000.0
     );
+
+    let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
+    let stable_hash = data_man.get_cur_consensus_era_stable_hash();
+
+    if genesis_hash == genesis_block.block_header.hash() {
+        println!("No checkpoint created, test finished!");
+        return;
+    }
+
+    data_man.initialize_instance_id();
+
+    let (sync_n, consensus_n) =
+        initialize_synchronization_graph_with_data_manager(
+            data_man,
+            beta,
+            h_ratio,
+            timer_ratio,
+            timer_beta,
+            era_epoch_count,
+        );
+
+    println!("Checkpoint generated in the process. Going to test the last checkpoint recovery, genesis hash {} stable hash {}.", genesis_hash, stable_hash);
+    let mut encounter_genesis = false;
+    let mut genesis_idx = 0;
+    for i in 0..blocks.len() {
+        if blocks[i].block_header.hash() == genesis_hash {
+            encounter_genesis = true;
+            genesis_idx = i;
+            println!(
+                "Going to check the recovery phase with genesis at index {}",
+                i
+            );
+        }
+        if encounter_genesis == false {
+            continue;
+        }
+        if genesis_idx != i {
+            let mut b = blocks[i].clone();
+            let h = b.hash();
+            consensus_n.on_new_block(&h, true, false);
+        }
+    }
+
+    println!("Waiting for the last phase being processed again...");
+    while consensus_n.get_processed_block_count()
+        != blocks.len() - genesis_idx - 1
+    {
+        println!(
+            "Processed count {} / {}",
+            consensus_n.get_processed_block_count(),
+            blocks.len() - genesis_idx - 1
+        );
+        thread::sleep(time::Duration::from_millis(CHECKER_SLEEP_PERIOD));
+    }
+    check_results(
+        genesis_idx + 1,
+        blocks.len(),
+        consensus_n.clone(),
+        &hashes,
+        &valid_indices,
+        &stable_indices,
+        &adaptive_indices,
+    );
+    println!("Done!");
 }

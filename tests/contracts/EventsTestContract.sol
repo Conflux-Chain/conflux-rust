@@ -3,11 +3,11 @@ contract EventsTestContract {
 
     uint32 counter;
 
-    event Constructed(address indexed by);
+    event Constructed(address indexed by, address data);
     event Called(address indexed by, uint32 indexed num);
 
     constructor() public {
-        emit Constructed(msg.sender);
+        emit Constructed(msg.sender, msg.sender);
     }
 
     function foo() public {

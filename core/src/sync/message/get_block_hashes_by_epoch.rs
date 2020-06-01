@@ -9,7 +9,7 @@ use crate::{
         message::{
             Context, GetBlockHashesResponse, Handleable, Key, KeyContainer,
         },
-        request_manager::Request,
+        request_manager::{AsAny, Request},
         Error, ProtocolConfiguration,
     },
 };
@@ -22,11 +22,13 @@ pub struct GetBlockHashesByEpoch {
     pub epochs: Vec<u64>,
 }
 
-impl Request for GetBlockHashesByEpoch {
-    fn as_message(&self) -> &dyn Message { self }
-
+impl AsAny for GetBlockHashesByEpoch {
     fn as_any(&self) -> &dyn Any { self }
 
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+}
+
+impl Request for GetBlockHashesByEpoch {
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
         conf.headers_request_timeout
     }
@@ -57,7 +59,7 @@ impl Handleable for GetBlockHashesByEpoch {
             .epochs
             .iter()
             .take(MAX_EPOCHS_TO_SEND as usize)
-            .map(|&e| ctx.manager.graph.get_block_hashes_by_epoch(e))
+            .map(|&e| ctx.manager.graph.get_all_block_hashes_by_epoch(e))
             .filter_map(Result::ok)
             .fold(vec![], |mut res, sub| {
                 res.extend(sub);
@@ -65,7 +67,7 @@ impl Handleable for GetBlockHashesByEpoch {
             });
 
         let response = GetBlockHashesResponse {
-            request_id: self.request_id.clone(),
+            request_id: self.request_id,
             hashes,
         };
 

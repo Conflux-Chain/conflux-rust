@@ -2,11 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    utils::{create_simple_block_impl, initialize_synchronization_graph},
-    SynchronizationGraphNode,
+use crate::{
+    block_data_manager::DbType,
+    sync::{
+        utils::{create_simple_block_impl, initialize_synchronization_graph},
+        SynchronizationGraphNode,
+    },
 };
-use cfx_types::{H256, U256};
+use cfx_types::{BigEndianHash, H256, U256};
 use primitives::Block;
 use std::{
     fs,
@@ -18,12 +21,18 @@ use std::{
 #[test]
 fn test_remove_expire_blocks() {
     {
-        let (sync, _, _) =
-            initialize_synchronization_graph("./test.db", 1, 1, 1, 1, 50000);
+        let (sync, _, _, _) = initialize_synchronization_graph(
+            "./test.db/",
+            1,
+            1,
+            1,
+            1,
+            50000,
+            DbType::Rocksdb,
+        );
         // test initialization
         {
             let inner = sync.inner.read();
-            assert!(inner.genesis_block_index == 0);
             assert!(inner.arena.len() == 1);
             assert!(inner.hash_to_arena_indices.len() == 1);
             assert!(inner.not_ready_blocks_count == 0);
@@ -83,7 +92,7 @@ fn test_remove_expire_blocks() {
                     if parent[i as usize] == -1 {
                         H256::default()
                     } else if parent[i as usize] >= i {
-                        H256::from(U256::from(100 + i as usize))
+                        BigEndianHash::from_uint(&U256::from(100 + i as usize))
                     } else {
                         blocks[parent[i as usize] as usize].hash()
                     }
@@ -92,9 +101,10 @@ fn test_remove_expire_blocks() {
                     parent_hash,
                     vec![],
                     0,
-                    i as u64,
+                    U256::from(i),
                     U256::from(10),
                     1,
+                    false,
                 );
                 blocks.push(block);
             }
@@ -147,7 +157,7 @@ fn test_remove_expire_blocks() {
 
             println!(
                 "not_ready_blocks_frontier={:?}",
-                inner.not_ready_blocks_frontier
+                inner.not_ready_blocks_frontier.get_frontier()
             );
             assert!(inner.arena.len() == 12);
             assert!(inner.hash_to_arena_indices.len() == 12);
@@ -162,11 +172,7 @@ fn test_remove_expire_blocks() {
 
         // not expire any blocks
         {
-            sync.remove_expire_blocks(
-                1000,  /* expire_time */
-                false, /* recover */
-                None,  /* maybe_out_of_era_blocks */
-            );
+            sync.remove_expire_blocks(1000 /* expire_time */);
             let inner = sync.inner.read();
             assert!(inner.arena.len() == 12);
             assert!(inner.hash_to_arena_indices.len() == 12);
@@ -189,11 +195,7 @@ fn test_remove_expire_blocks() {
                 - 1000;
         }
         {
-            sync.remove_expire_blocks(
-                500,   /* expire_time */
-                false, /* recover */
-                None,  /* maybe_out_of_era_blocks */
-            );
+            sync.remove_expire_blocks(500 /* expire_time */);
             let inner = sync.inner.read();
             assert!(inner.arena.len() == 10);
             assert!(inner.hash_to_arena_indices.len() == 10);
@@ -221,11 +223,7 @@ fn test_remove_expire_blocks() {
                 - 1000;
         }
         {
-            sync.remove_expire_blocks(
-                500,   /* expire_time */
-                false, /* recover */
-                None,  /* maybe_out_of_era_blocks */
-            );
+            sync.remove_expire_blocks(500 /* expire_time */);
             let inner = sync.inner.read();
             assert!(inner.arena.len() == 5);
             assert!(inner.hash_to_arena_indices.len() == 5);

@@ -7,11 +7,10 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-ethereum-types = "0.4"
-keccak-hash = "0.1.2"
+ethereum-types = "0.8"
+keccak-hash = "0.4"
 primitives = { path = "../primitives" }
-parking_lot = "0.6"
-rlp = "0.3.0"
-rand = "0.5"
-keylib = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", package = "ethkey" }
-rustc-hex = "1.0"
+parking_lot = "0.10"
+rlp = "0.4.0"
+rand = "0.7"
+cfxkey = { path = "../accounts/cfxkey" }

@@ -59,7 +59,7 @@ pub struct MockCall {
 /// Can't do recursive calls.
 #[derive(Default)]
 pub struct MockContext {
-    pub store: HashMap<H256, H256>,
+    pub store: HashMap<Vec<u8>, H256>,
     pub suicides: HashSet<Address>,
     pub calls: HashSet<MockCall>,
     pub sstore_clears: i128,
@@ -72,6 +72,8 @@ pub struct MockContext {
     pub balances: HashMap<Address, U256>,
     pub tracing: bool,
     pub is_static: bool,
+
+    chain_id: u64,
 }
 
 // similar to the normal `finalize` function, but ignoring NeedsReturn.
@@ -104,18 +106,19 @@ impl MockContext {
         self.spec.wasm = Some(Default::default());
         self
     }
+
+    pub fn with_chain_id(mut self, chain_id: u64) -> Self {
+        self.chain_id = chain_id;
+        self
+    }
 }
 
 impl Context for MockContext {
-    fn initial_storage_at(&self, _key: &H256) -> Result<H256> {
-        Ok(H256::new())
+    fn storage_at(&self, key: &Vec<u8>) -> Result<H256> {
+        Ok(self.store.get(key).unwrap_or(&H256::zero()).clone())
     }
 
-    fn storage_at(&self, key: &H256) -> Result<H256> {
-        Ok(self.store.get(key).unwrap_or(&H256::new()).clone())
-    }
-
-    fn set_storage(&mut self, key: H256, value: H256) -> Result<()> {
+    fn set_storage(&mut self, key: Vec<u8>, value: H256) -> Result<()> {
         self.store.insert(key, value);
         Ok(())
     }
@@ -135,7 +138,10 @@ impl Context for MockContext {
     }
 
     fn blockhash(&mut self, number: &U256) -> H256 {
-        self.blockhashes.get(number).unwrap_or(&H256::new()).clone()
+        self.blockhashes
+            .get(number)
+            .unwrap_or(&H256::zero())
+            .clone()
     }
 
     fn create(
@@ -211,6 +217,8 @@ impl Context for MockContext {
     fn spec(&self) -> &Spec { &self.spec }
 
     fn env(&self) -> &Env { &self.env }
+
+    fn chain_id(&self) -> u64 { self.chain_id }
 
     fn depth(&self) -> usize { self.depth }
 

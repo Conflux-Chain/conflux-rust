@@ -2,31 +2,27 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::sync::Arc;
-
 use cfx_types::{Bloom, H256};
 use primitives::{
-    Block, BlockHeader, BlockHeaderBuilder, EpochNumber, Receipt, StateRoot,
+    Block, BlockHeader, BlockHeaderBuilder, BlockReceipts, EpochNumber,
+    StorageKey,
 };
 
 use crate::{
-    consensus::ConsensusGraph,
-    light_protocol::{
-        message::{StateRootWithProof, WitnessInfoWithHeight},
-        Error, ErrorKind,
-    },
+    consensus::SharedConsensusGraph,
+    light_protocol::{message::WitnessInfoWithHeight, Error, ErrorKind},
     parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
     statedb::StateDb,
     storage::{
         state::{State, StateTrait},
         state_manager::StateManagerTrait,
-        SnapshotAndEpochIdRef, StateProof,
+        StateProof, StateRootWithAuxInfo,
     },
 };
 
 pub struct LedgerInfo {
     // shared consensus graph
-    consensus: Arc<ConsensusGraph>,
+    consensus: SharedConsensusGraph,
 }
 
 /// NOTE: we use `height` when we talk about headers on the pivot chain
@@ -35,7 +31,7 @@ pub struct LedgerInfo {
 /// example: the roots of epoch=5 are stored in the header at height=10
 ///          (or later, if there is blaming involved)
 impl LedgerInfo {
-    pub fn new(consensus: Arc<ConsensusGraph>) -> Self {
+    pub fn new(consensus: SharedConsensusGraph) -> Self {
         LedgerInfo { consensus }
     }
 
@@ -43,9 +39,10 @@ impl LedgerInfo {
     #[inline]
     pub fn block(&self, hash: H256) -> Result<Block, Error> {
         self.consensus
-            .data_man
+            .get_data_manager()
             .block_by_hash(&hash, false /* update_cache */)
             .map(|b| (*b).clone())
+            // FIXME: what's this internal error?
             .ok_or(ErrorKind::InternalError.into())
     }
 
@@ -53,7 +50,7 @@ impl LedgerInfo {
     #[inline]
     pub fn header(&self, hash: H256) -> Result<BlockHeader, Error> {
         self.consensus
-            .data_man
+            .get_data_manager()
             .block_header_by_hash(&hash)
             .map(|h| (*h).clone())
             .ok_or(ErrorKind::InternalError.into())
@@ -89,7 +86,7 @@ impl LedgerInfo {
     ) -> Result<H256, Error> {
         let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
         let root = self.state_root_of(epoch)?;
-        Ok(root.compute_state_root_hash())
+        Ok(root.aux_info.state_root_hash)
     }
 
     /// Get the correct deferred receipts root of the block at `height` on the
@@ -102,8 +99,8 @@ impl LedgerInfo {
         let pivot = self.pivot_hash_of(epoch)?;
 
         self.consensus
-            .data_man
-            .get_epoch_execution_commitments(&pivot)
+            .get_data_manager()
+            .get_epoch_execution_commitment(&pivot)
             .map(|c| c.receipts_root)
             .ok_or(ErrorKind::InternalError.into())
     }
@@ -118,8 +115,8 @@ impl LedgerInfo {
         let pivot = self.pivot_hash_of(epoch)?;
 
         self.consensus
-            .data_man
-            .get_epoch_execution_commitments(&pivot)
+            .get_data_manager()
+            .get_epoch_execution_commitment(&pivot)
             .map(|c| c.logs_bloom_hash)
             .ok_or(ErrorKind::InternalError.into())
     }
@@ -129,42 +126,33 @@ impl LedgerInfo {
     pub fn state_of(&self, epoch: u64) -> Result<State, Error> {
         let pivot = self.pivot_hash_of(epoch)?;
 
-        let state = self
+        let (_state_index_guard, maybe_state_index) = self
             .consensus
-            .data_man
-            .storage_manager
-            .get_state_no_commit(SnapshotAndEpochIdRef::new(&pivot, None));
+            .get_data_manager()
+            .get_state_readonly_index(&pivot)
+            .into();
+        let state = maybe_state_index.map(|state_index| {
+            self.consensus
+                .get_data_manager()
+                .storage_manager
+                .get_state_no_commit(state_index, /* try_open = */ true)
+        });
 
         match state {
-            Ok(Some(state)) => Ok(state),
+            Some(Ok(Some(state))) => Ok(state),
             _ => Err(ErrorKind::InternalError.into()),
         }
     }
 
     /// Get the state trie roots corresponding to the execution of `epoch`.
     #[inline]
-    pub fn state_root_of(&self, epoch: u64) -> Result<StateRoot, Error> {
-        match self.state_of(epoch)?.get_state_root() {
-            Ok(Some(root)) => Ok(root.state_root),
-            _ => Err(ErrorKind::InternalError.into()),
-        }
-    }
-
-    /// Get the state trie roots corresponding to the execution of `epoch`.
-    /// Returns a ledger proof along with the state trie roots.
-    #[inline]
-    pub fn state_root_with_proof_of(
+    pub fn state_root_of(
         &self, epoch: u64,
-    ) -> Result<StateRootWithProof, Error> {
-        let root = self.state_root_of(epoch)?;
-
-        let proof = self
-            .headers_needed_to_verify(epoch)?
-            .into_iter()
-            .map(|h| self.correct_deferred_state_root_hash_of(h))
-            .collect::<Result<Vec<H256>, Error>>()?;
-
-        Ok(StateRootWithProof { root, proof })
+    ) -> Result<StateRootWithAuxInfo, Error> {
+        match self.state_of(epoch)?.get_state_root() {
+            Ok(root) => Ok(root),
+            _ => Err(ErrorKind::InternalError.into()),
+        }
     }
 
     /// Get the state trie entry under `key` at `epoch`.
@@ -175,7 +163,7 @@ impl LedgerInfo {
         let state = self.state_of(epoch)?;
 
         let (value, proof) = StateDb::new(state)
-            .get_raw_with_proof(key)
+            .get_raw_with_proof(StorageKey::from_key_bytes(&key))
             .or(Err(ErrorKind::InternalError))?;
 
         let value = value.map(|x| x.to_vec());
@@ -185,7 +173,11 @@ impl LedgerInfo {
     /// Get the epoch receipts corresponding to the execution of `epoch`.
     /// Returns a vector of receipts for each block in `epoch`.
     #[inline]
-    pub fn receipts_of(&self, epoch: u64) -> Result<Vec<Vec<Receipt>>, Error> {
+    pub fn receipts_of(&self, epoch: u64) -> Result<Vec<BlockReceipts>, Error> {
+        if epoch == 0 {
+            return Ok(vec![]);
+        }
+
         let pivot = self.pivot_hash_of(epoch)?;
         let hashes = self.block_hashes_in(epoch)?;
 
@@ -193,11 +185,12 @@ impl LedgerInfo {
             .into_iter()
             .map(|h| {
                 self.consensus
-                    .data_man
-                    .block_results_by_hash_with_epoch(
-                        &h, &pivot, false, /* update_cache */
+                    .get_data_manager()
+                    .block_execution_result_by_hash_with_epoch(
+                        &h, &pivot, false, /* update_pivot_assumption */
+                        false, /* update_cache */
                     )
-                    .map(|res| (*res.receipts).clone())
+                    .map(|res| (*res.block_receipts).clone())
                     .ok_or(ErrorKind::InternalError.into())
             })
             .collect()
@@ -206,6 +199,10 @@ impl LedgerInfo {
     /// Get the aggregated bloom corresponding to the execution of `epoch`.
     #[inline]
     pub fn bloom_of(&self, epoch: u64) -> Result<Bloom, Error> {
+        if epoch == 0 {
+            return Ok(Bloom::zero());
+        }
+
         let pivot = self.pivot_hash_of(epoch)?;
         let hashes = self.block_hashes_in(epoch)?;
 
@@ -213,9 +210,10 @@ impl LedgerInfo {
             .into_iter()
             .map(|h| {
                 self.consensus
-                    .data_man
-                    .block_results_by_hash_with_epoch(
-                        &h, &pivot, false, /* update_cache */
+                    .get_data_manager()
+                    .block_execution_result_by_hash_with_epoch(
+                        &h, &pivot, false, /* update_pivot_assumption */
+                        false, /* update_cache */
                     )
                     .map(|res| res.bloom)
                     .ok_or(ErrorKind::InternalError.into())
@@ -229,39 +227,9 @@ impl LedgerInfo {
     /// information of the pivot block at `height`.
     #[inline]
     pub fn witness_of_header_at(&self, height: u64) -> Option<u64> {
-        self.consensus.first_trusted_header_starting_from(height)
-    }
-
-    /// Get the witness height that can be used to retrieve the correct header
-    /// information corresponding to the execution of `epoch`.
-    #[inline]
-    pub fn witness_of_state_at(&self, epoch: u64) -> Option<u64> {
-        let height = epoch + DEFERRED_STATE_EPOCH_COUNT;
-        self.consensus.first_trusted_header_starting_from(height)
-    }
-
-    /// Get a list of header heights required to verify the roots at `epoch`
-    /// based on the blame information.
-    #[inline]
-    pub fn headers_needed_to_verify(
-        &self, epoch: u64,
-    ) -> Result<Vec<u64>, Error> {
-        // find the first header that can verify the state root requested
-        let witness = match self.witness_of_state_at(epoch) {
-            Some(epoch) => epoch,
-            None => {
-                warn!("Unable to produce state proof for epoch {}", epoch);
-                return Err(ErrorKind::UnableToProduceProof.into());
-            }
-        };
-
-        let blame = self.pivot_header_of(witness)?.blame() as u64;
-
-        // assumption: the state root requested can be verified by the witness
-        assert!(witness >= epoch + DEFERRED_STATE_EPOCH_COUNT);
-        assert!(witness <= epoch + DEFERRED_STATE_EPOCH_COUNT + blame);
-
-        self.headers_seen_by_witness(witness)
+        self.consensus.first_trusted_header_starting_from(
+            height, None, /* blame_bound */
+        )
     }
 
     /// Get a list of all headers for which the block at height `witness` on the
@@ -281,43 +249,27 @@ impl LedgerInfo {
         Ok((0..(blame + 1)).map(|ii| witness - ii).collect())
     }
 
-    /// Get a list of all correct receipts roots stored in the header at
-    /// height `witness` on the pivot chain.
-    #[inline]
-    pub fn receipts_roots_seen_by_witness(
-        &self, witness: u64,
-    ) -> Result<Vec<H256>, Error> {
-        self.headers_seen_by_witness(witness)?
-            .into_iter()
-            .map(|height| self.correct_deferred_receipts_root_hash_of(height))
-            .collect()
-    }
-
-    /// Get a list of all correct log bloom hashes stored in the header at
-    /// height `witness` on the pivot chain.
-    #[inline]
-    pub fn bloom_hashes_seen_by_witness(
-        &self, witness: u64,
-    ) -> Result<Vec<H256>, Error> {
-        self.headers_seen_by_witness(witness)?
-            .into_iter()
-            .map(|height| self.correct_deferred_logs_root_hash_of(height))
-            .collect()
-    }
-
-    /// Get a list of all correct log bloom hashes stored in the header at
-    /// height `witness` on the pivot chain.
+    /// Get all correct state roots, receipts roots, and bloom hashes seen by
+    /// the header at height `witness`.
     #[inline]
     pub fn witness_info(
         &self, witness: u64,
     ) -> Result<WitnessInfoWithHeight, Error> {
-        let receipt_hashes = self.receipts_roots_seen_by_witness(witness)?;
-        let bloom_hashes = self.bloom_hashes_seen_by_witness(witness)?;
+        let mut states = vec![];
+        let mut receipts = vec![];
+        let mut blooms = vec![];
+
+        for h in self.headers_seen_by_witness(witness)? {
+            states.push(self.correct_deferred_state_root_hash_of(h)?);
+            receipts.push(self.correct_deferred_receipts_root_hash_of(h)?);
+            blooms.push(self.correct_deferred_logs_root_hash_of(h)?);
+        }
 
         Ok(WitnessInfoWithHeight {
             height: witness,
-            receipt_hashes,
-            bloom_hashes,
+            state_roots: states,
+            receipt_hashes: receipts,
+            bloom_hashes: blooms,
         })
     }
 }

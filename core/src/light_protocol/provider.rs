@@ -4,7 +4,6 @@
 
 use io::TimerToken;
 use parking_lot::RwLock;
-use rand::Rng;
 use rlp::Rlp;
 use std::sync::{Arc, Weak};
 
@@ -12,9 +11,9 @@ use cfx_types::H256;
 use primitives::{SignedTransaction, TransactionWithSignature};
 
 use crate::{
-    consensus::ConsensusGraph,
+    consensus::SharedConsensusGraph,
     light_protocol::{
-        common::{LedgerInfo, Peers, Validate},
+        common::{validate_chain_id, LedgerInfo, LightPeerState, Peers},
         handle_error,
         message::{
             msgid, BlockHashes as GetBlockHashesResponse,
@@ -22,36 +21,40 @@ use crate::{
             BlockTxs as GetBlockTxsResponse, BlockTxsWithHash, BloomWithEpoch,
             Blooms as GetBloomsResponse, GetBlockHashesByEpoch,
             GetBlockHeaders, GetBlockTxs, GetBlooms, GetReceipts,
-            GetStateEntry, GetStateRoot, GetTxs, GetWitnessInfo,
+            GetStateEntries, GetStateRoots, GetTxInfos, GetTxs, GetWitnessInfo,
             NewBlockHashes, NodeType, Receipts as GetReceiptsResponse,
-            ReceiptsWithEpoch, SendRawTx, StateEntry as GetStateEntryResponse,
-            StateRoot as GetStateRootResponse, StatusPing, StatusPong,
+            ReceiptsWithEpoch, SendRawTx,
+            StateEntries as GetStateEntriesResponse, StateEntryWithKey,
+            StateRootWithEpoch, StateRoots as GetStateRootsResponse,
+            StatusPingDeprecatedV1, StatusPingV2, StatusPongDeprecatedV1,
+            StatusPongV2, TxInfo, TxInfos as GetTxInfosResponse,
             Txs as GetTxsResponse, WitnessInfo as GetWitnessInfoResponse,
             WitnessInfoWithHeight,
         },
-        Error, ErrorKind, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
+        Error, ErrorKind, LIGHT_PROTOCOL_ID,
+        LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT, LIGHT_PROTOCOL_VERSION,
+        LIGHT_PROTO_V1,
     },
-    message::{decode_msg, Message, MsgId},
+    message::{decode_msg, decode_rlp_and_check_deprecation, Message, MsgId},
     network::{
         throttling::THROTTLING_SERVICE, NetworkContext, NetworkProtocolHandler,
-        NetworkService, PeerId,
+        NetworkService,
     },
     parameters::light::{
         MAX_EPOCHS_TO_SEND, MAX_HEADERS_TO_SEND, MAX_TXS_TO_SEND,
     },
-    sync::SynchronizationGraph,
+    sync::{message::Throttled, SynchronizationGraph},
     TransactionPool,
 };
-
-#[derive(Default)]
-pub struct LightPeerState {
-    pub handshake_completed: bool,
-    pub protocol_version: u8,
-}
+use network::{node_table::NodeId, service::ProtocolVersion};
+use rand::prelude::SliceRandom;
+use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
 
 pub struct Provider {
+    pub protocol_version: ProtocolVersion,
+
     // shared consensus graph
-    consensus: Arc<ConsensusGraph>,
+    consensus: SharedConsensusGraph,
 
     // shared synchronization graph
     graph: Arc<SynchronizationGraph>,
@@ -69,39 +72,39 @@ pub struct Provider {
     // shared transaction pool
     tx_pool: Arc<TransactionPool>,
 
-    // helper API for validating ledger and state information
-    validate: Validate,
+    throttling_config_file: Option<String>,
 }
 
 impl Provider {
     pub fn new(
-        consensus: Arc<ConsensusGraph>, graph: Arc<SynchronizationGraph>,
+        consensus: SharedConsensusGraph, graph: Arc<SynchronizationGraph>,
         network: Weak<NetworkService>, tx_pool: Arc<TransactionPool>,
+        throttling_config_file: Option<String>,
     ) -> Self
     {
         let ledger = LedgerInfo::new(consensus.clone());
         let peers = Peers::new();
-        let validate = Validate::new(consensus.clone());
 
         Provider {
+            protocol_version: LIGHT_PROTOCOL_VERSION,
             consensus,
             graph,
             ledger,
             network,
             peers,
             tx_pool,
-            validate,
+            throttling_config_file,
         }
     }
 
     pub fn register(
-        self: Arc<Self>, network: Arc<NetworkService>,
+        self: &Arc<Self>, network: Arc<NetworkService>,
     ) -> Result<(), String> {
         network
             .register_protocol(
-                self,
+                self.clone(),
                 LIGHT_PROTOCOL_ID,
-                &[LIGHT_PROTOCOL_VERSION],
+                self.protocol_version,
             )
             .map_err(|e| {
                 format!("failed to register protocol Provider: {:?}", e)
@@ -110,9 +113,9 @@ impl Provider {
 
     #[inline]
     fn get_existing_peer_state(
-        &self, peer: &PeerId,
+        &self, peer: &NodeId,
     ) -> Result<Arc<RwLock<LightPeerState>>, Error> {
-        match self.peers.get(&peer) {
+        match self.peers.get(peer) {
             Some(state) => Ok(state),
             None => {
                 // NOTE: this should not happen as we register
@@ -124,12 +127,20 @@ impl Provider {
     }
 
     #[inline]
+    fn peer_version(&self, peer: &NodeId) -> Result<ProtocolVersion, Error> {
+        Ok(self.get_existing_peer_state(peer)?.read().protocol_version)
+    }
+
+    #[inline]
     fn validate_peer_state(
-        &self, peer: PeerId, msg_id: MsgId,
+        &self, peer: &NodeId, msg_id: MsgId,
     ) -> Result<(), Error> {
         let state = self.get_existing_peer_state(&peer)?;
 
-        if msg_id != msgid::STATUS_PING && !state.read().handshake_completed {
+        if msg_id != msgid::STATUS_PING_DEPRECATED
+            && msg_id != msgid::STATUS_PING_V2
+            && !state.read().handshake_completed
+        {
             warn!("Received msg={:?} from handshaking peer={:?}", msg_id, peer);
             return Err(ErrorKind::UnexpectedMessage.into());
         }
@@ -139,29 +150,33 @@ impl Provider {
 
     #[rustfmt::skip]
     fn dispatch_message(
-        &self, io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, rlp: Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, rlp: Rlp,
     ) -> Result<(), Error> {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
         self.validate_peer_state(peer, msg_id)?;
+        let min_supported_ver = self.minimum_supported_version();
+        let protocol = io.get_protocol();
 
         match msg_id {
-            msgid::STATUS_PING => self.on_status(io, peer, &rlp),
-            msgid::GET_STATE_ROOT => self.on_get_state_root(io, peer, &rlp),
-            msgid::GET_STATE_ENTRY => self.on_get_state_entry(io, peer, &rlp),
-            msgid::GET_BLOCK_HASHES_BY_EPOCH => self.on_get_block_hashes_by_epoch(io, peer, &rlp),
-            msgid::GET_BLOCK_HEADERS => self.on_get_block_headers(io, peer, &rlp),
-            msgid::SEND_RAW_TX => self.on_send_raw_tx(io, peer, &rlp),
-            msgid::GET_RECEIPTS => self.on_get_receipts(io, peer, &rlp),
-            msgid::GET_TXS => self.on_get_txs(io, peer, &rlp),
-            msgid::GET_WITNESS_INFO => self.on_get_witness_info(io, peer, &rlp),
-            msgid::GET_BLOOMS => self.on_get_blooms(io, peer, &rlp),
-            msgid::GET_BLOCK_TXS => self.on_get_block_txs(io, peer, &rlp),
+            msgid::STATUS_PING_DEPRECATED => self.on_status_deprecated(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::STATUS_PING_V2 => self.on_status_v2(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::GET_STATE_ENTRIES => self.on_get_state_entries(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::GET_STATE_ROOTS => self.on_get_state_roots(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::GET_BLOCK_HASHES_BY_EPOCH => self.on_get_block_hashes_by_epoch(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::GET_BLOCK_HEADERS => self.on_get_block_headers(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::SEND_RAW_TX => self.on_send_raw_tx(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::GET_RECEIPTS => self.on_get_receipts(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::GET_TXS => self.on_get_txs(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::GET_WITNESS_INFO => self.on_get_witness_info(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::GET_BLOOMS => self.on_get_blooms(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::GET_BLOCK_TXS => self.on_get_block_txs(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::GET_TX_INFOS => self.on_get_tx_infos(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             _ => Err(ErrorKind::UnknownMessage.into()),
         }
     }
 
     #[inline]
-    fn all_light_peers(&self) -> Vec<PeerId> {
+    fn all_light_peers(&self) -> Vec<NodeId> {
         // peers completing the handshake are guaranteed to be light peers
         self.peers.all_peers_satisfying(|s| s.handshake_completed)
     }
@@ -179,25 +194,86 @@ impl Provider {
         None
     }
 
-    fn send_status(
-        &self, io: &dyn NetworkContext, peer: PeerId,
-    ) -> Result<(), Error> {
-        let best_info = self.consensus.get_best_info();
-        let genesis_hash = self.consensus.data_man.true_genesis_block.hash();
-
-        let terminals = match &best_info.terminal_block_hashes {
-            Some(x) => x.clone(),
-            None => best_info.bounded_terminal_block_hashes.clone(),
+    #[inline]
+    fn tx_info_by_hash(&self, hash: H256) -> Option<TxInfo> {
+        let addr = match self.consensus.get_transaction_info_by_hash(&hash) {
+            Some(info) => info.2,
+            None => {
+                warn!("Unable to get tx info for {:?}", hash);
+                return None;
+            }
         };
 
-        let msg: Box<dyn Message> = Box::new(StatusPong {
-            best_epoch: best_info.best_epoch_number,
-            genesis_hash,
-            network_id: 0x0,
-            node_type: NodeType::Full,
-            protocol_version: LIGHT_PROTOCOL_VERSION,
-            terminals,
-        });
+        let block_hash = addr.block_hash;
+        let index = addr.index;
+
+        let epoch = match self.consensus.get_block_epoch_number(&block_hash) {
+            Some(epoch) => epoch,
+            None => {
+                warn!("Unable to get epoch number for block {:?}", block_hash);
+                return None;
+            }
+        };
+
+        let epoch_receipts = match self.ledger.receipts_of(epoch) {
+            Ok(rs) => rs,
+            Err(e) => {
+                warn!("Unable to retrieve receipts for {}: {}", epoch, e);
+                return None;
+            }
+        };
+
+        let block = match self.ledger.block(block_hash) {
+            Ok(b) => b,
+            Err(e) => {
+                warn!("Unable to retrieve block {:?}: {}", block_hash, e);
+                return None;
+            }
+        };
+
+        let block_txs = block
+            .transactions
+            .clone()
+            .into_iter()
+            .map(|arc_tx| (*arc_tx).clone())
+            .collect();
+
+        Some(TxInfo {
+            tx_hash: hash,
+            epoch,
+            block_hash,
+            index,
+            epoch_receipts,
+            block_txs,
+        })
+    }
+
+    fn send_status(
+        &self, io: &dyn NetworkContext, peer: &NodeId,
+    ) -> Result<(), Error> {
+        let best_info = self.consensus.best_info();
+        let genesis_hash = self.graph.data_man.true_genesis.hash();
+
+        let terminals = best_info.bounded_terminal_block_hashes.clone();
+
+        let msg: Box<dyn Message>;
+        if self.peer_version(peer)? == LIGHT_PROTO_V1 {
+            msg = Box::new(StatusPongDeprecatedV1 {
+                protocol_version: self.protocol_version.0,
+                best_epoch: best_info.best_epoch_number,
+                genesis_hash,
+                node_type: NodeType::Full,
+                terminals,
+            });
+        } else {
+            msg = Box::new(StatusPongV2 {
+                chain_id: self.consensus.get_config().chain_id.clone(),
+                best_epoch: best_info.best_epoch_number,
+                genesis_hash,
+                node_type: NodeType::Full,
+                terminals,
+            });
+        }
 
         msg.send(io, peer)?;
         Ok(())
@@ -211,65 +287,110 @@ impl Provider {
         }
     }
 
-    fn on_status(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+    #[inline]
+    fn validate_genesis_hash(&self, genesis: H256) -> Result<(), Error> {
+        match self.graph.data_man.true_genesis.hash() {
+            h if h == genesis => Ok(()),
+            h => {
+                debug!(
+                    "Genesis mismatch (ours: {:?}, theirs: {:?})",
+                    h, genesis
+                );
+                Err(ErrorKind::GenesisMismatch.into())
+            }
+        }
+    }
+
+    fn on_status_v2(
+        &self, io: &dyn NetworkContext, peer: &NodeId, status: StatusPingV2,
     ) -> Result<(), Error> {
-        let status: StatusPing = rlp.as_val()?;
         info!("on_status peer={:?} status={:?}", peer, status);
+        self.throttle(peer, &status)?;
 
         self.validate_peer_type(&status.node_type)?;
-        self.validate.genesis_hash(status.genesis_hash)?;
+        self.validate_genesis_hash(status.genesis_hash)?;
+        validate_chain_id(
+            &self.consensus.get_config().chain_id,
+            &status.chain_id,
+        )?;
 
         if let Err(e) = self.send_status(io, peer) {
             warn!("Failed to send status to peer={:?}: {:?}", peer, e);
             return Err(ErrorKind::SendStatusFailed.into());
         };
 
-        let state = self.get_existing_peer_state(&peer)?;
+        let state = self.get_existing_peer_state(peer)?;
         let mut state = state.write();
         state.handshake_completed = true;
-        state.protocol_version = status.protocol_version;
         Ok(())
     }
 
-    fn on_get_state_root(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+    fn on_status_deprecated(
+        &self, io: &dyn NetworkContext, peer: &NodeId,
+        status: StatusPingDeprecatedV1,
+    ) -> Result<(), Error>
+    {
+        self.on_status_v2(
+            io,
+            peer,
+            StatusPingV2 {
+                genesis_hash: status.genesis_hash,
+                node_type: status.node_type,
+                chain_id: self.consensus.get_config().chain_id.clone(),
+            },
+        )
+    }
+
+    fn on_get_state_roots(
+        &self, io: &dyn NetworkContext, peer: &NodeId, req: GetStateRoots,
     ) -> Result<(), Error> {
-        let req: GetStateRoot = rlp.as_val()?;
-        info!("on_get_state_root req={:?}", req);
+        debug!("on_get_state_roots req={:?}", req);
+        self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
-        let pivot_hash = self.ledger.pivot_hash_of(req.epoch)?;
-        let state_root = self.ledger.state_root_with_proof_of(req.epoch)?;
+        let state_roots = req
+            .epochs
+            .into_iter()
+            .map(|e| {
+                self.ledger
+                    .state_root_of(e)
+                    .map(|root| (e, root.state_root))
+            })
+            .filter_map(Result::ok)
+            .map(|(epoch, state_root)| StateRootWithEpoch { epoch, state_root })
+            .collect();
 
-        let msg: Box<dyn Message> = Box::new(GetStateRootResponse {
+        let msg: Box<dyn Message> = Box::new(GetStateRootsResponse {
             request_id,
-            pivot_hash,
-            state_root,
+            state_roots,
         });
 
         msg.send(io, peer)?;
         Ok(())
     }
 
-    fn on_get_state_entry(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+    fn on_get_state_entries(
+        &self, io: &dyn NetworkContext, peer: &NodeId, req: GetStateEntries,
     ) -> Result<(), Error> {
-        let req: GetStateEntry = rlp.as_val()?;
-        info!("on_get_state_entry req={:?}", req);
+        debug!("on_get_state_entries req={:?}", req);
+        self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
-        let pivot_hash = self.ledger.pivot_hash_of(req.epoch)?;
-        let state_root = self.ledger.state_root_with_proof_of(req.epoch)?;
-        let (entry, proof) = self.ledger.state_entry_at(req.epoch, &req.key)?;
-        let entry = entry.map(|x| x.to_vec());
+        let entries = req
+            .keys
+            .into_iter()
+            .map(|key| {
+                self.ledger
+                    .state_entry_at(key.epoch, &key.key)
+                    .map(|(entry, proof)| (key, entry, proof))
+            })
+            .filter_map(Result::ok)
+            .map(|(key, entry, proof)| StateEntryWithKey { key, entry, proof })
+            .collect();
 
-        let msg: Box<dyn Message> = Box::new(GetStateEntryResponse {
+        let msg: Box<dyn Message> = Box::new(GetStateEntriesResponse {
             request_id,
-            pivot_hash,
-            state_root,
-            entry,
-            proof,
+            entries,
         });
 
         msg.send(io, peer)?;
@@ -277,17 +398,19 @@ impl Provider {
     }
 
     fn on_get_block_hashes_by_epoch(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let req: GetBlockHashesByEpoch = rlp.as_val()?;
-        info!("on_get_block_hashes_by_epoch req={:?}", req);
+        &self, io: &dyn NetworkContext, peer: &NodeId,
+        req: GetBlockHashesByEpoch,
+    ) -> Result<(), Error>
+    {
+        debug!("on_get_block_hashes_by_epoch req={:?}", req);
+        self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
         let hashes = req
             .epochs
             .iter()
             .take(MAX_EPOCHS_TO_SEND)
-            .filter_map(|&e| self.graph.get_block_hashes_by_epoch(e).ok())
+            .filter_map(|&e| self.graph.get_all_block_hashes_by_epoch(e).ok())
             .fold(vec![], |mut res, sub| {
                 res.extend(sub);
                 res
@@ -301,17 +424,22 @@ impl Provider {
     }
 
     fn on_get_block_headers(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, req: GetBlockHeaders,
     ) -> Result<(), Error> {
-        let req: GetBlockHeaders = rlp.as_val()?;
-        info!("on_get_block_headers req={:?}", req);
+        debug!("on_get_block_headers req={:?}", req);
+        self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
         let headers = req
             .hashes
             .iter()
             .take(MAX_HEADERS_TO_SEND)
-            .filter_map(|h| self.graph.block_header_by_hash(&h))
+            .filter_map(|h| {
+                self.graph
+                    .data_man
+                    .block_header_by_hash(&h)
+                    .map(|header_arc| header_arc.as_ref().clone())
+            })
             .collect();
 
         let msg: Box<dyn Message> = Box::new(GetBlockHeadersResponse {
@@ -324,17 +452,17 @@ impl Provider {
     }
 
     fn on_send_raw_tx(
-        &self, _io: &dyn NetworkContext, _peer: PeerId, rlp: &Rlp,
+        &self, _io: &dyn NetworkContext, peer: &NodeId, req: SendRawTx,
     ) -> Result<(), Error> {
-        let req: SendRawTx = rlp.as_val()?;
-        info!("on_send_raw_tx req={:?}", req);
+        debug!("on_send_raw_tx req={:?}", req);
+        self.throttle(peer, &req)?;
         let tx: TransactionWithSignature = rlp::decode(&req.raw)?;
 
-        let (passed, failed) = self.tx_pool.insert_new_transactions(&vec![tx]);
+        let (passed, failed) = self.tx_pool.insert_new_transactions(vec![tx]);
 
         match (passed.len(), failed.len()) {
             (0, 0) => {
-                info!("Tx already inserted, ignoring");
+                debug!("Tx already inserted, ignoring");
                 Ok(())
             }
             (0, 1) => {
@@ -343,7 +471,7 @@ impl Provider {
                 Ok(())
             }
             (1, 0) => {
-                info!("Tx inserted successfully");
+                debug!("Tx inserted successfully");
                 // TODO(thegaram): consider relaying to peers
                 Ok(())
             }
@@ -359,10 +487,10 @@ impl Provider {
     }
 
     fn on_get_receipts(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, req: GetReceipts,
     ) -> Result<(), Error> {
-        let req: GetReceipts = rlp.as_val()?;
-        info!("on_get_receipts req={:?}", req);
+        debug!("on_get_receipts req={:?}", req);
+        self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
         let receipts = req
@@ -370,7 +498,10 @@ impl Provider {
             .into_iter()
             .map(|e| self.ledger.receipts_of(e).map(|receipts| (e, receipts)))
             .filter_map(Result::ok)
-            .map(|(epoch, receipts)| ReceiptsWithEpoch { epoch, receipts })
+            .map(|(epoch, epoch_receipts)| ReceiptsWithEpoch {
+                epoch,
+                epoch_receipts,
+            })
             .collect();
 
         let msg: Box<dyn Message> = Box::new(GetReceiptsResponse {
@@ -383,10 +514,10 @@ impl Provider {
     }
 
     fn on_get_txs(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, req: GetTxs,
     ) -> Result<(), Error> {
-        let req: GetTxs = rlp.as_val()?;
-        info!("on_get_txs req={:?}", req);
+        debug!("on_get_txs req={:?}", req);
+        self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
         let txs = req
@@ -404,10 +535,10 @@ impl Provider {
     }
 
     fn on_get_witness_info(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, req: GetWitnessInfo,
     ) -> Result<(), Error> {
-        let req: GetWitnessInfo = rlp.as_val()?;
-        info!("on_get_witness_info req={:?}", req);
+        debug!("on_get_witness_info req={:?}", req);
+        self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
         let infos = req
@@ -424,10 +555,10 @@ impl Provider {
     }
 
     fn on_get_blooms(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, req: GetBlooms,
     ) -> Result<(), Error> {
-        let req: GetBlooms = rlp.as_val()?;
-        info!("on_get_blooms req={:?}", req);
+        debug!("on_get_blooms req={:?}", req);
+        self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
         let blooms = req
@@ -446,10 +577,10 @@ impl Provider {
     }
 
     fn on_get_block_txs(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, req: GetBlockTxs,
     ) -> Result<(), Error> {
-        let req: GetBlockTxs = rlp.as_val()?;
-        info!("on_get_block_txs req={:?}", req);
+        debug!("on_get_block_txs req={:?}", req);
+        self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
         let block_txs = req
@@ -480,12 +611,33 @@ impl Provider {
         Ok(())
     }
 
+    fn on_get_tx_infos(
+        &self, io: &dyn NetworkContext, peer: &NodeId, req: GetTxInfos,
+    ) -> Result<(), Error> {
+        debug!("on_get_tx_infos req={:?}", req);
+        self.throttle(peer, &req)?;
+        let request_id = req.request_id;
+
+        // TODO(thegaram): consider merging overlapping tx infos
+        let infos = req
+            .hashes
+            .into_iter()
+            .filter_map(|h| self.tx_info_by_hash(h))
+            .collect();
+
+        let msg: Box<dyn Message> =
+            Box::new(GetTxInfosResponse { request_id, infos });
+
+        msg.send(io, peer)?;
+        Ok(())
+    }
+
     fn broadcast(
-        &self, io: &dyn NetworkContext, mut peers: Vec<PeerId>,
+        &self, io: &dyn NetworkContext, mut peers: Vec<NodeId>,
         msg: &dyn Message,
     ) -> Result<(), Error>
     {
-        info!("broadcast peers={:?}", peers);
+        debug!("broadcast peers={:?}", peers);
 
         let throttle_ratio = THROTTLING_SERVICE.read().get_throttling_ratio();
         let total = peers.len();
@@ -496,19 +648,21 @@ impl Provider {
                 "Apply throttling for broadcast, total: {}, allowed: {}",
                 total, allowed
             );
-            rand::thread_rng().shuffle(&mut peers);
+            peers.shuffle(&mut rand::thread_rng());
             peers.truncate(allowed);
         }
 
         for id in peers {
-            msg.send(io, id)?;
+            msg.send(io, &id)?;
         }
 
         Ok(())
     }
 
-    pub fn relay_hashes(&self, hashes: Vec<H256>) -> Result<(), Error> {
-        info!("relay_hashes hashes={:?}", hashes);
+    pub fn relay_hashes(
+        self: &Arc<Self>, hashes: Vec<H256>,
+    ) -> Result<(), Error> {
+        debug!("relay_hashes hashes={:?}", hashes);
 
         if hashes.is_empty() {
             return Ok(());
@@ -524,7 +678,7 @@ impl Provider {
         };
 
         // broadcast message
-        let res = network.with_context(LIGHT_PROTOCOL_ID, |io| {
+        let res = network.with_context(self.clone(), LIGHT_PROTOCOL_ID, |io| {
             let msg: Box<dyn Message> = Box::new(NewBlockHashes { hashes });
             self.broadcast(io, self.all_light_peers(), msg.as_ref())
         });
@@ -535,12 +689,51 @@ impl Provider {
 
         Ok(())
     }
+
+    fn throttle<T: Message>(
+        &self, peer: &NodeId, msg: &T,
+    ) -> Result<(), Error> {
+        let peer = self.get_existing_peer_state(peer)?;
+
+        let bucket_name = msg.msg_name().to_string();
+        let bucket = match peer.read().throttling.get(&bucket_name) {
+            Some(bucket) => bucket,
+            None => return Ok(()),
+        };
+
+        let result = bucket.lock().throttle_default();
+
+        match result {
+            ThrottleResult::Success => Ok(()),
+            ThrottleResult::Throttled(wait_time) => {
+                let throttled = Throttled {
+                    msg_id: msg.msg_id(),
+                    wait_time_nanos: wait_time.as_nanos() as u64,
+                    request_id: msg.get_request_id(),
+                };
+
+                Err(ErrorKind::Throttled(msg.msg_name(), throttled).into())
+            }
+            ThrottleResult::AlreadyThrottled => {
+                Err(ErrorKind::AlreadyThrottled(msg.msg_name()).into())
+            }
+        }
+    }
 }
 
 impl NetworkProtocolHandler for Provider {
+    fn minimum_supported_version(&self) -> ProtocolVersion {
+        let my_version = self.protocol_version.0;
+        if my_version > LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT {
+            ProtocolVersion(my_version - LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT)
+        } else {
+            LIGHT_PROTO_V1
+        }
+    }
+
     fn initialize(&self, _io: &dyn NetworkContext) {}
 
-    fn on_message(&self, io: &dyn NetworkContext, peer: PeerId, raw: &[u8]) {
+    fn on_message(&self, io: &dyn NetworkContext, peer: &NodeId, raw: &[u8]) {
         trace!("on_message: peer={:?}, raw={:?}", peer, raw);
 
         let (msg_id, rlp) = match decode_msg(raw) {
@@ -562,19 +755,43 @@ impl NetworkProtocolHandler for Provider {
         }
     }
 
-    fn on_peer_connected(&self, _io: &dyn NetworkContext, peer: PeerId) {
-        info!("on_peer_connected: peer={:?}", peer);
+    fn on_peer_connected(
+        &self, _io: &dyn NetworkContext, peer: &NodeId,
+        peer_protocol_version: ProtocolVersion,
+    )
+    {
+        debug!(
+            "on_peer_connected: peer={:?} version={}",
+            peer, peer_protocol_version
+        );
 
         // insert handshaking peer, wait for StatusPing
-        self.peers.insert(peer);
+        self.peers.insert(*peer);
+        self.peers.get(peer).unwrap().write().protocol_version =
+            peer_protocol_version;
+
+        if let Some(ref file) = self.throttling_config_file {
+            let peer = self.peers.get(peer).expect("peer not found");
+            peer.write().throttling =
+                TokenBucketManager::load(file, Some("light_protocol"))
+                    .expect("invalid throttling configuration file");
+        }
     }
 
-    fn on_peer_disconnected(&self, _io: &dyn NetworkContext, peer: PeerId) {
-        info!("on_peer_disconnected: peer={:?}", peer);
-        self.peers.remove(&peer);
+    fn on_peer_disconnected(&self, _io: &dyn NetworkContext, peer: &NodeId) {
+        debug!("on_peer_disconnected: peer={}", peer);
+        self.peers.remove(peer);
     }
 
     fn on_timeout(&self, _io: &dyn NetworkContext, _timer: TimerToken) {
         // EMPTY
+    }
+
+    fn send_local_message(&self, _io: &dyn NetworkContext, _message: Vec<u8>) {
+        unreachable!("Light node provider does not have send_local_message.")
+    }
+
+    fn on_work_dispatch(&self, _io: &dyn NetworkContext, _work_type: u8) {
+        unreachable!("Light node provider does not have on_work_dispatch.")
     }
 }

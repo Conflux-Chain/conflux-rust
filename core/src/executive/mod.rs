@@ -5,8 +5,17 @@
 mod context;
 mod executed;
 mod executive;
+mod internal_contract;
+
+#[cfg(test)]
+mod executive_tests;
 
 pub use self::{
-    executed::{Executed, ExecutionError, ExecutionResult},
+    executed::*,
     executive::{contract_address, Executive},
+    internal_contract::{
+        suicide, InternalContractMap, InternalContractTrait,
+        SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+        STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+    },
 };

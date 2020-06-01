@@ -186,7 +186,7 @@ impl NodeDatabase {
     /// Add a new trusted node if not exists. Otherwise, update the existing
     /// node with the specified `entry`, and promote the node to trusted if it
     /// is untrusted.
-    pub fn insert_with_promotion(&mut self, entry: NodeEntry) {
+    pub fn insert_with_conditional_promotion(&mut self, entry: NodeEntry) {
         if self.evaluate_blacklisted(&entry.id) {
             return;
         }
@@ -197,6 +197,12 @@ impl NodeDatabase {
         let ip = node.endpoint.address.ip();
 
         if self.untrusted_nodes.contains(&node.id) {
+            if let Some(NodeContact::Demoted(_)) =
+                self.untrusted_nodes.get(&node.id).unwrap().last_contact
+            {
+                return;
+            }
+
             if let Some(old_node) = self.promote_with_untrusted(&node.id, ip) {
                 node.last_connected = old_node.last_connected;
                 node.stream_token = old_node.stream_token;
@@ -247,7 +253,7 @@ impl NodeDatabase {
             return;
         }
 
-        let mut node = Node::new(entry.id.clone(), entry.endpoint.clone());
+        let mut node = Node::new(entry.id.clone(), entry.endpoint);
         let ip = node.endpoint.address.ip();
 
         if self.untrusted_nodes.contains(&node.id) {
@@ -273,11 +279,29 @@ impl NodeDatabase {
     pub fn note_failure(
         &mut self, id: &NodeId, by_connection: bool, trusted_only: bool,
     ) {
-        self.trusted_nodes.note_failure(id, by_connection);
+        self.trusted_nodes.note_unsuccess_contact(
+            id,
+            by_connection,
+            Some(NodeContact::failure()),
+        );
 
         if !trusted_only {
-            self.untrusted_nodes.note_failure(id, by_connection);
+            self.untrusted_nodes.note_unsuccess_contact(
+                id,
+                by_connection,
+                Some(NodeContact::failure()),
+            );
         }
+    }
+
+    /// Mark as demoted for the specified node.
+    pub fn note_demoted(&mut self, id: &NodeId, by_connection: bool) {
+        assert!(!self.trusted_nodes.contains(id));
+        self.untrusted_nodes.note_unsuccess_contact(
+            id,
+            by_connection,
+            Some(NodeContact::demoted()),
+        );
     }
 
     /// Mark as success for the specified node.
@@ -352,7 +376,7 @@ impl NodeDatabase {
         // node table
         self.trusted_node_tag_index
             .sample(count, key, value)
-            .unwrap_or_else(|| HashSet::new())
+            .unwrap_or_else(HashSet::new)
     }
 
     pub fn get_nodes(
@@ -388,9 +412,15 @@ impl NodeDatabase {
             if let Some(node) = self.untrusted_nodes.get(id) {
                 if let Some(lc) = node.last_connected {
                     if lc.success_for_duration(due) {
-                        if let Some(removed_node) =
+                        if let Some(mut removed_node) =
                             self.untrusted_nodes.remove_with_id(id)
                         {
+                            removed_node.last_contact =
+                                removed_node.last_connected;
+                            self.promote_with_untrusted(
+                                id,
+                                removed_node.endpoint.address.ip(),
+                            );
                             // IP address not changed and always allow to add.
                             self.trusted_node_tag_index.add_node(&removed_node);
                             self.trusted_nodes.add_node(
@@ -406,6 +436,7 @@ impl NodeDatabase {
 
     /// Demote the specified node to untrusted if it is trusted.
     pub fn demote(&mut self, node_id: &NodeId) {
+        self.ip_limit.demote(node_id);
         if let Some(removed_trusted_node) =
             self.trusted_nodes.remove_with_id(node_id)
         {
@@ -481,12 +512,10 @@ impl NodeDatabase {
                 }
 
                 assert!(self.ip_limit.insert(id, ip, trusted, evictee));
+            } else if trusted {
+                self.trusted_nodes.remove_with_id(&id);
             } else {
-                if trusted {
-                    self.trusted_nodes.remove_with_id(&id);
-                } else {
-                    self.untrusted_nodes.remove_with_id(&id);
-                }
+                self.untrusted_nodes.remove_with_id(&id);
             }
         }
     }

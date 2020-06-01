@@ -2,39 +2,70 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{Bloom, H160, H256, KECCAK_EMPTY_BLOOM};
+use crate::{
+    consensus::SharedConsensusGraph,
+    light_protocol::{
+        common::{FullPeerFilter, LedgerInfo},
+        handler::sync::tx_infos::TxInfoValidated,
+        message::msgid,
+        Handler as LightHandler, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
+    },
+    network::{NetworkContext, NetworkService},
+    parameters::{
+        consensus::DEFERRED_STATE_EPOCH_COUNT,
+        light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME},
+    },
+    sync::SynchronizationGraph,
+};
+use cfx_types::{Bloom, H160, H256, KECCAK_EMPTY_BLOOM, U256};
+use futures::{
+    future::{self, Either},
+    stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
+};
+use network::service::ProtocolVersion;
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
-    Account, Receipt, SignedTransaction, StateRoot,
+    Account, BlockReceipts, CodeInfo, EpochNumber, Receipt, SignedTransaction,
+    StateRoot, StorageKey, StorageValue, TransactionIndex,
 };
-use std::sync::Arc;
+use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 
-extern crate futures;
-use futures::{future, stream, Future, Stream};
+// FIXME: struct
+type TxInfo = (
+    SignedTransaction,
+    Receipt,
+    TransactionIndex,
+    Option<u64>,  /* maybe_epoch */
+    Option<H256>, /* maybe_state_root */
+    U256,         /* prior_gas_used */
+);
 
-use crate::{
-    consensus::ConsensusGraph,
-    network::{NetworkService, PeerId},
-    parameters::{
-        consensus::DEFERRED_STATE_EPOCH_COUNT, light::LOG_FILTERING_LOOKAHEAD,
-    },
-    statedb::StorageKey,
-    storage,
-    sync::SynchronizationGraph,
-};
+// As of now, the jsonrpc crate uses legacy futures (futures@0.1 and tokio@0.1).
+// Because of this, our RPC runtime cannot handle tokio@0.2 timing primitives.
+// As a temporary workaround, we use the old `tokio_timer::Timeout` instead.
+async fn with_timeout<T>(
+    d: Duration, msg: String, fut: impl Future<Output = T> + Send + Sync,
+) -> Result<T, String> {
+    // convert `fut` into futures@0.1
+    let fut = fut.unit_error().boxed().compat();
 
-use super::{
-    common::{poll_next, LedgerInfo},
-    handler::QueryResult,
-    message::{GetStateEntry, GetStateRoot, GetTxs},
-    Error, ErrorKind, Handler as LightHandler, LIGHT_PROTOCOL_ID,
-    LIGHT_PROTOCOL_VERSION,
-};
+    // set timeout
+    let with_timeout = tokio_timer::Timeout::new(fut, d);
+
+    // convert back to std::future
+    use futures::compat::Future01CompatExt;
+    let with_timeout = with_timeout.compat();
+
+    // set error message
+    with_timeout.await.map_err(|_| msg)
+}
 
 pub struct QueryService {
+    protocol_version: ProtocolVersion,
+
     // shared consensus graph
-    consensus: Arc<ConsensusGraph>,
+    consensus: SharedConsensusGraph,
 
     // light protocol handler
     handler: Arc<LightHandler>,
@@ -48,14 +79,19 @@ pub struct QueryService {
 
 impl QueryService {
     pub fn new(
-        consensus: Arc<ConsensusGraph>, graph: Arc<SynchronizationGraph>,
-        network: Arc<NetworkService>,
+        consensus: SharedConsensusGraph, graph: Arc<SynchronizationGraph>,
+        network: Arc<NetworkService>, throttling_config_file: Option<String>,
     ) -> Self
     {
-        let handler = Arc::new(LightHandler::new(consensus.clone(), graph));
+        let handler = Arc::new(LightHandler::new(
+            consensus.clone(),
+            graph,
+            throttling_config_file,
+        ));
         let ledger = LedgerInfo::new(consensus.clone());
 
         QueryService {
+            protocol_version: LIGHT_PROTOCOL_VERSION,
             consensus,
             handler,
             ledger,
@@ -68,103 +104,232 @@ impl QueryService {
             .register_protocol(
                 self.handler.clone(),
                 LIGHT_PROTOCOL_ID,
-                &[LIGHT_PROTOCOL_VERSION],
+                self.protocol_version,
             )
             .map_err(|e| {
                 format!("failed to register protocol QueryService: {:?}", e)
             })
     }
 
-    pub fn query_state_root(
-        &self, peer: PeerId, epoch: u64,
-    ) -> Result<StateRoot, Error> {
-        // TODO(thegaram): retrieve from cache
-        info!("query_state_root epoch={:?}", epoch);
-
-        let req = GetStateRoot {
-            request_id: 0,
-            epoch,
-        };
-
-        self.network.with_context(LIGHT_PROTOCOL_ID, |io| {
-            match self.handler.query.execute(io, peer, req)? {
-                QueryResult::StateRoot(sr) => Ok(sr),
-                _ => Err(ErrorKind::UnexpectedResponse.into()),
-            }
-        })
+    fn with_io<T>(&self, f: impl FnOnce(&dyn NetworkContext) -> T) -> T {
+        self.network
+            .with_context(self.handler.clone(), LIGHT_PROTOCOL_ID, |io| f(io))
+            .expect("Unable to access network service")
     }
 
-    pub fn query_state_entry(
-        &self, peer: PeerId, epoch: u64, key: Vec<u8>,
-    ) -> Result<Option<Vec<u8>>, Error> {
-        info!("query_state_entry epoch={:?} key={:?}", epoch, key);
+    #[allow(dead_code)]
+    async fn retrieve_state_root(
+        &self, epoch: u64,
+    ) -> Result<StateRoot, String> {
+        trace!("retrieve_state_root epoch = {}", epoch);
 
-        let req = GetStateEntry {
-            request_id: 0,
-            epoch,
-            key,
-        };
-
-        self.network.with_context(LIGHT_PROTOCOL_ID, |io| {
-            match self.handler.query.execute(io, peer, req)? {
-                QueryResult::StateEntry(entry) => Ok(entry),
-                _ => Err(ErrorKind::UnexpectedResponse.into()),
-            }
-        })
+        with_timeout(
+            *MAX_POLL_TIME,
+            format!("Timeout while retrieving state root for epoch {}", epoch),
+            self.with_io(|io| self.handler.state_roots.request_now(io, epoch)),
+        )
+        .await
     }
 
-    pub fn query_account(
-        &self, peer: PeerId, epoch: u64, address: H160,
-    ) -> Result<Option<Account>, Error> {
-        info!(
-            "query_account peer={:?} epoch={:?} address={:?}",
-            peer, epoch, address
+    async fn retrieve_state_entry_raw(
+        &self, epoch: u64, key: Vec<u8>,
+    ) -> Result<Option<Vec<u8>>, String> {
+        trace!(
+            "retrieve_state_entry_raw epoch = {}, key = {:?}",
+            epoch,
+            key
         );
 
-        // retrieve state root from peer
-        let state_root = self.query_state_root(peer, epoch)?;
+        // trigger state root request but don't wait for result
+        // FIXME(thegaram): is there a better way?
+        let _ =
+            self.with_io(|io| self.handler.state_roots.request_now(io, epoch));
 
-        // calculate corresponding state trie key
-        let key = {
-            let padding = storage::MultiVersionMerklePatriciaTrie::padding(
-                &state_root.snapshot_root,
-                &state_root.intermediate_delta_root,
-            );
-
-            StorageKey::new_account_key(&address, &padding)
-                .as_ref()
-                .to_vec()
-        };
-
-        // retrieve state entry from peer
-        let entry = self.query_state_entry(peer, epoch, key)?;
-
-        let account = match entry {
-            None => None,
-            Some(entry) => Some(rlp::decode(&entry[..])?),
-        };
-
-        Ok(account)
+        with_timeout(
+            *MAX_POLL_TIME,
+            format!("Timeout while retrieving state entry for epoch {} with key {:?}", epoch, key),
+            self.with_io(|io| self.handler.state_entries.request_now(io, epoch, key)),
+        )
+        .await
     }
 
-    pub fn get_account(&self, epoch: u64, address: H160) -> Option<Account> {
-        info!("get_account epoch={:?} address={:?}", epoch, address);
-
-        // try each peer until we succeed
-        // TODO(thegaram): only query peers who already have `epoch`
-        for peer in self.handler.peers.all_peers_shuffled() {
-            match self.query_account(peer, epoch, address) {
-                Ok(account) => return account,
-                Err(e) => {
-                    warn!(
-                        "Failed to get account from peer={:?}: {:?}",
-                        peer, e
-                    );
-                }
-            };
+    async fn retrieve_state_entry<T: rlp::Decodable>(
+        &self, epoch: u64, key: Vec<u8>,
+    ) -> Result<Option<T>, String> {
+        match self.retrieve_state_entry_raw(epoch, key).await? {
+            None => Ok(None),
+            Some(raw) => {
+                let decoded = rlp::decode::<T>(raw.as_ref())
+                    .map_err(|e| format!("{}", e))?;
+                Ok(Some(decoded))
+            }
         }
+    }
 
-        None
+    async fn retrieve_bloom(&self, epoch: u64) -> Result<(u64, Bloom), String> {
+        trace!("retrieve_bloom epoch = {}", epoch);
+
+        with_timeout(
+            *MAX_POLL_TIME,
+            format!("Timeout while retrieving bloom for epoch {}", epoch),
+            self.handler.blooms.request(epoch),
+        )
+        .await
+        .map(|bloom| (epoch, bloom))
+    }
+
+    async fn retrieve_receipts(
+        &self, epoch: u64,
+    ) -> Result<(u64, Vec<BlockReceipts>), String> {
+        trace!("retrieve_receipts epoch = {}", epoch);
+
+        with_timeout(
+            *MAX_POLL_TIME,
+            format!("Timeout while retrieving receipts for epoch {}", epoch),
+            self.handler.receipts.request(epoch),
+        )
+        .await
+        .map(|receipts| (epoch, receipts))
+    }
+
+    async fn retrieve_block_txs(
+        &self, log: LocalizedLogEntry,
+    ) -> Result<(LocalizedLogEntry, Vec<SignedTransaction>), String> {
+        trace!("retrieve_block_txs log = {:?}", log);
+        let hash = log.block_hash;
+
+        with_timeout(
+            *MAX_POLL_TIME,
+            format!("Timeout while retrieving block txs for block {}", hash),
+            self.handler.block_txs.request(hash),
+        )
+        .await
+        .map(|block_txs| (log, block_txs))
+    }
+
+    async fn retrieve_tx_info(
+        &self, hash: H256,
+    ) -> Result<TxInfoValidated, String> {
+        trace!("retrieve_tx_info hash = {:?}", hash);
+
+        with_timeout(
+            *MAX_POLL_TIME,
+            format!("Timeout while retrieving tx info for tx {}", hash),
+            self.with_io(|io| self.handler.tx_infos.request_now(io, hash)),
+        )
+        .await
+    }
+
+    fn account_key(address: &H160) -> Vec<u8> {
+        StorageKey::AccountKey(&address.0).to_key_bytes()
+    }
+
+    fn code_key(address: &H160, code_hash: &H256) -> Vec<u8> {
+        StorageKey::CodeKey {
+            address_bytes: &address.0,
+            code_hash_bytes: &code_hash.0,
+        }
+        .to_key_bytes()
+    }
+
+    fn storage_key(address: &H160, position: &H256) -> Vec<u8> {
+        StorageKey::StorageKey {
+            address_bytes: &address.0,
+            storage_key: &position.0,
+        }
+        .to_key_bytes()
+    }
+
+    pub async fn get_account(
+        &self, epoch: EpochNumber, address: H160,
+    ) -> Result<Option<Account>, String> {
+        debug!("get_account epoch={:?} address={:?}", epoch, address);
+
+        let epoch = match self.get_height_from_epoch_number(epoch) {
+            Ok(epoch) => epoch,
+            Err(e) => return Err(format!("{}", e)),
+        };
+
+        let key = Self::account_key(&address);
+
+        self.retrieve_state_entry(epoch, key)
+            .await
+            .map_err(|e| format!("Unable to retrieve account: {}", e))
+    }
+
+    pub async fn get_code(
+        &self, epoch: EpochNumber, address: H160,
+    ) -> Result<Option<Vec<u8>>, String> {
+        debug!("get_code epoch={:?} address={:?}", epoch, address);
+
+        let epoch = match self.get_height_from_epoch_number(epoch) {
+            Ok(epoch) => epoch,
+            Err(e) => return Err(format!("{}", e)),
+        };
+
+        let key = Self::account_key(&address);
+
+        let code_hash = match self
+            .retrieve_state_entry::<Account>(epoch, key)
+            .await
+        {
+            Err(e) => return Err(format!("Unable to retrieve account: {}", e)),
+            Ok(None) => return Ok(None),
+            Ok(Some(account)) => account.code_hash,
+        };
+
+        let key = Self::code_key(&address, &code_hash);
+
+        match self.retrieve_state_entry::<CodeInfo>(epoch, key).await {
+            Err(e) => Err(format!("Unable to retrieve code: {}", e)),
+            Ok(None) => {
+                // FIXME(thegaram): can this happen?
+                error!("Account {:?} found but code {:?} does not exist (epoch={:?})",  address, code_hash, epoch);
+                Err(format!("Unable to retrieve code: internal error"))
+            }
+            Ok(Some(info)) => Ok(Some(info.code)),
+        }
+    }
+
+    pub async fn get_storage(
+        &self, epoch: EpochNumber, address: H160, position: H256,
+    ) -> Result<Option<H256>, String> {
+        debug!(
+            "get_storage epoch={:?} address={:?} position={:?}",
+            epoch, address, position
+        );
+
+        let epoch = match self.get_height_from_epoch_number(epoch) {
+            Ok(epoch) => epoch,
+            Err(e) => return Err(format!("{}", e)),
+        };
+
+        let key = Self::storage_key(&address, &position);
+
+        match self.retrieve_state_entry::<StorageValue>(epoch, key).await {
+            Err(e) => Err(format!("Unable to retrieve storage entry: {}", e)),
+            Ok(None) => Ok(None),
+            Ok(Some(entry)) => Ok(Some(entry.value)),
+        }
+    }
+
+    pub async fn get_tx_info(&self, hash: H256) -> Result<TxInfo, String> {
+        debug!("get_tx_info hash={:?}", hash);
+
+        // Note: if a transaction does not exist, we fail with timeout, as
+        //       peers cannot provide non-existence proofs for transactions.
+        // FIXME: is there a better way?
+        let (tx, receipt, address, prior_gas_used) =
+            self.retrieve_tx_info(hash).await?;
+
+        let hash = address.block_hash;
+        let epoch = self.consensus.get_block_epoch_number(&hash);
+
+        let root = epoch
+            .and_then(|e| self.handler.witnesses.root_hashes_of(e))
+            .map(|(state_root, _, _)| state_root);
+
+        Ok((tx, receipt, address, epoch, root, prior_gas_used))
     }
 
     /// Relay raw transaction to all peers.
@@ -173,76 +338,57 @@ impl QueryService {
     pub fn send_raw_tx(&self, raw: Vec<u8>) -> bool {
         debug!("send_raw_tx raw={:?}", raw);
 
-        let mut success = false;
+        let peers = FullPeerFilter::new(msgid::SEND_RAW_TX)
+            .select_all(self.handler.peers.clone());
 
-        for peer in self.handler.peers.all_peers_shuffled() {
-            // relay to peer
-            let res = self.network.with_context(LIGHT_PROTOCOL_ID, |io| {
-                self.handler.send_raw_tx(io, peer, raw.clone())
-            });
+        match self.network.with_context(
+            self.handler.clone(),
+            LIGHT_PROTOCOL_ID,
+            |io| {
+                let mut success = false;
 
-            // check error
-            match res {
-                Err(e) => warn!("Failed to relay to peer={:?}: {:?}", peer, e),
-                Ok(_) => {
-                    debug!("Tx relay to peer {:?} successful", peer);
-                    success = true;
-                }
-            }
-        }
+                for peer in peers {
+                    // relay to peer
+                    let res = self.handler.send_raw_tx(io, &peer, raw.clone());
 
-        success
-    }
-
-    pub fn query_txs(
-        &self, peer: PeerId, hashes: Vec<H256>,
-    ) -> Result<Vec<SignedTransaction>, Error> {
-        info!("query_txs peer={:?} hashes={:?}", peer, hashes);
-
-        let req = GetTxs {
-            request_id: 0,
-            hashes,
-        };
-
-        self.network.with_context(LIGHT_PROTOCOL_ID, |io| {
-            match self.handler.query.execute(io, peer, req)? {
-                QueryResult::Txs(txs) => Ok(txs),
-                _ => Err(ErrorKind::UnexpectedResponse.into()),
-            }
-        })
-    }
-
-    pub fn get_tx(&self, hash: H256) -> Option<SignedTransaction> {
-        info!("get_tx hash={:?}", hash);
-
-        // try each peer until we succeed
-        for peer in self.handler.peers.all_peers_shuffled() {
-            match self.query_txs(peer, vec![hash]) {
-                Err(e) => {
-                    warn!("Failed to get txs from peer={:?}: {:?}", peer, e);
-                }
-                Ok(txs) => {
-                    match txs.iter().find(|tx| tx.hash() == hash).cloned() {
-                        Some(tx) => return Some(tx),
-                        None => {
-                            warn!(
-                                "Peer {} returned {:?}, target tx not found!",
-                                peer, txs
-                            );
+                    // check error
+                    match res {
+                        Err(e) => {
+                            warn!("Failed to relay to peer={:?}: {:?}", peer, e)
+                        }
+                        Ok(_) => {
+                            debug!("Tx relay to peer {:?} successful", peer);
+                            success = true;
                         }
                     }
                 }
-            };
-        }
 
-        None
+                success
+            },
+        ) {
+            Err(e) => unreachable!(e),
+            Ok(success) => success,
+        }
+    }
+
+    pub async fn get_tx(
+        &self, hash: H256,
+    ) -> Result<SignedTransaction, String> {
+        debug!("get_tx hash={:?}", hash);
+
+        with_timeout(
+            *MAX_POLL_TIME,
+            format!("Timeout while retrieving transaction with hash {}", hash),
+            self.with_io(|io| self.handler.txs.request_now(io, hash)),
+        )
+        .await
     }
 
     /// Apply filter to all logs within a receipt.
     /// NOTE: `log.transaction_hash` is not known at this point,
     /// so this field has to be filled later on.
     fn filter_receipt_logs(
-        block_hash: H256, transaction_index: usize,
+        epoch: u64, block_hash: H256, transaction_index: usize,
         num_logs_remaining: &mut usize, mut logs: Vec<LogEntry>,
         filter: Filter,
     ) -> impl Iterator<Item = LocalizedLogEntry>
@@ -260,7 +406,7 @@ impl QueryService {
             .filter(move |(_, entry)| filter.matches(&entry))
             .map(move |(ii, entry)| LocalizedLogEntry {
                 block_hash,
-                block_number: 0, // TODO
+                epoch_number: epoch,
                 entry,
                 log_index: log_base_index - ii - 1,
                 transaction_hash: KECCAK_EMPTY_BLOOM, // will fill in later
@@ -271,8 +417,9 @@ impl QueryService {
 
     /// Apply filter to all receipts within a block.
     fn filter_block_receipts(
-        hash: H256, mut receipts: Vec<Receipt>, filter: Filter,
+        epoch: u64, hash: H256, block_receipts: BlockReceipts, filter: Filter,
     ) -> impl Iterator<Item = LocalizedLogEntry> {
+        let mut receipts = block_receipts.receipts;
         // number of receipts in this block
         let num_receipts = receipts.len();
 
@@ -286,6 +433,7 @@ impl QueryService {
             move |(ii, logs)| {
                 debug!("block_hash {:?} logs = {:?}", hash, logs);
                 Self::filter_receipt_logs(
+                    epoch,
                     hash,
                     num_receipts - ii - 1,
                     &mut remaining,
@@ -298,10 +446,13 @@ impl QueryService {
 
     /// Apply filter to all receipts within an epoch.
     fn filter_epoch_receipts(
-        &self, epoch: u64, mut receipts: Vec<Vec<Receipt>>, filter: Filter,
-    ) -> Result<impl Iterator<Item = LocalizedLogEntry>, Error> {
+        &self, epoch: u64, mut receipts: Vec<BlockReceipts>, filter: Filter,
+    ) -> Result<impl Iterator<Item = LocalizedLogEntry>, String> {
         // get epoch blocks in execution order
-        let mut hashes: Vec<H256> = self.ledger.block_hashes_in(epoch)?;
+        let mut hashes = self
+            .ledger
+            .block_hashes_in(epoch)
+            .map_err(|e| format!("{}", e))?;
 
         // process epoch receipts in reverse order
         receipts.reverse();
@@ -310,68 +461,150 @@ impl QueryService {
         let matching = receipts.into_iter().zip(hashes).flat_map(
             move |(receipts, hash)| {
                 trace!("block_hash {:?} receipts = {:?}", hash, receipts);
-                Self::filter_block_receipts(hash, receipts, filter.clone())
+                Self::filter_block_receipts(
+                    epoch,
+                    hash,
+                    receipts,
+                    filter.clone(),
+                )
             },
         );
 
         Ok(matching)
     }
 
-    pub fn get_logs(
-        &self, filter: Filter,
-    ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
+    pub fn get_latest_verifiable_chain_id(&self) -> Result<u64, FilterError> {
+        let epoch_number = self.get_latest_verifiable_epoch_number()?;
+        Ok(self
+            .consensus
+            .get_config()
+            .chain_id
+            .get_chain_id(epoch_number))
+    }
+
+    pub fn get_latest_verifiable_epoch_number(
+        &self,
+    ) -> Result<u64, FilterError> {
         // find highest epoch that we are able to verify based on witness info
-        let latest_verified = self.handler.sync.witnesses.latest_verified();
+        let latest_verified = self.handler.witnesses.latest_verified();
 
         let latest_verifiable = match latest_verified {
-            n if n < DEFERRED_STATE_EPOCH_COUNT => return Ok(vec![]),
-            n => n - DEFERRED_STATE_EPOCH_COUNT,
+            n if n >= DEFERRED_STATE_EPOCH_COUNT => {
+                n - DEFERRED_STATE_EPOCH_COUNT
+            }
+            _ => {
+                return Err(FilterError::UnableToVerify {
+                    epoch: 0,
+                    latest_verifiable: 0,
+                });
+            }
         };
 
-        debug!(
-            "get_logs filter = {:?}, latest_verifiable = {}",
-            filter, latest_verifiable
+        trace!(
+            "get_latest_verifiable_epoch_number latest_verifiable = {}",
+            latest_verifiable
+        );
+        Ok(latest_verifiable)
+    }
+
+    fn get_height_from_epoch_number(
+        &self, epoch: EpochNumber,
+    ) -> Result<u64, FilterError> {
+        let latest_verifiable = self.get_latest_verifiable_epoch_number()?;
+
+        trace!(
+            "get_height_from_epoch_number epoch = {:?}, latest_verifiable = {}",
+            epoch,
+            latest_verifiable
         );
 
-        // find epochs to match against
-        let from_epoch = match self
-            .consensus
-            .get_height_from_epoch_number(filter.from_epoch.clone())
-        {
-            Ok(num) => std::cmp::min(num, latest_verifiable),
-            Err(_) => return Ok(vec![]),
-        };
-
-        let to_epoch = std::cmp::min(
-            latest_verifiable,
-            self.consensus
-                .get_height_from_epoch_number(filter.to_epoch.clone())
-                .unwrap_or(latest_verifiable),
-        );
-
-        if from_epoch > to_epoch {
-            return Err(FilterError::InvalidEpochNumber {
-                from_epoch,
-                to_epoch,
-            });
+        match epoch {
+            EpochNumber::Earliest => Ok(0),
+            EpochNumber::LatestMined => Ok(latest_verifiable),
+            EpochNumber::LatestState => Ok(latest_verifiable),
+            EpochNumber::Number(n) if n <= latest_verifiable => Ok(n),
+            EpochNumber::Number(n) => Err(FilterError::UnableToVerify {
+                epoch: n,
+                latest_verifiable,
+            }),
         }
+    }
 
-        let mut epochs: Vec<u64> = (from_epoch..(to_epoch + 1)).collect();
-        epochs.reverse();
+    fn get_filter_epochs(
+        &self, filter: &Filter,
+    ) -> Result<(Vec<u64>, Box<dyn Fn(H256) -> bool + Send + Sync>), FilterError>
+    {
+        match &filter.block_hashes {
+            None => {
+                let from_epoch = self
+                    .get_height_from_epoch_number(filter.from_epoch.clone())?;
+                let to_epoch =
+                    self.get_height_from_epoch_number(filter.to_epoch.clone())?;
+
+                if from_epoch > to_epoch {
+                    return Err(FilterError::InvalidEpochNumber {
+                        from_epoch,
+                        to_epoch,
+                    });
+                }
+
+                let epochs = (from_epoch..(to_epoch + 1)).rev().collect();
+                let block_filter = Box::new(|_| true);
+
+                Ok((epochs, block_filter))
+            }
+            Some(hashes) => {
+                // we use BTreeSet to make lookup efficient
+                let hashes: BTreeSet<_> = hashes.iter().cloned().collect();
+
+                // we use BTreeSet to ensure order and uniqueness
+                let mut epochs = BTreeSet::new();
+
+                for hash in &hashes {
+                    match self.consensus.get_block_epoch_number(&hash) {
+                        Some(epoch) => epochs.insert(epoch),
+                        None => {
+                            return Err(FilterError::UnknownBlock {
+                                hash: *hash,
+                            })
+                        }
+                    };
+                }
+
+                let epochs = epochs.into_iter().rev().collect();
+                let block_filter = Box::new(move |hash| hashes.contains(&hash));
+
+                Ok((epochs, block_filter))
+            }
+        }
+    }
+
+    pub async fn get_logs(
+        &self, filter: Filter,
+    ) -> Result<Vec<LocalizedLogEntry>, String> {
+        debug!("get_logs filter = {:?}", filter);
+
+        // find epochs and blocks to match against
+        let (epochs, block_filter) = self
+            .get_filter_epochs(&filter)
+            .map_err(|e| format!("{}", e))?;
+
         debug!("Executing filter on epochs {:?}", epochs);
 
         // construct blooms for matching epochs
         let blooms = filter.bloom_possibilities();
-        let bloom_match = |block_log_bloom: &Bloom| {
+
+        // The returned future will outlive this method (`get_logs`). Thus, we
+        // need to move `blooms` into `bloom_match` and `bloom_match` into the
+        // future.
+        let bloom_match = move |block_log_bloom: &Bloom| {
             blooms
                 .iter()
                 .any(|bloom| block_log_bloom.contains_bloom(bloom))
         };
 
         // set maximum to number of logs returned
-        let limit = filter.limit.unwrap_or(::std::usize::MAX) as u64;
-
-        // TODO(thegaram): add support for filter.block_hashes
+        let limit = filter.limit.unwrap_or(::std::usize::MAX);
 
         // construct a stream object for log filtering
         // we first retrieve the epoch blooms and try to match against them. for
@@ -379,69 +612,77 @@ impl QueryService {
         // matching entries. finally, for each matching entry, we retrieve the
         // block transactions so that we can add the tx hash. each of these is
         // verified in the corresponding sync handler.
-        let mut stream =
+
+        // NOTE: in the type annotations below, we use these conventions:
+        //    Stream<T> = futures::stream::Stream<Item = T>
+        // TryStream<T> = futures::stream::TryStream<Ok = T, Error = String>
+        // TryFuture<T> = futures::future::TryFuture<Ok = T, Error = String>
+        let stream =
             // process epochs one by one
-            stream::iter_ok::<_, Error>(epochs)
+            stream::iter(epochs)
+            // --> Stream<u64>
 
             // retrieve blooms
-            .map(|epoch| {
-                debug!("Requesting blooms for {:?}", epoch);
-                self.handler.sync.blooms.request(epoch).map(move |bloom| (epoch, bloom))
-            })
+            .map(|epoch| self.retrieve_bloom(epoch))
+            // --> Stream<TryFuture<(u64, Bloom)>>
 
-            // we first request blooms for up to `LOG_FILTERING_LOOKAHEAD`
-            // epochs and then wait for them and process them one by one
-            // NOTE: we wrap our future in a future because we don't want to wait for the actual value yet
-            .map(future::ok)
             .buffered(LOG_FILTERING_LOOKAHEAD)
-            .and_then(|x| x)
+            // --> TryStream<(u64, Bloom)>
 
             // find the epochs that match
-            .filter_map(|(epoch, bloom)| {
-                    debug!("Matching epoch {:?} bloom = {:?}", epoch, bloom);
+            .try_filter_map(move |(epoch, bloom)| {
+                debug!("Matching epoch {:?} bloom = {:?}", epoch, bloom);
 
-                    match bloom_match(&bloom) {
-                        true => Some(epoch),
-                        false => None,
-                    }
-                },
-            )
+                match bloom_match(&bloom) {
+                    true => future::ready(Ok(Some(epoch))),
+                    false => future::ready(Ok(None)),
+                }
+            })
+            // --> TryStream<u64>
 
             // retrieve receipts
-            .map(|epoch| {
-                debug!("Requesting receipts for {:?}", epoch);
-                self.handler.sync.receipts.request(epoch).map(move |receipts| (epoch, receipts))
+            .map(|res| match res {
+                Err(e) => Either::Left(future::err(e)),
+                Ok(epoch) => Either::Right(self.retrieve_receipts(epoch)),
             })
+            // --> Stream<TryFuture<(u64, Vec<Vec<Receipt>>)>>
 
-            // we first request receipts for up to `LOG_FILTERING_LOOKAHEAD`
-            // epochs and then wait for them and process them one by one
-            .map(future::ok)
             .buffered(LOG_FILTERING_LOOKAHEAD)
-            .and_then(|x| x)
+            // --> TryStream<(u64, Vec<Vec<Receipt>>)>
 
             // filter logs in epoch
-            .and_then(|(epoch, receipts)| {
-                debug!("Filtering epoch {:?} receipts = {:?}", epoch, receipts);
-                let logs = self.filter_epoch_receipts(epoch, receipts, filter.clone())?;
-                Ok(stream::iter_ok(logs))
-            })
+            .map(|res| match res {
+                Err(e) => Err(e),
+                Ok((epoch, receipts)) => {
+                    debug!("Filtering epoch {:?} receipts = {:?}", epoch, receipts);
 
-            // Stream<Stream<Log>> -> Stream<Log>
-            .flatten()
+                    let logs = self
+                        .filter_epoch_receipts(epoch, receipts, filter.clone())?
+                        .map(|log| Ok(log));
+
+                    Ok(stream::iter(logs))
+                }
+            })
+            // --> TryStream<TryStream<LocalizedLogEntry>>
+
+            .try_flatten()
+            // --> TryStream<LocalizedLogEntry>
+
+            // apply block filter
+            .try_filter(move |log| future::ready(block_filter(log.block_hash)))
+            // --> TryStream<LocalizedLogEntry>
 
             // retrieve block txs
-            .map(|log| {
-                debug!("Requesting block txs for {:?}", log.block_hash);
-                self.handler.sync.block_txs.request(log.block_hash).map(move |txs| (log, txs))
+            .map(|res| match res {
+                Err(e) => Either::Left(future::err(e)),
+                Ok(log) => Either::Right(self.retrieve_block_txs(log)),
             })
+            // --> Stream<TryFuture<(LocalizedLogEntry, Vec<SignedTransaction>)>>
 
-            // we first request txs for up to `LOG_FILTERING_LOOKAHEAD`
-            // blocks and then wait for them and process them one by one
-            .map(future::ok)
             .buffered(LOG_FILTERING_LOOKAHEAD)
-            .and_then(|x| x)
+            // --> TryStream<(LocalizedLogEntry, Vec<SignedTransaction>)>
 
-            .map(|(mut log, txs)| {
+            .map_ok(|(mut log, txs)| {
                 debug!("processing log = {:?} txs = {:?}", log, txs);
 
                 // at this point, we're trying to retrieve a block tx based on verified
@@ -453,20 +694,16 @@ impl QueryService {
                 log.transaction_hash = txs[log.transaction_index].hash();
                 log
             })
+            // --> TryStream<LocalizedLogEntry>
 
             // limit number of entries we need
-            .take(limit);
+            .take(limit)
+            // --> TryStream<LocalizedLogEntry>
 
-        // NOTE: eventually, we might want to extend our RPC with futures and
-        // return the async stream directly. for now, we're offering a sync API
-        // based on polling.
-        // TODO(thegaram): review this
-        let mut matching = vec![];
+            .try_collect();
+        // --> TryFuture<Vec<LocalizedLogEntry>>
 
-        while let Ok(Some(x)) = poll_next(&mut stream) {
-            matching.push(x);
-        }
-
+        let mut matching: Vec<_> = stream.await?;
         matching.reverse();
         debug!("Collected matching logs = {:?}", matching);
         Ok(matching)

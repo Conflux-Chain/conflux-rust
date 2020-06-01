@@ -2,8 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::io::IoError;
-use keylib;
+use crate::{io::IoError, service::ProtocolVersion, ProtocolId};
 use rlp::{self, Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{fmt, io, net};
 
@@ -93,6 +92,7 @@ impl fmt::Display for DisconnectReason {
 pub enum ThrottlingReason {
     QueueFull,
     Throttled,
+    PacketThrottled(&'static str),
 }
 
 impl fmt::Display for ThrottlingReason {
@@ -102,6 +102,10 @@ impl fmt::Display for ThrottlingReason {
                 f.write_str("egress queue capacity reached")
             }
             ThrottlingReason::Throttled => f.write_str("egress throttled"),
+            ThrottlingReason::PacketThrottled(name) => {
+                let msg = format!("packet {} throttled", name);
+                f.write_str(msg.as_str())
+            }
         }
     }
 }
@@ -169,6 +173,32 @@ error_chain! {
         Io(err: io::Error) {
             description("IO Error"),
             display("Unexpected IO error: {}", err),
+        }
+
+        MessageDeprecated{
+            protocol: ProtocolId,
+            msg_id: u16,
+            min_supported_version: ProtocolVersion
+        } {
+            description("Received message is deprecated"),
+            display(
+                "Received message is deprecated. Protocol {:?}, message id {}, \
+                min_supported_version {}", protocol, msg_id, min_supported_version
+            ),
+        }
+
+        SendUnsupportedMessage{
+            protocol: ProtocolId,
+            msg_id: u16,
+            peer_protocol_version: Option<ProtocolVersion>,
+            min_supported_version: Option<ProtocolVersion>
+        } {
+            description("We are trying to send unsupported message to peer"),
+            display(
+                "We are trying to send unsupported message to peer. Protocol {:?},\
+                message id {}, peer_protocol_version {:?}, min_supported_version {:?}",
+                protocol, msg_id, peer_protocol_version, min_supported_version
+            ),
         }
 
         Throttling(reason: ThrottlingReason) {

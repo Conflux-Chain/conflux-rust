@@ -10,10 +10,12 @@ from test_framework.util import *
 
 class ExpireBlockTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
-        self.conf_parameters["log_level"] = '"debug"'
+        self.conf_parameters["adaptive_weight_beta"] = "1"
+        self.conf_parameters["timer_chain_block_difficulty_ratio"] = "3"
+        self.conf_parameters["timer_chain_beta"] = "15"
         self.conf_parameters["era_epoch_count"] = "100"
-        self.conf_parameters["era_checkpoint_gap"] = "100"
+        self.conf_parameters["dev_snapshot_epoch_count"] = "50"
+        self.conf_parameters["anticone_penalty_ratio"] = "10"
         self.num_nodes = 2
 
     def setup_network(self):
@@ -34,12 +36,12 @@ class ExpireBlockTest(ConfluxTestFramework):
     def test_recover_expire_block(self):
         node = self.nodes[1]
 
-        blocks = [node.getbestblockhash()]
+        blocks = [node.best_block_hash()]
         for i in range(400):
             new_hash = node.generatefixedblock(blocks[-1], [], 0, False)
             blocks.append(new_hash)
             self.log.info("generate block={}".format(new_hash))
-        wait_until(lambda: node.getbestblockhash() == new_hash)
+        wait_until(lambda: node.best_block_hash() == new_hash)
         out_block = create_block(parent_hash=bytes.fromhex(blocks[50][2:]), height=51, referee_hashes=[bytes.fromhex(blocks[400][2:])])
         self.send_msg(node, NewBlock(block=out_block))
         time.sleep(3)
@@ -55,20 +57,20 @@ class ExpireBlockTest(ConfluxTestFramework):
             blocks.append(new_block)
         for i in range(1, 6):
             self.send_msg(node, NewBlock(block=blocks[i]))
-            wait_until(lambda: node.getbestblockhash() == blocks[i].hash_hex())
+            wait_until(lambda: node.best_block_hash() == blocks[i].hash_hex())
         for i in range(7, 9):
             self.send_msg(node, NewBlock(block=blocks[i]))
-            wait_until(lambda: node.getbestblockhash() == blocks[5].hash_hex())
+            wait_until(lambda: node.best_block_hash() == blocks[5].hash_hex())
         time.sleep(3)
         node.expireblockgc(2)
         for i in range(7, 9):
             self.send_msg(node, NewBlock(block=blocks[i]))
-            wait_until(lambda: node.getbestblockhash() == blocks[5].hash_hex())
+            wait_until(lambda: node.best_block_hash() == blocks[5].hash_hex())
         self.send_msg(node, NewBlock(block=blocks[6]))
-        wait_until(lambda: node.getbestblockhash() == blocks[8].hash_hex())
+        wait_until(lambda: node.best_block_hash() == blocks[8].hash_hex())
         for i in range(9, 11):
             self.send_msg(node, NewBlock(block=blocks[i]))
-            wait_until(lambda: node.getbestblockhash() == blocks[i].hash_hex())
+            wait_until(lambda: node.best_block_hash() == blocks[i].hash_hex())
 
 if __name__ == "__main__":
     ExpireBlockTest().main()

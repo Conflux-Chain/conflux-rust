@@ -2,30 +2,40 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use bigdecimal::BigDecimal;
+use jsonrpc_core::{Error as RpcError, Result as RpcResult, Value as RpcValue};
+use num_bigint::{BigInt, ToBigInt};
+use parking_lot::{Condvar, Mutex};
 use std::{
     collections::{BTreeMap, HashSet},
     net::SocketAddr,
     sync::Arc,
+    time::Duration,
 };
 
-use jsonrpc_core::{Error as RpcError, Result as RpcResult};
-use parking_lot::{Condvar, Mutex};
-
-use cfx_types::H256;
-use cfxcore::{PeerInfo, SharedConsensusGraph, SharedTransactionPool};
+use cfx_types::{Address, H256, U128, U256};
+use cfxcore::{
+    BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
+    SharedConsensusGraph, SharedTransactionPool,
+};
+use cfxcore_accounts::AccountProvider;
+use cfxkey::Password;
+use keccak_hash::keccak;
 use primitives::{Action, SignedTransaction};
 
 use network::{
-    get_high_priority_packets,
     node_table::{Node, NodeEndpoint, NodeEntry, NodeId},
     throttling::{self, THROTTLING_SERVICE},
     NetworkService, SessionDetails, UpdateNodeOperation,
 };
 
+use crate::accounts::{account_provider, keys_path};
+
 use crate::rpc::types::{
-    Block as RpcBlock, EpochNumber, Receipt as RpcReceipt, Status as RpcStatus,
-    Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
-    U256 as RpcU256, U64 as RpcU64,
+    Block as RpcBlock, BlockHashOrEpochNumber, Bytes, EpochNumber,
+    Status as RpcStatus, Transaction as RpcTransaction, H160 as RpcH160,
+    H256 as RpcH256, H520 as RpcH520, U128 as RpcU128, U256 as RpcU256,
+    U64 as RpcU64,
 };
 
 fn grouped_txs<T, F>(
@@ -53,8 +63,10 @@ where F: Fn(Arc<SignedTransaction>) -> T {
 pub struct RpcImpl {
     exit: Arc<(Mutex<bool>, Condvar)>,
     consensus: SharedConsensusGraph,
+    data_man: Arc<BlockDataManager>,
     network: Arc<NetworkService>,
     tx_pool: SharedTransactionPool,
+    accounts: Arc<AccountProvider>,
 }
 
 impl RpcImpl {
@@ -63,11 +75,21 @@ impl RpcImpl {
         network: Arc<NetworkService>, tx_pool: SharedTransactionPool,
     ) -> Self
     {
+        let accounts = Arc::new(
+            account_provider(Some(keys_path()), None)
+                .ok()
+                .expect("failed to initialize account provider"),
+        );
+
+        let data_man = consensus.get_data_manager().clone();
+
         RpcImpl {
             exit,
             consensus,
+            data_man,
             network,
             tx_pool,
+            accounts,
         }
     }
 }
@@ -80,19 +102,29 @@ impl RpcImpl {
     }
 
     pub fn gas_price(&self) -> RpcResult<RpcU256> {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
         info!("RPC Request: cfx_gasPrice()");
-        Ok(self.consensus.gas_price().unwrap_or(0.into()).into())
+        Ok(consensus_graph
+            .gas_price()
+            .unwrap_or(cfxcore::consensus_parameters::ONE_GDRIP_IN_DRIP.into())
+            .into())
     }
 
     pub fn epoch_number(
         &self, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<RpcU256> {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestMined);
         info!("RPC Request: cfx_epochNumber({:?})", epoch_num);
-        match self
-            .consensus
-            .get_height_from_epoch_number(epoch_num.into())
-        {
+        match consensus_graph.get_height_from_epoch_number(epoch_num.into()) {
             Ok(height) => Ok(height.into()),
             Err(e) => Err(RpcError::invalid_params(e)),
         }
@@ -101,55 +133,99 @@ impl RpcImpl {
     pub fn block_by_epoch_number(
         &self, epoch_num: EpochNumber, include_txs: bool,
     ) -> RpcResult<RpcBlock> {
-        let inner = &*self.consensus.inner.read();
-        info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
-        let epoch_height = self
+        let consensus_graph = self
             .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+        let inner = &*consensus_graph.inner.read();
+        info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
+
+        let epoch_height = consensus_graph
             .get_height_from_epoch_number(epoch_num.into())
-            .map_err(|err| RpcError::invalid_params(err))?;
-        inner
-            .get_hash_from_epoch_number(epoch_height)
-            .map_err(|err| RpcError::invalid_params(err))
-            .and_then(|hash| {
-                let block = self
-                    .consensus
-                    .data_man
-                    .block_by_hash(&hash, false /* update_cache */)
-                    .unwrap();
-                Ok(RpcBlock::new(&*block, inner, include_txs))
-            })
+            .map_err(RpcError::invalid_params)?;
+
+        let pivot_hash = inner
+            .get_pivot_hash_from_epoch_number(epoch_height)
+            .map_err(RpcError::invalid_params)?;
+
+        if let Some(block) = self
+            .data_man
+            .block_by_hash(&pivot_hash, false /* update_cache */)
+        {
+            Ok(RpcBlock::new(&*block, inner, &self.data_man, include_txs))
+        } else {
+            Err(RpcError::internal_error())
+        }
+    }
+
+    pub fn confirmation_risk_by_hash(
+        &self, block_hash: RpcH256,
+    ) -> RpcResult<Option<RpcU256>> {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+        let inner = &*consensus_graph.inner.read();
+        let result = consensus_graph
+            .confirmation_meter
+            .confirmation_risk_by_hash(inner, block_hash.into());
+        if result.is_none() {
+            Ok(None)
+        } else {
+            let risk: BigDecimal = result.unwrap().into();
+            let scale = BigInt::parse_bytes(b"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", 16).expect("failed to unwrap U256::max into bigInt");
+
+            //TODO: there's a precision problem here, it should be fine under a
+            // (2^256 - 1) scale
+            let scaled_risk: BigInt = (risk * scale)
+                .to_bigint()
+                .expect("failed to convert scaled risk to bigInt");
+            let (sign, big_endian_bytes) = scaled_risk.to_bytes_be();
+            assert_ne!(sign, num_bigint::Sign::Minus);
+            let rpc_result = U256::from(big_endian_bytes.as_slice());
+            Ok(Some(rpc_result.into()))
+        }
     }
 
     pub fn block_by_hash(
         &self, hash: RpcH256, include_txs: bool,
     ) -> RpcResult<Option<RpcBlock>> {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
         let hash: H256 = hash.into();
         info!(
             "RPC Request: cfx_getBlockByHash hash={:?} include_txs={:?}",
             hash, include_txs
         );
-        let inner = &*self.consensus.inner.read();
 
-        if let Some(block) = self
-            .consensus
+        let inner = &*consensus_graph.inner.read();
+
+        let maybe_block = self
             .data_man
             .block_by_hash(&hash, false /* update_cache */)
-        {
-            let result_block = Some(RpcBlock::new(&*block, inner, include_txs));
-            Ok(result_block)
-        } else {
-            Ok(None)
-        }
+            .map(|b| RpcBlock::new(&*b, inner, &self.data_man, include_txs));
+
+        Ok(maybe_block)
     }
 
     pub fn block_by_hash_with_pivot_assumption(
         &self, block_hash: RpcH256, pivot_hash: RpcH256, epoch_number: RpcU64,
     ) -> RpcResult<RpcBlock> {
-        let inner = &*self.consensus.inner.read();
-
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+        let inner = &*consensus_graph.inner.read();
         let block_hash: H256 = block_hash.into();
         let pivot_hash: H256 = pivot_hash.into();
         let epoch_number = epoch_number.as_usize() as u64;
+
         info!(
             "RPC Request: cfx_getBlockByHashWithPivotAssumption block_hash={:?} pivot_hash={:?} epoch_number={:?}",
             block_hash, pivot_hash, epoch_number
@@ -157,45 +233,59 @@ impl RpcImpl {
 
         inner
             .check_block_pivot_assumption(&pivot_hash, epoch_number)
-            .map_err(|err| RpcError::invalid_params(err))
-            .and_then(|_| {
-                if let Some(block) = self
-                    .consensus
-                    .data_man
-                    .block_by_hash(&block_hash, false /* update_cache */)
-                {
-                    debug!("Build RpcBlock {}", block.hash());
-                    let result_block = RpcBlock::new(&*block, inner, true);
-                    Ok(result_block)
-                } else {
-                    Err(RpcError::invalid_params(
-                        "Error: can not find expected block".to_owned(),
-                    ))
-                }
+            .map_err(RpcError::invalid_params)?;
+
+        self.data_man
+            .block_by_hash(&block_hash, false /* update_cache */)
+            .ok_or_else(|| RpcError::invalid_params("Block not found"))
+            .map(|block| {
+                debug!("Build RpcBlock {}", block.hash());
+                RpcBlock::new(&*block, inner, &self.data_man, true)
             })
     }
 
     pub fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>> {
-        info!("RPC Request: cfx_getBlocks epoch_number={:?}", num);
+        info!("RPC Request: cfx_getBlocksByEpoch epoch_number={:?}", num);
 
         self.consensus
-            .block_hashes_by_epoch(num.into())
-            .map_err(|err| RpcError::invalid_params(err))
+            .get_block_hashes_by_epoch(num.into())
+            .map_err(RpcError::invalid_params)
             .and_then(|vec| Ok(vec.into_iter().map(|x| x.into()).collect()))
     }
 
-    pub fn transaction_count(
-        &self, address: RpcH160, num: Option<EpochNumber>,
-    ) -> RpcResult<RpcU256> {
-        let num = num.unwrap_or(EpochNumber::LatestState);
+    pub fn skipped_blocks_by_epoch(
+        &self, num: EpochNumber,
+    ) -> RpcResult<Vec<RpcH256>> {
         info!(
-            "RPC Request: cfx_getTransactionCount address={:?} epoch_num={:?}",
-            address, num
+            "RPC Request: cfx_getSkippedBlocksByEpoch epoch_number={:?}",
+            num
         );
 
         self.consensus
-            .transaction_count(address.into(), num.into())
-            .map_err(|err| RpcError::invalid_params(err))
+            .get_skipped_block_hashes_by_epoch(num.into())
+            .map_err(RpcError::invalid_params)
+            .and_then(|vec| Ok(vec.into_iter().map(|x| x.into()).collect()))
+    }
+
+    pub fn next_nonce(
+        &self, address: RpcH160, num: Option<BlockHashOrEpochNumber>,
+    ) -> RpcResult<RpcU256> {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+        let num = num.unwrap_or(BlockHashOrEpochNumber::EpochNumber(
+            EpochNumber::LatestState,
+        ));
+        info!(
+            "RPC Request: cfx_getNextNonce address={:?} epoch_num={:?}",
+            address, num
+        );
+
+        consensus_graph
+            .next_nonce(address.into(), num.into())
+            .map_err(RpcError::invalid_params)
             .map(|x| x.into())
     }
 }
@@ -221,28 +311,33 @@ impl RpcImpl {
         };
         info!("RPC Request: add_peer({:?})", node.clone());
         match self.network.add_peer(node) {
-            Ok(x) => Ok(x),
+            Ok(_x) => Ok(()),
             Err(_) => Err(RpcError::internal_error()),
         }
     }
 
     pub fn chain(&self) -> RpcResult<Vec<RpcBlock>> {
         info!("RPC Request: cfx_getChain");
-        let inner = &*self.consensus.inner.read();
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+        let inner = &*consensus_graph.inner.read();
+
+        let construct_block = |hash| {
+            let block = self
+                .data_man
+                .block_by_hash(hash, false /* update_cache */)
+                .expect("Error to get block by hash");
+
+            RpcBlock::new(&*block, inner, &self.data_man, true)
+        };
+
         Ok(inner
             .all_blocks_with_topo_order()
             .iter()
-            .map(|x| {
-                RpcBlock::new(
-                    self.consensus
-                        .data_man
-                        .block_by_hash(x, false /* update_cache */)
-                        .expect("Error to get block by hash")
-                        .as_ref(),
-                    inner,
-                    true,
-                )
-            })
+            .map(construct_block)
             .collect())
     }
 
@@ -263,11 +358,6 @@ impl RpcImpl {
         }
     }
 
-    pub fn get_best_block_hash(&self) -> RpcResult<H256> {
-        info!("RPC Request: get_best_block_hash()");
-        Ok(self.consensus.best_block_hash())
-    }
-
     pub fn get_block_count(&self) -> RpcResult<u64> {
         info!("RPC Request: get_block_count()");
         let count = self.consensus.block_count();
@@ -276,15 +366,27 @@ impl RpcImpl {
     }
 
     pub fn get_goodput(&self) -> RpcResult<String> {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
         info!("RPC Request: get_goodput");
+        let mut all_block_set = HashSet::new();
+        for epoch_number in 1..consensus_graph.best_epoch_number() {
+            for block_hash in consensus_graph
+                .get_block_hashes_by_epoch(epoch_number.into())
+                .map_err(|_| RpcError::internal_error())?
+            {
+                all_block_set.insert(block_hash);
+            }
+        }
         let mut set = HashSet::new();
         let mut min = std::u64::MAX;
         let mut max: u64 = 0;
-        for key in self.consensus.inner.read().hash_to_arena_indices.keys() {
-            if let Some(block) = self
-                .consensus
-                .data_man
-                .block_by_hash(key, false /* update_cache */)
+        for key in &all_block_set {
+            if let Some(block) =
+                self.data_man.block_by_hash(key, false /* update_cache */)
             {
                 let timestamp = block.block_header.timestamp();
                 if timestamp < min && timestamp > 0 {
@@ -303,10 +405,8 @@ impl RpcImpl {
             let lower_bound = min + ((max - min) as f64 * 0.3) as u64;
             let upper_bound = min + ((max - min) as f64 * 0.8) as u64;
             let mut ranged_set = HashSet::new();
-            for key in self.consensus.inner.read().hash_to_arena_indices.keys()
-            {
+            for key in &all_block_set {
                 if let Some(block) = self
-                    .consensus
                     .data_man
                     .block_by_hash(key, false /* update_cache */)
                 {
@@ -352,34 +452,19 @@ impl RpcImpl {
     }
 
     pub fn get_status(&self) -> RpcResult<RpcStatus> {
-        let best_hash = self.consensus.best_block_hash();
+        let best_info = self.consensus.best_info();
+        let best_hash = best_info.best_block_hash;
+        let epoch_number = best_info.best_epoch_number;
         let block_number = self.consensus.block_count();
         let tx_count = self.tx_pool.total_unpacked();
-        if let Some(epoch_number) =
-            self.consensus.get_block_epoch_number(&best_hash)
-        {
-            Ok(RpcStatus {
-                best_hash: RpcH256::from(best_hash),
-                epoch_number,
-                block_number,
-                pending_tx_number: tx_count,
-            })
-        } else {
-            Err(RpcError::internal_error())
-        }
-    }
 
-    /// The first element is true if the tx is executed in a confirmed block.
-    /// The second element indicate the execution result (standin
-    /// for receipt)
-    pub fn get_transaction_receipt(
-        &self, tx_hash: H256,
-    ) -> RpcResult<Option<RpcReceipt>> {
-        let maybe_receipt =
-            self.consensus.get_transaction_info_by_hash(&tx_hash).map(
-                |(tx, receipt, address)| RpcReceipt::new(tx, receipt, address),
-            );
-        Ok(maybe_receipt)
+        Ok(RpcStatus {
+            best_hash: RpcH256::from(best_hash),
+            chain_id: best_info.chain_id.into(),
+            epoch_number: epoch_number.into(),
+            block_number: block_number.into(),
+            pending_tx_number: tx_count,
+        })
     }
 
     pub fn say_hello(&self) -> RpcResult<String> { Ok("Hello, world".into()) }
@@ -399,10 +484,6 @@ impl RpcImpl {
         Ok(())
     }
 
-    pub fn net_high_priority_packets(&self) -> RpcResult<usize> {
-        Ok(get_high_priority_packets())
-    }
-
     pub fn net_node(&self, id: NodeId) -> RpcResult<Option<(String, Node)>> {
         match self.network.get_node(&id) {
             None => Ok(None),
@@ -418,14 +499,14 @@ impl RpcImpl {
 
     pub fn net_disconnect_node(
         &self, id: NodeId, op: Option<UpdateNodeOperation>,
-    ) -> RpcResult<Option<usize>> {
+    ) -> RpcResult<bool> {
         Ok(self.network.disconnect_node(&id, op))
     }
 
     pub fn net_sessions(
         &self, node_id: Option<NodeId>,
     ) -> RpcResult<Vec<SessionDetails>> {
-        match self.network.get_detailed_sessions(node_id.into()) {
+        match self.network.get_detailed_sessions(node_id) {
             None => Ok(Vec::new()),
             Some(sessions) => Ok(sessions),
         }
@@ -449,8 +530,14 @@ impl RpcImpl {
             }
             let (local_nonce, local_balance) =
                 self.tx_pool.get_local_account_info(&tx.sender());
-            let (state_nonce, state_balance) =
-                self.tx_pool.get_state_account_info(&tx.sender());
+            let (state_nonce, state_balance) = self
+                .tx_pool
+                .get_state_account_info(&tx.sender())
+                .map_err(|e| {
+                    let mut rpc_error = RpcError::internal_error();
+                    rpc_error.data = Some(RpcValue::String(format!("{}", e)));
+                    rpc_error
+                })?;
             ret.insert(
                 "local nonce".into(),
                 serde_json::to_string(&local_nonce).unwrap(),
@@ -471,6 +558,19 @@ impl RpcImpl {
             ret.insert("exist".into(), "false".into());
         }
         Ok(ret)
+    }
+
+    pub fn txs_from_pool(&self) -> RpcResult<Vec<RpcTransaction>> {
+        let (ready_txs, deferred_txs) = self.tx_pool.content();
+        let converter = |tx: &Arc<SignedTransaction>| -> RpcTransaction {
+            RpcTransaction::from_signed(&tx, None)
+        };
+        let result = ready_txs
+            .iter()
+            .map(converter)
+            .chain(deferred_txs.iter().map(converter))
+            .collect();
+        return Ok(result);
     }
 
     pub fn txpool_content(
@@ -536,4 +636,112 @@ impl RpcImpl {
 
         Ok(ret)
     }
+
+    pub fn accounts(&self) -> RpcResult<Vec<RpcH160>> {
+        let accounts: Vec<Address> = self.accounts.accounts().map_err(|e| {
+            warn!("Could not fetch accounts. With error {:?}", e);
+            RpcError::internal_error()
+        })?;
+        Ok(accounts
+            .into_iter()
+            .map(Into::into)
+            .collect::<Vec<RpcH160>>())
+    }
+
+    pub fn new_account(&self, password: String) -> RpcResult<RpcH160> {
+        let address: Address = self
+            .accounts
+            .new_account(&password.into())
+            .map(Into::into)
+            .map_err(|e| {
+                warn!("Could not create account. With error {:?}", e);
+                RpcError::internal_error()
+            })?;
+        Ok(address.into())
+    }
+
+    pub fn unlock_account(
+        &self, address: RpcH160, password: String, duration: Option<RpcU128>,
+    ) -> RpcResult<bool> {
+        let account: Address = address.into();
+        let store = self.accounts.clone();
+        let duration = match duration {
+            None => None,
+            Some(duration) => {
+                let duration: U128 = duration.into();
+                let v = duration.low_u64() as u32;
+                if duration != v.into() {
+                    return Err(RpcError::invalid_params(
+                        "invalid duration number",
+                    ));
+                } else {
+                    Some(v)
+                }
+            }
+        };
+
+        let r = match duration {
+            Some(0) => {
+                store.unlock_account_permanently(account, password.into())
+            }
+            Some(d) => store.unlock_account_timed(
+                account,
+                password.into(),
+                Duration::from_secs(d.into()),
+            ),
+            None => store.unlock_account_timed(
+                account,
+                password.into(),
+                Duration::from_secs(300),
+            ),
+        };
+        match r {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                warn!("Unable to unlock the account. With error {:?}", err);
+                Err(RpcError::internal_error())
+            }
+        }
+    }
+
+    pub fn lock_account(&self, address: RpcH160) -> RpcResult<bool> {
+        match self.accounts.lock_account(address.into()) {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                warn!("Unable to lock the account. With error {:?}", err);
+                Err(RpcError::internal_error())
+            }
+        }
+    }
+
+    pub fn sign(
+        &self, data: Bytes, address: RpcH160, password: Option<String>,
+    ) -> RpcResult<RpcH520> {
+        let message = eth_data_hash(data.0);
+        let password = password.map(Password::from);
+        let signature =
+            match self.accounts.sign(address.into(), password, message) {
+                Ok(signature) => signature,
+                Err(err) => {
+                    warn!("Unable to sign the message. With error {:?}", err);
+                    return Err(RpcError::internal_error());
+                }
+            };
+        Ok(RpcH520(signature.into()))
+    }
+
+    pub fn save_node_db(&self) -> RpcResult<()> {
+        self.network.save_node_db();
+        Ok(())
+    }
+}
+
+/// Returns a eth_sign-compatible hash of data to sign.
+/// The data is prepended with special message to prevent
+/// malicious DApps from using the function to sign forged transactions.
+fn eth_data_hash(mut data: Vec<u8>) -> H256 {
+    let mut message_data =
+        format!("\x19Ethereum Signed Message:\n{}", data.len()).into_bytes();
+    message_data.append(&mut data);
+    keccak(message_data)
 }

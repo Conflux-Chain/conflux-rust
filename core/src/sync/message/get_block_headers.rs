@@ -3,13 +3,13 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    message::{HasRequestId, Message, RequestId},
+    message::{Message, RequestId},
     parameters::sync::MAX_HEADERS_TO_SEND,
     sync::{
         message::{
             Context, GetBlockHeadersResponse, Handleable, Key, KeyContainer,
         },
-        request_manager::Request,
+        request_manager::{AsAny, Request},
         Error, ProtocolConfiguration,
     },
 };
@@ -23,11 +23,13 @@ pub struct GetBlockHeaders {
     pub hashes: Vec<H256>,
 }
 
-impl Request for GetBlockHeaders {
-    fn as_message(&self) -> &dyn Message { self }
-
+impl AsAny for GetBlockHeaders {
     fn as_any(&self) -> &dyn Any { self }
 
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+}
+
+impl Request for GetBlockHeaders {
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
         conf.headers_request_timeout
     }
@@ -53,21 +55,30 @@ impl Request for GetBlockHeaders {
 
 impl Handleable for GetBlockHeaders {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
+        debug!("Received GetBlockHeaders {:?}", self);
         let headers = self
             .hashes
             .iter()
             .take(MAX_HEADERS_TO_SEND as usize)
-            .filter_map(|hash| ctx.manager.graph.block_header_by_hash(&hash))
+            .filter_map(|hash| {
+                // We should not use `graph.block_header_by_hash` here because
+                // it only returns headers in memory
+                ctx.manager
+                    .graph
+                    .data_man
+                    .block_header_by_hash(&hash)
+                    .map(|header_arc| header_arc.as_ref().clone())
+            })
             .collect();
 
         let mut block_headers_resp = GetBlockHeadersResponse::default();
-        block_headers_resp.set_request_id(self.request_id);
+        block_headers_resp.request_id = self.request_id;
         block_headers_resp.headers = headers;
 
         debug!(
             "Returned {:?} block headers to peer {:?}",
             block_headers_resp.headers.len(),
-            ctx.peer,
+            ctx.node_id,
         );
 
         ctx.send_response(&block_headers_resp)

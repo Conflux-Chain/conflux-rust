@@ -7,6 +7,7 @@ P2PInterface: A high-level interface object for communicating to a node over P2P
 from eth_utils import big_endian_to_int, encode_hex
 
 from conflux import utils
+from conflux.config import DEFAULT_PY_TEST_CHAIN_ID
 from conflux.messages import *
 import asyncore
 from collections import defaultdict
@@ -42,9 +43,13 @@ class P2PConnection(asyncore.dispatcher):
     sub-classed and the on_message() callback overridden."""
 
     def __init__(self):
+        self.chain_id = None
         assert not network_thread_running()
 
         super().__init__(map=mininode_socket_map)
+
+    def set_chain_id(self, chain_id):
+        self.chain_id = chain_id
 
     def peer_connect(self, dstaddr, dstport):
         self.dstaddr = dstaddr
@@ -177,12 +182,8 @@ class P2PConnection(asyncore.dispatcher):
                 if packet_id == PACKET_HELLO:
                     self.on_hello(payload)
                 elif packet_id == PACKET_DISCONNECT:
-                    disconnect = rlp.decode(payload, Disconnect)
+                    disconnect = Disconnect(payload[0], payload[1:])
                     self.on_disconnect(disconnect)
-                elif packet_id == PACKET_PING:
-                    self.on_ping()
-                elif packet_id == PACKET_PONG:
-                    self.on_pong()
                 else:
                     assert packet_id == PACKET_PROTOCOL
                     self.on_protocol_packet(protocol, payload)
@@ -198,13 +199,6 @@ class P2PConnection(asyncore.dispatcher):
 
     def on_disconnect(self, disconnect):
         self.on_close()
-
-    def on_ping(self):
-        self.send_packet(PACKET_PONG, b"")
-        pass
-
-    def on_pong(self):
-        pass
 
     def on_protocol_packet(self, protocol, payload):
         """Callback for processing a protocol-specific P2P payload. Must be overridden by derived class."""
@@ -312,7 +306,7 @@ class P2PInterface(P2PConnection):
 
         # Default protocol version
         self.protocol = b'cfx'
-        self.protocol_version = 1
+        self.protocol_version = 2
         self.genesis = make_genesis()
         self.best_block_hash = self.genesis.block_header.hash
         self.blocks = {self.genesis.block_header.hash: self.genesis}
@@ -339,8 +333,9 @@ class P2PInterface(P2PConnection):
     # Message receiving methods
 
     def send_status(self):
-        status = Status(self.protocol_version, 0,
-                        self.genesis.block_header.hash, 0, [self.best_block_hash])
+        status = Status(
+            ChainIdParams(self.chain_id),
+            self.genesis.block_header.hash, 0, [self.best_block_hash])
         self.send_protocol_msg(status)
 
     def on_protocol_packet(self, protocol, payload):
@@ -358,10 +353,9 @@ class P2PInterface(P2PConnection):
                 logger.debug("%s %s", packet_type, rlp.decode(payload))
                 if msg_class is not None:
                     msg = rlp.decode(payload, msg_class)
-                if packet_type == STATUS:
-                    self._log_message("receive", "STATUS, protocol_version:{}, terminal_hashes:{}"
-                                      .format(msg.protocol_version,
-                                              [utils.encode_hex(i) for i in msg.terminal_block_hashes]))
+                if packet_type == STATUS_V2:
+                    self._log_message("receive", "STATUS, terminal_hashes:{}"
+                                      .format([utils.encode_hex(i) for i in msg.terminal_block_hashes]))
                     self.had_status = True
                 elif packet_type == GET_BLOCK_HEADERS:
                     self._log_message("receive", "GET_BLOCK_HEADERS of {}".format(msg.hashes))
@@ -426,8 +420,8 @@ class P2PInterface(P2PConnection):
         ip = [127, 0, 0, 1]
         if self.remote:
             ip = get_ip_address()
-        endpoint = NodeEndpoint(address=bytes(ip), port=32325, udp_port=32325)
-        hello = Hello([Capability(self.protocol, self.protocol_version)], endpoint)
+        endpoint = NodeEndpoint(address=bytes(ip), tcp_port=32325, udp_port=32325)
+        hello = Hello(DEFAULT_PY_TEST_CHAIN_ID, [Capability(self.protocol, self.protocol_version)], endpoint)
 
         self.send_packet(PACKET_HELLO, rlp.encode(hello, Hello))
         self.had_hello = True
@@ -483,8 +477,6 @@ mininode_lock = threading.RLock()
 class DefaultNode(P2PInterface):
     def __init__(self, remote = False):
         super().__init__(remote)
-        self.protocol = b'cfx'
-        self.protocol_version = 1
 
 class NetworkThread(threading.Thread):
 

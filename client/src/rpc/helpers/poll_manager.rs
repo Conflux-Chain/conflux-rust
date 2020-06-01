@@ -120,5 +120,4 @@ mod tests {
         indexer.remove_poll(&1);
         assert!(indexer.poll(&1).is_none());
     }
-
 }

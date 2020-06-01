@@ -22,7 +22,7 @@
 
 use super::{action_params::ActionParams, ResumeCall, ResumeCreate};
 use crate::statedb::Error as DbError;
-use cfx_types::Address;
+use cfx_types::{Address, U256};
 use std::fmt;
 
 #[derive(Debug)]
@@ -75,23 +75,49 @@ pub enum Error {
         /// What was the stack limit
         limit: usize,
     },
+    /// `SubStackUnderflow` when there is not enough stack elements to execute
+    /// a subroutine return
+    SubStackUnderflow {
+        /// How many stack elements was requested by instruction
+        wanted: usize,
+        /// How many elements were on stack
+        on_stack: usize,
+    },
+    /// When execution would exceed defined subroutine Stack Limit
+    OutOfSubStack {
+        /// How many stack elements instruction wanted to pop
+        wanted: usize,
+        /// What was the stack limit
+        limit: usize,
+    },
+    /// When balance is not enough for `collateral_for_storage`.
+    /// The state should be reverted to the state from before the
+    /// transaction execution.
+    NotEnoughBalanceForStorage { required: U256, got: U256 },
+    /// `ExceedStorageLimit` is returned when the `collateral_for_storage`
+    /// exceed the `storage_limit`.
+    ExceedStorageLimit,
     /// Built-in contract failed on given input
     BuiltIn(&'static str),
+    /// Internal contract failed
+    InternalContract(&'static str),
     /// When execution tries to modify the state in static context
     MutableCallInStaticContext,
-    /// Likely to cause consensus issues.
-    Internal(String),
+    /// Error from storage.
+    StateDbError(String),
     /// Wasm runtime error
     Wasm(String),
     /// Out of bounds access in RETURNDATACOPY.
     OutOfBounds,
     /// Execution has been reverted with REVERT.
     Reverted,
+    /// Reentrancy encountered
+    Reentrancy,
 }
 
 impl From<DbError> for Error {
     fn from(err: DbError) -> Self {
-        Error::Internal(format!("Internal error: {}", err))
+        Error::StateDbError(format!("Internal error: {}", err))
     }
 }
 
@@ -120,14 +146,28 @@ impl fmt::Display for Error {
                 wanted,
                 limit,
             } => write!(f, "Out of stack {} {}/{}", instruction, wanted, limit),
+            SubStackUnderflow { wanted, on_stack } => {
+                write!(f, "Subroutine stack underflow {}/{}", wanted, on_stack)
+            }
+            OutOfSubStack { wanted, limit } => {
+                write!(f, "Out of subroutine stack {}/{}", wanted, limit)
+            }
+            NotEnoughBalanceForStorage { required, got } => {
+                write!(f, "Not enough balance for storage {}/{}", required, got)
+            }
+            ExceedStorageLimit => write!(f, "Exceed storage limit"),
             BuiltIn(name) => write!(f, "Built-in failed: {}", name),
-            Internal(ref msg) => write!(f, "Internal error: {}", msg),
+            InternalContract(name) => {
+                write!(f, "InternalContract failed: {}", name)
+            }
+            StateDbError(ref msg) => write!(f, "Internal error: {}", msg),
             MutableCallInStaticContext => {
                 write!(f, "Mutable call in static context")
             }
             Wasm(ref msg) => write!(f, "Internal error: {}", msg),
             OutOfBounds => write!(f, "Out of bounds"),
             Reverted => write!(f, "Reverted"),
+            Reentrancy => write!(f, "Reentrancy"),
         }
     }
 }

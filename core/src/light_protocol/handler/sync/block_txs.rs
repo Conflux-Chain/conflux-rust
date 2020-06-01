@@ -2,39 +2,39 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate futures;
-
-use cfx_types::H256;
-use futures::Future;
-use parking_lot::RwLock;
-use primitives::SignedTransaction;
-use std::{collections::HashMap, sync::Arc, time::Duration};
-
-use crate::{
-    consensus::ConsensusGraph,
-    light_protocol::{
-        common::{Peers, UniqueId, Validate},
-        handler::FullPeerState,
-        message::{BlockTxsWithHash, GetBlockTxs},
-        Error,
-    },
-    message::Message,
-    network::{NetworkContext, PeerId},
-    parameters::light::{
-        BLOCK_TX_REQUEST_BATCH_SIZE, BLOCK_TX_REQUEST_TIMEOUT_MS,
-        MAX_BLOCK_TXS_IN_FLIGHT,
-    },
-};
+extern crate lru_time_cache;
 
 use super::{
-    future_item::FutureItem, missing_item::TimeOrdered,
-    sync_manager::SyncManager,
+    common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
+    Txs,
 };
+use crate::{
+    consensus::SharedConsensusGraph,
+    light_protocol::{
+        common::{FullPeerState, LedgerInfo, Peers},
+        message::{msgid, BlockTxsWithHash, GetBlockTxs},
+        Error, ErrorKind,
+    },
+    message::{Message, RequestId},
+    network::NetworkContext,
+    parameters::light::{
+        BLOCK_TX_REQUEST_BATCH_SIZE, BLOCK_TX_REQUEST_TIMEOUT, CACHE_TIMEOUT,
+        MAX_BLOCK_TXS_IN_FLIGHT,
+    },
+    verification::compute_transaction_root,
+    UniqueId,
+};
+use cfx_types::H256;
+use lru_time_cache::LruCache;
+use network::node_table::NodeId;
+use parking_lot::RwLock;
+use primitives::SignedTransaction;
+use std::{future::Future, sync::Arc};
 
 #[derive(Debug)]
 struct Statistics {
+    cached: usize,
     in_flight: usize,
-    verified: usize,
     waiting: usize,
 }
 
@@ -42,33 +42,40 @@ struct Statistics {
 type MissingBlockTxs = TimeOrdered<H256>;
 
 pub struct BlockTxs {
+    // helper API for retrieving ledger information
+    ledger: LedgerInfo,
+
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
 
     // sync and request manager
     sync_manager: SyncManager<H256, MissingBlockTxs>,
 
-    // helper API for validating ledger and state information
-    validate: Validate,
+    // tx sync manager
+    txs: Arc<Txs>,
 
     // block txs received from full node
-    verified: Arc<RwLock<HashMap<H256, Vec<SignedTransaction>>>>,
+    verified: Arc<RwLock<LruCache<H256, PendingItem<Vec<SignedTransaction>>>>>,
 }
 
 impl BlockTxs {
-    pub(super) fn new(
-        consensus: Arc<ConsensusGraph>, peers: Arc<Peers<FullPeerState>>,
-        request_id_allocator: Arc<UniqueId>,
+    pub fn new(
+        consensus: SharedConsensusGraph, peers: Arc<Peers<FullPeerState>>,
+        request_id_allocator: Arc<UniqueId>, txs: Arc<Txs>,
     ) -> Self
     {
-        let sync_manager = SyncManager::new(peers.clone());
-        let validate = Validate::new(consensus.clone());
-        let verified = Arc::new(RwLock::new(HashMap::new()));
+        let ledger = LedgerInfo::new(consensus.clone());
+        let sync_manager =
+            SyncManager::new(peers.clone(), msgid::GET_BLOCK_TXS);
+
+        let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
+        let verified = Arc::new(RwLock::new(cache));
 
         BlockTxs {
+            ledger,
             request_id_allocator,
             sync_manager,
-            validate,
+            txs,
             verified,
         }
     }
@@ -76,8 +83,8 @@ impl BlockTxs {
     #[inline]
     fn get_statistics(&self) -> Statistics {
         Statistics {
+            cached: self.verified.read().len(),
             in_flight: self.sync_manager.num_in_flight(),
-            verified: self.verified.read().len(),
             waiting: self.sync_manager.num_waiting(),
         }
     }
@@ -85,7 +92,7 @@ impl BlockTxs {
     #[inline]
     pub fn request(
         &self, hash: H256,
-    ) -> impl Future<Item = Vec<SignedTransaction>, Error = Error> {
+    ) -> impl Future<Output = Vec<SignedTransaction>> {
         if !self.verified.read().contains_key(&hash) {
             let missing = MissingBlockTxs::new(hash);
             self.sync_manager.insert_waiting(std::iter::once(missing));
@@ -95,54 +102,105 @@ impl BlockTxs {
     }
 
     #[inline]
-    pub(super) fn receive(
-        &self, block_txs: impl Iterator<Item = BlockTxsWithHash>,
-    ) -> Result<(), Error> {
+    pub fn receive(
+        &self, peer: &NodeId, id: RequestId,
+        block_txs: impl Iterator<Item = BlockTxsWithHash>,
+    ) -> Result<(), Error>
+    {
         for BlockTxsWithHash { hash, block_txs } in block_txs {
-            info!("Validating block_txs {:?} with hash {}", block_txs, hash);
-            self.validate.block_txs(hash, &block_txs)?;
+            debug!("Validating block_txs {:?} with hash {}", block_txs, hash);
 
-            self.verified.write().insert(hash, block_txs);
-            self.sync_manager.remove_in_flight(&hash);
+            match self.sync_manager.check_if_requested(peer, id, &hash)? {
+                None => continue,
+                Some(_) => self.validate_and_store(hash, block_txs)?,
+            };
         }
 
         Ok(())
     }
 
     #[inline]
-    pub(super) fn clean_up(&self) {
-        let timeout = Duration::from_millis(BLOCK_TX_REQUEST_TIMEOUT_MS);
+    pub fn validate_and_store(
+        &self, hash: H256, block_txs: Vec<SignedTransaction>,
+    ) -> Result<(), Error> {
+        // validate and store each transaction
+        for tx in &block_txs {
+            self.txs.validate_and_store(tx.clone())?;
+        }
+
+        // validate block txs
+        self.validate_block_txs(hash, &block_txs)?;
+
+        // store block bodies by block hash
+        self.verified
+            .write()
+            .entry(hash)
+            .or_insert(PendingItem::pending())
+            .set(block_txs);
+
+        self.sync_manager.remove_in_flight(&hash);
+        Ok(())
+    }
+
+    #[inline]
+    pub fn clean_up(&self) {
+        // remove timeout in-flight requests
+        let timeout = *BLOCK_TX_REQUEST_TIMEOUT;
         let block_txs = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(block_txs.into_iter());
+
+        // trigger cache cleanup
+        self.verified.write().get(&Default::default());
     }
 
     #[inline]
     fn send_request(
-        &self, io: &dyn NetworkContext, peer: PeerId, hashes: Vec<H256>,
-    ) -> Result<(), Error> {
-        info!("send_request peer={:?} hashes={:?}", peer, hashes);
+        &self, io: &dyn NetworkContext, peer: &NodeId, hashes: Vec<H256>,
+    ) -> Result<Option<RequestId>, Error> {
+        debug!("send_request peer={:?} hashes={:?}", peer, hashes);
 
         if hashes.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
 
-        let msg: Box<dyn Message> = Box::new(GetBlockTxs {
-            request_id: self.request_id_allocator.next(),
-            hashes,
-        });
+        let request_id = self.request_id_allocator.next();
+        let msg: Box<dyn Message> =
+            Box::new(GetBlockTxs { request_id, hashes });
 
         msg.send(io, peer)?;
-        Ok(())
+        Ok(Some(request_id))
     }
 
     #[inline]
-    pub(super) fn sync(&self, io: &dyn NetworkContext) {
-        info!("block tx sync statistics: {:?}", self.get_statistics());
+    pub fn sync(&self, io: &dyn NetworkContext) {
+        debug!("block tx sync statistics: {:?}", self.get_statistics());
 
         self.sync_manager.sync(
             MAX_BLOCK_TXS_IN_FLIGHT,
             BLOCK_TX_REQUEST_BATCH_SIZE,
             |peer, block_hashes| self.send_request(io, peer, block_hashes),
         );
+    }
+
+    #[inline]
+    pub fn validate_block_txs(
+        &self, hash: H256, txs: &Vec<SignedTransaction>,
+    ) -> Result<(), Error> {
+        // NOTE: tx signatures have been validated previously
+
+        let local = *self.ledger.header(hash)?.transactions_root();
+
+        let txs: Vec<_> = txs.iter().map(|tx| Arc::new(tx.clone())).collect();
+        let received = compute_transaction_root(&txs);
+
+        if received != local {
+            warn!(
+                "Tx root validation failed, received={:?}, local={:?}",
+                received, local
+            );
+            return Err(ErrorKind::InvalidTxRoot.into());
+        }
+
+        Ok(())
     }
 }

@@ -32,7 +32,7 @@ impl Handleable for GetTerminalBlockHashesResponse {
             .collect::<Vec<H256>>();
         ctx.manager.request_block_headers(
             ctx.io,
-            Some(ctx.peer),
+            Some(ctx.node_id.clone()),
             missing_hash,
             true, /* ignore_db */
         );

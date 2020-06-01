@@ -5,29 +5,27 @@ import eth_utils
 from conflux.config import default_config
 from conflux.filter import Filter
 from conflux.rpc import RpcClient
-from conflux.utils import sha3 as keccak, privtoaddr
+from conflux.utils import sha3 as keccak, priv_to_addr
 from test_framework.blocktools import create_transaction, encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.util import assert_equal, assert_is_hex_string, assert_is_hash_string
 from test_framework.util import *
+from test_framework.mininode import *
 
 CONTRACT_PATH = "contracts/EventsTestContract_bytecode.dat"
-CONSTRUCTED_TOPIC = encode_hex_0x(keccak(b"Constructed(address)"))
+CONSTRUCTED_TOPIC = encode_hex_0x(keccak(b"Constructed(address,address)"))
 CALLED_TOPIC = encode_hex_0x(keccak(b"Called(address,uint32)"))
 NUM_CALLS = 20
 
 class LogFilteringTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 1
 
     def setup_network(self):
         self.setup_nodes()
 
     def run_test(self):
-        time.sleep(7)
         priv_key = default_config["GENESIS_PRI_KEY"]
-        sender = eth_utils.encode_hex(privtoaddr(priv_key))
+        sender = eth_utils.encode_hex(priv_to_addr(priv_key))
 
         self.rpc = RpcClient(self.nodes[0])
 
@@ -52,9 +50,10 @@ class LogFilteringTest(ConfluxTestFramework):
         assert_equal(len(logs0[0]["topics"]), 2)
         assert_equal(logs0[0]["topics"][0], CONSTRUCTED_TOPIC)
         assert_equal(logs0[0]["topics"][1], self.address_to_topic(sender))
+        assert_equal(logs0[0]["data"], self.address_to_topic(sender))
 
         # call method
-        receipt = self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"foo()")))
+        receipt = self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"foo()")), storage_limit=64)
 
         # apply filter, we expect two logs with 2 and 3 topics respectively
         filter = Filter(from_epoch="earliest", to_epoch="latest_mined")
@@ -79,7 +78,7 @@ class LogFilteringTest(ConfluxTestFramework):
 
         # call many times
         for ii in range(0, NUM_CALLS - 2):
-            self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"foo()")))
+            self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"foo()")), storage_limit=0)
 
         # apply filter, we expect NUM_CALLS log entries with inreasing uint32 fields
         filter = Filter(from_epoch="earliest", to_epoch="latest_mined")
@@ -150,17 +149,23 @@ class LogFilteringTest(ConfluxTestFramework):
         return "0x" + ("%x" % number).zfill(64)
 
     def deploy_contract(self, sender, priv_key, data_hex):
-        tx = self.rpc.new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key)
+        c0 = self.rpc.get_collateral_for_storage(sender)
+        tx = self.rpc.new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key, storage_limit=253)
         assert_equal(self.rpc.send_tx(tx, True), tx.hash_hex())
-        receipt = self.rpc.get_receipt(tx.hash_hex())
+        receipt = self.rpc.get_transaction_receipt(tx.hash_hex())
         address = receipt["contractCreated"]
+        c1 = self.rpc.get_collateral_for_storage(sender)
+        assert_equal(c1 - c0, 253 * 10 ** 18 // 1024)
         assert_is_hex_string(address)
         return receipt, address
 
-    def call_contract(self, sender, priv_key, contract, data_hex):
-        tx = self.rpc.new_contract_tx(receiver=contract, data_hex=data_hex, sender=sender, priv_key=priv_key)
+    def call_contract(self, sender, priv_key, contract, data_hex, storage_limit):
+        c0 = self.rpc.get_collateral_for_storage(sender)
+        tx = self.rpc.new_contract_tx(receiver=contract, data_hex=data_hex, sender=sender, priv_key=priv_key, storage_limit=storage_limit)
         assert_equal(self.rpc.send_tx(tx, True), tx.hash_hex())
-        receipt = self.rpc.get_receipt(tx.hash_hex())
+        receipt = self.rpc.get_transaction_receipt(tx.hash_hex())
+        c1 = self.rpc.get_collateral_for_storage(sender)
+        assert_equal(c1 - c0, storage_limit * 10 ** 18 // 1024)
         return receipt
 
     def assert_response_format_correct(self, response):
@@ -170,7 +175,7 @@ class LogFilteringTest(ConfluxTestFramework):
 
     def assert_log_format_correct(self, log):
         assert_is_hex_string(log["address"])
-        assert_is_hex_string(log["blockNumber"])
+        assert_is_hex_string(log["epochNumber"])
         assert_is_hex_string(log["logIndex"])
         assert_is_hex_string(log["transactionIndex"])
         assert_is_hex_string(log["transactionLogIndex"])

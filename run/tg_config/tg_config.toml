@@ -1,0 +1,5 @@
+[base]
+role="validator"
+
+#[consensus]
+#consensus_peers_file = "consensus_peers.config.toml"

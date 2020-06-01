@@ -16,41 +16,42 @@ pub use super::impls::state::State;
 // anticipated to be too complex to present in the same file of the API.
 // TODO(yz): check if this is the best way to organize code for this library.
 pub trait StateTrait {
-    // Status.
-    // FIXME: now we don't allow getting non-existing state. Is this method
-    // still useful.
-    /// Check if the state exists. If not any state action operates on an empty
-    /// state.
-    fn does_exist(&self) -> bool;
-    /// Get padding for storage keys.
-    fn get_padding(&self) -> &KeyPadding;
-    /// Merkle hash
-    fn get_merkle_hash(&self, access_key: &[u8]) -> Result<Option<MerkleHash>>;
+    // Verifiable proof related methods.
+    fn get_with_proof(
+        &self, access_key: StorageKey,
+    ) -> Result<(Option<Box<[u8]>>, StateProof)>;
 
     // Actions.
-    fn get(&self, access_key: &[u8]) -> Result<Option<Box<[u8]>>>;
-    fn get_with_proof(
-        &self, access_key: &[u8],
-    ) -> Result<(Option<Box<[u8]>>, StateProof)>;
-    fn set(&mut self, access_key: &[u8], value: Box<[u8]>) -> Result<()>;
-    fn delete(&mut self, access_key: &[u8]) -> Result<Option<Box<[u8]>>>;
+    fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>>;
+    fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()>;
+    fn delete(&mut self, access_key: StorageKey) -> Result<()>;
+    fn delete_test_only(
+        &mut self, access_key: StorageKey,
+    ) -> Result<Option<Box<[u8]>>>;
     // Delete everything prefixed by access_key and return deleted key value
     // pairs.
     fn delete_all(
-        &mut self, access_key_prefix: &[u8],
+        &mut self, access_key_prefix: StorageKey,
     ) -> Result<Option<Vec<(Vec<u8>, Box<[u8]>)>>>;
 
     // Finalize
     /// It's costly to compute state root however it's only necessary to compute
     /// state root once before committing.
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo>;
-    fn get_state_root(&self) -> Result<Option<StateRootWithAuxInfo>>;
-    fn commit(&mut self, epoch: EpochId) -> Result<()>;
+    fn get_state_root(&self) -> Result<StateRootWithAuxInfo>;
+    fn commit(&mut self, epoch: EpochId) -> Result<StateRootWithAuxInfo>;
     fn revert(&mut self);
 
-    // TODO(yz): verifiable proof related methods.
+    /// Compute the merkle of the node under `access_key` in all tries.
+    /// Node merkle is computed on the value and children hashes, ignoring the
+    /// compressed path.
+    fn get_node_merkle_all_versions(
+        &self, access_key: StorageKey,
+    ) -> Result<(Option<MerkleHash>, Option<MerkleHash>, Option<MerkleHash>)>;
 }
 
-use super::impls::{errors::*, state_proof::StateProof};
-use crate::statedb::KeyPadding;
-use primitives::{EpochId, MerkleHash, StateRootWithAuxInfo};
+use super::{
+    impls::{errors::*, state_proof::StateProof},
+    StateRootWithAuxInfo,
+};
+use primitives::{EpochId, MerkleHash, StorageKey};

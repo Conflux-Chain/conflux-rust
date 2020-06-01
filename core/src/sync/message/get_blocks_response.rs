@@ -37,13 +37,27 @@ impl Handleable for GetBlocksResponse {
                 .map(|b| b.block_header.hash())
                 .collect::<Vec<H256>>()
         );
+
+        // TODO Check block size in advance to avoid attacks causing OOM.
+        if ctx.manager.is_block_queue_full() {
+            debug!("recover_public_queue is full, discard GetBlocksResponse");
+            return Ok(());
+        }
+
+        for block in &self.blocks {
+            debug!("transaction received by block: ratio=1");
+            debug!(
+                "new block received: block_header={:?}, tx_count={}, block_size={}",
+                block.block_header,
+                block.transactions.len(),
+                block.size(),
+            );
+        }
+
         let req = ctx.match_request(self.request_id)?;
+        let delay = req.delay;
         let requested_blocks: HashSet<H256> = req
-            .downcast_ref::<GetBlocks>(
-                ctx.io,
-                &ctx.manager.request_manager,
-                true,
-            )?
+            .downcast_ref::<GetBlocks>(ctx.io, &ctx.manager.request_manager)?
             .hashes
             .iter()
             .cloned()
@@ -54,8 +68,9 @@ impl Handleable for GetBlocksResponse {
             RecoverPublicTask::new(
                 self.blocks,
                 requested_blocks,
-                ctx.peer,
+                ctx.node_id.clone(),
                 false,
+                delay,
             ),
         );
 
@@ -81,18 +96,17 @@ impl Handleable for GetBlocksWithPublicResponse {
                 .collect::<Vec<H256>>()
         );
         let req = ctx.match_request(self.request_id)?;
+        let delay = req.delay;
         let req_hashes: HashSet<H256> = if let Ok(req) = req
             .downcast_ref::<GetCompactBlocks>(
                 ctx.io,
                 &ctx.manager.request_manager,
-                false,
             ) {
             req.hashes.iter().cloned().collect()
         } else {
             let req = req.downcast_ref::<GetBlocks>(
                 ctx.io,
                 &ctx.manager.request_manager,
-                false,
             )?;
             req.hashes.iter().cloned().collect()
         };
@@ -102,8 +116,9 @@ impl Handleable for GetBlocksWithPublicResponse {
             RecoverPublicTask::new(
                 self.blocks,
                 req_hashes,
-                ctx.peer,
+                ctx.node_id.clone(),
                 false, /* compact */
+                delay,
             ),
         );
 

@@ -76,8 +76,11 @@ pub struct ActionParams {
     pub address: Address,
     /// Sender of current part of the transaction.
     pub sender: Address,
-    /// Transaction initiator.
-    pub origin: Address,
+    /// This is the address of original sender of the transaction.
+    pub original_sender: Address,
+    /// This is the address of account who will pay collateral for storage in
+    /// the whole execution.
+    pub storage_owner: Address,
     /// Gas paid up front for transaction execution
     pub gas: U256,
     /// Gas price.
@@ -92,17 +95,20 @@ pub struct ActionParams {
     pub call_type: CallType,
     /// Param types encoding
     pub params_type: ParamsType,
+    /// The upper bound of `collateral_for_storage` for `original_sender`
+    pub storage_limit: U256,
 }
 
 impl Default for ActionParams {
     /// Returns default ActionParams initialized with zeros
     fn default() -> ActionParams {
         ActionParams {
-            code_address: Address::new(),
+            code_address: Address::default(),
             code_hash: Some(KECCAK_EMPTY),
-            address: Address::new(),
-            sender: Address::new(),
-            origin: Address::new(),
+            address: Address::default(),
+            sender: Address::default(),
+            original_sender: Address::default(),
+            storage_owner: Address::default(),
             gas: U256::zero(),
             gas_price: U256::zero(),
             value: ActionValue::Transfer(U256::zero()),
@@ -110,6 +116,7 @@ impl Default for ActionParams {
             data: None,
             call_type: CallType::None,
             params_type: ParamsType::Separate,
+            storage_limit: U256::MAX,
         }
     }
 }

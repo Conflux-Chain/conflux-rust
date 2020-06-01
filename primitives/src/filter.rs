@@ -28,7 +28,29 @@ use std::{error, fmt};
 /// Errors concerning log filtering.
 pub enum FilterError {
     /// Filter has wrong epoch numbers set.
-    InvalidEpochNumber { from_epoch: u64, to_epoch: u64 },
+    InvalidEpochNumber {
+        from_epoch: u64,
+        to_epoch: u64,
+    },
+
+    OutOfBoundEpochNumber {
+        to_epoch: u64,
+        max_epoch: u64,
+    },
+
+    /// Roots for verifying the requested epochs are unavailable.
+    UnableToVerify {
+        epoch: u64,
+        latest_verifiable: u64,
+    },
+
+    /// The block requested does not exist
+    UnknownBlock {
+        hash: H256,
+    },
+
+    /// Filter error with custom error message (e.g. timeout)
+    Custom(String),
 }
 
 impl fmt::Display for FilterError {
@@ -42,9 +64,27 @@ impl fmt::Display for FilterError {
                 "Filter has wrong epoch numbers set (from: {}, to: {})",
                 from_epoch, to_epoch
             },
+            OutOfBoundEpochNumber {
+                to_epoch,
+                max_epoch,
+            } => format! {
+                "Filter to_epoch is larger than the current best_epoch (to: {}, max: {})",
+                to_epoch, max_epoch,
+            },
+            UnableToVerify {
+                epoch,
+                latest_verifiable,
+            } => format! {
+                "Unable to verify epoch {} (latest verifiable epoch is {})",
+                epoch, latest_verifiable
+            },
+            UnknownBlock { hash } => format! {
+                "Unable to identify block {}", hash
+            },
+            Custom(ref s) => s.clone(),
         };
 
-        f.write_fmt(format_args!("Filter error ({})", msg))
+        f.write_fmt(format_args!("Filter error: {}", msg))
     }
 }
 
@@ -102,13 +142,28 @@ impl Clone for Filter {
     }
 }
 
+impl Default for Filter {
+    fn default() -> Self {
+        Filter {
+            from_epoch: EpochNumber::Earliest,
+            to_epoch: EpochNumber::LatestMined,
+            block_hashes: None,
+            address: None,
+            topics: vec![None, None, None, None],
+            limit: None,
+        }
+    }
+}
+
 impl Filter {
     /// Returns combinations of each address and topic.
     pub fn bloom_possibilities(&self) -> Vec<Bloom> {
         let blooms = match self.address {
             Some(ref addresses) if !addresses.is_empty() => addresses
                 .iter()
-                .map(|ref address| Bloom::from(BloomInput::Raw(address)))
+                .map(|ref address| {
+                    Bloom::from(BloomInput::Raw(address.as_bytes()))
+                })
                 .collect(),
             _ => vec![Bloom::default()],
         };
@@ -119,10 +174,10 @@ impl Filter {
                 .into_iter()
                 .flat_map(|bloom| {
                     topics
-                        .into_iter()
+                        .iter()
                         .map(|topic| {
                             let mut b = bloom.clone();
-                            b.accrue(BloomInput::Raw(topic));
+                            b.accrue(BloomInput::Raw(topic.as_bytes()));
                             b
                         })
                         .collect::<Vec<Bloom>>()
@@ -152,4 +207,8 @@ impl Filter {
                     _ => true,
                 })
     }
+}
+
+impl From<String> for FilterError {
+    fn from(s: String) -> Self { FilterError::Custom(s) }
 }

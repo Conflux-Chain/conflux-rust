@@ -1,12 +1,16 @@
 use cfx_types::U256;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::SignedTransaction;
-use rand::{prng::XorShiftRng, FromEntropy, RngCore};
+use rand::{RngCore, SeedableRng};
+use rand_xorshift::XorShiftRng;
 use std::{cmp::Ordering, mem, ops::Deref, sync::Arc};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, DeriveMallocSizeOf)]
 pub struct TxWithReadyInfo {
     pub transaction: Arc<SignedTransaction>,
     pub packed: bool,
+    pub sponsored_gas: U256,
 }
 
 impl TxWithReadyInfo {
@@ -25,6 +29,8 @@ impl TxWithReadyInfo {
             return true;
         }
         self.gas_price > x.gas_price
+            || self.gas_price == x.gas_price
+                && self.epoch_height > x.epoch_height
     }
 }
 
@@ -44,7 +50,7 @@ pub enum InsertResult {
     Updated(TxWithReadyInfo),
 }
 
-#[derive(Debug)]
+#[derive(Debug, DeriveMallocSizeOf)]
 struct NoncePoolNode {
     /// transaction in current node
     tx: TxWithReadyInfo,
@@ -65,7 +71,7 @@ impl NoncePoolNode {
         NoncePoolNode {
             tx: tx.clone(),
             subtree_unpacked: 1 - tx.packed as u32,
-            subtree_cost: tx.value + tx.gas * tx.gas_price,
+            subtree_cost: tx.value + (tx.gas - tx.sponsored_gas) * tx.gas_price,
             subtree_size: 1,
             priority,
             child: [None, None],
@@ -114,7 +120,7 @@ impl NoncePoolNode {
                         tx.clone(),
                     ))
                 } else {
-                    InsertResult::Failed(format!("Tx with same nonce already inserted, try to replace it with a higher gas price"))
+                    InsertResult::Failed(format!("Tx with same nonce already inserted. To replace it, you need to specify a gas price > {}", &node.as_ref().unwrap().tx.gas_price))
                 }
             };
             node.as_mut().unwrap().update();
@@ -203,7 +209,9 @@ impl NoncePoolNode {
                 } else {
                     let mut ret = NoncePoolNode::size(&node.child[0]);
                     ret.0 += 1;
-                    ret.1 += node.tx.value + node.tx.gas * node.tx.gas_price;
+                    ret.1 += node.tx.value
+                        + (node.tx.gas - node.tx.sponsored_gas)
+                            * node.tx.gas_price;
                     if cmp == Ordering::Greater {
                         let tmp = NoncePoolNode::rank(&node.child[1], nonce);
                         ret.0 += tmp.0;
@@ -267,7 +275,8 @@ impl NoncePoolNode {
     /// update subtree info: last_packed_ts and cost_sum
     fn update(&mut self) {
         self.subtree_unpacked = 1 - self.tx.packed as u32;
-        self.subtree_cost = self.tx.value + self.tx.gas * self.tx.gas_price;
+        self.subtree_cost = self.tx.value
+            + (self.tx.gas - self.tx.sponsored_gas) * self.tx.gas_price;
         self.subtree_size = 1;
         for i in 0..2 {
             if self.child[i as usize].is_some() {
@@ -295,6 +304,12 @@ impl NoncePoolNode {
 pub struct NoncePool {
     root: Option<Box<NoncePoolNode>>,
     rng: XorShiftRng,
+}
+
+impl MallocSizeOf for NoncePool {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.root.size_of(ops)
+    }
 }
 
 impl NoncePool {
@@ -358,16 +373,19 @@ impl NoncePool {
 
     pub fn is_empty(&self) -> bool { self.root.is_none() }
 
+    /// return the number of transactions whose nonce < `nonce`
+    pub fn count_less(&self, nonce: &U256) -> usize {
+        if *nonce == U256::from(0) {
+            0
+        } else {
+            NoncePoolNode::rank(&self.root, &(nonce - 1)).0 as usize
+        }
+    }
+
     /// return the number of transactions whose nonce >= `nonce`
     #[allow(dead_code)]
     pub fn count_from(&self, nonce: &U256) -> usize {
-        if *nonce == U256::from(0) {
-            NoncePoolNode::size(&self.root).0 as usize
-        } else {
-            (NoncePoolNode::size(&self.root).0
-                - NoncePoolNode::rank(&self.root, &(nonce - 1)).0)
-                as usize
-        }
+        NoncePoolNode::size(&self.root).0 as usize - self.count_less(nonce)
     }
 
     pub fn check_nonce_exists(&self, nonce: &U256) -> bool {
@@ -384,7 +402,8 @@ mod nonce_pool_test {
     use cfx_types::{Address, U256};
     use keylib::{Generator, KeyPair, Random};
     use primitives::{Action, SignedTransaction, Transaction};
-    use rand::{prng::XorShiftRng, FromEntropy, RngCore};
+    use rand::{RngCore, SeedableRng};
+    use rand_xorshift::XorShiftRng;
     use std::{collections::BTreeMap, sync::Arc};
 
     fn new_test_tx(
@@ -397,6 +416,9 @@ mod nonce_pool_test {
                 gas: U256::from(50000),
                 action: Action::Call(Address::random()),
                 value: U256::from(value),
+                storage_limit: U256::zero(),
+                epoch_height: 0,
+                chain_id: 0,
                 data: Vec::new(),
             }
             .sign(sender.secret()),
@@ -412,6 +434,7 @@ mod nonce_pool_test {
         TxWithReadyInfo {
             transaction,
             packed,
+            sponsored_gas: U256::from(0),
         }
     }
 
@@ -441,7 +464,8 @@ mod nonce_pool_test {
                 nonce_pool.get_tx_by_nonce(U256::from(i)),
                 Some(tx1[i].clone())
             );
-            assert_eq!(nonce_pool.insert(&tx2[i as usize], false /* force */), InsertResult::Failed(format!("Tx with same nonce already inserted, try to replace it with a higher gas price")));
+            assert_eq!(nonce_pool.insert(&tx2[i as usize], false /* force */),
+                       InsertResult::Failed(format!("Tx with same nonce already inserted. To replace it, you need to specify a gas price > {}", &tx1[i as usize].gas_price)));
             assert_eq!(
                 nonce_pool.insert(&tx2[i as usize], true /* force */),
                 InsertResult::Updated(tx1[i as usize].clone())
@@ -577,7 +601,7 @@ mod nonce_pool_test {
         let mut next_nonce = nonce;
         let mut balance_left = balance;
         while let Some(tx) = nonce_pool.get(&next_nonce) {
-            let cost = tx.value + tx.gas_price * tx.gas;
+            let cost = tx.value + tx.gas_price * (tx.gas - tx.sponsored_gas);
             if balance_left < cost {
                 return None;
             }

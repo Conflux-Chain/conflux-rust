@@ -5,17 +5,14 @@
 use crate::{
     message::Message,
     sync::{
-        msg_sender::send_message, request_manager::RequestMessage, Error,
-        SynchronizationProtocolHandler,
+        request_manager::RequestMessage, Error, SynchronizationProtocolHandler,
     },
 };
-use cfx_types::H256;
-use network::{NetworkContext, PeerId};
-use primitives::StateRoot;
+use network::{node_table::NodeId, NetworkContext};
 
 pub struct Context<'a> {
     pub io: &'a dyn NetworkContext,
-    pub peer: PeerId,
+    pub node_id: NodeId,
     pub manager: &'a SynchronizationProtocolHandler,
 }
 
@@ -25,31 +22,15 @@ impl<'a> Context<'a> {
     ) -> Result<RequestMessage, Error> {
         self.manager
             .request_manager
-            .match_request(self.io, self.peer, request_id)
+            .match_request(&self.node_id, request_id)
     }
 
     pub fn send_response(&self, response: &dyn Message) -> Result<(), Error> {
-        send_message(self.io, self.peer, response)?;
+        response.send(self.io, &self.node_id)?;
         Ok(())
     }
 
-    pub fn must_get_state_root(&self, checkpoint: &H256) -> StateRoot {
-        match self.manager.graph.data_man.block_header_by_hash(checkpoint) {
-            Some(header) => header
-                .deferred_state_root_with_aux_info()
-                .state_root
-                .clone(),
-            None => {
-                error!(
-                    "failed to find the state root of checkpoint {:?}",
-                    checkpoint
-                );
-                panic!(
-                    "Cannot find block header of checkpoint to sync snapshot"
-                );
-            }
-        }
-    }
+    pub fn node_id(&self) -> NodeId { self.node_id.clone() }
 }
 
 // todo merge with Request and RequestContext!!!

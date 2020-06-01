@@ -4,27 +4,33 @@
 
 use super::{
     context::{Context, OriginInfo, OutputPolicy},
-    Executed, ExecutionError, ExecutionResult,
+    Executed, ExecutionError, InternalContractMap,
 };
 use crate::{
     bytes::{Bytes, BytesRef},
     evm::{FinalizationResult, Finalize},
+    executive::executed::{ExecutionOutcome, ToRepackError},
     hash::keccak,
     machine::Machine,
-    state::{CleanupMode, State, Substate},
-};
-use cfx_types::{Address, H256, U256, U512};
-use primitives::{transaction::Action, SignedTransaction};
-use std::{cmp, sync::Arc};
-//use crate::storage::{Storage, StorageTrait};
-//use crate::transaction_pool::SharedTransactionPool;
-use crate::{
+    parameters::staking::*,
+    state::{CleanupMode, CollateralCheckResult, State, Substate},
+    statedb::Result as DbResult,
+    verification::VerificationConfig,
     vm::{
-        self, ActionParams, ActionValue, CallType, CleanDustMode,
-        CreateContractAddress, Env, ResumeCall, ResumeCreate, ReturnData, Spec,
-        TrapError,
+        self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
+        ResumeCall, ResumeCreate, ReturnData, Spec, TrapError,
     },
     vm_factory::VmFactory,
+};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256, U512};
+use primitives::{
+    receipt::StorageChange, transaction::Action, SignedTransaction,
+};
+use std::{
+    collections::HashSet,
+    convert::{TryFrom, TryInto},
+    mem,
+    sync::Arc,
 };
 
 /// Returns new address created from address, nonce, and code hash
@@ -33,14 +39,23 @@ pub fn contract_address(
     code: &[u8],
 ) -> (Address, Option<H256>)
 {
-    use rlp::RlpStream;
-
     match address_scheme {
-        CreateContractAddress::FromSenderAndNonce => {
-            let mut stream = RlpStream::new_list(2);
-            stream.append(sender);
-            stream.append(nonce);
-            (From::from(keccak(stream.as_raw())), None)
+        CreateContractAddress::FromSenderNonceAndCodeHash => {
+            let mut buffer = [0u8; 1 + 20 + 32 + 32];
+            // In Conflux, we append CodeHash to determine the address as well.
+            // This is required to enable us to clean up unused user account in
+            // future.
+            let code_hash = keccak(code);
+            buffer[0] = 0x0;
+            &mut buffer[1..(1 + 20)].copy_from_slice(&sender[..]);
+            nonce.to_little_endian(&mut buffer[(1 + 20)..(1 + 20 + 32)]);
+            &mut buffer[(1 + 20 + 32)..].copy_from_slice(&code_hash[..]);
+            // In Conflux, we use the first four bits to indicate the type of
+            // the address. For contract address, the bits will be
+            // set to 0x8.
+            let mut h = Address::from(keccak(&buffer[..]));
+            h.set_contract_type_bits();
+            (h, Some(code_hash))
         }
         CreateContractAddress::FromSenderSaltAndCodeHash(salt) => {
             let code_hash = keccak(code);
@@ -49,14 +64,11 @@ pub fn contract_address(
             &mut buffer[1..(1 + 20)].copy_from_slice(&sender[..]);
             &mut buffer[(1 + 20)..(1 + 20 + 32)].copy_from_slice(&salt[..]);
             &mut buffer[(1 + 20 + 32)..].copy_from_slice(&code_hash[..]);
-            (From::from(keccak(&buffer[..])), Some(code_hash))
-        }
-        CreateContractAddress::FromSenderAndCodeHash => {
-            let code_hash = keccak(code);
-            let mut buffer = [0u8; 20 + 32];
-            &mut buffer[..20].copy_from_slice(&sender[..]);
-            &mut buffer[20..].copy_from_slice(&code_hash[..]);
-            (From::from(keccak(&buffer[..])), Some(code_hash))
+            // In Conflux, we use the first bit to indicate the type of the
+            // address. For contract address, the bits will be set to 0x8.
+            let mut h = Address::from(keccak(&buffer[..]));
+            h.set_contract_type_bits();
+            (h, Some(code_hash))
         }
     }
 }
@@ -107,6 +119,7 @@ pub fn into_contract_create_result(
 enum CallCreateExecutiveKind {
     Transfer(ActionParams),
     CallBuiltin(ActionParams),
+    CallInternalContract(ActionParams, Substate),
     ExecCall(ActionParams, Substate),
     ExecCreate(ActionParams, Substate),
     ResumeCall(OriginInfo, Box<dyn ResumeCall>, Substate),
@@ -124,6 +137,7 @@ pub struct CallCreateExecutive<'a> {
     is_create: bool,
     gas: U256,
     kind: CallCreateExecutiveKind,
+    internal_contract_map: &'a InternalContractMap,
 }
 
 impl<'a> CallCreateExecutive<'a> {
@@ -132,6 +146,9 @@ impl<'a> CallCreateExecutive<'a> {
         params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
         stack_depth: usize, parent_static_flag: bool,
+        internal_contract_map: &'a InternalContractMap,
+        contracts_in_callstack: Option<HashSet<Address>>,
+        is_recursive_call: bool,
     ) -> Self
     {
         trace!(
@@ -154,16 +171,40 @@ impl<'a> CallCreateExecutive<'a> {
             if !builtin.is_active(env.number) {
                 panic!("Consensus failure: engine implementation prematurely enabled built-in at {}", params.code_address);
             }
-
+            trace!("CallBuiltin");
             CallCreateExecutiveKind::CallBuiltin(params)
+        } else if let Some(_) =
+            internal_contract_map.contract(&params.code_address)
+        {
+            info!(
+                "CallInternalContract: address={:?} data={:?}",
+                params.code_address, params.data
+            );
+            CallCreateExecutiveKind::CallInternalContract(
+                params,
+                Substate::new(),
+            )
         } else {
             if params.code.is_some() {
-                CallCreateExecutiveKind::ExecCall(params, Substate::new())
+                trace!("ExecCall");
+                let mut contracts_in_callstack =
+                    contracts_in_callstack.unwrap();
+                let code_address = params.code_address.clone();
+                let is_contract_in_callstack =
+                    !contracts_in_callstack.insert(code_address.clone());
+                CallCreateExecutiveKind::ExecCall(
+                    params,
+                    Substate::with_contracts_in_callstack(
+                        contracts_in_callstack,
+                        code_address,
+                        is_contract_in_callstack && !is_recursive_call,
+                    ),
+                )
             } else {
+                trace!("Transfer");
                 CallCreateExecutiveKind::Transfer(params)
             }
         };
-
         Self {
             env,
             machine,
@@ -175,6 +216,7 @@ impl<'a> CallCreateExecutive<'a> {
             kind,
             gas,
             is_create: false,
+            internal_contract_map,
         }
     }
 
@@ -183,6 +225,8 @@ impl<'a> CallCreateExecutive<'a> {
         params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
         stack_depth: usize, static_flag: bool,
+        internal_contract_map: &'a InternalContractMap,
+        mut contracts_in_callstack: HashSet<Address>,
     ) -> Self
     {
         trace!(
@@ -194,7 +238,17 @@ impl<'a> CallCreateExecutive<'a> {
 
         let gas = params.gas;
 
-        let kind = CallCreateExecutiveKind::ExecCreate(params, Substate::new());
+        let code_address = params.code_address.clone();
+        assert!(!contracts_in_callstack.contains(&code_address));
+        contracts_in_callstack.insert(code_address.clone());
+        let kind = CallCreateExecutiveKind::ExecCreate(
+            params,
+            Substate::with_contracts_in_callstack(
+                contracts_in_callstack,
+                code_address,
+                false, /* reentrancy_encountered */
+            ),
+        );
 
         Self {
             env,
@@ -207,6 +261,7 @@ impl<'a> CallCreateExecutive<'a> {
             kind,
             gas,
             is_create: true,
+            internal_contract_map,
         }
     }
 
@@ -222,6 +277,9 @@ impl<'a> CallCreateExecutive<'a> {
                 Some(unsub)
             }
             CallCreateExecutiveKind::ResumeCall(_, _, ref mut unsub) => {
+                Some(unsub)
+            }
+            CallCreateExecutiveKind::CallInternalContract(_, ref mut unsub) => {
                 Some(unsub)
             }
             CallCreateExecutiveKind::Transfer(..)
@@ -249,8 +307,8 @@ impl<'a> CallCreateExecutive<'a> {
         Ok(())
     }
 
-    fn transfer_exec_balance<'b: 'a>(
-        params: &ActionParams, spec: &Spec, state: &mut State<'b>,
+    fn transfer_exec_balance(
+        params: &ActionParams, spec: &Spec, state: &mut State,
         substate: &mut Substate,
     ) -> vm::Result<()>
     {
@@ -266,40 +324,55 @@ impl<'a> CallCreateExecutive<'a> {
         Ok(())
     }
 
-    fn transfer_exec_balance_and_init_contract<'b: 'a>(
-        params: &ActionParams, spec: &Spec, state: &mut State<'b>,
+    fn transfer_exec_balance_and_init_contract(
+        params: &ActionParams, spec: &Spec, state: &mut State,
         substate: &mut Substate,
     ) -> vm::Result<()>
     {
-        let nonce_offset = if spec.no_empty { 1 } else { 0 }.into();
-        let balance = state.balance(&params.address)?;
         if let ActionValue::Transfer(val) = params.value {
             state.sub_balance(
                 &params.sender,
                 &val,
                 &mut substate.to_cleanup_mode(&spec),
             )?;
-            state.new_contract(&params.address, val + balance, nonce_offset)?;
+            state.new_contract_with_admin(
+                &params.address,
+                &params.original_sender,
+                val,
+                state.contract_start_nonce(),
+            )?;
         } else {
-            state.new_contract(&params.address, balance, nonce_offset)?;
+            state.new_contract_with_admin(
+                &params.address,
+                &params.original_sender,
+                U256::zero(),
+                state.contract_start_nonce(),
+            )?;
         }
 
         Ok(())
     }
 
-    fn enact_result<'b>(
-        result: &vm::Result<FinalizationResult>, state: &mut State<'b>,
-        substate: &mut Substate, unconfirmed_substate: Substate,
-    )
+    fn enact_result(
+        result: &vm::Result<FinalizationResult>, state: &mut State,
+        substate: &mut Substate, mut unconfirmed_substate: Substate,
+        sender: &Address, storage_limit: &U256, is_bottom_ex: bool,
+    ) -> CollateralCheckResult
     {
-        match *result {
+        substate.pop_callstack_contract(&mut unconfirmed_substate);
+        match result {
             Err(vm::Error::OutOfGas)
             | Err(vm::Error::BadJumpDestination { .. })
             | Err(vm::Error::BadInstruction { .. })
             | Err(vm::Error::StackUnderflow { .. })
             | Err(vm::Error::BuiltIn { .. })
+            | Err(vm::Error::InternalContract { .. })
             | Err(vm::Error::Wasm { .. })
             | Err(vm::Error::OutOfStack { .. })
+            | Err(vm::Error::SubStackUnderflow { .. })
+            | Err(vm::Error::OutOfSubStack { .. })
+            | Err(vm::Error::ExceedStorageLimit)
+            | Err(vm::Error::NotEnoughBalanceForStorage { .. })
             | Err(vm::Error::MutableCallInStaticContext)
             | Err(vm::Error::OutOfBounds)
             | Err(vm::Error::Reverted)
@@ -307,21 +380,55 @@ impl<'a> CallCreateExecutive<'a> {
                 apply_state: false, ..
             }) => {
                 state.revert_to_checkpoint();
+                CollateralCheckResult::Valid
             }
-            Ok(_) | Err(vm::Error::Internal(_)) => {
+            Err(vm::Error::Reentrancy) => {
+                assert!(unconfirmed_substate.reentrancy_encountered);
                 state.discard_checkpoint();
-                substate.accrue(unconfirmed_substate);
+                CollateralCheckResult::Valid
+            }
+            Err(vm::Error::StateDbError(e)) => {
+                panic!("db error occurred during execution, {}", e);
+            }
+            Ok(_) => {
+                let check_result = if is_bottom_ex {
+                    state.check_collateral_for_storage_finally(
+                        sender,
+                        storage_limit,
+                        &mut unconfirmed_substate,
+                    )
+                } else {
+                    state.checkout_ownership_changed(&mut unconfirmed_substate)
+                };
+                match check_result {
+                    Ok(CollateralCheckResult::ExceedStorageLimit {
+                        ..
+                    }) => {
+                        state.revert_to_checkpoint();
+                    }
+                    Ok(CollateralCheckResult::NotEnoughBalance { .. }) => {
+                        state.revert_to_checkpoint();
+                    }
+                    Ok(CollateralCheckResult::Valid) => {
+                        state.discard_checkpoint();
+                        substate.accrue(unconfirmed_substate);
+                    }
+                    Err(_) => {
+                        panic!("db error occurred during execution");
+                    }
+                }
+                check_result.unwrap()
             }
         }
     }
 
     /// Creates `Context` from `Executive`.
-    fn as_context<'any, 'b: 'any>(
-        state: &'any mut State<'b>, env: &'any Env, machine: &'any Machine,
+    fn as_context<'any>(
+        state: &'any mut State, env: &'any Env, machine: &'any Machine,
         spec: &'any Spec, depth: usize, stack_depth: usize, static_flag: bool,
         origin: &'any OriginInfo, substate: &'any mut Substate,
-        output: OutputPolicy,
-    ) -> Context<'any, 'b>
+        output: OutputPolicy, internal_contract_map: &'any InternalContractMap,
+    ) -> Context<'any>
     {
         Context::new(
             state,
@@ -334,14 +441,15 @@ impl<'a> CallCreateExecutive<'a> {
             substate,
             output,
             static_flag,
+            internal_contract_map,
         )
     }
 
     /// Execute the executive. If a sub-call/create action is required, a
     /// resume trap error is returned. The caller is then expected to call
     /// `resume_call` or `resume_create` to continue the execution.
-    pub fn exec<'b: 'a>(
-        mut self, state: &mut State<'b>, substate: &mut Substate,
+    pub fn exec(
+        mut self, state: &mut State, substate: &mut Substate,
     ) -> ExecutiveTrapResult<'a, FinalizationResult> {
         match self.kind {
             CallCreateExecutiveKind::Transfer(ref params) => {
@@ -425,6 +533,106 @@ impl<'a> CallCreateExecutive<'a> {
                 Ok(inner())
             }
 
+            CallCreateExecutiveKind::CallInternalContract(
+                params,
+                mut unconfirmed_substate,
+            ) => {
+                assert!(!self.is_create);
+
+                let static_flag = self.static_flag;
+                let is_create = self.is_create;
+                let spec = self.spec;
+                let internal_contract_map = self.internal_contract_map;
+
+                let inner = |depth| {
+                    if params.call_type != CallType::Call {
+                        return Err(vm::Error::InternalContract(
+                            "Incorrect call type.",
+                        ));
+                    }
+
+                    Self::check_static_flag(&params, static_flag, is_create)?;
+                    state.checkpoint();
+                    Self::transfer_exec_balance(
+                        &params, spec, state, substate,
+                    )?;
+
+                    let mut gas_cost = U256::zero();
+                    let result = if let Some(contract) =
+                        internal_contract_map.contract(&params.code_address)
+                    {
+                        gas_cost = contract.cost(&params, state);
+                        if gas_cost > params.gas {
+                            Err(vm::Error::OutOfGas)
+                        } else {
+                            contract.execute(
+                                &params,
+                                &spec,
+                                state,
+                                &mut unconfirmed_substate,
+                            )
+                        }
+                    } else {
+                        Ok(())
+                    };
+                    if let Err(e) = result {
+                        state.revert_to_checkpoint();
+                        Err(e.into())
+                    } else {
+                        let cres = if depth == 0 {
+                            state.check_collateral_for_storage_finally(
+                                &params.original_sender,
+                                &params.storage_limit,
+                                &mut unconfirmed_substate,
+                            )
+                        } else {
+                            state.checkout_ownership_changed(
+                                &mut unconfirmed_substate,
+                            )
+                        };
+                        match cres {
+                            Ok(CollateralCheckResult::ExceedStorageLimit {
+                                ..
+                            }) => {
+                                state.revert_to_checkpoint();
+                                Err(vm::Error::ExceedStorageLimit)
+                            }
+                            Ok(CollateralCheckResult::NotEnoughBalance {
+                                required,
+                                got,
+                            }) => {
+                                state.revert_to_checkpoint();
+                                Err(vm::Error::NotEnoughBalanceForStorage {
+                                    required,
+                                    got,
+                                })
+                            }
+                            Ok(CollateralCheckResult::Valid) => {
+                                state.discard_checkpoint();
+                                substate.accrue(unconfirmed_substate);
+                                let internal_contract_out_buffer = Vec::new();
+                                let out_len =
+                                    internal_contract_out_buffer.len();
+                                Ok(FinalizationResult {
+                                    gas_left: params.gas - gas_cost,
+                                    return_data: ReturnData::new(
+                                        internal_contract_out_buffer,
+                                        0,
+                                        out_len,
+                                    ),
+                                    apply_state: true,
+                                })
+                            }
+                            Err(_) => {
+                                panic!("db error occurred during execution");
+                            }
+                        }
+                    }
+                };
+
+                Ok(inner(self.depth))
+            }
+
             CallCreateExecutiveKind::ExecCall(
                 params,
                 mut unconfirmed_substate,
@@ -456,25 +664,34 @@ impl<'a> CallCreateExecutive<'a> {
                 }
 
                 let origin = OriginInfo::from(&params);
-                let exec = self.factory.create(params, self.spec, self.depth);
+                let sender = *origin.original_sender();
+                let storage_limit = *origin.storage_limit();
 
-                let out = {
-                    let mut context = Self::as_context(
-                        state,
-                        self.env,
-                        self.machine,
-                        self.spec,
-                        self.depth,
-                        self.stack_depth,
-                        self.static_flag,
-                        &origin,
-                        &mut unconfirmed_substate,
-                        OutputPolicy::Return,
-                    );
-                    match exec.exec(&mut context) {
-                        Ok(val) => Ok(val.finalize(context)),
-                        Err(err) => Err(err),
-                    }
+                let out = if unconfirmed_substate.reentrancy_encountered {
+                    Ok(Err(vm::Error::Reentrancy))
+                } else {
+                    let exec =
+                        self.factory.create(params, self.spec, self.depth);
+                    let out = {
+                        let mut context = Self::as_context(
+                            state,
+                            self.env,
+                            self.machine,
+                            self.spec,
+                            self.depth,
+                            self.stack_depth,
+                            self.static_flag,
+                            &origin,
+                            &mut unconfirmed_substate,
+                            OutputPolicy::Return,
+                            self.internal_contract_map,
+                        );
+                        match exec.exec(&mut context) {
+                            Ok(val) => Ok(val.finalize(context)),
+                            Err(err) => Err(err),
+                        }
+                    };
+                    out
                 };
 
                 let res = match out {
@@ -499,14 +716,34 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                Self::enact_result(&res, state, substate, unconfirmed_substate);
-                Ok(res)
+                match Self::enact_result(
+                    &res,
+                    state,
+                    substate,
+                    unconfirmed_substate,
+                    &sender,
+                    &storage_limit,
+                    self.depth == 0,
+                ) {
+                    CollateralCheckResult::Valid => Ok(res),
+                    CollateralCheckResult::ExceedStorageLimit { .. } => {
+                        Ok(Err(vm::Error::ExceedStorageLimit))
+                    }
+                    CollateralCheckResult::NotEnoughBalance {
+                        required,
+                        got,
+                    } => Ok(Err(vm::Error::NotEnoughBalanceForStorage {
+                        required,
+                        got,
+                    })),
+                }
             }
 
             CallCreateExecutiveKind::ExecCreate(
                 params,
                 mut unconfirmed_substate,
             ) => {
+                debug!("CallCreateExecutiveKind::ExecCreate");
                 assert!(self.is_create);
 
                 {
@@ -534,32 +771,38 @@ impl<'a> CallCreateExecutive<'a> {
                 }
 
                 let origin = OriginInfo::from(&params);
-                let exec = self.factory.create(params, self.spec, self.depth);
+                let sender = *origin.original_sender();
+                let storage_limit = *origin.storage_limit();
 
-                let out = {
-                    let mut context = Self::as_context(
-                        state,
-                        self.env,
-                        self.machine,
-                        self.spec,
-                        self.depth,
-                        self.stack_depth,
-                        self.static_flag,
-                        &origin,
-                        &mut unconfirmed_substate,
-                        OutputPolicy::InitContract,
-                    );
-                    match exec.exec(&mut context) {
-                        Ok(val) => Ok(val.finalize(context)),
-                        Err(err) => Err(err),
-                    }
+                let out = if unconfirmed_substate.reentrancy_encountered {
+                    Ok(Err(vm::Error::Reentrancy))
+                } else {
+                    let exec =
+                        self.factory.create(params, self.spec, self.depth);
+                    let out = {
+                        let mut context = Self::as_context(
+                            state,
+                            self.env,
+                            self.machine,
+                            self.spec,
+                            self.depth,
+                            self.stack_depth,
+                            self.static_flag,
+                            &origin,
+                            &mut unconfirmed_substate,
+                            OutputPolicy::InitContract,
+                            self.internal_contract_map,
+                        );
+                        match exec.exec(&mut context) {
+                            Ok(val) => Ok(val.finalize(context)),
+                            Err(err) => Err(err),
+                        }
+                    };
+                    out
                 };
 
                 let res = match out {
-                    Ok(val) => {
-                        println!("{:?}", val);
-                        val
-                    }
+                    Ok(val) => val,
                     Err(TrapError::Call(subparams, resume)) => {
                         self.kind = CallCreateExecutiveKind::ResumeCall(
                             origin,
@@ -580,8 +823,27 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                Self::enact_result(&res, state, substate, unconfirmed_substate);
-                Ok(res)
+                match Self::enact_result(
+                    &res,
+                    state,
+                    substate,
+                    unconfirmed_substate,
+                    &sender,
+                    &storage_limit,
+                    self.depth == 0,
+                ) {
+                    CollateralCheckResult::Valid => Ok(res),
+                    CollateralCheckResult::ExceedStorageLimit { .. } => {
+                        Ok(Err(vm::Error::ExceedStorageLimit))
+                    }
+                    CollateralCheckResult::NotEnoughBalance {
+                        required,
+                        got,
+                    } => Ok(Err(vm::Error::NotEnoughBalanceForStorage {
+                        required,
+                        got,
+                    })),
+                }
             }
 
             CallCreateExecutiveKind::ResumeCall(..)
@@ -592,8 +854,8 @@ impl<'a> CallCreateExecutive<'a> {
     }
 
     /// Resume execution from a call trap previously trapped by `exec'.
-    pub fn resume_call<'b: 'a>(
-        mut self, result: vm::MessageCallResult, state: &mut State<'b>,
+    pub fn resume_call(
+        mut self, result: vm::MessageCallResult, state: &mut State,
         substate: &mut Substate,
     ) -> ExecutiveTrapResult<'a, FinalizationResult>
     {
@@ -621,12 +883,16 @@ impl<'a> CallCreateExecutive<'a> {
                         } else {
                             OutputPolicy::Return
                         },
+                        self.internal_contract_map,
                     );
                     match exec.exec(&mut context) {
                         Ok(val) => Ok(val.finalize(context)),
                         Err(err) => Err(err),
                     }
                 };
+
+                let sender = *origin.original_sender();
+                let storage_limit = *origin.storage_limit();
 
                 let res = match out {
                     Ok(val) => val,
@@ -650,14 +916,34 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                Self::enact_result(&res, state, substate, unconfirmed_substate);
-                Ok(res)
+                match Self::enact_result(
+                    &res,
+                    state,
+                    substate,
+                    unconfirmed_substate,
+                    &sender,
+                    &storage_limit,
+                    self.depth == 0,
+                ) {
+                    CollateralCheckResult::Valid => Ok(res),
+                    CollateralCheckResult::ExceedStorageLimit { .. } => {
+                        Ok(Err(vm::Error::ExceedStorageLimit))
+                    }
+                    CollateralCheckResult::NotEnoughBalance {
+                        required,
+                        got,
+                    } => Ok(Err(vm::Error::NotEnoughBalanceForStorage {
+                        required,
+                        got,
+                    })),
+                }
             }
             CallCreateExecutiveKind::ResumeCreate(..) => {
                 panic!("Resumable as create, but called resume_call")
             }
             CallCreateExecutiveKind::Transfer(..)
             | CallCreateExecutiveKind::CallBuiltin(..)
+            | CallCreateExecutiveKind::CallInternalContract(..)
             | CallCreateExecutiveKind::ExecCall(..)
             | CallCreateExecutiveKind::ExecCreate(..) => {
                 panic!("Not resumable")
@@ -666,8 +952,8 @@ impl<'a> CallCreateExecutive<'a> {
     }
 
     /// Resume execution from a create trap previously trapped by `exec`.
-    pub fn resume_create<'b: 'a>(
-        mut self, result: vm::ContractCreateResult, state: &mut State<'b>,
+    pub fn resume_create(
+        mut self, result: vm::ContractCreateResult, state: &mut State,
         substate: &mut Substate,
     ) -> ExecutiveTrapResult<'a, FinalizationResult>
     {
@@ -677,6 +963,9 @@ impl<'a> CallCreateExecutive<'a> {
                 resume,
                 mut unconfirmed_substate,
             ) => {
+                let sender = *origin.original_sender();
+                let storage_limit = *origin.storage_limit();
+
                 let out = {
                     let exec = resume.resume_create(result);
 
@@ -695,6 +984,7 @@ impl<'a> CallCreateExecutive<'a> {
                         } else {
                             OutputPolicy::Return
                         },
+                        self.internal_contract_map,
                     );
                     match exec.exec(&mut context) {
                         Ok(val) => Ok(val.finalize(context)),
@@ -724,14 +1014,34 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                Self::enact_result(&res, state, substate, unconfirmed_substate);
-                Ok(res)
+                match Self::enact_result(
+                    &res,
+                    state,
+                    substate,
+                    unconfirmed_substate,
+                    &sender,
+                    &storage_limit,
+                    self.depth == 0,
+                ) {
+                    CollateralCheckResult::Valid => Ok(res),
+                    CollateralCheckResult::ExceedStorageLimit { .. } => {
+                        Ok(Err(vm::Error::ExceedStorageLimit))
+                    }
+                    CollateralCheckResult::NotEnoughBalance {
+                        required,
+                        got,
+                    } => Ok(Err(vm::Error::NotEnoughBalanceForStorage {
+                        required,
+                        got,
+                    })),
+                }
             }
             CallCreateExecutiveKind::ResumeCall(..) => {
                 panic!("Resumable as call, but called resume_create")
             }
             CallCreateExecutiveKind::Transfer(..)
             | CallCreateExecutiveKind::CallBuiltin(..)
+            | CallCreateExecutiveKind::CallInternalContract(..)
             | CallCreateExecutiveKind::ExecCall(..)
             | CallCreateExecutiveKind::ExecCreate(..) => {
                 panic!("Not resumable")
@@ -742,8 +1052,8 @@ impl<'a> CallCreateExecutive<'a> {
     /// Execute and consume the current executive. This function handles resume
     /// traps and sub-level tracing. The caller is expected to handle
     /// current-level tracing.
-    pub fn consume<'b: 'a>(
-        self, state: &mut State<'b>, top_substate: &mut Substate,
+    pub fn consume(
+        self, state: &mut State, top_substate: &mut Substate,
     ) -> vm::Result<FinalizationResult> {
         let mut last_res =
             Some((false, self.gas, self.exec(state, top_substate)));
@@ -803,7 +1113,22 @@ impl<'a> CallCreateExecutive<'a> {
                         None => return val,
                     }
                 },
-                Some((_, _, Err(TrapError::Call(subparams, resume)))) => {
+                Some((_, _, Err(TrapError::Call(subparams, mut resume)))) => {
+                    let is_not_internal_contract_and_has_code = subparams.code.is_some() && resume.internal_contract_map.contract(&subparams.code_address).is_none();
+                    let substate = resume.unconfirmed_substate().unwrap();
+                    let mut is_recursive_call = false;
+                    let contracts_in_callstack = if is_not_internal_contract_and_has_code {
+                        is_recursive_call = substate.contract_address == subparams.code_address;
+                        let mut contracts_in_callstack = HashSet::<Address>::new();
+                        mem::swap(
+                            &mut contracts_in_callstack,
+                            &mut substate.contracts_in_callstack,
+                        );
+                        Some(contracts_in_callstack)
+                    } else {
+                        None
+                    };
+
                     let sub_exec = CallCreateExecutive::new_call_raw(
                         subparams,
                         resume.env,
@@ -813,13 +1138,22 @@ impl<'a> CallCreateExecutive<'a> {
                         resume.depth + 1,
                         resume.stack_depth,
                         resume.static_flag,
+                        resume.internal_contract_map,
+                        contracts_in_callstack,
+                        is_recursive_call,
                     );
 
                     callstack.push((None, resume));
                     callstack.push((None, sub_exec));
                     last_res = None;
                 },
-                Some((_, _, Err(TrapError::Create(subparams, address, resume)))) => {
+                Some((_, _, Err(TrapError::Create(subparams, address, mut resume)))) => {
+                    let substate = resume.unconfirmed_substate().unwrap();
+                    let mut contracts_in_callstack = HashSet::<Address>::new();
+                    mem::swap(
+                        &mut contracts_in_callstack,
+                        &mut substate.contracts_in_callstack,
+                    );
                     let sub_exec = CallCreateExecutive::new_create_raw(
                         subparams,
                         resume.env,
@@ -828,7 +1162,9 @@ impl<'a> CallCreateExecutive<'a> {
                         resume.factory,
                         resume.depth + 1,
                         resume.stack_depth,
-                        resume.static_flag
+                        resume.static_flag,
+                        resume.internal_contract_map,
+                        contracts_in_callstack,
                     );
 
                     callstack.push((Some(address), resume));
@@ -848,20 +1184,21 @@ pub type ExecutiveTrapResult<'a, T> =
 //    vm::TrapError<CallCreateExecutive<'a>, CallCreateExecutive<'a>>;
 
 /// Transaction executor.
-pub struct Executive<'a, 'b: 'a> {
-    pub state: &'a mut State<'b>,
+pub struct Executive<'a> {
+    pub state: &'a mut State,
     env: &'a Env,
     machine: &'a Machine,
     spec: &'a Spec,
     depth: usize,
     static_flag: bool,
+    internal_contract_map: &'a InternalContractMap,
 }
 
-impl<'a, 'b> Executive<'a, 'b> {
+impl<'a> Executive<'a> {
     /// Basic constructor.
     pub fn new(
-        state: &'a mut State<'b>, env: &'a Env, machine: &'a Machine,
-        spec: &'a Spec,
+        state: &'a mut State, env: &'a Env, machine: &'a Machine,
+        spec: &'a Spec, internal_contract_map: &'a InternalContractMap,
     ) -> Self
     {
         Executive {
@@ -871,13 +1208,15 @@ impl<'a, 'b> Executive<'a, 'b> {
             spec,
             depth: 0,
             static_flag: false,
+            internal_contract_map,
         }
     }
 
     /// Populates executive from parent properties. Increments executive depth.
     pub fn from_parent(
-        state: &'a mut State<'b>, env: &'a Env, machine: &'a Machine,
+        state: &'a mut State, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, parent_depth: usize, static_flag: bool,
+        internal_contract_map: &'a InternalContractMap,
     ) -> Self
     {
         Executive {
@@ -887,6 +1226,7 @@ impl<'a, 'b> Executive<'a, 'b> {
             spec,
             depth: parent_depth + 1,
             static_flag,
+            internal_contract_map,
         }
     }
 
@@ -915,6 +1255,11 @@ impl<'a, 'b> Executive<'a, 'b> {
         let _gas = params.gas;
 
         let vm_factory = self.state.vm_factory();
+        let mut contracts_in_callstack = HashSet::<Address>::new();
+        mem::swap(
+            &mut contracts_in_callstack,
+            &mut substate.contracts_in_callstack,
+        );
         let result = CallCreateExecutive::new_create_raw(
             params,
             self.env,
@@ -924,6 +1269,8 @@ impl<'a, 'b> Executive<'a, 'b> {
             self.depth,
             stack_depth,
             self.static_flag,
+            self.internal_contract_map,
+            contracts_in_callstack,
         )
         .consume(self.state, substate);
 
@@ -933,8 +1280,6 @@ impl<'a, 'b> Executive<'a, 'b> {
     pub fn create(
         &mut self, params: ActionParams, substate: &mut Substate,
     ) -> vm::Result<FinalizationResult> {
-        println!("gas={:?}", params.gas);
-
         self.create_with_stack_depth(params, substate, 0)
     }
 
@@ -943,9 +1288,25 @@ impl<'a, 'b> Executive<'a, 'b> {
         stack_depth: usize,
     ) -> vm::Result<FinalizationResult>
     {
-        let _gas = params.gas;
-
         let vm_factory = self.state.vm_factory();
+        let is_not_internal_contract_and_has_code = params.code.is_some()
+            && self
+                .internal_contract_map
+                .contract(&params.code_address)
+                .is_none();
+        let mut is_recursive_call = false;
+        let contracts_in_callstack = if is_not_internal_contract_and_has_code {
+            is_recursive_call =
+                substate.contract_address == params.code_address;
+            let mut contracts_in_callstack = HashSet::<Address>::new();
+            mem::swap(
+                &mut contracts_in_callstack,
+                &mut substate.contracts_in_callstack,
+            );
+            Some(contracts_in_callstack)
+        } else {
+            None
+        };
         let result = CallCreateExecutive::new_call_raw(
             params,
             self.env,
@@ -955,6 +1316,9 @@ impl<'a, 'b> Executive<'a, 'b> {
             self.depth,
             stack_depth,
             self.static_flag,
+            self.internal_contract_map,
+            contracts_in_callstack,
+            is_recursive_call,
         )
         .consume(self.state, substate);
 
@@ -967,109 +1331,257 @@ impl<'a, 'b> Executive<'a, 'b> {
         self.call_with_stack_depth(params, substate, 0)
     }
 
+    pub fn transact_virtual(
+        &mut self, tx: &SignedTransaction,
+    ) -> DbResult<ExecutionOutcome> {
+        let sender = tx.sender();
+        let balance = self.state.balance(&sender)?;
+        // Give the sender a sufficient balance.
+        let needed_balance = U256::MAX / U256::from(2);
+        self.state.set_nonce(&sender, &tx.nonce)?;
+        if balance < needed_balance {
+            self.state.add_balance(
+                &sender,
+                &(needed_balance - balance),
+                CleanupMode::NoEmpty,
+            )?;
+        }
+        self.transact(tx)
+    }
+
     pub fn transact(
-        &mut self, tx: &SignedTransaction, nonce_increased: &mut bool,
-    ) -> ExecutionResult<Executed> {
-        *nonce_increased = false;
+        &mut self, tx: &SignedTransaction,
+    ) -> DbResult<ExecutionOutcome> {
+        let spec = &self.spec;
         let sender = tx.sender();
         let nonce = self.state.nonce(&sender)?;
 
-        let spec = self.spec;
-        let base_gas_required = U256::from(Self::gas_required_for(
-            match tx.action {
-                Action::Create => true,
-                Action::Call(_) => false,
-            },
+        // Validate transaction nonce
+        if tx.nonce < nonce {
+            return Ok(ExecutionOutcome::NotExecutedOldNonce(nonce, tx.nonce));
+        } else if tx.nonce > nonce {
+            return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
+                ToRepackError::InvalidNonce {
+                    expected: nonce,
+                    got: tx.nonce,
+                },
+            ));
+        }
+
+        // Validate transaction epoch height.
+        match VerificationConfig::verify_transaction_epoch_height(
+            tx,
+            self.env.epoch_height,
+            self.env.transaction_epoch_bound,
+        ) {
+            Err(_) => {
+                return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
+                    ToRepackError::EpochHeightOutOfBound {
+                        block_height: self.env.epoch_height,
+                        set: tx.epoch_height,
+                        transaction_epoch_bound: self
+                            .env
+                            .transaction_epoch_bound,
+                    },
+                ))
+            }
+            Ok(()) => {}
+        }
+
+        let base_gas_required = Executive::gas_required_for(
+            tx.action == Action::Create,
             &tx.data,
             spec,
-        ));
-
-        if tx.gas < base_gas_required {
-            return Err(ExecutionError::NotEnoughBaseGas {
-                required: base_gas_required,
-                got: tx.gas,
-            });
-        }
-
-        if !tx.is_unsigned()
-            && spec.kill_dust != CleanDustMode::Off
-            && !self.state.exists(&sender)?
-        {
-            return Err(ExecutionError::SenderMustExist);
-        }
-
+        );
+        assert!(
+            tx.gas >= base_gas_required.into(),
+            "We have already checked the base gas requirement when we received the block."
+        );
         let init_gas = tx.gas - base_gas_required;
-
-        // Validate transaction nonce
-        if tx.nonce != nonce {
-            return Err(ExecutionError::InvalidNonce {
-                expected: nonce,
-                got: tx.nonce,
-            });
-        }
-
-        // This should never happen because we have checked block gas limit
-        // before SyncGraph Validate if transaction fits into give block
-        if self.env.gas_used + tx.gas > self.env.gas_limit {
-            return Err(ExecutionError::BlockGasLimitReached {
-                gas_limit: self.env.gas_limit,
-                gas_used: self.env.gas_used,
-                gas: tx.gas,
-            });
-        }
 
         let balance = self.state.balance(&sender)?;
         let gas_cost = tx.gas.full_mul(tx.gas_price);
-        let total_cost = U512::from(tx.value) + gas_cost;
 
-        // Increase nonce even sender does not have enough balance
-        if !spec.keep_unsigned_nonce || !tx.is_unsigned() {
-            self.state.inc_nonce(&sender)?;
-            *nonce_increased = true;
+        // Check if contract will pay transaction fee for the sender.
+        let mut code_address = Address::zero();
+        let mut gas_sponsored = false;
+        let mut storage_sponsored = false;
+        match tx.action {
+            Action::Call(ref address) => {
+                if self.state.is_contract(address) {
+                    code_address = *address;
+                    if self
+                        .state
+                        .check_commission_privilege(&code_address, &sender)?
+                    {
+                        // No need to check for gas sponsor account existence.
+                        gas_sponsored = gas_cost
+                            <= U512::from(
+                                self.state.sponsor_gas_bound(&code_address)?,
+                            );
+                        storage_sponsored = self
+                            .state
+                            .sponsor_for_collateral(&code_address)?
+                            .is_some();
+                    }
+                }
+            }
+            Action::Create => {}
+        };
+
+        let mut total_cost = U512::from(tx.value);
+
+        // Sender pays for gas when sponsor runs out of balance.
+        let gas_sponsor_balance = if gas_sponsored {
+            U512::from(self.state.sponsor_balance_for_gas(&code_address)?)
+        } else {
+            0.into()
+        };
+        let gas_free_of_charge =
+            gas_sponsored && gas_sponsor_balance >= gas_cost;
+
+        if !gas_free_of_charge {
+            total_cost += gas_cost
+        }
+
+        let tx_storage_limit_in_drip =
+            if tx.storage_limit >= U256::from(std::u64::MAX) {
+                U256::from(std::u64::MAX) * *COLLATERAL_PER_BYTE
+            } else {
+                tx.storage_limit * *COLLATERAL_PER_BYTE
+            };
+        let storage_sponsor_balance = if storage_sponsored {
+            self.state.sponsor_balance_for_collateral(&code_address)?
+        } else {
+            0.into()
+        };
+        // Find the upper bound of `collateral_for_storage` and `storage_owner`
+        // in this execution.
+        let (total_storage_limit, storage_owner) = {
+            if storage_sponsored
+                && tx_storage_limit_in_drip <= storage_sponsor_balance
+            {
+                // sponsor will pay for collateral for storage
+                let collateral_for_storage =
+                    self.state.collateral_for_storage(&code_address)?;
+                (
+                    tx_storage_limit_in_drip + collateral_for_storage,
+                    code_address,
+                )
+            } else {
+                // sender will pay for collateral for storage
+                total_cost += tx_storage_limit_in_drip.into();
+                let collateral_for_storage =
+                    self.state.collateral_for_storage(&sender)?;
+                (tx_storage_limit_in_drip + collateral_for_storage, sender)
+            }
+        };
+
+        let balance512 = U512::from(balance);
+        let mut sender_intended_cost = U512::from(tx.value);
+        if !gas_sponsored {
+            sender_intended_cost += gas_cost
+        }
+        if !storage_sponsored {
+            sender_intended_cost += tx_storage_limit_in_drip.into()
+        };
+        // Sponsor is allowed however sender do not have enough balance to pay
+        // for the extra gas because sponsor has run out of balance in
+        // the mean time.
+        //
+        // Sender is not responsible for the incident, therefore we don't fail
+        // the transaction.
+        if balance512 >= sender_intended_cost && balance512 < total_cost {
+            return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
+                ToRepackError::NotEnoughCashFromSponsor {
+                    required_gas_cost: gas_cost,
+                    gas_sponsor_balance,
+                    required_storage_cost: tx_storage_limit_in_drip,
+                    storage_sponsor_balance,
+                },
+            ));
         }
 
         let mut substate = Substate::new();
-        // Avoid unaffordable transactions
-        let balance512 = U512::from(balance);
-        if balance512 < total_cost {
+        // Sender is responsible for the insufficient balance.
+        if balance512 < sender_intended_cost {
             // Sub tx fee if not enough cash, and substitute all remaining
             // balance if balance is not enough to pay the tx fee
-            let actual_cost = if gas_cost > balance512 {
+            let actual_gas_cost: U256;
+
+            actual_gas_cost = if gas_cost > balance512 {
                 balance512
             } else {
                 gas_cost
-            };
+            }
+            .try_into()
+            .unwrap();
+            // We don't want to bump nonce for non-existent account when we
+            // can't charge gas fee.
+            if !self.state.exists(&sender)? {
+                return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
+                    ToRepackError::SenderDoesNotExist,
+                ));
+            }
+            self.state.inc_nonce(&sender)?;
             self.state.sub_balance(
                 &sender,
-                &U256::from(actual_cost),
+                &actual_gas_cost,
                 &mut substate.to_cleanup_mode(&spec),
             )?;
-            return Err(ExecutionError::NotEnoughCash {
-                required: total_cost,
-                got: balance512,
-            });
+
+            return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
+                ExecutionError::NotEnoughCash {
+                    required: total_cost,
+                    got: balance512,
+                    actual_gas_cost: actual_gas_cost.clone(),
+                    max_storage_limit_cost: tx_storage_limit_in_drip,
+                },
+                Executed::not_enough_balance_fee_charged(tx, &actual_gas_cost),
+            ));
+        } else {
+            // From now on sender balance >= total_cost, transaction execution
+            // is guaranteed.
+            self.state.inc_nonce(&sender)?;
         }
 
-        self.state.sub_balance(
-            &sender,
-            &U256::from(gas_cost),
-            &mut substate.to_cleanup_mode(&spec),
-        )?;
+        // Subtract the transaction fee from sender or contract.
+        if !gas_free_of_charge {
+            self.state.sub_balance(
+                &sender,
+                &U256::try_from(gas_cost).unwrap(),
+                &mut substate.to_cleanup_mode(&spec),
+            )?;
+        } else {
+            self.state.sub_sponsor_balance_for_gas(
+                &code_address,
+                &U256::try_from(gas_cost).unwrap(),
+            )?;
+        }
 
         let (result, output) = match tx.action {
             Action::Create => {
                 let (new_address, _code_hash) = contract_address(
-                    CreateContractAddress::FromSenderAndNonce,
+                    CreateContractAddress::FromSenderNonceAndCodeHash,
                     &sender,
                     &nonce,
                     &tx.data,
                 );
+
+                if self.state.is_contract(&new_address) {
+                    return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
+                        ExecutionError::ContractAddressConflict,
+                        Executed::execution_error_fully_charged(tx),
+                    ));
+                }
+
                 let params = ActionParams {
-                    code_address: new_address.clone(),
+                    code_address: new_address,
                     code_hash: None,
                     address: new_address,
-                    sender: sender.clone(),
-                    origin: sender.clone(),
+                    sender,
+                    original_sender: sender,
+                    storage_owner,
                     gas: init_gas,
                     gas_price: tx.gas_price,
                     value: ActionValue::Transfer(tx.value),
@@ -1077,6 +1589,7 @@ impl<'a, 'b> Executive<'a, 'b> {
                     data: None,
                     call_type: CallType::None,
                     params_type: vm::ParamsType::Embedded,
+                    storage_limit: total_storage_limit,
                 };
                 let res = self.create(params, &mut substate);
                 let out = match &res {
@@ -1087,10 +1600,11 @@ impl<'a, 'b> Executive<'a, 'b> {
             }
             Action::Call(ref address) => {
                 let params = ActionParams {
-                    code_address: address.clone(),
-                    address: address.clone(),
-                    sender: sender.clone(),
-                    origin: sender.clone(),
+                    code_address: *address,
+                    address: *address,
+                    sender,
+                    original_sender: sender,
+                    storage_owner,
                     gas: init_gas,
                     gas_price: tx.gas_price,
                     value: ActionValue::Transfer(tx.value),
@@ -1099,7 +1613,9 @@ impl<'a, 'b> Executive<'a, 'b> {
                     data: Some(tx.data.clone()),
                     call_type: CallType::Call,
                     params_type: vm::ParamsType::Separate,
+                    storage_limit: total_storage_limit,
                 };
+
                 let res = self.call(params, &mut substate);
                 let out = match &res {
                     Ok(res) => res.return_data.to_vec(),
@@ -1109,64 +1625,60 @@ impl<'a, 'b> Executive<'a, 'b> {
             }
         };
 
-        Ok(self.finalize(tx, substate, result, output)?)
+        let refund_receiver = if gas_free_of_charge {
+            Some(code_address)
+        } else {
+            None
+        };
+
+        Ok(self.finalize(
+            tx,
+            substate,
+            result,
+            output,
+            refund_receiver,
+            storage_sponsored,
+        )?)
     }
 
     /// Finalizes the transaction (does refunds and suicides).
     fn finalize(
-        &mut self, tx: &SignedTransaction, substate: Substate,
+        &mut self, tx: &SignedTransaction, mut substate: Substate,
         result: vm::Result<FinalizationResult>, output: Bytes,
-    ) -> ExecutionResult<Executed>
+        refund_receiver: Option<Address>, storage_sponsor_paid: bool,
+    ) -> DbResult<ExecutionOutcome>
     {
-        let spec = self.spec;
-
-        // refunds from SSTORE nonzero -> zero
-        assert!(
-            substate.sstore_clears_refund >= 0,
-            "On transaction level, sstore clears refund cannot go below zero."
-        );
-        let sstore_refunds = U256::from(substate.sstore_clears_refund as u64);
-        // refunds from contract suicides
-        let suicide_refunds = U256::from(spec.suicide_refund_gas)
-            * U256::from(substate.suicides.len());
-        let refunds_bound = sstore_refunds + suicide_refunds;
-
-        // real ammount to refund
-        let gas_left_prerefund = match result {
+        let gas_left = match result {
             Ok(FinalizationResult { gas_left, .. }) => gas_left,
             _ => 0.into(),
         };
-        let refunded =
-            cmp::min(refunds_bound, (tx.gas - gas_left_prerefund) >> 1);
-        let gas_left = gas_left_prerefund + refunded;
 
+        // gas_used is only used to estimate gas needed
         let gas_used = tx.gas - gas_left;
-        let refund_value = U256::zero();
-        let fees_value = tx.gas * tx.gas_price;
+        // gas_left should be smaller than 1/4 of gas_limit, otherwise
+        // 3/4 of gas_limit is charged.
+        let charge_all = (gas_left + gas_left + gas_left) >= gas_used;
+        let (gas_charged, fees_value, refund_value) = if charge_all {
+            let gas_refunded = tx.gas >> 2;
+            let gas_charged = tx.gas - gas_refunded;
+            (
+                gas_charged,
+                gas_charged * tx.gas_price,
+                gas_refunded * tx.gas_price,
+            )
+        } else {
+            (gas_used, gas_used * tx.gas_price, gas_left * tx.gas_price)
+        };
 
-        trace!("exec::finalize: tx.gas={}, sstore_refunds={}, suicide_refunds={}, refunds_bound={}, gas_left_prerefund={}, refunded={}, gas_left={}, gas_used={}, refund_value={}, fees_value={}\n",
-               tx.gas, sstore_refunds, suicide_refunds, refunds_bound, gas_left_prerefund, refunded, gas_left, gas_used, refund_value, fees_value);
-
-        let sender = tx.sender();
-        trace!(
-            "exec::finalize: Refunding refund_value={}, sender={}\n",
-            refund_value,
-            sender
-        );
-        // Below: NoEmpty is safe since the sender must already be non-null to
-        // have sent this transaction
-        self.state
-            .add_balance(&sender, &refund_value, CleanupMode::NoEmpty)?;
-        trace!(
-            "exec::finalize: Compensating author: fees_value={}, author={}\n",
-            fees_value,
-            &self.env.author
-        );
-        //        self.state.add_balance(
-        //            &self.env.author,
-        //            &fees_value,
-        //            substate.to_cleanup_mode(&spec),
-        //        )?;
+        if let Some(r) = refund_receiver {
+            self.state.add_sponsor_balance_for_gas(&r, &refund_value)?;
+        } else {
+            self.state.add_balance(
+                &tx.sender(),
+                &refund_value,
+                substate.to_cleanup_mode(self.spec),
+            )?;
+        };
 
         // perform suicides
         for address in &substate.suicides {
@@ -1175,6 +1687,10 @@ impl<'a, 'b> Executive<'a, 'b> {
 
         // TODO should be added back after enabling dust collection
         // Should be executed once per block, instead of per transaction?
+        //
+        // When enabling this feature, remember to check touched set in
+        // functions like "add_collateral_for_storage()" in "State"
+        // struct.
 
         //        // perform garbage-collection
         //        let min_balance = if spec.kill_dust != CleanDustMode::Off {
@@ -1191,424 +1707,74 @@ impl<'a, 'b> Executive<'a, 'b> {
         //        )?;
 
         match result {
-            Err(vm::Error::Internal(msg)) => Err(ExecutionError::Internal(msg)),
-            Err(exception) => Ok(Executed {
-                exception: Some(exception),
-                gas: tx.gas,
-                gas_used: tx.gas,
-                refunded: U256::zero(),
-                fee: fees_value,
-                cumulative_gas_used: self.env.gas_used + tx.gas,
-                logs: vec![],
-                contracts_created: vec![],
-                output,
-            }),
-            Ok(r) => Ok(Executed {
-                exception: if r.apply_state {
-                    None
+            Err(vm::Error::StateDbError(e)) => bail!(e),
+            Err(exception) => Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
+                ExecutionError::VmError(exception),
+                Executed::execution_error_fully_charged(tx),
+            )),
+            Ok(r) => {
+                let mut storage_collateralized = Vec::new();
+                let mut storage_released = Vec::new();
+
+                if r.apply_state {
+                    let affected_address1: HashSet<_> = substate
+                        .storage_collateralized
+                        .keys()
+                        .cloned()
+                        .collect();
+                    let affected_address2: HashSet<_> =
+                        substate.storage_released.keys().cloned().collect();
+                    let mut affected_address: Vec<_> =
+                        affected_address1.union(&affected_address2).collect();
+                    affected_address.sort();
+                    for address in affected_address {
+                        let inc = substate
+                            .storage_collateralized
+                            .get(address)
+                            .cloned()
+                            .unwrap_or(0);
+                        let sub = substate
+                            .storage_released
+                            .get(address)
+                            .cloned()
+                            .unwrap_or(0);
+                        if inc > sub {
+                            storage_collateralized.push(StorageChange {
+                                address: *address,
+                                amount: inc - sub,
+                            });
+                        } else if inc < sub {
+                            storage_released.push(StorageChange {
+                                address: *address,
+                                amount: sub - inc,
+                            });
+                        }
+                    }
+                }
+
+                let executed = Executed {
+                    gas_used,
+                    gas_charged,
+                    fee: fees_value,
+                    gas_sponsor_paid: refund_receiver.is_some(),
+                    logs: substate.logs,
+                    contracts_created: substate.contracts_created,
+                    storage_sponsor_paid,
+                    storage_collateralized,
+                    storage_released,
+                    output,
+                };
+
+                if r.apply_state {
+                    Ok(ExecutionOutcome::Finished(executed))
                 } else {
-                    Some(vm::Error::Reverted)
-                },
-                gas: tx.gas,
-                gas_used,
-                refunded,
-                fee: fees_value,
-                cumulative_gas_used: self.env.gas_used + gas_used,
-                logs: substate.logs,
-                contracts_created: substate.contracts_created,
-                output,
-            }),
-        }
-    }
-}
-
-#[cfg(test)]
-#[allow(unused_imports)]
-mod tests {
-    use super::*;
-    use crate::{
-        evm::{Factory, VMType},
-        machine::Machine,
-        state::{CleanupMode, State, Substate},
-        statedb::StateDb,
-        storage::{
-            tests::new_state_manager_for_testing, StorageManager,
-            StorageManagerTrait,
-        },
-        test_helpers::{
-            get_state_for_genesis_write,
-            get_state_for_genesis_write_with_factory,
-        },
-    };
-    use cfx_types::{Address, H256, U256, U512};
-    use keylib::{Generator, Random};
-    use primitives::Transaction;
-    use rustc_hex::FromHex;
-    use std::str::FromStr;
-
-    fn make_byzantium_machine(max_depth: usize) -> Machine {
-        let mut machine = crate::machine::new_machine();
-        machine.set_spec_creation_rules(Box::new(move |s, _| {
-            s.max_depth = max_depth
-        }));
-        machine
-    }
-
-    #[test]
-    fn test_contract_address() {
-        let address =
-            Address::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6")
-                .unwrap();
-        let expected_address =
-            Address::from_str("3f09c73a5ed19289fb9bdc72f1742566df146f56")
-                .unwrap();
-        assert_eq!(
-            expected_address,
-            contract_address(
-                CreateContractAddress::FromSenderAndNonce,
-                &address,
-                &U256::from(88),
-                &[]
-            )
-            .0
-        );
-    }
-
-    #[test]
-    fn test_sender_balance() {
-        let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-        let sender =
-            Address::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6")
-                .unwrap();
-        let address = contract_address(
-            CreateContractAddress::FromSenderAndNonce,
-            &sender,
-            &U256::zero(),
-            &[],
-        )
-        .0;
-        let mut params = ActionParams::default();
-        params.address = address.clone();
-        params.sender = sender.clone();
-        params.gas = U256::from(100_000);
-        params.code = Some(Arc::new("3331600055".from_hex().unwrap()));
-        params.value = ActionValue::Transfer(U256::from(0x7));
-        let storage_manager = new_state_manager_for_testing();
-        let mut state =
-            get_state_for_genesis_write_with_factory(&storage_manager, factory);
-        state
-            .add_balance(&sender, &U256::from(0x100u64), CleanupMode::NoEmpty)
-            .unwrap();
-        let env = Env::default();
-        let machine = make_byzantium_machine(0);
-        let spec = machine.spec(env.number);
-        let mut substate = Substate::new();
-
-        let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.create(params, &mut substate).unwrap()
-        };
-
-        assert_eq!(gas_left, U256::from(79_595));
-        assert_eq!(
-            state.storage_at(&address, &H256::new()).unwrap(),
-            H256::from(&U256::from(0xf9u64))
-        );
-        assert_eq!(state.balance(&sender).unwrap(), U256::from(0xf9));
-        assert_eq!(state.balance(&address).unwrap(), U256::from(0x7));
-        assert_eq!(substate.contracts_created.len(), 0);
-    }
-
-    #[test]
-    fn test_create_contract_out_of_depth() {
-        let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-
-        // code:
-        //
-        // 7c 601080600c6000396000f3006000355415600957005b60203560003555 - push
-        // 29 bytes? 60 00 - push 0
-        // 52
-        // 60 1d - push 29
-        // 60 03 - push 3
-        // 60 17 - push 17
-        // f0 - create
-        // 60 00 - push 0
-        // 55 sstore
-        //
-        // other code:
-        //
-        // 60 10 - push 16
-        // 80 - duplicate first stack item
-        // 60 0c - push 12
-        // 60 00 - push 0
-        // 39 - copy current code to memory
-        // 60 00 - push 0
-        // f3 - return
-
-        let code = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
-
-        let sender =
-            Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681")
-                .unwrap();
-        let address = contract_address(
-            CreateContractAddress::FromSenderAndNonce,
-            &sender,
-            &U256::zero(),
-            &[],
-        )
-        .0;
-
-        let mut params = ActionParams::default();
-        params.address = address.clone();
-        params.sender = sender.clone();
-        params.origin = sender.clone();
-        params.gas = U256::from(100_000);
-        params.code = Some(Arc::new(code));
-        params.value = ActionValue::Transfer(U256::from(100));
-
-        let storage_manager = new_state_manager_for_testing();
-        let mut state =
-            get_state_for_genesis_write_with_factory(&storage_manager, factory);
-        state
-            .add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty)
-            .unwrap();
-        let env = Env::default();
-        let machine = make_byzantium_machine(0);
-        let spec = machine.spec(env.number);
-        let mut substate = Substate::new();
-
-        let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.create(params, &mut substate).unwrap()
-        };
-
-        assert_eq!(gas_left, U256::from(62_976));
-        assert_eq!(substate.contracts_created.len(), 0);
-    }
-
-    #[test]
-    // Tracing is not suported in JIT
-    fn test_call_to_create() {
-        // code:
-        //
-        // 7c 601080600c6000396000f3006000355415600957005b60203560003555 - push
-        // 29 bytes? 60 00 - push 0
-        // 52
-        // 60 1d - push 29
-        // 60 03 - push 3
-        // 60 17 - push 23
-        // f0 - create
-        // 60 00 - push 0
-        // 55 sstore
-        //
-        // other code:
-        //
-        // 60 10 - push 16
-        // 80 - duplicate first stack item
-        // 60 0c - push 12
-        // 60 00 - push 0
-        // 39 - copy current code to memory
-        // 60 00 - push 0
-        // f3 - return
-
-        let code = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
-
-        let sender =
-            Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681")
-                .unwrap();
-        let address = contract_address(
-            CreateContractAddress::FromSenderAndNonce,
-            &sender,
-            &U256::zero(),
-            &[],
-        )
-        .0;
-        // TODO: add tests for 'callcreate'
-        //let next_address = contract_address(&address, &U256::zero());
-        let mut params = ActionParams::default();
-        params.address = address.clone();
-        params.code_address = address.clone();
-        params.sender = sender.clone();
-        params.origin = sender.clone();
-        params.gas = U256::from(100_000);
-        params.code = Some(Arc::new(code));
-        params.value = ActionValue::Transfer(U256::from(100));
-        params.call_type = CallType::Call;
-
-        let storage_manager = new_state_manager_for_testing();
-        let mut state = get_state_for_genesis_write(&storage_manager);
-        state
-            .add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty)
-            .unwrap();
-        let env = Env::default();
-        let machine = make_byzantium_machine(5);
-        let spec = machine.spec(env.number);
-        let mut substate = Substate::new();
-
-        let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.call(params, &mut substate).unwrap()
-        };
-
-        assert_eq!(gas_left, U256::from(44_752));
-    }
-
-    #[test]
-    fn test_revert() {
-        let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-
-        let contract_address =
-            Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681")
-                .unwrap();
-        let sender =
-            Address::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6")
-                .unwrap();
-
-        let code = "6c726576657274656420646174616000557f726576657274206d657373616765000000000000000000000000000000000000600052600e6000fd".from_hex().unwrap();
-        let returns = "726576657274206d657373616765".from_hex().unwrap();
-
-        let storage_manager = new_state_manager_for_testing();
-        let mut state = get_state_for_genesis_write_with_factory(
-            &storage_manager,
-            factory.clone(),
-        );
-        state
-            .add_balance(
-                &sender,
-                &U256::from_str("152d02c7e14af68000000").unwrap(),
-                CleanupMode::NoEmpty,
-            )
-            .unwrap();
-        state.commit(H256::from(U256::from(1))).unwrap();
-
-        let mut params = ActionParams::default();
-        params.address = contract_address.clone();
-        params.sender = sender.clone();
-        params.origin = sender.clone();
-        params.gas = U256::from(20025);
-        params.code = Some(Arc::new(code));
-        params.value = ActionValue::Transfer(U256::zero());
-        let env = Env::default();
-        let machine = crate::machine::new_machine();
-        let spec = machine.spec(env.number);
-        let mut substate = Substate::new();
-
-        let mut output = [0u8; 14];
-        let FinalizationResult {
-            gas_left: result,
-            return_data,
-            ..
-        } = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.call(params, &mut substate).unwrap()
-        };
-        (&mut output)
-            .copy_from_slice(&return_data[..(cmp::min(14, return_data.len()))]);
-
-        assert_eq!(result, U256::from(1));
-        assert_eq!(output[..], returns[..]);
-        assert_eq!(
-            state
-                .storage_at(&contract_address, &H256::from(&U256::zero()))
-                .unwrap(),
-            H256::from(&U256::from(0))
-        );
-    }
-
-    #[test]
-    fn test_keccak() {
-        let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-
-        let code = "6064640fffffffff20600055".from_hex().unwrap();
-
-        let sender =
-            Address::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6")
-                .unwrap();
-        let address = contract_address(
-            CreateContractAddress::FromSenderAndNonce,
-            &sender,
-            &U256::zero(),
-            &[],
-        )
-        .0;
-        // TODO: add tests for 'callcreate'
-        //let next_address = contract_address(&address, &U256::zero());
-        let mut params = ActionParams::default();
-        params.address = address.clone();
-        params.sender = sender.clone();
-        params.origin = sender.clone();
-        params.gas = U256::from(0x0186a0);
-        params.code = Some(Arc::new(code));
-        params.value =
-            ActionValue::Transfer(U256::from_str("0de0b6b3a7640000").unwrap());
-
-        let storage_manager = new_state_manager_for_testing();
-        let mut state =
-            get_state_for_genesis_write_with_factory(&storage_manager, factory);
-        state
-            .add_balance(
-                &sender,
-                &U256::from_str("152d02c7e14af6800000").unwrap(),
-                CleanupMode::NoEmpty,
-            )
-            .unwrap();
-        let env = Env::default();
-        let machine = make_byzantium_machine(0);
-        let spec = machine.spec(env.number);
-        let mut substate = Substate::new();
-
-        let result = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.create(params, &mut substate)
-        };
-
-        match result {
-            Err(_) => {}
-            _ => panic!("Expected OutOfGas"),
-        }
-    }
-
-    #[test]
-    fn test_not_enough_cash() {
-        let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-
-        let keypair = Random.generate().unwrap();
-        let t = Transaction {
-            action: Action::Create,
-            value: U256::from(18),
-            data: "3331600055".from_hex().unwrap(),
-            gas: U256::from(100_000),
-            gas_price: U256::one(),
-            nonce: U256::zero(),
-        }
-        .sign(keypair.secret());
-        let sender = t.sender();
-
-        let storage_manager = new_state_manager_for_testing();
-        let mut state =
-            get_state_for_genesis_write_with_factory(&storage_manager, factory);
-        state
-            .add_balance(&sender, &U256::from(100_017), CleanupMode::NoEmpty)
-            .unwrap();
-        let mut env = Env::default();
-        env.gas_limit = U256::from(100_000);
-        let machine = make_byzantium_machine(0);
-        let spec = machine.spec(env.number);
-
-        let res = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            let mut nonce_increased = false;
-            ex.transact(&t, &mut nonce_increased)
-        };
-
-        match res {
-            Err(ExecutionError::NotEnoughCash { required, got })
-                if required == U512::from(100_018)
-                    && got == U512::from(100_017) =>
-            {
-                ()
+                    // Transaction reverted by vm instruction.
+                    Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
+                        ExecutionError::VmError(vm::Error::Reverted),
+                        executed,
+                    ))
+                }
             }
-            _ => assert!(false, "Expected not enough cash error. {:?}", res),
         }
     }
 }

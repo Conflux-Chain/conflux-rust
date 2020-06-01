@@ -5,60 +5,218 @@
 use crate::{
     cache_config::CacheConfig,
     cache_manager::{CacheId, CacheManager, CacheSize},
-    db::{
-        COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_EPOCH_SET_HASHES,
-        COL_EXECUTION_CONTEXT, COL_MISC, COL_TX_ADDRESS,
-    },
     ext_db::SystemDB,
-    parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
     pow::TargetDifficultyManager,
     storage::{
-        state_manager::{SnapshotAndEpochIdRef, StateManagerTrait},
-        StorageManager,
+        state_manager::StateIndex, utils::guarded_value::*,
+        StateRootWithAuxInfo, StorageManager, StorageManagerTrait,
+        StorageStateTrait,
     },
-    verification::VerificationConfig,
 };
-use byteorder::{ByteOrder, LittleEndian};
 use cfx_types::{Bloom, H256};
-use kvdb::DBTransaction;
-use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
-use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
+use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
+use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
 use primitives::{
     block::CompactBlock,
     receipt::{
-        Receipt, TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
+        BlockReceipts, TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
-    Block, BlockHeader, SignedTransaction, TransactionAddress,
-    TransactionWithSignature,
+    Block, BlockHeader, EpochId, SignedTransaction, TransactionIndex,
+    TransactionWithSignature, NULL_EPOCH,
 };
-use rlp::{DecoderError, Rlp, RlpStream};
+use rlp::DecoderError;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
 use threadpool::ThreadPool;
 pub mod block_data_types;
+pub mod db_manager;
 pub mod tx_data_manager;
-use crate::block_data_manager::tx_data_manager::TransactionDataManager;
+use crate::block_data_manager::{
+    db_manager::DBManager, tx_data_manager::TransactionDataManager,
+};
 pub use block_data_types::*;
+use derivative::Derivative;
+use std::{hash::Hash, path::Path, time::Duration};
+
+use crate::parameters::consensus_internal::REWARD_EPOCH_COUNT;
+use metrics::{register_meter_with_group, Meter, MeterTimer};
+lazy_static! {
+    static ref TX_POOL_RECOVER_TIMER: Arc<dyn Meter> =
+        register_meter_with_group("timer", "tx_pool::recover_public");
+}
 
 pub const NULLU64: u64 = !0;
 
-const LOCAL_BLOCK_INFO_SUFFIX_BYTE: u8 = 1;
-const BLOCK_BODY_SUFFIX_BYTE: u8 = 2;
-const EPOCH_EXECUTION_RESULT_SUFFIX_BYTE: u8 = 3;
+/// FIXME: move it to another module.
+#[derive(Derivative, Clone)]
+#[derivative(Debug)]
+#[derive(DeriveMallocSizeOf)]
+pub struct StateAvailabilityBoundary {
+    /// This is the hash of blocks in pivot chain based on current graph.
+    #[derivative(Debug = "ignore")]
+    pub pivot_chain: Vec<H256>,
+
+    pub synced_state_height: u64,
+    /// This is the lower boundary height of available state.
+    pub lower_bound: u64,
+    /// This is the upper boundary height of available state.
+    pub upper_bound: u64,
+    // Optimistic execution is the feature to execute ahead of the deferred
+    // execution boundary. The goal is to pipeline the transaction
+    // execution and the block packaging and verification.
+    // optimistic_executed_height is the number of step to go ahead
+    pub optimistic_executed_height: Option<u64>,
+}
+
+impl StateAvailabilityBoundary {
+    pub fn new(epoch_hash: H256, epoch_height: u64) -> Self {
+        Self {
+            pivot_chain: vec![epoch_hash],
+            synced_state_height: 0,
+            lower_bound: epoch_height,
+            upper_bound: epoch_height,
+            optimistic_executed_height: None,
+        }
+    }
+
+    pub fn check_availability(&self, height: u64, block_hash: &H256) -> bool {
+        (height == 0 || height != self.synced_state_height)
+            && self.lower_bound <= height
+            && height <= self.upper_bound
+            && {
+                let r = self.pivot_chain[(height - self.lower_bound) as usize]
+                    == *block_hash;
+                if !r {
+                    debug!(
+                        "pivot_chain={:?} should be {:?} asked is {:?}",
+                        self.pivot_chain,
+                        self.pivot_chain[(height - self.lower_bound) as usize],
+                        block_hash
+                    );
+                }
+                r
+            }
+    }
+
+    /// Try to update `upper_bound` according to a new executed block.
+    pub fn adjust_upper_bound(&mut self, executed_block: &BlockHeader) {
+        let next_index = (self.upper_bound - self.lower_bound + 1) as usize;
+        if next_index < self.pivot_chain.len()
+            && executed_block.height() == self.upper_bound + 1
+            && executed_block.hash() == self.pivot_chain[next_index]
+        {
+            self.upper_bound += 1;
+        }
+        if self.lower_bound == self.synced_state_height
+            && self.synced_state_height != 0
+            && self.upper_bound > self.synced_state_height
+        {
+            self.adjust_lower_bound(self.lower_bound + 1)
+        }
+    }
+
+    /// This function will record the most recent synced_state_height for
+    /// special case handling.
+    pub fn set_synced_state_height(&mut self, synced_state_height: u64) {
+        self.synced_state_height = synced_state_height;
+    }
+
+    /// This function will set a new lower boundary height of available state.
+    /// Caller should make sure the new lower boundary height should be greater
+    /// than or equal to current lower boundary height.
+    /// Caller should also make sure the new lower boundary height should be
+    /// less than or equal to current upper boundary height.
+    pub fn adjust_lower_bound(&mut self, new_lower_bound: u64) {
+        // If we are going to call this function, `upper_bound` will not be 0
+        // unless it is a full node and is in header phase. And we should do
+        // nothing in this case.
+        if self.upper_bound == 0 {
+            return;
+        }
+        assert!(self.lower_bound <= new_lower_bound);
+        assert!(
+            new_lower_bound <= self.upper_bound,
+            "however {} > {}, self {:?}",
+            new_lower_bound,
+            self.upper_bound,
+            self,
+        );
+        if self.synced_state_height != 0
+            && new_lower_bound > self.synced_state_height + REWARD_EPOCH_COUNT
+        {
+            self.synced_state_height = 0;
+        }
+        self.pivot_chain = self
+            .pivot_chain
+            .split_off((new_lower_bound - self.lower_bound) as usize);
+        self.lower_bound = new_lower_bound;
+    }
+}
+
+#[derive(DeriveMallocSizeOf)]
+pub struct InvalidBlockSet {
+    capacity: usize,
+    invalid_block_hashes: HashSet<H256>,
+}
+
+impl InvalidBlockSet {
+    pub fn new(capacity: usize) -> Self {
+        InvalidBlockSet {
+            capacity,
+            invalid_block_hashes: HashSet::new(),
+        }
+    }
+
+    pub fn insert(&mut self, value: H256) {
+        if !self.invalid_block_hashes.contains(&value) {
+            if self.invalid_block_hashes.len() < self.capacity {
+                self.invalid_block_hashes.insert(value);
+                return;
+            }
+
+            let mut iter = self.invalid_block_hashes.iter();
+            let the_evicted = iter.next().map(|e| e.clone());
+            if let Some(evicted) = the_evicted {
+                self.invalid_block_hashes.remove(&evicted);
+            }
+            self.invalid_block_hashes.insert(value);
+        }
+    }
+
+    pub fn contains(&self, value: &H256) -> bool {
+        self.invalid_block_hashes.contains(value)
+    }
+}
 
 pub struct BlockDataManager {
     block_headers: RwLock<HashMap<H256, Arc<BlockHeader>>>,
     blocks: RwLock<HashMap<H256, Arc<Block>>>,
     compact_blocks: RwLock<HashMap<H256, CompactBlock>>,
     block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
-    transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
+    block_rewards: RwLock<HashMap<H256, BlockRewardResult>>,
+    transaction_indices: RwLock<HashMap<H256, TransactionIndex>>,
+    local_block_info: RwLock<HashMap<H256, LocalBlockInfo>>,
+    /// Caching for receipts_root and logs_bloom for epochs after
+    /// cur_era_genesis. It is not deferred, i.e., indexed by the hash of
+    /// the pivot block that produces the result when executed.
+    /// It is also used for checking whether an epoch has been executed.
+    /// It can be updated, i.e., adding new items, in the following cases:
+    /// 1) When a new epoch gets executed in normal execution;
+    /// 2) After syncing snapshot, we need to update execution commitment
+    ///    for pivot blocks around snapshot block based on blaming information;
+    /// 3) After recovering block graph from db, update execution commitment
+    ///    from db;
+    /// 4) In BlockDataManager::new(), update execution commitment
+    ///    of true_genesis_block.
     epoch_execution_commitments:
-        RwLock<HashMap<H256, EpochExecutionCommitments>>,
+        RwLock<HashMap<H256, EpochExecutionCommitment>>,
     epoch_execution_contexts: RwLock<HashMap<H256, EpochExecutionContext>>,
-    invalid_block_set: RwLock<HashSet<H256>>,
+
+    invalid_block_set: RwLock<InvalidBlockSet>,
     cur_consensus_era_genesis_hash: RwLock<H256>,
     cur_consensus_era_stable_hash: RwLock<H256>,
     instance_id: Mutex<u64>,
@@ -66,23 +224,86 @@ pub struct BlockDataManager {
     config: DataManagerConfiguration,
 
     tx_data_manager: TransactionDataManager,
+    db_manager: DBManager,
 
-    pub genesis_block: Arc<Block>,
-    pub true_genesis_block: Arc<Block>,
-    pub db: Arc<SystemDB>,
+    /// This is the original genesis block.
+    pub true_genesis: Arc<Block>,
     pub storage_manager: Arc<StorageManager>,
     cache_man: Arc<Mutex<CacheManager<CacheId>>>,
     pub target_difficulty_manager: TargetDifficultyManager,
+
+    /// This maintains the boundary height of available state and commitments
+    /// (executed but not deleted or in `ExecutionTaskQueue`).
+    /// The upper bound always equal to latest executed epoch height.
+    /// As for the lower bound:
+    ///   1. For archive node, it always equals `cur_era_stable_height`.
+    ///   2. For full node, it equals the height of remotely synchronized
+    ///      state at start, and equals `cur_era_stable_height` after making a
+    ///      new checkpoint.
+    ///
+    /// The lower boundary height will be updated when:
+    ///   1. New checkpoint
+    ///   2. Full Node snapshot syncing
+    ///   3. New Snapshot
+    ///
+    /// The upper boundary height will be updated when:
+    ///   1. Pivot chain switch
+    ///   2. Execution of new epoch
+    ///
+    /// The state of an epoch is valid if and only if the height of the epoch
+    /// is inside the boundary.
+    pub state_availability_boundary: RwLock<StateAvailabilityBoundary>,
+}
+
+impl MallocSizeOf for BlockDataManager {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let block_headers_size = self.block_headers.read().size_of(ops);
+        let blocks_size = self.blocks.read().size_of(ops);
+        let compact_blocks_size = self.compact_blocks.read().size_of(ops);
+        let block_receipts_size = self.block_receipts.read().size_of(ops);
+        let block_reward_size = self.block_rewards.read().size_of(ops);
+        let transaction_indices_size =
+            self.transaction_indices.read().size_of(ops);
+        let epoch_execution_commitments_size =
+            self.epoch_execution_commitments.read().size_of(ops);
+        let epoch_execution_contexts_size =
+            self.epoch_execution_contexts.read().size_of(ops);
+        let invalid_block_set_size = self.invalid_block_set.read().size_of(ops);
+        let cur_consensus_era_genesis_hash_size =
+            self.cur_consensus_era_genesis_hash.read().size_of(ops);
+        let cur_consensus_era_stable_hash_size =
+            self.cur_consensus_era_stable_hash.read().size_of(ops);
+        let cache_man_size = self.cache_man.lock().size_of(ops);
+        let state_availability_boundary_size =
+            self.state_availability_boundary.read().size_of(ops);
+
+        block_headers_size
+            + blocks_size
+            + compact_blocks_size
+            + block_receipts_size
+            + block_reward_size
+            + transaction_indices_size
+            + epoch_execution_commitments_size
+            + epoch_execution_contexts_size
+            + invalid_block_set_size
+            + cur_consensus_era_genesis_hash_size
+            + cur_consensus_era_stable_hash_size
+            + self.config.size_of(ops)
+            + self.tx_data_manager.size_of(ops)
+            + self.true_genesis.size_of(ops)
+            + cache_man_size
+            + self.target_difficulty_manager.size_of(ops)
+            + state_availability_boundary_size
+    }
 }
 
 impl BlockDataManager {
     pub fn new(
-        cache_conf: CacheConfig, genesis_block: Arc<Block>, db: Arc<SystemDB>,
+        cache_conf: CacheConfig, true_genesis: Arc<Block>, db: Arc<SystemDB>,
         storage_manager: Arc<StorageManager>,
         worker_pool: Arc<Mutex<ThreadPool>>, config: DataManagerConfiguration,
     ) -> Self
     {
-        let genesis_hash = genesis_block.block_header.hash();
         let mb = 1024 * 1024;
         let max_cache_size = cache_conf.ledger_mb() * mb;
         let pref_cache_size = max_cache_size * 3 / 4;
@@ -91,121 +312,118 @@ impl BlockDataManager {
             max_cache_size,
             3 * mb,
         )));
-        let tx_data_manager =
-            TransactionDataManager::new(config.tx_cache_count, worker_pool);
+        let tx_data_manager = TransactionDataManager::new(
+            config.tx_cache_index_maintain_timeout,
+            worker_pool,
+        );
+        let db_manager = match config.db_type {
+            DbType::Rocksdb => DBManager::new_from_rocksdb(db),
+            DbType::Sqlite => {
+                DBManager::new_from_sqlite(Path::new("./sqlite_db"))
+            }
+        };
 
-        let mut data_man = Self {
+        let data_man = Self {
             block_headers: RwLock::new(HashMap::new()),
             blocks: RwLock::new(HashMap::new()),
             compact_blocks: Default::default(),
             block_receipts: Default::default(),
-            transaction_addresses: Default::default(),
+            block_rewards: Default::default(),
+            transaction_indices: Default::default(),
+            local_block_info: Default::default(),
             epoch_execution_commitments: Default::default(),
             epoch_execution_contexts: Default::default(),
-            invalid_block_set: Default::default(),
-            genesis_block: genesis_block.clone(),
-            true_genesis_block: genesis_block.clone(),
-            db,
+            invalid_block_set: RwLock::new(InvalidBlockSet::new(
+                cache_conf.invalid_block_hashes_cache_size_in_count,
+            )),
+            true_genesis: true_genesis.clone(),
             storage_manager,
             cache_man,
             instance_id: Mutex::new(0),
             config,
             target_difficulty_manager: TargetDifficultyManager::new(),
-            cur_consensus_era_genesis_hash: RwLock::new(genesis_hash),
-            cur_consensus_era_stable_hash: RwLock::new(genesis_hash),
+            cur_consensus_era_genesis_hash: RwLock::new(true_genesis.hash()),
+            cur_consensus_era_stable_hash: RwLock::new(true_genesis.hash()),
             tx_data_manager,
+            db_manager,
+            state_availability_boundary: RwLock::new(
+                StateAvailabilityBoundary::new(true_genesis.hash(), 0),
+            ),
         };
 
         data_man.initialize_instance_id();
 
-        if let Some((checkpoint_hash, stable_hash)) =
-            data_man.checkpoint_hashes_from_db()
-        {
-            if checkpoint_hash != genesis_block.block_header.hash() {
-                if let Some(checkpoint_block) = data_man.block_by_hash(
-                    &checkpoint_hash,
-                    false, /* update_cache */
-                ) {
-                    if data_man
-                        .storage_manager
-                        .contains_state(SnapshotAndEpochIdRef::new(
-                            &checkpoint_hash,
-                            None,
-                        ))
-                        .unwrap()
-                    {
-                        let mut cur_hash =
-                            *checkpoint_block.block_header.parent_hash();
-                        for _ in 0..DEFERRED_STATE_EPOCH_COUNT - 1 {
-                            assert_ne!(cur_hash, H256::default());
-                            let cur_block = data_man.block_by_hash(
-                                &cur_hash, false, /* update_cache */
-                            );
-                            if cur_block.is_some()
-                                && data_man
-                                    .storage_manager
-                                    .contains_state(SnapshotAndEpochIdRef::new(
-                                        &cur_hash, None,
-                                    ))
-                                    .unwrap()
-                            {
-                                let cur_block = cur_block.unwrap();
-                                cur_hash =
-                                    *cur_block.block_header.parent_hash();
-                            } else {
-                                panic!("recovery checkpoint from disk failed.");
-                            }
-                        }
-
-                        *data_man.cur_consensus_era_genesis_hash.write() =
-                            checkpoint_hash;
-                        *data_man.cur_consensus_era_stable_hash.write() =
-                            stable_hash;
-                        data_man.genesis_block = checkpoint_block;
-                    }
+        let cur_era_genesis_hash =
+            match data_man.db_manager.checkpoint_hashes_from_db() {
+                None => true_genesis.hash(),
+                Some((checkpoint_hash, stable_hash)) => {
+                    *data_man.cur_consensus_era_genesis_hash.write() =
+                        checkpoint_hash;
+                    *data_man.cur_consensus_era_stable_hash.write() =
+                        stable_hash;
+                    checkpoint_hash
                 }
-            }
-        }
+            };
 
-        data_man.insert_epoch_execution_context(
-            data_man.genesis_block.hash(),
-            EpochExecutionContext {
-                start_block_number: 0,
-            },
+        debug!(
+            "BlockDataManager::new() cur_era_genesis_hash: {:?}",
+            &cur_era_genesis_hash
         );
 
-        data_man
-            .insert_block(data_man.genesis_block(), true /* persistent */);
-
-        if data_man.genesis_block().hash() == genesis_block.hash() {
+        if cur_era_genesis_hash == data_man.true_genesis.hash() {
+            // Only insert block body for true genesis
+            data_man.insert_block(
+                data_man.true_genesis.clone(),
+                true, /* persistent */
+            );
+            // Initialize ExecutionContext for true genesis
+            data_man.insert_epoch_execution_context(
+                cur_era_genesis_hash,
+                EpochExecutionContext {
+                    start_block_number: 0,
+                },
+                true,
+            );
             // persist local_block_info for true genesis
-            data_man.insert_local_block_info_to_db(
-                &genesis_block.hash(),
-                LocalBlockInfo::new(
+            data_man.db_manager.insert_local_block_info_to_db(
+                &data_man.true_genesis.hash(),
+                &LocalBlockInfo::new(
                     BlockStatus::Valid,
                     0,
                     data_man.get_instance_id(),
                 ),
             );
-            data_man.insert_epoch_execution_commitments(
-                data_man.genesis_block.hash(),
-                *data_man.genesis_block.block_header.deferred_receipts_root(),
+            data_man.insert_epoch_execution_commitment(
+                data_man.true_genesis.hash(),
+                data_man.true_genesis_state_root(),
+                *data_man.true_genesis.block_header.deferred_receipts_root(),
                 *data_man
-                    .genesis_block
+                    .true_genesis
                     .block_header
                     .deferred_logs_bloom_hash(),
             );
         } else {
+            // Recover ExecutionContext for cur_era_genesis from db
+            data_man.insert_epoch_execution_context(
+                cur_era_genesis_hash,
+                data_man
+                    .get_epoch_execution_context(&cur_era_genesis_hash)
+                    .expect("ExecutionContext exists for cur_era_genesis"),
+                false, /* Not persistent because it's already in db */
+            );
             // for other era genesis, we need to change the instance_id
             if let Some(mut local_block_info) = data_man
-                .local_block_info_from_db(&data_man.genesis_block().hash())
+                .db_manager
+                .local_block_info_from_db(&cur_era_genesis_hash)
             {
                 local_block_info.instance_id = data_man.get_instance_id();
-                data_man.insert_local_block_info_to_db(
-                    &data_man.genesis_block().hash(),
-                    local_block_info,
+                data_man.db_manager.insert_local_block_info_to_db(
+                    &cur_era_genesis_hash,
+                    &local_block_info,
                 );
             }
+            // The commitments of cur_era_genesis will be recovered in
+            // `construct_pivot_state` with other epochs
         }
 
         data_man
@@ -217,18 +435,7 @@ impl BlockDataManager {
         let mut my_instance_id = self.instance_id.lock();
         if *my_instance_id == 0 {
             // load last instance id
-            let instance_id = match self.db.key_value().get(COL_MISC, b"instance")
-                .expect("Low-level database error when fetching instance id. Some issue with disk?")
-                {
-                    Some(instance) => {
-                        let rlp = Rlp::new(&instance);
-                        Some(rlp.val_at::<u64>(0).expect("Failed to decode instance id!"))
-                    }
-                    None => {
-                        info!("No instance id got from db");
-                        None
-                    }
-                };
+            let instance_id = self.db_manager.instance_id_from_db();
 
             // set new instance id
             if let Some(instance_id) = instance_id {
@@ -240,181 +447,50 @@ impl BlockDataManager {
             // current one.
             *my_instance_id += 1;
             if let Some(mut local_block_info) =
-                self.local_block_info_from_db(&self.genesis_block().hash())
+                self.db_manager.local_block_info_from_db(
+                    &self.get_cur_consensus_era_genesis_hash(),
+                )
             {
                 local_block_info.instance_id = *my_instance_id;
-                self.insert_local_block_info_to_db(
-                    &self.genesis_block().hash(),
-                    local_block_info,
+                self.db_manager.insert_local_block_info_to_db(
+                    &self.get_cur_consensus_era_genesis_hash(),
+                    &local_block_info,
                 );
             }
         }
 
         // persist new instance id
-        let mut rlp_stream = RlpStream::new();
-        rlp_stream.begin_list(1);
-        rlp_stream.append(&(*my_instance_id));
-        let mut dbops = self.db.key_value().transaction();
-        dbops.put(COL_MISC, b"instance", &rlp_stream.drain());
-        self.commit_db_transaction(dbops);
+        self.db_manager.insert_instance_id_to_db(*my_instance_id);
     }
 
-    pub fn genesis_block(&self) -> Arc<Block> { self.genesis_block.clone() }
+    /// This will return the state root of true genesis block.
+    pub fn true_genesis_state_root(&self) -> StateRootWithAuxInfo {
+        let true_genesis_hash = self.true_genesis.hash();
+        self.storage_manager
+            .get_state_no_commit(
+                StateIndex::new_for_readonly(
+                    &true_genesis_hash,
+                    &StateRootWithAuxInfo::genesis(&true_genesis_hash),
+                ),
+                /* try_open = */ false,
+            )
+            .unwrap()
+            .unwrap()
+            .get_state_root()
+            .unwrap()
+    }
 
     pub fn transaction_by_hash(
         &self, hash: &H256,
     ) -> Option<Arc<SignedTransaction>> {
-        let address = self
-            .transaction_address_by_hash(hash, false /* update_cache */)?;
+        let tx_index = self
+            .transaction_index_by_hash(hash, false /* update_cache */)?;
         let block = self.block_by_hash(
-            &address.block_hash,
+            &tx_index.block_hash,
             false, /* update_cache */
         )?;
-        assert!(address.index < block.transactions.len());
-        Some(block.transactions[address.index].clone())
-    }
-
-    fn commit_db_transaction(&self, transaction: DBTransaction) {
-        self.db
-            .key_value()
-            .write(transaction)
-            .expect("crash for db failure");
-    }
-
-    fn block_header_from_db(&self, hash: &H256) -> Option<BlockHeader> {
-        let rlp_bytes = self.db.key_value().get(COL_BLOCKS, hash)
-            .expect("Low level database error when fetching block. Some issue with disk?")?;
-        let rlp = Rlp::new(&rlp_bytes);
-        let mut block_header = rlp.as_val().expect("Wrong block rlp format!");
-        VerificationConfig::compute_header_pow_quality(&mut block_header);
-        Some(block_header)
-    }
-
-    fn insert_block_header_to_db(&self, header: &BlockHeader) {
-        let mut dbops = self.db.key_value().transaction();
-        dbops.put(COL_BLOCKS, &header.hash(), &rlp::encode(header));
-        self.commit_db_transaction(dbops);
-    }
-
-    fn remove_block_header_from_db(&self, hash: &H256) {
-        let mut dbops = self.db.key_value().transaction();
-        dbops.delete(COL_BLOCKS, hash);
-        self.commit_db_transaction(dbops);
-    }
-
-    fn block_body_key(block_hash: &H256) -> Vec<u8> {
-        let mut key = Vec::with_capacity(block_hash.len() + 1);
-        key.extend_from_slice(&block_hash);
-        key.push(BLOCK_BODY_SUFFIX_BYTE);
-        key
-    }
-
-    fn epoch_execution_result_key(hash: &H256) -> Vec<u8> {
-        let mut key = Vec::with_capacity(hash.len() + 1);
-        key.extend_from_slice(&hash);
-        key.push(EPOCH_EXECUTION_RESULT_SUFFIX_BYTE);
-        key
-    }
-
-    fn block_body_from_db(
-        &self, block_hash: &H256,
-    ) -> Option<Vec<Arc<SignedTransaction>>> {
-        let rlp_bytes = self.db.key_value().get(COL_BLOCKS, &Self::block_body_key(block_hash))
-            .expect("Low level database error when fetching block. Some issue with disk?")?;
-        let rlp = Rlp::new(&rlp_bytes);
-        let block_body = Block::decode_body_with_tx_public(&rlp)
-            .expect("Wrong block rlp format!");
-        Some(block_body)
-    }
-
-    pub fn insert_checkpoint_hashes_to_db(
-        &self, checkpoint_prev: &H256, checkpoint_cur: &H256,
-    ) {
-        let mut rlp_stream = RlpStream::new();
-        rlp_stream.begin_list(2);
-        rlp_stream.append(checkpoint_prev);
-        rlp_stream.append(checkpoint_cur);
-        let mut dbops = self.db.key_value().transaction();
-        dbops.put(COL_MISC, b"checkpoint", &rlp_stream.drain());
-        self.commit_db_transaction(dbops);
-    }
-
-    pub fn checkpoint_hashes_from_db(&self) -> Option<(H256, H256)> {
-        match self.db.key_value().get(COL_MISC, b"checkpoint")
-            .expect("Low-level database error when fetching 'checkpoint' block. Some issue with disk?")
-            {
-                Some(checkpoint) => {
-                    let rlp = Rlp::new(&checkpoint);
-                    Some((rlp.val_at::<H256>(0).expect("Failed to decode checkpoint hash!"),
-                          rlp.val_at::<H256>(1).expect("Failed to decode checkpoint hash!")))
-                }
-                None => {
-                    info!("No checkpoint got from db");
-                    None
-                }
-            }
-    }
-
-    pub fn insert_epoch_set_hashes_to_db(
-        &self, epoch: u64, hashes: &Vec<H256>,
-    ) {
-        debug!(
-            "insert_epoch_set_hashes_to_db: epoch={}, hashes={:?}",
-            epoch, hashes
-        );
-        let mut rlp_stream = RlpStream::new();
-        rlp_stream.begin_list(hashes.len());
-        for hash in hashes {
-            rlp_stream.append(hash);
-        }
-        let mut epoch_key = [0; 8];
-        LittleEndian::write_u64(&mut epoch_key[0..8], epoch);
-        let mut dbops = self.db.key_value().transaction();
-        dbops.put(COL_EPOCH_SET_HASHES, &epoch_key[0..8], &rlp_stream.drain());
-        self.commit_db_transaction(dbops);
-    }
-
-    pub fn epoch_set_hashes_from_db(&self, epoch: u64) -> Option<Vec<H256>> {
-        let mut epoch_key = [0; 8];
-        LittleEndian::write_u64(&mut epoch_key[0..8], epoch);
-        match self.db.key_value().get(COL_EPOCH_SET_HASHES, &epoch_key[0..8])
-            .expect("Low-level database error when fetching 'epoch set hashes'. Some issue with disk?")
-            {
-                Some(hashes) => {
-                    let rlp = Rlp::new(&hashes);
-                    Some(rlp.as_list::<H256>().expect("Failed to decode epoch set hashes!"))
-                }
-                None => {
-                    info!("No epoch set hashes got from db, epoch={}", epoch);
-                    None
-                }
-            }
-    }
-
-    pub fn insert_terminals_to_db(&self, terminals: &Vec<H256>) {
-        let mut rlp_stream = RlpStream::new();
-        rlp_stream.begin_list(terminals.len());
-        for hash in terminals {
-            rlp_stream.append(hash);
-        }
-        let mut dbops = self.db.key_value().transaction();
-        dbops.put(COL_MISC, b"terminals", &rlp_stream.drain());
-        self.commit_db_transaction(dbops);
-    }
-
-    pub fn terminals_from_db(&self) -> Option<Vec<H256>> {
-        match self.db.key_value().get(COL_MISC, b"terminals")
-            .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
-            {
-                Some(terminals) => {
-                    let rlp = Rlp::new(&terminals);
-                    Some(rlp.as_list::<H256>().expect("Failed to decode terminals!"))
-                }
-                None => {
-                    info!("No terminals got from db");
-                    None
-                }
-            }
+        assert!(tx_index.index < block.transactions.len());
+        Some(block.transactions[tx_index.index].clone())
     }
 
     /// insert block body in memory cache and db
@@ -422,68 +498,39 @@ impl BlockDataManager {
         &self, hash: H256, block: Arc<Block>, persistent: bool,
     ) {
         if persistent {
-            self.insert_block_body_to_db(&block);
+            self.db_manager.insert_block_body_to_db(block.as_ref());
         }
         self.cache_man.lock().note_used(CacheId::Block(hash));
         self.blocks.write().insert(hash, block);
     }
 
-    fn insert_block_body_to_db(&self, block: &Block) {
-        let mut dbops = self.db.key_value().transaction();
-        dbops.put(
-            COL_BLOCKS,
-            &Self::block_body_key(&block.hash()),
-            &block.encode_body_with_tx_public(),
-        );
-        self.commit_db_transaction(dbops);
-    }
-
-    fn remove_block_body_from_db(&self, hash: &H256) {
-        let mut dbops = self.db.key_value().transaction();
-        dbops.delete(COL_BLOCKS, &Self::block_body_key(hash));
-        self.commit_db_transaction(dbops);
-    }
-
     /// remove block body in memory cache and db
     pub fn remove_block_body(&self, hash: &H256, remove_db: bool) {
         if remove_db {
-            self.remove_block_body_from_db(hash);
+            self.db_manager.remove_block_body_from_db(hash);
         }
         self.blocks.write().remove(hash);
     }
 
+    /// TODO Also set block header
     pub fn block_by_hash(
         &self, hash: &H256, update_cache: bool,
     ) -> Option<Arc<Block>> {
-        // Check cache first
-        {
-            let read = self.blocks.read();
-            if let Some(v) = read.get(hash) {
-                return Some(v.clone());
-            }
-        }
-
-        let header = self.block_header_by_hash(hash)?;
-        let block = Arc::new(Block {
-            block_header: header.as_ref().clone(),
-            transactions: self.block_body_from_db(hash)?,
-            approximated_rlp_size: 0,
-            approximated_rlp_size_with_public: 0,
-        });
-
-        if update_cache {
-            let mut write = self.blocks.write();
-            write.insert(*hash, block.clone());
-            self.cache_man.lock().note_used(CacheId::Block(*hash));
-        }
-        Some(block)
+        self.get(
+            hash,
+            &self.blocks,
+            |key| self.db_manager.block_from_db(key).map(Arc::new),
+            if update_cache {
+                Some(CacheId::Block(*hash))
+            } else {
+                None
+            },
+        )
     }
 
-    pub fn block_from_db(&self, block_hash: &H256) -> Option<Block> {
-        Some(Block::new(
-            self.block_header_from_db(block_hash)?,
-            self.block_body_from_db(block_hash)?,
-        ))
+    /// This function returns the block from db without wrapping it in `Arc`.
+    pub fn block_from_db(&self, hash: &H256) -> Option<Block> {
+        self.db_manager.block_from_db(hash)
     }
 
     pub fn blocks_by_hash_list(
@@ -507,47 +554,6 @@ impl BlockDataManager {
         self.insert_block_body(hash, block, persistent);
     }
 
-    fn local_block_info_key(block_hash: &H256) -> Vec<u8> {
-        let mut key = Vec::with_capacity(block_hash.len() + 1);
-        key.extend_from_slice(block_hash);
-        key.push(LOCAL_BLOCK_INFO_SUFFIX_BYTE);
-        key
-    }
-
-    /// Store block info to db. Block info includes block status and
-    /// the sequence number when the block enters consensus graph.
-    /// The db key is the block hash plus one extra byte, so we can get better
-    /// data locality if we get both a block and its info from db.
-    /// The info is not a part of the block because the block is inserted
-    /// before we know its info, and we do not want to insert a large chunk
-    /// again. TODO Maybe we can use in-place modification (operator `merge`
-    /// in rocksdb) to keep the info together with the block.
-    pub fn insert_local_block_info_to_db(
-        &self, block_hash: &H256, block_info: LocalBlockInfo,
-    ) {
-        let mut dbops = self.db.key_value().transaction();
-        dbops.put(
-            COL_BLOCKS,
-            &Self::local_block_info_key(block_hash),
-            &rlp::encode(&block_info),
-        );
-        self.commit_db_transaction(dbops);
-    }
-
-    /// Get block info from db.
-    pub fn local_block_info_from_db(
-        &self, block_hash: &H256,
-    ) -> Option<LocalBlockInfo> {
-        self.db
-            .key_value()
-            .get(COL_BLOCKS, &Self::local_block_info_key(block_hash))
-            .expect("crash for db failure")
-            .map(|encoded| {
-                let rlp = Rlp::new(&encoded);
-                rlp.as_val().expect("Wrong block info rlp format!")
-            })
-    }
-
     /// remove block body and block header in memory cache and db
     pub fn remove_block(&self, hash: &H256, remove_db: bool) {
         self.remove_block_header(hash, remove_db);
@@ -557,39 +563,33 @@ impl BlockDataManager {
     pub fn block_header_by_hash(
         &self, hash: &H256,
     ) -> Option<Arc<BlockHeader>> {
-        let block_headers = self.block_headers.upgradable_read();
-        if let Some(header) = block_headers.get(hash) {
-            return Some(header.clone());
-        } else if !self.config.persist_header {
-            return None;
-        } else {
-            let maybe_header = self.block_header_from_db(hash);
-            maybe_header.map(|header| {
-                let header_arc = Arc::new(header);
-                RwLockUpgradableReadGuard::upgrade(block_headers)
-                    .insert(header_arc.hash(), header_arc.clone());
-                self.cache_man
-                    .lock()
-                    .note_used(CacheId::BlockHeader(header_arc.hash()));
-                header_arc
-            })
-        }
+        self.get(
+            hash,
+            &self.block_headers,
+            |key| self.db_manager.block_header_from_db(key).map(Arc::new),
+            Some(CacheId::BlockHeader(*hash)),
+        )
     }
 
     pub fn insert_block_header(
         &self, hash: H256, header: Arc<BlockHeader>, persistent: bool,
     ) {
-        if persistent {
-            self.insert_block_header_to_db(&header);
-        }
-        self.cache_man.lock().note_used(CacheId::BlockHeader(hash));
-        self.block_headers.write().insert(hash, header);
+        self.insert(
+            hash,
+            header,
+            &self.block_headers,
+            |_, value| {
+                self.db_manager.insert_block_header_to_db(value.as_ref())
+            },
+            Some(CacheId::BlockHeader(hash)),
+            persistent,
+        )
     }
 
     /// remove block header in memory cache and db
     pub fn remove_block_header(&self, hash: &H256, remove_db: bool) {
         if remove_db {
-            self.remove_block_header_from_db(hash);
+            self.db_manager.remove_block_header_from_db(hash);
         }
         self.block_headers.write().remove(hash);
     }
@@ -618,43 +618,48 @@ impl BlockDataManager {
         self.compact_blocks.read().contains_key(hash)
     }
 
-    pub fn block_results_by_hash_from_db(
-        &self, hash: &H256,
-    ) -> Option<(H256, BlockExecutedResult)> {
-        trace!("Read receipts from db {}", hash);
-        let block_receipts = self.db.key_value().get(COL_BLOCK_RECEIPTS, hash)
-            .expect("Low level database error when fetching block receipts. Some issue with disk?")?;
-        let rlp = Rlp::new(&block_receipts);
-        let epoch: H256 = rlp.val_at(0).expect("encoded");
-        let receipts: Vec<Receipt> = rlp.list_at(1).expect("encoded");
-        let bloom: Bloom = rlp.val_at(2).expect("encoded");
-        Some((
-            epoch,
-            BlockExecutedResult {
-                receipts: Arc::new(receipts),
-                bloom,
-            },
-        ))
-    }
-
     /// Return None if receipts for corresponding epoch is not computed before
-    /// or has been overwritten by another new pivot chain in db
+    /// or has been overwritten by another new pivot chain in db.
+    /// If `update_pivot_assumption` is true and we have execution results of
+    /// `assumed_epoch` in memory, we will also ensure `assumed_epoch`
+    /// is persisted as the pivot hash in db.
     ///
-    /// This function will require lock of block_receipts
-    pub fn block_results_by_hash_with_epoch(
-        &self, hash: &H256, assumed_epoch: &H256, update_cache: bool,
-    ) -> Option<BlockExecutedResult> {
-        let maybe_receipts =
-            self.block_receipts
-                .read()
-                .get(hash)
-                .and_then(|receipt_info| {
-                    receipt_info.get_receipts_at_epoch(assumed_epoch)
-                });
-        if maybe_receipts.is_some() {
-            return maybe_receipts;
+    /// This function will require lock of block_receipts.
+    pub fn block_execution_result_by_hash_with_epoch(
+        &self, hash: &H256, assumed_epoch: &H256,
+        update_pivot_assumption: bool, update_cache: bool,
+    ) -> Option<BlockExecutionResult>
+    {
+        if let Some((receipts, is_on_pivot)) = self
+            .block_receipts
+            .write()
+            .get_mut(hash)
+            .and_then(|receipt_info| {
+                let r = receipt_info.get_receipts_at_epoch(assumed_epoch);
+                if update_pivot_assumption {
+                    receipt_info.set_pivot_hash(*assumed_epoch);
+                }
+                r
+            })
+        {
+            if update_cache {
+                self.cache_man
+                    .lock()
+                    .note_used(CacheId::BlockReceipts(*hash));
+            }
+            if update_pivot_assumption && !is_on_pivot {
+                self.db_manager.insert_block_execution_result_to_db(
+                    hash,
+                    &BlockExecutionResultWithEpoch(
+                        *assumed_epoch,
+                        receipts.clone(),
+                    ),
+                )
+            }
+            return Some(receipts);
         }
-        let (epoch, receipts) = self.block_results_by_hash_from_db(hash)?;
+        let BlockExecutionResultWithEpoch(epoch, receipts) =
+            self.db_manager.block_execution_result_from_db(hash)?;
         if epoch != *assumed_epoch {
             debug!(
                 "epoch from db {} does not match assumed {}",
@@ -675,89 +680,259 @@ impl BlockDataManager {
         Some(receipts)
     }
 
-    pub fn insert_block_results(
-        &self, hash: H256, epoch: H256, receipts: Arc<Vec<Receipt>>,
+    pub fn block_execution_result_by_hash_from_db(
+        &self, hash: &H256,
+    ) -> Option<BlockExecutionResultWithEpoch> {
+        self.db_manager.block_execution_result_from_db(hash)
+    }
+
+    pub fn block_epoch_number(&self, hash: &H256) -> Option<u64> {
+        self.block_execution_result_by_hash_from_db(&hash)
+            .map(|execution_result| execution_result.0)
+            .and_then(|pivot| self.block_header_by_hash(&pivot))
+            .map(|header| header.height())
+    }
+
+    pub fn insert_block_execution_result(
+        &self, hash: H256, epoch: H256, block_receipts: Arc<BlockReceipts>,
         persistent: bool,
     )
     {
-        let bloom = receipts.iter().fold(Bloom::zero(), |mut b, r| {
-            b.accrue_bloom(&r.log_bloom);
-            b
-        });
+        let bloom =
+            block_receipts
+                .receipts
+                .iter()
+                .fold(Bloom::zero(), |mut b, r| {
+                    b.accrue_bloom(&r.log_bloom);
+                    b
+                });
+        let result = BlockExecutionResultWithEpoch(
+            epoch,
+            BlockExecutionResult {
+                block_receipts,
+                bloom,
+            },
+        );
 
         if persistent {
-            let mut dbops = self.db.key_value().transaction();
-            let mut rlp_stream = RlpStream::new_list(3);
-            rlp_stream.append(&epoch);
-            rlp_stream.append_list(&receipts);
-            rlp_stream.append(&bloom);
-            dbops.put(COL_BLOCK_RECEIPTS, &hash, &rlp_stream.drain());
-            self.commit_db_transaction(dbops);
+            self.db_manager
+                .insert_block_execution_result_to_db(&hash, &result);
         }
 
         let mut block_receipts = self.block_receipts.write();
         let receipt_info = block_receipts
             .entry(hash)
             .or_insert(BlockReceiptsInfo::default());
-        receipt_info.insert_receipts_at_epoch(
-            &epoch,
-            BlockExecutedResult { receipts, bloom },
-        );
+        receipt_info.insert_receipts_at_epoch(&epoch, result.1);
 
         self.cache_man
             .lock()
             .note_used(CacheId::BlockReceipts(hash));
     }
 
-    pub fn transaction_address_by_hash_from_db(
-        &self, hash: &H256,
-    ) -> Option<TransactionAddress> {
-        let tx_index_encoded = self.db.key_value().get(COL_TX_ADDRESS, hash).expect("Low level database error when fetching transaction index. Some issue with disk?")?;
-        let rlp = Rlp::new(&tx_index_encoded);
-        let tx_index: TransactionAddress =
-            rlp.as_val().expect("Wrong tx index rlp format!");
-        Some(tx_index)
+    pub fn insert_block_reward_result(
+        &self, hash: H256, block_reward: BlockRewardResult, persistent: bool,
+    ) {
+        self.insert(
+            hash,
+            block_reward,
+            &self.block_rewards,
+            |hash, value| {
+                self.db_manager
+                    .insert_block_reward_result_to_db(hash, value)
+            },
+            Some(CacheId::BlockRewards(hash)),
+            persistent,
+        )
     }
 
-    pub fn transaction_address_by_hash(
-        &self, hash: &H256, update_cache: bool,
-    ) -> Option<TransactionAddress> {
-        let transaction_addresses =
-            self.transaction_addresses.upgradable_read();
-        if let Some(index) = transaction_addresses.get(hash) {
-            return Some(index.clone());
+    pub fn block_reward_result_by_hash(
+        &self, hash: &H256,
+    ) -> Option<BlockRewardResult> {
+        self.get(
+            hash,
+            &self.block_rewards,
+            |key| self.db_manager.block_reward_result_from_db(key),
+            Some(CacheId::BlockRewards(*hash)),
+        )
+    }
+
+    pub fn remove_block_result(&self, hash: &H256, remove_db: bool) {
+        self.block_receipts.write().remove(hash);
+        self.block_rewards.write().remove(hash);
+        if remove_db {
+            self.db_manager.remove_block_execution_result_from_db(hash);
+            self.db_manager.remove_block_reward_result_from_db(hash);
         }
-        self.transaction_address_by_hash_from_db(hash)
-            .map(|address| {
+    }
+
+    pub fn transaction_index_by_hash(
+        &self, hash: &H256, update_cache: bool,
+    ) -> Option<TransactionIndex> {
+        if self.config.persist_tx_index {
+            self.get(
+                hash,
+                &self.transaction_indices,
+                |key| self.db_manager.transaction_index_from_db(key),
                 if update_cache {
-                    RwLockUpgradableReadGuard::upgrade(transaction_addresses)
-                        .insert(*hash, address.clone());
+                    Some(CacheId::TransactionAddress(*hash))
+                } else {
+                    None
+                },
+            )
+        } else {
+            self.transaction_indices.read().get(hash).map(|v| v.clone())
+        }
+    }
+
+    pub fn insert_transaction_index(
+        &self, hash: &H256, tx_index: &TransactionIndex,
+    ) {
+        if self.config.persist_tx_index {
+            // transaction_indices will not be updated if it's not inserted
+            // before
+            self.transaction_indices
+                .write()
+                .entry(*hash)
+                .and_modify(|v| {
+                    *v = tx_index.clone();
                     self.cache_man
                         .lock()
                         .note_used(CacheId::TransactionAddress(*hash));
-                }
-                address
-            })
+                });
+            self.db_manager
+                .insert_transaction_index_to_db(hash, tx_index);
+        } else {
+            // If not persisted, we will just hold it temporarily in memory
+            self.transaction_indices
+                .write()
+                .insert(hash.clone(), tx_index.clone());
+        }
     }
 
-    pub fn insert_transaction_address(
-        &self, hash: &H256, tx_address: &TransactionAddress,
-    ) {
-        if !self.config.record_tx_address {
-            return;
+    pub fn insert_local_block_info(&self, hash: &H256, info: LocalBlockInfo) {
+        self.insert(
+            *hash,
+            info,
+            &self.local_block_info,
+            |key, value| {
+                self.db_manager.insert_local_block_info_to_db(key, value)
+            },
+            Some(CacheId::LocalBlockInfo(*hash)),
+            true,
+        )
+    }
+
+    pub fn local_block_info_by_hash(
+        &self, hash: &H256,
+    ) -> Option<LocalBlockInfo> {
+        self.get(
+            hash,
+            &self.local_block_info,
+            |key| self.db_manager.local_block_info_from_db(key),
+            Some(CacheId::LocalBlockInfo(*hash)),
+        )
+    }
+
+    fn insert<K, V, InsertF>(
+        &self, key: K, value: V, in_mem: &RwLock<HashMap<K, V>>,
+        insert_f: InsertF, maybe_cache_id: Option<CacheId>, persistent: bool,
+    ) where
+        K: Clone + Eq + Hash,
+        InsertF: Fn(&K, &V),
+    {
+        if persistent {
+            insert_f(&key, &value);
         }
-        self.transaction_addresses
-            .write()
-            .entry(*hash)
-            .and_modify(|v| {
-                *v = tx_address.clone();
-                self.cache_man
-                    .lock()
-                    .note_used(CacheId::TransactionAddress(*hash));
-            });
-        let mut dbops = self.db.key_value().transaction();
-        dbops.put(COL_TX_ADDRESS, hash, &rlp::encode(tx_address));
-        self.commit_db_transaction(dbops);
+        in_mem.write().insert(key.clone(), value);
+        if let Some(cache_id) = maybe_cache_id {
+            self.cache_man.lock().note_used(cache_id);
+        }
+    }
+
+    fn get<K, V, LoadF>(
+        &self, key: &K, in_mem: &RwLock<HashMap<K, V>>, load_f: LoadF,
+        maybe_cache_id: Option<CacheId>,
+    ) -> Option<V>
+    where
+        K: Clone + Eq + Hash,
+        V: Clone,
+        LoadF: Fn(&K) -> Option<V>,
+    {
+        let upgradable_read_lock = in_mem.upgradable_read();
+        if let Some(value) = upgradable_read_lock.get(key) {
+            return Some(value.clone());
+        }
+        load_f(key).map(|value| {
+            if let Some(cache_id) = maybe_cache_id {
+                RwLockUpgradableReadGuard::upgrade(upgradable_read_lock)
+                    .insert(key.clone(), value.clone());
+                self.cache_man.lock().note_used(cache_id);
+            }
+            value
+        })
+    }
+
+    pub fn insert_terminals_to_db(&self, terminals: Vec<H256>) {
+        self.db_manager.insert_terminals_to_db(&terminals)
+    }
+
+    pub fn terminals_from_db(&self) -> Option<Vec<H256>> {
+        self.db_manager.terminals_from_db()
+    }
+
+    pub fn insert_executed_epoch_set_hashes_to_db(
+        &self, epoch_number: u64, epoch_set: &Vec<H256>,
+    ) {
+        self.db_manager
+            .insert_executed_epoch_set_hashes_to_db(epoch_number, epoch_set);
+    }
+
+    pub fn insert_skipped_epoch_set_hashes_to_db(
+        &self, epoch_number: u64, skipped_set: &Vec<H256>,
+    ) {
+        self.db_manager
+            .insert_skipped_epoch_set_hashes_to_db(epoch_number, skipped_set);
+    }
+
+    pub fn executed_epoch_set_hashes_from_db(
+        &self, epoch_number: u64,
+    ) -> Option<Vec<H256>> {
+        if epoch_number != 0 {
+            self.db_manager
+                .executed_epoch_set_hashes_from_db(epoch_number)
+        } else {
+            Some(vec![self.true_genesis.hash()])
+        }
+    }
+
+    pub fn skipped_epoch_set_hashes_from_db(
+        &self, epoch_number: u64,
+    ) -> Option<Vec<H256>> {
+        if epoch_number != 0 {
+            self.db_manager
+                .skipped_epoch_set_hashes_from_db(epoch_number)
+        } else {
+            Some(vec![])
+        }
+    }
+
+    pub fn all_epoch_set_hashes_from_db(
+        &self, epoch_number: u64,
+    ) -> Option<Vec<H256>> {
+        if epoch_number != 0 {
+            let mut res = self
+                .db_manager
+                .skipped_epoch_set_hashes_from_db(epoch_number)?;
+            res.append(
+                &mut self
+                    .db_manager
+                    .executed_epoch_set_hashes_from_db(epoch_number)?,
+            );
+            Some(res)
+        } else {
+            Some(vec![self.true_genesis.hash()])
+        }
     }
 
     /// Return `false` if there is no executed results for given `block_hash`
@@ -773,57 +948,122 @@ impl BlockDataManager {
         }
     }
 
-    pub fn insert_epoch_execution_commitments(
-        &self, block_hash: H256, receipts_root: H256, logs_bloom_hash: H256,
+    pub fn insert_epoch_execution_context(
+        &self, hash: H256, ctx: EpochExecutionContext, persistent: bool,
     ) {
-        self.epoch_execution_commitments.write().insert(
-            block_hash,
-            EpochExecutionCommitments {
-                receipts_root,
-                logs_bloom_hash,
+        self.insert(
+            hash,
+            ctx,
+            &self.epoch_execution_contexts,
+            |key, value| {
+                self.db_manager.insert_execution_context_to_db(key, value)
             },
+            None,
+            persistent,
         );
     }
 
-    pub fn insert_epoch_execution_context(
-        &self, hash: H256, ctx: EpochExecutionContext,
-    ) {
-        self.epoch_execution_contexts.write().insert(hash, ctx);
-    }
-
-    pub fn get_epoch_execution_commitments(
-        &self, block_hash: &H256,
-    ) -> Option<EpochExecutionCommitments> {
-        self.epoch_execution_commitments
-            .read()
-            .get(block_hash)
-            .map(Clone::clone)
-    }
-
+    /// The in-memory state will not be updated because it's only garbage
+    /// collected explicitly when we make checkpoints.
     pub fn get_epoch_execution_context(
         &self, hash: &H256,
     ) -> Option<EpochExecutionContext> {
-        self.epoch_execution_contexts
-            .read()
-            .get(hash)
-            .map(Clone::clone)
+        self.get(
+            hash,
+            &self.epoch_execution_contexts,
+            |key| self.db_manager.execution_context_from_db(key),
+            None,
+        )
     }
 
-    pub fn remove_epoch_execution_commitments(&self, block_hash: &H256) {
+    /// TODO We can avoid persisting execution_commitments for blocks
+    /// not on the pivot chain after a checkpoint
+    pub fn insert_epoch_execution_commitment(
+        &self, block_hash: H256,
+        state_root_with_aux_info: StateRootWithAuxInfo, receipts_root: H256,
+        logs_bloom_hash: H256,
+    )
+    {
+        let commitment = EpochExecutionCommitment {
+            state_root_with_aux_info,
+            receipts_root,
+            logs_bloom_hash,
+        };
+        self.insert(
+            block_hash,
+            commitment,
+            &self.epoch_execution_commitments,
+            |key, value| {
+                self.db_manager
+                    .insert_epoch_execution_commitment_to_db(key, value)
+            },
+            None,
+            true,
+        );
+    }
+
+    /// Get in-mem execution commitment.
+    pub fn get_epoch_execution_commitment(
+        &self, block_hash: &H256,
+    ) -> GuardedValue<
+        RwLockReadGuard<'_, HashMap<H256, EpochExecutionCommitment>>,
+        NonCopy<Option<&'_ EpochExecutionCommitment>>,
+    > {
+        let read_lock = self.epoch_execution_commitments.read();
+        let (read_lock, derefed) = GuardedValue::new_derefed(read_lock).into();
+        GuardedValue::new(read_lock, NonCopy(derefed.0.get(block_hash)))
+    }
+
+    /// Load commitment from db.
+    /// The caller should ensure that the loaded commitment is after
+    /// cur_era_genesis and can be garbage-collected by checkpoint.
+    pub fn load_epoch_execution_commitment_from_db(
+        &self, block_hash: &H256,
+    ) -> Option<EpochExecutionCommitment> {
+        let commitment = self
+            .db_manager
+            .epoch_execution_commitment_from_db(block_hash)?;
+        self.epoch_execution_commitments
+            .write()
+            .insert(*block_hash, commitment.clone());
+        Some(commitment)
+    }
+
+    /// Get persisted execution commitment.
+    /// It will check db if it's missing in db.
+    pub fn get_epoch_execution_commitment_with_db(
+        &self, block_hash: &H256,
+    ) -> Option<EpochExecutionCommitment> {
+        self.get_epoch_execution_commitment(block_hash).map_or_else(
+            || {
+                self.db_manager
+                    .epoch_execution_commitment_from_db(block_hash)
+            },
+            |maybe_ref| Some(maybe_ref.clone()),
+        )
+    }
+
+    pub fn remove_epoch_execution_commitment(&self, block_hash: &H256) {
         self.epoch_execution_commitments.write().remove(block_hash);
+    }
+
+    pub fn remove_epoch_execution_commitment_from_db(&self, block_hash: &H256) {
+        self.db_manager
+            .remove_epoch_execution_commitment_from_db(block_hash);
     }
 
     pub fn remove_epoch_execution_context(&self, block_hash: &H256) {
         self.epoch_execution_contexts.write().remove(block_hash);
     }
 
+    pub fn remove_epoch_execution_context_from_db(&self, block_hash: &H256) {
+        self.db_manager
+            .remove_block_execution_result_from_db(block_hash);
+    }
+
     pub fn epoch_executed(&self, epoch_hash: &H256) -> bool {
         // `block_receipts_root` is not computed when recovering from db
-        self.get_epoch_execution_commitments(epoch_hash).is_some()
-            && self
-                .storage_manager
-                .contains_state(SnapshotAndEpochIdRef::new(epoch_hash, None))
-                .unwrap()
+        self.get_epoch_execution_commitment(epoch_hash).is_some()
     }
 
     /// Check if all executed results of an epoch exist
@@ -836,14 +1076,15 @@ impl BlockDataManager {
             return false;
         }
 
-        if self.config.record_tx_address && on_local_pivot {
+        if on_local_pivot {
             // Check if all blocks receipts are from this epoch
             let mut epoch_receipts = Vec::new();
             for h in epoch_block_hashes {
-                if let Some(r) = self.block_results_by_hash_with_epoch(
-                    h, epoch_hash, true, /* update_cache */
+                if let Some(r) = self.block_execution_result_by_hash_with_epoch(
+                    h, epoch_hash, true, /* update_pivot_assumption */
+                    true, /* update_cache */
                 ) {
-                    epoch_receipts.push(r.receipts);
+                    epoch_receipts.push(r.block_receipts);
                 } else {
                     return false;
                 }
@@ -856,15 +1097,16 @@ impl BlockDataManager {
                     .expect("block exists");
                 for (tx_idx, tx) in block.transactions.iter().enumerate() {
                     match epoch_receipts[block_idx]
+                        .receipts
                         .get(tx_idx)
                         .unwrap()
                         .outcome_status
                     {
                         TRANSACTION_OUTCOME_SUCCESS
                         | TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING => {
-                            self.insert_transaction_address(
+                            self.insert_transaction_index(
                                 &tx.hash,
-                                &TransactionAddress {
+                                &TransactionIndex {
                                     block_hash: *block_hash,
                                     index: tx_idx,
                                 },
@@ -883,29 +1125,33 @@ impl BlockDataManager {
         // assign it a NULL sequence number.
         let block_info =
             LocalBlockInfo::new(BlockStatus::Invalid, NULLU64, NULLU64);
-        self.insert_local_block_info_to_db(&block_hash, block_info);
+        self.db_manager
+            .insert_local_block_info_to_db(&block_hash, &block_info);
         self.invalid_block_set.write().insert(block_hash);
     }
 
     /// Check if a block is already marked as invalid.
-    pub fn verified_invalid(&self, block_hash: &H256) -> bool {
+    pub fn verified_invalid(
+        &self, block_hash: &H256,
+    ) -> (bool, Option<LocalBlockInfo>) {
         let invalid_block_set = self.invalid_block_set.upgradable_read();
         if invalid_block_set.contains(block_hash) {
-            return true;
+            return (true, None);
         } else {
-            if let Some(block_info) = self.local_block_info_from_db(block_hash)
+            if let Some(block_info) =
+                self.db_manager.local_block_info_from_db(block_hash)
             {
                 match block_info.get_status() {
                     BlockStatus::Invalid => {
                         RwLockUpgradableReadGuard::upgrade(invalid_block_set)
                             .insert(*block_hash);
-                        return true;
+                        return (true, Some(block_info));
                     }
-                    _ => return false,
+                    _ => return (false, Some(block_info)),
                 }
             } else {
                 // No status on disk, so the block is not marked invalid before
-                return false;
+                return (false, None);
             }
         }
     }
@@ -919,81 +1165,97 @@ impl BlockDataManager {
         let blocks = self.blocks.read().size_of(malloc_ops);
         let compact_blocks = self.compact_blocks.read().size_of(malloc_ops);
         let block_receipts = self.block_receipts.read().size_of(malloc_ops);
-        let transaction_addresses =
-            self.transaction_addresses.read().size_of(malloc_ops);
+        let block_rewards = self.block_rewards.read().size_of(malloc_ops);
+        let transaction_indices =
+            self.transaction_indices.read().size_of(malloc_ops);
+        let local_block_infos =
+            self.local_block_info.read().size_of(malloc_ops);
+
         CacheSize {
             block_headers,
             blocks,
             block_receipts,
-            transaction_addresses,
+            block_rewards,
+            transaction_indices,
             compact_blocks,
+            local_block_infos,
         }
     }
 
     fn block_cache_gc(&self) {
-        let malloc_ops = &mut new_malloc_size_ops();
         let current_size = self.cache_size().total();
         let mut block_headers = self.block_headers.write();
         let mut blocks = self.blocks.write();
         let mut compact_blocks = self.compact_blocks.write();
         let mut executed_results = self.block_receipts.write();
-        let mut tx_address = self.transaction_addresses.write();
-        let mut exeuction_contexts = self.epoch_execution_contexts.write();
+        let mut reward_results = self.block_rewards.write();
+        let mut tx_indices = self.transaction_indices.write();
+        let mut local_block_info = self.local_block_info.write();
         let mut cache_man = self.cache_man.lock();
-        info!(
-            "Before gc cache_size={} {} {} {} {}",
+        debug!(
+            "Before gc cache_size={} {} {} {} {} {} {}",
             current_size,
             blocks.len(),
             compact_blocks.len(),
             executed_results.len(),
-            tx_address.len(),
+            reward_results.len(),
+            tx_indices.len(),
+            local_block_info.len(),
         );
 
         cache_man.collect_garbage(current_size, |ids| {
             for id in &ids {
-                match *id {
-                    CacheId::Block(ref h) => {
+                match id {
+                    CacheId::Block(h) => {
                         blocks.remove(h);
                     }
-                    CacheId::BlockReceipts(ref h) => {
-                        executed_results.remove(h);
+                    CacheId::BlockHeader(h) => {
+                        block_headers.remove(h);
                     }
-                    CacheId::TransactionAddress(ref h) => {
-                        tx_address.remove(h);
-                    }
-                    CacheId::CompactBlock(ref h) => {
+                    CacheId::CompactBlock(h) => {
                         compact_blocks.remove(h);
                     }
-                    CacheId::BlockHeader(ref h) => {
-                        block_headers.remove(h);
+                    CacheId::BlockReceipts(h) => {
+                        executed_results.remove(h);
+                    }
+                    CacheId::BlockRewards(h) => {
+                        reward_results.remove(h);
+                    }
+                    CacheId::TransactionAddress(h) => {
+                        tx_indices.remove(h);
+                    }
+                    CacheId::LocalBlockInfo(h) => {
+                        local_block_info.remove(h);
                     }
                 }
             }
 
+            let malloc_ops = &mut new_malloc_size_ops();
             block_headers.size_of(malloc_ops)
                 + blocks.size_of(malloc_ops)
                 + executed_results.size_of(malloc_ops)
-                + tx_address.size_of(malloc_ops)
+                + reward_results.size_of(malloc_ops)
+                + tx_indices.size_of(malloc_ops)
                 + compact_blocks.size_of(malloc_ops)
+                + local_block_info.size_of(malloc_ops)
         });
 
         block_headers.shrink_to_fit();
         blocks.shrink_to_fit();
         executed_results.shrink_to_fit();
-        tx_address.shrink_to_fit();
+        reward_results.shrink_to_fit();
+        tx_indices.shrink_to_fit();
         compact_blocks.shrink_to_fit();
-        exeuction_contexts.shrink_to_fit();
+        local_block_info.shrink_to_fit();
     }
 
-    pub fn gc_cache(&self) {
-        self.block_cache_gc();
-        self.tx_data_manager.tx_cache_gc();
-    }
+    pub fn cache_gc(&self) { self.block_cache_gc(); }
 
     pub fn set_cur_consensus_era_genesis_hash(
         &self, cur_era_hash: &H256, next_era_hash: &H256,
     ) {
-        self.insert_checkpoint_hashes_to_db(cur_era_hash, next_era_hash);
+        self.db_manager
+            .insert_checkpoint_hashes_to_db(cur_era_hash, next_era_hash);
 
         let mut era_hash = self.cur_consensus_era_genesis_hash.write();
         let mut stable_hash = self.cur_consensus_era_stable_hash.write();
@@ -1009,40 +1271,10 @@ impl BlockDataManager {
         self.cur_consensus_era_stable_hash.read().clone()
     }
 
-    pub fn insert_consensus_graph_execution_info_to_db(
-        &self, hash: &H256, ctx: &ConsensusGraphExecutionInfo,
-    ) {
-        let mut dbops = self.db.key_value().transaction();
-        dbops.put(
-            COL_EXECUTION_CONTEXT,
-            &Self::epoch_execution_result_key(hash),
-            &rlp::encode(ctx),
-        );
-        self.commit_db_transaction(dbops);
-    }
-
-    pub fn consensus_graph_execution_info_from_db(
-        &self, hash: &H256,
-    ) -> Option<ConsensusGraphExecutionInfo> {
-        let rlp_bytes = self
-            .db
-            .key_value()
-            .get(
-                COL_EXECUTION_CONTEXT,
-                &Self::epoch_execution_result_key(hash),
-            )
-            .expect("crash for db failure")?;
-        let rlp = Rlp::new(&rlp_bytes);
-
-        Some(
-            rlp.as_val()
-                .expect("Wrong consensus_graph_execution_info rlp format!"),
-        )
-    }
-
     pub fn recover_unsigned_tx(
         &self, transactions: &Vec<TransactionWithSignature>,
     ) -> Result<Vec<Arc<SignedTransaction>>, DecoderError> {
+        let _timer = MeterTimer::time_func(TX_POOL_RECOVER_TIMER.as_ref());
         self.tx_data_manager.recover_unsigned_tx(transactions)
     }
 
@@ -1057,27 +1289,97 @@ impl BlockDataManager {
             .recover_unsigned_tx_with_order(transactions)
     }
 
-    pub fn build_partial(
+    pub fn find_missing_tx_indices_encoded(
         &self, compact_block: &mut CompactBlock,
     ) -> Vec<usize> {
-        self.tx_data_manager.build_partial(compact_block)
+        self.tx_data_manager
+            .find_missing_tx_indices_encoded(compact_block)
+    }
+
+    /// Caller should make sure the state exists.
+    pub fn get_state_readonly_index<'a>(
+        &'a self, block_hash: &'a EpochId,
+    ) -> GuardedValue<
+        RwLockReadGuard<'a, HashMap<H256, EpochExecutionCommitment>>,
+        Option<StateIndex<'a>>,
+    > {
+        let (guard, maybe_commitment) =
+            self.get_epoch_execution_commitment(block_hash).into();
+        let maybe_state_index = match &*maybe_commitment {
+            None => None,
+            Some(execution_commitment) => Some(StateIndex::new_for_readonly(
+                block_hash,
+                &execution_commitment.state_root_with_aux_info,
+            )),
+        };
+
+        GuardedValue::new(guard, maybe_state_index)
+    }
+
+    // TODO: There could be io error when getting block by hash.
+    pub fn get_parent_epochs_for(
+        &self, mut block: EpochId, mut count: u64,
+    ) -> (EpochId, Vec<EpochId>) {
+        let mut epochs_reverse_order = vec![];
+        while count > 0 {
+            debug!("getting parent for block {:?}", block);
+            epochs_reverse_order.push(block);
+            block = *self.block_header_by_hash(&block).unwrap().parent_hash();
+            if block == NULL_EPOCH
+                || block == *self.cur_consensus_era_genesis_hash.read()
+            {
+                break;
+            }
+            count -= 1;
+        }
+
+        debug!("get_parent_epochs stopped at block {:?}", block);
+        epochs_reverse_order.reverse();
+        (block, epochs_reverse_order)
+    }
+
+    pub fn get_snapshot_epoch_count(&self) -> u32 {
+        self.storage_manager
+            .get_storage_manager()
+            .get_snapshot_epoch_count()
+    }
+
+    pub fn get_snapshot_blame_plus_depth(&self) -> usize {
+        // We need the extra + 1 to get a state root that points to the
+        // snapshot we want.
+        self.storage_manager
+            .get_storage_manager()
+            .get_snapshot_epoch_count() as usize
+            + 1
     }
 }
 
+#[derive(Copy, Clone)]
+pub enum DbType {
+    Rocksdb,
+    Sqlite,
+}
+
 pub struct DataManagerConfiguration {
-    record_tx_address: bool,
-    persist_header: bool,
-    tx_cache_count: usize,
+    persist_tx_index: bool,
+    tx_cache_index_maintain_timeout: Duration,
+    db_type: DbType,
+}
+
+impl MallocSizeOf for DataManagerConfiguration {
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
 
 impl DataManagerConfiguration {
     pub fn new(
-        record_tx_address: bool, persist_header: bool, tx_cache_count: usize,
-    ) -> Self {
+        persist_tx_index: bool, tx_cache_index_maintain_timeout: Duration,
+        db_type: DbType,
+    ) -> Self
+    {
         Self {
-            record_tx_address,
-            persist_header,
-            tx_cache_count,
+            persist_tx_index,
+            tx_cache_index_maintain_timeout,
+            db_type,
         }
     }
 }

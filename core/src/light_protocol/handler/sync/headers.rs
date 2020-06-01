@@ -9,7 +9,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc,
     },
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use cfx_types::H256;
@@ -17,21 +17,22 @@ use primitives::BlockHeader;
 
 use crate::{
     light_protocol::{
-        common::{Peers, UniqueId},
-        handler::FullPeerState,
-        message::GetBlockHeaders,
+        common::{FullPeerState, Peers},
+        message::{msgid, GetBlockHeaders},
         Error,
     },
-    message::Message,
-    network::{NetworkContext, PeerId},
+    message::{Message, RequestId},
+    network::NetworkContext,
     parameters::light::{
-        HEADER_REQUEST_BATCH_SIZE, HEADER_REQUEST_TIMEOUT_MS,
+        HEADER_REQUEST_BATCH_SIZE, HEADER_REQUEST_TIMEOUT,
         MAX_HEADERS_IN_FLIGHT,
     },
     sync::SynchronizationGraph,
+    UniqueId,
 };
 
-use super::{missing_item::HasKey, sync_manager::SyncManager};
+use super::common::{HasKey, SyncManager};
+use network::node_table::NodeId;
 
 #[derive(Debug)]
 struct Statistics {
@@ -42,7 +43,7 @@ struct Statistics {
 
 // NOTE: order defines priority: Epoch < Reference < NewHash
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(super) enum HashSource {
+pub enum HashSource {
     Epoch,      // hash received through an epoch request
     Dependency, // hash referenced by a header we received
     NewHash,    // hash received through a new hashes announcement
@@ -85,7 +86,7 @@ impl HasKey<H256> for MissingHeader {
     fn key(&self) -> H256 { self.hash }
 }
 
-pub(super) struct Headers {
+pub struct Headers {
     // number of headers received multiple times
     duplicate_count: AtomicU64,
 
@@ -106,7 +107,8 @@ impl Headers {
     ) -> Self
     {
         let duplicate_count = AtomicU64::new(0);
-        let sync_manager = SyncManager::new(peers.clone());
+        let sync_manager =
+            SyncManager::new(peers.clone(), msgid::GET_BLOCK_HEADERS);
 
         Headers {
             duplicate_count,
@@ -140,7 +142,7 @@ impl Headers {
 
     #[inline]
     pub fn request_now_from_peer<I>(
-        &self, io: &dyn NetworkContext, peer: PeerId, hashes: I,
+        &self, io: &dyn NetworkContext, peer: &NodeId, hashes: I,
         source: HashSource,
     ) where
         I: Iterator<Item = H256>,
@@ -154,25 +156,32 @@ impl Headers {
             .cloned()
             .map(|h| MissingHeader::new(h, source.clone()));
 
-        match self.send_request(io, peer, hashes.clone()) {
-            Ok(_) => self.sync_manager.insert_in_flight(headers),
-            Err(e) => {
-                warn!(
-                    "Failed to request {:?} from {:?}: {:?}",
-                    hashes, peer, e
-                );
-                self.sync_manager.insert_waiting(headers);
-            }
-        }
+        self.sync_manager.request_now_from_peer(
+            headers,
+            peer,
+            |peer, hashes| self.send_request(io, peer, hashes),
+        );
     }
 
-    pub fn receive<I>(&self, headers: I)
-    where I: Iterator<Item = BlockHeader> {
+    pub fn receive(
+        &self, peer: &NodeId, id: RequestId,
+        headers: impl Iterator<Item = BlockHeader>,
+    ) -> Result<(), Error>
+    {
         let mut missing = HashSet::new();
 
         // TODO(thegaram): validate header timestamps
         for header in headers {
             let hash = header.hash();
+
+            // check request id
+            if self
+                .sync_manager
+                .check_if_requested(peer, id, &hash)?
+                .is_none()
+            {
+                continue;
+            }
 
             // signal receipt
             self.sync_manager.remove_in_flight(&hash);
@@ -184,7 +193,7 @@ impl Headers {
             }
 
             // insert into graph
-            let (valid, _) = self.graph.insert_block_header(
+            let (insert_result, _) = self.graph.insert_block_header(
                 &mut header.clone(),
                 true,  /* need_to_verify */
                 false, /* bench_mode */
@@ -192,7 +201,7 @@ impl Headers {
                 true,  /* persistent */
             );
 
-            if !valid {
+            if !insert_result.is_new_valid() {
                 continue;
             }
 
@@ -206,37 +215,38 @@ impl Headers {
 
         let missing = missing.into_iter();
         self.request(missing, HashSource::Dependency);
+
+        Ok(())
     }
 
     #[inline]
     pub fn clean_up(&self) {
-        let timeout = Duration::from_millis(HEADER_REQUEST_TIMEOUT_MS);
+        let timeout = *HEADER_REQUEST_TIMEOUT;
         let headers = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(headers.into_iter());
     }
 
     #[inline]
     fn send_request(
-        &self, io: &dyn NetworkContext, peer: PeerId, hashes: Vec<H256>,
-    ) -> Result<(), Error> {
-        info!("send_request peer={:?} hashes={:?}", peer, hashes);
+        &self, io: &dyn NetworkContext, peer: &NodeId, hashes: Vec<H256>,
+    ) -> Result<Option<RequestId>, Error> {
+        debug!("send_request peer={:?} hashes={:?}", peer, hashes);
 
         if hashes.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
 
-        let msg: Box<dyn Message> = Box::new(GetBlockHeaders {
-            request_id: self.request_id_allocator.next(),
-            hashes,
-        });
+        let request_id = self.request_id_allocator.next();
+        let msg: Box<dyn Message> =
+            Box::new(GetBlockHeaders { request_id, hashes });
 
         msg.send(io, peer)?;
-        Ok(())
+        Ok(Some(request_id))
     }
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        info!("header sync statistics: {:?}", self.get_statistics());
+        debug!("header sync statistics: {:?}", self.get_statistics());
 
         self.sync_manager.sync(
             MAX_HEADERS_IN_FLIGHT,
@@ -248,10 +258,9 @@ impl Headers {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        super::priority_queue::PriorityQueue, HashSource, MissingHeader,
-    };
-    use rand::Rng;
+    use super::{super::common::PriorityQueue, HashSource, MissingHeader};
+    use cfx_types::H256;
+    use rand::prelude::SliceRandom;
     use std::{
         ops::Sub,
         time::{Duration, Instant},
@@ -266,13 +275,13 @@ mod tests {
         let one_ms_ago = now.sub(Duration::from_millis(1));
 
         let h0 = MissingHeader {
-            hash: 0.into(),
+            hash: H256::from_low_u64_be(0),
             since: now,
             source: HashSource::Epoch,
         };
 
         let h1 = MissingHeader {
-            hash: 1.into(),
+            hash: H256::from_low_u64_be(1),
             since: one_ms_ago,
             source: HashSource::Epoch,
         };
@@ -280,7 +289,7 @@ mod tests {
         assert!(h0 < h1); // longer waiting time
 
         let h2 = MissingHeader {
-            hash: 2.into(),
+            hash: H256::from_low_u64_be(2),
             since: now,
             source: HashSource::Dependency,
         };
@@ -288,7 +297,7 @@ mod tests {
         assert!(h1 < h2); // higher source priority
 
         let h3 = MissingHeader {
-            hash: 3.into(),
+            hash: H256::from_low_u64_be(3),
             since: one_ms_ago,
             source: HashSource::Dependency,
         };
@@ -296,7 +305,7 @@ mod tests {
         assert!(h2 < h3); // longer waiting time
 
         let h4 = MissingHeader {
-            hash: 4.into(),
+            hash: H256::from_low_u64_be(4),
             since: now,
             source: HashSource::NewHash,
         };
@@ -304,7 +313,7 @@ mod tests {
         assert!(h3 < h4); // higher source priority
 
         let h5 = MissingHeader {
-            hash: 5.into(),
+            hash: H256::from_low_u64_be(5),
             since: one_ms_ago,
             source: HashSource::NewHash,
         };
@@ -312,7 +321,7 @@ mod tests {
         assert!(h4 < h5); // longer waiting time
 
         let h6 = MissingHeader {
-            hash: 6.into(),
+            hash: H256::from_low_u64_be(6),
             since: now,
             source: HashSource::NewHash,
         };
@@ -333,43 +342,43 @@ mod tests {
         let one_ms_ago = now.sub(Duration::from_millis(1));
 
         let h0 = MissingHeader {
-            hash: 0.into(),
+            hash: H256::from_low_u64_be(0),
             since: now,
             source: HashSource::Epoch,
         };
 
         let h1 = MissingHeader {
-            hash: 1.into(),
+            hash: H256::from_low_u64_be(1),
             since: one_ms_ago,
             source: HashSource::Epoch,
         };
 
         let h2 = MissingHeader {
-            hash: 2.into(),
+            hash: H256::from_low_u64_be(2),
             since: now,
             source: HashSource::Dependency,
         };
 
         let h3 = MissingHeader {
-            hash: 3.into(),
+            hash: H256::from_low_u64_be(3),
             since: one_ms_ago,
             source: HashSource::Dependency,
         };
 
         let h4 = MissingHeader {
-            hash: 4.into(),
+            hash: H256::from_low_u64_be(4),
             since: now,
             source: HashSource::NewHash,
         };
 
         let h5 = MissingHeader {
-            hash: 5.into(),
+            hash: H256::from_low_u64_be(5),
             since: one_ms_ago,
             source: HashSource::NewHash,
         };
 
         let h6 = MissingHeader {
-            hash: 5.into(),
+            hash: H256::from_low_u64_be(5),
             since: one_ms_ago,
             source: HashSource::NewHash,
         };
@@ -384,7 +393,7 @@ mod tests {
         headers.push(h5.clone());
         headers.push(h6.clone());
 
-        rand::thread_rng().shuffle(&mut headers);
+        headers.shuffle(&mut rand::thread_rng());
         let mut queue = PriorityQueue::new();
         queue.extend(headers);
 

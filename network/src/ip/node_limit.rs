@@ -10,14 +10,28 @@ use std::{
     time::Duration,
 };
 
+/// Default maximum duration of last node contact time that used to evict a node
+/// when `NodeBucket` is full.
 const DEFAULT_EVICT_TIMEOUT: Duration = Duration::from_secs(7 * 24 * 3600); // 7 days
 
+/// Validation result before adding a node.
 #[derive(Debug, PartialEq)]
 pub enum ValidateInsertResult {
+    /// Node already exists and IP address not changed
     AlreadyExists,
+    /// Node will be new added, and occupy the IP address used by existing
+    /// node. In this case, the existing node will be evicted before adding
+    /// the new node.
     OccupyIp(NodeId),
+    /// Node is allowed to add or update with new IP address, because the
+    /// corresponding `NodeBucket` has enough quota.
     QuotaEnough,
+    /// Node is allowed to add or update, but need to evict the specified
+    /// existing node first.
     Evict(NodeId),
+    /// Node is not allowed to add or update, because the corresponding
+    /// `NodeBucket` is full, and no node could be evicted. E.g. all nodes in
+    /// the bucket are in connecting status.
     QuotaNotEnough,
 }
 
@@ -39,6 +53,7 @@ pub struct NodeIpLimit {
     // all untrusted nodes grouped by subnet
     untrusted_buckets: SampleHashMap<u32, NodeBucket>,
 
+    // helpful indices
     ip_index: HashMap<IpAddr, NodeId>,
     node_index: HashMap<NodeId, IpAddr>,
 }
@@ -59,6 +74,7 @@ impl NodeIpLimit {
     #[inline]
     pub fn is_enabled(&self) -> bool { self.subnet_quota > 0 }
 
+    /// Get the subnet of specified node `id`.
     pub fn subnet(&self, id: &NodeId) -> Option<u32> {
         let ip = self.node_index.get(id)?;
         Some(self.subnet_type.subnet(ip))
@@ -86,6 +102,7 @@ impl NodeIpLimit {
         true
     }
 
+    /// Remove node from specified buckets.
     fn remove_with_buckets(
         buckets: &mut SampleHashMap<u32, NodeBucket>, subnet: u32, id: &NodeId,
     ) -> bool {
@@ -98,6 +115,7 @@ impl NodeIpLimit {
             return false;
         }
 
+        // remove bucket on empty
         if bucket.count() == 0 {
             buckets.remove(&subnet);
         }
@@ -106,7 +124,8 @@ impl NodeIpLimit {
     }
 
     /// Randomly select `n` trusted nodes. Note, it may return less than `n`
-    /// nodes.
+    /// nodes. Note, the time complexity is O(n), where n is the number of
+    /// sampled nodes.
     pub fn sample_trusted(&self, n: u32) -> HashSet<NodeId> {
         if !self.is_enabled() {
             return HashSet::new();
@@ -134,8 +153,10 @@ impl NodeIpLimit {
     /// The returned result indicates whether insertion is allowed,
     /// and possible evictee before insertion.
     ///
-    /// When subnet quota is not enough before insertion, someone in the
-    /// same subnet may be evicted.
+    /// When subnet quota is not enough before insertion:
+    /// 1. If node IP changed and still in the same subnet,
+    /// just evict the node itself.
+    /// 2. Otherwise, someone in the subnet of `ip` may be evicted.
     ///
     /// There are 2 cases that insertion is not allowed:
     /// 1. Node already exists and ip not changed;
@@ -148,7 +169,8 @@ impl NodeIpLimit {
         }
 
         // node exists and ip not changed.
-        if let Some(cur_ip) = self.node_index.get(&id) {
+        let maybe_cur_ip = self.node_index.get(&id);
+        if let Some(cur_ip) = maybe_cur_ip {
             if cur_ip == ip {
                 return ValidateInsertResult::AlreadyExists;
             }
@@ -159,10 +181,22 @@ impl NodeIpLimit {
             return ValidateInsertResult::OccupyIp(old_id.clone());
         }
 
+        // quota enough
         if self.is_quota_allowed(ip) {
             return ValidateInsertResult::QuotaEnough;
         }
 
+        // Node ip changed, but still in the same subnet.
+        // So, just evict the node itself.
+        if let Some(cur_ip) = maybe_cur_ip {
+            let cur_subnet = self.subnet_type.subnet(cur_ip);
+            let new_subnet = self.subnet_type.subnet(ip);
+            if cur_subnet == new_subnet {
+                return ValidateInsertResult::Evict(id.clone());
+            }
+        }
+
+        // quota not enough, try to evict one.
         if let Some(evictee) = self.select_evictee(ip, db) {
             return ValidateInsertResult::Evict(evictee);
         }
@@ -207,6 +241,20 @@ impl NodeIpLimit {
         false
     }
 
+    /// Demote `id` from trusted to untrusted
+    pub fn demote(&mut self, id: &NodeId) {
+        if let Some(ip) = self.node_index.get(id) {
+            let subnet = self.subnet_type.subnet(ip);
+            if let Some(b) = self.trusted_buckets.get_mut(&subnet) {
+                if b.remove(id) {
+                    if let Some(b) = self.untrusted_buckets.get_mut(&subnet) {
+                        b.add(id.clone());
+                    }
+                }
+            }
+        }
+    }
+
     /// Add or update a node with new IP address. It assumes that the bucket
     /// of corresponding subnet have enough quota.
     fn add_or_update(&mut self, ip: IpAddr, id: NodeId, trusted: bool) {
@@ -219,11 +267,11 @@ impl NodeIpLimit {
         let subnet = self.subnet_type.subnet(&ip);
         if trusted {
             self.trusted_buckets
-                .get_mut_or_insert_with(subnet, || NodeBucket::default())
+                .get_mut_or_insert_with(subnet, NodeBucket::default)
                 .add(id);
         } else {
             self.untrusted_buckets
-                .get_mut_or_insert_with(subnet, || NodeBucket::default())
+                .get_mut_or_insert_with(subnet, NodeBucket::default)
                 .add(id);
         }
     }

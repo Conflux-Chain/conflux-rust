@@ -19,6 +19,12 @@ impl Handleable for NewBlock {
     // TODO This is only used in tests now. Maybe we can add a rpc to send full
     // block and remove NEW_BLOCK from p2p
     fn handle(self, ctx: &Context) -> Result<(), Error> {
+        // We may receive some messages from peer during recover from db
+        // phase. We should ignore it, since it may cause some
+        // inconsistency.
+        if ctx.manager.in_recover_from_db_phase() {
+            return Ok(());
+        }
         let mut block = self.block;
         ctx.manager.graph.data_man.recover_block(&mut block)?;
 
@@ -38,7 +44,7 @@ impl Handleable for NewBlock {
 
         ctx.manager.request_block_headers(
             ctx.io,
-            Some(ctx.peer),
+            Some(ctx.node_id.clone()),
             headers_to_request,
             true, /* ignore_db */
         );
@@ -58,28 +64,29 @@ fn on_new_decoded_block(
     match ctx.manager.graph.block_header_by_hash(&hash) {
         Some(header) => block.block_header = header,
         None => {
-            let res = ctx.manager.graph.insert_block_header(
-                &mut block.block_header,
-                need_to_verify,
-                false,
-                false,
-                true,
-            );
-            if res.0 {
-                need_to_relay.extend(res.1);
+            let (insert_result, to_relay) =
+                ctx.manager.graph.insert_block_header(
+                    &mut block.block_header,
+                    need_to_verify,
+                    false,
+                    false,
+                    true,
+                );
+            if insert_result.is_new_valid() {
+                need_to_relay.extend(to_relay);
             } else {
-                return Err(Error::from_kind(ErrorKind::Invalid));
+                return Err(Error::from_kind(ErrorKind::InvalidBlock));
             }
         }
     }
 
-    let (_, to_relay) = ctx.manager.graph.insert_block(
+    let insert_result = ctx.manager.graph.insert_block(
         block,
         need_to_verify,
         persistent,
         false, // recover_from_db
     );
-    if to_relay {
+    if insert_result.should_relay() {
         need_to_relay.push(hash);
     }
     Ok(need_to_relay)

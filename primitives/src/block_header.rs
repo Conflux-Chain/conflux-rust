@@ -2,11 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::state_root::*;
 use crate::{
-    bytes::Bytes,
-    hash::{keccak, KECCAK_EMPTY_LIST_RLP},
-    receipt::Receipt,
+    bytes::Bytes, hash::keccak, receipt::BlockReceipts, MERKLE_NULL_NODE,
+    NULL_EPOCH,
 };
 use cfx_types::{Address, Bloom, H256, KECCAK_EMPTY_BLOOM, U256};
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
@@ -48,8 +46,10 @@ pub struct BlockHeaderRlpPart {
     gas_limit: U256,
     /// Referee hashes
     referee_hashes: Vec<H256>,
+    /// Customized information
+    custom: Vec<Bytes>,
     /// Nonce of the block
-    nonce: u64,
+    nonce: U256,
 }
 
 impl PartialEq for BlockHeaderRlpPart {
@@ -67,6 +67,7 @@ impl PartialEq for BlockHeaderRlpPart {
             && self.adaptive == o.adaptive
             && self.gas_limit == o.gas_limit
             && self.referee_hashes == o.referee_hashes
+            && self.custom == o.custom
     }
 }
 
@@ -80,11 +81,6 @@ pub struct BlockHeader {
     pub pow_quality: U256,
     /// Approximated rlp size of the block header
     pub approximated_rlp_size: usize,
-    // TODO: the state root auxiliary information can be derived from
-    // TODO: consensus graph and should be moved out from p2p messages,
-    // TODO: however to reduce complexity of the code we keep it
-    // TODO: temporarily.
-    pub state_root_with_aux_info: StateRootWithAuxInfo,
 }
 
 impl Deref for BlockHeader {
@@ -99,7 +95,7 @@ impl DerefMut for BlockHeader {
 
 impl MallocSizeOf for BlockHeader {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.referee_hashes.size_of(ops)
+        self.referee_hashes.size_of(ops) + self.custom.size_of(ops)
     }
 }
 
@@ -129,10 +125,6 @@ impl BlockHeader {
     /// Get the deferred state root field of the header.
     pub fn deferred_state_root(&self) -> &H256 { &self.deferred_state_root }
 
-    pub fn deferred_state_root_with_aux_info(&self) -> &StateRootWithAuxInfo {
-        &self.state_root_with_aux_info
-    }
-
     /// Get the deferred block receipts root field of the header.
     pub fn deferred_receipts_root(&self) -> &H256 {
         &self.deferred_receipts_root
@@ -158,11 +150,19 @@ impl BlockHeader {
     /// Get the referee hashes field of the header.
     pub fn referee_hashes(&self) -> &Vec<H256> { &self.referee_hashes }
 
+    /// Get the custom data field of the header.
+    pub fn custom(&self) -> &Vec<Bytes> { &self.custom }
+
     /// Get the nonce field of the header.
-    pub fn nonce(&self) -> u64 { self.nonce }
+    pub fn nonce(&self) -> U256 { self.nonce }
 
     /// Set the nonce field of the header.
-    pub fn set_nonce(&mut self, nonce: u64) { self.nonce = nonce; }
+    pub fn set_nonce(&mut self, nonce: U256) { self.nonce = nonce; }
+
+    /// Set the timestamp filed of the header.
+    pub fn set_timestamp(&mut self, timestamp: u64) {
+        self.timestamp = timestamp;
+    }
 
     /// Compute the hash of the block.
     pub fn compute_hash(&mut self) -> H256 {
@@ -196,8 +196,13 @@ impl BlockHeader {
     /// Place this header(except nonce) into an RLP stream `stream`.
     fn stream_rlp_without_nonce(&self, stream: &mut RlpStream) {
         let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
+        let list_len = if self.custom.is_empty() {
+            13
+        } else {
+            13 + self.custom.len()
+        };
         stream
-            .begin_list(13)
+            .begin_list(list_len)
             .append(&self.parent_hash)
             .append(&self.height)
             .append(&self.timestamp)
@@ -211,13 +216,24 @@ impl BlockHeader {
             .append(&adaptive_n)
             .append(&self.gas_limit)
             .append_list(&self.referee_hashes);
+
+        if list_len > 13 {
+            for b in &self.custom {
+                stream.append_raw(b, 1);
+            }
+        }
     }
 
     /// Place this header into an RLP stream `stream`.
     fn stream_rlp(&self, stream: &mut RlpStream) {
         let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
+        let list_len = if self.custom.is_empty() {
+            14
+        } else {
+            14 + self.custom.len()
+        };
         stream
-            .begin_list(14)
+            .begin_list(list_len)
             .append(&self.parent_hash)
             .append(&self.height)
             .append(&self.timestamp)
@@ -232,30 +248,12 @@ impl BlockHeader {
             .append(&self.gas_limit)
             .append_list(&self.referee_hashes)
             .append(&self.nonce);
-    }
 
-    // TODO: calculate previous_snapshot_root & intermediate_delta_epoch_id in
-    // TODO: consensus graph and remove this method.
-    /// Place this header into an RLP stream `stream` for p2p messages.
-    fn stream_wire_rlp(&self, stream: &mut RlpStream) {
-        let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
-        stream
-            .begin_list(15)
-            .append(&self.parent_hash)
-            .append(&self.height)
-            .append(&self.timestamp)
-            .append(&self.author)
-            .append(&self.transactions_root)
-            .append(&self.deferred_state_root)
-            .append(&self.deferred_receipts_root)
-            .append(&self.deferred_logs_bloom_hash)
-            .append(&self.blame)
-            .append(&self.difficulty)
-            .append(&adaptive_n)
-            .append(&self.gas_limit)
-            .append_list(&self.referee_hashes)
-            .append(&self.nonce)
-            .append(&self.state_root_with_aux_info);
+        if list_len > 14 {
+            for b in &self.custom {
+                stream.append_raw(b, 1);
+            }
+        }
     }
 
     pub fn size(&self) -> usize {
@@ -272,7 +270,6 @@ pub struct BlockHeaderBuilder {
     author: Address,
     transactions_root: H256,
     deferred_state_root: H256,
-    deferred_state_root_with_aux_info: StateRootWithAuxInfo,
     deferred_receipts_root: H256,
     deferred_logs_bloom_hash: H256,
     blame: u32,
@@ -280,27 +277,28 @@ pub struct BlockHeaderBuilder {
     adaptive: bool,
     gas_limit: U256,
     referee_hashes: Vec<H256>,
-    nonce: u64,
+    custom: Vec<Bytes>,
+    nonce: U256,
 }
 
 impl BlockHeaderBuilder {
     pub fn new() -> Self {
         Self {
-            parent_hash: H256::default(),
+            parent_hash: NULL_EPOCH,
             height: 0,
             timestamp: 0,
             author: Address::default(),
-            transactions_root: KECCAK_EMPTY_LIST_RLP,
+            transactions_root: MERKLE_NULL_NODE,
             deferred_state_root: Default::default(),
-            deferred_state_root_with_aux_info: Default::default(),
-            deferred_receipts_root: KECCAK_EMPTY_LIST_RLP,
+            deferred_receipts_root: Default::default(),
             deferred_logs_bloom_hash: KECCAK_EMPTY_BLOOM,
             blame: 0,
             difficulty: U256::default(),
             adaptive: false,
             gas_limit: U256::zero(),
             referee_hashes: Vec::new(),
-            nonce: 0,
+            custom: Vec::new(),
+            nonce: U256::zero(),
         }
     }
 
@@ -328,15 +326,6 @@ impl BlockHeaderBuilder {
         &mut self, transactions_root: H256,
     ) -> &mut Self {
         self.transactions_root = transactions_root;
-        self
-    }
-
-    pub fn with_deferred_state_root_with_aux_info(
-        &mut self, deferred_state_root_with_aux_info: StateRootWithAuxInfo,
-    ) -> &mut Self {
-        self.deferred_state_root_with_aux_info =
-            deferred_state_root_with_aux_info;
-
         self
     }
 
@@ -388,7 +377,12 @@ impl BlockHeaderBuilder {
         self
     }
 
-    pub fn with_nonce(&mut self, nonce: u64) -> &mut Self {
+    pub fn with_custom(&mut self, custom: Vec<Bytes>) -> &mut Self {
+        self.custom = custom;
+        self
+    }
+
+    pub fn with_nonce(&mut self, nonce: U256) -> &mut Self {
         self.nonce = nonce;
         self
     }
@@ -409,14 +403,12 @@ impl BlockHeaderBuilder {
                 adaptive: self.adaptive,
                 gas_limit: self.gas_limit,
                 referee_hashes: self.referee_hashes.clone(),
+                custom: self.custom.clone(),
                 nonce: self.nonce,
             },
             hash: None,
             pow_quality: U256::zero(),
             approximated_rlp_size: 0,
-            state_root_with_aux_info: self
-                .deferred_state_root_with_aux_info
-                .clone(),
         };
 
         block_header.approximated_rlp_size =
@@ -428,21 +420,10 @@ impl BlockHeaderBuilder {
         block_header
     }
 
-    pub fn compute_block_receipts_root(
-        receipts: &Vec<Arc<Vec<Receipt>>>,
-    ) -> H256 {
-        let mut rlp_stream = RlpStream::new_list(receipts.len());
-        for r in receipts {
-            rlp_stream.append_list(r.as_ref());
-        }
-
-        keccak(rlp_stream.out())
-    }
-
     pub fn compute_block_logs_bloom_hash(
-        receipts: &Vec<Arc<Vec<Receipt>>>,
+        receipts: &Vec<Arc<BlockReceipts>>,
     ) -> H256 {
-        let bloom = receipts.iter().map(|x| x.as_ref()).flatten().fold(
+        let bloom = receipts.iter().map(|x| &x.receipts).flatten().fold(
             Bloom::zero(),
             |mut b, r| {
                 b.accrue_bloom(&r.log_bloom);
@@ -461,44 +442,60 @@ impl BlockHeaderBuilder {
     }
 
     pub fn compute_blame_state_root_vec_root(roots: Vec<H256>) -> H256 {
-        let mut rlp_stream = RlpStream::new_list(roots.len());
-        for root in roots {
-            rlp_stream.append_list(root.as_ref());
+        let mut accumulated_root = roots.last().unwrap().clone();
+        for i in (0..(roots.len() - 1)).rev() {
+            accumulated_root =
+                BlockHeaderBuilder::compute_blame_state_root_incremental(
+                    roots[i],
+                    accumulated_root,
+                );
         }
-        keccak(rlp_stream.out())
+        accumulated_root
+    }
+
+    pub fn compute_blame_state_root_incremental(
+        first_root: H256, remaining_root: H256,
+    ) -> H256 {
+        let mut buffer = Vec::with_capacity(H256::len_bytes() * 2);
+        buffer.extend_from_slice(first_root.as_bytes());
+        buffer.extend_from_slice(remaining_root.as_bytes());
+        keccak(&buffer)
     }
 }
 
 impl Encodable for BlockHeader {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        self.stream_wire_rlp(stream);
-    }
+    fn rlp_append(&self, stream: &mut RlpStream) { self.stream_rlp(stream); }
 }
 
 impl Decodable for BlockHeader {
     fn decode(r: &Rlp) -> Result<Self, DecoderError> {
         let rlp_size = r.as_raw().len();
+        let mut rlp_part = BlockHeaderRlpPart {
+            parent_hash: r.val_at(0)?,
+            height: r.val_at(1)?,
+            timestamp: r.val_at(2)?,
+            author: r.val_at(3)?,
+            transactions_root: r.val_at(4)?,
+            deferred_state_root: r.val_at(5)?,
+            deferred_receipts_root: r.val_at(6)?,
+            deferred_logs_bloom_hash: r.val_at(7)?,
+            blame: r.val_at(8)?,
+            difficulty: r.val_at(9)?,
+            adaptive: r.val_at::<u8>(10)? == 1,
+            gas_limit: r.val_at(11)?,
+            referee_hashes: r.list_at(12)?,
+            custom: vec![],
+            nonce: r.val_at(13)?,
+        };
+        for i in 14..r.item_count()? {
+            rlp_part.custom.push(r.at(i)?.as_raw().to_vec())
+        }
+
         let mut header = BlockHeader {
-            rlp_part: BlockHeaderRlpPart {
-                parent_hash: r.val_at(0)?,
-                height: r.val_at(1)?,
-                timestamp: r.val_at(2)?,
-                author: r.val_at(3)?,
-                transactions_root: r.val_at(4)?,
-                deferred_state_root: r.val_at(5)?,
-                deferred_receipts_root: r.val_at(6)?,
-                deferred_logs_bloom_hash: r.val_at(7)?,
-                blame: r.val_at(8)?,
-                difficulty: r.val_at(9)?,
-                adaptive: r.val_at::<u8>(10)? == 1,
-                gas_limit: r.val_at(11)?,
-                referee_hashes: r.list_at(12)?,
-                nonce: r.val_at(13)?,
-            },
+            rlp_part,
             hash: None,
             pow_quality: U256::zero(),
             approximated_rlp_size: rlp_size,
-            state_root_with_aux_info: r.val_at(14)?,
         };
         header.compute_hash();
 
@@ -509,9 +506,12 @@ impl Decodable for BlockHeader {
 #[cfg(test)]
 mod tests {
     use super::BlockHeaderBuilder;
-    use crate::{hash::keccak, receipt::Receipt};
-    use cfx_types::{Bloom, KECCAK_EMPTY_BLOOM};
-    use std::sync::Arc;
+    use crate::{
+        hash::keccak,
+        receipt::{BlockReceipts, Receipt},
+    };
+    use cfx_types::{Bloom, KECCAK_EMPTY_BLOOM, U256};
+    use std::{str::FromStr, sync::Arc};
 
     #[test]
     fn test_logs_bloom_hash_no_receipts() {
@@ -519,7 +519,14 @@ mod tests {
         let hash = BlockHeaderBuilder::compute_block_logs_bloom_hash(&receipts);
         assert_eq!(hash, KECCAK_EMPTY_BLOOM);
 
-        let receipts = (1..11).map(|_| Arc::new(vec![])).collect(); // Vec<Arc<Vec<_>>>
+        let receipts = (1..11)
+            .map(|_| {
+                Arc::new(BlockReceipts {
+                    receipts: vec![],
+                    secondary_reward: U256::zero(),
+                })
+            })
+            .collect(); // Vec<Arc<Vec<_>>>
         let hash = BlockHeaderBuilder::compute_block_logs_bloom_hash(&receipts);
         assert_eq!(hash, KECCAK_EMPTY_BLOOM);
     }
@@ -527,15 +534,25 @@ mod tests {
     #[test]
     fn test_logs_bloom_hash_empty_receipts() {
         let receipt = Receipt {
-            gas_used: 0.into(),
+            accumulated_gas_used: U256::zero(),
+            gas_fee: U256::zero(),
+            gas_sponsor_paid: false,
             logs: vec![],
-            outcome_status: 0.into(),
+            outcome_status: 0,
             log_bloom: Bloom::zero(),
+            storage_sponsor_paid: false,
+            storage_collateralized: vec![],
+            storage_released: vec![],
         };
 
         // 10 blocks with 10 empty receipts each
-        let receipts: Vec<Arc<Vec<Receipt>>> = (1..11)
-            .map(|_| Arc::new((1..11).map(|_| receipt.clone()).collect()))
+        let receipts = (1..11)
+            .map(|_| {
+                Arc::new(BlockReceipts {
+                    receipts: (1..11).map(|_| receipt.clone()).collect(),
+                    secondary_reward: U256::zero(),
+                })
+            })
             .collect();
         let hash = BlockHeaderBuilder::compute_block_logs_bloom_hash(&receipts);
         assert_eq!(hash, KECCAK_EMPTY_BLOOM);
@@ -543,75 +560,102 @@ mod tests {
 
     #[test]
     fn test_logs_bloom_hash() {
-        let block1 = vec![
-            Receipt {
-                gas_used: 0.into(),
-                logs: vec![],
-                outcome_status: 0.into(),
-                log_bloom: "11111111111111111111111111111111\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000"
-                    .into(),
-            },
-            Receipt {
-                gas_used: 0.into(),
-                logs: vec![],
-                outcome_status: 0.into(),
-                log_bloom: "00000000000000000000000000000000\
-                            22222222222222222222222222222222\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000\
-                            00000000000000000000000000000000"
-                    .into(),
-            },
-        ];
+        let block1 = BlockReceipts {
+            receipts: vec![
+                Receipt {
+                    accumulated_gas_used: 0.into(),
+                    gas_fee: 0.into(),
+                    gas_sponsor_paid: false,
+                    logs: vec![],
+                    outcome_status: 0,
+                    log_bloom: Bloom::from_str(
+                        "11111111111111111111111111111111\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000",
+                    )
+                    .unwrap(),
+                    storage_sponsor_paid: false,
+                    storage_collateralized: vec![],
+                    storage_released: vec![],
+                },
+                Receipt {
+                    accumulated_gas_used: U256::zero(),
+                    gas_fee: U256::zero(),
+                    gas_sponsor_paid: false,
+                    logs: vec![],
+                    outcome_status: 0,
+                    log_bloom: Bloom::from_str(
+                        "00000000000000000000000000000000\
+                         22222222222222222222222222222222\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000",
+                    )
+                    .unwrap(),
+                    storage_sponsor_paid: false,
+                    storage_collateralized: vec![],
+                    storage_released: vec![],
+                },
+            ],
+            secondary_reward: U256::zero(),
+        };
 
-        let block2 = vec![Receipt {
-            gas_used: 0.into(),
-            logs: vec![],
-            outcome_status: 0.into(),
-            log_bloom: "44444444444444440000000000000000\
-                        44444444444444440000000000000000\
-                        44444444444444440000000000000000\
-                        44444444444444440000000000000000\
-                        00000000000000000000000000000000\
-                        00000000000000000000000000000000\
-                        00000000000000000000000000000000\
-                        00000000000000000000000000000000\
-                        00000000000000000000000000000000\
-                        00000000000000000000000000000000\
-                        00000000000000000000000000000000\
-                        00000000000000000000000000000000\
-                        00000000000000000000000000000000\
-                        00000000000000000000000000000000\
-                        00000000000000000000000000000000\
-                        00000000000000000000000000000000"
-                .into(),
-        }];
+        let block2 = BlockReceipts {
+            receipts: vec![Receipt {
+                accumulated_gas_used: U256::zero(),
+                gas_fee: U256::zero(),
+                gas_sponsor_paid: false,
+                logs: vec![],
+                outcome_status: 0,
+                log_bloom: Bloom::from_str(
+                    "44444444444444440000000000000000\
+                     44444444444444440000000000000000\
+                     44444444444444440000000000000000\
+                     44444444444444440000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000",
+                )
+                .unwrap(),
+                storage_sponsor_paid: false,
+                storage_collateralized: vec![],
+                storage_released: vec![],
+            }],
+            secondary_reward: U256::zero(),
+        };
 
         let expected = keccak(
             "55555555555555551111111111111111\

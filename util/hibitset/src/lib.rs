@@ -43,8 +43,10 @@
 //! the `BitSet` to panic.
 
 #![deny(missing_docs)]
+#![allow(clippy::all)]
 
 extern crate atom;
+extern crate malloc_size_of;
 #[cfg(test)]
 extern crate rand;
 #[cfg(feature = "parallel")]
@@ -61,6 +63,7 @@ pub use iter::{BitIter, DrainBitIter};
 pub use iter::{BitParIter, BitProducer};
 pub use ops::{BitSetAll, BitSetAnd, BitSetNot, BitSetOr, BitSetXor};
 
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use util::*;
 
 /// A `BitSet` is a simple set designed to track which indices are placed
@@ -75,6 +78,14 @@ pub struct BitSet {
     layer2: Vec<usize>,
     layer1: Vec<usize>,
     layer0: Vec<usize>,
+}
+
+impl MallocSizeOf for BitSet {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.layer2.size_of(ops)
+            + self.layer1.size_of(ops)
+            + self.layer0.size_of(ops)
+    }
 }
 
 impl BitSet {

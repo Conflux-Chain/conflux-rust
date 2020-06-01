@@ -4,22 +4,27 @@
 
 use super::*;
 use crate::{
-    message::{HasRequestId, Message, MsgId, RequestId},
+    message::{
+        decode_rlp_and_check_deprecation, GetMaybeRequestId, Message,
+        MessageProtocolVersionBound, MsgId, RequestId, SetRequestId,
+    },
     sync::{
+        message::throttling::Throttle,
         state::{
             SnapshotChunkRequest, SnapshotChunkResponse,
             SnapshotManifestRequest, SnapshotManifestResponse,
+            StateSyncCandidateRequest, StateSyncCandidateResponse,
         },
-        Error,
+        Error, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
 };
+use network::{service::ProtocolVersion, NetworkProtocolHandler};
 pub use priority_send_queue::SendQueuePriority;
-use rlp::Rlp;
-use std::any::Any;
+use rlp::{Decodable, Rlp};
 
 // generate `pub mod msgid`
 build_msgid! {
-    STATUS = 0x00
+    STATUS_DEPRECATED = 0x00
     NEW_BLOCK_HASHES = 0x01
     TRANSACTIONS = 0x02
     GET_BLOCK_HASHES = 0x03
@@ -48,114 +53,134 @@ build_msgid! {
     GET_SNAPSHOT_MANIFEST_RESPONSE = 0x1a
     GET_SNAPSHOT_CHUNK = 0x1b
     GET_SNAPSHOT_CHUNK_RESPONSE = 0x1c
+    GET_TRANSACTIONS_FROM_TX_HASHES = 0x1d
+    GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE = 0x1e
+    STATE_SYNC_CANDIDATE_REQUEST = 0x20
+    STATE_SYNC_CANDIDATE_RESPONSE = 0x21
+    STATUS_V2 = 0x22
 
-    GET_CHECKPOINT_BLAME_STATE_REQUEST = 0x1d
-    GET_CHECKPOINT_BLAME_STATE_RESPONSE = 0x1e
+    // This is only used in inflight_keys.
+    NET_INFLIGHT_BLOCKS = 0xf0
+    THROTTLED = 0xfe
 
     INVALID = 0xff
+    // This above not the last one because msg_id is u16,
+    // U16_NEXT = 0x100
 }
 
 // generate `impl Message for _` for each message type
 // high priority message types
-build_msg_impl! { Status, msgid::STATUS, "Status" }
-build_msg_impl! { NewBlockHashes, msgid::NEW_BLOCK_HASHES, "NewBlockHashes" }
-build_msg_impl! { GetBlockHashesResponse, msgid::GET_BLOCK_HASHES_RESPONSE, "GetBlockHashesResponse" }
-build_msg_impl! { GetBlockHeaders, msgid::GET_BLOCK_HEADERS, "GetBlockHeaders" }
-build_msg_impl! { GetBlockHeadersResponse, msgid::GET_BLOCK_HEADERS_RESPONSE, "GetBlockHeadersResponse" }
-build_msg_impl! { NewBlock, msgid::NEW_BLOCK, "NewBlock" }
-build_msg_impl! { GetTerminalBlockHashesResponse, msgid::GET_TERMINAL_BLOCK_HASHES_RESPONSE, "GetTerminalBlockHashesResponse" }
-build_msg_impl! { GetTerminalBlockHashes, msgid::GET_TERMINAL_BLOCK_HASHES, "GetTerminalBlockHashes" }
-build_msg_impl! { GetBlocks, msgid::GET_BLOCKS, "GetBlocks" }
-build_msg_impl! { GetCompactBlocks, msgid::GET_CMPCT_BLOCKS, "GetCompactBlocks" }
-build_msg_impl! { GetCompactBlocksResponse, msgid::GET_CMPCT_BLOCKS_RESPONSE, "GetCompactBlocksResponse" }
-build_msg_impl! { GetBlockTxn, msgid::GET_BLOCK_TXN, "GetBlockTxn" }
-build_msg_impl! { DynamicCapabilityChange, msgid::DYNAMIC_CAPABILITY_CHANGE, "DynamicCapabilityChange" }
-build_msg_impl! { GetBlockHashesByEpoch, msgid::GET_BLOCK_HASHES_BY_EPOCH, "GetBlockHashesByEpoch" }
+build_msg_impl! { StatusDeprecatedV1, msgid::STATUS_DEPRECATED, "Status", SYNC_PROTO_V1, SYNC_PROTO_V1 }
+build_msg_impl! { StatusV2, msgid::STATUS_V2, "StatusV2", SYNC_PROTO_V2, SYNC_PROTO_V2 }
+build_msg_impl! { NewBlockHashes, msgid::NEW_BLOCK_HASHES, "NewBlockHashes", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_with_request_id_impl! { GetBlockHeaders, msgid::GET_BLOCK_HEADERS, "GetBlockHeaders", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_impl! { GetBlockHeadersResponse, msgid::GET_BLOCK_HEADERS_RESPONSE, "GetBlockHeadersResponse", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_impl! { NewBlock, msgid::NEW_BLOCK, "NewBlock", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_impl! { GetTerminalBlockHashesResponse, msgid::GET_TERMINAL_BLOCK_HASHES_RESPONSE, "GetTerminalBlockHashesResponse", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_with_request_id_impl! { GetTerminalBlockHashes, msgid::GET_TERMINAL_BLOCK_HASHES, "GetTerminalBlockHashes", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_with_request_id_impl! { GetBlocks, msgid::GET_BLOCKS, "GetBlocks", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_with_request_id_impl! { GetCompactBlocks, msgid::GET_CMPCT_BLOCKS, "GetCompactBlocks", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_impl! { GetCompactBlocksResponse, msgid::GET_CMPCT_BLOCKS_RESPONSE, "GetCompactBlocksResponse", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_with_request_id_impl! { GetBlockTxn, msgid::GET_BLOCK_TXN, "GetBlockTxn", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_impl! { DynamicCapabilityChange, msgid::DYNAMIC_CAPABILITY_CHANGE, "DynamicCapabilityChange", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_with_request_id_impl! { GetBlockHashesByEpoch, msgid::GET_BLOCK_HASHES_BY_EPOCH, "GetBlockHashesByEpoch", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_impl! { Throttled, msgid::THROTTLED, "Throttled", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+
+impl GetMaybeRequestId for GetBlockHashesResponse {}
+mark_msg_version_bound!(GetBlockHashesResponse, SYNC_PROTO_V1, SYNC_PROTO_V2);
+impl Message for GetBlockHashesResponse {
+    fn msg_id(&self) -> MsgId { msgid::GET_BLOCK_HASHES_RESPONSE }
+
+    fn msg_name(&self) -> &'static str { "GetBlockHashesResponse" }
+
+    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Low }
+}
 
 // normal priority and size-sensitive message types
+impl GetMaybeRequestId for Transactions {}
+mark_msg_version_bound!(Transactions, SYNC_PROTO_V1, SYNC_PROTO_V2);
 impl Message for Transactions {
-    fn as_any(&self) -> &dyn Any { self }
+    fn is_size_sensitive(&self) -> bool { self.transactions.len() > 1 }
 
     fn msg_id(&self) -> MsgId { msgid::TRANSACTIONS }
 
     fn msg_name(&self) -> &'static str { "Transactions" }
-
-    fn is_size_sensitive(&self) -> bool { self.transactions.len() > 1 }
 }
 
+impl GetMaybeRequestId for GetBlocksResponse {}
+mark_msg_version_bound!(GetBlocksResponse, SYNC_PROTO_V1, SYNC_PROTO_V2);
 impl Message for GetBlocksResponse {
-    fn as_any(&self) -> &dyn Any { self }
+    fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
 
     fn msg_id(&self) -> MsgId { msgid::GET_BLOCKS_RESPONSE }
 
     fn msg_name(&self) -> &'static str { "GetBlocksResponse" }
-
-    fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
 }
 
+impl GetMaybeRequestId for GetBlocksWithPublicResponse {}
+mark_msg_version_bound!(
+    GetBlocksWithPublicResponse,
+    SYNC_PROTO_V1,
+    SYNC_PROTO_V2
+);
 impl Message for GetBlocksWithPublicResponse {
-    fn as_any(&self) -> &dyn Any { self }
+    fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
 
     fn msg_id(&self) -> MsgId { msgid::GET_BLOCKS_WITH_PUBLIC_RESPONSE }
 
     fn msg_name(&self) -> &'static str { "GetBlocksWithPublicResponse" }
-
-    fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
 }
 
+impl GetMaybeRequestId for GetBlockTxnResponse {}
+mark_msg_version_bound!(GetBlockTxnResponse, SYNC_PROTO_V1, SYNC_PROTO_V2);
 impl Message for GetBlockTxnResponse {
-    fn as_any(&self) -> &dyn Any { self }
+    fn is_size_sensitive(&self) -> bool { self.block_txn.len() > 1 }
 
     fn msg_id(&self) -> MsgId { msgid::GET_BLOCK_TXN_RESPONSE }
 
     fn msg_name(&self) -> &'static str { "GetBlockTxnResponse" }
-
-    fn is_size_sensitive(&self) -> bool { self.block_txn.len() > 1 }
 }
 
+impl GetMaybeRequestId for TransactionDigests {}
+mark_msg_version_bound!(TransactionDigests, SYNC_PROTO_V1, SYNC_PROTO_V2);
 impl Message for TransactionDigests {
-    fn as_any(&self) -> &dyn Any { self }
+    fn is_size_sensitive(&self) -> bool { self.len() > 1 }
 
     fn msg_id(&self) -> MsgId { msgid::TRANSACTION_DIGESTS }
 
     fn msg_name(&self) -> &'static str { "TransactionDigests" }
 
-    fn is_size_sensitive(&self) -> bool { self.len() > 1 }
-
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 }
 
-impl Message for GetTransactions {
-    fn as_any(&self) -> &dyn Any { self }
-
-    fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS }
-
-    fn msg_name(&self) -> &'static str { "GetTransactions" }
-
-    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
-}
-
+impl GetMaybeRequestId for GetTransactionsResponse {}
+mark_msg_version_bound!(GetTransactionsResponse, SYNC_PROTO_V1, SYNC_PROTO_V2);
 impl Message for GetTransactionsResponse {
-    fn as_any(&self) -> &dyn Any { self }
+    fn is_size_sensitive(&self) -> bool { self.transactions.len() > 0 }
 
     fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS_RESPONSE }
 
     fn msg_name(&self) -> &'static str { "GetTransactionsResponse" }
 
+    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
+}
+impl GetMaybeRequestId for GetTransactionsFromTxHashesResponse {}
+mark_msg_version_bound!(
+    GetTransactionsFromTxHashesResponse,
+    SYNC_PROTO_V1,
+    SYNC_PROTO_V2
+);
+impl Message for GetTransactionsFromTxHashesResponse {
     fn is_size_sensitive(&self) -> bool { self.transactions.len() > 0 }
+
+    fn msg_id(&self) -> MsgId {
+        msgid::GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE
+    }
+
+    fn msg_name(&self) -> &'static str { "GetTransactionsFromTxHashesResponse" }
 
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 }
-
-// generate `impl HasRequestId for _` for each request type
-build_has_request_id_impl! { GetBlockHashesByEpoch }
-build_has_request_id_impl! { GetBlockHeaders }
-build_has_request_id_impl! { GetBlockHeadersResponse }
-build_has_request_id_impl! { GetBlocks }
-build_has_request_id_impl! { GetBlockTxn }
-build_has_request_id_impl! { GetCompactBlocks }
-build_has_request_id_impl! { GetTransactions }
-
 /// handle the RLP encoded message with given context `ctx`.
 /// If the message not handled, return `Ok(false)`.
 /// Otherwise, return `Ok(true)` if handled successfully
@@ -164,78 +189,127 @@ pub fn handle_rlp_message(
     id: MsgId, ctx: &Context, rlp: &Rlp,
 ) -> Result<bool, Error> {
     match id {
-        msgid::STATUS => rlp.as_val::<Status>()?.handle(ctx)?,
-        msgid::NEW_BLOCK => rlp.as_val::<NewBlock>()?.handle(&ctx)?,
+        msgid::STATUS_DEPRECATED => {
+            handle_message::<StatusDeprecatedV1>(ctx, rlp)?
+        }
+        msgid::STATUS_V2 => handle_message::<StatusV2>(ctx, rlp)?,
+        msgid::NEW_BLOCK => handle_message::<NewBlock>(ctx, rlp)?,
         msgid::NEW_BLOCK_HASHES => {
-            rlp.as_val::<NewBlockHashes>()?.handle(&ctx)?;
+            handle_message::<NewBlockHashes>(ctx, rlp)?;
         }
         msgid::GET_BLOCK_HEADERS => {
-            rlp.as_val::<GetBlockHeaders>()?.handle(ctx)?;
+            handle_message::<GetBlockHeaders>(ctx, rlp)?;
         }
         msgid::GET_BLOCK_HEADERS_RESPONSE => {
-            rlp.as_val::<GetBlockHeadersResponse>()?.handle(&ctx)?;
+            handle_message::<GetBlockHeadersResponse>(ctx, rlp)?;
         }
-        msgid::GET_BLOCKS => rlp.as_val::<GetBlocks>()?.handle(&ctx)?,
+        msgid::GET_BLOCKS => handle_message::<GetBlocks>(ctx, rlp)?,
         msgid::GET_BLOCKS_RESPONSE => {
-            rlp.as_val::<GetBlocksResponse>()?.handle(&ctx)?;
+            handle_message::<GetBlocksResponse>(ctx, rlp)?;
         }
         msgid::GET_BLOCKS_WITH_PUBLIC_RESPONSE => {
-            rlp.as_val::<GetBlocksWithPublicResponse>()?.handle(&ctx)?;
+            handle_message::<GetBlocksWithPublicResponse>(ctx, rlp)?;
         }
         msgid::GET_TERMINAL_BLOCK_HASHES => {
-            rlp.as_val::<GetTerminalBlockHashes>()?.handle(&ctx)?;
+            handle_message::<GetTerminalBlockHashes>(ctx, rlp)?;
         }
         msgid::GET_TERMINAL_BLOCK_HASHES_RESPONSE => {
-            rlp.as_val::<GetTerminalBlockHashesResponse>()?
-                .handle(&ctx)?;
+            handle_message::<GetTerminalBlockHashesResponse>(ctx, rlp)?;
         }
         msgid::GET_CMPCT_BLOCKS => {
-            rlp.as_val::<GetCompactBlocks>()?.handle(&ctx)?;
+            handle_message::<GetCompactBlocks>(ctx, rlp)?;
         }
         msgid::GET_CMPCT_BLOCKS_RESPONSE => {
-            rlp.as_val::<GetCompactBlocksResponse>()?.handle(&ctx)?;
+            handle_message::<GetCompactBlocksResponse>(ctx, rlp)?;
         }
         msgid::GET_BLOCK_TXN => {
-            rlp.as_val::<GetBlockTxn>()?.handle(&ctx)?;
+            handle_message::<GetBlockTxn>(ctx, rlp)?;
         }
         msgid::GET_BLOCK_TXN_RESPONSE => {
-            rlp.as_val::<GetBlockTxnResponse>()?.handle(&ctx)?;
+            handle_message::<GetBlockTxnResponse>(ctx, rlp)?;
         }
         msgid::TRANSACTIONS => {
-            rlp.as_val::<Transactions>()?.handle(&ctx)?;
+            handle_message::<Transactions>(ctx, rlp)?;
         }
         msgid::DYNAMIC_CAPABILITY_CHANGE => {
-            rlp.as_val::<DynamicCapabilityChange>()?.handle(&ctx)?;
+            handle_message::<DynamicCapabilityChange>(ctx, rlp)?;
         }
         msgid::TRANSACTION_DIGESTS => {
-            rlp.as_val::<TransactionDigests>()?.handle(&ctx)?;
+            handle_message::<TransactionDigests>(ctx, rlp)?;
         }
         msgid::GET_TRANSACTIONS => {
-            rlp.as_val::<GetTransactions>()?.handle(&ctx)?;
+            handle_message::<GetTransactions>(ctx, rlp)?;
+        }
+        msgid::GET_TRANSACTIONS_FROM_TX_HASHES => {
+            handle_message::<GetTransactionsFromTxHashes>(ctx, rlp)?;
         }
         msgid::GET_TRANSACTIONS_RESPONSE => {
-            rlp.as_val::<GetTransactionsResponse>()?.handle(&ctx)?;
+            handle_message::<GetTransactionsResponse>(ctx, rlp)?;
+        }
+        msgid::GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE => {
+            handle_message::<GetTransactionsFromTxHashesResponse>(ctx, rlp)?;
         }
         msgid::GET_BLOCK_HASHES_BY_EPOCH => {
-            rlp.as_val::<GetBlockHashesByEpoch>()?.handle(&ctx)?;
+            handle_message::<GetBlockHashesByEpoch>(ctx, rlp)?;
         }
         msgid::GET_BLOCK_HASHES_RESPONSE => {
-            rlp.as_val::<GetBlockHashesResponse>()?.handle(&ctx)?;
+            handle_message::<GetBlockHashesResponse>(ctx, rlp)?;
         }
         msgid::GET_SNAPSHOT_MANIFEST => {
-            rlp.as_val::<SnapshotManifestRequest>()?.handle(&ctx)?;
+            handle_message::<SnapshotManifestRequest>(ctx, rlp)?;
         }
         msgid::GET_SNAPSHOT_MANIFEST_RESPONSE => {
-            rlp.as_val::<SnapshotManifestResponse>()?.handle(&ctx)?;
+            handle_message::<SnapshotManifestResponse>(ctx, rlp)?;
         }
         msgid::GET_SNAPSHOT_CHUNK => {
-            rlp.as_val::<SnapshotChunkRequest>()?.handle(&ctx)?;
+            handle_message::<SnapshotChunkRequest>(ctx, rlp)?;
         }
         msgid::GET_SNAPSHOT_CHUNK_RESPONSE => {
-            rlp.as_val::<SnapshotChunkResponse>()?.handle(&ctx)?;
+            handle_message::<SnapshotChunkResponse>(ctx, rlp)?;
+        }
+        msgid::STATE_SYNC_CANDIDATE_REQUEST => {
+            handle_message::<StateSyncCandidateRequest>(ctx, rlp)?;
+        }
+        msgid::STATE_SYNC_CANDIDATE_RESPONSE => {
+            handle_message::<StateSyncCandidateResponse>(ctx, rlp)?;
+        }
+        msgid::THROTTLED => {
+            handle_message::<Throttled>(ctx, rlp)?;
         }
         _ => return Ok(false),
     }
 
     Ok(true)
+}
+
+fn handle_message<T: Decodable + Handleable + Message>(
+    ctx: &Context, rlp: &Rlp,
+) -> Result<(), Error> {
+    let msg: T = decode_rlp_and_check_deprecation(
+        rlp,
+        ctx.manager.minimum_supported_version(),
+        ctx.io.get_protocol(),
+    )?;
+
+    let msg_id = msg.msg_id();
+    let msg_name = msg.msg_name();
+    let req_id = msg.get_request_id();
+
+    trace!(
+        "handle sync protocol message, peer = {}, id = {}, name = {}, request_id = {:?}",
+        ctx.node_id, msg_id, msg_name, req_id,
+    );
+
+    msg.throttle(ctx)?;
+
+    if let Err(e) = msg.handle(ctx) {
+        debug!(
+            "failed to handle sync protocol message, peer = {}, id = {}, name = {}, request_id = {:?}, error_kind = {:?}",
+            ctx.node_id, msg_id, msg_name, req_id, e.0,
+        );
+
+        return Err(e);
+    }
+
+    Ok(())
 }

@@ -2,24 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::H256;
+use cfx_types::{hexstr_to_h256, H256};
 use primitives::Block;
 use std::{
     collections::{HashSet, VecDeque},
     sync::Arc,
 };
-
-// from /core/benchmark/storage/src/main.rs
-fn hexstr_to_h256(hex_str: &str) -> H256 {
-    assert_eq!(hex_str.len(), 64);
-    let mut bytes: [u8; 32] = Default::default();
-
-    for i in 0..32 {
-        bytes[i] = u8::from_str_radix(&hex_str[i * 2..i * 2 + 2], 16).unwrap();
-    }
-
-    H256::from(bytes)
-}
 
 fn open_db(db_path: &str) -> std::io::Result<Arc<db::SystemDB>> {
     let db_config = db::db_config(
@@ -27,13 +15,14 @@ fn open_db(db_path: &str) -> std::io::Result<Arc<db::SystemDB>> {
         None,
         db::DatabaseCompactionProfile::default(),
         cfxcore::db::NUM_COLUMNS,
+        false,
     );
 
     db::open_database(db_path, &db_config)
 }
 
 fn retrieve_block(db: &Arc<db::SystemDB>, hash: &H256) -> Option<Block> {
-    let block = db.key_value().get(cfxcore::db::COL_BLOCKS, hash).expect(
+    let block = db.key_value().get(cfxcore::db::COL_BLOCKS, hash.as_bytes()).expect(
         "Low level database error when fetching block. Some issue with disk?",
     )?;
 
@@ -41,7 +30,7 @@ fn retrieve_block(db: &Arc<db::SystemDB>, hash: &H256) -> Option<Block> {
     let block =
         Block::decode_with_tx_public(&rlp).expect("Wrong block rlp format!");
 
-    return Some(block);
+    Some(block)
 }
 
 fn fmt_hash(hash: &H256) -> String {

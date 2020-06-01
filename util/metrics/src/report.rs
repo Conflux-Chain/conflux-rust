@@ -1,3 +1,7 @@
+// Copyright 2019 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 use crate::{
     counter::{Counter, CounterUsize},
     gauge::{Gauge, GaugeUsize},
@@ -6,12 +10,19 @@ use crate::{
     metrics::is_enabled,
     registry::{DEFAULT_GROUPING_REGISTRY, DEFAULT_REGISTRY},
 };
+use lazy_static::lazy_static;
 use std::{
     fs::OpenOptions,
     io::Write,
+    sync::Arc,
     thread,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+
+lazy_static! {
+    static ref REPORT_TIME: Arc<dyn Gauge<usize>> =
+        GaugeUsize::register("metrics_report_time");
+}
 
 pub trait Reporter: Send {
     fn report(&self) -> Result<(), String>;
@@ -25,10 +36,12 @@ pub fn report_async<R: 'static + Reporter>(reporter: R, interval: Duration) {
     thread::spawn(move || loop {
         thread::sleep(interval);
 
+        let start = Instant::now();
         if let Err(e) = reporter.report() {
             eprintln!("Exit metrics reporting due to error: {}", e);
             break;
         }
+        REPORT_TIME.update(start.elapsed().as_nanos() as usize);
     });
 }
 

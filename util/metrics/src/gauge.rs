@@ -1,3 +1,7 @@
+// Copyright 2019 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 use crate::{
     metrics::{is_enabled, Metric, ORDER},
     registry::{DEFAULT_GROUPING_REGISTRY, DEFAULT_REGISTRY},
@@ -21,7 +25,7 @@ macro_rules! construct_gauge {
         }
 
         impl $name {
-            pub fn register(name: &'static str) -> Arc<dyn Gauge<$data_type>> {
+            pub fn register(name: &str) -> Arc<dyn Gauge<$data_type>> {
                 if !is_enabled() {
                     return Arc::new(NoopGauge);
                 }
@@ -35,7 +39,7 @@ macro_rules! construct_gauge {
             }
 
             pub fn register_with_group(
-                group: &'static str, name: &'static str,
+                group: &str, name: &str,
             ) -> Arc<dyn Gauge<$data_type>> {
                 if !is_enabled() {
                     return Arc::new(NoopGauge);
@@ -59,7 +63,7 @@ macro_rules! construct_gauge {
         }
 
         impl Metric for $name {
-            fn get_type(&self) -> &'static str { "Gauge" }
+            fn get_type(&self) -> &str { "Gauge" }
         }
     };
 }

@@ -1,3 +1,7 @@
+// Copyright 2019-2020 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 // Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
@@ -27,29 +31,28 @@ mod memory;
 mod shared_cache;
 mod stack;
 
-use crate::{bytes::Bytes, hash::keccak};
-use cfx_types::{Address, H256, U256, U512};
-use std::{cmp, marker::PhantomData, mem, sync::Arc};
-
-use crate::vm::{
-    self, ActionParams, ActionValue, CallType, ContractCreateResult,
-    CreateContractAddress, GasLeft, MessageCallResult, ParamsType, ReturnData,
-    Spec, TrapError, TrapKind,
-};
-
-use super::{
-    evm::CostType,
-    instructions::{self, Instruction, InstructionInfo},
-};
-
 pub use self::shared_cache::SharedCache;
 use self::{
     gasometer::Gasometer,
     memory::Memory,
     stack::{Stack, VecStack},
 };
-
+use super::{
+    evm::CostType,
+    instructions::{self, Instruction, InstructionInfo},
+};
+use crate::{
+    bytes::Bytes,
+    hash::keccak,
+    vm::{
+        self, ActionParams, ActionValue, CallType, ContractCreateResult,
+        CreateContractAddress, GasLeft, MessageCallResult, ParamsType,
+        ReturnData, Spec, TrapError, TrapKind,
+    },
+};
 use bit_set::BitSet;
+use cfx_types::{Address, BigEndianHash, H256, U256, U512};
+use std::{cmp, convert::TryFrom, marker::PhantomData, mem, sync::Arc};
 
 const GASOMETER_PROOF: &str = "If gasometer is None, Err is immediately returned in step; this function is only called by step; qed";
 
@@ -65,6 +68,10 @@ const TWO_POW_64: U256 = U256([0, 0x1, 0, 0]); // 0x1 00000000 00000000
 const TWO_POW_96: U256 = U256([0, 0x100000000, 0, 0]); //0x1 00000000 00000000 00000000
 const TWO_POW_224: U256 = U256([0, 0, 0, 0x100000000]); //0x1 00000000 00000000 00000000 00000000 00000000 00000000 00000000
 const TWO_POW_248: U256 = U256([0, 0, 0, 0x100000000000000]); //0x1 00000000 00000000 00000000 00000000 00000000 00000000 00000000 000000
+
+/// Maximal subroutine stack size as specified in
+/// https://eips.ethereum.org/EIPS/eip-2315.
+pub const MAX_SUB_STACK_SIZE: usize = 1024;
 
 /// Abstraction over raw vector of Bytes. Easier state management of PC.
 struct CodeReader {
@@ -91,6 +98,8 @@ enum InstructionResult<Gas> {
     Ok,
     UnusedGas(Gas),
     JumpToPosition(U256),
+    JumpToSubroutine(U256),
+    ReturnFromSubroutine(usize),
     StopExecutionNeedsReturn {
         /// Gas left.
         gas: Gas,
@@ -105,8 +114,6 @@ enum InstructionResult<Gas> {
     Trap(TrapKind),
 }
 
-enum Never {}
-
 /// ActionParams without code, so that it can be feed into CodeReader.
 #[derive(Debug)]
 struct InterpreterParams {
@@ -119,8 +126,11 @@ struct InterpreterParams {
     pub address: Address,
     /// Sender of current part of the transaction.
     pub sender: Address,
-    /// Transaction initiator.
-    pub origin: Address,
+    /// This is the address of original sender of the transaction.
+    pub original_sender: Address,
+    /// This is the address of original receiver of the transaction.
+    /// If it is a contract call, it is the address of the contract.
+    pub storage_owner: Address,
     /// Gas paid up front for transaction execution
     pub gas: U256,
     /// Gas price.
@@ -142,7 +152,8 @@ impl From<ActionParams> for InterpreterParams {
             code_hash: params.code_hash,
             address: params.address,
             sender: params.sender,
-            origin: params.origin,
+            original_sender: params.original_sender,
+            storage_owner: params.storage_owner,
             gas: params.gas,
             gas_price: params.gas_price,
             value: params.value,
@@ -182,8 +193,10 @@ pub struct Interpreter<Cost: CostType> {
     do_trace: bool,
     done: bool,
     valid_jump_destinations: Option<Arc<BitSet>>,
+    valid_subroutine_destinations: Option<Arc<BitSet>>,
     gasometer: Option<Gasometer<Cost>>,
     stack: VecStack<U256>,
+    return_stack: Vec<usize>,
     resume_output_range: Option<(U256, U256)>,
     resume_result: Option<InstructionResult<Cost>>,
     last_stack_ret_len: usize,
@@ -302,10 +315,12 @@ impl<Cost: CostType> Interpreter<Cost> {
         let params = InterpreterParams::from(params);
         let informant = informant::EvmInformant::new(depth);
         let valid_jump_destinations = None;
+        let valid_subroutine_destinations = None;
         let gasometer = Cost::from_u256(params.gas)
             .ok()
             .map(|gas| Gasometer::<Cost>::new(gas));
         let stack = VecStack::with_capacity(spec.stack_limit, U256::zero());
+        let return_stack = Vec::with_capacity(MAX_SUB_STACK_SIZE);
 
         Interpreter {
             cache,
@@ -313,8 +328,10 @@ impl<Cost: CostType> Interpreter<Cost> {
             reader,
             informant,
             valid_jump_destinations,
+            valid_subroutine_destinations,
             gasometer,
             stack,
+            return_stack,
             done: false,
             do_trace: true,
             mem: Vec::new(),
@@ -345,8 +362,6 @@ impl<Cost: CostType> Interpreter<Cost> {
             )))
         } else {
             self.step_inner(context)
-                .err()
-                .expect("step_inner never returns Ok(()); qed")
         };
 
         if let &InterpreterResult::Done(_) = &result {
@@ -360,7 +375,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     #[inline(always)]
     fn step_inner(
         &mut self, context: &mut dyn vm::Context,
-    ) -> Result<Never, InterpreterResult> {
+    ) -> InterpreterResult {
         let result = match self.resume_result.take() {
             Some(result) => result,
             None => {
@@ -384,20 +399,24 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let instruction = match instruction {
                     Some(i) => i,
                     None => {
-                        return Err(InterpreterResult::Done(Err(
+                        return InterpreterResult::Done(Err(
                             vm::Error::BadInstruction {
                                 instruction: opcode,
                             },
-                        )));
+                        ));
                     }
                 };
 
                 let info = instruction.info();
                 self.last_stack_ret_len = info.ret;
-                self.verify_instruction(context, instruction, info)?;
+                if let Err(e) =
+                    self.verify_instruction(context, instruction, info)
+                {
+                    return InterpreterResult::Done(Err(e));
+                }
 
                 // Calculate gas cost
-                let requirements = self
+                let requirements = match self
                     .gasometer
                     .as_mut()
                     .expect(GASOMETER_PROOF)
@@ -407,7 +426,10 @@ impl<Cost: CostType> Interpreter<Cost> {
                         info,
                         &self.stack,
                         self.mem.size(),
-                    )?;
+                    ) {
+                    Ok(t) => t,
+                    Err(e) => return InterpreterResult::Done(Err(e)),
+                };
                 if self.do_trace {
                     context.trace_prepare_execute(
                         self.reader.position - 1,
@@ -418,10 +440,14 @@ impl<Cost: CostType> Interpreter<Cost> {
                     );
                 }
 
-                self.gasometer
+                if let Err(e) = self
+                    .gasometer
                     .as_mut()
                     .expect(GASOMETER_PROOF)
-                    .verify_gas(&requirements.gas_cost)?;
+                    .verify_gas(&requirements.gas_cost)
+                {
+                    return InterpreterResult::Done(Err(e));
+                }
                 self.mem.expand(requirements.memory_required_size);
                 self.gasometer
                     .as_mut()
@@ -448,12 +474,17 @@ impl<Cost: CostType> Interpreter<Cost> {
                 // Execute instruction
                 let current_gas =
                     self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas;
-                let result = self.exec_instruction(
+                let result = match self.exec_instruction(
                     current_gas,
                     context,
                     instruction,
                     requirements.provide_gas,
-                )?;
+                ) {
+                    Err(x) => {
+                        return InterpreterResult::Done(Err(x));
+                    }
+                    Ok(x) => x,
+                };
 
                 evm_debug!({ self.informant.after_instruction(instruction) });
 
@@ -462,7 +493,7 @@ impl<Cost: CostType> Interpreter<Cost> {
         };
 
         if let InstructionResult::Trap(trap) = result {
-            return Err(InterpreterResult::Trap(trap));
+            return InterpreterResult::Trap(trap);
         }
 
         if let InstructionResult::UnusedGas(ref gas) = result {
@@ -487,17 +518,47 @@ impl<Cost: CostType> Interpreter<Cost> {
         match result {
             InstructionResult::JumpToPosition(position) => {
                 if self.valid_jump_destinations.is_none() {
-                    self.valid_jump_destinations =
-                        Some(self.cache.jump_destinations(
-                            &self.params.code_hash,
-                            &self.reader.code,
-                        ));
+                    self.valid_jump_destinations = Some(
+                        self.cache
+                            .jump_and_sub_destinations(
+                                &self.params.code_hash,
+                                &self.reader.code,
+                            )
+                            .0,
+                    );
                 }
                 let jump_destinations =
                     self.valid_jump_destinations.as_ref().expect(
                         "jump_destinations are initialized on first jump; qed",
                     );
-                let pos = self.verify_jump(position, jump_destinations)?;
+                let pos = match self.verify_jump(position, jump_destinations) {
+                    Ok(x) => x,
+                    Err(e) => return InterpreterResult::Done(Err(e)),
+                };
+                self.reader.position = pos;
+            }
+            InstructionResult::JumpToSubroutine(position) => {
+                if self.valid_subroutine_destinations.is_none() {
+                    self.valid_subroutine_destinations = Some(
+                        self.cache
+                            .jump_and_sub_destinations(
+                                &self.params.code_hash,
+                                &self.reader.code,
+                            )
+                            .1,
+                    );
+                }
+                let subroutine_destinations = self.valid_subroutine_destinations.as_ref().expect("subroutine_destinations are initialized on first jump; qed");
+                let pos =
+                    match self.verify_jump(position, subroutine_destinations) {
+                        Ok(x) => x,
+                        Err(e) => return InterpreterResult::Done(Err(e)),
+                    };
+                self.return_stack.push(self.reader.position);
+                // JUMPSUB will land on the next position after BEGINSUB
+                self.reader.position = pos + 1;
+            }
+            InstructionResult::ReturnFromSubroutine(pos) => {
                 self.reader.position = pos;
             }
             InstructionResult::StopExecutionNeedsReturn {
@@ -507,37 +568,35 @@ impl<Cost: CostType> Interpreter<Cost> {
                 apply,
             } => {
                 let mem = mem::replace(&mut self.mem, Vec::new());
-                return Err(InterpreterResult::Done(Ok(
-                    GasLeft::NeedsReturn {
-                        gas_left: gas.as_u256(),
-                        data: mem.into_return_data(init_off, init_size),
-                        apply_state: apply,
-                    },
-                )));
+                return InterpreterResult::Done(Ok(GasLeft::NeedsReturn {
+                    gas_left: gas.as_u256(),
+                    data: mem.into_return_data(init_off, init_size),
+                    apply_state: apply,
+                }));
             }
             InstructionResult::StopExecution => {
-                return Err(InterpreterResult::Done(Ok(GasLeft::Known(
+                return InterpreterResult::Done(Ok(GasLeft::Known(
                     self.gasometer
                         .as_mut()
                         .expect(GASOMETER_PROOF)
                         .current_gas
                         .as_u256(),
-                ))));
+                )));
             }
             _ => {}
         }
 
         if self.reader.position >= self.reader.len() {
-            return Err(InterpreterResult::Done(Ok(GasLeft::Known(
+            return InterpreterResult::Done(Ok(GasLeft::Known(
                 self.gasometer
                     .as_mut()
                     .expect(GASOMETER_PROOF)
                     .current_gas
                     .as_u256(),
-            ))));
+            )));
         }
 
-        Err(InterpreterResult::Continue)
+        InterpreterResult::Continue
     }
 
     fn verify_instruction(
@@ -562,6 +621,13 @@ impl<Cost: CostType> Interpreter<Cost> {
                 && !spec.have_bitwise_shifting)
             || (instruction == instructions::EXTCODEHASH
                 && !spec.have_extcodehash)
+            || ((instruction == instructions::BEGINSUB
+                || instruction == instructions::JUMPSUB
+                || instruction == instructions::RETURNSUB)
+                && !spec.have_subs)
+            || (instruction == instructions::CHAINID && !spec.have_chain_id)
+            || (instruction == instructions::SELFBALANCE
+                && !spec.have_self_balance)
         {
             return Err(vm::Error::BadInstruction {
                 instruction: instruction as u8,
@@ -629,6 +695,7 @@ impl<Cost: CostType> Interpreter<Cost> {
         instruction: Instruction, provided: Option<Cost>,
     ) -> vm::Result<InstructionResult<Cost>>
     {
+        trace!("exec instruction: {:?}", instruction);
         match instruction {
             instructions::JUMP => {
                 let jump = self.stack.pop_back();
@@ -644,13 +711,43 @@ impl<Cost: CostType> Interpreter<Cost> {
             instructions::JUMPDEST => {
                 // ignore
             }
+            instructions::BEGINSUB => {
+                // BEGINSUB should not be executed. If so, returns OutOfGas
+                // (EIP-2315).
+                return Err(vm::Error::OutOfGas);
+            }
+            instructions::JUMPSUB => {
+                if self.return_stack.len() >= MAX_SUB_STACK_SIZE {
+                    return Err(vm::Error::OutOfSubStack {
+                        wanted: 1,
+                        limit: MAX_SUB_STACK_SIZE,
+                    });
+                }
+                let sub_destination = self.stack.pop_back();
+                return Ok(InstructionResult::JumpToSubroutine(
+                    sub_destination,
+                ));
+            }
+            instructions::RETURNSUB => {
+                if let Some(pos) = self.return_stack.pop() {
+                    return Ok(InstructionResult::ReturnFromSubroutine(pos));
+                } else {
+                    return Err(vm::Error::SubStackUnderflow {
+                        wanted: 1,
+                        on_stack: 0,
+                    });
+                }
+            }
             instructions::CREATE | instructions::CREATE2 => {
                 let endowment = self.stack.pop_back();
                 let init_off = self.stack.pop_back();
                 let init_size = self.stack.pop_back();
                 let address_scheme = match instruction {
-					instructions::CREATE => CreateContractAddress::FromSenderAndNonce,
-					instructions::CREATE2 => CreateContractAddress::FromSenderSaltAndCodeHash(self.stack.pop_back().into()),
+					instructions::CREATE => CreateContractAddress::FromSenderNonceAndCodeHash,
+					instructions::CREATE2 => {
+                        let h: H256 = BigEndianHash::from_uint(&self.stack.pop_back());
+                        CreateContractAddress::FromSenderSaltAndCodeHash(h)
+                    },
 					_ => unreachable!("instruction can only be CREATE/CREATE2 checked above; qed"),
 				};
 
@@ -905,7 +1002,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                     .stack
                     .pop_n(no_of_topics)
                     .iter()
-                    .map(H256::from)
+                    .map(BigEndianHash::from_uint)
                     .collect();
                 context.log(topics, self.mem.read_slice(offset, size))?;
             }
@@ -968,26 +1065,20 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let offset = self.stack.pop_back();
                 let size = self.stack.pop_back();
                 let k = keccak(self.mem.read_slice(offset, size));
-                self.stack.push(U256::from(&*k));
+                self.stack.push(k.into_uint());
             }
             instructions::SLOAD => {
-                let key = H256::from(&self.stack.pop_back());
-                let word = U256::from(&*context.storage_at(&key)?);
+                let mut key = vec![0; 32];
+                self.stack.pop_back().to_big_endian(key.as_mut());
+                let word = context.storage_at(&key)?.into_uint();
                 self.stack.push(word);
             }
             instructions::SSTORE => {
-                let address = H256::from(&self.stack.pop_back());
+                let mut key = vec![0; 32];
+                self.stack.pop_back().to_big_endian(key.as_mut());
                 let val = self.stack.pop_back();
 
-                let current_val = U256::from(&*context.storage_at(&address)?);
-
-                if !current_val.is_zero() && val.is_zero() {
-                    let sstore_clears_schedule =
-                        context.spec().sstore_refund_gas;
-                    context.add_sstore_refund(sstore_clears_schedule);
-                }
-
-                context.set_storage(address, H256::from(&val))?;
+                context.set_storage(key, BigEndianHash::from_uint(&val))?;
             }
             instructions::PC => {
                 self.stack.push(U256::from(self.reader.position - 1));
@@ -1000,7 +1091,8 @@ impl<Cost: CostType> Interpreter<Cost> {
                     .push(address_to_u256(self.params.address.clone()));
             }
             instructions::ORIGIN => {
-                self.stack.push(address_to_u256(self.params.origin.clone()));
+                self.stack
+                    .push(address_to_u256(self.params.original_sender.clone()));
             }
             instructions::BALANCE => {
                 let address = u256_to_address(&self.stack.pop_back());
@@ -1054,7 +1146,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let address = u256_to_address(&self.stack.pop_back());
                 let hash =
                     context.extcodehash(&address)?.unwrap_or_else(H256::zero);
-                self.stack.push(U256::from(hash));
+                self.stack.push(hash.into_uint());
             }
             instructions::CALLDATACOPY => {
                 Self::copy_data_to_memory(
@@ -1104,7 +1196,7 @@ impl<Cost: CostType> Interpreter<Cost> {
             instructions::BLOCKHASH => {
                 let block_number = self.stack.pop_back();
                 let block_hash = context.blockhash(&block_number);
-                self.stack.push(U256::from(&*block_hash));
+                self.stack.push(block_hash.into_uint());
             }
             instructions::COINBASE => {
                 self.stack
@@ -1121,6 +1213,10 @@ impl<Cost: CostType> Interpreter<Cost> {
             }
             instructions::GASLIMIT => {
                 self.stack.push(context.env().gas_limit.clone());
+            }
+            instructions::CHAINID => self.stack.push(context.chain_id().into()),
+            instructions::SELFBALANCE => {
+                self.stack.push(context.balance(&self.params.address)?);
             }
 
             // Stack instructions
@@ -1337,7 +1433,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                         let a5 = U512::from(a);
                         let res = a5.overflowing_add(U512::from(b)).0;
                         let x = res % U512::from(c);
-                        U256::from(x)
+                        U256::try_from(x).expect("U512 % U256 fits U256; qed")
                     } else {
                         U256::zero()
                     },
@@ -1353,7 +1449,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                         let a5 = U512::from(a);
                         let res = a5.overflowing_mul(U512::from(b)).0;
                         let x = res % U512::from(c);
-                        U256::from(x)
+                        U256::try_from(x).expect("U512 % U256 fits U256; qed")
                     } else {
                         U256::zero()
                     },
@@ -1501,10 +1597,13 @@ fn set_sign(value: U256, sign: bool) -> U256 {
 }
 
 #[inline]
-fn u256_to_address(value: &U256) -> Address { Address::from(H256::from(value)) }
+fn u256_to_address(value: &U256) -> Address {
+    let addr: H256 = BigEndianHash::from_uint(value);
+    Address::from(addr)
+}
 
 #[inline]
-fn address_to_u256(value: Address) -> U256 { U256::from(&*H256::from(value)) }
+fn address_to_u256(value: Address) -> U256 { H256::from(value).into_uint() }
 
 #[cfg(test)]
 mod tests {
@@ -1514,6 +1613,7 @@ mod tests {
         tests::{test_finalize, MockContext},
         ActionParams, ActionValue, Exec,
     };
+    use cfx_types::Address;
     use rustc_hex::FromHex;
     use std::sync::Arc;
 
@@ -1532,13 +1632,15 @@ mod tests {
         let code = "7feeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff006000527faaffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffaa6020526000620f120660406000601773945304eb96065b2a98b57a48a06ae28d285a71b56101f4f1600055".from_hex().unwrap();
 
         let mut params = ActionParams::default();
-        params.address = 5.into();
+        params.address = Address::from_low_u64_be(5);
         params.gas = 300_000.into();
         params.gas_price = 1.into();
         params.value = ActionValue::Transfer(100_000.into());
         params.code = Some(Arc::new(code));
         let mut context = MockContext::new();
-        context.balances.insert(5.into(), 1_000_000_000.into());
+        context
+            .balances
+            .insert(Address::from_low_u64_be(5), 1_000_000_000.into());
         context.tracing = true;
 
         //let gas_left = {
@@ -1556,12 +1658,14 @@ mod tests {
         let code = "6001600160000360003e00".from_hex().unwrap();
 
         let mut params = ActionParams::default();
-        params.address = 5.into();
+        params.address = Address::from_low_u64_be(5);
         params.gas = 300_000.into();
         params.gas_price = 1.into();
         params.code = Some(Arc::new(code));
         let mut context = MockContext::new_spec();
-        context.balances.insert(5.into(), 1_000_000_000.into());
+        context
+            .balances
+            .insert(Address::from_low_u64_be(5), 1_000_000_000.into());
         context.tracing = true;
 
         let err = {

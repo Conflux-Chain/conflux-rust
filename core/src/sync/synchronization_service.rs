@@ -7,11 +7,10 @@ use super::{
 };
 use crate::{
     light_protocol::Provider as LightProvider,
-    parameters::sync::SYNCHRONIZATION_PROTOCOL_VERSION,
     sync::{
-        synchronization_phases::SyncPhaseType,
+        request_manager::RequestManager, synchronization_phases::SyncPhaseType,
         synchronization_protocol_handler::ProtocolConfiguration,
-        SynchronizationPhaseTrait,
+        StateSyncConfiguration, SynchronizationPhaseTrait,
     },
 };
 use cfx_types::H256;
@@ -30,16 +29,20 @@ impl SynchronizationService {
         is_full_node: bool, network: Arc<NetworkService>,
         sync_graph: SharedSynchronizationGraph,
         protocol_config: ProtocolConfiguration,
+        state_sync_config: StateSyncConfiguration,
         initial_sync_phase: SyncPhaseType, light_provider: Arc<LightProvider>,
     ) -> Self
     {
         let sync_handler = Arc::new(SynchronizationProtocolHandler::new(
             is_full_node,
             protocol_config,
+            state_sync_config,
             initial_sync_phase,
-            sync_graph,
+            sync_graph.clone(),
             light_provider,
         ));
+
+        assert_eq!(sync_handler.is_consortium(), sync_graph.is_consortium());
 
         SynchronizationService {
             network,
@@ -54,6 +57,10 @@ impl SynchronizationService {
 
     pub fn get_synchronization_graph(&self) -> SharedSynchronizationGraph {
         self.protocol_handler.get_synchronization_graph()
+    }
+
+    pub fn get_request_manager(&self) -> Arc<RequestManager> {
+        self.protocol_handler.get_request_manager()
     }
 
     pub fn current_sync_phase(&self) -> Arc<dyn SynchronizationPhaseTrait> {
@@ -71,28 +78,31 @@ impl SynchronizationService {
         self.network.register_protocol(
             self.protocol_handler.clone(),
             self.protocol,
-            &[SYNCHRONIZATION_PROTOCOL_VERSION],
+            self.protocol_handler.protocol_version,
         )?;
         Ok(())
     }
 
-    fn relay_blocks(&self, need_to_relay: Vec<H256>) {
-        // FIXME: We may need to propagate the error up
-        let _res = self.network.with_context(self.protocol, |io| {
-            self.protocol_handler.relay_blocks(io, need_to_relay)
-        });
+    fn relay_blocks(&self, need_to_relay: Vec<H256>) -> Result<(), Error> {
+        self.network.with_context(
+            self.protocol_handler.clone(),
+            self.protocol,
+            |io| self.protocol_handler.relay_blocks(io, need_to_relay),
+        )?
     }
 
-    pub fn on_mined_block(&self, block: Block) {
+    pub fn on_mined_block(&self, block: Block) -> Result<(), Error> {
         let hash = block.hash();
         self.protocol_handler.on_mined_block(block);
-        self.relay_blocks(vec![hash]);
+        self.relay_blocks(vec![hash])
     }
 
     pub fn expire_block_gc(&self, timeout: u64) {
-        let _res = self.network.with_context(self.protocol, |io| {
-            self.protocol_handler.expire_block_gc(io, timeout)
-        });
+        let _res = self.network.with_context(
+            self.protocol_handler.clone(),
+            self.protocol,
+            |io| self.protocol_handler.expire_block_gc(io, timeout),
+        );
     }
 }
 

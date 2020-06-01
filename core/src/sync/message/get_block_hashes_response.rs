@@ -23,19 +23,19 @@ impl Handleable for GetBlockHashesResponse {
         debug!("on_block_hashes_response, msg={:?}", self);
 
         let req = ctx.match_request(self.request_id)?;
+        let delay = req.delay;
         let epoch_req = req.downcast_ref::<GetBlockHashesByEpoch>(
             ctx.io,
             &ctx.manager.request_manager,
-            true,
         )?;
 
         // assume received everything
         // FIXME: peer should signal error?
-        let req = epoch_req.epochs.clone().into_iter().collect();
-        let rec = epoch_req.epochs.clone().into_iter().collect();
+        let req = epoch_req.epochs.iter().cloned().collect();
+        let rec = epoch_req.epochs.iter().cloned().collect();
         ctx.manager
             .request_manager
-            .epochs_received(ctx.io, req, rec);
+            .epochs_received(ctx.io, req, rec, delay);
 
         // request missing headers
         let missing_headers = self
@@ -52,7 +52,7 @@ impl Handleable for GetBlockHashesResponse {
 
         ctx.manager.request_block_headers(
             ctx.io,
-            Some(ctx.peer),
+            Some(ctx.node_id),
             missing_headers,
             true, /* ignore_db */
         );

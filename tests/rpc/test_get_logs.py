@@ -7,6 +7,7 @@ from test_framework.util import assert_equal, assert_raises_rpc_error
 
 class TestGetLogs(RpcClient):
     def test_invalid_filter(self):
+        self.generate_blocks_to_state()
         # invalid epoch type
         filter = Filter(from_epoch=0)
         assert_raises_rpc_error(None, None, self.get_logs, filter)

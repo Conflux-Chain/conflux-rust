@@ -6,32 +6,38 @@
 /// All	values are represented in MB.
 use std::cmp::max;
 
-const MIN_DB_CACHE_MB: usize = 8;
+pub const DEFAULT_LEDGER_CACHE_SIZE: usize = 1024;
 const MIN_LEDGER_CACHE_MB: usize = 4;
-const DEFAULT_DB_CACHE_SIZE: usize = 128;
-const DEFAULT_LEDGER_CACHE_SIZE: usize = 2048;
+
+pub const DEFAULT_INVALID_BLOCK_HASH_CACHE_SIZE_IN_COUNT: usize = 32 * 1024;
 
 #[derive(Debug, PartialEq)]
 pub struct CacheConfig {
-    /// Size of rocksDB cache.
-    pub db: usize,
     /// Size of ledger cache.
     pub ledger: usize,
+    /// The maximum number of cached invalid block hashes
+    pub invalid_block_hashes_cache_size_in_count: usize,
 }
 
 impl Default for CacheConfig {
     fn default() -> Self {
-        CacheConfig::new(DEFAULT_DB_CACHE_SIZE, DEFAULT_LEDGER_CACHE_SIZE)
+        CacheConfig::new(
+            DEFAULT_LEDGER_CACHE_SIZE,
+            DEFAULT_INVALID_BLOCK_HASH_CACHE_SIZE_IN_COUNT,
+        )
     }
 }
 
 impl CacheConfig {
-    /// Creates new cache config with gitven details.
-    pub fn new(db: usize, ledger: usize) -> Self { CacheConfig { db, ledger } }
-
-    /// Size of db cache.
-    #[allow(dead_code)]
-    pub fn db_cache_size(&self) -> usize { max(MIN_DB_CACHE_MB, self.db) }
+    /// Creates new cache config with given details.
+    pub fn new(
+        ledger: usize, invalid_block_hashes_cache_size_in_count: usize,
+    ) -> Self {
+        CacheConfig {
+            ledger,
+            invalid_block_hashes_cache_size_in_count,
+        }
+    }
 
     /// Size of the ledger cache.
     pub fn ledger_mb(&self) -> usize { max(self.ledger, MIN_LEDGER_CACHE_MB) }

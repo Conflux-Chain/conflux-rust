@@ -37,8 +37,10 @@ const SYSTEM_ACCOUNT_SECRET_BYTES: &str =
     "46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f";
 lazy_static! {
     static ref SYSTEM_ACCOUNT_SECRET: Secret = {
-        Secret::from_slice(&hexstr_to_h256(&SYSTEM_ACCOUNT_SECRET_BYTES))
-            .unwrap()
+        Secret::from_slice(
+            hexstr_to_h256(&SYSTEM_ACCOUNT_SECRET_BYTES).as_ref(),
+        )
+        .unwrap()
     };
 }
 
@@ -682,7 +684,9 @@ impl<RequestT: FIFOConsumerRequestTrait> FIFOConsumerThread<RequestT> {
 
     pub fn new_arc<ResultT: ResultTrait>(
         consumer_results: Arc<Mutex<FIFOConsumerResult<ResultT>>>,
-        mut processor: Box<FnMut(RequestT) -> (usize, ResultT) + Send + Sync>,
+        mut processor: Box<
+            dyn FnMut(RequestT) -> (usize, ResultT) + Send + Sync,
+        >,
     ) -> Arc<Mutex<FIFOConsumerThread<RequestT>>>
     {
         let (sender, receiver) = mpsc::sync_channel(10_000);
@@ -1146,8 +1150,8 @@ impl<EthTxT: EthTxTypeTrait> EthTxExtractor<EthTxT> {
         let extractor_arc = result.as_ref().unwrap().clone();
         // FIXME: remove unsafes.
         unsafe {
-            (&mut *(extractor_arc.as_ref() as *const EthTxExtractor<EthTxT>
-                as *mut EthTxExtractor<EthTxT>))
+            &mut *(extractor_arc.as_ref() as *const EthTxExtractor<EthTxT>
+                as *mut EthTxExtractor<EthTxT>)
         }
         .shared_self = Some(extractor_arc.clone());
 
@@ -1520,7 +1524,7 @@ fn tx_extract<U: TxExtractor, T: Deref<Target = U> + Sync + Send + 'static>(
                 }
 
                 let mut to_parse = buffer.as_slice();
-                'parse: loop {
+                '_parse: loop {
                     // Try to parse rlp.
                     let payload_info_result = Rlp::new(to_parse).payload_info();
                     if payload_info_result.is_err() {
@@ -1575,6 +1579,10 @@ struct TxReplayer {
     storage_manager: Arc<StorageManager>,
     tx_counts: Cell<u64>,
     ops_counts: Cell<u64>,
+    block_height: Cell<i64>,
+    commit_log: KvdbSqlite<Box<[u8]>>,
+    commit_log_vec: Mutex<Vec<StateRootWithAuxInfo>>,
+    state_availability_boundary: RwLock<StateAvailabilityBoundary>,
 
     exit: Arc<(Mutex<bool>, Condvar)>,
 }
@@ -1588,34 +1596,30 @@ impl Drop for TxReplayer {
 
 impl TxReplayer {
     const EPOCH_TXS: u64 = 20000;
+    const SNAPSHOT_EPOCHS_CAPACITY: u32 = 400;
 
-    pub fn new(db_dir: &str) -> TxReplayer {
-        let db_config = db::db_config(
-            Path::new(db_dir),
-            None,
-            db::DatabaseCompactionProfile::SSD,
-            cfxcore::db::NUM_COLUMNS.clone(),
+    pub fn new(
+        conflux_data_dir: &str, reset_db: bool, debug_snapshot_integrity: bool,
+    ) -> errors::Result<TxReplayer> {
+        if reset_db {
+            match fs::remove_dir_all(conflux_data_dir) {
+                Ok(_) => {}
+                Err(ref e) if e.kind() == io::ErrorKind::NotFound => {}
+                e @ Err(_) => e.unwrap(),
+            }
+        }
+
+        let mut storage_configuration = StorageConfiguration::new_default(
+            conflux_data_dir.to_string() + "/",
         );
-
-        let db = db::open_database(db_dir, &db_config).unwrap();
-
-        let storage_manager = Arc::new(StorageManager::new(
-            db,
-            StorageConfiguration {
-                //cache_start_size: 10_000,
-                cache_start_size:
-                    cfxcore::storage::defaults::DEFAULT_CACHE_START_SIZE,
-                //cache_size: 10_000,
-                cache_size: cfxcore::storage::defaults::DEFAULT_CACHE_SIZE,
-                //idle_size: 10_000,
-                idle_size: cfxcore::storage::defaults::DEFAULT_IDLE_SIZE,
-                //node_map_size: 10_000,
-                node_map_size:
-                    cfxcore::storage::defaults::DEFAULT_NODE_MAP_SIZE,
-                recent_lfu_factor:
-                    cfxcore::storage::defaults::DEFAULT_RECENT_LFU_FACTOR,
-            },
-        ));
+        // Check data-integrity for snapshot mpt with 4 threads.
+        if debug_snapshot_integrity {
+            storage_configuration.debug_snapshot_checker_threads = 4;
+        }
+        storage_configuration.consensus_param.snapshot_epoch_count =
+            Self::SNAPSHOT_EPOCHS_CAPACITY;
+        let storage_manager =
+            Arc::new(StorageManager::new(storage_configuration)?);
 
         let exit: Arc<(Mutex<bool>, Condvar)> = Default::default();
 
@@ -1637,42 +1641,120 @@ impl TxReplayer {
             }
         });
 
-        TxReplayer {
+        let commit_log_path = conflux_data_dir.to_string() + "/commit_log";
+
+        Ok(TxReplayer {
             storage_manager,
             tx_counts: Cell::new(0),
             ops_counts: Cell::new(0),
+            block_height: Cell::new(0),
+            commit_log: KvdbSqlite::open_or_create(
+                commit_log_path,
+                Arc::new(KvdbSqliteStatements::make_statements(
+                    &["state_root_with_aux_info"],
+                    &["BLOB"],
+                    "commit_log",
+                    true,
+                )?),
+            )?
+            .1,
+            commit_log_vec: Default::default(),
+            state_availability_boundary: RwLock::new(
+                StateAvailabilityBoundary {
+                    pivot_chain: vec![],
+                    synced_state_height: 0,
+                    lower_bound: 0,
+                    upper_bound: 0,
+                    optimistic_executed_height: None,
+                },
+            ),
             exit,
-        }
+        })
     }
 
-    pub fn commit(latest_state: &mut StateDb, txs: u64, ops: u64) -> H256 {
-        warn!("Committing block at tx {}, ops {}.", txs, ops);
+    pub fn commit(
+        &self, latest_state: &mut StateDb, txs: u64, ops: u64,
+    ) -> errors::Result<StateRootWithAuxInfo> {
+        warn!("Committing epoch at tx {}, ops {}.", txs, ops);
 
         let storage = latest_state.get_storage_mut();
-        let state_root =
-            storage.compute_state_root().unwrap().state_root.delta_root;
-        storage.commit(state_root).unwrap();
-        state_root
+        let state_root_with_aux = storage.compute_state_root().unwrap();
+        let epoch_id = state_root_with_aux.state_root.delta_root;
+        storage.commit(epoch_id).unwrap();
+        let block_height = self.block_height.get();
+        {
+            let mut state_availability_boundary_mut =
+                self.state_availability_boundary.write();
+            state_availability_boundary_mut.upper_bound = block_height as u64;
+            state_availability_boundary_mut.pivot_chain.push(epoch_id);
+        }
+        let confirmation_lag = 20;
+        if block_height > confirmation_lag {
+            let confirmed_height = (block_height - confirmation_lag) as u64;
+            let commit_log_vec_locked = self.commit_log_vec.lock();
+            let confirmed_epoch_state_root =
+                &commit_log_vec_locked[(confirmed_height - 1) as usize];
+            let confirmed_epoch_hash =
+                &confirmed_epoch_state_root.state_root.delta_root;
+            self.storage_manager
+                .get_storage_manager()
+                .maintain_snapshots_pivot_chain_confirmed(
+                    confirmed_height,
+                    confirmed_epoch_hash,
+                    confirmed_epoch_state_root,
+                    &self.state_availability_boundary,
+                )?;
+        }
+        self.block_height.set(block_height + 1);
+        self.commit_log.put_with_number_key(
+            block_height,
+            &state_root_with_aux.to_rlp_bytes(),
+        )?;
+        self.commit_log_vec.lock().push(state_root_with_aux.clone());
+
+        Ok(state_root_with_aux)
     }
 
-    pub fn add_tx<'a>(
-        &'a self, tx: RealizedEthTx, latest_state: &mut StateDb<'a>,
-        last_state_root: &mut H256,
-    )
+    // FIXME: use and test performance with ExecutionStatePrefetcher
+    pub fn add_tx(
+        &self, tx: RealizedEthTx, latest_state: &mut StateDb,
+        last_state_root: &mut StateRootWithAuxInfo,
+    ) -> errors::Result<()>
     {
         if let Some(sender) = tx.sender {
-            let maybe_account = latest_state.get_account(&sender).unwrap();
+            let maybe_account = latest_state
+                .get_account(
+                    // Transmute between different version of ethereum-types
+                    // because conflux use a newer version
+                    unsafe { std::mem::transmute(&sender) },
+                )
+                .unwrap();
             self.ops_counts.set(self.ops_counts.get() + 2);
             match maybe_account {
                 Some(mut account) => {
                     account.balance = account
                         .balance
-                        .overflowing_sub(tx.amount_wei + tx.tx_fee_wei)
+                        .overflowing_sub(
+                            // Transmute between different version of
+                            // ethereum-types because conflux use a newer
+                            // version
+                            unsafe {
+                                std::mem::transmute(
+                                    tx.amount_wei + tx.tx_fee_wei,
+                                )
+                            },
+                        )
                         .0;
                     latest_state
                         .set::<Account>(
-                            &latest_state.account_key(&sender),
+                            StorageKey::new_account_key(
+                                // Transmute between different version of
+                                // ethereum-types because conflux use a newer
+                                // version
+                                unsafe { std::mem::transmute(&sender) },
+                            ),
                             &account,
+                            None,
                         )
                         .unwrap();
                 }
@@ -1683,63 +1765,89 @@ impl TxReplayer {
             }
         }
         if let Some(receiver) = tx.receiver {
-            let maybe_account = latest_state.get_account(&receiver).unwrap();
+            let maybe_account = latest_state
+                .get_account(
+                    // Transmute between different version of
+                    // ethereum-types because conflux use a newer
+                    // version
+                    unsafe { std::mem::transmute(&receiver) },
+                )
+                .unwrap();
             let mut account;
             match maybe_account {
                 Some(account_) => {
                     account = account_;
-                    account.balance =
-                        account.balance.overflowing_add(tx.amount_wei).0;
+                    account.balance = account
+                        .balance
+                        .overflowing_add(
+                            // Transmute between different version of
+                            // ethereum-types because conflux use a newer
+                            // version
+                            unsafe { std::mem::transmute(tx.amount_wei) },
+                        )
+                        .0;
                 }
                 _ => {
                     account = Account::new_empty_with_balance(
-                        &receiver,
-                        &tx.amount_wei,
-                        &0.into(),
+                        // Transmute between different version of
+                        // ethereum-types because conflux use a newer
+                        // version
+                        unsafe { std::mem::transmute(&receiver) },
+                        // Transmute between different version of
+                        // ethereum-types because conflux use a newer
+                        // version
+                        unsafe { std::mem::transmute(&tx.amount_wei) }, /* balance */
+                        &0.into(), /* nonce */
                     );
                 }
             }
             latest_state
-                .set::<Account>(&latest_state.account_key(&receiver), &account)
+                .set::<Account>(
+                    StorageKey::new_account_key(
+                        // Transmute between different version of
+                        // ethereum-types because conflux use a newer
+                        // version
+                        unsafe { std::mem::transmute(&receiver) },
+                    ),
+                    &account,
+                    None,
+                )
                 .unwrap();
             self.ops_counts.set(self.ops_counts.get() + 2);
         }
 
         self.tx_counts.set(self.tx_counts.get() + 1);
         if self.tx_counts.get() % Self::EPOCH_TXS == 0 {
-            *last_state_root = Self::commit(
+            *last_state_root = self.commit(
                 latest_state,
                 self.tx_counts.get(),
                 self.ops_counts.get(),
-            );
+            )?;
             *latest_state = StateDb::new(
                 self.storage_manager
-                    .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(
-                        last_state_root,
-                        None,
+                    .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
+                        &last_state_root.state_root.delta_root,
+                        &last_state_root,
+                        self.block_height.get() as u64,
+                        self.storage_manager
+                            .get_storage_manager()
+                            .get_snapshot_epoch_count(),
                     ))
                     .unwrap()
                     .unwrap(),
             );
         }
+
+        Ok(())
     }
-}
-
-fn hexstr_to_h256(hex_str: &str) -> H256 {
-    assert_eq!(hex_str.len(), 64);
-
-    let mut bytes: [u8; 32] = Default::default();
-
-    for i in 0..32 {
-        bytes[i] = u8::from_str_radix(&hex_str[i * 2..i * 2 + 2], 16).unwrap();
-    }
-
-    H256::from(bytes)
 }
 
 fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
-    let tx_replayer =
-        TxReplayer::new(matches.value_of("storage_db_dir").unwrap());
+    let tx_replayer = TxReplayer::new(
+        matches.value_of("conflux_data_dir").unwrap(),
+        matches.occurrences_of("reset_db") > 0,
+        matches.occurrences_of("debug_check_snapshot_integrity") > 0,
+    )?;
 
     let txs_to_process = match matches.value_of("txs_to_process") {
         None => None,
@@ -1754,42 +1862,48 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
     let mut latest_state;
     let mut last_state_root;
 
-    if tx_replayer
-        .storage_manager
-        .start_commit()
-        .info
-        .row_number
-        .value
-        == 0
-    {
-        last_state_root = H256::default();
+    if matches.occurrences_of("reset_db") > 0 {
+        last_state_root = StateRootWithAuxInfo::genesis(&MERKLE_NULL_NODE);
         latest_state = StateDb::new(
             tx_replayer.storage_manager.get_state_for_genesis_write(),
         );
     } else {
-        last_state_root =
-            hexstr_to_h256(&matches.value_of("last_state_root").unwrap());
-        let true_state_root = tx_replayer
-            .storage_manager
-            .get_state_no_commit(SnapshotAndEpochIdRef::new(
-                &last_state_root,
-                None,
-            ))
-            .unwrap()
-            .unwrap()
-            .compute_state_root()
-            .unwrap();
-        assert_eq!(true_state_root.state_root.delta_root, last_state_root);
-        latest_state = StateDb::new(
-            tx_replayer
-                .storage_manager
-                .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(
-                    &last_state_root,
-                    None,
-                ))
-                .unwrap()
-                .unwrap(),
-        );
+        match matches.value_of("last_epoch_number") {
+            None => {
+                last_state_root =
+                    StateRootWithAuxInfo::genesis(&MERKLE_NULL_NODE);
+                latest_state = StateDb::new(
+                    tx_replayer.storage_manager.get_state_for_genesis_write(),
+                );
+            }
+            Some(state_to_load) => {
+                let block_height = state_to_load.parse::<i64>()?;
+                tx_replayer.block_height.set(block_height);
+                last_state_root = StateRootWithAuxInfo::from_rlp_bytes(
+                    &tx_replayer
+                        .commit_log
+                        .get_with_number_key(block_height)?
+                        .unwrap(),
+                )?;
+                latest_state = StateDb::new(
+                    tx_replayer
+                        .storage_manager
+                        .get_state_for_next_epoch(
+                            StateIndex::new_for_next_epoch(
+                                &last_state_root.state_root.delta_root,
+                                &last_state_root,
+                                block_height as u64,
+                                tx_replayer
+                                    .storage_manager
+                                    .get_storage_manager()
+                                    .get_snapshot_epoch_count(),
+                            ),
+                        )
+                        .unwrap()
+                        .unwrap(),
+                );
+            }
+        }
     }
 
     // Load block RLP from file.
@@ -1847,7 +1961,7 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
                 }
 
                 let mut to_parse = buffer.as_slice();
-                'parse: loop {
+                '_parse: loop {
                     // Try to parse rlp.
                     let payload_info_result = Rlp::new(to_parse).payload_info();
                     if payload_info_result.is_err() {
@@ -1889,7 +2003,7 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
                         tx,
                         &mut latest_state,
                         &mut last_state_root,
-                    );
+                    )?;
                 }
             }
             Err(err) => {
@@ -1904,11 +2018,11 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
             }
         }
     }
-    last_state_root = TxReplayer::commit(
+    last_state_root = tx_replayer.commit(
         &mut latest_state,
         tx_replayer.tx_counts.get(),
         tx_replayer.ops_counts.get(),
-    );
+    )?;
     warn!("tx replay last state_root = {:?}", last_state_root);
     Ok(())
 }
@@ -1960,17 +2074,24 @@ fn main() -> errors::Result<()> {
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("storage_db_dir")
-                .value_name("storage db dir")
-                .help("storage db dir")
+            Arg::with_name("conflux_data_dir")
+                .value_name("Conflux data dir")
+                .help("Conflux data dir")
                 .short("d")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("last_state_root")
-                .value_name("last state root")
-                .help("last state root from previous tx replay")
-                .short("r")
+            Arg::with_name("reset_db")
+                .value_name("reset database")
+                .help("reset database and start from genesis")
+                .short("R")
+                .takes_value(false),
+        )
+        .arg(
+            Arg::with_name("last_epoch_number")
+                .value_name("last epoch number")
+                .help("last epoch number from previous tx replay")
+                .short("h")
                 .takes_value(true),
         )
         .arg(
@@ -2030,11 +2151,16 @@ fn main() -> errors::Result<()> {
     }
 }
 
+use cfx_types::hexstr_to_h256;
 use cfxcore::{
+    block_data_manager::StateAvailabilityBoundary,
     statedb::StateDb,
     storage::{
-        state_manager::StorageConfiguration, SnapshotAndEpochIdRef,
-        StorageManager, StorageManagerTrait, StorageTrait,
+        state::StateTrait,
+        storage_db::key_value_db::{KeyValueDbTrait, KeyValueDbTraitRead},
+        KvdbSqlite, KvdbSqliteStatements, StateIndex, StateRootWithAuxInfo,
+        StateRootWithAuxInfoToFromRlpBytes, StorageConfiguration,
+        StorageManager, StorageManagerTrait,
     },
 };
 use clap::{App, Arg, ArgMatches};
@@ -2054,19 +2180,18 @@ use ethkey::{public_to_address, Secret};
 use heapsize::HeapSizeOf;
 use lazy_static::*;
 use log::*;
-use parking_lot::{Condvar, Mutex};
-use primitives::Account;
+use parking_lot::{Condvar, Mutex, RwLock};
+use primitives::{Account, StorageKey, MERKLE_NULL_NODE};
 use rlp::{Decodable, *};
 use std::{
     cell::Cell,
     collections::{vec_deque::VecDeque, BTreeMap},
     fmt::Debug,
-    fs::File,
+    fs::{self, File},
     io::{self, Read, Write},
     marker::{Send, Sync},
     mem,
     ops::{Deref, Shr},
-    path::Path,
     slice,
     sync::{
         atomic::{AtomicUsize, Ordering},

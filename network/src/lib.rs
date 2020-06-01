@@ -21,7 +21,6 @@ extern crate serde_derive;
 extern crate enum_map;
 extern crate igd;
 extern crate keccak_hash as hash;
-extern crate keylib;
 extern crate libc;
 extern crate parity_path;
 extern crate rand;
@@ -30,6 +29,7 @@ extern crate enum_map_derive;
 extern crate strum;
 #[macro_use]
 extern crate strum_macros;
+extern crate cfxkey as keylib;
 extern crate keccak_hash;
 
 pub const PROTOCOL_ID_SIZE: usize = 3;
@@ -45,13 +45,12 @@ mod ip;
 mod ip_utils;
 mod node_database;
 pub mod node_table;
-mod service;
+pub mod service;
 mod session;
 mod session_manager;
 pub mod throttling;
 
 pub use crate::{
-    connection::get_high_priority_packets,
     error::{DisconnectReason, Error, ErrorKind, ThrottlingReason},
     ip::SessionIpLimitConfig,
     node_table::Node,
@@ -63,7 +62,7 @@ pub use io::TimerToken;
 use crate::{
     node_table::NodeId,
     service::{
-        DEFAULT_CONNECTION_LIFETIME_FOR_PROMOTION,
+        ProtocolVersion, DEFAULT_CONNECTION_LIFETIME_FOR_PROMOTION,
         DEFAULT_DISCOVERY_REFRESH_TIMEOUT, DEFAULT_DISCOVERY_ROUND_TIMEOUT,
         DEFAULT_FAST_DISCOVERY_REFRESH_TIMEOUT, DEFAULT_HOUSEKEEPING_TIMEOUT,
         DEFAULT_NODE_TABLE_TIMEOUT,
@@ -87,6 +86,9 @@ pub const NODE_TAG_ARCHIVE: &str = "archive";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NetworkConfiguration {
+    pub is_consortium: bool,
+    /// Network identifier
+    pub id: u64,
     /// Directory path to store general network configuration. None means
     /// nothing will be saved
     pub config_path: Option<String>,
@@ -135,13 +137,11 @@ pub struct NetworkConfiguration {
     pub session_ip_limit_config: SessionIpLimitConfig,
 }
 
-impl Default for NetworkConfiguration {
-    fn default() -> Self { NetworkConfiguration::new() }
-}
-
 impl NetworkConfiguration {
-    pub fn new() -> Self {
+    pub fn new(id: u64) -> Self {
         NetworkConfiguration {
+            is_consortium: false,
+            id,
             config_path: Some("./net_config".to_string()),
             listen_address: None,
             public_address: None,
@@ -150,10 +150,10 @@ impl NetworkConfiguration {
             discovery_enabled: false,
             boot_nodes: Vec::new(),
             use_secret: None,
-            max_outgoing_peers: 16,
+            max_outgoing_peers: 0,
             max_outgoing_peers_archive: 0,
-            max_incoming_peers: 32,
-            max_handshakes: 64,
+            max_incoming_peers: 0,
+            max_handshakes: 0,
             reserved_nodes: Vec::new(),
             ip_filter: IpFilter::default(),
             housekeeping_timeout: DEFAULT_HOUSEKEEPING_TIMEOUT,
@@ -170,8 +170,8 @@ impl NetworkConfiguration {
         }
     }
 
-    pub fn new_with_port(port: u16) -> NetworkConfiguration {
-        let mut config = NetworkConfiguration::new();
+    pub fn new_with_port(id: u64, port: u16) -> NetworkConfiguration {
+        let mut config = NetworkConfiguration::new(id);
         config.listen_address = Some(SocketAddr::V4(SocketAddrV4::new(
             Ipv4Addr::new(0, 0, 0, 0),
             port,
@@ -179,8 +179,8 @@ impl NetworkConfiguration {
         config
     }
 
-    pub fn new_local() -> NetworkConfiguration {
-        let mut config = NetworkConfiguration::new();
+    pub fn new_local(id: u64) -> NetworkConfiguration {
+        let mut config = NetworkConfiguration::new(id);
         config.listen_address = Some(SocketAddr::V4(SocketAddrV4::new(
             Ipv4Addr::new(127, 0, 0, 1),
             0,
@@ -189,13 +189,22 @@ impl NetworkConfiguration {
     }
 }
 
+/// Type of NAT resolving method
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum NatType {
+    Nothing,
+    Any,
+    UPnP,
+    NatPMP,
+}
+
 #[derive(Clone)]
 pub enum NetworkIoMessage {
     Start,
     AddHandler {
         handler: Arc<dyn NetworkProtocolHandler + Sync>,
         protocol: ProtocolId,
-        versions: Vec<u8>,
+        version: ProtocolVersion,
     },
     /// Register a new protocol timer
     AddTimer {
@@ -212,28 +221,40 @@ pub enum NetworkIoMessage {
         /// Work type.
         work_type: HandlerWorkType,
     },
+    HandleProtocolMessage {
+        protocol: ProtocolId,
+        peer: PeerId,
+        node_id: NodeId,
+        data: Vec<u8>,
+    },
 }
 
 pub trait NetworkProtocolHandler: Sync + Send {
-    fn initialize(&self, _io: &dyn NetworkContext) {}
+    fn minimum_supported_version(&self) -> ProtocolVersion;
 
-    fn on_message(&self, io: &dyn NetworkContext, peer: PeerId, data: &[u8]);
+    fn initialize(&self, _io: &dyn NetworkContext);
 
-    fn on_peer_connected(&self, io: &dyn NetworkContext, peer: PeerId);
+    fn on_message(
+        &self, io: &dyn NetworkContext, node_id: &NodeId, data: &[u8],
+    );
 
-    fn on_peer_disconnected(&self, io: &dyn NetworkContext, peer: PeerId);
+    fn on_peer_connected(
+        &self, io: &dyn NetworkContext, node_id: &NodeId,
+        peer_protocol_version: ProtocolVersion,
+    );
+
+    fn on_peer_disconnected(&self, io: &dyn NetworkContext, node_id: &NodeId);
 
     fn on_timeout(&self, io: &dyn NetworkContext, timer: TimerToken);
 
-    fn send_local_message(&self, _io: &dyn NetworkContext, _message: Vec<u8>) {}
+    fn send_local_message(&self, _io: &dyn NetworkContext, _message: Vec<u8>);
 
     fn on_work_dispatch(
         &self, _io: &dyn NetworkContext, _work_type: HandlerWorkType,
-    ) {
-    }
+    );
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum UpdateNodeOperation {
     Failure,
     Demotion,
@@ -241,15 +262,18 @@ pub enum UpdateNodeOperation {
 }
 
 pub trait NetworkContext {
-    fn get_peer_node_id(&self, peer: PeerId) -> NodeId;
+    fn get_protocol(&self) -> ProtocolId;
+
+    fn get_peer_connection_origin(&self, node_id: &NodeId) -> Option<bool>;
 
     fn send(
-        &self, peer: PeerId, msg: Vec<u8>, priority: SendQueuePriority,
+        &self, node_id: &NodeId, msg: Vec<u8>,
+        min_protocol_version: ProtocolVersion,
+        version_valid_till: ProtocolVersion, priority: SendQueuePriority,
     ) -> Result<(), Error>;
 
     fn disconnect_peer(
-        &self, peer: PeerId, op: Option<UpdateNodeOperation>,
-        reason: Option<&'static str>,
+        &self, node_id: &NodeId, op: Option<UpdateNodeOperation>, reason: &str,
     );
 
     /// Register a new IO timer. 'IoHandler::timeout' will be called with the
@@ -260,24 +284,28 @@ pub trait NetworkContext {
 
     fn dispatch_work(&self, work_type: HandlerWorkType);
 
-    fn insert_peer_node_tag(&self, peer: PeerId, key: &str, value: &str);
+    fn is_peer_self(&self, _node_id: &NodeId) -> bool;
+
+    fn self_node_id(&self) -> NodeId;
 }
 
 #[derive(Debug, Clone)]
 pub struct SessionMetadata {
     pub id: Option<NodeId>,
-    pub capabilities: Vec<Capability>,
-    pub peer_capabilities: Vec<Capability>,
+    /// There won't be many protocols so it's faster to use Vec than Map.
+    pub peer_protocols: Vec<ProtocolInfo>,
     pub originated: bool,
+    /// Packet header version of the peer.
+    pub peer_header_version: u8,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Capability {
+pub struct ProtocolInfo {
     pub protocol: ProtocolId,
-    pub version: u8,
+    pub version: ProtocolVersion,
 }
 
-impl Encodable for Capability {
+impl Encodable for ProtocolInfo {
     fn rlp_append(&self, rlp: &mut RlpStream) {
         rlp.begin_list(2);
         rlp.append(&&self.protocol[..]);
@@ -285,7 +313,7 @@ impl Encodable for Capability {
     }
 }
 
-impl Decodable for Capability {
+impl Decodable for ProtocolInfo {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         let p: Vec<u8> = rlp.val_at(0)?;
         if p.len() != 3 {
@@ -295,22 +323,22 @@ impl Decodable for Capability {
         }
         let mut protocol: ProtocolId = [0u8; 3];
         protocol.clone_from_slice(&p);
-        Ok(Capability {
+        Ok(ProtocolInfo {
             protocol,
             version: rlp.val_at(1)?,
         })
     }
 }
 
-impl PartialOrd for Capability {
-    fn partial_cmp(&self, other: &Capability) -> Option<Ordering> {
+impl PartialOrd for ProtocolInfo {
+    fn partial_cmp(&self, other: &ProtocolInfo) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for Capability {
-    fn cmp(&self, other: &Capability) -> Ordering {
-        return self.protocol.cmp(&other.protocol);
+impl Ord for ProtocolInfo {
+    fn cmp(&self, other: &ProtocolInfo) -> Ordering {
+        self.protocol.cmp(&other.protocol)
     }
 }
 
@@ -319,7 +347,7 @@ pub struct PeerInfo {
     pub id: PeerId,
     pub addr: SocketAddr,
     pub nodeid: NodeId,
-    pub caps: Vec<Capability>,
+    pub protocols: Vec<ProtocolInfo>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -350,7 +378,7 @@ impl IpFilter {
                 "public" => filter.predefined = AllowIP::Public,
                 "none" => filter.predefined = AllowIP::None,
                 custom => {
-                    if custom.starts_with("-") {
+                    if custom.starts_with('-') {
                         filter.custom_block.push(IpNetwork::from_str(
                             &custom.to_owned().split_off(1),
                         )?)
@@ -375,4 +403,23 @@ pub enum AllowIP {
     Public,
     /// Block all addresses
     None,
+}
+
+pub fn parse_msg_id_leb128_2_bytes_at_most(msg: &mut &[u8]) -> u16 {
+    let buf = *msg;
+
+    let mut ret = 0;
+    let mut pos = buf.len() - 1;
+
+    let byte = buf[pos] as u16;
+    ret |= byte & 0x7f;
+    if byte & 0x80 != 0 {
+        pos -= 1;
+        let byte = buf[pos] as u16;
+        ret |= (byte & 0x7f) << 7;
+    }
+
+    *msg = &buf[..pos];
+
+    ret
 }

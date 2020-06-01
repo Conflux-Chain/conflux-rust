@@ -61,27 +61,21 @@ pub enum MessageCallResult {
 /// Specifies how an address is calculated for a new contract.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum CreateContractAddress {
-    /// Address is calculated from sender and nonce. pWASM `create` scheme.
-    FromSenderAndNonce,
+    /// Address is calculated from sender, nonce, and code hash. Conflux
+    /// `create` scheme.
+    FromSenderNonceAndCodeHash,
     /// Address is calculated from sender, salt and code hash. pWASM `create2`
     /// scheme.
     FromSenderSaltAndCodeHash(H256),
-    /// Address is calculated from code hash and sender. Used by pwasm create
-    /// ext.
-    FromSenderAndCodeHash,
 }
 
 /// Context for VMs
 pub trait Context {
-    /// Returns the storage value for a given key if reversion happens on the
-    /// current transaction.
-    fn initial_storage_at(&self, key: &H256) -> Result<H256>;
-
     /// Returns a value for given key.
-    fn storage_at(&self, key: &H256) -> Result<H256>;
+    fn storage_at(&self, key: &Vec<u8>) -> Result<H256>;
 
     /// Stores a value for given key.
-    fn set_storage(&mut self, key: H256, value: H256) -> Result<()>;
+    fn set_storage(&mut self, key: Vec<u8>, value: H256) -> Result<()>;
 
     /// Determine whether an account exists.
     fn exists(&self, address: &Address) -> Result<bool>;
@@ -146,6 +140,9 @@ pub trait Context {
 
     /// Returns environment.
     fn env(&self) -> &Env;
+
+    /// Returns the chain ID of the blockchain
+    fn chain_id(&self) -> u64;
 
     /// Returns current depth of execution.
     ///

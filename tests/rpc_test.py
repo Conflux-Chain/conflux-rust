@@ -6,16 +6,18 @@ import types
 
 from conflux.config import default_config
 from conflux.messages import GetBlockHeaders, GET_BLOCK_HEADERS_RESPONSE, Transactions
-from conflux.utils import int_to_hex, privtoaddr, encode_hex
+from conflux.utils import int_to_hex, priv_to_addr, encode_hex
 from test_framework.blocktools import make_genesis, create_transaction
 from test_framework.mininode import start_p2p_connection
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.util import assert_equal, connect_nodes, get_peer_addr, wait_until, WaitHandler, checktx
+from test_framework.util import assert_equal, connect_nodes, get_peer_addr, wait_until, WaitHandler, checktx, \
+    initialize_datadir
+
 
 class RpcTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 2
+        self.conf_parameters = {"log_level": "\"trace\""}
 
     def setup_network(self):
         self.setup_nodes()
@@ -24,11 +26,11 @@ class RpcTest(ConfluxTestFramework):
         time.sleep(7)
         self._test_sayhello()
 
-        blocks = self.nodes[0].generate(1, 0)
+        blocks = self.nodes[0].generate_empty_blocks(1)
         self.best_block_hash = blocks[-1] #make_genesis().block_header.hash
 
         self._test_getblockcount()
-        self._test_getbestblockhash()
+        self._test_best_block_hash()
         self._test_getpeerinfo()
         self._test_addlatency()
         self._test_getstatus()
@@ -57,8 +59,15 @@ class RpcTest(ConfluxTestFramework):
                     self._test_class(name, obj)
 
     def _test_class(self, class_name, class_type):
-        obj = class_type(self.nodes[0])
-        
+        # TODO Clean old nodes
+        # Setup a clean node to run each test
+        self.stop_nodes()
+        self.add_nodes(1)
+        node_index = len(self.nodes) - 1
+        initialize_datadir(self.options.tmpdir, node_index, self.conf_parameters)
+        self.start_node(node_index)
+        obj = class_type(self.nodes[node_index])
+
         for name in dir(obj):
             m = getattr(obj, name)
             if type(m) is types.MethodType and name.startswith("test_"):
@@ -79,9 +88,9 @@ class RpcTest(ConfluxTestFramework):
         self.log.info("Test getgoodput")
         # TODO test in the future
 
-    def _test_getbestblockhash(self):
-        self.log.info("Test getbestblockhash")
-        res = self.nodes[0].getbestblockhash()
+    def _test_best_block_hash(self):
+        self.log.info("Test best_block_hash")
+        res = self.nodes[0].best_block_hash()
         assert_equal(self.best_block_hash, res)
 
     def _test_getpeerinfo(self):
@@ -116,10 +125,10 @@ class RpcTest(ConfluxTestFramework):
         handler.wait()
 
     def _test_getstatus(self):
-        self.log.info("Test getstatus")
-        res = self.nodes[0].getstatus()
+        self.log.info("Test cfx_getStatus")
+        res = self.nodes[0].cfx_getStatus()
         block_count = self.nodes[0].getblockcount()
-        assert_equal(block_count, res['blockNumber'])
+        assert_equal(hex(block_count), res['blockNumber'])
 
     def _test_stop(self):
         self.log.info("Test stop")

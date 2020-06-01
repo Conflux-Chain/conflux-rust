@@ -9,7 +9,6 @@ from test_framework.util import *
 
 class SyncTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 2
 
     def setup_network(self):
@@ -24,7 +23,7 @@ class SyncTest(ConfluxTestFramework):
 
         start_p2p_connection(self.nodes)
         
-        best_block = self.nodes[1].generate(1, 0)[0]
+        best_block = self.nodes[1].generate_empty_blocks(1)[0]
         block1 = create_block(parent_hash=decode_hex(best_block), height=2)
         block2 = create_block(parent_hash=decode_hex(best_block), height=2, author=b'\x01' * 20)
         self.nodes[1].p2p.send_protocol_msg(NewBlock(block=block1))
@@ -37,7 +36,7 @@ class SyncTest(ConfluxTestFramework):
             print(encode_hex(block.hash))
         connect_nodes(self.nodes, 0, 1)
         sync_blocks(self.nodes, timeout=5)
-        best_block = self.nodes[0].getbestblockhash()
+        best_block = self.nodes[0].best_block_hash()
         print("best from rust: %s \nbest from local: %s\n" % (best_block, encode_hex(block3.hash)))
         assert_equal(best_block, encode_hex(block3.hash))
         self.log.info("Pass 1")
@@ -55,7 +54,7 @@ class SyncTest(ConfluxTestFramework):
         disconnect_nodes(self.nodes, 0, 1)
         for i in range(block_number):
             chosen_peer = random.randint(1, self.num_nodes - 1)
-            block_hash = self.nodes[chosen_peer].generate(1, 0)
+            block_hash = self.nodes[chosen_peer].generate_empty_blocks(1)
             self.log.info("%s generate block %s", chosen_peer, block_hash)
         wait_for_block_count(self.nodes[1], block_number + 7)
         sync_blocks(self.nodes[1:], timeout=10)

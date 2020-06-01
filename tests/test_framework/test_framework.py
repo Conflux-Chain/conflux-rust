@@ -14,6 +14,7 @@ import shutil
 import sys
 import tempfile
 import time
+from typing import Union
 import random
 
 from .authproxy import JSONRPCException
@@ -31,6 +32,7 @@ from .util import (
     disconnect_nodes,
     get_datadir_path,
     initialize_datadir,
+    initialize_tg_config,
     p2p_port,
     set_node_times,
     sync_blocks,
@@ -67,7 +69,7 @@ class ConfluxTestFramework:
 
     def __init__(self):
         """Sets test framework defaults. Do not override this method. Instead, override the set_test_params() method"""
-        self.setup_clean_chain = False
+        self.setup_clean_chain = True
         self.nodes = []
         self.network_thread = None
         self.mocktime = 0
@@ -75,7 +77,11 @@ class ConfluxTestFramework:
         self.supports_cli = False
         self.bind_to_localhost_only = True
         self.conf_parameters = {}
+        # The key is file name, and the value is a string as file content.
+        self.extra_conf_files = {}
         self.set_test_params()
+        self.predicates = {}
+        self.snapshot = {}
 
         assert hasattr(
             self,
@@ -155,6 +161,14 @@ class ConfluxTestFramework:
             dest="metrics_report_interval_ms",
             default=0,
             type=int)
+
+        parser.add_argument(
+            "--conflux-binary",
+            dest="conflux",
+            default=os.path.join(
+                os.path.dirname(os.path.realpath(__file__)),
+                "../../target/release/conflux"),
+            type=str)
         self.add_options(parser)
         self.options = parser.parse_args()
         self.after_options_parsed()
@@ -164,12 +178,6 @@ class ConfluxTestFramework:
         check_json_precision()
 
         self.options.cachedir = os.path.abspath(self.options.cachedir)
-
-        self.options.conflux = os.getenv(
-            "CONFLUX",
-            default=os.path.join(
-                os.path.dirname(os.path.realpath(__file__)),
-                "../../target/release/conflux"))
 
         # Set up temp directory and start logging
         if self.options.tmpdir:
@@ -284,26 +292,31 @@ class ConfluxTestFramework:
         # two halves that can work on competing chains.
         for i in range(self.num_nodes - 1):
             connect_nodes(self.nodes, i, i + 1)
-        self.sync_all()
+        sync_blocks(self.nodes)
 
     def setup_nodes(self, binary=None):
         """Override this method to customize test node setup"""
         self.add_nodes(self.num_nodes, binary=binary)
         self.start_nodes()
 
-    def add_nodes(self, num_nodes, rpchost=None, binary=None):
+    def add_nodes(self, num_nodes, rpchost=None, binary=None, auto_recovery=False, recovery_timeout=30, is_consortium=False):
         """Instantiate TestNode objects"""
         if binary is None:
             binary = [self.options.conflux] * num_nodes
         assert_equal(len(binary), num_nodes)
+        if is_consortium:
+            initialize_tg_config(self.options.tmpdir, num_nodes)
         for i in range(num_nodes):
+            node_index = len(self.nodes)
             self.nodes.append(
                 TestNode(
-                    i,
-                    get_datadir_path(self.options.tmpdir, i),
+                    node_index,
+                    get_datadir_path(self.options.tmpdir, node_index),
                     rpchost=rpchost,
                     rpc_timeout=self.rpc_timewait,
                     confluxd=binary[i],
+                    auto_recovery=auto_recovery,
+                    recovery_timeout=recovery_timeout
                 ))
 
     def add_remote_nodes(self, num_nodes, ip, user, rpchost=None, binary=None):
@@ -358,10 +371,11 @@ class ConfluxTestFramework:
                 coverage.write_all_rpc_commands(self.options.coveragedir,
                                                 node.rpc)
 
-    def stop_node(self, i, expected_stderr='', kill=False):
+    def stop_node(self, i, expected_stderr='', kill=False, wait=True, clean=False):
         """Stop a bitcoind test node"""
-        self.nodes[i].stop_node(expected_stderr, kill)
-        self.nodes[i].wait_until_stopped()
+        self.nodes[i].stop_node(expected_stderr, kill, wait)
+        if clean:
+            self.nodes[i].clean_data()
 
     def stop_nodes(self):
         """Stop multiple bitcoind test nodes"""
@@ -369,12 +383,15 @@ class ConfluxTestFramework:
             # Issue RPC to stop nodes
             node.stop_node()
 
-        for node in self.nodes:
-            # Wait for nodes to stop
-            node.wait_until_stopped()
-
     def wait_for_node_exit(self, i, timeout):
         self.nodes[i].process.wait(timeout)
+
+    def maybe_restart_node(self, i, stop_probability, clean_probability):
+        if random.random() <= stop_probability:
+            self.log.info("stop %s", i)
+            clean_data = True if random.random() <= clean_probability else False
+            self.stop_node(i, clean=clean_data)
+            self.start_node(i, wait_time=120, phase_to_wait=("NormalSyncPhase"))
 
     # Private helper methods. These should not be accessed by the subclass test scripts.
 
@@ -434,7 +451,7 @@ class ConfluxTestFramework:
 
             # Create cache directories, run bitcoinds:
             for i in range(MAX_NODES):
-                datadir = initialize_datadir(self.options.cachedir, i)
+                datadir = initialize_datadir(self.options.cachedir, i, self.extra_conf_files)
                 args = [self.options.bitcoind, "-datadir=" + datadir]
                 if i > 0:
                     args.append("-connect=127.0.0.1:" + str(p2p_port(0)))
@@ -470,7 +487,7 @@ class ConfluxTestFramework:
                 for peer in range(4):
                     for j in range(25):
                         set_node_times(self.nodes, block_time)
-                        self.nodes[peer].generate(1)
+                        self.nodes[peer].generate_empty_blocks(1)
                         block_time += 10 * 60
                     # Must sync before next peer starts generating blocks
                     sync_blocks(self.nodes)
@@ -495,7 +512,7 @@ class ConfluxTestFramework:
             to_dir = get_datadir_path(self.options.tmpdir, i)
             shutil.copytree(from_dir, to_dir)
             initialize_datadir(self.options.tmpdir,
-                               i, self.conf_parameters)  # Overwrite port/rpcport in bitcoin.conf
+                               i, self.conf_parameters, self.extra_conf_files)  # Overwrite port/rpcport in bitcoin.conf
 
     def _initialize_chain_clean(self):
         """Initialize empty blockchain for use by the test.
@@ -503,7 +520,7 @@ class ConfluxTestFramework:
         Create an empty blockchain and num_nodes wallets.
         Useful if a test case wants complete control over initialization."""
         for i in range(self.num_nodes):
-            initialize_datadir(self.options.tmpdir, i, self.conf_parameters)
+            initialize_datadir(self.options.tmpdir, i, self.conf_parameters, self.extra_conf_files)
 
 
 class SkipTest(Exception):
@@ -514,9 +531,7 @@ class SkipTest(Exception):
 
 class DefaultConfluxTestFramework(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 8
-        self.conf_parameters = {"log_level":"\"debug\""}
 
     def setup_network(self):
         self.log.info("setup nodes ...")
@@ -527,4 +542,68 @@ class DefaultConfluxTestFramework(ConfluxTestFramework):
         sync_blocks(self.nodes)
         self.log.info("start P2P connection ...")
         start_p2p_connection(self.nodes)
-        
+
+class OptionHelper:
+    def to_argument_str(arg_name):
+        return "--" + str(arg_name).replace("_", "-")
+
+    def parsed_options_to_args(parsed_arg: dict):
+        args = []
+        for arg_name, value in parsed_arg.items():
+            if type(value) is not bool:
+                args.append(OptionHelper.to_argument_str(arg_name))
+                args.append(str(value))
+            elif value:
+                # FIXME: This only allows setting boolean to True.
+                args.append(OptionHelper.to_argument_str(arg_name))
+        return args
+
+    """
+    arg_definition is a key-value pair of arg_name and its default value.
+    When the default value is set to None, argparse.SUPPRESS is passed to
+    argument parser, which means that in the absence of this argument,
+    the value is unset, and in this case we assign the type to str.
+    
+    arg_filter is either None or a set of arg_names to add. By setting 
+    arg_filter, A class may use a subset of arg_definition of another 
+    class, without changing default value.
+    """
+    def add_options(
+            parser: argparse.ArgumentParser,
+            arg_definition: dict,
+            arg_filter: Union[None, set, dict] = None):
+        for arg_name, default_value in arg_definition.items():
+            if arg_filter is None or arg_name in arg_filter:
+                try:
+                    if default_value is None:
+                        parser.add_argument(
+                            OptionHelper.to_argument_str(arg_name),
+                            dest=arg_name,
+                            default=SUPPRESS,
+                            type=str
+                        )
+                    elif type(default_value) is bool:
+                        parser.add_argument(
+                            OptionHelper.to_argument_str(arg_name),
+                            dest=arg_name,
+                            action= 'store_false' if default_value else 'store_true',
+                        )
+                    else:
+                        parser.add_argument(
+                            OptionHelper.to_argument_str(arg_name),
+                            dest=arg_name,
+                            default=default_value,
+                            type=type(default_value)
+                        )
+                except argparse.ArgumentError as e:
+                    print(f"Ignored argparse error: {e}")
+
+    def conflux_options_to_config(parsed_args: dict, arg_filter: Union[None, set, dict] = None) -> dict:
+        conflux_config = {}
+        for arg_name, value in parsed_args.items():
+            if arg_filter is None or arg_name in arg_filter:
+                if type(value) is bool:
+                    conflux_config[arg_name] = "true" if value else "false"
+                else:
+                    conflux_config[arg_name] = repr(value)
+        return conflux_config

@@ -19,6 +19,8 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_types::H256;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use std::{
     collections::{HashSet, VecDeque},
     hash::Hash,
@@ -26,13 +28,15 @@ use std::{
 
 const COLLECTION_QUEUE_SIZE: usize = 8;
 
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone, DeriveMallocSizeOf)]
 pub enum CacheId {
     Block(H256),
     BlockHeader(H256),
-    BlockReceipts(H256),
-    TransactionAddress(H256),
     CompactBlock(H256),
+    BlockReceipts(H256),
+    BlockRewards(H256),
+    TransactionAddress(H256),
+    LocalBlockInfo(H256),
 }
 
 pub struct CacheManager<T> {
@@ -40,6 +44,12 @@ pub struct CacheManager<T> {
     max_cache_size: usize,
     bytes_per_cache_entry: usize,
     cache_usage: VecDeque<HashSet<T>>,
+}
+
+impl<T: MallocSizeOf + Eq + Hash> MallocSizeOf for CacheManager<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.cache_usage.size_of(ops)
+    }
 }
 
 impl<T> CacheManager<T>
@@ -120,12 +130,16 @@ pub struct CacheSize {
     pub block_headers: usize,
     /// Blocks cache size.
     pub blocks: usize,
-    /// Block Receipts cache size.
-    pub block_receipts: usize,
-    /// Transaction Addresses cache size.
-    pub transaction_addresses: usize,
     /// Compact blocks cache size.
     pub compact_blocks: usize,
+    /// Block Receipts cache size.
+    pub block_receipts: usize,
+    /// Block Rewards cache size.
+    pub block_rewards: usize,
+    /// Transaction indices cache size.
+    pub transaction_indices: usize,
+    /// Local block info cache size.
+    pub local_block_infos: usize,
 }
 
 impl CacheSize {
@@ -133,7 +147,8 @@ impl CacheSize {
     pub fn total(&self) -> usize {
         self.blocks
             + self.block_receipts
-            + self.transaction_addresses
+            + self.block_rewards
+            + self.transaction_indices
             + self.compact_blocks
     }
 }
