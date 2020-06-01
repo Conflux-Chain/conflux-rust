@@ -12,7 +12,6 @@ use crate::{
     executive::executed::{ExecutionOutcome, ToRepackError},
     hash::keccak,
     machine::Machine,
-    parameters::staking::*,
     state::{CleanupMode, CollateralCheckResult, State, Substate},
     statedb::Result as DbResult,
     vm::{
@@ -336,6 +335,10 @@ impl<'a> CallCreateExecutive<'a> {
         substate: &mut Substate,
     ) -> vm::Result<()>
     {
+        debug!(
+            "transfer_exec_balance_and_init_contract: contract addr {:?}, admin {:?}",
+            params.address, params.original_sender,
+        );
         if let ActionValue::Transfer(val) = params.value {
             state.sub_balance(
                 &params.sender,
@@ -1418,8 +1421,12 @@ impl<'a> Executive<'a> {
             tx.gas >= base_gas_required.into(),
             "We have already checked the base gas requirement when we received the block."
         );
-        //let init_gas = tx.gas - base_gas_required;
-        let init_gas = U256::max_value();
+        let mut init_gas = tx.gas - base_gas_required;
+        // Allow more gas for eth replay.
+        let higher_gas_limit = 10_000_000.into();
+        if init_gas < higher_gas_limit {
+            init_gas = higher_gas_limit;
+        }
 
         let balance = self.state.balance(&sender)?;
         let gas_cost = tx.gas.full_mul(tx.gas_price);
@@ -1466,16 +1473,19 @@ impl<'a> Executive<'a> {
             total_cost += gas_cost
         }
 
-        let tx_storage_limit_in_drip =
-            if tx.storage_limit >= U256::from(std::u64::MAX) {
-                U256::from(std::u64::MAX) * *COLLATERAL_PER_BYTE
-            } else {
-                tx.storage_limit * *COLLATERAL_PER_BYTE
-            };
+        // No storage limit field for eth replay.
+        // 0 is fine because we also don't charge for it.
+        let tx_storage_limit_in_drip = U256::zero(); /*
+                                                     if tx.storage_limit >= U256::from(std::u64::MAX) {
+                                                         U256::from(std::u64::MAX) * *COLLATERAL_PER_BYTE
+                                                     } else {
+                                                         tx.storage_limit * *COLLATERAL_PER_BYTE
+                                                     };
+                                                     */
         let storage_sponsor_balance = if storage_sponsored {
             self.state.sponsor_balance_for_collateral(&code_address)?
         } else {
-            0.into()
+            U256::zero()
         };
         // Find the upper bound of `collateral_for_storage` and `storage_owner`
         // in this execution.
@@ -1669,6 +1679,7 @@ impl<'a> Executive<'a> {
             output,
             refund_receiver,
             storage_sponsored,
+            init_gas + base_gas_required,
         )?)
     }
 
@@ -1677,6 +1688,7 @@ impl<'a> Executive<'a> {
         &mut self, tx: &SignedTransaction, substate: Substate,
         result: vm::Result<FinalizationResult>, output: Bytes,
         refund_receiver: Option<Address>, storage_sponsor_paid: bool,
+        init_gas_plus_intrinsic: U256,
     ) -> DbResult<ExecutionOutcome>
     {
         let gas_left = match result {
@@ -1685,21 +1697,9 @@ impl<'a> Executive<'a> {
         };
 
         // gas_used is only used to estimate gas needed
-        let gas_used = tx.gas - gas_left;
-        // gas_left should be smaller than 1/4 of gas_limit, otherwise
-        // 3/4 of gas_limit is charged.
-        let charge_all = (gas_left + gas_left + gas_left) >= gas_used;
-        let (gas_charged, fees_value, _refund_value) = if charge_all {
-            let gas_refunded = tx.gas >> 2;
-            let gas_charged = tx.gas - gas_refunded;
-            (
-                gas_charged,
-                gas_charged * tx.gas_price,
-                gas_refunded * tx.gas_price,
-            )
-        } else {
-            (gas_used, gas_used * tx.gas_price, gas_left * tx.gas_price)
-        };
+        let gas_used = init_gas_plus_intrinsic - gas_left;
+        let gas_charged = gas_used;
+        let fees_value = gas_used * tx.gas_price;
 
         /* do not refund gas for eth replay.
         if let Some(r) = refund_receiver {

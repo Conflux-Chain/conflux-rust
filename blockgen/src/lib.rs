@@ -53,6 +53,7 @@ pub struct BlockGenerator {
     state: RwLock<MiningState>,
     workers: Mutex<Vec<(Worker, mpsc::Sender<ProofOfWorkProblem>)>>,
     pub stratum: RwLock<Option<Stratum>>,
+    prev_block: Mutex<Option<EpochId>>,
 }
 
 pub struct Worker {
@@ -141,6 +142,7 @@ impl BlockGenerator {
             state: RwLock::new(MiningState::Start),
             workers: Mutex::new(Vec::new()),
             stratum: RwLock::new(None),
+            prev_block: Default::default(),
         }
     }
 
@@ -192,6 +194,13 @@ impl BlockGenerator {
             .expect("downcast should succeed");
 
         let mut consensus_inner = consensus_graph.inner.write();
+        // FIXME: fix for conflux.
+        let mut prev = self.prev_block.lock();
+        if let Some(prev_hash) = &*prev {
+            if parent_hash.ne(prev_hash) {
+                referees.push(*prev_hash);
+            }
+        }
         // referees are retrieved before locking inner, so we need to
         // filter out the blocks that should be removed by possible
         // checkpoint making that happens before we acquire the inner lock
@@ -241,6 +250,7 @@ impl BlockGenerator {
             .with_gas_limit(block_gas_limit)
             .build();
 
+        *prev = Some(block_header.hash());
         Block::new(block_header, transactions)
     }
 

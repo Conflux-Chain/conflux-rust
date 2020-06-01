@@ -371,12 +371,6 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
                 (Gas::from(0), self.current_mem_gas)
             };
 
-        debug!(
-            "mem_gas_cost: current_mem_size {:?}, mem_size {:?}, mem_gas_cost {:?}, \
-            new_mem_gas {:?}, req_mem_size_rounded {:?}",
-            current_mem_size, mem_size, mem_gas_cost, new_mem_gas,
-            req_mem_size_rounded
-        );
         Ok((mem_gas_cost, new_mem_gas, req_mem_size_rounded.as_usize()))
     }
 }

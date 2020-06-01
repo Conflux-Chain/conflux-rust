@@ -75,7 +75,9 @@ def create_block_with_nonce(
 
 def create_transaction(nonce=0, gas_price=1, gas=21000, value=0, receiver=default_config['GENESIS_COINBASE'],
                        data=b'', pri_key=default_config["GENESIS_PRI_KEY"], storage_limit=0, epoch_height = 0, chain_id = DEFAULT_PY_TEST_CHAIN_ID, node=None):
-    transaction = UnsignedTransaction(nonce, gas_price, gas, receiver, value, data, storage_limit, epoch_height, chain_id)
+    #transaction = UnsignedTransaction(nonce, gas_price, gas, receiver, value, data, storage_limit, epoch_height, chain_id)
+    # for eth replay
+    transaction = UnsignedTransaction(nonce, gas_price, gas, receiver, value, data)
     return transaction.sign(pri_key)
 
 

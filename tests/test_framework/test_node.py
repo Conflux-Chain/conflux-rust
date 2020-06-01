@@ -227,8 +227,9 @@ class TestNode:
         pubkey, x, y = get_nodeid(self)
         self.key = eth_utils.encode_hex(pubkey)
         addr_tmp = bytearray(sha3(encode_int32(x) + encode_int32(y))[12:])
-        addr_tmp[0] &= 0x0f
-        addr_tmp[0] |= 0x10
+        # not for eth replay
+        #addr_tmp[0] &= 0x0f
+        #addr_tmp[0] |= 0x10
         self.addr = addr_tmp
         self.log.debug("Get node {} nodeid {}".format(self.index, self.key))
 

@@ -950,18 +950,19 @@ impl ConsensusExecutionHandler {
             epoch_blocks.len(),
         );
 
+        let parent_hash = pivot_block.block_header.parent_hash();
+        let total_executed_txs =
+            self.data_man.get_total_executed_txs(&parent_hash);
         let spec = Spec::new_spec();
         let mut state = State::new(
             StateDb::new(
                 self.data_man
                     .storage_manager
                     .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
-                        pivot_block.block_header.parent_hash(),
+                        parent_hash,
                         &self
                             .data_man
-                            .get_epoch_execution_commitment(
-                                pivot_block.block_header.parent_hash(),
-                            )
+                            .get_epoch_execution_commitment(parent_hash)
                             // Unwrapping is safe because the state exists.
                             .unwrap()
                             .state_root_with_aux_info,
@@ -984,6 +985,7 @@ impl ConsensusExecutionHandler {
                 &epoch_blocks,
                 start_block_number,
                 on_local_pivot,
+                total_executed_txs,
             )
             // TODO: maybe propagate the error all the way up so that the
             // program may restart by itself.
@@ -1044,7 +1046,7 @@ impl ConsensusExecutionHandler {
     fn process_epoch_transactions(
         &self, spec: &Spec, epoch_id: EpochId, state: &mut State,
         epoch_blocks: &Vec<Arc<Block>>, start_block_number: u64,
-        on_local_pivot: bool,
+        on_local_pivot: bool, mut total_executed_txs: u64,
     ) -> DbResult<Vec<Arc<BlockReceipts>>>
     {
         // Prefetch accounts for transactions.
@@ -1173,6 +1175,7 @@ impl ConsensusExecutionHandler {
                     ) => {
                         tx_outcome_status =
                             TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING;
+                        total_executed_txs += 1;
 
                         env.accumulated_gas_used += executed.gas_used;
                         gas_fee = executed.fee;
@@ -1183,6 +1186,9 @@ impl ConsensusExecutionHandler {
                     }
                     ExecutionOutcome::Finished(executed) => {
                         tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
+                        total_executed_txs += 1;
+                        // FIXME: for Conflux, this is not the right way to mark
+                        // good tps.
                         GOOD_TPS_METER.mark(1);
 
                         env.accumulated_gas_used += executed.gas_used;
@@ -1234,6 +1240,7 @@ impl ConsensusExecutionHandler {
                 block.hash(),
                 pivot_block.hash(),
                 block_receipts.clone(),
+                total_executed_txs,
                 on_local_pivot,
             );
 
@@ -1560,18 +1567,19 @@ impl ConsensusExecutionHandler {
             epoch_blocks.len(),
         );
         let pivot_block = epoch_blocks.last().expect("Not empty");
+        let parent_hash = pivot_block.block_header.parent_hash();
+        let total_executed_txs =
+            self.data_man.get_total_executed_txs(&parent_hash);
         let spec = Spec::new_spec();
         let mut state = State::new(
             StateDb::new(
                 self.data_man
                     .storage_manager
                     .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
-                        pivot_block.block_header.parent_hash(),
+                        parent_hash,
                         &self
                             .data_man
-                            .get_epoch_execution_commitment(
-                                pivot_block.block_header.parent_hash(),
-                            )
+                            .get_epoch_execution_commitment(parent_hash)
                             // Unwrapping is safe because the state exists.
                             .unwrap()
                             .state_root_with_aux_info,
@@ -1593,6 +1601,7 @@ impl ConsensusExecutionHandler {
             &epoch_blocks,
             start_block_number,
             false,
+            total_executed_txs,
         )
     }
 

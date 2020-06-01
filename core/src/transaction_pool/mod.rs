@@ -32,7 +32,9 @@ use metrics::{
     RwLockExtensions,
 };
 use parking_lot::{Mutex, MutexGuard, RwLock};
-use primitives::{Account, SignedTransaction, TransactionWithSignature};
+use primitives::{
+    Account, EpochId, SignedTransaction, TransactionWithSignature,
+};
 use std::{
     cmp::{max, min},
     collections::hash_map::HashMap,
@@ -115,6 +117,7 @@ pub struct TransactionPool {
     to_propagate_trans: Arc<RwLock<HashMap<H256, Arc<SignedTransaction>>>>,
     pub data_man: Arc<BlockDataManager>,
     best_executed_state: Mutex<Arc<StateDb>>,
+    best_executed_epoch: RwLock<EpochId>,
     consensus_best_info: Mutex<Arc<BestInformation>>,
     set_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
     recycle_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
@@ -178,6 +181,7 @@ impl TransactionPool {
                     // start.
                     .expect(&concat!(file!(), ":", line!(), ":", column!())),
             ))),
+            best_executed_epoch: Default::default(),
             consensus_best_info: Mutex::new(Arc::new(Default::default())),
             set_tx_requests: Mutex::new(Default::default()),
             recycle_tx_requests: Mutex::new(Default::default()),
@@ -291,6 +295,7 @@ impl TransactionPool {
                         continue;
                     }
                     passed_transactions.push(tx.clone());
+                    inner.total_received_count += 1;
                     if !to_prop.contains_key(&tx.hash) {
                         to_prop.insert(tx.hash, tx);
                     }
@@ -619,10 +624,19 @@ impl TransactionPool {
 
         let target_gas_limit = self.config.target_block_gas_limit.into();
         let self_gas_limit = min(max(target_gas_limit, gas_lower), gas_upper);
+        // FIXME: this is a bug fix for Conflux
+        let mut tx_pool_gas_limit = self_gas_limit;
+        for tx in &additional_transactions {
+            assert!(
+                tx_pool_gas_limit >= tx.gas,
+                "preset txs must not exceed block gas limit"
+            );
+            tx_pool_gas_limit -= tx.gas;
+        }
 
         let transactions_from_pool = self.pack_transactions(
             num_txs,
-            self_gas_limit.clone(),
+            tx_pool_gas_limit.clone(),
             block_size_limit,
             consensus_best_info.best_epoch_number,
         );
@@ -639,6 +653,8 @@ impl TransactionPool {
     pub fn set_best_executed_epoch(
         &self, best_executed_epoch: StateIndex,
     ) -> StorageResult<()> {
+        *self.best_executed_epoch.write() =
+            best_executed_epoch.epoch_id.clone();
         let best_executed_state = Arc::new(StateDb::new(
             self.data_man
                 .storage_manager
@@ -652,6 +668,10 @@ impl TransactionPool {
         *self.best_executed_state.lock() = best_executed_state;
 
         Ok(())
+    }
+
+    pub fn get_best_executed_epoch(&self) -> EpochId {
+        self.best_executed_epoch.read().clone()
     }
 
     fn get_best_state_account_cache(&self) -> AccountCache {

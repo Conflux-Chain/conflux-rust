@@ -217,7 +217,8 @@ impl TransactionGenerator {
                 gas: U256::from(21000u64),
                 value: balance_to_transfer,
                 action: Action::Call(receiver_address),
-                storage_limit: U256::zero(),
+                // commented out for eth replay
+                //storage_limit: U256::zero(),
                 //chain_id: txgen.consensus.get_config().chain_id.chain_id,
                 //epoch_height: txgen.consensus.best_epoch_number(),
                 data: Bytes::new(),
@@ -351,9 +352,9 @@ impl DirectTransactionGenerator {
                 sender_nonce = sender_info.1.nonce;
             }
 
-            let gas = U256::from(100_000u64);
+            let gas = U256::from(21_512u64);
             let gas_price = U256::from(1u64);
-            let transaction_fee = U256::from(100_000u64);
+            let transaction_fee = U256::from(21_512u64);
 
             if sender_balance <= transaction_fee {
                 self.accounts.remove(&sender_address);
@@ -361,10 +362,15 @@ impl DirectTransactionGenerator {
                 continue;
             }
 
+            // FIXME: fix for Conflux.
             let balance_to_transfer = U256::try_from(
-                H512::random().into_uint() % U512::from(sender_balance),
+                H512::random().into_uint()
+                    % U512::from(sender_balance - transaction_fee),
             )
             .unwrap();
+            if balance_to_transfer < gas {
+                continue;
+            }
 
             let is_send_to_new_address = (number_of_accounts
                 <= Self::MAX_TOTAL_ACCOUNTS)
@@ -406,7 +412,8 @@ impl DirectTransactionGenerator {
                 gas,
                 value: balance_to_transfer,
                 action: Action::Call(receiver_address),
-                storage_limit: U256::zero(),
+                // commented out for eth replay.
+                //storage_limit: U256::zero(),
                 // FIXME: We will have to setup TRANSACTION_EPOCH_BOUND to a
                 // large value to avoid FIXME: this sloppy zero
                 // becomes an issue in the experiments.
@@ -423,6 +430,8 @@ impl DirectTransactionGenerator {
 
             self.accounts.get_mut(&sender_address).unwrap().1.balance -=
                 balance_to_transfer;
+            self.accounts.get_mut(&sender_address).unwrap().1.balance -=
+                transaction_fee;
             self.accounts.get_mut(&sender_address).unwrap().1.nonce += 1.into();
             self.accounts.get_mut(&receiver_address).unwrap().1.balance +=
                 balance_to_transfer;
@@ -497,7 +506,8 @@ impl DirectTransactionGenerator {
                 gas,
                 value: 0.into(),
                 action: Action::Call(self.erc20_address.clone()),
-                storage_limit: U256::zero(),
+                // commented out for eth replay.
+                // storage_limit: U256::zero(),
                 // FIXME: We will have to setup TRANSACTION_EPOCH_BOUND to a
                 // large value to avoid FIXME: this sloppy zero
                 // becomes an issue in the experiments.
@@ -514,6 +524,8 @@ impl DirectTransactionGenerator {
 
             self.accounts.get_mut(&sender_address).unwrap().2 -=
                 balance_to_transfer;
+            self.accounts.get_mut(&sender_address).unwrap().1.balance -=
+                transaction_fee;
             self.accounts.get_mut(&sender_address).unwrap().1.nonce += 1.into();
             self.accounts.get_mut(&receiver_address).unwrap().2 +=
                 balance_to_transfer;

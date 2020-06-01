@@ -23,13 +23,13 @@ class UnsignedTransaction(rlp.Serializable):
         ('gas', big_endian_int),
         ('action', address),
         ('value', big_endian_int),
-        ('storage_limit', big_endian_int),
-        ('epoch_height', big_endian_int),
-        ('chain_id', big_endian_int),
+        #('storage_limit', big_endian_int),
+        #('epoch_height', big_endian_int),
+        #('chain_id', big_endian_int),
         ('data', binary),
     ]
 
-    def __init__(self, nonce, gas_price, gas, action, value, data, storage_limit, epoch_height, chain_id):
+    def __init__(self, nonce, gas_price, gas, action, value, data):
         if gas_price >= TT256 or \
                 value >= TT256 or nonce >= TT256:
             raise InvalidTransaction("Values way too high!")
@@ -41,11 +41,12 @@ class UnsignedTransaction(rlp.Serializable):
             value=value,
             action=action,
             data=data,
-            storage_limit=storage_limit,
-            epoch_height=epoch_height,
-            chain_id=chain_id
+            #storage_limit=storage_limit,
+            #epoch_height=epoch_height,
+            #chain_id=chain_id
         )
 
+    # We don't create eth transaction through this class so no need to fix chain_id processing.
     def sign(self, key):
         rawhash = utils.sha3(
             rlp.encode(self, UnsignedTransaction))
@@ -55,7 +56,7 @@ class UnsignedTransaction(rlp.Serializable):
         v, r, s = ecsign(rawhash, key)
         # For eth replay test
         #v = v - 27
-        ret = Transaction(transaction=copy.deepcopy(self), v=v, r=r, s=s)
+        ret = Transaction(unsigned_transaction=copy.deepcopy(self), v=v, r=r, s=s)
         ret._sender = utils.priv_to_addr(key)
         return ret
 
@@ -79,7 +80,12 @@ class Transaction(rlp.Serializable):
     """
 
     fields = [
-        ('transaction', UnsignedTransaction),
+        ('nonce', big_endian_int),
+        ('gas_price', big_endian_int),
+        ('gas', big_endian_int),
+        ('action', address),
+        ('value', big_endian_int),
+        ('data', binary),
         ('v', big_endian_int),
         ('r', big_endian_int),
         ('s', big_endian_int),
@@ -94,6 +100,16 @@ class Transaction(rlp.Serializable):
     @sender.setter
     def sender(self, value):
         self._sender = value
+
+    def __init__(self, unsigned_transaction, v=0, r=0, s=0):
+        t = unsigned_transaction
+
+        super(Transaction, self).__init__(
+            t.nonce, t.gas_price, t.gas, t.action, t.value, t.data, v, r, s
+        )
+        if self.gas_price >= TT256 or \
+                self.value >= TT256 or self.nonce >= TT256:
+            raise InvalidTransaction("Values way too high!")
 
     @property
     def hash(self):

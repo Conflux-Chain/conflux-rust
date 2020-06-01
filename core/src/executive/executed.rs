@@ -43,6 +43,7 @@ pub struct Executed {
     pub output: Bytes,
 }
 
+// FIXME: bump nonce for eth?
 #[derive(Debug)]
 pub enum ToRepackError {
     /// Returned when transaction nonce does not match state nonce.
@@ -79,6 +80,7 @@ pub enum ToRepackError {
     SenderDoesNotExist,
 }
 
+// FIXME: no bump nonce for eth?
 #[derive(Debug)]
 pub enum ExecutionError {
     /// Returned when cost of transaction (value + gas_price * gas) exceeds
