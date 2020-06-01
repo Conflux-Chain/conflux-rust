@@ -206,7 +206,7 @@ impl Encodable for Account {
             stream
                 .begin_list(6)
                 // FIXME: for Conflux, do not store address
-                //.append(&self.address)
+                .append(&self.address)
                 .append(&self.balance)
                 .append(&self.nonce)
                 .append(&self.staking_balance)
@@ -217,7 +217,7 @@ impl Encodable for Account {
             stream
                 .begin_list(9)
                 // FIXME: for Conflux, do not store address
-                //.append(&self.address)
+                .append(&self.address)
                 .append(&self.balance)
                 .append(&self.nonce)
                 .append(&self.code_hash)

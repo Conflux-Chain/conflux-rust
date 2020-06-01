@@ -458,12 +458,17 @@ impl RpcImpl {
         let block_number = self.consensus.block_count();
         let tx_count = self.tx_pool.total_unpacked();
 
+        let best_executed_hash = self.tx_pool.get_best_executed_epoch();
+
         Ok(RpcStatus {
             best_hash: RpcH256::from(best_hash),
             chain_id: best_info.chain_id.into(),
             epoch_number: epoch_number.into(),
             block_number: block_number.into(),
             pending_tx_number: tx_count,
+            total_executed_txs: self
+                .data_man
+                .get_total_executed_txs(&best_executed_hash),
         })
     }
 
@@ -625,14 +630,16 @@ impl RpcImpl {
     }
 
     pub fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>> {
-        let (ready_len, deferred_len, received_len, unexecuted_len) =
+        let (ready_len, deferred_len, received_len, unpacked_len) =
             self.tx_pool.stats();
 
         let mut ret: BTreeMap<String, usize> = BTreeMap::new();
         ret.insert("ready".into(), ready_len);
         ret.insert("deferred".into(), deferred_len);
         ret.insert("received".into(), received_len);
-        ret.insert("unexecuted".into(), unexecuted_len);
+        ret.insert("unpacked".into(), unpacked_len);
+
+        debug!("txpool_status: {:?}", ret);
 
         Ok(ret)
     }

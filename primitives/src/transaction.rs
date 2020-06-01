@@ -227,11 +227,11 @@ pub struct Transaction {
     pub action: Action,
     /// Transferred value.
     pub value: U256,
+    /* no such fields for eth replay
     // Nothing to do for eth replay because collateral does not exceed storage
     // limit of 0.
     /// Maximum storage increment in this execution.
     pub storage_limit: U256,
-    /* no such fields for eth replay
     /// The epoch height of the transaction. A transaction
     /// can only be packed between the epochs of [epoch_height -
     /// TRANSACTION_EPOCH_BOUND, epoch_height + TRANSACTION_EPOCH_BOUND]
@@ -258,7 +258,9 @@ impl Transaction {
     // for Eth replay
     pub fn hash(&self, chain_id: Option<u8>) -> H256 {
         let mut s = RlpStream::new();
+        s.begin_unbounded_list();
         self.rlp_append_unsigned_transaction(&mut s, chain_id);
+        s.finalize_unbounded_list();
         keccak(s.as_raw())
     }
 
@@ -266,7 +268,6 @@ impl Transaction {
     pub fn rlp_append_unsigned_transaction(
         &self, s: &mut RlpStream, chain_id: Option<u8>,
     ) {
-        s.begin_list(if chain_id.is_none() { 6 } else { 9 });
         s.append(&self.nonce);
         s.append(&self.gas_price);
         s.append(&self.gas);
@@ -336,16 +337,7 @@ impl MallocSizeOf for Transaction {
 }
 
 /// Signed transaction information without verified signature.
-#[derive(
-    Debug,
-    Clone,
-    Eq,
-    PartialEq,
-    RlpEncodable,
-    RlpDecodable,
-    Serialize,
-    Deserialize,
-)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TransactionWithSignatureSerializePart {
     /// Plain Transaction.
     pub unsigned: Transaction,
@@ -356,6 +348,52 @@ pub struct TransactionWithSignatureSerializePart {
     pub r: U256,
     /// The S field of the signature; helps describe the point on the curve.
     pub s: U256,
+}
+
+// For eth replay
+impl TransactionWithSignatureSerializePart {
+    /// Checks whether signature is empty.
+    pub fn is_unsigned(&self) -> bool { self.r.is_zero() && self.s.is_zero() }
+
+    pub fn chain_id(&self) -> Option<u8> {
+        match self.v {
+            v if self.is_unsigned() => Some(v),
+            v if v >= 35 => Some((v - 35) / 2),
+            _ => None,
+        }
+    }
+}
+
+impl Encodable for TransactionWithSignatureSerializePart {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_unbounded_list();
+        self.unsigned
+            .rlp_append_unsigned_transaction(s, self.chain_id());
+        s.append(&self.v).append(&self.r).append(&self.s);
+        s.finalize_unbounded_list();
+    }
+}
+
+impl Decodable for TransactionWithSignatureSerializePart {
+    fn decode(d: &Rlp) -> Result<Self, DecoderError> {
+        if d.item_count()? != 9 {
+            return Err(DecoderError::RlpIncorrectListLen);
+        }
+
+        Ok(Self {
+            unsigned: Transaction {
+                nonce: d.val_at(0)?,
+                gas_price: d.val_at(1)?,
+                gas: d.val_at(2)?,
+                action: d.val_at(3)?,
+                value: d.val_at(4)?,
+                data: d.val_at(5)?,
+            },
+            v: d.val_at(6)?,
+            r: d.val_at(7)?,
+            s: d.val_at(8)?,
+        })
+    }
 }
 
 impl Deref for TransactionWithSignatureSerializePart {
@@ -385,17 +423,13 @@ impl Deref for TransactionWithSignature {
 
 impl Decodable for TransactionWithSignature {
     fn decode(d: &Rlp) -> Result<Self, DecoderError> {
+        let transaction = TransactionWithSignatureSerializePart::decode(d)?;
         let hash = keccak(d.as_raw());
-        let rlp_size = Some(d.as_raw().len());
-        // Check item count of TransactionWithSignatureSerializePart
-        if d.item_count()? != 4 {
-            return Err(DecoderError::RlpIncorrectListLen);
-        }
-        let transaction = d.as_val()?;
-        Ok(TransactionWithSignature {
+        let rlp_size = d.as_raw().len();
+        Ok(Self {
             transaction,
             hash,
-            rlp_size,
+            rlp_size: Some(rlp_size),
         })
     }
 }
@@ -427,9 +461,6 @@ impl TransactionWithSignature {
         self
     }
 
-    /// Checks whether signature is empty.
-    pub fn is_unsigned(&self) -> bool { self.r.is_zero() && self.s.is_zero() }
-
     /// Construct a signature object from the sig.
     pub fn signature(&self) -> Signature {
         let r: H256 = BigEndianHash::from_uint(&self.r);
@@ -448,14 +479,6 @@ impl TransactionWithSignature {
         }
         */
         Ok(())
-    }
-
-    pub fn chain_id(&self) -> Option<u8> {
-        match self.v {
-            v if self.is_unsigned() => Some(v),
-            v if v >= 35 => Some((v - 35) / 2),
-            _ => None,
-        }
     }
 
     pub fn hash(&self) -> H256 { self.hash }
@@ -552,9 +575,6 @@ impl SignedTransaction {
     pub fn sender(&self) -> Address { self.sender }
 
     pub fn nonce(&self) -> U256 { self.transaction.nonce }
-
-    /// Checks if signature is empty.
-    pub fn is_unsigned(&self) -> bool { self.transaction.is_unsigned() }
 
     pub fn hash(&self) -> H256 { self.transaction.hash() }
 

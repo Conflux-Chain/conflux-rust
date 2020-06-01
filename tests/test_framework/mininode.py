@@ -349,7 +349,8 @@ class P2PInterface(P2PConnection):
                 self.protocol_message_count[packet_type] += 1
                 msg = None
                 msg_class = get_msg_class(packet_type)
-                logger.debug("%s %s", packet_type, rlp.decode(payload))
+                # FIXME: for conflux; don't print too much
+                #logger.debug("%s %s", packet_type, rlp.decode(payload))
                 if msg_class is not None:
                     msg = rlp.decode(payload, msg_class)
                 if packet_type == STATUS_V2:
@@ -385,7 +386,9 @@ class P2PInterface(P2PConnection):
                 elif packet_type == GET_BLOCKS_RESPONSE:
                     self._log_message("receive", "BLOCKS, {} blocks".format(len(msg.blocks)))
                 elif packet_type == GET_CMPCT_BLOCKS_RESPONSE:
-                    self._log_message("receive", "GET_CMPCT_BLOCKS_RESPONSE, {} blocks".format(len(msg.blocks)))
+                    # we don't care
+                    #self._log_message("receive", "GET_CMPCT_BLOCKS_RESPONSE, {} blocks".format(len(msg.blocks)))
+                    pass
                 elif packet_type == GET_BLOCK_TXN_RESPONSE:
                     self._log_message("receive", "GET_BLOCK_TXN_RESPONSE, block:{}".format(len(msg.block_hash)))
                 elif packet_type == GET_BLOCKS:
@@ -400,6 +403,9 @@ class P2PInterface(P2PConnection):
                 elif packet_type == GET_BLOCK_HASHES_BY_EPOCH:
                     self._log_message("receive", "GET_BLOCK_HASHES_BY_EPOCH, epochs: {}".format(msg.epochs))
                     self.on_get_block_hashes_by_epoch(msg)
+                elif packet_type == TRANSACTION_DIGESTS:
+                    # we don't care
+                    pass
                 else:
                     self._log_message("receive", "Unknown packet {}".format(packet_type))
                     return

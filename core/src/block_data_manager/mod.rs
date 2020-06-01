@@ -429,6 +429,28 @@ impl BlockDataManager {
         data_man
     }
 
+    pub fn get_total_executed_txs(&self, epoch_hash: &EpochId) -> u64 {
+        self.block_receipts
+            .read()
+            .get(epoch_hash)
+            .map_or(0, |info| info.total_executed_txs)
+    }
+
+    pub fn get_parent_by_hash(
+        &self, block_hash: &EpochId, mut steps: u8,
+    ) -> (EpochId, u8) {
+        let headers_map = self.block_headers.read();
+        let mut current_hash = block_hash;
+        while let Some(header) = headers_map.get(block_hash) {
+            if steps == 0 {
+                break;
+            }
+            steps -= 1;
+            current_hash = header.parent_hash();
+        }
+        return (*current_hash, steps);
+    }
+
     pub fn get_instance_id(&self) -> u64 { *self.instance_id.lock() }
 
     pub fn initialize_instance_id(&self) {
@@ -695,7 +717,7 @@ impl BlockDataManager {
 
     pub fn insert_block_execution_result(
         &self, hash: H256, epoch: H256, block_receipts: Arc<BlockReceipts>,
-        persistent: bool,
+        total_executed_txs: u64, persistent: bool,
     )
     {
         let bloom =
@@ -724,6 +746,7 @@ impl BlockDataManager {
             .entry(hash)
             .or_insert(BlockReceiptsInfo::default());
         receipt_info.insert_receipts_at_epoch(&epoch, result.1);
+        receipt_info.total_executed_txs = total_executed_txs;
 
         self.cache_man
             .lock()

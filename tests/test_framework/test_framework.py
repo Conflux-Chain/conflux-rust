@@ -184,6 +184,9 @@ class ConfluxTestFramework:
             self.options.tmpdir = os.path.abspath(self.options.tmpdir)
             os.makedirs(self.options.tmpdir, exist_ok=True)
         else:
+            # FIXME:
+            #  for conflux, the temp dir is created anyways.. despite the env
+            #  var specified.
             self.options.tmpdir = os.getenv(
                 "CONFLUX_TESTS_LOG_DIR",
                 default=tempfile.mkdtemp(prefix="conflux_test_"))

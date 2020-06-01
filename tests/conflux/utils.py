@@ -216,8 +216,9 @@ def priv_to_addr(k):
     k = normalize_key(k)
     x, y = privtopub(k)
     addr = bytearray(sha3(encode_int32(x) + encode_int32(y))[12:])
-    addr[0] &= 0x0f
-    addr[0] |= 0x10
+    # not for eth replay
+    #addr[0] &= 0x0f
+    #addr[0] |= 0x10
     return bytes(addr)
 
 
@@ -231,8 +232,9 @@ def pub_to_addr(k):
     x = big_endian_to_int(decode_hex(k[2:34]))
     y = big_endian_to_int(decode_hex(k[34:66]))
     addr = sha3(encode_int32(x) + encode_int32(y))[12:]
-    addr[0] &= 0x0f
-    addr[0] |= 0x10
+    # not for eth replay
+    #addr[0] &= 0x0f
+    #addr[0] |= 0x10
     return bytes(addr)
 
 def checksum_encode(addr):  # Takes a 20-byte binary address as input

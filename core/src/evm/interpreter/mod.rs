@@ -338,8 +338,8 @@ impl<Cost: CostType> Interpreter<Cost> {
             stack,
             return_stack,
             done: false,
-            // FIXME: false
-            do_trace: true,
+            // FIXME: for Conflux, false
+            do_trace: false,
             mem: Vec::new(),
             return_data: ReturnData::empty(),
             last_stack_ret_len: 0,
@@ -436,10 +436,6 @@ impl<Cost: CostType> Interpreter<Cost> {
                     Ok(t) => t,
                     Err(e) => return InterpreterResult::Done(Err(e)),
                 };
-                debug!(
-                    "do trace: {}, gas req: {:?}",
-                    self.do_trace, requirements
-                );
                 if self.do_trace {
                     context.trace_prepare_execute(
                         self.reader.position - 1,

@@ -1,7 +1,7 @@
 from . import trie
 from eth_utils import decode_hex
 
-DEFAULT_PY_TEST_CHAIN_ID = 10
+DEFAULT_PY_TEST_CHAIN_ID = 1
 
 default_config = dict(
     GENESIS_DIFFICULTY=0,
@@ -9,7 +9,7 @@ default_config = dict(
     GENESIS_COINBASE=b'\x10' * 20,
     GENESIS_PRI_KEY=decode_hex("46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f"),
     TOTAL_COIN= 5 * 10**9 * 10**18 * 10**6,
-    GENESIS_STATE_ROOT=decode_hex("0xa296d6b5871ce3d8ec9ab06eec1fe837cf04de536f0e533acd4d35c94cf9be6c"),
+    GENESIS_STATE_ROOT=decode_hex("0x5a3b8f7ee1ac6d69acb26bd2ac42441a4a5e9c335f9506e05f76156e5417953d"),
     GENESIS_RECEIPTS_ROOT=trie.EMPTY_EPOCH_RECEIPT_ROOT_BY_NUMBER_OF_BLOCKS[0],
     GENESIS_LOGS_BLOOM_HASH=decode_hex("0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5"), # KECCAK_EMPTY_BLOOM    ~ keccak(b'\0' * 256)
     GENESIS_AUTHOR=decode_hex("0x1000000000000000000000000000000000000020"),
@@ -37,6 +37,7 @@ small_local_test_conf = dict(
     log_level = '"debug"',
     metrics_output_file = "'./metrics.log'",
     metrics_enabled = "true",
+    mining_author = "'10000000000000000000000000000000000000aa'",
     mode = '"test"',
     session_ip_limits = "'0,0,0,0'",
     start_mining = "false",

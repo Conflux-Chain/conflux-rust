@@ -33,12 +33,10 @@ pub enum EthTxType {
     GenesisAccount,
 }
 
-const SYSTEM_ACCOUNT_SECRET_BYTES: &str =
-    "46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f";
 lazy_static! {
     static ref SYSTEM_ACCOUNT_SECRET: Secret = {
         Secret::from_slice(
-            hexstr_to_h256(&SYSTEM_ACCOUNT_SECRET_BYTES).as_ref(),
+            hexstr_to_h256(&DEV_GENESIS_PRI_KEY).as_ref(),
         )
         .unwrap()
     };
@@ -2154,6 +2152,7 @@ fn main() -> errors::Result<()> {
 use cfx_types::hexstr_to_h256;
 use cfxcore::{
     block_data_manager::StateAvailabilityBoundary,
+    genesis::DEV_GENESIS_PRI_KEY,
     statedb::StateDb,
     storage::{
         state::StateTrait,

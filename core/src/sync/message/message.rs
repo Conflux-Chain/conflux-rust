@@ -295,6 +295,22 @@ fn handle_message<T: Decodable + Handleable + Message>(
     let msg_name = msg.msg_name();
     let req_id = msg.get_request_id();
 
+    /* eth replay debug only code
+    if msg_id == msgid::TRANSACTIONS {
+        let rlp_bytes = rlp.as_raw();
+        let len = rlp_bytes.len();
+        if len < 20 {
+            debug!(
+                "received transaction message, len {}, {:#x?}", len, rlp_bytes);
+        } else {
+            debug!(
+                "received transaction message, len {}, {:#x?} ... {:#x?}",
+                len, &rlp_bytes[0..10], &rlp_bytes[len-10..len]
+            );
+        }
+    }
+    */
+
     trace!(
         "handle sync protocol message, peer = {}, id = {}, name = {}, request_id = {:?}",
         ctx.node_id, msg_id, msg_name, req_id,

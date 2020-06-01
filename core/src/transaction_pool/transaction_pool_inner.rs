@@ -26,7 +26,7 @@ lazy_static! {
 
 // Shouldn't limit the nonce_offset when replaying ETH txs because
 // we don't resend a transaction in the experiment.
-const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 100000;
+const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 1000000;
 // By default, the capacity of tx pool is 500K, so the maximum TPS is
 // 500K / 100 = 5K
 const TIME_WINDOW: u64 = 100;
@@ -229,7 +229,8 @@ impl ReadyAccountPool {
 #[derive(DeriveMallocSizeOf)]
 pub struct TransactionPoolInner {
     capacity: usize,
-    total_received_count: usize,
+    // FIXME: for conflux, txpool_stats() should be well aligned.
+    pub total_received_count: usize,
     unpacked_transaction_count: usize,
     deferred_pool: DeferredPool,
     ready_account_pool: ReadyAccountPool,

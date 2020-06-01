@@ -589,6 +589,7 @@ impl SnapshotChunkSync {
                 *block_hash,
                 *epoch_hash,
                 receipts.clone(),
+                0,    /* total_executed_txs */
                 true, /* persistent */
             );
         }

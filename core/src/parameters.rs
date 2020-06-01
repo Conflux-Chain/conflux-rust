@@ -158,13 +158,13 @@ pub mod pow {
 pub mod block {
     use crate::parameters::consensus::GENESIS_GAS_LIMIT;
 
-    // FIXME: high tps need more bytes and txs per block.
     // The maximum block size limit in bytes
     // Consider that the simple payment transaction consumes only 100 bytes per
     // second. This would allow us to have 2000 simple payment transactions
     // per block. With two blocks per second, we will have 4000TPS at the
     // peak with only simple payment, which is good enough for now.
-    pub const MAX_BLOCK_SIZE_IN_BYTES: usize = 200 * 1024;
+    // make it large for eth replay.
+    pub const MAX_BLOCK_SIZE_IN_BYTES: usize = 1000 * 1024;
     // The maximum number of transactions to be packed in a block given
     // `MAX_BLOCK_SIZE_IN_BYTES`, assuming 50-byte transactions.
     pub const ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT: usize = 4096;

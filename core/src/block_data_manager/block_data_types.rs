@@ -94,6 +94,7 @@ pub struct BlockReceiptsInfo {
     // The current pivot epoch that this block is executed.
     // This should be consistent with the epoch hash in database.
     pivot_epoch: EpochIndex,
+    pub total_executed_txs: u64,
 }
 
 impl BlockReceiptsInfo {

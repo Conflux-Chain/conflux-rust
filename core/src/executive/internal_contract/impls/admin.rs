@@ -33,6 +33,11 @@ pub fn suicide(
     spec: &Spec, substate: &mut Substate,
 ) -> vm::Result<()>
 {
+    debug!(
+        "suiside contract addr {:?}, code hash {:?}",
+        contract_address,
+        state.code_hash(contract_address)
+    );
     state.checkout_ownership_changed(substate)?;
     match state.checkout_collateral_for_storage(contract_address)? {
         CollateralCheckResult::Valid => {}
@@ -51,9 +56,10 @@ pub fn suicide(
         ));
     }
     let balance = state.balance(contract_address)?;
-    let code_size = state
-        .code_size(contract_address)?
-        .expect("code size exists");
+    let code_size = match state.code_size(contract_address)? {
+        Some(size) => size,
+        None => bail!(vm::Error::InternalContract("suicide at creation",)),
+    };
     let code_owner = state
         .code_owner(contract_address)?
         .expect("code owner exists");

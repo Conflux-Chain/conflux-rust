@@ -67,7 +67,8 @@ pub fn sign_call(
         gas,
         gas_price: request.gas_price.unwrap_or_default(),
         value: request.value.unwrap_or_default(),
-        storage_limit: request.storage_limit.unwrap_or(U256::MAX),
+        // commented out for eth replay.
+        //storage_limit: request.storage_limit.unwrap_or(U256::MAX),
         //epoch_height,
         //chain_id,
         data: request.data.unwrap_or_default().into_vec(),

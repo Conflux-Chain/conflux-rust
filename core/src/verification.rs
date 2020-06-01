@@ -332,10 +332,10 @@ impl VerificationConfig {
             ));
         }
 
-        if tx.chain_id().unwrap_or(0) != chain_id {
+        if tx.chain_id().unwrap_or(1) != chain_id {
             bail!(TransactionError::ChainIdMismatch {
                 expected: chain_id,
-                got: tx.chain_id().unwrap_or(0),
+                got: tx.chain_id().unwrap_or(1),
             });
         }
 
