@@ -27,7 +27,7 @@ use cfxcore::{
     PeerInfo, SharedConsensusGraph, SharedSynchronizationService,
     block_data_manager::BlockExecutionResultWithEpoch, machine::Machine,
     state_exposer::STATE_EXPOSER, test_context::*, vm, ConsensusGraph,
-    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
+    ConsensusGraphTrait,
     SharedTransactionPool,
 };
 use delegate::delegate;
@@ -60,7 +60,6 @@ pub struct RpcImpl {
     maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
     machine: Arc<Machine>,
 }
-use cfxcore::storage::SnapshotAndEpochIdRef;
 
 impl RpcImpl {
     pub fn new(
@@ -893,7 +892,12 @@ impl RpcImpl {
     }
 
     fn get_pivot_chain_and_weight(&self) -> RpcResult<Vec<(H256, U256)>> {
-        let inner = &mut *self.consensus.inner.write();
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+        let inner = &mut *consensus_graph.inner.write();
         let mut chain = Vec::new();
         for idx in &inner.pivot_chain {
             chain.push((
@@ -905,29 +909,21 @@ impl RpcImpl {
     }
 
     fn get_executed_info(&self, block_hash: H256) -> RpcResult<(H256, H256)> {
-        let receipts_root = self
+
+        let consensus_graph = self
             .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+        let commitment = consensus_graph
             .data_man
-            .get_epoch_execution_commitments(&block_hash)
-            .ok_or(RpcError::invalid_params(
+            .get_epoch_execution_commitment(&block_hash)
+            .ok_or(JsonRpcError::invalid_params(
                 "No receipts root. Possibly never pivot?".to_owned(),
-            ))?
-            .receipts_root;
-        let state_root = self
-            .consensus
-            .data_man
-            .storage_manager
-            .get_state_no_commit(SnapshotAndEpochIdRef::new(&block_hash, None))
-            .unwrap()
-            .unwrap()
-            .get_state_root()
-            .unwrap()
-            .ok_or(RpcError::invalid_params(
-                "No state root. Possibly never pivot?".to_owned(),
             ))?;
         Ok((
-            receipts_root.clone().into(),
-            state_root.state_root.compute_state_root_hash(),
+            commitment.receipts_root.clone().into(),
+            commitment.state_root_with_aux_info.state_root.compute_state_root_hash(),
         ))
     }
 
@@ -1001,6 +997,7 @@ impl CfxHandler {
 use crate::common::delegate_convert;
 use cfx_types::address_util::AddressUtil;
 use cfxcore::executive::{ExecutionError, ExecutionOutcome};
+use cfxcore::storage::StateIndex;
 
 impl Cfx for CfxHandler {
     delegate! {
@@ -1095,8 +1092,8 @@ impl TestRpc for TestRpcImpl {
             fn generate_custom_block(
                 &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes, adaptive: Option<bool>)
                 -> JsonRpcResult<H256>;
-            fn get_pivot_chain_and_weight(&self) -> RpcResult<Vec<(H256, U256)>>;
-            fn get_executed_info(&self, block_hash: H256) -> RpcResult<(H256, H256)> ;
+            fn get_pivot_chain_and_weight(&self) -> JsonRpcResult<Vec<(H256, U256)>>;
+            fn get_executed_info(&self, block_hash: H256) -> JsonRpcResult<(H256, H256)> ;
             fn generate_fixed_block(
                 &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>)
                 -> JsonRpcResult<H256>;

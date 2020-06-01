@@ -25,9 +25,9 @@ use std::{
     collections::HashSet,
     sync::{mpsc, Arc},
     thread,
-    time::{self, Duration},
+    time,
 };
-use time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use txgen::SharedTransactionGenerator;
 lazy_static! {
     static ref PACKED_ACCOUNT_SIZE: Arc<dyn Gauge<usize>> =
@@ -118,7 +118,7 @@ impl Worker {
                             // This sleep is for test_mode mining of
                             // balance_attack
                             // debug!("Try nonce {}", nonce);
-                            if let Some(t) = bg.test_mining_sleep_time {
+                            if let Some(t) = bg_handle.test_mining_sleep_time {
                                 thread::sleep(t);
                             }
                         }

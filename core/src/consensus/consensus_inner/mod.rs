@@ -418,7 +418,7 @@ pub struct ConsensusGraphInner {
     /// indices maps block hash to internal index.
     pub hash_to_arena_indices: FastHashMap<H256, usize>,
     /// The current pivot chain indexes.
-    pivot_chain: Vec<usize>,
+    pub pivot_chain: Vec<usize>,
     /// The metadata associated with each pivot chain block
     pivot_chain_metadata: Vec<ConsensusGraphPivotData>,
     /// The longest timer chain block indexes

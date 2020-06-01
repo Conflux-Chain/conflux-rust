@@ -4,7 +4,7 @@ from http.client import CannotSendRequest
 
 from eth_utils import decode_hex
 
-from conflux.utils import encode_hex, privtoaddr, parse_as_int
+from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 from test_framework.blocktools import create_transaction, create_block
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
@@ -37,8 +37,8 @@ class P2PTest(ConfluxTestFramework):
             "mining_author": '"' + "0"*40 + '"',
             "log_level": "\"debug\"",
             "headers_request_timeout_ms": "30000",  # need to be larger than network latency
-            "heavy_block_difficulty_ratio": "1000",  # parameter used in the original experiments
-            "adaptive_weight_beta": "3000",  # parameter used in the original experiments
+            # "heavy_block_difficulty_ratio": "1000",  # parameter used in the original experiments
+            # "adaptive_weight_beta": "3000",  # parameter used in the original experiments
         }
         self._initialize_chain_clean()
 
