@@ -27,6 +27,7 @@ mod inner {
         ($x:expr) => {};
     }
 
+    #[derive(Debug)]
     pub struct EvmInformant;
     impl EvmInformant {
         pub fn new(_depth: usize) -> Self { EvmInformant {} }

@@ -21,6 +21,7 @@ use cfx_types::H256;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use memory_cache::MemoryLruCache;
 use parking_lot::Mutex;
+use serde::export::{fmt::Error, Formatter};
 use std::sync::Arc;
 
 const DEFAULT_CACHE_SIZE: usize = 4 * 1024 * 1024;
@@ -52,6 +53,10 @@ impl MallocSizeOf for CacheItem {
 /// Global cache for EVM interpreter
 pub struct SharedCache {
     jump_destinations: Mutex<MemoryLruCache<H256, CacheItem>>,
+}
+
+impl std::fmt::Debug for SharedCache {
+    fn fmt(&self, _f: &mut Formatter) -> Result<(), Error> { Ok(()) }
 }
 
 impl SharedCache {

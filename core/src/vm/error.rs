@@ -31,6 +31,7 @@ pub enum TrapKind {
     Create(ActionParams, Address),
 }
 
+#[derive(Debug)]
 pub enum TrapError<Call, Create> {
     Call(ActionParams, Call),
     Create(ActionParams, Address, Create),
