@@ -74,6 +74,7 @@ const TWO_POW_248: U256 = U256([0, 0, 0, 0x100000000000000]); //0x1 00000000 000
 pub const MAX_SUB_STACK_SIZE: usize = 1024;
 
 /// Abstraction over raw vector of Bytes. Easier state management of PC.
+#[derive(Debug)]
 struct CodeReader {
     position: ProgramCounter,
     code: Arc<Bytes>,
@@ -94,6 +95,7 @@ impl CodeReader {
     fn len(&self) -> usize { self.code.len() }
 }
 
+#[derive(Debug)]
 enum InstructionResult<Gas> {
     Ok,
     UnusedGas(Gas),
@@ -183,6 +185,7 @@ impl From<vm::Error> for InterpreterResult {
 }
 
 /// Intepreter EVM implementation
+#[derive(Debug)]
 pub struct Interpreter<Cost: CostType> {
     mem: Vec<u8>,
     cache: Arc<SharedCache>,
@@ -207,6 +210,7 @@ impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
     fn exec(
         mut self: Box<Self>, context: &mut dyn vm::Context,
     ) -> vm::ExecTrapResult<GasLeft> {
+        debug!("Interpreter exec");
         loop {
             let result = self.step(context);
             match result {
@@ -309,6 +313,7 @@ impl<Cost: CostType> Interpreter<Cost> {
         depth: usize,
     ) -> Interpreter<Cost>
     {
+        debug!("new EVM Interpreter");
         let reader = CodeReader::new(
             params.code.take().expect("VM always called with code; qed"),
         );
@@ -333,7 +338,8 @@ impl<Cost: CostType> Interpreter<Cost> {
             stack,
             return_stack,
             done: false,
-            do_trace: false,
+            // FIXME: false
+            do_trace: true,
             mem: Vec::new(),
             return_data: ReturnData::empty(),
             last_stack_ret_len: 0,
@@ -430,6 +436,10 @@ impl<Cost: CostType> Interpreter<Cost> {
                     Ok(t) => t,
                     Err(e) => return InterpreterResult::Done(Err(e)),
                 };
+                debug!(
+                    "do trace: {}, gas req: {:?}",
+                    self.do_trace, requirements
+                );
                 if self.do_trace {
                     context.trace_prepare_execute(
                         self.reader.position - 1,
@@ -497,6 +507,12 @@ impl<Cost: CostType> Interpreter<Cost> {
         }
 
         if let InstructionResult::UnusedGas(ref gas) = result {
+            debug!(
+                "unused gas: current gas {:?}, after {:?}",
+                self.gasometer.as_ref().expect(GASOMETER_PROOF).current_gas,
+                self.gasometer.as_ref().expect(GASOMETER_PROOF).current_gas
+                    + *gas
+            );
             self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas =
                 self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas
                     + *gas;
@@ -764,7 +780,17 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let can_create = context.balance(&self.params.address)?
                     >= endowment
                     && context.depth() < context.spec().max_depth;
+                debug!(
+                    "exec_instruction CREATE | CREATE2 can_create {}, create_gas {:?}",
+                    can_create, create_gas
+                );
                 if !can_create {
+                    debug!(
+                        "sufficient balance {}, depth {}, max_depth {}",
+                        context.balance(&self.params.address)? >= endowment,
+                        context.depth(),
+                        context.spec().max_depth,
+                    );
                     self.stack.push(U256::zero());
                     return Ok(InstructionResult::UnusedGas(create_gas));
                 }

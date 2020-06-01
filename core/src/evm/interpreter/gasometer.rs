@@ -47,6 +47,7 @@ enum Request<Cost: evm::CostType> {
     GasMemCopy(Cost, Cost, Cost),
 }
 
+#[derive(Debug)]
 pub struct InstructionRequirements<Cost> {
     pub gas_cost: Cost,
     pub provide_gas: Option<Cost>,
@@ -54,6 +55,7 @@ pub struct InstructionRequirements<Cost> {
     pub memory_required_size: usize,
 }
 
+#[derive(Debug)]
 pub struct Gasometer<Gas> {
     pub current_gas: Gas,
     pub current_mem_gas: Gas,
@@ -257,6 +259,10 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
                 let gas = Gas::from(spec.create_gas);
                 let mem = mem_needed(start, len)?;
 
+                debug!(
+                    "CREATE gas cost: gas {:?}, mem gas {:?}, start {}, len {}",
+                    gas, mem, start, len
+                );
                 Request::GasMemProvide(gas, mem, None)
             }
             instructions::CREATE2 => {
@@ -308,6 +314,10 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
                     self.mem_gas_cost(spec, current_mem_size, &mem_size)?;
                 let gas = overflowing!(gas.overflow_add(mem_gas_cost));
                 let provided = self.gas_provided(spec, gas, requested)?;
+                debug!(
+                    "gas_provided {:?} for gas {:?}, requested {:?}",
+                    provided, gas, requested,
+                );
                 let total_gas = overflowing!(gas.overflow_add(provided));
 
                 InstructionRequirements {
@@ -361,6 +371,12 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
                 (Gas::from(0), self.current_mem_gas)
             };
 
+        debug!(
+            "mem_gas_cost: current_mem_size {:?}, mem_size {:?}, mem_gas_cost {:?}, \
+            new_mem_gas {:?}, req_mem_size_rounded {:?}",
+            current_mem_size, mem_size, mem_gas_cost, new_mem_gas,
+            req_mem_size_rounded
+        );
         Ok((mem_gas_cost, new_mem_gas, req_mem_size_rounded.as_usize()))
     }
 }

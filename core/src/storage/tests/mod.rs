@@ -131,7 +131,7 @@ impl DerefMut for FakeStateManager {
 
 #[cfg(test)]
 pub fn new_state_manager_for_unit_test() -> FakeStateManager {
-    const WITH_LOGGER: bool = false;
+    const WITH_LOGGER: bool = true;
     if WITH_LOGGER {
         log4rs::init_config(
             log4rs::config::Config::builder()

@@ -42,6 +42,7 @@ pub trait Stack<T> {
     fn peek_top(&self, no_of_elems: usize) -> &[T];
 }
 
+#[derive(Debug)]
 pub struct VecStack<S> {
     stack: Vec<S>,
     logs: [S; instructions::MAX_NO_OF_TOPICS],

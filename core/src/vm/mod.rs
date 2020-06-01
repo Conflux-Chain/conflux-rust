@@ -35,14 +35,14 @@ pub trait Exec: Send {
 }
 
 /// Resume call interface
-pub trait ResumeCall: Send {
+pub trait ResumeCall: Send + std::fmt::Debug {
     /// Resume an execution for call, returns back the Vm interface.
     fn resume_call(self: Box<Self>, result: MessageCallResult)
         -> Box<dyn Exec>;
 }
 
 /// Resume create interface
-pub trait ResumeCreate: Send {
+pub trait ResumeCreate: Send + std::fmt::Debug {
     /// Resume an execution from create, returns back the Vm interface.
     fn resume_create(
         self: Box<Self>, result: ContractCreateResult,

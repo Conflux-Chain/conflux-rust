@@ -366,6 +366,7 @@ impl<'a> CallCreateExecutive<'a> {
         sender: &Address, storage_limit: &U256, is_bottom_ex: bool,
     ) -> CollateralCheckResult
     {
+        debug!("enact_result, result {:?}", result);
         substate.pop_callstack_contract(&mut unconfirmed_substate);
         match result {
             Err(vm::Error::OutOfGas)
@@ -750,7 +751,10 @@ impl<'a> CallCreateExecutive<'a> {
                 params,
                 mut unconfirmed_substate,
             ) => {
-                debug!("CallCreateExecutiveKind::ExecCreate");
+                debug!(
+                    "CallCreateExecutiveKind::ExecCreate, gas: {}",
+                    params.gas
+                );
                 assert!(self.is_create);
 
                 {
@@ -808,6 +812,7 @@ impl<'a> CallCreateExecutive<'a> {
                     out
                 };
 
+                debug!("out, {:?}", out);
                 let res = match out {
                     Ok(val) => val,
                     Err(TrapError::Call(subparams, resume)) => {

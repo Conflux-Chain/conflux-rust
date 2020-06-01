@@ -27,7 +27,7 @@ use super::{
     return_data::ReturnData,
     spec::Spec,
 };
-use crate::bytes::Bytes;
+use crate::{bytes::Bytes, evm::instructions::Instruction};
 use cfx_types::{Address, H256, U256};
 use std::sync::Arc;
 
@@ -163,7 +163,8 @@ pub trait Context {
     fn trace_next_instruction(
         &mut self, _pc: usize, _instruction: u8, _current_gas: U256,
     ) -> bool {
-        false
+        // Default to trace.
+        true
     }
 
     /// Prepare to trace an operation. Passthrough for the VM trace.
@@ -173,12 +174,25 @@ pub trait Context {
         _store_written: Option<(U256, U256)>,
     )
     {
+        println!(
+            "trace_prepare_execute: pc {}, instruction {:?}, gas_cost {}, \
+             mem_written {:?}, store written {:?}",
+            _pc,
+            Instruction::from_u8(_instruction),
+            _gas_cost,
+            _mem_written,
+            _store_written
+        )
     }
 
     /// Trace the finalised execution of a single instruction.
     fn trace_executed(
-        &mut self, _gas_used: U256, _stack_push: &[U256], _mem: &[u8],
+        &mut self, _gas_left: U256, _stack_push: &[U256], _mem: &[u8],
     ) {
+        println!(
+            "trace_executed: gas_left {}, stack_push {:?}, mem {:?}",
+            _gas_left, _stack_push, _mem
+        )
     }
 
     /// Check if running in static context.

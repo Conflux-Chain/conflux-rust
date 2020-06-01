@@ -421,6 +421,12 @@ impl<'a> ContextTrait for Context<'a> {
         self.substate.sstore_clears_refund -= value as i128;
     }
 
+    fn trace_next_instruction(
+        &mut self, _pc: usize, _instruction: u8, _current_gas: U256,
+    ) -> bool {
+        // FIXME: false
+        true
+    }
 }
 
 #[cfg(test)]
