@@ -34,7 +34,7 @@ lazy_static! {
         GaugeUsize::register_with_group("txpool", "packed_account_size");
 }
 
-const MINING_ITERATION: u64 = 100_000;
+const MINING_ITERATION: u64 = 1;
 const BLOCK_FORCE_UPDATE_INTERVAL_IN_SECS: u64 = 10;
 const BLOCKGEN_LOOP_SLEEP_IN_MILISECS: u64 = 30;
 

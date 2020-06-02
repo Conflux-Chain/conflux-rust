@@ -15,30 +15,35 @@ class P2PTest(ConfluxTestFramework):
         self.setup_clean_chain = True
         self.num_nodes = 2
         self.start_attack = True
+        self.rpc_timewait = 3600
 
     def add_options(self, parser:ArgumentParser):
         parser.add_argument(
             "--evil",
             dest="evil_rate",
-            default=0.2,
+            default=0.3,
             type=float,
         )
 
     def setup_chain(self):
         self.log.info("Initializing test directory " + self.options.tmpdir)
+        mining_sleep_us = 10000
         self.total_period = 0.25
         self.evil_rate = self.options.evil_rate
-        self.difficulty = int(2 / (1/self.total_period) / (1-self.evil_rate) * 100)
+        self.difficulty = int(2 / (1/self.total_period) / (1-self.evil_rate) * 10**6/mining_sleep_us)
         print(self.difficulty)
         self.conf_parameters = {
             "start_mining": "true",
             "initial_difficulty": str(self.difficulty),
-            "test_mining_sleep_us": "10000",
+            "test_mining_sleep_us": f"{mining_sleep_us}",
             "mining_author": '"' + "0"*40 + '"',
             "log_level": "\"debug\"",
-            "headers_request_timeout_ms": "30000",  # need to be larger than network latency
+            # "headers_request_timeout_ms": "60000",  # need to be larger than network latency
             # "heavy_block_difficulty_ratio": "1000",  # parameter used in the original experiments
             # "adaptive_weight_beta": "3000",  # parameter used in the original experiments
+            "max_allowed_timeout_in_observing_period": "1000000000",
+            # "blocks_request_timeout_ms": "60000",
+            "heartbeat_timeout_ms": "1000000000",
         }
         self._initialize_chain_clean()
 
@@ -86,9 +91,16 @@ class P2PTest(ConfluxTestFramework):
         count = 0
         after_count = 0
         merged = False
+        start = time.time()
         while True:
             # This roughly determines adversary's mining power
-            time.sleep(random.expovariate(1 / generation_period))
+            should_sleep = random.expovariate(1 / generation_period)
+            elapsed = time.time() - start
+            if elapsed < should_sleep:
+                time.sleep(should_sleep - elapsed)
+            else:
+                self.log.info(f"slow adversary {elapsed} {should_sleep}")
+            start = time.time()
 
             chain0 = self.process_chain(self.nodes[0].getPivotChainAndWeight())
             self.check_chain_heavy(chain0, 0, fork_height)
@@ -104,14 +116,14 @@ class P2PTest(ConfluxTestFramework):
                 # self.log.info("chain0 %s", chain0)
                 # self.log.info("chain1 %s", chain1)
                 after_count += 1
-                if after_count >= 600 / generation_period:
+                if after_count >= 12*3600 / generation_period:
                     self.log.info("Merged. Winner: %s Chain end with %s", fork0[0], chain0[min(len(chain0), len(chain1)) - 2][0])
                     break
                 continue
 
             count += 1
-            if count >= 2400 / generation_period:
-                self.log.info("Not merged after 40 min")
+            if count >= 12*3600 / generation_period:
+                self.log.info("Not merged after 12h")
                 break
             ''' Send blocks to keep balance.
                 The adversary's mining power and strategy is not strictly designed in the naive version.
