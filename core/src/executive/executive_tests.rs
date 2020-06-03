@@ -196,6 +196,58 @@ fn test_create_contract_out_of_depth() {
 }
 
 #[test]
+fn test_suicide_when_creation() {
+    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
+
+    // code:
+    //
+    // 33 - get caller address
+    // ff - self-deconstruct
+
+    let code = "33ff".from_hex().unwrap();
+
+    let sender =
+        Address::from_str("1d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+    let address = contract_address(
+        CreateContractAddress::FromSenderNonceAndCodeHash,
+        &sender,
+        &U256::zero(),
+        &[],
+    )
+    .0;
+
+    let mut params = ActionParams::default();
+    params.address = address;
+    params.sender = sender;
+    params.original_sender = sender;
+    params.storage_owner = sender;
+    params.gas = U256::from(100_000);
+    params.code = Some(Arc::new(code));
+    params.value = ActionValue::Transfer(U256::from(0));
+
+    let storage_manager = new_state_manager_for_unit_test();
+    let mut state =
+        get_state_for_genesis_write_with_factory(&storage_manager, factory);
+    state
+        .add_balance(&sender, &U256::from(100_000), CleanupMode::NoEmpty)
+        .unwrap();
+    let env = Env::default();
+    let machine = make_byzantium_machine(0);
+    let internal_contract_map = InternalContractMap::new();
+    let spec = machine.spec(env.number);
+    let mut substate = Substate::new();
+
+    let mut ex = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    );
+    ex.create(params, &mut substate).unwrap();
+}
+
+#[test]
 // Tracing is not suported in JIT
 fn test_call_to_create() {
     // code:

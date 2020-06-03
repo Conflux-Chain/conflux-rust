@@ -51,14 +51,17 @@ pub fn suicide(
         ));
     }
     let balance = state.balance(contract_address)?;
-    let code_size = state
-        .code_size(contract_address)?
-        .expect("code size exists");
-    let code_owner = state
-        .code_owner(contract_address)?
-        .expect("code owner exists");
-    let collateral_for_code = U256::from(code_size) * *COLLATERAL_PER_BYTE;
-    state.sub_collateral_for_storage(&code_owner, &collateral_for_code)?;
+
+    if let Some(code_size) = state.code_size(contract_address)? {
+        // Only refund the code collateral when code exists.
+        // If a contract suicides during creation, the code will be empty.
+        let code_owner = state
+            .code_owner(contract_address)?
+            .expect("code owner exists");
+        let collateral_for_code = U256::from(code_size) * *COLLATERAL_PER_BYTE;
+        state.sub_collateral_for_storage(&code_owner, &collateral_for_code)?;
+    }
+
     let sponsor_for_gas = state.sponsor_for_gas(contract_address)?;
     let sponsor_for_collateral =
         state.sponsor_for_collateral(contract_address)?;
