@@ -14,6 +14,9 @@ contract. When a user account is to be created, the address space is checked.
 - Fix issue in processing snapshot chunk boundary which caused crash. The bug
 was caused by a wrong assumption of the uniqueness of the trie proof key.
 
+- Fix incorrect receipt in refunding code collateral when contract suicides.
+
+- Fix crash when a contract suicides during creation.
 
 ## Improvements
 
