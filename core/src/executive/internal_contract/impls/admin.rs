@@ -60,6 +60,8 @@ pub fn suicide(
             .expect("code owner exists");
         let collateral_for_code = U256::from(code_size) * *COLLATERAL_PER_BYTE;
         state.sub_collateral_for_storage(&code_owner, &collateral_for_code)?;
+        *substate.storage_released.entry(code_owner).or_insert(0) +=
+            code_size as u64;
     }
 
     let sponsor_for_gas = state.sponsor_for_gas(contract_address)?;
@@ -69,10 +71,7 @@ pub fn suicide(
         state.sponsor_balance_for_gas(contract_address)?;
     let sponsor_balance_for_collateral =
         state.sponsor_balance_for_collateral(contract_address)?;
-    *substate
-        .storage_collateralized
-        .entry(code_owner)
-        .or_insert(0) += code_size as u64;
+
     if sponsor_for_gas.is_some() {
         state.add_balance(
             sponsor_for_gas.as_ref().unwrap(),
