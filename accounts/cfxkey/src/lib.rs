@@ -23,6 +23,8 @@ extern crate parity_crypto;
 extern crate parity_wordlist;
 #[macro_use]
 extern crate quick_error;
+extern crate malloc_size_of;
+extern crate malloc_size_of_derive;
 extern crate rand;
 extern crate rustc_hex;
 extern crate secp256k1;
