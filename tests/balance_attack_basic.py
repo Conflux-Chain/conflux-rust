@@ -38,12 +38,13 @@ class P2PTest(ConfluxTestFramework):
             "test_mining_sleep_us": f"{mining_sleep_us}",
             "mining_author": '"' + "0"*40 + '"',
             "log_level": "\"debug\"",
-            # "headers_request_timeout_ms": "60000",  # need to be larger than network latency
+            "headers_request_timeout_ms": "6000000",  # need to be larger than network latency
             # "heavy_block_difficulty_ratio": "1000",  # parameter used in the original experiments
             # "adaptive_weight_beta": "3000",  # parameter used in the original experiments
             "max_allowed_timeout_in_observing_period": "1000000000",
-            # "blocks_request_timeout_ms": "60000",
+            "blocks_request_timeout_ms": "6000000",
             "heartbeat_timeout_ms": "1000000000",
+            "max_inflight_request_count": "1000000"
         }
         self._initialize_chain_clean()
 
@@ -52,8 +53,8 @@ class P2PTest(ConfluxTestFramework):
         connect_nodes(self.nodes, 0, 1)
 
         # Set latency between two groups
-        self.nodes[0].addlatency(self.nodes[1].key, 10000)
-        self.nodes[1].addlatency(self.nodes[0].key, 10000)
+        self.nodes[0].addlatency(self.nodes[1].key, 4000)
+        self.nodes[1].addlatency(self.nodes[0].key, 4000)
 
     def run_test(self):
         start_p2p_connection(self.nodes)
@@ -92,15 +93,15 @@ class P2PTest(ConfluxTestFramework):
         after_count = 0
         merged = False
         start = time.time()
+        total_sleep = 0
         while True:
             # This roughly determines adversary's mining power
-            should_sleep = random.expovariate(1 / generation_period)
+            total_sleep += random.expovariate(1 / generation_period)
             elapsed = time.time() - start
-            if elapsed < should_sleep:
-                time.sleep(should_sleep - elapsed)
+            if elapsed < total_sleep:
+                time.sleep(total_sleep - elapsed)
             else:
-                self.log.info(f"slow adversary {elapsed} {should_sleep}")
-            start = time.time()
+                self.log.info(f"slow adversary {elapsed} {total_sleep}")
 
             chain0 = self.process_chain(self.nodes[0].getPivotChainAndWeight())
             self.check_chain_heavy(chain0, 0, fork_height)
