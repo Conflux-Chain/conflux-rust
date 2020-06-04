@@ -759,10 +759,9 @@ impl ConsensusGraph {
                 .map(|epoch_number| {
                     let mut blocks = Vec::new();
                     if epoch_number <= inner.get_cur_era_genesis_height() {
-                        // Blocks before (including) `cur_era_genesis` does not
-                        // has epoch set in memory, so
-                        // we should get the epoch set
-                        // from db
+                        // Blocks before (including) `cur_era_genesis` do no
+                        // have epoch set in memory, so
+                        // we should get the epoch set from db
                         let epoch_set = self
                             .data_man
                             .executed_epoch_set_hashes_from_db(epoch_number)
