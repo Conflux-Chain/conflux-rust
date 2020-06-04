@@ -8,11 +8,22 @@ use crate::sync::{
 };
 use cfx_types::H256;
 use primitives::Block;
-use rlp_derive::{RlpDecodableWrapper, RlpEncodableWrapper};
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
-#[derive(Debug, PartialEq, RlpDecodableWrapper, RlpEncodableWrapper)]
+#[derive(Debug, PartialEq)]
 pub struct NewBlock {
     pub block: Block,
+}
+
+impl Encodable for NewBlock {
+    fn rlp_append(&self, s: &mut RlpStream) { s.append_internal(&self.block); }
+}
+
+impl Decodable for NewBlock {
+    fn decode(d: &Rlp) -> Result<Self, DecoderError> {
+        let block = d.as_val()?;
+        Ok(NewBlock { block })
+    }
 }
 
 impl Handleable for NewBlock {
