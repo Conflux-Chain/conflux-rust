@@ -128,6 +128,7 @@ pub fn initialize_common_modules(
         Arc<NetworkService>,
         Arc<CommonRpcImpl>,
         PubSubClient,
+        Runtime,
     ),
     String,
 > {
@@ -269,6 +270,7 @@ pub fn initialize_common_modules(
         network,
         common_impl,
         pubsub,
+        runtime,
     ))
 }
 
@@ -285,6 +287,7 @@ pub fn initialize_not_light_node_modules(
         Option<HttpServer>,
         Option<TcpServer>,
         Option<WSServer>,
+        Runtime,
     ),
     String,
 > {
@@ -298,6 +301,7 @@ pub fn initialize_not_light_node_modules(
         network,
         common_impl,
         pubsub,
+        runtime,
     ) = initialize_common_modules(&conf, exit.clone())?;
 
     let light_provider = Arc::new(LightProvider::new(
@@ -480,6 +484,7 @@ pub fn initialize_not_light_node_modules(
         rpc_http_server,
         rpc_tcp_server,
         rpc_ws_server,
+        runtime,
     ))
 }
 

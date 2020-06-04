@@ -14,6 +14,7 @@ use blockgen::BlockGenerator;
 use cfxcore::{ConsensusGraph, SynchronizationService, TransactionPool};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Condvar, Mutex};
+use runtime::Runtime;
 use std::sync::Arc;
 
 pub struct ArchiveClientExtraComponents {
@@ -24,6 +25,7 @@ pub struct ArchiveClientExtraComponents {
     pub rpc_ws_server: Option<WsServer>,
     pub sync: Arc<SynchronizationService>,
     pub txpool: Arc<TransactionPool>,
+    pub runtime: Runtime,
 }
 
 impl MallocSizeOf for ArchiveClientExtraComponents {
@@ -61,6 +63,7 @@ impl ArchiveClient {
             rpc_http_server,
             rpc_tcp_server,
             rpc_ws_server,
+            runtime,
         ) = initialize_not_light_node_modules(
             &conf, exit, false, /* is_full_node */
         )?;
@@ -75,6 +78,7 @@ impl ArchiveClient {
                 rpc_ws_server,
                 sync,
                 txpool,
+                runtime,
             },
         }))
     }
