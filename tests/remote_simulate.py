@@ -228,11 +228,21 @@ class RemoteSimulate(ConfluxTestFramework):
         self.log.info(f"average confirmation latency: {self.confirm_info.get_average_latency()}")
 
     def gather_confirmation_latency_async(self):
+        executor = ThreadPoolExecutor()
+        query_count = 80
+
+        def get_risk(block):
+            p = random.randint(0, len(self.nodes) - 1)
+            risk = self.nodes[p].cfx_getConfirmationRiskByHash(block)
+            self.log.debug(f"risk: {block} {risk}")
+            return (block, risk)
+
         while not self.stopped:
-            for block in self.confirm_info.get_unconfirmed_blocks():
-                p = random.randint(0, len(self.nodes) - 1)
-                risk = self.nodes[p].cfx_getConfirmationRiskByHash(block)
-                self.log.debug(f"risk: {block} {risk}")
+            futures = []
+            for block in self.confirm_info.get_unconfirmed_blocks()[:query_count]:
+                futures.append(executor.submit(get_risk, block))
+            for f in futures:
+                block, risk = f.result()
                 if risk is not None and int(risk, 16) <= CONFIRMATION_THRESHOLD:
                     self.confirm_info.confirm_block(block)
             self.log.info(self.confirm_info.progress())
@@ -358,7 +368,7 @@ class BlockConfirmationInfo:
         self._lock.release()
 
     def get_unconfirmed_blocks(self):
-        return self.unconfirmed_block.copy()
+        return sorted(self.unconfirmed_block, key=lambda h: self.block_start_time[h])
 
     def get_average_latency(self):
         self._lock.acquire()

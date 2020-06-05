@@ -113,6 +113,7 @@ class LatencyExperiment:
             print("Collecting metrics ...")
             tag = self.tag(config)
             execute("./copy_file_from_slave.sh metrics.log {} > /dev/null".format(tag), 3, "collect metrics")
+            execute("./copy_file_from_slave.sh conflux.log {} > /dev/null".format(tag), 3, "collect rust log")
             if self.options.enable_flamegraph:
                 try:
                     execute("./copy_file_from_slave.sh conflux.svg {} > /dev/null".format(tag), 10, "collect flamegraph")
@@ -123,7 +124,7 @@ class LatencyExperiment:
 
         print("=========================================================")
         print("archive the experiment results into [{}] ...".format(self.stat_archive_file))
-        cmd = "tar cvfz {} {} *.exp.log *nodes.csv *.metrics.log".format(self.stat_archive_file, self.stat_log_file)
+        cmd = "tar cvfz {} {} *.exp.log *nodes.csv *.metrics.log *.conflux.log".format(self.stat_archive_file, self.stat_log_file)
         if self.options.enable_flamegraph:
             cmd = cmd + " *.conflux.svg"
         os.system(cmd)
