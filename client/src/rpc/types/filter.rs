@@ -130,7 +130,10 @@ impl Filter {
         };
 
         PrimitiveFilter {
-            from_epoch: self.from_epoch.unwrap_or(EpochNumber::Earliest).into(),
+            from_epoch: self
+                .from_epoch
+                .unwrap_or(EpochNumber::LatestCheckpoint)
+                .into(),
             to_epoch: self.to_epoch.unwrap_or(EpochNumber::LatestMined).into(),
             block_hashes: maybe_vec_into(&self.block_hashes),
             address: maybe_vec_into(&address),
