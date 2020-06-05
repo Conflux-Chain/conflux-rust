@@ -72,6 +72,9 @@ or zero if not querying the last block hash.
 
 - Disable reentrancy of contract calling through other contracts. 
 
+- Change the default value of `from_epoch` in RPC `cfx_getLogs` from "earliest" to "latest_checkpoint".
+Now if no `from_epoch` is specified, it will only return logs after the latest checkpoint.
+
 # 0.5.0
 
 ## Improvements
