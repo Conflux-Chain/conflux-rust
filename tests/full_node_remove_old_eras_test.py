@@ -3,17 +3,9 @@ import os
 import eth_utils
 import time
 
-from conflux.config import default_config
-from conflux.filter import Filter
 from conflux.rpc import RpcClient
-from conflux.utils import sha3 as keccak, priv_to_addr
-from test_framework.blocktools import create_transaction, encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.util import *
-from test_framework.mininode import *
-
-CONTRACT_PATH = "contracts/EventsTestContract_bytecode.dat"
-CALLED_TOPIC = encode_hex_0x(keccak(b"Called(address,uint32)"))
+from test_framework.util import assert_equal, connect_nodes, sync_blocks
 
 ARCHIVE_NODE = 0
 FULL_NODE = 1
@@ -65,8 +57,7 @@ class FullNodeRemoveOldErasTest(ConfluxTestFramework):
         sync_blocks(self.nodes)
         time.sleep(1)
 
-        # under these parameters, checkpoints are formed after 4 eras
-        # we expect full nodes to keep the last 4 eras only
+        # we expect the first few eras are removed
         self.log.info(f"checking deleted blocks...")
 
         for epoch in range(0, 6 * ERA_EPOCH_COUNT):
@@ -78,7 +69,8 @@ class FullNodeRemoveOldErasTest(ConfluxTestFramework):
 
         self.log.info(f"checking existing blocks...")
 
-        for epoch in range(6 * ERA_EPOCH_COUNT, 10 * ERA_EPOCH_COUNT):
+        # we expect the last few eras are not removed
+        for epoch in range(7 * ERA_EPOCH_COUNT, 10 * ERA_EPOCH_COUNT):
             archive_block = self.rpc[ARCHIVE_NODE].block_by_epoch(hex(epoch), include_txs=True)
             assert(archive_block != None)
 
