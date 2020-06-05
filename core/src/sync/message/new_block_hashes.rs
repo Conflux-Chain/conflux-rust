@@ -7,11 +7,24 @@ use crate::sync::{
     Error,
 };
 use cfx_types::H256;
-use rlp_derive::{RlpDecodableWrapper, RlpEncodableWrapper};
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
-#[derive(Debug, PartialEq, RlpDecodableWrapper, RlpEncodableWrapper)]
+#[derive(Debug, PartialEq)]
 pub struct NewBlockHashes {
     pub block_hashes: Vec<H256>,
+}
+
+impl Encodable for NewBlockHashes {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.append_list(&self.block_hashes);
+    }
+}
+
+impl Decodable for NewBlockHashes {
+    fn decode(d: &Rlp) -> Result<Self, DecoderError> {
+        let block_hashes = d.as_list()?;
+        Ok(NewBlockHashes { block_hashes })
+    }
 }
 
 impl Handleable for NewBlockHashes {
