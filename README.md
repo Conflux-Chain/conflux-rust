@@ -19,7 +19,7 @@ Here are some guidelines before you start:
 
 * [Conflux Website](https://www.conflux-chain.org/)
 * [Conflux Paper](https://arxiv.org/abs/1805.03870)
-* [Medium](https://medium.com/@Confluxchain)
+* [Medium](https://medium.com/@ConfluxNetwork)
 
 ## License
 

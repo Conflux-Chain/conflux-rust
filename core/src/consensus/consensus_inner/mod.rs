@@ -455,6 +455,8 @@ pub struct ConsensusGraphInner {
     /// adaptive_tree maintains 2 * SubStableTW(B, x) - SubTW(B, P(x)) +
     /// Weight(P(x))
     adaptive_tree: CaterpillarMinLinkCutTree,
+    /// size_tree maintains the subtree size of each node in the TreeGraph
+    size_tree: SizeMinLinkCutTree,
     /// A priority that holds for every non-active partial invalid block, the
     /// timer chain stamp that will become valid
     invalid_block_queue: BinaryHeap<(i128, usize)>,
@@ -498,6 +500,7 @@ impl MallocSizeOf for ConsensusGraphInner {
             + self.initial_stable_future.size_of(ops)
             + self.weight_tree.size_of(ops)
             + self.adaptive_tree.size_of(ops)
+            + self.size_tree.size_of(ops)
             + self.invalid_block_queue.size_of(ops)
             + self.block_body_caches.size_of(ops)
             + self.pow_config.size_of(ops)
@@ -584,6 +587,7 @@ impl ConsensusGraphInner {
             best_timer_chain_hash: Default::default(),
             weight_tree: SizeMinLinkCutTree::new(),
             adaptive_tree: CaterpillarMinLinkCutTree::new(),
+            size_tree: SizeMinLinkCutTree::new(),
             invalid_block_queue: BinaryHeap::new(),
             block_body_caches: HashMap::new(),
             pow_config,
@@ -628,6 +632,12 @@ impl ConsensusGraphInner {
         inner
             .adaptive_tree
             .make_tree(inner.cur_era_genesis_block_arena_index);
+        inner
+            .size_tree
+            .make_tree(inner.cur_era_genesis_block_arena_index);
+        inner
+            .size_tree
+            .path_apply(inner.cur_era_genesis_block_arena_index, 1);
         // The genesis node can be zero in adaptive_tree because it is never
         // used!
         inner
@@ -1183,16 +1193,19 @@ impl ConsensusGraphInner {
 
     fn compute_subtree_weights(
         &self, me: usize, anticone_barrier: &BitSet,
-    ) -> Vec<i128> {
+    ) -> (Vec<i128>, Vec<i128>) {
         let mut subtree_weight = Vec::new();
+        let mut subtree_size: Vec<i128> = Vec::new();
         let n = self.arena.capacity();
         subtree_weight.resize_with(n, Default::default);
+        subtree_size.resize_with(n, Default::default);
         let mut stack = Vec::new();
         stack.push((0, self.cur_era_genesis_block_arena_index));
         while let Some((stage, index)) = stack.pop() {
             if stage == 0 {
                 stack.push((1, index));
                 subtree_weight[index] = 0;
+                subtree_size[index] = 0;
                 for child in &self.arena[index].children {
                     if !anticone_barrier.contains(*child as u32) && *child != me
                     {
@@ -1202,13 +1215,15 @@ impl ConsensusGraphInner {
             } else {
                 let weight = self.block_weight(index);
                 subtree_weight[index] += weight;
+                subtree_size[index] += 1;
                 let parent = self.arena[index].parent;
                 if parent != NULL {
                     subtree_weight[parent] += subtree_weight[index];
+                    subtree_size[parent] += subtree_size[index];
                 }
             }
         }
-        subtree_weight
+        (subtree_weight, subtree_size)
     }
 
     fn get_best_timer_tick(
@@ -1254,6 +1269,7 @@ impl ConsensusGraphInner {
 
     fn adaptive_weight_impl_brutal(
         &self, parent_0: usize, subtree_weight: &Vec<i128>,
+        subtree_size: &Vec<i128>,
         timer_chain_tuple: Option<&(
             u64,
             HashMap<usize, u64>,
@@ -1276,7 +1292,10 @@ impl ConsensusGraphInner {
             let grandparent = self.arena[parent].parent;
             let timer_parent = self.get_timer_tick(parent, timer_chain_tuple);
             assert!(timer_me >= timer_parent);
-            if timer_me - timer_parent >= self.inner_conf.timer_chain_beta {
+            let s = subtree_size[grandparent] - subtree_size[parent];
+            if timer_me - timer_parent >= self.inner_conf.timer_chain_beta
+                || s > 5400
+            {
                 let w = 2 * subtree_weight[parent]
                     - subtree_weight[grandparent]
                     + self.block_weight(grandparent);
@@ -1293,7 +1312,7 @@ impl ConsensusGraphInner {
 
     fn adaptive_weight_impl(
         &mut self, parent_0: usize, anticone_barrier: &BitSet,
-        weight_tuple: Option<&Vec<i128>>,
+        weight_tuple: Option<&(Vec<i128>, Vec<i128>)>,
         timer_chain_tuple: Option<&(
             u64,
             HashMap<usize, u64>,
@@ -1303,7 +1322,7 @@ impl ConsensusGraphInner {
         difficulty: i128,
     ) -> bool
     {
-        let mut parent = parent_0;
+        let parent = parent_0;
         let force_confirm = self.compute_force_confirm(timer_chain_tuple);
         let force_confirm_height = self.arena[force_confirm].height;
         // This may happen if we are forced to generate at a position choosing
@@ -1313,10 +1332,11 @@ impl ConsensusGraphInner {
         {
             return false;
         }
-        if let Some(subtree_weight) = weight_tuple {
+        if let Some(tuple) = weight_tuple {
             return self.adaptive_weight_impl_brutal(
                 parent_0,
-                subtree_weight,
+                &tuple.0,
+                &tuple.1,
                 timer_chain_tuple,
                 force_confirm,
                 difficulty,
@@ -1324,11 +1344,14 @@ impl ConsensusGraphInner {
         }
 
         let mut weight_delta = HashMap::new();
+        let mut size_delta = HashMap::new();
 
         for index in anticone_barrier.iter() {
             assert!(!self.is_legacy_block(index as usize));
             weight_delta
                 .insert(index as usize, self.weight_tree.get(index as usize));
+            size_delta
+                .insert(index as usize, self.size_tree.get(index as usize));
         }
 
         for (index, delta) in &weight_delta {
@@ -1337,6 +1360,9 @@ impl ConsensusGraphInner {
             assert!(parent != NULL);
             self.adaptive_tree.caterpillar_apply(parent, *delta);
             self.adaptive_tree.path_apply(*index, -*delta * 2);
+        }
+        for (index, delta) in &size_delta {
+            self.size_tree.path_apply(*index, -*delta);
         }
 
         let timer_me = self.get_best_timer_tick(timer_chain_tuple);
@@ -1360,33 +1386,58 @@ impl ConsensusGraphInner {
             }
         }
 
-        let adaptive = if best != force_confirm_height {
-            parent = self.ancestor_at(parent, best);
-
-            let a = self
-                .adaptive_tree
-                .path_aggregate_chop(parent, force_confirm);
-            let b = self.inner_conf.adaptive_weight_beta as i128 * difficulty;
-
-            if a < b {
-                debug!("block is adaptive: {:?} < {:?}!", a, b);
-            } else {
-                debug!("block is not adaptive: {:?} >= {:?}!", a, b);
+        let mut adaptive = false;
+        let mut cur = parent;
+        let mut cur_height = self.arena[cur].height;
+        while cur_height > best && cur_height > force_confirm_height {
+            let x = cur;
+            let x_parent = self.arena[x].parent;
+            if self.size_tree.get(x_parent) - self.size_tree.get(x) > 5400 {
+                if 2 * self.weight_tree.get(x) - self.weight_tree.get(x_parent)
+                    + self.block_weight(x_parent)
+                    < self.inner_conf.adaptive_weight_beta as i128 * difficulty
+                {
+                    debug!("block is adaptive because of subtree size check: {} parent_size {} his_size {}", x, self.size_tree.get(x_parent), self.size_tree.get(x));
+                    adaptive = true;
+                    break;
+                }
             }
-            a < b
-        } else {
-            debug!(
-                "block is not adaptive: too close to genesis, timer tick {:?}",
-                timer_me
-            );
-            false
-        };
+            cur = self.arena[cur].parent;
+            cur_height -= 1;
+        }
+        if !adaptive {
+            adaptive = if best != force_confirm_height {
+                let pivot_at_best = self.ancestor_at(parent, best);
+
+                let a = self
+                    .adaptive_tree
+                    .path_aggregate_chop(pivot_at_best, force_confirm);
+                let b =
+                    self.inner_conf.adaptive_weight_beta as i128 * difficulty;
+
+                if a < b {
+                    debug!("block is adaptive: {:?} < {:?}!", a, b);
+                } else {
+                    debug!("block is not adaptive: {:?} >= {:?}!", a, b);
+                }
+                a < b
+            } else {
+                debug!(
+                    "block is not adaptive: too close to genesis, timer tick {:?}",
+                    timer_me
+                );
+                false
+            };
+        }
 
         for (index, delta) in &weight_delta {
             self.weight_tree.path_apply(*index, *delta);
             let parent = self.arena[*index].parent;
             self.adaptive_tree.caterpillar_apply(parent, -*delta);
             self.adaptive_tree.path_apply(*index, *delta * 2)
+        }
+        for (index, delta) in &size_delta {
+            self.size_tree.path_apply(*index, *delta);
         }
 
         adaptive
@@ -1396,7 +1447,7 @@ impl ConsensusGraphInner {
     /// both for block generations and for block validations.
     fn adaptive_weight(
         &mut self, me: usize, anticone_barrier: &BitSet,
-        weight_tuple: Option<&Vec<i128>>,
+        weight_tuple: Option<&(Vec<i128>, Vec<i128>)>,
         timer_chain_tuple: &(u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>),
     ) -> bool
     {
@@ -1559,6 +1610,7 @@ impl ConsensusGraphInner {
 
         self.weight_tree.make_tree(index);
         self.adaptive_tree.make_tree(index);
+        self.size_tree.make_tree(index);
 
         (sn, index)
     }
@@ -3407,6 +3459,7 @@ impl ConsensusGraphInner {
         assert!(parent != NULL);
         self.weight_tree.split_root(parent, me);
         self.adaptive_tree.split_root(parent, me);
+        self.size_tree.split_root(parent, me);
         self.arena[me].parent = NULL;
     }
 

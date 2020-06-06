@@ -44,6 +44,8 @@ serde_json = "1.0"
 [patch.crates-io]
 parity-snappy = { path = "parity-snappy/rust-snappy" }
 bzip2-sys = { git = "https://github.com/alexcrichton/bzip2-rs.git", commit = "a8ee5cb4" }
+sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = "1de8e5998f7c2d919336660b8ef4e8f52ac43844" }
+
 
 [patch.'https://github.com/paritytech/rust-secp256k1']
 # There was a package name change, bit it's not possible to redirect eth-secp256k1 to "parity-secp256k1"
