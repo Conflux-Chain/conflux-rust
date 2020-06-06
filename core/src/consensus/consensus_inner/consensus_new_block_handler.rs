@@ -502,7 +502,7 @@ impl ConsensusNewBlockHandler {
 
     fn check_correct_parent(
         inner: &mut ConsensusGraphInner, me: usize, anticone_barrier: &BitSet,
-        weight_tuple: Option<&Vec<i128>>,
+        weight_tuple: Option<&(Vec<i128>, Vec<i128>)>,
     ) -> bool
     {
         let parent = inner.arena[me].parent;
@@ -536,7 +536,7 @@ impl ConsensusNewBlockHandler {
             blockset.iter()
         };
 
-        if let Some(subtree_weight) = weight_tuple {
+        if let Some((subtree_weight, _)) = weight_tuple {
             let res = ConsensusNewBlockHandler::check_correct_parent_brutal(
                 inner,
                 me,
@@ -620,7 +620,8 @@ impl ConsensusNewBlockHandler {
 
     fn check_block_full_validity(
         &self, new: usize, inner: &mut ConsensusGraphInner, adaptive: bool,
-        anticone_barrier: &BitSet, weight_tuple: Option<&Vec<i128>>,
+        anticone_barrier: &BitSet,
+        weight_tuple: Option<&(Vec<i128>, Vec<i128>)>,
     ) -> bool
     {
         let parent = inner.arena[new].parent;
@@ -682,6 +683,9 @@ impl ConsensusNewBlockHandler {
 
         inner.adaptive_tree.make_tree(me);
         inner.adaptive_tree.link(parent, me);
+
+        inner.size_tree.make_tree(me);
+        inner.size_tree.link(parent, me);
     }
 
     #[inline]
@@ -696,6 +700,7 @@ impl ConsensusNewBlockHandler {
         inner.weight_tree.path_apply(me, weight);
         inner.adaptive_tree.path_apply(me, 2 * weight);
         inner.adaptive_tree.caterpillar_apply(parent, -weight);
+        inner.size_tree.path_apply(me, 1);
     }
 
     fn recycle_tx_in_block(
