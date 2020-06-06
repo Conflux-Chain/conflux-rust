@@ -1292,9 +1292,8 @@ impl ConsensusGraphInner {
             let grandparent = self.arena[parent].parent;
             let timer_parent = self.get_timer_tick(parent, timer_chain_tuple);
             assert!(timer_me >= timer_parent);
-            let s = subtree_size[grandparent] - subtree_size[parent];
             if timer_me - timer_parent >= self.inner_conf.timer_chain_beta
-                || s > 5400
+                || subtree_size[grandparent] > 10000
             {
                 let w = 2 * subtree_weight[parent]
                     - subtree_weight[grandparent]
@@ -1392,7 +1391,7 @@ impl ConsensusGraphInner {
         while cur_height > best && cur_height > force_confirm_height {
             let x = cur;
             let x_parent = self.arena[x].parent;
-            if self.size_tree.get(x_parent) - self.size_tree.get(x) > 5400 {
+            if self.size_tree.get(x_parent) > 10000 {
                 if 2 * self.weight_tree.get(x) - self.weight_tree.get(x_parent)
                     + self.block_weight(x_parent)
                     < self.inner_conf.adaptive_weight_beta as i128 * difficulty
