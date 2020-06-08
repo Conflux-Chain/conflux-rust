@@ -55,9 +55,8 @@ impl Serialize for EpochNumber {
             EpochNumber::Earliest => serializer.serialize_str("earliest"),
             EpochNumber::LatestCheckpoint => {
                 serializer.serialize_str("latest_checkpoint")
-            }
-            /*            EpochNumber::Pending =>
-             * serializer.serialize_str("pending"), */
+            } /*            EpochNumber::Pending =>
+               * serializer.serialize_str("pending"), */
         }
     }
 }
