@@ -32,6 +32,7 @@ impl KeyValueDbTrait for KvdbRocksdb {
         random_crash_if_enabled("rocksdb delete");
         let mut transaction = self.kvdb.transaction();
         transaction.delete(self.col, key);
+        self.kvdb.write(transaction)?;
         Ok(None)
     }
 

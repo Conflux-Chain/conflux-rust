@@ -364,7 +364,9 @@ impl Decodable for TransactionWithSignature {
 }
 
 impl Encodable for TransactionWithSignature {
-    fn rlp_append(&self, s: &mut RlpStream) { s.append(&self.transaction); }
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.append_internal(&self.transaction);
+    }
 }
 
 impl TransactionWithSignature {
@@ -426,7 +428,7 @@ impl MallocSizeOf for TransactionWithSignature {
 }
 
 /// A signed transaction with successfully recovered `sender`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SignedTransaction {
     pub transaction: TransactionWithSignature,
     pub sender: Address,

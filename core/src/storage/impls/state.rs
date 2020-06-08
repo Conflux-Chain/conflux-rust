@@ -62,12 +62,14 @@ impl State {
     }
 
     fn state_root(&self, merkle_root: MerkleHash) -> StateRootWithAuxInfo {
+        let state_root = StateRoot {
+            snapshot_root: self.snapshot_merkle_root,
+            intermediate_delta_root: self.intermediate_trie_root_merkle,
+            delta_root: merkle_root,
+        };
+        let state_root_hash = state_root.compute_state_root_hash();
         StateRootWithAuxInfo {
-            state_root: StateRoot {
-                snapshot_root: self.snapshot_merkle_root,
-                intermediate_delta_root: self.intermediate_trie_root_merkle,
-                delta_root: merkle_root,
-            },
+            state_root,
             aux_info: StateRootAuxInfo {
                 snapshot_epoch_id: self.snapshot_epoch_id.clone(),
                 intermediate_epoch_id: self.intermediate_epoch_id.clone(),
@@ -75,6 +77,7 @@ impl State {
                     .maybe_intermediate_trie_key_padding
                     .clone(),
                 delta_mpt_key_padding: self.delta_trie_key_padding.clone(),
+                state_root_hash,
             },
         }
     }

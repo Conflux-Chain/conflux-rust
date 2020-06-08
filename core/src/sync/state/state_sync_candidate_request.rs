@@ -103,9 +103,7 @@ impl Request for StateSyncCandidateRequest {
 
     fn is_empty(&self) -> bool { false }
 
-    fn resend(&self) -> Option<Box<dyn Request>> {
-        Some(Box::new(self.clone()))
-    }
+    fn resend(&self) -> Option<Box<dyn Request>> { None }
 
     fn required_capability(&self) -> Option<DynamicCapability> { None }
 }

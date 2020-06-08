@@ -269,7 +269,6 @@ fn col_config(
 
 unsafe impl Send for Database {}
 unsafe impl Sync for Database {}
-/// TODO Mutex around Options may not be needed
 /// Key-Value database.
 #[derive(MallocSizeOfDerive)]
 pub struct Database {
@@ -278,11 +277,11 @@ pub struct Database {
     config: DatabaseConfig,
     path: String,
     #[ignore_malloc_size_of = "insignificant"]
-    write_opts: Mutex<WriteOptions>,
+    write_opts: WriteOptions,
     #[ignore_malloc_size_of = "insignificant"]
-    read_opts: Mutex<ReadOptions>,
+    read_opts: ReadOptions,
     #[ignore_malloc_size_of = "insignificant"]
-    block_opts: Mutex<BlockBasedOptions>,
+    block_opts: BlockBasedOptions,
     // Dirty values added with `write_buffered`. Cleaned on `flush`.
     overlay: RwLock<Vec<HashMap<DBKey, KeyState>>>,
     // Values currently being flushed. Cleared when `flush` completes.
@@ -447,9 +446,9 @@ impl Database {
             ),
             flushing_lock: Mutex::new(false),
             path: path.to_owned(),
-            read_opts: Mutex::new(read_opts),
-            write_opts: Mutex::new(write_opts),
-            block_opts: Mutex::new(block_opts),
+            read_opts,
+            write_opts,
+            block_opts,
         })
     }
 
@@ -506,7 +505,7 @@ impl Database {
 
                 check_for_corruption(
                     &self.path,
-                    cfs.db.write_opt(&batch, &*self.write_opts.lock()),
+                    cfs.db.write_opt(&batch, &self.write_opts),
                 )?;
 
                 for column in self.flushing.write().iter_mut() {
@@ -560,7 +559,7 @@ impl Database {
 
                 check_for_corruption(
                     &self.path,
-                    cfs.db.write_opt(&batch, &*self.write_opts.lock()),
+                    cfs.db.write_opt(&batch, &self.write_opts),
                 )
             }
             None => Err(other_io_err("Database is closed")),
@@ -589,7 +588,7 @@ impl Database {
                                 .get_cf_opt(
                                     cfs.get_cf(col as usize),
                                     key,
-                                    &*self.read_opts.lock(),
+                                    &self.read_opts,
                                 )
                                 .map(|r| r.map(|v| v.to_vec()))
                                 .map_err(other_io_err),
@@ -689,7 +688,7 @@ impl Database {
                 let name = format!("col{}", col);
                 db.create_cf((
                     name.as_str(),
-                    col_config(&self.config, &*self.block_opts.lock())?,
+                    col_config(&self.config, &self.block_opts)?,
                 ))
                 .map_err(other_io_err)?;
                 column_names.push(name);

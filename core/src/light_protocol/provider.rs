@@ -351,7 +351,11 @@ impl Provider {
         let state_roots = req
             .epochs
             .into_iter()
-            .map(|e| self.ledger.state_root_of(e).map(|root| (e, root)))
+            .map(|e| {
+                self.ledger
+                    .state_root_of(e)
+                    .map(|root| (e, root.state_root))
+            })
             .filter_map(Result::ok)
             .map(|(epoch, state_root)| StateRootWithEpoch { epoch, state_root })
             .collect();

@@ -354,7 +354,7 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
         if let Some(commitment) = sync_handler
             .graph
             .data_man
-            .get_epoch_execution_commitment_with_db(&epoch_to_sync)
+            .load_epoch_execution_commitment_from_db(&epoch_to_sync)
         {
             info!("CatchUpCheckpointPhase: commitment for epoch {:?} exists, skip state sync. \
                 commitment={:?}", epoch_to_sync, commitment);

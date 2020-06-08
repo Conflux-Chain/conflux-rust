@@ -5,9 +5,7 @@
 use crate::{bytes::Bytes, hash::KECCAK_EMPTY};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use rlp_derive::{
-    RlpDecodable, RlpDecodableWrapper, RlpEncodable, RlpEncodableWrapper,
-};
+use rlp_derive::{RlpDecodable, RlpEncodable};
 
 use std::ops::{Deref, DerefMut};
 
@@ -37,18 +35,19 @@ pub struct VoteStakeInfo {
     pub unlock_block_number: u64,
 }
 
-#[derive(
-    Clone,
-    Debug,
-    Default,
-    RlpDecodableWrapper,
-    RlpEncodableWrapper,
-    Ord,
-    PartialOrd,
-    Eq,
-    PartialEq,
-)]
+#[derive(Clone, Debug, Default, Ord, PartialOrd, Eq, PartialEq)]
 pub struct DepositList(pub Vec<DepositInfo>);
+
+impl Encodable for DepositList {
+    fn rlp_append(&self, s: &mut RlpStream) { s.append_list(&self.0); }
+}
+
+impl Decodable for DepositList {
+    fn decode(d: &Rlp) -> Result<Self, DecoderError> {
+        let deposit_vec = d.as_list()?;
+        Ok(DepositList(deposit_vec))
+    }
+}
 
 impl Deref for DepositList {
     type Target = Vec<DepositInfo>;
@@ -60,18 +59,19 @@ impl DerefMut for DepositList {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
-#[derive(
-    Clone,
-    Debug,
-    Default,
-    RlpDecodableWrapper,
-    RlpEncodableWrapper,
-    Ord,
-    PartialOrd,
-    Eq,
-    PartialEq,
-)]
+#[derive(Clone, Debug, Default, Ord, PartialOrd, Eq, PartialEq)]
 pub struct VoteStakeList(pub Vec<VoteStakeInfo>);
+
+impl Encodable for VoteStakeList {
+    fn rlp_append(&self, s: &mut RlpStream) { s.append_list(&self.0); }
+}
+
+impl Decodable for VoteStakeList {
+    fn decode(d: &Rlp) -> Result<Self, DecoderError> {
+        let vote_vec = d.as_list()?;
+        Ok(VoteStakeList(vote_vec))
+    }
+}
 
 impl Deref for VoteStakeList {
     type Target = Vec<VoteStakeInfo>;

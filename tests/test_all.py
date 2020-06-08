@@ -29,6 +29,7 @@ test_dir = os.path.dirname(os.path.realpath(__file__))
 
 test_subdirs = [
     "", # include test_dir itself
+    "full_node_tests",
     "light",
     "network_tests",
     "pubsub",

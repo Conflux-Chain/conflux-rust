@@ -5,7 +5,7 @@
 mod anticone_cache;
 pub mod consensus_inner;
 mod consensus_trait;
-mod debug;
+pub mod debug;
 mod pastset_cache;
 
 use super::consensus::consensus_inner::{
@@ -20,7 +20,9 @@ pub use crate::consensus::{
 use crate::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     bytes::Bytes,
-    consensus::consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
+    consensus::consensus_inner::{
+        consensus_executor::ConsensusExecutionConfiguration, StateBlameInfo,
+    },
     evm::Spec,
     executive::ExecutionOutcome,
     parameters::{
@@ -69,9 +71,6 @@ lazy_static! {
 pub struct ConsensusConfig {
     /// Chain id configs.
     pub chain_id: ChainIdParams,
-    /// If we hit invalid state root, we will dump the information into a
-    /// directory specified here. This is useful for testing.
-    pub debug_dump_dir_invalid_state_root: String,
     /// When bench_mode is true, the PoW solution verification will be skipped.
     /// The transaction execution will also be skipped and only return the
     /// pair of (KECCAK_NULL_RLP, KECCAK_EMPTY_LIST_RLP) This is for testing
@@ -601,12 +600,11 @@ impl ConsensusGraph {
         })
     }
 
-    // FIXME: structure the return value?
     /// Force the engine to recompute the deferred state root for a particular
     /// block given a delay.
     pub fn force_compute_blame_and_deferred_state_for_generation(
         &self, parent_block_hash: &H256,
-    ) -> Result<(u32, H256, H256, H256), String> {
+    ) -> Result<StateBlameInfo, String> {
         {
             let inner = &mut *self.inner.write();
             let hash = inner
@@ -623,10 +621,9 @@ impl ConsensusGraph {
         )
     }
 
-    // FIXME: structure the return value?
     pub fn get_blame_and_deferred_state_for_generation(
         &self, parent_block_hash: &H256,
-    ) -> Result<(u32, H256, H256, H256), String> {
+    ) -> Result<StateBlameInfo, String> {
         self.executor.get_blame_and_deferred_state_for_generation(
             parent_block_hash,
             &self.inner,
@@ -690,8 +687,8 @@ impl ConsensusGraph {
                 // `wait_for_result`
                 let state_root = execution_commitment
                     .state_root_with_aux_info
-                    .state_root
-                    .compute_state_root_hash();
+                    .aux_info
+                    .state_root_hash;
                 Some((results_with_epoch, address, state_root))
             }
             Err(msg) => {
@@ -749,42 +746,58 @@ impl ConsensusGraph {
                 });
             }
 
-            let blooms = filter.bloom_possibilities();
-            let mut blocks = vec![];
-            for epoch_number in from_epoch..(to_epoch + 1) {
-                if epoch_number <= inner.get_cur_era_genesis_height() {
-                    // Blocks before (including) `cur_era_genesis` does not has
-                    // epoch set in memory, so we should get
-                    // the epoch set from db
-                    let epoch_set = self
-                        .data_man
-                        .executed_epoch_set_hashes_from_db(epoch_number)
-                        .expect("epoch set past checkpoint should exist");
-                    let epoch_hash = epoch_set.last().expect("Not empty");
-                    for hash in &epoch_set {
-                        if self.block_matches_bloom(hash, epoch_hash, &blooms) {
-                            blocks.push(*hash);
-                        }
-                    }
-                } else {
-                    // Use the epoch set maintained in memory
-                    let epoch_hash = &inner.arena
-                        [inner.get_pivot_block_arena_index(epoch_number)]
-                    .hash;
-                    for index in inner.get_ordered_executable_epoch_blocks(
-                        inner.get_pivot_block_arena_index(epoch_number),
-                    ) {
-                        let hash = &inner.arena[*index].hash;
-                        if self.block_matches_bloom(hash, epoch_hash, &blooms) {
-                            blocks.push(*hash);
-                        }
-                    }
-                }
+            if to_epoch > inner.best_epoch_number() {
+                return Err(FilterError::OutOfBoundEpochNumber {
+                    to_epoch,
+                    max_epoch: inner.best_epoch_number(),
+                });
             }
-            blocks
+
+            let blooms = filter.bloom_possibilities();
+            (from_epoch..(to_epoch + 1))
+                .into_par_iter()
+                .map(|epoch_number| {
+                    let mut blocks = Vec::new();
+                    if epoch_number <= inner.get_cur_era_genesis_height() {
+                        // Blocks before (including) `cur_era_genesis` do not
+                        // have epoch set in memory, so
+                        // we should get the epoch set from db
+                        let epoch_set = self
+                            .data_man
+                            .executed_epoch_set_hashes_from_db(epoch_number)
+                            .expect("epoch set from past era should exist");
+                        let epoch_hash = epoch_set.last().expect("Not empty");
+                        for hash in &epoch_set {
+                            if self
+                                .block_matches_bloom(hash, epoch_hash, &blooms)
+                            {
+                                blocks.push(*hash)
+                            }
+                        }
+                    } else {
+                        // Use the epoch set maintained in memory
+                        let epoch_hash = &inner.arena
+                            [inner.get_pivot_block_arena_index(epoch_number)]
+                        .hash;
+                        for index in inner.get_ordered_executable_epoch_blocks(
+                            inner.get_pivot_block_arena_index(epoch_number),
+                        ) {
+                            let hash = &inner.arena[*index].hash;
+                            if self
+                                .block_matches_bloom(hash, epoch_hash, &blooms)
+                            {
+                                blocks.push(*hash);
+                            }
+                        }
+                    }
+                    blocks
+                })
+                .flatten()
+                .collect()
         } else {
             filter.block_hashes.as_ref().unwrap().clone()
         };
+        debug!("get_logs: {} blocks after filter", block_hashes.len());
 
         Ok(self.logs_from_blocks(
             block_hashes,
@@ -890,8 +903,14 @@ impl ConsensusGraph {
     ) -> RpcResult<ExecutionOutcome> {
         // only allow to call against stated epoch
         self.validate_stated_epoch(&epoch)?;
-        let epoch_id = self.get_hash_from_epoch_number(epoch)?;
-        self.executor.call_virtual(tx, &epoch_id)
+        let (epoch_id, epoch_size) = if let Ok(v) =
+            self.get_block_hashes_by_epoch(epoch)
+        {
+            (v.last().expect("pivot block always exist").clone(), v.len())
+        } else {
+            bail!("cannot get block hashes in the specified epoch, maybe it does not exist?");
+        };
+        self.executor.call_virtual(tx, &epoch_id, epoch_size)
     }
 
     pub fn check_balance_against_transaction(
@@ -1216,7 +1235,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
                                 StateDb::new(db),
                                 Default::default(), /* vm */
                                 &Spec::new_spec(),
-                                past_num_blocks, /* block_numer */
+                                past_num_blocks + 1, /* block_numer */
                             )
                         })
                         .expect("Best state has been executed");
