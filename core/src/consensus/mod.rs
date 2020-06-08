@@ -754,41 +754,50 @@ impl ConsensusGraph {
             }
 
             let blooms = filter.bloom_possibilities();
-            let mut blocks = vec![];
-            for epoch_number in from_epoch..(to_epoch + 1) {
-                if epoch_number <= inner.get_cur_era_genesis_height() {
-                    // Blocks before (including) `cur_era_genesis` does not has
-                    // epoch set in memory, so we should get
-                    // the epoch set from db
-                    let epoch_set = self
-                        .data_man
-                        .executed_epoch_set_hashes_from_db(epoch_number)
-                        .expect("epoch set past checkpoint should exist");
-                    let epoch_hash = epoch_set.last().expect("Not empty");
-                    for hash in &epoch_set {
-                        if self.block_matches_bloom(hash, epoch_hash, &blooms) {
-                            blocks.push(*hash);
+            (from_epoch..(to_epoch + 1))
+                .into_par_iter()
+                .map(|epoch_number| {
+                    let mut blocks = Vec::new();
+                    if epoch_number <= inner.get_cur_era_genesis_height() {
+                        // Blocks before (including) `cur_era_genesis` do not
+                        // have epoch set in memory, so
+                        // we should get the epoch set from db
+                        let epoch_set = self
+                            .data_man
+                            .executed_epoch_set_hashes_from_db(epoch_number)
+                            .expect("epoch set from past era should exist");
+                        let epoch_hash = epoch_set.last().expect("Not empty");
+                        for hash in &epoch_set {
+                            if self
+                                .block_matches_bloom(hash, epoch_hash, &blooms)
+                            {
+                                blocks.push(*hash)
+                            }
+                        }
+                    } else {
+                        // Use the epoch set maintained in memory
+                        let epoch_hash = &inner.arena
+                            [inner.get_pivot_block_arena_index(epoch_number)]
+                        .hash;
+                        for index in inner.get_ordered_executable_epoch_blocks(
+                            inner.get_pivot_block_arena_index(epoch_number),
+                        ) {
+                            let hash = &inner.arena[*index].hash;
+                            if self
+                                .block_matches_bloom(hash, epoch_hash, &blooms)
+                            {
+                                blocks.push(*hash);
+                            }
                         }
                     }
-                } else {
-                    // Use the epoch set maintained in memory
-                    let epoch_hash = &inner.arena
-                        [inner.get_pivot_block_arena_index(epoch_number)]
-                    .hash;
-                    for index in inner.get_ordered_executable_epoch_blocks(
-                        inner.get_pivot_block_arena_index(epoch_number),
-                    ) {
-                        let hash = &inner.arena[*index].hash;
-                        if self.block_matches_bloom(hash, epoch_hash, &blooms) {
-                            blocks.push(*hash);
-                        }
-                    }
-                }
-            }
-            blocks
+                    blocks
+                })
+                .flatten()
+                .collect()
         } else {
             filter.block_hashes.as_ref().unwrap().clone()
         };
+        debug!("get_logs: {} blocks after filter", block_hashes.len());
 
         Ok(self.logs_from_blocks(
             block_hashes,

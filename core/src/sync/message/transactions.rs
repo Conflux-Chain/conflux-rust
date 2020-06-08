@@ -22,15 +22,26 @@ use network::service::ProtocolVersion;
 use primitives::{transaction::TxPropagateId, TransactionWithSignature};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use rlp_derive::{
-    RlpDecodable, RlpDecodableWrapper, RlpEncodable, RlpEncodableWrapper,
-};
+use rlp_derive::{RlpDecodable, RlpEncodable};
 use siphasher::sip::SipHasher24;
 use std::{any::Any, collections::HashSet, hash::Hasher, time::Duration};
 
-#[derive(Debug, PartialEq, RlpDecodableWrapper, RlpEncodableWrapper)]
+#[derive(Debug, PartialEq)]
 pub struct Transactions {
     pub transactions: Vec<TransactionWithSignature>,
+}
+
+impl Encodable for Transactions {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.append_list(&self.transactions);
+    }
+}
+
+impl Decodable for Transactions {
+    fn decode(d: &Rlp) -> Result<Self, DecoderError> {
+        let transactions = d.as_list()?;
+        Ok(Transactions { transactions })
+    }
 }
 
 impl Handleable for Transactions {
