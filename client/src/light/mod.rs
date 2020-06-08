@@ -138,9 +138,9 @@ impl LightClient {
                 rpc_http_server,
                 rpc_tcp_server,
                 rpc_ws_server,
+                runtime,
                 secret_store,
                 txpool,
-                runtime,
             },
         }))
     }

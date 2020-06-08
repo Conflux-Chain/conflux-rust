@@ -72,9 +72,9 @@ impl ArchiveClient {
                 rpc_http_server,
                 rpc_tcp_server,
                 rpc_ws_server,
+                runtime,
                 sync,
                 txpool,
-                runtime,
             },
         }))
     }
