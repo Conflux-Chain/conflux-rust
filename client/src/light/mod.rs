@@ -31,9 +31,9 @@ pub struct LightClientExtraComponents {
     pub rpc_http_server: Option<HttpServer>,
     pub rpc_tcp_server: Option<TcpServer>,
     pub rpc_ws_server: Option<WsServer>,
+    pub runtime: Runtime,
     pub secret_store: Arc<SecretStore>,
     pub txpool: Arc<TransactionPool>,
-    pub runtime: Runtime,
 }
 
 impl MallocSizeOf for LightClientExtraComponents {

@@ -23,9 +23,9 @@ pub struct FullClientExtraComponents {
     pub rpc_http_server: Option<HttpServer>,
     pub rpc_tcp_server: Option<TcpServer>,
     pub rpc_ws_server: Option<WsServer>,
+    pub runtime: Runtime,
     pub sync: Arc<SynchronizationService>,
     pub txpool: Arc<TransactionPool>,
-    pub runtime: Runtime,
 }
 
 impl MallocSizeOf for FullClientExtraComponents {

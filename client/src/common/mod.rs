@@ -18,6 +18,8 @@ impl<BlockGenT, Rest: MallocSizeOf> MallocSizeOf
             let data_manager_size = data_man.size_of(ops);
             data_manager_size + self.other_components.size_of(ops)
         } else {
+            // If data_man is `None`, we will be just shutting down (dropping
+            // components) so we don't care about the size
             0
         }
     }
@@ -192,7 +194,7 @@ pub fn initialize_common_modules(
     let genesis_block = genesis_block(
         &storage_manager,
         genesis_accounts,
-        Address::from_str(TESTNET_VERSION).unwrap(),
+        Address::from_str(GENESIS_VERSION).unwrap(),
         U256::zero(),
     );
     debug!("Initialize genesis_block={:?}", genesis_block);
@@ -216,7 +218,6 @@ pub fn initialize_common_modules(
     ));
 
     let statistics = Arc::new(Statistics::new());
-
     let vm = VmFactory::new(1024 * 32);
     let pow_config = conf.pow_config();
     let notifications = Notifications::init();
@@ -251,12 +252,14 @@ pub fn initialize_common_modules(
         network.start().unwrap();
         Arc::new(network)
     };
+
     let common_impl = Arc::new(CommonRpcImpl::new(
         exit,
         consensus.clone(),
         network.clone(),
         txpool.clone(),
     ));
+
     let runtime = Runtime::with_default_thread_count();
     let pubsub =
         PubSubClient::new(runtime.executor(), consensus.clone(), notifications);
@@ -651,7 +654,7 @@ use crate::{
         },
         setup_debug_rpc_apis, setup_public_rpc_apis,
     },
-    TESTNET_VERSION,
+    GENESIS_VERSION,
 };
 use blockgen::BlockGenerator;
 use cfx_types::{Address, U256};
