@@ -132,7 +132,7 @@ impl RpcImpl {
 
     pub fn block_by_epoch_number(
         &self, epoch_num: EpochNumber, include_txs: bool,
-    ) -> RpcResult<RpcBlock> {
+    ) -> RpcResult<Option<RpcBlock>> {
         let consensus_graph = self
             .consensus
             .as_any()
@@ -149,14 +149,12 @@ impl RpcImpl {
             .get_pivot_hash_from_epoch_number(epoch_height)
             .map_err(RpcError::invalid_params)?;
 
-        if let Some(block) = self
+        let maybe_block = self
             .data_man
             .block_by_hash(&pivot_hash, false /* update_cache */)
-        {
-            Ok(RpcBlock::new(&*block, inner, &self.data_man, include_txs))
-        } else {
-            Err(RpcError::internal_error())
-        }
+            .map(|b| RpcBlock::new(&*b, inner, &self.data_man, include_txs));
+
+        Ok(maybe_block)
     }
 
     pub fn confirmation_risk_by_hash(
