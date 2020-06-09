@@ -74,17 +74,10 @@ path = "tools/tg_config_gen/main.rs"
 # Use workspace section to allow test all cases under root folder (cargo test --all).
 [workspace]
 
-#[patch.crates-io]
-#kvdb-rocksdb = {path = "./db/src/kvdb-rocksdb"}
-
 [features]
 deadlock_detection = ["parking_lot/deadlock_detection"]
 
-#[replace]
-#"bzip2-sys:0.1.6"={git = "https://github.com/alexcrichton/bzip2-rs.git"}
-
 [patch.crates-io]
-bzip2-sys = { git = "https://github.com/alexcrichton/bzip2-rs.git", commit = "461d6691" }
 sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = "1de8e5998f7c2d919336660b8ef4e8f52ac43844" }
 
 [profile.test]

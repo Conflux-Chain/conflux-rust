@@ -15,13 +15,14 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use ethereum_types::H256;
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use secp256k1::{constants::SECRET_KEY_SIZE as SECP256K1_SECRET_KEY_SIZE, key};
 use std::{fmt, ops::Deref, str::FromStr};
 use zeroize::Zeroize;
 use Error;
 use SECP256K1;
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, DeriveMallocSizeOf)]
 pub struct Secret {
     inner: H256,
 }

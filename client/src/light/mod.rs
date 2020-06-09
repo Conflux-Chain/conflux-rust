@@ -2,41 +2,27 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::{sync::Arc, thread, time::Duration};
+use std::sync::Arc;
 
-use cfx_types::{Address, U256};
-use network::NetworkService;
 use parking_lot::{Condvar, Mutex};
-use runtime::Runtime;
 use secret_store::SecretStore;
-use threadpool::ThreadPool;
 
 use jsonrpc_http_server::Server as HttpServer;
 use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WsServer;
 
 use crate::{
+    common::{initialize_common_modules, ClientComponents},
     configuration::Configuration,
     rpc::{
-        extractor::RpcExtractor,
-        impls::{
-            common::RpcImpl as CommonImpl, light::RpcImpl, pubsub::PubSubClient,
-        },
+        extractor::RpcExtractor, impls::light::RpcImpl,
         setup_debug_rpc_apis_light, setup_public_rpc_apis_light,
     },
 };
-use cfxcore::{
-    block_data_manager::BlockDataManager, genesis, statistics::Statistics,
-    storage::StorageManager, vm_factory::VmFactory, ConsensusGraph,
-    LightQueryService, Notifications, SynchronizationGraph, TransactionPool,
-    WORKER_COMPUTATION_PARALLELISM,
-};
-use std::str::FromStr;
-
-use super::TESTNET_VERSION;
-use crate::common::ClientComponents;
 use blockgen::BlockGenerator;
-use cfxcore::{genesis::genesis_block, machine::new_machine_with_builtin};
+use cfxcore::{ConsensusGraph, LightQueryService, TransactionPool};
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use runtime::Runtime;
 
 pub struct LightClientExtraComponents {
     pub consensus: Arc<ConsensusGraph>,
@@ -50,6 +36,10 @@ pub struct LightClientExtraComponents {
     pub txpool: Arc<TransactionPool>,
 }
 
+impl MallocSizeOf for LightClientExtraComponents {
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { unimplemented!() }
+}
+
 pub struct LightClient {}
 
 impl LightClient {
@@ -60,126 +50,18 @@ impl LightClient {
         Box<ClientComponents<BlockGenerator, LightClientExtraComponents>>,
         String,
     > {
-        info!("Working directory: {:?}", std::env::current_dir());
-
-        metrics::initialize(conf.metrics_config());
-
-        let worker_thread_pool = Arc::new(Mutex::new(ThreadPool::with_name(
-            "Tx Recover".into(),
-            WORKER_COMPUTATION_PARALLELISM,
-        )));
-
-        let network_config = conf.net_config()?;
-        let cache_config = conf.cache_config();
-
-        let db_config = conf.db_config();
-        let ledger_db =
-            db::open_database(conf.raw_conf.block_db_dir.as_str(), &db_config)
-                .map_err(|e| format!("Failed to open database {:?}", e))?;
-
-        let secret_store = Arc::new(SecretStore::new());
-        let storage_manager = Arc::new(
-            StorageManager::new(conf.storage_config())
-                .expect("Failed to initialize storage."),
-        );
-        {
-            let storage_manager_log_weak_ptr = Arc::downgrade(&storage_manager);
-            let exit_clone = exit.clone();
-            thread::spawn(move || loop {
-                let mut exit_lock = exit_clone.0.lock();
-                if exit_clone
-                    .1
-                    .wait_for(&mut exit_lock, Duration::from_millis(5000))
-                    .timed_out()
-                {
-                    let manager = storage_manager_log_weak_ptr.upgrade();
-                    match manager {
-                        None => return,
-                        Some(manager) => manager.log_usage(),
-                    };
-                } else {
-                    return;
-                }
-            });
-        }
-
-        let genesis_accounts = if conf.is_test_mode() {
-            match conf.raw_conf.genesis_secrets {
-                Some(ref file) => {
-                    genesis::load_secrets_file(file, secret_store.as_ref())?
-                }
-                None => genesis::default(conf.is_test_or_dev_mode()),
-            }
-        } else {
-            match conf.raw_conf.genesis_accounts {
-                Some(ref file) => genesis::load_file(file)?,
-                None => genesis::default(conf.is_test_or_dev_mode()),
-            }
-        };
-
-        let genesis_block = genesis_block(
-            &storage_manager,
-            genesis_accounts,
-            Address::from_str(TESTNET_VERSION).unwrap(),
-            U256::zero(),
-        );
-        debug!("Initialize genesis_block={:?}", genesis_block);
-
-        let data_man = Arc::new(BlockDataManager::new(
-            cache_config,
-            Arc::new(genesis_block),
-            ledger_db.clone(),
-            storage_manager,
-            worker_thread_pool,
-            conf.data_mananger_config(),
-        ));
-
-        let machine = Arc::new(new_machine_with_builtin());
-
-        let txpool = Arc::new(TransactionPool::new(
-            conf.txpool_config(),
-            conf.verification_config(),
-            data_man.clone(),
-            machine.clone(),
-        ));
-
-        let statistics = Arc::new(Statistics::new());
-
-        let vm = VmFactory::new(1024 * 32);
-        let pow_config = conf.pow_config();
-        let notifications = Notifications::init();
-
-        let consensus = Arc::new(ConsensusGraph::new(
-            conf.consensus_config(),
-            vm,
-            txpool.clone(),
-            statistics,
-            data_man.clone(),
-            pow_config.clone(),
-            notifications.clone(),
-            conf.execution_config(),
-            conf.verification_config(),
-        ));
-
-        let _protocol_config = conf.protocol_config();
-        let verification_config = conf.verification_config();
-        let sync_config = conf.sync_graph_config();
-
-        let sync_graph = Arc::new(SynchronizationGraph::new(
-            consensus.clone(),
-            verification_config,
-            pow_config,
-            sync_config,
-            notifications.clone(),
-            false,
-            machine.clone(),
-        ));
-
-        let network = {
-            let mut network = NetworkService::new(network_config);
-            network.start().unwrap();
-            Arc::new(network)
-        };
+        let (
+            _machine,
+            secret_store,
+            data_man,
+            txpool,
+            consensus,
+            sync_graph,
+            network,
+            common_impl,
+            pubsub,
+            runtime,
+        ) = initialize_common_modules(&conf, exit.clone())?;
 
         let light = Arc::new(LightQueryService::new(
             consensus.clone(),
@@ -190,21 +72,6 @@ impl LightClient {
         light.register().unwrap();
 
         let rpc_impl = Arc::new(RpcImpl::new(light.clone()));
-
-        let common_impl = Arc::new(CommonImpl::new(
-            exit,
-            consensus.clone(),
-            network,
-            txpool.clone(),
-        ));
-
-        let runtime = Runtime::with_default_thread_count();
-        let pubsub = PubSubClient::new(
-            runtime.executor(),
-            consensus.clone(),
-            notifications,
-        );
-
         let debug_rpc_http_server = super::rpc::start_http(
             conf.local_http_config(),
             setup_debug_rpc_apis_light(
