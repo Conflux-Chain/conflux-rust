@@ -107,7 +107,7 @@ pub trait Cfx {
     #[rpc(name = "cfx_getBlockByEpochNumber")]
     fn block_by_epoch_number(
         &self, epoch_number: EpochNumber, include_txs: bool,
-    ) -> JsonRpcResult<Block>;
+    ) -> JsonRpcResult<Option<Block>>;
 
     /// Returns best block hash.
     #[rpc(name = "cfx_getBestBlockHash")]

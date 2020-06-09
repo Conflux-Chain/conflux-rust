@@ -137,18 +137,20 @@ class LogFilteringTest(ConfluxTestFramework):
     def number_to_topic(self, number):
         return "0x" + ("%x" % number).zfill(64)
 
-    def deploy_contract(self, sender, priv_key, data_hex, epoch_height = 0):
-        tx = self.rpc[FULLNODE0].new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key, epoch_height = epoch_height, storage_limit=20000)
+    def deploy_contract(self, sender, priv_key, data_hex):
+        tx = self.rpc[FULLNODE0].new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key, storage_limit=1000)
         assert_equal(self.rpc[FULLNODE0].send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc[FULLNODE0].get_transaction_receipt(tx.hash_hex())
+        assert_equal(receipt["outcomeStatus"], 0)
         address = receipt["contractCreated"]
         assert_is_hex_string(address)
         return receipt, address
 
     def call_contract(self, sender, priv_key, contract, data_hex):
-        tx = self.rpc[FULLNODE0].new_contract_tx(receiver=contract, data_hex=data_hex, sender=sender, priv_key=priv_key)
+        tx = self.rpc[FULLNODE0].new_contract_tx(receiver=contract, data_hex=data_hex, sender=sender, priv_key=priv_key, storage_limit=1000)
         assert_equal(self.rpc[FULLNODE0].send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc[FULLNODE0].get_transaction_receipt(tx.hash_hex())
+        assert_equal(receipt["outcomeStatus"], 0)
         return receipt
 
 if __name__ == "__main__":

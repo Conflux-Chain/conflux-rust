@@ -364,7 +364,9 @@ impl Decodable for TransactionWithSignature {
 }
 
 impl Encodable for TransactionWithSignature {
-    fn rlp_append(&self, s: &mut RlpStream) { s.append(&self.transaction); }
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.append_internal(&self.transaction);
+    }
 }
 
 impl TransactionWithSignature {
