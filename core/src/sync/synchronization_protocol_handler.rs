@@ -1306,7 +1306,7 @@ impl SynchronizationProtocolHandler {
                 );
             }
         }
-        let mut sent_transactions = short_ids_transactions;
+        let mut sent_transactions = short_ids_transactions.clone();
         if !tx_hashes_transactions.is_empty() {
             TX_HASHES_PROPAGATE_METER.mark(tx_hashes_transactions.len());
             for tx in &tx_hashes_transactions {
@@ -1315,7 +1315,7 @@ impl SynchronizationProtocolHandler {
                     tx.hash(),
                 );
             }
-            sent_transactions.extend(tx_hashes_transactions);
+            sent_transactions.extend(tx_hashes_transactions.clone());
         }
 
         TX_PROPAGATE_METER.mark(sent_transactions.len());
@@ -1334,6 +1334,7 @@ impl SynchronizationProtocolHandler {
             .request_manager
             .append_sent_transactions(sent_transactions);
 
+        let mut resend_flag = false;
         for i in 0..lucky_peers.len() {
             let peer_id = lucky_peers[i];
             let (key1, key2) = nonces.pop().unwrap();
@@ -1357,8 +1358,21 @@ impl SynchronizationProtocolHandler {
                         "failed to propagate transaction ids to peer, id: {}, err: {}",
                         peer_id, e
                     );
+                    resend_flag = true;
                 }
             }
+        }
+
+        if resend_flag {
+            let mut resend_transactions: HashMap<H256, Arc<SignedTransaction>> =
+                HashMap::new();
+            for tx in short_ids_transactions {
+                resend_transactions.insert(tx.hash, tx.clone());
+            }
+            for tx in tx_hashes_transactions {
+                resend_transactions.insert(tx.hash, tx.clone());
+            }
+            self.set_to_propagate_trans(resend_transactions);
         }
     }
 
