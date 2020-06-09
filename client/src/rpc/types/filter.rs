@@ -130,7 +130,10 @@ impl Filter {
         };
 
         PrimitiveFilter {
-            from_epoch: self.from_epoch.unwrap_or(EpochNumber::Earliest).into(),
+            from_epoch: self
+                .from_epoch
+                .unwrap_or(EpochNumber::LatestCheckpoint)
+                .into(),
             to_epoch: self.to_epoch.unwrap_or(EpochNumber::LatestMined).into(),
             block_hashes: maybe_vec_into(&self.block_hashes),
             address: maybe_vec_into(&address),
@@ -343,7 +346,7 @@ mod tests {
         };
 
         let primitive_filter = PrimitiveFilter {
-            from_epoch: PrimitiveEpochNumber::Earliest,
+            from_epoch: PrimitiveEpochNumber::LatestCheckpoint,
             to_epoch: PrimitiveEpochNumber::LatestMined,
             block_hashes: Some(vec![
                 H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
