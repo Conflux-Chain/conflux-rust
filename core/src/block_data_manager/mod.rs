@@ -1058,7 +1058,7 @@ impl BlockDataManager {
 
     pub fn remove_epoch_execution_context_from_db(&self, block_hash: &H256) {
         self.db_manager
-            .remove_block_execution_result_from_db(block_hash);
+            .remove_epoch_execution_context_from_db(block_hash);
     }
 
     pub fn epoch_executed(&self, epoch_hash: &H256) -> bool {
