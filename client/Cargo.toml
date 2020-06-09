@@ -62,6 +62,7 @@ futures = { version = "0.3.3", features = ["compat"] }
 rayon = "1.2.0"
 throttling = { path = "../util/throttling" }
 tokio-timer = "0.2.13"
+malloc_size_of = {path = "../util/malloc_size_of"}
 
 [dev-dependencies]
 criterion = "0.2"

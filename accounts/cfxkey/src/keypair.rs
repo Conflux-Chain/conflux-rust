@@ -16,6 +16,7 @@
 
 use super::{Address, Error, Public, Secret, SECP256K1};
 use cfx_types::address_util::AddressUtil;
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parity_crypto::Keccak256 as _;
 use secp256k1::key;
 use std::fmt;
@@ -30,7 +31,7 @@ pub fn public_to_address(public: &Public) -> Address {
     result
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, DeriveMallocSizeOf)]
 /// secp256k1 key pair
 pub struct KeyPair {
     secret: Secret,

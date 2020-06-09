@@ -6,9 +6,11 @@ extern crate cfxkey as keylib;
 extern crate parking_lot;
 
 use keylib::KeyPair;
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::RwLock;
 use std::{collections::HashMap, sync::Arc};
 
+#[derive(DeriveMallocSizeOf)]
 pub struct StoreInner {
     account_vec: Vec<KeyPair>,
     secret_map: HashMap<String, usize>,
@@ -47,6 +49,7 @@ impl StoreInner {
     }
 }
 
+#[derive(DeriveMallocSizeOf)]
 pub struct SecretStore {
     store: RwLock<StoreInner>,
 }

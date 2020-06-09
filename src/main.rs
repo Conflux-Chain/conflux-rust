@@ -168,6 +168,7 @@ Current Version: {}
         ArchiveClient::start(conf, exit.clone())
             .map_err(|e| format!("failed to start archive client: {:?}", e))?
     };
+
     client_methods::run(client_handle, exit);
 
     Ok(())
