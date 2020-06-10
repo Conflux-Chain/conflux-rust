@@ -31,6 +31,8 @@ pub mod consensus {
     pub const ONE_UCFX_IN_DRIP: u64 = 1_000_000_000_000;
 
     pub const ONE_GDRIP_IN_DRIP: u64 = 1_000_000_000;
+
+    pub const LOG_FILTERING_EPOCH_CHUNK_SIZE: usize = 128;
 }
 
 pub mod consensus_internal {

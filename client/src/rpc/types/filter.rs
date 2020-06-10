@@ -129,13 +129,19 @@ impl Filter {
             ]
         };
 
+        // we allow up to 128 block hashes
+        let block_hashes = match self.block_hashes {
+            None => None,
+            Some(bhs) => Some(bhs.iter().take(128).cloned().collect()),
+        };
+
         PrimitiveFilter {
             from_epoch: self
                 .from_epoch
                 .unwrap_or(EpochNumber::LatestCheckpoint)
                 .into(),
-            to_epoch: self.to_epoch.unwrap_or(EpochNumber::LatestMined).into(),
-            block_hashes: maybe_vec_into(&self.block_hashes),
+            to_epoch: self.to_epoch.unwrap_or(EpochNumber::LatestState).into(),
+            block_hashes,
             address: maybe_vec_into(&address),
             topics: topics.iter().map(maybe_vec_into).collect(),
             limit: self.limit.map(|x| x.as_u64() as usize),

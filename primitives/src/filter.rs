@@ -49,6 +49,17 @@ pub enum FilterError {
         hash: H256,
     },
 
+    /// Epoch cannot be served as it was already pruned from db on a full node
+    EpochAlreadyPruned {
+        epoch: u64,
+        min: u64,
+    },
+
+    /// Block has not been executed yet
+    BlockNotExecutedYet {
+        block_hash: H256,
+    },
+
     /// Filter error with custom error message (e.g. timeout)
     Custom(String),
 }
@@ -80,6 +91,13 @@ impl fmt::Display for FilterError {
             },
             UnknownBlock { hash } => format! {
                 "Unable to identify block {}", hash
+            },
+            EpochAlreadyPruned { epoch, min } => format! {
+                "Epoch is smaller than the earliest epoch stored (epoch: {}, min: {})",
+                epoch, min,
+            },
+            BlockNotExecutedYet { block_hash } => format! {
+                "Block {:?} is not executed yet", block_hash,
             },
             Custom(ref s) => s.clone(),
         };
