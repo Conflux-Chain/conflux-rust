@@ -39,6 +39,8 @@ pub trait ConsensusGraphTrait: Send + Sync {
 
     fn best_epoch_number(&self) -> u64;
 
+    fn latest_checkpoint_epoch_number(&self) -> u64;
+
     fn best_chain_id(&self) -> u64;
 
     fn best_block_hash(&self) -> H256;

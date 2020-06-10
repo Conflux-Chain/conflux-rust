@@ -22,7 +22,8 @@ use std::{
         atomic::{AtomicBool, Ordering as AtomicOrdering},
         Arc,
     },
-    thread, time,
+    thread,
+    time::{self, Instant},
 };
 
 ///
@@ -282,7 +283,8 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
         info!("start phase {:?}", self.name());
         let (_, cur_era_genesis_height) =
             self.graph.get_genesis_hash_and_height_in_current_era();
-        *sync_handler.latest_epoch_requested.lock() = cur_era_genesis_height;
+        *sync_handler.latest_epoch_requested.lock() =
+            (cur_era_genesis_height, Instant::now());
 
         sync_handler.request_initial_missed_block(io);
         sync_handler.request_epochs(io);
@@ -633,7 +635,8 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
 
         let (_, cur_era_genesis_height) =
             self.graph.get_genesis_hash_and_height_in_current_era();
-        *sync_handler.latest_epoch_requested.lock() = cur_era_genesis_height;
+        *sync_handler.latest_epoch_requested.lock() =
+            (cur_era_genesis_height, Instant::now());
 
         sync_handler.request_initial_missed_block(io);
         sync_handler.request_epochs(io);

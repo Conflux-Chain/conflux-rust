@@ -165,7 +165,7 @@ build_config! {
         (max_incoming_peers, (usize), 64)
         (max_inflight_request_count, (u64), 64)
         (max_outgoing_peers, (usize), 16)
-        (max_outgoing_peers_archive, (usize), 0)
+        (max_outgoing_peers_archive, (Option<usize>), None)
         (max_peers_tx_propagation, (usize), 128)
         (max_unprocessed_block_size_mb, (usize), (128))
         (min_peers_tx_propagation, (usize), 8)
@@ -225,6 +225,7 @@ build_config! {
         (get_logs_filter_max_limit, (Option<usize>), None)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (persist_tx_index, (bool), false)
+        (print_memory_usage_period_s, (Option<u64>), None)
         (target_block_gas_limit, (u64), DEFAULT_TARGET_BLOCK_GAS_LIMIT)
 
         // TreeGraph Section.
@@ -351,7 +352,7 @@ impl Configuration {
         network_config.max_incoming_peers = self.raw_conf.max_incoming_peers;
         network_config.max_outgoing_peers = self.raw_conf.max_outgoing_peers;
         network_config.max_outgoing_peers_archive =
-            self.raw_conf.max_outgoing_peers_archive;
+            self.raw_conf.max_outgoing_peers_archive.unwrap_or(0);
         Ok(network_config)
     }
 

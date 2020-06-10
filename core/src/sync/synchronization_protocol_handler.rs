@@ -75,6 +75,11 @@ pub const CHECK_RPC_REQUEST_TIMER: TimerToken = 11;
 
 const MAX_TXS_BYTES_TO_PROPAGATE: usize = 1024 * 1024; // 1MB
 
+/// The maximum allowed gap between `best_epoch` and `latest_epoch_requested`.
+const EPOCH_SYNC_MAX_GAP: u64 = 20000;
+/// If not future epochs can be requested because of `EPOCH_SYNC_MAX_GAP`,
+/// after waiting this timeout we'll request from `best_epoch` again.
+const EPOCH_SYNC_RESTART_TIMEOUT_S: u64 = 60 * 10;
 const EPOCH_SYNC_MAX_INFLIGHT: u64 = 300;
 const EPOCH_SYNC_BATCH_SIZE: u64 = 30;
 
@@ -318,7 +323,8 @@ pub struct SynchronizationProtocolHandler {
     pub graph: SharedSynchronizationGraph,
     pub syn: Arc<SynchronizationState>,
     pub request_manager: Arc<RequestManager>,
-    pub latest_epoch_requested: Mutex<u64>,
+    /// The latest `(requested_epoch_number, request_time)`
+    pub latest_epoch_requested: Mutex<(u64, Instant)>,
     pub future_blocks: FutureBlockContainer,
     pub phase_manager: SynchronizationPhaseManager,
     pub phase_manager_lock: Mutex<u32>,
@@ -411,7 +417,7 @@ impl SynchronizationProtocolHandler {
             graph: sync_graph.clone(),
             syn: sync_state.clone(),
             request_manager,
-            latest_epoch_requested: Mutex::new(0),
+            latest_epoch_requested: Mutex::new((0, Instant::now())),
             future_blocks: FutureBlockContainer::new(
                 future_block_buffer_capacity,
             ),
@@ -754,18 +760,36 @@ impl SynchronizationProtocolHandler {
         let median_peer_epoch =
             self.syn.median_epoch_from_normal_peers().unwrap_or(0);
         let my_best_epoch = self.graph.consensus.best_epoch_number();
+        let (mut latest_requested_epoch, latest_request_time) =
+            *latest_requested;
+
+        // If the gap is too large, it means that the next epoch of
+        // `my_best_epoch` is missing, either because received
+        // epoch_set is wrong or we have too many epochs with
+        // blocks not received.
+        if latest_requested_epoch - my_best_epoch >= EPOCH_SYNC_MAX_GAP {
+            if latest_request_time.elapsed()
+                < Duration::from_secs(EPOCH_SYNC_RESTART_TIMEOUT_S)
+            {
+                return;
+            } else {
+                // Restart from `my_best_epoch` to fix possible problems.
+                latest_requested_epoch = my_best_epoch;
+            }
+        }
 
         while self.request_manager.num_epochs_in_flight()
             < EPOCH_SYNC_MAX_INFLIGHT
-            && (*latest_requested < median_peer_epoch || median_peer_epoch == 0)
+            && latest_requested_epoch - my_best_epoch < EPOCH_SYNC_MAX_GAP
+            && (latest_requested_epoch < median_peer_epoch
+                || median_peer_epoch == 0)
         {
-            let from = cmp::max(my_best_epoch, *latest_requested) + 1;
+            let from = cmp::max(my_best_epoch, latest_requested_epoch) + 1;
             // Check epochs from db
             if let Some(epoch_hashes) =
                 self.graph.data_man.all_epoch_set_hashes_from_db(from)
             {
                 debug!("Recovered epoch {} from db", from);
-                // FIXME better handle this in our event loop separately
                 if self.need_requesting_blocks() {
                     self.request_blocks(io, None, epoch_hashes);
                 } else {
@@ -776,12 +800,12 @@ impl SynchronizationProtocolHandler {
                         true, /* ignore_db */
                     );
                 }
-                *latest_requested = from;
+                latest_requested_epoch = from;
                 continue;
             } else if median_peer_epoch == 0 {
                 // We have recovered all epochs from db, and there is no peer to
                 // request new epochs, so we should enter `Latest` phase
-                return;
+                break;
             }
 
             // Epoch hashes are not in db, so should be requested from another
@@ -822,8 +846,9 @@ impl SynchronizationProtocolHandler {
 
             self.request_manager
                 .request_epoch_hashes(io, peer, epochs, None);
-            *latest_requested = until - 1;
+            latest_requested_epoch = until - 1;
         }
+        *latest_requested = (latest_requested_epoch, Instant::now());
     }
 
     pub fn request_block_headers(
@@ -1281,7 +1306,7 @@ impl SynchronizationProtocolHandler {
                 );
             }
         }
-        let mut sent_transactions = short_ids_transactions;
+        let mut sent_transactions = short_ids_transactions.clone();
         if !tx_hashes_transactions.is_empty() {
             TX_HASHES_PROPAGATE_METER.mark(tx_hashes_transactions.len());
             for tx in &tx_hashes_transactions {
@@ -1290,7 +1315,7 @@ impl SynchronizationProtocolHandler {
                     tx.hash(),
                 );
             }
-            sent_transactions.extend(tx_hashes_transactions);
+            sent_transactions.extend(tx_hashes_transactions.clone());
         }
 
         TX_PROPAGATE_METER.mark(sent_transactions.len());
@@ -1309,6 +1334,7 @@ impl SynchronizationProtocolHandler {
             .request_manager
             .append_sent_transactions(sent_transactions);
 
+        let mut resend_flag = false;
         for i in 0..lucky_peers.len() {
             let peer_id = lucky_peers[i];
             let (key1, key2) = nonces.pop().unwrap();
@@ -1332,8 +1358,21 @@ impl SynchronizationProtocolHandler {
                         "failed to propagate transaction ids to peer, id: {}, err: {}",
                         peer_id, e
                     );
+                    resend_flag = true;
                 }
             }
+        }
+
+        if resend_flag {
+            let mut resend_transactions: HashMap<H256, Arc<SignedTransaction>> =
+                HashMap::new();
+            for tx in short_ids_transactions {
+                resend_transactions.insert(tx.hash, tx.clone());
+            }
+            for tx in tx_hashes_transactions {
+                resend_transactions.insert(tx.hash, tx.clone());
+            }
+            self.set_to_propagate_trans(resend_transactions);
         }
     }
 

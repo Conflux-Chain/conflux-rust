@@ -520,6 +520,9 @@ impl QueryService {
 
         match epoch {
             EpochNumber::Earliest => Ok(0),
+            EpochNumber::LatestCheckpoint => {
+                Ok(self.consensus.latest_checkpoint_epoch_number())
+            }
             EpochNumber::LatestMined => Ok(latest_verifiable),
             EpochNumber::LatestState => Ok(latest_verifiable),
             EpochNumber::Number(n) if n <= latest_verifiable => Ok(n),

@@ -317,6 +317,9 @@ impl ConsensusGraph {
     ) -> Result<u64, String> {
         Ok(match epoch_number {
             EpochNumber::Earliest => 0,
+            EpochNumber::LatestCheckpoint => {
+                self.latest_checkpoint_epoch_number()
+            }
             EpochNumber::LatestMined => self.best_epoch_number(),
             EpochNumber::LatestState => self.best_executed_state_epoch_number(),
             EpochNumber::Number(num) => {
@@ -1102,6 +1105,14 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn best_epoch_number(&self) -> u64 {
         self.best_info.read_recursive().best_epoch_number
+    }
+
+    fn latest_checkpoint_epoch_number(&self) -> u64 {
+        self.data_man
+            .block_height_by_hash(
+                &self.data_man.get_cur_consensus_era_genesis_hash(),
+            )
+            .expect("header for cur_era_genesis should exist")
     }
 
     fn best_chain_id(&self) -> u64 {
