@@ -61,7 +61,11 @@ impl LightClient {
             common_impl,
             pubsub,
             runtime,
-        ) = initialize_common_modules(&conf, exit.clone())?;
+        ) = initialize_common_modules(
+            &conf,
+            exit.clone(),
+            false, /* is_full_node */
+        )?;
 
         let light = Arc::new(LightQueryService::new(
             consensus.clone(),
