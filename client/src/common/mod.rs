@@ -118,7 +118,7 @@ pub mod client_methods {
 }
 
 pub fn initialize_common_modules(
-    conf: &Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
+    conf: &Configuration, exit: Arc<(Mutex<bool>, Condvar)>, is_full_node: bool,
 ) -> Result<
     (
         Arc<Machine>,
@@ -243,7 +243,7 @@ pub fn initialize_common_modules(
         pow_config,
         sync_config,
         notifications.clone(),
-        false,
+        is_full_node,
         machine.clone(),
     ));
 
@@ -305,7 +305,7 @@ pub fn initialize_not_light_node_modules(
         common_impl,
         pubsub,
         runtime,
-    ) = initialize_common_modules(&conf, exit.clone())?;
+    ) = initialize_common_modules(&conf, exit.clone(), is_full_node)?;
 
     let light_provider = Arc::new(LightProvider::new(
         consensus.clone(),
