@@ -353,7 +353,7 @@ mod tests {
 
         let primitive_filter = PrimitiveFilter {
             from_epoch: PrimitiveEpochNumber::LatestCheckpoint,
-            to_epoch: PrimitiveEpochNumber::LatestMined,
+            to_epoch: PrimitiveEpochNumber::LatestState,
             block_hashes: Some(vec![
                 H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
