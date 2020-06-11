@@ -83,11 +83,14 @@ class TestGetLogs(RpcClient):
         logs = self.get_logs(filter)
         assert_equal(logs, [])
 
-        ## all fields
+        # non-existent block hash
+        filter = Filter(block_hashes=["0x0000000000000000000000000000000000000000000000000000000000000000"])
+        assert_raises_rpc_error(None, None, self.get_logs, filter)
+
+        # all fields
         filter = Filter(
             from_epoch="0x0",
             to_epoch="latest_state",
-            block_hashes=["0x0000000000000000000000000000000000000000000000000000000000000000"],
             address=["0x0000000000000000000000000000000000000000"],
             topics=[
                 "0x0000000000000000000000000000000000000000000000000000000000000000",

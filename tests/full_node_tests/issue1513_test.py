@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-import os
+import os, sys, time
 import eth_utils
-import time
+
+sys.path.insert(1, os.path.dirname(sys.path[0]))
 
 from conflux.config import default_config
 from conflux.filter import Filter
@@ -12,7 +13,7 @@ from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 from test_framework.mininode import *
 
-CONTRACT_PATH = "contracts/EventsTestContract_bytecode.dat"
+CONTRACT_PATH = "../contracts/EventsTestContract_bytecode.dat"
 CALLED_TOPIC = encode_hex_0x(keccak(b"Called(address,uint32)"))
 
 ARCHIVE_NODE = 0
