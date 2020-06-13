@@ -480,8 +480,6 @@ impl SnapshotChunkSync {
         }
     }
 
-                &epoch_receipts,
-            );
     /// TODO Handling manifest requesting separately
     /// Return Some if a candidate is ready and we can start requesting
     /// manifests

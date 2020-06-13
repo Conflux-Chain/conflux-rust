@@ -74,6 +74,9 @@ impl SnapshotChunkManager {
         Ok(chunk_manager)
     }
 
+    /// Add a received chunk, and request new ones if needed.
+    /// Return `Ok(true)` if all chunks have been received and the snapshot is
+    /// reconstructed. Return `Ok(false)` if there are chunks missing.
     pub fn add_chunk(
         &mut self, ctx: &Context, chunk_key: ChunkKey, chunk: Chunk,
     ) -> StorageResult<bool> {
@@ -154,6 +157,7 @@ impl SnapshotChunkManager {
         }
     }
 
+    /// Remove timeout chunks and request new chunks.
     pub fn check_timeout(&mut self, ctx: &Context) {
         let mut timeout_chunks = Vec::new();
         for (chunk_key, status) in &self.downloading_chunks {
