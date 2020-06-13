@@ -6,13 +6,7 @@ use super::*;
 use crate::{
     message::{GetMaybeRequestId, Message, MsgId, RequestId, SetRequestId},
     sync::{
-        message::throttling::Throttle,
-        state::{
-            SnapshotChunkRequest, SnapshotChunkResponse,
-            SnapshotManifestRequest, SnapshotManifestResponse,
-            StateSyncCandidateRequest, StateSyncCandidateResponse,
-        },
-        Error,
+        message::throttling::Throttle, Error,
     },
 };
 pub use priority_send_queue::SendQueuePriority;

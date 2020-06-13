@@ -21,6 +21,12 @@ mod message;
 mod metrics;
 mod new_block;
 mod new_block_hashes;
+mod snapshot_chunk_request;
+mod snapshot_chunk_response;
+mod snapshot_manifest_request;
+mod snapshot_manifest_response;
+mod state_sync_candidate_request;
+mod state_sync_candidate_response;
 mod status;
 mod throttling;
 mod transactions;
@@ -47,6 +53,11 @@ pub use self::{
     new_block::NewBlock,
     new_block_hashes::NewBlockHashes,
     status::Status,
+    snapshot_chunk_response::SnapshotChunkResponse,
+    snapshot_manifest_request::SnapshotManifestRequest,
+    snapshot_manifest_response::SnapshotManifestResponse,
+    state_sync_candidate_request::StateSyncCandidateRequest,
+    state_sync_candidate_response::StateSyncCandidateResponse,
     throttling::Throttled,
     transactions::{
         GetTransactions, GetTransactionsFromTxHashes,

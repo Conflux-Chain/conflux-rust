@@ -1,8 +1,8 @@
 use crate::{
     message::{GetMaybeRequestId, Message, MsgId, RequestId},
     sync::{
-        message::{msgid, Context, Handleable},
-        state::{storage::SnapshotSyncCandidate, StateSyncCandidateRequest},
+        message::{msgid, Context, Handleable, StateSyncCandidateRequest},
+        state::storage::SnapshotSyncCandidate,
         Error,
     },
 };
