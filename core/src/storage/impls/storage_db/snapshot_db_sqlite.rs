@@ -277,7 +277,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
                     snapshot_path,
                     SNAPSHOT_DB_STATEMENTS.kvdb_statements.clone(),
                     /* create_table = */ true,
-                    /* fast_mode = */ true,
+                    /* unsafe_mode = */ true,
                 )?;
             let mut connections =
                 // Safe to unwrap since the connections are newly created.

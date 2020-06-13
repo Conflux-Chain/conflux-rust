@@ -96,18 +96,18 @@ impl SqliteConnection {
         }
     }
 
-    /// If `fast_mode` is true, data loss or database corruption may happen if
+    /// If `unsafe_mode` is true, data loss or database corruption may happen if
     /// the process crashes, so it should only be used for write-once
     /// databases where an unfinished temporary database will be removed
     /// after process restart.
     pub fn create_and_init<P: AsRef<Path>>(
-        path: P, fast_mode: bool,
+        path: P, unsafe_mode: bool,
     ) -> Result<()> {
         let conn = Connection::open_with_flags(
             &path,
             Self::default_open_flags().set_read_write().set_create(),
         )?;
-        if fast_mode {
+        if unsafe_mode {
             conn.execute("PRAGMA journal_mode=OFF")?;
             conn.execute("PRAGMA synchronous=OFF")?;
         } else {
@@ -121,9 +121,9 @@ impl SqliteConnection {
     }
 
     pub fn create_and_open<P: AsRef<Path>>(
-        path: P, open_flags: OpenFlags, fast_mode: bool,
+        path: P, open_flags: OpenFlags, unsafe_mode: bool,
     ) -> Result<Self> {
-        Self::create_and_init(path.as_ref(), fast_mode)?;
+        Self::create_and_init(path.as_ref(), unsafe_mode)?;
         Self::open(path, false, open_flags)
     }
 

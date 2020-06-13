@@ -105,7 +105,7 @@ impl DBManager {
                     )
                     .unwrap(),
                 ),
-                false, /* fast_mode */
+                false, /* unsafe_mode */
             )
             .expect("Open sqlite failure");
             table_db.insert(
