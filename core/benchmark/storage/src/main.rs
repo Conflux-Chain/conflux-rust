@@ -1656,6 +1656,7 @@ impl TxReplayer {
                     "commit_log",
                     true,
                 )?),
+                false, /* unsafe_mode */
             )?
             .1,
             commit_log_vec: Default::default(),
