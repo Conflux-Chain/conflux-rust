@@ -729,7 +729,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "0.5.1"
+version = "0.5.1-test"
 dependencies = [
  "app_dirs",
  "blockgen",
