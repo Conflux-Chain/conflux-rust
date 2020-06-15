@@ -10,7 +10,6 @@ use crate::{
         storage_db::SnapshotInfo, StateRootAuxInfo, StateRootWithAuxInfo,
     },
     sync::{message::Context, state::storage::SnapshotSyncCandidate},
-    verification::compute_receipts_root,
 };
 use cfx_types::H256;
 use network::node_table::NodeId;
@@ -212,7 +211,6 @@ impl SnapshotManifestManager {
                     // We don't necessarily need to know because
                     // the execution of the next epoch shifts delta MPT.
                     maybe_intermediate_mpt_key_padding: None,
-                    state_root_hash,
                 },
             },
             SnapshotInfo {
@@ -280,7 +278,9 @@ impl SnapshotManifestManager {
                     return None;
                 }
             }
-            let receipt_root = compute_receipts_root(&epoch_receipts);
+            let receipt_root = BlockHeaderBuilder::compute_block_receipts_root(
+                &epoch_receipts,
+            );
             let logs_bloom_hash =
                 BlockHeaderBuilder::compute_block_logs_bloom_hash(
                     &epoch_receipts,
