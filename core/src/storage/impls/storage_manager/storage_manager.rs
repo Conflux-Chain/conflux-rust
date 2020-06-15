@@ -107,6 +107,7 @@ impl StorageManager {
         let (_, snapshot_info_db) = KvdbSqlite::open_or_create(
             &storage_conf.path_snapshot_info_db,
             SNAPSHOT_KVDB_STATEMENTS.clone(),
+            false, /* unsafe_mode */
         )?;
 
         let (
