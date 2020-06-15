@@ -380,6 +380,7 @@ pub struct ProtocolConfiguration {
     pub max_allowed_timeout_in_observing_period: u64,
     pub demote_peer_for_timeout: bool,
     pub max_unprocessed_block_size: usize,
+    pub max_chunk_number_in_manifest: usize,
 }
 
 impl SynchronizationProtocolHandler {
