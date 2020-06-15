@@ -339,6 +339,10 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
     ) -> Result<MerkleHash> {
         unreachable!()
     }
+
+    fn start_transaction(&mut self) -> Result<()> { unreachable!() }
+
+    fn commit_transaction(&mut self) -> Result<()> { unreachable!() }
 }
 
 #[derive(Default)]
