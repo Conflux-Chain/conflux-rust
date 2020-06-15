@@ -151,6 +151,7 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
             self.chunk_verified[chunk_index] = true;
             self.number_incomplete_chunk -= 1;
 
+            self.temp_snapshot_db.start_transaction()?;
             // Commit key-values.
             for (key, value) in keys.into_iter().zip(values.into_iter()) {
                 self.temp_snapshot_db.put(key.borrow(), &*value)?;
@@ -162,6 +163,8 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
             for (path, node) in chunk_rebuilder.inner_nodes_to_write {
                 snapshot_mpt.write_node(&path, &node)?;
             }
+            drop(snapshot_mpt);
+            self.temp_snapshot_db.commit_transaction()?;
 
             // Combine changes around boundary nodes.
             for (path, node) in chunk_rebuilder.boundary_nodes {
@@ -254,8 +257,8 @@ use crate::storage::{
     },
     storage_db::{
         key_value_db::KeyValueDbTraitSingleWriter, OpenSnapshotMptTrait,
-        SnapshotDbManagerTrait, SnapshotMptNode, SnapshotMptTraitRw,
-        SubtreeMerkleWithSize,
+        SnapshotDbManagerTrait, SnapshotDbTrait, SnapshotMptNode,
+        SnapshotMptTraitRw, SubtreeMerkleWithSize,
     },
     TrieProof,
 };
