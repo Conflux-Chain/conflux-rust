@@ -161,6 +161,7 @@ build_config! {
         (heartbeat_timeout_ms, (u64), 180_000)
         (inflight_pending_tx_index_maintain_timeout_ms, (u64), 30_000)
         (max_allowed_timeout_in_observing_period, (u64), 10)
+        (max_chunk_number_in_manifest, (usize), 500)
         (max_downloading_chunks, (usize), 8)
         (max_handshakes, (usize), 64)
         (max_incoming_peers, (usize), 64)
@@ -595,6 +596,9 @@ impl Configuration {
                 self.raw_conf.snapshot_chunk_request_timeout_ms,
             ),
             chunk_size_byte: self.raw_conf.chunk_size_byte,
+            max_chunk_number_in_manifest: self
+                .raw_conf
+                .max_chunk_number_in_manifest,
             timeout_observing_period_s: self
                 .raw_conf
                 .timeout_observing_period_s,
