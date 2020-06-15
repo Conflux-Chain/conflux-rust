@@ -99,6 +99,10 @@ pub trait SnapshotDbTrait:
     fn direct_merge(&mut self) -> Result<MerkleHash>;
 
     fn copy_and_merge(&mut self, old_snapshot_db: &Self) -> Result<MerkleHash>;
+
+    fn start_transaction(&mut self) -> Result<()>;
+
+    fn commit_transaction(&mut self) -> Result<()>;
 }
 
 impl Encodable for SnapshotInfo {
