@@ -158,6 +158,11 @@ args:
         long: egress-max-throttle
         value_name: MB
         takes_value: true
+    - get-logs-epoch-batch-size:
+        help: Sets the size of the epoch batches used during log filtering.
+        long: get-logs-epoch-batch-size
+        value_name: SIZE
+        takes_value: true
     - light:
         long: light
     - archive:

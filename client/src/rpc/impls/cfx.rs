@@ -4,7 +4,7 @@
 
 use crate::rpc::{
     error_codes::{call_execution_error, invalid_params},
-    impls::common::RpcImpl as CommonImpl,
+    impls::{common::RpcImpl as CommonImpl, RpcImplConfiguration},
     traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
     types::{
         sign_call, Account as RpcAccount, BlameInfo, Block as RpcBlock,
@@ -41,11 +41,6 @@ use primitives::{
 use rlp::Rlp;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
-
-#[derive(Default)]
-pub struct RpcImplConfiguration {
-    pub get_logs_filter_max_limit: Option<usize>,
-}
 
 pub struct RpcImpl {
     config: RpcImplConfiguration,
@@ -714,11 +709,11 @@ impl RpcImpl {
             .expect("downcast should succeed");
 
         info!("RPC Request: cfx_getLogs({:?})", filter);
-        let mut filter: Filter = filter.into();
+        let mut filter: Filter = filter.into_primitive()?;
 
         // If max_limit is set, the value in `filter` will be modified to
         // satisfy this limitation to avoid loading too many blocks
-        // TODO Should the response indicates that the filter is modified?
+        // TODO Should the response indicate that the filter is modified?
         if let Some(max_limit) = self.config.get_logs_filter_max_limit {
             if filter.limit.is_none() || filter.limit.unwrap() > max_limit {
                 filter.limit = Some(max_limit);

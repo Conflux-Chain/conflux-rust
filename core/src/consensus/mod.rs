@@ -87,6 +87,10 @@ pub struct ConsensusConfig {
     pub transaction_epoch_bound: u64,
     /// The number of referees that are allowed for a block.
     pub referee_bound: usize,
+    /// Epoch batch size used in log filtering.
+    /// Larger batch sizes may improve performance but might also prevent
+    /// consensus from making progress under high RPC load.
+    pub get_logs_epoch_batch_size: usize,
 }
 
 #[derive(Debug)]
@@ -331,7 +335,7 @@ impl ConsensusGraph {
             EpochNumber::LatestState => self.best_executed_state_epoch_number(),
             EpochNumber::Number(num) => {
                 let epoch_num = num;
-                if epoch_num > self.inner.read().best_epoch_number() {
+                if epoch_num > self.inner.read_recursive().best_epoch_number() {
                     return Err("Invalid params: expected a numbers with less than largest epoch number.".to_owned());
                 }
                 epoch_num
@@ -744,8 +748,9 @@ impl ConsensusGraph {
         }
     }
 
+    // TODO: consider merging this with `get_block_hashes_by_epoch`
     fn get_block_hashes_in_epoch(&self, epoch: u64) -> Vec<H256> {
-        let inner = self.inner.read();
+        let inner = self.inner.read_recursive();
 
         // epoch set already removed from memory
         if epoch <= inner.get_cur_era_genesis_height() {
@@ -825,6 +830,13 @@ impl ConsensusGraph {
             return Ok(Either::Left(std::iter::empty()));
         }
 
+        // check if epoch is still available
+        let min = self.earliest_epoch_available();
+
+        if epoch < min {
+            return Err(FilterError::EpochAlreadyPruned { epoch, min });
+        }
+
         // get block bloom and receipts from db
         let (block_bloom, receipts) = match self
             .data_man
@@ -836,14 +848,7 @@ impl ConsensusGraph {
             ) {
             Some(r) => (r.bloom, r.block_receipts.receipts.clone()),
             None => {
-                let min = self.earliest_epoch_available();
-
-                // block data has been removed from db
-                if epoch < min {
-                    return Err(FilterError::EpochAlreadyPruned { epoch, min });
-                }
-
-                // block not executed yet
+                // `block_hash` must exist so the block not executed yet
                 return Err(FilterError::BlockNotExecutedYet { block_hash });
             }
         };
@@ -860,14 +865,7 @@ impl ConsensusGraph {
         let block = match self.data_man.block_by_hash(&block_hash, false) {
             Some(b) => b,
             None => {
-                let min = self.earliest_epoch_available();
-
-                // block data has been removed from db
-                if epoch < min {
-                    return Err(FilterError::EpochAlreadyPruned { epoch, min });
-                }
-
-                // otherwise it is an internal error
+                // `block_hash` must exist so this is an internal error
                 error!(
                     "Block {:?} in epoch {} ({:?}) not found",
                     block_hash, epoch, pivot_hash
@@ -920,18 +918,34 @@ impl ConsensusGraph {
 
     fn filter_epoch_batch(
         &self, filter: &Filter, bloom_possibilities: &Vec<Bloom>,
-        epochs: Vec<u64>,
+        epochs: Vec<u64>, consistency_check_data: &mut Option<(u64, H256)>,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError>
     {
         // lock so that we have a consistent view during this batch
-        let _inner = self.inner.read();
+        let inner = self.inner.read();
 
-        // FIXME(thegaram): as batches are processed atomically and only the
+        // NOTE: as batches are processed atomically and only the
         // first batch (last few epochs) is likely to fluctuate, is is unlikely
         // that releasing the lock between batches would cause inconsistency:
         // we assume there are no pivot chain reorgs deeper than batch_size.
-        // However, we could add a simle sanity check here:
-        // pivot_hash(batch[n][0]) == pivot_hash(batch[n + 1][batch_size - 1])
+        // However, we still add a simple sanity check here:
+
+        if let Some((epoch, pivot)) = *consistency_check_data {
+            let new_pivot = inner.get_pivot_hash_from_epoch_number(epoch)?;
+
+            if pivot != new_pivot {
+                return Err(FilterError::PivotChainReorg {
+                    epoch,
+                    from: pivot,
+                    to: new_pivot,
+                });
+            }
+        }
+
+        *consistency_check_data = Some((
+            epochs[0],
+            inner.get_pivot_hash_from_epoch_number(epochs[0])?,
+        ));
 
         epochs
             .into_par_iter() // process each epoch of this batch in parallel
@@ -940,7 +954,7 @@ impl ConsensusGraph {
             .collect() // short-circuit on error
     }
 
-    pub fn get_epochs_to_filter(
+    pub fn get_filter_epoch_range(
         &self, filter: &Filter,
     ) -> Result<impl Iterator<Item = u64>, FilterError> {
         // lock so that we have a consistent view
@@ -973,19 +987,25 @@ impl ConsensusGraph {
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
         assert!(filter.block_hashes.is_none());
         let bloom_possibilities = filter.bloom_possibilities();
+        let limit = filter.limit.unwrap_or(::std::usize::MAX);
+
+        // we store the last epoch processed and the corresponding pivot hash so
+        // that we can check whether it changed between batches
+        let mut consistency_check_data: Option<(u64, H256)> = None;
 
         let mut logs = self
             // iterate over epochs in reverse order
-            .get_epochs_to_filter(&filter)?
+            .get_filter_epoch_range(&filter)?
             // we process epochs in each batch in parallel
             // but batches are processed one-by-one
-            .chunks(LOG_FILTERING_EPOCH_CHUNK_SIZE)
+            .chunks(self.config.get_logs_epoch_batch_size)
             .into_iter()
-            .map(|epochs| {
+            .map(move |epochs| {
                 self.filter_epoch_batch(
                     &filter,
                     &bloom_possibilities,
                     epochs.into_iter().collect(),
+                    &mut consistency_check_data,
                 )
             })
             // flatten results
@@ -994,7 +1014,7 @@ impl ConsensusGraph {
                 Err(e) => Either::Right(std::iter::once(Err(e))),
             })
             // take as many as we need
-            .take(filter.limit.unwrap_or(::std::usize::MAX))
+            .take(limit)
             // short-circuit on error
             .collect::<Result<Vec<LocalizedLogEntry>, FilterError>>()?;
 
@@ -1019,7 +1039,7 @@ impl ConsensusGraph {
         // find pivot block
         let pivot_hash = match self
             .inner
-            .read()
+            .read_recursive()
             .block_execution_results_by_hash(&block_hash, false)
         {
             Some(r) => r.0,
