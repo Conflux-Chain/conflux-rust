@@ -20,3 +20,5 @@ serde = "1.0"
 serde_derive = "1.0"
 tiny-keccak = "1.4"
 zeroize = "1.0.0"
+malloc_size_of_derive = {path = "../../util/malloc_size_of_derive"}
+malloc_size_of = {path = "../../util/malloc_size_of"}

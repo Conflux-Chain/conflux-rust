@@ -105,6 +105,7 @@ impl DBManager {
                     )
                     .unwrap(),
                 ),
+                false, /* unsafe_mode */
             )
             .expect("Open sqlite failure");
             table_db.insert(
@@ -369,7 +370,7 @@ impl DBManager {
         )
     }
 
-    pub fn remove_execution_context_from_db(&self, hash: &H256) {
+    pub fn remove_epoch_execution_context_from_db(&self, hash: &H256) {
         self.remove_from_db(DBTable::Blocks, &epoch_execution_context_key(hash))
     }
 

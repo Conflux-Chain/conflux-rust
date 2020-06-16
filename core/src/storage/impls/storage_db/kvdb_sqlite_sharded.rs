@@ -141,7 +141,9 @@ impl<ValueType> KvdbSqliteSharded<ValueType> {
 
     pub fn open_or_create<P: AsRef<Path>>(
         num_shards: u16, dir: P, statements: Arc<KvdbSqliteStatements>,
-    ) -> Result<(bool, Self)> {
+        unsafe_mode: bool,
+    ) -> Result<(bool, Self)>
+    {
         if dir.as_ref().exists() {
             Ok((
                 true,
@@ -153,7 +155,11 @@ impl<ValueType> KvdbSqliteSharded<ValueType> {
             Ok((
                 false,
                 Self::create_and_open(
-                    num_shards, dir, statements, /* create_table = */ true,
+                    num_shards,
+                    dir,
+                    statements,
+                    /* create_table = */ true,
+                    unsafe_mode,
                 )?,
             ))
         }
@@ -161,7 +167,7 @@ impl<ValueType> KvdbSqliteSharded<ValueType> {
 
     pub fn create_and_open<P: AsRef<Path>>(
         num_shards: u16, dir: P, statements: Arc<KvdbSqliteStatements>,
-        create_table: bool,
+        create_table: bool, unsafe_mode: bool,
     ) -> Result<Self>
     {
         assert_valid_num_shards(num_shards);
@@ -171,6 +177,7 @@ impl<ValueType> KvdbSqliteSharded<ValueType> {
                 Self::db_path(&dir, i),
                 statements.clone(),
                 /* create_table = */ create_table,
+                unsafe_mode,
             )?
             .into_connection()
             // Safe to unwrap since the connection is newly created.
