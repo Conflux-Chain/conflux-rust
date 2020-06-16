@@ -97,7 +97,11 @@ impl SnapshotChunkManager {
         }
 
         self.num_downloaded += 1;
-        self.restorer.append(chunk_key, chunk);
+
+        if !self.restorer.append(chunk_key.clone(), chunk) {
+            warn!("Receive invalid chunk during appending {:?}", chunk_key);
+            self.pending_chunks.push_back(chunk_key);
+        }
 
         // begin to restore if all chunks downloaded
         if self.downloading_chunks.is_empty() && self.pending_chunks.is_empty()
