@@ -99,11 +99,11 @@ pub struct ConsensusGraphNodeData {
     /// A partial invalid block will get a NULL counter
     /// A normal block which referenced directly or indirectly will have a
     /// positive counter
-    active_cnt: usize,
+    inactive_dependency_cnt: usize,
     /// This is an implementation flag indicate whether the node is active or
-    /// not. Because multiple blocks may have their `active_cnt` turning
-    /// zero in the same time, we need this flag to process them correctly
-    /// one by one.
+    /// not. Because multiple blocks may have their `inactive_dependency_cnt`
+    /// turning zero in the same time, we need this flag to process them
+    /// correctly one by one.
     activated: bool,
     /// This records the force confirm point in the past view of this block.
     force_confirm: usize,
@@ -157,12 +157,14 @@ pub struct ConsensusGraphNodeData {
 }
 
 impl ConsensusGraphNodeData {
-    fn new(epoch_number: u64, sequence_number: u64, active_cnt: usize) -> Self {
+    fn new(
+        epoch_number: u64, sequence_number: u64, inactive_dependency_cnt: usize,
+    ) -> Self {
         ConsensusGraphNodeData {
             epoch_number,
             partial_invalid: false,
             pending: false,
-            active_cnt,
+            inactive_dependency_cnt,
             activated: false,
             force_confirm: NULL,
             blockset_in_own_view_of_epoch: Default::default(),
@@ -281,8 +283,8 @@ impl Default for ConsensusGraphPivotData {
 /// receive any reward. Normal nodes will also refrain from *directly or
 /// indirectly* referencing b until TimerDis(*b*, new_block) is greater than or
 /// equal to timer_dis_delta. Normal nodes essentially ignores partial invalid
-/// blocks for a while. We implement this via our active_cnt field. Last but not
-/// least, we exclude *partial invalid* blocks from the timer chain
+/// blocks for a while. We implement this via our inactive_dependency_cnt field.
+/// Last but not least, we exclude *partial invalid* blocks from the timer chain
 /// consideration. They are not timer blocks!
 ///
 /// # Implementation details of checkpoints
@@ -1518,10 +1520,10 @@ impl ConsensusGraphInner {
             return (sn, NULL);
         }
 
-        let mut active_cnt = 0;
+        let mut inactive_dependency_cnt = 0;
         for referee in &referees {
             if !self.arena[*referee].data.activated {
-                active_cnt += 1;
+                inactive_dependency_cnt += 1;
             }
         }
 
@@ -1542,7 +1544,11 @@ impl ConsensusGraphInner {
             children: Vec::new(),
             referees,
             referrers: Vec::new(),
-            data: ConsensusGraphNodeData::new(NULLU64, sn, active_cnt),
+            data: ConsensusGraphNodeData::new(
+                NULLU64,
+                sn,
+                inactive_dependency_cnt,
+            ),
         });
         self.arena[index].data.pending = true;
         self.arena[index].data.activated = false;
@@ -1633,7 +1639,7 @@ impl ConsensusGraphInner {
             }
         }
 
-        let mut active_cnt =
+        let mut inactive_dependency_cnt =
             if parent != NULL && !self.arena[parent].data.activated {
                 1
             } else {
@@ -1641,7 +1647,7 @@ impl ConsensusGraphInner {
             };
         for referee in &referees {
             if !self.arena[*referee].data.activated {
-                active_cnt += 1;
+                inactive_dependency_cnt += 1;
             }
         }
 
@@ -1662,7 +1668,11 @@ impl ConsensusGraphInner {
             children: Vec::new(),
             referees,
             referrers: Vec::new(),
-            data: ConsensusGraphNodeData::new(NULLU64, sn, active_cnt),
+            data: ConsensusGraphNodeData::new(
+                NULLU64,
+                sn,
+                inactive_dependency_cnt,
+            ),
         });
         self.hash_to_arena_indices.insert(hash, index);
 
@@ -1712,7 +1722,8 @@ impl ConsensusGraphInner {
             for child in &self.arena[index].children {
                 if !visited.contains(*child as u32)
                     && (self.arena[*child].data.activated
-                        || self.arena[*child].data.active_cnt == NULL)
+                        || self.arena[*child].data.inactive_dependency_cnt
+                            == NULL)
                 /* We include all preactivated blocks */
                 {
                     visited.add(*child as u32);
@@ -1722,7 +1733,8 @@ impl ConsensusGraphInner {
             for referrer in &self.arena[index].referrers {
                 if !visited.contains(*referrer as u32)
                     && (self.arena[*referrer].data.activated
-                        || self.arena[*referrer].data.active_cnt == NULL)
+                        || self.arena[*referrer].data.inactive_dependency_cnt
+                            == NULL)
                 /* We include all preactivated blocks */
                 {
                     visited.add(*referrer as u32);
