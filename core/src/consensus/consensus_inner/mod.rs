@@ -817,6 +817,20 @@ impl ConsensusGraphInner {
         self.arena[index].era_block == NULL
     }
 
+    /// This function computes the epoch set of block *pivot* based on
+    /// the past set of block *lca* which is the parental ancestor of
+    /// *pivot*. The algorithm processes the blocks along the parental
+    /// path from *lca* to *pivot* to produce the *visited* block set,
+    /// and then compute the epoch block set of *pivot* based on the
+    /// *pastset* and the *visited*. The following figure illustrates
+    /// this process. B[lca] refers to the block *lca*, B[piv] refers
+    /// to the block *pivot*, and B[par] refers to the parent of *pivot*
+    ///
+    /// I    ------------\-------------------\-------------------\
+    /// I        lca      \                   \       epoch       \
+    /// I    -- pastset -B[lca]-- visited --B[par]-- blockset --B[piv]
+    /// I                 /                   /                   /
+    /// I    ------------/-------------------/-------------------/
     fn compute_blockset_in_own_view_of_epoch_impl(
         &mut self, lca: usize, pivot: usize,
     ) {
@@ -878,6 +892,15 @@ impl ConsensusGraphInner {
         }
     }
 
+    /// This function computes the epoch block set under the view of
+    /// block *pivot*. It also computes the ordered set of executable
+    /// blocks in the epoch. This set has a bound specified by
+    /// EPOCH_EXECUTED_BLOCK_BOUND. To compute this set, it first
+    /// filters out the blocks in the raw epoch set but not in the
+    /// same era with *pivot*. It then topologically sorts the retained
+    /// blocks and preserves at most the last EPOCH_EXECUTED_BLOCK_BOUND
+    /// blocks. All the filtered-out blocks are added into
+    /// *skipped_epoch_blocks*.
     fn compute_blockset_in_own_view_of_epoch(&mut self, pivot: usize) {
         if !self.arena[pivot].data.blockset_cleared {
             return;
