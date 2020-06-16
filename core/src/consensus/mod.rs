@@ -748,29 +748,6 @@ impl ConsensusGraph {
         }
     }
 
-    // TODO: consider merging this with `get_block_hashes_by_epoch`
-    fn get_block_hashes_in_epoch(&self, epoch: u64) -> Vec<H256> {
-        let inner = self.inner.read_recursive();
-
-        // epoch set already removed from memory
-        if epoch <= inner.get_cur_era_genesis_height() {
-            self.data_man
-                .executed_epoch_set_hashes_from_db(epoch)
-                .expect("epoch set from past era should exist")
-        }
-        // epoch set maintained in memory
-        else {
-            let pivot_block_arena_index =
-                inner.get_pivot_block_arena_index(epoch);
-
-            inner
-                .get_ordered_executable_epoch_blocks(pivot_block_arena_index)
-                .iter()
-                .map(|index| inner.arena[*index].hash)
-                .collect()
-        }
-    }
-
     fn filter_block_receipts<'a>(
         &self, filter: &'a Filter, epoch_number: u64, block_hash: H256,
         mut receipts: Vec<Receipt>, mut tx_hashes: Vec<H256>,
@@ -890,13 +867,21 @@ impl ConsensusGraph {
     ) -> impl ParallelIterator<Item = Result<LocalizedLogEntry, FilterError>> + 'a
     {
         // retrieve epoch hashes and pivot hash
-        let mut epoch_hashes = self.get_block_hashes_in_epoch(epoch);
+        let mut epoch_hashes =
+            match self.inner.read_recursive().block_hashes_by_epoch(epoch) {
+                Ok(hs) => hs,
+                Err(e) => {
+                    let error = Err(e.into());
+                    return rayon::iter::Either::Left(rayon::iter::once(error));
+                }
+            };
+
         let pivot_hash = *epoch_hashes.last().expect("Epoch set not empty");
 
         // process hashes in reverse order
         epoch_hashes.reverse();
 
-        epoch_hashes
+        let res = epoch_hashes
             // process each block of this epoch in parallel
             .into_par_iter()
             .map(move |block_hash| {
@@ -913,7 +898,9 @@ impl ConsensusGraph {
             .flat_map(|res| match res {
                 Ok(it) => rayon::iter::Either::Left(it.par_bridge().map(Ok)),
                 Err(e) => rayon::iter::Either::Right(rayon::iter::once(Err(e))),
-            })
+            });
+
+        rayon::iter::Either::Right(res)
     }
 
     fn filter_epoch_batch(
@@ -1062,7 +1049,9 @@ impl ConsensusGraph {
         };
 
         let index_in_epoch = self
-            .get_block_hashes_in_epoch(epoch)
+            .inner
+            .read_recursive()
+            .block_hashes_by_epoch(epoch)?
             .into_iter()
             .position(|h| h == block_hash)
             .expect("Block should exit in epoch set");
