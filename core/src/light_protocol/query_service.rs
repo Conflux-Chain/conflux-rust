@@ -28,7 +28,7 @@ use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
     Account, BlockReceipts, CodeInfo, EpochNumber, Receipt, SignedTransaction,
-    StateRoot, StorageKey, StorageRoot, StorageValue, TransactionIndex,
+    StorageKey, StorageRoot, StorageValue, TransactionIndex,
 };
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 
@@ -118,20 +118,6 @@ impl QueryService {
         self.network
             .with_context(self.handler.clone(), LIGHT_PROTOCOL_ID, |io| f(io))
             .expect("Unable to access network service")
-    }
-
-    #[allow(dead_code)]
-    async fn retrieve_state_root(
-        &self, epoch: u64,
-    ) -> Result<StateRoot, Error> {
-        trace!("retrieve_state_root epoch = {}", epoch);
-
-        with_timeout(
-            *MAX_POLL_TIME,
-            format!("Timeout while retrieving state root for epoch {}", epoch),
-            self.with_io(|io| self.handler.state_roots.request_now(io, epoch)),
-        )
-        .await
     }
 
     async fn retrieve_state_entry_raw(
@@ -257,11 +243,7 @@ impl QueryService {
     ) -> Result<Option<Account>, Error> {
         debug!("get_account epoch={:?} address={:?}", epoch, address);
 
-        let epoch = match self.get_height_from_epoch_number(epoch) {
-            Ok(epoch) => epoch,
-            Err(e) => return Err(e.into()),
-        };
-
+        let epoch = self.get_height_from_epoch_number(epoch)?;
         let key = Self::account_key(&address);
 
         self.retrieve_state_entry(epoch, key).await
@@ -272,11 +254,7 @@ impl QueryService {
     ) -> Result<Option<Vec<u8>>, Error> {
         debug!("get_code epoch={:?} address={:?}", epoch, address);
 
-        let epoch = match self.get_height_from_epoch_number(epoch) {
-            Ok(epoch) => epoch,
-            Err(e) => return Err(e.into()),
-        };
-
+        let epoch = self.get_height_from_epoch_number(epoch)?;
         let key = Self::account_key(&address);
 
         let code_hash =
@@ -291,7 +269,10 @@ impl QueryService {
         match self.retrieve_state_entry::<CodeInfo>(epoch, key).await {
             Err(e) => Err(e),
             Ok(None) => {
-                // FIXME(thegaram): can this happen?
+                // this can only happen if the state corresponding to `epoch` is
+                // removed between the two queries
+                // TODO(thegaram): add state availability checks and return
+                // meaningful errors
                 error!("Account {:?} found but code {:?} does not exist (epoch={:?})",  address, code_hash, epoch);
                 Err(ErrorKind::InternalError.into())
             }
@@ -307,11 +288,7 @@ impl QueryService {
             epoch, address, position
         );
 
-        let epoch = match self.get_height_from_epoch_number(epoch) {
-            Ok(epoch) => epoch,
-            Err(e) => return Err(e.into()),
-        };
-
+        let epoch = self.get_height_from_epoch_number(epoch)?;
         let key = Self::storage_key(&address, &position);
 
         match self.retrieve_state_entry::<StorageValue>(epoch, key).await {
@@ -326,11 +303,7 @@ impl QueryService {
     ) -> Result<Option<StorageRoot>, Error> {
         debug!("get_storage_root epoch={:?} address={:?}", epoch, address,);
 
-        let epoch = match self.get_height_from_epoch_number(epoch) {
-            Ok(epoch) => epoch,
-            Err(e) => return Err(e.into()),
-        };
-
+        let epoch = self.get_height_from_epoch_number(epoch)?;
         self.retrieve_storage_root(epoch, address).await
     }
 
