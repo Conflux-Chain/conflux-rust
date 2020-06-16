@@ -348,7 +348,7 @@ impl ConsensusNewBlockHandler {
         for (i, node) in inner.arena.iter() {
             if node.data.epoch_number > last_in_pivot
                 && !visited.contains(i as u32)
-                && (node.data.activated || node.data.active_cnt == NULL) /* We include only preactivated blocks */
+                && (node.data.activated || node.data.inactive_dependency_cnt == NULL) /* We include only preactivated blocks */
                 && node.era_block != NULL
             /* We exclude out-of-era blocks */
             {
@@ -1055,9 +1055,9 @@ impl ConsensusNewBlockHandler {
         let mut succ_list = inner.arena[me].children.clone();
         succ_list.extend(inner.arena[me].referrers.iter());
         for succ in &succ_list {
-            assert!(inner.arena[*succ].data.active_cnt > 0);
-            inner.arena[*succ].data.active_cnt -= 1;
-            if inner.arena[*succ].data.active_cnt == 0 {
+            assert!(inner.arena[*succ].data.inactive_dependency_cnt > 0);
+            inner.arena[*succ].data.inactive_dependency_cnt -= 1;
+            if inner.arena[*succ].data.inactive_dependency_cnt == 0 {
                 queue.push_back(*succ);
             }
         }
@@ -1695,10 +1695,10 @@ impl ConsensusNewBlockHandler {
     {
         let parent_hash = block_header.parent_hash();
         let parent_index = inner.hash_to_arena_indices.get(&parent_hash);
-        // current block is outside era or it's parent is outside era
         let me = if parent_index.is_none()
             || inner.arena[*parent_index.unwrap()].era_block == NULL
         {
+            // current block is outside of the current era.
             debug!(
                 "parent={:?} not in consensus graph or not in the genesis subtree, inserted as an out-era block stub",
                 parent_hash
@@ -1734,7 +1734,7 @@ impl ConsensusNewBlockHandler {
             me
         };
 
-        if inner.arena[me].data.active_cnt == 0 {
+        if inner.arena[me].data.inactive_dependency_cnt == 0 {
             let mut queue: VecDeque<usize> = VecDeque::new();
             queue.push_back(me);
             while let Some(me) = queue.pop_front() {
@@ -1762,7 +1762,7 @@ impl ConsensusNewBlockHandler {
                     } else {
                         inner.invalid_block_queue.push((-(timer as i128), me));
                     }
-                    inner.arena[me].data.active_cnt = NULL;
+                    inner.arena[me].data.inactive_dependency_cnt = NULL;
                     debug!(
                         "Block {} (hash = {}) is partially invalid, all of its future will be non-active till timer height {}",
                         me, inner.arena[me].hash, timer
@@ -1806,8 +1806,10 @@ impl ConsensusNewBlockHandler {
                         break;
                     }
                     let (_, x) = inner.invalid_block_queue.pop().unwrap();
-                    assert!(inner.arena[x].data.active_cnt == NULL);
-                    inner.arena[x].data.active_cnt = 0;
+                    assert!(
+                        inner.arena[x].data.inactive_dependency_cnt == NULL
+                    );
+                    inner.arena[x].data.inactive_dependency_cnt = 0;
                     let transactions =
                         inner.block_body_caches.remove(&x).unwrap_or(None);
                     self.activate_block(
@@ -1822,7 +1824,9 @@ impl ConsensusNewBlockHandler {
         } else {
             debug!(
                 "Block {} (hash = {}) is non-active with active counter {}",
-                me, inner.arena[me].hash, inner.arena[me].data.active_cnt
+                me,
+                inner.arena[me].hash,
+                inner.arena[me].data.inactive_dependency_cnt
             );
         }
     }
