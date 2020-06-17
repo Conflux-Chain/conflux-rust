@@ -1206,6 +1206,25 @@ impl ConsensusGraphInner {
         )
     }
 
+    /// This function computes the subtree weight for each node
+    /// in the subtree of the past view of *me* by conducting
+    /// DFS from the cur_era_genesis. The subtree to process
+    /// is illustrated as follows:
+    ///                     cur_era_genesis
+    /// I                        / \
+    /// I                      /     \
+    /// I                    /  the    \
+    /// I                  /   subtree   \
+    /// I                /   to process    \
+    /// I                \__             __/
+    /// I                 a \__       __/ a
+    /// I                    a \_____/ a
+    /// I                      a me a
+    ///
+    /// *a* refers to the elements in anticone barrier who are
+    /// anticone of *me* while whose parents are in the past set
+    /// of *me*. The subtree to process does not include *a* and
+    /// *me*.
     fn compute_subtree_weights(
         &self, me: usize, anticone_barrier: &BitSet,
     ) -> Vec<i128> {
