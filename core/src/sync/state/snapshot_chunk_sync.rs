@@ -118,8 +118,8 @@ impl Inner {
                 // The new candidate is not changed, so we can resume our
                 // previous sync status with new `active_peers`.
                 self.status = Status::DownloadingChunks(Instant::now());
-                chunk_manager.add_active_peers(
-                    self.sync_candidate_manager.active_peers(),
+                chunk_manager.set_active_peers(
+                    self.sync_candidate_manager.active_peers().clone(),
                 );
                 return;
             }
@@ -243,6 +243,9 @@ impl SnapshotChunkSync {
         } else {
             error!("manifest manager is None in status {:?}", inner.status);
         }
+        if matches!(inner.status, Status::DownloadingChunks(_)) {
+            inner.manifest_manager = None;
+        }
         Ok(())
     }
 
@@ -346,6 +349,12 @@ impl SnapshotChunkSync {
     pub fn on_peer_disconnected(&self, peer: &NodeId) {
         let mut inner = self.inner.write();
         inner.sync_candidate_manager.on_peer_disconnected(peer);
+        if let Some(manifest_manager) = &mut inner.manifest_manager {
+            manifest_manager.on_peer_disconnected(peer);
+        }
+        if let Some(chunk_manager) = &mut inner.chunk_manager {
+            chunk_manager.on_peer_disconnected(peer);
+        }
     }
 
     /// Reset status if we cannot make progress based on current peers and
