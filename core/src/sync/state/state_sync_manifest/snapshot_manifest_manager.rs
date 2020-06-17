@@ -86,6 +86,22 @@ impl SnapshotManifestManager {
         request: &SnapshotManifestRequest,
     ) -> Result<Option<RelatedData>, Error>
     {
+        match self
+            .handle_snapshot_manifest_response_impl(ctx, response, request)
+        {
+            Ok(r) => Ok(r),
+            Err(e) => {
+                self.note_failure(&ctx.node_id);
+                Err(e)
+            }
+        }
+    }
+
+    fn handle_snapshot_manifest_response_impl(
+        &mut self, ctx: &Context, response: SnapshotManifestResponse,
+        request: &SnapshotManifestRequest,
+    ) -> Result<Option<RelatedData>, Error>
+    {
         // new era started
         if request.snapshot_to_sync != self.snapshot_candidate {
             info!(
@@ -542,6 +558,14 @@ impl SnapshotManifestManager {
         } else {
             None
         }
+    }
+
+    pub fn on_peer_disconnected(&mut self, peer: &NodeId) {
+        self.active_peers.remove(peer);
+    }
+
+    fn note_failure(&mut self, node_id: &NodeId) {
+        self.active_peers.remove(node_id);
     }
 }
 

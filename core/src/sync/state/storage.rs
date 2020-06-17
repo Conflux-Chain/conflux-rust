@@ -173,17 +173,16 @@ impl RangedManifest {
         &self, snapshot_root: &MerkleHash, _start_chunk: &Option<Vec<u8>>,
     ) -> Result<(), Error> {
         if self.chunk_boundaries.len() != self.chunk_boundary_proofs.len() {
-            return Err(ErrorKind::InvalidSnapshotManifest(
+            bail!(ErrorKind::InvalidSnapshotManifest(
                 "chunk and proof number do not match".into(),
-            )
-            .into());
+            ));
         }
-        // chunks in manifest should not be empty
-        if self.chunk_boundaries.is_empty() {
-            return Err(ErrorKind::InvalidSnapshotManifest(
-                "empty snapshot manifest".into(),
-            )
-            .into());
+        if let Some(next) = &self.next {
+            if next != self.chunk_boundaries.last().unwrap() {
+                bail!(ErrorKind::InvalidSnapshotManifest(
+                    "next does not match last boundary".into(),
+                ));
+            }
         }
 
         // validate the trie proof for all chunks
@@ -196,16 +195,14 @@ impl RangedManifest {
                     snapshot_root,
                     proof.get_merkle_root()
                 );
-                return Err(ErrorKind::InvalidSnapshotManifest(
+                bail!(ErrorKind::InvalidSnapshotManifest(
                     "invalid proof merkle root".into(),
-                )
-                .into());
+                ));
             }
             if !proof.if_proves_key(&self.chunk_boundaries[chunk_index]).0 {
-                return Err(ErrorKind::InvalidSnapshotManifest(
+                bail!(ErrorKind::InvalidSnapshotManifest(
                     "invalid proof".into(),
-                )
-                .into());
+                ));
             }
         }
         Ok(())

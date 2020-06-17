@@ -101,6 +101,7 @@ impl SnapshotChunkManager {
         if !self.restorer.append(chunk_key.clone(), chunk) {
             warn!("Receive invalid chunk during appending {:?}", chunk_key);
             self.pending_chunks.push_back(chunk_key);
+            self.note_failure(&ctx.node_id)
         }
 
         // begin to restore if all chunks downloaded
@@ -182,8 +183,16 @@ impl SnapshotChunkManager {
 
     pub fn is_inactive(&self) -> bool { self.active_peers.is_empty() }
 
-    pub fn add_active_peers(&mut self, new_active_peers: &HashSet<NodeId>) {
-        self.active_peers.extend(new_active_peers)
+    pub fn set_active_peers(&mut self, new_active_peers: HashSet<NodeId>) {
+        self.active_peers = new_active_peers;
+    }
+
+    pub fn on_peer_disconnected(&mut self, peer: &NodeId) {
+        self.active_peers.remove(peer);
+    }
+
+    fn note_failure(&mut self, node_id: &NodeId) {
+        self.active_peers.remove(node_id);
     }
 }
 
