@@ -1596,7 +1596,7 @@ impl SynchronizationGraph {
         if let Some(info) = local_info_opt {
             // If the block is ordered before current era genesis or it has
             // already entered consensus graph in this run, we do not need to
-            // process it. And it these two cases, the block is considered
+            // process it. And in these two cases, the block is considered
             // valid.
             let already_processed = info.get_seq_num()
                 < self.consensus.current_era_genesis_seq_num()
@@ -1608,7 +1608,7 @@ impl SynchronizationGraph {
                     VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(header);
                 }
                 return (
-                    BlockHeaderInsertionResult::AlreadyProcessed,
+                    BlockHeaderInsertionResult::AlreadyProcessedInConsensus,
                     Vec::new(),
                 );
             }
@@ -1620,7 +1620,10 @@ impl SynchronizationGraph {
                 // a part of block later
                 VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(header);
             }
-            return (BlockHeaderInsertionResult::AlreadyProcessed, Vec::new());
+            return (
+                BlockHeaderInsertionResult::AlreadyProcessedInSync,
+                Vec::new(),
+            );
         }
 
         // skip check for consortium currently
@@ -1843,10 +1846,6 @@ impl SynchronizationGraph {
 
         let inner = &mut *self.inner.write();
 
-        if self.data_man.verified_invalid(&hash).0 {
-            return BlockInsertionResult::Invalid;
-        }
-
         let contains_block =
             if let Some(index) = inner.hash_to_arena_indices.get(&hash) {
                 inner.arena[*index].block_ready
@@ -1859,6 +1858,10 @@ impl SynchronizationGraph {
         if contains_block {
             return BlockInsertionResult::AlreadyProcessed;
         }
+
+        // We only insert the body after a valid header is inserted, so this has
+        // been checked when we insert the header.
+        debug_assert!(!self.data_man.verified_invalid(&hash).0);
 
         self.statistics.inc_sync_graph_inserted_block_count();
 
@@ -2152,8 +2155,12 @@ impl BlockInsertionResult {
 }
 
 pub enum BlockHeaderInsertionResult {
-    // The block is valid and already processed before.
-    AlreadyProcessed,
+    // The block is valid and already processed consensus before.
+    // We should not process this block again.
+    AlreadyProcessedInConsensus,
+    // The block header has been inserted into sync graph. We can ingore this
+    // header, but we should keep processing its body if needed.
+    AlreadyProcessedInSync,
     // The block is valid and is processed for the first time.
     NewValid,
     // The block is definitely invalid. It's not inserted to sync graph
@@ -2168,5 +2175,13 @@ impl BlockHeaderInsertionResult {
 
     pub fn is_invalid(&self) -> bool {
         matches!(self, BlockHeaderInsertionResult::Invalid)
+    }
+
+    pub fn should_process_body(&self) -> bool {
+        matches!(
+            self,
+            BlockHeaderInsertionResult::NewValid
+                | BlockHeaderInsertionResult::AlreadyProcessedInSync
+        )
     }
 }
