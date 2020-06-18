@@ -145,7 +145,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
 {
     let verification_config = VerificationConfig::new(
-        true,
+        true, /* test_mode */
         REFEREE_DEFAULT_BOUND,
         MAX_BLOCK_SIZE_IN_BYTES,
         TRANSACTION_DEFAULT_EPOCH_BOUND,
@@ -193,6 +193,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
                                * execution */
             transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
             referee_bound: REFEREE_DEFAULT_BOUND,
+            get_logs_epoch_batch_size: 128,
         },
         vm.clone(),
         txpool.clone(),
@@ -205,6 +206,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
             base_reward_table_in_ucfx: vec![INITIAL_BASE_MINING_REWARD_IN_UCFX],
         },
         verification_config.clone(),
+        false, /* is_full_node */
     ));
 
     let sync = Arc::new(SynchronizationGraph::new(
@@ -213,7 +215,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         pow_config,
         sync_config,
         notifications,
-        false,
+        false, /* is_full_node */
         machine,
     ));
 

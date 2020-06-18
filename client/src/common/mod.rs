@@ -102,6 +102,7 @@ pub mod client_methods {
     };
 }
 
+        is_full_node,
 pub fn initialize_txgens(
     consensus: Arc<ConsensusGraph>, txpool: Arc<TransactionPool>,
     sync: Arc<SynchronizationService>, secret_store: SharedSecretStore,

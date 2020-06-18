@@ -542,7 +542,7 @@ class ContractBenchTest(SmartContractBenchBase):
             tx = self.rpc.new_tx(value=0, sender=pub_key, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
             self.rpc.send_tx(tx)
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
-        self.filter = Filter(from_epoch="earliest", to_epoch="latest_mined")
+        self.filter = Filter(from_epoch="earliest", to_epoch="latest_state")
         self.testEventContract()
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
         self.testBallotContract()

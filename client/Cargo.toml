@@ -55,7 +55,7 @@ metrics = { path = "../util/metrics" }
 delegate = { path = "../util/delegate" }
 transient-hashmap = "0.4"
 rand_xorshift = "0.2"
-itertools = "0.8"
+itertools = "0.9"
 order-stat = "0.1"
 futures01 = "0.1"
 futures = { version = "0.3.3", features = ["compat"] }

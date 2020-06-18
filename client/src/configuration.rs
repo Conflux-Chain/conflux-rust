@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    impls::cfx::RpcImplConfiguration, HttpConfiguration, TcpConfiguration,
+    impls::RpcImplConfiguration, HttpConfiguration, TcpConfiguration,
     WsConfiguration,
 };
 use cfx_types::H256;
@@ -215,6 +215,7 @@ build_config! {
         (enable_optimistic_execution, (bool), true)
         (future_block_buffer_capacity, (usize), 32768)
         (get_logs_filter_max_limit, (Option<usize>), None)
+        (get_logs_epoch_batch_size, (usize), 128)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (persist_tx_index, (bool), false)
         (target_block_gas_limit, (u64), DEFAULT_TARGET_BLOCK_GAS_LIMIT)
@@ -388,6 +389,7 @@ impl Configuration {
             bench_mode: false,
             transaction_epoch_bound: self.raw_conf.transaction_epoch_bound,
             referee_bound: self.raw_conf.referee_bound,
+            get_logs_epoch_batch_size: self.raw_conf.get_logs_epoch_batch_size,
         }
     }
 
