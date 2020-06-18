@@ -964,10 +964,11 @@ impl SynchronizationProtocolHandler {
                         false, // insert_into_consensus
                         true,  // persistent
                     );
-                    if !insert_result.is_new_valid() {
-                        // If header is invalid or already processed, we do not
-                        // need to request the block, so
-                        // just mark it received
+                    if !insert_result.should_process_body() {
+                        // If the header is invalid or the block has been
+                        // processed in consensus, we do not need to request the
+                        // block, so just mark it
+                        // received.
                         received_blocks.insert(hash);
                         continue;
                     }
