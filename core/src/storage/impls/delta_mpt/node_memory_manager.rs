@@ -143,10 +143,12 @@ impl<
     /// Method that requires mut borrow of allocator.
     pub fn enlarge(&self) -> Result<()> {
         let allocator_upgradable_read = self.allocator.upgradable_read();
-        let idle = allocator_upgradable_read.capacity()
-            - allocator_upgradable_read.len();
+        let allocator_capacity = allocator_upgradable_read.capacity();
+        let allocated_size = allocator_upgradable_read.len();
+        let idle = allocator_capacity - allocated_size;
         let should_idle = self.idle_size as usize;
-        if idle >= should_idle {
+        if idle >= should_idle
+           || allocated_capacity == self.size_limit as usize {
             return Ok(());
         }
         let mut add_size = should_idle - idle;
