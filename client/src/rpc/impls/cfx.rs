@@ -145,7 +145,7 @@ impl RpcImpl {
         let num = num.unwrap_or(EpochNumber::LatestState);
         let address: H160 = address.into();
         info!(
-            "RPC Request: cfx_getAdmin address={:?} epoch_num={:?}",
+            "RPC Request: cfx_getSponsorInfo address={:?} epoch_num={:?}",
             address, num
         );
 
