@@ -232,6 +232,7 @@ pub fn initialize_common_modules(
         notifications.clone(),
         conf.execution_config(),
         conf.verification_config(),
+        is_full_node,
     ));
 
     let verification_config = conf.verification_config();

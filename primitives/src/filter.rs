@@ -49,6 +49,24 @@ pub enum FilterError {
         hash: H256,
     },
 
+    /// Epoch cannot be served as it was already pruned from db on a full node
+    EpochAlreadyPruned {
+        epoch: u64,
+        min: u64,
+    },
+
+    /// Block has not been executed yet
+    BlockNotExecutedYet {
+        block_hash: H256,
+    },
+
+    /// There was a pivot chain reorganization during log filtering
+    PivotChainReorg {
+        epoch: u64,
+        from: H256,
+        to: H256,
+    },
+
     /// Filter error with custom error message (e.g. timeout)
     Custom(String),
 }
@@ -79,7 +97,18 @@ impl fmt::Display for FilterError {
                 epoch, latest_verifiable
             },
             UnknownBlock { hash } => format! {
-                "Unable to identify block {}", hash
+                "Unable to identify block {:?}", hash
+            },
+            EpochAlreadyPruned { epoch, min } => format! {
+                "Epoch is smaller than the earliest epoch stored (epoch: {}, min: {})",
+                epoch, min,
+            },
+            BlockNotExecutedYet { block_hash } => format! {
+                "Block {:?} is not executed yet", block_hash,
+            },
+            PivotChainReorg { epoch, from, to } => format! {
+                "Pivot chain at epoch {} has been reorganized during log filtering: {:?} -> {:?}. Operation terminated to avoid inconsistent results.",
+                epoch, from, to,
             },
             Custom(ref s) => s.clone(),
         };

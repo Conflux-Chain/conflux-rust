@@ -4,6 +4,7 @@
 
 use super::EpochNumber;
 use cfx_types::{H160, H256, U64};
+use jsonrpc_core::Error as RpcError;
 use primitives::filter::Filter as PrimitiveFilter;
 
 use serde::{
@@ -11,6 +12,8 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use serde_json::{from_value, Value};
+
+const FILTER_BLOCK_HASH_LIMIT: usize = 128;
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum VariadicValue<T> {
@@ -110,8 +113,35 @@ where A: Clone + Into<B> {
 }
 
 impl Filter {
-    pub fn into_primitive(self) -> PrimitiveFilter {
-        let address = self.address.and_then(Into::into);
+    pub fn into_primitive(self) -> Result<PrimitiveFilter, RpcError> {
+        // from_epoch, to_epoch
+        let from_epoch = self
+            .from_epoch
+            .unwrap_or(EpochNumber::LatestCheckpoint)
+            .into();
+
+        let to_epoch = self.to_epoch.unwrap_or(EpochNumber::LatestState).into();
+
+        // block_hashes
+        match self.block_hashes {
+            Some(ref bhs) if bhs.len() > FILTER_BLOCK_HASH_LIMIT => return Err(RpcError::invalid_params(
+                format!("filter.block_hashes can contain up to {} hashes; {} were provided.", FILTER_BLOCK_HASH_LIMIT, bhs.len())
+            )),
+            _ => {}
+        }
+
+        let block_hashes = maybe_vec_into(&self.block_hashes);
+
+        // topics
+        match self.topics {
+            Some(ref ts) if ts.len() > 4 => {
+                return Err(RpcError::invalid_params(format!(
+                    "filter.topics can contain up to 4 topics; {} were provided.",
+                    ts.len()
+                )))
+            }
+            _ => {}
+        }
 
         let topics = {
             let mut iter = self
@@ -129,22 +159,19 @@ impl Filter {
             ]
         };
 
-        PrimitiveFilter {
-            from_epoch: self
-                .from_epoch
-                .unwrap_or(EpochNumber::LatestCheckpoint)
-                .into(),
-            to_epoch: self.to_epoch.unwrap_or(EpochNumber::LatestMined).into(),
-            block_hashes: maybe_vec_into(&self.block_hashes),
-            address: maybe_vec_into(&address),
-            topics: topics.iter().map(maybe_vec_into).collect(),
-            limit: self.limit.map(|x| x.as_u64() as usize),
-        }
-    }
-}
+        // address, limit
+        let address = self.address.and_then(Into::into);
+        let limit = self.limit.map(|x| x.as_u64() as usize);
 
-impl Into<PrimitiveFilter> for Filter {
-    fn into(self) -> PrimitiveFilter { self.into_primitive() }
+        Ok(PrimitiveFilter {
+            from_epoch,
+            to_epoch,
+            block_hashes,
+            address,
+            topics,
+            limit,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -347,7 +374,7 @@ mod tests {
 
         let primitive_filter = PrimitiveFilter {
             from_epoch: PrimitiveEpochNumber::LatestCheckpoint,
-            to_epoch: PrimitiveEpochNumber::LatestMined,
+            to_epoch: PrimitiveEpochNumber::LatestState,
             block_hashes: Some(vec![
                 H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
@@ -368,6 +395,6 @@ mod tests {
             limit: Some(2),
         };
 
-        assert_eq!(filter.into_primitive(), primitive_filter);
+        assert_eq!(filter.into_primitive(), Ok(primitive_filter));
     }
 }

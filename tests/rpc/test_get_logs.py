@@ -5,9 +5,13 @@ from conflux.filter import Filter
 from conflux.rpc import RpcClient
 from test_framework.util import assert_equal, assert_raises_rpc_error
 
+NULL_H160 = "0x0000000000000000000000000000000000000000"
+NULL_H256 = "0x0000000000000000000000000000000000000000000000000000000000000000"
+
 class TestGetLogs(RpcClient):
     def test_invalid_filter(self):
-        self.generate_blocks_to_state()
+        self.blocks = self.generate_blocks_to_state()
+
         # invalid epoch type
         filter = Filter(from_epoch=0)
         assert_raises_rpc_error(None, None, self.get_logs, filter)
@@ -26,11 +30,15 @@ class TestGetLogs(RpcClient):
         filter = Filter(from_epoch="0xQQQQ")
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
-        # invalid `blockHashes` type
+        # invalid `block_hashes` type
         filter = Filter(block_hashes="")
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
         filter = Filter(block_hashes=["0x0"])
+        assert_raises_rpc_error(None, None, self.get_logs, filter)
+
+        # invalid `block_hashes` length
+        filter = Filter(block_hashes=[NULL_H256] * 129)
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
         # invalid `address` type
@@ -45,6 +53,10 @@ class TestGetLogs(RpcClient):
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
         filter = Filter(topics=["0x0"])
+        assert_raises_rpc_error(None, None, self.get_logs, filter)
+
+        # invalid topics length
+        filter = Filter(topics=[NULL_H256] * 5)
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
         # invalid `limit` type
@@ -62,11 +74,11 @@ class TestGetLogs(RpcClient):
         logs = self.get_logs(filter)
         assert_equal(logs, [])
 
-        filter = Filter(address="0x0000000000000000000000000000000000000000")
+        filter = Filter(address=NULL_H160)
         logs = self.get_logs(filter)
         assert_equal(logs, [])
 
-        filter = Filter(address=["0x0000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000"])
+        filter = Filter(address=[NULL_H160, NULL_H160])
         logs = self.get_logs(filter)
         assert_equal(logs, [])
 
@@ -75,23 +87,25 @@ class TestGetLogs(RpcClient):
         logs = self.get_logs(filter)
         assert_equal(logs, [])
 
-        filter = Filter(topics=["0x0000000000000000000000000000000000000000000000000000000000000000"])
+        filter = Filter(topics=[NULL_H256])
         logs = self.get_logs(filter)
         assert_equal(logs, [])
 
-        filter = Filter(topics=["0x0000000000000000000000000000000000000000000000000000000000000000", ["0x0000000000000000000000000000000000000000000000000000000000000000"]])
+        filter = Filter(topics=[NULL_H256, [NULL_H256]])
         logs = self.get_logs(filter)
         assert_equal(logs, [])
 
-        ## all fields
+        # non-existent block hash
+        filter = Filter(block_hashes=[NULL_H256])
+        assert_raises_rpc_error(None, None, self.get_logs, filter)
+
+        # all fields
         filter = Filter(
             from_epoch="0x0",
             to_epoch="latest_state",
-            block_hashes=["0x0000000000000000000000000000000000000000000000000000000000000000"],
-            address=["0x0000000000000000000000000000000000000000"],
-            topics=[
-                "0x0000000000000000000000000000000000000000000000000000000000000000",
-                ["0x0000000000000000000000000000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000000000000000000000000000"]],
+            block_hashes = [self.blocks[0]],
+            address=[NULL_H160],
+            topics=[NULL_H256, [NULL_H256, NULL_H256]],
             limit="0x1"
         )
         logs = self.get_logs(filter)
