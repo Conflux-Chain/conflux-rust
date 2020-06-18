@@ -147,8 +147,7 @@ impl<
         let allocated_size = allocator_upgradable_read.len();
         let idle = allocator_capacity - allocated_size;
         let should_idle = self.idle_size as usize;
-        if idle >= should_idle
-           || allocated_capacity == self.size_limit as usize {
+        if idle >= should_idle || allocated_capacity == self.size_limit as usize {
             return Ok(());
         }
         let mut add_size = should_idle - idle;
