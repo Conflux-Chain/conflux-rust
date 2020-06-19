@@ -210,7 +210,7 @@ fn test_find_jump_and_sub_allowing_unknown_opcodes() {
 
     // 0000 5B   JUMPDEST
     // 0001 CC   ???
-    // 0002 B2   BEGINSUB
+    // 0002 5C   BEGINSUB
     let code = "5BCC5C".from_hex().unwrap();
 
     // when
