@@ -71,7 +71,7 @@ const TWO_POW_248: U256 = U256([0, 0, 0, 0x100000000000000]); //0x1 00000000 000
 
 /// Maximal subroutine stack size as specified in
 /// https://eips.ethereum.org/EIPS/eip-2315.
-pub const MAX_SUB_STACK_SIZE: usize = 1024;
+pub const MAX_SUB_STACK_SIZE: usize = 1023;
 
 /// Abstraction over raw vector of Bytes. Easier state management of PC.
 struct CodeReader {
