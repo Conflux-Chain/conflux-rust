@@ -90,10 +90,14 @@ pub enum Error {
         /// What was the stack limit
         limit: usize,
     },
+    InvalidSubEntry,
     /// When balance is not enough for `collateral_for_storage`.
     /// The state should be reverted to the state from before the
     /// transaction execution.
-    NotEnoughBalanceForStorage { required: U256, got: U256 },
+    NotEnoughBalanceForStorage {
+        required: U256,
+        got: U256,
+    },
     /// `ExceedStorageLimit` is returned when the `collateral_for_storage`
     /// exceed the `storage_limit`.
     ExceedStorageLimit,
@@ -148,6 +152,9 @@ impl fmt::Display for Error {
             } => write!(f, "Out of stack {} {}/{}", instruction, wanted, limit),
             SubStackUnderflow { wanted, on_stack } => {
                 write!(f, "Subroutine stack underflow {}/{}", wanted, on_stack)
+            }
+            InvalidSubEntry => {
+                write!(f, "Invalid Subroutine Entry via BEGINSUB")
             }
             OutOfSubStack { wanted, limit } => {
                 write!(f, "Out of subroutine stack {}/{}", wanted, limit)

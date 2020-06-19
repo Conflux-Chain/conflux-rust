@@ -712,9 +712,9 @@ impl<Cost: CostType> Interpreter<Cost> {
                 // ignore
             }
             instructions::BEGINSUB => {
-                // BEGINSUB should not be executed. If so, returns OutOfGas
-                // (EIP-2315).
-                return Err(vm::Error::OutOfGas);
+                // BEGINSUB should not be executed. If so, returns
+                // InvalidSubEntry (EIP-2315).
+                return Err(vm::Error::InvalidSubEntry);
             }
             instructions::JUMPSUB => {
                 if self.return_stack.len() >= MAX_SUB_STACK_SIZE {

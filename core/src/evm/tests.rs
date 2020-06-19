@@ -1216,6 +1216,24 @@ fn test_subs_sub_at_end(factory: super::Factory) {
     assert_eq!(gas_left, U256::from(0));
 }
 
+evm_test! {test_subs_walk_into_subroutine: test_subs_walk_into_subroutine_int}
+fn test_subs_walk_into_subroutine(factory: super::Factory) {
+    let code = "5c5d00".from_hex().unwrap();
+
+    let mut params = ActionParams::default();
+    params.gas = U256::from(100);
+    params.code = Some(Arc::new(code));
+    let mut ctx = MockContext::new();
+
+    let current = {
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap())
+    };
+
+    let expected = Result::Err(vm::Error::InvalidSubEntry);
+    assert_eq!(current, expected);
+}
+
 evm_test! {test_calls: test_calls_int}
 fn test_calls(factory: super::Factory) {
     let code = "600054602d57600160005560006000600060006050610998610100f160006000600060006050610998610100f25b".from_hex().unwrap();
