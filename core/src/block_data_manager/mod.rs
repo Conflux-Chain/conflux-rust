@@ -61,7 +61,10 @@ pub struct StateAvailabilityBoundary {
     pub pivot_chain: Vec<H256>,
 
     pub synced_state_height: u64,
-    /// This is the lower boundary height of available state.
+    /// This is the lower boundary height of available state where we can
+    /// execute new epochs based on it. Note that `synced_state_height` is
+    /// within this bound for execution, but its state cannot be accessed
+    /// through `get_state_no_commit`.
     pub lower_bound: u64,
     /// This is the upper boundary height of available state.
     pub upper_bound: u64,
@@ -83,6 +86,7 @@ impl StateAvailabilityBoundary {
         }
     }
 
+    /// Check if the state can be accessed for reading.
     pub fn check_availability(&self, height: u64, block_hash: &H256) -> bool {
         (height == 0 || height != self.synced_state_height)
             && self.lower_bound <= height
@@ -110,12 +114,6 @@ impl StateAvailabilityBoundary {
             && executed_block.hash() == self.pivot_chain[next_index]
         {
             self.upper_bound += 1;
-        }
-        if self.lower_bound == self.synced_state_height
-            && self.synced_state_height != 0
-            && self.upper_bound > self.synced_state_height
-        {
-            self.adjust_lower_bound(self.lower_bound + 1)
         }
     }
 
