@@ -27,6 +27,11 @@ macro_rules! not_supported {
     };
 }
 
+#[derive(Default)]
+pub struct RpcImplConfiguration {
+    pub get_logs_filter_max_limit: Option<usize>,
+}
+
 pub mod cfx;
 pub mod common;
 pub mod light;

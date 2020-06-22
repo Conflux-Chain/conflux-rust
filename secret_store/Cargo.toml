@@ -14,3 +14,5 @@ parking_lot = "0.10"
 rlp = "0.4.0"
 rand = "0.7"
 cfxkey = { path = "../accounts/cfxkey" }
+malloc_size_of_derive = {path = "../util/malloc_size_of_derive"}
+malloc_size_of= {path = "../util/malloc_size_of"}

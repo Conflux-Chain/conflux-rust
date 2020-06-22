@@ -767,7 +767,7 @@ impl SynchronizationProtocolHandler {
         // `my_best_epoch` is missing, either because received
         // epoch_set is wrong or we have too many epochs with
         // blocks not received.
-        if latest_requested_epoch - my_best_epoch >= EPOCH_SYNC_MAX_GAP {
+        if latest_requested_epoch >= my_best_epoch + EPOCH_SYNC_MAX_GAP {
             if latest_request_time.elapsed()
                 < Duration::from_secs(EPOCH_SYNC_RESTART_TIMEOUT_S)
             {
@@ -780,7 +780,7 @@ impl SynchronizationProtocolHandler {
 
         while self.request_manager.num_epochs_in_flight()
             < EPOCH_SYNC_MAX_INFLIGHT
-            && latest_requested_epoch - my_best_epoch < EPOCH_SYNC_MAX_GAP
+            && latest_requested_epoch < my_best_epoch + EPOCH_SYNC_MAX_GAP
             && (latest_requested_epoch < median_peer_epoch
                 || median_peer_epoch == 0)
         {
@@ -964,10 +964,11 @@ impl SynchronizationProtocolHandler {
                         false, // insert_into_consensus
                         true,  // persistent
                     );
-                    if !insert_result.is_new_valid() {
-                        // If header is invalid or already processed, we do not
-                        // need to request the block, so
-                        // just mark it received
+                    if !insert_result.should_process_body() {
+                        // If the header is invalid or the block has been
+                        // processed in consensus, we do not need to request the
+                        // block, so just mark it
+                        // received.
                         received_blocks.insert(hash);
                         continue;
                     }
