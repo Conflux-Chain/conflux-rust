@@ -29,7 +29,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
         for i in range(self.num_nodes - 1):
             self.start_node(i)
         connect_sample_nodes(self.nodes[:-1], self.log, latency_max=1)
-    
+
     def _generate_txs(self, peer, num):
         client = RpcClient(self.nodes[peer])
         txs = []
