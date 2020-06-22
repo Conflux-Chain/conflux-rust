@@ -474,7 +474,7 @@ impl Configuration {
     }
 
     pub fn tx_gen_config(&self) -> Option<TransactionGeneratorConfig> {
-        if self.is_test_mode() &&
+        if self.is_test_or_dev_mode() &&
             // FIXME: this is not a good condition to check.
             self.raw_conf.genesis_secrets.is_some()
         {

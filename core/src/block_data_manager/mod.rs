@@ -222,7 +222,7 @@ pub struct BlockDataManager {
     config: DataManagerConfiguration,
 
     tx_data_manager: TransactionDataManager,
-    db_manager: DBManager,
+    pub db_manager: DBManager,
 
     /// This is the original genesis block.
     pub true_genesis: Arc<Block>,
