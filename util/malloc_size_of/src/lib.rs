@@ -197,6 +197,12 @@ impl<T: MallocSizeOf> MallocSizeOf for std::cell::RefCell<T> {
     }
 }
 
+impl<T: MallocSizeOf> MallocSizeOf for std::cell::UnsafeCell<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        unsafe { &*self.get() }.size_of(ops)
+    }
+}
+
 impl<'a, B: ?Sized + ToOwned> MallocSizeOf for std::borrow::Cow<'a, B>
 where B::Owned: MallocSizeOf
 {

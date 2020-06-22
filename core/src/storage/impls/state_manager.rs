@@ -33,6 +33,7 @@ pub struct StateTrees {
     pub parent_epoch_id: EpochId,
 }
 
+#[derive(MallocSizeOfDerive)]
 pub struct StateManager {
     storage_manager: Arc<StorageManager>,
     pub number_committed_nodes: AtomicUsize,
@@ -578,6 +579,7 @@ use crate::storage::{
     utils::arc_ext::shared_from_this,
     StorageConfiguration,
 };
+use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
 use primitives::{
     DeltaMptKeyPadding, EpochId, MerkleHash, StorageKey,
     GENESIS_DELTA_MPT_KEY_PADDING, MERKLE_NULL_NODE, NULL_EPOCH,

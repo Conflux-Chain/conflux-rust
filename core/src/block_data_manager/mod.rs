@@ -292,6 +292,8 @@ impl MallocSizeOf for BlockDataManager {
             + cache_man_size
             + self.target_difficulty_manager.size_of(ops)
             + state_availability_boundary_size
+            + self.db_manager.size_of(ops)
+            + self.storage_manager.size_of(ops)
     }
 }
 
