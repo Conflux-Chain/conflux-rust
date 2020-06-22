@@ -52,8 +52,8 @@ error_chain! {
 
         RequestNotFound {
             description("The response is received after the request timeout or \
-            there is not request for the response"),
-            display("Request not found for the respond"),
+            there is no request matching the response"),
+            display("No matching request found for response"),
         }
 
         TooManyTrans {
