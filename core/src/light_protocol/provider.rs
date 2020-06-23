@@ -92,11 +92,11 @@ impl Provider {
     }
 
     pub fn register(
-        self: Arc<Self>, network: Arc<NetworkService>,
+        self: &Arc<Self>, network: Arc<NetworkService>,
     ) -> Result<(), String> {
         network
             .register_protocol(
-                self,
+                self.clone(),
                 LIGHT_PROTOCOL_ID,
                 &[LIGHT_PROTOCOL_VERSION],
             )

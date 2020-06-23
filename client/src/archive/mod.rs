@@ -16,7 +16,6 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Condvar, Mutex};
 use runtime::Runtime;
 use std::sync::Arc;
-use txgen::propagate::DataPropagation;
 
 pub struct ArchiveClientExtraComponents {
     pub consensus: Arc<ConsensusGraph>,
@@ -63,15 +62,8 @@ impl ArchiveClient {
             runtime,
         ) = initialize_not_light_node_modules(
             &conf, exit, false, /* is_full_node */
-
-        if conf.is_test_mode() && conf.raw_conf.data_propagate_enabled {
-            let dp = Arc::new(DataPropagation::new(
-                conf.raw_conf.data_propagate_interval_ms,
-                conf.raw_conf.data_propagate_size,
-            ));
-            DataPropagation::register(dp, network.clone())?;
-        }
         )?;
+
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
             blockgen: Some(blockgen),
