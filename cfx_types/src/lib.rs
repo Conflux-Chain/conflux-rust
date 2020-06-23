@@ -51,10 +51,10 @@ pub mod address_util {
         }
 
         #[inline]
-        fn is_valid_address<T>(&self, builtin_map: &BTreeMap<Self, T>) -> bool {
+        fn is_valid_address(&self) -> bool {
             self.is_contract_address()
                 || self.is_user_account_address()
-                || self.is_builtin_address(builtin_map)
+                || self.is_builtin_address()
         }
 
         #[inline]
@@ -68,11 +68,8 @@ pub mod address_util {
         }
 
         #[inline]
-        fn is_builtin_address<T>(
-            &self, builtin_map: &BTreeMap<Self, T>,
-        ) -> bool {
+        fn is_builtin_address(&self) -> bool {
             self.address_type_bits() == TYPE_BITS_BUILTIN
-                && builtin_map.contains_key(self)
         }
 
         #[inline]

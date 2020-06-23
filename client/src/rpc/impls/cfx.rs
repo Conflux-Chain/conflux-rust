@@ -299,7 +299,7 @@ impl RpcImpl {
         &self, tx: TransactionWithSignature,
     ) -> RpcResult<RpcH256> {
         if let Call(address) = &tx.transaction.action {
-            if !address.is_valid_address(self.machine.builtins()) {
+            if !address.is_valid_address() {
                 bail!(invalid_params("tx", "Sending transactions to invalid address. The first four bits must be 0x0 (built-in/reserved), 0x1 (user-account), or 0x8 (contract)."));
             }
         }

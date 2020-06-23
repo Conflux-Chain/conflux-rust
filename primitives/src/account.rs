@@ -158,7 +158,7 @@ impl Decodable for Account {
             return Err(DecoderError::RlpIncorrectListLen);
         }
         let address: Address = rlp.val_at(0)?;
-        if address.is_user_account_address() {
+        if address.is_user_account_address() || address.is_builtin_address() {
             if rlp.item_count()? != 6 {
                 return Err(DecoderError::RlpIncorrectListLen);
             }
@@ -174,6 +174,11 @@ impl Decodable for Account {
                 sponsor_info: Default::default(),
             })
         } else if address.is_contract_address() {
+            // Note that, our implementation assumes that the set of serialized
+            // fields of contract address is a *super-set* of the
+            // fields of normal addresses. This is because we allow
+            // send money to contract address and we will create a *normal*
+            // address stub there to store its balance.
             if rlp.item_count()? != 9 {
                 return Err(DecoderError::RlpIncorrectListLen);
             }
@@ -196,7 +201,9 @@ impl Decodable for Account {
 
 impl Encodable for Account {
     fn rlp_append(&self, stream: &mut RlpStream) {
-        if self.address.is_user_account_address() {
+        if self.address.is_user_account_address()
+            || self.address.is_builtin_address()
+        {
             stream
                 .begin_list(6)
                 .append(&self.address)
@@ -206,6 +213,11 @@ impl Encodable for Account {
                 .append(&self.collateral_for_storage)
                 .append(&self.accumulated_interest_return);
         } else if self.address.is_contract_address() {
+            // Note that, our implementation assumes that the set of serialized
+            // fields of contract address is a *super-set* of the
+            // fields of normal addresses. This is because we allow
+            // send money to contract address and we will create a *normal*
+            // address stub there to store its balance.
             stream
                 .begin_list(9)
                 .append(&self.address)
