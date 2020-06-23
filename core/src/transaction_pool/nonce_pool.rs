@@ -350,7 +350,7 @@ impl NoncePool {
     }
 
     /// find a transaction `tx` such that
-    ///   1. all nonce in `[nouce, tx.nouce]` exists
+    ///   1. all nonce in `[nouce, tx.nonce]` exists
     ///   2. tx.packed is false and tx.nouce is minimum
     pub fn recalculate_readiness_with_local_info(
         &self, nonce: U256, balance: U256,

@@ -113,7 +113,7 @@ where Message: Send + Sync + 'static
         &self, _stream: StreamToken, _reg: Token, _event_loop: &Poll,
     ) {
     }
-    /// Deregister a stream. Called whenstream is removed from event loop
+    /// Deregister a stream. Called when stream is removed from event loop
     fn deregister_stream(&self, _stream: StreamToken, _event_loop: &Poll) {}
 }
 

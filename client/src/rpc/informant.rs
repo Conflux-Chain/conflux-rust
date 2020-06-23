@@ -122,7 +122,7 @@ impl<T: Default + Copy + Ord> StatsCalculator<T> {
         self.samples[self.idx] = sample;
     }
 
-    /// Returns aproximate of media
+    /// Returns approximate of media
     pub fn approximated_median(&self) -> T {
         let mut copy = [T::default(); STATS_SAMPLES];
         copy.copy_from_slice(&self.samples);
