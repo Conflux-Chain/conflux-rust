@@ -1409,7 +1409,7 @@ impl<'a> Executive<'a> {
         let mut storage_sponsored = false;
         match tx.action {
             Action::Call(ref address) => {
-                if self.state.is_contract(address) {
+                if address.is_contract_address() {
                     code_address = *address;
                     if self
                         .state
@@ -1569,7 +1569,12 @@ impl<'a> Executive<'a> {
                     &tx.data,
                 );
 
-                if self.state.is_contract(&new_address) {
+                // For a contract address already with code, we do not allow
+                // overlap the address. This should generally
+                // not happen. Unless we enable account dust in
+                // future. We add this check just in case it
+                // helps in future.
+                if self.state.is_contract_with_code(&new_address) {
                     return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                         ExecutionError::ContractAddressConflict,
                         Executed::execution_error_fully_charged(tx),
