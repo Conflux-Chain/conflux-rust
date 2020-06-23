@@ -1191,8 +1191,9 @@ impl BlockDataManager {
         let mut local_block_info = self.local_block_info.write();
         let mut cache_man = self.cache_man.lock();
         debug!(
-            "Before gc cache_size={} {} {} {} {} {} {}",
+            "Before gc cache_size={} {} {} {} {} {} {} {}",
             current_size,
+            block_headers.len(),
             blocks.len(),
             compact_blocks.len(),
             executed_results.len(),
