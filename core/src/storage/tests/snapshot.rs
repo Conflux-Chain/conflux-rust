@@ -391,7 +391,7 @@ fn test_inserts_deletes_and_subtree_size() {
         kv: [
             keys_unchanged
                 .iter()
-                .map(|k| (Vec::<u8>::from(&k[..]), Box::<[u8]>::default()))
+                .map(|k| (Vec::<u8>::from(&k[..]), Box::<[u8]>::from(&k[..])))
                 .collect::<Vec<_>>(),
             keys_delete
                 .iter()
@@ -414,7 +414,7 @@ fn test_inserts_deletes_and_subtree_size() {
         kv: [
             keys_unchanged
                 .iter()
-                .map(|k| (Vec::<u8>::from(&k[..]), Box::<[u8]>::default()))
+                .map(|k| (Vec::<u8>::from(&k[..]), Box::<[u8]>::from(&k[..])))
                 .collect::<Vec<_>>(),
             keys_new
                 .iter()
@@ -481,7 +481,7 @@ fn test_two_way_merge() {
         kv: [
             keys_unchanged
                 .iter()
-                .map(|k| (Vec::<u8>::from(&k[..]), Box::<[u8]>::default()))
+                .map(|k| (Vec::<u8>::from(&k[..]), Box::<[u8]>::from(&k[..])))
                 .collect::<Vec<_>>(),
             keys_delete
                 .iter()
