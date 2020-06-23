@@ -142,9 +142,11 @@ pub struct CacheSize {
 impl CacheSize {
     /// Total amount used by the cache.
     pub fn total(&self) -> usize {
-        self.blocks
+        self.block_headers
+            + self.blocks
+            + self.compact_blocks
             + self.block_receipts
             + self.transaction_indices
-            + self.compact_blocks
+            + self.local_block_infos
     }
 }
