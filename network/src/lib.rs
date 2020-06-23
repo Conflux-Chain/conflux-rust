@@ -388,7 +388,7 @@ impl IpFilter {
     }
 }
 
-/// IP fiter
+/// IP filter
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AllowIP {
     /// Connect to any address
