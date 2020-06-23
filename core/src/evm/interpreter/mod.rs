@@ -182,7 +182,7 @@ impl From<vm::Error> for InterpreterResult {
     }
 }
 
-/// Intepreter EVM implementation
+/// Interpreter EVM implementation
 pub struct Interpreter<Cost: CostType> {
     mem: Vec<u8>,
     cache: Arc<SharedCache>,
