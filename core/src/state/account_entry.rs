@@ -8,7 +8,9 @@ use crate::{
     hash::{keccak, KECCAK_EMPTY},
     statedb::{Result as DbResult, StateDb},
 };
-use cfx_types::{Address, BigEndianHash, H256, U256};
+use cfx_types::{
+    address_util::AddressUtil, Address, BigEndianHash, H256, U256,
+};
 use parking_lot::RwLock;
 use primitives::{
     Account, CodeInfo, DepositInfo, DepositList, SponsorInfo, StorageKey,
@@ -84,9 +86,10 @@ pub struct OverlayAccount {
     code_cache: Arc<Bytes>,
     code_owner: Address,
 
+    // This flag indicates whether it is a newly created contract. For such
+    // account, we will skip looking data from the disk. This flag will stay
+    // true until the contract being committed and cleared from the memory.
     is_newly_created_contract: bool,
-    // Whether it is a contract address.
-    is_contract: bool,
 }
 
 impl OverlayAccount {
@@ -114,7 +117,6 @@ impl OverlayAccount {
             code_cache: Arc::new(vec![]),
             code_owner: Address::zero(),
             is_newly_created_contract: false,
-            is_contract: account.code_hash != KECCAK_EMPTY,
         };
 
         overlay_account
@@ -144,7 +146,6 @@ impl OverlayAccount {
             code_cache: Arc::new(vec![]),
             code_owner: Address::zero(),
             is_newly_created_contract: false,
-            is_contract: false,
         }
     }
 
@@ -173,7 +174,6 @@ impl OverlayAccount {
             code_cache: Arc::new(vec![]),
             code_owner: Address::zero(),
             is_newly_created_contract: true,
-            is_contract: true,
         }
     }
 
@@ -203,7 +203,6 @@ impl OverlayAccount {
             code_cache: Arc::new(Default::default()),
             code_owner: Address::zero(),
             is_newly_created_contract: true,
-            is_contract: true,
         }
     }
 
@@ -221,7 +220,7 @@ impl OverlayAccount {
         }
     }
 
-    pub fn is_contract(&self) -> bool { self.is_contract }
+    pub fn is_contract(&self) -> bool { self.address.is_contract_address() }
 
     pub fn address(&self) -> &Address { &self.address }
 
@@ -267,7 +266,7 @@ impl OverlayAccount {
     }
 
     pub fn set_admin(&mut self, requester: &Address, admin: &Address) {
-        if self.is_contract && self.admin == *requester {
+        if self.is_contract() && self.admin == *requester {
             self.admin = admin.clone();
         }
     }
@@ -534,7 +533,7 @@ impl OverlayAccount {
     }
 
     pub fn add_collateral_for_storage(&mut self, by: &U256) {
-        if self.is_contract {
+        if self.is_contract() {
             self.sub_sponsor_balance_for_collateral(by);
         } else {
             self.sub_balance(by);
@@ -544,7 +543,7 @@ impl OverlayAccount {
 
     pub fn sub_collateral_for_storage(&mut self, by: &U256) {
         assert!(self.collateral_for_storage >= *by);
-        if self.is_contract {
+        if self.is_contract() {
             self.add_sponsor_balance_for_collateral(by);
         } else {
             self.add_balance(by);
@@ -634,7 +633,6 @@ impl OverlayAccount {
             code_cache: self.code_cache.clone(),
             code_owner: self.code_owner,
             is_newly_created_contract: self.is_newly_created_contract,
-            is_contract: self.is_contract,
         }
     }
 
@@ -738,7 +736,6 @@ impl OverlayAccount {
         self.code_cache = Arc::new(code);
         self.code_owner = owner;
         self.code_size = Some(self.code_cache.len());
-        self.is_contract = true;
     }
 
     pub fn overwrite_with(&mut self, other: OverlayAccount) {
@@ -763,7 +760,6 @@ impl OverlayAccount {
         self.deposit_list = other.deposit_list;
         self.vote_stake_list = other.vote_stake_list;
         self.is_newly_created_contract = other.is_newly_created_contract;
-        self.is_contract = other.is_contract;
     }
 
     /// Return the owner of `key` before this execution. If it is `None`, it
