@@ -15,9 +15,9 @@ mod tests;
 /// element.
 ///
 /// User may use a 32bit data type to reduce memory usage.
-pub trait CacheIndexTrait: Copy + Send {}
+pub trait CacheIndexTrait: Copy + Send + MallocSizeOf {}
 
-pub trait CacheAlgoDataTrait: Copy + Default + Send {}
+pub trait CacheAlgoDataTrait: Copy + Default + Send + MallocSizeOf {}
 
 /// The cache storage interface that user should implement for cache algorithm
 /// to update reference from cached object to its internal data structure.
@@ -194,6 +194,7 @@ pub trait PrimitiveNum:
     + MyFrom<i32>
     + MyFrom<usize>
     + Send
+    + MallocSizeOf
 {
 }
 
@@ -338,6 +339,7 @@ where CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.algo_data }
 }
 
+use malloc_size_of::MallocSizeOf;
 use std::{
     fmt::{Debug, Display},
     marker::PhantomData,

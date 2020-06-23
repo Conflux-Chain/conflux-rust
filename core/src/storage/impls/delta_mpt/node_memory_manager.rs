@@ -37,6 +37,7 @@ pub type DeltaMptsCacheManager =
 
 impl CacheIndexTrait for DeltaMptDbKey {}
 
+#[derive(MallocSizeOfDerive)]
 pub struct NodeMemoryManager<
     CacheAlgoDataT: CacheAlgoDataTrait,
     CacheAlgorithmT: CacheAlgorithm<CacheAlgoData = CacheAlgoDataT>,
@@ -787,6 +788,7 @@ use super::{
     slab::Slab,
     NodeRefDeltaMpt,
 };
+use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
 use parking_lot::{
     Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard,
 };

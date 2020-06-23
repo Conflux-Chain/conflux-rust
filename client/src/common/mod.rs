@@ -344,16 +344,24 @@ pub fn initialize_not_light_node_modules(
         thread::Builder::new().name("MallocSizeOf".into()).spawn(
             move || loop {
                 let start = Instant::now();
+                let mb = 1_000_000;
                 let mut ops = new_malloc_size_ops();
-                let secret_store_size = secret_store.size_of(&mut ops);
-                let data_man_size = data_man.size_of(&mut ops);
-                let tx_pool_size = txpool.size_of(&mut ops);
-                let consensus_graph_size = consensus.size_of(&mut ops);
+                let secret_store_size = secret_store.size_of(&mut ops) / mb;
+                // Note `db_manager` is not wrapped in Arc, so it will still be included
+                // in `data_man_size`.
+                let data_manager_db_cache_size = data_man.db_manager.size_of(&mut ops) / mb;
+                let storage_manager_size = data_man.storage_manager.size_of(&mut ops) / mb;
+                let data_man_size = data_man.size_of(&mut ops) / mb;
+                let tx_pool_size = txpool.size_of(&mut ops) / mb;
+                let consensus_graph_size = consensus.size_of(&mut ops) / mb;
                 let sync_graph_size =
-                    sync.get_synchronization_graph().size_of(&mut ops);
+                    sync.get_synchronization_graph().size_of(&mut ops) / mb;
                 info!(
-                    "Malloc Size: secret_store={} data_man={} txpool={} consensus={} sync={}, time elapsed={:?}",
-                    secret_store_size, data_man_size, tx_pool_size, consensus_graph_size, sync_graph_size,
+                    "Malloc Size(MB): secret_store={} data_manager_db_cache_size={} \
+                    storage_manager_size={} data_man={} txpool={} consensus={} sync={}, \
+                    time elapsed={:?}",
+                    secret_store_size,data_manager_db_cache_size,storage_manager_size,
+                    data_man_size, tx_pool_size, consensus_graph_size, sync_graph_size,
                     start.elapsed(),
                 );
                 thread::sleep(Duration::from_secs(
