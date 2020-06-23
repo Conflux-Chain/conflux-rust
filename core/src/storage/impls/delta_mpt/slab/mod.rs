@@ -112,6 +112,7 @@ use super::super::{
     super::utils::{UnsafeCellExtension, WrappedCreateFrom},
     errors::*,
 };
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use parking_lot::Mutex;
 use std::{
     cell::UnsafeCell, fmt, iter::IntoIterator, marker::PhantomData, ops, ptr,
@@ -144,6 +145,14 @@ pub struct Slab<T, E: EntryTrait<EntryType = T> = Entry<T>> {
     alloc_fields: Mutex<AllocRelatedFields>,
 
     value_type: PhantomData<T>,
+}
+
+impl<T, E: EntryTrait<EntryType = T> + MallocSizeOf> MallocSizeOf
+    for Slab<T, E>
+{
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.entries.size_of(ops)
+    }
 }
 
 unsafe impl<T, E: EntryTrait<EntryType = T>> Sync for Slab<T, E> {}
@@ -362,6 +371,15 @@ pub struct IterMut<'a, T: 'a, E: 'a + EntryTrait<EntryType = T>> {
 pub enum Entry<T> {
     Vacant(usize),
     Occupied(T),
+}
+
+impl<T: MallocSizeOf> MallocSizeOf for Entry<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        match self {
+            Entry::Vacant(_) => 0,
+            Entry::Occupied(e) => e.size_of(ops),
+        }
+    }
 }
 
 impl<T> Default for Entry<T> {

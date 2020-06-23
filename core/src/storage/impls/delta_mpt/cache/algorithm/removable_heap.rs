@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::{super::super::super::errors::*, MyInto, PrimitiveNum};
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use std::{cmp::Ordering, marker::PhantomData, mem, ptr, vec::Vec};
 
 // To make it easy for any value type to implement HeapValueUtil.
@@ -165,6 +166,14 @@ pub struct RemovableHeap<PosT: PrimitiveNum, ValueType> {
     /// from heap but may be maintained and push to heap again.
     array: Vec<ValueType>,
     heap_size: PosT,
+}
+
+impl<PosT: PrimitiveNum, ValueType: MallocSizeOf> MallocSizeOf
+    for RemovableHeap<PosT, ValueType>
+{
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.array.size_of(ops) + self.heap_size.size_of(ops)
+    }
 }
 
 impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {

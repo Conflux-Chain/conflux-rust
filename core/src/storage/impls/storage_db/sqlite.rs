@@ -12,6 +12,10 @@ pub struct SqliteConnection {
     cached_statements: Mutex<StatementCache>,
 }
 
+impl MallocSizeOf for SqliteConnection {
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { unimplemented!() }
+}
+
 pub struct SqliteConnectionInfo {
     pub readonly: bool,
     pub path: PathBuf,
@@ -713,6 +717,7 @@ use super::super::{
     errors::*,
 };
 use fallible_iterator::FallibleIterator;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Mutex, MutexGuard};
 use sqlite::{Bindable, Connection, OpenFlags, Readable, State, Statement};
 use sqlite3_sys as sqlite_ffi;

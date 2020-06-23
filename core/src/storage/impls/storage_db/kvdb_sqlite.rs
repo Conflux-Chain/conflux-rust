@@ -10,6 +10,12 @@ pub struct KvdbSqlite<ValueType> {
     __marker_value: PhantomData<ValueType>,
 }
 
+impl<ValueType> MallocSizeOf for KvdbSqlite<ValueType> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.connection.size_of(ops)
+    }
+}
+
 pub struct KvdbSqliteBorrowShared<'db, ValueType> {
     connection: Option<*const SqliteConnection>,
     statements: *const KvdbSqliteStatements,
@@ -1228,6 +1234,7 @@ use super::{
     sqlite::*,
 };
 use crate::test_context::random_crash_if_enabled;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use sqlite::{Connection, Statement};
 use std::{
     any::Any,

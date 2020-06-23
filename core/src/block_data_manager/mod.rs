@@ -186,7 +186,7 @@ pub struct BlockDataManager {
     config: DataManagerConfiguration,
 
     tx_data_manager: TransactionDataManager,
-    db_manager: DBManager,
+    pub db_manager: DBManager,
 
     /// This is the original genesis block.
     pub true_genesis: Arc<Block>,
@@ -254,6 +254,8 @@ impl MallocSizeOf for BlockDataManager {
             + cache_man_size
             + self.target_difficulty_manager.size_of(ops)
             + state_availability_boundary_size
+            + self.db_manager.size_of(ops)
+            + self.storage_manager.size_of(ops)
     }
 }
 

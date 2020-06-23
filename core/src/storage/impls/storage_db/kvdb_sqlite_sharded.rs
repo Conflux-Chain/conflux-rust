@@ -10,6 +10,19 @@ pub struct KvdbSqliteSharded<ValueType> {
     __marker_value: PhantomData<ValueType>,
 }
 
+impl<ValueType> MallocSizeOf for KvdbSqliteSharded<ValueType> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let mut size = 0;
+        if let Some(connections) = &self.shards_connections {
+            for connection in &**connections {
+                size += connection.size_of(ops);
+            }
+        }
+        // statements is small so can be ignored
+        size
+    }
+}
+
 impl<ValueType> KvdbSqliteSharded<ValueType> {
     pub fn new(
         shard_connections: Option<Box<[SqliteConnection]>>,
@@ -1026,6 +1039,7 @@ use crate::storage::{
     KvdbSqlite, KvdbSqliteStatements, SqliteConnection,
 };
 use fallible_iterator::FallibleIterator;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use serde::export::PhantomData;
 use sqlite::Statement;
 use std::{
