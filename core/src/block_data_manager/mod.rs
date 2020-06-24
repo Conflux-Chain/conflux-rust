@@ -341,7 +341,9 @@ impl BlockDataManager {
             cache_man,
             instance_id: Mutex::new(0),
             config,
-            target_difficulty_manager: TargetDifficultyManager::new(),
+            target_difficulty_manager: TargetDifficultyManager::new(
+                cache_conf.target_difficulties_cache_size_in_count,
+            ),
             cur_consensus_era_genesis_hash: RwLock::new(true_genesis.hash()),
             cur_consensus_era_stable_hash: RwLock::new(true_genesis.hash()),
             tx_data_manager,
