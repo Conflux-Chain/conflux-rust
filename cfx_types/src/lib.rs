@@ -29,7 +29,6 @@ pub fn hexstr_to_h256(hex_str: &str) -> H256 {
 
 pub mod address_util {
     use super::Address;
-    use std::collections::BTreeMap;
 
     pub const TYPE_BITS_BUILTIN: u8 = 0x00;
     pub const TYPE_BITS_CONTRACT: u8 = 0x80;
