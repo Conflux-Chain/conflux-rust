@@ -22,7 +22,7 @@ use crate::rpc::{
 use blockgen::BlockGenerator;
 use cfx_types::{H160, H256, U256};
 use cfxcore::{
-    block_data_manager::BlockExecutionResultWithEpoch, machine::Machine,
+    block_data_manager::BlockExecutionResultWithEpoch,
     state_exposer::STATE_EXPOSER, test_context::*, vm, ConsensusGraph,
     ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
