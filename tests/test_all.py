@@ -39,7 +39,7 @@ test_subdirs = [
 for subdir in test_subdirs:
     subdir_path = os.path.join(test_dir, subdir)
     for file in os.listdir(subdir_path):
-        if file.endswith("_test.py") and not (file.endswith("p2p_era_test.py") and subdir != "full_node_tests"):
+        if file.endswith("_test.py"):
             rel_path = os.path.join(subdir, file)
             TEST_SCRIPTS.append(rel_path)
 
