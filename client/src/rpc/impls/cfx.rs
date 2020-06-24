@@ -50,7 +50,6 @@ pub struct RpcImpl {
     tx_pool: SharedTransactionPool,
     maybe_txgen: Option<Arc<TransactionGenerator>>,
     maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
-    machine: Arc<Machine>,
 }
 
 impl RpcImpl {
@@ -59,7 +58,7 @@ impl RpcImpl {
         block_gen: Arc<BlockGenerator>, tx_pool: SharedTransactionPool,
         maybe_txgen: Option<Arc<TransactionGenerator>>,
         maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
-        config: RpcImplConfiguration, machine: Arc<Machine>,
+        config: RpcImplConfiguration,
     ) -> Self
     {
         RpcImpl {
@@ -70,7 +69,6 @@ impl RpcImpl {
             maybe_txgen,
             maybe_direct_txgen,
             config,
-            machine,
         }
     }
 
