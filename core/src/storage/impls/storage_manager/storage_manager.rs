@@ -45,8 +45,10 @@ impl MallocSizeOf for StorageManager {
         // TODO: Sqlite for snapshot may also use a significant amount of
         // memory. We need to fork the crate `sqlite` ourselves to
         // expose `sqlite3_status` to get the memory usage statistics.
-        self.delta_mpts_node_memory_manager.size_of(ops)
-            + self.snapshot_associated_mpts_by_epoch.size_of(ops)
+        let mut size = 0;
+        size += self.delta_mpts_node_memory_manager.size_of(ops);
+        size += self.snapshot_associated_mpts_by_epoch.size_of(ops);
+        size
     }
 }
 
