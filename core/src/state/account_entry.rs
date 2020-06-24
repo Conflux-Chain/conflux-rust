@@ -790,7 +790,7 @@ impl OverlayAccount {
     /// Return the storage change of each related account.
     /// Each account is associated with a pair of `(usize, usize)`. The first
     /// value means the number of keys occupied by this account in current
-    /// execution. The second value means the nubmer of keys released by this
+    /// execution. The second value means the number of keys released by this
     /// account in current execution.
     pub fn commit_ownership_change(
         &mut self, db: &StateDb,
@@ -968,7 +968,7 @@ pub enum AccountState {
 /// Account entry can contain existing (`Some`) or non-existing
 /// account (`None`)
 pub struct AccountEntry {
-    /// Account proxy. `None` if account known to be non-existant.
+    /// Account proxy. `None` if account known to be non-existent.
     pub account: Option<OverlayAccount>,
     /// Unmodified account balance.
     pub old_balance: Option<U256>,

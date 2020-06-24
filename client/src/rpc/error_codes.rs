@@ -63,7 +63,7 @@ pub mod codes {
     pub const INCAPABLE: i64 = -32703;
 
     /* Rpc usage related error codes */
-    /// When there are too many rpc requests. We limt the number of allowed rpc
+    /// When there are too many rpc requests. We limit the number of allowed rpc
     /// requests for attack prevention.
     pub const REQUEST_REJECTED_TOO_MANY_REQUESTS: i64 = -32072;
     /// When the request is considered too much for the rpc function.

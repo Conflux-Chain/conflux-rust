@@ -136,7 +136,7 @@ pub struct ConsensusGraphNodeData {
     past_view_last_timer_block_arena_index: usize,
     /// The height of the closest timer block in the longest timer chain.
     /// Note that this only considers the current longest timer chain and
-    /// ingores the remaining timer blocks.
+    /// ignores the remaining timer blocks.
     ledger_view_timer_chain_height: u64,
     /// vote_valid_lca_height indicates the fork_at height that the vote_valid
     /// field corresponds to.
@@ -3715,7 +3715,7 @@ impl ConsensusGraphInner {
         bounded_hashes
     }
 
-    /// This function is used by the synchronization layer to garbege collect
+    /// This function is used by the synchronization layer to garbage collect
     /// `old_era_block_set`. The set contains all the blocks that should be
     /// eliminated by full nodes
     pub fn pop_old_era_block_set(&self) -> Option<H256> {

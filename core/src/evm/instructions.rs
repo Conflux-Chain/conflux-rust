@@ -55,7 +55,7 @@ enum_with_from_u8! {
         STOP = 0x00,
         #[doc = "addition operation"]
         ADD = 0x01,
-        #[doc = "mulitplication operation"]
+        #[doc = "multiplication operation"]
         MUL = 0x02,
         #[doc = "subtraction operation"]
         SUB = 0x03,
@@ -76,15 +76,15 @@ enum_with_from_u8! {
         #[doc = "extend length of signed integer"]
         SIGNEXTEND = 0x0b,
 
-        #[doc = "less-than comparision"]
+        #[doc = "less-than comparison"]
         LT = 0x10,
-        #[doc = "greater-than comparision"]
+        #[doc = "greater-than comparison"]
         GT = 0x11,
-        #[doc = "signed less-than comparision"]
+        #[doc = "signed less-than comparison"]
         SLT = 0x12,
-        #[doc = "signed greater-than comparision"]
+        #[doc = "signed greater-than comparison"]
         SGT = 0x13,
-        #[doc = "equality comparision"]
+        #[doc = "equality comparison"]
         EQ = 0x14,
         #[doc = "simple not operator"]
         ISZERO = 0x15,
@@ -94,7 +94,7 @@ enum_with_from_u8! {
         OR = 0x17,
         #[doc = "bitwise XOR operation"]
         XOR = 0x18,
-        #[doc = "bitwise NOT opertation"]
+        #[doc = "bitwise NOT operation"]
         NOT = 0x19,
         #[doc = "retrieve single byte from word"]
         BYTE = 0x1a,

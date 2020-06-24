@@ -120,12 +120,12 @@ use std::{
 };
 
 /// Pre-allocated storage for a uniform data type.
-/// The modified slab offers thread-safety without giant lock by mimicing the
+/// The modified slab offers thread-safety without giant lock by mimicking the
 /// behavior of independent pointer at best.
 ///
-/// Resizing the slab itself requires &mut, other operatios can be done with &.
+/// Resizing the slab itself requires &mut, other operations can be done with &.
 ///
-/// Gettting reference to allocated slot doesn't conflict with any other
+/// Getting reference to allocated slot doesn't conflict with any other
 /// operations. Slab doesn't check if user get &mut and & for the same slot.
 /// User should maintain a layer which controls the mutability of each specific
 /// slot. It can be done through the wrapper around the slot index, or in the
@@ -490,10 +490,10 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// more values.
     ///
     /// `reserve_exact` does nothing if the slab already has sufficient capacity
-    /// for `additional` more valus. If more capacity is required, a new segment
-    /// of memory will be allocated and all existing values will be copied into
-    /// it.  As such, if the slab is already very large, a call to `reserve` can
-    /// end up being expensive.
+    /// for `additional` more values. If more capacity is required, a new
+    /// segment of memory will be allocated and all existing values will be
+    /// copied into it.  As such, if the slab is already very large, a call
+    /// to `reserve` can end up being expensive.
     ///
     /// Note that the allocator may give the slab more space than it requests.
     /// Therefore capacity can not be relied upon to be precisely minimal.
