@@ -1289,7 +1289,25 @@ impl SynchronizationGraph {
         );
 
         // Get terminals stored in db.
-        let terminals_opt = self.data_man.terminals_from_db();
+        let terminals_opt = if header_only {
+            // Recover from both the header terminal and body terminal.
+            // If a full node crashes in the header sync phase, the header
+            // terminal should be further than the body terminal.
+            // If it crashes after entering NormalSyncPhase, the body terminal
+            // should be further than the header terminal.
+            self.data_man.header_terminals_from_db().and_then(
+                |header_only_terminals| {
+                    self.data_man.block_terminals_from_db().map(
+                        |mut block_terminals| {
+                            block_terminals.extend(header_only_terminals);
+                            block_terminals
+                        },
+                    )
+                },
+            )
+        } else {
+            self.data_man.block_terminals_from_db()
+        };
         if terminals_opt.is_none() {
             return;
         }
@@ -1306,8 +1324,11 @@ impl SynchronizationGraph {
         let mut queue = VecDeque::new();
         let mut visited_blocks: HashSet<H256> = HashSet::new();
         for terminal in terminals {
-            queue.push_back(terminal);
-            visited_blocks.insert(terminal);
+            // header terminals and block terminals may contain the same hash
+            if !visited_blocks.contains(&terminal) {
+                queue.push_back(terminal);
+                visited_blocks.insert(terminal);
+            }
         }
 
         // Remember the hashes of blocks that belong to the current genesis
