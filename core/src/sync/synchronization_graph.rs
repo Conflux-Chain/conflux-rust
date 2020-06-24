@@ -245,6 +245,13 @@ impl SynchronizationGraphInner {
         let max_num_of_cleared_blocks = 2;
         let mut num_cleared = 0;
         let era_genesis = self.get_genesis_in_current_era();
+        let genesis_seq_num = self
+            .data_man
+            .local_block_info_by_hash(
+                &self.data_man.get_cur_consensus_era_genesis_hash(),
+            )
+            .expect("local_block_info for genesis must exist")
+            .get_seq_num();
         let mut era_genesis_in_frontier = false;
 
         while let Some(index) = self.old_era_blocks_frontier.pop_front() {
@@ -261,7 +268,7 @@ impl SynchronizationGraphInner {
             let hash = self.arena[index].block_header.hash();
             assert!(self.arena[index].parent == NULL);
 
-            if self.data_man.local_block_info_by_hash(&hash).is_none() {
+            if !self.is_graph_ready_in_db(&hash, genesis_seq_num) {
                 // This block has not been processed in consensus. Clearing it
                 // now may make its referrers not block-graph-ready.
                 // See https://github.com/Conflux-Chain/conflux-rust/issues/1426.
