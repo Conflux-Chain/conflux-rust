@@ -737,6 +737,9 @@ impl BlockDataManager {
             self.transaction_indices
                 .write()
                 .insert(hash.clone(), tx_index.clone());
+            self.cache_man
+                .lock()
+                .note_used(CacheId::TransactionAddress(*hash));
         }
     }
 
