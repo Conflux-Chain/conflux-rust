@@ -128,7 +128,7 @@ The **AdminControl** contract is introduced for better maintenance of other smar
 
 The default administrator of a smart contract is the creator of the contract, i.e. the sender α of the transaction that causes the creation of the contract. The current administrator of a smart contract can transfer its authority to another normal account by sending a request to the AdminControl contract. Contract accounts are not allowed to be the administrator of other contracts, since this mechanism is mainly for tentative maintenance. Any long term administration with customized authorization rules should be implemented inside the contract, i.e. as a specific function that handles destruction requests.
 
-At any time, the administrator `addr` of an existing contract has the right to request destruction of the contract by calling AdminControl. However, the request would be rejected if the collateral for storage of contract is not zero, or `addr is not the current administrator of the contract. If `addr` is the current administrator of the contract and the collateral for storage of contract is zero, then the destruction request is accepted and
+At any time, the administrator `addr` of an existing contract has the right to request destruction of the contract by calling AdminControl. However, the request would be rejected if the collateral for storage of contract is not zero, or `addr` is not the current administrator of the contract. If `addr` is the current administrator of the contract and the collateral for storage of contract is zero, then the destruction request is accepted and
 processed as follows:
 1. the balance of the contract will be refunded to `addr`;
 2. the `sponsor_balance_for_gas` of the contract will be refunded to `sponsor_for_gas`;
