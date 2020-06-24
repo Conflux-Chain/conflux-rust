@@ -6,9 +6,10 @@ use super::{
     CacheAccessResult, CacheAlgoDataAdapter, CacheAlgoDataTrait,
     CacheAlgorithm, CacheIndexTrait, CacheStoreUtil, MyInto, PrimitiveNum,
 };
+use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
 use std::{mem::replace, vec::Vec};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, MallocSizeOfDerive)]
 pub struct LRUHandle<PosT: PrimitiveNum> {
     prev_pos: PosT,
 }
@@ -55,12 +56,14 @@ impl<PosT: PrimitiveNum> Default for LRUHandle<PosT> {
     }
 }
 
+#[derive(MallocSizeOfDerive)]
 struct DoubleLinkListNode<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> {
     next: PosT,
     /// prev link is stored in LRUHandle<PosT>
     cache_index: CacheIndexT,
 }
 
+#[derive(MallocSizeOfDerive)]
 pub struct LRU<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> {
     size: PosT,
     capacity: PosT,

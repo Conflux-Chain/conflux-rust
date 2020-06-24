@@ -11,6 +11,7 @@
 // TODO: element for batched hit update could be evicted by other threads. cache
 // TODO: miss locks mutably for slab alloc/delete, noderefmap update.
 // TODO: can also be batched however the lifetime of TrieNode should be managed.
+#[derive(MallocSizeOfDerive)]
 pub struct CacheManagerDeltaMpts<
     CacheAlgoDataT: CacheAlgoDataTrait,
     CacheAlgorithmT: CacheAlgorithm<CacheAlgoData = CacheAlgoDataT>,
@@ -100,3 +101,4 @@ use super::{
     node_memory_manager::{ActualSlabIndex, NodeMemoryManager},
     node_ref_map::{DeltaMptDbKey, DeltaMptId, NodeRefMapDeltaMpts},
 };
+use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;

@@ -34,7 +34,7 @@ use std::sync::Arc;
 #[derive(Debug)]
 /// Result of externalities create function.
 pub enum ContractCreateResult {
-    /// Returned when creation was successfull.
+    /// Returned when creation was successful.
     /// Contains an address of newly created contract and gas left.
     Created(Address, U256),
     /// Returned when contract creation failed.
@@ -47,7 +47,7 @@ pub enum ContractCreateResult {
 #[derive(Debug)]
 /// Result of externalities call function.
 pub enum MessageCallResult {
-    /// Returned when message call was successfull.
+    /// Returned when message call was successful.
     /// Contains gas left and output data.
     Success(U256, ReturnData),
     /// Returned when message call failed.
@@ -106,7 +106,7 @@ pub trait Context {
     ///
     /// Returns Err, if we run out of gas.
     /// Otherwise returns call_result which contains gas left
-    /// and true if subcall was successfull.
+    /// and true if subcall was successful.
     fn call(
         &mut self, gas: &U256, sender_address: &Address,
         receive_address: &Address, value: Option<U256>, data: &[u8],

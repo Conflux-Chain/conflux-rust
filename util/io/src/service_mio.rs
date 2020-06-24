@@ -47,7 +47,7 @@ use std::{
 pub type TimerToken = usize;
 /// Timer ID
 pub type StreamToken = usize;
-/// IO Hadndler ID
+/// IO Handler ID
 pub type HandlerId = usize;
 
 /// Maximum number of tokens a handler can use
@@ -770,7 +770,7 @@ where Message: Send + Sync + 'static
         Ok(())
     }
 
-    /// Send a message over the network. Normaly `HostIo::send` should be used.
+    /// Send a message over the network. Normally `HostIo::send` should be used.
     /// This can be used from non-io threads.
     pub fn send_message(&self, message: Message) -> Result<(), IoError> {
         self.host_channel

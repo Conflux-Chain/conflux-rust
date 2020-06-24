@@ -143,7 +143,7 @@ pub trait ElementSatisfy<ElementConstrain: ?Sized> {
 // Library user don't neet to look beyond this point. Check test mod for usage.
 
 /// Trait on Index, meaning that the element at Index for ConcernedTuple
-/// satifies ElementConstrain.
+/// satisfies ElementConstrain.
 pub trait OfElementSatisfiesOnTuple<ConcernedTuple, ElementConstrain: ?Sized>:
     TupleIndex + Sized
 {

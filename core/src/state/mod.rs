@@ -210,7 +210,7 @@ impl State {
         }
         if inc > 0 {
             let delta = U256::from(inc) * *COLLATERAL_PER_STORAGE_KEY;
-            if self.is_contract(addr) {
+            if addr.is_contract_address() {
                 let sponsor_balance =
                     self.sponsor_balance_for_collateral(addr)?;
                 // sponsor_balance is not enough to cover storage incremental.
@@ -408,10 +408,12 @@ impl State {
         })
     }
 
-    // TODO: first check the type bits of the address.
-    pub fn is_contract(&self, address: &Address) -> bool {
+    pub fn is_contract_with_code(&self, address: &Address) -> bool {
+        if !address.is_contract_address() {
+            return false;
+        }
         self.ensure_cached(address, RequireCache::None, |acc| {
-            acc.map_or(false, |acc| acc.is_contract())
+            acc.map_or(false, |acc| acc.code_hash() != KECCAK_EMPTY)
         })
         .unwrap_or(false)
     }

@@ -13,6 +13,7 @@ use crate::{
 use byteorder::{ByteOrder, LittleEndian};
 use cfx_types::H256;
 use db::SystemDB;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use primitives::{Block, BlockHeader, SignedTransaction, TransactionIndex};
 use rlp::{Decodable, Encodable, Rlp};
 use std::{collections::HashMap, fs, path::Path, sync::Arc};
@@ -472,4 +473,15 @@ fn epoch_execution_context_key(hash: &H256) -> Vec<u8> {
 
 fn epoch_consensus_epoch_execution_commitment_key(hash: &H256) -> Vec<u8> {
     append_suffix(hash, EPOCH_CONSENSUS_EXECUTION_INFO_SUFFIX_BYTE)
+}
+
+impl MallocSizeOf for DBManager {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        // Here we only handle the case that all columns are stored within the
+        // same rocksdb.
+        self.table_db
+            .get(&DBTable::Blocks)
+            .expect("DBManager initialized")
+            .size_of(ops)
+    }
 }

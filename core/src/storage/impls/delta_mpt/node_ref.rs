@@ -8,14 +8,14 @@
 ///
 /// It's necessary to use MaybeNodeRef in ChildrenTable because it consumes less
 /// space than NodeRef.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, MallocSizeOfDerive)]
 pub struct NodeRefDeltaMptCompact {
     value: u32,
 }
 
 impl NodeRefTrait for NodeRefDeltaMptCompact {}
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, MallocSizeOfDerive)]
 pub struct MaybeNodeRefDeltaMptCompact {
     value: u32,
 }
@@ -43,7 +43,7 @@ impl MaybeNodeRefDeltaMptCompact {
 
 // Manages access to a TrieNode. Converted from MaybeNodeRef. NodeRef is not
 // copy because it controls access to TrieNode.
-#[derive(Clone, Eq, PartialOrd, PartialEq, Ord, Debug)]
+#[derive(Clone, Eq, PartialOrd, PartialEq, Ord, Debug, MallocSizeOfDerive)]
 pub enum NodeRefDeltaMpt {
     Committed { db_key: DeltaMptDbKey },
     Dirty { index: ActualSlabIndex },
@@ -113,4 +113,5 @@ use super::{
     super::merkle_patricia_trie::NodeRefTrait,
     node_memory_manager::ActualSlabIndex, node_ref_map::DeltaMptDbKey,
 };
+use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
 use rlp::*;

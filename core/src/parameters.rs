@@ -310,7 +310,7 @@ pub mod light {
     /// During log filtering, we stream a set of items (blooms, receipts, txs)
     /// to match against. To make the process faster, we need to make sure that
     /// there's always plenty of items in flight. This way, we can reduce idle
-    /// time when we're waiting to recveive an item.
+    /// time when we're waiting to receive an item.
     pub const LOG_FILTERING_LOOKAHEAD: usize = 100;
 }
 

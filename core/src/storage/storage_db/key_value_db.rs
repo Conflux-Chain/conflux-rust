@@ -84,7 +84,9 @@ pub trait KeyValueDbTraitSingleWriterMultiReader:
 {
 }
 
-pub trait KeyValueDbTrait: KeyValueDbTraitMultiReader + Send + Sync {
+pub trait KeyValueDbTrait:
+    KeyValueDbTraitMultiReader + Send + Sync + MallocSizeOf
+{
     /// Return Some(maybe_old_value) or None if the db don't support reading the
     /// old value at deletion.
     fn delete(&self, key: &[u8]) -> Result<Option<Option<Self::ValueType>>>;
@@ -307,7 +309,8 @@ impl<
             + DbImplByFamily<<T as DbImplFamily>::FamilyRepresentative>
             + KeyValueDbTraitMultiReader
             + Send
-            + Sync,
+            + Sync
+            + MallocSizeOf,
     > KeyValueDbTrait for T
 {
     fn delete(&self, key: &[u8]) -> Result<Option<Option<Self::ValueType>>> {
@@ -418,4 +421,5 @@ impl DbValueType for i64 {
 
 use super::super::impls::errors::*;
 use fallible_iterator::FallibleIterator;
+use malloc_size_of::MallocSizeOf;
 use std::any::Any;

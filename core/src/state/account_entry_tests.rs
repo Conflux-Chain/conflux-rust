@@ -9,7 +9,7 @@ use crate::{
     statedb::StateDb,
     storage::{tests::new_state_manager_for_unit_test, StorageManagerTrait},
 };
-use cfx_types::{Address, H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use primitives::{Account, SponsorInfo, VoteStakeList};
 
 #[test]
@@ -41,7 +41,10 @@ fn test_overlay_account_create() {
     assert_eq!(*overlay_account.admin(), Address::zero());
     assert_eq!(*overlay_account.sponsor_info(), Default::default());
 
-    let address = Address::random();
+    let mut address = Address::random();
+    address.set_user_account_type_bits();
+    let mut contract_address = Address::random();
+    contract_address.set_contract_type_bits();
     let admin = Address::random();
     let sponsor_info = SponsorInfo {
         sponsor_for_gas: Address::random(),
@@ -96,11 +99,14 @@ fn test_overlay_account_create() {
     assert_eq!(*overlay_account.sponsor_info(), Default::default());
 
     // test new contract
-    let mut overlay_account =
-        OverlayAccount::new_contract(&address, 5678.into(), 1234.into());
+    let mut overlay_account = OverlayAccount::new_contract(
+        &contract_address,
+        5678.into(),
+        1234.into(),
+    );
     assert!(overlay_account.deposit_list().is_none());
     assert!(overlay_account.vote_stake_list().is_none());
-    assert_eq!(*overlay_account.address(), address);
+    assert_eq!(*overlay_account.address(), contract_address);
     assert_eq!(*overlay_account.balance(), 5678.into());
     assert_eq!(*overlay_account.nonce(), 1234.into());
     assert_eq!(*overlay_account.staking_balance(), 0.into());
@@ -116,14 +122,14 @@ fn test_overlay_account_create() {
 
     // test new contract with admin
     let overlay_account = OverlayAccount::new_contract_with_admin(
-        &address,
+        &contract_address,
         5678.into(),
         1234.into(),
         &admin,
     );
     assert!(overlay_account.deposit_list().is_none());
     assert!(overlay_account.vote_stake_list().is_none());
-    assert_eq!(*overlay_account.address(), address);
+    assert_eq!(*overlay_account.address(), contract_address);
     assert_eq!(*overlay_account.balance(), 5678.into());
     assert_eq!(*overlay_account.nonce(), 1234.into());
     assert_eq!(*overlay_account.staking_balance(), 0.into());

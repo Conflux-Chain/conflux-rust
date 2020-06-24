@@ -89,7 +89,7 @@ pub trait Writable {
         T: rlp::Encodable,
         R: Deref<Target = [u8]>;
 
-    /// Deletes key from the databse.
+    /// Deletes key from the database.
     fn delete<T, R>(&mut self, col: u32, key: &dyn Key<T, Target = R>)
     where
         T: rlp::Encodable,
