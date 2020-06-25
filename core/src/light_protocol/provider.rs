@@ -21,15 +21,13 @@ use crate::{
             BlockTxs as GetBlockTxsResponse, BlockTxsWithHash, BloomWithEpoch,
             Blooms as GetBloomsResponse, GetBlockHashesByEpoch,
             GetBlockHeaders, GetBlockTxs, GetBlooms, GetReceipts,
-            GetStateEntries, GetStateRoots, GetTxInfos, GetTxs, GetWitnessInfo,
-            NewBlockHashes, NodeType, Receipts as GetReceiptsResponse,
-            ReceiptsWithEpoch, SendRawTx,
-            StateEntries as GetStateEntriesResponse, StateEntryWithKey,
-            StateRootWithEpoch, StateRoots as GetStateRootsResponse,
-            StatusPingDeprecatedV1, StatusPingV2, StatusPongDeprecatedV1,
-            StatusPongV2, TxInfo, TxInfos as GetTxInfosResponse,
-            Txs as GetTxsResponse, WitnessInfo as GetWitnessInfoResponse,
-            WitnessInfoWithHeight,
+            GetStateEntries, GetStateRoots, GetTxInfos, GetTxs, NewBlockHashes,
+            NodeType, Receipts as GetReceiptsResponse, ReceiptsWithEpoch,
+            SendRawTx, StateEntries as GetStateEntriesResponse,
+            StateEntryWithKey, StateRootWithEpoch,
+            StateRoots as GetStateRootsResponse, StatusPingDeprecatedV1,
+            StatusPingV2, StatusPongDeprecatedV1, StatusPongV2, TxInfo,
+            TxInfos as GetTxInfosResponse, Txs as GetTxsResponse,
         },
         Error, ErrorKind, LIGHT_PROTOCOL_ID,
         LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT, LIGHT_PROTOCOL_VERSION,
@@ -167,7 +165,6 @@ impl Provider {
             msgid::SEND_RAW_TX => self.on_send_raw_tx(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::GET_RECEIPTS => self.on_get_receipts(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::GET_TXS => self.on_get_txs(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
-            msgid::GET_WITNESS_INFO => self.on_get_witness_info(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::GET_BLOOMS => self.on_get_blooms(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::GET_BLOCK_TXS => self.on_get_block_txs(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::GET_TX_INFOS => self.on_get_tx_infos(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
@@ -215,13 +212,26 @@ impl Provider {
             }
         };
 
-        let epoch_receipts = match self.ledger.receipts_of(epoch) {
-            Ok(rs) => rs,
-            Err(e) => {
-                warn!("Unable to retrieve receipts for {}: {}", epoch, e);
-                return None;
-            }
-        };
+        let (epoch_receipts, receipts_witness) =
+            match self.ledger.receipts_and_witness_of(epoch) {
+                Ok(rs) => rs,
+                Err(e) => {
+                    warn!("Unable to retrieve receipts for {}: {}", epoch, e);
+                    return None;
+                }
+            };
+
+        let (state_root_with_aux, state_root_witness) =
+            match self.ledger.state_root_and_witness_of(epoch) {
+                Ok(rs) => rs,
+                Err(e) => {
+                    warn!("Unable to retrieve state root for {}: {}", epoch, e);
+                    return None;
+                }
+            };
+
+        let state_root_hash =
+            state_root_with_aux.state_root.compute_state_root_hash();
 
         let block = match self.ledger.block(block_hash) {
             Ok(b) => b,
@@ -244,6 +254,9 @@ impl Provider {
             block_hash,
             index,
             epoch_receipts,
+            receipts_witness,
+            state_root_hash,
+            state_root_witness,
             block_txs,
         })
     }
@@ -351,13 +364,16 @@ impl Provider {
         let state_roots = req
             .epochs
             .into_iter()
-            .map(|e| {
-                self.ledger
-                    .state_root_of(e)
-                    .map(|root| (e, root.state_root))
+            .map(|epoch| {
+                self.ledger.state_root_and_witness_of(epoch).map(
+                    |(root, witness)| StateRootWithEpoch {
+                        epoch,
+                        state_root: root.state_root,
+                        witness,
+                    },
+                )
             })
             .filter_map(Result::ok)
-            .map(|(epoch, state_root)| StateRootWithEpoch { epoch, state_root })
             .collect();
 
         let msg: Box<dyn Message> = Box::new(GetStateRootsResponse {
@@ -496,12 +512,16 @@ impl Provider {
         let receipts = req
             .epochs
             .into_iter()
-            .map(|e| self.ledger.receipts_of(e).map(|receipts| (e, receipts)))
-            .filter_map(Result::ok)
-            .map(|(epoch, epoch_receipts)| ReceiptsWithEpoch {
-                epoch,
-                epoch_receipts,
+            .map(|epoch| {
+                self.ledger.receipts_and_witness_of(epoch).map(
+                    |(epoch_receipts, witness)| ReceiptsWithEpoch {
+                        epoch,
+                        epoch_receipts,
+                        witness,
+                    },
+                )
             })
+            .filter_map(Result::ok)
             .collect();
 
         let msg: Box<dyn Message> = Box::new(GetReceiptsResponse {
@@ -534,26 +554,6 @@ impl Provider {
         Ok(())
     }
 
-    fn on_get_witness_info(
-        &self, io: &dyn NetworkContext, peer: &NodeId, req: GetWitnessInfo,
-    ) -> Result<(), Error> {
-        debug!("on_get_witness_info req={:?}", req);
-        self.throttle(peer, &req)?;
-        let request_id = req.request_id;
-
-        let infos = req
-            .witnesses
-            .into_iter()
-            .map(|w| self.ledger.witness_info(w))
-            .collect::<Result<Vec<WitnessInfoWithHeight>, Error>>()?;
-
-        let msg: Box<dyn Message> =
-            Box::new(GetWitnessInfoResponse { request_id, infos });
-
-        msg.send(io, peer)?;
-        Ok(())
-    }
-
     fn on_get_blooms(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetBlooms,
     ) -> Result<(), Error> {
@@ -564,9 +564,16 @@ impl Provider {
         let blooms = req
             .epochs
             .into_iter()
-            .map(|e| self.ledger.bloom_of(e).map(|bloom| (e, bloom)))
+            .map(|epoch| {
+                self.ledger.bloom_and_witness_of(epoch).map(
+                    |(bloom, witness)| BloomWithEpoch {
+                        epoch,
+                        bloom,
+                        witness,
+                    },
+                )
+            })
             .filter_map(Result::ok)
-            .map(|(epoch, bloom)| BloomWithEpoch { epoch, bloom })
             .collect();
 
         let msg: Box<dyn Message> =

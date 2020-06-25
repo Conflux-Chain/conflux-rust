@@ -13,7 +13,7 @@ use crate::{
     network::{NetworkContext, NetworkService},
     parameters::{
         consensus::DEFERRED_STATE_EPOCH_COUNT,
-        light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME},
+        light::{BLAME_CHECK_OFFSET, LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME},
     },
     sync::SynchronizationGraph,
 };
@@ -319,17 +319,20 @@ impl QueryService {
         // Note: if a transaction does not exist, we fail with timeout, as
         //       peers cannot provide non-existence proofs for transactions.
         // FIXME: is there a better way?
-        let (tx, receipt, address, prior_gas_used) =
+        let (tx, receipt, address, prior_gas_used, state_root) =
             self.retrieve_tx_info(hash).await?;
 
         let hash = address.block_hash;
         let epoch = self.consensus.get_block_epoch_number(&hash);
 
-        let root = epoch
-            .and_then(|e| self.handler.witnesses.root_hashes_of(e))
-            .map(|(state_root, _, _)| state_root);
-
-        Ok((tx, receipt, address, epoch, root, prior_gas_used))
+        Ok((
+            tx,
+            receipt,
+            address,
+            epoch,
+            Some(state_root),
+            prior_gas_used,
+        ))
     }
 
     /// Relay raw transaction to all peers.
@@ -486,7 +489,8 @@ impl QueryService {
         &self,
     ) -> Result<u64, FilterError> {
         // find highest epoch that we are able to verify based on witness info
-        let latest_verified = self.handler.witnesses.latest_verified();
+        let latest_verified =
+            self.consensus.best_epoch_number() - BLAME_CHECK_OFFSET;
 
         let latest_verifiable = match latest_verified {
             n if n >= DEFERRED_STATE_EPOCH_COUNT => {

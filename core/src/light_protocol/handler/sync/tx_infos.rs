@@ -12,7 +12,7 @@ use std::{future::Future, sync::Arc};
 
 use super::{
     common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
-    BlockTxs, Receipts,
+    BlockTxs, Receipts, StateRoots,
 };
 use crate::{
     consensus::SharedConsensusGraph,
@@ -42,7 +42,8 @@ struct Statistics {
 type MissingTxInfo = TimeOrdered<H256>;
 
 // FIXME: struct
-pub type TxInfoValidated = (SignedTransaction, Receipt, TransactionIndex, U256);
+pub type TxInfoValidated =
+    (SignedTransaction, Receipt, TransactionIndex, U256, H256);
 
 pub struct TxInfos {
     // block tx sync manager
@@ -57,6 +58,9 @@ pub struct TxInfos {
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
 
+    // state root sync manager
+    state_roots: Arc<StateRoots>,
+
     // sync and request manager
     sync_manager: SyncManager<H256, MissingTxInfo>,
 
@@ -68,7 +72,7 @@ impl TxInfos {
     pub fn new(
         block_txs: Arc<BlockTxs>, consensus: SharedConsensusGraph,
         peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
-        receipts: Arc<Receipts>,
+        receipts: Arc<Receipts>, state_roots: Arc<StateRoots>,
     ) -> Self
     {
         let ledger = LedgerInfo::new(consensus.clone());
@@ -82,6 +86,7 @@ impl TxInfos {
             ledger,
             receipts,
             request_id_allocator,
+            state_roots,
             sync_manager,
             verified,
         }
@@ -140,6 +145,9 @@ impl TxInfos {
             block_hash,
             index: _,
             mut epoch_receipts,
+            receipts_witness,
+            state_root_hash,
+            state_root_witness,
             block_txs,
             tx_hash: _,
         } = info;
@@ -160,12 +168,21 @@ impl TxInfos {
         };
 
         // validate receipts
-        let receipts = epoch_receipts.clone();
-        self.receipts.validate_and_store(epoch, receipts)?;
+        self.receipts.validate_receipts(
+            epoch,
+            &epoch_receipts,
+            receipts_witness,
+        )?;
+
+        // validate state root hash
+        self.state_roots.validate_state_root_hash(
+            epoch,
+            state_root_hash,
+            state_root_witness,
+        )?;
 
         // validate block txs
-        let txs = block_txs.clone();
-        self.block_txs.validate_and_store(block_hash, txs)?;
+        self.block_txs.validate_block_txs(block_hash, &block_txs)?;
 
         // `epoch_receipts` is valid and `block_hash` exists in epoch
         assert!(block_index < epoch_receipts.len());
@@ -177,6 +194,7 @@ impl TxInfos {
             .into_iter()
             .zip(block_receipts.receipts.into_iter());
 
+        // TODO(thegaram): it's probably best to only store the requested one
         let mut prior_gas_used = U256::zero();
         for (index, (tx, receipt)) in items.enumerate() {
             let hash = tx.hash();
@@ -186,7 +204,7 @@ impl TxInfos {
                 .write()
                 .entry(hash)
                 .or_insert(PendingItem::pending())
-                .set((tx, receipt, address, prior_gas_used));
+                .set((tx, receipt, address, prior_gas_used, state_root_hash));
             prior_gas_used = prior_accumulated_gas_used;
 
             self.sync_manager.remove_in_flight(&hash);

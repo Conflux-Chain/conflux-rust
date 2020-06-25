@@ -120,7 +120,7 @@ impl BlockTxs {
     }
 
     #[inline]
-    pub fn validate_and_store(
+    fn validate_and_store(
         &self, hash: H256, block_txs: Vec<SignedTransaction>,
     ) -> Result<(), Error> {
         // validate and store each transaction

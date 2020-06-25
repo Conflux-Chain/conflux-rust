@@ -12,8 +12,8 @@ pub use protocol::{
     BlockHashes, BlockHeaders, BlockTxs, BlockTxsWithHash, BloomWithEpoch,
     Blooms, GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxs, GetBlooms,
     GetReceipts, GetStateEntries, GetStateRoots, GetTxInfos, GetTxs,
-    GetWitnessInfo, NewBlockHashes, Receipts, ReceiptsWithEpoch, SendRawTx,
-    StateEntries, StateEntryWithKey, StateKey, StateRootWithEpoch, StateRoots,
+    NewBlockHashes, Receipts, ReceiptsWithEpoch, SendRawTx, StateEntries,
+    StateEntryWithKey, StateKey, StateRootWithEpoch, StateRoots,
     StatusPingDeprecatedV1, StatusPingV2, StatusPongDeprecatedV1, StatusPongV2,
-    TxInfo, TxInfos, Txs, WitnessInfo, WitnessInfoWithHeight,
+    TxInfo, TxInfos, Txs,
 };

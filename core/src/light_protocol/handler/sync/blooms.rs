@@ -4,30 +4,33 @@
 
 extern crate lru_time_cache;
 
-use cfx_types::Bloom;
+use cfx_types::{Bloom, H256};
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use std::{future::Future, sync::Arc};
 
 use crate::{
+    consensus::SharedConsensusGraph,
     hash::keccak,
     light_protocol::{
-        common::{FullPeerState, Peers},
+        common::{FullPeerState, LedgerInfo, Peers},
         message::{msgid, BloomWithEpoch, GetBlooms},
         Error, ErrorKind,
     },
     message::{Message, RequestId},
     network::NetworkContext,
-    parameters::light::{
-        BLOOM_REQUEST_BATCH_SIZE, BLOOM_REQUEST_TIMEOUT, CACHE_TIMEOUT,
-        MAX_BLOOMS_IN_FLIGHT,
+    parameters::{
+        consensus::DEFERRED_STATE_EPOCH_COUNT,
+        light::{
+            BLOOM_REQUEST_BATCH_SIZE, BLOOM_REQUEST_TIMEOUT, CACHE_TIMEOUT,
+            MAX_BLOOMS_IN_FLIGHT,
+        },
     },
     UniqueId,
 };
 
-use super::{
-    common::{FutureItem, KeyOrdered, PendingItem, SyncManager},
-    witnesses::Witnesses,
+use super::common::{
+    FutureItem, KeyOrdered, LedgerProof, PendingItem, SyncManager,
 };
 use network::node_table::NodeId;
 
@@ -42,6 +45,9 @@ struct Statistics {
 type MissingBloom = KeyOrdered<u64>;
 
 pub struct Blooms {
+    // helper API for retrieving ledger information
+    ledger: LedgerInfo,
+
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
 
@@ -50,27 +56,25 @@ pub struct Blooms {
 
     // bloom filters received from full node
     verified: Arc<RwLock<LruCache<u64, PendingItem<Bloom>>>>,
-
-    // witness sync manager
-    witnesses: Arc<Witnesses>,
 }
 
 impl Blooms {
     pub fn new(
-        peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
-        witnesses: Arc<Witnesses>,
+        consensus: SharedConsensusGraph, peers: Arc<Peers<FullPeerState>>,
+        request_id_allocator: Arc<UniqueId>,
     ) -> Self
     {
+        let ledger = LedgerInfo::new(consensus.clone());
         let sync_manager = SyncManager::new(peers.clone(), msgid::GET_BLOOMS);
 
         let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
         let verified = Arc::new(RwLock::new(cache));
 
         Blooms {
+            ledger,
             request_id_allocator,
             sync_manager,
             verified,
-            witnesses,
         }
     }
 
@@ -105,12 +109,17 @@ impl Blooms {
         blooms: impl Iterator<Item = BloomWithEpoch>,
     ) -> Result<(), Error>
     {
-        for BloomWithEpoch { epoch, bloom } in blooms {
+        for BloomWithEpoch {
+            epoch,
+            bloom,
+            witness,
+        } in blooms
+        {
             debug!("Validating bloom {:?} with epoch {}", bloom, epoch);
 
             match self.sync_manager.check_if_requested(peer, id, &epoch)? {
                 None => continue,
-                Some(_) => self.validate_and_store(epoch, bloom)?,
+                Some(_) => self.validate_and_store(epoch, bloom, witness)?,
             };
         }
 
@@ -119,10 +128,10 @@ impl Blooms {
 
     #[inline]
     pub fn validate_and_store(
-        &self, epoch: u64, bloom: Bloom,
+        &self, epoch: u64, bloom: Bloom, witness: Vec<H256>,
     ) -> Result<(), Error> {
         // validate bloom
-        self.validate_bloom(epoch, bloom)?;
+        self.validate_bloom(epoch, bloom, witness)?;
 
         // store bloom by epoch
         self.verified
@@ -175,27 +184,43 @@ impl Blooms {
     }
 
     #[inline]
-    fn validate_bloom(&self, epoch: u64, bloom: Bloom) -> Result<(), Error> {
-        // calculate received bloom hash
-        let received = keccak(bloom);
+    fn validate_bloom(
+        &self, epoch: u64, bloom: Bloom, mut witness: Vec<H256>,
+    ) -> Result<(), Error> {
+        // height of header that can be used to validate `epoch`
+        let height = epoch + DEFERRED_STATE_EPOCH_COUNT;
 
-        // retrieve local bloom hash
-        let local = match self.witnesses.root_hashes_of(epoch) {
-            Some((_, _, bloom_hash)) => bloom_hash,
+        // get witness info from local ledger
+        let w = match self.ledger.witness_of_header_at(height) {
+            Some(w) => w,
             None => {
-                warn!(
-                    "Bloom hash not found, epoch={}, bloom={:?}",
-                    epoch, bloom
-                );
-                return Err(ErrorKind::InternalError.into());
+                warn!("Unable to verify header using local ledger");
+                return Err(ErrorKind::NoWitnessForHeight(height).into());
             }
         };
 
-        // check
-        if received != local {
+        // validate witness info
+        let header = self.ledger.pivot_header_of(w)?;
+
+        if w == height && witness.len() == 0 {
+            witness = vec![*header.deferred_logs_bloom_hash()];
+        }
+
+        LedgerProof::LogsBloomHash(&witness).validate(&header)?;
+
+        // take correct receipts_root_hash from validated response hashes
+        assert!(w >= height);
+        let index = (w - height) as usize;
+        assert!(index < witness.len());
+        let correct = witness[index];
+
+        // validate `state_root`
+        let received = keccak(bloom);
+
+        if received != correct {
             warn!(
-                "Bloom validation failed, received={:?}, local={:?}",
-                received, local
+                "Bloom validation failed, received={:?}, correct={:?}",
+                received, correct
             );
             return Err(ErrorKind::InvalidBloom.into());
         }

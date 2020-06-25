@@ -18,7 +18,6 @@ use crate::{
             StateRoots as GetStateRootsResponse, StatusPingDeprecatedV1,
             StatusPingV2, StatusPongDeprecatedV1, StatusPongV2,
             TxInfos as GetTxInfosResponse, Txs as GetTxsResponse,
-            WitnessInfo as GetWitnessInfoResponse,
         },
         Error, ErrorKind, LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT,
         LIGHT_PROTOCOL_VERSION, LIGHT_PROTO_V1,
@@ -42,7 +41,7 @@ use std::{
 };
 use sync::{
     BlockTxs, Blooms, Epochs, HashSource, Headers, Receipts, StateEntries,
-    StateRoots, TxInfos, Txs, Witnesses,
+    StateRoots, TxInfos, Txs,
 };
 use throttling::token_bucket::TokenBucketManager;
 
@@ -53,7 +52,6 @@ const REQUEST_CLEANUP_TIMER: TimerToken = 1;
 struct Statistics {
     catch_up_mode: bool,
     latest_epoch: u64,
-    latest_verified: u64,
 }
 
 /// Handler is responsible for maintaining peer meta-information and
@@ -96,9 +94,6 @@ pub struct Handler {
 
     // path to unexpected messages config file
     throttling_config_file: Option<String>,
-
-    // witness sync manager
-    pub witnesses: Arc<Witnesses>,
 }
 
 impl Handler {
@@ -128,28 +123,22 @@ impl Handler {
             request_id_allocator.clone(),
         );
 
-        let witnesses = Arc::new(Witnesses::new(
+        let blooms = Blooms::new(
+            consensus.clone(),
+            peers.clone(),
+            request_id_allocator.clone(),
+        );
+
+        let receipts = Arc::new(Receipts::new(
             consensus.clone(),
             peers.clone(),
             request_id_allocator.clone(),
         ));
 
-        let blooms = Blooms::new(
-            peers.clone(),
-            request_id_allocator.clone(),
-            witnesses.clone(),
-        );
-
-        let receipts = Arc::new(Receipts::new(
-            peers.clone(),
-            request_id_allocator.clone(),
-            witnesses.clone(),
-        ));
-
         let state_roots = Arc::new(StateRoots::new(
+            consensus.clone(),
             peers.clone(),
             request_id_allocator.clone(),
-            witnesses.clone(),
         ));
 
         let state_entries = StateEntries::new(
@@ -174,6 +163,7 @@ impl Handler {
             peers.clone(),
             request_id_allocator.clone(),
             receipts.clone(),
+            state_roots.clone(),
         );
 
         Handler {
@@ -190,7 +180,6 @@ impl Handler {
             txs,
             tx_infos,
             throttling_config_file,
-            witnesses,
         }
     }
 
@@ -279,7 +268,6 @@ impl Handler {
             msgid::STATE_ROOTS => self.on_state_roots(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::TXS => self.on_txs(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::TX_INFOS => self.on_tx_infos(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
-            msgid::WITNESS_INFO => self.on_witness_info(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
 
             // request was throttled by service provider
             msgid::THROTTLED => self.on_throttled(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
@@ -319,7 +307,6 @@ impl Handler {
         Statistics {
             catch_up_mode: self.catch_up_mode(),
             latest_epoch: self.consensus.best_epoch_number(),
-            latest_verified: self.witnesses.latest_verified(),
         }
     }
 
@@ -586,23 +573,6 @@ impl Handler {
         Ok(())
     }
 
-    fn on_witness_info(
-        &self, io: &dyn NetworkContext, peer: &NodeId,
-        resp: GetWitnessInfoResponse,
-    ) -> Result<(), Error>
-    {
-        debug!("on_witness_info resp={:?}", resp);
-
-        self.witnesses.receive(
-            peer,
-            resp.request_id,
-            resp.infos.into_iter(),
-        )?;
-
-        self.witnesses.sync(io);
-        Ok(())
-    }
-
     fn start_sync(&self, io: &dyn NetworkContext) {
         info!("general sync statistics: {:?}", self.get_statistics());
 
@@ -617,7 +587,6 @@ impl Handler {
             }
         };
 
-        self.witnesses.sync(io);
         self.blooms.sync(io);
         self.receipts.sync(io);
         self.block_txs.sync(io);
@@ -638,7 +607,6 @@ impl Handler {
         self.state_roots.clean_up();
         self.tx_infos.clean_up();
         self.txs.clean_up();
-        self.witnesses.clean_up();
     }
 
     fn on_throttled(

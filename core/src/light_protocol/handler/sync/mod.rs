@@ -12,7 +12,6 @@ mod state_entries;
 mod state_roots;
 pub mod tx_infos;
 mod txs;
-mod witnesses;
 
 pub use block_txs::BlockTxs;
 pub use blooms::Blooms;
@@ -23,4 +22,3 @@ pub use state_entries::StateEntries;
 pub use state_roots::StateRoots;
 pub use tx_infos::TxInfos;
 pub use txs::Txs;
-pub use witnesses::Witnesses;

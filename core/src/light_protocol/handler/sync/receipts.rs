@@ -4,29 +4,33 @@
 
 extern crate lru_time_cache;
 
+use cfx_types::H256;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use std::{future::Future, sync::Arc};
 
 use crate::{
+    consensus::SharedConsensusGraph,
     light_protocol::{
-        common::{FullPeerState, Peers},
+        common::{FullPeerState, LedgerInfo, Peers},
         message::{msgid, GetReceipts, ReceiptsWithEpoch},
         Error, ErrorKind,
     },
     message::{Message, RequestId},
     network::NetworkContext,
-    parameters::light::{
-        CACHE_TIMEOUT, MAX_RECEIPTS_IN_FLIGHT, RECEIPT_REQUEST_BATCH_SIZE,
-        RECEIPT_REQUEST_TIMEOUT,
+    parameters::{
+        consensus::DEFERRED_STATE_EPOCH_COUNT,
+        light::{
+            CACHE_TIMEOUT, MAX_RECEIPTS_IN_FLIGHT, RECEIPT_REQUEST_BATCH_SIZE,
+            RECEIPT_REQUEST_TIMEOUT,
+        },
     },
     primitives::BlockReceipts,
     UniqueId,
 };
 
-use super::{
-    common::{FutureItem, KeyOrdered, PendingItem, SyncManager},
-    witnesses::Witnesses,
+use super::common::{
+    FutureItem, KeyOrdered, LedgerProof, PendingItem, SyncManager,
 };
 use crate::verification::compute_receipts_root;
 use network::node_table::NodeId;
@@ -42,6 +46,9 @@ struct Statistics {
 type MissingReceipts = KeyOrdered<u64>;
 
 pub struct Receipts {
+    // helper API for retrieving ledger information
+    ledger: LedgerInfo,
+
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
 
@@ -50,27 +57,25 @@ pub struct Receipts {
 
     // epoch receipts received from full node
     verified: Arc<RwLock<LruCache<u64, PendingItem<Vec<BlockReceipts>>>>>,
-
-    // witness sync manager
-    witnesses: Arc<Witnesses>,
 }
 
 impl Receipts {
     pub fn new(
-        peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
-        witnesses: Arc<Witnesses>,
+        consensus: SharedConsensusGraph, peers: Arc<Peers<FullPeerState>>,
+        request_id_allocator: Arc<UniqueId>,
     ) -> Self
     {
+        let ledger = LedgerInfo::new(consensus.clone());
         let sync_manager = SyncManager::new(peers.clone(), msgid::GET_RECEIPTS);
 
         let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
         let verified = Arc::new(RwLock::new(cache));
 
         Receipts {
+            ledger,
             request_id_allocator,
             sync_manager,
             verified,
-            witnesses,
         }
     }
 
@@ -108,6 +113,7 @@ impl Receipts {
         for ReceiptsWithEpoch {
             epoch,
             epoch_receipts,
+            witness,
         } in receipts
         {
             debug!(
@@ -117,7 +123,9 @@ impl Receipts {
 
             match self.sync_manager.check_if_requested(peer, id, &epoch)? {
                 None => continue,
-                Some(_) => self.validate_and_store(epoch, epoch_receipts)?,
+                Some(_) => {
+                    self.validate_and_store(epoch, epoch_receipts, witness)?
+                }
             };
         }
 
@@ -125,11 +133,11 @@ impl Receipts {
     }
 
     #[inline]
-    pub fn validate_and_store(
-        &self, epoch: u64, receipts: Vec<BlockReceipts>,
+    fn validate_and_store(
+        &self, epoch: u64, receipts: Vec<BlockReceipts>, witness: Vec<H256>,
     ) -> Result<(), Error> {
         // validate receipts
-        self.validate_receipts(epoch, &receipts)?;
+        self.validate_receipts(epoch, &receipts, witness)?;
 
         // store receipts by epoch
         self.verified
@@ -183,9 +191,39 @@ impl Receipts {
     }
 
     #[inline]
-    fn validate_receipts(
+    pub fn validate_receipts(
         &self, epoch: u64, receipts: &Vec<BlockReceipts>,
-    ) -> Result<(), Error> {
+        mut witness: Vec<H256>,
+    ) -> Result<(), Error>
+    {
+        // height of header that can be used to validate `epoch`
+        let height = epoch + DEFERRED_STATE_EPOCH_COUNT;
+
+        // get witness info from local ledger
+        let w = match self.ledger.witness_of_header_at(height) {
+            Some(w) => w,
+            None => {
+                warn!("Unable to verify header using local ledger");
+                return Err(ErrorKind::NoWitnessForHeight(height).into());
+            }
+        };
+
+        // validate witness info
+        let header = self.ledger.pivot_header_of(w)?;
+
+        if w == height && witness.len() == 0 {
+            witness = vec![*header.deferred_receipts_root()];
+        }
+
+        LedgerProof::ReceiptsRoot(&witness).validate(&header)?;
+
+        // take correct receipts_root_hash from validated response hashes
+        assert!(w >= height);
+        let index = (w - height) as usize;
+        assert!(index < witness.len());
+        let correct = witness[index];
+
+        // validate `state_root`
         // calculate received receipts root
         // convert Vec<Vec<Receipt>> -> Vec<Arc<Vec<Receipt>>>
         // for API compatibility
@@ -197,25 +235,12 @@ impl Receipts {
 
         let received = compute_receipts_root(&rs);
 
-        // retrieve local receipts root
-        let local = match self.witnesses.root_hashes_of(epoch) {
-            Some((_, receipts_root, _)) => receipts_root,
-            None => {
-                warn!(
-                    "Receipt root not found, epoch={}, receipts={:?}",
-                    epoch, receipts
-                );
-                return Err(ErrorKind::InternalError.into());
-            }
-        };
-
-        // check
-        if received != local {
+        if received != correct {
             warn!(
-                "Receipt validation failed, received={:?}, local={:?}",
-                received, local
+                "Receipts validation failed, received={:?}, correct={:?}",
+                received, correct
             );
-            return Err(ErrorKind::InvalidBloom.into());
+            return Err(ErrorKind::InvalidReceipts.into());
         }
 
         Ok(())

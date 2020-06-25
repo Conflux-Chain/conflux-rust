@@ -10,7 +10,7 @@ use primitives::{
 
 use crate::{
     consensus::SharedConsensusGraph,
-    light_protocol::{message::WitnessInfoWithHeight, Error, ErrorKind},
+    light_protocol::{Error, ErrorKind},
     parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
     statedb::StateDb,
     storage::{
@@ -151,8 +151,28 @@ impl LedgerInfo {
     ) -> Result<StateRootWithAuxInfo, Error> {
         match self.state_of(epoch)?.get_state_root() {
             Ok(root) => Ok(root),
-            _ => Err(ErrorKind::InternalError.into()),
+            Err(e) => {
+                error!("Unexpected error from `get_state_root`: {:?}", e);
+                Err(ErrorKind::InternalError.into())
+            }
         }
+    }
+
+    /// Get the state trie roots corresponding to the execution of `epoch`,
+    /// along with the state root hash witness hashes.
+    #[inline]
+    pub fn state_root_and_witness_of(
+        &self, epoch: u64,
+    ) -> Result<(StateRootWithAuxInfo, Vec<H256>), Error> {
+        let root = self.state_root_of(epoch)?;
+        let height = epoch + DEFERRED_STATE_EPOCH_COUNT;
+
+        let witness = match self.witness_of_header_at(height) {
+            Some(w) => self.state_root_witness(w)?,
+            None => return Err(ErrorKind::NoWitnessForHeight(height).into()),
+        };
+
+        Ok((root, witness))
     }
 
     /// Get the state trie entry under `key` at `epoch`.
@@ -196,6 +216,23 @@ impl LedgerInfo {
             .collect()
     }
 
+    /// Get the epoch receipts corresponding to the execution of `epoch`,
+    /// along with the receipts root hash witness hashes.
+    #[inline]
+    pub fn receipts_and_witness_of(
+        &self, epoch: u64,
+    ) -> Result<(Vec<BlockReceipts>, Vec<H256>), Error> {
+        let receipts = self.receipts_of(epoch)?;
+        let height = epoch + DEFERRED_STATE_EPOCH_COUNT;
+
+        let witness = match self.witness_of_header_at(height) {
+            Some(w) => self.receipts_root_witness(w)?,
+            None => return Err(ErrorKind::NoWitnessForHeight(height).into()),
+        };
+
+        Ok((receipts, witness))
+    }
+
     /// Get the aggregated bloom corresponding to the execution of `epoch`.
     #[inline]
     pub fn bloom_of(&self, epoch: u64) -> Result<Bloom, Error> {
@@ -223,6 +260,23 @@ impl LedgerInfo {
         Ok(BlockHeaderBuilder::compute_aggregated_bloom(blooms))
     }
 
+    /// Get the aggregated bloom corresponding to the execution of `epoch`,
+    /// along with the logs bloom hash witness hashes.
+    #[inline]
+    pub fn bloom_and_witness_of(
+        &self, epoch: u64,
+    ) -> Result<(Bloom, Vec<H256>), Error> {
+        let bloom = self.bloom_of(epoch)?;
+        let height = epoch + DEFERRED_STATE_EPOCH_COUNT;
+
+        let witness = match self.witness_of_header_at(height) {
+            Some(w) => self.logs_bloom_hash_witness(w)?,
+            None => return Err(ErrorKind::NoWitnessForHeight(height).into()),
+        };
+
+        Ok((bloom, witness))
+    }
+
     /// Get the witness height that can be used to retrieve the correct header
     /// information of the pivot block at `height`.
     #[inline]
@@ -238,7 +292,7 @@ impl LedgerInfo {
     #[inline]
     pub fn headers_seen_by_witness(
         &self, witness: u64,
-    ) -> Result<Vec<u64>, Error> {
+    ) -> Result<impl Iterator<Item = u64>, Error> {
         let blame = self.pivot_header_of(witness)?.blame() as u64;
 
         // assumption: the witness header is correct
@@ -246,30 +300,58 @@ impl LedgerInfo {
         assert!(witness > blame);
 
         // collect all header heights that were used to compute DSR of `witness`
-        Ok((0..(blame + 1)).map(|ii| witness - ii).collect())
+        Ok((0..(blame + 1)).map(move |ii| witness - ii))
     }
 
-    /// Get all correct state roots, receipts roots, and bloom hashes seen by
-    /// the header at height `witness`.
+    /// Get the correct state root hashes seen by `witness`.
+    /// If `witness` is not blaming any headers, return an empty vector.
     #[inline]
-    pub fn witness_info(
-        &self, witness: u64,
-    ) -> Result<WitnessInfoWithHeight, Error> {
-        let mut states = vec![];
-        let mut receipts = vec![];
-        let mut blooms = vec![];
+    pub fn state_root_witness(&self, witness: u64) -> Result<Vec<H256>, Error> {
+        let witness = self
+            .headers_seen_by_witness(witness)?
+            .map(|h| self.correct_deferred_state_root_hash_of(h))
+            .collect::<Result<Vec<_>, _>>()?;
 
-        for h in self.headers_seen_by_witness(witness)? {
-            states.push(self.correct_deferred_state_root_hash_of(h)?);
-            receipts.push(self.correct_deferred_receipts_root_hash_of(h)?);
-            blooms.push(self.correct_deferred_logs_root_hash_of(h)?);
+        if witness.len() == 1 {
+            Ok(vec![])
+        } else {
+            Ok(witness)
         }
+    }
 
-        Ok(WitnessInfoWithHeight {
-            height: witness,
-            state_roots: states,
-            receipt_hashes: receipts,
-            bloom_hashes: blooms,
-        })
+    /// Get the correct receipts root hashes seen by `witness`.
+    /// If `witness` is not blaming any headers, return an empty vector.
+    #[inline]
+    pub fn receipts_root_witness(
+        &self, witness: u64,
+    ) -> Result<Vec<H256>, Error> {
+        let witness = self
+            .headers_seen_by_witness(witness)?
+            .map(|h| self.correct_deferred_receipts_root_hash_of(h))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if witness.len() == 1 {
+            Ok(vec![])
+        } else {
+            Ok(witness)
+        }
+    }
+
+    /// Get the correct logs bloom hashes seen by `witness`.
+    /// If `witness` is not blaming any headers, return an empty vector.
+    #[inline]
+    pub fn logs_bloom_hash_witness(
+        &self, witness: u64,
+    ) -> Result<Vec<H256>, Error> {
+        let witness = self
+            .headers_seen_by_witness(witness)?
+            .map(|h| self.correct_deferred_logs_root_hash_of(h))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if witness.len() == 1 {
+            Ok(vec![])
+        } else {
+            Ok(witness)
+        }
     }
 }

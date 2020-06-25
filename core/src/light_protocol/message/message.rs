@@ -27,8 +27,8 @@ build_msgid! {
     RECEIPTS = 0x0d
     GET_TXS = 0x0e
     TXS = 0x0f
-    GET_WITNESS_INFO = 0x10
-    WITNESS_INFO = 0x11
+    // GET_WITNESS_INFO = 0x10
+    // WITNESS_INFO = 0x11
     GET_BLOOMS = 0x12
     BLOOMS = 0x13
     GET_BLOCK_TXS = 0x014
@@ -61,8 +61,6 @@ build_msg_impl! { GetReceipts, msgid::GET_RECEIPTS, "GetReceipts", LIGHT_PROTO_V
 build_msg_impl! { Receipts, msgid::RECEIPTS, "Receipts", LIGHT_PROTO_V1, LIGHT_PROTO_V2 }
 build_msg_impl! { GetTxs, msgid::GET_TXS, "GetTxs", LIGHT_PROTO_V1, LIGHT_PROTO_V2 }
 build_msg_impl! { Txs, msgid::TXS, "Txs", LIGHT_PROTO_V1, LIGHT_PROTO_V2 }
-build_msg_impl! { GetWitnessInfo, msgid::GET_WITNESS_INFO, "GetWitnessInfo", LIGHT_PROTO_V1, LIGHT_PROTO_V2 }
-build_msg_impl! { WitnessInfo, msgid::WITNESS_INFO, "WitnessInfo", LIGHT_PROTO_V1, LIGHT_PROTO_V2 }
 build_msg_impl! { GetBlooms, msgid::GET_BLOOMS, "GetBlooms", LIGHT_PROTO_V1, LIGHT_PROTO_V2 }
 build_msg_impl! { Blooms, msgid::BLOOMS, "Blooms", LIGHT_PROTO_V1, LIGHT_PROTO_V2 }
 build_msg_impl! { GetBlockTxs, msgid::GET_BLOCK_TXS, "GetBlockTxs", LIGHT_PROTO_V1, LIGHT_PROTO_V2 }

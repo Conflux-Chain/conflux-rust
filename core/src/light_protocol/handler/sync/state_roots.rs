@@ -4,29 +4,33 @@
 
 extern crate lru_time_cache;
 
+use cfx_types::H256;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use primitives::StateRoot;
 use std::{future::Future, sync::Arc};
 
 use crate::{
+    consensus::SharedConsensusGraph,
     light_protocol::{
-        common::{FullPeerState, Peers},
+        common::{FullPeerState, LedgerInfo, Peers},
         message::{msgid, GetStateRoots, StateRootWithEpoch},
         Error, ErrorKind,
     },
     message::{Message, RequestId},
     network::NetworkContext,
-    parameters::light::{
-        CACHE_TIMEOUT, MAX_STATE_ROOTS_IN_FLIGHT,
-        STATE_ROOT_REQUEST_BATCH_SIZE, STATE_ROOT_REQUEST_TIMEOUT,
+    parameters::{
+        consensus::DEFERRED_STATE_EPOCH_COUNT,
+        light::{
+            CACHE_TIMEOUT, MAX_STATE_ROOTS_IN_FLIGHT,
+            STATE_ROOT_REQUEST_BATCH_SIZE, STATE_ROOT_REQUEST_TIMEOUT,
+        },
     },
     UniqueId,
 };
 
-use super::{
-    common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
-    witnesses::Witnesses,
+use super::common::{
+    FutureItem, LedgerProof, PendingItem, SyncManager, TimeOrdered,
 };
 use network::node_table::NodeId;
 
@@ -40,6 +44,9 @@ struct Statistics {
 type MissingStateRoot = TimeOrdered<u64>;
 
 pub struct StateRoots {
+    // helper API for retrieving ledger information
+    ledger: LedgerInfo,
+
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
 
@@ -48,17 +55,15 @@ pub struct StateRoots {
 
     // bloom filters received from full node
     verified: Arc<RwLock<LruCache<u64, PendingItem<StateRoot>>>>,
-
-    // witness sync manager
-    witnesses: Arc<Witnesses>,
 }
 
 impl StateRoots {
     pub fn new(
-        peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
-        witnesses: Arc<Witnesses>,
+        consensus: SharedConsensusGraph, peers: Arc<Peers<FullPeerState>>,
+        request_id_allocator: Arc<UniqueId>,
     ) -> Self
     {
+        let ledger = LedgerInfo::new(consensus.clone());
         let sync_manager =
             SyncManager::new(peers.clone(), msgid::GET_STATE_ROOTS);
 
@@ -66,10 +71,10 @@ impl StateRoots {
         let verified = Arc::new(RwLock::new(cache));
 
         StateRoots {
+            ledger,
             request_id_allocator,
             sync_manager,
             verified,
-            witnesses,
         }
     }
 
@@ -112,7 +117,12 @@ impl StateRoots {
         state_roots: impl Iterator<Item = StateRootWithEpoch>,
     ) -> Result<(), Error>
     {
-        for StateRootWithEpoch { epoch, state_root } in state_roots {
+        for StateRootWithEpoch {
+            epoch,
+            state_root,
+            witness,
+        } in state_roots
+        {
             debug!(
                 "Validating state root {:?} with epoch {}",
                 state_root, epoch
@@ -120,7 +130,9 @@ impl StateRoots {
 
             match self.sync_manager.check_if_requested(peer, id, &epoch)? {
                 None => continue,
-                Some(_) => self.validate_and_store(epoch, state_root)?,
+                Some(_) => {
+                    self.validate_and_store(epoch, state_root, witness)?
+                }
             };
         }
 
@@ -129,10 +141,10 @@ impl StateRoots {
 
     #[inline]
     pub fn validate_and_store(
-        &self, epoch: u64, state_root: StateRoot,
+        &self, epoch: u64, state_root: StateRoot, witness: Vec<H256>,
     ) -> Result<(), Error> {
         // validate state root
-        self.validate_state_root(epoch, &state_root)?;
+        self.validate_state_root(epoch, &state_root, witness)?;
 
         // store state root by epoch
         self.verified
@@ -186,29 +198,51 @@ impl StateRoots {
     }
 
     #[inline]
-    fn validate_state_root(
-        &self, epoch: u64, state_root: &StateRoot,
+    pub fn validate_state_root(
+        &self, epoch: u64, state_root: &StateRoot, witness: Vec<H256>,
     ) -> Result<(), Error> {
-        // calculate received state root hash
-        let received = state_root.compute_state_root_hash();
+        let state_root_hash = state_root.compute_state_root_hash();
+        self.validate_state_root_hash(epoch, state_root_hash, witness)
+    }
 
-        // retrieve local state root hash
-        let local = match self.witnesses.root_hashes_of(epoch) {
-            Some((state_root, _, _)) => state_root,
+    #[inline]
+    pub fn validate_state_root_hash(
+        &self, epoch: u64, state_root_hash: H256, mut witness: Vec<H256>,
+    ) -> Result<(), Error> {
+        // height of header that can be used to validate `epoch`
+        let height = epoch + DEFERRED_STATE_EPOCH_COUNT;
+
+        // get witness info from local ledger
+        let w = match self.ledger.witness_of_header_at(height) {
+            Some(w) => w,
             None => {
-                warn!(
-                    "State root hash not found, epoch={}, state_root={:?}",
-                    epoch, state_root
-                );
-                return Err(ErrorKind::InternalError.into());
+                warn!("Unable to verify header using local ledger");
+                return Err(ErrorKind::NoWitnessForHeight(height).into());
             }
         };
 
-        // check
-        if received != local {
+        // validate witness info
+        let header = self.ledger.pivot_header_of(w)?;
+
+        if w == height && witness.len() == 0 {
+            witness = vec![*header.deferred_state_root()];
+        }
+
+        LedgerProof::StateRoot(&witness).validate(&header)?;
+
+        // take correct state_root_hash from validated response hashes
+        assert!(w >= height);
+        let index = (w - height) as usize;
+        assert!(index < witness.len());
+        let correct = witness[index];
+
+        // validate `state_root`
+        let received = state_root_hash;
+
+        if received != correct {
             warn!(
-                "State root validation failed, received={:?}, local={:?}",
-                received, local
+                "State root validation failed, received={:?}, correct={:?}",
+                received, correct
             );
             return Err(ErrorKind::InvalidStateRoot.into());
         }

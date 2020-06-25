@@ -8,13 +8,13 @@ use std::ops::Index;
 
 use crate::light_protocol::{Error, ErrorKind};
 
-pub enum LedgerProof {
-    StateRoot(Vec<H256>),
-    ReceiptsRoot(Vec<H256>),
-    LogsBloomHash(Vec<H256>),
+pub enum LedgerProof<'a> {
+    StateRoot(&'a Vec<H256>),
+    ReceiptsRoot(&'a Vec<H256>),
+    LogsBloomHash(&'a Vec<H256>),
 }
 
-impl Index<usize> for LedgerProof {
+impl<'a> Index<usize> for LedgerProof<'a> {
     type Output = H256;
 
     fn index(&self, ii: usize) -> &Self::Output {
@@ -28,7 +28,7 @@ impl Index<usize> for LedgerProof {
     }
 }
 
-impl LedgerProof {
+impl<'a> LedgerProof<'a> {
     pub fn validate(&self, witness: &BlockHeader) -> Result<(), Error> {
         // extract proof hashes and corresponding local root hash
         let (hashes, local_root_hash) = match self {
@@ -59,7 +59,7 @@ impl LedgerProof {
         let received_root_hash = match blame {
             0 => hashes[0],
             _ => {
-                let hashes = hashes.clone();
+                let hashes = hashes.to_vec();
                 BlockHeaderBuilder::compute_blame_state_root_vec_root(hashes)
             }
         };

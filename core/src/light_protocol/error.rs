@@ -36,6 +36,11 @@ error_chain! {
             display("NoResponse"),
         }
 
+        NoWitnessForHeight(height: u64) {
+            description("No witness found"),
+            display("No witness available for height {}", height),
+        }
+
         InternalError {
             description("Internal error"),
             display("Internal error"),
@@ -162,6 +167,7 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
     // will help covering all the cases.
     match e.0 {
         ErrorKind::NoResponse
+        | ErrorKind::NoWitnessForHeight(_)
         | ErrorKind::InternalError
 
         // NOTE: we should be tolerant of non-critical errors,

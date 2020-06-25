@@ -89,6 +89,7 @@ pub struct GetReceipts {
 pub struct ReceiptsWithEpoch {
     pub epoch: u64,
     pub epoch_receipts: Vec<BlockReceipts>,
+    pub witness: Vec<H256>,
 }
 
 #[derive(Clone, Debug, RlpEncodable, RlpDecodable)]
@@ -110,26 +111,6 @@ pub struct Txs {
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
-pub struct GetWitnessInfo {
-    pub request_id: RequestId,
-    pub witnesses: Vec<u64>,
-}
-
-#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
-pub struct WitnessInfoWithHeight {
-    pub height: u64,
-    pub state_roots: Vec<H256>,
-    pub receipt_hashes: Vec<H256>,
-    pub bloom_hashes: Vec<H256>,
-}
-
-#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
-pub struct WitnessInfo {
-    pub request_id: RequestId,
-    pub infos: Vec<WitnessInfoWithHeight>,
-}
-
-#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct GetBlooms {
     pub request_id: RequestId,
     pub epochs: Vec<u64>,
@@ -139,6 +120,7 @@ pub struct GetBlooms {
 pub struct BloomWithEpoch {
     pub epoch: u64,
     pub bloom: Bloom,
+    pub witness: Vec<H256>,
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
@@ -175,6 +157,7 @@ pub struct GetStateRoots {
 pub struct StateRootWithEpoch {
     pub epoch: u64,
     pub state_root: PrimitiveStateRoot,
+    pub witness: Vec<H256>,
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
@@ -222,6 +205,9 @@ pub struct TxInfo {
     pub block_hash: H256,
     pub index: usize,
     pub epoch_receipts: Vec<BlockReceipts>,
+    pub receipts_witness: Vec<H256>,
+    pub state_root_hash: H256,
+    pub state_root_witness: Vec<H256>,
     pub block_txs: Vec<SignedTransaction>,
     pub tx_hash: H256,
 }
