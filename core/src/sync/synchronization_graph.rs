@@ -1295,16 +1295,22 @@ impl SynchronizationGraph {
             // terminal should be further than the body terminal.
             // If it crashes after entering NormalSyncPhase, the body terminal
             // should be further than the header terminal.
-            self.data_man.header_terminals_from_db().and_then(
-                |header_only_terminals| {
-                    self.data_man.block_terminals_from_db().map(
-                        |mut block_terminals| {
-                            block_terminals.extend(header_only_terminals);
-                            block_terminals
-                        },
-                    )
-                },
-            )
+            let mut terminals = Vec::new();
+            if let Some(header_terminals) =
+                self.data_man.header_terminals_from_db()
+            {
+                terminals.extend(header_terminals);
+            }
+            if let Some(block_terminals) =
+                self.data_man.block_terminals_from_db()
+            {
+                terminals.extend(block_terminals);
+            }
+            if terminals.is_empty() {
+                None
+            } else {
+                Some(terminals)
+            }
         } else {
             self.data_man.block_terminals_from_db()
         };
