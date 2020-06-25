@@ -1065,10 +1065,10 @@ fn test_jumps(factory: super::Factory) {
 evm_test! {test_subs_simple: test_subs_simple_int}
 fn test_subs_simple(factory: super::Factory) {
     // as defined in https://eips.ethereum.org/EIPS/eip-2315
-    let code = "6004b300b2b7".from_hex().unwrap();
+    let code = "60045e005c5d".from_hex().unwrap();
 
     let mut params = ActionParams::default();
-    params.gas = U256::from(13);
+    params.gas = U256::from(18);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
 
@@ -1083,10 +1083,10 @@ fn test_subs_simple(factory: super::Factory) {
 evm_test! {test_subs_two_levels: test_subs_two_levels_int}
 fn test_subs_two_levels(factory: super::Factory) {
     // as defined in https://eips.ethereum.org/EIPS/eip-2315
-    let code = "6800000000000000000cb300b26011b3b7b2b7".from_hex().unwrap();
+    let code = "6800000000000000000c5e005c60115e5d5c5d".from_hex().unwrap();
 
     let mut params = ActionParams::default();
-    params.gas = U256::from(26);
+    params.gas = U256::from(36);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
 
@@ -1101,7 +1101,7 @@ fn test_subs_two_levels(factory: super::Factory) {
 evm_test! {test_subs_invalid_jump: test_subs_invalid_jump_int}
 fn test_subs_invalid_jump(factory: super::Factory) {
     // as defined in https://eips.ethereum.org/EIPS/eip-2315
-    let code = "6801000000000000000cb300b26011b3b7b2b7".from_hex().unwrap();
+    let code = "6801000000000000000c5e005c60115e5d5c5d".from_hex().unwrap();
 
     let mut params = ActionParams::default();
     params.gas = U256::from(24);
@@ -1121,7 +1121,7 @@ fn test_subs_invalid_jump(factory: super::Factory) {
 evm_test! {test_subs_shallow_return_stack: test_subs_shallow_return_stack_int}
 fn test_subs_shallow_return_stack(factory: super::Factory) {
     // as defined in https://eips.ethereum.org/EIPS/eip-2315
-    let code = "b75858".from_hex().unwrap();
+    let code = "5d5858".from_hex().unwrap();
 
     let mut params = ActionParams::default();
     params.gas = U256::from(24);
@@ -1156,7 +1156,7 @@ fn test_subs_substack_limit(factory: super::Factory) {
     //    SUB
     //    JUMPSUB :s
 
-    let mut code = "610400600756b25b80600d57005b600190036006b3"
+    let mut code = "6104006007565c5b80600d57005b6001900360065e"
         .from_hex()
         .unwrap();
     code[1..3].copy_from_slice(&(MAX_SUB_STACK_SIZE as u16).to_be_bytes()[..]);
@@ -1171,12 +1171,12 @@ fn test_subs_substack_limit(factory: super::Factory) {
         test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
-    assert_eq!(gas_left, U256::from(961_057));
+    assert_eq!(gas_left, U256::from(959_049));
 }
 
 evm_test! {test_subs_substack_out: test_subs_substack_out_int}
 fn test_subs_substack_out(factory: super::Factory) {
-    let mut code = "610400600756b25b80600d57005b600190036006b3"
+    let mut code = "6104006007565c5b80600d57005b6001900360065e"
         .from_hex()
         .unwrap();
     code[1..3]
@@ -1201,10 +1201,10 @@ fn test_subs_substack_out(factory: super::Factory) {
 
 evm_test! {test_subs_sub_at_end: test_subs_sub_at_end_int}
 fn test_subs_sub_at_end(factory: super::Factory) {
-    let code = "600556b2b75b6003b3".from_hex().unwrap();
+    let code = "6005565c5d5b60035e".from_hex().unwrap();
 
     let mut params = ActionParams::default();
-    params.gas = U256::from(25);
+    params.gas = U256::from(30);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
 
@@ -1214,6 +1214,24 @@ fn test_subs_sub_at_end(factory: super::Factory) {
     };
 
     assert_eq!(gas_left, U256::from(0));
+}
+
+evm_test! {test_subs_walk_into_subroutine: test_subs_walk_into_subroutine_int}
+fn test_subs_walk_into_subroutine(factory: super::Factory) {
+    let code = "5c5d00".from_hex().unwrap();
+
+    let mut params = ActionParams::default();
+    params.gas = U256::from(100);
+    params.code = Some(Arc::new(code));
+    let mut ctx = MockContext::new();
+
+    let current = {
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap())
+    };
+
+    let expected = Result::Err(vm::Error::InvalidSubEntry);
+    assert_eq!(current, expected);
 }
 
 evm_test! {test_calls: test_calls_int}

@@ -15,7 +15,7 @@ use crate::{
         ReturnData, Spec, TrapKind,
     },
 };
-use cfx_types::{Address, H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use primitives::{transaction::UNSIGNED_SENDER, StorageLayout};
 use std::sync::Arc;
 
@@ -174,7 +174,11 @@ impl<'a> ContextTrait for Context<'a> {
             }
         };
 
-        if self.state.is_contract(&address) {
+        // For a contract address already with code, we do not allow overlap the
+        // address. This should generally not happen. Unless we enable
+        // account dust in future. We add this check just in case it
+        // helps in future.
+        if self.state.is_contract_with_code(&address) {
             debug!("Contract address conflict!");
             return Ok(ContractCreateResult::Failed);
         }
@@ -324,14 +328,14 @@ impl<'a> ContextTrait for Context<'a> {
                 let collateral_for_storage = self
                     .state
                     .collateral_for_storage(&self.origin.storage_owner)?;
-                let balance =
-                    if self.state.is_contract(&self.origin.storage_owner) {
-                        self.state.sponsor_balance_for_collateral(
-                            &self.origin.storage_owner,
-                        )?
-                    } else {
-                        self.state.balance(&self.origin.storage_owner)?
-                    };
+                let balance = if self.origin.storage_owner.is_contract_address()
+                {
+                    self.state.sponsor_balance_for_collateral(
+                        &self.origin.storage_owner,
+                    )?
+                } else {
+                    self.state.balance(&self.origin.storage_owner)?
+                };
                 debug!(
                     "ret() balance={:?} collateral_for_code={:?}",
                     balance, collateral_for_code

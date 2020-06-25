@@ -245,6 +245,13 @@ impl SynchronizationGraphInner {
         let max_num_of_cleared_blocks = 2;
         let mut num_cleared = 0;
         let era_genesis = self.get_genesis_in_current_era();
+        let genesis_seq_num = self
+            .data_man
+            .local_block_info_by_hash(
+                &self.data_man.get_cur_consensus_era_genesis_hash(),
+            )
+            .expect("local_block_info for genesis must exist")
+            .get_seq_num();
         let mut era_genesis_in_frontier = false;
 
         while let Some(index) = self.old_era_blocks_frontier.pop_front() {
@@ -261,7 +268,7 @@ impl SynchronizationGraphInner {
             let hash = self.arena[index].block_header.hash();
             assert!(self.arena[index].parent == NULL);
 
-            if self.data_man.local_block_info_by_hash(&hash).is_none() {
+            if !self.is_graph_ready_in_db(&hash, genesis_seq_num) {
                 // This block has not been processed in consensus. Clearing it
                 // now may make its referrers not block-graph-ready.
                 // See https://github.com/Conflux-Chain/conflux-rust/issues/1426.
@@ -1282,7 +1289,31 @@ impl SynchronizationGraph {
         );
 
         // Get terminals stored in db.
-        let terminals_opt = self.data_man.terminals_from_db();
+        let terminals_opt = if header_only {
+            // Recover from both the header terminal and body terminal.
+            // If a full node crashes in the header sync phase, the header
+            // terminal should be further than the body terminal.
+            // If it crashes after entering NormalSyncPhase, the body terminal
+            // should be further than the header terminal.
+            let mut terminals = Vec::new();
+            if let Some(header_terminals) =
+                self.data_man.header_terminals_from_db()
+            {
+                terminals.extend(header_terminals);
+            }
+            if let Some(block_terminals) =
+                self.data_man.block_terminals_from_db()
+            {
+                terminals.extend(block_terminals);
+            }
+            if terminals.is_empty() {
+                None
+            } else {
+                Some(terminals)
+            }
+        } else {
+            self.data_man.block_terminals_from_db()
+        };
         if terminals_opt.is_none() {
             return;
         }
@@ -1299,8 +1330,11 @@ impl SynchronizationGraph {
         let mut queue = VecDeque::new();
         let mut visited_blocks: HashSet<H256> = HashSet::new();
         for terminal in terminals {
-            queue.push_back(terminal);
-            visited_blocks.insert(terminal);
+            // header terminals and block terminals may contain the same hash
+            if !visited_blocks.contains(&terminal) {
+                queue.push_back(terminal);
+                visited_blocks.insert(terminal);
+            }
         }
 
         // Remember the hashes of blocks that belong to the current genesis
@@ -1596,7 +1630,7 @@ impl SynchronizationGraph {
         if let Some(info) = local_info_opt {
             // If the block is ordered before current era genesis or it has
             // already entered consensus graph in this run, we do not need to
-            // process it. And it these two cases, the block is considered
+            // process it. And in these two cases, the block is considered
             // valid.
             let already_processed = info.get_seq_num()
                 < self.consensus.current_era_genesis_seq_num()
@@ -1608,7 +1642,7 @@ impl SynchronizationGraph {
                     VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(header);
                 }
                 return (
-                    BlockHeaderInsertionResult::AlreadyProcessed,
+                    BlockHeaderInsertionResult::AlreadyProcessedInConsensus,
                     Vec::new(),
                 );
             }
@@ -1620,7 +1654,10 @@ impl SynchronizationGraph {
                 // a part of block later
                 VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(header);
             }
-            return (BlockHeaderInsertionResult::AlreadyProcessed, Vec::new());
+            return (
+                BlockHeaderInsertionResult::AlreadyProcessedInSync,
+                Vec::new(),
+            );
         }
 
         // skip check for consortium currently
@@ -1843,10 +1880,6 @@ impl SynchronizationGraph {
 
         let inner = &mut *self.inner.write();
 
-        if self.data_man.verified_invalid(&hash).0 {
-            return BlockInsertionResult::Invalid;
-        }
-
         let contains_block =
             if let Some(index) = inner.hash_to_arena_indices.get(&hash) {
                 inner.arena[*index].block_ready
@@ -1859,6 +1892,10 @@ impl SynchronizationGraph {
         if contains_block {
             return BlockInsertionResult::AlreadyProcessed;
         }
+
+        // We only insert the body after a valid header is inserted, so this has
+        // been checked when we insert the header.
+        debug_assert!(!self.data_man.verified_invalid(&hash).0);
 
         self.statistics.inc_sync_graph_inserted_block_count();
 
@@ -2152,8 +2189,12 @@ impl BlockInsertionResult {
 }
 
 pub enum BlockHeaderInsertionResult {
-    // The block is valid and already processed before.
-    AlreadyProcessed,
+    // The block is valid and already processed consensus before.
+    // We should not process this block again.
+    AlreadyProcessedInConsensus,
+    // The block header has been inserted into sync graph. We can ingore this
+    // header, but we should keep processing its body if needed.
+    AlreadyProcessedInSync,
     // The block is valid and is processed for the first time.
     NewValid,
     // The block is definitely invalid. It's not inserted to sync graph
@@ -2168,5 +2209,13 @@ impl BlockHeaderInsertionResult {
 
     pub fn is_invalid(&self) -> bool {
         matches!(self, BlockHeaderInsertionResult::Invalid)
+    }
+
+    pub fn should_process_body(&self) -> bool {
+        matches!(
+            self,
+            BlockHeaderInsertionResult::NewValid
+                | BlockHeaderInsertionResult::AlreadyProcessedInSync
+        )
     }
 }

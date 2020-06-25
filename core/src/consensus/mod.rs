@@ -40,6 +40,8 @@ use crate::{
     Notifications,
 };
 use cfx_types::{Bloom, H160, H256, U256, U512};
+use either::Either;
+use itertools::Itertools;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
@@ -47,7 +49,7 @@ use parking_lot::{Mutex, RwLock};
 use primitives::{
     epoch::BlockHashOrEpochNumber,
     filter::{Filter, FilterError},
-    log_entry::{LocalizedLogEntry, LogEntry},
+    log_entry::LocalizedLogEntry,
     receipt::Receipt,
     Account, ChainIdParams, EpochId, EpochNumber, SignedTransaction,
     SponsorInfo, StorageKey, StorageRoot, StorageValue, TransactionIndex,
@@ -85,6 +87,10 @@ pub struct ConsensusConfig {
     pub transaction_epoch_bound: u64,
     /// The number of referees that are allowed for a block.
     pub referee_bound: usize,
+    /// Epoch batch size used in log filtering.
+    /// Larger batch sizes may improve performance but might also prevent
+    /// consensus from making progress under high RPC load.
+    pub get_logs_epoch_batch_size: usize,
 }
 
 #[derive(Debug)]
@@ -160,6 +166,9 @@ pub struct ConsensusGraph {
     /// This is always `None` for archive nodes.
     pub synced_epoch_id: Mutex<Option<EpochId>>,
     pub config: ConsensusConfig,
+
+    /// Whether this instance is an archive or full node.
+    is_full_node: bool,
 }
 
 impl MallocSizeOf for ConsensusGraph {
@@ -185,7 +194,7 @@ impl ConsensusGraph {
         pow_config: ProofOfWorkConfig, era_genesis_block_hash: &H256,
         era_stable_block_hash: &H256, notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
-        verification_config: VerificationConfig,
+        verification_config: VerificationConfig, is_full_node: bool,
     ) -> Self
     {
         let inner =
@@ -226,6 +235,7 @@ impl ConsensusGraph {
             pivot_block_state_valid_map: Default::default(),
             synced_epoch_id: Default::default(),
             config: conf,
+            is_full_node,
         };
         graph.update_best_info();
         graph
@@ -244,7 +254,7 @@ impl ConsensusGraph {
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
-        verification_conf: VerificationConfig,
+        verification_conf: VerificationConfig, is_full_node: bool,
     ) -> Self
     {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
@@ -261,6 +271,7 @@ impl ConsensusGraph {
             notifications,
             execution_conf,
             verification_conf,
+            is_full_node,
         )
     }
 
@@ -324,7 +335,7 @@ impl ConsensusGraph {
             EpochNumber::LatestState => self.best_executed_state_epoch_number(),
             EpochNumber::Number(num) => {
                 let epoch_num = num;
-                if epoch_num > self.best_epoch_number() {
+                if epoch_num > self.inner.read_recursive().best_epoch_number() {
                     return Err("Invalid params: expected a numbers with less than largest epoch number.".to_owned());
                 }
                 epoch_num
@@ -729,176 +740,380 @@ impl ConsensusGraph {
             .map_err(|err| format!("Get transaction count error: {:?}", err))
     }
 
+    fn earliest_epoch_available(&self) -> u64 {
+        if self.is_full_node {
+            self.latest_checkpoint_epoch_number()
+        } else {
+            0
+        }
+    }
+
+    fn filter_block_receipts<'a>(
+        &self, filter: &'a Filter, epoch_number: u64, block_hash: H256,
+        mut receipts: Vec<Receipt>, mut tx_hashes: Vec<H256>,
+    ) -> impl Iterator<Item = LocalizedLogEntry> + 'a
+    {
+        // sanity check
+        if receipts.len() != tx_hashes.len() {
+            warn!("Block ({}) has different number of receipts ({}) to transactions ({}). Database corrupt?", block_hash, receipts.len(), tx_hashes.len());
+            assert!(false);
+        }
+
+        // iterate in reverse
+        receipts.reverse();
+        tx_hashes.reverse();
+
+        let mut log_index = receipts
+            .iter()
+            .fold(0, |sum, receipt| sum + receipt.logs.len());
+
+        let receipts_len = receipts.len();
+
+        receipts
+            .into_iter()
+            .map(|receipt| receipt.logs)
+            .zip(tx_hashes)
+            .enumerate()
+            .flat_map(move |(index, (mut logs, transaction_hash))| {
+                let current_log_index = log_index;
+                let no_of_logs = logs.len();
+                log_index -= no_of_logs;
+
+                logs.reverse();
+                logs.into_iter().enumerate().map(move |(i, log)| {
+                    LocalizedLogEntry {
+                        entry: log,
+                        block_hash,
+                        epoch_number,
+                        transaction_hash,
+                        // iterating in reverse order
+                        transaction_index: receipts_len - index - 1,
+                        transaction_log_index: no_of_logs - i - 1,
+                        log_index: current_log_index - i - 1,
+                    }
+                })
+            })
+            .filter(move |log_entry| filter.matches(&log_entry.entry))
+            .take(filter.limit.unwrap_or(::std::usize::MAX))
+    }
+
+    fn filter_block<'a>(
+        &self, filter: &'a Filter, bloom_possibilities: &'a Vec<Bloom>,
+        epoch: u64, pivot_hash: H256, block_hash: H256,
+    ) -> Result<impl Iterator<Item = LocalizedLogEntry> + 'a, FilterError>
+    {
+        // special case for genesis (for now, genesis has no logs)
+        if epoch == 0 {
+            return Ok(Either::Left(std::iter::empty()));
+        }
+
+        // check if epoch is still available
+        let min = self.earliest_epoch_available();
+
+        if epoch < min {
+            return Err(FilterError::EpochAlreadyPruned { epoch, min });
+        }
+
+        // get block bloom and receipts from db
+        let (block_bloom, receipts) = match self
+            .data_man
+            .block_execution_result_by_hash_with_epoch(
+                &block_hash,
+                &pivot_hash,
+                false, /* update_pivot_assumption */
+                false, /* update_cache */
+            ) {
+            Some(r) => (r.bloom, r.block_receipts.receipts.clone()),
+            None => {
+                // `block_hash` must exist so the block not executed yet
+                return Err(FilterError::BlockNotExecutedYet { block_hash });
+            }
+        };
+
+        // filter block
+        if !bloom_possibilities
+            .iter()
+            .any(|bloom| block_bloom.contains_bloom(bloom))
+        {
+            return Ok(Either::Left(std::iter::empty()));
+        }
+
+        // get block body from db
+        let block = match self.data_man.block_by_hash(&block_hash, false) {
+            Some(b) => b,
+            None => {
+                // `block_hash` must exist so this is an internal error
+                error!(
+                    "Block {:?} in epoch {} ({:?}) not found",
+                    block_hash, epoch, pivot_hash
+                );
+
+                return Err(FilterError::UnknownBlock { hash: block_hash });
+            }
+        };
+
+        Ok(Either::Right(self.filter_block_receipts(
+            &filter,
+            epoch,
+            block_hash,
+            receipts,
+            block.transaction_hashes(),
+        )))
+    }
+
+    fn filter_single_epoch<'a>(
+        &'a self, filter: &'a Filter, bloom_possibilities: &'a Vec<Bloom>,
+        epoch: u64,
+    ) -> impl ParallelIterator<Item = Result<LocalizedLogEntry, FilterError>> + 'a
+    {
+        // retrieve epoch hashes and pivot hash
+        let mut epoch_hashes =
+            match self.inner.read_recursive().block_hashes_by_epoch(epoch) {
+                Ok(hs) => hs,
+                Err(e) => {
+                    let error = Err(e.into());
+                    return rayon::iter::Either::Left(rayon::iter::once(error));
+                }
+            };
+
+        let pivot_hash = *epoch_hashes.last().expect("Epoch set not empty");
+
+        // process hashes in reverse order
+        epoch_hashes.reverse();
+
+        let res = epoch_hashes
+            // process each block of this epoch in parallel
+            .into_par_iter()
+            .map(move |block_hash| {
+                self.filter_block(
+                    &filter,
+                    &bloom_possibilities,
+                    epoch,
+                    pivot_hash,
+                    block_hash,
+                )
+            })
+            // flatten results
+            // ParIt<Result<Iterator<_>>> --> ParIt<Result<_>>
+            .flat_map(|res| match res {
+                Ok(it) => rayon::iter::Either::Left(it.par_bridge().map(Ok)),
+                Err(e) => rayon::iter::Either::Right(rayon::iter::once(Err(e))),
+            });
+
+        rayon::iter::Either::Right(res)
+    }
+
+    fn filter_epoch_batch(
+        &self, filter: &Filter, bloom_possibilities: &Vec<Bloom>,
+        epochs: Vec<u64>, consistency_check_data: &mut Option<(u64, H256)>,
+    ) -> Result<Vec<LocalizedLogEntry>, FilterError>
+    {
+        // lock so that we have a consistent view during this batch
+        let inner = self.inner.read();
+
+        // NOTE: as batches are processed atomically and only the
+        // first batch (last few epochs) is likely to fluctuate, is is unlikely
+        // that releasing the lock between batches would cause inconsistency:
+        // we assume there are no pivot chain reorgs deeper than batch_size.
+        // However, we still add a simple sanity check here:
+
+        if let Some((epoch, pivot)) = *consistency_check_data {
+            let new_pivot = inner.get_pivot_hash_from_epoch_number(epoch)?;
+
+            if pivot != new_pivot {
+                return Err(FilterError::PivotChainReorg {
+                    epoch,
+                    from: pivot,
+                    to: new_pivot,
+                });
+            }
+        }
+
+        *consistency_check_data = Some((
+            epochs[0],
+            inner.get_pivot_hash_from_epoch_number(epochs[0])?,
+        ));
+
+        epochs
+            .into_par_iter() // process each epoch of this batch in parallel
+            .map(|e| self.filter_single_epoch(filter, bloom_possibilities, e))
+            .flatten()
+            .collect() // short-circuit on error
+    }
+
+    pub fn get_filter_epoch_range(
+        &self, filter: &Filter,
+    ) -> Result<impl Iterator<Item = u64>, FilterError> {
+        // lock so that we have a consistent view
+        let _inner = self.inner.read();
+
+        let from_epoch =
+            self.get_height_from_epoch_number(filter.from_epoch.clone())?;
+        let to_epoch =
+            self.get_height_from_epoch_number(filter.to_epoch.clone())?;
+
+        if from_epoch > to_epoch {
+            return Err(FilterError::InvalidEpochNumber {
+                from_epoch,
+                to_epoch,
+            });
+        }
+
+        if from_epoch < self.earliest_epoch_available() {
+            return Err(FilterError::EpochAlreadyPruned {
+                epoch: from_epoch,
+                min: self.earliest_epoch_available(),
+            });
+        }
+
+        return Ok((from_epoch..=to_epoch).rev());
+    }
+
+    fn filter_logs_by_epochs(
+        &self, filter: Filter,
+    ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
+        assert!(filter.block_hashes.is_none());
+        let bloom_possibilities = filter.bloom_possibilities();
+        let limit = filter.limit.unwrap_or(::std::usize::MAX);
+
+        // we store the last epoch processed and the corresponding pivot hash so
+        // that we can check whether it changed between batches
+        let mut consistency_check_data: Option<(u64, H256)> = None;
+
+        let mut logs = self
+            // iterate over epochs in reverse order
+            .get_filter_epoch_range(&filter)?
+            // we process epochs in each batch in parallel
+            // but batches are processed one-by-one
+            .chunks(self.config.get_logs_epoch_batch_size)
+            .into_iter()
+            .map(move |epochs| {
+                self.filter_epoch_batch(
+                    &filter,
+                    &bloom_possibilities,
+                    epochs.into_iter().collect(),
+                    &mut consistency_check_data,
+                )
+            })
+            // flatten results
+            .flat_map(|res| match res {
+                Ok(it) => Either::Left(it.into_iter().map(Ok)),
+                Err(e) => Either::Right(std::iter::once(Err(e))),
+            })
+            // take as many as we need
+            .take(limit)
+            // short-circuit on error
+            .collect::<Result<Vec<LocalizedLogEntry>, FilterError>>()?;
+
+        logs.reverse();
+        Ok(logs)
+    }
+
+    // collect epoch number, block index in epoch, block hash, pivot hash
+    fn collect_block_info(
+        &self, block_hash: H256,
+    ) -> Result<(u64, usize, H256, H256), FilterError> {
+        // special case for genesis
+        if block_hash == self.data_man.true_genesis.hash() {
+            return Ok((0, 0, block_hash, block_hash));
+        }
+
+        // check if block exists
+        if self.data_man.block_header_by_hash(&block_hash).is_none() {
+            return Err(FilterError::UnknownBlock { hash: block_hash });
+        };
+
+        // find pivot block
+        let pivot_hash = match self
+            .inner
+            .read_recursive()
+            .block_execution_results_by_hash(&block_hash, false)
+        {
+            Some(r) => r.0,
+            None => {
+                // exec results are either pruned already or block has not been
+                // executed yet
+                // TODO(thegaram): is there a way to tell these apart?
+                return Err(FilterError::BlockNotExecutedYet { block_hash });
+            }
+        };
+
+        // find epoch number
+        let epoch = match self.data_man.block_header_by_hash(&pivot_hash) {
+            Some(h) => h.height(),
+            None => {
+                // internal error
+                error!("Header of pivot block {:?} not found", pivot_hash);
+                return Err(FilterError::UnknownBlock { hash: pivot_hash });
+            }
+        };
+
+        let index_in_epoch = self
+            .inner
+            .read_recursive()
+            .block_hashes_by_epoch(epoch)?
+            .into_iter()
+            .position(|h| h == block_hash)
+            .expect("Block should exit in epoch set");
+
+        Ok((epoch, index_in_epoch, block_hash, pivot_hash))
+    }
+
+    fn filter_logs_by_block_hashes(
+        &self, mut filter: Filter,
+    ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
+        assert!(filter.block_hashes.is_some());
+        let block_hashes = filter.block_hashes.take().unwrap();
+        let bloom_possibilities = filter.bloom_possibilities();
+
+        // keep a consistent view during filtering
+        let _inner = self.inner.read();
+
+        // collect all block info in memory
+        // note: we allow at most 128 block hashes so this should be fine
+        let mut block_infos = block_hashes
+            .into_par_iter()
+            .map(|block_hash| self.collect_block_info(block_hash))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // lexicographic order will match execution order
+        block_infos.sort();
+
+        // process blocks in reverse
+        block_infos.reverse();
+
+        let mut logs = block_infos
+            .into_iter()
+            .map(|(epoch, _, block_hash, pivot_hash)| {
+                self.filter_block(
+                    &filter,
+                    &bloom_possibilities,
+                    epoch,
+                    pivot_hash,
+                    block_hash,
+                )
+            })
+            // flatten results
+            .flat_map(|res| match res {
+                Ok(it) => Either::Left(it.into_iter().map(Ok)),
+                Err(e) => Either::Right(std::iter::once(Err(e))),
+            })
+            // take as many as we need
+            .take(filter.limit.unwrap_or(::std::usize::MAX))
+            // short-circuit on error
+            .collect::<Result<Vec<_>, _>>()?;
+
+        logs.reverse();
+        Ok(logs)
+    }
+
     pub fn logs(
         &self, filter: Filter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
-        let block_hashes = if filter.block_hashes.is_none() {
-            let inner = self.inner.read();
-            // at most best_epoch
-            let from_epoch =
-                self.get_height_from_epoch_number(filter.from_epoch.clone())?;
-
-            // at most best_epoch
-            let to_epoch =
-                self.get_height_from_epoch_number(filter.to_epoch.clone())?;
-
-            if from_epoch > to_epoch {
-                return Err(FilterError::InvalidEpochNumber {
-                    from_epoch,
-                    to_epoch,
-                });
-            }
-
-            if to_epoch > inner.best_epoch_number() {
-                return Err(FilterError::OutOfBoundEpochNumber {
-                    to_epoch,
-                    max_epoch: inner.best_epoch_number(),
-                });
-            }
-
-            let blooms = filter.bloom_possibilities();
-            (from_epoch..(to_epoch + 1))
-                .into_par_iter()
-                .map(|epoch_number| {
-                    let mut blocks = Vec::new();
-                    if epoch_number <= inner.get_cur_era_genesis_height() {
-                        // Blocks before (including) `cur_era_genesis` do not
-                        // have epoch set in memory, so
-                        // we should get the epoch set from db
-                        let epoch_set = self
-                            .data_man
-                            .executed_epoch_set_hashes_from_db(epoch_number)
-                            .expect("epoch set from past era should exist");
-                        let epoch_hash = epoch_set.last().expect("Not empty");
-                        for hash in &epoch_set {
-                            if self
-                                .block_matches_bloom(hash, epoch_hash, &blooms)
-                            {
-                                blocks.push(*hash)
-                            }
-                        }
-                    } else {
-                        // Use the epoch set maintained in memory
-                        let epoch_hash = &inner.arena
-                            [inner.get_pivot_block_arena_index(epoch_number)]
-                        .hash;
-                        for index in inner.get_ordered_executable_epoch_blocks(
-                            inner.get_pivot_block_arena_index(epoch_number),
-                        ) {
-                            let hash = &inner.arena[*index].hash;
-                            if self
-                                .block_matches_bloom(hash, epoch_hash, &blooms)
-                            {
-                                blocks.push(*hash);
-                            }
-                        }
-                    }
-                    blocks
-                })
-                .flatten()
-                .collect()
-        } else {
-            filter.block_hashes.as_ref().unwrap().clone()
-        };
-        debug!("get_logs: {} blocks after filter", block_hashes.len());
-
-        Ok(self.logs_from_blocks(
-            block_hashes,
-            |entry| filter.matches(entry),
-            filter.limit,
-        ))
-    }
-
-    /// Return `true` if block log_bloom exists and matches some filter in given
-    /// `blooms`.
-    fn block_matches_bloom(
-        &self, block_hash: &H256, epoch_hash: &H256, blooms: &Vec<Bloom>,
-    ) -> bool {
-        if let Some(block_log_bloom) = self
-            .data_man
-            .block_execution_result_by_hash_with_epoch(
-                block_hash, epoch_hash,
-                false, /* update_pivot_assumption */
-                false, /* update_cache */
-            )
-            .map(|r| r.bloom)
-        {
-            if blooms
-                .iter()
-                .any(|bloom| block_log_bloom.contains_bloom(bloom))
-            {
-                return true;
-            }
+        match filter.block_hashes {
+            None => self.filter_logs_by_epochs(filter),
+            Some(_) => self.filter_logs_by_block_hashes(filter),
         }
-        false
-    }
-
-    /// Returns logs matching given filter. The order of logs returned will be
-    /// the same as the order of the blocks provided. And it's the callers
-    /// responsibility to sort blocks provided in advance.
-    pub fn logs_from_blocks<F>(
-        &self, mut blocks: Vec<H256>, matches: F, limit: Option<usize>,
-    ) -> Vec<LocalizedLogEntry>
-    where
-        F: Fn(&LogEntry) -> bool + Send + Sync,
-        Self: Sized,
-    {
-        // sort in reverse order
-        blocks.reverse();
-
-        let mut logs = blocks
-            .chunks(128)
-            .flat_map(move |blocks_chunk| {
-                blocks_chunk.into_par_iter()
-                    .filter_map(|hash|
-                        self.inner.read().block_execution_results_by_hash(&hash, false /* update_cache */).map(|r| (hash, r.0, (*r.1.block_receipts).clone()))
-                    )
-                    .filter_map(|(hash, epoch_hash, block_receipts)| self.data_man.block_by_hash(&hash, false /* update_cache */).map(|b| (hash, epoch_hash, block_receipts, b.transaction_hashes())))
-                    .filter_map(|(hash, epoch_hash, block_receipts, hashes)| self.data_man.block_by_hash(&epoch_hash, false /* update_cache */).map(|b| (hash, b.block_header.height(), block_receipts, hashes)))
-                    .flat_map(|(hash, epoch, block_receipts, mut hashes)| {
-                        let mut receipts = block_receipts.receipts;
-                        if receipts.len() != hashes.len() {
-                            warn!("Block ({}) has different number of receipts ({}) to transactions ({}). Database corrupt?", hash, receipts.len(), hashes.len());
-                            assert!(false);
-                        }
-                        let mut log_index = receipts.iter().fold(0, |sum, receipt| sum + receipt.logs.len());
-
-                        let receipts_len = receipts.len();
-                        hashes.reverse();
-                        receipts.reverse();
-                        receipts.into_iter()
-                            .map(|receipt| receipt.logs)
-                            .zip(hashes)
-                            .enumerate()
-                            .flat_map(move |(index, (mut logs, tx_hash))| {
-                                let current_log_index = log_index;
-                                let no_of_logs = logs.len();
-                                log_index -= no_of_logs;
-
-                                logs.reverse();
-                                logs.into_iter()
-                                    .enumerate()
-                                    .map(move |(i, log)| LocalizedLogEntry {
-                                        entry: log,
-                                        block_hash: *hash,
-                                        epoch_number: epoch,
-                                        transaction_hash: tx_hash,
-                                        // iterating in reverse order
-                                        transaction_index: receipts_len - index - 1,
-                                        transaction_log_index: no_of_logs - i - 1,
-                                        log_index: current_log_index - i - 1,
-                                    })
-                            })
-                            .filter(|log_entry| matches(&log_entry.entry))
-                            .take(limit.unwrap_or(::std::usize::MAX))
-                            .collect::<Vec<_>>()
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .take(limit.unwrap_or(::std::usize::MAX))
-            .collect::<Vec<LocalizedLogEntry>>();
-        logs.reverse();
-        logs
     }
 
     pub fn call_virtual(

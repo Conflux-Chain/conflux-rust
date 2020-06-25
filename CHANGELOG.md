@@ -75,6 +75,8 @@ or zero if not querying the last block hash.
 - Change the default value of `from_epoch` in RPC `cfx_getLogs` from "earliest" to "latest_checkpoint".
 Now if no `from_epoch` is specified, it will only return logs after the latest checkpoint.
 
+- Improve archive and full node log filtering. Change `filter.to_epoch` default to `"latest_state"`. Limit `filter.block_hashes` to up to 128 items.
+
 # 0.5.0
 
 ## Improvements

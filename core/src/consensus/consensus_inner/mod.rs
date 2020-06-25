@@ -99,11 +99,11 @@ pub struct ConsensusGraphNodeData {
     /// A partial invalid block will get a NULL counter
     /// A normal block which referenced directly or indirectly will have a
     /// positive counter
-    active_cnt: usize,
+    inactive_dependency_cnt: usize,
     /// This is an implementation flag indicate whether the node is active or
-    /// not. Because multiple blocks may have their `active_cnt` turning
-    /// zero in the same time, we need this flag to process them correctly
-    /// one by one.
+    /// not. Because multiple blocks may have their `inactive_dependency_cnt`
+    /// turning zero in the same time, we need this flag to process them
+    /// correctly one by one.
     activated: bool,
     /// This records the force confirm point in the past view of this block.
     force_confirm: usize,
@@ -136,7 +136,7 @@ pub struct ConsensusGraphNodeData {
     past_view_last_timer_block_arena_index: usize,
     /// The height of the closest timer block in the longest timer chain.
     /// Note that this only considers the current longest timer chain and
-    /// ingores the remaining timer blocks.
+    /// ignores the remaining timer blocks.
     ledger_view_timer_chain_height: u64,
     /// vote_valid_lca_height indicates the fork_at height that the vote_valid
     /// field corresponds to.
@@ -157,12 +157,14 @@ pub struct ConsensusGraphNodeData {
 }
 
 impl ConsensusGraphNodeData {
-    fn new(epoch_number: u64, sequence_number: u64, active_cnt: usize) -> Self {
+    fn new(
+        epoch_number: u64, sequence_number: u64, inactive_dependency_cnt: usize,
+    ) -> Self {
         ConsensusGraphNodeData {
             epoch_number,
             partial_invalid: false,
             pending: false,
-            active_cnt,
+            inactive_dependency_cnt,
             activated: false,
             force_confirm: NULL,
             blockset_in_own_view_of_epoch: Default::default(),
@@ -281,8 +283,8 @@ impl Default for ConsensusGraphPivotData {
 /// receive any reward. Normal nodes will also refrain from *directly or
 /// indirectly* referencing b until TimerDis(*b*, new_block) is greater than or
 /// equal to timer_dis_delta. Normal nodes essentially ignores partial invalid
-/// blocks for a while. We implement this via our active_cnt field. Last but not
-/// least, we exclude *partial invalid* blocks from the timer chain
+/// blocks for a while. We implement this via our inactive_dependency_cnt field.
+/// Last but not least, we exclude *partial invalid* blocks from the timer chain
 /// consideration. They are not timer blocks!
 ///
 /// # Implementation details of checkpoints
@@ -815,6 +817,20 @@ impl ConsensusGraphInner {
         self.arena[index].era_block == NULL
     }
 
+    /// This function computes the epoch set of block *pivot* based on
+    /// the past set of block *lca* which is the parental ancestor of
+    /// *pivot*. The algorithm processes the blocks along the parental
+    /// path from *lca* to *pivot* to produce the *visited* block set,
+    /// and then compute the epoch block set of *pivot* based on the
+    /// *pastset* and the *visited*. The following figure illustrates
+    /// this process. B[lca] refers to the block *lca*, B[piv] refers
+    /// to the block *pivot*, and B[par] refers to the parent of *pivot*
+    ///
+    /// I    ------------\-------------------\-------------------\
+    /// I        lca      \                   \       epoch       \
+    /// I    -- pastset -B[lca]-- visited --B[par]-- blockset --B[piv]
+    /// I                 /                   /                   /
+    /// I    ------------/-------------------/-------------------/
     fn compute_blockset_in_own_view_of_epoch_impl(
         &mut self, lca: usize, pivot: usize,
     ) {
@@ -876,6 +892,15 @@ impl ConsensusGraphInner {
         }
     }
 
+    /// This function computes the epoch block set under the view of
+    /// block *pivot*. It also computes the ordered set of executable
+    /// blocks in the epoch. This set has a bound specified by
+    /// EPOCH_EXECUTED_BLOCK_BOUND. To compute this set, it first
+    /// filters out the blocks in the raw epoch set but not in the
+    /// same era with *pivot*. It then topologically sorts the retained
+    /// blocks and preserves at most the last EPOCH_EXECUTED_BLOCK_BOUND
+    /// blocks. All the filtered-out blocks are added into
+    /// *skipped_epoch_blocks*.
     fn compute_blockset_in_own_view_of_epoch(&mut self, pivot: usize) {
         if !self.arena[pivot].data.blockset_cleared {
             return;
@@ -1181,6 +1206,25 @@ impl ConsensusGraphInner {
         )
     }
 
+    /// This function computes the subtree weight for each node
+    /// in the subtree of the past view of *me* by conducting
+    /// DFS from the cur_era_genesis. The subtree to process
+    /// is illustrated as follows:
+    ///                     cur_era_genesis
+    /// I                        / \
+    /// I                      /     \
+    /// I                    /  the    \
+    /// I                  /   subtree   \
+    /// I                /   to process    \
+    /// I                \__             __/
+    /// I                 a \__       __/ a
+    /// I                    a \_____/ a
+    /// I                      a me a
+    ///
+    /// *a* refers to the elements in anticone barrier who are
+    /// anticone of *me* while whose parents are in the past set
+    /// of *me*. The subtree to process does not include *a* and
+    /// *me*.
     fn compute_subtree_weights(
         &self, me: usize, anticone_barrier: &BitSet,
     ) -> Vec<i128> {
@@ -1518,10 +1562,10 @@ impl ConsensusGraphInner {
             return (sn, NULL);
         }
 
-        let mut active_cnt = 0;
+        let mut inactive_dependency_cnt = 0;
         for referee in &referees {
             if !self.arena[*referee].data.activated {
-                active_cnt += 1;
+                inactive_dependency_cnt += 1;
             }
         }
 
@@ -1542,7 +1586,11 @@ impl ConsensusGraphInner {
             children: Vec::new(),
             referees,
             referrers: Vec::new(),
-            data: ConsensusGraphNodeData::new(NULLU64, sn, active_cnt),
+            data: ConsensusGraphNodeData::new(
+                NULLU64,
+                sn,
+                inactive_dependency_cnt,
+            ),
         });
         self.arena[index].data.pending = true;
         self.arena[index].data.activated = false;
@@ -1633,7 +1681,7 @@ impl ConsensusGraphInner {
             }
         }
 
-        let mut active_cnt =
+        let mut inactive_dependency_cnt =
             if parent != NULL && !self.arena[parent].data.activated {
                 1
             } else {
@@ -1641,7 +1689,7 @@ impl ConsensusGraphInner {
             };
         for referee in &referees {
             if !self.arena[*referee].data.activated {
-                active_cnt += 1;
+                inactive_dependency_cnt += 1;
             }
         }
 
@@ -1662,7 +1710,11 @@ impl ConsensusGraphInner {
             children: Vec::new(),
             referees,
             referrers: Vec::new(),
-            data: ConsensusGraphNodeData::new(NULLU64, sn, active_cnt),
+            data: ConsensusGraphNodeData::new(
+                NULLU64,
+                sn,
+                inactive_dependency_cnt,
+            ),
         });
         self.hash_to_arena_indices.insert(hash, index);
 
@@ -1712,7 +1764,8 @@ impl ConsensusGraphInner {
             for child in &self.arena[index].children {
                 if !visited.contains(*child as u32)
                     && (self.arena[*child].data.activated
-                        || self.arena[*child].data.active_cnt == NULL)
+                        || self.arena[*child].data.inactive_dependency_cnt
+                            == NULL)
                 /* We include all preactivated blocks */
                 {
                     visited.add(*child as u32);
@@ -1722,7 +1775,8 @@ impl ConsensusGraphInner {
             for referrer in &self.arena[index].referrers {
                 if !visited.contains(*referrer as u32)
                     && (self.arena[*referrer].data.activated
-                        || self.arena[*referrer].data.active_cnt == NULL)
+                        || self.arena[*referrer].data.inactive_dependency_cnt
+                            == NULL)
                 /* We include all preactivated blocks */
                 {
                     visited.add(*referrer as u32);
@@ -3661,7 +3715,7 @@ impl ConsensusGraphInner {
         bounded_hashes
     }
 
-    /// This function is used by the synchronization layer to garbege collect
+    /// This function is used by the synchronization layer to garbage collect
     /// `old_era_block_set`. The set contains all the blocks that should be
     /// eliminated by full nodes
     pub fn pop_old_era_block_set(&self) -> Option<H256> {

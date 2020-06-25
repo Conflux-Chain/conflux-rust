@@ -8,6 +8,7 @@ use super::{
     CacheAccessResult, CacheAlgoDataAdapter, CacheAlgoDataTrait,
     CacheAlgorithm, CacheIndexTrait, CacheStoreUtil, MyInto, PrimitiveNum,
 };
+use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use std::{hint, mem};
@@ -22,16 +23,18 @@ use std::{hint, mem};
 /// The double link list algorithm for LFU can not extend if an element starts
 /// from frequency greater than 0, and another downside is using much more
 /// memory. We use heap to maintain frequency.
+#[derive(MallocSizeOfDerive)]
 pub struct RecentLFU<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> {
     capacity: PosT,
     frequency_lru: LRU<PosT, RecentLFUHandle<PosT>>,
     frequency_heap: RemovableHeap<PosT, RecentLFUMetadata<PosT, CacheIndexT>>,
+    #[ignore_malloc_size_of = "insignificant"]
     counter_rng: ChaChaRng,
 }
 
 /// RecentLFUHandle points to the location where frequency data is stored. A
 /// non-null pos means that the object is maintained in LRU.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, MallocSizeOfDerive)]
 pub struct RecentLFUHandle<PosT: PrimitiveNum> {
     pos: PosT,
 }
@@ -82,6 +85,7 @@ const COUNTER_MASK: FrequencyType = !RANDOM_BITS;
 /// MAX_VISIT_COUNT == COUNTER_MASK
 const MAX_VISIT_COUNT: FrequencyType = ::std::u16::MAX & COUNTER_MASK;
 
+#[derive(MallocSizeOfDerive)]
 struct RecentLFUMetadata<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> {
     frequency: FrequencyType,
     lru_handle: LRUHandle<PosT>,

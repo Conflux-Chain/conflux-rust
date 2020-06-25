@@ -37,6 +37,7 @@ pub type DeltaMptsCacheManager =
 
 impl CacheIndexTrait for DeltaMptDbKey {}
 
+#[derive(MallocSizeOfDerive)]
 pub struct NodeMemoryManager<
     CacheAlgoDataT: CacheAlgoDataTrait,
     CacheAlgorithmT: CacheAlgorithm<CacheAlgoData = CacheAlgoDataT>,
@@ -143,18 +144,19 @@ impl<
     /// Method that requires mut borrow of allocator.
     pub fn enlarge(&self) -> Result<()> {
         let allocator_upgradable_read = self.allocator.upgradable_read();
-        let idle = allocator_upgradable_read.capacity()
-            - allocator_upgradable_read.len();
+        let allocator_capacity = allocator_upgradable_read.capacity();
+        let occupied_size = allocator_upgradable_read.len();
+        let idle = allocator_capacity - occupied_size;
         let should_idle = self.idle_size as usize;
-        if idle >= should_idle {
+        if idle >= should_idle || allocator_capacity == self.size_limit as usize
+        {
             return Ok(());
         }
         let mut add_size = should_idle - idle;
-        if add_size < allocator_upgradable_read.capacity() {
-            add_size = allocator_upgradable_read.capacity();
+        if add_size < allocator_capacity {
+            add_size = allocator_capacity;
         }
-        let max_add_size =
-            self.size_limit as usize - allocator_upgradable_read.len();
+        let max_add_size = self.size_limit as usize - occupied_size;
         if add_size >= max_add_size {
             add_size = max_add_size;
         }
@@ -786,6 +788,7 @@ use super::{
     slab::Slab,
     NodeRefDeltaMpt,
 };
+use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
 use parking_lot::{
     Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard,
 };

@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    impls::cfx::RpcImplConfiguration, HttpConfiguration, TcpConfiguration,
+    impls::RpcImplConfiguration, HttpConfiguration, TcpConfiguration,
     WsConfiguration,
 };
 use cfx_types::H256;
@@ -13,6 +13,7 @@ use cfxcore::{
     cache_config::{
         DEFAULT_INVALID_BLOCK_HASH_CACHE_SIZE_IN_COUNT,
         DEFAULT_LEDGER_CACHE_SIZE,
+        DEFAULT_TARGET_DIFFICULTIES_CACHE_SIZE_IN_COUNT,
     },
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
@@ -210,6 +211,7 @@ build_config! {
         (block_db_dir, (String), "./blockchain_db".to_string())
         (ledger_cache_size, (usize), DEFAULT_LEDGER_CACHE_SIZE)
         (invalid_block_hash_cache_size_in_count, (usize), DEFAULT_INVALID_BLOCK_HASH_CACHE_SIZE_IN_COUNT)
+        (target_difficulties_cache_size_in_count, (usize), DEFAULT_TARGET_DIFFICULTIES_CACHE_SIZE_IN_COUNT)
         (rocksdb_cache_size, (Option<usize>), Some(128))
         (rocksdb_compaction_profile, (Option<String>), None)
         (storage_delta_mpts_cache_recent_lfu_factor, (f64), storage::defaults::DEFAULT_DELTA_MPTS_CACHE_RECENT_LFU_FACTOR)
@@ -223,6 +225,7 @@ build_config! {
         (enable_optimistic_execution, (bool), true)
         (future_block_buffer_capacity, (usize), 32768)
         (get_logs_filter_max_limit, (Option<usize>), None)
+        (get_logs_epoch_batch_size, (usize), 128)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (persist_tx_index, (bool), false)
         (print_memory_usage_period_s, (Option<u64>), None)
@@ -361,6 +364,8 @@ impl Configuration {
         cache_config.ledger = self.raw_conf.ledger_cache_size;
         cache_config.invalid_block_hashes_cache_size_in_count =
             self.raw_conf.invalid_block_hash_cache_size_in_count;
+        cache_config.target_difficulties_cache_size_in_count =
+            self.raw_conf.target_difficulties_cache_size_in_count;
         cache_config
     }
 
@@ -434,6 +439,7 @@ impl Configuration {
             bench_mode: false,
             transaction_epoch_bound: self.raw_conf.transaction_epoch_bound,
             referee_bound: self.raw_conf.referee_bound,
+            get_logs_epoch_batch_size: self.raw_conf.get_logs_epoch_batch_size,
         }
     }
 
@@ -472,7 +478,7 @@ impl Configuration {
     }
 
     pub fn tx_gen_config(&self) -> Option<TransactionGeneratorConfig> {
-        if self.is_test_mode() &&
+        if self.is_test_or_dev_mode() &&
             // FIXME: this is not a good condition to check.
             self.raw_conf.genesis_secrets.is_some()
         {

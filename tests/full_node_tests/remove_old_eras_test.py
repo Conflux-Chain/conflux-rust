@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-import os
+import os, sys, time
 import eth_utils
-import time
+
+sys.path.insert(1, os.path.dirname(sys.path[0]))
 
 from conflux.rpc import RpcClient
 from test_framework.test_framework import ConfluxTestFramework

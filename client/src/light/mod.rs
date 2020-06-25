@@ -61,7 +61,11 @@ impl LightClient {
             common_impl,
             pubsub,
             runtime,
-        ) = initialize_common_modules(&conf, exit.clone())?;
+        ) = initialize_common_modules(
+            &conf,
+            exit.clone(),
+            false, /* is_full_node */
+        )?;
 
         let light = Arc::new(LightQueryService::new(
             consensus.clone(),
@@ -71,7 +75,8 @@ impl LightClient {
         ));
         light.register().unwrap();
 
-        let rpc_impl = Arc::new(RpcImpl::new(light.clone()));
+        let rpc_impl =
+            Arc::new(RpcImpl::new(conf.rpc_impl_config(), light.clone()));
         let debug_rpc_http_server = super::rpc::start_http(
             conf.local_http_config(),
             setup_debug_rpc_apis_light(

@@ -40,6 +40,18 @@ pub struct StorageManager {
     storage_conf: StorageConfiguration,
 }
 
+impl MallocSizeOf for StorageManager {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        // TODO: Sqlite for snapshot may also use a significant amount of
+        // memory. We need to fork the crate `sqlite` ourselves to
+        // expose `sqlite3_status` to get the memory usage statistics.
+        let mut size = 0;
+        size += self.delta_mpts_node_memory_manager.size_of(ops);
+        size += self.snapshot_associated_mpts_by_epoch.size_of(ops);
+        size
+    }
+}
+
 /// Struct which makes sure that the delta mpt is properly ref-counted and
 /// released.
 pub struct DeltaDbReleaser {
@@ -107,6 +119,7 @@ impl StorageManager {
         let (_, snapshot_info_db) = KvdbSqlite::open_or_create(
             &storage_conf.path_snapshot_info_db,
             SNAPSHOT_KVDB_STATEMENTS.clone(),
+            false, /* unsafe_mode */
         )?;
 
         let (
@@ -1278,6 +1291,7 @@ use crate::{
     },
 };
 use fallible_iterator::FallibleIterator;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Mutex, RwLock, RwLockReadGuard};
 use primitives::{EpochId, MERKLE_NULL_NODE, NULL_EPOCH};
 use rlp::{Decodable, DecoderError, Encodable, Rlp};
