@@ -718,7 +718,7 @@ impl State {
         &mut self, address: &Address, by: &U256, cleanup_mode: CleanupMode,
     ) -> DbResult<()> {
         let exists = self.exists(address)?;
-        if !exists && !address.is_valid_address() {
+        if !address.is_valid_address() {
             // Sending to invalid addresses are not allowed. Note that this
             // check is required because at serialization we assume
             // only valid addresses.
