@@ -22,7 +22,7 @@ use crate::rpc::{
 use blockgen::BlockGenerator;
 use cfx_types::{H160, H256, U256};
 use cfxcore::{
-    block_data_manager::BlockExecutionResultWithEpoch, machine::Machine,
+    block_data_manager::BlockExecutionResultWithEpoch,
     state_exposer::STATE_EXPOSER, test_context::*, vm, ConsensusGraph,
     ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
@@ -50,7 +50,6 @@ pub struct RpcImpl {
     tx_pool: SharedTransactionPool,
     maybe_txgen: Option<Arc<TransactionGenerator>>,
     maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
-    machine: Arc<Machine>,
 }
 
 impl RpcImpl {
@@ -59,7 +58,7 @@ impl RpcImpl {
         block_gen: Arc<BlockGenerator>, tx_pool: SharedTransactionPool,
         maybe_txgen: Option<Arc<TransactionGenerator>>,
         maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
-        config: RpcImplConfiguration, machine: Arc<Machine>,
+        config: RpcImplConfiguration,
     ) -> Self
     {
         RpcImpl {
@@ -70,7 +69,6 @@ impl RpcImpl {
             maybe_txgen,
             maybe_direct_txgen,
             config,
-            machine,
         }
     }
 
@@ -299,7 +297,7 @@ impl RpcImpl {
         &self, tx: TransactionWithSignature,
     ) -> RpcResult<RpcH256> {
         if let Call(address) = &tx.transaction.action {
-            if !address.is_valid_address(self.machine.builtins()) {
+            if !address.is_valid_address() {
                 bail!(invalid_params("tx", "Sending transactions to invalid address. The first four bits must be 0x0 (built-in/reserved), 0x1 (user-account), or 0x8 (contract)."));
             }
         }
