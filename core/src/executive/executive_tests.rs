@@ -191,7 +191,7 @@ fn test_create_contract_out_of_depth() {
         ex.create(params, &mut substate).unwrap()
     };
 
-    assert_eq!(gas_left, U256::from(62_976));
+    assert_eq!(gas_left, U256::from(62_970));
     assert_eq!(substate.contracts_created.len(), 0);
 }
 
@@ -294,7 +294,7 @@ fn test_call_to_create() {
         *COLLATERAL_PER_STORAGE_KEY + U256::from(15_625_000_000_000_000u64)
     );
 
-    assert_eq!(gas_left, U256::from(59_752));
+    assert_eq!(gas_left, U256::from(59_746));
 }
 
 #[test]
@@ -1009,7 +1009,7 @@ fn test_commission_privilege() {
     .successfully_executed()
     .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_024));
+    assert_eq!(gas_used, U256::from(58_030));
     assert_eq!(state.nonce(&sender.address()).unwrap(), U256::from(1));
     assert_eq!(state.balance(&address).unwrap(), U256::from(1_000_000));
     assert_eq!(
