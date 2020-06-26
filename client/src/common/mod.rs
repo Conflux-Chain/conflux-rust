@@ -124,6 +124,7 @@ pub fn initialize_common_modules(
         Arc<Machine>,
         Arc<SecretStore>,
         Arc<BlockDataManager>,
+        Arc<PoWManager>,
         Arc<TransactionPool>,
         Arc<ConsensusGraph>,
         Arc<SynchronizationGraph>,
@@ -199,6 +200,10 @@ pub fn initialize_common_modules(
     );
     debug!("Initialize genesis_block={:?}", genesis_block);
 
+    let pow = Arc::new(PoWManager::new(
+        TempDir::new("pow").unwrap().path()
+    ));
+
     let data_man = Arc::new(BlockDataManager::new(
         cache_config,
         Arc::new(genesis_block),
@@ -206,6 +211,7 @@ pub fn initialize_common_modules(
         storage_manager,
         worker_thread_pool,
         conf.data_mananger_config(),
+        pow.clone(),
     ));
 
     let machine = Arc::new(new_machine_with_builtin());
@@ -229,6 +235,7 @@ pub fn initialize_common_modules(
         statistics,
         data_man.clone(),
         pow_config.clone(),
+        pow.clone(),
         notifications.clone(),
         conf.execution_config(),
         conf.verification_config(),
@@ -242,6 +249,7 @@ pub fn initialize_common_modules(
         consensus.clone(),
         verification_config,
         pow_config,
+        pow.clone(),
         sync_config,
         notifications.clone(),
         is_full_node,
@@ -268,6 +276,7 @@ pub fn initialize_common_modules(
         machine,
         secret_store,
         data_man,
+        pow,
         txpool,
         consensus,
         sync_graph,
@@ -283,6 +292,7 @@ pub fn initialize_not_light_node_modules(
 ) -> Result<
     (
         Arc<BlockDataManager>,
+        Arc<PoWManager>,
         Arc<TransactionPool>,
         Arc<ConsensusGraph>,
         Arc<SynchronizationService>,
@@ -299,6 +309,7 @@ pub fn initialize_not_light_node_modules(
         machine,
         secret_store,
         data_man,
+        pow,
         txpool,
         consensus,
         sync_graph,
@@ -392,6 +403,7 @@ pub fn initialize_not_light_node_modules(
         sync.clone(),
         maybe_txgen.clone(),
         conf.pow_config(),
+        pow.clone(),
         maybe_author.clone().unwrap_or_default(),
     ));
     if conf.is_dev_mode() {
@@ -488,6 +500,7 @@ pub fn initialize_not_light_node_modules(
     )?;
     Ok((
         data_man,
+        pow,
         txpool,
         consensus,
         sync,
@@ -674,6 +687,7 @@ use cfxcore::{
     statistics::Statistics,
     storage::StorageManager,
     sync::SyncPhaseType,
+    pow::PoWManager,
     vm_factory::VmFactory,
     ConsensusGraph, LightProvider, Notifications, Stopable,
     SynchronizationGraph, SynchronizationService, TransactionPool,
@@ -697,3 +711,4 @@ use std::{
 };
 use threadpool::ThreadPool;
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
+use tempdir::TempDir;

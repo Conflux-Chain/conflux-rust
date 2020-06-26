@@ -457,6 +457,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
 
             let new_consensus_inner = ConsensusGraphInner::with_era_genesis(
                 old_consensus_inner.pow_config.clone(),
+                self.graph.pow.clone(),
                 self.graph.data_man.clone(),
                 old_consensus_inner.inner_conf.clone(),
                 &cur_era_genesis_hash,
@@ -549,6 +550,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                     .block_header_by_hash(&cur_era_genesis_hash)
                     .expect("era genesis exists"),
                 old_sync_inner.pow_config.clone(),
+                old_sync_inner.pow.clone(),
                 old_sync_inner.config.clone(),
                 old_sync_inner.data_man.clone(),
                 self.graph.machine(),

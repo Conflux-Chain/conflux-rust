@@ -9,7 +9,7 @@ use crate::{
     error::{BlockError, Error, ErrorKind},
     machine::Machine,
     parameters::sync::OLD_ERA_BLOCK_GC_BATCH_SIZE,
-    pow::ProofOfWorkConfig,
+    pow::{ProofOfWorkConfig, PoWManager},
     state_exposer::{SyncGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,
     verification::*,
@@ -151,6 +151,7 @@ pub struct SynchronizationGraphInner {
     children_by_hash: HashMap<H256, Vec<usize>>,
     referrers_by_hash: HashMap<H256, Vec<usize>>,
     pub pow_config: ProofOfWorkConfig,
+    pub pow: Arc<PoWManager>,
     pub config: SyncGraphConfig,
     /// The indices of blocks whose graph_status is not GRAPH_READY.
     /// It may consider not header-graph-ready in phases
@@ -182,6 +183,7 @@ impl MallocSizeOf for SynchronizationGraphInner {
 impl SynchronizationGraphInner {
     pub fn with_genesis_block(
         genesis_header: Arc<BlockHeader>, pow_config: ProofOfWorkConfig,
+        pow: Arc<PoWManager>,
         config: SyncGraphConfig, data_man: Arc<BlockDataManager>,
         machine: Arc<Machine>,
     ) -> Self
@@ -193,6 +195,7 @@ impl SynchronizationGraphInner {
             children_by_hash: HashMap::new(),
             referrers_by_hash: HashMap::new(),
             pow_config,
+            pow,
             config,
             not_ready_blocks_frontier: UnreadyBlockFrontier::new(),
             not_ready_blocks_count: 0,
@@ -1026,6 +1029,7 @@ pub struct SynchronizationGraph {
     pub inner: Arc<RwLock<SynchronizationGraphInner>>,
     pub consensus: SharedConsensusGraph,
     pub data_man: Arc<BlockDataManager>,
+    pub pow: Arc<PoWManager>,
     pub initial_missed_block_hashes: Mutex<HashSet<H256>>,
     pub verification_config: VerificationConfig,
     pub sync_config: SyncGraphConfig,
@@ -1074,6 +1078,7 @@ impl SynchronizationGraph {
     pub fn new(
         consensus: SharedConsensusGraph,
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
+        pow: Arc<PoWManager>,
         sync_config: SyncGraphConfig, notifications: Arc<Notifications>,
         is_full_node: bool, machine: Arc<Machine>,
     ) -> Self
@@ -1092,6 +1097,7 @@ impl SynchronizationGraph {
             SynchronizationGraphInner::with_genesis_block(
                 genesis_block_header.clone(),
                 pow_config,
+                pow.clone(),
                 sync_config,
                 data_man.clone(),
                 machine.clone(),
@@ -1100,6 +1106,7 @@ impl SynchronizationGraph {
         let sync_graph = SynchronizationGraph {
             inner: inner.clone(),
             data_man: data_man.clone(),
+            pow: pow.clone(),
             initial_missed_block_hashes: Mutex::new(HashSet::new()),
             verification_config,
             sync_config,
@@ -1612,7 +1619,7 @@ impl SynchronizationGraph {
                 if need_to_verify && !self.is_consortium() {
                     // Compute pow_quality, because the input header may be used
                     // as a part of block later
-                    VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(header);
+                    VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(self.pow.clone(), header);
                 }
                 return (
                     BlockHeaderInsertionResult::AlreadyProcessedInConsensus,
@@ -1625,7 +1632,7 @@ impl SynchronizationGraph {
             if need_to_verify {
                 // Compute pow_quality, because the input header may be used as
                 // a part of block later
-                VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(header);
+                VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(self.pow.clone(), header);
             }
             return (
                 BlockHeaderInsertionResult::AlreadyProcessedInSync,
@@ -1640,7 +1647,7 @@ impl SynchronizationGraph {
                 || !(self.parent_or_referees_invalid(header)
                     || self
                         .verification_config
-                        .verify_header_params(header)
+                        .verify_header_params(self.pow.clone(), header)
                         .or_else(|e| {
                             warn!(
                                 "Invalid header: err={} header={:?}",
@@ -1652,7 +1659,7 @@ impl SynchronizationGraph {
         } else {
             if !bench_mode && !self.is_consortium() {
                 self.verification_config
-                    .verify_pow(header)
+                    .verify_pow(self.pow.clone(), header)
                     .expect("local mined block should pass this check!");
             }
             true

@@ -2,8 +2,18 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+mod shared;
+mod seed_compute;
+mod keccak;
+mod compute;
+mod cache;
+
+pub use self::cache::NodeCacheBuilder;
+use self::keccak::{H256 as KeccakH256};
+pub use self::shared::ETHASH_EPOCH_LENGTH;
+
 use crate::{
-    block_data_manager::BlockDataManager, hash::keccak, parameters::pow::*,
+    block_data_manager::BlockDataManager, parameters::pow::*,
 };
 use cfx_types::{BigEndianHash, H256, U256, U512};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
@@ -13,9 +23,13 @@ use std::{
     collections::{HashMap, VecDeque},
     convert::TryFrom,
 };
+use std::sync::Arc;
+use std::path::{Path, PathBuf};
+use tempdir::TempDir;
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub struct ProofOfWorkProblem {
+    pub block_height: u64,
     pub block_hash: H256,
     pub difficulty: U256,
     pub boundary: U256,
@@ -24,9 +38,10 @@ pub struct ProofOfWorkProblem {
 impl ProofOfWorkProblem {
     pub const NO_BOUNDARY: U256 = U256::MAX;
 
-    pub fn new(block_hash: H256, difficulty: U256) -> Self {
+    pub fn new(block_height: u64, block_hash: H256, difficulty: U256) -> Self {
         let boundary = difficulty_to_boundary(&difficulty);
         Self {
+            block_height,
             block_hash,
             difficulty,
             boundary,
@@ -149,6 +164,7 @@ pub fn nonce_to_lower_bound(nonce: &U256) -> U256 {
     lower_bound
 }
 
+
 pub fn pow_hash_to_quality(hash: &H256, nonce: &U256) -> U256 {
     let hash_as_uint = BigEndianHash::into_uint(hash);
     let lower_bound = nonce_to_lower_bound(nonce);
@@ -192,25 +208,40 @@ pub fn compute_inv_x_times_2_pow_256_floor(x: &U256) -> U256 {
     }
 }
 
-pub fn compute(nonce: &U256, block_hash: &H256) -> H256 {
-    let mut buf = [0u8; 64];
-    for i in 0..32 {
-        buf[i] = block_hash[i];
+pub struct PoWManager {
+    nodecache_builder: NodeCacheBuilder,
+    cache_dir: PathBuf,
+}
+
+impl PoWManager {
+    pub fn new(cache_dir: &Path) -> PoWManager {
+        PoWManager {
+            cache_dir: cache_dir.to_path_buf(),
+            nodecache_builder: NodeCacheBuilder::new(),
+        }
     }
-    nonce.to_little_endian(&mut buf[32..64]);
-    let intermediate = keccak(&buf[..]);
-    let mut tmp = [0u8; 32];
-    for i in 0..32 {
-        tmp[i] = intermediate[i] ^ block_hash[i];
+
+    pub fn new_in(prefix: &str) -> Self {
+        Self::new(TempDir::new(prefix).unwrap().path())
     }
-    keccak(tmp)
+
+    pub fn compute_light(&self, block_height: u64, block_hash: &KeccakH256, nonce: u64) -> KeccakH256 {
+        let epoch = block_height / ETHASH_EPOCH_LENGTH;
+        let light = self.nodecache_builder.light(&self.cache_dir, block_height);
+        light.compute(block_hash, nonce, block_height)
+    }
+}
+
+pub fn compute(
+    pow: Arc<PoWManager>, nonce: &U256, block_hash: &H256, block_height: u64) -> H256 {
+    pow.compute_light(block_height, block_hash.as_fixed_bytes(), nonce.low_u64()).into()
 }
 
 pub fn validate(
-    problem: &ProofOfWorkProblem, solution: &ProofOfWorkSolution,
+    pow: Arc<PoWManager>, problem: &ProofOfWorkProblem, solution: &ProofOfWorkSolution,
 ) -> bool {
     let nonce = solution.nonce;
-    let hash = compute(&nonce, &problem.block_hash);
+    let hash = compute(pow, &nonce, &problem.block_hash, problem.block_height);
     ProofOfWorkProblem::validate_hash_against_boundary(
         &hash,
         &nonce,

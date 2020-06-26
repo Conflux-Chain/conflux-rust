@@ -14,7 +14,7 @@ use crate::{
         consensus_internal::INITIAL_BASE_MINING_REWARD_IN_UCFX,
         WORKER_COMPUTATION_PARALLELISM,
     },
-    pow::ProofOfWorkConfig,
+    pow::{ProofOfWorkConfig, PoWManager},
     statistics::Statistics,
     storage::{StorageConfiguration, StorageManager},
     sync::{SyncGraphConfig, SynchronizationGraph},
@@ -29,6 +29,7 @@ use parking_lot::Mutex;
 use primitives::{Block, BlockHeaderBuilder, ChainIdParams};
 use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
 use threadpool::ThreadPool;
+use tempdir::TempDir;
 
 pub fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: U256,
@@ -86,7 +87,7 @@ pub fn create_simple_block(
 }
 
 pub fn initialize_data_manager(
-    db_dir: &str, dbtype: DbType,
+    db_dir: &str, dbtype: DbType, pow: Arc<PoWManager>,
 ) -> (Arc<BlockDataManager>, Arc<Block>) {
     let ledger_db = db::open_database(
         db_dir,
@@ -138,13 +139,14 @@ pub fn initialize_data_manager(
             Duration::from_millis(300_000), /* max cached tx count */
             dbtype,
         ),
+        pow,
     ));
     (data_man, genesis_block)
 }
 
 pub fn initialize_synchronization_graph_with_data_manager(
     data_man: Arc<BlockDataManager>, beta: u64, h: u64, tcr: u64, tcb: u64,
-    era_epoch_count: u64,
+    era_epoch_count: u64, pow: Arc<PoWManager>,
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
 {
     let verification_config = VerificationConfig::new(
@@ -203,6 +205,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         statistics.clone(),
         data_man.clone(),
         pow_config.clone(),
+        pow.clone(),
         notifications.clone(),
         ConsensusExecutionConfiguration {
             anticone_penalty_ratio: tcr - 1,
@@ -216,6 +219,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         consensus.clone(),
         verification_config,
         pow_config,
+        pow.clone(),
         sync_config,
         notifications,
         false, /* is_full_node */
@@ -236,7 +240,11 @@ pub fn initialize_synchronization_graph(
     Arc<Block>,
 )
 {
-    let (data_man, genesis_block) = initialize_data_manager(db_dir, dbtype);
+    let pow = Arc::new(PoWManager::new(
+        TempDir::new("pow").unwrap().path()
+    ));
+
+    let (data_man, genesis_block) = initialize_data_manager(db_dir, dbtype, pow.clone());
 
     let (sync, consensus) = initialize_synchronization_graph_with_data_manager(
         data_man.clone(),
@@ -245,6 +253,7 @@ pub fn initialize_synchronization_graph(
         tcr,
         tcb,
         era_epoch_count,
+        pow.clone(),
     );
 
     (sync, consensus, data_man, genesis_block)

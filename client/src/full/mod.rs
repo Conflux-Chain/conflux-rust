@@ -11,7 +11,7 @@ use crate::{
     configuration::Configuration,
 };
 use blockgen::BlockGenerator;
-use cfxcore::{ConsensusGraph, SynchronizationService, TransactionPool};
+use cfxcore::{ConsensusGraph, SynchronizationService, TransactionPool, pow::PoWManager};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Condvar, Mutex};
 use runtime::Runtime;
@@ -26,6 +26,7 @@ pub struct FullClientExtraComponents {
     pub runtime: Runtime,
     pub sync: Arc<SynchronizationService>,
     pub txpool: Arc<TransactionPool>,
+    pub pow: Arc<PoWManager>,
 }
 
 impl MallocSizeOf for FullClientExtraComponents {
@@ -44,6 +45,7 @@ impl FullClient {
     > {
         let (
             data_man,
+            pow,
             txpool,
             consensus,
             sync,
@@ -68,6 +70,7 @@ impl FullClient {
                 runtime,
                 sync,
                 txpool,
+                pow,
             },
         }))
     }
