@@ -245,6 +245,13 @@ impl SynchronizationGraphInner {
         let max_num_of_cleared_blocks = 2;
         let mut num_cleared = 0;
         let era_genesis = self.get_genesis_in_current_era();
+        let genesis_seq_num = self
+            .data_man
+            .local_block_info_by_hash(
+                &self.data_man.get_cur_consensus_era_genesis_hash(),
+            )
+            .expect("local_block_info for genesis must exist")
+            .get_seq_num();
         let mut era_genesis_in_frontier = false;
 
         while let Some(index) = self.old_era_blocks_frontier.pop_front() {
@@ -261,7 +268,7 @@ impl SynchronizationGraphInner {
             let hash = self.arena[index].block_header.hash();
             assert!(self.arena[index].parent == NULL);
 
-            if self.data_man.local_block_info_by_hash(&hash).is_none() {
+            if !self.is_graph_ready_in_db(&hash, genesis_seq_num) {
                 // This block has not been processed in consensus. Clearing it
                 // now may make its referrers not block-graph-ready.
                 // See https://github.com/Conflux-Chain/conflux-rust/issues/1426.
@@ -1282,7 +1289,31 @@ impl SynchronizationGraph {
         );
 
         // Get terminals stored in db.
-        let terminals_opt = self.data_man.terminals_from_db();
+        let terminals_opt = if header_only {
+            // Recover from both the header terminal and body terminal.
+            // If a full node crashes in the header sync phase, the header
+            // terminal should be further than the body terminal.
+            // If it crashes after entering NormalSyncPhase, the body terminal
+            // should be further than the header terminal.
+            let mut terminals = Vec::new();
+            if let Some(header_terminals) =
+                self.data_man.header_terminals_from_db()
+            {
+                terminals.extend(header_terminals);
+            }
+            if let Some(block_terminals) =
+                self.data_man.block_terminals_from_db()
+            {
+                terminals.extend(block_terminals);
+            }
+            if terminals.is_empty() {
+                None
+            } else {
+                Some(terminals)
+            }
+        } else {
+            self.data_man.block_terminals_from_db()
+        };
         if terminals_opt.is_none() {
             return;
         }
@@ -1299,8 +1330,11 @@ impl SynchronizationGraph {
         let mut queue = VecDeque::new();
         let mut visited_blocks: HashSet<H256> = HashSet::new();
         for terminal in terminals {
-            queue.push_back(terminal);
-            visited_blocks.insert(terminal);
+            // header terminals and block terminals may contain the same hash
+            if !visited_blocks.contains(&terminal) {
+                queue.push_back(terminal);
+                visited_blocks.insert(terminal);
+            }
         }
 
         // Remember the hashes of blocks that belong to the current genesis

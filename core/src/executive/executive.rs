@@ -330,6 +330,9 @@ impl<'a> CallCreateExecutive<'a> {
     ) -> vm::Result<()>
     {
         if let ActionValue::Transfer(val) = params.value {
+            // It is possible to first send money to a pre-calculated
+            // contract address.
+            let prev_balance = state.balance(&params.address)?;
             state.sub_balance(
                 &params.sender,
                 &val,
@@ -338,7 +341,7 @@ impl<'a> CallCreateExecutive<'a> {
             state.new_contract_with_admin(
                 &params.address,
                 &params.original_sender,
-                val,
+                val.saturating_add(prev_balance),
                 state.contract_start_nonce(),
             )?;
         } else {

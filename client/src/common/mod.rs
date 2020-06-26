@@ -296,7 +296,7 @@ pub fn initialize_not_light_node_modules(
     String,
 > {
     let (
-        machine,
+        _machine,
         secret_store,
         data_man,
         txpool,
@@ -425,7 +425,6 @@ pub fn initialize_not_light_node_modules(
         maybe_txgen.clone(),
         maybe_direct_txgen,
         conf.rpc_impl_config(),
-        machine,
     ));
 
     let debug_rpc_http_server = super::rpc::start_http(

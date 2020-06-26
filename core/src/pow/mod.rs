@@ -9,7 +9,10 @@ use cfx_types::{BigEndianHash, H256, U256, U512};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::RwLock;
-use std::{collections::HashMap, convert::TryFrom};
+use std::{
+    collections::{HashMap, VecDeque},
+    convert::TryFrom,
+};
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub struct ProofOfWorkProblem {
@@ -287,14 +290,32 @@ where
 //FIXME: make entries replaceable
 #[derive(DeriveMallocSizeOf)]
 struct TargetDifficultyCacheInner {
+    capacity: usize,
+    meta: VecDeque<H256>,
     cache: HashMap<H256, U256>,
 }
 
 impl TargetDifficultyCacheInner {
-    pub fn new() -> Self {
+    pub fn new(capacity: usize) -> Self {
         TargetDifficultyCacheInner {
+            capacity,
+            meta: Default::default(),
             cache: Default::default(),
         }
+    }
+
+    pub fn is_full(&self) -> bool { self.meta.len() >= self.capacity }
+
+    pub fn evict_one(&mut self) {
+        let hash = self.meta.pop_front();
+        if let Some(h) = hash {
+            self.cache.remove(&h);
+        }
+    }
+
+    pub fn insert(&mut self, hash: H256, difficulty: U256) {
+        self.meta.push_back(hash.clone());
+        self.cache.insert(hash, difficulty);
     }
 }
 
@@ -309,9 +330,9 @@ impl MallocSizeOf for TargetDifficultyCache {
 }
 
 impl TargetDifficultyCache {
-    pub fn new() -> Self {
+    pub fn new(capacity: usize) -> Self {
         TargetDifficultyCache {
-            inner: RwLock::new(TargetDifficultyCacheInner::new()),
+            inner: RwLock::new(TargetDifficultyCacheInner::new(capacity)),
         }
     }
 
@@ -322,7 +343,10 @@ impl TargetDifficultyCache {
 
     pub fn set(&self, hash: H256, difficulty: U256) {
         let mut inner = self.inner.write();
-        inner.cache.insert(hash, difficulty);
+        while inner.is_full() {
+            inner.evict_one();
+        }
+        inner.insert(hash, difficulty);
     }
 }
 
@@ -336,9 +360,9 @@ pub struct TargetDifficultyManager {
 }
 
 impl TargetDifficultyManager {
-    pub fn new() -> Self {
+    pub fn new(capacity: usize) -> Self {
         TargetDifficultyManager {
-            cache: TargetDifficultyCache::new(),
+            cache: TargetDifficultyCache::new(capacity),
         }
     }
 

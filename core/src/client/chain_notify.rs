@@ -6,7 +6,7 @@ use primitives::TransactionWithSignature;
 pub enum ChainMessageType {
     /// Consensus message
     Consensus(Vec<u8>),
-    /// Mesage with private transaction
+    /// Message with private transaction
     PrivateTransaction(H256, Vec<u8>),
     /// Message with signed private transaction
     SignedPrivateTransaction(H256, Vec<u8>),

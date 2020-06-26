@@ -1553,7 +1553,7 @@ pub fn rlp_str_len(len: usize) -> u64 {
 }
 
 /// We assume that the keys and values are serialized in separate vector,
-/// therefore we only add up those rlp string lenghts.
+/// therefore we only add up those rlp string lengths.
 /// The rlp bytes for the up-most structures are ignored for sync slicer.
 pub fn rlp_key_value_len(key_len: u16, value_len: usize) -> u64 {
     rlp_str_len(key_len.into()) + rlp_str_len(value_len)

@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 /// Set this flag to true to enable storing children merkles for
-/// possibily faster merkle root computation.
+/// possibly faster merkle root computation.
 const ENABLE_CHILDREN_MERKLES: bool = true;
 
 /// Load children merkles only when the number of uncached children nodes is

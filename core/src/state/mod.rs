@@ -688,14 +688,14 @@ impl State {
     }
 
     pub fn inc_nonce(&mut self, address: &Address) -> DbResult<()> {
-        self.require_or_new_user_account(address)
+        self.require_or_new_basic_account(address)
             .map(|mut x| x.inc_nonce())
     }
 
     pub fn set_nonce(
         &mut self, address: &Address, nonce: &U256,
     ) -> DbResult<()> {
-        self.require_or_new_user_account(address)
+        self.require_or_new_basic_account(address)
             .map(|mut x| x.set_nonce(nonce))
     }
 
@@ -718,16 +718,17 @@ impl State {
         &mut self, address: &Address, by: &U256, cleanup_mode: CleanupMode,
     ) -> DbResult<()> {
         let exists = self.exists(address)?;
-        if !exists && !address.is_user_account_address() {
-            // Sending to non-existent non user account address is
-            // not allowed.
+        if !address.is_valid_address() {
+            // Sending to invalid addresses are not allowed. Note that this
+            // check is required because at serialization we assume
+            // only valid addresses.
             //
             // There are checks to forbid it at transact level.
             //
             // The logic here is intended for incorrect miner coin-base. In this
             // case, the mining reward get lost.
             warn!(
-                "add_balance: address does not already exist and is not an user account. {:?}",
+                "add_balance: address does not already exist and is not a valid address. {:?}",
                 address
             );
             return Ok(());
@@ -735,7 +736,7 @@ impl State {
         if !by.is_zero()
             || (cleanup_mode == CleanupMode::ForceCreate && !exists)
         {
-            self.require_or_new_user_account(address)?.add_balance(by);
+            self.require_or_new_basic_account(address)?.add_balance(by);
         }
 
         if let CleanupMode::TrackTouched(set) = cleanup_mode {
@@ -1358,11 +1359,15 @@ impl State {
         self.require_or_set(address, require_code, no_account_is_an_error)
     }
 
-    fn require_or_new_user_account(
+    fn require_or_new_basic_account(
         &self, address: &Address,
     ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>> {
         self.require_or_set(address, false, |address| {
-            if address.is_user_account_address() {
+            if address.is_valid_address() {
+                // Note that it is possible to first send money to a pre-calculated contract
+                // address and then deploy contracts. So we are going to *allow* sending to a contract
+                // address and use new_basic() to create a *stub* there. Because the contract serialization
+                // is a super-set of the normal address serialization, this should just work.
                 Ok(OverlayAccount::new_basic(
                     address,
                     U256::zero(),
