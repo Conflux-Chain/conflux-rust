@@ -1364,7 +1364,7 @@ impl State {
     ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>> {
         self.require_or_set(address, false, |address| {
             if address.is_valid_address() {
-                // Note that it is a common practice to first send money to a pre-calculated contract
+                // Note that it is possible to first send money to a pre-calculated contract
                 // address and then deploy contracts. So we are going to *allow* sending to a contract
                 // address and use new_basic() to create a *stub* there. Because the contract serialization
                 // is a super-set of the normal address serialization, this should just work.

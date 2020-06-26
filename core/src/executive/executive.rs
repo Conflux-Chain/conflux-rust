@@ -330,7 +330,7 @@ impl<'a> CallCreateExecutive<'a> {
     ) -> vm::Result<()>
     {
         if let ActionValue::Transfer(val) = params.value {
-            // It is a common practice to first send money to a pre-calculated
+            // It is possible to first send money to a pre-calculated
             // contract address.
             let prev_balance = state.balance(&params.address)?;
             state.sub_balance(
