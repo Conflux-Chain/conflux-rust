@@ -189,7 +189,7 @@ fn test_create_contract_out_of_depth() {
         ex.create(params, &mut substate).unwrap()
     };
 
-    assert_eq!(gas_left, U256::from(62_976));
+    assert_eq!(gas_left, U256::from(62_970));
     assert_eq!(substate.contracts_created.len(), 0);
 }
 
@@ -290,7 +290,7 @@ fn test_call_to_create() {
         *COLLATERAL_PER_STORAGE_KEY + U256::from(15_625_000_000_000_000u64)
     );
 
-    assert_eq!(gas_left, U256::from(59_752));
+    assert_eq!(gas_left, U256::from(59_746));
 }
 
 #[test]
@@ -995,7 +995,7 @@ fn test_commission_privilege() {
     .successfully_executed()
     .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_024));
+    assert_eq!(gas_used, U256::from(58_030));
     assert_eq!(state.nonce(&sender.address()).unwrap(), U256::from(1));
     assert_eq!(state.balance(&address).unwrap(), U256::from(1_000_000));
     assert_eq!(
@@ -1087,11 +1087,11 @@ fn test_commission_privilege() {
     .successfully_executed()
     .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_024));
+    assert_eq!(gas_used, U256::from(58_030));
     assert_eq!(state.nonce(&caller3.address()).unwrap(), U256::from(1));
     assert_eq!(
         state.balance(&caller3.address()).unwrap(),
-        U256::from(41_976)
+        U256::from(41_970)
     );
     assert_eq!(
         state.sponsor_balance_for_gas(&address).unwrap(),
@@ -1128,7 +1128,7 @@ fn test_commission_privilege() {
     .successfully_executed()
     .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_024));
+    assert_eq!(gas_used, U256::from(58_030));
     assert_eq!(state.nonce(&caller1.address()).unwrap(), U256::from(1));
     assert_eq!(
         state.balance(&caller1.address()).unwrap(),
@@ -1169,7 +1169,7 @@ fn test_commission_privilege() {
     .successfully_executed()
     .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_024));
+    assert_eq!(gas_used, U256::from(58_030));
     assert_eq!(state.nonce(&caller2.address()).unwrap(), U256::from(1));
     assert_eq!(
         state.balance(&caller2.address()).unwrap(),
@@ -1224,7 +1224,7 @@ fn test_commission_privilege() {
     .successfully_executed()
     .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_024));
+    assert_eq!(gas_used, U256::from(58_030));
     assert_eq!(state.nonce(&caller2.address()).unwrap(), U256::from(2));
     assert_eq!(
         state.balance(&caller2.address()).unwrap(),
@@ -1258,7 +1258,7 @@ fn test_commission_privilege() {
     assert_eq!(tx.sender(), caller3.address());
     assert_eq!(
         state.balance(&caller3.address()).unwrap(),
-        U256::from(41_976)
+        U256::from(41_970)
     );
     let Executed { gas_used, .. } = Executive::new(
         &mut state,
@@ -1272,11 +1272,11 @@ fn test_commission_privilege() {
     .successfully_executed()
     .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_024));
+    assert_eq!(gas_used, U256::from(58_030));
     assert_eq!(state.nonce(&caller3.address()).unwrap(), U256::from(2));
     assert_eq!(
         state.balance(&caller3.address()).unwrap(),
-        U256::from(41_976)
+        U256::from(41_970)
     );
     assert_eq!(
         state.sponsor_balance_for_gas(&address).unwrap(),
