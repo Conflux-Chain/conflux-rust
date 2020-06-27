@@ -6,8 +6,8 @@ use crate::{
     executive::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
     parameters::staking::*,
     storage::{
-        Error as StorageError, ErrorKind as StorageErrorKind, StateProof,
-        StateRootWithAuxInfo, StorageState, StorageStateTrait,
+        Error as StorageError, ErrorKind as StorageErrorKind, MptKeyValue,
+        StateProof, StateRootWithAuxInfo, StorageState, StorageStateTrait,
     },
 };
 use cfx_types::{Address, H256, U256};
@@ -174,7 +174,7 @@ impl StateDb {
     pub fn delete_all(
         &mut self, key_prefix: StorageKey,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> Result<Option<Vec<(Vec<u8>, Box<[u8]>)>>>
+    ) -> Result<Option<Vec<MptKeyValue>>>
     {
         if let Some(record) = debug_record {
             record.state_ops.push(StateOp::StorageLevelOp {
