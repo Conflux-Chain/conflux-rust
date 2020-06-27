@@ -130,7 +130,7 @@ impl<
 }
 
 // So far we don't support ElementType that is non 'static because rust
-// automatically add 'static to ElementContrain since it is a trait object.
+// automatically add 'static to ElementConstrain since it is a trait object.
 // It would require more time to add support for ElementType with lifetime
 // constrain.
 /// ElementConstrain is a trait that can be made into trait object where
@@ -140,7 +140,7 @@ pub trait ElementSatisfy<ElementConstrain: ?Sized> {
     fn to_constrain_object_mut(&mut self) -> &mut ElementConstrain;
 }
 
-// Library user don't neet to look beyond this point. Check test mod for usage.
+// Library user don't need to look beyond this point. Check test mod for usage.
 
 /// Trait on Index, meaning that the element at Index for ConcernedTuple
 /// satisfies ElementConstrain.

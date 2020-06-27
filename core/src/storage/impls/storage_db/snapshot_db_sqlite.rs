@@ -244,8 +244,80 @@ impl<'db> SnapshotKvIterTrait<'db> for SnapshotDbSqlite {
     }
 }
 
-impl WrappedTrait for KvdbSqliteSharded<Box<[u8]>> {}
-impl WrappedLifetimeFamily<'_> for KvdbSqliteSharded<Box<[u8]>> {
+impl WrappedTrait<dyn FallibleIterator<Item = MptKeyValue, Error = Error>>
+    for KvdbIterIterator<MptKeyValue, [u8], SnapshotDbSqlite>
+{
+}
+impl<'a>
+    WrappedLifetimeFamily<
+        'a,
+        dyn FallibleIterator<Item = MptKeyValue, Error = Error>,
+    > for KvdbIterIterator<MptKeyValue, [u8], SnapshotDbSqlite>
+{
+    type Out = ShardedIterMerger<
+        Vec<u8>,
+        Box<[u8]>,
+        MappedRows<
+            'a,
+            for<'r, 's> fn(&'r Statement<'s>) -> Result<MptKeyValue>,
+        >,
+    >;
+}
+
+impl KvdbIterTrait<MptKeyValue, [u8], SnapshotDbSqlite>
+    for KvdbSqliteSharded<Box<[u8]>>
+{
+    fn iter_range2(
+        &mut self, lower_bound_incl: &[u8], upper_bound_excl: Option<&[u8]>,
+    ) -> Result<
+        Wrap<
+            KvdbIterIterator<MptKeyValue, [u8], SnapshotDbSqlite>,
+            dyn FallibleIterator<Item = (Vec<u8>, Box<[u8]>), Error = Error>,
+        >,
+    > {
+        unimplemented!()
+    }
+
+    fn iter_range_excl2(
+        &mut self, lower_bound_excl: &[u8], upper_bound_excl: &[u8],
+    ) -> Result<
+        Wrap<
+            KvdbIterIterator<MptKeyValue, [u8], SnapshotDbSqlite>,
+            dyn FallibleIterator<Item = (Vec<u8>, Box<[u8]>), Error = Error>,
+        >,
+    > {
+        unimplemented!()
+    }
+}
+
+impl ElementSatisfy<dyn KvdbIterTrait<MptKeyValue, [u8], SnapshotDbSqlite>>
+    for KvdbSqliteSharded<Box<[u8]>>
+{
+    fn to_constrain_object(
+        &self,
+    ) -> &(dyn KvdbIterTrait<MptKeyValue, [u8], SnapshotDbSqlite> + 'static)
+    {
+        self
+    }
+
+    fn to_constrain_object_mut(
+        &mut self,
+    ) -> &mut (dyn KvdbIterTrait<MptKeyValue, [u8], SnapshotDbSqlite> + 'static)
+    {
+        self
+    }
+}
+
+impl WrappedTrait<dyn KvdbIterTrait<MptKeyValue, [u8], SnapshotDbSqlite>>
+    for KvdbSqliteSharded<Box<[u8]>>
+{
+}
+impl
+    WrappedLifetimeFamily<
+        '_,
+        dyn KvdbIterTrait<MptKeyValue, [u8], SnapshotDbSqlite>,
+    > for KvdbSqliteSharded<Box<[u8]>>
+{
     type Out = Self;
 }
 
@@ -408,7 +480,12 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
 
     fn snapshot_kv_iterator_n(
         &self,
-    ) -> Result<Wrap<Self::SnapshotKvIterTypeN>> {
+    ) -> Result<
+        Wrap<
+            Self::SnapshotKvIterTypeN,
+            dyn KvdbIterTrait<MptKeyValue, [u8], SnapshotDbSqlite>,
+        >,
+    > {
         Ok(Wrap(KvdbSqliteSharded::new(
             self.try_clone_connections()?,
             SNAPSHOT_DB_STATEMENTS.kvdb_statements.clone(),
@@ -618,25 +695,30 @@ use crate::storage::{
                 KvdbSqliteSharded, KvdbSqliteShardedBorrowMut,
                 KvdbSqliteShardedBorrowShared,
                 KvdbSqliteShardedDestructureTrait,
-                KvdbSqliteShardedRefDestructureTrait,
+                KvdbSqliteShardedRefDestructureTrait, ShardedIterMerger,
             },
             snapshot_db_manager_sqlite::AlreadyOpenSnapshots,
             snapshot_mpt::{SnapshotMpt, SnapshotMptLoadNode},
-            sqlite::SQLITE_NO_PARAM,
+            sqlite::{MappedRows, SQLITE_NO_PARAM},
         },
     },
     storage_db::{
         KeyValueDbIterableTrait, KeyValueDbTraitSingleWriter, KeyValueDbTypes,
-        OpenSnapshotMptTrait, OwnedReadImplByFamily, OwnedReadImplFamily,
-        ReadImplByFamily, ReadImplFamily, SingleWriterImplByFamily,
-        SingleWriterImplFamily, SnapshotDbTrait, SnapshotKvIterTrait,
-        SnapshotMptDbValue, SnapshotMptTraitReadAndIterate, SnapshotMptTraitRw,
+        KvdbIterImpl, KvdbIterIterator, KvdbIterTrait, OpenSnapshotMptTrait,
+        OwnedReadImplByFamily, OwnedReadImplFamily, ReadImplByFamily,
+        ReadImplFamily, SingleWriterImplByFamily, SingleWriterImplFamily,
+        SnapshotDbTrait, SnapshotKvIterTrait, SnapshotMptDbValue,
+        SnapshotMptTraitReadAndIterate, SnapshotMptTraitRw,
     },
-    utils::wrap::{Wrap, WrappedLifetimeFamily, WrappedTrait},
+    utils::{
+        tuple::ElementSatisfy,
+        wrap::{Wrap, WrappedLifetimeFamily, WrappedTrait},
+    },
     KVInserter, SnapshotDbManagerSqlite, SqliteConnection,
 };
 use fallible_iterator::FallibleIterator;
 use primitives::{MerkleHash, StorageKey};
+use sqlite::Statement;
 use std::{
     fs,
     path::{Path, PathBuf},

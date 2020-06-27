@@ -128,23 +128,27 @@ impl<'a> MptIter<'a> {
 }
 
 pub fn verify_snapshot_db<
-    'db,
     SnapshotDbType: SnapshotDbTrait<ValueType = Box<[u8]>>,
 >(
-    snapshot_db: &'db SnapshotDbType,
+    snapshot_db: &SnapshotDbType,
 )
 /*
+// snapshot_db: &'db
 where <SnapshotDbType as SnapshotKvIterTrait<'db>>::SnapshotKvIterType:
 for<'a> KeyValueDbIterableTrait<'a, (Vec<u8>, Box<[u8]>), Error, [u8]>
  */
-/*where for<'a> <SnapshotDbType::SnapshotKvIterTypeN as WrappedLifetimeFamily<'a>>::Out:
-        KeyValueDbIterableTrait<'a, (Vec<u8>, Box<[u8]>), Error, [u8]>*/
+/*
 where <SnapshotDbType::SnapshotKvIterTypeN as WrappedLifetimeFamily<'db>>::Out:
-        for<'a> KeyValueDbIterableTrait<'a, MptKeyValue, Error, [u8]> {
+        for<'a> KeyValueDbIterableTrait<'a, MptKeyValue, Error, [u8]>
+ */
+{
     let mut mpt_kvs: Vec<MptKeyValue> = vec![];
     let mut key_value_iter =
         snapshot_db.snapshot_kv_iterator_n().unwrap().take();
-    let mut kv_iter = key_value_iter.iter_range(&[], None).unwrap();
+    let mut kv_iter = key_value_iter
+        .to_constrain_object()
+        .iter_range2(&[], None)
+        .unwrap();
     while let Some((key, value)) = kv_iter.next().unwrap() {
         if value.len() == 0 {
             println!("snapshot db value can't be 0");

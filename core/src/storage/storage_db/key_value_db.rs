@@ -77,57 +77,113 @@ pub trait KeyValueDbIterableTrait<'db, Item, Error, KeyType: ?Sized> {
     ) -> Result<Self::Iterator>;
 }
 
+// FIXME: create a marker ImplESByTransmute<Trait> and then auto impl transmute.
+
+impl<Item, T: FallibleIterator<Item = Item, Error = Error>>
+    ElementSatisfy<dyn FallibleIterator<Item = Item, Error = Error> + 'static>
+    for T
+{
+    fn to_constrain_object(
+        &self,
+    ) -> &(dyn 'static + FallibleIterator<Item = Item, Error = Error>) {
+        unsafe {
+            std::mem::transmute(
+                self as &(dyn '_
+                      + FallibleIterator<Item = Item, Error = Error>),
+            )
+        }
+    }
+
+    fn to_constrain_object_mut(
+        &mut self,
+    ) -> &mut (dyn FallibleIterator<Item = Item, Error = Error> + 'static) {
+        unsafe {
+            std::mem::transmute(
+                self as &mut (dyn '_
+                          + FallibleIterator<Item = Item, Error = Error>),
+            )
+        }
+    }
+}
+
 // FIXME: this is temporary
-pub struct KvdbIterIterator<Item, Error, KeyType: ?Sized, T> {
+pub struct KvdbIterIterator<Item, KeyType: ?Sized, T: ?Sized> {
     __i_m: std::marker::PhantomData<Item>,
-    __e_m: std::marker::PhantomData<Error>,
     __k_m: std::marker::PhantomData<KeyType>,
     __t_m: std::marker::PhantomData<T>,
 }
 impl<
         Item,
-        Error,
         KeyType: ?Sized,
         T: for<'db> KeyValueDbIterableTrait<'db, Item, Error, KeyType>,
-    > WrappedTrait for KvdbIterIterator<Item, Error, KeyType, T>
+    > WrappedTrait<dyn FallibleIterator<Item = Item, Error = Error>>
+    for KvdbIterIterator<Item, KeyType, T>
+where for<'x> <T as KeyValueDbIterableTrait<'x, Item, Error, KeyType>>::Iterator:
+        ElementSatisfy<
+            dyn FallibleIterator<Item = Item, Error = Error> + 'static,
+        >
 {
 }
 impl<
         'a,
         Item,
-        Error,
         KeyType: ?Sized,
         T: for<'db> KeyValueDbIterableTrait<'db, Item, Error, KeyType>,
-    > WrappedLifetimeFamily<'a> for KvdbIterIterator<Item, Error, KeyType, T>
+    >
+    WrappedLifetimeFamily<'a, dyn FallibleIterator<Item = Item, Error = Error>>
+    for KvdbIterIterator<Item, KeyType, T>
+where for<'x> <T as KeyValueDbIterableTrait<'x, Item, Error, KeyType>>::Iterator:
+        ElementSatisfy<
+            dyn FallibleIterator<Item = Item, Error = Error> + 'static,
+        >
 {
     type Out =
         <T as KeyValueDbIterableTrait<'a, Item, Error, KeyType>>::Iterator;
 }
 
 // FIXME: rename
-pub trait KvdbIterTrait<Item, Error, KeyType: ?Sized>: Sized
-where for<'db> Self: KeyValueDbIterableTrait<'db, Item, Error, KeyType>
+pub trait KvdbIterTrait<Item, KeyType: ?Sized, Tag: ?Sized>
+where KvdbIterIterator<Item, KeyType, Tag>:
+        WrappedTrait<dyn FallibleIterator<Item = Item, Error = Error>>
 {
     fn iter_range2(
         &mut self, lower_bound_incl: &KeyType,
         upper_bound_excl: Option<&KeyType>,
-    ) -> Result<Wrap<KvdbIterIterator<Item, Error, KeyType, Self>>>;
+    ) -> Result<
+        Wrap<
+            KvdbIterIterator<Item, KeyType, Tag>,
+            dyn FallibleIterator<Item = Item, Error = Error>,
+        >,
+    >;
     fn iter_range_excl2(
         &mut self, lower_bound_excl: &KeyType, upper_bound_excl: &KeyType,
-    ) -> Result<Wrap<KvdbIterIterator<Item, Error, KeyType, Self>>>;
+    ) -> Result<
+        Wrap<
+            KvdbIterIterator<Item, KeyType, Tag>,
+            dyn FallibleIterator<Item = Item, Error = Error>,
+        >,
+    >;
 }
 
 impl<
         Item,
-        Error,
         KeyType: ?Sized,
         T: for<'db> KeyValueDbIterableTrait<'db, Item, Error, KeyType>,
-    > KvdbIterTrait<Item, Error, KeyType> for T
+    > KvdbIterTrait<Item, KeyType, T> for T
+where for<'x> <T as KeyValueDbIterableTrait<'x, Item, Error, KeyType>>::Iterator:
+        ElementSatisfy<
+            dyn FallibleIterator<Item = Item, Error = Error> + 'static,
+        >
 {
     fn iter_range2(
         &mut self, lower_bound_incl: &KeyType,
         upper_bound_excl: Option<&KeyType>,
-    ) -> Result<Wrap<KvdbIterIterator<Item, Error, KeyType, Self>>>
+    ) -> Result<
+        Wrap<
+            KvdbIterIterator<Item, KeyType, T>,
+            dyn FallibleIterator<Item = Item, Error = Error>,
+        >,
+    >
     {
         // to my surprise it compiles
         Ok(Wrap(
@@ -137,7 +193,12 @@ impl<
 
     fn iter_range_excl2(
         &mut self, lower_bound_excl: &KeyType, upper_bound_excl: &KeyType,
-    ) -> Result<Wrap<KvdbIterIterator<Item, Error, KeyType, Self>>> {
+    ) -> Result<
+        Wrap<
+            KvdbIterIterator<Item, KeyType, T>,
+            dyn FallibleIterator<Item = Item, Error = Error>,
+        >,
+    > {
         Ok(Wrap(
             self.iter_range_excl(lower_bound_excl, upper_bound_excl)
                 .unwrap(),
@@ -543,7 +604,10 @@ where <T as KvdbIterImpl<
 }
 
 use super::super::impls::errors::*;
-use crate::storage::utils::wrap::{Wrap, WrappedLifetimeFamily, WrappedTrait};
+use crate::storage::utils::{
+    tuple::ElementSatisfy,
+    wrap::{Wrap, WrappedLifetimeFamily, WrappedTrait},
+};
 use fallible_iterator::FallibleIterator;
 use malloc_size_of::MallocSizeOf;
 use std::any::Any;
