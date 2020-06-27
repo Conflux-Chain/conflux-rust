@@ -139,7 +139,7 @@ impl FallibleIterator for FakeSnapshotMptDbIter<'_> {
 }
 
 #[cfg(test)]
-fn assert_snapshot_mpt_formation(mpt_kv_iter: &DumpedDeltaMptIterator) {
+fn assert_snapshot_mpt_formation(mpt_kv_iter: &DumpedMptKvIterator) {
     let snapshot_mpt_nodes;
     let delta_mpt_root = {
         let state_manager = new_state_manager_for_unit_test();
@@ -257,7 +257,7 @@ fn test_mpt_node_path_to_from_db_key() {
 #[test]
 fn test_merkle_root() {
     // Merkle root of empty db.
-    assert_snapshot_mpt_formation(&DumpedDeltaMptIterator::default());
+    assert_snapshot_mpt_formation(&DumpedMptKvIterator::default());
 
     // Merkle root of random set of keys.
     let mut rng = get_rng_for_test();
@@ -267,7 +267,7 @@ fn test_merkle_root() {
             .filter(|_| rng.gen_bool(0.1))
             .cloned()
             .collect();
-        let mpt_kv_iter = DumpedDeltaMptIterator {
+        let mpt_kv_iter = DumpedMptKvIterator {
             kv: keys.iter().map(|k| (k[..].into(), k[..].into())).collect(),
         };
         assert_snapshot_mpt_formation(&mpt_kv_iter);
@@ -283,7 +283,7 @@ fn test_delete_all() {
         .filter(|_| rng.gen_bool(0.5))
         .cloned()
         .collect();
-    let mpt_kv_iter = DumpedDeltaMptIterator {
+    let mpt_kv_iter = DumpedMptKvIterator {
         kv: keys.iter().map(|k| (k[..].into(), k[..].into())).collect(),
     };
 
@@ -296,7 +296,7 @@ fn test_delete_all() {
         .merge(&mpt_kv_iter)
         .unwrap();
 
-    let mpt_deleter = DumpedDeltaMptIterator {
+    let mpt_deleter = DumpedMptKvIterator {
         kv: keys
             .iter()
             .map(|k| (k[..].into(), Default::default()))
@@ -335,7 +335,7 @@ fn test_inserts_deletes_and_subtree_size() {
 
     // Case 1. Start with a snapshot mpt consisting of keys_delete,
     // Apply the change, then end up with a snapshot mpt consisting of keys_new.
-    let mpt_kv_iter = DumpedDeltaMptIterator {
+    let mpt_kv_iter = DumpedMptKvIterator {
         kv: keys_delete
             .iter()
             .map(|k| (k[..].into(), k[..].into()))
@@ -343,11 +343,18 @@ fn test_inserts_deletes_and_subtree_size() {
     };
 
     let mut in_place_mod_mpt = FakeSnapshotMptDb::default();
-    MptMerger::new(None, &mut in_place_mod_mpt)
+    let init_merkle_root = MptMerger::new(None, &mut in_place_mod_mpt)
         .merge(&mpt_kv_iter)
         .unwrap();
 
-    let mpt_kv_iter = DumpedDeltaMptIterator {
+    let mut in_place_mod_mpt_discard_write =
+        FakeSnapshotMptDb::new_discard_write();
+    let merkle_root = MptMerger::new(None, &mut in_place_mod_mpt_discard_write)
+        .merge(&mpt_kv_iter)
+        .unwrap();
+    assert_eq!(init_merkle_root, merkle_root);
+
+    let mpt_kv_iter = DumpedMptKvIterator {
         kv: keys_new
             .iter()
             .map(|k| (k[..].into(), k[..].into()))
@@ -358,7 +365,7 @@ fn test_inserts_deletes_and_subtree_size() {
         .merge(&mpt_kv_iter)
         .unwrap();
 
-    let delta_mpt_iter = DumpedDeltaMptIterator {
+    let delta_mpt_iter = DumpedMptKvIterator {
         kv: [
             keys_delete
                 .iter()
@@ -389,7 +396,7 @@ fn test_inserts_deletes_and_subtree_size() {
     // Case 2. Start with a snapshot mpt consisting of keys_unchanged,
     // keys_overwritten, keys_delete, Apply the change, then end up with a
     // snapshot mpt consisting of (keys_unchanged, keys_overwritten, keys_new).
-    let mpt_kv_iter = DumpedDeltaMptIterator {
+    let mpt_kv_iter = DumpedMptKvIterator {
         kv: [
             keys_unchanged
                 .iter()
@@ -412,7 +419,7 @@ fn test_inserts_deletes_and_subtree_size() {
         .merge(&mpt_kv_iter)
         .unwrap();
 
-    let mpt_kv_iter = DumpedDeltaMptIterator {
+    let mpt_kv_iter = DumpedMptKvIterator {
         kv: [
             keys_unchanged
                 .iter()
@@ -434,7 +441,7 @@ fn test_inserts_deletes_and_subtree_size() {
         .merge(&mpt_kv_iter)
         .unwrap();
 
-    let delta_mpt_iter = DumpedDeltaMptIterator {
+    let delta_mpt_iter = DumpedMptKvIterator {
         kv: [
             keys_delete
                 .iter()
@@ -479,7 +486,7 @@ fn test_two_way_merge() {
         &keys[set_size * 3..set_size * 4],
     );
 
-    let mpt_kv_iter = DumpedDeltaMptIterator {
+    let mpt_kv_iter = DumpedMptKvIterator {
         kv: [
             keys_unchanged
                 .iter()
@@ -503,7 +510,7 @@ fn test_two_way_merge() {
         .unwrap();
 
     // One way merge.
-    let delta_mpt_iter = DumpedDeltaMptIterator {
+    let delta_mpt_iter = DumpedMptKvIterator {
         kv: [
             keys_delete
                 .iter()

@@ -47,7 +47,7 @@ pub trait KeyValueDbIterableTrait<'db, Item, Error, KeyType: ?Sized> {
     // TODO(yz): lifetime? Then create a HRTB for it?
     // TODO(yz): Maybe Lukas who wrote http://lukaskalbertodt.github.io/2018/08/03/solving-the-generalized-streaming-iterator-problem-without-gats.html#workaround-b-hrtbs--the-family-trait-pattern
     // TODO(yz): has a library?
-    type Iterator: FallibleIterator<Item = Item, Error = Error> + 'db;
+    type Iterator: 'db + FallibleIterator<Item = Item, Error = Error>;
 
     fn iter_range(
         &'db mut self, lower_bound_incl: &KeyType,
@@ -178,6 +178,30 @@ where for<'a> &'a T: KeyValueDbTraitOwnedRead<ValueType = Self::ValueType>
     > {
         Ok(Box::new(self))
     }
+}
+
+macro_rules! mark_kvdb_multi_reader {
+    ($type:ty) => {
+        impl KeyValueDbTraitMultiReader for $type {}
+        // Family dispatching
+        impl OwnedReadImplFamily for &$type {
+            type FamilyRepresentative = dyn KeyValueDbTraitMultiReader<
+                ValueType = <$type as KeyValueDbTypes>::ValueType,
+            >;
+        }
+    };
+}
+
+impl DbValueType for () {
+    type Type = ();
+}
+
+impl DbValueType for Box<[u8]> {
+    type Type = [u8];
+}
+
+impl DbValueType for i64 {
+    type Type = i64;
 }
 
 /// We implement the family dispatching for types which implements
@@ -393,30 +417,6 @@ impl<
     ) -> Result<Option<Self::ValueType>> {
         self.get_with_number_key(key)
     }
-}
-
-macro_rules! mark_kvdb_multi_reader {
-    ($type:ty) => {
-        impl KeyValueDbTraitMultiReader for $type {}
-        // Family dispatching
-        impl OwnedReadImplFamily for &$type {
-            type FamilyRepresentative = dyn KeyValueDbTraitMultiReader<
-                ValueType = <$type as KeyValueDbTypes>::ValueType,
-            >;
-        }
-    };
-}
-
-impl DbValueType for () {
-    type Type = ();
-}
-
-impl DbValueType for Box<[u8]> {
-    type Type = [u8];
-}
-
-impl DbValueType for i64 {
-    type Type = i64;
 }
 
 use super::super::impls::errors::*;

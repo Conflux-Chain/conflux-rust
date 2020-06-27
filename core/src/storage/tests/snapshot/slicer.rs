@@ -32,7 +32,7 @@ fn test_slicing_position() {
         .cloned()
         .collect();
     keys.sort();
-    let mpt_kv_iter = DumpedDeltaMptIterator {
+    let mpt_kv_iter = DumpedMptKvIterator {
         kv: keys
             .iter()
             .map(|k| {
@@ -101,7 +101,7 @@ use crate::storage::{
     impls::merkle_patricia_trie::{mpt_cursor::rlp_key_value_len, MptMerger},
     tests::{
         generate_keys, get_rng_for_test, snapshot::FakeSnapshotMptDb,
-        DumpedDeltaMptIterator, TEST_NUMBER_OF_KEYS,
+        DumpedMptKvIterator, TEST_NUMBER_OF_KEYS,
     },
     MptSlicer,
 };

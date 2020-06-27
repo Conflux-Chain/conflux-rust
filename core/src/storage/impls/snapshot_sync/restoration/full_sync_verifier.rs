@@ -216,6 +216,7 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
     /// Combine and write boundary subtree nodes after all chunks have been
     /// completed.
     pub fn finalize(&mut self) -> Result<()> {
+        self.temp_snapshot_db.start_transaction()?;
         let mut snapshot_mpt =
             self.temp_snapshot_db.open_snapshot_mpt_owned()?;
 
@@ -240,6 +241,8 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
             snapshot_mpt.write_node(&path, &node)?;
         }
 
+        drop(snapshot_mpt);
+        self.temp_snapshot_db.commit_transaction()?;
         Ok(())
     }
 }

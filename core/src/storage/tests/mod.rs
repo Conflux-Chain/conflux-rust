@@ -158,11 +158,16 @@ pub fn new_state_manager_for_unit_test() -> FakeStateManager {
 }
 
 #[derive(Default)]
-pub struct DumpedDeltaMptIterator {
+pub struct DumpedMptKvIterator {
     pub kv: Vec<(Vec<u8>, Box<[u8]>)>,
 }
 
-impl DumpedDeltaMptIterator {
+pub struct DumpedMptKvFallibleIterator {
+    pub kv: Vec<(Vec<u8>, Box<[u8]>)>,
+    pub index: usize,
+}
+
+impl DumpedMptKvIterator {
     pub fn iterate<'a, DeltaMptDumper: KVInserter<(Vec<u8>, Box<[u8]>)>>(
         &self, dumper: &mut DeltaMptDumper,
     ) -> Result<()> {
@@ -175,7 +180,7 @@ impl DumpedDeltaMptIterator {
     }
 }
 
-impl KVInserter<(Vec<u8>, Box<[u8]>)> for DumpedDeltaMptIterator {
+impl KVInserter<(Vec<u8>, Box<[u8]>)> for DumpedMptKvIterator {
     fn push(&mut self, v: (Vec<u8>, Box<[u8]>)) -> Result<()> {
         let (mpt_key, value) = v;
         let snapshot_key =
@@ -183,6 +188,17 @@ impl KVInserter<(Vec<u8>, Box<[u8]>)> for DumpedDeltaMptIterator {
 
         self.kv.push((snapshot_key, value));
         Ok(())
+    }
+}
+
+impl FallibleIterator for DumpedMptKvFallibleIterator {
+    type Error = Error;
+    type Item = (Vec<u8>, Box<[u8]>);
+
+    fn next(&mut self) -> Result<Option<Self::Item>> {
+        let result = Ok(self.kv.get(self.index).cloned());
+        self.index += 1;
+        result
     }
 }
 
@@ -239,6 +255,7 @@ use crate::storage::{
     impls::{errors::*, merkle_patricia_trie::CompressedPathRaw},
     KVInserter,
 };
+use fallible_iterator::FallibleIterator;
 use kvdb::{DBTransaction, DBValue, KeyValueDB};
 use parity_util_mem::{MallocSizeOf, MallocSizeOfOps};
 use primitives::StorageKey;

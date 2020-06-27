@@ -41,7 +41,7 @@ impl<'a> MptMerger<'a> {
     }
 
     pub fn merge(
-        &mut self, inserter: &DumpedDeltaMptIterator,
+        &mut self, inserter: &DumpedMptKvIterator,
     ) -> Result<MerkleHash> {
         self.rw_cursor.load_root()?;
 
@@ -183,7 +183,7 @@ use crate::storage::{
         merkle_patricia_trie::{mpt_cursor::*, KVInserter},
     },
     storage_db::snapshot_mpt::*,
-    tests::DumpedDeltaMptIterator,
+    tests::DumpedMptKvIterator,
 };
 use fallible_iterator::FallibleIterator;
 use primitives::MerkleHash;
