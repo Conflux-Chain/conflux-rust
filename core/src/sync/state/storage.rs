@@ -4,7 +4,10 @@
 
 use crate::sync::{Error, ErrorKind};
 use cfx_storage::{
-    storage_db::{key_value_db::KeyValueDbIterableTrait, OpenSnapshotMptTrait},
+    storage_db::{
+        key_value_db::KeyValueDbIterableTrait,
+        snapshot_db::SnapshotKvIterTrait, OpenSnapshotMptTrait,
+    },
     MptSlicer, StorageManager, TrieProof,
 };
 use cfx_types::H256;

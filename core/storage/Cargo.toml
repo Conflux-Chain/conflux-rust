@@ -7,6 +7,7 @@ version = "1.0.0"
 edition = "2018"
 
 [dependencies]
+cfg-if = "0.1"
 cfx-bytes = { path = "../../cfx_bytes" }
 cfx-internal-common = { path = "../internal_common" }
 cfx-types = { path = "../../cfx_types" }

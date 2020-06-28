@@ -2,6 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+#[cfg(test)]
+pub mod tests;
+
 pub struct SnapshotMpt<DbType: ?Sized, BorrowType: BorrowMut<DbType>> {
     pub db: BorrowType,
     pub merkle_root: MerkleHash,
@@ -86,11 +89,15 @@ impl<DbType: SnapshotMptLoadNode + ?Sized, BorrowType: BorrowMut<DbType>>
             merkle_root: MERKLE_NULL_NODE,
             _marker_db_type: Default::default(),
         };
-        if let Some(rlp) = mpt.db.borrow_mut().load_node_rlp(
-            &mpt_node_path_to_db_key(&CompressedPathRaw::default()),
-        )? {
+        let path_to_root_node = CompressedPathRaw::default();
+        if let Some(rlp) = mpt
+            .db
+            .borrow_mut()
+            .load_node_rlp(&mpt_node_path_to_db_key(&path_to_root_node))?
+        {
             mpt.merkle_root =
-                *SnapshotMptNode(Rlp::new(&rlp).as_val()?).get_merkle();
+                *SnapshotMptNode::load_rlp_and_check(&rlp, &path_to_root_node)?
+                    .get_merkle();
         }
         Ok(mpt)
     }
@@ -109,7 +116,9 @@ impl<DbType: SnapshotMptLoadNode + ?Sized, BorrowType: BorrowMut<DbType>>
         let key = mpt_node_path_to_db_key(path);
         match self.db.borrow_mut().load_node_rlp(&key)? {
             None => Ok(None),
-            Some(rlp) => Ok(Some(SnapshotMptNode(Rlp::new(&rlp).as_val()?))),
+            Some(rlp) => {
+                Ok(Some(SnapshotMptNode::load_rlp_and_check(&rlp, path)?))
+            }
         }
     }
 }

@@ -606,15 +606,29 @@ pub fn kvdb_sqlite_iter_range_excl_impl<
 impl<
         'db,
         'any: 'db,
-        Item: 'db,
+        ItemKey: 'db,
+        ValueType: 'db,
         T: DerefMutPlusImplOrBorrowMutSelf<dyn 'any + KvdbSqliteDestructureTrait>,
-        F: 'db + FnMut(&Statement<'db>) -> Result<Item>,
-    > KeyValueDbIterableTrait<'db, Item, Error, [u8]>
+        F: FnMut(&Statement<'db>) -> Result<(ItemKey, ValueType)>,
+    > KvdbIterImplKind<ItemKey, ValueType> for ConnectionWithRowParser<T, F>
+{
+    type ImplKind = KvdbSqlite<ValueType>;
+}
+
+impl<
+        'db,
+        'any: 'db,
+        ItemKey: 'db,
+        ValueType: 'db,
+        T: DerefMutPlusImplOrBorrowMutSelf<dyn 'any + KvdbSqliteDestructureTrait>,
+        F: 'db + FnMut(&Statement<'db>) -> Result<(ItemKey, ValueType)>,
+    > KvdbIterImpl<'db, KvdbSqlite<ValueType>>
     for ConnectionWithRowParser<T, F>
 {
     type Iterator = MappedRows<'db, &'db mut F>;
+    type KeyType = [u8];
 
-    fn iter_range(
+    fn iter_range_impl(
         &'db mut self, lower_bound_incl: &[u8], upper_bound_excl: Option<&[u8]>,
     ) -> Result<Self::Iterator> {
         let (connection, statements) = self.0.borrow_mut().destructure_mut();
@@ -627,7 +641,7 @@ impl<
         )
     }
 
-    fn iter_range_excl(
+    fn iter_range_excl_impl(
         &'db mut self, lower_bound_excl: &[u8], upper_bound_excl: &[u8],
     ) -> Result<Self::Iterator> {
         let (connection, statements) = self.0.borrow_mut().destructure_mut();
@@ -641,7 +655,6 @@ impl<
     }
 }
 
-/// TODO: Check if these are correct
 impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KeyValueDbTraitMultiReader for KvdbSqlite<ValueType>

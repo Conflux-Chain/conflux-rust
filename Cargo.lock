@@ -503,6 +503,7 @@ dependencies = [
 name = "cfx-storage"
 version = "1.0.0"
 dependencies = [
+ "cfg-if",
  "cfx-bytes",
  "cfx-internal-common",
  "cfx-types",
