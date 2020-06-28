@@ -550,8 +550,7 @@ impl SnapshotChunkSync {
                 && inner
                     .chunk_manager
                     .as_ref()
-                    .map(|m| m.is_inactive())
-                    .unwrap_or(true)
+                    .map_or(true, |m| m.is_inactive())
             {
                 // We are requesting candidates and all `pending_peers` timeout,
                 // or we are syncing states all
