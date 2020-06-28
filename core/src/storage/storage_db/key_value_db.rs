@@ -37,6 +37,24 @@ pub trait KeyValueDbTraitOwnedRead: KeyValueDbTypes {
     }
 }
 
+pub trait KvdbIterImplKind<ItemKey, ValueType> {
+    type ImplKind: ?Sized;
+}
+
+pub trait KvdbIterImpl<'db, ImplKind: ?Sized> {
+    type KeyType: ?Sized;
+    type Iterator: 'db;
+
+    fn iter_range_impl(
+        &'db mut self, lower_bound_incl: &Self::KeyType,
+        upper_bound_excl: Option<&Self::KeyType>,
+    ) -> Result<Self::Iterator>;
+    fn iter_range_excl_impl(
+        &'db mut self, lower_bound_excl: &Self::KeyType,
+        upper_bound_excl: &Self::KeyType,
+    ) -> Result<Self::Iterator>;
+}
+
 pub trait KeyValueDbIterableTrait<'db, Item, Error, KeyType: ?Sized> {
     /// Initially we'd like to use FallibleStreamingIterator however it's only
     /// possible to return a borrow from the iteration, but we want to be
@@ -57,6 +75,74 @@ pub trait KeyValueDbIterableTrait<'db, Item, Error, KeyType: ?Sized> {
     fn iter_range_excl(
         &'db mut self, lower_bound_excl: &KeyType, upper_bound_excl: &KeyType,
     ) -> Result<Self::Iterator>;
+}
+
+// FIXME: this is temporary
+pub struct KvdbIterIterator<Item, Error, KeyType: ?Sized, T> {
+    __i_m: std::marker::PhantomData<Item>,
+    __e_m: std::marker::PhantomData<Error>,
+    __k_m: std::marker::PhantomData<KeyType>,
+    __t_m: std::marker::PhantomData<T>,
+}
+impl<
+        Item,
+        Error,
+        KeyType: ?Sized,
+        T: for<'db> KeyValueDbIterableTrait<'db, Item, Error, KeyType>,
+    > WrappedTrait for KvdbIterIterator<Item, Error, KeyType, T>
+{
+}
+impl<
+        'a,
+        Item,
+        Error,
+        KeyType: ?Sized,
+        T: for<'db> KeyValueDbIterableTrait<'db, Item, Error, KeyType>,
+    > WrappedLifetimeFamily<'a> for KvdbIterIterator<Item, Error, KeyType, T>
+{
+    type Out =
+        <T as KeyValueDbIterableTrait<'a, Item, Error, KeyType>>::Iterator;
+}
+
+// FIXME: rename
+pub trait KvdbIterTrait<Item, Error, KeyType: ?Sized>: Sized
+where for<'db> Self: KeyValueDbIterableTrait<'db, Item, Error, KeyType>
+{
+    fn iter_range2(
+        &mut self, lower_bound_incl: &KeyType,
+        upper_bound_excl: Option<&KeyType>,
+    ) -> Result<Wrap<KvdbIterIterator<Item, Error, KeyType, Self>>>;
+    fn iter_range_excl2(
+        &mut self, lower_bound_excl: &KeyType, upper_bound_excl: &KeyType,
+    ) -> Result<Wrap<KvdbIterIterator<Item, Error, KeyType, Self>>>;
+}
+
+impl<
+        Item,
+        Error,
+        KeyType: ?Sized,
+        T: for<'db> KeyValueDbIterableTrait<'db, Item, Error, KeyType>,
+    > KvdbIterTrait<Item, Error, KeyType> for T
+{
+    fn iter_range2(
+        &mut self, lower_bound_incl: &KeyType,
+        upper_bound_excl: Option<&KeyType>,
+    ) -> Result<Wrap<KvdbIterIterator<Item, Error, KeyType, Self>>>
+    {
+        // to my surprise it compiles
+        Ok(Wrap(
+            self.iter_range(lower_bound_incl, upper_bound_excl).unwrap(),
+        ))
+    }
+
+    fn iter_range_excl2(
+        &mut self, lower_bound_excl: &KeyType, upper_bound_excl: &KeyType,
+    ) -> Result<Wrap<KvdbIterIterator<Item, Error, KeyType, Self>>> {
+        Ok(Wrap(
+            self.iter_range_excl(lower_bound_excl, upper_bound_excl)
+                .unwrap(),
+        ))
+    }
 }
 
 pub trait KeyValueDbTraitSingleWriter: KeyValueDbTraitOwnedRead {
@@ -419,7 +505,45 @@ impl<
     }
 }
 
+impl<
+        'db,
+        ItemKey,
+        ValueType,
+        KeyType: ?Sized,
+        T: KvdbIterImplKind<ItemKey, ValueType>
+            + KvdbIterImpl<
+                'db,
+                <T as KvdbIterImplKind<ItemKey, ValueType>>::ImplKind,
+                KeyType = KeyType,
+            >,
+    > KeyValueDbIterableTrait<'db, (ItemKey, ValueType), Error, KeyType> for T
+where <T as KvdbIterImpl<
+        'db,
+        <T as KvdbIterImplKind<ItemKey, ValueType>>::ImplKind,
+    >>::Iterator: FallibleIterator<Item = (ItemKey, ValueType), Error = Error>
+{
+    type Iterator = <T as KvdbIterImpl<
+        'db,
+        <T as KvdbIterImplKind<ItemKey, ValueType>>::ImplKind,
+    >>::Iterator;
+
+    fn iter_range(
+        &'db mut self, lower_bound_incl: &KeyType,
+        upper_bound_excl: Option<&KeyType>,
+    ) -> Result<Self::Iterator>
+    {
+        self.iter_range_impl(lower_bound_incl, upper_bound_excl)
+    }
+
+    fn iter_range_excl(
+        &'db mut self, lower_bound_excl: &KeyType, upper_bound_excl: &KeyType,
+    ) -> Result<Self::Iterator> {
+        self.iter_range_excl_impl(lower_bound_excl, upper_bound_excl)
+    }
+}
+
 use super::super::impls::errors::*;
+use crate::storage::utils::wrap::{Wrap, WrappedLifetimeFamily, WrappedTrait};
 use fallible_iterator::FallibleIterator;
 use malloc_size_of::MallocSizeOf;
 use std::any::Any;

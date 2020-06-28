@@ -492,6 +492,7 @@ dependencies = [
  "bit-set",
  "bn",
  "byteorder",
+ "cfg-if",
  "cfx-bytes",
  "cfx-types",
  "cfx-utils",

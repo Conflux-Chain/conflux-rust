@@ -5,7 +5,8 @@
 use crate::{
     storage::{
         storage_db::{
-            key_value_db::KeyValueDbIterableTrait, OpenSnapshotMptTrait,
+            key_value_db::KeyValueDbIterableTrait,
+            snapshot_db::SnapshotKvIterTrait, OpenSnapshotMptTrait,
         },
         MptSlicer, StorageManager, TrieProof,
     },

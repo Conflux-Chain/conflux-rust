@@ -220,9 +220,18 @@ fn test_slice_verifier() {
 }
 
 #[derive(Default)]
-struct FakeSnapshotDb {
-    kv: HashMap<Vec<u8>, Box<[u8]>>,
+pub struct FakeSnapshotDb {
+    kv: BTreeMap<Vec<u8>, Box<[u8]>>,
     mpt_db: Arc<Mutex<FakeSnapshotMptDb>>,
+}
+
+impl FakeSnapshotDb {
+    pub fn new(kv: &[(Vec<u8>, Box<[u8]>)], mpt: &FakeSnapshotMptDb) -> Self {
+        Self {
+            kv: kv.iter().cloned().collect(),
+            mpt_db: Arc::new(Mutex::new(mpt.clone())),
+        }
+    }
 }
 
 impl KeyValueDbTypes for Arc<Mutex<FakeSnapshotDb>> {
@@ -287,6 +296,68 @@ impl SnapshotMptTraitRw for Arc<Mutex<FakeSnapshotMptDb>> {
     }
 }
 
+impl KvdbIterImplKind<Vec<u8>, Box<[u8]>> for ArcMutexFakeSnapshotDbRef<'_> {
+    type ImplKind = FakeSnapshotDb;
+}
+
+impl<'a, 'db> KvdbIterImpl<'db, FakeSnapshotDb>
+    for ArcMutexFakeSnapshotDbRef<'a>
+{
+    type Iterator = DumpedMptKvFallibleIterator;
+    type KeyType = [u8];
+
+    fn iter_range_impl(
+        &'db mut self, lower_bound_incl: &[u8], upper_bound_excl: Option<&[u8]>,
+    ) -> Result<Self::Iterator> {
+        let db = &*self.r.lock();
+        Ok(DumpedMptKvFallibleIterator {
+            kv: db
+                .kv
+                .range((
+                    Included(Vec::from(lower_bound_incl)),
+                    upper_bound_excl
+                        .map_or(Unbounded, |v| Excluded(Vec::from(v))),
+                ))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+            index: 0,
+        })
+    }
+
+    fn iter_range_excl_impl(
+        &'db mut self, lower_bound_excl: &[u8], upper_bound_excl: &[u8],
+    ) -> Result<Self::Iterator> {
+        let db = &*self.r.lock();
+        Ok(DumpedMptKvFallibleIterator {
+            kv: db
+                .kv
+                .range((
+                    Excluded(Vec::from(lower_bound_excl)),
+                    Excluded(Vec::from(upper_bound_excl)),
+                ))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+            index: 0,
+        })
+    }
+}
+
+pub struct ArcMutexFakeSnapshotDbRef<'a> {
+    // To work around an annoying rust compilation error because Arc is an
+    // upstream type. Rust is afraid that DerefMut is implemented for Arc
+    // so that which implementation for KvdbIterImplKind to apply can become
+    // ambigiuous.
+    r: &'a Arc<Mutex<FakeSnapshotDb>>,
+}
+
+impl<'db> SnapshotKvIterTrait<'db> for Arc<Mutex<FakeSnapshotDb>> {
+    type SnapshotKvIterType = ArcMutexFakeSnapshotDbRef<'db>;
+
+    fn snapshot_kv_iterator(&'db self) -> Result<Self::SnapshotKvIterType> {
+        Ok(ArcMutexFakeSnapshotDbRef { r: self })
+    }
+}
+
 impl<'db> OpenSnapshotMptTrait<'db> for Arc<Mutex<FakeSnapshotDb>> {
     type SnapshotDbAsOwnedType = Arc<Mutex<FakeSnapshotMptDb>>;
     type SnapshotDbBorrowMutType = Arc<Mutex<FakeSnapshotMptDb>>;
@@ -311,7 +382,15 @@ impl<'db> OpenSnapshotMptTrait<'db> for Arc<Mutex<FakeSnapshotDb>> {
     }
 }
 
+impl WrappedTrait for Arc<Mutex<FakeSnapshotDb>> {}
+
+impl<'a> WrappedLifetimeFamily<'a> for Arc<Mutex<FakeSnapshotDb>> {
+    type Out = ArcMutexFakeSnapshotDbRef<'a>;
+}
+
 impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
+    type SnapshotKvIterTypeN = Self;
+
     fn get_null_snapshot() -> Self { unreachable!() }
 
     fn open(
@@ -343,6 +422,12 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
     fn start_transaction(&mut self) -> Result<()> { Ok(()) }
 
     fn commit_transaction(&mut self) -> Result<()> { Ok(()) }
+
+    fn snapshot_kv_iterator_n(
+        &self,
+    ) -> Result<Wrap<Self::SnapshotKvIterTypeN>> {
+        Ok(Wrap(ArcMutexFakeSnapshotDbRef { r: self }))
+    }
 }
 
 #[derive(Default)]
@@ -585,15 +670,17 @@ use crate::storage::{
     },
     storage_db::{
         DbValueType, KeyValueDbTraitOwnedRead, KeyValueDbTraitRead,
-        KeyValueDbTraitSingleWriter, KeyValueDbTypes, OpenSnapshotMptTrait,
-        SnapshotDbManagerTrait, SnapshotDbTrait, SnapshotInfo,
+        KeyValueDbTraitSingleWriter, KeyValueDbTypes, KvdbIterImpl,
+        KvdbIterImplKind, OpenSnapshotMptTrait, SnapshotDbManagerTrait,
+        SnapshotDbTrait, SnapshotInfo, SnapshotKvIterTrait,
         SnapshotMptIteraterTrait, SnapshotMptNode, SnapshotMptTraitRead,
         SnapshotMptTraitReadAndIterate, SnapshotMptTraitRw,
     },
     tests::{
         generate_keys, get_rng_for_test, snapshot::FakeSnapshotMptDb,
-        DumpedMptKvIterator, TEST_NUMBER_OF_KEYS,
+        DumpedMptKvFallibleIterator, DumpedMptKvIterator, TEST_NUMBER_OF_KEYS,
     },
+    utils::wrap::{Wrap, WrappedLifetimeFamily, WrappedTrait},
     DeltaMptIterator, MptSlicer,
 };
 use parking_lot::Mutex;
@@ -601,7 +688,8 @@ use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
 use rand::Rng;
 use std::{
     cmp::{max, min},
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
+    ops::Bound::{Excluded, Included, Unbounded},
     path::{Path, PathBuf},
     sync::Arc,
 };

@@ -653,6 +653,21 @@ pub fn kvdb_sqlite_sharded_iter_range_excl_impl<
     shards_iter_merger_result
 }
 
+// TODO: this blanket implementation for
+//  KvdbSqliteShardedDestructureTraitWithValueType prevents other potential
+//  implementation. Try to find a better solution.
+impl<
+        ValueType: ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+        T: DerefMutPlusImplOrBorrowMutSelf<
+            dyn KvdbSqliteShardedDestructureTraitWithValueType<
+                ValueType = ValueType,
+            >,
+        >,
+    > KvdbIterImplKind<Vec<u8>, ValueType> for T
+{
+    type ImplKind = KvdbSqliteSharded<ValueType>;
+}
+
 impl<
         'db,
         ValueType: 'db + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
@@ -662,7 +677,7 @@ impl<
                     ValueType = ValueType,
                 >,
         >,
-    > KeyValueDbIterableTrait<'db, (Vec<u8>, ValueType), Error, [u8]> for T
+    > KvdbIterImpl<'db, KvdbSqliteSharded<ValueType>> for T
 {
     type Iterator = ShardedIterMerger<
         Vec<u8>,
@@ -672,8 +687,9 @@ impl<
             for<'r, 's> fn(&'r Statement<'s>) -> Result<(Vec<u8>, ValueType)>,
         >,
     >;
+    type KeyType = [u8];
 
-    fn iter_range(
+    fn iter_range_impl(
         &'db mut self, lower_bound_incl: &[u8], upper_bound_excl: Option<&[u8]>,
     ) -> Result<Self::Iterator> {
         let (maybe_shards_connections, statements) =
@@ -691,7 +707,7 @@ impl<
         )
     }
 
-    fn iter_range_excl(
+    fn iter_range_excl_impl(
         &'db mut self, lower_bound_excl: &[u8], upper_bound_excl: &[u8],
     ) -> Result<Self::Iterator> {
         let (maybe_shards_connections, statements) =
@@ -1029,9 +1045,9 @@ use crate::storage::{
         },
     },
     storage_db::{
-        DbValueType, DeltaDbTrait, KeyValueDbIterableTrait,
-        KeyValueDbTraitMultiReader, KeyValueDbTraitTransactional,
-        KeyValueDbTransactionTrait, KeyValueDbTypes, OwnedReadImplByFamily,
+        DbValueType, DeltaDbTrait, KeyValueDbTraitMultiReader,
+        KeyValueDbTraitTransactional, KeyValueDbTransactionTrait,
+        KeyValueDbTypes, KvdbIterImpl, KvdbIterImplKind, OwnedReadImplByFamily,
         OwnedReadImplFamily, ReadImplByFamily, ReadImplFamily,
         SingleWriterImplByFamily, SingleWriterImplFamily,
     },

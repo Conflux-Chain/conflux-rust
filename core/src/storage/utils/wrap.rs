@@ -60,4 +60,60 @@
 
 // TODO: Implement, to have a proper iterator. Otherwise delete this file at
 // clean up.
-trait WrapTrait {}
+
+/*
+// FIXME: we should separate Borrowed 'a and Owned for better rust borrow checking deduction.
+pub trait WrappedBorrowMarker {
+    type Borrowed;
+    type Owned;
+}
+pub struct WrapBorrowedMarker {}
+impl WrappedBorrowMarker for WrapBorrowedMarker {
+    type Borrowed = ();
+    type Owned = !;
+}
+pub struct WrapOwnedMarker {}
+impl WrappedBorrowMarker for WrapOwnedMarker {
+    type Borrowed = !;
+    type Owned = ();
+}
+*/
+
+pub trait WrappedLifetimeFamily<'a> {
+    type Out: 'a;
+}
+
+pub trait WrappedTrait: for<'a> WrappedLifetimeFamily<'a> {
+    //type BorrowMarker: WrappedBorrowMarker;
+}
+
+/*
+pub enum Wrap<'a, Wrapped: WrappedTrait>{
+    Borrowed(<Wrapped as WrappedLifetimeFamily<'a>>::Out, Wrapped::BorrowMarker::Borrowed),
+    Owned(<Wrapped as WrappedLifetimeFamily<'a>>::Out, Wrapped::BorrowMarker::Owned),
+}
+*/
+
+pub struct Wrap<'a, Wrapped: ?Sized + WrappedTrait>(
+    pub <Wrapped as WrappedLifetimeFamily<'a>>::Out,
+);
+
+impl<'a, Wrapped: ?Sized + WrappedTrait> Wrap<'a, Wrapped> {
+    pub fn take(self) -> <Wrapped as WrappedLifetimeFamily<'a>>::Out { self.0 }
+}
+
+pub trait LaterLifetime<'a, 'b, Wrapped: ?Sized> {
+    type Longest: 'b;
+}
+
+impl<'a, 'b: 'a, Wrapped: ?Sized + WrappedTrait> LaterLifetime<'a, 'b, Wrapped>
+    for Wrapped
+{
+    type Longest = <Wrapped as WrappedLifetimeFamily<'b>>::Out;
+}
+
+pub trait AllLaterLifetime<'b, Wrapped: ?Sized>:
+    for<'a> LaterLifetime<'a, 'b, Wrapped>
+{
+    type T: 'b;
+}
