@@ -100,11 +100,6 @@ fn test_load_chain() {
         let primitive_block: Block = rpc_block.into_primitive().map_err(|e| {
             format!("Failed to convert from a rpc_block to primitive block {:?}", e)
         }).ok().unwrap();
-        println!(
-            "block hash {:?} parent hash {:?}",
-            primitive_block.hash(),
-            primitive_block.block_header.parent_hash()
-        );
         handle
             .other_components
             .sync
