@@ -1475,6 +1475,10 @@ impl SynchronizationGraph {
     }
 
     pub fn contains_block_header(&self, hash: &H256) -> bool {
+        println!(
+            "hesh_to_arena: {:?}",
+            self.inner.read().hash_to_arena_indices
+        );
         self.inner.read().hash_to_arena_indices.contains_key(hash)
     }
 

@@ -12,7 +12,7 @@ use std::str::FromStr;
 
 lazy_static! {
     pub static ref SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS: Address =
-        Address::from_str("8ad036480160591706c831f0da19d1a424e39469").unwrap();
+        Address::from_str("0888000000000000000000000000000000000001").unwrap();
 }
 
 /// The first 4 bytes of keccak('set_sponsor_for_gas(address,uint256)') is
