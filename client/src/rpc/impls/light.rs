@@ -321,7 +321,7 @@ impl RpcImpl {
     fn send_transaction(
         &self, mut tx: SendTxRequest, password: Option<String>,
     ) -> BoxFuture<RpcH256> {
-        info!("RPC Request: send_transaction tx={:?}", tx);
+        info!("RPC Request: cfx_sendTransaction tx={:?}", tx);
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
