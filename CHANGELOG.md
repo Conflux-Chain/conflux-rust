@@ -17,6 +17,8 @@ was caused by a wrong assumption of the uniqueness of the trie proof key.
 
 ## Improvements
 
+- Rename local rpc send_transaction with cfx_sendTransaction.
+
 - Improve the performance of the consensus layer for unstable TreeGraph scenarios. 
 
 - Complete the protocol version mechanism for node communications and bump
