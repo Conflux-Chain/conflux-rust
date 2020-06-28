@@ -310,8 +310,6 @@ impl StateManager {
                     }
                 }
                 Some(guarded_snapshot) => {
-                    snapshot = guarded_snapshot;
-
                     snapshot_merkle_root = match self
                         .storage_manager
                         .get_snapshot_info_at_epoch(snapshot_epoch_id)
@@ -327,20 +325,34 @@ impl StateManager {
                         }
                         Some(snapshot_info) => snapshot_info.merkle_root,
                     };
-                    maybe_intermediate_mpt = self
+                    let temp_maybe_intermediate_mpt = self
                         .storage_manager
                         .get_intermediate_mpt(snapshot_epoch_id)?;
-                    delta_mpt = self
-                        .storage_manager
-                        .get_delta_mpt(&snapshot_epoch_id)?;
-                    intermediate_trie_root_merkle = match maybe_intermediate_mpt
-                        .as_ref()
-                    {
-                        None => MERKLE_NULL_NODE,
+                    match temp_maybe_intermediate_mpt {
+                        None => {
+                            snapshot = guarded_snapshot;
+                            maybe_intermediate_mpt_key_padding =
+                                Some(parent_state_index.delta_mpt_key_padding);
+                            delta_mpt = self
+                                .storage_manager
+                                .get_delta_mpt(&snapshot_epoch_id)?;
+                            intermediate_trie_root_merkle = MERKLE_NULL_NODE;
+                            maybe_intermediate_mpt = None;
+                        }
                         Some(mpt) => match mpt.get_merkle_root_by_epoch_id(
                             &parent_state_index.epoch_id,
                         )? {
-                            Some(merkle_root) => merkle_root,
+                            Some(merkle_root) => {
+                                snapshot = guarded_snapshot;
+                                maybe_intermediate_mpt_key_padding = Some(
+                                    parent_state_index.delta_mpt_key_padding,
+                                );
+                                delta_mpt = self
+                                    .storage_manager
+                                    .get_delta_mpt(&snapshot_epoch_id)?;
+                                intermediate_trie_root_merkle = merkle_root;
+                                maybe_intermediate_mpt = Some(mpt);
+                            }
                             None => {
                                 warn!(
                                         "get_state_trees_for_next_epoch, shift snapshot, normal case, \
@@ -348,12 +360,54 @@ impl StateManager {
                                         parent_state_index.epoch_id,
                                         parent_state_index,
                                     );
-                                return Ok(None);
+
+                                // Check if we should progress with a synced
+                                // state.
+                                // This is a quick fix for
+                                // https://github.com/Conflux-Chain/conflux-rust/issues/1543.
+                                // FIXME: We should remove all the hacks about
+                                // state sync.
+                                match self.storage_manager.wait_for_snapshot(
+                                    parent_state_index.epoch_id,
+                                    try_open,
+                                )? {
+                                    None => {
+                                        warn!(
+                                            "get_state_trees_for_next_epoch, shift snapshot, special case, \
+                                snapshot not found for snapshot {:?}. StateIndex: {:?}.",
+                                            parent_state_index.epoch_id,
+                                            parent_state_index,
+                                        );
+                                        return Ok(None);
+                                    }
+                                    Some(guarded_synced_snapshot) => {
+                                        snapshot = guarded_synced_snapshot;
+                                    }
+                                }
+                                maybe_intermediate_mpt = None;
+                                maybe_intermediate_mpt_key_padding = None;
+                                intermediate_trie_root_merkle =
+                                    *parent_state_index
+                                        .intermediate_trie_root_merkle;
+                                match self
+                                    .storage_manager
+                                    .get_intermediate_mpt(
+                                        parent_state_index.epoch_id,
+                                    )? {
+                                    None => {
+                                        warn!(
+                                            "get_state_trees_for_next_epoch, shift snapshot, special case, \
+                                intermediate_mpt not found for snapshot {:?}. StateIndex: {:?}.",
+                                            parent_state_index.epoch_id,
+                                            parent_state_index,
+                                        );
+                                        return Ok(None);
+                                    }
+                                    Some(mpt) => delta_mpt = mpt,
+                                }
                             }
                         },
                     };
-                    maybe_intermediate_mpt_key_padding =
-                        Some(parent_state_index.delta_mpt_key_padding);
                 }
             };
             maybe_delta_mpt_key_padding = None;
