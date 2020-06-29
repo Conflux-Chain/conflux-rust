@@ -40,7 +40,7 @@ fn txexe_benchmark(c: &mut Criterion) {
         gas: U256::from(21000u64),
         value: 1.into(),
         action: Action::Call(receiver_kp.address()),
-        storage_limit: U256::zero(),
+        storage_limit: 0,
         epoch_height: 0,
         chain_id: 0,
         data: Bytes::new(),

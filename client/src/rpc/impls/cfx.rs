@@ -834,6 +834,10 @@ impl RpcImpl {
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed");
         let epoch = epoch.unwrap_or(EpochNumber::LatestState);
+        let storage_limit_u256: U256 = storage_limit.into();
+        if storage_limit_u256 > U256::from(std::u64::MAX) {
+            bail!(JsonRpcError::invalid_params(format!("storage_limit has to be within the range of u64 but {} supplied!", storage_limit)));
+        }
 
         match consensus_graph.check_balance_against_transaction(
             account_addr.into(),

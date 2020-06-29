@@ -9,7 +9,6 @@ use crate::{
         U256 as RpcU256,
     },
 };
-use cfx_types::U256;
 use cfxkey::{Error, Password};
 use primitives::{
     transaction::Action, SignedTransaction,
@@ -92,7 +91,7 @@ impl Transaction {
                         Some(address) => Action::Call(address.into()),
                     },
                     value: self.value.into(),
-                    storage_limit: self.storage_limit.into(),
+                    storage_limit: self.storage_limit.as_usize() as u64,
                     epoch_height: self.epoch_height.as_usize() as u64,
                     chain_id: self.chain_id.as_usize() as u64,
                     data: self.data.into(),
@@ -139,8 +138,8 @@ impl SendTxRequest {
             value: self.value.into(),
             storage_limit: self
                 .storage_limit
-                .unwrap_or(U256::MAX.into())
-                .into(),
+                .unwrap_or(std::u64::MAX.into())
+                .as_usize() as u64,
             epoch_height: self
                 .epoch_height
                 .unwrap_or(best_epoch_height.into())
