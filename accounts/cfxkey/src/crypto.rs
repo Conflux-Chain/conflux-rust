@@ -70,7 +70,7 @@ pub mod ecdh {
 /// ECIES function
 pub mod ecies {
     use super::{ecdh, Error};
-    use ethereum_types::H128;
+    use cfx_types::H128;
     use parity_crypto::{aes, digest, hmac, is_equal};
     use Generator;
     use Public;

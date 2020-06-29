@@ -18,7 +18,6 @@
 
 extern crate cfx_types;
 extern crate edit_distance;
-extern crate ethereum_types;
 extern crate parity_crypto;
 extern crate parity_wordlist;
 #[macro_use]
@@ -73,9 +72,9 @@ pub use self::{
     signature::{recover, sign, verify_address, verify_public, Signature},
 };
 
-use ethereum_types::H256;
+use cfx_types::H256;
 
-pub use ethereum_types::{Address, Public};
+pub use cfx_types::{Address, Public};
 pub type Message = H256;
 
 lazy_static! {
