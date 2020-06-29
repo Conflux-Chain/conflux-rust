@@ -76,7 +76,7 @@ pub trait LocalRpc {
     #[rpc(name = "sync_graph_state")]
     fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
 
-    #[rpc(name = "send_transaction")]
+    #[rpc(name = "cfx_sendTransaction")]
     fn send_transaction(
         &self, tx: SendTxRequest, password: Option<String>,
     ) -> BoxFuture<RpcH256>;

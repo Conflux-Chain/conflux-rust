@@ -558,7 +558,7 @@ subcommands:
                         about: Send a transaction and return its hash
                         args:
                             - rpc-method:
-                                default_value: send_transaction
+                                default_value: cfx_sendTransaction
                                 hidden: true
                             - rpc-args:
                                 multiple: true
