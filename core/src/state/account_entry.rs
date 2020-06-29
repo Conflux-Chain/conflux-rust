@@ -151,9 +151,6 @@ impl OverlayAccount {
 
     #[cfg(test)]
     pub fn new_contract(address: &Address, balance: U256, nonce: U256) -> Self {
-        // It will cause inconsistency to create contracts on non-contract
-        // addresses.
-        assert!(address.is_contract_address());
         OverlayAccount {
             address: address.clone(),
             balance,
@@ -183,9 +180,6 @@ impl OverlayAccount {
     pub fn new_contract_with_admin(
         address: &Address, balance: U256, nonce: U256, admin: &Address,
     ) -> Self {
-        // It will cause inconsistency to create contracts on non-contract
-        // addresses.
-        assert!(address.is_contract_address());
         OverlayAccount {
             address: address.clone(),
             balance,
