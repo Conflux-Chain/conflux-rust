@@ -48,7 +48,7 @@ fn test_contract_address() {
             CreateContractAddress::FromSenderNonceAndCodeHash,
             &address,
             &U256::from(88),
-            &[]
+            &[],
         )
         .0
     );
@@ -206,21 +206,21 @@ fn test_suicide_when_creation() {
 
     let code = "33ff".from_hex().unwrap();
 
-    let sender =
+    let sender_addr =
         Address::from_str("1d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
-    let address = contract_address(
+    let contract_addr = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
-        &sender,
+        &sender_addr,
         &U256::zero(),
         &[],
     )
     .0;
 
     let mut params = ActionParams::default();
-    params.address = address;
-    params.sender = sender;
-    params.original_sender = sender;
-    params.storage_owner = sender;
+    params.address = contract_addr;
+    params.sender = sender_addr;
+    params.original_sender = sender_addr;
+    params.storage_owner = sender_addr;
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     params.value = ActionValue::Transfer(U256::from(0));
@@ -229,7 +229,7 @@ fn test_suicide_when_creation() {
     let mut state =
         get_state_for_genesis_write_with_factory(&storage_manager, factory);
     state
-        .add_balance(&sender, &U256::from(100_000), CleanupMode::NoEmpty)
+        .add_balance(&sender_addr, &U256::from(100_000), CleanupMode::NoEmpty)
         .unwrap();
     let env = Env::default();
     let machine = make_byzantium_machine(0);
@@ -244,7 +244,20 @@ fn test_suicide_when_creation() {
         &spec,
         &internal_contract_map,
     );
-    ex.create(params, &mut substate).unwrap();
+    let FinalizationResult {
+        gas_left,
+        apply_state,
+        return_data: _,
+    } = ex.create(params, &mut substate).unwrap();
+
+    assert_eq!(gas_left, U256::from(94_998));
+    assert_eq!(apply_state, true);
+
+    assert!(substate.storage_collateralized.get(&sender_addr).is_none(),
+            "Since the contract has not been created, the sender occupied no storage now. ");
+    assert!(substate.storage_released.get(&sender_addr).is_none(),
+            "Since the contract has not been created, no storage is released when contract suicides. ");
+    assert!(substate.suicides.contains(&contract_addr));
 }
 
 #[test]
@@ -1501,7 +1514,7 @@ fn test_storage_commission_privilege() {
             .check_collateral_for_storage_finally(
                 &privilege_control_address,
                 &U256::MAX,
-                &mut substate
+                &mut substate,
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -1801,7 +1814,7 @@ fn test_storage_commission_privilege() {
             .check_collateral_for_storage_finally(
                 &privilege_control_address,
                 &U256::MAX,
-                &mut substate
+                &mut substate,
             )
             .unwrap(),
         CollateralCheckResult::Valid
