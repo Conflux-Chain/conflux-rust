@@ -17,6 +17,9 @@ pub enum EpochNumber {
     Earliest,
     /// The latest checkpoint (cur_era_genesis)
     LatestCheckpoint,
+    /// The latest confirmed block (based on the estimation of the confirmation
+    /// meter)
+    LatestConfirmed,
     /// Latest block with state.
     LatestState,
     /// Latest mined block.
