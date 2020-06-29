@@ -2,20 +2,18 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    accounts::account_provider,
-    rpc::types::{
-        receipt::Receipt, Bytes, H160 as RpcH160, H256 as RpcH256,
-        U256 as RpcU256,
-    },
+use crate::rpc::types::{
+    receipt::Receipt, Bytes, H160 as RpcH160, H256 as RpcH256, U256 as RpcU256,
 };
 use cfx_types::U256;
+use cfxcore_accounts::AccountProvider;
 use cfxkey::{Error, Password};
 use primitives::{
     transaction::Action, SignedTransaction,
     Transaction as PrimitiveTransaction, TransactionWithSignature,
     TransactionWithSignatureSerializePart,
 };
+use std::sync::Arc;
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -127,7 +125,9 @@ pub struct SendTxRequest {
 impl SendTxRequest {
     pub fn sign_with(
         self, best_epoch_height: u64, chain_id: u64, password: Option<String>,
-    ) -> Result<TransactionWithSignature, String> {
+        accounts: Arc<AccountProvider>,
+    ) -> Result<TransactionWithSignature, String>
+    {
         let tx = PrimitiveTransaction {
             nonce: self.nonce.unwrap_or_default().into(),
             gas_price: self.gas_price.into(),
@@ -151,7 +151,7 @@ impl SendTxRequest {
         };
 
         let password = password.map(Password::from);
-        let sig = account_provider(None, None)?
+        let sig = accounts
             .sign(self.from.into(), password, tx.hash())
             .map_err(|e| format!("failed to sign transaction: {:?}", e))?;
 
