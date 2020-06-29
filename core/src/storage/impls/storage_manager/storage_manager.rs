@@ -772,9 +772,6 @@ impl StorageManager {
             consensus_inner
                 .data_man
                 .remove_epoch_execution_commitment_from_db(&hash);
-            consensus_inner
-                .data_man
-                .remove_epoch_execution_context_from_db(&hash);
         }
         Ok(())
     }

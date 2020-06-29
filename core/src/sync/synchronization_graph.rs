@@ -1243,6 +1243,7 @@ impl SynchronizationGraph {
                 self.data_man
                     .remove_block_result(&hash, true /* remove_db */);
             }
+            self.data_man.remove_epoch_execution_context_from_db(&hash);
             num_of_blocks_to_remove -= 1;
             if num_of_blocks_to_remove == 0 {
                 break;
