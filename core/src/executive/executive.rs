@@ -1453,11 +1453,7 @@ impl<'a> Executive<'a> {
         }
 
         let tx_storage_limit_in_drip =
-            if tx.storage_limit >= U256::from(std::u64::MAX) {
-                U256::from(std::u64::MAX) * *COLLATERAL_PER_BYTE
-            } else {
-                tx.storage_limit * *COLLATERAL_PER_BYTE
-            };
+            U256::from(tx.storage_limit) * *COLLATERAL_PER_BYTE;
         let storage_sponsor_balance = if storage_sponsored {
             self.state.sponsor_balance_for_collateral(&code_address)?
         } else {
