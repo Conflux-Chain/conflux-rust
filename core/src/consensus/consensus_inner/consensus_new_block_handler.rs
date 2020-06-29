@@ -1515,7 +1515,7 @@ impl ConsensusNewBlockHandler {
         self.data_man
             .storage_manager
             .get_storage_manager()
-            .maintain_snapshots_pivot_chain_confirmed(
+            .maintain_state_confirmed(
                 inner,
                 confirmed_height,
                 &self.data_man.state_availability_boundary,

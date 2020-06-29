@@ -388,16 +388,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "130aac562c0dd69c56b3b1cc8ffd2e17be31d0b6c25b61c96b76231aa23e39e1"
 
 [[package]]
-name = "bzip2"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42b7c3cbf0fa9c1b82308d57191728ca0256cb821220f4e2fd410a72ade26e3b"
-dependencies = [
- "bzip2-sys",
- "libc",
-]
-
-[[package]]
 name = "bzip2-sys"
 version = "0.1.9+1.0.8"
 source = "git+https://github.com/alexcrichton/bzip2-rs.git#ea8fc591ff34ef9398731aa05e1201975b35fa54"
@@ -460,6 +450,7 @@ dependencies = [
  "clap",
  "db",
  "derivative",
+ "either",
  "error-chain",
  "fallible-iterator",
  "fs_extra",
@@ -468,6 +459,7 @@ dependencies = [
  "heapsize",
  "hibitset",
  "io",
+ "itertools 0.9.0",
  "jsonrpc-core",
  "keccak-hash 0.4.1",
  "kvdb 0.4.0",
@@ -519,7 +511,6 @@ dependencies = [
  "tokio-timer",
  "toml",
  "unexpected 0.1.0 (git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=1597a9cab02343eb2322ca0ac58d39b64e3f42d1)",
- "zip",
 ]
 
 [[package]]
@@ -531,6 +522,8 @@ dependencies = [
  "ethereum-types 0.8.0",
  "lazy_static",
  "log 0.4.8",
+ "malloc_size_of",
+ "malloc_size_of_derive",
  "parity-crypto 0.4.2",
  "parity-secp256k1",
  "parity-wordlist",
@@ -3036,12 +3029,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "podio"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "780fb4b6698bbf9cf2444ea5d22411cef2953f0824b98f33cf454ec5615645bd"
-
-[[package]]
 name = "ppv-lite86"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3657,6 +3644,8 @@ dependencies = [
  "cfxkey",
  "ethereum-types 0.8.0",
  "keccak-hash 0.4.1",
+ "malloc_size_of",
+ "malloc_size_of_derive",
  "parking_lot 0.10.2",
  "primitives",
  "rand 0.7.3",
@@ -3872,8 +3861,7 @@ dependencies = [
 [[package]]
 name = "sqlite3-sys"
 version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71fec807a1534bd13eeaaec396175d67c79bdc68df55e18a452726ec62a8fb08"
+source = "git+https://github.com/Conflux-Chain/sqlite3-sys.git?rev=1de8e5998f7c2d919336660b8ef4e8f52ac43844#1de8e5998f7c2d919336660b8ef4e8f52ac43844"
 dependencies = [
  "libc",
  "sqlite3-src",
@@ -4746,19 +4734,6 @@ dependencies = [
  "quote 0.6.13",
  "syn 0.15.44",
  "synstructure 0.10.2",
-]
-
-[[package]]
-name = "zip"
-version = "0.5.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6df134e83b8f0f8153a094c7b0fd79dfebe437f1d76e7715afa18ed95ebe2fd7"
-dependencies = [
- "bzip2",
- "crc32fast",
- "flate2",
- "podio",
- "time",
 ]
 
 [[package]]
