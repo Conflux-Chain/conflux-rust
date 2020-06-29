@@ -173,7 +173,7 @@ impl<'a> CallCreateExecutive<'a> {
         } else if let Some(_) =
             internal_contract_map.contract(&params.code_address)
         {
-            info!(
+            debug!(
                 "CallInternalContract: address={:?} data={:?}",
                 params.code_address, params.data
             );
@@ -543,6 +543,7 @@ impl<'a> CallCreateExecutive<'a> {
                     } else {
                         Ok(())
                     };
+                    debug!("Internal Call Result: {:?}", result);
                     if let Err(e) = result {
                         state.revert_to_checkpoint();
                         Err(e.into())
@@ -705,6 +706,10 @@ impl<'a> CallCreateExecutive<'a> {
                 params,
                 mut unconfirmed_substate,
             ) => {
+                debug!(
+                    "CallCreateExecutiveKind::ExecCreate: contract_addr = {:?}",
+                    params.address
+                );
                 assert!(self.is_create);
 
                 {
