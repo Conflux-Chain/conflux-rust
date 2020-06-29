@@ -91,7 +91,7 @@ fn test_get_set_at_second_commit() {
         ))
         .unwrap()
         .unwrap();
-    println!("Set new {} keys for state_1.", keys_1_new.len(),);
+    println!("Set new {} keys for state_1.", keys_1_new.len());
     for key in keys_1_new {
         let value = vec![&key[..], &key[..]].concat();
         state_1
