@@ -969,11 +969,13 @@ impl State {
                     {
                         let storage_value =
                             rlp::decode::<StorageValue>(value.as_ref())?;
+                        let storage_owner =
+                            storage_value.owner.as_ref().unwrap_or(&address);
                         assert!(self
-                            .exists(&storage_value.owner)
+                            .exists(storage_owner)
                             .expect("no db error"));
                         self.sub_collateral_for_storage(
-                            &storage_value.owner,
+                            storage_owner,
                             &COLLATERAL_PER_STORAGE_KEY,
                         )?;
                     }
@@ -1168,10 +1170,10 @@ impl State {
 
     pub fn storage_at(
         &self, address: &Address, key: &Vec<u8>,
-    ) -> DbResult<H256> {
+    ) -> DbResult<U256> {
         self.ensure_cached(address, RequireCache::None, |acc| {
-            acc.map_or(H256::zero(), |account| {
-                account.storage_at(&self.db, key).unwrap_or(H256::zero())
+            acc.map_or(U256::zero(), |account| {
+                account.storage_at(&self.db, key).unwrap_or(U256::zero())
             })
         })
     }
@@ -1179,12 +1181,12 @@ impl State {
     #[cfg(test)]
     pub fn original_storage_at(
         &self, address: &Address, key: &Vec<u8>,
-    ) -> DbResult<H256> {
+    ) -> DbResult<U256> {
         self.ensure_cached(address, RequireCache::None, |acc| {
-            acc.map_or(H256::zero(), |account| {
+            acc.map_or(U256::zero(), |account| {
                 account
                     .original_storage_at(&self.db, key)
-                    .unwrap_or(H256::zero())
+                    .unwrap_or(U256::zero())
             })
         })
     }
@@ -1194,7 +1196,7 @@ impl State {
     #[cfg(test)]
     pub fn checkpoint_storage_at(
         &self, start_checkpoint_index: usize, address: &Address, key: &Vec<u8>,
-    ) -> DbResult<Option<H256>> {
+    ) -> DbResult<Option<U256>> {
         #[derive(Debug)]
         enum ReturnKind {
             OriginalAt,
@@ -1219,14 +1221,16 @@ impl State {
                         if let Some(value) = account.cached_storage_at(key) {
                             return Ok(Some(value));
                         } else if account.is_newly_created_contract() {
-                            return Ok(Some(H256::zero()));
+                            // FIXME: check if the logic about
+                            // "is_newly_created_contract" is correct.
+                            return Ok(Some(U256::zero()));
                         } else {
                             kind = Some(ReturnKind::OriginalAt);
                             break;
                         }
                     }
                     Some(Some(AccountEntry { account: None, .. })) => {
-                        return Ok(Some(H256::zero()));
+                        return Ok(Some(U256::zero()));
                     }
                     Some(None) => {
                         kind = Some(ReturnKind::OriginalAt);
@@ -1251,7 +1255,7 @@ impl State {
     }
 
     pub fn set_storage(
-        &mut self, address: &Address, key: Vec<u8>, value: H256, owner: Address,
+        &mut self, address: &Address, key: Vec<u8>, value: U256, owner: Address,
     ) -> DbResult<()> {
         if self.storage_at(address, &key)? != value {
             self.require_exists(address, false)?

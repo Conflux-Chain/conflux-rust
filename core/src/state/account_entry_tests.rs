@@ -9,7 +9,7 @@ use crate::{
     statedb::StateDb,
     storage::{tests::new_state_manager_for_unit_test, StorageManagerTrait},
 };
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, U256};
 use primitives::{Account, SponsorInfo, VoteStakeList};
 
 #[test]
@@ -694,7 +694,7 @@ fn test_clone_overwrite() {
     assert_eq!(account1, overlay_account1.as_account());
     assert_eq!(account2, overlay_account2.as_account());
 
-    overlay_account1.set_storage(vec![0; 32], H256::zero(), address);
+    overlay_account1.set_storage(vec![0; 32], U256::zero(), address);
     assert_eq!(account1, overlay_account1.as_account());
     assert_eq!(overlay_account1.storage_changes().len(), 1);
     assert_eq!(overlay_account1.ownership_changes().len(), 1);
@@ -707,8 +707,8 @@ fn test_clone_overwrite() {
     assert_eq!(overlay_account.storage_changes().len(), 1);
     assert_eq!(overlay_account.ownership_changes().len(), 1);
 
-    overlay_account2.set_storage(vec![0; 32], H256::zero(), address);
-    overlay_account2.set_storage(vec![1; 32], H256::zero(), address);
+    overlay_account2.set_storage(vec![0; 32], U256::zero(), address);
+    overlay_account2.set_storage(vec![1; 32], U256::zero(), address);
     overlay_account1.overwrite_with(overlay_account2);
     assert_ne!(account1, overlay_account1.as_account());
     assert_eq!(account2, overlay_account1.as_account());
