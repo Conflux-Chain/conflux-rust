@@ -822,13 +822,16 @@ impl SynchronizationProtocolHandler {
             let until = {
                 let max_to_send = EPOCH_SYNC_MAX_INFLIGHT
                     - self.request_manager.num_epochs_in_flight();
+                let maybe_peer_info = self.syn.get_peer_info(&peer.unwrap());
+                if maybe_peer_info.is_err() {
+                    // The peer is disconnected after we chose it.
+                    // `latest_requested` is not updated, so we just continue to
+                    // try another peer.
+                    continue;
+                }
 
-                let best_of_this_peer = self
-                    .syn
-                    .get_peer_info(&peer.unwrap())
-                    .unwrap()
-                    .read()
-                    .best_epoch;
+                let best_of_this_peer =
+                    maybe_peer_info.unwrap().read().best_epoch;
 
                 let until = from + cmp::min(EPOCH_SYNC_BATCH_SIZE, max_to_send);
                 cmp::min(until, best_of_this_peer + 1)
