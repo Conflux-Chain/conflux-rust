@@ -768,6 +768,7 @@ impl StorageManager {
         }
         for hash in states_to_remove {
             // FIXME Commitments of non-pivot states are not removed.
+            // Need to check if this will take too much time.
             consensus_inner
                 .data_man
                 .remove_epoch_execution_commitment_from_db(&hash);
