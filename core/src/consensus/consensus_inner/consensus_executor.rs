@@ -1196,8 +1196,8 @@ impl ConsensusExecutionHandler {
                         env.accumulated_gas_used += executed.gas_used;
                         gas_fee = executed.fee;
                         debug!(
-                            "tx execution error: transaction={:?}, err={:?}",
-                            transaction, error
+                            "tx execution error: err={:?}, transaction={:?}",
+                            error, transaction
                         );
                     }
                     ExecutionOutcome::Finished(executed) => {
@@ -1214,7 +1214,7 @@ impl ConsensusExecutionHandler {
                         gas_sponsor_paid = executed.gas_sponsor_paid;
                         storage_sponsor_paid = executed.storage_sponsor_paid;
 
-                        trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
+                        trace!("tx executed successfully: result={:?}, transaction={:?}, in block {:?}", executed, transaction, block.hash());
                     }
                 }
 
