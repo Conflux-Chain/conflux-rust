@@ -2,6 +2,9 @@
 
 ## Bug Fixes
 
+- Fix incorrect receipt in refunding code collateral when contract suicides.
+
+- Fix crash when a contract suicides during creation.
 ## Improvements
 
 - Rename local rpc send_transaction with cfx_sendTransaction.
