@@ -221,7 +221,7 @@ impl State {
                     });
                 }
             } else {
-                let balance = self.balance(addr).expect("no db error");
+                let balance = self.balance(addr)?;
                 // balance is not enough to cover storage incremental.
                 if delta > balance {
                     return Ok(CollateralCheckResult::NotEnoughBalance {
@@ -969,11 +969,11 @@ impl State {
                     {
                         let storage_value =
                             rlp::decode::<StorageValue>(value.as_ref())?;
-                        assert!(self
-                            .exists(&storage_value.owner)
-                            .expect("no db error"));
+                        let storage_owner =
+                            storage_value.owner.as_ref().unwrap_or(&address);
+                        assert!(self.exists(storage_owner)?);
                         self.sub_collateral_for_storage(
-                            &storage_value.owner,
+                            storage_owner,
                             &COLLATERAL_PER_STORAGE_KEY,
                         )?;
                     }
@@ -1168,33 +1168,19 @@ impl State {
 
     pub fn storage_at(
         &self, address: &Address, key: &Vec<u8>,
-    ) -> DbResult<H256> {
+    ) -> DbResult<U256> {
         self.ensure_cached(address, RequireCache::None, |acc| {
-            acc.map_or(H256::zero(), |account| {
-                account.storage_at(&self.db, key).unwrap_or(H256::zero())
-            })
-        })
-    }
-
-    #[cfg(test)]
-    pub fn original_storage_at(
-        &self, address: &Address, key: &Vec<u8>,
-    ) -> DbResult<H256> {
-        self.ensure_cached(address, RequireCache::None, |acc| {
-            acc.map_or(H256::zero(), |account| {
-                account
-                    .original_storage_at(&self.db, key)
-                    .unwrap_or(H256::zero())
+            acc.map_or(U256::zero(), |account| {
+                account.storage_at(&self.db, key).unwrap_or(U256::zero())
             })
         })
     }
 
     /// Get the value of storage at a specific checkpoint.
-    /// TODO: Remove this function since it is not used outside.
     #[cfg(test)]
     pub fn checkpoint_storage_at(
         &self, start_checkpoint_index: usize, address: &Address, key: &Vec<u8>,
-    ) -> DbResult<Option<H256>> {
+    ) -> DbResult<Option<U256>> {
         #[derive(Debug)]
         enum ReturnKind {
             OriginalAt,
@@ -1219,14 +1205,14 @@ impl State {
                         if let Some(value) = account.cached_storage_at(key) {
                             return Ok(Some(value));
                         } else if account.is_newly_created_contract() {
-                            return Ok(Some(H256::zero()));
+                            return Ok(Some(U256::zero()));
                         } else {
                             kind = Some(ReturnKind::OriginalAt);
                             break;
                         }
                     }
                     Some(Some(AccountEntry { account: None, .. })) => {
-                        return Ok(Some(H256::zero()));
+                        return Ok(Some(U256::zero()));
                     }
                     Some(None) => {
                         kind = Some(ReturnKind::OriginalAt);
@@ -1245,13 +1231,18 @@ impl State {
         match kind {
             ReturnKind::SameAsNext => Ok(Some(self.storage_at(address, key)?)),
             ReturnKind::OriginalAt => {
-                Ok(Some(self.original_storage_at(address, key)?))
+                match self.db.get::<StorageValue>(
+                    StorageKey::new_storage_key(address, key.as_ref()),
+                )? {
+                    Some(storage_value) => Ok(Some(storage_value.value)),
+                    None => Ok(Some(U256::zero())),
+                }
             }
         }
     }
 
     pub fn set_storage(
-        &mut self, address: &Address, key: Vec<u8>, value: H256, owner: Address,
+        &mut self, address: &Address, key: Vec<u8>, value: U256, owner: Address,
     ) -> DbResult<()> {
         if self.storage_at(address, &key)? != value {
             self.require_exists(address, false)?

@@ -27,7 +27,7 @@ use crate::{
         ActionParams, ActionValue, Context,
     },
 };
-use cfx_types::{Address, H256, U256};
+use cfx_types::{Address, BigEndianHash, H256, U256};
 use rustc_hex::FromHex;
 use std::{
     collections::{HashMap, HashSet},
@@ -360,7 +360,7 @@ fn test_blockhash(factory: super::Factory) {
     };
 
     assert_eq!(gas_left, U256::from(94_974));
-    assert_eq!(ctx.store.get(&vec![0; 32]).unwrap(), &blockhash);
+    assert_eq!(ctx.store.get(&vec![0; 32]).unwrap(), &blockhash.into_uint());
 }
 
 evm_test! {test_calldataload: test_calldataload_int}
@@ -1322,5 +1322,8 @@ fn assert_set_contains<T: Debug + Eq + PartialEq + Hash>(
 fn assert_store(ctx: &MockContext, pos: u64, val: &str) {
     let mut key = vec![0; 32];
     U256::from(pos).to_big_endian(key.as_mut());
-    assert_eq!(ctx.store.get(&key).unwrap(), &H256::from_str(val).unwrap());
+    assert_eq!(
+        ctx.store.get(&key).unwrap(),
+        &H256::from_str(val).unwrap().into_uint()
+    );
 }

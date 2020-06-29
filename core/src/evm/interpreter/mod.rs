@@ -1070,7 +1070,7 @@ impl<Cost: CostType> Interpreter<Cost> {
             instructions::SLOAD => {
                 let mut key = vec![0; 32];
                 self.stack.pop_back().to_big_endian(key.as_mut());
-                let word = context.storage_at(&key)?.into_uint();
+                let word = context.storage_at(&key)?;
                 self.stack.push(word);
             }
             instructions::SSTORE => {
@@ -1078,7 +1078,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                 self.stack.pop_back().to_big_endian(key.as_mut());
                 let val = self.stack.pop_back();
 
-                context.set_storage(key, BigEndianHash::from_uint(&val))?;
+                context.set_storage(key, val)?;
             }
             instructions::PC => {
                 self.stack.push(U256::from(self.reader.position - 1));

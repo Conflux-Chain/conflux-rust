@@ -20,6 +20,12 @@ was caused by a wrong assumption of the uniqueness of the trie proof key.
 
 - Fix db error handling for EVM create / call.
 
+## Incompatible Changes
+
+- Change StorageValue serialization to reduce space.
+
+- Changed COMMISSION_PRIVILEGE_STORAGE_VALUE.
+
 ## Improvements
 
 - Rename local rpc send_transaction with cfx_sendTransaction.
