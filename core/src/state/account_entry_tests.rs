@@ -146,7 +146,8 @@ fn test_overlay_account_create() {
 fn test_deposit_and_withdraw() {
     let storage_manager = new_state_manager_for_unit_test();
     let db = StateDb::new(storage_manager.get_state_for_genesis_write());
-    let address = Address::random();
+    let mut address = Address::random();
+    address.set_user_account_type_bits();
     let admin = Address::random();
     let account = Account {
         address,
