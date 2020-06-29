@@ -736,11 +736,36 @@ impl StorageManager {
     ///
     /// Returns the first available state height after the maintenance.
     pub fn maintain_snapshots_pivot_chain_confirmed(
-        &self, confirmed_height: u64, confirmed_epoch_id: &EpochId,
-        confirmed_state_root: &StateRootWithAuxInfo,
+        &self, consensus_inner: &ConsensusGraphInner, confirmed_height: u64,
         state_availability_boundary: &RwLock<StateAvailabilityBoundary>,
     ) -> Result<()>
     {
+        let additional_state_height_gap =
+            (self.storage_conf.additional_maintained_snapshot_count
+                * self.storage_conf.consensus_param.snapshot_epoch_count)
+                as u64;
+        let maintained_state_height_upper_bound =
+            if confirmed_height > additional_state_height_gap {
+                confirmed_height - additional_state_height_gap
+            } else {
+                0
+            };
+        if maintained_state_height_upper_bound
+            <= state_availability_boundary.read().lower_bound
+        {
+            return Ok(());
+        }
+        let maintained_epoch_id = consensus_inner
+            .get_pivot_hash_from_epoch_number(
+                maintained_state_height_upper_bound,
+            )?;
+        let confirmed_state_root = match &*consensus_inner
+            .data_man
+            .get_epoch_execution_commitment(&maintained_epoch_id)
+        {
+            Some(commitment) => &commitment.state_root_with_aux_info,
+            None => return Ok(()),
+        };
         // Update the confirmed epoch id. Skip remaining actions when the
         // confirmed snapshottable epoch id doesn't change
         {
@@ -758,9 +783,9 @@ impl StorageManager {
             );
         }
 
-        let confirmed_intermediate_height = confirmed_height
+        let confirmed_intermediate_height = maintained_state_height_upper_bound
             - StateIndex::height_to_delta_height(
-                confirmed_height,
+                maintained_state_height_upper_bound,
                 self.get_snapshot_epoch_count(),
             ) as u64;
 
@@ -783,8 +808,8 @@ impl StorageManager {
              confirmed_epoch_id {:?}, confirmed_intermediate_id {:?}, \
              confirmed_snapshot_id {:?}, confirmed_intermediate_height {}, \
              confirmed_snapshot_height {}, first_available_state_height {}",
-            confirmed_height,
-            confirmed_epoch_id,
+            maintained_state_height_upper_bound,
+            maintained_epoch_id,
             confirmed_state_root.aux_info.intermediate_epoch_id,
             confirmed_state_root.aux_info.snapshot_epoch_id,
             confirmed_intermediate_height,
@@ -827,7 +852,9 @@ impl StorageManager {
                         non_pivot_snapshots_to_remove
                             .insert(snapshot_epoch_id.clone());
                     }
-                } else if snapshot_info.height < confirmed_height {
+                } else if snapshot_info.height
+                    < maintained_state_height_upper_bound
+                {
                     // There can be at most 1 snapshot between the snapshot at
                     // confirmed_snapshot_height and confirmed_height.
                     //
@@ -864,16 +891,18 @@ impl StorageManager {
             // Check snapshots which has height >= confirmed_height
             for snapshot_info in &*current_snapshots {
                 // Check for non-pivot snapshot to remove.
-                match snapshot_info.get_epoch_id_at_height(confirmed_height) {
+                match snapshot_info
+                    .get_epoch_id_at_height(maintained_state_height_upper_bound)
+                {
                     Some(path_epoch_id) => {
                         // Check if the snapshot is within
                         // confirmed_epoch's
                         // subtree.
-                        if path_epoch_id != confirmed_epoch_id {
+                        if path_epoch_id != &maintained_epoch_id {
                             debug!(
                                 "remove non-subtree snapshot {:?}, got {:?}, expected {:?}",
                                 snapshot_info.get_snapshot_epoch_id(),
-                                path_epoch_id, confirmed_epoch_id,
+                                path_epoch_id, maintained_epoch_id,
                             );
                             non_pivot_snapshots_to_remove.insert(
                                 snapshot_info.get_snapshot_epoch_id().clone(),
@@ -912,7 +941,9 @@ impl StorageManager {
             if in_progress_snapshot_info.height < confirmed_intermediate_height
             {
                 to_cancel = true;
-            } else if in_progress_snapshot_info.height < confirmed_height {
+            } else if in_progress_snapshot_info.height
+                < maintained_state_height_upper_bound
+            {
                 if in_progress_snapshot_info
                     .get_epoch_id_at_height(confirmed_intermediate_height)
                     != Some(
@@ -923,10 +954,10 @@ impl StorageManager {
                 }
             } else {
                 match in_progress_snapshot_info
-                    .get_epoch_id_at_height(confirmed_height)
+                    .get_epoch_id_at_height(maintained_state_height_upper_bound)
                 {
                     Some(path_epoch_id) => {
-                        if path_epoch_id != confirmed_epoch_id {
+                        if path_epoch_id != &maintained_epoch_id {
                             to_cancel = true;
                         }
                     }
@@ -978,11 +1009,29 @@ impl StorageManager {
             current_snapshots_locked.retain(|x| {
                 !snapshots_to_remove.contains(x.get_snapshot_epoch_id())
             });
-            self.snapshot_info_map_by_epoch.write().retain(
-                |snapshot_epoch_id, _| {
-                    !snapshots_to_remove.contains(snapshot_epoch_id)
-                },
-            );
+            {
+                let mut states_to_remove = HashSet::new();
+                let mut snapshot_info_map =
+                    self.snapshot_info_map_by_epoch.write();
+                for snapshot_epoch_id in &snapshots_to_remove {
+                    if let Some(snapshot_info) =
+                        snapshot_info_map.remove(snapshot_epoch_id)
+                    {
+                        for hash in snapshot_info.pivot_chain_parts {
+                            states_to_remove.insert(hash);
+                        }
+                    }
+                }
+                for hash in states_to_remove {
+                    // FIXME Commitments of non-pivot states are not removed.
+                    consensus_inner
+                        .data_man
+                        .remove_epoch_execution_commitment_from_db(&hash);
+                    consensus_inner
+                        .data_man
+                        .remove_epoch_execution_context_from_db(&hash);
+                }
+            }
             {
                 let snapshot_associated_mpts_by_epoch_locked =
                     &mut *self.snapshot_associated_mpts_by_epoch.write();
@@ -1256,7 +1305,6 @@ use super::super::{
             snapshot_db_manager::SnapshotDbManagerTrait,
         },
         utils::arc_ext::*,
-        StateRootWithAuxInfo,
     },
     delta_mpt::*,
     errors::*,
@@ -1264,6 +1312,7 @@ use super::super::{
 };
 use crate::{
     block_data_manager::StateAvailabilityBoundary,
+    consensus::ConsensusGraphInner,
     storage::{
         impls::{
             delta_mpt::{
