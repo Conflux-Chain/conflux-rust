@@ -146,7 +146,8 @@ fn test_overlay_account_create() {
 
 #[test]
 fn test_deposit_and_withdraw() {
-    let address = Address::random();
+    let mut address = Address::random();
+    address.set_user_account_type_bits();
     let admin = Address::random();
     let account = Account {
         address,
