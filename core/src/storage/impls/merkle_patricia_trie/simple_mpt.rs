@@ -33,7 +33,7 @@ pub fn make_simple_mpt(mut values: Vec<Box<[u8]>>) -> FakeSnapshotMptDb {
     }
 
     MptMerger::new(None, &mut mpt)
-        .merge(&DumpedDeltaMptIterator { kv: mpt_kvs })
+        .merge(&DumpedMptKvIterator { kv: mpt_kvs })
         // FakeSnapshotMptDb does not fail.
         .unwrap();
 
@@ -83,6 +83,6 @@ use crate::storage::{
         MptMerger,
     },
     storage_db::SnapshotMptTraitRead,
-    tests::{DumpedDeltaMptIterator, FakeSnapshotMptDb},
+    tests::{DumpedMptKvIterator, FakeSnapshotMptDb},
 };
 use primitives::{MerkleHash, MERKLE_NULL_NODE};

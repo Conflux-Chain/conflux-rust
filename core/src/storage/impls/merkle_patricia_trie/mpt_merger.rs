@@ -41,7 +41,7 @@ impl<'a> MptMerger<'a> {
     }
 
     pub fn merge(
-        &mut self, inserter: &DumpedDeltaMptIterator,
+        &mut self, inserter: &DumpedMptKvIterator,
     ) -> Result<MerkleHash> {
         self.rw_cursor.load_root()?;
 
@@ -53,8 +53,8 @@ impl<'a> MptMerger<'a> {
             fn merger_mut(&mut self) -> &mut MptMerger<'a> { self.merger }
         }
 
-        impl<'x, 'a: 'x> KVInserter<(Vec<u8>, Box<[u8]>)> for Merger<'x, 'a> {
-            fn push(&mut self, v: (Vec<u8>, Box<[u8]>)) -> Result<()> {
+        impl<'x, 'a: 'x> KVInserter<MptKeyValue> for Merger<'x, 'a> {
+            fn push(&mut self, v: MptKeyValue) -> Result<()> {
                 let (key, value) = v;
                 if value.len() > 0 {
                     self.merger_mut().rw_cursor.insert(&key, value)?;
@@ -77,10 +77,7 @@ impl<'a> MptMerger<'a> {
             Item = (Vec<u8>, ()),
             Error = Error,
         >,
-        mut set_keys_iter: impl FallibleIterator<
-            Item = (Vec<u8>, Box<[u8]>),
-            Error = Error,
-        >,
+        mut set_keys_iter: impl FallibleIterator<Item = MptKeyValue, Error = Error>,
     ) -> Result<MerkleHash>
     {
         self.rw_cursor.load_root()?;
@@ -180,10 +177,10 @@ impl GetRwMpt for MergeMptsInRequest<'_> {
 use crate::storage::{
     impls::{
         errors::*,
-        merkle_patricia_trie::{mpt_cursor::*, KVInserter},
+        merkle_patricia_trie::{mpt_cursor::*, KVInserter, MptKeyValue},
     },
     storage_db::snapshot_mpt::*,
-    tests::DumpedDeltaMptIterator,
+    tests::DumpedMptKvIterator,
 };
 use fallible_iterator::FallibleIterator;
 use primitives::MerkleHash;

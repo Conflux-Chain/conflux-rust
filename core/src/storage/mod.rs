@@ -97,7 +97,9 @@ pub use self::{
         defaults,
         delta_mpt::*,
         errors::{Error, ErrorKind, Result},
-        merkle_patricia_trie::{simple_mpt::*, KVInserter, TrieProof},
+        merkle_patricia_trie::{
+            simple_mpt::*, KVInserter, MptKeyValue, TrieProof,
+        },
         snapshot_sync::{FullSyncVerifier, MptSlicer},
         state_proof::StateProof,
         storage_db::{
