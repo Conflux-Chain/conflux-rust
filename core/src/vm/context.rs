@@ -72,10 +72,10 @@ pub enum CreateContractAddress {
 /// Context for VMs
 pub trait Context {
     /// Returns a value for given key.
-    fn storage_at(&self, key: &Vec<u8>) -> Result<H256>;
+    fn storage_at(&self, key: &Vec<u8>) -> Result<U256>;
 
     /// Stores a value for given key.
-    fn set_storage(&mut self, key: Vec<u8>, value: H256) -> Result<()>;
+    fn set_storage(&mut self, key: Vec<u8>, value: U256) -> Result<()>;
 
     /// Determine whether an account exists.
     fn exists(&self, address: &Address) -> Result<bool>;
