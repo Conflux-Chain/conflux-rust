@@ -112,7 +112,7 @@ pub use self::{
     state::{State as StorageState, StateTrait as StorageStateTrait},
     state_manager::{
         StateIndex, StateManager as StorageManager,
-        StateManagerTrait as StorageManagerTrait, StateReadonlyIndex,
+        StateManagerTrait as StorageManagerTrait,
     },
     state_root_with_aux_info::*,
     storage_db::KeyValueDbTrait,
