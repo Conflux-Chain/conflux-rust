@@ -587,7 +587,7 @@ impl<'a> CallCreateExecutive<'a> {
                         let cres = if depth == 0 {
                             state.check_collateral_for_storage_finally(
                                 &params.original_sender,
-                                &params.storage_limit,
+                                &params.storage_limit_in_drip,
                                 &mut unconfirmed_substate,
                             )
                         } else {
@@ -1598,7 +1598,7 @@ impl<'a> Executive<'a> {
                     data: None,
                     call_type: CallType::None,
                     params_type: vm::ParamsType::Embedded,
-                    storage_limit: total_storage_limit,
+                    storage_limit_in_drip: total_storage_limit,
                 };
                 let res = self.create(params, &mut substate);
                 let out = match &res {
@@ -1622,7 +1622,7 @@ impl<'a> Executive<'a> {
                     data: Some(tx.data.clone()),
                     call_type: CallType::Call,
                     params_type: vm::ParamsType::Separate,
-                    storage_limit: total_storage_limit,
+                    storage_limit_in_drip: total_storage_limit,
                 };
 
                 let res = self.call(params, &mut substate);

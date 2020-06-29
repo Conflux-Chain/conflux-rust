@@ -38,7 +38,7 @@ pub struct OriginInfo {
     /// the whole execution.
     storage_owner: Address,
     /// The upper bound of `collateral_for_storage` for `original_sender`
-    storage_limit: U256,
+    storage_limit_in_drip: U256,
     gas_price: U256,
     value: U256,
 }
@@ -50,7 +50,7 @@ impl OriginInfo {
             address: params.address,
             original_sender: params.original_sender,
             storage_owner: params.storage_owner,
-            storage_limit: params.storage_limit,
+            storage_limit_in_drip: params.storage_limit_in_drip,
             gas_price: params.gas_price,
             value: match params.value {
                 ActionValue::Transfer(val) | ActionValue::Apparent(val) => val,
@@ -60,7 +60,7 @@ impl OriginInfo {
 
     pub fn original_sender(&self) -> &Address { &self.original_sender }
 
-    pub fn storage_limit(&self) -> &U256 { &self.storage_limit }
+    pub fn storage_limit(&self) -> &U256 { &self.storage_limit_in_drip }
 }
 
 /// Implementation of evm context.
@@ -190,7 +190,7 @@ impl<'a> ContextTrait for Context<'a> {
             sender: self.origin.address.clone(),
             original_sender: self.origin.original_sender,
             storage_owner: self.origin.storage_owner,
-            storage_limit: self.origin.storage_limit,
+            storage_limit_in_drip: self.origin.storage_limit_in_drip,
             gas: *gas,
             gas_price: self.origin.gas_price,
             value: ActionValue::Transfer(*value),
@@ -265,7 +265,7 @@ impl<'a> ContextTrait for Context<'a> {
             code_address: *code_address,
             original_sender: self.origin.original_sender,
             storage_owner: self.origin.storage_owner,
-            storage_limit: self.origin.storage_limit,
+            storage_limit_in_drip: self.origin.storage_limit_in_drip,
             gas: *gas,
             gas_price: self.origin.gas_price,
             code,
@@ -347,7 +347,7 @@ impl<'a> ContextTrait for Context<'a> {
                     });
                 }
                 if collateral_for_storage + collateral_for_code
-                    > self.origin.storage_limit
+                    > self.origin.storage_limit_in_drip
                 {
                     return Err(vm::Error::ExceedStorageLimit);
                 }
@@ -477,7 +477,7 @@ mod tests {
             storage_owner: Address::zero(),
             gas_price: U256::zero(),
             value: U256::zero(),
-            storage_limit: U256::MAX,
+            storage_limit_in_drip: U256::MAX,
         }
     }
 
