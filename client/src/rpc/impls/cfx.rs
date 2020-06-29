@@ -372,7 +372,7 @@ impl RpcImpl {
     fn send_transaction(
         &self, tx: SendTxRequest, password: Option<String>,
     ) -> RpcResult<RpcH256> {
-        info!("RPC Request: send_transaction, tx = {:?}", tx);
+        info!("RPC Request: cfx_sendTransaction, tx = {:?}", tx);
 
         self.prepare_transaction(tx, password)
             .and_then(|tx| self.send_transaction_with_signature(tx))

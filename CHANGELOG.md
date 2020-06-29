@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- Rename local rpc send_transaction with cfx_sendTransaction.
+
 
 - Improve the performance of the consensus layer for unstable TreeGraph scenarios. 
 
