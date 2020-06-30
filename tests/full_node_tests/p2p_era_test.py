@@ -47,7 +47,9 @@ class P2PTest(ConfluxTestFramework):
 
     def setup_network(self):
         self.setup_nodes()
-        connect_sample_nodes(self.nodes, self.log)
+        # Make all nodes fully connected, so a crashed archive node can be connected to another
+        # archive node to catch up
+        connect_sample_nodes(self.nodes, self.log, sample=self.num_nodes - 1)
         sync_blocks(self.nodes)
 
     def run_test(self):
