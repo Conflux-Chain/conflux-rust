@@ -31,7 +31,7 @@ use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Lock, Meter, MeterTimer,
     RwLockExtensions,
 };
-use parking_lot::{Mutex, MutexGuard, RwLock};
+use parking_lot::{Mutex, RwLock};
 use primitives::{Account, SignedTransaction, TransactionWithSignature};
 use std::{
     cmp::{max, min},
@@ -228,6 +228,8 @@ impl TransactionPool {
 
         let mut passed_transactions = Vec::new();
         let mut failure = HashMap::new();
+        let consensus_best_info_clone =
+            { self.consensus_best_info.lock().clone() };
 
         // filter out invalid transactions.
         let mut index = 0;
@@ -235,7 +237,7 @@ impl TransactionPool {
             match self.verify_transaction_tx_pool(
                 tx,
                 /* basic_check = */ true,
-                &self.consensus_best_info.lock(),
+                consensus_best_info_clone.clone(),
             ) {
                 Ok(_) => index += 1,
                 Err(e) => {
@@ -317,7 +319,7 @@ impl TransactionPool {
     /// readiness
     fn verify_transaction_tx_pool(
         &self, transaction: &TransactionWithSignature, basic_check: bool,
-        current_best_info: &MutexGuard<Arc<BestInformation>>,
+        current_best_info: Arc<BestInformation>,
     ) -> Result<(), String>
     {
         let _timer = MeterTimer::time_func(TX_POOL_VERIFY_TIMER.as_ref());
@@ -535,8 +537,10 @@ impl TransactionPool {
     ) -> StateDbResult<()> {
         let mut set_tx_buffer = self.set_tx_requests.lock();
         let mut recycle_tx_buffer = self.recycle_tx_requests.lock();
-        let mut consensus_best_info = self.consensus_best_info.lock();
-        *consensus_best_info = best_info;
+        {
+            let mut consensus_best_info = self.consensus_best_info.lock();
+            *consensus_best_info = best_info.clone();
+        }
 
         let mut account_cache = self.get_best_state_account_cache();
         let mut inner = self.inner.write_with_metric(&NOTIFY_BEST_INFO_LOCK);
@@ -563,7 +567,7 @@ impl TransactionPool {
             if let Err(e) = self.verify_transaction_tx_pool(
                 &tx,
                 /* basic_check = */ false,
-                &consensus_best_info,
+                best_info.clone(),
             ) {
                 warn!(
                     "Recycled transaction {:?} discarded due to not passing verification {}.",
@@ -588,12 +592,16 @@ impl TransactionPool {
         additional_transactions: Vec<Arc<SignedTransaction>>,
     ) -> (Arc<BestInformation>, U256, Vec<Arc<SignedTransaction>>)
     {
-        let consensus_best_info = self.consensus_best_info.lock();
+        // We do not need to hold the lock because it is fine for us to generate
+        // blocks that are slightly behind the best state.
+        // We do not want to stall the consensus thread.
+        let consensus_best_info_clone =
+            { self.consensus_best_info.lock().clone() };
 
         let parent_block_gas_limit = self
             .data_man
             .block_by_hash(
-                &consensus_best_info.best_block_hash,
+                &consensus_best_info_clone.best_block_hash,
                 /* update_cache = */ true,
             )
             // The parent block must exists.
@@ -621,7 +629,7 @@ impl TransactionPool {
             num_txs,
             self_gas_limit.clone(),
             block_size_limit,
-            consensus_best_info.best_epoch_number,
+            consensus_best_info_clone.best_epoch_number,
         );
 
         let transactions = [
@@ -630,7 +638,7 @@ impl TransactionPool {
         ]
         .concat();
 
-        (consensus_best_info.clone(), self_gas_limit, transactions)
+        (consensus_best_info_clone, self_gas_limit, transactions)
     }
 
     pub fn set_best_executed_epoch(
