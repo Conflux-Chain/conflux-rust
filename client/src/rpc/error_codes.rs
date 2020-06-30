@@ -42,7 +42,7 @@ pub mod codes {
     /// by 1.
     ///
     /// Do not recycle deprecated error codes.
-    const NEXT_SERVER_ERROR_CODE: i64 = -32073;
+    const NEXT_SERVER_ERROR_CODE: i64 = -32078;
     /// When the above number is equal to -32100, take the number below on the
     /// right for new error code, then increase it by 1.
     const CFX_EXTRA_SERVER_ERROR_CODE: i64 = -31999;
@@ -66,9 +66,6 @@ pub mod codes {
     /// When there are too many rpc requests. We limit the number of allowed rpc
     /// requests for attack prevention.
     pub const REQUEST_REJECTED_TOO_MANY_REQUESTS: i64 = -32072;
-    /// When the node is still in catch up mode, it is not capable to handle
-    /// certain requests. We will return this code in this situation.
-    pub const REQUEST_REJECTED_IN_CATCH_UP: i64 = -32073;
     /// When the request is considered too much for the rpc function.
     /// The consideration is set individually per rpc. It can be data too large,
     /// or it can be that some performance/security related parameter is outside
@@ -94,6 +91,9 @@ pub mod codes {
     /// It's likely that the node is under attack or the whole Conflux network
     /// enters an abnormal state.
     pub const SUSPICIOUS_MINING_RATE: i64 = -32076;
+    /// When the node is still in catch up mode, it is not capable to handle
+    /// certain requests. We will return this code in this situation.
+    pub const REQUEST_REJECTED_IN_CATCH_UP: i64 = -32077;
 
     /* Other server error codes */
     /// Any exception happened while processing the transaction. Mostly likely
