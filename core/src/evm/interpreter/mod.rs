@@ -776,7 +776,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                     contract_code,
                     address_scheme,
                     true,
-                );
+                )?;
                 return match create_result {
                     Ok(ContractCreateResult::Created(address, gas_left)) => {
                         self.stack.push(address_to_u256(address));
@@ -916,7 +916,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                         &code_address,
                         call_type,
                         true,
-                    )
+                    )?
                 };
 
                 self.resume_output_range = Some((out_off, out_size));

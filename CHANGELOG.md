@@ -18,6 +18,8 @@ was caused by a wrong assumption of the uniqueness of the trie proof key.
 
 - Fix crash when a contract suicides during creation.
 
+- Fix db error handling for EVM create / call.
+
 ## Improvements
 
 - Rename local rpc send_transaction with cfx_sendTransaction.
