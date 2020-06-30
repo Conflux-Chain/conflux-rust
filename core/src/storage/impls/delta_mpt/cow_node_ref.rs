@@ -247,7 +247,7 @@ impl CowNodeRef {
     pub fn delete_subtree(
         mut self, trie: &DeltaMpt, owned_node_set: &OwnedNodeSet,
         guarded_trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
-        key_prefix: CompressedPathRaw, values: &mut Vec<(Vec<u8>, Box<[u8]>)>,
+        key_prefix: CompressedPathRaw, values: &mut Vec<MptKeyValue>,
         db: &mut DeltaDbOwnedReadTraitObj,
     ) -> Result<()>
     {
@@ -582,9 +582,7 @@ impl CowNodeRef {
     // FIXME: It's unnecessary to use owned_node_set for read-only access.
     // FIXME: Where to put which method? CowNodeRef, MVMPT / MPT,
     // FIXME: SubTrieVisitor?
-    pub fn iterate_internal<
-        KVInserterType: KVInserter<(Vec<u8>, Box<[u8]>)>,
-    >(
+    pub fn iterate_internal<KVInserterType: KVInserter<MptKeyValue>>(
         &self, owned_node_set: &OwnedNodeSet, trie: &DeltaMpt,
         guarded_trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
         key_prefix: CompressedPathRaw, values: &mut KVInserterType,

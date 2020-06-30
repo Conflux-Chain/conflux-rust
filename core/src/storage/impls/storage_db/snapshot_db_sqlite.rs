@@ -563,8 +563,8 @@ impl KvdbSqliteShardedDestructureTrait for DeltaMptDumperDeleteDb<'_> {
     }
 }
 
-impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptMergeDumperSqlite<'a> {
-    fn push(&mut self, x: (Vec<u8>, Box<[u8]>)) -> Result<()> {
+impl<'a> KVInserter<MptKeyValue> for DeltaMptMergeDumperSqlite<'a> {
+    fn push(&mut self, x: MptKeyValue) -> Result<()> {
         // TODO: what about multi-threading put?
         let (mpt_key, value) = x;
         let snapshot_key =
@@ -589,7 +589,7 @@ use crate::storage::{
     impls::{
         delta_mpt::DeltaMptIterator,
         errors::*,
-        merkle_patricia_trie::MptMerger,
+        merkle_patricia_trie::{MptKeyValue, MptMerger},
         storage_db::{
             kvdb_sqlite::KvdbSqliteStatements,
             kvdb_sqlite_sharded::{
