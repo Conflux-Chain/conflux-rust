@@ -188,11 +188,11 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             name="constructor",
             args=[],
             sender_key=self.genesis_priv_key,
-            storage_limit=2842)
+            storage_limit=2723)
         contract_addr = self.wait_for_tx([transaction], True)[0]['contractCreated']
         self.log.info("contract_addr={}".format(contract_addr))
         assert_equal(client.get_balance(contract_addr), 0)
-        assert_equal(client.get_collateral_for_storage(genesis_addr), 2842 * collateral_per_byte)
+        assert_equal(client.get_collateral_for_storage(genesis_addr), 2723 * collateral_per_byte)
 
         # sponsor the contract failed due to sponsor_balance < 1000 * upper_bound
         b0 = client.get_balance(genesis_addr)
@@ -684,7 +684,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             contract_addr=contract_addr,
             wait=True,
             storage_limit=bytes_per_key * 30)
-        assert_equal(client.get_collateral_for_storage(genesis_addr), c0)
+        assert_equal(client.get_collateral_for_storage(genesis_addr), c0 + 10 * collateral_per_storage_key)
 
         c0 = client.get_collateral_for_storage(genesis_addr)
         self.call_contract_function(
@@ -717,7 +717,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             contract_addr=contract_addr,
             wait=True,
             storage_limit=bytes_per_key * 300)
-        assert_equal(client.get_collateral_for_storage(genesis_addr), c0)
+        assert_equal(client.get_collateral_for_storage(genesis_addr), c0 + 21 * collateral_per_storage_key)
 
         # test recurrence
         c0 = client.get_collateral_for_storage(genesis_addr)
