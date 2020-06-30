@@ -81,7 +81,7 @@ pub fn initialize_internal_contract_accounts(state: &mut StateDb) {
                     /* balance = */ U256::zero(),
                     /* nonce = */ U256::one(),
                 )
-                .as_account();
+                .as_account()?;
                 state.set(
                     StorageKey::AccountKey(address.as_bytes()),
                     &account,
@@ -119,7 +119,8 @@ pub fn genesis_block(
             &addr,
             &balance,
             &0.into(), /* nonce */
-        );
+        )
+        .unwrap();
         state
             .set(StorageKey::new_account_key(&addr), &account, None)
             .unwrap();
