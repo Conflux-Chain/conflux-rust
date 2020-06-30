@@ -747,7 +747,7 @@ impl Drop for Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ethereum_types::H256;
+    use cfx_types::H256;
     use std::str::FromStr;
     use tempdir::TempDir;
 
