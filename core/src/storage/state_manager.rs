@@ -8,59 +8,15 @@ pub use super::impls::state_manager::StateManager;
 
 pub type SharedStateManager = Arc<StateManager>;
 
-pub struct StateReadonlyIndex {
+#[derive(Debug)]
+pub struct StateIndex {
     pub snapshot_epoch_id: EpochId,
     pub snapshot_merkle_root: MerkleHash,
     pub intermediate_epoch_id: EpochId,
     pub intermediate_trie_root_merkle: MerkleHash,
-    pub maybe_intermediate_key_padding: Option<DeltaMptKeyPadding>,
+    pub maybe_intermediate_mpt_key_padding: Option<DeltaMptKeyPadding>,
     pub epoch_id: EpochId,
     pub delta_mpt_key_padding: DeltaMptKeyPadding,
-}
-
-impl StateReadonlyIndex {
-    pub fn from_ref(r: StateIndex) -> Self {
-        Self {
-            snapshot_epoch_id: r.snapshot_epoch_id.clone(),
-            snapshot_merkle_root: r.snapshot_merkle_root.clone(),
-            intermediate_epoch_id: r.intermediate_epoch_id.clone(),
-            intermediate_trie_root_merkle: r
-                .intermediate_trie_root_merkle
-                .clone(),
-            maybe_intermediate_key_padding: r
-                .maybe_intermediate_mpt_key_padding
-                .cloned(),
-            epoch_id: r.epoch_id.clone(),
-            delta_mpt_key_padding: r.delta_mpt_key_padding.clone(),
-        }
-    }
-
-    pub fn as_ref(&self) -> StateIndex {
-        StateIndex {
-            snapshot_epoch_id: &self.snapshot_epoch_id,
-            snapshot_merkle_root: &self.snapshot_merkle_root,
-            intermediate_epoch_id: &self.intermediate_epoch_id,
-            intermediate_trie_root_merkle: &self.intermediate_trie_root_merkle,
-            maybe_intermediate_mpt_key_padding: self
-                .maybe_intermediate_key_padding
-                .as_ref(),
-            epoch_id: &self.epoch_id,
-            delta_mpt_key_padding: &self.delta_mpt_key_padding,
-            maybe_delta_trie_height: None,
-            maybe_height: None,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct StateIndex<'a> {
-    pub snapshot_epoch_id: &'a EpochId,
-    pub snapshot_merkle_root: &'a MerkleHash,
-    pub intermediate_epoch_id: &'a EpochId,
-    pub intermediate_trie_root_merkle: &'a MerkleHash,
-    pub maybe_intermediate_mpt_key_padding: Option<&'a DeltaMptKeyPadding>,
-    pub epoch_id: &'a EpochId,
-    pub delta_mpt_key_padding: &'a DeltaMptKeyPadding,
     pub maybe_delta_trie_height: Option<u32>,
     pub maybe_height: Option<u64>,
 }
@@ -83,7 +39,7 @@ pub trait StateManagerTrait {
     fn get_state_for_genesis_write(&self) -> State;
 }
 
-impl<'a> StateIndex<'a> {
+impl StateIndex {
     pub fn height_to_delta_height(
         height: u64, snapshot_epoch_count: u32,
     ) -> u32 {
@@ -94,15 +50,15 @@ impl<'a> StateIndex<'a> {
         }
     }
 
-    pub fn new_for_test_only_delta_mpt(epoch_id: &'a EpochId) -> Self {
+    pub fn new_for_test_only_delta_mpt(epoch_id: &EpochId) -> Self {
         Self {
-            snapshot_epoch_id: &NULL_EPOCH,
-            snapshot_merkle_root: &MERKLE_NULL_NODE,
-            intermediate_epoch_id: &NULL_EPOCH,
-            intermediate_trie_root_merkle: &MERKLE_NULL_NODE,
+            snapshot_epoch_id: NULL_EPOCH,
+            snapshot_merkle_root: MERKLE_NULL_NODE,
+            intermediate_epoch_id: NULL_EPOCH,
+            intermediate_trie_root_merkle: MERKLE_NULL_NODE,
             maybe_intermediate_mpt_key_padding: None,
-            epoch_id,
-            delta_mpt_key_padding: &*GENESIS_DELTA_MPT_KEY_PADDING,
+            epoch_id: *epoch_id,
+            delta_mpt_key_padding: GENESIS_DELTA_MPT_KEY_PADDING.clone(),
             maybe_delta_trie_height: Some(0),
             maybe_height: Some(0),
         }
@@ -111,23 +67,26 @@ impl<'a> StateIndex<'a> {
     /// Height is used to check for shifting snapshot.
     /// The state root and height information should be provided from consensus.
     pub fn new_for_next_epoch(
-        base_epoch_id: &'a EpochId, state_root: &'a StateRootWithAuxInfo,
+        base_epoch_id: &EpochId, state_root: &StateRootWithAuxInfo,
         height: u64, snapshot_epoch_count: u32,
     ) -> Self
     {
         Self {
-            snapshot_epoch_id: &state_root.aux_info.snapshot_epoch_id,
-            snapshot_merkle_root: &state_root.state_root.snapshot_root,
-            intermediate_epoch_id: &state_root.aux_info.intermediate_epoch_id,
-            intermediate_trie_root_merkle: &state_root
+            snapshot_epoch_id: state_root.aux_info.snapshot_epoch_id,
+            snapshot_merkle_root: state_root.state_root.snapshot_root,
+            intermediate_epoch_id: state_root.aux_info.intermediate_epoch_id,
+            intermediate_trie_root_merkle: state_root
                 .state_root
                 .intermediate_delta_root,
             maybe_intermediate_mpt_key_padding: state_root
                 .aux_info
                 .maybe_intermediate_mpt_key_padding
-                .as_ref(),
-            epoch_id: base_epoch_id,
-            delta_mpt_key_padding: &state_root.aux_info.delta_mpt_key_padding,
+                .clone(),
+            epoch_id: *base_epoch_id,
+            delta_mpt_key_padding: state_root
+                .aux_info
+                .delta_mpt_key_padding
+                .clone(),
             maybe_delta_trie_height: Some(Self::height_to_delta_height(
                 height,
                 snapshot_epoch_count,
@@ -137,21 +96,24 @@ impl<'a> StateIndex<'a> {
     }
 
     pub fn new_for_readonly(
-        epoch_id: &'a EpochId, state_root: &'a StateRootWithAuxInfo,
+        epoch_id: &EpochId, state_root: &StateRootWithAuxInfo,
     ) -> Self {
         Self {
-            snapshot_epoch_id: &state_root.aux_info.snapshot_epoch_id,
-            snapshot_merkle_root: &state_root.state_root.snapshot_root,
-            intermediate_epoch_id: &state_root.aux_info.intermediate_epoch_id,
-            intermediate_trie_root_merkle: &state_root
+            snapshot_epoch_id: state_root.aux_info.snapshot_epoch_id,
+            snapshot_merkle_root: state_root.state_root.snapshot_root,
+            intermediate_epoch_id: state_root.aux_info.intermediate_epoch_id,
+            intermediate_trie_root_merkle: state_root
                 .state_root
                 .intermediate_delta_root,
             maybe_intermediate_mpt_key_padding: state_root
                 .aux_info
                 .maybe_intermediate_mpt_key_padding
-                .as_ref(),
-            epoch_id,
-            delta_mpt_key_padding: &state_root.aux_info.delta_mpt_key_padding,
+                .clone(),
+            epoch_id: *epoch_id,
+            delta_mpt_key_padding: state_root
+                .aux_info
+                .delta_mpt_key_padding
+                .clone(),
             maybe_delta_trie_height: None,
             maybe_height: None,
         }

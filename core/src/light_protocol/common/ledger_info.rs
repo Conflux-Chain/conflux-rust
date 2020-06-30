@@ -126,11 +126,10 @@ impl LedgerInfo {
     pub fn state_of(&self, epoch: u64) -> Result<State, Error> {
         let pivot = self.pivot_hash_of(epoch)?;
 
-        let (_state_index_guard, maybe_state_index) = self
+        let maybe_state_index = self
             .consensus
             .get_data_manager()
-            .get_state_readonly_index(&pivot)
-            .into();
+            .get_state_readonly_index(&pivot);
         let state = maybe_state_index.map(|state_index| {
             self.consensus
                 .get_data_manager()
