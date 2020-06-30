@@ -331,6 +331,9 @@ impl ConsensusGraph {
             EpochNumber::LatestCheckpoint => {
                 self.latest_checkpoint_epoch_number()
             }
+            EpochNumber::LatestConfirmed => {
+                self.latest_confirmed_epoch_number()
+            }
             EpochNumber::LatestMined => self.best_epoch_number(),
             EpochNumber::LatestState => self.best_executed_state_epoch_number(),
             EpochNumber::Number(num) => {
@@ -437,7 +440,7 @@ impl ConsensusGraph {
             )
             .into());
         }
-        let (_state_index_guard, maybe_state_readonly_index) =
+        let maybe_state_readonly_index =
             self.data_man.get_state_readonly_index(&hash).into();
         let maybe_state = match maybe_state_readonly_index {
             Some(state_readonly_index) => self
@@ -1330,6 +1333,11 @@ impl ConsensusGraphTrait for ConsensusGraph {
             .expect("header for cur_era_genesis should exist")
     }
 
+    fn latest_confirmed_epoch_number(&self) -> u64 {
+        self.confirmation_meter
+            .get_confirmed_epoch_num(std::u64::MAX)
+    }
+
     fn best_chain_id(&self) -> u64 {
         self.best_info.read_recursive().best_chain_id()
     }
@@ -1445,10 +1453,8 @@ impl ConsensusGraphTrait for ConsensusGraph {
                 (best_state_hash, past_num_blocks)
             };
             if self.executor.wait_for_result(best_state_hash).is_ok() {
-                let (_state_index_guard, best_state_index) = self
-                    .data_man
-                    .get_state_readonly_index(&best_state_hash)
-                    .into();
+                let best_state_index =
+                    self.data_man.get_state_readonly_index(&best_state_hash);
                 if let Ok(state) =
                     self.data_man.storage_manager.get_state_no_commit(
                         best_state_index.unwrap(),

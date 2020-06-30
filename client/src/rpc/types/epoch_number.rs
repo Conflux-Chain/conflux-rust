@@ -22,6 +22,8 @@ pub enum EpochNumber {
     Earliest,
     /// The latest checkpoint (cur_era_genesis)
     LatestCheckpoint,
+    /// The latest confirmed (with the estimation of the confirmation meter)
+    LatestConfirmed,
     /// Latest block with state.
     LatestState,
     /// Latest mined block.
@@ -56,6 +58,9 @@ impl Serialize for EpochNumber {
             EpochNumber::LatestCheckpoint => {
                 serializer.serialize_str("latest_checkpoint")
             }
+            EpochNumber::LatestConfirmed => {
+                serializer.serialize_str("latest_confirmed")
+            }
         }
     }
 }
@@ -70,6 +75,9 @@ impl EpochNumber {
             EpochNumber::LatestCheckpoint => {
                 PrimitiveEpochNumber::LatestCheckpoint
             }
+            EpochNumber::LatestConfirmed => {
+                PrimitiveEpochNumber::LatestConfirmed
+            }
         }
     }
 }
@@ -81,6 +89,7 @@ impl FromStr for EpochNumber {
         match s {
             "latest_mined" => Ok(EpochNumber::LatestMined),
             "latest_state" => Ok(EpochNumber::LatestState),
+            "latest_confirmed" => Ok(EpochNumber::LatestConfirmed),
             "earliest" => Ok(EpochNumber::Earliest),
             "latest_checkpoint" => Ok(EpochNumber::LatestCheckpoint),
             _ if s.starts_with("0x") => u64::from_str_radix(&s[2..], 16)
@@ -107,7 +116,7 @@ impl<'a> Visitor<'a> for EpochNumberVisitor {
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(
             formatter,
-            "an epoch number or 'latest_mined', 'latest_state', 'latest_checkpoint', or 'earliest'"
+            "an epoch number or 'latest_mined', 'latest_state', 'latest_checkpoint', 'latest_confirmed' or 'earliest'"
         )
     }
 
@@ -179,7 +188,7 @@ impl<'a> Visitor<'a> for BlockHashOrEpochNumberVisitor {
         write!(
             formatter,
             "an epoch number or 'latest_mined', 'latest_state', 'latest_checkpoint',\
-             or 'earliest', or 'hash:<BLOCK_HASH>'"
+             'latest_confirmed', or 'earliest', or 'hash:<BLOCK_HASH>'"
         )
     }
 

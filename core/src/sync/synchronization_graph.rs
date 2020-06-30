@@ -1243,12 +1243,6 @@ impl SynchronizationGraph {
                 self.data_man
                     .remove_block_result(&hash, true /* remove_db */);
             }
-            // All nodes will not maintain old era states, so related data can
-            // be removed safely. The in-memory data is already
-            // removed in `make_checkpoint`.
-            // TODO Only call remove for executed epochs.
-            self.data_man
-                .remove_epoch_execution_commitment_from_db(&hash);
             self.data_man.remove_epoch_execution_context_from_db(&hash);
             num_of_blocks_to_remove -= 1;
             if num_of_blocks_to_remove == 0 {

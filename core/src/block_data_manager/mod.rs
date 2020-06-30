@@ -1268,23 +1268,19 @@ impl BlockDataManager {
     }
 
     /// Caller should make sure the state exists.
-    pub fn get_state_readonly_index<'a>(
-        &'a self, block_hash: &'a EpochId,
-    ) -> GuardedValue<
-        RwLockReadGuard<'a, HashMap<H256, EpochExecutionCommitment>>,
-        Option<StateIndex<'a>>,
-    > {
-        let (guard, maybe_commitment) =
-            self.get_epoch_execution_commitment(block_hash).into();
-        let maybe_state_index = match &*maybe_commitment {
+    pub fn get_state_readonly_index(
+        &self, block_hash: &EpochId,
+    ) -> Option<StateIndex> {
+        let maybe_commitment =
+            self.get_epoch_execution_commitment_with_db(block_hash);
+        let maybe_state_index = match maybe_commitment {
             None => None,
             Some(execution_commitment) => Some(StateIndex::new_for_readonly(
                 block_hash,
                 &execution_commitment.state_root_with_aux_info,
             )),
         };
-
-        GuardedValue::new(guard, maybe_state_index)
+        maybe_state_index
     }
 
     // TODO: There could be io error when getting block by hash.
