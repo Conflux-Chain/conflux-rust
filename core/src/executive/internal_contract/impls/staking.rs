@@ -13,7 +13,7 @@ use std::str::FromStr;
 
 lazy_static! {
     pub static ref STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS: Address =
-        Address::from_str("843c409373ffd5c0bec1dddb7bec830856757b65").unwrap();
+        Address::from_str("0888000000000000000000000000000000000002").unwrap();
 }
 
 /// The first 4 bytes of keccak('deposit(uint256)') is `0xb6b55f25`.

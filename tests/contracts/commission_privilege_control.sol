@@ -1,19 +1,19 @@
 pragma solidity >=0.4.15;
 
-import "https://github.com/Conflux-Chain/conflux-rust/blob/master/internal_contract/contracts/SponsorWhitelistControl.sol";
+import "internal/SponsorWhitelistControl.sol";
 
 contract CommissionPrivilegeTest {
     mapping(uint => uint) public ss;
 
     function add(address account) public payable {
-        SponsorWhitelistControl cpc = SponsorWhitelistControl(0x8ad036480160591706c831f0DA19D1a424e39469);
+        SponsorWhitelistControl cpc = SponsorWhitelistControl(0x0888000000000000000000000000000000000001);
         address[] memory a = new address[](1);
         a[0] = account;
         cpc.add_privilege(a);
     }
 
     function remove(address account) public payable {
-        SponsorWhitelistControl cpc = SponsorWhitelistControl(0x8ad036480160591706c831f0DA19D1a424e39469);
+        SponsorWhitelistControl cpc = SponsorWhitelistControl(0x0888000000000000000000000000000000000001);
         address[] memory a = new address[](1);
         a[0] = account;
         cpc.remove_privilege(a);

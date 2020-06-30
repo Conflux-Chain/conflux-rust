@@ -28,18 +28,18 @@ TEST_SCRIPTS = []
 test_dir = os.path.dirname(os.path.realpath(__file__))
 
 test_subdirs = [
-    "", # include test_dir itself
-    "full_node_tests",
-    "light",
-    "network_tests",
-    "pubsub",
-]
+        "", # include test_dir itself
+        "full_node_tests",
+        "light",
+        "network_tests",
+        "pubsub",
+        ]
 
 # By default, run all *_test.py files in the specified subfolders.
 for subdir in test_subdirs:
     subdir_path = os.path.join(test_dir, subdir)
     for file in os.listdir(subdir_path):
-        if file.endswith("_test.py"):
+        if file.endswith("_test.py") and not file.endswith("commission_privilege_test.py"):
             rel_path = os.path.join(subdir, file)
             TEST_SCRIPTS.append(rel_path)
 

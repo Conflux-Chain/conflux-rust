@@ -82,6 +82,8 @@ Now if no `from_epoch` is specified, it will only return logs after the latest c
 
 - Improve archive and full node log filtering. Change `filter.to_epoch` default to `"latest_state"`. Limit `filter.block_hashes` to up to 128 items.
 
+- Change internal contracts address to 0x088800...
+
 # 0.5.0
 
 ## Improvements
