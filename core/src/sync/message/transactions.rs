@@ -150,15 +150,20 @@ impl Handleable for TransactionDigests {
             }
         }
 
-        ctx.manager
-            .request_manager
-            .request_transactions_from_digest(
-                ctx.io,
-                ctx.node_id.clone(),
-                &self,
-            );
-
-        Ok(())
+        // We will not request transactions when in the catch up mode, because
+        // the transaction pool cannot process them correctly.
+        if !ctx.manager.catch_up_mode() {
+            ctx.manager
+                .request_manager
+                .request_transactions_from_digest(
+                    ctx.io,
+                    ctx.node_id.clone(),
+                    &self,
+                );
+            Err(ErrorKind::InCatchUpMode("ignore transaction_digests message because still in the catch up mode".to_string()).into())
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -574,7 +579,7 @@ impl Handleable for GetTransactionsResponse {
         // transactions when in the catch up mode because the state is still
         // not correct. We therefore do not insert transactions when in the
         // catch up mode.
-        if !ctx.manager.catch_up_mode() {
+        let ret = if !ctx.manager.catch_up_mode() {
             let (signed_trans, failure) = ctx
                 .manager
                 .graph
@@ -597,22 +602,25 @@ impl Handleable for GetTransactionsResponse {
             ctx.manager
                 .request_manager
                 .transactions_received_from_digests(ctx.io, &req, signed_trans);
+
+            if req.tx_hashes_indices.len() > 0 && !self.tx_hashes.is_empty() {
+                ctx.manager
+                    .request_manager
+                    .request_transactions_from_tx_hashes(
+                        ctx.io,
+                        ctx.node_id.clone(),
+                        self.tx_hashes,
+                        req.window_index,
+                        &req.tx_hashes_indices,
+                    );
+            }
+            Ok(())
         } else {
             debug!("All {} transactions are not inserted to the transaction pool, because the node is still in the catch up mode", self.transactions.len());
-        }
+            Err(ErrorKind::InCatchUpMode("transactions discarded for handling on_get_transactions_response messages".to_string()).into())
+        };
 
-        if req.tx_hashes_indices.len() > 0 && !self.tx_hashes.is_empty() {
-            ctx.manager
-                .request_manager
-                .request_transactions_from_tx_hashes(
-                    ctx.io,
-                    ctx.node_id.clone(),
-                    self.tx_hashes,
-                    req.window_index,
-                    &req.tx_hashes_indices,
-                );
-        }
-        Ok(())
+        ret
     }
 }
 

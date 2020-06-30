@@ -66,6 +66,9 @@ pub mod codes {
     /// When there are too many rpc requests. We limit the number of allowed rpc
     /// requests for attack prevention.
     pub const REQUEST_REJECTED_TOO_MANY_REQUESTS: i64 = -32072;
+    /// When the node is still in catch up mode, it is not capable to handle
+    /// certain requests. We will return this code in this situation.
+    pub const REQUEST_REJECTED_IN_CATCH_UP: i64 = -32073;
     /// When the request is considered too much for the rpc function.
     /// The consideration is set individually per rpc. It can be data too large,
     /// or it can be that some performance/security related parameter is outside
@@ -165,6 +168,14 @@ pub fn request_rejected_too_many_request_error(
     Error {
         code: ErrorCode::ServerError(codes::REQUEST_REJECTED_TOO_MANY_REQUESTS),
         message: "Request rejected.".into(),
+        data: details.map(Value::String),
+    }
+}
+
+pub fn request_rejected_in_catch_up_mode(details: Option<String>) -> Error {
+    Error {
+        code: ErrorCode::ServerError(codes::REQUEST_REJECTED_IN_CATCH_UP),
+        message: "Request rejected due to still in the catch up mode.".into(),
         data: details.map(Value::String),
     }
 }

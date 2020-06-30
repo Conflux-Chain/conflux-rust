@@ -535,13 +535,10 @@ impl SynchronizationProtocolHandler {
     fn handle_error(
         &self, io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error,
     ) {
-        warn!(
-            "Error while handling message, peer={}, msgid={:?}, error={}",
-            peer, msg_id, e
-        );
-
         let mut disconnect = true;
+        let mut warn = true;
         let reason = format!("{}", e.0);
+        let error_reason = format!("{:?}", e);
         let mut op = None;
 
         // NOTE, DO NOT USE WILDCARD IN THE FOLLOWING MATCH STATEMENT!
@@ -566,6 +563,10 @@ impl SynchronizationProtocolHandler {
                 op = Some(UpdateNodeOperation::Demotion)
             }
             ErrorKind::RequestNotFound => disconnect = false,
+            ErrorKind::InCatchUpMode(_) => {
+                disconnect = false;
+                warn = false;
+            }
             ErrorKind::TooManyTrans => {}
             ErrorKind::InvalidTimestamp => {
                 op = Some(UpdateNodeOperation::Demotion)
@@ -645,6 +646,18 @@ impl SynchronizationProtocolHandler {
                 op = Some(UpdateNodeOperation::Remove)
             }
             ErrorKind::NotSupported(_) => disconnect = false,
+        }
+
+        if warn {
+            warn!(
+                "Error while handling message, peer={}, msgid={:?}, error={}",
+                peer, msg_id, error_reason
+            );
+        } else {
+            debug!(
+                "Minor error while handling message, peer={}, msgid={:?}, error={}",
+                peer, msg_id, error_reason
+            );
         }
 
         if disconnect {

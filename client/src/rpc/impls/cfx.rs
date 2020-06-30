@@ -3,7 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    error_codes::{call_execution_error, invalid_params},
+    error_codes::{
+        call_execution_error, invalid_params, request_rejected_in_catch_up_mode,
+    },
     impls::{common::RpcImpl as CommonImpl, RpcImplConfiguration},
     traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
     types::{
@@ -305,7 +307,7 @@ impl RpcImpl {
         }
         if self.sync.catch_up_mode() {
             warn!("Ignore send_transaction request {}. Cannot send transaction when the node is still in catch-up mode.", tx.hash());
-            bail!(JsonRpcError::invalid_request());
+            bail!(request_rejected_in_catch_up_mode(None));
         }
         let (signed_trans, failed_trans) =
             self.tx_pool.insert_new_transactions(vec![tx]);
