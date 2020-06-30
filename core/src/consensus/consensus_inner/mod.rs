@@ -351,8 +351,8 @@ impl Default for ConsensusGraphPivotData {
 /// This means when Bi+3 was mined, the node thinks Bi's information is correct,
 /// while the information in Bi+1 and Bi+2 are wrong. Therefore, the node
 /// recovers the true deferred state roots (DSR) of Bi+1, Bi+2, and Bi+3 by
-/// computing locally, and then computes the keccak hash of [DSRi+3, DSRi+2,
-/// DSRi+1] and stores the hash into the header of Bi+3 as its final deferred
+/// computing locally, and then computes keccak(DSRi+3, keccak(DSRi+2, DSRi+1))
+/// and stores the hash into the header of Bi+3 as its final deferred
 /// state root. A special case is if the blaming count is 0, the final deferred
 /// state root of the block is simply the original deferred state root, i.e.,
 /// DSRi+3 for block Bi+3 in the above case.
@@ -401,9 +401,9 @@ impl Default for ConsensusGraphPivotData {
 /// deferred state root of block Bk and its DSR vector, i.e., [..., DSRi+2,
 /// ...].
 ///
-/// 6. The verifier verifies the keccak hash of [..., DSRi+2, ...] equals
-/// to deferred state root of Bk, and then verifies that DSRi+2 equals to the
-/// path root of Bi.
+/// 6. The verifier verifies the accumulated keccak hash of [..., DSRi+2, ...]
+/// equals to deferred state root of Bk, and then verifies that DSRi+2 equals
+/// to the path root of Bi.
 ///
 /// In ConsensusGraphInner, every block corresponds to a ConsensusGraphNode and
 /// each node has an internal index. This enables fast internal implementation
@@ -2429,7 +2429,11 @@ impl ConsensusGraphInner {
     /// together with [Bm], e.g., in the above example, 'blame'==3, and
     /// the vector of deferred roots of these blocks is
     /// ([Dm], [Dp], [Di], [Dj]), therefore, the deferred blame root of
-    /// [Bm] is keccak([Dm], [Dp], [Di], [Dj]).
+    /// [Bm] is keccak([Dm], keccak([Dp], keccak([Di], [Dj]))).
+    /// The reason that we use this recursive way to compute deferred
+    /// blame root is to be able to leverage the computed value of previous
+    /// block. For example, the deferred blame root of [Bm] is exactly the
+    /// keccak of [Dm] and the deferred blame root of [Bp].
     fn compute_blame_and_state_with_execution_result(
         &mut self, parent: usize, state_root_hash: H256,
         receipts_root_hash: H256, logs_bloom_hash: H256,
@@ -2521,6 +2525,17 @@ impl ConsensusGraphInner {
             cur = self.arena[cur].parent;
         }
         let blame = blame_cnt + blame_info_to_fill.len() as u32;
+
+        // To this point:
+        //                   _________ 5 __________
+        //                   |                    |
+        //  state_valid:           t    f    f    f
+        // <----------------[Bl]-[Bk]-[Bj]-[Bi]-[Bp]-[Bm]----
+        //   [Dj]-[Di]-[Dp]-[Dm]
+        //                                   1    0
+        //                                   |----|   blame_info_to_fill
+        //    3    2    1    0
+        //    |--------------|  state_blame_vec
         if blame > 0 {
             let mut accumulated_state_root =
                 state_blame_vec.last().unwrap().clone();
