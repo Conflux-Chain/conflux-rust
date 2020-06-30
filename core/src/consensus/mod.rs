@@ -331,6 +331,9 @@ impl ConsensusGraph {
             EpochNumber::LatestCheckpoint => {
                 self.latest_checkpoint_epoch_number()
             }
+            EpochNumber::LatestConfirmed => {
+                self.latest_confirmed_epoch_number()
+            }
             EpochNumber::LatestMined => self.best_epoch_number(),
             EpochNumber::LatestState => self.best_executed_state_epoch_number(),
             EpochNumber::Number(num) => {
@@ -1328,6 +1331,11 @@ impl ConsensusGraphTrait for ConsensusGraph {
                 &self.data_man.get_cur_consensus_era_genesis_hash(),
             )
             .expect("header for cur_era_genesis should exist")
+    }
+
+    fn latest_confirmed_epoch_number(&self) -> u64 {
+        self.confirmation_meter
+            .get_confirmed_epoch_num(std::u64::MAX)
     }
 
     fn best_chain_id(&self) -> u64 {
