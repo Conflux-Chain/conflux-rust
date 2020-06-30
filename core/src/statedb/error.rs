@@ -4,6 +4,7 @@
 
 use crate::storage::Error as StorageError;
 use cfx_types::Address;
+use primitives::account::AccountError;
 use rlp::DecoderError;
 
 error_chain! {
@@ -11,6 +12,7 @@ error_chain! {
     }
 
     foreign_links {
+        Account(AccountError);
         Storage(StorageError);
         Decoder(DecoderError);
     }

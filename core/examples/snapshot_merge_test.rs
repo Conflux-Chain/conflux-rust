@@ -11,8 +11,8 @@ use cfxcore::{
         storage_db::{
             KeyValueDbTraitRead, SnapshotDbManagerTrait, SnapshotInfo,
         },
-        DeltaMptIterator, StateIndex, StateRootAuxInfo, StateRootWithAuxInfo,
-        StorageConfiguration,
+        DeltaMptIterator, Error as StorageError, StateIndex, StateRootAuxInfo,
+        StateRootWithAuxInfo, StorageConfiguration,
     },
     sync::Error,
 };
@@ -309,13 +309,13 @@ fn prepare_state(
     manager: &StateManager, parent: H256, height: &mut u64, accounts: usize,
     accounts_per_epoch: usize, account_map: &mut HashMap<Address, Account>,
     old_state_root: &StateRootWithAuxInfo, state_root: &StateRootWithAuxInfo,
-) -> Result<(H256, MerkleHash), Error>
+) -> Result<(H256, MerkleHash), StorageError>
 {
     let mut new_account_map = HashMap::new();
     for i in 0..accounts {
         let addr = Address::random();
         let account =
-            Account::new_empty_with_balance(&addr, &i.into(), &0.into());
+            Account::new_empty_with_balance(&addr, &i.into(), &0.into())?;
         new_account_map.insert(addr, account);
     }
     let r = add_accounts(
@@ -335,7 +335,7 @@ fn add_accounts(
     manager: &StateManager, parent: H256, height: &mut u64,
     accounts_per_epoch: usize, new_account_map: &HashMap<Address, Account>,
     old_state_root: &StateRootWithAuxInfo, state_root: &StateRootWithAuxInfo,
-) -> Result<(H256, MerkleHash), Error>
+) -> Result<(H256, MerkleHash), StorageError>
 {
     let accounts = new_account_map.len();
     println!("begin to add {} accounts for snapshot...", accounts);

@@ -17,6 +17,7 @@ use crate::rpc::{
         Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
         H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
     },
+    RpcBoxFuture,
 };
 use cfx_types::{H160, H256, U256};
 use cfxcore::{LightQueryService, PeerInfo};
@@ -57,7 +58,7 @@ impl RpcImpl {
 
     fn account(
         &self, address: RpcH160, num: Option<EpochNumber>,
-    ) -> BoxFuture<RpcAccount> {
+    ) -> RpcBoxFuture<RpcAccount> {
         let address: H160 = address.into();
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
         info!(
@@ -69,17 +70,20 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            let account = light
-                .get_account(epoch, address)
-                .await
-                .map_err(RpcError::invalid_params)?;
+            let account = invalid_params_check(
+                "address",
+                light.get_account(epoch, address).await,
+            )?;
 
             Ok(RpcAccount::new(account.unwrap_or(
-                Account::new_empty_with_balance(
-                    &address,
-                    &U256::zero(), /* balance */
-                    &U256::zero(), /* nonce */
-                ),
+                account_result_to_rpc_result(
+                    "address",
+                    Account::new_empty_with_balance(
+                        &address,
+                        &U256::zero(), /* balance */
+                        &U256::zero(), /* nonce */
+                    ),
+                )?,
             )))
         };
 
@@ -88,7 +92,7 @@ impl RpcImpl {
 
     fn balance(
         &self, address: RpcH160, num: Option<EpochNumber>,
-    ) -> BoxFuture<RpcU256> {
+    ) -> RpcBoxFuture<RpcU256> {
         let address: H160 = address.into();
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
@@ -101,10 +105,10 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            let account = light
-                .get_account(epoch, address)
-                .await
-                .map_err(RpcError::invalid_params)?;
+            let account = invalid_params_check(
+                "address",
+                light.get_account(epoch, address).await,
+            )?;
 
             Ok(account
                 .map(|account| account.balance.into())
@@ -116,7 +120,7 @@ impl RpcImpl {
 
     fn admin(
         &self, address: RpcH160, num: Option<EpochNumber>,
-    ) -> BoxFuture<Option<RpcH160>> {
+    ) -> RpcBoxFuture<Option<RpcH160>> {
         let address: H160 = address.into();
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
@@ -129,10 +133,10 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            let account = light
-                .get_account(epoch, address)
-                .await
-                .map_err(RpcError::invalid_params)?;
+            let account = invalid_params_check(
+                "address",
+                light.get_account(epoch, address).await,
+            )?;
 
             Ok(account.map(|account| account.admin.into()))
         };
@@ -142,7 +146,7 @@ impl RpcImpl {
 
     fn sponsor_info(
         &self, address: RpcH160, num: Option<EpochNumber>,
-    ) -> BoxFuture<RpcSponsorInfo> {
+    ) -> RpcBoxFuture<RpcSponsorInfo> {
         let address: H160 = address.into();
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
@@ -155,10 +159,10 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            let account = light
-                .get_account(epoch, address)
-                .await
-                .map_err(RpcError::invalid_params)?;
+            let account = invalid_params_check(
+                "address",
+                light.get_account(epoch, address).await,
+            )?;
 
             Ok(RpcSponsorInfo::new(
                 account.map_or(Default::default(), |acc| acc.sponsor_info),
@@ -170,7 +174,7 @@ impl RpcImpl {
 
     fn staking_balance(
         &self, address: RpcH160, num: Option<EpochNumber>,
-    ) -> BoxFuture<RpcU256> {
+    ) -> RpcBoxFuture<RpcU256> {
         let address: H160 = address.into();
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
@@ -183,10 +187,10 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            let account = light
-                .get_account(epoch, address)
-                .await
-                .map_err(RpcError::invalid_params)?;
+            let account = invalid_params_check(
+                "address",
+                light.get_account(epoch, address).await,
+            )?;
 
             Ok(account
                 .map(|account| account.staking_balance.into())
@@ -198,7 +202,7 @@ impl RpcImpl {
 
     fn collateral_for_storage(
         &self, address: RpcH160, num: Option<EpochNumber>,
-    ) -> BoxFuture<RpcU256> {
+    ) -> RpcBoxFuture<RpcU256> {
         let address: H160 = address.into();
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
@@ -211,10 +215,10 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            let account = light
-                .get_account(epoch, address)
-                .await
-                .map_err(RpcError::invalid_params)?;
+            let account = invalid_params_check(
+                "address",
+                light.get_account(epoch, address).await,
+            )?;
 
             Ok(account
                 .map(|account| account.collateral_for_storage.into())
@@ -234,7 +238,7 @@ impl RpcImpl {
 
     fn code(
         &self, address: RpcH160, epoch_num: Option<EpochNumber>,
-    ) -> BoxFuture<Bytes> {
+    ) -> RpcBoxFuture<Bytes> {
         let address: H160 = address.into();
         let epoch = epoch_num.unwrap_or(EpochNumber::LatestState).into();
 
@@ -247,12 +251,17 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            light
-                .get_code(epoch, address)
-                .await
-                .map(|code| code.unwrap_or_default())
-                .map(Bytes::new)
-                .map_err(RpcError::invalid_params)
+            // FIMXE:
+            //  We should get rid of the invalid_params_check when the
+            //  error conversion is done within the light service methods.
+            //  Same for all other usages here in this file.
+            Ok(Bytes::new(
+                invalid_params_check(
+                    "address",
+                    light.get_code(epoch, address).await,
+                )?
+                .unwrap_or_default(),
+            ))
         };
 
         Box::new(fut.boxed().compat())
@@ -487,6 +496,7 @@ impl CfxHandler {
 
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
 use crate::common::delegate_convert;
+use cfxcore::rpc_errors::{account_result_to_rpc_result, invalid_params_check};
 use cfxcore_accounts::AccountProvider;
 
 impl Cfx for CfxHandler {

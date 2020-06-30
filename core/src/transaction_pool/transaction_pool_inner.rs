@@ -694,7 +694,7 @@ impl TransactionPoolInner {
     ) {
         for account in &accounts_from_execution {
             self.recalculate_readiness_with_fixed_info(
-                &account.address,
+                account.address(),
                 account.nonce,
                 account.balance,
             );

@@ -11,8 +11,9 @@ use crate::{
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use parking_lot::RwLock;
 use primitives::{
-    Account, CodeInfo, DepositInfo, DepositList, SponsorInfo, StorageKey,
-    StorageLayout, StorageValue, VoteStakeInfo, VoteStakeList,
+    account::AccountError, Account, CodeInfo, DepositInfo, DepositList,
+    SponsorInfo, StorageKey, StorageLayout, StorageValue, VoteStakeInfo,
+    VoteStakeList,
 };
 use std::{collections::HashMap, sync::Arc};
 
@@ -181,18 +182,20 @@ impl OverlayAccount {
         }
     }
 
-    pub fn as_account(&self) -> Account {
-        Account {
-            address: self.address,
-            balance: self.balance,
-            nonce: self.nonce,
-            code_hash: self.code_hash,
-            staking_balance: self.staking_balance,
-            collateral_for_storage: self.collateral_for_storage,
-            accumulated_interest_return: self.accumulated_interest_return,
-            admin: self.admin,
-            sponsor_info: self.sponsor_info.clone(),
-        }
+    pub fn as_account(&self) -> Result<Account, AccountError> {
+        let mut account = Account::default();
+
+        account.balance = self.balance;
+        account.nonce = self.nonce;
+        account.code_hash = self.code_hash;
+        account.staking_balance = self.staking_balance;
+        account.collateral_for_storage = self.collateral_for_storage;
+        account.accumulated_interest_return = self.accumulated_interest_return;
+        account.admin = self.admin;
+        account.sponsor_info = self.sponsor_info.clone();
+        account.set_address(self.address)?;
+
+        Ok(account)
     }
 
     pub fn is_contract(&self) -> bool { self.address.is_contract_address() }

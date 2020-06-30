@@ -1799,7 +1799,7 @@ impl TxReplayer {
                         // version
                         unsafe { std::mem::transmute(&tx.amount_wei) }, /* balance */
                         &0.into(), /* nonce */
-                    );
+                    )?;
                 }
             }
             latest_state

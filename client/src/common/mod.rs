@@ -568,7 +568,7 @@ pub fn initialize_txgens(
 pub mod delegate_convert {
     use crate::rpc::{
         error_codes::{codes::EXCEPTION_ERROR, invalid_params},
-        JsonRpcErrorKind, RpcError, RpcErrorKind, RpcResult,
+        JsonRpcErrorKind, RpcBoxFuture, RpcError, RpcErrorKind, RpcResult,
     };
     use jsonrpc_core::{
         futures::{future::IntoFuture, Future},
@@ -586,6 +586,12 @@ pub mod delegate_convert {
 
     impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for BoxFuture<T> {
         fn into(x: Self) -> BoxFuture<T> { x }
+    }
+
+    impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for RpcBoxFuture<T> {
+        fn into(x: Self) -> BoxFuture<T> {
+            Box::new(x.map_err(|rpc_error| Into::into(rpc_error)))
+        }
     }
 
     impl Into<JsonRpcError> for RpcError {
