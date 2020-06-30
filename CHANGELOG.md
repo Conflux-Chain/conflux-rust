@@ -20,11 +20,16 @@ was caused by a wrong assumption of the uniqueness of the trie proof key.
 
 - Fix db error handling for EVM create / call.
 
+- Prevent crashes due to unchecked address space.
+
 ## Incompatible Changes
 
 - Change StorageValue serialization to reduce space.
 
 - Changed COMMISSION_PRIVILEGE_STORAGE_VALUE.
+
+- Remove address from Account rlp format, which was included unexpectedly
+before.
 
 ## Improvements
 

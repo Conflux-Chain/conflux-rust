@@ -119,7 +119,8 @@ pub fn genesis_block(
             &addr,
             &balance,
             &0.into(), /* nonce */
-        );
+        )
+        .unwrap();
         state
             .set(StorageKey::new_account_key(&addr), &account, None)
             .unwrap();

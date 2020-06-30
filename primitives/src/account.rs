@@ -7,7 +7,16 @@ use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
-use std::ops::{Deref, DerefMut};
+use std::{
+    fmt,
+    ops::{Deref, DerefMut},
+};
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum AccountError {
+    ReservedAddressSpace(Address),
+    InvalidRlp(DecoderError),
+}
 
 #[derive(
     Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
@@ -117,7 +126,40 @@ pub struct SponsorInfo {
 
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub struct Account {
-    pub address: Address,
+    pub address_debug_only: Address,
+    pub balance: U256,
+    pub nonce: U256,
+    pub code_hash: H256,
+    /// This is the number of tokens used in staking.
+    pub staking_balance: U256,
+    /// This is the number of tokens used as collateral for storage, which will
+    /// be returned to balance if the storage is released.
+    pub collateral_for_storage: U256,
+    /// This is the accumulated interest return.
+    pub accumulated_interest_return: U256,
+    /// This is the address of the administrator of the contract.
+    pub admin: Address,
+    /// This is the sponsor information of the contract.
+    pub sponsor_info: SponsorInfo,
+}
+
+/// Defined for Rlp serialization/deserialization.
+#[derive(RlpEncodable, RlpDecodable)]
+pub struct BasicAccount {
+    pub balance: U256,
+    pub nonce: U256,
+    /// This is the number of tokens used in staking.
+    pub staking_balance: U256,
+    /// This is the number of tokens used as collateral for storage, which will
+    /// be returned to balance if the storage is released.
+    pub collateral_for_storage: U256,
+    /// This is the accumulated interest return.
+    pub accumulated_interest_return: U256,
+}
+
+/// Defined for Rlp serialization/deserialization.
+#[derive(RlpEncodable, RlpDecodable)]
+pub struct ContractAccount {
     pub balance: U256,
     pub nonce: U256,
     pub code_hash: H256,
@@ -135,11 +177,23 @@ pub struct Account {
 }
 
 impl Account {
+    pub fn check_address_space(address: &Address) -> Result<(), AccountError> {
+        if address.is_user_account_address()
+            || address.is_builtin_address()
+            || address.is_contract_address()
+        {
+            Ok(())
+        } else {
+            Err(AccountError::ReservedAddressSpace(*address))
+        }
+    }
+
     pub fn new_empty_with_balance(
         address: &Address, balance: &U256, nonce: &U256,
-    ) -> Account {
-        Self {
-            address: *address,
+    ) -> Result<Account, AccountError> {
+        Self::check_address_space(address)?;
+        Ok(Self {
+            address_debug_only: *address,
             balance: *balance,
             nonce: *nonce,
             code_hash: KECCAK_EMPTY,
@@ -148,89 +202,115 @@ impl Account {
             accumulated_interest_return: 0.into(),
             admin: Address::zero(),
             sponsor_info: Default::default(),
+        })
+    }
+
+    pub fn from_basic_account(address: Address, a: BasicAccount) -> Self {
+        Self {
+            address_debug_only: address,
+            balance: a.balance,
+            nonce: a.nonce,
+            code_hash: KECCAK_EMPTY,
+            staking_balance: a.staking_balance,
+            collateral_for_storage: a.collateral_for_storage,
+            accumulated_interest_return: a.accumulated_interest_return,
+            admin: Address::zero(),
+            sponsor_info: Default::default(),
         }
     }
-}
 
-impl Decodable for Account {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if !(rlp.item_count()? == 6 || rlp.item_count()? == 9) {
-            return Err(DecoderError::RlpIncorrectListLen);
+    pub fn from_contract_account(address: Address, a: ContractAccount) -> Self {
+        Self {
+            address_debug_only: address,
+            balance: a.balance,
+            nonce: a.nonce,
+            code_hash: a.code_hash,
+            staking_balance: a.staking_balance,
+            collateral_for_storage: a.collateral_for_storage,
+            accumulated_interest_return: a.accumulated_interest_return,
+            admin: a.admin,
+            sponsor_info: a.sponsor_info,
         }
-        let address: Address = rlp.val_at(0)?;
+    }
+
+    pub fn to_basic_account(&self) -> BasicAccount {
+        BasicAccount {
+            balance: self.balance,
+            nonce: self.nonce,
+            staking_balance: self.staking_balance,
+            collateral_for_storage: self.collateral_for_storage,
+            accumulated_interest_return: self.accumulated_interest_return,
+        }
+    }
+
+    pub fn to_contract_account(&self) -> ContractAccount {
+        ContractAccount {
+            balance: self.balance,
+            nonce: self.nonce,
+            code_hash: self.code_hash,
+            staking_balance: self.staking_balance,
+            collateral_for_storage: self.collateral_for_storage,
+            accumulated_interest_return: self.accumulated_interest_return,
+            admin: self.admin,
+            sponsor_info: self.sponsor_info.clone(),
+        }
+    }
+
+    pub fn new_from_rlp(
+        address: Address, rlp: &Rlp,
+    ) -> Result<Self, AccountError> {
         if address.is_user_account_address() || address.is_builtin_address() {
-            if rlp.item_count()? != 6 {
-                return Err(DecoderError::RlpIncorrectListLen);
-            }
-            Ok(Self {
+            Ok(Self::from_basic_account(
                 address,
-                balance: rlp.val_at(1)?,
-                nonce: rlp.val_at(2)?,
-                code_hash: KECCAK_EMPTY,
-                staking_balance: rlp.val_at(3)?,
-                collateral_for_storage: rlp.val_at(4)?,
-                accumulated_interest_return: rlp.val_at(5)?,
-                admin: Address::zero(),
-                sponsor_info: Default::default(),
-            })
+                BasicAccount::decode(rlp)?,
+            ))
         } else if address.is_contract_address() {
-            // Note that, our implementation assumes that the set of serialized
-            // fields of contract address is a *super-set* of the
-            // fields of normal addresses. This is because we allow
-            // send money to contract address and we will create a *normal*
-            // address stub there to store its balance.
-            if rlp.item_count()? != 9 {
-                return Err(DecoderError::RlpIncorrectListLen);
-            }
-            Ok(Self {
+            Ok(Self::from_contract_account(
                 address,
-                balance: rlp.val_at(1)?,
-                nonce: rlp.val_at(2)?,
-                code_hash: rlp.val_at(3)?,
-                staking_balance: rlp.val_at(4)?,
-                collateral_for_storage: rlp.val_at(5)?,
-                accumulated_interest_return: rlp.val_at(6)?,
-                admin: rlp.val_at(7)?,
-                sponsor_info: rlp.val_at(8)?,
-            })
+                ContractAccount::decode(rlp)?,
+            ))
         } else {
-            panic!("other types of address are not supported yet.");
+            Err(AccountError::ReservedAddressSpace(address))
         }
     }
 }
 
 impl Encodable for Account {
     fn rlp_append(&self, stream: &mut RlpStream) {
-        if self.address.is_user_account_address()
-            || self.address.is_builtin_address()
+        if self.address_debug_only.is_user_account_address()
+            || self.address_debug_only.is_builtin_address()
         {
-            stream
-                .begin_list(6)
-                .append(&self.address)
-                .append(&self.balance)
-                .append(&self.nonce)
-                .append(&self.staking_balance)
-                .append(&self.collateral_for_storage)
-                .append(&self.accumulated_interest_return);
-        } else if self.address.is_contract_address() {
-            // Note that, our implementation assumes that the set of serialized
-            // fields of contract address is a *super-set* of the
-            // fields of normal addresses. This is because we allow
-            // send money to contract address and we will create a *normal*
-            // address stub there to store its balance.
-            stream
-                .begin_list(9)
-                .append(&self.address)
-                .append(&self.balance)
-                .append(&self.nonce)
-                .append(&self.code_hash)
-                .append(&self.staking_balance)
-                .append(&self.collateral_for_storage)
-                .append(&self.accumulated_interest_return)
-                .append(&self.admin)
-                .append(&self.sponsor_info);
+            stream.append_internal(&self.to_basic_account());
+        } else if self.address_debug_only.is_contract_address() {
+            // A contract address can hold balance before its initialization
+            // as a recipient of a simple transaction.
+            // So we always determine how to serialize by the address type bits.
+            stream.append_internal(&self.to_contract_account());
         } else {
-            panic!("other types of address are not supported yet.");
+            unreachable!("other types of address are not supported yet.");
         }
     }
+}
+
+impl From<rlp::DecoderError> for AccountError {
+    fn from(err: rlp::DecoderError) -> Self { AccountError::InvalidRlp(err) }
+}
+
+impl fmt::Display for AccountError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let msg = match self {
+            AccountError::ReservedAddressSpace(address) => {
+                format!("Address space is reserved for {:?}", address)
+            }
+            AccountError::InvalidRlp(err) => {
+                format!("Transaction has invalid RLP structure: {}.", err)
+            }
+        };
+
+        f.write_fmt(format_args!("Account error ({})", msg))
+    }
+}
+
+impl std::error::Error for AccountError {
+    fn description(&self) -> &str { "Account error" }
 }

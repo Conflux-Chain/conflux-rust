@@ -183,7 +183,7 @@ impl OverlayAccount {
 
     pub fn as_account(&self) -> Account {
         Account {
-            address: self.address,
+            address_debug_only: self.address,
             balance: self.balance,
             nonce: self.nonce,
             code_hash: self.code_hash,

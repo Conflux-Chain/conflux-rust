@@ -14,18 +14,11 @@ use primitives::{Account, SponsorInfo, VoteStakeList};
 
 #[test]
 fn test_overlay_account_create() {
-    let address = Address::random();
-    let account = Account {
-        address,
-        balance: 0.into(),
-        nonce: 0.into(),
-        code_hash: KECCAK_EMPTY,
-        staking_balance: 0.into(),
-        collateral_for_storage: 0.into(),
-        accumulated_interest_return: 0.into(),
-        admin: Address::zero(),
-        sponsor_info: Default::default(),
-    };
+    let mut address = Address::random();
+    address.set_user_account_type_bits();
+    let account =
+        Account::new_empty_with_balance(&address, &U256::zero(), &U256::zero())
+            .unwrap();
     // test new from account 1
     let overlay_account = OverlayAccount::new(&address, account);
     assert!(overlay_account.deposit_list().is_none());
@@ -54,7 +47,7 @@ fn test_overlay_account_create() {
         sponsor_gas_bound: U256::from(2),
     };
     let account = Account {
-        address,
+        address_debug_only: address,
         balance: 101.into(),
         nonce: 55.into(),
         code_hash: KECCAK_EMPTY,
@@ -148,18 +141,9 @@ fn test_deposit_and_withdraw() {
     let db = StateDb::new(storage_manager.get_state_for_genesis_write());
     let mut address = Address::random();
     address.set_user_account_type_bits();
-    let admin = Address::random();
-    let account = Account {
-        address,
-        balance: 0.into(),
-        nonce: 0.into(),
-        code_hash: KECCAK_EMPTY,
-        staking_balance: 0.into(),
-        collateral_for_storage: 0.into(),
-        accumulated_interest_return: 0.into(),
-        admin,
-        sponsor_info: Default::default(),
-    };
+    let account =
+        Account::new_empty_with_balance(&address, &U256::zero(), &U256::zero())
+            .unwrap();
     let mut accumulated_interest_rate = vec![*ACCUMULATED_INTEREST_RATE_SCALE];
     for _ in 0..100000 {
         let last = *accumulated_interest_rate.last().unwrap();
@@ -449,7 +433,7 @@ fn init_test_account() -> OverlayAccount {
     let address = Address::random();
     let admin = Address::random();
     let account = Account {
-        address,
+        address_debug_only: address,
         balance: 10000000.into(),
         nonce: 0.into(),
         code_hash: KECCAK_EMPTY,
@@ -658,7 +642,7 @@ fn test_clone_overwrite() {
         sponsor_gas_bound: U256::from(2),
     };
     let account1 = Account {
-        address,
+        address_debug_only: address,
         balance: 1000.into(),
         nonce: 123.into(),
         code_hash: KECCAK_EMPTY,
@@ -678,7 +662,7 @@ fn test_clone_overwrite() {
         sponsor_gas_bound: U256::from(23),
     };
     let account2 = Account {
-        address,
+        address_debug_only: address,
         balance: 1001.into(),
         nonce: 124.into(),
         code_hash: KECCAK_EMPTY,
