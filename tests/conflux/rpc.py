@@ -27,6 +27,7 @@ class RpcClient:
         self.EPOCH_EARLIEST = "earliest"
         self.EPOCH_LATEST_MINED = "latest_mined"
         self.EPOCH_LATEST_STATE = "latest_state"
+        self.EPOCH_LATEST_CONFIRMED = "latest_confirmed"
 
         # update node operations
         self.UPDATE_NODE_OP_FAILURE = "Failure"
