@@ -5,15 +5,7 @@
 use super::*;
 use crate::{
     message::{GetMaybeRequestId, Message, MsgId, RequestId, SetRequestId},
-    sync::{
-        message::throttling::Throttle,
-        state::{
-            SnapshotChunkRequest, SnapshotChunkResponse,
-            SnapshotManifestRequest, SnapshotManifestResponse,
-            StateSyncCandidateRequest, StateSyncCandidateResponse,
-        },
-        Error,
-    },
+    sync::{message::throttling::Throttle, Error},
 };
 pub use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, Encodable, Rlp};

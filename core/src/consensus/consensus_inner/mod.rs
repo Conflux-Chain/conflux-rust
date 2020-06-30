@@ -443,7 +443,7 @@ pub struct ConsensusGraphInner {
     /// It maintains the expected difficulty of the next local mined block.
     pub current_difficulty: U256,
     /// data_man is the handle to access raw block data
-    data_man: Arc<BlockDataManager>,
+    pub data_man: Arc<BlockDataManager>,
     pub inner_conf: ConsensusInnerConfig,
     /// The cache to store Anticone information of each node. This could be
     /// very large so we periodically remove old ones in the cache.

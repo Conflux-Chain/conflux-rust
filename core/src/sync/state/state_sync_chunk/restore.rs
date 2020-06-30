@@ -11,10 +11,7 @@ use crate::{
     sync::state::storage::{Chunk, ChunkKey},
 };
 use primitives::{EpochId, MerkleHash};
-use std::sync::{
-    atomic::{AtomicUsize, Ordering::Relaxed},
-    Arc,
-};
+use std::sync::Arc;
 
 pub struct Restorer {
     pub snapshot_epoch_id: EpochId,
@@ -25,15 +22,13 @@ pub struct Restorer {
     verifier: Option<FullSyncVerifier<SnapshotDbManagerSqlite>>,
 }
 
-impl Default for Restorer {
-    fn default() -> Self { Self::new(EpochId::default()) }
-}
-
 impl Restorer {
-    pub fn new(snapshot_epoch_id: EpochId) -> Self {
+    pub fn new(
+        snapshot_epoch_id: EpochId, snapshot_merkle_root: MerkleHash,
+    ) -> Self {
         Restorer {
             snapshot_epoch_id,
-            snapshot_merkle_root: Default::default(),
+            snapshot_merkle_root,
             verifier: None,
         }
     }
@@ -87,19 +82,5 @@ impl Restorer {
 
         debug!("Completed snapshot restoration.");
         Ok(())
-    }
-}
-
-#[derive(Default, Debug)]
-pub struct RestoreProgress {
-    total: AtomicUsize,
-    completed: AtomicUsize,
-}
-
-impl RestoreProgress {
-    pub fn is_completed(&self) -> bool {
-        let total = self.total.load(Relaxed);
-        let completed = self.completed.load(Relaxed);
-        completed >= total
     }
 }
