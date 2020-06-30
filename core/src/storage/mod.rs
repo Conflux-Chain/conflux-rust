@@ -47,6 +47,7 @@ pub struct ConsensusParam {
 
 #[derive(Debug, Clone)]
 pub struct StorageConfiguration {
+    pub additional_maintained_snapshot_count: u32,
     pub consensus_param: ConsensusParam,
     pub debug_snapshot_checker_threads: u16,
     pub delta_mpts_cache_recent_lfu_factor: f64,
@@ -65,6 +66,7 @@ impl StorageConfiguration {
     pub fn new_default(conflux_data_dir: String) -> Self {
         let conflux_data_path = Path::new(&conflux_data_dir);
         StorageConfiguration {
+            additional_maintained_snapshot_count: 0,
             consensus_param: ConsensusParam {
                 snapshot_epoch_count: SNAPSHOT_EPOCHS_CAPACITY,
             },
@@ -112,7 +114,7 @@ pub use self::{
     state::{State as StorageState, StateTrait as StorageStateTrait},
     state_manager::{
         StateIndex, StateManager as StorageManager,
-        StateManagerTrait as StorageManagerTrait, StateReadonlyIndex,
+        StateManagerTrait as StorageManagerTrait,
     },
     state_root_with_aux_info::*,
     storage_db::KeyValueDbTrait,

@@ -683,11 +683,8 @@ impl ConsensusExecutor {
         // do it again
         debug!("compute_state_for_block {:?}", block_hash);
         {
-            let (_guarded_state_index, maybe_state_index) = self
-                .handler
-                .data_man
-                .get_state_readonly_index(&block_hash)
-                .into();
+            let maybe_state_index =
+                self.handler.data_man.get_state_readonly_index(&block_hash);
             // The state is computed and is retrievable from storage.
             if let Some(maybe_cached_state_result) =
                 maybe_state_index.map(|state_readonly_index| {
@@ -1652,8 +1649,7 @@ impl ConsensusExecutionHandler {
         {
             bail!("state is not ready");
         }
-        let (_state_index_guard, state_index) =
-            self.data_man.get_state_readonly_index(epoch_id).into();
+        let state_index = self.data_man.get_state_readonly_index(epoch_id);
         trace!("best_block_header: {:?}", best_block_header);
         let time_stamp = best_block_header.timestamp();
         let mut state = State::new(
@@ -1664,8 +1660,7 @@ impl ConsensusExecutionHandler {
                         state_index.unwrap(),
                         /* try_open = */ true,
                     )?
-                    // Safe because the state exists.
-                    .expect("State Exists"),
+                    .ok_or("state deleted")?,
             ),
             self.vm.clone(),
             &spec,

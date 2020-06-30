@@ -347,6 +347,11 @@ jsonrpc_local_http_port=12539
 
 # ------------------ Storage Parameters ----------------------
 
+# The number of additional snapshot before the current stable checkpoint that we will maintain.
+# If it's 0, all snapshot before stable genesis will be deleted and the states are unavailable.
+#
+# additional_maintained_snapshot_count = 0
+
 # Time interval to evict old data from in-memory data cache.
 #
 # block_cache_gc_period_ms = 5_000

@@ -79,6 +79,7 @@ impl FakeStateManager {
             Ok(FakeStateManager {
                 data_dir: unit_test_data_dir.clone(),
                 state_manager: Some(StateManager::new(StorageConfiguration {
+                    additional_maintained_snapshot_count: 0,
                     consensus_param: ConsensusParam {
                         snapshot_epoch_count: 10_000_000,
                     },

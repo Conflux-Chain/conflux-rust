@@ -209,6 +209,7 @@ build_config! {
         (conflux_data_dir, (String), "./".to_string())
         // FIXME: use a fixed sub-dir of conflux_data_dir instead.
         (block_db_dir, (String), "./blockchain_db".to_string())
+        (additional_maintained_snapshot_count, (u32), 0)
         (ledger_cache_size, (usize), DEFAULT_LEDGER_CACHE_SIZE)
         (invalid_block_hash_cache_size_in_count, (usize), DEFAULT_INVALID_BLOCK_HASH_CACHE_SIZE_IN_COUNT)
         (target_difficulties_cache_size_in_count, (usize), DEFAULT_TARGET_DIFFICULTIES_CACHE_SIZE_IN_COUNT)
@@ -495,6 +496,9 @@ impl Configuration {
     pub fn storage_config(&self) -> StorageConfiguration {
         let conflux_data_path = Path::new(&self.raw_conf.conflux_data_dir);
         StorageConfiguration {
+            additional_maintained_snapshot_count: self
+                .raw_conf
+                .additional_maintained_snapshot_count,
             consensus_param: ConsensusParam {
                 snapshot_epoch_count: if self.is_test_mode() {
                     self.raw_conf.dev_snapshot_epoch_count
