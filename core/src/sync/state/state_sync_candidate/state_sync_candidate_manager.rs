@@ -148,20 +148,6 @@ impl StateSyncCandidateManager {
         self.active_candidate.map(|i| self.candidates[i].clone())
     }
 
-    /// `peer` cannot support the active candidate now
-    pub fn note_state_sync_failure(&mut self, peer: &NodeId) {
-        self.pending_peers.remove(peer);
-        self.active_peers.remove(peer);
-        if let Some(active_candidate) = self.active_candidate.clone() {
-            if let Some(peers) = self
-                .candidates_map
-                .get_mut(&self.candidates[active_candidate])
-            {
-                peers.remove(peer);
-            }
-        }
-    }
-
     pub fn set_active_candidate(&mut self) {
         let mut candidate_index = self.active_candidate.map_or(0, |i| i + 1);
         let max_candidate_index = self.candidates.len();

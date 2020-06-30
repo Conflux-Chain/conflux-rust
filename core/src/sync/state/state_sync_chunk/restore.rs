@@ -51,7 +51,11 @@ impl Restorer {
                     chunk.values,
                 ) {
                     Ok(true) => true,
-                    _ => false,
+                    Ok(false) => false,
+                    Err(e) => {
+                        warn!("error for restore_chunk: err={:?}", e);
+                        false
+                    }
                 }
             }
         }
