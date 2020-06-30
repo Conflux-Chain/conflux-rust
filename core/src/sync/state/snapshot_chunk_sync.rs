@@ -3,42 +3,34 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    block_data_manager::BlockExecutionResult,
-    parameters::{
-        consensus::DEFERRED_STATE_EPOCH_COUNT,
-        consensus_internal::REWARD_EPOCH_COUNT,
-    },
+    parameters::consensus_internal::REWARD_EPOCH_COUNT,
     storage::{
-        storage_db::SnapshotInfo, FullSyncVerifier, Result as StorageResult,
-        StateRootAuxInfo, StateRootWithAuxInfo,
+        storage_db::SnapshotInfo, Result as StorageResult, StateRootWithAuxInfo,
     },
     sync::{
         error::{Error, ErrorKind},
-        message::{msgid, Context},
-        state::{
-            restore::Restorer,
-            snapshot_chunk_request::SnapshotChunkRequest,
-            snapshot_manifest_request::SnapshotManifestRequest,
-            snapshot_manifest_response::SnapshotManifestResponse,
-            state_sync_candidate_manager::StateSyncCandidateManager,
-            storage::{Chunk, ChunkKey, SnapshotSyncCandidate},
+        message::{
+            msgid, Context, SnapshotManifestRequest, SnapshotManifestResponse,
             StateSyncCandidateRequest,
+        },
+        state::{
+            state_sync_candidate::state_sync_candidate_manager::StateSyncCandidateManager,
+            state_sync_chunk::snapshot_chunk_manager::{
+                SnapshotChunkConfig, SnapshotChunkManager,
+            },
+            state_sync_manifest::snapshot_manifest_manager::SnapshotManifestManager,
+            storage::{Chunk, ChunkKey, SnapshotSyncCandidate},
         },
         synchronization_state::PeerFilter,
         SynchronizationProtocolHandler,
     },
-    verification::compute_receipts_root,
 };
 use cfx_types::H256;
 use network::{node_table::NodeId, NetworkContext};
 use parking_lot::RwLock;
-use primitives::{
-    BlockHeaderBuilder, BlockReceipts, EpochId, EpochNumber, StateRoot,
-    StorageKey, NULL_EPOCH,
-};
+use primitives::{BlockReceipts, EpochId};
 use rand::{seq::SliceRandom, thread_rng};
 use std::{
-    collections::{HashMap, VecDeque},
     fmt::{Debug, Formatter},
     sync::Arc,
     time::{Duration, Instant},
@@ -102,13 +94,8 @@ struct Inner {
     epoch_receipts: Vec<(H256, H256, Arc<BlockReceipts>)>,
     snapshot_info: SnapshotInfo,
 
-    pending_chunks: VecDeque<ChunkKey>,
-    /// status of downloading chunks
-    downloading_chunks: HashMap<ChunkKey, DownloadingChunkStatus>,
-    num_downloaded: usize,
-
-    // restore
-    restorer: Restorer,
+    // Initialized after we receive a valid manifest.
+    chunk_manager: Option<SnapshotChunkManager>,
 }
 
 impl Default for Inner {
@@ -123,9 +110,6 @@ impl Inner {
         trusted_blame_block: H256, status: Status,
     ) -> Self
     {
-        let snapshot_epoch_id = current_sync_candidate
-            .as_ref()
-            .map_or(Default::default(), |c| c.get_snapshot_epoch_id().clone());
         Self {
             sync_candidate_manager: Default::default(),
             manifest_request_status: None,
@@ -139,10 +123,7 @@ impl Inner {
             receipt_blame_vec: Default::default(),
             bloom_blame_vec: Default::default(),
             epoch_receipts: Default::default(),
-            pending_chunks: Default::default(),
-            downloading_chunks: Default::default(),
-            num_downloaded: 0,
-            restorer: Restorer::new(snapshot_epoch_id),
+            chunk_manager: None,
             blame_vec_offset: 0,
         }
     }
@@ -153,13 +134,18 @@ impl Inner {
         sync_handler: &SynchronizationProtocolHandler,
     )
     {
-        if self.current_sync_candidate.as_ref() == Some(&sync_candidate)
-            && self.trusted_blame_block == trusted_blame_block
-        {
-            // The new candidate is not changed, so we can resume our previous
-            // sync status with new `active_peers`.
-            self.status = Status::DownloadingChunks(Instant::now());
-            return;
+        if let Some(chunk_manager) = &mut self.chunk_manager {
+            if chunk_manager.snapshot_candidate() == &sync_candidate
+                && self.trusted_blame_block == trusted_blame_block
+            {
+                // The new candidate is not changed, so we can resume our
+                // previous sync status with new `active_peers`.
+                self.status = Status::DownloadingChunks(Instant::now());
+                chunk_manager.add_active_peers(
+                    self.sync_candidate_manager.active_peers(),
+                );
+                return;
+            }
         }
         info!(
             "start to sync state, snapshot_to_sync = {:?}, trusted blame block = {:?}",
@@ -249,13 +235,11 @@ impl Debug for Inner {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "(status = {:?}, download = {}/{}/{}, pending_peers: {}, active_peers: {})",
+            "(status = {:?}, pending_peers: {}, active_peers: {}, chunks: {:?})",
             self.status,
-            self.pending_chunks.len(),
-            self.downloading_chunks.len(),
-            self.num_downloaded,
             self.sync_candidate_manager.pending_peers().len(),
             self.sync_candidate_manager.active_peers().len(),
+            self.chunk_manager,
         )
     }
 }
@@ -305,7 +289,7 @@ impl SnapshotChunkSync {
 
         // validate blame state if requested
         if request.is_initial_request() {
-            match Self::validate_blame_states(
+            match SnapshotManifestManager::validate_blame_states(
                 ctx,
                 inner
                     .current_sync_candidate
@@ -335,8 +319,6 @@ impl SnapshotChunkSync {
                             "invalid snapshot root in manifest".into(),
                         ));
                     }
-                    inner.restorer.snapshot_merkle_root =
-                        snapshot_info.merkle_root;
                     inner.true_state_root_by_blame_info =
                         state_root_with_aux_info;
                     inner.blame_vec_offset = blame_vec_offset;
@@ -350,7 +332,7 @@ impl SnapshotChunkSync {
                     ));
                 }
             }
-            match Self::validate_epoch_receipts(
+            match SnapshotManifestManager::validate_epoch_receipts(
                 ctx,
                 inner.blame_vec_offset,
                 inner
@@ -374,7 +356,7 @@ impl SnapshotChunkSync {
 
             // Check proofs for keys.
             if let Err(e) = response.manifest.validate(
-                &inner.restorer.snapshot_merkle_root,
+                &inner.snapshot_info.merkle_root,
                 &request.start_chunk,
             ) {
                 warn!("failed to validate snapshot manifest, error = {:?}", e);
@@ -383,23 +365,6 @@ impl SnapshotChunkSync {
                 ));
             }
         }
-
-        let verifier = FullSyncVerifier::new(
-            response.manifest.chunk_boundaries.len() + 1,
-            response.manifest.chunk_boundaries.clone(),
-            response.manifest.chunk_boundary_proofs.clone(),
-            inner.restorer.snapshot_merkle_root,
-            ctx.manager
-                .graph
-                .data_man
-                .storage_manager
-                .get_storage_manager()
-                .get_snapshot_manager()
-                .get_snapshot_db_manager(),
-            &inner.restorer.snapshot_epoch_id,
-        )?;
-        inner.restorer.initialize_verifier(verifier);
-        inner.pending_chunks.extend(response.manifest.into_chunks());
 
         // FIXME Handle next_chunk
 
@@ -422,10 +387,9 @@ impl SnapshotChunkSync {
         // todo validate the integrity of manifest, and re-sync it if failed
 
         info!(
-            "Snapshot manifest received, checkpoint = {:?}, elapsed = {:?}, chunks = {}",
+            "Snapshot manifest received, checkpoint = {:?}, elapsed = {:?}",
             inner.current_sync_candidate,
             start_time.elapsed(),
-            inner.pending_chunks.len(),
         );
 
         // update status
@@ -433,9 +397,14 @@ impl SnapshotChunkSync {
         inner.manifest_request_status = None;
         inner.receipt_blame_vec = response.receipt_blame_vec;
         inner.bloom_blame_vec = response.bloom_blame_vec;
-
-        // request snapshot chunks from peers concurrently
-        self.request_chunks(ctx, inner);
+        inner.chunk_manager = Some(SnapshotChunkManager::new_and_start(
+            ctx,
+            inner.current_sync_candidate.clone().unwrap(),
+            inner.snapshot_info.clone(),
+            response.manifest,
+            inner.sync_candidate_manager.active_peers().clone(),
+            self.config.chunk_config(),
+        )?);
 
         debug!("sync state progress: {:?}", *inner);
         Ok(())
@@ -445,102 +414,19 @@ impl SnapshotChunkSync {
         inner.request_manifest(ctx.io, ctx.manager);
     }
 
-    /// Request multiple chunks from random peers.
-    fn request_chunks(&self, ctx: &Context, inner: &mut Inner) {
-        if inner.current_sync_candidate.is_none() {
-            // This may happen if called from `check_timeout`.
-            return;
-        }
-        if inner.downloading_chunks.len() > self.config.max_downloading_chunks {
-            // This should not happen.
-            error!("downloading_chunks > max_downloading_chunks");
-            return;
-        }
-        let chosen_peers = PeerFilter::new(msgid::GET_SNAPSHOT_CHUNK)
-            .choose_from(inner.sync_candidate_manager.active_peers())
-            .select_n(
-                self.config.max_downloading_chunks
-                    - inner.downloading_chunks.len(),
-                &ctx.manager.syn,
-            );
-        for peer in chosen_peers {
-            if self.request_chunk_from_peer(ctx, inner, &peer).is_none() {
-                break;
-            }
-        }
-    }
-
-    fn request_chunk_from_peer(
-        &self, ctx: &Context, inner: &mut Inner, peer: &NodeId,
-    ) -> Option<ChunkKey> {
-        let chunk_key = inner.pending_chunks.pop_front()?;
-        assert!(inner
-            .downloading_chunks
-            .insert(
-                chunk_key.clone(),
-                DownloadingChunkStatus {
-                    peer: *peer,
-                    start_time: Instant::now(),
-                }
-            )
-            .is_none());
-
-        let request = SnapshotChunkRequest::new(
-            inner
-                .current_sync_candidate
-                .clone()
-                .expect("checked in request_chunks"),
-            chunk_key.clone(),
-        );
-
-        ctx.manager.request_manager.request_with_delay(
-            ctx.io,
-            Box::new(request),
-            Some(*peer),
-            None,
-        );
-
-        Some(chunk_key)
-    }
-
     pub fn handle_snapshot_chunk_response(
         &self, ctx: &Context, chunk_key: ChunkKey, chunk: Chunk,
     ) -> StorageResult<()> {
         let mut inner = self.inner.write();
-
-        // If a response is in `downloading_chunks`, we can process
-        // it regardless of our current status, because we allow chunk requests
-        // to be resumed if the snapshot to sync is unchanged.
-        //
-        // There are two possible reasons that a response is not in
-        // `downloading_chunks`:
-        // 1. received a out-of-date snapshot chunk, e.g. new era started.
-        // 2. Chunks are received after timeout.
-        if inner.downloading_chunks.remove(&chunk_key).is_none() {
-            info!("Snapshot chunk received, but not in downloading queue, progess is {:?}", *inner);
-            self.request_chunks(ctx, &mut inner);
-            return Ok(());
-        }
-
-        inner.num_downloaded += 1;
-        inner.restorer.append(chunk_key, chunk);
-
-        // continue to request remaining chunks
-        self.request_chunks(ctx, &mut inner);
-
-        // begin to restore if all chunks downloaded
-        if inner.downloading_chunks.is_empty()
-            && inner.pending_chunks.is_empty()
-        {
-            debug!("Snapshot chunks are all downloaded",);
-
-            let snapshot_info = inner.snapshot_info.clone();
-            // start to restore and update status
-            inner.restorer.finalize_restoration(
-                ctx.manager.graph.data_man.storage_manager.clone(),
-                snapshot_info,
-            )?;
-            inner.status = Status::Completed;
+        if let Some(chunk_manager) = &mut inner.chunk_manager {
+            if chunk_manager.add_chunk(ctx, chunk_key, chunk)? {
+                inner.status = Status::Completed;
+            }
+        } else {
+            debug!(
+                "Chunk {:?} received in status {:?}",
+                chunk_key, inner.status
+            );
         }
         info!("sync state progress: {:?}", *inner);
         Ok(())
@@ -591,287 +477,6 @@ impl SnapshotChunkSync {
                 receipts.clone(),
                 true, /* persistent */
             );
-        }
-    }
-
-    fn validate_blame_states(
-        ctx: &Context, snapshot_epoch_id: &H256, trusted_blame_block: &H256,
-        state_root_vec: &Vec<StateRoot>, receipt_blame_vec: &Vec<H256>,
-        bloom_blame_vec: &Vec<H256>,
-    ) -> Option<(usize, StateRootWithAuxInfo, SnapshotInfo)>
-    {
-        let mut state_blame_vec = vec![];
-
-        // these two header must exist in disk, it's safe to unwrap
-        let snapshot_block_header = ctx
-            .manager
-            .graph
-            .data_man
-            .block_header_by_hash(snapshot_epoch_id)
-            .expect("block header must exist for snapshot to sync");
-        let trusted_blame_block = ctx
-            .manager
-            .graph
-            .data_man
-            .block_header_by_hash(trusted_blame_block)
-            .expect("trusted_blame_block header must exist");
-
-        // check snapshot position in `out_state_blame_vec`
-        let offset = (trusted_blame_block.height()
-            - (snapshot_block_header.height() + DEFERRED_STATE_EPOCH_COUNT))
-            as usize;
-        if offset >= state_root_vec.len() {
-            warn!("validate_blame_states: not enough state_root");
-            return None;
-        }
-
-        let min_vec_len = if snapshot_block_header.height() == 0 {
-            trusted_blame_block.height()
-                - DEFERRED_STATE_EPOCH_COUNT
-                - snapshot_block_header.height()
-                + 1
-        } else {
-            trusted_blame_block.height()
-                - DEFERRED_STATE_EPOCH_COUNT
-                - snapshot_block_header.height()
-                + REWARD_EPOCH_COUNT
-        };
-        let mut trusted_blocks = Vec::new();
-        let mut trusted_block_height = trusted_blame_block.height();
-        let mut blame_count = trusted_blame_block.blame();
-        let mut block_hash = trusted_blame_block.hash();
-        let mut vec_len: usize = 0;
-        trusted_blocks.push(trusted_blame_block);
-
-        // verify the length of vector.
-        loop {
-            vec_len += 1;
-            let block = ctx
-                .manager
-                .graph
-                .data_man
-                .block_header_by_hash(&block_hash)
-                .expect("block header must exist");
-            // We've jump to another trusted block.
-            if block.height() + blame_count as u64 + 1 == trusted_block_height {
-                trusted_block_height = block.height();
-                blame_count = block.blame();
-                trusted_blocks.push(block.clone());
-            }
-            if block.height() + blame_count as u64 == trusted_block_height
-                && vec_len >= min_vec_len as usize
-            {
-                break;
-            }
-            block_hash = *block.parent_hash();
-        }
-        // verify the length of vector
-        if vec_len != state_root_vec.len() {
-            warn!(
-                "wrong length of state_root_vec, expected {}, but {} found",
-                vec_len,
-                state_root_vec.len()
-            );
-            return None;
-        }
-        // Construct out_state_blame_vec.
-        state_blame_vec.clear();
-        for state_root in state_root_vec {
-            state_blame_vec.push(state_root.compute_state_root_hash());
-        }
-        let mut slice_begin = 0;
-        for trusted_block in trusted_blocks {
-            let slice_end = slice_begin + trusted_block.blame() as usize + 1;
-            let deferred_state_root = if trusted_block.blame() == 0 {
-                state_blame_vec[slice_begin].clone()
-            } else {
-                BlockHeaderBuilder::compute_blame_state_root_vec_root(
-                    state_blame_vec[slice_begin..slice_end].to_vec(),
-                )
-            };
-            let deferred_receipts_root = if trusted_block.blame() == 0 {
-                receipt_blame_vec[slice_begin].clone()
-            } else {
-                BlockHeaderBuilder::compute_blame_state_root_vec_root(
-                    receipt_blame_vec[slice_begin..slice_end].to_vec(),
-                )
-            };
-            let deferred_logs_bloom_hash = if trusted_block.blame() == 0 {
-                bloom_blame_vec[slice_begin].clone()
-            } else {
-                BlockHeaderBuilder::compute_blame_state_root_vec_root(
-                    bloom_blame_vec[slice_begin..slice_end].to_vec(),
-                )
-            };
-            // verify `deferred_state_root`, `deferred_receipts_root` and
-            // `deferred_logs_bloom_hash`
-            if deferred_state_root != *trusted_block.deferred_state_root()
-                || deferred_receipts_root
-                    != *trusted_block.deferred_receipts_root()
-                || deferred_logs_bloom_hash
-                    != *trusted_block.deferred_logs_bloom_hash()
-            {
-                warn!("root mismatch: (state_root, receipts_root, logs_bloom_hash) \
-                should be ({:?} {:?} {:?}), get ({:?} {:?} {:?})",
-                       trusted_block.deferred_state_root(),
-                       trusted_block.deferred_receipts_root(),
-                       trusted_block.deferred_logs_bloom_hash(),
-                       deferred_state_root,
-                       deferred_receipts_root,
-                       deferred_logs_bloom_hash,
-                );
-                return None;
-            }
-            slice_begin = slice_end;
-        }
-
-        let (parent_snapshot_epoch, pivot_chain_parts) =
-            ctx.manager.graph.data_man.get_parent_epochs_for(
-                snapshot_epoch_id.clone(),
-                ctx.manager.graph.data_man.get_snapshot_epoch_count() as u64,
-            );
-
-        let parent_snapshot_height = if parent_snapshot_epoch == NULL_EPOCH {
-            0
-        } else {
-            ctx.manager
-                .graph
-                .data_man
-                .block_header_by_hash(&parent_snapshot_epoch)
-                .unwrap()
-                .height()
-        };
-        let mut snapshot_state_root = state_root_vec[offset].clone();
-        let state_root_hash = state_root_vec[offset].compute_state_root_hash();
-        // This delta_root is the intermediate_delta_root of the new snapshot,
-        // and this field will be used to fill new state_root in
-        // get_state_trees_for_next_epoch
-        snapshot_state_root.intermediate_delta_root =
-            state_root_vec[offset].delta_root;
-
-        Some((
-            offset,
-            StateRootWithAuxInfo {
-                state_root: snapshot_state_root,
-                aux_info: StateRootAuxInfo {
-                    // FIXME: we should not commit the EpochExecutionCommitment
-                    // FIXME: for the synced snapshot because it's fake.
-                    // Should be parent of parent but we don't necessarily need
-                    // to know. We put the
-                    // parent_snapshot_merkle_root here.
-                    snapshot_epoch_id: state_root_vec[offset - 1].snapshot_root,
-                    // This field will not be used
-                    delta_mpt_key_padding: StorageKey::delta_mpt_padding(
-                        &state_root_vec[offset].snapshot_root,
-                        &state_root_vec[offset].intermediate_delta_root,
-                    ),
-                    intermediate_epoch_id: parent_snapshot_epoch,
-                    // We don't necessarily need to know because
-                    // the execution of the next epoch shifts delta MPT.
-                    maybe_intermediate_mpt_key_padding: None,
-                    state_root_hash,
-                },
-            },
-            SnapshotInfo {
-                serve_one_step_sync: false,
-                // We need the extra -1 to get a state root that points to the
-                // snapshot we want.
-                merkle_root: state_root_vec[offset
-                    - ctx
-                        .manager
-                        .graph
-                        .data_man
-                        .get_snapshot_blame_plus_depth()]
-                .snapshot_root,
-                height: snapshot_block_header.height(),
-                parent_snapshot_epoch_id: parent_snapshot_epoch,
-                parent_snapshot_height,
-                pivot_chain_parts,
-            },
-        ))
-    }
-
-    fn validate_epoch_receipts(
-        ctx: &Context, blame_vec_offset: usize, snapshot_epoch_id: &EpochId,
-        receipt_blame_vec: &Vec<H256>, bloom_blame_vec: &Vec<H256>,
-        block_receipts: &Vec<BlockExecutionResult>,
-    ) -> Option<Vec<(H256, H256, Arc<BlockReceipts>)>>
-    {
-        let mut epoch_hash = snapshot_epoch_id.clone();
-        let checkpoint = ctx
-            .manager
-            .graph
-            .data_man
-            .block_header_by_hash(snapshot_epoch_id)
-            .expect("checkpoint header must exist");
-        let epoch_receipts_count = if checkpoint.height() == 0 {
-            1
-        } else {
-            REWARD_EPOCH_COUNT
-        } as usize;
-        let mut receipts_vec_offset = 0;
-        let mut result = Vec::new();
-        for idx in 0..epoch_receipts_count {
-            let block_header = ctx
-                .manager
-                .graph
-                .data_man
-                .block_header_by_hash(&epoch_hash)
-                .expect("block header must exist");
-            let ordered_executable_epoch_blocks = ctx
-                .manager
-                .graph
-                .consensus
-                .get_block_hashes_by_epoch(EpochNumber::Number(
-                    block_header.height(),
-                ))
-                .expect("ordered executable epoch blocks must exist");
-            let mut epoch_receipts = Vec::new();
-            for i in 0..ordered_executable_epoch_blocks.len() {
-                if let Some(block_receipt) =
-                    block_receipts.get(receipts_vec_offset + i)
-                {
-                    epoch_receipts.push(block_receipt.block_receipts.clone());
-                } else {
-                    // Invalid block_receipts vector length.
-                    return None;
-                }
-            }
-            let receipt_root = compute_receipts_root(&epoch_receipts);
-            let logs_bloom_hash =
-                BlockHeaderBuilder::compute_block_logs_bloom_hash(
-                    &epoch_receipts,
-                );
-            if receipt_blame_vec[blame_vec_offset + idx] != receipt_root {
-                debug!(
-                    "wrong receipt root, expected={:?}, now={:?}",
-                    receipt_blame_vec[blame_vec_offset + idx],
-                    receipt_root
-                );
-                return None;
-            }
-            if bloom_blame_vec[blame_vec_offset + idx] != logs_bloom_hash {
-                debug!(
-                    "wrong logs bloom hash, expected={:?}, now={:?}",
-                    bloom_blame_vec[blame_vec_offset + idx],
-                    logs_bloom_hash
-                );
-                return None;
-            }
-            for i in 0..ordered_executable_epoch_blocks.len() {
-                result.push((
-                    ordered_executable_epoch_blocks[i],
-                    epoch_hash,
-                    epoch_receipts[i].clone(),
-                ));
-            }
-            receipts_vec_offset += ordered_executable_epoch_blocks.len();
-            epoch_hash = *block_header.parent_hash();
-        }
-        if receipts_vec_offset == block_receipts.len() {
-            Some(result)
-        } else {
-            None
         }
     }
 
@@ -941,7 +546,12 @@ impl SnapshotChunkSync {
                 }
                 _ => {}
             }
-            if inner.sync_candidate_manager.is_inactive() {
+            if inner.sync_candidate_manager.is_inactive()
+                && inner
+                    .chunk_manager
+                    .as_ref()
+                    .map_or(true, |m| m.is_inactive())
+            {
                 // We are requesting candidates and all `pending_peers` timeout,
                 // or we are syncing states all
                 // `active_peers` for all candidates timeout.
@@ -1012,20 +622,9 @@ impl SnapshotChunkSync {
                 inner.request_manifest(ctx.io, ctx.manager);
             }
         }
-        let mut timeout_chunks = Vec::new();
-        for (chunk_key, status) in &inner.downloading_chunks {
-            if status.start_time.elapsed() > self.config.chunk_request_timeout {
-                inner
-                    .sync_candidate_manager
-                    .note_state_sync_failure(&status.peer);
-                timeout_chunks.push(chunk_key.clone());
-            }
+        if let Some(chunk_manager) = &mut inner.chunk_manager {
+            chunk_manager.check_timeout(ctx);
         }
-        for timeout_key in timeout_chunks {
-            inner.downloading_chunks.remove(&timeout_key);
-            inner.pending_chunks.push_back(timeout_key);
-        }
-        self.request_chunks(ctx, inner);
     }
 }
 
@@ -1036,7 +635,11 @@ pub struct StateSyncConfiguration {
     pub manifest_request_timeout: Duration,
 }
 
-struct DownloadingChunkStatus {
-    peer: NodeId,
-    start_time: Instant,
+impl StateSyncConfiguration {
+    fn chunk_config(&self) -> SnapshotChunkConfig {
+        SnapshotChunkConfig {
+            max_downloading_chunks: self.max_downloading_chunks,
+            chunk_request_timeout: self.chunk_request_timeout,
+        }
+    }
 }

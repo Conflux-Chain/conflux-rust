@@ -9,13 +9,7 @@ use crate::{
         MessageProtocolVersionBound, MsgId, RequestId, SetRequestId,
     },
     sync::{
-        message::throttling::Throttle,
-        state::{
-            SnapshotChunkRequest, SnapshotChunkResponse,
-            SnapshotManifestRequest, SnapshotManifestResponse,
-            StateSyncCandidateRequest, StateSyncCandidateResponse,
-        },
-        Error, SYNC_PROTO_V1, SYNC_PROTO_V2,
+        message::throttling::Throttle, Error, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
 };
 use network::{service::ProtocolVersion, NetworkProtocolHandler};

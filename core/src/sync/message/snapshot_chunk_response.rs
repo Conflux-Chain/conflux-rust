@@ -5,8 +5,8 @@
 use crate::{
     message::{GetMaybeRequestId, Message, MessageProtocolVersionBound, MsgId},
     sync::{
-        message::{msgid, Context, Handleable},
-        state::{storage::Chunk, SnapshotChunkRequest},
+        message::{msgid, Context, Handleable, SnapshotChunkRequest},
+        state::storage::Chunk,
         Error, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
 };

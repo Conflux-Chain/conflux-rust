@@ -15,12 +15,10 @@ use crate::{
     sync::{
         message::{
             msgid, Context, DynamicCapability, Handleable, KeyContainer,
+            SnapshotManifestResponse,
         },
         request_manager::{AsAny, Request},
-        state::{
-            snapshot_manifest_response::SnapshotManifestResponse,
-            storage::{RangedManifest, SnapshotSyncCandidate},
-        },
+        state::storage::{RangedManifest, SnapshotSyncCandidate},
         Error, ProtocolConfiguration, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
 };
