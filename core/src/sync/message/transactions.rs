@@ -683,10 +683,10 @@ impl Handleable for GetTransactionsFromTxHashesResponse {
             ctx.manager
                 .request_manager
                 .transactions_received_from_tx_hashes(&req, signed_trans);
+            Ok(())
         } else {
             debug!("All {} transactions are not inserted to the transaction pool, because the node is still in the catch up mode", self.transactions.len());
+            Err(ErrorKind::InCatchUpMode("transactions discarded for handling on_get_transactions_response messages".to_string()).into())
         }
-
-        Ok(())
     }
 }
