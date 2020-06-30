@@ -109,7 +109,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         return transaction
 
     def run_test(self):
-        sponsor_whitelist_contract_addr = Web3.toChecksumAddress("8ad036480160591706c831f0da19d1a424e39469")
+        sponsor_whitelist_contract_addr = Web3.toChecksumAddress("0888000000000000000000000000000000000001")
         bytes_per_key = 64
         collateral_per_byte = 10 ** 18 // 1024
         collateral_per_storage_key = 10 ** 18 // 16

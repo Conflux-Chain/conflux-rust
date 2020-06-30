@@ -39,7 +39,7 @@ The replacement of `sponsor_for_collateral` is similar except that there is no a
 
 ### The Interfaces
 
-The built-in contract address is `0x8ad036480160591706c831f0da19d1a424e39469`. The abi for the internal contract could be found [here](https://github.com/Conflux-Chain/conflux-rust/blob/master/internal_contract/metadata/SponsorWhitelistControl.json) and [here](https://github.com/Conflux-Chain/conflux-rust/blob/master/internal_contract/contracts/SponsorWhitelistControl.sol).
+The built-in contract address is `0x0888000000000000000000000000000000000001`. The abi for the internal contract could be found [here](https://github.com/Conflux-Chain/conflux-rust/blob/master/internal_contract/metadata/SponsorWhitelistControl.json) and [here](https://github.com/Conflux-Chain/conflux-rust/blob/master/internal_contract/contracts/SponsorWhitelistControl.sol).
 
 + `set_sponsor_for_gas(address contract, uint upper_bound)`: If someone wants to sponsor the gas fee for a contract with address `contract`, he/she (it can be a contract account) should call this function and in the meantime transfer some tokens to the address `0x8ad036480160591706c831f0da19d1a424e39469`. The parameter `upper_bound` is the upper bound of the gas fee the sponsor will pay for a single transaction. The number of transfered tokens should be at least 1000 times of the `upper_bound`. The sponsor could be replaced if the new sponsor transfers more tokens and sets a larger upper bound. The current sponsor can also call the function to transfer more tokens to sponsor the contract. The `upper_bound` can be changed to a smaller one if current sponsor balance is less than the `upper_bound`.
 + `set_sponsor_for_collateral(address contract_addr)`: If someone wants to sponsor the CFS (collateral for storage) for a contract with address `contract`, he/she (it can be a contract account) should call this function and in the meantime transfer some tokens to the address `0x8ad036480160591706c831f0da19d1a424e39469`. The sponsor could be replaced if the new sponsor transfers more tokens. The current sponsor can also call the function to transfer more tokens to sponsor the contract.
@@ -95,7 +95,7 @@ const cfx = new Conflux({
 });
 const account = cfx.Account(PRIVATE_KEY); // create account instance
 
-const sponsor_contract_addr = '0x8ad036480160591706c831f0da19d1a424e39469';
+const sponsor_contract_addr = '0x0888000000000000000000000000000000000001';
 const sponsor_contract = cfx.Contract({
   abi: require('./contracts/sponsor.abi.json'),
   address: sponsor_contract_addr,
@@ -138,7 +138,7 @@ processed as follows:
 
 ### The Interfaces
 
-The contract address is `0x8060de9e1568e69811c4a398f92c3d10949dc891`. The abi for the internal contract could be found [here](https://github.com/Conflux-Chain/conflux-rust/blob/master/internal_contract/metadata/AdminControl.json) and [here](https://github.com/Conflux-Chain/conflux-rust/blob/master/internal_contract/contracts/AdminControl.sol).
+The contract address is `0x0888000000000000000000000000000000000000`. The abi for the internal contract could be found [here](https://github.com/Conflux-Chain/conflux-rust/blob/master/internal_contract/metadata/AdminControl.json) and [here](https://github.com/Conflux-Chain/conflux-rust/blob/master/internal_contract/contracts/AdminControl.sol).
 
 + `set_admin(address contract, address admin)`: Set the administrator of contract `contract` to `admin`. The caller should be the administrator of `contract` and it should be a normal account. Caller should make sure that `contract` should be an address of a contract and `admin` should be a normal account address. Otherwise, the call will fail.
 
@@ -158,7 +158,7 @@ const cfx = new Conflux({
 });
 const account = cfx.Account(PRIVATE_KEY); // create account instance
 
-const admin_contract_addr = '0x8060de9e1568e69811c4a398f92c3d10949dc891';
+const admin_contract_addr = '0x0888000000000000000000000000000000000000';
 const admin_contract = cfx.Contract({
   abi: require('./contracts/admin.abi.json'),
   address: admin_contract_addr,
@@ -198,7 +198,7 @@ See the details in [Conflux Protocol Specification](https://confluxnetwork.org/d
 
 ### The Interfaces
 
-The contract address is `0x843c409373ffd5c0bec1dddb7bec830856757b65`. The abi for the internal contract could be found [here](https://github.com/Conflux-Chain/conflux-rust/blob/master/internal_contract/metadata/Staking.json) and [here](https://github.com/Conflux-Chain/conflux-rust/blob/master/internal_contract/contracts/Staking.sol).
+The contract address is `0x0888000000000000000000000000000000000002`. The abi for the internal contract could be found [here](https://github.com/Conflux-Chain/conflux-rust/blob/master/internal_contract/metadata/Staking.json) and [here](https://github.com/Conflux-Chain/conflux-rust/blob/master/internal_contract/contracts/Staking.sol).
 
 + `deposit(uint amount)`: The caller can call this function to deposit some tokens to Conflux Internal Staking Contract. The current annual interest rate is 4%.
 + `withdraw(uint amount)`: The caller can call this function to withdraw some tokens to Conflux Internal Staking Contract. It will trigger a interest settlement. The staking capital and staking interest will be transferred to the user's balance in time. All the withdrawal applications will be processed on a first-come-first-served basis according to the sequence of staking orders.
@@ -216,7 +216,7 @@ const cfx = new Conflux({
 });
 const account = cfx.Account(PRIVATE_KEY); // create account instance
 
-const staking_contract_addr = '0x843c409373ffd5c0bec1dddb7bec830856757b65';
+const staking_contract_addr = '0x0888000000000000000000000000000000000002';
 const staking_contract = cfx.Contract({
   abi: require('./contracts/staking.abi.json'),
   address: staking_contract_addr,

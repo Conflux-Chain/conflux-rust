@@ -70,7 +70,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
         assert_equal(client.get_balance(addr), 5 * 10 ** 18)
         assert_equal(client.get_staking_balance(addr), 0)
 
-        self.tx_conf["to"] = Web3.toChecksumAddress("843c409373ffd5c0bec1dddb7bec830856757b65")
+        self.tx_conf["to"] = Web3.toChecksumAddress("0888000000000000000000000000000000000002")
         # deposit 10**18
         tx_data = decode_hex(staking_contract.functions.deposit(10 ** 18).buildTransaction(self.tx_conf)["data"])
         tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)

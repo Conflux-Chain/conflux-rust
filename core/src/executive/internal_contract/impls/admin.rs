@@ -13,7 +13,7 @@ use std::str::FromStr;
 
 lazy_static! {
     pub static ref ADMIN_CONTROL_CONTRACT_ADDRESS: Address =
-        Address::from_str("8060de9e1568e69811c4a398f92c3d10949dc891").unwrap();
+        Address::from_str("0888000000000000000000000000000000000000").unwrap();
 }
 
 /// The first 4 bytes of keccak('set_admin(address,address)') is 0x73e80cba.
