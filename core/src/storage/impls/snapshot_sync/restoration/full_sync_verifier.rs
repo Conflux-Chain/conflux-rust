@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::storage::impls::merkle_patricia_trie::VanillaChildrenTable;
-
 pub struct FullSyncVerifier<SnapshotDbManager: SnapshotDbManagerTrait> {
     number_chunks: usize,
     merkle_root: MerkleHash,
@@ -74,7 +72,7 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
     pub fn is_completed(&self) -> bool { self.number_incomplete_chunk == 0 }
 
     // FIXME: multi-threading, where &mut can be dropped.
-    pub fn restore_chunk<Key: Borrow<[u8]>>(
+    pub fn restore_chunk<Key: Borrow<[u8]> + Debug>(
         &mut self, chunk_upper_key: &Option<Vec<u8>>, keys: &Vec<Key>,
         values: Vec<Vec<u8>>,
     ) -> Result<bool>
@@ -84,8 +82,10 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
             Some(upper_key) => {
                 match self.chunk_index_by_upper_key.get(upper_key) {
                     Some(index) => *index,
-                    // Chunk key does not match boundaries in manifest
-                    None => return Ok(false),
+                    None => {
+                        warn!("chunk key {:?} does not match boundaries in manifest", upper_key);
+                        return Ok(false);
+                    }
                 }
             }
         };
@@ -94,6 +94,7 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
             let mut previous = keys.first().unwrap();
             for key in &keys[1..] {
                 if key.borrow().le(previous.borrow()) {
+                    warn!("chunk key not in order");
                     return Ok(false);
                 }
                 previous = key;
@@ -114,6 +115,10 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
             // Check key boundary.
             if let Some(first_key) = keys.first() {
                 if first_key.borrow().lt(&*key_range_left) {
+                    warn!(
+                        "first chunk key {:?} less than left range {:?}",
+                        first_key, key_range_left
+                    );
                     return Ok(false);
                 }
             }
@@ -129,6 +134,10 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
             // Check key boundary.
             if let Some(last_key) = keys.last() {
                 if last_key.borrow().ge(&*key_range_right_excl) {
+                    warn!(
+                        "last chunk key {:?} larger than left range {:?}",
+                        last_key, key_range_right_excl,
+                    );
                     return Ok(false);
                 }
             }
@@ -251,8 +260,8 @@ use crate::storage::{
     impls::{
         errors::*,
         merkle_patricia_trie::{
-            trie_node::TrieNodeTrait, CompressedPathRaw, VanillaTrieNode,
-            CHILDREN_COUNT,
+            trie_node::TrieNodeTrait, CompressedPathRaw, VanillaChildrenTable,
+            VanillaTrieNode, CHILDREN_COUNT,
         },
         snapshot_sync::restoration::mpt_slice_verifier::{
             BoundarySubtreeIndex, MptSliceVerifier,
@@ -266,4 +275,4 @@ use crate::storage::{
     TrieProof,
 };
 use primitives::{EpochId, MerkleHash};
-use std::{borrow::Borrow, collections::HashMap};
+use std::{borrow::Borrow, collections::HashMap, fmt::Debug};

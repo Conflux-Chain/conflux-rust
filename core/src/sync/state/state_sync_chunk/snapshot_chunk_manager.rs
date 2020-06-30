@@ -1,6 +1,7 @@
 use crate::{
     storage::{
         storage_db::SnapshotInfo, FullSyncVerifier, Result as StorageResult,
+        TrieProof,
     },
     sync::{
         message::{msgid, Context, SnapshotChunkRequest},
@@ -19,7 +20,7 @@ use std::{
 };
 
 pub struct SnapshotChunkManager {
-    snapshot_candidate: SnapshotSyncCandidate,
+    pub snapshot_candidate: SnapshotSyncCandidate,
     snapshot_info: SnapshotInfo,
 
     active_peers: HashSet<NodeId>,
@@ -34,8 +35,9 @@ pub struct SnapshotChunkManager {
 impl SnapshotChunkManager {
     pub fn new_and_start(
         ctx: &Context, snapshot_candidate: SnapshotSyncCandidate,
-        snapshot_info: SnapshotInfo, manifest: RangedManifest,
-        active_peers: HashSet<NodeId>, config: SnapshotChunkConfig,
+        snapshot_info: SnapshotInfo, chunk_boundaries: Vec<Vec<u8>>,
+        chunk_boundary_proofs: Vec<TrieProof>, active_peers: HashSet<NodeId>,
+        config: SnapshotChunkConfig,
     ) -> StorageResult<Self>
     {
         let mut restorer = Restorer::new(
@@ -44,9 +46,9 @@ impl SnapshotChunkManager {
         );
 
         let verifier = FullSyncVerifier::new(
-            manifest.chunk_boundaries.len() + 1,
-            manifest.chunk_boundaries.clone(),
-            manifest.chunk_boundary_proofs.clone(),
+            chunk_boundaries.len() + 1,
+            chunk_boundaries.clone(),
+            chunk_boundary_proofs.clone(),
             snapshot_info.merkle_root,
             ctx.manager
                 .graph
@@ -59,7 +61,8 @@ impl SnapshotChunkManager {
         )?;
 
         restorer.initialize_verifier(verifier);
-        let chunks = manifest.into_chunks();
+        let chunks =
+            RangedManifest::convert_boundaries_to_chunks(chunk_boundaries);
         let mut chunk_manager = Self {
             snapshot_candidate,
             snapshot_info,
@@ -94,7 +97,12 @@ impl SnapshotChunkManager {
         }
 
         self.num_downloaded += 1;
-        self.restorer.append(chunk_key, chunk);
+
+        if !self.restorer.append(chunk_key.clone(), chunk) {
+            warn!("Receive invalid chunk during appending {:?}", chunk_key);
+            self.pending_chunks.push_back(chunk_key);
+            self.note_failure(&ctx.node_id)
+        }
 
         // begin to restore if all chunks downloaded
         if self.downloading_chunks.is_empty() && self.pending_chunks.is_empty()
@@ -175,12 +183,16 @@ impl SnapshotChunkManager {
 
     pub fn is_inactive(&self) -> bool { self.active_peers.is_empty() }
 
-    pub fn add_active_peers(&mut self, new_active_peers: &HashSet<NodeId>) {
-        self.active_peers.extend(new_active_peers)
+    pub fn set_active_peers(&mut self, new_active_peers: HashSet<NodeId>) {
+        self.active_peers = new_active_peers;
     }
 
-    pub fn snapshot_candidate(&self) -> &SnapshotSyncCandidate {
-        &self.snapshot_candidate
+    pub fn on_peer_disconnected(&mut self, peer: &NodeId) {
+        self.active_peers.remove(peer);
+    }
+
+    fn note_failure(&mut self, node_id: &NodeId) {
+        self.active_peers.remove(node_id);
     }
 }
 

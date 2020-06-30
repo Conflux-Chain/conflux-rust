@@ -143,7 +143,7 @@ pub struct ChunkKey {
 pub struct RangedManifest {
     pub chunk_boundaries: Vec<Vec<u8>>,
     pub chunk_boundary_proofs: Vec<TrieProof>,
-    next: Option<Vec<u8>>,
+    pub next: Option<Vec<u8>>,
 }
 
 impl Encodable for RangedManifest {
@@ -169,28 +169,17 @@ impl RangedManifest {
     /// Validate the manifest with specified snapshot merkle root and the
     /// requested start chunk key. Basically, the retrieved chunks should
     /// not be empty, and the proofs of all chunk keys are valid.
-    pub fn validate(
-        &self, snapshot_root: &MerkleHash, start_chunk: &Option<Vec<u8>>,
-    ) -> Result<(), Error> {
+    pub fn validate(&self, snapshot_root: &MerkleHash) -> Result<(), Error> {
         if self.chunk_boundaries.len() != self.chunk_boundary_proofs.len() {
-            return Err(ErrorKind::InvalidSnapshotManifest(
+            bail!(ErrorKind::InvalidSnapshotManifest(
                 "chunk and proof number do not match".into(),
-            )
-            .into());
+            ));
         }
-        if let Some(start_key) = start_chunk {
-            // chunks in manifest should not be empty
-            if self.chunk_boundaries.is_empty() {
-                return Err(ErrorKind::InvalidSnapshotManifest(
-                    "empty snapshot manifest".into(),
-                )
-                .into());
-            }
-            if start_key != self.chunk_boundaries.first().expect("Not empty") {
-                return Err(ErrorKind::InvalidSnapshotManifest(
-                    "chunk start key do not match".into(),
-                )
-                .into());
+        if let Some(next) = &self.next {
+            if next != self.chunk_boundaries.last().unwrap() {
+                bail!(ErrorKind::InvalidSnapshotManifest(
+                    "next does not match last boundary".into(),
+                ));
             }
         }
 
@@ -204,25 +193,25 @@ impl RangedManifest {
                     snapshot_root,
                     proof.get_merkle_root()
                 );
-                return Err(ErrorKind::InvalidSnapshotManifest(
+                bail!(ErrorKind::InvalidSnapshotManifest(
                     "invalid proof merkle root".into(),
-                )
-                .into());
+                ));
             }
             if !proof.if_proves_key(&self.chunk_boundaries[chunk_index]).0 {
-                return Err(ErrorKind::InvalidSnapshotManifest(
+                bail!(ErrorKind::InvalidSnapshotManifest(
                     "invalid proof".into(),
-                )
-                .into());
+                ));
             }
         }
         Ok(())
     }
 
-    pub fn into_chunks(self) -> Vec<ChunkKey> {
-        let mut chunks = Vec::with_capacity(self.chunk_boundaries.len());
+    pub fn convert_boundaries_to_chunks(
+        chunk_boundaries: Vec<Vec<u8>>,
+    ) -> Vec<ChunkKey> {
+        let mut chunks = Vec::with_capacity(chunk_boundaries.len());
         let mut lower = None;
-        for key in self.chunk_boundaries {
+        for key in chunk_boundaries {
             chunks.push(ChunkKey {
                 lower_bound_incl: lower,
                 upper_bound_excl: Some(key.clone()),
@@ -238,7 +227,7 @@ impl RangedManifest {
 
     pub fn load(
         snapshot_to_sync: &SnapshotSyncCandidate, start_key: Option<Vec<u8>>,
-        storage_manager: &StorageManager, chunk_size: u64,
+        storage_manager: &StorageManager, chunk_size: u64, max_chunks: usize,
     ) -> Result<Option<(RangedManifest, MerkleHash)>, Error>
     {
         let snapshot_epoch_id = match snapshot_to_sync {
@@ -283,8 +272,6 @@ impl RangedManifest {
         let mut manifest = RangedManifest::default();
         let mut has_next = true;
 
-        // todo determine the maximum chunks in a ranged manifest
-        let max_chunks = i32::max_value();
         for i in 0..max_chunks {
             trace!("cut chunks for manifest, loop = {}", i);
             slicer.advance(chunk_size)?;

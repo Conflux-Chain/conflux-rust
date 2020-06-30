@@ -2,14 +2,24 @@
 
 use crate::{
     block_data_manager::BlockExecutionResult,
+    message::NetworkContext,
     parameters::{
         consensus::DEFERRED_STATE_EPOCH_COUNT,
         consensus_internal::REWARD_EPOCH_COUNT,
     },
     storage::{
         storage_db::SnapshotInfo, StateRootAuxInfo, StateRootWithAuxInfo,
+        TrieProof,
     },
-    sync::{message::Context, state::storage::SnapshotSyncCandidate},
+    sync::{
+        error::{Error, ErrorKind},
+        message::{
+            msgid, Context, SnapshotManifestRequest, SnapshotManifestResponse,
+        },
+        state::storage::SnapshotSyncCandidate,
+        synchronization_state::PeerFilter,
+        SynchronizationProtocolHandler,
+    },
     verification::compute_receipts_root,
 };
 use cfx_types::H256;
@@ -18,24 +28,255 @@ use primitives::{
     BlockHeaderBuilder, BlockReceipts, EpochId, EpochNumber, StateRoot,
     StorageKey, NULL_EPOCH,
 };
-use std::{sync::Arc, time::Instant};
+use rand::{seq::SliceRandom, thread_rng};
+use std::{
+    collections::HashSet,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 pub struct SnapshotManifestManager {
     manifest_request_status: Option<(Instant, NodeId)>,
-    snapshot_candidate: SnapshotSyncCandidate,
+    pub snapshot_candidate: SnapshotSyncCandidate,
     trusted_blame_block: H256,
+    pub active_peers: HashSet<NodeId>,
+
+    pub chunk_boundaries: Vec<Vec<u8>>,
+    pub chunk_boundary_proofs: Vec<TrieProof>,
+
+    related_data: Option<RelatedData>,
+    config: SnapshotManifestConfig,
+}
+
+#[derive(Clone)]
+pub struct RelatedData {
+    /// State root verified by blame.
+    pub true_state_root_by_blame_info: StateRootWithAuxInfo,
+    /// Point to the corresponding entry to the snapshot in the blame vectors.
+    pub blame_vec_offset: usize,
+    pub receipt_blame_vec: Vec<H256>,
+    pub bloom_blame_vec: Vec<H256>,
+    pub epoch_receipts: Vec<(H256, H256, Arc<BlockReceipts>)>,
+    pub snapshot_info: SnapshotInfo,
 }
 
 impl SnapshotManifestManager {
-    pub fn new(
+    pub fn new_and_start(
         snapshot_candidate: SnapshotSyncCandidate, trusted_blame_block: H256,
-    ) -> Self {
-        Self {
+        active_peers: HashSet<NodeId>, config: SnapshotManifestConfig,
+        io: &dyn NetworkContext, sync_handler: &SynchronizationProtocolHandler,
+    ) -> Self
+    {
+        let mut manager = Self {
             manifest_request_status: None,
             snapshot_candidate,
             trusted_blame_block,
+            active_peers,
+            chunk_boundaries: vec![],
+            chunk_boundary_proofs: vec![],
+            related_data: None,
+            config,
+        };
+        manager.request_manifest(io, sync_handler, None);
+        manager
+    }
+
+    pub fn handle_snapshot_manifest_response(
+        &mut self, ctx: &Context, response: SnapshotManifestResponse,
+        request: &SnapshotManifestRequest,
+    ) -> Result<Option<RelatedData>, Error>
+    {
+        match self
+            .handle_snapshot_manifest_response_impl(ctx, response, request)
+        {
+            Ok(r) => Ok(r),
+            Err(e) => {
+                self.note_failure(&ctx.node_id);
+                Err(e)
+            }
         }
     }
+
+    fn handle_snapshot_manifest_response_impl(
+        &mut self, ctx: &Context, response: SnapshotManifestResponse,
+        request: &SnapshotManifestRequest,
+    ) -> Result<Option<RelatedData>, Error>
+    {
+        // new era started
+        if request.snapshot_to_sync != self.snapshot_candidate {
+            info!(
+                "The received snapshot manifest doesn't match the current snapshot_candidate,\
+                 current snapshot_candidate = {:?}, requested sync candidate = {:?}",
+                self.snapshot_candidate,
+                request.snapshot_to_sync);
+            return Ok(None);
+        }
+
+        info!(
+            "Snapshot manifest received, checkpoint = {:?}, chunk_boundaries.len()={}, \
+            start={:?}, next={:?}",
+            self.snapshot_candidate, response.manifest.chunk_boundaries.len(),
+            request.start_chunk, response.manifest.next
+        );
+
+        // validate blame state if requested
+        if request.is_initial_request() {
+            if !self.chunk_boundaries.is_empty() {
+                bail!(ErrorKind::InvalidSnapshotManifest(
+                    "Initial manifest is not expected".into(),
+                ));
+            }
+            let (blame_vec_offset, state_root_with_aux_info, snapshot_info) =
+                match Self::validate_blame_states(
+                    ctx,
+                    self.snapshot_candidate.get_snapshot_epoch_id(),
+                    &self.trusted_blame_block,
+                    &response.state_root_vec,
+                    &response.receipt_blame_vec,
+                    &response.bloom_blame_vec,
+                ) {
+                    Some(info_tuple) => info_tuple,
+                    None => {
+                        warn!("failed to validate the blame state, re-sync manifest from other peer");
+                        self.resync_manifest(ctx);
+                        bail!(ErrorKind::InvalidSnapshotManifest(
+                            "invalid blame state in manifest".into(),
+                        ));
+                    }
+                };
+
+            let epoch_receipts =
+                match SnapshotManifestManager::validate_epoch_receipts(
+                    ctx,
+                    blame_vec_offset,
+                    self.snapshot_candidate.get_snapshot_epoch_id(),
+                    &response.receipt_blame_vec,
+                    &response.bloom_blame_vec,
+                    &response.block_receipts,
+                ) {
+                    Some(epoch_receipts) => epoch_receipts,
+                    None => {
+                        warn!("failed to validate the epoch receipts, re-sync manifest from other peer");
+                        self.resync_manifest(ctx);
+                        bail!(ErrorKind::InvalidSnapshotManifest(
+                            "invalid epoch receipts in manifest".into(),
+                        ));
+                    }
+                };
+
+            // Check proofs for keys.
+            if let Err(e) =
+                response.manifest.validate(&snapshot_info.merkle_root)
+            {
+                warn!("failed to validate snapshot manifest, error = {:?}", e);
+                bail!(ErrorKind::InvalidSnapshotManifest(
+                    "invalid chunk proofs in manifest".into(),
+                ));
+            }
+            self.related_data = Some(RelatedData {
+                true_state_root_by_blame_info: state_root_with_aux_info,
+                blame_vec_offset,
+                receipt_blame_vec: response.receipt_blame_vec,
+                bloom_blame_vec: response.bloom_blame_vec,
+                epoch_receipts,
+                snapshot_info,
+            });
+        } else {
+            if self.chunk_boundaries.is_empty() {
+                bail!(ErrorKind::InvalidSnapshotManifest(
+                    "Non-initial manifest is not expected".into()
+                ));
+            }
+            debug_assert_eq!(
+                request.start_chunk.as_ref(),
+                self.chunk_boundaries.last()
+            );
+            if let Some(related_data) = &self.related_data {
+                // Check proofs for keys.
+                if let Err(e) = response
+                    .manifest
+                    .validate(&related_data.snapshot_info.merkle_root)
+                {
+                    warn!(
+                        "failed to validate snapshot manifest, error = {:?}",
+                        e
+                    );
+                    bail!(ErrorKind::InvalidSnapshotManifest(
+                        "invalid chunk proofs in manifest".into(),
+                    ));
+                }
+            }
+        }
+        // The first element is `start_key` and overlaps with the previous
+        // manifest.
+        self.chunk_boundaries
+            .extend_from_slice(&response.manifest.chunk_boundaries);
+        self.chunk_boundary_proofs
+            .extend_from_slice(&response.manifest.chunk_boundary_proofs);
+        if response.manifest.next.is_none() {
+            return Ok(self.related_data.clone());
+        } else {
+            self.request_manifest(ctx.io, ctx.manager, response.manifest.next);
+        }
+        Ok(None)
+    }
+
+    /// request manifest from random peer
+    pub fn request_manifest(
+        &mut self, io: &dyn NetworkContext,
+        sync_handler: &SynchronizationProtocolHandler,
+        start_chunk: Option<Vec<u8>>,
+    )
+    {
+        let maybe_trusted_blame_block = if start_chunk.is_none() {
+            Some(self.trusted_blame_block.clone())
+        } else {
+            None
+        };
+        let request = SnapshotManifestRequest::new(
+            // Safe to unwrap since it's guaranteed to be Some(..)
+            self.snapshot_candidate.clone(),
+            maybe_trusted_blame_block,
+            start_chunk,
+        );
+
+        let available_peers = PeerFilter::new(msgid::GET_SNAPSHOT_MANIFEST)
+            .choose_from(&self.active_peers)
+            .select_all(&sync_handler.syn);
+        let maybe_peer = available_peers.choose(&mut thread_rng()).map(|p| *p);
+        if let Some(peer) = maybe_peer {
+            self.manifest_request_status = Some((Instant::now(), peer));
+            sync_handler.request_manager.request_with_delay(
+                io,
+                Box::new(request),
+                Some(peer),
+                None,
+            );
+        }
+    }
+
+    fn resync_manifest(&mut self, ctx: &Context) {
+        self.request_manifest(
+            ctx.io,
+            ctx.manager,
+            self.chunk_boundaries.last().cloned(),
+        );
+    }
+
+    pub fn check_timeout(&mut self, ctx: &Context) {
+        if let Some((manifest_start_time, peer)) = &self.manifest_request_status
+        {
+            if manifest_start_time.elapsed()
+                > self.config.manifest_request_timeout
+            {
+                self.active_peers.remove(peer);
+                self.manifest_request_status = None;
+                self.resync_manifest(ctx);
+            }
+        }
+    }
+
+    pub fn is_inactive(&self) -> bool { self.active_peers.is_empty() }
 
     pub fn validate_blame_states(
         ctx: &Context, snapshot_epoch_id: &H256, trusted_blame_block: &H256,
@@ -317,4 +558,16 @@ impl SnapshotManifestManager {
             None
         }
     }
+
+    pub fn on_peer_disconnected(&mut self, peer: &NodeId) {
+        self.active_peers.remove(peer);
+    }
+
+    fn note_failure(&mut self, node_id: &NodeId) {
+        self.active_peers.remove(node_id);
+    }
+}
+
+pub struct SnapshotManifestConfig {
+    pub manifest_request_timeout: Duration,
 }

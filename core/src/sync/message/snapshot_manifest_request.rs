@@ -50,6 +50,7 @@ impl Handleable for SnapshotManifestRequest {
             self.start_chunk.clone(),
             &ctx.manager.graph.data_man.storage_manager,
             ctx.manager.protocol_config.chunk_size_byte,
+            ctx.manager.protocol_config.max_chunk_number_in_manifest,
         ) {
             Ok(Some((m, merkle_root))) => {
                 snapshot_merkle_root = merkle_root;
@@ -65,35 +66,47 @@ impl Handleable for SnapshotManifestRequest {
                 return Ok(());
             }
         };
+        if self.is_initial_request() {
+            let (state_root_vec, receipt_blame_vec, bloom_blame_vec) =
+                self.get_blame_states(ctx).unwrap_or_default();
+            let block_receipts =
+                self.get_block_receipts(ctx).unwrap_or_default();
 
-        let (state_root_vec, receipt_blame_vec, bloom_blame_vec) =
-            self.get_blame_states(ctx).unwrap_or_default();
-        let block_receipts = self.get_block_receipts(ctx).unwrap_or_default();
-
-        debug!("handle SnapshotManifestRequest {:?}", self,);
-        ctx.send_response(&SnapshotManifestResponse {
-            request_id: self.request_id,
-            manifest,
-            state_root_vec,
-            receipt_blame_vec,
-            bloom_blame_vec,
-            block_receipts,
-            snapshot_merkle_root,
-        })
+            debug!("handle SnapshotManifestRequest {:?}", self,);
+            ctx.send_response(&SnapshotManifestResponse {
+                request_id: self.request_id,
+                manifest,
+                snapshot_merkle_root,
+                state_root_vec,
+                receipt_blame_vec,
+                bloom_blame_vec,
+                block_receipts,
+            })
+        } else {
+            ctx.send_response(&SnapshotManifestResponse {
+                request_id: self.request_id,
+                manifest,
+                snapshot_merkle_root: Default::default(),
+                state_root_vec: Default::default(),
+                receipt_blame_vec: Default::default(),
+                bloom_blame_vec: Default::default(),
+                block_receipts: Default::default(),
+            })
+        }
     }
 }
 
 impl SnapshotManifestRequest {
     pub fn new(
         snapshot_sync_candidate: SnapshotSyncCandidate,
-        trusted_blame_block: H256,
+        trusted_blame_block: Option<H256>, start_chunk: Option<Vec<u8>>,
     ) -> Self
     {
         SnapshotManifestRequest {
             request_id: 0,
             snapshot_to_sync: snapshot_sync_candidate,
-            start_chunk: None,
-            trusted_blame_block: Some(trusted_blame_block),
+            start_chunk,
+            trusted_blame_block,
         }
     }
 

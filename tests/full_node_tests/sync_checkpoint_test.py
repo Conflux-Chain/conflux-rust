@@ -50,11 +50,12 @@ class SyncCheckpointTests(ConfluxTestFramework):
         self.genesis_nonce = archive_node_client.get_nonce(archive_node_client.GENESIS_ADDR)
         blocks_in_era = []
         for i in range(num_blocks):
-            txs = self._generate_txs(0, random.randint(5, 10))
+            txs = self._generate_txs(0, random.randint(50, 100))
             block_hash = archive_node_client.generate_block_with_fake_txs(txs)
             if i >= snapshot_epoch:
                 blocks_in_era.append(block_hash)
         sync_blocks(self.nodes[:-1])
+        self.log.info("All archive nodes synced")
 
         # Start node[full_node_index] as full node to sync checkpoint
         # Change phase from CatchUpSyncBlockHeader to CatchUpCheckpoint
@@ -64,6 +65,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
         for i in range(self.num_nodes - 1):
             connect_nodes(self.nodes, full_node_index, i)
 
+        self.log.info("Wait for full node to sync, index=%d", full_node_index)
         self.nodes[full_node_index].wait_for_phase(["NormalSyncPhase"], wait_time=60)
 
         sync_blocks(self.nodes, sync_count=False)
