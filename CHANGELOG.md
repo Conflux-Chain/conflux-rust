@@ -84,6 +84,9 @@ Now if no `from_epoch` is specified, it will only return logs after the latest c
 
 - Change internal contracts address to 0x088800...
 
+- Enable overflow-checks for release build, to make sure that underflow is
+impossible.
+
 # 0.5.0
 
 ## Improvements

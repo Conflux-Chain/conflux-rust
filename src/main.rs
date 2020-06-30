@@ -2,6 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+#[cfg(test)]
+mod test;
+
 mod command;
 
 use crate::command::rpc::RpcCommand;
