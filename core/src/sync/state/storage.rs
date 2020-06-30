@@ -169,9 +169,7 @@ impl RangedManifest {
     /// Validate the manifest with specified snapshot merkle root and the
     /// requested start chunk key. Basically, the retrieved chunks should
     /// not be empty, and the proofs of all chunk keys are valid.
-    pub fn validate(
-        &self, snapshot_root: &MerkleHash, _start_chunk: &Option<Vec<u8>>,
-    ) -> Result<(), Error> {
+    pub fn validate(&self, snapshot_root: &MerkleHash) -> Result<(), Error> {
         if self.chunk_boundaries.len() != self.chunk_boundary_proofs.len() {
             bail!(ErrorKind::InvalidSnapshotManifest(
                 "chunk and proof number do not match".into(),

@@ -165,9 +165,8 @@ impl SnapshotManifestManager {
                 };
 
             // Check proofs for keys.
-            if let Err(e) = response
-                .manifest
-                .validate(&snapshot_info.merkle_root, &request.start_chunk)
+            if let Err(e) =
+                response.manifest.validate(&snapshot_info.merkle_root)
             {
                 warn!("failed to validate snapshot manifest, error = {:?}", e);
                 bail!(ErrorKind::InvalidSnapshotManifest(
@@ -194,10 +193,10 @@ impl SnapshotManifestManager {
             );
             if let Some(related_data) = &self.related_data {
                 // Check proofs for keys.
-                if let Err(e) = response.manifest.validate(
-                    &related_data.snapshot_info.merkle_root,
-                    &request.start_chunk,
-                ) {
+                if let Err(e) = response
+                    .manifest
+                    .validate(&related_data.snapshot_info.merkle_root)
+                {
                     warn!(
                         "failed to validate snapshot manifest, error = {:?}",
                         e
