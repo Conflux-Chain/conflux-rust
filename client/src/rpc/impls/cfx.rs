@@ -50,6 +50,7 @@ pub struct RpcImpl {
     tx_pool: SharedTransactionPool,
     maybe_txgen: Option<Arc<TransactionGenerator>>,
     maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
+    accounts: Arc<AccountProvider>,
 }
 
 impl RpcImpl {
@@ -58,7 +59,7 @@ impl RpcImpl {
         block_gen: Arc<BlockGenerator>, tx_pool: SharedTransactionPool,
         maybe_txgen: Option<Arc<TransactionGenerator>>,
         maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
-        config: RpcImplConfiguration,
+        config: RpcImplConfiguration, accounts: Arc<AccountProvider>,
     ) -> Self
     {
         RpcImpl {
@@ -69,6 +70,7 @@ impl RpcImpl {
             maybe_txgen,
             maybe_direct_txgen,
             config,
+            accounts,
         }
     }
 
@@ -355,14 +357,14 @@ impl RpcImpl {
 
         let epoch_height = consensus_graph.best_epoch_number();
         let chain_id = consensus_graph.best_chain_id();
-        let tx =
-            tx.sign_with(epoch_height, chain_id, password)
-                .map_err(|e| {
-                    invalid_params(
-                        "tx",
-                        format!("failed to send transaction: {:?}", e),
-                    )
-                })?;
+        let tx = tx
+            .sign_with(epoch_height, chain_id, password, self.accounts.clone())
+            .map_err(|e| {
+                invalid_params(
+                    "tx",
+                    format!("failed to send transaction: {:?}", e),
+                )
+            })?;
 
         Ok(tx)
     }
@@ -954,6 +956,7 @@ impl CfxHandler {
 use crate::common::delegate_convert;
 use cfx_types::address_util::AddressUtil;
 use cfxcore::executive::{ExecutionError, ExecutionOutcome};
+use cfxcore_accounts::AccountProvider;
 
 impl Cfx for CfxHandler {
     delegate! {

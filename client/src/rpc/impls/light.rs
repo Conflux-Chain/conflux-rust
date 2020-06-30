@@ -38,13 +38,21 @@ pub struct RpcImpl {
 
     // helper API for retrieving verified information from peers
     light: Arc<LightQueryService>,
+
+    accounts: Arc<AccountProvider>,
 }
 
 impl RpcImpl {
     pub fn new(
         config: RpcImplConfiguration, light: Arc<LightQueryService>,
-    ) -> Self {
-        RpcImpl { config, light }
+        accounts: Arc<AccountProvider>,
+    ) -> Self
+    {
+        RpcImpl {
+            config,
+            light,
+            accounts,
+        }
     }
 
     fn account(
@@ -325,6 +333,7 @@ impl RpcImpl {
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
+        let accounts = self.accounts.clone();
 
         let fut = async move {
             if tx.nonce.is_none() {
@@ -352,14 +361,14 @@ impl RpcImpl {
             let chain_id = light.get_latest_verifiable_chain_id().map_err(|_| {
                 RpcError::invalid_params(format!("the light client cannot retrieve/verify the latest chain_id."))
             })?;
-            let tx = tx.sign_with(epoch_height, chain_id, password).map_err(
-                |e| {
-                    RpcError::invalid_params(format!(
-                        "failed to send transaction: {:?}",
-                        e
-                    ))
-                },
-            )?;
+            let tx = tx
+                .sign_with(epoch_height, chain_id, password, accounts)
+                .map_err(|e| {
+                RpcError::invalid_params(format!(
+                    "failed to send transaction: {:?}",
+                    e
+                ))
+            })?;
 
             Self::send_tx_helper(light, Bytes::new(tx.rlp_bytes()))
         };
@@ -478,6 +487,8 @@ impl CfxHandler {
 
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
 use crate::common::delegate_convert;
+use cfxcore_accounts::AccountProvider;
+
 impl Cfx for CfxHandler {
     delegate! {
         to self.common {

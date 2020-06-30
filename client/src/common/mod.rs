@@ -129,6 +129,7 @@ pub fn initialize_common_modules(
         Arc<SynchronizationGraph>,
         Arc<NetworkService>,
         Arc<CommonRpcImpl>,
+        Arc<AccountProvider>,
         PubSubClient,
         Runtime,
     ),
@@ -254,11 +255,18 @@ pub fn initialize_common_modules(
         Arc::new(network)
     };
 
+    let accounts = Arc::new(
+        account_provider(Some(keys_path()), None)
+            .ok()
+            .expect("failed to initialize account provider"),
+    );
+
     let common_impl = Arc::new(CommonRpcImpl::new(
         exit,
         consensus.clone(),
         network.clone(),
         txpool.clone(),
+        accounts.clone(),
     ));
 
     let runtime = Runtime::with_default_thread_count();
@@ -273,6 +281,7 @@ pub fn initialize_common_modules(
         sync_graph,
         network,
         common_impl,
+        accounts,
         pubsub,
         runtime,
     ))
@@ -304,6 +313,7 @@ pub fn initialize_not_light_node_modules(
         sync_graph,
         network,
         common_impl,
+        accounts,
         pubsub,
         runtime,
     ) = initialize_common_modules(&conf, exit.clone(), is_full_node)?;
@@ -425,6 +435,7 @@ pub fn initialize_not_light_node_modules(
         maybe_txgen.clone(),
         maybe_direct_txgen,
         conf.rpc_impl_config(),
+        accounts,
     ));
 
     let debug_rpc_http_server = super::rpc::start_http(
@@ -654,6 +665,7 @@ pub mod delegate_convert {
 
 pub use crate::configuration::Configuration;
 use crate::{
+    accounts::{account_provider, keys_path},
     rpc::{
         extractor::RpcExtractor,
         impls::{
@@ -678,6 +690,7 @@ use cfxcore::{
     SynchronizationGraph, SynchronizationService, TransactionPool,
     WORKER_COMPUTATION_PARALLELISM,
 };
+use cfxcore_accounts::AccountProvider;
 use cfxkey::public_to_address;
 use jsonrpc_http_server::Server as HttpServer;
 use jsonrpc_tcp_server::Server as TcpServer;
