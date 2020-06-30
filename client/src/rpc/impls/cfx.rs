@@ -303,6 +303,10 @@ impl RpcImpl {
                 bail!(invalid_params("tx", "Sending transactions to invalid address. The first four bits must be 0x0 (built-in/reserved), 0x1 (user-account), or 0x8 (contract)."));
             }
         }
+        if self.sync.catch_up_mode() {
+            warn!("Ignore send_transaction request {}. Cannot send transaction when the node is still in catch-up mode.", tx.hash());
+            bail!(JsonRpcError::invalid_request());
+        }
         let (signed_trans, failed_trans) =
             self.tx_pool.insert_new_transactions(vec![tx]);
         // FIXME: how is it possible?

@@ -76,18 +76,38 @@ impl Handleable for Transactions {
             bail!(ErrorKind::TooManyTrans);
         }
 
-        let (signed_trans, _) = ctx
-            .manager
-            .graph
-            .consensus
-            .get_tx_pool()
-            .insert_new_transactions(transactions);
+        // The transaction pool will rely on the execution state information to
+        // verify transaction validity. It may incorrectly accept/reject
+        // transactions when in the catch up mode because the state is still
+        // not correct. We therefore do not insert transactions when in the
+        // catch up mode.
+        if !ctx.manager.catch_up_mode() {
+            let (signed_trans, failure) = ctx
+                .manager
+                .graph
+                .consensus
+                .get_tx_pool()
+                .insert_new_transactions(transactions);
+            if failure.is_empty() {
+                debug!(
+                    "Transactions successfully inserted to transaction pool"
+                );
+            } else {
+                debug!(
+                    "{} transactions are rejected by the transaction pool",
+                    failure.len()
+                );
+                for (tx, e) in failure {
+                    trace!("Transaction {} is rejected by the transaction pool: error = {}", tx, e);
+                }
+            }
 
-        ctx.manager
-            .request_manager
-            .append_received_transactions(signed_trans);
-
-        debug!("Transactions successfully inserted to transaction pool");
+            ctx.manager
+                .request_manager
+                .append_received_transactions(signed_trans);
+        } else {
+            debug!("All {} transactions are not inserted to the transaction pool, because the node is still in the catch up mode", transactions.len());
+        }
 
         Ok(())
     }
@@ -549,18 +569,37 @@ impl Handleable for GetTransactionsResponse {
             ctx.node_id
         );
 
-        let (signed_trans, _) = ctx
-            .manager
-            .graph
-            .consensus
-            .get_tx_pool()
-            .insert_new_transactions(self.transactions);
-
-        ctx.manager
-            .request_manager
-            .transactions_received_from_digests(ctx.io, &req, signed_trans);
-
-        debug!("Transactions successfully inserted to transaction pool");
+        // The transaction pool will rely on the execution state information to
+        // verify transaction validity. It may incorrectly accept/reject
+        // transactions when in the catch up mode because the state is still
+        // not correct. We therefore do not insert transactions when in the
+        // catch up mode.
+        if !ctx.manager.catch_up_mode() {
+            let (signed_trans, failure) = ctx
+                .manager
+                .graph
+                .consensus
+                .get_tx_pool()
+                .insert_new_transactions(self.transactions);
+            if failure.is_empty() {
+                debug!(
+                    "Transactions successfully inserted to transaction pool"
+                );
+            } else {
+                debug!(
+                    "{} transactions are rejected by the transaction pool",
+                    failure.len()
+                );
+                for (tx, e) in failure {
+                    trace!("Transaction {} is rejected by the transaction pool: error = {}", tx, e);
+                }
+            }
+            ctx.manager
+                .request_manager
+                .transactions_received_from_digests(ctx.io, &req, signed_trans);
+        } else {
+            debug!("All {} transactions are not inserted to the transaction pool, because the node is still in the catch up mode", self.transactions.len());
+        }
 
         if req.tx_hashes_indices.len() > 0 && !self.tx_hashes.is_empty() {
             ctx.manager
@@ -608,18 +647,38 @@ impl Handleable for GetTransactionsFromTxHashesResponse {
             ctx.node_id
         );
 
-        let (signed_trans, _) = ctx
-            .manager
-            .graph
-            .consensus
-            .get_tx_pool()
-            .insert_new_transactions(self.transactions);
+        // The transaction pool will rely on the execution state information to
+        // verify transaction validity. It may incorrectly accept/reject
+        // transactions when in the catch up mode because the state is still
+        // not correct. We therefore do not insert transactions when in the
+        // catch up mode.
+        if !ctx.manager.catch_up_mode() {
+            let (signed_trans, failure) = ctx
+                .manager
+                .graph
+                .consensus
+                .get_tx_pool()
+                .insert_new_transactions(self.transactions);
+            if failure.is_empty() {
+                debug!(
+                    "Transactions successfully inserted to transaction pool"
+                );
+            } else {
+                debug!(
+                    "{} transactions are rejected by the transaction pool",
+                    failure.len()
+                );
+                for (tx, e) in failure {
+                    trace!("Transaction {} is rejected by the transaction pool: error = {}", tx, e);
+                }
+            }
+            ctx.manager
+                .request_manager
+                .transactions_received_from_tx_hashes(&req, signed_trans);
+        } else {
+            debug!("All {} transactions are not inserted to the transaction pool, because the node is still in the catch up mode", self.transactions.len());
+        }
 
-        ctx.manager
-            .request_manager
-            .transactions_received_from_tx_hashes(&req, signed_trans);
-
-        debug!("Transactions successfully inserted to transaction pool");
         Ok(())
     }
 }
