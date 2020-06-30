@@ -41,8 +41,8 @@ The replacement of `sponsor_for_collateral` is similar except that there is no a
 
 The built-in contract address is `0x0888000000000000000000000000000000000001`. The abi for the internal contract could be found [here](https://github.com/Conflux-Chain/conflux-rust/blob/master/internal_contract/metadata/SponsorWhitelistControl.json) and [here](https://github.com/Conflux-Chain/conflux-rust/blob/master/internal_contract/contracts/SponsorWhitelistControl.sol).
 
-+ `set_sponsor_for_gas(address contract, uint upper_bound)`: If someone wants to sponsor the gas fee for a contract with address `contract`, he/she (it can be a contract account) should call this function and in the meantime transfer some tokens to the address `0x8ad036480160591706c831f0da19d1a424e39469`. The parameter `upper_bound` is the upper bound of the gas fee the sponsor will pay for a single transaction. The number of transfered tokens should be at least 1000 times of the `upper_bound`. The sponsor could be replaced if the new sponsor transfers more tokens and sets a larger upper bound. The current sponsor can also call the function to transfer more tokens to sponsor the contract. The `upper_bound` can be changed to a smaller one if current sponsor balance is less than the `upper_bound`.
-+ `set_sponsor_for_collateral(address contract_addr)`: If someone wants to sponsor the CFS (collateral for storage) for a contract with address `contract`, he/she (it can be a contract account) should call this function and in the meantime transfer some tokens to the address `0x8ad036480160591706c831f0da19d1a424e39469`. The sponsor could be replaced if the new sponsor transfers more tokens. The current sponsor can also call the function to transfer more tokens to sponsor the contract.
++ `set_sponsor_for_gas(address contract, uint upper_bound)`: If someone wants to sponsor the gas fee for a contract with address `contract`, he/she (it can be a contract account) should call this function and in the meantime transfer some tokens to the address `0x0888000000000000000000000000000000000001`. The parameter `upper_bound` is the upper bound of the gas fee the sponsor will pay for a single transaction. The number of transfered tokens should be at least 1000 times of the `upper_bound`. The sponsor could be replaced if the new sponsor transfers more tokens and sets a larger upper bound. The current sponsor can also call the function to transfer more tokens to sponsor the contract. The `upper_bound` can be changed to a smaller one if current sponsor balance is less than the `upper_bound`.
++ `set_sponsor_for_collateral(address contract_addr)`: If someone wants to sponsor the CFS (collateral for storage) for a contract with address `contract`, he/she (it can be a contract account) should call this function and in the meantime transfer some tokens to the address `0x0888000000000000000000000000000000000001`. The sponsor could be replaced if the new sponsor transfers more tokens. The current sponsor can also call the function to transfer more tokens to sponsor the contract.
 + `add_privilege(address[] memory)`: A contract can call this function to add some normal account address to the whitelist. It means that if the `sponsor_for_gas` is set, the contract will pay the gas fee for the accounts in the whitelist, and if the `sponsor_for_collateral` is set, the contract will pay the CFS (collateral for storage) for the accounts in the whitelist. A special address `0x0000000000000000000000000000000000000000` could be used if the contract wants to add all account to the whitelist.
 + `remove_privilege(address[] memory)`: A contract can call this function to remove some normal account address from the whitelist.
 
@@ -60,14 +60,14 @@ contract CommissionPrivilegeTest {
     mapping(uint => uint) public ss;
 
     function add(address account) public payable {
-        SponsorWhitelistControl cpc = SponsorWhitelistControl(0x8ad036480160591706c831f0DA19D1a424e39469);
+        SponsorWhitelistControl cpc = SponsorWhitelistControl(0x0888000000000000000000000000000000000001);
         address[] memory a = new address[](1);
         a[0] = account;
         cpc.add_privilege(a);
     }
 
     function remove(address account) public payable {
-        SponsorWhitelistControl cpc = SponsorWhitelistControl(0x8ad036480160591706c831f0DA19D1a424e39469);
+        SponsorWhitelistControl cpc = SponsorWhitelistControl(0x0888000000000000000000000000000000000001);
         address[] memory a = new address[](1);
         a[0] = account;
         cpc.remove_privilege(a);
