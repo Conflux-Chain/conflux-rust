@@ -107,9 +107,7 @@ fn test_sender_balance() {
     assert_eq!(gas_left, U256::from(94_595));
     assert_eq!(
         state.storage_at(&address, &vec![0; 32]).unwrap(),
-        BigEndianHash::from_uint(
-            &(*COLLATERAL_PER_STORAGE_KEY + U256::from(0xf9))
-        )
+        *COLLATERAL_PER_STORAGE_KEY + U256::from(0xf9)
     );
     assert_eq!(state.balance(&sender).unwrap(), U256::from(0xf9));
     assert_eq!(
@@ -429,7 +427,7 @@ fn test_revert() {
     assert_eq!(output[..], returns[..]);
     assert_eq!(
         state.storage_at(&contract_address, &vec![0; 32]).unwrap(),
-        BigEndianHash::from_uint(&U256::zero())
+        U256::zero()
     );
 }
 

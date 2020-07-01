@@ -39,7 +39,7 @@ use crate::{
     vm_factory::VmFactory,
     Notifications,
 };
-use cfx_types::{Bloom, H160, H256, U256, U512};
+use cfx_types::{BigEndianHash, Bloom, H160, H256, U256, U512};
 use either::Either;
 use itertools::Itertools;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
@@ -561,7 +561,7 @@ impl ConsensusGraph {
         let key = StorageKey::new_storage_key(&address, position.as_ref());
 
         match state_db.get::<StorageValue>(key) {
-            Ok(Some(entry)) => Ok(Some(entry.value)),
+            Ok(Some(entry)) => Ok(Some(H256::from_uint(&entry.value))),
             Ok(None) => Ok(None),
             Err(e) => {
                 warn!("Unexpected error while retrieving storage entry: {}", e);
@@ -1431,13 +1431,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
     ///
     /// Do not use this function to answer queries from peers. This function is
     /// mainly used for transaction pool.
-    //
-    // TODO: The drawback of the current implementation is that it waits for
-    // TODO: execution, and the current logic seems pretty complex, but
-    // TODO: since transaction pool is designed to take just a recent state
-    // TODO: from execution, taking a recently executed state which matched
-    // TODO: with pivot chain (a final check in StateAvailabilityBoundry)
-    // TODO: from ConsensusExecutor should be good.
     fn get_best_state(&self) -> State {
         // To handle the extremely rare case that the large chain
         // reorganization/checkpoint happens in this call (because we do
