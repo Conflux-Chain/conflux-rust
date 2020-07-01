@@ -105,11 +105,11 @@ impl Handleable for Transactions {
             ctx.manager
                 .request_manager
                 .append_received_transactions(signed_trans);
+            Ok(())
         } else {
             debug!("All {} transactions are not inserted to the transaction pool, because the node is still in the catch up mode", transactions.len());
+            Err(ErrorKind::InCatchUpMode("ignore transaction_digests message because still in the catch up mode".to_string()).into())
         }
-
-        Ok(())
     }
 }
 
@@ -579,7 +579,7 @@ impl Handleable for GetTransactionsResponse {
         // transactions when in the catch up mode because the state is still
         // not correct. We therefore do not insert transactions when in the
         // catch up mode.
-        let ret = if !ctx.manager.catch_up_mode() {
+        if !ctx.manager.catch_up_mode() {
             let (signed_trans, failure) = ctx
                 .manager
                 .graph
@@ -618,9 +618,7 @@ impl Handleable for GetTransactionsResponse {
         } else {
             debug!("All {} transactions are not inserted to the transaction pool, because the node is still in the catch up mode", self.transactions.len());
             Err(ErrorKind::InCatchUpMode("transactions discarded for handling on_get_transactions_response messages".to_string()).into())
-        };
-
-        ret
+        }
     }
 }
 
