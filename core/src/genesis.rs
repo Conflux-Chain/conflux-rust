@@ -33,9 +33,9 @@ pub const DEV_GENESIS_PRI_KEY_2: &'static str =
 
 lazy_static! {
     pub static ref DEV_GENESIS_KEY_PAIR: KeyPair =
-        KeyPair::from_secret(DEV_GENESIS_PRI_KEY.parse().unwrap(),).unwrap();
+        KeyPair::from_secret(DEV_GENESIS_PRI_KEY.parse().unwrap()).unwrap();
     pub static ref DEV_GENESIS_KEY_PAIR_2: KeyPair =
-        KeyPair::from_secret(DEV_GENESIS_PRI_KEY_2.parse().unwrap(),).unwrap();
+        KeyPair::from_secret(DEV_GENESIS_PRI_KEY_2.parse().unwrap()).unwrap();
 }
 
 pub fn default(_dev_or_test_mode: bool) -> HashMap<Address, U256> {
