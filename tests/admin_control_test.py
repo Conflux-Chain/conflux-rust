@@ -136,7 +136,6 @@ class AdminControlTest(ConfluxTestFramework):
         (addr, priv_key) = client.rand_account()
         self.log.info("addr=%s priv_key=%s", addr, priv_key)
         tx = client.new_tx(value=5 * 10 ** 18, receiver=addr, nonce=self.get_nonce(genesis_addr))
-        node.wait_for_phase(["NormalSyncPhase"])
         client.send_tx(tx, True)
         assert_equal(client.get_balance(addr), 5000000000000000000)
 

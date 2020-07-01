@@ -73,7 +73,7 @@ class TxRelayTest(ConfluxTestFramework):
 
             # send tx from genesis account
             tx = self.rpc[LIGHTNODE].new_tx(receiver=receiver, value=value, nonce=nonce)
-            hash = self.rpc[LIGHTNODE].send_tx(tx)
+            hash = self.rpc[LIGHTNODE].send_tx(tx, wait_for_catchup=False)
 
             self.log.info(f"sent {value: <5} to {receiver}, tx: {hash}")
             txs.append((hash, receiver, value))
