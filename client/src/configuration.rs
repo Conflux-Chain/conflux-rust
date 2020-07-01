@@ -125,6 +125,7 @@ build_config! {
         // Mining section.
         (mining_author, (Option<String>), None)
         (start_mining, (bool), false)
+        (stratum_listen_address, (String), "127.0.0.1".into())
         (stratum_port, (u16), 32525)
         (stratum_secret, (Option<String>), None)
         (use_stratum, (bool), false)
@@ -446,13 +447,6 @@ impl Configuration {
     }
 
     pub fn pow_config(&self) -> ProofOfWorkConfig {
-        let stratum_listen_addr =
-            if let Some(listen_addr) = self.raw_conf.public_address.clone() {
-                listen_addr
-            } else {
-                String::from("")
-            };
-
         let stratum_secret =
             self.raw_conf
                 .stratum_secret
@@ -464,7 +458,7 @@ impl Configuration {
             self.is_test_or_dev_mode(),
             self.raw_conf.use_stratum,
             self.raw_conf.initial_difficulty,
-            stratum_listen_addr,
+            self.raw_conf.stratum_listen_address.clone(),
             self.raw_conf.stratum_port,
             stratum_secret,
         )

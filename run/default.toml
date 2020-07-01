@@ -57,6 +57,10 @@ bootnodes="cfxnode://7ffff7f14f8f73fa93a95309803bbc93c762c48bc873a823ac40500471c
 # stratum protocol.
 # use_stratum=true
 
+# Listen address for stratum
+#
+# stratum_listen_address = "127.0.0.1"
+
 # Port for stratum.
 #
 # stratum_port = 32525
