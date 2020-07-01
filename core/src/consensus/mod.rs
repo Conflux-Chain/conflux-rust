@@ -1431,13 +1431,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
     ///
     /// Do not use this function to answer queries from peers. This function is
     /// mainly used for transaction pool.
-    //
-    // TODO: The drawback of the current implementation is that it waits for
-    // TODO: execution, and the current logic seems pretty complex, but
-    // TODO: since transaction pool is designed to take just a recent state
-    // TODO: from execution, taking a recently executed state which matched
-    // TODO: with pivot chain (a final check in StateAvailabilityBoundry)
-    // TODO: from ConsensusExecutor should be good.
     fn get_best_state(&self) -> State {
         // To handle the extremely rare case that the large chain
         // reorganization/checkpoint happens in this call (because we do
