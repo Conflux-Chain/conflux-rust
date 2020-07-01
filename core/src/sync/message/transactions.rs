@@ -160,9 +160,9 @@ impl Handleable for TransactionDigests {
                     ctx.node_id.clone(),
                     &self,
                 );
-            Err(ErrorKind::InCatchUpMode("ignore transaction_digests message because still in the catch up mode".to_string()).into())
-        } else {
             Ok(())
+        } else {
+            Err(ErrorKind::InCatchUpMode("ignore transaction_digests message because still in the catch up mode".to_string()).into())
         }
     }
 }
