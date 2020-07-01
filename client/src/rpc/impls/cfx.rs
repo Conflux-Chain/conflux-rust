@@ -3,7 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    error_codes::{call_execution_error, invalid_params},
+    error_codes::{
+        call_execution_error, invalid_params, request_rejected_in_catch_up_mode,
+    },
     impls::{common::RpcImpl as CommonImpl, RpcImplConfiguration},
     traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
     types::{
@@ -302,6 +304,10 @@ impl RpcImpl {
             if !address.is_valid_address() {
                 bail!(invalid_params("tx", "Sending transactions to invalid address. The first four bits must be 0x0 (built-in/reserved), 0x1 (user-account), or 0x8 (contract)."));
             }
+        }
+        if self.sync.catch_up_mode() {
+            warn!("Ignore send_transaction request {}. Cannot send transaction when the node is still in catch-up mode.", tx.hash());
+            bail!(request_rejected_in_catch_up_mode(None));
         }
         let (signed_trans, failed_trans) =
             self.tx_pool.insert_new_transactions(vec![tx]);
