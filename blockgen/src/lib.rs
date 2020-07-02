@@ -131,7 +131,8 @@ impl BlockGenerator {
         graph: SharedSynchronizationGraph, txpool: SharedTransactionPool,
         sync: SharedSynchronizationService,
         maybe_txgen: Option<SharedTransactionGenerator>,
-        pow_config: ProofOfWorkConfig, pow: Arc<PoWManager>, mining_author: Address,
+        pow_config: ProofOfWorkConfig, pow: Arc<PoWManager>,
+        mining_author: Address,
     ) -> Self
     {
         BlockGenerator {

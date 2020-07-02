@@ -20,7 +20,9 @@ use crate::{
     },
 };
 use blockgen::BlockGenerator;
-use cfxcore::{ConsensusGraph, LightQueryService, TransactionPool, pow::PoWManager};
+use cfxcore::{
+    pow::PoWManager, ConsensusGraph, LightQueryService, TransactionPool,
+};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use runtime::Runtime;
 

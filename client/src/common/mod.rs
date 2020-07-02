@@ -200,9 +200,7 @@ pub fn initialize_common_modules(
     );
     debug!("Initialize genesis_block={:?}", genesis_block);
 
-    let pow = Arc::new(PoWManager::new(
-        TempDir::new("pow").unwrap().path()
-    ));
+    let pow = Arc::new(PoWManager::new(TempDir::new("pow").unwrap().path()));
 
     let data_man = Arc::new(BlockDataManager::new(
         cache_config,
@@ -684,10 +682,10 @@ use cfxcore::{
     block_data_manager::BlockDataManager,
     genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
     machine::{new_machine_with_builtin, Machine},
+    pow::PoWManager,
     statistics::Statistics,
     storage::StorageManager,
     sync::SyncPhaseType,
-    pow::PoWManager,
     vm_factory::VmFactory,
     ConsensusGraph, LightProvider, Notifications, Stopable,
     SynchronizationGraph, SynchronizationService, TransactionPool,
@@ -709,6 +707,6 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+use tempdir::TempDir;
 use threadpool::ThreadPool;
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
-use tempdir::TempDir;

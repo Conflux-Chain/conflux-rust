@@ -6,7 +6,7 @@ use crate::{
     cache_config::CacheConfig,
     cache_manager::{CacheId, CacheManager, CacheSize},
     ext_db::SystemDB,
-    pow::{TargetDifficultyManager, PoWManager},
+    pow::{PoWManager, TargetDifficultyManager},
     storage::{
         state_manager::StateIndex, utils::guarded_value::*,
         StateRootWithAuxInfo, StorageManager, StorageManagerTrait,

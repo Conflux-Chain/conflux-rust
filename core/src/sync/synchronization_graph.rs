@@ -9,7 +9,7 @@ use crate::{
     error::{BlockError, Error, ErrorKind},
     machine::Machine,
     parameters::sync::OLD_ERA_BLOCK_GC_BATCH_SIZE,
-    pow::{ProofOfWorkConfig, PoWManager},
+    pow::{PoWManager, ProofOfWorkConfig},
     state_exposer::{SyncGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,
     verification::*,
@@ -183,9 +183,8 @@ impl MallocSizeOf for SynchronizationGraphInner {
 impl SynchronizationGraphInner {
     pub fn with_genesis_block(
         genesis_header: Arc<BlockHeader>, pow_config: ProofOfWorkConfig,
-        pow: Arc<PoWManager>,
-        config: SyncGraphConfig, data_man: Arc<BlockDataManager>,
-        machine: Arc<Machine>,
+        pow: Arc<PoWManager>, config: SyncGraphConfig,
+        data_man: Arc<BlockDataManager>, machine: Arc<Machine>,
     ) -> Self
     {
         let mut inner = SynchronizationGraphInner {
@@ -1078,9 +1077,9 @@ impl SynchronizationGraph {
     pub fn new(
         consensus: SharedConsensusGraph,
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
-        pow: Arc<PoWManager>,
-        sync_config: SyncGraphConfig, notifications: Arc<Notifications>,
-        is_full_node: bool, machine: Arc<Machine>,
+        pow: Arc<PoWManager>, sync_config: SyncGraphConfig,
+        notifications: Arc<Notifications>, is_full_node: bool,
+        machine: Arc<Machine>,
     ) -> Self
     {
         let data_man = consensus.get_data_manager().clone();

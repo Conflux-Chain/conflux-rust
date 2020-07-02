@@ -17,7 +17,7 @@ use crate::{
         pastset_cache::PastSetCache,
     },
     parameters::{consensus::*, consensus_internal::*},
-    pow::{target_difficulty, ProofOfWorkConfig, PoWManager},
+    pow::{target_difficulty, PoWManager, ProofOfWorkConfig},
     state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
 };
 use cfx_types::{H256, U256, U512};
@@ -553,9 +553,9 @@ impl ConsensusGraphNode {
 
 impl ConsensusGraphInner {
     pub fn with_era_genesis(
-        pow_config: ProofOfWorkConfig, pow: Arc<PoWManager>, data_man: Arc<BlockDataManager>,
-        inner_conf: ConsensusInnerConfig, cur_era_genesis_block_hash: &H256,
-        cur_era_stable_block_hash: &H256,
+        pow_config: ProofOfWorkConfig, pow: Arc<PoWManager>,
+        data_man: Arc<BlockDataManager>, inner_conf: ConsensusInnerConfig,
+        cur_era_genesis_block_hash: &H256, cur_era_stable_block_hash: &H256,
     ) -> Self
     {
         let genesis_block_header = data_man

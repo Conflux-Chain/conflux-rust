@@ -2,19 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-mod shared;
-mod seed_compute;
-mod keccak;
-mod compute;
 mod cache;
+mod compute;
+mod keccak;
+mod seed_compute;
+mod shared;
 
-pub use self::cache::NodeCacheBuilder;
-use self::keccak::{H256 as KeccakH256};
-pub use self::shared::ETHASH_EPOCH_LENGTH;
+use self::keccak::H256 as KeccakH256;
+pub use self::{cache::NodeCacheBuilder, shared::ETHASH_EPOCH_LENGTH};
 
-use crate::{
-    block_data_manager::BlockDataManager, parameters::pow::*,
-};
+use crate::{block_data_manager::BlockDataManager, parameters::pow::*};
 use cfx_types::{BigEndianHash, H256, U256, U512};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -22,9 +19,9 @@ use parking_lot::RwLock;
 use std::{
     collections::{HashMap, VecDeque},
     convert::TryFrom,
+    path::{Path, PathBuf},
+    sync::Arc,
 };
-use std::sync::Arc;
-use std::path::{Path, PathBuf};
 use tempdir::TempDir;
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
@@ -164,7 +161,6 @@ pub fn nonce_to_lower_bound(nonce: &U256) -> U256 {
     lower_bound
 }
 
-
 pub fn pow_hash_to_quality(hash: &H256, nonce: &U256) -> U256 {
     let hash_as_uint = BigEndianHash::into_uint(hash);
     let lower_bound = nonce_to_lower_bound(nonce);
@@ -225,7 +221,9 @@ impl PoWManager {
         Self::new(TempDir::new(prefix).unwrap().path())
     }
 
-    pub fn compute_light(&self, block_height: u64, block_hash: &KeccakH256, nonce: u64) -> KeccakH256 {
+    pub fn compute_light(
+        &self, block_height: u64, block_hash: &KeccakH256, nonce: u64,
+    ) -> KeccakH256 {
         let epoch = block_height / ETHASH_EPOCH_LENGTH;
         let light = self.nodecache_builder.light(&self.cache_dir, block_height);
         light.compute(block_hash, nonce, block_height)
@@ -233,13 +231,21 @@ impl PoWManager {
 }
 
 pub fn compute(
-    pow: Arc<PoWManager>, nonce: &U256, block_hash: &H256, block_height: u64) -> H256 {
-    pow.compute_light(block_height, block_hash.as_fixed_bytes(), nonce.low_u64()).into()
+    pow: Arc<PoWManager>, nonce: &U256, block_hash: &H256, block_height: u64,
+) -> H256 {
+    pow.compute_light(
+        block_height,
+        block_hash.as_fixed_bytes(),
+        nonce.low_u64(),
+    )
+    .into()
 }
 
 pub fn validate(
-    pow: Arc<PoWManager>, problem: &ProofOfWorkProblem, solution: &ProofOfWorkSolution,
-) -> bool {
+    pow: Arc<PoWManager>, problem: &ProofOfWorkProblem,
+    solution: &ProofOfWorkSolution,
+) -> bool
+{
     let nonce = solution.nonce;
     let hash = compute(pow, &nonce, &problem.block_hash, problem.block_height);
     ProofOfWorkProblem::validate_hash_against_boundary(

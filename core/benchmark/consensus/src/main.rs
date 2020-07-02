@@ -14,7 +14,7 @@ use cfxcore::{
     },
     consensus_parameters::*,
     db::NUM_COLUMNS,
-    pow::{ProofOfWorkConfig, PoWManager},
+    pow::{PoWManager, ProofOfWorkConfig},
     statistics::Statistics,
     storage::{StorageConfiguration, StorageManager},
     sync::{

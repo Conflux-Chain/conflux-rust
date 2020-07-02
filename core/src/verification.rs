@@ -6,7 +6,7 @@ use crate::{
     error::{BlockError, Error},
     executive::Executive,
     parameters::block::*,
-    pow::{self, nonce_to_lower_bound, ProofOfWorkProblem, PoWManager},
+    pow::{self, nonce_to_lower_bound, PoWManager, ProofOfWorkProblem},
     storage::{make_simple_mpt, simple_mpt_merkle_root, TrieProof},
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
     vm,
@@ -100,13 +100,21 @@ impl VerificationConfig {
         pow: Arc<PoWManager>, header: &mut BlockHeader,
     ) -> H256 {
         let nonce = header.nonce();
-        let pow_hash: H256 = pow.compute_light(header.height(), header.problem_hash().as_fixed_bytes(), nonce.low_u64()).into();
+        let pow_hash: H256 = pow
+            .compute_light(
+                header.height(),
+                header.problem_hash().as_fixed_bytes(),
+                nonce.low_u64(),
+            )
+            .into();
         header.pow_quality = pow::pow_hash_to_quality(&pow_hash, &nonce);
         pow_hash
     }
 
     #[inline]
-    pub fn verify_pow(&self, pow: Arc<PoWManager>, header: &mut BlockHeader) -> Result<(), Error> {
+    pub fn verify_pow(
+        &self, pow: Arc<PoWManager>, header: &mut BlockHeader,
+    ) -> Result<(), Error> {
         let pow_hash =
             Self::compute_pow_hash_and_fill_header_pow_quality(pow, header);
         if header.difficulty().is_zero() {

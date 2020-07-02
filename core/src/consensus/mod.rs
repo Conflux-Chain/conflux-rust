@@ -28,7 +28,7 @@ use crate::{
     parameters::{
         consensus::*, consensus_internal::*, staking::COLLATERAL_PER_BYTE,
     },
-    pow::{ProofOfWorkConfig, PoWManager},
+    pow::{PoWManager, ProofOfWorkConfig},
     rpc_errors::Result as RpcResult,
     state::State,
     statedb::StateDb,
@@ -191,8 +191,9 @@ impl ConsensusGraph {
     pub fn with_era_genesis(
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
-        pow_config: ProofOfWorkConfig, pow: Arc<PoWManager>, era_genesis_block_hash: &H256,
-        era_stable_block_hash: &H256, notifications: Arc<Notifications>,
+        pow_config: ProofOfWorkConfig, pow: Arc<PoWManager>,
+        era_genesis_block_hash: &H256, era_stable_block_hash: &H256,
+        notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, is_full_node: bool,
     ) -> Self
@@ -253,7 +254,8 @@ impl ConsensusGraph {
     pub fn new(
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
-        pow_config: ProofOfWorkConfig, pow: Arc<PoWManager>, notifications: Arc<Notifications>,
+        pow_config: ProofOfWorkConfig, pow: Arc<PoWManager>,
+        notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_conf: VerificationConfig, is_full_node: bool,
     ) -> Self
