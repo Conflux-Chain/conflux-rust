@@ -6,10 +6,10 @@ pub mod consensus {
     pub const DEFERRED_STATE_EPOCH_COUNT: u64 = 5;
     pub const EPOCH_SET_PERSISTENCE_DELAY: u64 = 100;
 
-    pub const ADAPTIVE_WEIGHT_DEFAULT_BETA: u64 = 2000;
-    pub const HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 600;
-    pub const TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 360;
-    pub const TIMER_CHAIN_DEFAULT_BETA: u64 = 160;
+    pub const ADAPTIVE_WEIGHT_DEFAULT_BETA: u64 = 1000;
+    pub const HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 250;
+    pub const TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 180;
+    pub const TIMER_CHAIN_DEFAULT_BETA: u64 = 240;
     // The number of epochs per era. Each era is a potential checkpoint
     // position. The parent_edge checking and adaptive checking are defined
     // relative to the era start blocks.
@@ -72,7 +72,7 @@ pub mod consensus_internal {
     pub const CONFIRMATION_METER_MAX_NUM_MAINTAINED_RISK: usize = 100;
     /// The minimum timer diff value for the adaptive test in confirmation meter
     /// to consider
-    pub const CONFIRMATION_METER_ADAPTIVE_TEST_TIMER_DIFF: u64 = 70;
+    pub const CONFIRMATION_METER_ADAPTIVE_TEST_TIMER_DIFF: u64 = 140;
     /// The batch step in the confirmation meter to do the adaptive test
     pub const CONFIRMATION_METER_PSI: u64 = 30;
     /// The maximum value of adaptive block generation risk that a confirmation
