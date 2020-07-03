@@ -3,8 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    error_codes::{call_execution_error, invalid_params},
-    impls::common::RpcImpl as CommonImpl,
+    error_codes::{
+        call_execution_error, invalid_params, request_rejected_in_catch_up_mode,
+    },
+    impls::{common::RpcImpl as CommonImpl, RpcImplConfiguration},
     traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
     types::{
         sign_call, Account as RpcAccount, BlameInfo, Block as RpcBlock,
@@ -22,10 +24,9 @@ use crate::rpc::{
 use blockgen::BlockGenerator;
 use cfx_types::{H160, H256, U256};
 use cfxcore::{
-    block_parameters::MAX_BLOCK_SIZE_IN_BYTES,
+    block_data_manager::BlockExecutionResultWithEpoch,
     storage::{state::StateTrait, state_manager::StateManagerTrait},
     PeerInfo, SharedConsensusGraph, SharedSynchronizationService,
-    block_data_manager::BlockExecutionResultWithEpoch, machine::Machine,
     state_exposer::STATE_EXPOSER, test_context::*, vm, ConsensusGraph,
     ConsensusGraphTrait,
     SharedTransactionPool,
@@ -45,11 +46,6 @@ use rlp::Rlp;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
 
-#[derive(Default)]
-pub struct RpcImplConfiguration {
-    pub get_logs_filter_max_limit: Option<usize>,
-}
-
 pub struct RpcImpl {
     config: RpcImplConfiguration,
     pub consensus: SharedConsensusGraph,
@@ -58,7 +54,7 @@ pub struct RpcImpl {
     tx_pool: SharedTransactionPool,
     maybe_txgen: Option<Arc<TransactionGenerator>>,
     maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
-    machine: Arc<Machine>,
+    accounts: Arc<AccountProvider>,
 }
 
 impl RpcImpl {
@@ -67,7 +63,7 @@ impl RpcImpl {
         block_gen: Arc<BlockGenerator>, tx_pool: SharedTransactionPool,
         maybe_txgen: Option<Arc<TransactionGenerator>>,
         maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
-        config: RpcImplConfiguration, machine: Arc<Machine>,
+        config: RpcImplConfiguration, accounts: Arc<AccountProvider>,
     ) -> Self
     {
         RpcImpl {
@@ -78,7 +74,7 @@ impl RpcImpl {
             maybe_txgen,
             maybe_direct_txgen,
             config,
-            machine,
+            accounts,
         }
     }
 
@@ -148,7 +144,7 @@ impl RpcImpl {
         let num = num.unwrap_or(EpochNumber::LatestState);
         let address: H160 = address.into();
         info!(
-            "RPC Request: cfx_getAdmin address={:?} epoch_num={:?}",
+            "RPC Request: cfx_getSponsorInfo address={:?} epoch_num={:?}",
             address, num
         );
 
@@ -307,9 +303,13 @@ impl RpcImpl {
         &self, tx: TransactionWithSignature,
     ) -> RpcResult<RpcH256> {
         if let Call(address) = &tx.transaction.action {
-            if !address.is_valid_address(self.machine.builtins()) {
+            if !address.is_valid_address() {
                 bail!(invalid_params("tx", "Sending transactions to invalid address. The first four bits must be 0x0 (built-in/reserved), 0x1 (user-account), or 0x8 (contract)."));
             }
+        }
+        if self.sync.catch_up_mode() {
+            warn!("Ignore send_transaction request {}. Cannot send transaction when the node is still in catch-up mode.", tx.hash());
+            bail!(request_rejected_in_catch_up_mode(None));
         }
         let (signed_trans, failed_trans) =
             self.tx_pool.insert_new_transactions(vec![tx]);
@@ -365,14 +365,14 @@ impl RpcImpl {
 
         let epoch_height = consensus_graph.best_epoch_number();
         let chain_id = consensus_graph.best_chain_id();
-        let tx =
-            tx.sign_with(epoch_height, chain_id, password)
-                .map_err(|e| {
-                    invalid_params(
-                        "tx",
-                        format!("failed to send transaction: {:?}", e),
-                    )
-                })?;
+        let tx = tx
+            .sign_with(epoch_height, chain_id, password, self.accounts.clone())
+            .map_err(|e| {
+                invalid_params(
+                    "tx",
+                    format!("failed to send transaction: {:?}", e),
+                )
+            })?;
 
         Ok(tx)
     }
@@ -380,7 +380,7 @@ impl RpcImpl {
     fn send_transaction(
         &self, tx: SendTxRequest, password: Option<String>,
     ) -> RpcResult<RpcH256> {
-        info!("RPC Request: send_transaction, tx = {:?}", tx);
+        info!("RPC Request: cfx_sendTransaction, tx = {:?}", tx);
 
         self.prepare_transaction(tx, password)
             .and_then(|tx| self.send_transaction_with_signature(tx))
@@ -717,11 +717,11 @@ impl RpcImpl {
             .expect("downcast should succeed");
 
         info!("RPC Request: cfx_getLogs({:?})", filter);
-        let mut filter: Filter = filter.into();
+        let mut filter: Filter = filter.into_primitive()?;
 
         // If max_limit is set, the value in `filter` will be modified to
         // satisfy this limitation to avoid loading too many blocks
-        // TODO Should the response indicates that the filter is modified?
+        // TODO Should the response indicate that the filter is modified?
         if let Some(max_limit) = self.config.get_logs_filter_max_limit {
             if filter.limit.is_none() || filter.limit.unwrap() > max_limit {
                 filter.limit = Some(max_limit);
@@ -814,9 +814,8 @@ impl RpcImpl {
             ) => executed,
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
                 bail!(call_execution_error(
-                    "Can not estimate: transaction execution failed, \
-                     all gas will be charged"
-                        .into(),
+                    format! {"Can not estimate: transaction execution failed, \
+                     all gas will be charged (execution error: {:?})", e}.into(),
                     format! {"{:?}", e}.into_bytes()
                 ))
             }
@@ -845,6 +844,10 @@ impl RpcImpl {
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed");
         let epoch = epoch.unwrap_or(EpochNumber::LatestState);
+        let storage_limit_u256: U256 = storage_limit.into();
+        if storage_limit_u256 > U256::from(std::u64::MAX) {
+            bail!(JsonRpcError::invalid_params(format!("storage_limit has to be within the range of u64 but {} supplied!", storage_limit)));
+        }
 
         match consensus_graph.check_balance_against_transaction(
             account_addr.into(),
@@ -997,14 +1000,14 @@ impl CfxHandler {
 use crate::common::delegate_convert;
 use cfx_types::address_util::AddressUtil;
 use cfxcore::executive::{ExecutionError, ExecutionOutcome};
-use cfxcore::storage::StateIndex;
+use cfxcore_accounts::AccountProvider;
 
 impl Cfx for CfxHandler {
     delegate! {
         to self.common {
             fn best_block_hash(&self) -> JsonRpcResult<RpcH256>;
             fn block_by_epoch_number(
-                &self, epoch_num: EpochNumber, include_txs: bool) -> JsonRpcResult<RpcBlock>;
+                &self, epoch_num: EpochNumber, include_txs: bool) -> JsonRpcResult<Option<RpcBlock>>;
             fn block_by_hash_with_pivot_assumption(
                 &self, block_hash: RpcH256, pivot_hash: RpcH256, epoch_number: RpcU64)
                 -> JsonRpcResult<RpcBlock>;

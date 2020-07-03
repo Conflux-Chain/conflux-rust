@@ -1,4 +1,4 @@
-name: Conflux 0.6.0
+name: conflux
 about: Conflux client.
 author: The Conflux Team
 
@@ -157,6 +157,11 @@ args:
         help: Sets maximum throttling queue size of egress.
         long: egress-max-throttle
         value_name: MB
+        takes_value: true
+    - get-logs-epoch-batch-size:
+        help: Sets the size of the epoch batches used during log filtering.
+        long: get-logs-epoch-batch-size
+        value_name: SIZE
         takes_value: true
     - light:
         long: light
@@ -553,7 +558,7 @@ subcommands:
                         about: Send a transaction and return its hash
                         args:
                             - rpc-method:
-                                default_value: send_transaction
+                                default_value: cfx_sendTransaction
                                 hidden: true
                             - rpc-args:
                                 multiple: true

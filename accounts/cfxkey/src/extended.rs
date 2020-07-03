@@ -17,7 +17,7 @@
 //! Extended keys
 
 pub use self::derivation::Error as DerivationError;
-use ethereum_types::H256;
+use cfx_types::H256;
 use secret::Secret;
 use Public;
 
@@ -206,7 +206,7 @@ impl ExtendedKeyPair {
 // https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
 mod derivation {
     use super::{Derivation, Label};
-    use ethereum_types::{BigEndianHash, H256, H512, U256, U512};
+    use cfx_types::{BigEndianHash, H256, H512, U256, U512};
     use keccak;
     use math::curve_order;
     use parity_crypto::hmac;
@@ -403,7 +403,7 @@ mod tests {
     use super::{
         derivation, Derivation, ExtendedKeyPair, ExtendedPublic, ExtendedSecret,
     };
-    use ethereum_types::{H128, H256, H512};
+    use cfx_types::{H128, H256, H512};
     use secret::Secret;
     use std::str::FromStr;
 

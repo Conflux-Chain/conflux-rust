@@ -29,7 +29,6 @@ pub fn hexstr_to_h256(hex_str: &str) -> H256 {
 
 pub mod address_util {
     use super::Address;
-    use std::collections::BTreeMap;
 
     pub const TYPE_BITS_BUILTIN: u8 = 0x00;
     pub const TYPE_BITS_CONTRACT: u8 = 0x80;
@@ -51,10 +50,10 @@ pub mod address_util {
         }
 
         #[inline]
-        fn is_valid_address<T>(&self, builtin_map: &BTreeMap<Self, T>) -> bool {
+        fn is_valid_address(&self) -> bool {
             self.is_contract_address()
                 || self.is_user_account_address()
-                || self.is_builtin_address(builtin_map)
+                || self.is_builtin_address()
         }
 
         #[inline]
@@ -68,11 +67,8 @@ pub mod address_util {
         }
 
         #[inline]
-        fn is_builtin_address<T>(
-            &self, builtin_map: &BTreeMap<Self, T>,
-        ) -> bool {
+        fn is_builtin_address(&self) -> bool {
             self.address_type_bits() == TYPE_BITS_BUILTIN
-                && builtin_map.contains_key(self)
         }
 
         #[inline]

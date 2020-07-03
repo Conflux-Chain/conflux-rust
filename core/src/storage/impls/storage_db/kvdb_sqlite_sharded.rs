@@ -10,6 +10,19 @@ pub struct KvdbSqliteSharded<ValueType> {
     __marker_value: PhantomData<ValueType>,
 }
 
+impl<ValueType> MallocSizeOf for KvdbSqliteSharded<ValueType> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let mut size = 0;
+        if let Some(connections) = &self.shards_connections {
+            for connection in &**connections {
+                size += connection.size_of(ops);
+            }
+        }
+        // statements is small so can be ignored
+        size
+    }
+}
+
 impl<ValueType> KvdbSqliteSharded<ValueType> {
     pub fn new(
         shard_connections: Option<Box<[SqliteConnection]>>,
@@ -141,7 +154,9 @@ impl<ValueType> KvdbSqliteSharded<ValueType> {
 
     pub fn open_or_create<P: AsRef<Path>>(
         num_shards: u16, dir: P, statements: Arc<KvdbSqliteStatements>,
-    ) -> Result<(bool, Self)> {
+        unsafe_mode: bool,
+    ) -> Result<(bool, Self)>
+    {
         if dir.as_ref().exists() {
             Ok((
                 true,
@@ -153,7 +168,11 @@ impl<ValueType> KvdbSqliteSharded<ValueType> {
             Ok((
                 false,
                 Self::create_and_open(
-                    num_shards, dir, statements, /* create_table = */ true,
+                    num_shards,
+                    dir,
+                    statements,
+                    /* create_table = */ true,
+                    unsafe_mode,
                 )?,
             ))
         }
@@ -161,7 +180,7 @@ impl<ValueType> KvdbSqliteSharded<ValueType> {
 
     pub fn create_and_open<P: AsRef<Path>>(
         num_shards: u16, dir: P, statements: Arc<KvdbSqliteStatements>,
-        create_table: bool,
+        create_table: bool, unsafe_mode: bool,
     ) -> Result<Self>
     {
         assert_valid_num_shards(num_shards);
@@ -171,6 +190,7 @@ impl<ValueType> KvdbSqliteSharded<ValueType> {
                 Self::db_path(&dir, i),
                 statements.clone(),
                 /* create_table = */ create_table,
+                unsafe_mode,
             )?
             .into_connection()
             // Safe to unwrap since the connection is newly created.
@@ -1019,6 +1039,7 @@ use crate::storage::{
     KvdbSqlite, KvdbSqliteStatements, SqliteConnection,
 };
 use fallible_iterator::FallibleIterator;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use serde::export::PhantomData;
 use sqlite::Statement;
 use std::{

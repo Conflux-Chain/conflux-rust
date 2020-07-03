@@ -277,6 +277,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
                     snapshot_path,
                     SNAPSHOT_DB_STATEMENTS.kvdb_statements.clone(),
                     /* create_table = */ true,
+                    /* unsafe_mode = */ true,
                 )?;
             let mut connections =
                 // Safe to unwrap since the connections are newly created.
@@ -312,7 +313,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         let mut delete_keys_iter =
             self.dumped_delta_kv_delete_keys_iterator()?;
 
-        self.start_mpt_merge_transaction()?;
+        self.start_transaction()?;
         // TODO: what about multi-threading node load?
         let mut mpt_to_modify = self.open_snapshot_mpt_owned()?;
 
@@ -324,7 +325,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             delete_keys_iter.iter_range(&[], None)?,
             set_keys_iter.iter_range(&[], None)?,
         )?;
-        self.commit_mpt_merge_transaction()?;
+        self.commit_transaction()?;
 
         Ok(snapshot_root)
     }
@@ -348,7 +349,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         let mut set_keys_iter = self.dumped_delta_kv_set_keys_iterator()?;
         let mut delete_keys_iter =
             self.dumped_delta_kv_delete_keys_iterator()?;
-        self.start_mpt_merge_transaction()?;
+        self.start_transaction()?;
         // TODO: what about multi-threading node load?
         let mut base_mpt = old_snapshot_db.open_snapshot_mpt_as_owned()?;
         let mut save_as_mpt = self.open_snapshot_mpt_owned()?;
@@ -360,9 +361,27 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             delete_keys_iter.iter_range(&[], None)?,
             set_keys_iter.iter_range(&[], None)?,
         )?;
-        self.commit_mpt_merge_transaction()?;
+        self.commit_transaction()?;
 
         Ok(snapshot_root)
+    }
+
+    fn start_transaction(&mut self) -> Result<()> {
+        if let Some(connections) = self.maybe_db_connections.as_mut() {
+            for connection in connections.iter_mut() {
+                connection.execute("BEGIN IMMEDIATE", SQLITE_NO_PARAM)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn commit_transaction(&mut self) -> Result<()> {
+        if let Some(connections) = self.maybe_db_connections.as_mut() {
+            for connection in connections.iter_mut() {
+                connection.execute("COMMIT", SQLITE_NO_PARAM)?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -439,11 +458,11 @@ impl SnapshotDbSqlite {
         }
 
         // Dump code.
-        self.start_mpt_merge_transaction()?;
+        self.start_transaction()?;
         delta_mpt.iterate(&mut DeltaMptMergeDumperSqlite {
             connections: self.maybe_db_connections.as_mut().unwrap(),
         })?;
-        self.commit_mpt_merge_transaction()?;
+        self.commit_transaction()?;
 
         Ok(())
     }
@@ -489,24 +508,6 @@ impl SnapshotDbSqlite {
                     SQLITE_NO_PARAM,
                 )?
                 .finish_ignore_rows()?;
-        }
-        Ok(())
-    }
-
-    fn start_mpt_merge_transaction(&mut self) -> Result<()> {
-        if let Some(connections) = self.maybe_db_connections.as_mut() {
-            for connection in connections.iter_mut() {
-                connection.execute("BEGIN IMMEDIATE", SQLITE_NO_PARAM)?;
-            }
-        }
-        Ok(())
-    }
-
-    fn commit_mpt_merge_transaction(&mut self) -> Result<()> {
-        if let Some(connections) = self.maybe_db_connections.as_mut() {
-            for connection in connections.iter_mut() {
-                connection.execute("COMMIT", SQLITE_NO_PARAM)?;
-            }
         }
         Ok(())
     }
@@ -562,8 +563,8 @@ impl KvdbSqliteShardedDestructureTrait for DeltaMptDumperDeleteDb<'_> {
     }
 }
 
-impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptMergeDumperSqlite<'a> {
-    fn push(&mut self, x: (Vec<u8>, Box<[u8]>)) -> Result<()> {
+impl<'a> KVInserter<MptKeyValue> for DeltaMptMergeDumperSqlite<'a> {
+    fn push(&mut self, x: MptKeyValue) -> Result<()> {
         // TODO: what about multi-threading put?
         let (mpt_key, value) = x;
         let snapshot_key =
@@ -588,7 +589,7 @@ use crate::storage::{
     impls::{
         delta_mpt::DeltaMptIterator,
         errors::*,
-        merkle_patricia_trie::MptMerger,
+        merkle_patricia_trie::{MptKeyValue, MptMerger},
         storage_db::{
             kvdb_sqlite::KvdbSqliteStatements,
             kvdb_sqlite_sharded::{

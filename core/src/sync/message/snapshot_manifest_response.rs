@@ -6,8 +6,8 @@ use crate::{
     block_data_manager::BlockExecutionResult,
     message::{GetMaybeRequestId, Message, MessageProtocolVersionBound, MsgId},
     sync::{
-        message::{msgid, Context, Handleable},
-        state::{storage::RangedManifest, SnapshotManifestRequest},
+        message::{msgid, Context, Handleable, SnapshotManifestRequest},
+        state::storage::RangedManifest,
         Error, ErrorKind, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
 };

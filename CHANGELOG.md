@@ -14,8 +14,21 @@ contract. When a user account is to be created, the address space is checked.
 - Fix issue in processing snapshot chunk boundary which caused crash. The bug
 was caused by a wrong assumption of the uniqueness of the trie proof key.
 
+- Fix incorrect receipt in refunding code collateral when contract suicides.
+
+- Fix crash when a contract suicides during creation.
+
+- Fix db error handling for EVM create / call.
+
+## Incompatible Changes
+
+- Change StorageValue serialization to reduce space.
+
+- Changed COMMISSION_PRIVILEGE_STORAGE_VALUE.
 
 ## Improvements
+
+- Rename local rpc send_transaction with cfx_sendTransaction.
 
 - Improve the performance of the consensus layer for unstable TreeGraph scenarios. 
 
@@ -71,6 +84,16 @@ element of the vec is fixed length H256.
 or zero if not querying the last block hash.
 
 - Disable reentrancy of contract calling through other contracts. 
+
+- Change the default value of `from_epoch` in RPC `cfx_getLogs` from "earliest" to "latest_checkpoint".
+Now if no `from_epoch` is specified, it will only return logs after the latest checkpoint.
+
+- Improve archive and full node log filtering. Change `filter.to_epoch` default to `"latest_state"`. Limit `filter.block_hashes` to up to 128 items.
+
+- Change internal contracts address to 0x088800...
+
+- Enable overflow-checks for release build, to make sure that underflow is
+impossible.
 
 # 0.5.0
 

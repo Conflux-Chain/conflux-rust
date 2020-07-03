@@ -15,7 +15,7 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::{Error, Public, Secret, SECP256K1};
-use ethereum_types::{BigEndianHash as _, H256, U256};
+use cfx_types::{BigEndianHash as _, H256, U256};
 use secp256k1::{
     constants::{CURVE_ORDER, GENERATOR_X, GENERATOR_Y},
     key,

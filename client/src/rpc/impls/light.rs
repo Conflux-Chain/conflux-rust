@@ -2,9 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::common::RpcImpl as CommonImpl;
 use crate::rpc::{
     error_codes,
+    impls::{common::RpcImpl as CommonImpl, RpcImplConfiguration},
     traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
     types::{
         Account as RpcAccount, BlameInfo, Block as RpcBlock,
@@ -22,6 +22,7 @@ use cfx_types::{H160, H256, U256};
 use cfxcore::{LightQueryService, PeerInfo};
 use delegate::delegate;
 use futures::future::{FutureExt, TryFutureExt};
+use futures01;
 use jsonrpc_core::{BoxFuture, Error as RpcError, Result as RpcResult};
 use network::{
     node_table::{Node, NodeId},
@@ -32,12 +33,27 @@ use rlp::Encodable;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 
 pub struct RpcImpl {
+    // configuration parameters
+    config: RpcImplConfiguration,
+
     // helper API for retrieving verified information from peers
     light: Arc<LightQueryService>,
+
+    accounts: Arc<AccountProvider>,
 }
 
 impl RpcImpl {
-    pub fn new(light: Arc<LightQueryService>) -> Self { RpcImpl { light } }
+    pub fn new(
+        config: RpcImplConfiguration, light: Arc<LightQueryService>,
+        accounts: Arc<AccountProvider>,
+    ) -> Self
+    {
+        RpcImpl {
+            config,
+            light,
+            accounts,
+        }
+    }
 
     fn account(
         &self, address: RpcH160, num: Option<EpochNumber>,
@@ -253,12 +269,26 @@ impl RpcImpl {
     fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>> {
         info!("RPC Request: cfx_getLogs filter={:?}", filter);
 
+        let mut filter = match filter.into_primitive() {
+            Ok(filter) => filter,
+            Err(e) => return Box::new(futures01::future::err(e)),
+        };
+
+        // If max_limit is set, the value in `filter` will be modified to
+        // satisfy this limitation to avoid loading too many blocks
+        // TODO Should the response indicate that the filter is modified?
+        if let Some(max_limit) = self.config.get_logs_filter_max_limit {
+            if filter.limit.is_none() || filter.limit.unwrap() > max_limit {
+                filter.limit = Some(max_limit);
+            }
+        }
+
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
 
         let fut = async move {
             let logs = light
-                .get_logs(filter.into())
+                .get_logs(filter)
                 .await
                 .map_err(RpcError::invalid_params)?;
 
@@ -299,10 +329,11 @@ impl RpcImpl {
     fn send_transaction(
         &self, mut tx: SendTxRequest, password: Option<String>,
     ) -> BoxFuture<RpcH256> {
-        info!("RPC Request: send_transaction tx={:?}", tx);
+        info!("RPC Request: cfx_sendTransaction tx={:?}", tx);
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
+        let accounts = self.accounts.clone();
 
         let fut = async move {
             if tx.nonce.is_none() {
@@ -330,14 +361,14 @@ impl RpcImpl {
             let chain_id = light.get_latest_verifiable_chain_id().map_err(|_| {
                 RpcError::invalid_params(format!("the light client cannot retrieve/verify the latest chain_id."))
             })?;
-            let tx = tx.sign_with(epoch_height, chain_id, password).map_err(
-                |e| {
-                    RpcError::invalid_params(format!(
-                        "failed to send transaction: {:?}",
-                        e
-                    ))
-                },
-            )?;
+            let tx = tx
+                .sign_with(epoch_height, chain_id, password, accounts)
+                .map_err(|e| {
+                RpcError::invalid_params(format!(
+                    "failed to send transaction: {:?}",
+                    e
+                ))
+            })?;
 
             Self::send_tx_helper(light, Bytes::new(tx.rlp_bytes()))
         };
@@ -456,11 +487,13 @@ impl CfxHandler {
 
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
 use crate::common::delegate_convert;
+use cfxcore_accounts::AccountProvider;
+
 impl Cfx for CfxHandler {
     delegate! {
         to self.common {
             fn best_block_hash(&self) -> RpcResult<RpcH256>;
-            fn block_by_epoch_number(&self, epoch_num: EpochNumber, include_txs: bool) -> RpcResult<RpcBlock>;
+            fn block_by_epoch_number(&self, epoch_num: EpochNumber, include_txs: bool) -> RpcResult<Option<RpcBlock>>;
             fn block_by_hash_with_pivot_assumption(&self, block_hash: RpcH256, pivot_hash: RpcH256, epoch_number: RpcU64) -> RpcResult<RpcBlock>;
             fn block_by_hash(&self, hash: RpcH256, include_txs: bool) -> RpcResult<Option<RpcBlock>>;
             fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>>;

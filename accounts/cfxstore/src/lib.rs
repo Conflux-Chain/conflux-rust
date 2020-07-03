@@ -18,8 +18,12 @@
 
 #![warn(missing_docs)]
 
+extern crate cfx_types;
+extern crate cfxkey as _cfxkey;
 extern crate dir;
 extern crate libc;
+extern crate parity_crypto as crypto;
+extern crate parity_wordlist;
 extern crate parking_lot;
 extern crate rand;
 extern crate rustc_hex;
@@ -29,12 +33,6 @@ extern crate smallvec;
 extern crate tempdir;
 extern crate time;
 extern crate tiny_keccak;
-
-extern crate cfxkey as _cfxkey;
-extern crate ethereum_types;
-extern crate parity_crypto as crypto;
-extern crate parity_wordlist;
-
 #[macro_use]
 extern crate log;
 #[macro_use]
@@ -43,17 +41,14 @@ extern crate serde_derive;
 #[cfg(test)]
 #[macro_use]
 extern crate matches;
-extern crate cfx_types;
-
-pub mod accounts_dir;
-pub mod cfxkey;
 
 mod account;
-mod json;
-
+pub mod accounts_dir;
+pub mod cfxkey;
 mod cfxstore;
 mod error;
 mod import;
+mod json;
 mod random;
 mod secret_store;
 

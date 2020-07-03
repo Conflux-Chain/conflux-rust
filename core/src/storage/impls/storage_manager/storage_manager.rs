@@ -40,6 +40,18 @@ pub struct StorageManager {
     storage_conf: StorageConfiguration,
 }
 
+impl MallocSizeOf for StorageManager {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        // TODO: Sqlite for snapshot may also use a significant amount of
+        // memory. We need to fork the crate `sqlite` ourselves to
+        // expose `sqlite3_status` to get the memory usage statistics.
+        let mut size = 0;
+        size += self.delta_mpts_node_memory_manager.size_of(ops);
+        size += self.snapshot_associated_mpts_by_epoch.size_of(ops);
+        size
+    }
+}
+
 /// Struct which makes sure that the delta mpt is properly ref-counted and
 /// released.
 pub struct DeltaDbReleaser {
@@ -107,6 +119,7 @@ impl StorageManager {
         let (_, snapshot_info_db) = KvdbSqlite::open_or_create(
             &storage_conf.path_snapshot_info_db,
             SNAPSHOT_KVDB_STATEMENTS.clone(),
+            false, /* unsafe_mode */
         )?;
 
         let (
@@ -707,6 +720,62 @@ impl StorageManager {
         Ok(())
     }
 
+    pub fn maintain_state_confirmed(
+        &self, consensus_inner: &ConsensusGraphInner, confirmed_height: u64,
+        state_availability_boundary: &RwLock<StateAvailabilityBoundary>,
+    ) -> Result<()>
+    {
+        let additional_state_height_gap =
+            (self.storage_conf.additional_maintained_snapshot_count
+                * self.storage_conf.consensus_param.snapshot_epoch_count)
+                as u64;
+        let maintained_state_height_lower_bound =
+            if confirmed_height > additional_state_height_gap {
+                confirmed_height - additional_state_height_gap
+            } else {
+                0
+            };
+        if maintained_state_height_lower_bound
+            <= state_availability_boundary.read().lower_bound
+        {
+            return Ok(());
+        }
+        let maintained_epoch_id = consensus_inner
+            .get_pivot_hash_from_epoch_number(
+                maintained_state_height_lower_bound,
+            )?;
+        let maintained_state_root = match &*consensus_inner
+            .data_man
+            .get_epoch_execution_commitment(&maintained_epoch_id)
+        {
+            Some(commitment) => &commitment.state_root_with_aux_info,
+            None => return Ok(()),
+        };
+
+        let snapshot_info_removed = self
+            .maintain_snapshots_pivot_chain_confirmed(
+                maintained_state_height_lower_bound,
+                &maintained_epoch_id,
+                maintained_state_root,
+                state_availability_boundary,
+            )?;
+
+        let mut states_to_remove = HashSet::new();
+        for snapshot_info in snapshot_info_removed {
+            for hash in snapshot_info.pivot_chain_parts {
+                states_to_remove.insert(hash);
+            }
+        }
+        for hash in states_to_remove {
+            // FIXME Commitments of non-pivot states are not removed.
+            // Need to check if this will take too much time.
+            consensus_inner
+                .data_man
+                .remove_epoch_execution_commitment_from_db(&hash);
+        }
+        Ok(())
+    }
+
     /// The algorithm figure out which snapshot to remove by simply going
     /// through all SnapshotInfo in one pass in the reverse order such that
     /// the parent snapshot is processed after the children snapshot.
@@ -723,10 +792,11 @@ impl StorageManager {
     ///
     /// Returns the first available state height after the maintenance.
     pub fn maintain_snapshots_pivot_chain_confirmed(
-        &self, confirmed_height: u64, confirmed_epoch_id: &EpochId,
-        confirmed_state_root: &StateRootWithAuxInfo,
+        &self, maintained_state_height_lower_bound: u64,
+        maintained_epoch_id: &EpochId,
+        maintained_state_root: &StateRootWithAuxInfo,
         state_availability_boundary: &RwLock<StateAvailabilityBoundary>,
-    ) -> Result<()>
+    ) -> Result<Vec<SnapshotInfo>>
     {
         // Update the confirmed epoch id. Skip remaining actions when the
         // confirmed snapshottable epoch id doesn't change
@@ -734,20 +804,20 @@ impl StorageManager {
             let mut last_confirmed_snapshottable_id_locked =
                 self.last_confirmed_snapshottable_epoch_id.lock();
             if last_confirmed_snapshottable_id_locked.is_some() {
-                if confirmed_state_root.aux_info.intermediate_epoch_id.eq(
+                if maintained_state_root.aux_info.intermediate_epoch_id.eq(
                     last_confirmed_snapshottable_id_locked.as_ref().unwrap(),
                 ) {
-                    return Ok(());
+                    return Ok(vec![]);
                 }
             }
             *last_confirmed_snapshottable_id_locked = Some(
-                confirmed_state_root.aux_info.intermediate_epoch_id.clone(),
+                maintained_state_root.aux_info.intermediate_epoch_id.clone(),
             );
         }
 
-        let confirmed_intermediate_height = confirmed_height
+        let confirmed_intermediate_height = maintained_state_height_lower_bound
             - StateIndex::height_to_delta_height(
-                confirmed_height,
+                maintained_state_height_lower_bound,
                 self.get_snapshot_epoch_count(),
             ) as u64;
 
@@ -770,10 +840,10 @@ impl StorageManager {
              confirmed_epoch_id {:?}, confirmed_intermediate_id {:?}, \
              confirmed_snapshot_id {:?}, confirmed_intermediate_height {}, \
              confirmed_snapshot_height {}, first_available_state_height {}",
-            confirmed_height,
-            confirmed_epoch_id,
-            confirmed_state_root.aux_info.intermediate_epoch_id,
-            confirmed_state_root.aux_info.snapshot_epoch_id,
+            maintained_state_height_lower_bound,
+            maintained_epoch_id,
+            maintained_state_root.aux_info.intermediate_epoch_id,
+            maintained_state_root.aux_info.snapshot_epoch_id,
             confirmed_intermediate_height,
             confirmed_snapshot_height,
             first_available_state_height,
@@ -794,7 +864,7 @@ impl StorageManager {
                     // Remove all non-pivot Snapshot at
                     // confirmed_snapshot_height
                     if snapshot_epoch_id
-                        .eq(&confirmed_state_root.aux_info.snapshot_epoch_id)
+                        .eq(&maintained_state_root.aux_info.snapshot_epoch_id)
                     {
                         prev_snapshot_epoch_id =
                             &snapshot_info.parent_snapshot_epoch_id;
@@ -814,7 +884,9 @@ impl StorageManager {
                         non_pivot_snapshots_to_remove
                             .insert(snapshot_epoch_id.clone());
                     }
-                } else if snapshot_info.height < confirmed_height {
+                } else if snapshot_info.height
+                    < maintained_state_height_lower_bound
+                {
                     // There can be at most 1 snapshot between the snapshot at
                     // confirmed_snapshot_height and confirmed_height.
                     //
@@ -824,7 +896,7 @@ impl StorageManager {
                     if snapshot_info
                         .get_epoch_id_at_height(confirmed_intermediate_height)
                         != Some(
-                            &confirmed_state_root
+                            &maintained_state_root
                                 .aux_info
                                 .intermediate_epoch_id,
                         )
@@ -851,16 +923,18 @@ impl StorageManager {
             // Check snapshots which has height >= confirmed_height
             for snapshot_info in &*current_snapshots {
                 // Check for non-pivot snapshot to remove.
-                match snapshot_info.get_epoch_id_at_height(confirmed_height) {
+                match snapshot_info
+                    .get_epoch_id_at_height(maintained_state_height_lower_bound)
+                {
                     Some(path_epoch_id) => {
                         // Check if the snapshot is within
                         // confirmed_epoch's
                         // subtree.
-                        if path_epoch_id != confirmed_epoch_id {
+                        if path_epoch_id != maintained_epoch_id {
                             debug!(
                                 "remove non-subtree snapshot {:?}, got {:?}, expected {:?}",
                                 snapshot_info.get_snapshot_epoch_id(),
-                                path_epoch_id, confirmed_epoch_id,
+                                path_epoch_id, maintained_epoch_id,
                             );
                             non_pivot_snapshots_to_remove.insert(
                                 snapshot_info.get_snapshot_epoch_id().clone(),
@@ -899,21 +973,23 @@ impl StorageManager {
             if in_progress_snapshot_info.height < confirmed_intermediate_height
             {
                 to_cancel = true;
-            } else if in_progress_snapshot_info.height < confirmed_height {
+            } else if in_progress_snapshot_info.height
+                < maintained_state_height_lower_bound
+            {
                 if in_progress_snapshot_info
                     .get_epoch_id_at_height(confirmed_intermediate_height)
                     != Some(
-                        &confirmed_state_root.aux_info.intermediate_epoch_id,
+                        &maintained_state_root.aux_info.intermediate_epoch_id,
                     )
                 {
                     to_cancel = true;
                 }
             } else {
                 match in_progress_snapshot_info
-                    .get_epoch_id_at_height(confirmed_height)
+                    .get_epoch_id_at_height(maintained_state_height_lower_bound)
                 {
                     Some(path_epoch_id) => {
-                        if path_epoch_id != confirmed_epoch_id {
+                        if path_epoch_id != maintained_epoch_id {
                             to_cancel = true;
                         }
                     }
@@ -933,6 +1009,7 @@ impl StorageManager {
             }
         }
 
+        let mut snapshot_info_removed = Vec::new();
         if !non_pivot_snapshots_to_remove.is_empty()
             || !old_pivot_snapshots_to_remove.is_empty()
         {
@@ -965,11 +1042,17 @@ impl StorageManager {
             current_snapshots_locked.retain(|x| {
                 !snapshots_to_remove.contains(x.get_snapshot_epoch_id())
             });
-            self.snapshot_info_map_by_epoch.write().retain(
-                |snapshot_epoch_id, _| {
-                    !snapshots_to_remove.contains(snapshot_epoch_id)
-                },
-            );
+            {
+                let mut snapshot_info_map =
+                    self.snapshot_info_map_by_epoch.write();
+                for snapshot_epoch_id in &snapshots_to_remove {
+                    if let Some(snapshot_info) =
+                        snapshot_info_map.remove(snapshot_epoch_id)
+                    {
+                        snapshot_info_removed.push(snapshot_info);
+                    }
+                }
+            }
             {
                 let snapshot_associated_mpts_by_epoch_locked =
                     &mut *self.snapshot_associated_mpts_by_epoch.write();
@@ -998,7 +1081,7 @@ impl StorageManager {
         }
         */
 
-        Ok(())
+        Ok(snapshot_info_removed)
     }
 
     pub fn get_snapshot_info_at_epoch(
@@ -1243,7 +1326,6 @@ use super::super::{
             snapshot_db_manager::SnapshotDbManagerTrait,
         },
         utils::arc_ext::*,
-        StateRootWithAuxInfo,
     },
     delta_mpt::*,
     errors::*,
@@ -1251,6 +1333,7 @@ use super::super::{
 };
 use crate::{
     block_data_manager::StateAvailabilityBoundary,
+    consensus::ConsensusGraphInner,
     storage::{
         impls::{
             delta_mpt::{
@@ -1274,10 +1357,12 @@ use crate::{
         },
         storage_dir,
         utils::guarded_value::GuardedValue,
-        KeyValueDbTrait, KvdbSqlite, StorageConfiguration,
+        KeyValueDbTrait, KvdbSqlite, StateRootWithAuxInfo,
+        StorageConfiguration,
     },
 };
 use fallible_iterator::FallibleIterator;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Mutex, RwLock, RwLockReadGuard};
 use primitives::{EpochId, MERKLE_NULL_NODE, NULL_EPOCH};
 use rlp::{Decodable, DecoderError, Encodable, Rlp};

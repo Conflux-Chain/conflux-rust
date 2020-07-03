@@ -10,6 +10,12 @@ pub struct KvdbSqlite<ValueType> {
     __marker_value: PhantomData<ValueType>,
 }
 
+impl<ValueType> MallocSizeOf for KvdbSqlite<ValueType> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.connection.size_of(ops)
+    }
+}
+
 pub struct KvdbSqliteBorrowShared<'db, ValueType> {
     connection: Option<*const SqliteConnection>,
     statements: *const KvdbSqliteStatements,
@@ -223,7 +229,7 @@ impl<ValueType> KvdbSqlite<ValueType> {
     }
 
     pub fn open_or_create<P: AsRef<Path>>(
-        path: P, statements: Arc<KvdbSqliteStatements>,
+        path: P, statements: Arc<KvdbSqliteStatements>, unsafe_mode: bool,
     ) -> Result<(bool, Self)> {
         if path.as_ref().exists() {
             Ok((true, Self::open(path, /* readonly = */ false, statements)?))
@@ -231,7 +237,10 @@ impl<ValueType> KvdbSqlite<ValueType> {
             Ok((
                 false,
                 Self::create_and_open(
-                    path, statements, /* create_table = */ true,
+                    path,
+                    statements,
+                    /* create_table = */ true,
+                    unsafe_mode,
                 )?,
             ))
         }
@@ -239,11 +248,14 @@ impl<ValueType> KvdbSqlite<ValueType> {
 
     pub fn create_and_open<P: AsRef<Path>>(
         path: P, statements: Arc<KvdbSqliteStatements>, create_table: bool,
-    ) -> Result<Self> {
+        unsafe_mode: bool,
+    ) -> Result<Self>
+    {
         let create_result = (|statements, path| -> Result<SqliteConnection> {
             let mut connection = SqliteConnection::create_and_open(
                 path,
                 SqliteConnection::default_open_flags(),
+                unsafe_mode,
             )?;
             if create_table {
                 Self::create_table(&mut connection, statements)?
@@ -1222,6 +1234,7 @@ use super::{
     sqlite::*,
 };
 use crate::test_context::random_crash_if_enabled;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use sqlite::{Connection, Statement};
 use std::{
     any::Any,

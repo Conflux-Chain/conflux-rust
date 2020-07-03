@@ -415,7 +415,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
     pub fn delete_all(
         mut self, key: KeyPart, key_remaining: KeyPart,
     ) -> Result<(
-        Option<Vec<(Vec<u8>, Box<[u8]>)>>,
+        Option<Vec<MptKeyValue>>,
         bool,
         Option<NodeRefDeltaMptCompact>,
     )> {
@@ -568,7 +568,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
     /// return all key/value pairs given the prefix
     pub fn traversal(
         mut self, key: KeyPart, key_remaining: KeyPart,
-    ) -> Result<Option<Vec<(Vec<u8>, Box<[u8]>)>>> {
+    ) -> Result<Option<Vec<MptKeyValue>>> {
         let node_memory_manager = self.node_memory_manager();
         let allocator = node_memory_manager.get_allocator();
         let mut node_cow = self.root.take();

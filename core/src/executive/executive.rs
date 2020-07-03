@@ -176,7 +176,7 @@ impl<'a> CallCreateExecutive<'a> {
         } else if let Some(_) =
             internal_contract_map.contract(&params.code_address)
         {
-            info!(
+            debug!(
                 "CallInternalContract: address={:?} data={:?}",
                 params.code_address, params.data
             );
@@ -330,6 +330,9 @@ impl<'a> CallCreateExecutive<'a> {
     ) -> vm::Result<()>
     {
         if let ActionValue::Transfer(val) = params.value {
+            // It is possible to first send money to a pre-calculated
+            // contract address.
+            let prev_balance = state.balance(&params.address)?;
             state.sub_balance(
                 &params.sender,
                 &val,
@@ -338,7 +341,7 @@ impl<'a> CallCreateExecutive<'a> {
             state.new_contract_with_admin(
                 &params.address,
                 &params.original_sender,
-                val,
+                val.saturating_add(prev_balance),
                 state.contract_start_nonce(),
             )?;
         } else {
@@ -354,10 +357,10 @@ impl<'a> CallCreateExecutive<'a> {
     }
 
     fn enact_result(
-        result: &vm::Result<FinalizationResult>, state: &mut State,
+        result: vm::Result<FinalizationResult>, state: &mut State,
         substate: &mut Substate, mut unconfirmed_substate: Substate,
         sender: &Address, storage_limit: &U256, is_bottom_ex: bool,
-    ) -> CollateralCheckResult
+    ) -> vm::Result<FinalizationResult>
     {
         substate.pop_callstack_contract(&mut unconfirmed_substate);
         match result {
@@ -369,6 +372,7 @@ impl<'a> CallCreateExecutive<'a> {
             | Err(vm::Error::InternalContract { .. })
             | Err(vm::Error::Wasm { .. })
             | Err(vm::Error::OutOfStack { .. })
+            | Err(vm::Error::InvalidSubEntry)
             | Err(vm::Error::SubStackUnderflow { .. })
             | Err(vm::Error::OutOfSubStack { .. })
             | Err(vm::Error::ExceedStorageLimit)
@@ -380,16 +384,15 @@ impl<'a> CallCreateExecutive<'a> {
                 apply_state: false, ..
             }) => {
                 state.revert_to_checkpoint();
-                CollateralCheckResult::Valid
+                result
             }
             Err(vm::Error::Reentrancy) => {
                 assert!(unconfirmed_substate.reentrancy_encountered);
                 state.discard_checkpoint();
-                CollateralCheckResult::Valid
+                result
             }
-            Err(vm::Error::StateDbError(e)) => {
-                panic!("db error occurred during execution, {}", e);
-            }
+            // The whole epoch execution fails. No need to revert state.
+            Err(vm::Error::StateDbError(_)) => result,
             Ok(_) => {
                 let check_result = if is_bottom_ex {
                     state.check_collateral_for_storage_finally(
@@ -399,25 +402,29 @@ impl<'a> CallCreateExecutive<'a> {
                     )
                 } else {
                     state.checkout_ownership_changed(&mut unconfirmed_substate)
-                };
+                }?;
                 match check_result {
-                    Ok(CollateralCheckResult::ExceedStorageLimit {
-                        ..
-                    }) => {
+                    CollateralCheckResult::ExceedStorageLimit { .. } => {
                         state.revert_to_checkpoint();
+                        Err(vm::Error::ExceedStorageLimit)
                     }
-                    Ok(CollateralCheckResult::NotEnoughBalance { .. }) => {
+                    CollateralCheckResult::NotEnoughBalance {
+                        required,
+                        got,
+                    } => {
                         state.revert_to_checkpoint();
+                        Err(vm::Error::NotEnoughBalanceForStorage {
+                            required,
+                            got,
+                        })
                     }
-                    Ok(CollateralCheckResult::Valid) => {
+                    CollateralCheckResult::Valid => {
                         state.discard_checkpoint();
                         substate.accrue(unconfirmed_substate);
-                    }
-                    Err(_) => {
-                        panic!("db error occurred during execution");
+
+                        result
                     }
                 }
-                check_result.unwrap()
             }
         }
     }
@@ -575,6 +582,7 @@ impl<'a> CallCreateExecutive<'a> {
                     } else {
                         Ok(())
                     };
+                    debug!("Internal Call Result: {:?}", result);
                     if let Err(e) = result {
                         state.revert_to_checkpoint();
                         Err(e.into())
@@ -582,7 +590,7 @@ impl<'a> CallCreateExecutive<'a> {
                         let cres = if depth == 0 {
                             state.check_collateral_for_storage_finally(
                                 &params.original_sender,
-                                &params.storage_limit,
+                                &params.storage_limit_in_drip,
                                 &mut unconfirmed_substate,
                             )
                         } else {
@@ -716,34 +724,25 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                match Self::enact_result(
-                    &res,
+                Ok(Self::enact_result(
+                    res,
                     state,
                     substate,
                     unconfirmed_substate,
                     &sender,
                     &storage_limit,
                     self.depth == 0,
-                ) {
-                    CollateralCheckResult::Valid => Ok(res),
-                    CollateralCheckResult::ExceedStorageLimit { .. } => {
-                        Ok(Err(vm::Error::ExceedStorageLimit))
-                    }
-                    CollateralCheckResult::NotEnoughBalance {
-                        required,
-                        got,
-                    } => Ok(Err(vm::Error::NotEnoughBalanceForStorage {
-                        required,
-                        got,
-                    })),
-                }
+                ))
             }
 
             CallCreateExecutiveKind::ExecCreate(
                 params,
                 mut unconfirmed_substate,
             ) => {
-                debug!("CallCreateExecutiveKind::ExecCreate");
+                debug!(
+                    "CallCreateExecutiveKind::ExecCreate: contract_addr = {:?}",
+                    params.address
+                );
                 assert!(self.is_create);
 
                 {
@@ -823,27 +822,15 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                match Self::enact_result(
-                    &res,
+                Ok(Self::enact_result(
+                    res,
                     state,
                     substate,
                     unconfirmed_substate,
                     &sender,
                     &storage_limit,
                     self.depth == 0,
-                ) {
-                    CollateralCheckResult::Valid => Ok(res),
-                    CollateralCheckResult::ExceedStorageLimit { .. } => {
-                        Ok(Err(vm::Error::ExceedStorageLimit))
-                    }
-                    CollateralCheckResult::NotEnoughBalance {
-                        required,
-                        got,
-                    } => Ok(Err(vm::Error::NotEnoughBalanceForStorage {
-                        required,
-                        got,
-                    })),
-                }
+                ))
             }
 
             CallCreateExecutiveKind::ResumeCall(..)
@@ -916,27 +903,15 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                match Self::enact_result(
-                    &res,
+                Ok(Self::enact_result(
+                    res,
                     state,
                     substate,
                     unconfirmed_substate,
                     &sender,
                     &storage_limit,
                     self.depth == 0,
-                ) {
-                    CollateralCheckResult::Valid => Ok(res),
-                    CollateralCheckResult::ExceedStorageLimit { .. } => {
-                        Ok(Err(vm::Error::ExceedStorageLimit))
-                    }
-                    CollateralCheckResult::NotEnoughBalance {
-                        required,
-                        got,
-                    } => Ok(Err(vm::Error::NotEnoughBalanceForStorage {
-                        required,
-                        got,
-                    })),
-                }
+                ))
             }
             CallCreateExecutiveKind::ResumeCreate(..) => {
                 panic!("Resumable as create, but called resume_call")
@@ -1014,27 +989,15 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                match Self::enact_result(
-                    &res,
+                Ok(Self::enact_result(
+                    res,
                     state,
                     substate,
                     unconfirmed_substate,
                     &sender,
                     &storage_limit,
                     self.depth == 0,
-                ) {
-                    CollateralCheckResult::Valid => Ok(res),
-                    CollateralCheckResult::ExceedStorageLimit { .. } => {
-                        Ok(Err(vm::Error::ExceedStorageLimit))
-                    }
-                    CollateralCheckResult::NotEnoughBalance {
-                        required,
-                        got,
-                    } => Ok(Err(vm::Error::NotEnoughBalanceForStorage {
-                        required,
-                        got,
-                    })),
-                }
+                ))
             }
             CallCreateExecutiveKind::ResumeCall(..) => {
                 panic!("Resumable as call, but called resume_create")
@@ -1408,7 +1371,7 @@ impl<'a> Executive<'a> {
         let mut storage_sponsored = false;
         match tx.action {
             Action::Call(ref address) => {
-                if self.state.is_contract(address) {
+                if address.is_contract_address() {
                     code_address = *address;
                     if self
                         .state
@@ -1445,11 +1408,7 @@ impl<'a> Executive<'a> {
         }
 
         let tx_storage_limit_in_drip =
-            if tx.storage_limit >= U256::from(std::u64::MAX) {
-                U256::from(std::u64::MAX) * *COLLATERAL_PER_BYTE
-            } else {
-                tx.storage_limit * *COLLATERAL_PER_BYTE
-            };
+            U256::from(tx.storage_limit) * *COLLATERAL_PER_BYTE;
         let storage_sponsor_balance = if storage_sponsored {
             self.state.sponsor_balance_for_collateral(&code_address)?
         } else {
@@ -1568,7 +1527,12 @@ impl<'a> Executive<'a> {
                     &tx.data,
                 );
 
-                if self.state.is_contract(&new_address) {
+                // For a contract address already with code, we do not allow
+                // overlap the address. This should generally
+                // not happen. Unless we enable account dust in
+                // future. We add this check just in case it
+                // helps in future.
+                if self.state.is_contract_with_code(&new_address) {
                     return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                         ExecutionError::ContractAddressConflict,
                         Executed::execution_error_fully_charged(tx),
@@ -1589,7 +1553,7 @@ impl<'a> Executive<'a> {
                     data: None,
                     call_type: CallType::None,
                     params_type: vm::ParamsType::Embedded,
-                    storage_limit: total_storage_limit,
+                    storage_limit_in_drip: total_storage_limit,
                 };
                 let res = self.create(params, &mut substate);
                 let out = match &res {
@@ -1613,7 +1577,7 @@ impl<'a> Executive<'a> {
                     data: Some(tx.data.clone()),
                     call_type: CallType::Call,
                     params_type: vm::ParamsType::Separate,
-                    storage_limit: total_storage_limit,
+                    storage_limit_in_drip: total_storage_limit,
                 };
 
                 let res = self.call(params, &mut substate);
@@ -1707,7 +1671,7 @@ impl<'a> Executive<'a> {
         //        )?;
 
         match result {
-            Err(vm::Error::StateDbError(e)) => bail!(e),
+            Err(vm::Error::StateDbError(e)) => bail!(e.0),
             Err(exception) => Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(exception),
                 Executed::execution_error_fully_charged(tx),

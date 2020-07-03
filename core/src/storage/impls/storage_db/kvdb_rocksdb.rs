@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+#[derive(MallocSizeOfDerive)]
 pub struct KvdbRocksdb {
     pub kvdb: Arc<Database>,
     pub col: u32,
@@ -32,6 +33,7 @@ impl KeyValueDbTrait for KvdbRocksdb {
         random_crash_if_enabled("rocksdb delete");
         let mut transaction = self.kvdb.transaction();
         transaction.delete(self.col, key);
+        self.kvdb.write(transaction)?;
         Ok(None)
     }
 
@@ -140,4 +142,5 @@ use super::super::{
 };
 use kvdb::DBTransaction;
 use kvdb_rocksdb::Database;
+use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
 use std::{any::Any, sync::Arc};

@@ -85,6 +85,18 @@ pub struct MultiVersionMerklePatriciaTrie {
     parent_epoch_by_epoch: RwLock<HashMap<EpochId, EpochId>>,
 }
 
+impl MallocSizeOf for MultiVersionMerklePatriciaTrie {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let mut size = 0;
+        size += self.root_node_by_epoch.size_of(ops);
+        size += self.root_node_by_merkle_root.size_of(ops);
+        size += self.node_memory_manager.size_of(ops);
+        size += self.db.size_of(ops);
+        size += self.parent_epoch_by_epoch.size_of(ops);
+        size
+    }
+}
+
 impl MultiVersionMerklePatriciaTrie {
     pub fn new(
         kvdb: Arc<dyn DeltaDbTrait + Send + Sync>, snapshot_epoch_id: EpochId,
@@ -413,6 +425,7 @@ use crate::storage::{
     },
 };
 use cfx_types::hexstr_to_h256;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE};
 use std::{any::Any, borrow::BorrowMut, collections::HashMap, sync::Arc};

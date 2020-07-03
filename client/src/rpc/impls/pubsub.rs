@@ -434,13 +434,18 @@ impl PubSub for PubSubClient {
                 return;
             }
             (pubsub::Kind::Logs, Some(pubsub::Params::Logs(filter))) => {
-                let id = self
-                    .logs_subscribers
-                    .write()
-                    .push(subscriber, filter.into());
+                match filter.into_primitive() {
+                    Err(e) => e,
+                    Ok(filter) => {
+                        let id = self
+                            .logs_subscribers
+                            .write()
+                            .push(subscriber, filter);
 
-                self.start_logs_loop(id);
-                return;
+                        self.start_logs_loop(id);
+                        return;
+                    }
+                }
             }
             (pubsub::Kind::Logs, _) => error_codes::invalid_params(
                 "logs",

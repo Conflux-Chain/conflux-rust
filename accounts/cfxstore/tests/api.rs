@@ -14,18 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+extern crate cfx_types;
 extern crate cfxstore;
-extern crate ethereum_types;
 extern crate rand;
 
 mod util;
 
+use cfx_types::Address;
 use cfxstore::{
     accounts_dir::RootDiskDirectory,
     cfxkey::{verify_address, Generator, KeyPair, Random, Secret},
     CfxStore, SecretVaultRef, SimpleSecretStore, StoreAccountRef,
 };
-use ethereum_types::Address;
 use std::str::FromStr;
 use util::TransientDir;
 

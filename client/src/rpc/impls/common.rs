@@ -29,8 +29,6 @@ use network::{
     NetworkService, SessionDetails, UpdateNodeOperation,
 };
 
-use crate::accounts::{account_provider, keys_path};
-
 use crate::rpc::types::{
     Block as RpcBlock, BlockHashOrEpochNumber, Bytes, EpochNumber,
     Status as RpcStatus, Transaction as RpcTransaction, H160 as RpcH160,
@@ -73,14 +71,9 @@ impl RpcImpl {
     pub fn new(
         exit: Arc<(Mutex<bool>, Condvar)>, consensus: SharedConsensusGraph,
         network: Arc<NetworkService>, tx_pool: SharedTransactionPool,
+        accounts: Arc<AccountProvider>,
     ) -> Self
     {
-        let accounts = Arc::new(
-            account_provider(Some(keys_path()), None)
-                .ok()
-                .expect("failed to initialize account provider"),
-        );
-
         let data_man = consensus.get_data_manager().clone();
 
         RpcImpl {
@@ -132,7 +125,7 @@ impl RpcImpl {
 
     pub fn block_by_epoch_number(
         &self, epoch_num: EpochNumber, include_txs: bool,
-    ) -> RpcResult<RpcBlock> {
+    ) -> RpcResult<Option<RpcBlock>> {
         let consensus_graph = self
             .consensus
             .as_any()
@@ -149,14 +142,12 @@ impl RpcImpl {
             .get_pivot_hash_from_epoch_number(epoch_height)
             .map_err(RpcError::invalid_params)?;
 
-        if let Some(block) = self
+        let maybe_block = self
             .data_man
             .block_by_hash(&pivot_hash, false /* update_cache */)
-        {
-            Ok(RpcBlock::new(&*block, inner, &self.data_man, include_txs))
-        } else {
-            Err(RpcError::internal_error())
-        }
+            .map(|b| RpcBlock::new(&*b, inner, &self.data_man, include_txs));
+
+        Ok(maybe_block)
     }
 
     pub fn confirmation_risk_by_hash(

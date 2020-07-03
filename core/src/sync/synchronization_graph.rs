@@ -245,6 +245,13 @@ impl SynchronizationGraphInner {
         let max_num_of_cleared_blocks = 2;
         let mut num_cleared = 0;
         let era_genesis = self.get_genesis_in_current_era();
+        let genesis_seq_num = self
+            .data_man
+            .local_block_info_by_hash(
+                &self.data_man.get_cur_consensus_era_genesis_hash(),
+            )
+            .expect("local_block_info for genesis must exist")
+            .get_seq_num();
         let mut era_genesis_in_frontier = false;
 
         while let Some(index) = self.old_era_blocks_frontier.pop_front() {
@@ -261,7 +268,7 @@ impl SynchronizationGraphInner {
             let hash = self.arena[index].block_header.hash();
             assert!(self.arena[index].parent == NULL);
 
-            if self.data_man.local_block_info_by_hash(&hash).is_none() {
+            if !self.is_graph_ready_in_db(&hash, genesis_seq_num) {
                 // This block has not been processed in consensus. Clearing it
                 // now may make its referrers not block-graph-ready.
                 // See https://github.com/Conflux-Chain/conflux-rust/issues/1426.
@@ -1236,12 +1243,6 @@ impl SynchronizationGraph {
                 self.data_man
                     .remove_block_result(&hash, true /* remove_db */);
             }
-            // All nodes will not maintain old era states, so related data can
-            // be removed safely. The in-memory data is already
-            // removed in `make_checkpoint`.
-            // TODO Only call remove for executed epochs.
-            self.data_man
-                .remove_epoch_execution_commitment_from_db(&hash);
             self.data_man.remove_epoch_execution_context_from_db(&hash);
             num_of_blocks_to_remove -= 1;
             if num_of_blocks_to_remove == 0 {
@@ -1282,7 +1283,31 @@ impl SynchronizationGraph {
         );
 
         // Get terminals stored in db.
-        let terminals_opt = self.data_man.terminals_from_db();
+        let terminals_opt = if header_only {
+            // Recover from both the header terminal and body terminal.
+            // If a full node crashes in the header sync phase, the header
+            // terminal should be further than the body terminal.
+            // If it crashes after entering NormalSyncPhase, the body terminal
+            // should be further than the header terminal.
+            let mut terminals = Vec::new();
+            if let Some(header_terminals) =
+                self.data_man.header_terminals_from_db()
+            {
+                terminals.extend(header_terminals);
+            }
+            if let Some(block_terminals) =
+                self.data_man.block_terminals_from_db()
+            {
+                terminals.extend(block_terminals);
+            }
+            if terminals.is_empty() {
+                None
+            } else {
+                Some(terminals)
+            }
+        } else {
+            self.data_man.block_terminals_from_db()
+        };
         if terminals_opt.is_none() {
             return;
         }
@@ -1299,8 +1324,11 @@ impl SynchronizationGraph {
         let mut queue = VecDeque::new();
         let mut visited_blocks: HashSet<H256> = HashSet::new();
         for terminal in terminals {
-            queue.push_back(terminal);
-            visited_blocks.insert(terminal);
+            // header terminals and block terminals may contain the same hash
+            if !visited_blocks.contains(&terminal) {
+                queue.push_back(terminal);
+                visited_blocks.insert(terminal);
+            }
         }
 
         // Remember the hashes of blocks that belong to the current genesis
@@ -1329,46 +1357,50 @@ impl SynchronizationGraph {
                 }
             }
 
-            if let Some(block_header_arc) =
-                self.data_man.block_header_by_hash(&hash)
-            {
-                let mut block_header = block_header_arc.as_ref().clone();
-                // Only construct synchronization graph if is not header_only.
-                // Construct both sync and consensus graph if is header_only.
-                let (insert_result, _) = self.insert_block_header(
-                    &mut block_header,
-                    true,        /* need_to_verify */
-                    false,       /* bench_mode */
-                    header_only, /* insert_to_consensus */
-                    false,       /* persistent */
-                );
-                assert!(!insert_result.is_invalid());
-
-                let parent = block_header.parent_hash().clone();
-                let referees = block_header.referee_hashes().clone();
-
-                // Construct consensus graph if is not header_only.
-                if !header_only {
-                    if let Some(block) =
-                        self.data_man.block_by_hash(&hash, false)
-                    {
-                        let result = self.insert_block(
+            // Insert headers or full blocks depending on our phase.
+            // Note that if we have headers in db for recover block phase, we
+            // will not insert the headers, so the blocks can be
+            // retrieved later.
+            let get_and_insert = |hash| {
+                if header_only {
+                    self.data_man.block_header_by_hash(hash).map(|header| {
+                        self.insert_block_header(
+                            &mut header.as_ref().clone(),
+                            true,  /* need_to_verify */
+                            false, /* bench_mode */
+                            true,  /* insert_to_consensus */
+                            false, /* persistent */
+                        );
+                        header
+                    })
+                } else {
+                    self.data_man.block_by_hash(hash, false).map(|block| {
+                        let mut header = block.block_header.clone();
+                        self.insert_block_header(
+                            &mut header,
+                            true,  /* need_to_verify */
+                            false, /* bench_mode */
+                            false, /* insert_to_consensus */
+                            false, /* persistent */
+                        );
+                        self.insert_block(
                             block.as_ref().clone(),
                             true,  /* need_to_verify */
                             false, /* persistent */
                             true,  /* recover_from_db */
                         );
-                        assert!(result.is_valid());
-                    } else {
-                        missed_hashes.insert(hash);
-                    }
+                        Arc::new(header)
+                    })
                 }
+            };
 
+            if let Some(block_header) = get_and_insert(&hash) {
+                let parent = block_header.parent_hash().clone();
+                let referees = block_header.referee_hashes().clone();
                 if !visited_blocks.contains(&parent) {
                     queue.push_back(parent);
                     visited_blocks.insert(parent);
                 }
-
                 for referee in referees {
                     if !visited_blocks.contains(&referee) {
                         queue.push_back(referee);
@@ -1580,6 +1612,7 @@ impl SynchronizationGraph {
     ) -> (BlockHeaderInsertionResult, Vec<H256>)
     {
         let _timer = MeterTimer::time_func(SYNC_INSERT_HEADER.as_ref());
+        self.statistics.inc_sync_graph_inserted_header_count();
         let inner = &mut *self.inner.write();
         let hash = header.hash();
 
@@ -1591,7 +1624,7 @@ impl SynchronizationGraph {
         if let Some(info) = local_info_opt {
             // If the block is ordered before current era genesis or it has
             // already entered consensus graph in this run, we do not need to
-            // process it. And it these two cases, the block is considered
+            // process it. And in these two cases, the block is considered
             // valid.
             let already_processed = info.get_seq_num()
                 < self.consensus.current_era_genesis_seq_num()
@@ -1603,7 +1636,7 @@ impl SynchronizationGraph {
                     VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(header);
                 }
                 return (
-                    BlockHeaderInsertionResult::AlreadyProcessed,
+                    BlockHeaderInsertionResult::AlreadyProcessedInConsensus,
                     Vec::new(),
                 );
             }
@@ -1615,7 +1648,10 @@ impl SynchronizationGraph {
                 // a part of block later
                 VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(header);
             }
-            return (BlockHeaderInsertionResult::AlreadyProcessed, Vec::new());
+            return (
+                BlockHeaderInsertionResult::AlreadyProcessedInSync,
+                Vec::new(),
+            );
         }
 
         // skip check for consortium currently
@@ -1838,10 +1874,6 @@ impl SynchronizationGraph {
 
         let inner = &mut *self.inner.write();
 
-        if self.data_man.verified_invalid(&hash).0 {
-            return BlockInsertionResult::Invalid;
-        }
-
         let contains_block =
             if let Some(index) = inner.hash_to_arena_indices.get(&hash) {
                 inner.arena[*index].block_ready
@@ -1854,6 +1886,10 @@ impl SynchronizationGraph {
         if contains_block {
             return BlockInsertionResult::AlreadyProcessed;
         }
+
+        // We only insert the body after a valid header is inserted, so this has
+        // been checked when we insert the header.
+        debug_assert!(!self.data_man.verified_invalid(&hash).0);
 
         self.statistics.inc_sync_graph_inserted_block_count();
 
@@ -2148,8 +2184,12 @@ impl BlockInsertionResult {
 }
 
 pub enum BlockHeaderInsertionResult {
-    // The block is valid and already processed before.
-    AlreadyProcessed,
+    // The block is valid and already processed consensus before.
+    // We should not process this block again.
+    AlreadyProcessedInConsensus,
+    // The block header has been inserted into sync graph. We can ingore this
+    // header, but we should keep processing its body if needed.
+    AlreadyProcessedInSync,
     // The block is valid and is processed for the first time.
     NewValid,
     // The block is definitely invalid. It's not inserted to sync graph
@@ -2164,5 +2204,13 @@ impl BlockHeaderInsertionResult {
 
     pub fn is_invalid(&self) -> bool {
         matches!(self, BlockHeaderInsertionResult::Invalid)
+    }
+
+    pub fn should_process_body(&self) -> bool {
+        matches!(
+            self,
+            BlockHeaderInsertionResult::NewValid
+                | BlockHeaderInsertionResult::AlreadyProcessedInSync
+        )
     }
 }

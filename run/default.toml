@@ -57,6 +57,10 @@ bootnodes="cfxnode://7ffff7f14f8f73fa93a95309803bbc93c762c48bc873a823ac40500471c
 # stratum protocol.
 # use_stratum=true
 
+# Listen address for stratum
+#
+# stratum_listen_address = "127.0.0.1"
+
 # Port for stratum.
 #
 # stratum_port = 32525
@@ -347,6 +351,11 @@ jsonrpc_local_http_port=12539
 
 # ------------------ Storage Parameters ----------------------
 
+# The number of additional snapshot before the current stable checkpoint that we will maintain.
+# If it's 0, all snapshot before stable genesis will be deleted and the states are unavailable.
+#
+# additional_maintained_snapshot_count = 0
+
 # Time interval to evict old data from in-memory data cache.
 #
 # block_cache_gc_period_ms = 5_000
@@ -403,6 +412,11 @@ jsonrpc_local_http_port=12539
 # If not set, cfx_getLogs will not limit the number of logs returned.
 #
 # get_logs_filter_max_limit = 10
+
+# Epoch batch size used in log filtering.
+# Larger batch sizes may improve performance but might also prevent consensus from making progress under high RPC load.
+#
+# get_logs_epoch_batch_size = 128
 
 # Maximum number of transactions allowed for peers to send to a catch-up node.
 #

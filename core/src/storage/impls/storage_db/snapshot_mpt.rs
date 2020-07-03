@@ -116,7 +116,7 @@ impl<DbType: SnapshotMptLoadNode + ?Sized, BorrowType: BorrowMut<DbType>>
 
 impl<
         DbType: SnapshotMptLoadNode
-            + for<'db> KeyValueDbIterableTrait<'db, SnapshotMptValue, Error, [u8]>
+            + for<'db> KeyValueDbIterableTrait<'db, MptKeyValue, Error, [u8]>
             + ?Sized,
         BorrowType: BorrowMut<DbType>,
     > SnapshotMptTraitReadAndIterate for SnapshotMpt<DbType, BorrowType>
@@ -147,7 +147,7 @@ impl<
 impl<
         DbType: SnapshotMptLoadNode
             + KeyValueDbTraitSingleWriter<ValueType = SnapshotMptDbValue>
-            + for<'db> KeyValueDbIterableTrait<'db, SnapshotMptValue, Error, [u8]>
+            + for<'db> KeyValueDbIterableTrait<'db, MptKeyValue, Error, [u8]>
             + ?Sized,
         BorrowType: BorrowMut<DbType>,
     > SnapshotMptTraitRw for SnapshotMpt<DbType, BorrowType>
@@ -179,6 +179,7 @@ use crate::storage::{
         snapshot_mpt::*,
         SnapshotMptTraitRead,
     },
+    MptKeyValue,
 };
 use fallible_iterator::FallibleIterator;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};

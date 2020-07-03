@@ -10,12 +10,10 @@ use crate::{
     sync::{
         message::{
             msgid, Context, DynamicCapability, Handleable, KeyContainer,
+            SnapshotChunkResponse,
         },
         request_manager::{AsAny, Request},
-        state::{
-            snapshot_chunk_response::SnapshotChunkResponse,
-            storage::{Chunk, ChunkKey, SnapshotSyncCandidate},
-        },
+        state::storage::{Chunk, ChunkKey, SnapshotSyncCandidate},
         Error, ErrorKind, ProtocolConfiguration, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
 };

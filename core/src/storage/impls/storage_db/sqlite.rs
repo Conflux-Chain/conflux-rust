@@ -12,6 +12,10 @@ pub struct SqliteConnection {
     cached_statements: Mutex<StatementCache>,
 }
 
+impl MallocSizeOf for SqliteConnection {
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { unimplemented!() }
+}
+
 pub struct SqliteConnectionInfo {
     pub readonly: bool,
     pub path: PathBuf,
@@ -96,12 +100,23 @@ impl SqliteConnection {
         }
     }
 
-    pub fn create_and_init<P: AsRef<Path>>(path: P) -> Result<()> {
+    /// If `unsafe_mode` is true, data loss or database corruption may happen if
+    /// the process crashes, so it should only be used for write-once
+    /// databases where an unfinished temporary database will be removed
+    /// after process restart.
+    pub fn create_and_init<P: AsRef<Path>>(
+        path: P, unsafe_mode: bool,
+    ) -> Result<()> {
         let conn = Connection::open_with_flags(
             &path,
             Self::default_open_flags().set_read_write().set_create(),
         )?;
-        conn.execute("PRAGMA journal_mode=WAL")?;
+        if unsafe_mode {
+            conn.execute("PRAGMA journal_mode=OFF")?;
+            conn.execute("PRAGMA synchronous=OFF")?;
+        } else {
+            conn.execute("PRAGMA journal_mode=WAL")?;
+        }
         // Prevent other processes from accessing the db.
         // The "-shm" file will not be created,
         // see https://www.sqlite.org/tempfiles.html#shared_memory_files.
@@ -110,9 +125,9 @@ impl SqliteConnection {
     }
 
     pub fn create_and_open<P: AsRef<Path>>(
-        path: P, open_flags: OpenFlags,
+        path: P, open_flags: OpenFlags, unsafe_mode: bool,
     ) -> Result<Self> {
-        Self::create_and_init(path.as_ref())?;
+        Self::create_and_init(path.as_ref(), unsafe_mode)?;
         Self::open(path, false, open_flags)
     }
 
@@ -702,6 +717,7 @@ use super::super::{
     errors::*,
 };
 use fallible_iterator::FallibleIterator;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Mutex, MutexGuard};
 use sqlite::{Bindable, Connection, OpenFlags, Readable, State, Statement};
 use sqlite3_sys as sqlite_ffi;

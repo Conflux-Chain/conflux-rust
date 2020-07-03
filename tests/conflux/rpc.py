@@ -27,6 +27,7 @@ class RpcClient:
         self.EPOCH_EARLIEST = "earliest"
         self.EPOCH_LATEST_MINED = "latest_mined"
         self.EPOCH_LATEST_STATE = "latest_state"
+        self.EPOCH_LATEST_CONFIRMED = "latest_confirmed"
 
         # update node operations
         self.UPDATE_NODE_OP_FAILURE = "Failure"
@@ -217,7 +218,10 @@ class RpcClient:
         else:
             return int(self.node.cfx_getNextNonce(addr, epoch), 0)
 
-    def send_raw_tx(self, raw_tx: str) -> str:
+    def send_raw_tx(self, raw_tx: str, wait_for_catchup=True) -> str:
+        # We wait for the node out of the catch up mode first
+        if wait_for_catchup:
+            self.node.wait_for_phase(["NormalSyncPhase"])
         tx_hash = self.node.cfx_sendRawTransaction(raw_tx)
         assert_is_hash_string(tx_hash)
         return tx_hash
@@ -226,9 +230,9 @@ class RpcClient:
         self.node.clear_tx_pool()
 
 
-    def send_tx(self, tx: Transaction, wait_for_receipt=False) -> str:
+    def send_tx(self, tx: Transaction, wait_for_receipt=False, wait_for_catchup=True) -> str:
         encoded = eth_utils.encode_hex(rlp.encode(tx))
-        tx_hash = self.send_raw_tx(encoded)
+        tx_hash = self.send_raw_tx(encoded, wait_for_catchup=wait_for_catchup)
         
         if wait_for_receipt:
             self.wait_for_receipt(tx_hash)

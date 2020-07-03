@@ -7,10 +7,11 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-ethereum-types = "0.8"
-keccak-hash = "0.4"
+cfx-types = { path = "../cfx_types" }
 primitives = { path = "../primitives" }
 parking_lot = "0.10"
 rlp = "0.4.0"
 rand = "0.7"
 cfxkey = { path = "../accounts/cfxkey" }
+malloc_size_of_derive = {path = "../util/malloc_size_of_derive"}
+malloc_size_of= {path = "../util/malloc_size_of"}
