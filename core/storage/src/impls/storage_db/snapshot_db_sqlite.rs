@@ -264,6 +264,8 @@ impl<'a>
     >;
 }
 
+// FIXME: implement for more general types
+// (DerefOr...<KvdbSqliteShardedBorrow...>)
 impl KvdbIterTrait<MptKeyValue, [u8], SnapshotDbSqlite>
     for KvdbSqliteSharded<Box<[u8]>>
 {
@@ -275,7 +277,15 @@ impl KvdbIterTrait<MptKeyValue, [u8], SnapshotDbSqlite>
             dyn FallibleIterator<Item = (Vec<u8>, Box<[u8]>), Error = Error>,
         >,
     > {
-        unimplemented!()
+        let (maybe_shards_connections, statements) = self.destructure_mut();
+        Ok(Wrap(kvdb_sqlite_sharded_iter_range_impl(
+            maybe_shards_connections,
+            statements,
+            lower_bound_incl,
+            upper_bound_excl,
+            KvdbSqlite::<Box<[u8]>>::kv_from_iter_row::<Vec<u8>>
+                as for<'r, 's> fn(&'r Statement<'s>) -> Result<MptKeyValue>,
+        )?))
     }
 
     fn iter_range_excl2(
@@ -286,7 +296,15 @@ impl KvdbIterTrait<MptKeyValue, [u8], SnapshotDbSqlite>
             dyn FallibleIterator<Item = (Vec<u8>, Box<[u8]>), Error = Error>,
         >,
     > {
-        unimplemented!()
+        let (maybe_shards_connections, statements) = self.destructure_mut();
+        Ok(Wrap(kvdb_sqlite_sharded_iter_range_excl_impl(
+            maybe_shards_connections,
+            statements,
+            lower_bound_excl,
+            upper_bound_excl,
+            KvdbSqlite::<Box<[u8]>>::kv_from_iter_row::<Vec<u8>>
+                as for<'r, 's> fn(&'r Statement<'s>) -> Result<MptKeyValue>,
+        )?))
     }
 }
 
@@ -694,8 +712,9 @@ use crate::{
         storage_db::{
             kvdb_sqlite::KvdbSqliteStatements,
             kvdb_sqlite_sharded::{
-                KvdbSqliteSharded, KvdbSqliteShardedBorrowMut,
-                KvdbSqliteShardedBorrowShared,
+                kvdb_sqlite_sharded_iter_range_excl_impl,
+                kvdb_sqlite_sharded_iter_range_impl, KvdbSqliteSharded,
+                KvdbSqliteShardedBorrowMut, KvdbSqliteShardedBorrowShared,
                 KvdbSqliteShardedDestructureTrait,
                 KvdbSqliteShardedRefDestructureTrait, ShardedIterMerger,
             },
@@ -716,7 +735,7 @@ use crate::{
         tuple::ElementSatisfy,
         wrap::{Wrap, WrappedLifetimeFamily, WrappedTrait},
     },
-    KVInserter, SnapshotDbManagerSqlite, SqliteConnection,
+    KVInserter, KvdbSqlite, SnapshotDbManagerSqlite, SqliteConnection,
 };
 use fallible_iterator::FallibleIterator;
 use primitives::{MerkleHash, StorageKey};
