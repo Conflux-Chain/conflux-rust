@@ -24,17 +24,16 @@ use std::{
     cmp::max,
     collections::HashSet,
     sync::{mpsc, Arc},
-    thread,
-    time,
+    thread, time,
 };
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use time::{Duration, SystemTime, UNIX_EPOCH};
 use txgen::SharedTransactionGenerator;
 lazy_static! {
     static ref PACKED_ACCOUNT_SIZE: Arc<dyn Gauge<usize>> =
         GaugeUsize::register_with_group("txpool", "packed_account_size");
 }
 
-const MINING_ITERATION: u64 = 1;
+const MINING_ITERATION: u64 = 100_000;
 const BLOCK_FORCE_UPDATE_INTERVAL_IN_SECS: u64 = 10;
 const BLOCKGEN_LOOP_SLEEP_IN_MILISECS: u64 = 30;
 
@@ -53,7 +52,6 @@ pub struct BlockGenerator {
     sync: SharedSynchronizationService,
     state: RwLock<MiningState>,
     workers: Mutex<Vec<(Worker, mpsc::Sender<ProofOfWorkProblem>)>>,
-    pub test_mining_sleep_time: Option<Duration>,
     pub stratum: RwLock<Option<Stratum>>,
 }
 
@@ -108,19 +106,12 @@ impl Worker {
                                         warn!("{}", e);
                                     }
                                 }
-                                debug!("mined block");
+
                                 trace!("problem solved");
-                                //                                problem =
-                                // None;
+                                problem = None;
                                 break;
                             }
                             nonce += 1;
-                            // This sleep is for test_mode mining of
-                            // balance_attack
-                            // debug!("Try nonce {}", nonce);
-                            if let Some(t) = bg_handle.test_mining_sleep_time {
-                                thread::sleep(t);
-                            }
                         }
                     } else {
                         thread::sleep(sleep_duration);
@@ -138,7 +129,6 @@ impl BlockGenerator {
         sync: SharedSynchronizationService,
         maybe_txgen: Option<SharedTransactionGenerator>,
         pow_config: ProofOfWorkConfig, mining_author: Address,
-        test_mining_sleep_time: Option<Duration>,
     ) -> Self
     {
         BlockGenerator {
@@ -150,7 +140,6 @@ impl BlockGenerator {
             sync,
             state: RwLock::new(MiningState::Start),
             workers: Mutex::new(Vec::new()),
-            test_mining_sleep_time,
             stratum: RwLock::new(None),
         }
     }
@@ -760,7 +749,6 @@ impl BlockGenerator {
                     }
                 }
                 if new_solution.is_ok() {
-                    debug!("Get solution {}", new_solution.unwrap().nonce);
                     let solution = new_solution.unwrap();
                     current_mining_block
                         .as_mut()

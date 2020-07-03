@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
-from base64 import b64encode
-from binascii import hexlify, unhexlify
 
 import conflux.config
 from decimal import Decimal, ROUND_DOWN
-import hashlib
 import inspect
 import json
 import logging
@@ -681,37 +678,3 @@ def get_contract_instance(contract_dict=None,
     return contract
 
 
-class PoWGenerateThread(threading.Thread):
-    def __init__(self, name, node, generation_period_ms, log, report_progress_blocks=None, fixed_period=False):
-        threading.Thread.__init__(self, daemon=True)
-        self.name = name
-        self.node = node
-        self.generation_period_ms = generation_period_ms
-        self.log = log
-        self.report_progress_blocks = report_progress_blocks
-        self.fixed_period = fixed_period
-
-    def generate_block(self):
-        pass
-
-    def run(self):
-        # generate blocks
-        i = 0
-        period_start_time = time.time()
-        while True:
-            i += 1
-            if self.report_progress_blocks is not None:
-                if i % self.report_progress_blocks == 0:
-                    period_elapsed = time.time() - period_start_time
-                    self.log.info("[%s]: %d blocks generated in %f seconds", self.name, self.report_progress_blocks, period_elapsed)
-                    period_start_time = time.time()
-
-            if self.fixed_period:
-                wait_sec = self.generation_period_ms / 1000
-            else:
-                wait_sec = random.expovariate(1000 / self.generation_period_ms)
-            start = time.time()
-            self.generate_block()
-            elapsed = time.time() - start
-            if elapsed < wait_sec:
-                time.sleep(wait_sec - elapsed)

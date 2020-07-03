@@ -5,6 +5,7 @@ from http.client import CannotSendRequest
 from eth_utils import decode_hex
 
 from conflux.utils import encode_hex, priv_to_addr, parse_as_int
+from test_framework.block_gen_thread import PoWGenerateThread
 from test_framework.blocktools import create_transaction, create_block
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
@@ -27,20 +28,12 @@ class P2PTest(ConfluxTestFramework):
 
     def setup_chain(self):
         self.log.info("Initializing test directory " + self.options.tmpdir)
-        mining_sleep_us = 10000
-        self.total_period = 0.25
+        self.total_period = 0.05
         self.evil_rate = self.options.evil_rate
-        self.difficulty = int(2 / (1/self.total_period) / (1-self.evil_rate) * 10**6/mining_sleep_us)
-        print(self.difficulty)
+        self.difficulty = 4  # default test difficulty
         self.conf_parameters = {
-            "start_mining": "true",
-            "initial_difficulty": str(self.difficulty),
-            "test_mining_sleep_us": f"{mining_sleep_us}",
-            "mining_author": '"' + "0"*40 + '"',
             "log_level": "\"debug\"",
             "headers_request_timeout_ms": "6000000",  # need to be larger than network latency
-            # "heavy_block_difficulty_ratio": "1000",  # parameter used in the original experiments
-            # "adaptive_weight_beta": "3000",  # parameter used in the original experiments
             "max_allowed_timeout_in_observing_period": "1000000000",
             "blocks_request_timeout_ms": "6000000",
             "heartbeat_timeout_ms": "1000000000",
@@ -53,19 +46,20 @@ class P2PTest(ConfluxTestFramework):
         connect_nodes(self.nodes, 0, 1)
 
         # Set latency between two groups
-        self.nodes[0].addlatency(self.nodes[1].key, 4000)
-        self.nodes[1].addlatency(self.nodes[0].key, 4000)
+        self.nodes[0].addlatency(self.nodes[1].key, 400)
+        self.nodes[1].addlatency(self.nodes[0].key, 400)
 
     def run_test(self):
         start_p2p_connection(self.nodes)
 
-        # Some blocks may have been mined before we setup the latency,
-        # so wait for the latency and find the fork point
-        generation_period = 1/(1/self.total_period * self.evil_rate)
-        self.log.info("Adversary mining average period=%f", generation_period)
+        honest_generation_period = self.total_period / (1-self.evil_rate) * 2
+        PoWGenerateThread("node0", self.nodes[0], honest_generation_period * 1000, self.log).start()
+        PoWGenerateThread("node1", self.nodes[1], honest_generation_period * 1000, self.log).start()
 
-        # Some blocks may have been mined before we setup the latency,
-        # so wait for the latency and find the fork point
+        evil_generation_period = 1/(1/self.total_period * self.evil_rate)
+        self.log.info("Adversary mining average period=%f", evil_generation_period)
+
+        # Find the fork point
         finished = False
         while not finished:
             chain0 = self.process_chain(self.nodes[0].getPivotChainAndWeight())
@@ -96,7 +90,7 @@ class P2PTest(ConfluxTestFramework):
         total_sleep = 0
         while True:
             # This roughly determines adversary's mining power
-            total_sleep += random.expovariate(1 / generation_period)
+            total_sleep += random.expovariate(1 / evil_generation_period)
             elapsed = time.time() - start
             if elapsed < total_sleep:
                 time.sleep(total_sleep - elapsed)
@@ -113,17 +107,15 @@ class P2PTest(ConfluxTestFramework):
             self.log.debug("Fork root %s %s", chain0[fork_height], chain1[fork_height])
             if fork0[0] == fork1[0]:
                 merged = True
-                # self.log.info("Pivot chain merged")
-                # self.log.info("chain0 %s", chain0)
-                # self.log.info("chain1 %s", chain1)
+                self.log.info("Pivot chain merged")
                 after_count += 1
-                if after_count >= 12*3600 / generation_period:
+                if after_count >= 12*3600 / evil_generation_period:
                     self.log.info("Merged. Winner: %s Chain end with %s", fork0[0], chain0[min(len(chain0), len(chain1)) - 2][0])
                     break
                 continue
 
             count += 1
-            if count >= 12*3600 / generation_period:
+            if count >= 12*3600 / evil_generation_period:
                 self.log.info("Not merged after 12h")
                 break
             ''' Send blocks to keep balance.

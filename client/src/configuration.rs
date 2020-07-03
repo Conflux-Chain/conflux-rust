@@ -151,7 +151,6 @@ build_config! {
         (check_request_period_ms, (u64), 1_000)
         (chunk_size_byte, (u64), DEFAULT_CHUNK_SIZE)
         (demote_peer_for_timeout, (bool), false)
-        (test_mining_sleep_us, (Option<u64>), None)
         (egress_queue_capacity, (usize), 256)
         (egress_min_throttle, (usize), 10)
         (egress_max_throttle, (usize), 64)
