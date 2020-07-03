@@ -7,12 +7,12 @@ use crate::{
     state::{State, Substate},
     vm::{self, ActionParams, CallType, Spec},
 };
-use cfx_types::{Address, U256};
+use cfx_types::{address_util::AddressUtil, Address, U256};
 use std::str::FromStr;
 
 lazy_static! {
     pub static ref SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS: Address =
-        Address::from_str("8ad036480160591706c831f0da19d1a424e39469").unwrap();
+        Address::from_str("0888000000000000000000000000000000000001").unwrap();
 }
 
 /// The first 4 bytes of keccak('set_sponsor_for_gas(address,uint256)') is
@@ -51,7 +51,7 @@ impl SponsorWhitelistControl {
             ));
         }
 
-        if !state.is_contract(&contract_address) {
+        if !contract_address.is_contract_address() {
             return Err(vm::Error::InternalContract(
                 "not allowed to sponsor non-contract account",
             ));
@@ -157,7 +157,7 @@ impl SponsorWhitelistControl {
             ));
         }
 
-        if !state.is_contract(&contract_address) {
+        if !contract_address.is_contract_address() {
             return Err(vm::Error::InternalContract(
                 "not allowed to sponsor non-contract account",
             ));
@@ -229,7 +229,7 @@ impl SponsorWhitelistControl {
     fn add_privilege(
         &self, input: &[u8], params: &ActionParams, state: &mut State,
     ) -> vm::Result<()> {
-        if !state.is_contract(&params.sender) {
+        if !params.sender.is_contract_address() {
             return Err(vm::Error::InternalContract(
                 "normal account is not allowed to set commission_privilege",
             ));
@@ -268,7 +268,7 @@ impl SponsorWhitelistControl {
     fn remove_privilege(
         &self, input: &[u8], params: &ActionParams, state: &mut State,
     ) -> vm::Result<()> {
-        if !state.is_contract(&params.sender) {
+        if !params.sender.is_contract_address() {
             return Err(vm::Error::InternalContract(
                 "normal account is not allowed to set commission_privilege",
             ));

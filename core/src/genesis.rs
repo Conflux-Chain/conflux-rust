@@ -33,9 +33,9 @@ pub const DEV_GENESIS_PRI_KEY_2: &'static str =
 
 lazy_static! {
     pub static ref DEV_GENESIS_KEY_PAIR: KeyPair =
-        KeyPair::from_secret(DEV_GENESIS_PRI_KEY.parse().unwrap(),).unwrap();
+        KeyPair::from_secret(DEV_GENESIS_PRI_KEY.parse().unwrap()).unwrap();
     pub static ref DEV_GENESIS_KEY_PAIR_2: KeyPair =
-        KeyPair::from_secret(DEV_GENESIS_PRI_KEY_2.parse().unwrap(),).unwrap();
+        KeyPair::from_secret(DEV_GENESIS_PRI_KEY_2.parse().unwrap()).unwrap();
 }
 
 pub fn default(_dev_or_test_mode: bool) -> HashMap<Address, U256> {
@@ -76,12 +76,10 @@ pub fn initialize_internal_contract_accounts(state: &mut StateDb) {
     || -> DbResult<()> {
         {
             for address in InternalContractMap::new().keys() {
-                let account = OverlayAccount::new_contract_with_admin(
+                let account = OverlayAccount::new_basic(
                     address,
                     /* balance = */ U256::zero(),
                     /* nonce = */ U256::one(),
-                    // Admin for internal contract is zero.
-                    &Address::default(),
                 )
                 .as_account();
                 state.set(

@@ -71,7 +71,7 @@ const TWO_POW_248: U256 = U256([0, 0, 0, 0x100000000000000]); //0x1 00000000 000
 
 /// Maximal subroutine stack size as specified in
 /// https://eips.ethereum.org/EIPS/eip-2315.
-pub const MAX_SUB_STACK_SIZE: usize = 1024;
+pub const MAX_SUB_STACK_SIZE: usize = 1023;
 
 /// Abstraction over raw vector of Bytes. Easier state management of PC.
 struct CodeReader {
@@ -182,7 +182,7 @@ impl From<vm::Error> for InterpreterResult {
     }
 }
 
-/// Intepreter EVM implementation
+/// Interpreter EVM implementation
 pub struct Interpreter<Cost: CostType> {
     mem: Vec<u8>,
     cache: Arc<SharedCache>,
@@ -712,9 +712,9 @@ impl<Cost: CostType> Interpreter<Cost> {
                 // ignore
             }
             instructions::BEGINSUB => {
-                // BEGINSUB should not be executed. If so, returns OutOfGas
-                // (EIP-2315).
-                return Err(vm::Error::OutOfGas);
+                // BEGINSUB should not be executed. If so, returns
+                // InvalidSubEntry (EIP-2315).
+                return Err(vm::Error::InvalidSubEntry);
             }
             instructions::JUMPSUB => {
                 if self.return_stack.len() >= MAX_SUB_STACK_SIZE {
@@ -776,7 +776,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                     contract_code,
                     address_scheme,
                     true,
-                );
+                )?;
                 return match create_result {
                     Ok(ContractCreateResult::Created(address, gas_left)) => {
                         self.stack.push(address_to_u256(address));
@@ -916,7 +916,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                         &code_address,
                         call_type,
                         true,
-                    )
+                    )?
                 };
 
                 self.resume_output_range = Some((out_off, out_size));
@@ -1070,7 +1070,7 @@ impl<Cost: CostType> Interpreter<Cost> {
             instructions::SLOAD => {
                 let mut key = vec![0; 32];
                 self.stack.pop_back().to_big_endian(key.as_mut());
-                let word = context.storage_at(&key)?.into_uint();
+                let word = context.storage_at(&key)?;
                 self.stack.push(word);
             }
             instructions::SSTORE => {
@@ -1078,7 +1078,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                 self.stack.pop_back().to_big_endian(key.as_mut());
                 let val = self.stack.pop_back();
 
-                context.set_storage(key, BigEndianHash::from_uint(&val))?;
+                context.set_storage(key, val)?;
             }
             instructions::PC => {
                 self.stack.push(U256::from(self.reader.position - 1));

@@ -6,12 +6,10 @@ use crate::{
     sync::{
         message::{
             msgid, Context, DynamicCapability, Handleable, KeyContainer,
+            StateSyncCandidateResponse,
         },
         request_manager::{AsAny, Request},
-        state::{
-            state_sync_candidate_response::StateSyncCandidateResponse,
-            storage::SnapshotSyncCandidate,
-        },
+        state::storage::SnapshotSyncCandidate,
         Error, ProtocolConfiguration, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
 };

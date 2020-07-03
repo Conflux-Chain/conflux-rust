@@ -29,8 +29,6 @@ use network::{
     NetworkService, SessionDetails, UpdateNodeOperation,
 };
 
-use crate::accounts::{account_provider, keys_path};
-
 use crate::rpc::types::{
     Block as RpcBlock, BlockHashOrEpochNumber, Bytes, EpochNumber,
     Status as RpcStatus, Transaction as RpcTransaction, H160 as RpcH160,
@@ -73,14 +71,9 @@ impl RpcImpl {
     pub fn new(
         exit: Arc<(Mutex<bool>, Condvar)>, consensus: SharedConsensusGraph,
         network: Arc<NetworkService>, tx_pool: SharedTransactionPool,
+        accounts: Arc<AccountProvider>,
     ) -> Self
     {
-        let accounts = Arc::new(
-            account_provider(Some(keys_path()), None)
-                .ok()
-                .expect("failed to initialize account provider"),
-        );
-
         let data_man = consensus.get_data_manager().clone();
 
         RpcImpl {

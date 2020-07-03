@@ -67,6 +67,7 @@ impl DeltaDbManagerTrait for DeltaDbManagerSqlite {
                 path_str,
                 Self::kvdb_sqlite_statements(),
                 /* create_table = */ true,
+                /* unsafe_mode = */ false,
             )
         }
     }

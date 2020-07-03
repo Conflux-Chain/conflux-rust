@@ -9,13 +9,14 @@ use crate::{
     machine::Machine,
     parameters::staking::*,
     state::{State, Substate},
+    statedb,
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
         ContractCreateResult, CreateContractAddress, Env, MessageCallResult,
         ReturnData, Spec, TrapKind,
     },
 };
-use cfx_types::{Address, H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use primitives::{transaction::UNSIGNED_SENDER, StorageLayout};
 use std::sync::Arc;
 
@@ -38,7 +39,7 @@ pub struct OriginInfo {
     /// the whole execution.
     storage_owner: Address,
     /// The upper bound of `collateral_for_storage` for `original_sender`
-    storage_limit: U256,
+    storage_limit_in_drip: U256,
     gas_price: U256,
     value: U256,
 }
@@ -50,7 +51,7 @@ impl OriginInfo {
             address: params.address,
             original_sender: params.original_sender,
             storage_owner: params.storage_owner,
-            storage_limit: params.storage_limit,
+            storage_limit_in_drip: params.storage_limit_in_drip,
             gas_price: params.gas_price,
             value: match params.value {
                 ActionValue::Transfer(val) | ActionValue::Apparent(val) => val,
@@ -60,7 +61,7 @@ impl OriginInfo {
 
     pub fn original_sender(&self) -> &Address { &self.original_sender }
 
-    pub fn storage_limit(&self) -> &U256 { &self.storage_limit }
+    pub fn storage_limit(&self) -> &U256 { &self.storage_limit_in_drip }
 }
 
 /// Implementation of evm context.
@@ -105,13 +106,13 @@ impl<'a> Context<'a> {
 }
 
 impl<'a> ContextTrait for Context<'a> {
-    fn storage_at(&self, key: &Vec<u8>) -> vm::Result<H256> {
+    fn storage_at(&self, key: &Vec<u8>) -> vm::Result<U256> {
         self.state
             .storage_at(&self.origin.address, key)
             .map_err(Into::into)
     }
 
-    fn set_storage(&mut self, key: Vec<u8>, value: H256) -> vm::Result<()> {
+    fn set_storage(&mut self, key: Vec<u8>, value: U256) -> vm::Result<()> {
         if self.static_flag {
             Err(vm::Error::MutableCallInStaticContext)
         } else {
@@ -157,26 +158,23 @@ impl<'a> ContextTrait for Context<'a> {
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
         address_scheme: CreateContractAddress, trap: bool,
-    ) -> ::std::result::Result<ContractCreateResult, TrapKind>
+    ) -> statedb::Result<::std::result::Result<ContractCreateResult, TrapKind>>
     {
         // create new contract address
-        let (address, code_hash) = match self.state.nonce(&self.origin.address)
-        {
-            Ok(nonce) => self::contract_address(
-                address_scheme,
-                &self.origin.address,
-                &nonce,
-                &code,
-            ),
-            Err(e) => {
-                debug!(target: "context", "Database corruption encountered: {:?}", e);
-                return Ok(ContractCreateResult::Failed);
-            }
-        };
+        let (address, code_hash) = self::contract_address(
+            address_scheme,
+            &self.origin.address,
+            &self.state.nonce(&self.origin.address)?,
+            &code,
+        );
 
-        if self.state.is_contract(&address) {
+        // For a contract address already with code, we do not allow overlap the
+        // address. This should generally not happen. Unless we enable
+        // account dust in future. We add this check just in case it
+        // helps in future.
+        if self.state.is_contract_with_code(&address) {
             debug!("Contract address conflict!");
-            return Ok(ContractCreateResult::Failed);
+            return Ok(Ok(ContractCreateResult::Failed));
         }
 
         // prepare the params
@@ -186,7 +184,7 @@ impl<'a> ContextTrait for Context<'a> {
             sender: self.origin.address.clone(),
             original_sender: self.origin.original_sender,
             storage_owner: self.origin.storage_owner,
-            storage_limit: self.origin.storage_limit,
+            storage_limit_in_drip: self.origin.storage_limit_in_drip,
             gas: *gas,
             gas_price: self.origin.gas_price,
             value: ActionValue::Transfer(*value),
@@ -201,15 +199,12 @@ impl<'a> ContextTrait for Context<'a> {
             if !self.spec.keep_unsigned_nonce
                 || params.sender != UNSIGNED_SENDER
             {
-                if let Err(e) = self.state.inc_nonce(&self.origin.address) {
-                    debug!(target: "ext", "Database corruption encountered: {:?}", e);
-                    return Ok(ContractCreateResult::Failed);
-                }
+                self.state.inc_nonce(&self.origin.address)?;
             }
         }
 
         if trap {
-            return Err(TrapKind::Create(params, address));
+            return Ok(Err(TrapKind::Create(params, address)));
         }
 
         let mut ex = Executive::from_parent(
@@ -226,32 +221,32 @@ impl<'a> ContextTrait for Context<'a> {
             self.substate,
             self.stack_depth + 1,
         );
-        Ok(into_contract_create_result(out, &address, self.substate))
+        Ok(Ok(into_contract_create_result(
+            out,
+            &address,
+            self.substate,
+        )))
     }
 
     fn call(
         &mut self, gas: &U256, sender_address: &Address,
         receive_address: &Address, value: Option<U256>, data: &[u8],
         code_address: &Address, call_type: CallType, trap: bool,
-    ) -> ::std::result::Result<MessageCallResult, TrapKind>
+    ) -> statedb::Result<::std::result::Result<MessageCallResult, TrapKind>>
     {
         trace!(target: "context", "call");
 
         assert!(trap);
 
-        let code_with_hash = if let Some(contract) =
+        let (code, code_hash) = if let Some(contract) =
             self.internal_contract_map.contract(code_address)
         {
-            Ok((Some(contract.code()), Some(contract.code_hash())))
+            (Some(contract.code()), Some(contract.code_hash()))
         } else {
-            self.state.code(code_address).and_then(|code| {
-                self.state.code_hash(code_address).map(|hash| (code, hash))
-            })
-        };
-
-        let (code, code_hash) = match code_with_hash {
-            Ok((code, hash)) => (code, hash),
-            Err(_) => return Ok(MessageCallResult::Failed),
+            (
+                self.state.code(code_address)?,
+                self.state.code_hash(code_address)?,
+            )
         };
 
         let mut params = ActionParams {
@@ -261,7 +256,7 @@ impl<'a> ContextTrait for Context<'a> {
             code_address: *code_address,
             original_sender: self.origin.original_sender,
             storage_owner: self.origin.storage_owner,
-            storage_limit: self.origin.storage_limit,
+            storage_limit_in_drip: self.origin.storage_limit_in_drip,
             gas: *gas,
             gas_price: self.origin.gas_price,
             code,
@@ -275,7 +270,7 @@ impl<'a> ContextTrait for Context<'a> {
             params.value = ActionValue::Transfer(value);
         }
 
-        return Err(TrapKind::Call(params));
+        return Ok(Err(TrapKind::Call(params)));
     }
 
     fn extcode(&self, address: &Address) -> vm::Result<Option<Arc<Bytes>>> {
@@ -324,14 +319,14 @@ impl<'a> ContextTrait for Context<'a> {
                 let collateral_for_storage = self
                     .state
                     .collateral_for_storage(&self.origin.storage_owner)?;
-                let balance =
-                    if self.state.is_contract(&self.origin.storage_owner) {
-                        self.state.sponsor_balance_for_collateral(
-                            &self.origin.storage_owner,
-                        )?
-                    } else {
-                        self.state.balance(&self.origin.storage_owner)?
-                    };
+                let balance = if self.origin.storage_owner.is_contract_address()
+                {
+                    self.state.sponsor_balance_for_collateral(
+                        &self.origin.storage_owner,
+                    )?
+                } else {
+                    self.state.balance(&self.origin.storage_owner)?
+                };
                 debug!(
                     "ret() balance={:?} collateral_for_code={:?}",
                     balance, collateral_for_code
@@ -343,7 +338,7 @@ impl<'a> ContextTrait for Context<'a> {
                     });
                 }
                 if collateral_for_storage + collateral_for_code
-                    > self.origin.storage_limit
+                    > self.origin.storage_limit_in_drip
                 {
                     return Err(vm::Error::ExceedStorageLimit);
                 }
@@ -473,7 +468,7 @@ mod tests {
             storage_owner: Address::zero(),
             gas_price: U256::zero(),
             value: U256::zero(),
-            storage_limit: U256::MAX,
+            storage_limit_in_drip: U256::MAX,
         }
     }
 
@@ -671,6 +666,7 @@ mod tests {
         CallType::Call,
         false,
     )
+            .unwrap()
     .ok()
     .unwrap();
     }
@@ -774,13 +770,16 @@ mod tests {
                 false,
                 &setup.internal_contract_map,
             );
-            match ctx.create(
-                &U256::max_value(),
-                &U256::zero(),
-                &[],
-                CreateContractAddress::FromSenderNonceAndCodeHash,
-                false,
-            ) {
+            match ctx
+                .create(
+                    &U256::max_value(),
+                    &U256::zero(),
+                    &[],
+                    CreateContractAddress::FromSenderNonceAndCodeHash,
+                    false,
+                )
+                .expect("no db error")
+            {
                 Ok(ContractCreateResult::Created(address, _)) => address,
                 _ => panic!(
                     "Test create failed; expected Created, got Failed/Reverted"
@@ -818,15 +817,18 @@ mod tests {
                 &setup.internal_contract_map,
             );
 
-            match ctx.create(
-                &U256::max_value(),
-                &U256::zero(),
-                &[],
-                CreateContractAddress::FromSenderSaltAndCodeHash(
-                    H256::default(),
-                ),
-                false,
-            ) {
+            match ctx
+                .create(
+                    &U256::max_value(),
+                    &U256::zero(),
+                    &[],
+                    CreateContractAddress::FromSenderSaltAndCodeHash(
+                        H256::default(),
+                    ),
+                    false,
+                )
+                .expect("no db error")
+            {
                 Ok(ContractCreateResult::Created(address, _)) => address,
                 _ => panic!(
                 "Test create failed; expected Created, got Failed/Reverted."

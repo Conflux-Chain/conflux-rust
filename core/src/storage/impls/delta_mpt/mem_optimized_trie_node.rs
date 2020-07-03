@@ -74,6 +74,31 @@ pub struct MemOptimizedTrieNode<CacheAlgoDataT: CacheAlgoDataTrait> {
     pub(in super::super) cache_algo_data: CacheAlgoDataT,
 }
 
+impl<CacheAlgoDataT: CacheAlgoDataTrait> MallocSizeOf
+    for MemOptimizedTrieNode<CacheAlgoDataT>
+{
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let path_malloc_size = if self.path_memory_manager.get_size()
+            > MaybeInPlaceByteArray::MAX_INPLACE_SIZE
+        {
+            unsafe { ops.malloc_size_of(self.path.ptr) }
+        } else {
+            0
+        };
+        let value_malloc_size = if self.value_memory_manager.get_size()
+            > MaybeInPlaceByteArray::MAX_INPLACE_SIZE
+        {
+            unsafe { ops.malloc_size_of(self.value.ptr) }
+        } else {
+            0
+        };
+        self.children_table.size_of(ops)
+            + self.cache_algo_data.size_of(ops)
+            + value_malloc_size
+            + path_malloc_size
+    }
+}
+
 /// The action variants after a value deletion.
 pub enum TrieNodeAction {
     Modify,
@@ -620,6 +645,7 @@ use super::{
     slab::*,
     *,
 };
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use primitives::MerkleHash;
 use rlp::*;
 use std::{

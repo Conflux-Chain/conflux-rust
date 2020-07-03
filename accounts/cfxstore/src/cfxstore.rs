@@ -911,8 +911,8 @@ mod tests {
     use self::tempdir::TempDir;
     use super::{CfxMultiStore, CfxStore};
     use accounts_dir::{KeyDirectory, MemoryDirectory, RootDiskDirectory};
+    use cfx_types::H256;
     use cfxkey::{Generator, KeyPair, Random};
-    use ethereum_types::H256;
     use secret_store::{
         Derivation, SecretStore, SecretVaultRef, SimpleSecretStore,
         StoreAccountRef,

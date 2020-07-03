@@ -9,7 +9,7 @@ cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
 cfxkey = { path = "../accounts/cfxkey" }
 fixed-hash = "0.5"
-keccak-hash = "0.4"
+keccak-hash = "0.5"
 lazy_static = "1.4"
 log = "0.4"
 lru = "0.1"

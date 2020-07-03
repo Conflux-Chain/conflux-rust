@@ -9,7 +9,7 @@ pub struct DeltaMptIterator {
 }
 
 impl DeltaMptIterator {
-    pub fn iterate<'a, DeltaMptDumper: KVInserter<(Vec<u8>, Box<[u8]>)>>(
+    pub fn iterate<'a, DeltaMptDumper: KVInserter<MptKeyValue>>(
         &self, dumper: &mut DeltaMptDumper,
     ) -> Result<()> {
         match &self.maybe_root_node {
@@ -47,7 +47,7 @@ use crate::storage::{
     impls::{
         delta_mpt::{CowNodeRef, DeltaMpt, NodeRefDeltaMpt},
         errors::Result,
-        merkle_patricia_trie::{CompressedPathRaw, KVInserter},
+        merkle_patricia_trie::{CompressedPathRaw, KVInserter, MptKeyValue},
     },
     utils::guarded_value::GuardedValue,
 };

@@ -48,7 +48,7 @@ fn test_contract_address() {
             CreateContractAddress::FromSenderNonceAndCodeHash,
             &address,
             &U256::from(88),
-            &[]
+            &[],
         )
         .0
     );
@@ -107,9 +107,7 @@ fn test_sender_balance() {
     assert_eq!(gas_left, U256::from(94_595));
     assert_eq!(
         state.storage_at(&address, &vec![0; 32]).unwrap(),
-        BigEndianHash::from_uint(
-            &(*COLLATERAL_PER_STORAGE_KEY + U256::from(0xf9))
-        )
+        *COLLATERAL_PER_STORAGE_KEY + U256::from(0xf9)
     );
     assert_eq!(state.balance(&sender).unwrap(), U256::from(0xf9));
     assert_eq!(
@@ -191,8 +189,73 @@ fn test_create_contract_out_of_depth() {
         ex.create(params, &mut substate).unwrap()
     };
 
-    assert_eq!(gas_left, U256::from(62_976));
+    assert_eq!(gas_left, U256::from(62_970));
     assert_eq!(substate.contracts_created.len(), 0);
+}
+
+#[test]
+fn test_suicide_when_creation() {
+    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
+
+    // code:
+    //
+    // 33 - get caller address
+    // ff - self-deconstruct
+
+    let code = "33ff".from_hex().unwrap();
+
+    let sender_addr =
+        Address::from_str("1d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+    let contract_addr = contract_address(
+        CreateContractAddress::FromSenderNonceAndCodeHash,
+        &sender_addr,
+        &U256::zero(),
+        &[],
+    )
+    .0;
+
+    let mut params = ActionParams::default();
+    params.address = contract_addr;
+    params.sender = sender_addr;
+    params.original_sender = sender_addr;
+    params.storage_owner = sender_addr;
+    params.gas = U256::from(100_000);
+    params.code = Some(Arc::new(code));
+    params.value = ActionValue::Transfer(U256::from(0));
+
+    let storage_manager = new_state_manager_for_unit_test();
+    let mut state =
+        get_state_for_genesis_write_with_factory(&storage_manager, factory);
+    state
+        .add_balance(&sender_addr, &U256::from(100_000), CleanupMode::NoEmpty)
+        .unwrap();
+    let env = Env::default();
+    let machine = make_byzantium_machine(0);
+    let internal_contract_map = InternalContractMap::new();
+    let spec = machine.spec(env.number);
+    let mut substate = Substate::new();
+
+    let mut ex = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    );
+    let FinalizationResult {
+        gas_left,
+        apply_state,
+        return_data: _,
+    } = ex.create(params, &mut substate).unwrap();
+
+    assert_eq!(gas_left, U256::from(94_998));
+    assert_eq!(apply_state, true);
+
+    assert!(substate.storage_collateralized.get(&sender_addr).is_none(),
+            "Since the contract has not been created, the sender occupied no storage now. ");
+    assert!(substate.storage_released.get(&sender_addr).is_none(),
+            "Since the contract has not been created, no storage is released when contract suicides. ");
+    assert!(substate.suicides.contains(&contract_addr));
 }
 
 #[test]
@@ -294,7 +357,7 @@ fn test_call_to_create() {
         *COLLATERAL_PER_STORAGE_KEY + U256::from(15_625_000_000_000_000u64)
     );
 
-    assert_eq!(gas_left, U256::from(59_752));
+    assert_eq!(gas_left, U256::from(59_746));
 }
 
 #[test]
@@ -364,7 +427,7 @@ fn test_revert() {
     assert_eq!(output[..], returns[..]);
     assert_eq!(
         state.storage_at(&contract_address, &vec![0; 32]).unwrap(),
-        BigEndianHash::from_uint(&U256::zero())
+        U256::zero()
     );
 }
 
@@ -439,7 +502,7 @@ fn test_not_enough_cash() {
         data: "3331600055".from_hex().unwrap(),
         gas: U256::from(100_000),
         gas_price: U256::one(),
-        storage_limit: U256::zero(),
+        storage_limit: 0,
         epoch_height: 0,
         chain_id: 0,
         nonce: U256::zero(),
@@ -990,7 +1053,7 @@ fn test_commission_privilege() {
         gas: U256::from(100_000),
         value: U256::from(1000000),
         action: Action::Call(address),
-        storage_limit: U256::from(0),
+        storage_limit: 0,
         epoch_height: 0,
         chain_id: 0,
         data: vec![],
@@ -1009,7 +1072,7 @@ fn test_commission_privilege() {
     .successfully_executed()
     .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_024));
+    assert_eq!(gas_used, U256::from(58_030));
     assert_eq!(state.nonce(&sender.address()).unwrap(), U256::from(1));
     assert_eq!(state.balance(&address).unwrap(), U256::from(1_000_000));
     assert_eq!(
@@ -1078,7 +1141,7 @@ fn test_commission_privilege() {
         gas: U256::from(60_000),
         value: U256::zero(),
         action: Action::Call(address),
-        storage_limit: U256::from(0),
+        storage_limit: 0,
         epoch_height: 0,
         chain_id: 0,
         data: vec![],
@@ -1101,11 +1164,11 @@ fn test_commission_privilege() {
     .successfully_executed()
     .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_024));
+    assert_eq!(gas_used, U256::from(58_030));
     assert_eq!(state.nonce(&caller3.address()).unwrap(), U256::from(1));
     assert_eq!(
         state.balance(&caller3.address()).unwrap(),
-        U256::from(41_976)
+        U256::from(41_970)
     );
     assert_eq!(
         state.sponsor_balance_for_gas(&address).unwrap(),
@@ -1119,7 +1182,7 @@ fn test_commission_privilege() {
         gas: U256::from(100_000),
         value: U256::zero(),
         action: Action::Call(address),
-        storage_limit: U256::from(0),
+        storage_limit: 0,
         epoch_height: 0,
         chain_id: 0,
         data: vec![],
@@ -1142,7 +1205,7 @@ fn test_commission_privilege() {
     .successfully_executed()
     .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_024));
+    assert_eq!(gas_used, U256::from(58_030));
     assert_eq!(state.nonce(&caller1.address()).unwrap(), U256::from(1));
     assert_eq!(
         state.balance(&caller1.address()).unwrap(),
@@ -1160,7 +1223,7 @@ fn test_commission_privilege() {
         gas: U256::from(100_000),
         value: U256::zero(),
         action: Action::Call(address),
-        storage_limit: U256::from(0),
+        storage_limit: 0,
         epoch_height: 0,
         chain_id: 0,
         data: vec![],
@@ -1183,7 +1246,7 @@ fn test_commission_privilege() {
     .successfully_executed()
     .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_024));
+    assert_eq!(gas_used, U256::from(58_030));
     assert_eq!(state.nonce(&caller2.address()).unwrap(), U256::from(1));
     assert_eq!(
         state.balance(&caller2.address()).unwrap(),
@@ -1215,7 +1278,7 @@ fn test_commission_privilege() {
         gas: U256::from(100_000),
         value: U256::zero(),
         action: Action::Call(address),
-        storage_limit: U256::from(0),
+        storage_limit: 0,
         epoch_height: 0,
         chain_id: 0,
         data: vec![],
@@ -1238,7 +1301,7 @@ fn test_commission_privilege() {
     .successfully_executed()
     .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_024));
+    assert_eq!(gas_used, U256::from(58_030));
     assert_eq!(state.nonce(&caller2.address()).unwrap(), U256::from(2));
     assert_eq!(
         state.balance(&caller2.address()).unwrap(),
@@ -1263,7 +1326,7 @@ fn test_commission_privilege() {
         gas: U256::from(100_000),
         value: U256::zero(),
         action: Action::Call(address),
-        storage_limit: U256::from(0),
+        storage_limit: 0,
         epoch_height: 0,
         chain_id: 0,
         data: vec![],
@@ -1272,7 +1335,7 @@ fn test_commission_privilege() {
     assert_eq!(tx.sender(), caller3.address());
     assert_eq!(
         state.balance(&caller3.address()).unwrap(),
-        U256::from(41_976)
+        U256::from(41_970)
     );
     let Executed { gas_used, .. } = Executive::new(
         &mut state,
@@ -1286,11 +1349,11 @@ fn test_commission_privilege() {
     .successfully_executed()
     .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_024));
+    assert_eq!(gas_used, U256::from(58_030));
     assert_eq!(state.nonce(&caller3.address()).unwrap(), U256::from(2));
     assert_eq!(
         state.balance(&caller3.address()).unwrap(),
-        U256::from(41_976)
+        U256::from(41_970)
     );
     assert_eq!(
         state.sponsor_balance_for_gas(&address).unwrap(),
@@ -1359,7 +1422,7 @@ fn test_storage_commission_privilege() {
         gas: U256::from(100_000),
         value: *COLLATERAL_PER_STORAGE_KEY,
         action: Action::Call(address),
-        storage_limit: U256::from(BYTES_PER_STORAGE_KEY),
+        storage_limit: BYTES_PER_STORAGE_KEY,
         epoch_height: 0,
         chain_id: 0,
         data: vec![],
@@ -1449,7 +1512,7 @@ fn test_storage_commission_privilege() {
             .check_collateral_for_storage_finally(
                 &privilege_control_address,
                 &U256::MAX,
-                &mut substate
+                &mut substate,
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -1497,7 +1560,7 @@ fn test_storage_commission_privilege() {
         gas: U256::from(100_000),
         value: U256::from(0),
         action: Action::Call(address),
-        storage_limit: U256::from(BYTES_PER_STORAGE_KEY),
+        storage_limit: BYTES_PER_STORAGE_KEY,
         epoch_height: 0,
         chain_id: 0,
         data: vec![],
@@ -1572,7 +1635,7 @@ fn test_storage_commission_privilege() {
         gas: U256::from(100_000),
         value: U256::from(0),
         action: Action::Call(address),
-        storage_limit: U256::from(BYTES_PER_STORAGE_KEY),
+        storage_limit: BYTES_PER_STORAGE_KEY,
         epoch_height: 0,
         chain_id: 0,
         data: vec![],
@@ -1665,7 +1728,7 @@ fn test_storage_commission_privilege() {
         gas: U256::from(100_000),
         value: U256::from(0),
         action: Action::Call(address),
-        storage_limit: U256::from(BYTES_PER_STORAGE_KEY),
+        storage_limit: BYTES_PER_STORAGE_KEY,
         epoch_height: 0,
         chain_id: 0,
         data: vec![],
@@ -1749,7 +1812,7 @@ fn test_storage_commission_privilege() {
             .check_collateral_for_storage_finally(
                 &privilege_control_address,
                 &U256::MAX,
-                &mut substate
+                &mut substate,
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -1791,7 +1854,7 @@ fn test_storage_commission_privilege() {
         gas: U256::from(100_000),
         value: U256::from(0),
         action: Action::Call(address),
-        storage_limit: U256::from(BYTES_PER_STORAGE_KEY),
+        storage_limit: BYTES_PER_STORAGE_KEY,
         epoch_height: 0,
         chain_id: 0,
         data: vec![],

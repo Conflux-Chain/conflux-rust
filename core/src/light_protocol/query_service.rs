@@ -17,7 +17,7 @@ use crate::{
     },
     sync::SynchronizationGraph,
 };
-use cfx_types::{Bloom, H160, H256, KECCAK_EMPTY_BLOOM, U256};
+use cfx_types::{BigEndianHash, Bloom, H160, H256, KECCAK_EMPTY_BLOOM, U256};
 use futures::{
     future::{self, Either},
     stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
@@ -309,7 +309,7 @@ impl QueryService {
         match self.retrieve_state_entry::<StorageValue>(epoch, key).await {
             Err(e) => Err(format!("Unable to retrieve storage entry: {}", e)),
             Ok(None) => Ok(None),
-            Ok(Some(entry)) => Ok(Some(entry.value)),
+            Ok(Some(entry)) => Ok(Some(H256::from_uint(&entry.value))),
         }
     }
 
@@ -520,6 +520,12 @@ impl QueryService {
 
         match epoch {
             EpochNumber::Earliest => Ok(0),
+            EpochNumber::LatestCheckpoint => {
+                Ok(self.consensus.latest_checkpoint_epoch_number())
+            }
+            EpochNumber::LatestConfirmed => {
+                Ok(self.consensus.latest_confirmed_epoch_number())
+            }
             EpochNumber::LatestMined => Ok(latest_verifiable),
             EpochNumber::LatestState => Ok(latest_verifiable),
             EpochNumber::Number(n) if n <= latest_verifiable => Ok(n),

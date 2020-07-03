@@ -2,8 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{Address, H256};
-use rlp_derive::{RlpDecodable, RlpEncodable};
+use cfx_types::{Address, H256, U256};
+use rlp::*;
 
 #[derive(Clone, Debug)]
 pub enum StorageLayout {
@@ -31,8 +31,40 @@ pub struct StorageRoot {
     pub snapshot: H256,
 }
 
-#[derive(Default, Clone, Debug, RlpDecodable, RlpEncodable)]
+#[derive(Default, Clone, Debug)]
 pub struct StorageValue {
-    pub value: H256,
-    pub owner: Address,
+    pub value: U256,
+    pub owner: Option<Address>,
+}
+
+impl Decodable for StorageValue {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        if rlp.is_list() {
+            if rlp.item_count()? != 2 {
+                return Err(DecoderError::RlpIncorrectListLen);
+            }
+            Ok(StorageValue {
+                value: rlp.val_at(0)?,
+                owner: Some(rlp.val_at(1)?),
+            })
+        } else {
+            Ok(StorageValue {
+                value: rlp.as_val()?,
+                owner: None,
+            })
+        }
+    }
+}
+
+impl Encodable for StorageValue {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        match &self.owner {
+            Some(owner) => {
+                s.begin_list(2).append(&self.value).append(owner);
+            }
+            None => {
+                s.append_internal(&self.value);
+            }
+        }
+    }
 }

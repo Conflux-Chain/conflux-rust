@@ -683,9 +683,9 @@ impl AccountProvider {
 #[cfg(test)]
 mod tests {
     use super::{AccountProvider, Unlock};
+    use cfx_types::H256;
     use cfxkey::{Address, Generator, Random};
     use cfxstore::{Derivation, StoreAccountRef};
-    use ethereum_types::H256;
     use std::time::{Duration, Instant};
 
     #[test]

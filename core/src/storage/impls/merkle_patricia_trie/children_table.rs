@@ -9,7 +9,7 @@ pub trait NodeRefTrait:
 
 impl NodeRefTrait for MerkleHash {}
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, MallocSizeOfDerive)]
 pub struct VanillaChildrenTable<NodeRefT: NodeRefTrait> {
     table: [NodeRefT; CHILDREN_COUNT],
     // TODO(yz): Use bitmap to save space for rlp format.
@@ -210,6 +210,13 @@ pub struct CompactedChildrenTable<NodeRefT: NodeRefTrait> {
     children_count: u8,
     /// Stores the existing children ordered.
     table_ptr: *mut NodeRefT,
+}
+
+impl<NodeRefT: NodeRefTrait> MallocSizeOf for CompactedChildrenTable<NodeRefT> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        // `table_ptr` is either null or from Vec
+        unsafe { ops.malloc_size_of(self.table_ptr) }
+    }
 }
 
 pub const CHILDREN_COUNT: usize = 16;
@@ -776,6 +783,7 @@ impl<'a, NodeRefT: NodeRefTrait> ChildrenTableIteratorStartIndex
     }
 }
 
+#[derive(MallocSizeOfDerive)]
 pub struct ChildrenTable<NodeRefT: NodeRefTrait> {
     /// Stores the existing children ordered.
     table: Box<[NodeRefT]>,
@@ -845,6 +853,8 @@ use super::{
     super::super::utils::WrappedCreateFrom,
     merkle::{ChildrenMerkleTable, MaybeMerkleTable},
 };
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;
 use std::{fmt::*, marker::PhantomData, mem, ptr::null_mut, slice};

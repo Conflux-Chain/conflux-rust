@@ -510,7 +510,7 @@ class ContractBenchTest(SmartContractBenchBase):
         file_path = "/".join(file_path)
         staking_contract_dict = json.loads(open(os.path.join(file_path), "r").read())
         staking_contract = get_contract_instance(contract_dict=staking_contract_dict)
-        staking_contract_addr = Web3.toChecksumAddress("843c409373ffd5c0bec1dddb7bec830856757b65")
+        staking_contract_addr = Web3.toChecksumAddress("0888000000000000000000000000000000000002")
 
         self.problem = "0x2bc79b7514884ab00da924607d71542cc4fed3beb8518e747726ae30ab6c7944"
         self.solution = "0xc4d2751c52311d0d7efe44e5c4195e058ad5ef4bb89b3e1761b24dc277b132c2"
@@ -542,7 +542,7 @@ class ContractBenchTest(SmartContractBenchBase):
             tx = self.rpc.new_tx(value=0, sender=pub_key, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
             self.rpc.send_tx(tx)
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
-        self.filter = Filter(from_epoch="earliest", to_epoch="latest_mined")
+        self.filter = Filter(from_epoch="earliest", to_epoch="latest_state")
         self.testEventContract()
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
         self.testBallotContract()

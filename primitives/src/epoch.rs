@@ -15,10 +15,15 @@ pub enum EpochNumber {
     Number(u64),
     /// Earliest block (checkpoint).
     Earliest,
-    /// Latest mined block.
-    LatestMined,
+    /// The latest checkpoint (cur_era_genesis)
+    LatestCheckpoint,
+    /// The latest confirmed block (based on the estimation of the confirmation
+    /// meter)
+    LatestConfirmed,
     /// Latest block with state.
     LatestState,
+    /// Latest mined block.
+    LatestMined,
 }
 
 impl Into<EpochNumber> for u64 {

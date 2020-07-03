@@ -247,19 +247,9 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
 
                 Request::GasMemProvide(gas, mem, Some(requested))
             }
-            instructions::CREATE => {
+            instructions::CREATE | instructions::CREATE2 => {
                 let start = stack.peek(1);
                 let len = stack.peek(2);
-
-                let gas = Gas::from(spec.create_gas);
-                let mem = mem_needed(start, len)?;
-
-                Request::GasMemProvide(gas, mem, None)
-            }
-            instructions::CREATE2 => {
-                let start = stack.peek(1);
-                let len = stack.peek(2);
-
                 let base = Gas::from(spec.create_gas);
                 let word = overflowing!(to_word_size(Gas::from_u256(*len)?));
                 let word_gas = overflowing!(

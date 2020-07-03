@@ -75,6 +75,11 @@ pub const CHECK_RPC_REQUEST_TIMER: TimerToken = 11;
 
 const MAX_TXS_BYTES_TO_PROPAGATE: usize = 1024 * 1024; // 1MB
 
+/// The maximum allowed gap between `best_epoch` and `latest_epoch_requested`.
+const EPOCH_SYNC_MAX_GAP: u64 = 20000;
+/// If not future epochs can be requested because of `EPOCH_SYNC_MAX_GAP`,
+/// after waiting this timeout we'll request from `best_epoch` again.
+const EPOCH_SYNC_RESTART_TIMEOUT_S: u64 = 60 * 10;
 const EPOCH_SYNC_MAX_INFLIGHT: u64 = 300;
 const EPOCH_SYNC_BATCH_SIZE: u64 = 30;
 
@@ -318,7 +323,8 @@ pub struct SynchronizationProtocolHandler {
     pub graph: SharedSynchronizationGraph,
     pub syn: Arc<SynchronizationState>,
     pub request_manager: Arc<RequestManager>,
-    pub latest_epoch_requested: Mutex<u64>,
+    /// The latest `(requested_epoch_number, request_time)`
+    pub latest_epoch_requested: Mutex<(u64, Instant)>,
     pub future_blocks: FutureBlockContainer,
     pub phase_manager: SynchronizationPhaseManager,
     pub phase_manager_lock: Mutex<u32>,
@@ -374,6 +380,7 @@ pub struct ProtocolConfiguration {
     pub max_allowed_timeout_in_observing_period: u64,
     pub demote_peer_for_timeout: bool,
     pub max_unprocessed_block_size: usize,
+    pub max_chunk_number_in_manifest: usize,
 }
 
 impl SynchronizationProtocolHandler {
@@ -411,7 +418,7 @@ impl SynchronizationProtocolHandler {
             graph: sync_graph.clone(),
             syn: sync_state.clone(),
             request_manager,
-            latest_epoch_requested: Mutex::new(0),
+            latest_epoch_requested: Mutex::new((0, Instant::now())),
             future_blocks: FutureBlockContainer::new(
                 future_block_buffer_capacity,
             ),
@@ -528,13 +535,10 @@ impl SynchronizationProtocolHandler {
     fn handle_error(
         &self, io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error,
     ) {
-        warn!(
-            "Error while handling message, peer={}, msgid={:?}, error={}",
-            peer, msg_id, e
-        );
-
         let mut disconnect = true;
+        let mut warn = true;
         let reason = format!("{}", e.0);
+        let error_reason = format!("{:?}", e);
         let mut op = None;
 
         // NOTE, DO NOT USE WILDCARD IN THE FOLLOWING MATCH STATEMENT!
@@ -559,6 +563,10 @@ impl SynchronizationProtocolHandler {
                 op = Some(UpdateNodeOperation::Demotion)
             }
             ErrorKind::RequestNotFound => disconnect = false,
+            ErrorKind::InCatchUpMode(_) => {
+                disconnect = false;
+                warn = false;
+            }
             ErrorKind::TooManyTrans => {}
             ErrorKind::InvalidTimestamp => {
                 op = Some(UpdateNodeOperation::Demotion)
@@ -638,6 +646,18 @@ impl SynchronizationProtocolHandler {
                 op = Some(UpdateNodeOperation::Remove)
             }
             ErrorKind::NotSupported(_) => disconnect = false,
+        }
+
+        if warn {
+            warn!(
+                "Error while handling message, peer={}, msgid={:?}, error={}",
+                peer, msg_id, error_reason
+            );
+        } else {
+            debug!(
+                "Minor error while handling message, peer={}, msgid={:?}, error={}",
+                peer, msg_id, error_reason
+            );
         }
 
         if disconnect {
@@ -754,18 +774,36 @@ impl SynchronizationProtocolHandler {
         let median_peer_epoch =
             self.syn.median_epoch_from_normal_peers().unwrap_or(0);
         let my_best_epoch = self.graph.consensus.best_epoch_number();
+        let (mut latest_requested_epoch, latest_request_time) =
+            *latest_requested;
+
+        // If the gap is too large, it means that the next epoch of
+        // `my_best_epoch` is missing, either because received
+        // epoch_set is wrong or we have too many epochs with
+        // blocks not received.
+        if latest_requested_epoch >= my_best_epoch + EPOCH_SYNC_MAX_GAP {
+            if latest_request_time.elapsed()
+                < Duration::from_secs(EPOCH_SYNC_RESTART_TIMEOUT_S)
+            {
+                return;
+            } else {
+                // Restart from `my_best_epoch` to fix possible problems.
+                latest_requested_epoch = my_best_epoch;
+            }
+        }
 
         while self.request_manager.num_epochs_in_flight()
             < EPOCH_SYNC_MAX_INFLIGHT
-            && (*latest_requested < median_peer_epoch || median_peer_epoch == 0)
+            && latest_requested_epoch < my_best_epoch + EPOCH_SYNC_MAX_GAP
+            && (latest_requested_epoch < median_peer_epoch
+                || median_peer_epoch == 0)
         {
-            let from = cmp::max(my_best_epoch, *latest_requested) + 1;
+            let from = cmp::max(my_best_epoch, latest_requested_epoch) + 1;
             // Check epochs from db
             if let Some(epoch_hashes) =
                 self.graph.data_man.all_epoch_set_hashes_from_db(from)
             {
                 debug!("Recovered epoch {} from db", from);
-                // FIXME better handle this in our event loop separately
                 if self.need_requesting_blocks() {
                     self.request_blocks(io, None, epoch_hashes);
                 } else {
@@ -776,12 +814,12 @@ impl SynchronizationProtocolHandler {
                         true, /* ignore_db */
                     );
                 }
-                *latest_requested = from;
+                latest_requested_epoch = from;
                 continue;
             } else if median_peer_epoch == 0 {
                 // We have recovered all epochs from db, and there is no peer to
                 // request new epochs, so we should enter `Latest` phase
-                return;
+                break;
             }
 
             // Epoch hashes are not in db, so should be requested from another
@@ -798,13 +836,16 @@ impl SynchronizationProtocolHandler {
             let until = {
                 let max_to_send = EPOCH_SYNC_MAX_INFLIGHT
                     - self.request_manager.num_epochs_in_flight();
+                let maybe_peer_info = self.syn.get_peer_info(&peer.unwrap());
+                if maybe_peer_info.is_err() {
+                    // The peer is disconnected after we chose it.
+                    // `latest_requested` is not updated, so we just continue to
+                    // try another peer.
+                    continue;
+                }
 
-                let best_of_this_peer = self
-                    .syn
-                    .get_peer_info(&peer.unwrap())
-                    .unwrap()
-                    .read()
-                    .best_epoch;
+                let best_of_this_peer =
+                    maybe_peer_info.unwrap().read().best_epoch;
 
                 let until = from + cmp::min(EPOCH_SYNC_BATCH_SIZE, max_to_send);
                 cmp::min(until, best_of_this_peer + 1)
@@ -822,8 +863,9 @@ impl SynchronizationProtocolHandler {
 
             self.request_manager
                 .request_epoch_hashes(io, peer, epochs, None);
-            *latest_requested = until - 1;
+            latest_requested_epoch = until - 1;
         }
+        *latest_requested = (latest_requested_epoch, Instant::now());
     }
 
     pub fn request_block_headers(
@@ -939,10 +981,11 @@ impl SynchronizationProtocolHandler {
                         false, // insert_into_consensus
                         true,  // persistent
                     );
-                    if !insert_result.is_new_valid() {
-                        // If header is invalid or already processed, we do not
-                        // need to request the block, so
-                        // just mark it received
+                    if !insert_result.should_process_body() {
+                        // If the header is invalid or the block has been
+                        // processed in consensus, we do not need to request the
+                        // block, so just mark it
+                        // received.
                         received_blocks.insert(hash);
                         continue;
                     }
@@ -1281,7 +1324,7 @@ impl SynchronizationProtocolHandler {
                 );
             }
         }
-        let mut sent_transactions = short_ids_transactions;
+        let mut sent_transactions = short_ids_transactions.clone();
         if !tx_hashes_transactions.is_empty() {
             TX_HASHES_PROPAGATE_METER.mark(tx_hashes_transactions.len());
             for tx in &tx_hashes_transactions {
@@ -1290,7 +1333,7 @@ impl SynchronizationProtocolHandler {
                     tx.hash(),
                 );
             }
-            sent_transactions.extend(tx_hashes_transactions);
+            sent_transactions.extend(tx_hashes_transactions.clone());
         }
 
         TX_PROPAGATE_METER.mark(sent_transactions.len());
@@ -1309,6 +1352,7 @@ impl SynchronizationProtocolHandler {
             .request_manager
             .append_sent_transactions(sent_transactions);
 
+        let mut resend_flag = false;
         for i in 0..lucky_peers.len() {
             let peer_id = lucky_peers[i];
             let (key1, key2) = nonces.pop().unwrap();
@@ -1332,8 +1376,21 @@ impl SynchronizationProtocolHandler {
                         "failed to propagate transaction ids to peer, id: {}, err: {}",
                         peer_id, e
                     );
+                    resend_flag = true;
                 }
             }
+        }
+
+        if resend_flag {
+            let mut resend_transactions: HashMap<H256, Arc<SignedTransaction>> =
+                HashMap::new();
+            for tx in short_ids_transactions {
+                resend_transactions.insert(tx.hash, tx.clone());
+            }
+            for tx in tx_hashes_transactions {
+                resend_transactions.insert(tx.hash, tx.clone());
+            }
+            self.set_to_propagate_trans(resend_transactions);
         }
     }
 

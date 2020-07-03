@@ -11,7 +11,6 @@ clap = "2"
 cfxcore = { path = "../core" }
 cfx-stratum = { path = "stratum" }
 cfx-types = { path = "../cfx_types" }
-keccak-hash = "0.4"
 primitives = { path = "../primitives" }
 parking_lot = "0.10"
 rlp = "0.4.0"

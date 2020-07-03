@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-#[derive(Clone)]
+#[derive(Clone, MallocSizeOfDerive)]
 pub enum TrieCacheSlotOrCacheAlgoData<CacheAlgoDataT: CacheAlgoDataTrait> {
     TrieCacheSlot(ActualSlabIndex),
     CacheAlgoData(CacheAlgoDataT),
@@ -22,7 +22,7 @@ pub enum TrieCacheSlotOrCacheAlgoData<CacheAlgoDataT: CacheAlgoDataTrait> {
 /// obtain the CacheableNodeRef for the non-cached child node. However a
 /// reference count is necessary to prevent NodeRef for non-cached node from
 /// staying forever in the memory.
-#[derive(Clone)]
+#[derive(Clone, MallocSizeOfDerive)]
 pub struct CacheableNodeRefDeltaMpt<CacheAlgoDataT: CacheAlgoDataTrait> {
     cached: TrieCacheSlotOrCacheAlgoData<CacheAlgoDataT>,
 }
@@ -63,6 +63,7 @@ const MPT_ID_RANGE: usize = std::u16::MAX as usize + 1;
 // TODO(yz): chunks are filled, reclaim one chunk from the mpt with the lowest
 // TODO(yz): chunk cached rate.
 /// Maintains the cache slot / cache info for multiple Delta MPTs.
+#[derive(MallocSizeOfDerive)]
 pub struct NodeRefMapDeltaMpts<CacheAlgoDataT: CacheAlgoDataTrait> {
     node_ref_maps:
         Vec<HashMap<DeltaMptDbKey, CacheableNodeRefDeltaMpt<CacheAlgoDataT>>>,
@@ -161,3 +162,4 @@ use super::{
     node_memory_manager::ActualSlabIndex, row_number::RowNumberUnderlyingType,
 };
 use hashbrown::HashMap;
+use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;

@@ -4,8 +4,8 @@ use crate::{
         RequestId,
     },
     sync::{
-        message::{msgid, Context, Handleable},
-        state::{storage::SnapshotSyncCandidate, StateSyncCandidateRequest},
+        message::{msgid, Context, Handleable, StateSyncCandidateRequest},
+        state::storage::SnapshotSyncCandidate,
         Error, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
 };
