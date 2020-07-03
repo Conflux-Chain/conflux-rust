@@ -46,7 +46,6 @@ class TestNode:
         self.stderr_dir = os.path.join(self.datadir, "stderr")
         self.log = os.path.join(self.datadir, "node" + str(index) + ".log")
         self.remote = remote
-        # FIXME: When will it be False?
         self.no_pssh = no_pssh
         self.rpchost = rpchost
         self.auto_recovery = auto_recovery

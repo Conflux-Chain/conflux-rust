@@ -71,7 +71,6 @@ class RemoteSimulate(ConfluxTestFramework):
         egress_max_throttle = 1024,
         egress_queue_capacity = 2048,
         genesis_secrets = "/home/ubuntu/genesis_secrets.txt",
-        persist_tx_index = "false",
         send_tx_period_ms = 1300,
         txgen_account_count = 1000,
         tx_pool_size = conflux.config.default_conflux_conf["tx_pool_size"],
@@ -368,7 +367,10 @@ class BlockConfirmationInfo:
         self._lock.release()
 
     def get_unconfirmed_blocks(self):
-        return sorted(self.unconfirmed_block, key=lambda h: self.block_start_time[h])
+        self._lock.acquire()
+        sorted_blocks = sorted(self.unconfirmed_block, key=lambda h: self.block_start_time[h])
+        self._lock.release()
+        return sorted_blocks
 
     def get_average_latency(self):
         self._lock.acquire()
@@ -377,7 +379,10 @@ class BlockConfirmationInfo:
         return sum(confirmation_time) / len(confirmation_time)
 
     def progress(self):
-        return f"generated: {len(self.block_start_time)}, confirmed: {len(self.block_confirmation_time)}"
+        self._lock.acquire()
+        s = f"generated: {len(self.block_start_time)}, confirmed: {len(self.block_confirmation_time)}"
+        self._lock.release()
+        return s
 
 class GenerateThread(threading.Thread):
     def __init__(self, nodes, i, tx_n, tx_data_len, max_block_size, log, rpc_times:list, confirm_info: BlockConfirmationInfo):
@@ -385,7 +390,7 @@ class GenerateThread(threading.Thread):
         self.nodes = nodes
         self.i = i
         self.tx_n = tx_n
-        self.tx_data_len = tx_data_len - 200
+        self.tx_data_len = tx_data_len
         self.max_block_size = max_block_size
         self.log = log
         self.rpc_times = rpc_times
