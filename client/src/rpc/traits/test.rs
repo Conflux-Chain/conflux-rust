@@ -92,7 +92,9 @@ pub trait TestRpc {
     fn expire_block_gc(&self, timeout: u64) -> RpcResult<()>;
 
     #[rpc(name = "getPivotChainAndWeight")]
-    fn get_pivot_chain_and_weight(&self) -> RpcResult<Vec<(H256, U256)>>;
+    fn get_pivot_chain_and_weight(
+        &self, height_range: Option<(u64, u64)>,
+    ) -> RpcResult<Vec<(H256, U256)>>;
 
     #[rpc(name = "getExecutedInfo")]
     fn get_executed_info(&self, block_hash: H256) -> RpcResult<(H256, H256)>;

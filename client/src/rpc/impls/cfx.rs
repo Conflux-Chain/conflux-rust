@@ -25,11 +25,9 @@ use blockgen::BlockGenerator;
 use cfx_types::{H160, H256, U256};
 use cfxcore::{
     block_data_manager::BlockExecutionResultWithEpoch,
-    storage::{state::StateTrait, state_manager::StateManagerTrait},
-    PeerInfo, SharedConsensusGraph, SharedSynchronizationService,
     state_exposer::STATE_EXPOSER, test_context::*, vm, ConsensusGraph,
-    ConsensusGraphTrait,
-    SharedTransactionPool,
+    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
+    SharedSynchronizationService, SharedTransactionPool,
 };
 use delegate::delegate;
 use jsonrpc_core::{BoxFuture, Error as JsonRpcError, Result as JsonRpcResult};
@@ -894,25 +892,44 @@ impl RpcImpl {
         Ok(self.sync.current_sync_phase().name().into())
     }
 
-    fn get_pivot_chain_and_weight(&self) -> RpcResult<Vec<(H256, U256)>> {
+    /// Return the pivot chain block hashes in `height_range` (inclusive) and
+    /// their subtree weight. If it's none, return all pivot chain from
+    /// `cur_era_genesis` to chain tip.
+    ///
+    /// Note that this should note query blocks before `cur_era_genesis`.
+    fn get_pivot_chain_and_weight(
+        &self, height_range: Option<(u64, u64)>,
+    ) -> RpcResult<Vec<(H256, U256)>> {
         let consensus_graph = self
             .consensus
             .as_any()
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed");
         let inner = &mut *consensus_graph.inner.write();
+        let min_height = inner.get_cur_era_genesis_height();
+        let max_height = consensus_graph.best_epoch_number();
+        let (start, end) = height_range.unwrap_or((min_height, max_height));
+        if start < min_height || end > max_height {
+            bail!(
+                "height_range out of bound: requested={:?} min={} max={}",
+                height_range,
+                min_height,
+                max_height
+            );
+        }
+
         let mut chain = Vec::new();
-        for idx in &inner.pivot_chain {
+        for i in start..=end {
+            let pivot_arena_index = inner.get_pivot_block_arena_index(i);
             chain.push((
-                inner.arena[*idx].hash.into(),
-                (inner.weight_tree.get(*idx) as u64).into(),
+                inner.arena[pivot_arena_index].hash.into(),
+                (inner.weight_tree.get(pivot_arena_index) as u64).into(),
             ));
         }
         Ok(chain)
     }
 
     fn get_executed_info(&self, block_hash: H256) -> RpcResult<(H256, H256)> {
-
         let consensus_graph = self
             .consensus
             .as_any()
@@ -926,7 +943,10 @@ impl RpcImpl {
             ))?;
         Ok((
             commitment.receipts_root.clone().into(),
-            commitment.state_root_with_aux_info.state_root.compute_state_root_hash(),
+            commitment
+                .state_root_with_aux_info
+                .state_root
+                .compute_state_root_hash(),
         ))
     }
 
@@ -1095,7 +1115,7 @@ impl TestRpc for TestRpcImpl {
             fn generate_custom_block(
                 &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes, adaptive: Option<bool>)
                 -> JsonRpcResult<H256>;
-            fn get_pivot_chain_and_weight(&self) -> JsonRpcResult<Vec<(H256, U256)>>;
+            fn get_pivot_chain_and_weight(&self, height_range: Option<(u64, u64)>) -> JsonRpcResult<Vec<(H256, U256)>>;
             fn get_executed_info(&self, block_hash: H256) -> JsonRpcResult<(H256, H256)> ;
             fn generate_fixed_block(
                 &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>)

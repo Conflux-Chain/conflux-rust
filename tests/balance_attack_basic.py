@@ -11,6 +11,14 @@ from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 
+
+# Convert weight to integer
+def process_chain(chain):
+    for i in range(len(chain)):
+        chain[i][1] = parse_as_int(chain[i][1])
+    return chain
+
+
 class P2PTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -62,8 +70,8 @@ class P2PTest(ConfluxTestFramework):
         # Find the fork point
         finished = False
         while not finished:
-            chain0 = self.process_chain(self.nodes[0].getPivotChainAndWeight())
-            chain1 = self.process_chain(self.nodes[1].getPivotChainAndWeight())
+            chain0 = process_chain(self.nodes[0].getPivotChainAndWeight())
+            chain1 = process_chain(self.nodes[1].getPivotChainAndWeight())
             fork_height = 0
             while True:
                 if chain0[fork_height][0] != chain1[fork_height][0]:
@@ -83,8 +91,6 @@ class P2PTest(ConfluxTestFramework):
         else:
             receipts_root = default_config["GENESIS_RECEIPTS_ROOT"]
 
-        count = 0
-        after_count = 0
         merged = False
         start = time.time()
         total_sleep = 0
@@ -97,26 +103,17 @@ class P2PTest(ConfluxTestFramework):
             else:
                 self.log.info(f"slow adversary {elapsed} {total_sleep}")
 
-            chain0 = self.process_chain(self.nodes[0].getPivotChainAndWeight())
-            self.check_chain_heavy(chain0, 0, fork_height)
-            chain1 = self.process_chain(self.nodes[1].getPivotChainAndWeight())
-            self.check_chain_heavy(chain1, 1, fork_height)
-            assert_equal(chain0[0][0], chain1[0][0])
-            fork0 = chain0[fork_height]
-            fork1 = chain1[fork_height]
-            self.log.debug("Fork root %s %s", chain0[fork_height], chain1[fork_height])
-            if fork0[0] == fork1[0]:
-                merged = True
+            fork0 = process_chain(self.nodes[0].getPivotChainAndWeight((fork_height, fork_height)))[0]
+            adaptive0 = self.nodes[0].cfx_getBlockByEpochNumber("latest_mined", False)["adaptive"]
+            fork1 = process_chain(self.nodes[1].getPivotChainAndWeight((fork_height, fork_height)))[0]
+            adaptive1 = self.nodes[0].cfx_getBlockByEpochNumber("latest_mined", False)["adaptive"]
+            self.log.info(f"Fork weights: {fork0} {fork1}")
+            self.log.debug(f"two node adaptive: {adaptive0} {adaptive1}")
+            if fork0[0] == fork1[0] and not merged:
                 self.log.info("Pivot chain merged")
-                after_count += 1
-                if after_count >= 12*3600 / evil_generation_period:
-                    self.log.info("Merged. Winner: %s Chain end with %s", fork0[0], chain0[min(len(chain0), len(chain1)) - 2][0])
-                    break
-                continue
-
-            count += 1
-            if count >= 12*3600 / evil_generation_period:
-                self.log.info("Not merged after 12h")
+                merged = True
+            if not adaptive0 and not adaptive1 and merged:
+                self.log.info("adaptive blocks stopped")
                 break
             ''' Send blocks to keep balance.
                 The adversary's mining power and strategy is not strictly designed in the naive version.
@@ -140,19 +137,6 @@ class P2PTest(ConfluxTestFramework):
                     self.log.debug("send to 1 block %s, weight %d %d", block.block.hash_hex(), fork0[1], fork1[1])
         exit()
 
-    # Convert weight to integer
-    def process_chain(self, chain):
-        for i in range(len(chain)):
-            chain[i][1] = parse_as_int(chain[i][1])
-        return chain
-
-    def check_chain_heavy(self, chain, chain_id, fork_height):
-        for i in range(fork_height+1, len(chain)-1):
-            if chain[i][1] - chain[i+1][1] >= self.difficulty * 240:
-                self.log.debug("chain %d is heavy at height %d %d %d", chain_id, i,  chain[i][1], chain[i+1][1])
-                return
-        if chain[-1][1] >= self.difficulty * 240:
-            self.log.debug("chain %d is heavy at height %d %d %d", chain_id, i,  chain[i][1], chain[i+1][1])
 
 
 if __name__ == "__main__":
