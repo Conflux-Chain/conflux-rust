@@ -22,7 +22,7 @@ do
     echo $i >> instances
     echo $i >> instances_all
 done
-res=`aws ec2 describe-instances --filters Name=tag:role,Values=$role Name=instance-state-name,Values=stopped --region $region`
+res=`aws ec2 describe-instances --filters Name=tag:role,Values=$role Name=instance-state-name,Values=pending --region $region`
 instances=`echo $res | jq ".Reservations[].Instances[].InstanceId" | tr -d '"'`
 for i in ${instances[*]}
 do
