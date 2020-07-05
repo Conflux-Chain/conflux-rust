@@ -18,6 +18,7 @@ use crate::{
             GetBlockHeadersResponse, NewBlockHashes, StatusDeprecatedV1,
             StatusV2, TransactionDigests,
         },
+        request_manager::{try_get_block_hashes, Request},
         state::SnapshotChunkSync,
         synchronization_phases::{SyncPhaseType, SynchronizationPhaseManager},
         synchronization_state::PeerFilter,
@@ -1468,8 +1469,30 @@ impl SynchronizationProtocolHandler {
 
     pub fn remove_expired_flying_request(&self, io: &dyn NetworkContext) {
         self.request_manager.resend_timeout_requests(io);
-        self.request_manager
+        let cancelled_requests = self
+            .request_manager
             .resend_waiting_requests(io, !self.catch_up_mode());
+        self.handle_cancelled_requests(cancelled_requests);
+    }
+
+    /// Remove the blocks in `cancelled_requests` and their future set from sync
+    /// graph, so if they are needed in the future, they will be requested
+    /// again.
+    fn handle_cancelled_requests(
+        &self, cancelled_requests: Vec<Box<dyn Request>>,
+    ) {
+        let mut to_remove_blocks = HashSet::new();
+        for request in cancelled_requests {
+            // We do not need to handle `GetBlockHeaders` because if a header is
+            // not received, the block will not exist in our sync
+            // graph.
+            if let Some(block_hashes) = try_get_block_hashes(&request) {
+                for hash in block_hashes {
+                    to_remove_blocks.insert(*hash);
+                }
+            }
+        }
+        self.graph.remove_blocks_and_future(&to_remove_blocks);
     }
 
     pub fn send_heartbeat(&self, io: &dyn NetworkContext) {

@@ -2134,6 +2134,38 @@ impl SynchronizationGraph {
         inner.remove_blocks(&expire_set);
     }
 
+    /// Remove all blocks in `to_remove_set` and their future set from the
+    /// graph.
+    pub fn remove_blocks_and_future(&self, to_remove_set: &HashSet<H256>) {
+        let mut inner = self.inner.write();
+        let mut queue = VecDeque::new();
+        let mut visited = HashSet::new();
+
+        for block_hash in to_remove_set {
+            if let Some(index) = inner.hash_to_arena_indices.get(block_hash) {
+                queue.push_back(*index);
+                visited.insert(*index);
+            }
+        }
+
+        // TODO Merge codes for graph traversal.
+        while let Some(index) = queue.pop_front() {
+            for child in &inner.arena[index].children {
+                if !visited.contains(child) {
+                    visited.insert(*child);
+                    queue.push_back(*child);
+                }
+            }
+            for referrer in &inner.arena[index].referrers {
+                if !visited.contains(referrer) {
+                    visited.insert(*referrer);
+                    queue.push_back(*referrer);
+                }
+            }
+        }
+        inner.remove_blocks(&visited);
+    }
+
     pub fn is_consensus_worker_busy(&self) -> bool {
         self.consensus_unprocessed_count.load(Ordering::SeqCst) != 0
     }
