@@ -420,7 +420,7 @@ pub struct ConsensusGraphInner {
     /// indices maps block hash to internal index.
     pub hash_to_arena_indices: FastHashMap<H256, usize>,
     /// The current pivot chain indexes.
-    pub pivot_chain: Vec<usize>,
+    pivot_chain: Vec<usize>,
     /// The metadata associated with each pivot chain block
     pivot_chain_metadata: Vec<ConsensusGraphPivotData>,
     /// The longest timer chain block indexes
@@ -453,7 +453,7 @@ pub struct ConsensusGraphInner {
     best_timer_chain_difficulty: i128,
     best_timer_chain_hash: H256,
     /// weight_tree maintains the subtree weight of each node in the TreeGraph
-    pub weight_tree: SizeMinLinkCutTree,
+    weight_tree: SizeMinLinkCutTree,
     /// adaptive_tree maintains 2 * SubStableTW(B, x) - SubTW(B, P(x)) +
     /// Weight(P(x))
     adaptive_tree: CaterpillarMinLinkCutTree,
@@ -3758,5 +3758,31 @@ impl ConsensusGraphInner {
                     })
             );
         }
+    }
+
+    pub fn get_pivot_chain_and_weight(
+        &self, height_range: Option<(u64, u64)>,
+    ) -> Result<Vec<(H256, U256)>, String> {
+        let min_height = self.get_cur_era_genesis_height();
+        let max_height = self.arena[*self.pivot_chain.last().unwrap()].height;
+        let (start, end) = height_range.unwrap_or((min_height, max_height));
+        if start < min_height || end > max_height {
+            bail!(
+                "height_range out of bound: requested={:?} min={} max={}",
+                height_range,
+                min_height,
+                max_height
+            );
+        }
+
+        let mut chain = Vec::new();
+        for i in start..=end {
+            let pivot_arena_index = self.get_pivot_block_arena_index(i);
+            chain.push((
+                self.arena[pivot_arena_index].hash.into(),
+                (self.weight_tree.get(pivot_arena_index) as u64).into(),
+            ));
+        }
+        Ok(chain)
     }
 }

@@ -905,38 +905,16 @@ impl RpcImpl {
             .as_any()
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed");
-        let inner = &mut *consensus_graph.inner.write();
-        let min_height = inner.get_cur_era_genesis_height();
-        let max_height = consensus_graph.best_epoch_number();
-        let (start, end) = height_range.unwrap_or((min_height, max_height));
-        if start < min_height || end > max_height {
-            bail!(
-                "height_range out of bound: requested={:?} min={} max={}",
-                height_range,
-                min_height,
-                max_height
-            );
-        }
-
-        let mut chain = Vec::new();
-        for i in start..=end {
-            let pivot_arena_index = inner.get_pivot_block_arena_index(i);
-            chain.push((
-                inner.arena[pivot_arena_index].hash.into(),
-                (inner.weight_tree.get(pivot_arena_index) as u64).into(),
-            ));
-        }
-        Ok(chain)
+        Ok(consensus_graph
+            .inner
+            .read()
+            .get_pivot_chain_and_weight(height_range)?)
     }
 
     fn get_executed_info(&self, block_hash: H256) -> RpcResult<(H256, H256)> {
-        let consensus_graph = self
+        let commitment = self
             .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
-        let commitment = consensus_graph
-            .data_man
+            .get_data_manager()
             .get_epoch_execution_commitment(&block_hash)
             .ok_or(JsonRpcError::invalid_params(
                 "No receipts root. Possibly never pivot?".to_owned(),
