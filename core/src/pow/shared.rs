@@ -16,7 +16,10 @@ pub const NODE_BYTES: usize = 64;
 
 pub fn stage(block_height: u64) -> u64 { block_height / POW_STAGE_LENGTH }
 
+#[allow(dead_code)]
 static CHARS: &'static [u8] = b"0123456789abcdef";
+
+#[allow(dead_code)]
 pub fn to_hex(bytes: &[u8]) -> String {
     let mut v = Vec::with_capacity(bytes.len() * 2);
     for &byte in bytes.iter() {

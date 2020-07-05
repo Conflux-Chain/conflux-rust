@@ -1,11 +1,10 @@
 use super::{
-    cache::{NodeCache, NodeCacheBuilder},
+    cache::{Cache, CacheBuilder},
     keccak::{keccak_256, keccak_512, H256},
     seed_compute::SeedHashCompute,
     shared::*,
 };
-
-use std::mem;
+use std::{mem, sync::Arc};
 
 const MIX_WORDS: usize = POW_MIX_BYTES / 4;
 const MIX_NODES: usize = MIX_WORDS / NODE_WORDS;
@@ -13,14 +12,12 @@ pub const FNV_PRIME: u32 = 0x01000193;
 
 pub struct Light {
     block_height: u64,
-    cache: NodeCache,
+    cache: Arc<Cache>,
 }
 
 /// Light cache structure
 impl Light {
-    pub fn new_with_builder(
-        builder: &NodeCacheBuilder, block_height: u64,
-    ) -> Self {
+    pub fn new_with_builder(builder: &CacheBuilder, block_height: u64) -> Self {
         let cache = builder.new_cache(block_height);
 
         Light {
@@ -37,7 +34,7 @@ impl Light {
     }
 }
 
-#[warn(dead_code)]
+#[allow(dead_code)]
 pub fn slow_hash_block_height(block_height: u64) -> H256 {
     SeedHashCompute::resume_compute_seedhash([0u8; 32], 0, stage(block_height))
 }
@@ -207,7 +204,7 @@ fn hash_compute(
         }
     }
 
-    let mix_hash = buf.compress_bytes;
+    let _mix_hash = buf.compress_bytes;
 
     let value: H256 = {
         // We can interpret the buffer as an array of `u8`s, since it's

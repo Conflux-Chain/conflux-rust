@@ -4,34 +4,26 @@ use super::{
     compute::Light,
     keccak::{keccak_512, H256},
     seed_compute::SeedHashCompute,
-    shared::{get_cache_size, stage, Node, NODE_BYTES, POW_CACHE_ROUNDS},
+    shared::{
+        get_cache_size, Node, NODE_BYTES, POW_CACHE_ROUNDS, POW_STAGE_LENGTH,
+    },
 };
 
-use std::{slice, sync::Arc};
+use std::{collections::HashMap, slice, sync::Arc};
 
-type Cache = Vec<Node>;
-
-fn byte_size(cache: &Cache) -> usize { cache.len() * NODE_BYTES }
-
-fn new_buffer(num_nodes: usize, ident: &H256) -> Cache {
-    make_memory_cache(num_nodes, ident)
-}
+pub type Cache = Vec<Node>;
 
 #[derive(Clone)]
-pub struct NodeCacheBuilder {
+pub struct CacheBuilder {
     seedhash: Arc<Mutex<SeedHashCompute>>,
+    caches: Arc<Mutex<HashMap<u64, Arc<Cache>>>>,
 }
 
-pub struct NodeCache {
-    builder: NodeCacheBuilder,
-    stage: u64,
-    cache: Cache,
-}
-
-impl NodeCacheBuilder {
+impl CacheBuilder {
     pub fn new() -> Self {
-        NodeCacheBuilder {
+        CacheBuilder {
             seedhash: Arc::new(Mutex::new(SeedHashCompute::default())),
+            caches: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -43,13 +35,20 @@ impl NodeCacheBuilder {
         self.seedhash.lock().hash_block_height(block_height)
     }
 
+    #[allow(dead_code)]
     fn stage_to_ident(&self, stage: u64) -> H256 {
         self.seedhash.lock().hash_stage(stage)
     }
 
-    pub fn new_cache(&self, block_height: u64) -> NodeCache {
-        let ident = self.block_height_to_ident(block_height);
+    pub fn new_cache(&self, block_height: u64) -> Arc<Cache> {
+        let stage = block_height / POW_STAGE_LENGTH;
 
+        let mut caches = self.caches.lock();
+        if let Some(cache) = caches.get(&stage) {
+            return cache.clone();
+        }
+
+        let ident = self.block_height_to_ident(block_height);
         let cache_size = get_cache_size(block_height);
 
         // We use `debug_assert` since it is impossible for `get_cache_size` to
@@ -58,17 +57,14 @@ impl NodeCacheBuilder {
         debug_assert!(cache_size % NODE_BYTES == 0, "Unaligned cache size");
         let num_nodes = cache_size / NODE_BYTES;
 
-        let nodes = new_buffer(num_nodes, &ident);
+        let cache = Arc::new(make_memory_cache(num_nodes, &ident));
+        caches.insert(stage, cache.clone());
 
-        NodeCache {
-            builder: self.clone(),
-            stage: stage(block_height),
-            cache: nodes,
-        }
+        cache
     }
 }
 
-fn make_memory_cache(num_nodes: usize, ident: &H256) -> Vec<Node> {
+fn make_memory_cache(num_nodes: usize, ident: &H256) -> Cache {
     let mut nodes: Vec<Node> = Vec::with_capacity(num_nodes);
     // Use uninit instead of unnecessarily writing `size_of::<Node>() *
     // num_nodes` 0s
@@ -78,10 +74,6 @@ fn make_memory_cache(num_nodes: usize, ident: &H256) -> Vec<Node> {
     }
 
     nodes
-}
-
-impl AsRef<[Node]> for NodeCache {
-    fn as_ref(&self) -> &[Node] { self.cache.as_ref() }
 }
 
 // This takes a raw pointer and a counter because `memory` may be uninitialized.

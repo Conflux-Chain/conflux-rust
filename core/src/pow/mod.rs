@@ -9,7 +9,7 @@ mod seed_compute;
 mod shared;
 
 use self::keccak::H256 as RawH256;
-pub use self::{cache::NodeCacheBuilder, shared::POW_STAGE_LENGTH};
+pub use self::{cache::CacheBuilder, shared::POW_STAGE_LENGTH};
 
 use crate::{block_data_manager::BlockDataManager, parameters::pow::*};
 use cfx_types::{BigEndianHash, H256, U256, U512};
@@ -203,23 +203,20 @@ pub fn compute_inv_x_times_2_pow_256_floor(x: &U256) -> U256 {
 }
 
 pub struct PowComputer {
-    nodecache_builder: NodeCacheBuilder,
+    cache_builder: CacheBuilder,
 }
 
 impl PowComputer {
     pub fn new() -> Self {
-        debug!("PowComputer::new()");
-
         PowComputer {
-            nodecache_builder: NodeCacheBuilder::new(),
+            cache_builder: CacheBuilder::new(),
         }
     }
 
     pub fn compute_light(
         &self, block_height: u64, block_hash: &RawH256, nonce: u64,
     ) -> RawH256 {
-        debug!("block_height: {} nonce: {}", block_height, nonce);
-        let light = self.nodecache_builder.light(block_height);
+        let light = self.cache_builder.light(block_height);
         light.compute(block_hash, nonce)
     }
 }
