@@ -894,6 +894,42 @@ impl RpcImpl {
         Ok(self.sync.current_sync_phase().name().into())
     }
 
+    /// Return the pivot chain block hashes in `height_range` (inclusive) and
+    /// their subtree weight. If it's none, return all pivot chain from
+    /// `cur_era_genesis` to chain tip.
+    ///
+    /// Note that this should note query blocks before `cur_era_genesis`.
+    fn get_pivot_chain_and_weight(
+        &self, height_range: Option<(u64, u64)>,
+    ) -> RpcResult<Vec<(H256, U256)>> {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+        Ok(consensus_graph
+            .inner
+            .read()
+            .get_pivot_chain_and_weight(height_range)?)
+    }
+
+    fn get_executed_info(&self, block_hash: H256) -> RpcResult<(H256, H256)> {
+        let commitment = self
+            .consensus
+            .get_data_manager()
+            .get_epoch_execution_commitment(&block_hash)
+            .ok_or(JsonRpcError::invalid_params(
+                "No receipts root. Possibly never pivot?".to_owned(),
+            ))?;
+        Ok((
+            commitment.receipts_root.clone().into(),
+            commitment
+                .state_root_with_aux_info
+                .state_root
+                .compute_state_root_hash(),
+        ))
+    }
+
     fn expire_block_gc(&self, timeout: u64) -> RpcResult<()> {
         self.sync.expire_block_gc(timeout);
         Ok(())
@@ -1062,6 +1098,8 @@ impl TestRpc for TestRpcImpl {
             fn generate_custom_block(
                 &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes, adaptive: Option<bool>)
                 -> JsonRpcResult<H256>;
+            fn get_pivot_chain_and_weight(&self, height_range: Option<(u64, u64)>) -> JsonRpcResult<Vec<(H256, U256)>>;
+            fn get_executed_info(&self, block_hash: H256) -> JsonRpcResult<(H256, H256)> ;
             fn generate_fixed_block(
                 &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>)
                 -> JsonRpcResult<H256>;

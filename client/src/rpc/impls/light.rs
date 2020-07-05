@@ -582,6 +582,8 @@ impl TestRpc for TestRpcImpl {
         fn generate_block_with_nonce_and_timestamp(&self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: U256, timestamp: u64, adaptive: bool) -> RpcResult<H256>;
         fn generate_one_block(&self, num_txs: usize, block_size_limit: usize) -> RpcResult<H256>;
         fn generate_empty_blocks(&self, num_blocks: usize) -> RpcResult<Vec<H256>>;
+        fn get_pivot_chain_and_weight(&self, height_range: Option<(u64, u64)>) -> RpcResult<Vec<(H256, U256)>>;
+        fn get_executed_info(&self, block_hash: H256) -> RpcResult<(H256, H256)> ;
         fn send_usable_genesis_accounts(&self, account_start_index: usize) -> RpcResult<Bytes>;
         fn get_block_status(&self, block_hash: H256) -> RpcResult<(u8, bool)>;
         fn set_db_crash(&self, crash_probability: f64, crash_exit_code: i32) -> RpcResult<()>;

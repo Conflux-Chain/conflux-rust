@@ -3759,4 +3759,30 @@ impl ConsensusGraphInner {
             );
         }
     }
+
+    pub fn get_pivot_chain_and_weight(
+        &self, height_range: Option<(u64, u64)>,
+    ) -> Result<Vec<(H256, U256)>, String> {
+        let min_height = self.get_cur_era_genesis_height();
+        let max_height = self.arena[*self.pivot_chain.last().unwrap()].height;
+        let (start, end) = height_range.unwrap_or((min_height, max_height));
+        if start < min_height || end > max_height {
+            bail!(
+                "height_range out of bound: requested={:?} min={} max={}",
+                height_range,
+                min_height,
+                max_height
+            );
+        }
+
+        let mut chain = Vec::new();
+        for i in start..=end {
+            let pivot_arena_index = self.get_pivot_block_arena_index(i);
+            chain.push((
+                self.arena[pivot_arena_index].hash.into(),
+                (self.weight_tree.get(pivot_arena_index) as u64).into(),
+            ));
+        }
+        Ok(chain)
+    }
 }

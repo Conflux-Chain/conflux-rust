@@ -1904,6 +1904,7 @@ impl SynchronizationGraph {
         self.statistics.inc_sync_graph_inserted_block_count();
 
         let me = *inner.hash_to_arena_indices.get(&hash).unwrap();
+
         debug_assert!(hash == inner.arena[me].block_header.hash());
         debug_assert!(!inner.arena[me].block_ready);
         inner.arena[me].block_ready = true;
