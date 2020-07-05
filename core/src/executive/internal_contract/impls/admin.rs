@@ -95,11 +95,14 @@ pub fn suicide(
         )?;
     }
     if refund_address == contract_address {
+        // This is the corner case that the sponsor of the contract is itself.
+        // When destroying, the balance will be burnt.
         state.sub_balance(
             contract_address,
             &balance,
             &mut substate.to_cleanup_mode(spec),
         )?;
+        state.subtract_total_issued(balance);
     } else {
         trace!(target: "context", "Destroying {} -> {} (xfer: {})", contract_address, refund_address, balance);
         state.transfer_balance(
