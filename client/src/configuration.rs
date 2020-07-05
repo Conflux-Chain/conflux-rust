@@ -573,9 +573,6 @@ impl Configuration {
                 .max_trans_count_received_in_catch_up,
             min_peers_tx_propagation: self.raw_conf.min_peers_tx_propagation,
             max_peers_tx_propagation: self.raw_conf.max_peers_tx_propagation,
-            future_block_buffer_capacity: self
-                .raw_conf
-                .future_block_buffer_capacity,
             max_downloading_chunks: self.raw_conf.max_downloading_chunks,
             test_mode: self.is_test_mode(),
             dev_mode: self.is_dev_mode(),
@@ -644,6 +641,9 @@ impl Configuration {
 
     pub fn sync_graph_config(&self) -> SyncGraphConfig {
         SyncGraphConfig {
+            future_block_buffer_capacity: self
+                .raw_conf
+                .future_block_buffer_capacity,
             enable_state_expose: self.raw_conf.enable_state_expose,
             is_consortium: self.raw_conf.is_consortium,
         }

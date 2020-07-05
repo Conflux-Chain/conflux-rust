@@ -174,6 +174,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         None,             /* stratum_secret */
     );
     let sync_config = SyncGraphConfig {
+        future_block_buffer_capacity: 1,
         enable_state_expose: false,
         is_consortium: false,
     };
