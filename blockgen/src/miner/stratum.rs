@@ -31,7 +31,7 @@ use cfx_stratum::{
 };
 use cfx_types::{H256, U256};
 use cfxcore::pow::{
-    validate, PoWManager, ProofOfWorkProblem, ProofOfWorkSolution,
+    validate, PowComputer, ProofOfWorkProblem, ProofOfWorkSolution,
 };
 use log::{info, trace, warn};
 use parking_lot::Mutex;
@@ -115,7 +115,7 @@ impl fmt::Display for PayloadError {
 pub struct StratumJobDispatcher {
     current_problem: Mutex<Option<ProofOfWorkProblem>>,
     solution_sender: Mutex<mpsc::Sender<ProofOfWorkSolution>>,
-    pow: Arc<PoWManager>,
+    pow: Arc<PowComputer>,
 }
 
 impl JobDispatcher for StratumJobDispatcher {
@@ -183,7 +183,7 @@ impl StratumJobDispatcher {
     /// New stratum job dispatcher given the miner and client
     fn new(
         solution_sender: mpsc::Sender<ProofOfWorkSolution>,
-        pow: Arc<PoWManager>,
+        pow: Arc<PowComputer>,
     ) -> StratumJobDispatcher
     {
         StratumJobDispatcher {
@@ -250,7 +250,7 @@ impl Stratum {
     /// New stratum job dispatcher, given the miner, client and dedicated
     /// stratum service
     pub fn start(
-        options: &Options, pow: Arc<PoWManager>,
+        options: &Options, pow: Arc<PowComputer>,
         solution_sender: mpsc::Sender<ProofOfWorkSolution>,
     ) -> Result<Stratum, Error>
     {

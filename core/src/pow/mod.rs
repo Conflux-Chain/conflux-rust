@@ -8,8 +8,8 @@ mod keccak;
 mod seed_compute;
 mod shared;
 
-use self::keccak::H256 as KeccakH256;
-pub use self::{cache::NodeCacheBuilder, shared::ETHASH_EPOCH_LENGTH};
+use self::keccak::H256 as RawH256;
+pub use self::{cache::NodeCacheBuilder, shared::POW_STAGE_LENGTH};
 
 use crate::{block_data_manager::BlockDataManager, parameters::pow::*};
 use cfx_types::{BigEndianHash, H256, U256, U512};
@@ -19,10 +19,8 @@ use parking_lot::RwLock;
 use std::{
     collections::{HashMap, VecDeque},
     convert::TryFrom,
-    path::{Path, PathBuf},
     sync::Arc,
 };
-use tempdir::TempDir;
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub struct ProofOfWorkProblem {
@@ -204,34 +202,30 @@ pub fn compute_inv_x_times_2_pow_256_floor(x: &U256) -> U256 {
     }
 }
 
-pub struct PoWManager {
+pub struct PowComputer {
     nodecache_builder: NodeCacheBuilder,
-    cache_dir: PathBuf,
 }
 
-impl PoWManager {
-    pub fn new(cache_dir: &Path) -> PoWManager {
-        PoWManager {
-            cache_dir: cache_dir.to_path_buf(),
+impl PowComputer {
+    pub fn new() -> Self {
+        debug!("PowComputer::new()");
+
+        PowComputer {
             nodecache_builder: NodeCacheBuilder::new(),
         }
     }
 
-    pub fn new_in(prefix: &str) -> Self {
-        Self::new(TempDir::new(prefix).unwrap().path())
-    }
-
     pub fn compute_light(
-        &self, block_height: u64, block_hash: &KeccakH256, nonce: u64,
-    ) -> KeccakH256 {
-        let epoch = block_height / ETHASH_EPOCH_LENGTH;
-        let light = self.nodecache_builder.light(&self.cache_dir, block_height);
-        light.compute(block_hash, nonce, block_height)
+        &self, block_height: u64, block_hash: &RawH256, nonce: u64,
+    ) -> RawH256 {
+        debug!("block_height: {} nonce: {}", block_height, nonce);
+        let light = self.nodecache_builder.light(block_height);
+        light.compute(block_hash, nonce)
     }
 }
 
 pub fn compute(
-    pow: Arc<PoWManager>, nonce: &U256, block_hash: &H256, block_height: u64,
+    pow: Arc<PowComputer>, nonce: &U256, block_hash: &H256, block_height: u64,
 ) -> H256 {
     pow.compute_light(
         block_height,
@@ -242,7 +236,7 @@ pub fn compute(
 }
 
 pub fn validate(
-    pow: Arc<PoWManager>, problem: &ProofOfWorkProblem,
+    pow: Arc<PowComputer>, problem: &ProofOfWorkProblem,
     solution: &ProofOfWorkSolution,
 ) -> bool
 {

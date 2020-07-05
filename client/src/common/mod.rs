@@ -124,7 +124,7 @@ pub fn initialize_common_modules(
         Arc<Machine>,
         Arc<SecretStore>,
         Arc<BlockDataManager>,
-        Arc<PoWManager>,
+        Arc<PowComputer>,
         Arc<TransactionPool>,
         Arc<ConsensusGraph>,
         Arc<SynchronizationGraph>,
@@ -200,7 +200,7 @@ pub fn initialize_common_modules(
     );
     debug!("Initialize genesis_block={:?}", genesis_block);
 
-    let pow = Arc::new(PoWManager::new(TempDir::new("pow").unwrap().path()));
+    let pow = Arc::new(PowComputer::new());
 
     let data_man = Arc::new(BlockDataManager::new(
         cache_config,
@@ -290,7 +290,7 @@ pub fn initialize_not_light_node_modules(
 ) -> Result<
     (
         Arc<BlockDataManager>,
-        Arc<PoWManager>,
+        Arc<PowComputer>,
         Arc<TransactionPool>,
         Arc<ConsensusGraph>,
         Arc<SynchronizationService>,
@@ -682,7 +682,7 @@ use cfxcore::{
     block_data_manager::BlockDataManager,
     genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
     machine::{new_machine_with_builtin, Machine},
-    pow::PoWManager,
+    pow::PowComputer,
     statistics::Statistics,
     storage::StorageManager,
     sync::SyncPhaseType,
@@ -707,6 +707,5 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-use tempdir::TempDir;
 use threadpool::ThreadPool;
 use txgen::{DirectTransactionGenerator, TransactionGenerator};

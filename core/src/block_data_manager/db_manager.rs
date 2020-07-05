@@ -4,7 +4,7 @@ use crate::{
         EpochExecutionCommitment, EpochExecutionContext, LocalBlockInfo,
     },
     db::{COL_BLOCKS, COL_EPOCH_NUMBER, COL_MISC, COL_TX_INDEX},
-    pow::PoWManager,
+    pow::PowComputer,
     storage::{
         storage_db::KeyValueDbTrait, KvdbRocksdb, KvdbSqlite,
         KvdbSqliteStatements,
@@ -57,11 +57,11 @@ fn sqlite_db_table(table: DBTable) -> String {
 
 pub struct DBManager {
     table_db: HashMap<DBTable, Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>>,
-    pow: Arc<PoWManager>,
+    pow: Arc<PowComputer>,
 }
 
 impl DBManager {
-    pub fn new_from_rocksdb(db: Arc<SystemDB>, pow: Arc<PoWManager>) -> Self {
+    pub fn new_from_rocksdb(db: Arc<SystemDB>, pow: Arc<PowComputer>) -> Self {
         let mut table_db = HashMap::new();
         for table in vec![
             DBTable::Misc,
@@ -83,7 +83,7 @@ impl DBManager {
 }
 
 impl DBManager {
-    pub fn new_from_sqlite(db_path: &Path, pow: Arc<PoWManager>) -> Self {
+    pub fn new_from_sqlite(db_path: &Path, pow: Arc<PowComputer>) -> Self {
         if let Err(e) = fs::create_dir_all(db_path) {
             panic!("Error creating database directory: {:?}", e);
         }

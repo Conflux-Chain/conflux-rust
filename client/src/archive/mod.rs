@@ -12,7 +12,7 @@ use crate::{
 };
 use blockgen::BlockGenerator;
 use cfxcore::{
-    pow::PoWManager, ConsensusGraph, SynchronizationService, TransactionPool,
+    pow::PowComputer, ConsensusGraph, SynchronizationService, TransactionPool,
 };
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Condvar, Mutex};
@@ -28,7 +28,7 @@ pub struct ArchiveClientExtraComponents {
     pub runtime: Runtime,
     pub sync: Arc<SynchronizationService>,
     pub txpool: Arc<TransactionPool>,
-    pub pow: Arc<PoWManager>,
+    pub pow: Arc<PowComputer>,
 }
 
 impl MallocSizeOf for ArchiveClientExtraComponents {

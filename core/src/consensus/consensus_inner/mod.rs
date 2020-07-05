@@ -17,7 +17,7 @@ use crate::{
         pastset_cache::PastSetCache,
     },
     parameters::{consensus::*, consensus_internal::*},
-    pow::{target_difficulty, PoWManager, ProofOfWorkConfig},
+    pow::{target_difficulty, PowComputer, ProofOfWorkConfig},
     state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
 };
 use cfx_types::{H256, U256, U512};
@@ -413,7 +413,7 @@ pub struct ConsensusGraphInner {
     pub data_man: Arc<BlockDataManager>,
     pub inner_conf: ConsensusInnerConfig,
     pub pow_config: ProofOfWorkConfig,
-    pub pow: Arc<PoWManager>,
+    pub pow: Arc<PowComputer>,
     //executor: Arc<ConsensusExecutor>,
     /// This slab hold consensus graph node data and the array index is the
     /// internal index.
@@ -553,7 +553,7 @@ impl ConsensusGraphNode {
 
 impl ConsensusGraphInner {
     pub fn with_era_genesis(
-        pow_config: ProofOfWorkConfig, pow: Arc<PoWManager>,
+        pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
         data_man: Arc<BlockDataManager>, inner_conf: ConsensusInnerConfig,
         cur_era_genesis_block_hash: &H256, cur_era_stable_block_hash: &H256,
     ) -> Self

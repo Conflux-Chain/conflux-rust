@@ -9,7 +9,7 @@ use crate::{
     error::{BlockError, Error, ErrorKind},
     machine::Machine,
     parameters::sync::OLD_ERA_BLOCK_GC_BATCH_SIZE,
-    pow::{PoWManager, ProofOfWorkConfig},
+    pow::{PowComputer, ProofOfWorkConfig},
     state_exposer::{SyncGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,
     verification::*,
@@ -151,7 +151,7 @@ pub struct SynchronizationGraphInner {
     children_by_hash: HashMap<H256, Vec<usize>>,
     referrers_by_hash: HashMap<H256, Vec<usize>>,
     pub pow_config: ProofOfWorkConfig,
-    pub pow: Arc<PoWManager>,
+    pub pow: Arc<PowComputer>,
     pub config: SyncGraphConfig,
     /// The indices of blocks whose graph_status is not GRAPH_READY.
     /// It may consider not header-graph-ready in phases
@@ -183,7 +183,7 @@ impl MallocSizeOf for SynchronizationGraphInner {
 impl SynchronizationGraphInner {
     pub fn with_genesis_block(
         genesis_header: Arc<BlockHeader>, pow_config: ProofOfWorkConfig,
-        pow: Arc<PoWManager>, config: SyncGraphConfig,
+        pow: Arc<PowComputer>, config: SyncGraphConfig,
         data_man: Arc<BlockDataManager>, machine: Arc<Machine>,
     ) -> Self
     {
@@ -1028,7 +1028,7 @@ pub struct SynchronizationGraph {
     pub inner: Arc<RwLock<SynchronizationGraphInner>>,
     pub consensus: SharedConsensusGraph,
     pub data_man: Arc<BlockDataManager>,
-    pub pow: Arc<PoWManager>,
+    pub pow: Arc<PowComputer>,
     pub initial_missed_block_hashes: Mutex<HashSet<H256>>,
     pub verification_config: VerificationConfig,
     pub sync_config: SyncGraphConfig,
@@ -1077,7 +1077,7 @@ impl SynchronizationGraph {
     pub fn new(
         consensus: SharedConsensusGraph,
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
-        pow: Arc<PoWManager>, sync_config: SyncGraphConfig,
+        pow: Arc<PowComputer>, sync_config: SyncGraphConfig,
         notifications: Arc<Notifications>, is_full_node: bool,
         machine: Arc<Machine>,
     ) -> Self

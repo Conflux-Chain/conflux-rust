@@ -6,7 +6,7 @@ use crate::{
     error::{BlockError, Error},
     executive::Executive,
     parameters::block::*,
-    pow::{self, nonce_to_lower_bound, PoWManager, ProofOfWorkProblem},
+    pow::{self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem},
     storage::{make_simple_mpt, simple_mpt_merkle_root, TrieProof},
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
     vm,
@@ -97,7 +97,7 @@ impl VerificationConfig {
     #[inline]
     /// Note that this function returns *pow_hash* of the block, not its quality
     pub fn compute_pow_hash_and_fill_header_pow_quality(
-        pow: Arc<PoWManager>, header: &mut BlockHeader,
+        pow: Arc<PowComputer>, header: &mut BlockHeader,
     ) -> H256 {
         let nonce = header.nonce();
         let pow_hash: H256 = pow
@@ -113,7 +113,7 @@ impl VerificationConfig {
 
     #[inline]
     pub fn verify_pow(
-        &self, pow: Arc<PoWManager>, header: &mut BlockHeader,
+        &self, pow: Arc<PowComputer>, header: &mut BlockHeader,
     ) -> Result<(), Error> {
         let pow_hash =
             Self::compute_pow_hash_and_fill_header_pow_quality(pow, header);
@@ -168,7 +168,7 @@ impl VerificationConfig {
     /// This does not require header to be graph or parental tree ready.
     #[inline]
     pub fn verify_header_params(
-        &self, pow: Arc<PoWManager>, header: &mut BlockHeader,
+        &self, pow: Arc<PowComputer>, header: &mut BlockHeader,
     ) -> Result<(), Error> {
         // Check header custom data length
         let custom_len = header.custom().iter().fold(0, |acc, x| acc + x.len());

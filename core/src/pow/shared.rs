@@ -5,16 +5,16 @@ pub const DATASET_BYTES_GROWTH: u64 = 1 << 23;
 pub const CACHE_BYTES_INIT: u64 = 1 << 24;
 pub const CACHE_BYTES_GROWTH: u64 = 1 << 17;
 
-pub const ETHASH_EPOCH_LENGTH: u64 = 30000;
-pub const ETHASH_CACHE_ROUNDS: usize = 3;
-pub const ETHASH_MIX_BYTES: usize = 128;
-pub const ETHASH_ACCESSES: usize = 64;
-pub const ETHASH_DATASET_PARENTS: u32 = 256;
+pub const POW_STAGE_LENGTH: u64 = 30000;
+pub const POW_CACHE_ROUNDS: usize = 3;
+pub const POW_MIX_BYTES: usize = 128;
+pub const POW_ACCESSES: usize = 64;
+pub const POW_DATASET_PARENTS: u32 = 256;
 pub const NODE_DWORDS: usize = NODE_WORDS / 2;
 pub const NODE_WORDS: usize = NODE_BYTES / 4;
 pub const NODE_BYTES: usize = 64;
 
-pub fn epoch(block_height: u64) -> u64 { block_height / ETHASH_EPOCH_LENGTH }
+pub fn stage(block_height: u64) -> u64 { block_height / POW_STAGE_LENGTH }
 
 static CHARS: &'static [u8] = b"0123456789abcdef";
 pub fn to_hex(bytes: &[u8]) -> String {
@@ -29,8 +29,8 @@ pub fn to_hex(bytes: &[u8]) -> String {
 
 pub fn get_cache_size(block_height: u64) -> usize {
     // TODO: Memoise
-    let mut sz: u64 = CACHE_BYTES_INIT
-        + CACHE_BYTES_GROWTH * (block_height / ETHASH_EPOCH_LENGTH);
+    let mut sz: u64 =
+        CACHE_BYTES_INIT + CACHE_BYTES_GROWTH * stage(block_height);
     sz = sz - NODE_BYTES as u64;
     while !is_prime(sz / NODE_BYTES as u64) {
         sz = sz - 2 * NODE_BYTES as u64;
@@ -40,11 +40,11 @@ pub fn get_cache_size(block_height: u64) -> usize {
 
 pub fn get_data_size(block_height: u64) -> usize {
     // TODO: Memoise
-    let mut sz: u64 = DATASET_BYTES_INIT
-        + DATASET_BYTES_GROWTH * (block_height / ETHASH_EPOCH_LENGTH);
-    sz = sz - ETHASH_MIX_BYTES as u64;
-    while !is_prime(sz / ETHASH_MIX_BYTES as u64) {
-        sz = sz - 2 * ETHASH_MIX_BYTES as u64;
+    let mut sz: u64 =
+        DATASET_BYTES_INIT + DATASET_BYTES_GROWTH * stage(block_height);
+    sz = sz - POW_MIX_BYTES as u64;
+    while !is_prime(sz / POW_MIX_BYTES as u64) {
+        sz = sz - 2 * POW_MIX_BYTES as u64;
     }
     sz as usize
 }

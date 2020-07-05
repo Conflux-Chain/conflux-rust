@@ -5,9 +5,9 @@ use super::{
     shared::*,
 };
 
-use std::{io, mem, path::Path};
+use std::mem;
 
-const MIX_WORDS: usize = ETHASH_MIX_BYTES / 4;
+const MIX_WORDS: usize = POW_MIX_BYTES / 4;
 const MIX_NODES: usize = MIX_WORDS / NODE_WORDS;
 pub const FNV_PRIME: u32 = 0x01000193;
 
@@ -19,9 +19,9 @@ pub struct Light {
 /// Light cache structure
 impl Light {
     pub fn new_with_builder(
-        builder: &NodeCacheBuilder, cache_dir: &Path, block_height: u64,
+        builder: &NodeCacheBuilder, block_height: u64,
     ) -> Self {
-        let cache = builder.new_cache(cache_dir.to_path_buf(), block_height);
+        let cache = builder.new_cache(block_height);
 
         Light {
             block_height,
@@ -32,35 +32,14 @@ impl Light {
     /// Calculate the light boundary data
     /// `header_hash` - The header hash to pack into the mix
     /// `nonce` - The nonce to pack into the mix
-    pub fn compute(
-        &self, header_hash: &H256, nonce: u64, block_height: u64,
-    ) -> H256 {
+    pub fn compute(&self, header_hash: &H256, nonce: u64) -> H256 {
         light_compute(self, header_hash, nonce)
-    }
-
-    pub fn from_file_with_builder(
-        builder: &NodeCacheBuilder, cache_dir: &Path, block_height: u64,
-    ) -> io::Result<Self> {
-        let cache = builder.from_file(cache_dir.to_path_buf(), block_height)?;
-
-        Ok(Light {
-            block_height,
-            cache,
-        })
-    }
-
-    pub fn to_file(&mut self) -> io::Result<&Path> {
-        self.cache.flush()?;
-        Ok(self.cache.cache_path())
     }
 }
 
+#[warn(dead_code)]
 pub fn slow_hash_block_height(block_height: u64) -> H256 {
-    SeedHashCompute::resume_compute_seedhash(
-        [0u8; 32],
-        0,
-        block_height / ETHASH_EPOCH_LENGTH,
-    )
+    SeedHashCompute::resume_compute_seedhash([0u8; 32], 0, stage(block_height))
 }
 
 fn fnv_hash(x: u32, y: u32) -> u32 { return x.wrapping_mul(FNV_PRIME) ^ y; }
@@ -172,7 +151,7 @@ fn hash_compute(
     debug_assert_eq!(MIX_NODES, 2);
     debug_assert_eq!(NODE_WORDS, 16);
 
-    for i in 0..ETHASH_ACCESSES as u32 {
+    for i in 0..POW_ACCESSES as u32 {
         let index = {
             // This is trivially safe, but does not work on big-endian. The
             // safety of this is asserted in debug builds (see the
@@ -260,7 +239,7 @@ pub fn calculate_dag_item(node_index: u32, cache: &[Node]) -> Node {
     ret.as_bytes_mut().copy_from_slice(&tmp);
 
     debug_assert_eq!(NODE_WORDS, 16);
-    for i in 0..ETHASH_DATASET_PARENTS as u32 {
+    for i in 0..POW_DATASET_PARENTS as u32 {
         let parent_index =
             fnv_hash(node_index ^ i, ret.as_words()[i as usize % NODE_WORDS])
                 % num_parent_nodes as u32;

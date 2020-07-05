@@ -45,7 +45,7 @@ enum MiningState {
 /// The interface for a conflux block generator
 pub struct BlockGenerator {
     pub pow_config: ProofOfWorkConfig,
-    pow: Arc<PoWManager>,
+    pow: Arc<PowComputer>,
     mining_author: Address,
     graph: SharedSynchronizationGraph,
     txpool: SharedTransactionPool,
@@ -75,7 +75,7 @@ impl Worker {
             .spawn(move || {
                 let sleep_duration = time::Duration::from_millis(100);
                 let mut problem: Option<ProofOfWorkProblem> = None;
-                let bg_pow = Arc::new(PoWManager::new_in("bg_pow"));
+                let bg_pow = Arc::new(PowComputer::new());
 
                 loop {
                     match *bg_handle.state.read() {
@@ -131,7 +131,7 @@ impl BlockGenerator {
         graph: SharedSynchronizationGraph, txpool: SharedTransactionPool,
         sync: SharedSynchronizationService,
         maybe_txgen: Option<SharedTransactionGenerator>,
-        pow_config: ProofOfWorkConfig, pow: Arc<PoWManager>,
+        pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
         mining_author: Address,
     ) -> Self
     {

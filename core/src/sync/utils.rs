@@ -14,7 +14,7 @@ use crate::{
         consensus_internal::INITIAL_BASE_MINING_REWARD_IN_UCFX,
         WORKER_COMPUTATION_PARALLELISM,
     },
-    pow::{PoWManager, ProofOfWorkConfig},
+    pow::{PowComputer, ProofOfWorkConfig},
     statistics::Statistics,
     storage::{StorageConfiguration, StorageManager},
     sync::{SyncGraphConfig, SynchronizationGraph},
@@ -28,7 +28,6 @@ use core::str::FromStr;
 use parking_lot::Mutex;
 use primitives::{Block, BlockHeaderBuilder, ChainIdParams};
 use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
-use tempdir::TempDir;
 use threadpool::ThreadPool;
 
 pub fn create_simple_block_impl(
@@ -87,7 +86,7 @@ pub fn create_simple_block(
 }
 
 pub fn initialize_data_manager(
-    db_dir: &str, dbtype: DbType, pow: Arc<PoWManager>,
+    db_dir: &str, dbtype: DbType, pow: Arc<PowComputer>,
 ) -> (Arc<BlockDataManager>, Arc<Block>) {
     let ledger_db = db::open_database(
         db_dir,
@@ -146,7 +145,7 @@ pub fn initialize_data_manager(
 
 pub fn initialize_synchronization_graph_with_data_manager(
     data_man: Arc<BlockDataManager>, beta: u64, h: u64, tcr: u64, tcb: u64,
-    era_epoch_count: u64, pow: Arc<PoWManager>,
+    era_epoch_count: u64, pow: Arc<PowComputer>,
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
 {
     let verification_config = VerificationConfig::new(
@@ -240,7 +239,7 @@ pub fn initialize_synchronization_graph(
     Arc<Block>,
 )
 {
-    let pow = Arc::new(PoWManager::new(TempDir::new("pow").unwrap().path()));
+    let pow = Arc::new(PowComputer::new());
 
     let (data_man, genesis_block) =
         initialize_data_manager(db_dir, dbtype, pow.clone());
@@ -252,7 +251,7 @@ pub fn initialize_synchronization_graph(
         tcr,
         tcb,
         era_epoch_count,
-        pow.clone(),
+        pow,
     );
 
     (sync, consensus, data_man, genesis_block)
