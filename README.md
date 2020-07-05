@@ -6,18 +6,12 @@ This version depends on rustc 1.42.0.
 
 ## Contribution
 
-Thank you for considering helping out with our source code. We appreciate any contributions, even the smallest fixes.
-
-Here are some guidelines before you start:
-* Please fork the project to contribute your pull requests.
-* If you wish to submit complex changes, please fire an [issue](https://github.com/Conflux-Chain/conflux-rust/issues) to communicate with the core devs first. 
-* Pull requests need to be based on and opened against the `master` branch.
-* Code must be formatted using [cargo_fmt.sh](https://github.com/Conflux-Chain/conflux-rust/blob/master/cargo_fmt.sh).
-* We use reviewable.io as our code review tool for any pull request.
+Thank you for considering helping out with our source code. We appreciate any contributions, even the smallest fixes. Please read the [guideline](https://github.com/Conflux-Chain/conflux-rust/blob/master/CONTRIBUTE.md) on how to submit issues and pull requests. Note that if you want to propose significant changes to the Conflux protocol. Please submit a [CIP](https://github.com/Conflux-Chain/CIPs). 
 
 ## Resources
 
 * [Conflux Website](https://www.conflux-chain.org/)
+* [Conflux Scan](https://www.confluxscan.io/)
 * [Conflux Paper](https://arxiv.org/abs/1805.03870)
 * [Medium](https://medium.com/@ConfluxNetwork)
 
