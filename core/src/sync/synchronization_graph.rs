@@ -12,6 +12,7 @@ use crate::{
     pow::ProofOfWorkConfig,
     state_exposer::{SyncGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,
+    sync::synchronization_protocol_handler::FutureBlockContainer,
     verification::*,
     ConsensusGraph, Notifications,
 };
@@ -58,6 +59,7 @@ const BLOCK_GRAPH_READY: u8 = 3;
 
 #[derive(Copy, Clone)]
 pub struct SyncGraphConfig {
+    pub future_block_buffer_capacity: usize,
     pub enable_state_expose: bool,
     pub is_consortium: bool,
 }
@@ -1039,6 +1041,10 @@ pub struct SynchronizationGraph {
     /// Each element is <block_hash, ignore_body>
     new_block_hashes: Arc<Channel<(H256, bool)>>,
 
+    /// The blocks whose timestamps are near future.
+    /// They will be inserted into sync graph inner at their timestamp.
+    pub future_blocks: FutureBlockContainer,
+
     /// whether it is a archive node or full node
     is_full_node: bool,
     machine: Arc<Machine>,
@@ -1099,6 +1105,9 @@ impl SynchronizationGraph {
         ));
         let sync_graph = SynchronizationGraph {
             inner: inner.clone(),
+            future_blocks: FutureBlockContainer::new(
+                sync_config.future_block_buffer_capacity,
+            ),
             data_man: data_man.clone(),
             initial_missed_block_hashes: Mutex::new(HashSet::new()),
             verification_config,
@@ -1470,6 +1479,7 @@ impl SynchronizationGraph {
 
     pub fn contains_block_header(&self, hash: &H256) -> bool {
         self.inner.read().hash_to_arena_indices.contains_key(hash)
+            || self.future_blocks.contains(hash)
     }
 
     fn parent_or_referees_invalid(&self, header: &BlockHeader) -> bool {

@@ -226,7 +226,8 @@ impl TaskSize for LocalMessageTask {}
 struct FutureBlockContainerInner {
     capacity: usize,
     size: usize,
-    container: BTreeMap<u64, HashMap<H256, BlockHeader>>,
+    container: BTreeMap<u64, HashSet<H256>>,
+    hash_to_header: HashMap<H256, BlockHeader>,
 }
 
 impl FutureBlockContainerInner {
@@ -235,6 +236,7 @@ impl FutureBlockContainerInner {
             capacity,
             size: 0,
             container: BTreeMap::new(),
+            hash_to_header: Default::default(),
         }
     }
 }
@@ -251,13 +253,18 @@ impl FutureBlockContainer {
     }
 
     pub fn insert(&self, header: BlockHeader) {
-        let mut inner = self.inner.write();
+        let mut inner = &mut *self.inner.write();
+        let header_hash = header.hash();
+        if inner.hash_to_header.contains_key(&header_hash) {
+            return;
+        }
         let entry = inner
             .container
             .entry(header.timestamp())
-            .or_insert(HashMap::new());
-        if !entry.contains_key(&header.hash()) {
-            entry.insert(header.hash(), header);
+            .or_insert(HashSet::new());
+        if !entry.contains(&header_hash) {
+            entry.insert(header_hash);
+            inner.hash_to_header.insert(header_hash, header);
             inner.size += 1;
         }
 
@@ -270,8 +277,9 @@ impl FutureBlockContainer {
                     continue;
                 }
 
-                let hash = *entry.1.iter().find(|_| true).unwrap().0;
+                let hash = *entry.1.iter().next().unwrap();
                 entry.1.remove(&hash);
+                inner.hash_to_header.remove(&hash);
                 removed = true;
 
                 if entry.1.is_empty() {
@@ -307,12 +315,18 @@ impl FutureBlockContainer {
 
             let entry = inner.container.remove(&slot.unwrap()).unwrap();
 
-            for (_, header) in entry {
-                result.push(header);
+            for header_hash in entry {
+                result.push(inner.hash_to_header.remove(&header_hash).expect(
+                    "hash and header are inserted/removed together atomically",
+                ));
             }
         }
 
         result
+    }
+
+    pub fn contains(&self, header_hash: &H256) -> bool {
+        self.inner.read().hash_to_header.contains_key(header_hash)
     }
 }
 
@@ -325,7 +339,6 @@ pub struct SynchronizationProtocolHandler {
     pub request_manager: Arc<RequestManager>,
     /// The latest `(requested_epoch_number, request_time)`
     pub latest_epoch_requested: Mutex<(u64, Instant)>,
-    pub future_blocks: FutureBlockContainer,
     pub phase_manager: SynchronizationPhaseManager,
     pub phase_manager_lock: Mutex<u32>,
 
@@ -370,7 +383,6 @@ pub struct ProtocolConfiguration {
     pub max_trans_count_received_in_catch_up: u64,
     pub min_peers_tx_propagation: usize,
     pub max_peers_tx_propagation: usize,
-    pub future_block_buffer_capacity: usize,
     pub max_downloading_chunks: usize,
     pub test_mode: bool,
     pub dev_mode: bool,
@@ -407,9 +419,6 @@ impl SynchronizationProtocolHandler {
             recover_public_queue.clone(),
         ));
 
-        let future_block_buffer_capacity =
-            protocol_config.future_block_buffer_capacity;
-
         let state_sync = Arc::new(SnapshotChunkSync::new(state_sync_config));
 
         Self {
@@ -419,9 +428,6 @@ impl SynchronizationProtocolHandler {
             syn: sync_state.clone(),
             request_manager,
             latest_epoch_requested: Mutex::new((0, Instant::now())),
-            future_blocks: FutureBlockContainer::new(
-                future_block_buffer_capacity,
-            ),
             phase_manager: SynchronizationPhaseManager::new(
                 initial_sync_phase,
                 sync_state.clone(),
@@ -1402,7 +1408,7 @@ impl SynchronizationProtocolHandler {
 
         let mut missed_body_block_hashes = HashSet::new();
         let mut need_to_relay = HashSet::new();
-        let headers = self.future_blocks.get_before(now_timestamp);
+        let headers = self.graph.future_blocks.get_before(now_timestamp);
 
         if headers.is_empty() {
             return;

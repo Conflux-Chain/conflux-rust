@@ -13,7 +13,7 @@ use crate::{
             Handleable,
         },
         synchronization_state::PeerFilter,
-        Error,
+        Error, ErrorKind,
     },
 };
 use cfx_types::H256;
@@ -33,7 +33,7 @@ pub struct GetBlockHeadersResponse {
 }
 
 impl Handleable for GetBlockHeadersResponse {
-    fn handle(self, ctx: &Context) -> Result<(), Error> {
+    fn handle(mut self, ctx: &Context) -> Result<(), Error> {
         let _timer = MeterTimer::time_func(BLOCK_HEADER_HANDLE_TIMER.as_ref());
 
         for header in &self.headers {
@@ -80,16 +80,20 @@ impl Handleable for GetBlockHeadersResponse {
 
         let timestamp_validation_result =
             if ctx.manager.graph.verification_config.verify_timestamp {
-                self.headers
-                    .iter()
-                    .map(|h| {
-                        ctx.manager
-                            .graph
-                            .verification_config
-                            .validate_header_timestamp(h, now_timestamp)
-                    })
-                    .find(|result| result.is_err())
-                    .unwrap_or(Ok(()))
+                let original_size = self.headers.len();
+                self.headers.retain(|h| {
+                    ctx.manager
+                        .graph
+                        .verification_config
+                        .validate_header_timestamp(h, now_timestamp)
+                        .is_ok()
+                });
+                if original_size != self.headers.len() {
+                    // Some headers are removed because of invalid timestamps.
+                    Err(ErrorKind::InvalidTimestamp.into())
+                } else {
+                    Ok(())
+                }
             } else {
                 Ok(())
             };
@@ -155,7 +159,7 @@ impl GetBlockHeadersResponse {
                 }
                 if header_timestamp > now_timestamp + ACCEPTABLE_TIME_DRIFT {
                     warn!("The drift is more than the acceptable range ({}s). The processing of block {} will be delayed.", ACCEPTABLE_TIME_DRIFT, hash);
-                    ctx.manager.future_blocks.insert(header.clone());
+                    ctx.manager.graph.future_blocks.insert(header.clone());
                     continue;
                 }
             }
