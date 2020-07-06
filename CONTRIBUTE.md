@@ -3,7 +3,7 @@
 Thank you for considering helping out Conflux. This document specifies rules
 for proposing changes to Conflux protocol as well as Conflux-Rust
 implementation. Note that we differentiate Conflux protocol and Conflux-Rust
-implementation because we envision in future there will be implementations of
+implementation because we envision in the future there will be multiple implementations of
 Conflux in different languages.
 
 ## Change Types
