@@ -1024,6 +1024,7 @@ impl Cfx for CfxHandler {
             fn next_nonce(&self, address: RpcH160, num: Option<BlockHashOrEpochNumber>)
                 -> JsonRpcResult<RpcU256>;
             fn get_status(&self) -> JsonRpcResult<RpcStatus>;
+            fn get_client_version(&self) -> JsonRpcResult<String>;
         }
 
         to self.rpc_impl {

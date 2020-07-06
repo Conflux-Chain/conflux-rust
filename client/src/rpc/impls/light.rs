@@ -513,6 +513,7 @@ impl Cfx for CfxHandler {
             fn skipped_blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>>;
             fn confirmation_risk_by_hash(&self, block_hash: RpcH256) -> RpcResult<Option<RpcU256>>;
             fn get_status(&self) -> RpcResult<RpcStatus>;
+            fn get_client_version(&self) -> RpcResult<String>;
         }
 
         to self.rpc_impl {

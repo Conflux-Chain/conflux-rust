@@ -100,6 +100,13 @@ Now if no `from_epoch` is specified, it will only return logs after the latest c
 - Enable overflow-checks for release build, to make sure that underflow is
 impossible.
 
+- Reduce the lock dependency between the transaction pool and the consensus engine to improve the performance.
+
+- Transaction pool will not start until the node finishes the catch-up. This
+avoids inconsistent transaction pool issues during the catch up.
+
+- New cfx_clientVersion() rpc call to return a string with versions
+
 # 0.5.0
 
 ## Improvements

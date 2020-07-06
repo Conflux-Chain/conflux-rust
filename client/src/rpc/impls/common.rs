@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use bigdecimal::BigDecimal;
+use clap::crate_version;
 use jsonrpc_core::{Error as RpcError, Result as RpcResult, Value as RpcValue};
 use num_bigint::{BigInt, ToBigInt};
 use parking_lot::{Condvar, Mutex};
@@ -724,6 +725,10 @@ impl RpcImpl {
     pub fn save_node_db(&self) -> RpcResult<()> {
         self.network.save_node_db();
         Ok(())
+    }
+
+    pub fn get_client_version(&self) -> RpcResult<String> {
+        Ok(format!("conflux-rust-{}", crate_version!()).into())
     }
 }
 

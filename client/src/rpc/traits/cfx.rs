@@ -215,6 +215,10 @@ pub trait Cfx {
         &self, num: EpochNumber,
     ) -> JsonRpcResult<Vec<RpcRewardInfo>>;
 
+    /// Return the client version as a string
+    #[rpc(name = "cfx_clientVersion")]
+    fn get_client_version(&self) -> JsonRpcResult<String>;
+
     //        /// Returns transaction at given block hash and index.
     //        #[rpc(name = "cfx_getTransactionByBlockHashAndIndex")]
     //        fn transaction_by_block_hash_and_index(&self, RpcH256, Index) ->
