@@ -179,12 +179,11 @@ fn test_snapshot_random_read_performance() {
             &[&**key; 4].concat()[0..StorageKey::ACCOUNT_BYTES],
         );
         address.set_user_account_type_bits();
-        let account = Account::new_empty_with_balance(
+        let account = primitives::Account::new_empty_with_balance(
             &address,
             &DEFAULT_BALANCE.into(),
             &0.into(),
-        )
-        .unwrap();
+        );
         let account_key = StorageKey::new_account_key(&address);
         state_0
             .set(account_key, rlp::encode(&account).into())
@@ -260,16 +259,6 @@ fn simulate_transactions(
     {
         thread::sleep(Duration::from_secs(1));
     }
-
-    let mut addresses = Vec::with_capacity(keys.len());
-    for key in keys {
-        let mut address = Address::from_slice(
-            &[&**key; 4].concat()[0..StorageKey::ACCOUNT_BYTES],
-        );
-        address.set_user_account_type_bits();
-        addresses.push(address);
-    }
-
     let mut epoch_id = H256::default();
     epoch_id.as_bytes_mut()[0] = epoch;
     let mut state = state_manager
@@ -296,9 +285,9 @@ fn simulate_transactions(
         for thread in 0..THREADS {
             let range_start = len * thread / THREADS;
             let range_end = len * (thread + 1) / THREADS;
-            let addresses_range = unsafe {
-                std::mem::transmute::<&[Address], &'static [Address]>(
-                    &addresses[range_start..range_end],
+            let key_range = unsafe {
+                std::mem::transmute::<&[&[u8]], &'static [&'static [u8]]>(
+                    &keys[range_start..range_end],
                 )
             };
             let value_range = unsafe {
@@ -312,10 +301,16 @@ fn simulate_transactions(
             };
             join_handles.push(thread::spawn(move || {
                 let mut i = 0;
-                for address in addresses_range {
+                for key in key_range {
+                    let mut address = Address::from_slice(
+                        &[&**key; 4].concat()[0..StorageKey::ACCOUNT_BYTES],
+                    );
+                    address.set_user_account_type_bits();
+                    let account_key = StorageKey::new_account_key(&address);
+
                     value_range[i] = Some(
                         state_r
-                            .get(StorageKey::new_account_key(&address))
+                            .get(account_key)
                             .expect("Failed to get key.")
                             .expect("no such key"),
                     );
@@ -329,10 +324,16 @@ fn simulate_transactions(
         }
     } else {
         let mut i = 0;
-        for address in &addresses {
+        for key in keys {
+            let mut address = Address::from_slice(
+                &[&**key; 4].concat()[0..StorageKey::ACCOUNT_BYTES],
+            );
+            address.set_user_account_type_bits();
+            let account_key = StorageKey::new_account_key(&address);
+
             values[i] = Some(
                 state
-                    .get(StorageKey::new_account_key(&address))
+                    .get(account_key)
                     .expect("Failed to get key.")
                     .expect("no such key"),
             );
@@ -345,11 +346,9 @@ fn simulate_transactions(
     // Update accounts.
     let now = Instant::now();
     for i in 0..len {
-        let mut account: primitives::Account = Account::new_from_rlp(
-            addresses[i],
-            &Rlp::new(&values[i].as_ref().unwrap()),
-        )
-        .expect("failed to decode rlp");
+        let mut account: primitives::Account =
+            rlp::decode(values[i].as_ref().unwrap())
+                .expect("failed to decode rlp");
         if i % 2 == 0 {
             account.balance -= U256::one();
         } else {
@@ -781,13 +780,12 @@ use crate::storage::{
     StateRootWithAuxInfo,
 };
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
-use primitives::{Account, StateRoot, StorageKey};
+use primitives::{StateRoot, StorageKey};
 use rand::{
     distributions::{Distribution, Uniform},
     seq::SliceRandom,
     Rng,
 };
-use rlp::Rlp;
 use std::{
     sync::Arc,
     thread,

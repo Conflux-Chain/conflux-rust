@@ -15,7 +15,6 @@ use crate::{
         consensus::DEFERRED_STATE_EPOCH_COUNT,
         light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME},
     },
-    rpc_errors::{account_result_to_rpc_result, Error as RpcError},
     sync::SynchronizationGraph,
 };
 use cfx_types::{BigEndianHash, Bloom, H160, H256, KECCAK_EMPTY_BLOOM, U256};
@@ -30,7 +29,6 @@ use primitives::{
     Account, BlockReceipts, CodeInfo, EpochNumber, Receipt, SignedTransaction,
     StateRoot, StorageKey, StorageValue, TransactionIndex,
 };
-use rlp::Rlp;
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 
 // FIXME: struct
@@ -244,47 +242,52 @@ impl QueryService {
 
     pub async fn get_account(
         &self, epoch: EpochNumber, address: H160,
-    ) -> Result<Option<Account>, RpcError> {
+    ) -> Result<Option<Account>, String> {
         debug!("get_account epoch={:?} address={:?}", epoch, address);
 
-        let epoch = self.get_height_from_epoch_number(epoch)?;
+        let epoch = match self.get_height_from_epoch_number(epoch) {
+            Ok(epoch) => epoch,
+            Err(e) => return Err(format!("{}", e)),
+        };
+
         let key = Self::account_key(&address);
-        match self.retrieve_state_entry_raw(epoch, key).await? {
-            None => Ok(None),
-            Some(rlp) => Ok(Some(account_result_to_rpc_result(
-                "address",
-                Account::new_from_rlp(address, &Rlp::new(&rlp)),
-            )?)),
-        }
+
+        self.retrieve_state_entry(epoch, key)
+            .await
+            .map_err(|e| format!("Unable to retrieve account: {}", e))
     }
 
     pub async fn get_code(
         &self, epoch: EpochNumber, address: H160,
-    ) -> Result<Option<Vec<u8>>, RpcError> {
+    ) -> Result<Option<Vec<u8>>, String> {
         debug!("get_code epoch={:?} address={:?}", epoch, address);
 
-        let epoch = self.get_height_from_epoch_number(epoch)?;
+        let epoch = match self.get_height_from_epoch_number(epoch) {
+            Ok(epoch) => epoch,
+            Err(e) => return Err(format!("{}", e)),
+        };
+
         let key = Self::account_key(&address);
-        let code_hash = match self.retrieve_state_entry_raw(epoch, key).await {
-            Err(e) => bail!(e),
+
+        let code_hash = match self
+            .retrieve_state_entry::<Account>(epoch, key)
+            .await
+        {
+            Err(e) => return Err(format!("Unable to retrieve account: {}", e)),
             Ok(None) => return Ok(None),
-            Ok(Some(rlp)) => {
-                account_result_to_rpc_result(
-                    "address",
-                    Account::new_from_rlp(address, &Rlp::new(&rlp)),
-                )?
-                .code_hash
-            }
+            Ok(Some(account)) => account.code_hash,
         };
 
         let key = Self::code_key(&address, &code_hash);
-        match self.retrieve_state_entry::<CodeInfo>(epoch, key).await? {
-            None => {
+
+        match self.retrieve_state_entry::<CodeInfo>(epoch, key).await {
+            Err(e) => Err(format!("Unable to retrieve code: {}", e)),
+            Ok(None) => {
                 // FIXME(thegaram): can this happen?
                 error!("Account {:?} found but code {:?} does not exist (epoch={:?})",  address, code_hash, epoch);
-                bail!(format!("Unable to retrieve code: internal error"));
+                Err(format!("Unable to retrieve code: internal error"))
             }
-            Some(info) => Ok(Some(info.code)),
+            Ok(Some(info)) => Ok(Some(info.code)),
         }
     }
 

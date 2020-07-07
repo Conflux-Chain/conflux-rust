@@ -217,17 +217,15 @@ impl RpcImpl {
             .expect("downcast should succeed");
 
         Ok(RpcAccount::new(
-            match consensus_graph.get_account(address, epoch_num.into())? {
-                Some(t) => t,
-                None => account_result_to_rpc_result(
-                    "address",
+            consensus_graph
+                .get_account(address, epoch_num.into())?
+                .unwrap_or_else(|| {
                     Account::new_empty_with_balance(
                         &address,
                         &U256::zero(), /* balance */
                         &U256::zero(), /* nonce */
-                    ),
-                )?,
-            },
+                    )
+                }),
         ))
     }
 
@@ -999,10 +997,7 @@ impl CfxHandler {
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
 use crate::common::delegate_convert;
 use cfx_types::address_util::AddressUtil;
-use cfxcore::{
-    executive::{ExecutionError, ExecutionOutcome},
-    rpc_errors::account_result_to_rpc_result,
-};
+use cfxcore::executive::{ExecutionError, ExecutionOutcome};
 use cfxcore_accounts::AccountProvider;
 
 impl Cfx for CfxHandler {

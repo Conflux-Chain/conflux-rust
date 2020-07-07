@@ -3,7 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 use crate::storage::impls::delta_mpt::node_ref_map::DeltaMptId;
-use primitives::account::AccountError;
 use std::{io, num};
 
 error_chain! {
@@ -11,7 +10,6 @@ error_chain! {
     }
 
     foreign_links {
-        Account(AccountError);
         Io(io::Error);
         IntegerConversionError(std::num::TryFromIntError);
         ParseIntError(num::ParseIntError);

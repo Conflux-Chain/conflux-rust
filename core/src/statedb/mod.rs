@@ -20,7 +20,6 @@ mod error;
 
 pub use self::error::{Error, ErrorKind, Result};
 use crate::consensus::debug::{ComputeEpochDebugRecord, StateOp};
-use rlp::Rlp;
 
 pub struct StateDb {
     storage: StorageState,
@@ -41,11 +40,16 @@ impl StateDb {
 
     pub fn get<T>(&self, key: StorageKey) -> Result<Option<T>>
     where T: ::rlp::Decodable {
-        match self.storage.get(key) {
-            Ok(None) => Ok(None),
-            Ok(Some(raw)) => Ok(Some(::rlp::decode::<T>(raw.as_ref())?)),
-            Err(e) => bail!(e),
-        }
+        let raw = match self.storage.get(key) {
+            Ok(maybe_value) => match maybe_value {
+                None => return Ok(None),
+                Some(raw) => raw,
+            },
+            Err(e) => {
+                return Err(e.into());
+            }
+        };
+        Ok(Some(::rlp::decode::<T>(raw.as_ref())?))
     }
 
     pub fn get_code(
@@ -85,13 +89,7 @@ impl StateDb {
     }
 
     pub fn get_account(&self, address: &Address) -> Result<Option<Account>> {
-        match self.storage.get(StorageKey::new_account_key(address)) {
-            Ok(None) => Ok(None),
-            Ok(Some(raw)) => {
-                Ok(Some(Account::new_from_rlp(*address, &Rlp::new(&raw))?))
-            }
-            Err(e) => bail!(e),
-        }
+        self.get::<Account>(StorageKey::new_account_key(address))
     }
 
     pub fn get_storage_root(
