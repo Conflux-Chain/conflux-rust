@@ -51,7 +51,7 @@ bootnodes="cfxnode://7ffff7f14f8f73fa93a95309803bbc93c762c48bc873a823ac40500471c
 # The value is a 40-digit hex string without 0x prefix.
 # By default, the value is not set.
 #
-# mining_author="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+# mining_author="1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 # `use_stratum` controls whether the mining process goes through the
 # stratum protocol.
