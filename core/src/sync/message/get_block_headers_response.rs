@@ -159,7 +159,10 @@ impl GetBlockHeadersResponse {
                 }
                 if header_timestamp > now_timestamp + ACCEPTABLE_TIME_DRIFT {
                     warn!("The drift is more than the acceptable range ({}s). The processing of block {} will be delayed.", ACCEPTABLE_TIME_DRIFT, hash);
-                    ctx.manager.graph.future_blocks.insert(header.clone());
+                    ctx.manager
+                        .graph
+                        .future_blocks
+                        .insert(header.clone(), ctx.node_id);
                     continue;
                 }
             }
@@ -255,8 +258,7 @@ impl GetBlockHeadersResponse {
         if ctx.manager.need_requesting_blocks() {
             // request missing blocks
             ctx.manager
-                .request_missing_blocks(ctx.io, chosen_peer, hashes)
-                .ok();
+                .request_missing_blocks(ctx.io, chosen_peer, hashes);
 
             // relay if necessary
             ctx.manager.relay_blocks(ctx.io, need_to_relay).ok();
