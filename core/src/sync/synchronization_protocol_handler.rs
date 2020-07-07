@@ -229,8 +229,10 @@ struct FutureBlockContainerInner {
     size: usize,
     container: BTreeMap<u64, HashSet<H256>>,
 
-    // The value is a tuple of the header corresponding to a hash and the peer that we receive this header from.
-    // Since a header is only broadcast after receiving its body, we should be able to receive the block body from the peer successfully.
+    // The value is a tuple of the header corresponding to a hash and the peer
+    // that we receive this header from. Since a header is only broadcast
+    // after receiving its body, we should be able to receive the block body
+    // from the peer successfully.
     hash_to_header_and_peer: HashMap<H256, (BlockHeader, NodeId)>,
 }
 
@@ -268,7 +270,9 @@ impl FutureBlockContainer {
             .or_insert(HashSet::new());
         if !entry.contains(&header_hash) {
             entry.insert(header_hash);
-            inner.hash_to_header_and_peer.insert(header_hash, (header, peer));
+            inner
+                .hash_to_header_and_peer
+                .insert(header_hash, (header, peer));
             inner.size += 1;
         }
 
@@ -330,7 +334,10 @@ impl FutureBlockContainer {
     }
 
     pub fn contains(&self, header_hash: &H256) -> bool {
-        self.inner.read().hash_to_header_and_peer.contains_key(header_hash)
+        self.inner
+            .read()
+            .hash_to_header_and_peer
+            .contains_key(header_hash)
     }
 }
 
@@ -1432,22 +1439,21 @@ impl SynchronizationProtocolHandler {
 
                 // check block body
                 if !self.graph.contains_block(&hash) {
-                    missed_body_block_hashes.insert(hash);
+                    // There are no duplicate headers in `future_blocks`, so
+                    // using Vec for each peer is enough.
+                    missed_body_block_hashes
+                        .entry(peer)
+                        .or_insert(Vec::new())
+                        .push(hash);
                 }
             }
         }
 
-        let chosen_peer = PeerFilter::new(msgid::GET_CMPCT_BLOCKS)
-            .throttle(msgid::GET_BLOCKS)
-            .select(&self.syn);
-
-        // request missing blocks
-        self.request_missing_blocks(
-            io,
-            chosen_peer,
-            missed_body_block_hashes.into_iter().collect(),
-        )
-        .ok();
+        for (peer, missing_hashes) in missed_body_block_hashes {
+            // request missing blocks from the peer where we receive their
+            // headers.
+            self.request_missing_blocks(io, Some(peer), missing_hashes);
+        }
 
         // relay if necessary
         self.relay_blocks(io, need_to_relay.into_iter().collect())
@@ -1557,7 +1563,7 @@ impl SynchronizationProtocolHandler {
     pub fn request_missing_blocks(
         &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
         hashes: Vec<H256>,
-    ) -> Result<(), Error>
+    )
     {
         let catch_up_mode = self.catch_up_mode();
         if catch_up_mode {
@@ -1566,7 +1572,6 @@ impl SynchronizationProtocolHandler {
             self.request_manager
                 .request_compact_blocks(io, peer_id, hashes, None);
         }
-        Ok(())
     }
 
     pub fn request_blocks(
