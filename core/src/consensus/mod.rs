@@ -28,7 +28,7 @@ use crate::{
     parameters::{
         consensus::*, consensus_internal::*, staking::COLLATERAL_PER_BYTE,
     },
-    pow::ProofOfWorkConfig,
+    pow::{PowComputer, ProofOfWorkConfig},
     rpc_errors::Result as RpcResult,
     state::State,
     statedb::StateDb,
@@ -191,8 +191,9 @@ impl ConsensusGraph {
     pub fn with_era_genesis(
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
-        pow_config: ProofOfWorkConfig, era_genesis_block_hash: &H256,
-        era_stable_block_hash: &H256, notifications: Arc<Notifications>,
+        pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
+        era_genesis_block_hash: &H256, era_stable_block_hash: &H256,
+        notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, is_full_node: bool,
     ) -> Self
@@ -200,6 +201,7 @@ impl ConsensusGraph {
         let inner =
             Arc::new(RwLock::new(ConsensusGraphInner::with_era_genesis(
                 pow_config,
+                pow.clone(),
                 data_man.clone(),
                 conf.inner_conf.clone(),
                 era_genesis_block_hash,
@@ -252,7 +254,8 @@ impl ConsensusGraph {
     pub fn new(
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
-        pow_config: ProofOfWorkConfig, notifications: Arc<Notifications>,
+        pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
+        notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_conf: VerificationConfig, is_full_node: bool,
     ) -> Self
@@ -266,6 +269,7 @@ impl ConsensusGraph {
             statistics,
             data_man,
             pow_config,
+            pow,
             &genesis_hash,
             &stable_hash,
             notifications,

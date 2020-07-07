@@ -45,6 +45,7 @@ enum MiningState {
 /// The interface for a conflux block generator
 pub struct BlockGenerator {
     pub pow_config: ProofOfWorkConfig,
+    pow: Arc<PowComputer>,
     mining_author: Address,
     graph: SharedSynchronizationGraph,
     txpool: SharedTransactionPool,
@@ -74,6 +75,7 @@ impl Worker {
             .spawn(move || {
                 let sleep_duration = time::Duration::from_millis(100);
                 let mut problem: Option<ProofOfWorkProblem> = None;
+                let bg_pow = Arc::new(PowComputer::new(bg_handle.pow_config.test_mode));
 
                 loop {
                     match *bg_handle.state.read() {
@@ -92,10 +94,11 @@ impl Worker {
                         trace!("problem is {:?}", problem);
                         let boundary = problem.as_ref().unwrap().boundary;
                         let block_hash = problem.as_ref().unwrap().block_hash;
+                        let block_height = problem.as_ref().unwrap().block_height;
                         let mut nonce: u64 = rand::random();
                         for _i in 0..MINING_ITERATION {
                             let nonce_u256 = U256::from(nonce);
-                            let hash = compute(&nonce_u256, &block_hash);
+                            let hash = bg_pow.compute(&nonce_u256, &block_hash, block_height);
                             if ProofOfWorkProblem::validate_hash_against_boundary(&hash, &nonce_u256, &boundary) {
                                 // problem solved
                                 match solution_sender
@@ -128,11 +131,13 @@ impl BlockGenerator {
         graph: SharedSynchronizationGraph, txpool: SharedTransactionPool,
         sync: SharedSynchronizationService,
         maybe_txgen: Option<SharedTransactionGenerator>,
-        pow_config: ProofOfWorkConfig, mining_author: Address,
+        pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
+        mining_author: Address,
     ) -> Self
     {
         BlockGenerator {
             pow_config,
+            pow,
             mining_author,
             graph,
             txpool,
@@ -599,12 +604,14 @@ impl BlockGenerator {
         let mut block = block_init;
         let difficulty = block.block_header.difficulty();
         let problem = ProofOfWorkProblem::new(
+            block.block_header.height(),
             block.block_header.problem_hash(),
             *difficulty,
         );
         let mut nonce: u64 = rand::random();
         loop {
             if validate(
+                self.pow.clone(),
                 &problem,
                 &ProofOfWorkSolution {
                     nonce: U256::from(nonce),
@@ -664,7 +671,7 @@ impl BlockGenerator {
             port: bg.pow_config.stratum_port,
             secret: bg.pow_config.stratum_secret,
         };
-        let stratum = Stratum::start(&cfg, solution_sender)
+        let stratum = Stratum::start(&cfg, bg.pow.clone(), solution_sender)
             .expect("Failed to start Stratum service.");
         let mut bg_stratum = bg.stratum.write();
         *bg_stratum = Some(stratum);
@@ -719,6 +726,11 @@ impl BlockGenerator {
                         .as_ref()
                         .unwrap()
                         .block_header
+                        .height(),
+                    current_mining_block
+                        .as_ref()
+                        .unwrap()
+                        .block_header
                         .problem_hash(),
                     *current_difficulty,
                 );
@@ -735,6 +747,7 @@ impl BlockGenerator {
                     // check if the block received valid
                     if new_solution.is_ok()
                         && !validate(
+                            bg.pow.clone(),
                             &current_problem.unwrap(),
                             &new_solution.unwrap(),
                         )

@@ -6,7 +6,7 @@ use crate::{
     error::{BlockError, Error},
     executive::Executive,
     parameters::block::*,
-    pow::{self, nonce_to_lower_bound, ProofOfWorkProblem},
+    pow::{self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem},
     storage::{make_simple_mpt, simple_mpt_merkle_root, TrieProof},
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
     vm,
@@ -97,18 +97,22 @@ impl VerificationConfig {
     #[inline]
     /// Note that this function returns *pow_hash* of the block, not its quality
     pub fn compute_pow_hash_and_fill_header_pow_quality(
-        header: &mut BlockHeader,
+        pow: Arc<PowComputer>, header: &mut BlockHeader,
     ) -> H256 {
         let nonce = header.nonce();
-        let pow_hash = pow::compute(&nonce, &header.problem_hash());
+        let pow_hash: H256 = pow
+            .compute(&nonce, &header.problem_hash(), header.height())
+            .into();
         header.pow_quality = pow::pow_hash_to_quality(&pow_hash, &nonce);
         pow_hash
     }
 
     #[inline]
-    pub fn verify_pow(&self, header: &mut BlockHeader) -> Result<(), Error> {
+    pub fn verify_pow(
+        &self, pow: Arc<PowComputer>, header: &mut BlockHeader,
+    ) -> Result<(), Error> {
         let pow_hash =
-            Self::compute_pow_hash_and_fill_header_pow_quality(header);
+            Self::compute_pow_hash_and_fill_header_pow_quality(pow, header);
         if header.difficulty().is_zero() {
             return Err(BlockError::InvalidDifficulty(OutOfBounds {
                 min: Some(0.into()),
@@ -160,7 +164,7 @@ impl VerificationConfig {
     /// This does not require header to be graph or parental tree ready.
     #[inline]
     pub fn verify_header_params(
-        &self, header: &mut BlockHeader,
+        &self, pow: Arc<PowComputer>, header: &mut BlockHeader,
     ) -> Result<(), Error> {
         // Check header custom data length
         let custom_len = header.custom().iter().fold(0, |acc, x| acc + x.len());
@@ -175,7 +179,7 @@ impl VerificationConfig {
         }
 
         // verify POW
-        self.verify_pow(header)?;
+        self.verify_pow(pow, header)?;
 
         // A block will be invalid if it has more than REFEREE_BOUND referees
         if header.referee_hashes().len() > self.referee_bound {

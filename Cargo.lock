@@ -523,6 +523,7 @@ dependencies = [
  "lru_time_cache",
  "malloc_size_of",
  "malloc_size_of_derive",
+ "memmap",
  "memoffset",
  "memory-cache",
  "metrics",
@@ -535,6 +536,7 @@ dependencies = [
  "parity-crypto 0.3.1",
  "parity-util-mem",
  "parking_lot 0.10.2",
+ "primal",
  "primitives",
  "priority-send-queue",
  "prometheus",
@@ -553,7 +555,9 @@ dependencies = [
  "slab",
  "sqlite",
  "sqlite3-sys",
+ "static_assertions",
  "strfmt",
+ "tempdir",
  "thiserror",
  "threadpool",
  "throttling",
@@ -1519,6 +1523,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hamming"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65043da274378d68241eb9a8f8f8aa54e349136f7b8e12f63e3ef44043cc30e1"
+
+[[package]]
 name = "hashbrown"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2328,6 +2338,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3728d817d99e5ac407411fa471ff9800a778d88a24685968b36824eaf4bee400"
 
 [[package]]
+name = "memmap"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2ffa2c986de11a9df78620c01eeaaf27d94d3ff02bf81bfcca953102dd0c6ff"
+dependencies = [
+ "libc",
+ "winapi 0.3.8",
+]
+
+[[package]]
 name = "memoffset"
 version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2995,6 +3015,53 @@ name = "ppv-lite86"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "237a5ed80e274dbc66f86bd59c1e25edc039660be53194b5fe0a482e0f2612ea"
+
+[[package]]
+name = "primal"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e31b86efadeaeb1235452171a66689682783149a6249ff334a2c5d8218d00a4"
+dependencies = [
+ "primal-check",
+ "primal-estimate",
+ "primal-sieve",
+]
+
+[[package]]
+name = "primal-bit"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "686a64e2f50194c64942992af5799e6b6e8775b8f88c607d72ed0a2fd58b9b21"
+dependencies = [
+ "hamming",
+]
+
+[[package]]
+name = "primal-check"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e65f96c0a171f887198c274392c99a116ef65aa7f53f3b6d4902f493965c2d1"
+dependencies = [
+ "num-integer",
+]
+
+[[package]]
+name = "primal-estimate"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56ea4531dde757b56906493c8604641da14607bf9cdaa80fb9c9cabd2429f8d5"
+
+[[package]]
+name = "primal-sieve"
+version = "0.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da2d6ed369bb4b0273aeeb43f07c105c0117717cbae827b20719438eb2eb798c"
+dependencies = [
+ "hamming",
+ "primal-bit",
+ "primal-estimate",
+ "smallvec 0.6.13",
+]
 
 [[package]]
 name = "primitive-types"

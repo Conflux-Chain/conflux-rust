@@ -40,6 +40,11 @@ extern crate rustc_hex;
 extern crate serde;
 extern crate serde_derive;
 extern crate unexpected;
+#[macro_use]
+extern crate static_assertions;
+extern crate memmap;
+extern crate primal;
+extern crate tempdir;
 
 #[macro_use]
 pub mod message;

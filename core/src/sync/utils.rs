@@ -14,7 +14,7 @@ use crate::{
         consensus_internal::INITIAL_BASE_MINING_REWARD_IN_UCFX,
         WORKER_COMPUTATION_PARALLELISM,
     },
-    pow::ProofOfWorkConfig,
+    pow::{PowComputer, ProofOfWorkConfig},
     statistics::Statistics,
     storage::{StorageConfiguration, StorageManager},
     sync::{SyncGraphConfig, SynchronizationGraph},
@@ -86,7 +86,7 @@ pub fn create_simple_block(
 }
 
 pub fn initialize_data_manager(
-    db_dir: &str, dbtype: DbType,
+    db_dir: &str, dbtype: DbType, pow: Arc<PowComputer>,
 ) -> (Arc<BlockDataManager>, Arc<Block>) {
     let ledger_db = db::open_database(
         db_dir,
@@ -138,13 +138,14 @@ pub fn initialize_data_manager(
             Duration::from_millis(300_000), /* max cached tx count */
             dbtype,
         ),
+        pow,
     ));
     (data_man, genesis_block)
 }
 
 pub fn initialize_synchronization_graph_with_data_manager(
     data_man: Arc<BlockDataManager>, beta: u64, h: u64, tcr: u64, tcb: u64,
-    era_epoch_count: u64,
+    era_epoch_count: u64, pow: Arc<PowComputer>,
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
 {
     let verification_config = VerificationConfig::new(
@@ -204,6 +205,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         statistics.clone(),
         data_man.clone(),
         pow_config.clone(),
+        pow.clone(),
         notifications.clone(),
         ConsensusExecutionConfiguration {
             anticone_penalty_ratio: tcr - 1,
@@ -217,6 +219,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         consensus.clone(),
         verification_config,
         pow_config,
+        pow.clone(),
         sync_config,
         notifications,
         false, /* is_full_node */
@@ -237,7 +240,10 @@ pub fn initialize_synchronization_graph(
     Arc<Block>,
 )
 {
-    let (data_man, genesis_block) = initialize_data_manager(db_dir, dbtype);
+    let pow = Arc::new(PowComputer::new(true));
+
+    let (data_man, genesis_block) =
+        initialize_data_manager(db_dir, dbtype, pow.clone());
 
     let (sync, consensus) = initialize_synchronization_graph_with_data_manager(
         data_man.clone(),
@@ -246,6 +252,7 @@ pub fn initialize_synchronization_graph(
         tcr,
         tcb,
         era_epoch_count,
+        pow,
     );
 
     (sync, consensus, data_man, genesis_block)

@@ -6,7 +6,7 @@ use crate::{
     cache_config::CacheConfig,
     cache_manager::{CacheId, CacheManager, CacheSize},
     ext_db::SystemDB,
-    pow::TargetDifficultyManager,
+    pow::{PowComputer, TargetDifficultyManager},
     storage::{
         state_manager::StateIndex, utils::guarded_value::*,
         StateRootWithAuxInfo, StorageManager, StorageManagerTrait,
@@ -259,6 +259,7 @@ impl BlockDataManager {
         cache_conf: CacheConfig, true_genesis: Arc<Block>, db: Arc<SystemDB>,
         storage_manager: Arc<StorageManager>,
         worker_pool: Arc<Mutex<ThreadPool>>, config: DataManagerConfiguration,
+        pow: Arc<PowComputer>,
     ) -> Self
     {
         let mb = 1024 * 1024;
@@ -274,9 +275,9 @@ impl BlockDataManager {
             worker_pool,
         );
         let db_manager = match config.db_type {
-            DbType::Rocksdb => DBManager::new_from_rocksdb(db),
+            DbType::Rocksdb => DBManager::new_from_rocksdb(db, pow),
             DbType::Sqlite => {
-                DBManager::new_from_sqlite(Path::new("./sqlite_db"))
+                DBManager::new_from_sqlite(Path::new("./sqlite_db"), pow)
             }
         };
 
