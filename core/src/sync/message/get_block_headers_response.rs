@@ -159,7 +159,7 @@ impl GetBlockHeadersResponse {
                 }
                 if header_timestamp > now_timestamp + ACCEPTABLE_TIME_DRIFT {
                     warn!("The drift is more than the acceptable range ({}s). The processing of block {} will be delayed.", ACCEPTABLE_TIME_DRIFT, hash);
-                    ctx.manager.graph.future_blocks.insert(header.clone());
+                    ctx.manager.graph.future_blocks.insert(header.clone(), ctx.node_id);
                     continue;
                 }
             }
