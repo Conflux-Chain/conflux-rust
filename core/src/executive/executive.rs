@@ -1259,8 +1259,7 @@ impl<'a> Executive<'a> {
                 .is_none();
         let mut is_recursive_call = false;
         let contracts_in_callstack = if is_not_internal_contract_and_has_code {
-            is_recursive_call =
-                substate.contract_address == params.address;
+            is_recursive_call = substate.contract_address == params.address;
             let mut contracts_in_callstack = HashSet::<Address>::new();
             mem::swap(
                 &mut contracts_in_callstack,
