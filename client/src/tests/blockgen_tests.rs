@@ -62,9 +62,7 @@ fn test_mining_10_epochs_inner(
 fn test_mining_10_epochs() {
     let mut conf = Configuration::default();
     conf.raw_conf.mode = Some("test".to_owned());
-    // The timeout is 60s for 10 blocks.
-    // Given estimated 1 nonce/ms，this difficulty should pass the test.
-    conf.raw_conf.initial_difficulty = Some(500);
+    conf.raw_conf.initial_difficulty = Some(10_000);
 
     let tmp_dir = TempDir::new("conflux-test").unwrap();
     conf.raw_conf.conflux_data_dir =

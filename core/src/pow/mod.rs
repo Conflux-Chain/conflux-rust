@@ -8,8 +8,8 @@ mod keccak;
 mod seed_compute;
 mod shared;
 
-use self::keccak::H256 as RawH256;
 pub use self::{cache::CacheBuilder, shared::POW_STAGE_LENGTH};
+use crate::hash::keccak as keccak_hash;
 
 use crate::{block_data_manager::BlockDataManager, parameters::pow::*};
 use cfx_types::{BigEndianHash, H256, U256, U512};
@@ -203,33 +203,40 @@ pub fn compute_inv_x_times_2_pow_256_floor(x: &U256) -> U256 {
 }
 
 pub struct PowComputer {
+    test_mode: bool,
     cache_builder: CacheBuilder,
 }
 
 impl PowComputer {
-    pub fn new() -> Self {
+    pub fn new(test_mode: bool) -> Self {
         PowComputer {
+            test_mode,
             cache_builder: CacheBuilder::new(),
         }
     }
 
-    pub fn compute_light(
-        &self, block_height: u64, block_hash: &RawH256, nonce: u64,
-    ) -> RawH256 {
-        let light = self.cache_builder.light(block_height);
-        light.compute(block_hash, nonce)
+    pub fn compute(
+        &self, nonce: &U256, block_hash: &H256, block_height: u64,
+    ) -> H256 {
+        if self.test_mode {
+            let mut buf = [0u8; 64];
+            for i in 0..32 {
+                buf[i] = block_hash[i];
+            }
+            nonce.to_little_endian(&mut buf[32..64]);
+            let intermediate = keccak_hash(&buf[..]);
+            let mut tmp = [0u8; 32];
+            for i in 0..32 {
+                tmp[i] = intermediate[i] ^ block_hash[i]
+            }
+            keccak_hash(tmp)
+        } else {
+            let light = self.cache_builder.light(block_height);
+            light
+                .compute(block_hash.as_fixed_bytes(), nonce.low_u64())
+                .into()
+        }
     }
-}
-
-pub fn compute(
-    pow: Arc<PowComputer>, nonce: &U256, block_hash: &H256, block_height: u64,
-) -> H256 {
-    pow.compute_light(
-        block_height,
-        block_hash.as_fixed_bytes(),
-        nonce.low_u64(),
-    )
-    .into()
 }
 
 pub fn validate(
@@ -238,7 +245,7 @@ pub fn validate(
 ) -> bool
 {
     let nonce = solution.nonce;
-    let hash = compute(pow, &nonce, &problem.block_hash, problem.block_height);
+    let hash = pow.compute(&nonce, &problem.block_hash, problem.block_height);
     ProofOfWorkProblem::validate_hash_against_boundary(
         &hash,
         &nonce,

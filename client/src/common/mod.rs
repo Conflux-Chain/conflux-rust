@@ -200,7 +200,8 @@ pub fn initialize_common_modules(
     );
     debug!("Initialize genesis_block={:?}", genesis_block);
 
-    let pow = Arc::new(PowComputer::new());
+    let pow_config = conf.pow_config();
+    let pow = Arc::new(PowComputer::new(pow_config.test_mode));
 
     let data_man = Arc::new(BlockDataManager::new(
         cache_config,
@@ -223,7 +224,6 @@ pub fn initialize_common_modules(
 
     let statistics = Arc::new(Statistics::new());
     let vm = VmFactory::new(1024 * 32);
-    let pow_config = conf.pow_config();
     let notifications = Notifications::init();
 
     let consensus = Arc::new(ConsensusGraph::new(

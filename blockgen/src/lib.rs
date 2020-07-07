@@ -75,7 +75,7 @@ impl Worker {
             .spawn(move || {
                 let sleep_duration = time::Duration::from_millis(100);
                 let mut problem: Option<ProofOfWorkProblem> = None;
-                let bg_pow = Arc::new(PowComputer::new());
+                let bg_pow = Arc::new(PowComputer::new(bg_handle.pow_config.test_mode));
 
                 loop {
                     match *bg_handle.state.read() {
@@ -98,7 +98,7 @@ impl Worker {
                         let mut nonce: u64 = rand::random();
                         for _i in 0..MINING_ITERATION {
                             let nonce_u256 = U256::from(nonce);
-                            let hash = compute(bg_pow.clone(), &nonce_u256, &block_hash, block_height);
+                            let hash = bg_pow.compute(&nonce_u256, &block_hash, block_height);
                             if ProofOfWorkProblem::validate_hash_against_boundary(&hash, &nonce_u256, &boundary) {
                                 // problem solved
                                 match solution_sender

@@ -239,7 +239,7 @@ pub fn initialize_synchronization_graph(
     Arc<Block>,
 )
 {
-    let pow = Arc::new(PowComputer::new());
+    let pow = Arc::new(PowComputer::new(true));
 
     let (data_man, genesis_block) =
         initialize_data_manager(db_dir, dbtype, pow.clone());

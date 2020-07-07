@@ -101,11 +101,7 @@ impl VerificationConfig {
     ) -> H256 {
         let nonce = header.nonce();
         let pow_hash: H256 = pow
-            .compute_light(
-                header.height(),
-                header.problem_hash().as_fixed_bytes(),
-                nonce.low_u64(),
-            )
+            .compute(&nonce, &header.problem_hash(), header.height())
             .into();
         header.pow_quality = pow::pow_hash_to_quality(&pow_hash, &nonce);
         pow_hash
