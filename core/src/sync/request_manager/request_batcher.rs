@@ -5,7 +5,7 @@ use crate::sync::{
 use cfx_types::H256;
 use std::{cmp::min, time::Duration};
 
-const DEFAULT_REQUEST_BATCHER_BUCKET_NUMBER: usize = 10;
+const DEFAULT_REQUEST_BATCHER_BUCKET_NUMBER: usize = 30;
 const DEFAULT_REQUEST_HEADER_BATCH_SIZE: usize = 100;
 const DEFAULT_REQUEST_BLOCK_BATCH_SIZE: usize = 50;
 const DEFAULT_REQUEST_EPOCH_BATCH_SIZE: usize = 10;

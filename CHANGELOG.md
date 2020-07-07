@@ -20,11 +20,16 @@ was caused by a wrong assumption of the uniqueness of the trie proof key.
 
 - Fix db error handling for EVM create / call.
 
+- Prevent crashes due to unchecked address space.
+
 ## Incompatible Changes
 
 - Change StorageValue serialization to reduce space.
 
 - Changed COMMISSION_PRIVILEGE_STORAGE_VALUE.
+
+- Remove address from Account rlp format, which was included unexpectedly
+before.
 
 ## Improvements
 
@@ -94,6 +99,13 @@ Now if no `from_epoch` is specified, it will only return logs after the latest c
 
 - Enable overflow-checks for release build, to make sure that underflow is
 impossible.
+
+- Reduce the lock dependency between the transaction pool and the consensus engine to improve the performance.
+
+- Transaction pool will not start until the node finishes the catch-up. This
+avoids inconsistent transaction pool issues during the catch up.
+
+- New cfx_clientVersion() rpc call to return a string with versions
 
 # 0.5.0
 

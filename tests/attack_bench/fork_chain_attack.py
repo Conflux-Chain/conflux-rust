@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 import os, sys
+
+from test_framework.block_gen_thread import PoWGenerateThread
+
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 from conflux.utils import parse_as_int
@@ -9,10 +12,8 @@ from test_framework.mininode import start_p2p_connection
 
 
 from conflux.rpc import RpcClient
-from test_framework.blocktools import make_genesis, create_block
+from test_framework.blocktools import create_block
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.util import *
-
 
 '''
 An attacker mines a fork chain at a fixed point and release them at once.

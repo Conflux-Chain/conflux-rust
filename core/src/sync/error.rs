@@ -103,6 +103,11 @@ error_chain! {
             display("packet {:?} throttled: {:?}", msg_name, response),
         }
 
+        InCatchUpMode(reason: String) {
+            description("Cannot process the message due to the catch up mode."),
+            display("Cannot process the message due to the catch up mode: {:?}", reason),
+        }
+
         InternalError(reason: String) {
             description("Internal error"),
             display("Internal error: {:?}", reason),
