@@ -1081,7 +1081,7 @@ impl<'a> CallCreateExecutive<'a> {
                     let substate = resume.unconfirmed_substate().unwrap();
                     let mut is_recursive_call = false;
                     let contracts_in_callstack = if is_not_internal_contract_and_has_code {
-                        is_recursive_call = substate.contract_address == subparams.code_address;
+                        is_recursive_call = substate.code_address == subparams.code_address;
                         let mut contracts_in_callstack = HashSet::<Address>::new();
                         mem::swap(
                             &mut contracts_in_callstack,
@@ -1260,7 +1260,7 @@ impl<'a> Executive<'a> {
         let mut is_recursive_call = false;
         let contracts_in_callstack = if is_not_internal_contract_and_has_code {
             is_recursive_call =
-                substate.contract_address == params.code_address;
+                substate.code_address == params.code_address;
             let mut contracts_in_callstack = HashSet::<Address>::new();
             mem::swap(
                 &mut contracts_in_callstack,

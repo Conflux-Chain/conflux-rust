@@ -39,8 +39,8 @@ pub struct Substate {
     pub contracts_in_callstack: HashSet<Address>,
     /// Reentrancy happens in current call
     pub reentrancy_encountered: bool,
-    /// Contract address in current call
-    pub contract_address: Address,
+    /// Code address in current call
+    pub code_address: Address,
 }
 
 impl Substate {
@@ -52,14 +52,14 @@ impl Substate {
     }
 
     pub fn with_contracts_in_callstack(
-        contracts: HashSet<Address>, contract_address: Address,
+        contracts: HashSet<Address>, code_address: Address,
         reentrancy_encountered: bool,
     ) -> Self
     {
         let mut substate = Substate::default();
         substate.contracts_in_callstack = contracts;
         substate.reentrancy_encountered = reentrancy_encountered;
-        substate.contract_address = contract_address;
+        substate.code_address = code_address;
         substate
     }
 
@@ -83,9 +83,9 @@ impl Substate {
         let mut contract_in_callstack = HashSet::<Address>::new();
         mem::swap(&mut contract_in_callstack, &mut s.contracts_in_callstack);
         if !s.reentrancy_encountered
-            && self.contract_address != s.contract_address
+            && self.code_address != s.code_address
         {
-            contract_in_callstack.remove(&s.contract_address);
+            contract_in_callstack.remove(&s.code_address);
         }
         self.contracts_in_callstack = contract_in_callstack;
     }
