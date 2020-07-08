@@ -9,6 +9,8 @@ use std::{mem, sync::Arc};
 const MIX_WORDS: usize = POW_MIX_BYTES / 4;
 const MIX_NODES: usize = MIX_WORDS / NODE_WORDS;
 pub const FNV_PRIME: u32 = 0x01000193;
+const MOD: u32 = 1000000000 + 7;
+const MOD64: u64 = MOD as u64;
 
 pub struct Light {
     block_height: u64,
@@ -216,8 +218,6 @@ fn hash_compute(
         }
     }
 
-    let MOD: u32 = 1000000000 + 7;
-    let MOD64 = MOD as u64;
     let mut magic_mix: [u32; POW_ACCESSES] = [0; POW_ACCESSES];
 
     for i in 0..POW_ACCESSES as usize {
