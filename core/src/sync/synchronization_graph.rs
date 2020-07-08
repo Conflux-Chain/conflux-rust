@@ -161,7 +161,6 @@ pub struct SynchronizationGraphInner {
     /// Or, it may consider not block-graph-ready in phases
     /// `CatchUpRecoverBlockFromDB`, `CatchUpSyncBlock`, and `Normal`.
     pub not_ready_blocks_frontier: UnreadyBlockFrontier,
-    pub not_ready_blocks_count: usize,
     pub old_era_blocks_frontier: VecDeque<usize>,
     pub old_era_blocks_frontier_set: HashSet<usize>,
     machine: Arc<Machine>,
@@ -199,7 +198,6 @@ impl SynchronizationGraphInner {
             pow,
             config,
             not_ready_blocks_frontier: UnreadyBlockFrontier::new(),
-            not_ready_blocks_count: 0,
             old_era_blocks_frontier: Default::default(),
             old_era_blocks_frontier_set: Default::default(),
             machine,
@@ -929,7 +927,6 @@ impl SynchronizationGraphInner {
         for index in invalid_set {
             let hash = self.arena[*index].block_header.hash();
             self.not_ready_blocks_frontier.remove(index);
-            self.not_ready_blocks_count -= 1;
             self.old_era_blocks_frontier_set.remove(index);
 
             let parent = self.arena[*index].parent;
@@ -1577,7 +1574,6 @@ impl SynchronizationGraph {
                     );
 
                     // maintain not_ready_blocks_frontier
-                    inner.not_ready_blocks_count -= 1;
                     inner.not_ready_blocks_frontier.remove(&index);
                     for child in &inner.arena[index].children {
                         inner.not_ready_blocks_frontier.insert(*child);
@@ -1707,7 +1703,6 @@ impl SynchronizationGraph {
         //   2. `BLOCK_HEADER_ONLY` for non genesis block.
         //   3. `BLOCK_INVALID` for invalid block.
         if inner.arena[me].graph_status != BLOCK_GRAPH_READY {
-            inner.not_ready_blocks_count += 1;
             // This block will become a new `not_ready_blocks_frontier` if
             //   1. It's parent block has not inserted yet.
             //   2. We are in `Catch Up Blocks Phase` and the graph status of
@@ -1782,7 +1777,6 @@ impl SynchronizationGraph {
         }
 
         // maintain not_ready_blocks_frontier
-        inner.not_ready_blocks_count -= 1;
         inner.not_ready_blocks_frontier.remove(&index);
         for child in &inner.arena[index].children {
             inner.not_ready_blocks_frontier.insert(*child);
