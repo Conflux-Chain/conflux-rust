@@ -198,7 +198,9 @@ impl StratumJobDispatcher {
     }
 
     /// Serializes payload for stratum service
-    fn payload(&self, block_height: u64, pow_hash: H256, boundary: U256) -> String {
+    fn payload(
+        &self, block_height: u64, pow_hash: H256, boundary: U256,
+    ) -> String {
         // Now we just fill the job_id as pow_hash. This will be more consistent
         // with the convention.
         format!(

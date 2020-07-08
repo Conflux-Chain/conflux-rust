@@ -238,7 +238,12 @@ impl PowComputer {
             }
             keccak_hash(tmp)
         } else {
-            println!("header_hash: {:?}, block_height: {}, nonce: {}", block_hash, block_height, nonce.low_u64());
+            println!(
+                "header_hash: {:?}, block_height: {}, nonce: {}",
+                block_hash,
+                block_height,
+                nonce.low_u64()
+            );
             let light = self.cache_builder.light(block_height);
             light
                 .compute(block_hash.as_fixed_bytes(), nonce.low_u64())
@@ -414,12 +419,4 @@ impl TargetDifficultyManager {
     pub fn set(&self, hash: H256, difficulty: U256) {
         self.cache.set(hash, difficulty);
     }
-}
-
-#[test]
-fn test_octopus() {
-    let pow = PowComputer::new(true);
-
-    let block_hash = "4d99d0b41c7eb0dd1a801c35aae2df28ae6b53bc7743f0818a34b6ec97f5b4ae".parse().unwrap();
-    pow.compute(&U256::from(3812), &block_hash, 2);
 }
