@@ -694,7 +694,7 @@ impl RpcImpl {
             num_txs,
             block_size_limit,
             vec![],
-            blame_info.blame,
+            blame_info.blame.map(|x| x.as_u32()),
             blame_info.deferred_state_root.map(|x| x.into()),
             blame_info.deferred_receipts_root.map(|x| x.into()),
             blame_info.deferred_logs_bloom_hash.map(|x| x.into()),

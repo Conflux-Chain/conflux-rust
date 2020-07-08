@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{Receipt, Transaction, H160, H256, U256};
+use crate::rpc::types::{Receipt, Transaction, H160, H256, U256, U64};
 use cfx_types::U256 as CfxU256;
 use cfxcore::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
@@ -101,7 +101,7 @@ pub struct Block {
     /// state_root/receipts_root/logs_bloom_hash/blame are not correct.
     /// It acts as a vote to help light client determining the
     /// state_root/receipts_root/logs_bloom_hash are correct or not.
-    pub blame: u32,
+    pub blame: U64,
     /// Transactions root hash
     pub transactions_root: H256,
     /// Epoch number

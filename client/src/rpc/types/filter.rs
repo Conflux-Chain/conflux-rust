@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::EpochNumber;
-use cfx_types::{H160, H256, U64};
+use cfx_types::{H160, H256};
 use jsonrpc_core::Error as RpcError;
 use primitives::filter::Filter as PrimitiveFilter;
 
@@ -12,6 +12,8 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use serde_json::{from_value, Value};
+use crate::rpc::types::U64;
+
 
 const FILTER_BLOCK_HASH_LIMIT: usize = 128;
 

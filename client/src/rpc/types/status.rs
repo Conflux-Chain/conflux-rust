@@ -17,5 +17,5 @@ pub struct Status {
     /// The number of blocks
     pub block_number: U64,
     /// The number of pending transactions
-    pub pending_tx_number: usize,
+    pub pending_tx_number: U64,
 }

@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{Log, H256, U256};
+use crate::rpc::types::{Log, H256, U256, U64};
 use cfx_types::{Address, Bloom, H256 as CfxH256, U256 as CfxU256};
 use cfxcore::{executive::contract_address, vm::CreateContractAddress};
 use primitives::{
@@ -17,11 +17,11 @@ pub struct Receipt {
     /// Transaction hash.
     pub transaction_hash: H256,
     /// Transaction index within the block.
-    pub index: usize,
+    pub index: U64,
     /// Block hash.
     pub block_hash: H256,
     /// epoch number where this transaction was in.
-    pub epoch_number: Option<u64>,
+    pub epoch_number: Option<U64>,
     /// address of the sender.
     pub from: Address,
     /// address of the receiver, null when it's a contract creation
@@ -40,7 +40,7 @@ pub struct Receipt {
     /// state root.
     pub state_root: H256,
     /// Transaction outcome.
-    pub outcome_status: u8,
+    pub outcome_status: U64,
 }
 
 impl Receipt {

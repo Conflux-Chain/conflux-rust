@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::Bytes;
-use cfx_types::{address_util::AddressUtil, Address, H160, U256};
+use cfx_types::{address_util::AddressUtil, Address, H160, U256, U64};
 use primitives::{
     transaction::Action, SignedTransaction, Transaction as PrimitiveTransaction,
 };
@@ -27,7 +27,7 @@ pub struct CallRequest {
     /// Nonce
     pub nonce: Option<U256>,
     /// StorageLimit
-    pub storage_limit: Option<u64>,
+    pub storage_limit: Option<U64>,
 }
 
 #[derive(Debug, Default, PartialEq, Deserialize, Serialize)]

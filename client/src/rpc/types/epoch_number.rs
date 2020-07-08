@@ -12,12 +12,13 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use std::{fmt, str::FromStr};
+use crate::rpc::types::U64;
 
 /// Represents rpc api epoch number param.
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum EpochNumber {
     /// Number
-    Num(u64),
+    Num(U64),
     /// Earliest epoch (true genesis)
     Earliest,
     /// The latest checkpoint (cur_era_genesis)
