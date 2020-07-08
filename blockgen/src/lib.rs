@@ -23,7 +23,10 @@ use primitives::*;
 use std::{
     cmp::max,
     collections::HashSet,
-    sync::{mpsc, Arc},
+    sync::{
+        mpsc::{self, TryRecvError},
+        Arc,
+    },
     thread, time,
 };
 use time::{Duration, SystemTime, UNIX_EPOCH};
@@ -33,7 +36,10 @@ lazy_static! {
         GaugeUsize::register_with_group("txpool", "packed_account_size");
 }
 
-const MINING_ITERATION: u64 = 100_000;
+/// This determined the frequency of checking a new PoW problem.
+/// And the current mining speed in the Rust implementation is about 2 ms per
+/// nonce.
+const MINING_ITERATION: u64 = 20;
 const BLOCK_FORCE_UPDATE_INTERVAL_IN_SECS: u64 = 10;
 const BLOCKGEN_LOOP_SLEEP_IN_MILISECS: u64 = 30;
 
@@ -83,11 +89,17 @@ impl Worker {
                         _ => {}
                     }
 
-                    // check if there is a new problem
-                    let new_problem = problem_receiver.try_recv();
-                    if new_problem.is_ok() {
+                    // Drain the channel to check the latest problem
+                    loop {
+                        let maybe_new_problem = problem_receiver.try_recv();
                         trace!("new problem: {:?}", problem);
-                        problem = Some(new_problem.unwrap());
+                        match maybe_new_problem {
+                            Err(TryRecvError::Empty) => break,
+                            Err(TryRecvError::Disconnected) => return,
+                            Ok(new_problem) => {
+                                problem = Some(new_problem);
+                            }
+                        }
                     }
                     // check if there is a problem to be solved
                     if problem.is_some() {

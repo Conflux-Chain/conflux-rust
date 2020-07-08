@@ -66,7 +66,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
             connect_nodes(self.nodes, full_node_index, i)
 
         self.log.info("Wait for full node to sync, index=%d", full_node_index)
-        self.nodes[full_node_index].wait_for_phase(["NormalSyncPhase"], wait_time=60)
+        self.nodes[full_node_index].wait_for_phase(["NormalSyncPhase"], wait_time=240)
 
         sync_blocks(self.nodes, sync_count=False)
 
