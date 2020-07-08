@@ -67,8 +67,7 @@ class P2PTest(ConfluxTestFramework):
 
         for i in range(1, block_number):
             chosen_peer = random.randint(0, self.num_nodes - 1)
-            clean_p = 0 if chosen_peer == 0 else self.clean_probability
-            self.maybe_restart_node(chosen_peer, self.stop_probability, clean_p)
+            self.maybe_restart_node(chosen_peer, self.stop_probability, self.clean_probability)
             self.log.debug("%d try to generate", chosen_peer)
             block_hash = RpcClient(self.nodes[chosen_peer]).generate_block(random.randint(10, 100))
             self.log.info("%d generate block %s", chosen_peer, block_hash)
