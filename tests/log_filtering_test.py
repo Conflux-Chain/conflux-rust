@@ -13,7 +13,8 @@ from test_framework.mininode import *
 
 CONTRACT_PATH = "contracts/EventsTestContract_bytecode.dat"
 CONSTRUCTED_TOPIC = encode_hex_0x(keccak(b"Constructed(address,address)"))
-CALLED_TOPIC = encode_hex_0x(keccak(b"Called(address,uint32)"))
+FOO_TOPIC = encode_hex_0x(keccak(b"Foo(address,uint32)"))
+BAR_TOPIC = encode_hex_0x(keccak(b"Bar(address,uint32)"))
 NUM_CALLS = 20
 
 class LogFilteringTest(ConfluxTestFramework):
@@ -64,7 +65,7 @@ class LogFilteringTest(ConfluxTestFramework):
         assert_equal(logs1[0], logs0[0])
 
         assert_equal(len(logs1[1]["topics"]), 3)
-        assert_equal(logs1[1]["topics"][0], CALLED_TOPIC)
+        assert_equal(logs1[1]["topics"][0], FOO_TOPIC)
         assert_equal(logs1[1]["topics"][1], self.address_to_topic(sender))
         assert_equal(logs1[1]["topics"][2], self.number_to_topic(1))
 
@@ -89,7 +90,7 @@ class LogFilteringTest(ConfluxTestFramework):
 
         for ii in range(2, NUM_CALLS):
             assert_equal(len(logs[ii]["topics"]), 3)
-            assert_equal(logs[ii]["topics"][0], CALLED_TOPIC)
+            assert_equal(logs[ii]["topics"][0], FOO_TOPIC)
             assert(logs[ii]["topics"][1] == self.address_to_topic(sender))
             assert_equal(logs[ii]["topics"][2], self.number_to_topic(ii))
 
@@ -99,7 +100,7 @@ class LogFilteringTest(ConfluxTestFramework):
         self.assert_response_format_correct(logs)
         assert_equal(len(logs), 1)
 
-        filter = Filter(topics=[CALLED_TOPIC])
+        filter = Filter(topics=[FOO_TOPIC])
         logs = self.rpc.get_logs(filter)
         self.assert_response_format_correct(logs)
         assert_equal(len(logs), NUM_CALLS - 1)
@@ -109,8 +110,8 @@ class LogFilteringTest(ConfluxTestFramework):
         self.assert_response_format_correct(logs)
         assert_equal(len(logs), NUM_CALLS)
 
-        # find logs with `CALLED_TOPIC` as 1st topic and `3` or `4` as 3rd topic
-        filter = Filter(topics=[CALLED_TOPIC, None, [self.number_to_topic(3), self.number_to_topic(4)]])
+        # find logs with `FOO_TOPIC` as 1st topic and `3` or `4` as 3rd topic
+        filter = Filter(topics=[FOO_TOPIC, None, [self.number_to_topic(3), self.number_to_topic(4)]])
         logs = self.rpc.get_logs(filter)
         self.assert_response_format_correct(logs)
         assert_equal(len(logs), 2)
@@ -140,49 +141,79 @@ class LogFilteringTest(ConfluxTestFramework):
         result = self.rpc.get_logs(filter)
         assert_equal(result, [])
 
-        # generate two blocks with `NUM_CALLS` valid logs in each
+        # generate two blocks with `NUM_CALLS` transactions in each;
+        # transactions will generate 2 logs each
         parent_hash = self.rpc.block_by_epoch("latest_mined")['hash']
         start_nonce = self.rpc.get_nonce(sender)
 
-        txs = [self.rpc.new_contract_tx(receiver=contractAddr, data_hex=encode_hex_0x(keccak(b"foo()")), sender=sender, priv_key=priv_key, storage_limit=64, nonce = start_nonce + ii) for ii in range(0, NUM_CALLS)]
-        block_hash_1 = self.rpc.generate_custom_block(parent_hash = parent_hash, referee = [], txs = txs)
+        txs1 = [self.rpc.new_contract_tx(receiver=contractAddr, data_hex=encode_hex_0x(keccak(b"bar()")), sender=sender, priv_key=priv_key, storage_limit=64, nonce = start_nonce + ii) for ii in range(0, NUM_CALLS)]
+        block_hash_1 = self.rpc.generate_custom_block(parent_hash = parent_hash, referee = [], txs = txs1)
+        epoch_1 = self.rpc.block_by_hash(block_hash_1)["epochNumber"]
 
-        txs = [self.rpc.new_contract_tx(receiver=contractAddr, data_hex=encode_hex_0x(keccak(b"foo()")), sender=sender, priv_key=priv_key, storage_limit=64, nonce = start_nonce + NUM_CALLS + ii) for ii in range(0, NUM_CALLS)]
-        block_hash_2 = self.rpc.generate_custom_block(parent_hash = block_hash_1, referee = [], txs = txs)
+        txs2 = [self.rpc.new_contract_tx(receiver=contractAddr, data_hex=encode_hex_0x(keccak(b"bar()")), sender=sender, priv_key=priv_key, storage_limit=64, nonce = start_nonce + NUM_CALLS + ii) for ii in range(0, NUM_CALLS)]
+        block_hash_2 = self.rpc.generate_custom_block(parent_hash = block_hash_1, referee = [], txs = txs2)
+        epoch_2 = self.rpc.block_by_hash(block_hash_2)["epochNumber"]
+
+        txs = txs1
+        txs.extend(txs2)
 
         # blocks not executed yet, filtering should fail
-        filter = Filter(block_hashes=[block_hash_1, block_hash_2])
-        assert_raises_rpc_error(None, None, self.rpc.get_logs, filter)
+        # filter = Filter(block_hashes=[block_hash_1, block_hash_2], topics=[BAR_TOPIC])
+        # assert_raises_rpc_error(None, None, self.rpc.get_logs, filter)
 
         # generate some more blocks to ensure our two blocks are executed
         self.rpc.generate_blocks(10)
 
         # filtering for these two blocks should return logs in correct order
-        filter = Filter(block_hashes=[block_hash_1, block_hash_2])
+        filter = Filter(block_hashes=[block_hash_1, block_hash_2], topics=[BAR_TOPIC])
         logs = self.rpc.get_logs(filter)
-        assert_equal(len(logs), 2 * NUM_CALLS)
+        assert_equal(len(logs), 4 * NUM_CALLS)
 
-        for ii in range(0, 2 * NUM_CALLS):
+        log_index = 0
+        transaction_index = 0
+        transaction_log_index = 0
+
+        for ii in range(0, 4 * NUM_CALLS):
+            assert_equal(logs[ii]["address"], contractAddr)
+            assert_equal(logs[ii]["blockHash"], block_hash_1 if ii < 2 * NUM_CALLS else block_hash_2)
+            assert_equal(logs[ii]["epochNumber"], epoch_1 if ii < 2 * NUM_CALLS else epoch_2)
+            assert_equal(logs[ii]["transactionHash"], txs[ii // 2].hash_hex())
+
             assert_equal(len(logs[ii]["topics"]), 3)
-            assert_equal(logs[ii]["topics"][0], CALLED_TOPIC)
-            assert(logs[ii]["topics"][1] == self.address_to_topic(sender))
-            assert_equal(logs[ii]["topics"][2], self.number_to_topic(ii + NUM_CALLS))
+            assert_equal(logs[ii]["topics"][0], BAR_TOPIC)
+            assert_equal(logs[ii]["topics"][1], self.address_to_topic(sender))
+            assert_equal(logs[ii]["topics"][2], self.number_to_topic(ii))
+
+            # logIndex:
+            # 0, 1, 2, 3, 4, 6, 7, 8, ..., 2 * NUM_CALLS, 0, 1, 2, ...
+            assert_equal(logs[ii]["logIndex"], hex(log_index % (2 * NUM_CALLS)))
+            log_index += 1
+
+            # transactionIndex:
+            # 0, 0, 1, 1, 2, 2, 3, 3, ..., NUM_CALLS, 0, 0, 1, 1, ...
+            assert_equal(logs[ii]["transactionIndex"], hex((transaction_index // 2) % NUM_CALLS))
+            transaction_index += 1
+
+            # transactionLogIndex:
+            # 0, 1, 0, 1, 0, 1, 0, 1, ...
+            assert_equal(logs[ii]["transactionLogIndex"], hex(transaction_log_index % 2))
+            transaction_log_index += 1
 
         # block hash order should not affect log order
-        filter = Filter(block_hashes=[block_hash_2, block_hash_1])
+        filter = Filter(block_hashes=[block_hash_2, block_hash_1], topics=[BAR_TOPIC])
         logs2 = self.rpc.get_logs(filter)
         assert_equal(logs, logs2)
 
         # given a limit, we should receive the _last_ few logs
-        filter = Filter(block_hashes=[block_hash_1, block_hash_2], limit = hex(NUM_CALLS + NUM_CALLS // 2))
+        filter = Filter(block_hashes=[block_hash_1, block_hash_2], limit = hex(3 * NUM_CALLS + NUM_CALLS // 2), topics=[BAR_TOPIC])
         logs = self.rpc.get_logs(filter)
-        assert_equal(len(logs), NUM_CALLS + NUM_CALLS // 2)
+        assert_equal(len(logs), 3 * NUM_CALLS + NUM_CALLS // 2)
 
-        for ii in range(0, NUM_CALLS + NUM_CALLS // 2):
+        for ii in range(0, 3 * NUM_CALLS + NUM_CALLS // 2):
             assert_equal(len(logs[ii]["topics"]), 3)
-            assert_equal(logs[ii]["topics"][0], CALLED_TOPIC)
-            assert(logs[ii]["topics"][1] == self.address_to_topic(sender))
-            assert_equal(logs[ii]["topics"][2], self.number_to_topic(ii + NUM_CALLS + NUM_CALLS // 2))
+            assert_equal(logs[ii]["topics"][0], BAR_TOPIC)
+            assert_equal(logs[ii]["topics"][1], self.address_to_topic(sender))
+            assert_equal(logs[ii]["topics"][2], self.number_to_topic(NUM_CALLS // 2 + ii))
 
         self.log.info("Pass")
 
@@ -194,13 +225,13 @@ class LogFilteringTest(ConfluxTestFramework):
 
     def deploy_contract(self, sender, priv_key, data_hex):
         c0 = self.rpc.get_collateral_for_storage(sender)
-        tx = self.rpc.new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key, storage_limit=253)
+        tx = self.rpc.new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key, storage_limit=575)
         assert_equal(self.rpc.send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc.get_transaction_receipt(tx.hash_hex())
         assert_equal(receipt["outcomeStatus"], 0)
         address = receipt["contractCreated"]
         c1 = self.rpc.get_collateral_for_storage(sender)
-        assert_equal(c1 - c0, 253 * 10 ** 18 // 1024)
+        assert_equal(c1 - c0, 575 * 10 ** 18 // 1024)
         assert_is_hex_string(address)
         return receipt, address
 
