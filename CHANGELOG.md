@@ -31,6 +31,8 @@ was caused by a wrong assumption of the uniqueness of the trie proof key.
 - Remove address from Account rlp format, which was included unexpectedly
 before.
 
+- Changed RewardInfo struct to add author info.
+
 ## Improvements
 
 - Rename local rpc send_transaction with cfx_sendTransaction.

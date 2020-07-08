@@ -9,6 +9,8 @@ use std::{mem, sync::Arc};
 const MIX_WORDS: usize = POW_MIX_BYTES / 4;
 const MIX_NODES: usize = MIX_WORDS / NODE_WORDS;
 pub const FNV_PRIME: u32 = 0x01000193;
+const MOD: u32 = 1000000000 + 7;
+const MOD64: u64 = MOD as u64;
 
 pub struct Light {
     block_height: u64,
@@ -75,6 +77,15 @@ pub fn light_compute(light: &Light, header_hash: &H256, nonce: u64) -> H256 {
     hash_compute(light, full_size, header_hash, nonce)
 }
 
+fn as_u32_le(bytes: &[u8]) -> u32 {
+    assert!(bytes.len() == 4);
+
+    ((bytes[0] as u32) << 0)
+        + ((bytes[1] as u32) << 8)
+        + ((bytes[2] as u32) << 16)
+        + ((bytes[3] as u32) << 24)
+}
+
 fn hash_compute(
     light: &Light, full_size: usize, header_hash: &H256, nonce: u64,
 ) -> H256 {
@@ -100,6 +111,7 @@ fn hash_compute(
     struct MixBuf {
         half_mix: Node,
         compress_bytes: [u8; MIX_WORDS],
+        magic_mix: u32,
     };
 
     if full_size % MIX_WORDS != 0 {
@@ -135,6 +147,7 @@ fn hash_compute(
             Node { bytes: out }
         },
         compress_bytes: [0u8; MIX_WORDS],
+        magic_mix: 0,
     };
 
     let mut mix: [_; MIX_NODES] = [buf.half_mix.clone(), buf.half_mix.clone()];
@@ -144,6 +157,12 @@ fn hash_compute(
     // deref once for better performance
     let cache: &[Node] = light.cache.as_ref();
     let first_val = buf.half_mix.as_words()[0];
+
+    let magic_b0 = as_u32_le(&header_hash[0..4]);
+    let magic_b1 = as_u32_le(&header_hash[4..8]);
+    let magic_b2 = as_u32_le(&header_hash[8..12]);
+    let magic_w = as_u32_le(&header_hash[12..16]);
+    let mut magic_c: [u32; POW_ACCESSES] = [0; POW_ACCESSES];
 
     debug_assert_eq!(MIX_NODES, 2);
     debug_assert_eq!(NODE_WORDS, 16);
@@ -170,6 +189,7 @@ fn hash_compute(
                 mix[n].as_words_mut().iter_mut().zip(tmp_node.as_words())
             {
                 *a = fnv_hash(*a, *b);
+                magic_c[i as usize] = magic_c[i as usize] ^ *a;
             }
         }
     }
@@ -184,12 +204,6 @@ fn hash_compute(
         let compress: &mut [u32; MIX_WORDS / 4] = unsafe {
             make_const_array!(MIX_WORDS / 4, &mut buf.compress_bytes)
         };
-        #[cfg(target_endian = "big")]
-        {
-            compile_error!(
-                "OpenEthereum currently only supports little-endian targets"
-            );
-        }
 
         // Compress mix
         debug_assert_eq!(MIX_WORDS / 4, 8);
@@ -204,6 +218,31 @@ fn hash_compute(
         }
     }
 
+    let mut magic_mix: [u32; POW_ACCESSES] = [0; POW_ACCESSES];
+
+    for i in 0..POW_ACCESSES as usize {
+        let mut p: u64 = (magic_b2 as u64) % MOD64;
+        let mut q: u64 = (magic_b1 as u64) % MOD64;
+        for _ in 0..i as usize {
+            p = ((p * (magic_w as u64)) % MOD64 * (magic_w as u64)) % MOD64;
+            q = (q * (magic_w as u64)) % MOD64;
+        }
+        // println!("p={}, q={}", p, q);
+        let x = ((p + q + (magic_b0 as u64)) % MOD64) as u32;
+        let mut power = 1u64;
+        for k in 0..POW_ACCESSES as usize {
+            let term = ((power * (magic_c[k] as u64)) % MOD64) as u32;
+            power = (power * (x as u64)) % MOD64;
+            magic_mix[i] = (magic_mix[i] + term) % MOD;
+        }
+    }
+
+    let mut reduction: u32 = 0;
+    for i in 0..POW_ACCESSES as usize {
+        reduction = reduction.wrapping_mul(FNV_PRIME) ^ magic_mix[i];
+    }
+    buf.magic_mix = reduction;
+
     let _mix_hash = buf.compress_bytes;
 
     let value: H256 = {
@@ -213,7 +252,7 @@ fn hash_compute(
         let buffer = unsafe {
             core::slice::from_raw_parts(
                 read_ptr,
-                buf.half_mix.bytes.len() + buf.compress_bytes.len(),
+                buf.half_mix.bytes.len() + buf.compress_bytes.len() + 4,
             )
         };
         // We overwrite the buf.compress_bytes since `keccak_256` has an

@@ -30,6 +30,7 @@ use network::{node_table::NodeId, NetworkContext};
 use parking_lot::RwLock;
 use primitives::EpochId;
 use std::{
+    collections::HashSet,
     fmt::{Debug, Formatter},
     sync::Arc,
     time::{Duration, Instant},
@@ -102,8 +103,8 @@ impl Inner {
 
     pub fn start_sync_for_candidate(
         &mut self, sync_candidate: SnapshotSyncCandidate,
-        trusted_blame_block: H256, io: &dyn NetworkContext,
-        sync_handler: &SynchronizationProtocolHandler,
+        active_peers: HashSet<NodeId>, trusted_blame_block: H256,
+        io: &dyn NetworkContext, sync_handler: &SynchronizationProtocolHandler,
         manifest_config: SnapshotManifestConfig,
     )
     {
@@ -118,9 +119,7 @@ impl Inner {
                 // The new candidate is not changed, so we can resume our
                 // previous sync status with new `active_peers`.
                 self.status = Status::DownloadingChunks(Instant::now());
-                chunk_manager.set_active_peers(
-                    self.sync_candidate_manager.active_peers().clone(),
-                );
+                chunk_manager.set_active_peers(active_peers);
                 return;
             }
         }
@@ -130,7 +129,7 @@ impl Inner {
         let manifest_manager = SnapshotManifestManager::new_and_start(
             sync_candidate,
             trusted_blame_block,
-            self.sync_candidate_manager.active_peers().clone(),
+            active_peers,
             manifest_config,
             io,
             sync_handler,
@@ -185,10 +184,10 @@ impl Debug for Inner {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "(status = {:?}, pending_peers: {}, active_peers: {}, chunks: {:?})",
+            "(status = {:?}, pending_peers: {}, manifest: {:?}, chunks: {:?})",
             self.status,
             self.sync_candidate_manager.pending_peers().len(),
-            self.sync_candidate_manager.active_peers().len(),
+            self.manifest_manager,
             self.chunk_manager,
         )
     }
@@ -393,9 +392,28 @@ impl SnapshotChunkSync {
                         inner.sync_candidate_manager.set_active_candidate();
                     }
                 }
-                Status::DownloadingManifest(_)
-                | Status::DownloadingChunks(_) => {
-                    if inner.sync_candidate_manager.active_peers().is_empty() {
+                Status::DownloadingManifest(_) => {
+                    if inner
+                        .manifest_manager
+                        .as_ref()
+                        .expect("always set in DownloadingManifest")
+                        .is_inactive()
+                    {
+                        // The current candidate fails, so try to choose the
+                        // next one.
+                        inner.status = Status::StartCandidateSync;
+                        inner.sync_candidate_manager.set_active_candidate();
+                    }
+                }
+                Status::DownloadingChunks(_) => {
+                    if inner
+                        .chunk_manager
+                        .as_ref()
+                        .expect("always set in DownloadingChunks")
+                        .is_inactive()
+                    {
+                        // The current candidate fails, so try to choose the
+                        // next one.
                         inner.status = Status::StartCandidateSync;
                         inner.sync_candidate_manager.set_active_candidate();
                     }
@@ -410,11 +428,10 @@ impl SnapshotChunkSync {
                 && inner
                     .manifest_manager
                     .as_ref()
-                    .map(|m| m.is_inactive())
-                    .unwrap_or(true)
+                    .map_or(true, |m| m.is_inactive())
             {
                 // We are requesting candidates and all `pending_peers` timeout,
-                // or we are syncing states all
+                // or we are syncing states and all
                 // `active_peers` for all candidates timeout.
                 warn!("current sync candidate becomes inactive: {:?}", inner);
                 inner.status = Status::Inactive;
@@ -422,8 +439,9 @@ impl SnapshotChunkSync {
             }
             // We need to start/restart syncing states for a candidate.
             if inner.status == Status::StartCandidateSync {
-                if let Some(sync_candidate) =
-                    inner.sync_candidate_manager.get_active_candidate()
+                if let Some((sync_candidate, active_peers)) = inner
+                    .sync_candidate_manager
+                    .get_active_candidate_and_peers()
                 {
                     match sync_handler
                         .graph
@@ -434,6 +452,7 @@ impl SnapshotChunkSync {
                         Some(trusted_blame_block) => {
                             inner.start_sync_for_candidate(
                                 sync_candidate,
+                                active_peers,
                                 trusted_blame_block,
                                 io,
                                 sync_handler,

@@ -472,7 +472,7 @@ impl RpcImpl {
         let (
             BlockExecutionResultWithEpoch(epoch_hash, execution_result),
             address,
-            state_root,
+            maybe_state_root,
         ) = match maybe_results {
             None => return Ok(None),
             Some(result_tuple) => result_tuple,
@@ -529,7 +529,7 @@ impl RpcImpl {
             address,
             prior_gas_used,
             Some(epoch_number),
-            Some(state_root),
+            maybe_state_root,
         );
         Ok(Some(rpc_receipt))
     }
@@ -753,7 +753,15 @@ impl RpcImpl {
                 .get_data_manager()
                 .block_reward_result_by_hash(&b)
             {
-                ret.push(RpcRewardInfo::new(b, reward_result));
+                if let Some(block_header) =
+                    self.consensus.get_data_manager().block_header_by_hash(&b)
+                {
+                    ret.push(RpcRewardInfo::new(
+                        b,
+                        block_header.author().clone(),
+                        reward_result,
+                    ));
+                }
             }
         }
         Ok(ret)

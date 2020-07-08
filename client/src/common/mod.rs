@@ -202,7 +202,7 @@ pub fn initialize_common_modules(
     debug!("Initialize genesis_block={:?}", genesis_block);
 
     let pow_config = conf.pow_config();
-    let pow = Arc::new(PowComputer::new(pow_config.test_mode));
+    let pow = Arc::new(PowComputer::new(pow_config.use_octopus()));
 
     let data_man = Arc::new(BlockDataManager::new(
         cache_config,
