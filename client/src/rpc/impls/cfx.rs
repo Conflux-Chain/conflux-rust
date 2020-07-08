@@ -472,7 +472,7 @@ impl RpcImpl {
         let (
             BlockExecutionResultWithEpoch(epoch_hash, execution_result),
             address,
-            state_root,
+            maybe_state_root,
         ) = match maybe_results {
             None => return Ok(None),
             Some(result_tuple) => result_tuple,
@@ -529,7 +529,7 @@ impl RpcImpl {
             address,
             prior_gas_used,
             Some(epoch_number),
-            Some(state_root),
+            maybe_state_root,
         );
         Ok(Some(rpc_receipt))
     }

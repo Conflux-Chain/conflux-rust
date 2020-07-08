@@ -680,7 +680,11 @@ impl ConsensusGraph {
 
     pub fn get_transaction_receipt_and_block_info(
         &self, tx_hash: &H256,
-    ) -> Option<(BlockExecutionResultWithEpoch, TransactionIndex, H256)> {
+    ) -> Option<(
+        BlockExecutionResultWithEpoch,
+        TransactionIndex,
+        Option<H256>,
+    )> {
         // Note: `transaction_index_by_hash` might return outdated results if
         // there was a pivot chain reorg but the tx was not re-executed yet. In
         // this case, `block_execution_results_by_hash` will detect that the
@@ -701,22 +705,24 @@ impl ConsensusGraph {
             )
         };
         let epoch_hash = results_with_epoch.0;
-        match self.executor.wait_for_result(epoch_hash) {
+        let maybe_state_root = match self.executor.wait_for_result(epoch_hash) {
             Ok(execution_commitment) => {
                 // We already has transaction address with epoch_hash executed,
                 // so we can always get the state_root with
                 // `wait_for_result`
-                let state_root = execution_commitment
-                    .state_root_with_aux_info
-                    .aux_info
-                    .state_root_hash;
-                Some((results_with_epoch, address, state_root))
+                Some(
+                    execution_commitment
+                        .state_root_with_aux_info
+                        .aux_info
+                        .state_root_hash,
+                )
             }
             Err(msg) => {
                 warn!("get_transaction_receipt_and_block_info() gets the following error from ConsensusExecutor: {}", msg);
                 None
             }
-        }
+        };
+        Some((results_with_epoch, address, maybe_state_root))
     }
 
     pub fn next_nonce(
