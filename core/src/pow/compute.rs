@@ -184,12 +184,6 @@ fn hash_compute(
         let compress: &mut [u32; MIX_WORDS / 4] = unsafe {
             make_const_array!(MIX_WORDS / 4, &mut buf.compress_bytes)
         };
-        #[cfg(target_endian = "big")]
-        {
-            compile_error!(
-                "OpenEthereum currently only supports little-endian targets"
-            );
-        }
 
         // Compress mix
         debug_assert_eq!(MIX_WORDS / 4, 8);

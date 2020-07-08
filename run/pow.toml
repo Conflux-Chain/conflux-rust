@@ -1,0 +1,9 @@
+mode="test"
+use_octopus_in_test_mode=true
+start_mining=true
+mining_author="1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+log_level="warn"
+initial_difficulty=1000
+use_stratum=true
+stratum_listen_address="127.0.0.1"
+stratum_port=32525
