@@ -43,10 +43,8 @@ pub struct StateSyncCandidateManager {
     pending_peers: HashSet<NodeId>,
 
     /// The chosen candidate that we are actually requesting state manifest and
-    /// chunks
+    /// chunks.
     active_candidate: Option<usize>,
-    /// The peers that can serve `active_candidate`.
-    active_peers: HashSet<NodeId>,
 }
 
 impl StateSyncCandidateManager {
@@ -58,7 +56,6 @@ impl StateSyncCandidateManager {
             candidates_map: BTreeMap::new(),
             pending_peers: Default::default(),
             active_candidate: None,
-            active_peers: Default::default(),
         }
     }
 
@@ -77,7 +74,6 @@ impl StateSyncCandidateManager {
         self.candidates_map = candidates_map;
         self.pending_peers = peers.into_iter().collect();
         self.active_candidate = None;
-        self.active_peers = HashSet::new();
     }
 
     /// Update the status about candidate choosing.
@@ -128,24 +124,25 @@ impl StateSyncCandidateManager {
     }
 
     pub fn on_peer_disconnected(&mut self, peer: &NodeId) {
-        self.active_peers.remove(peer);
         for peers in self.candidates_map.values_mut() {
             peers.remove(peer);
         }
     }
 
-    #[allow(unused)]
-    // TODO Should change candidates if we only have slow active peers
-    pub fn should_change_candidate(&self) -> bool {
-        self.active_candidate.is_none() || self.active_peers.is_empty()
-    }
-
-    pub fn active_peers(&self) -> &HashSet<NodeId> { &self.active_peers }
-
     pub fn pending_peers(&self) -> &HashSet<NodeId> { &self.pending_peers }
 
-    pub fn get_active_candidate(&self) -> Option<SnapshotSyncCandidate> {
-        self.active_candidate.map(|i| self.candidates[i].clone())
+    pub fn get_active_candidate_and_peers(
+        &self,
+    ) -> Option<(SnapshotSyncCandidate, HashSet<NodeId>)> {
+        self.active_candidate.map(|i| {
+            let candidate = self.candidates[i].clone();
+            let active_peers = self
+                .candidates_map
+                .get(&candidate)
+                .expect("Active candidate has a non-empty peer set")
+                .clone();
+            (candidate, active_peers)
+        })
     }
 
     pub fn set_active_candidate(&mut self) {
@@ -165,8 +162,7 @@ impl StateSyncCandidateManager {
                     "StateSync: set active_candidate {}={:?}, active_peers={:?}",
                     candidate_index, candidate, peer_set
                 );
-                self.active_peers = peer_set.clone();
-                break;
+                return;
             }
             candidate_index += 1;
         }
@@ -186,7 +182,7 @@ impl StateSyncCandidateManager {
 
     /// Return `true ` if we are not requesting either candidates or states
     pub fn is_inactive(&self) -> bool {
-        self.pending_peers.is_empty() && self.active_peers.is_empty()
+        self.pending_peers.is_empty() && self.active_candidate.is_none()
     }
 }
 
