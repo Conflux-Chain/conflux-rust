@@ -425,6 +425,9 @@ impl TargetDifficultyManager {
 fn test_octopus() {
     let pow = PowComputer::new(true);
 
-    let block_hash = "4d99d0b41c7eb0dd1a801c35aae2df28ae6b53bc7743f0818a34b6ec97f5b4ae".parse().unwrap();
+    let block_hash =
+        "4d99d0b41c7eb0dd1a801c35aae2df28ae6b53bc7743f0818a34b6ec97f5b4ae"
+            .parse()
+            .unwrap();
     pow.compute(&U256::from(3812), &block_hash, 2);
 }

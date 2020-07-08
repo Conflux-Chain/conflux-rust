@@ -78,10 +78,10 @@ pub fn light_compute(light: &Light, header_hash: &H256, nonce: u64) -> H256 {
 fn as_u32_le(bytes: &[u8]) -> u32 {
     assert!(bytes.len() == 4);
 
-    ((bytes[0] as u32) <<  0) +
-    ((bytes[1] as u32) <<  8) +
-    ((bytes[2] as u32) << 16) +
-    ((bytes[3] as u32) << 24)    
+    ((bytes[0] as u32) << 0)
+        + ((bytes[1] as u32) << 8)
+        + ((bytes[2] as u32) << 16)
+        + ((bytes[3] as u32) << 24)
 }
 
 fn hash_compute(
@@ -252,7 +252,7 @@ fn hash_compute(
         let buffer = unsafe {
             core::slice::from_raw_parts(
                 read_ptr,
-                buf.half_mix.bytes.len() + buf.compress_bytes.len() + 4
+                buf.half_mix.bytes.len() + buf.compress_bytes.len() + 4,
             )
         };
         // We overwrite the buf.compress_bytes since `keccak_256` has an
