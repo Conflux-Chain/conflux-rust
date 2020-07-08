@@ -26,6 +26,10 @@ error_chain! {
     }
 }
 
+pub type BoxFuture<T> = Box<
+    dyn jsonrpc_core::futures::future::Future<Item = T, Error = Error> + Send,
+>;
+
 impl From<JsonRpcError> for Error {
     fn from(j: JsonRpcError) -> Self { ErrorKind::JsonRpcError(j).into() }
 }
@@ -41,8 +45,25 @@ pub fn invalid_params_check<T, E: Display>(
     }
 }
 
+pub fn account_result_to_rpc_result<T>(
+    param: &str, result: std::result::Result<T, AccountError>,
+) -> Result<T> {
+    match result {
+        Ok(t) => Ok(t),
+        Err(AccountError::InvalidRlp(decoder_error)) => {
+            Err(decoder_error.into())
+        }
+        Err(AccountError::AddressSpaceMismatch(_, _)) => {
+            invalid_params_check(param, result)
+        }
+        Err(AccountError::ReservedAddressSpace(_)) => {
+            invalid_params_check(param, result)
+        }
+    }
+}
+
 use crate::{statedb::Error as StateDbError, storage::Error as StorageError};
 use jsonrpc_core::Error as JsonRpcError;
-use primitives::filter::FilterError;
+use primitives::{account::AccountError, filter::FilterError};
 use rlp::DecoderError;
 use std::fmt::Display;
