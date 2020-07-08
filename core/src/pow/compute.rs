@@ -262,11 +262,6 @@ fn hash_compute(
         buf.compress_bytes
     };
 
-    for i in 0..32 {
-        print!("{} ", value[i]);
-    }
-    println!();
-
     value
 }
 
