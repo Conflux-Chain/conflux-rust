@@ -37,7 +37,7 @@ pub struct StateSyncCandidateManager {
 
     /// The map from state candidates to the set of peers that can support this
     /// state
-    candidates_map: BTreeMap<SnapshotSyncCandidate, HashSet<NodeId>>,
+    candidate_to_active_peers: BTreeMap<SnapshotSyncCandidate, HashSet<NodeId>>,
     /// The peers who have been requested for candidate response but has not
     /// replied
     pending_peers: HashSet<NodeId>,
@@ -53,7 +53,7 @@ impl StateSyncCandidateManager {
             start_time: Instant::now(),
             current_era_genesis: Default::default(),
             candidates: Default::default(),
-            candidates_map: BTreeMap::new(),
+            candidate_to_active_peers: BTreeMap::new(),
             pending_peers: Default::default(),
             active_candidate: None,
         }
@@ -71,7 +71,7 @@ impl StateSyncCandidateManager {
         self.start_time = Instant::now();
         self.current_era_genesis = current_era_genesis;
         self.candidates = candidates;
-        self.candidates_map = candidates_map;
+        self.candidate_to_active_peers = candidates_map;
         self.pending_peers = peers.into_iter().collect();
         self.active_candidate = None;
     }
@@ -91,7 +91,7 @@ impl StateSyncCandidateManager {
         let mut requested_candidates_set: HashSet<&SnapshotSyncCandidate> =
             requested_candidates.iter().collect();
         for candidate in supported_candidates {
-            match self.candidates_map.get_mut(candidate) {
+            match self.candidate_to_active_peers.get_mut(candidate) {
                 Some(peer_set) => {
                     peer_set.insert(*peer);
                 }
@@ -109,7 +109,7 @@ impl StateSyncCandidateManager {
             requested_candidates_set.remove(&candidate);
         }
         for unsupported_candidate in requested_candidates_set {
-            match self.candidates_map.get_mut(unsupported_candidate) {
+            match self.candidate_to_active_peers.get_mut(unsupported_candidate) {
                 Some(peer_set) => {
                     peer_set.remove(peer);
                 }
@@ -124,7 +124,7 @@ impl StateSyncCandidateManager {
     }
 
     pub fn on_peer_disconnected(&mut self, peer: &NodeId) {
-        for peers in self.candidates_map.values_mut() {
+        for peers in self.candidate_to_active_peers.values_mut() {
             peers.remove(peer);
         }
     }
@@ -137,7 +137,7 @@ impl StateSyncCandidateManager {
         self.active_candidate.map(|i| {
             let candidate = self.candidates[i].clone();
             let active_peers = self
-                .candidates_map
+                .candidate_to_active_peers
                 .get(&candidate)
                 .expect("Active candidate has a non-empty peer set")
                 .clone();
@@ -151,7 +151,7 @@ impl StateSyncCandidateManager {
         while candidate_index < max_candidate_index {
             self.active_candidate = Some(candidate_index);
             let candidate = &self.candidates[candidate_index];
-            let peer_set = self.candidates_map.get(candidate).unwrap();
+            let peer_set = self.candidate_to_active_peers.get(candidate).unwrap();
             if peer_set.is_empty() {
                 debug!(
                     "StateSync: candidate {}={:?}, active_peers={:?}",
