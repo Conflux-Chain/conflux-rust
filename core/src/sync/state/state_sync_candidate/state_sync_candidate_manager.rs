@@ -109,7 +109,10 @@ impl StateSyncCandidateManager {
             requested_candidates_set.remove(&candidate);
         }
         for unsupported_candidate in requested_candidates_set {
-            match self.candidate_to_active_peers.get_mut(unsupported_candidate) {
+            match self
+                .candidate_to_active_peers
+                .get_mut(unsupported_candidate)
+            {
                 Some(peer_set) => {
                     peer_set.remove(peer);
                 }
@@ -151,7 +154,8 @@ impl StateSyncCandidateManager {
         while candidate_index < max_candidate_index {
             self.active_candidate = Some(candidate_index);
             let candidate = &self.candidates[candidate_index];
-            let peer_set = self.candidate_to_active_peers.get(candidate).unwrap();
+            let peer_set =
+                self.candidate_to_active_peers.get(candidate).unwrap();
             if peer_set.is_empty() {
                 debug!(
                     "StateSync: candidate {}={:?}, active_peers={:?}",
