@@ -3,7 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    error_codes::{call_execution_error, invalid_params},
+    error_codes::{
+        call_execution_error, invalid_params, request_rejected_in_catch_up_mode,
+    },
     impls::{common::RpcImpl as CommonImpl, RpcImplConfiguration},
     traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
     types::{
@@ -215,15 +217,17 @@ impl RpcImpl {
             .expect("downcast should succeed");
 
         Ok(RpcAccount::new(
-            consensus_graph
-                .get_account(address, epoch_num.into())?
-                .unwrap_or_else(|| {
+            match consensus_graph.get_account(address, epoch_num.into())? {
+                Some(t) => t,
+                None => account_result_to_rpc_result(
+                    "address",
                     Account::new_empty_with_balance(
                         &address,
                         &U256::zero(), /* balance */
                         &U256::zero(), /* nonce */
-                    )
-                }),
+                    ),
+                )?,
+            },
         ))
     }
 
@@ -302,6 +306,10 @@ impl RpcImpl {
             if !address.is_valid_address() {
                 bail!(invalid_params("tx", "Sending transactions to invalid address. The first four bits must be 0x0 (built-in/reserved), 0x1 (user-account), or 0x8 (contract)."));
             }
+        }
+        if self.sync.catch_up_mode() {
+            warn!("Ignore send_transaction request {}. Cannot send transaction when the node is still in catch-up mode.", tx.hash());
+            bail!(request_rejected_in_catch_up_mode(None));
         }
         let (signed_trans, failed_trans) =
             self.tx_pool.insert_new_transactions(vec![tx]);
@@ -464,7 +472,7 @@ impl RpcImpl {
         let (
             BlockExecutionResultWithEpoch(epoch_hash, execution_result),
             address,
-            state_root,
+            maybe_state_root,
         ) = match maybe_results {
             None => return Ok(None),
             Some(result_tuple) => result_tuple,
@@ -521,7 +529,7 @@ impl RpcImpl {
             address,
             prior_gas_used,
             Some(epoch_number),
-            Some(state_root),
+            maybe_state_root,
         );
         Ok(Some(rpc_receipt))
     }
@@ -886,6 +894,42 @@ impl RpcImpl {
         Ok(self.sync.current_sync_phase().name().into())
     }
 
+    /// Return the pivot chain block hashes in `height_range` (inclusive) and
+    /// their subtree weight. If it's none, return all pivot chain from
+    /// `cur_era_genesis` to chain tip.
+    ///
+    /// Note that this should note query blocks before `cur_era_genesis`.
+    fn get_pivot_chain_and_weight(
+        &self, height_range: Option<(u64, u64)>,
+    ) -> RpcResult<Vec<(H256, U256)>> {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+        Ok(consensus_graph
+            .inner
+            .read()
+            .get_pivot_chain_and_weight(height_range)?)
+    }
+
+    fn get_executed_info(&self, block_hash: H256) -> RpcResult<(H256, H256)> {
+        let commitment = self
+            .consensus
+            .get_data_manager()
+            .get_epoch_execution_commitment(&block_hash)
+            .ok_or(JsonRpcError::invalid_params(
+                "No receipts root. Possibly never pivot?".to_owned(),
+            ))?;
+        Ok((
+            commitment.receipts_root.clone().into(),
+            commitment
+                .state_root_with_aux_info
+                .state_root
+                .compute_state_root_hash(),
+        ))
+    }
+
     fn expire_block_gc(&self, timeout: u64) -> RpcResult<()> {
         self.sync.expire_block_gc(timeout);
         Ok(())
@@ -955,7 +999,10 @@ impl CfxHandler {
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
 use crate::common::delegate_convert;
 use cfx_types::address_util::AddressUtil;
-use cfxcore::executive::{ExecutionError, ExecutionOutcome};
+use cfxcore::{
+    executive::{ExecutionError, ExecutionOutcome},
+    rpc_errors::account_result_to_rpc_result,
+};
 use cfxcore_accounts::AccountProvider;
 
 impl Cfx for CfxHandler {
@@ -977,6 +1024,7 @@ impl Cfx for CfxHandler {
             fn next_nonce(&self, address: RpcH160, num: Option<BlockHashOrEpochNumber>)
                 -> JsonRpcResult<RpcU256>;
             fn get_status(&self) -> JsonRpcResult<RpcStatus>;
+            fn get_client_version(&self) -> JsonRpcResult<String>;
         }
 
         to self.rpc_impl {
@@ -1051,6 +1099,8 @@ impl TestRpc for TestRpcImpl {
             fn generate_custom_block(
                 &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes, adaptive: Option<bool>)
                 -> JsonRpcResult<H256>;
+            fn get_pivot_chain_and_weight(&self, height_range: Option<(u64, u64)>) -> JsonRpcResult<Vec<(H256, U256)>>;
+            fn get_executed_info(&self, block_hash: H256) -> JsonRpcResult<(H256, H256)> ;
             fn generate_fixed_block(
                 &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>)
                 -> JsonRpcResult<H256>;

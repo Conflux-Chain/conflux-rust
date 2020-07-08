@@ -20,7 +20,9 @@ use crate::{
     },
 };
 use blockgen::BlockGenerator;
-use cfxcore::{ConsensusGraph, LightQueryService, TransactionPool};
+use cfxcore::{
+    pow::PowComputer, ConsensusGraph, LightQueryService, TransactionPool,
+};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use runtime::Runtime;
 
@@ -34,6 +36,7 @@ pub struct LightClientExtraComponents {
     pub runtime: Runtime,
     pub secret_store: Arc<SecretStore>,
     pub txpool: Arc<TransactionPool>,
+    pub pow: Arc<PowComputer>,
 }
 
 impl MallocSizeOf for LightClientExtraComponents {
@@ -54,6 +57,7 @@ impl LightClient {
             _machine,
             secret_store,
             data_man,
+            pow,
             txpool,
             consensus,
             sync_graph,
@@ -150,6 +154,7 @@ impl LightClient {
                 runtime,
                 secret_store,
                 txpool,
+                pow,
             },
         }))
     }

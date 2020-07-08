@@ -30,7 +30,9 @@ use cfx_stratum::{
     Stratum as StratumService,
 };
 use cfx_types::{H256, U256};
-use cfxcore::pow::{validate, ProofOfWorkProblem, ProofOfWorkSolution};
+use cfxcore::pow::{
+    validate, PowComputer, ProofOfWorkProblem, ProofOfWorkSolution,
+};
 use log::{info, trace, warn};
 use parking_lot::Mutex;
 use std::{
@@ -113,6 +115,7 @@ impl fmt::Display for PayloadError {
 pub struct StratumJobDispatcher {
     current_problem: Mutex<Option<ProofOfWorkProblem>>,
     solution_sender: Mutex<mpsc::Sender<ProofOfWorkSolution>>,
+    pow: Arc<PowComputer>,
 }
 
 impl JobDispatcher for StratumJobDispatcher {
@@ -143,7 +146,7 @@ impl JobDispatcher for StratumJobDispatcher {
                         .into(),
                     ));
                 }
-                if !validate(&prob, &sol) {
+                if !validate(self.pow.clone(), &prob, &sol) {
                     return Err(StratumServiceError::InvalidSolution(
                         format!(
                             "Incorrect Nonce! worker_id = {}!",
@@ -180,10 +183,13 @@ impl StratumJobDispatcher {
     /// New stratum job dispatcher given the miner and client
     fn new(
         solution_sender: mpsc::Sender<ProofOfWorkSolution>,
-    ) -> StratumJobDispatcher {
+        pow: Arc<PowComputer>,
+    ) -> StratumJobDispatcher
+    {
         StratumJobDispatcher {
             current_problem: Mutex::new(None),
             solution_sender: Mutex::new(solution_sender),
+            pow,
         }
     }
 
@@ -244,11 +250,14 @@ impl Stratum {
     /// New stratum job dispatcher, given the miner, client and dedicated
     /// stratum service
     pub fn start(
-        options: &Options, solution_sender: mpsc::Sender<ProofOfWorkSolution>,
-    ) -> Result<Stratum, Error> {
+        options: &Options, pow: Arc<PowComputer>,
+        solution_sender: mpsc::Sender<ProofOfWorkSolution>,
+    ) -> Result<Stratum, Error>
+    {
         use std::net::IpAddr;
 
-        let dispatcher = Arc::new(StratumJobDispatcher::new(solution_sender));
+        let dispatcher =
+            Arc::new(StratumJobDispatcher::new(solution_sender, pow));
 
         let stratum_svc = StratumService::start(
             &SocketAddr::new(

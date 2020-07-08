@@ -1024,7 +1024,7 @@ impl State {
                         .commit(&mut self.db, debug_record.as_deref_mut())?;
                     self.db.set::<Account>(
                         StorageKey::new_account_key(address),
-                        &account.as_account(),
+                        &account.as_account()?,
                         debug_record.as_deref_mut(),
                     )?;
                 }
@@ -1046,7 +1046,7 @@ impl State {
         let mut accounts_for_txpool = vec![];
         for (_address, entry) in &self.dirty_accounts_to_commit {
             if let Some(account) = &entry.account {
-                accounts_for_txpool.push(account.as_account());
+                accounts_for_txpool.push(account.as_account()?);
             }
         }
         {

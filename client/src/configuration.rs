@@ -125,6 +125,7 @@ build_config! {
         // Mining section.
         (mining_author, (Option<String>), None)
         (start_mining, (bool), false)
+        (stratum_listen_address, (String), "127.0.0.1".into())
         (stratum_port, (u16), 32525)
         (stratum_secret, (Option<String>), None)
         (use_stratum, (bool), false)
@@ -446,13 +447,6 @@ impl Configuration {
     }
 
     pub fn pow_config(&self) -> ProofOfWorkConfig {
-        let stratum_listen_addr =
-            if let Some(listen_addr) = self.raw_conf.public_address.clone() {
-                listen_addr
-            } else {
-                String::from("")
-            };
-
         let stratum_secret =
             self.raw_conf
                 .stratum_secret
@@ -464,7 +458,7 @@ impl Configuration {
             self.is_test_or_dev_mode(),
             self.raw_conf.use_stratum,
             self.raw_conf.initial_difficulty,
-            stratum_listen_addr,
+            self.raw_conf.stratum_listen_address.clone(),
             self.raw_conf.stratum_port,
             stratum_secret,
         )
@@ -579,9 +573,6 @@ impl Configuration {
                 .max_trans_count_received_in_catch_up,
             min_peers_tx_propagation: self.raw_conf.min_peers_tx_propagation,
             max_peers_tx_propagation: self.raw_conf.max_peers_tx_propagation,
-            future_block_buffer_capacity: self
-                .raw_conf
-                .future_block_buffer_capacity,
             max_downloading_chunks: self.raw_conf.max_downloading_chunks,
             test_mode: self.is_test_mode(),
             dev_mode: self.is_dev_mode(),
@@ -650,6 +641,9 @@ impl Configuration {
 
     pub fn sync_graph_config(&self) -> SyncGraphConfig {
         SyncGraphConfig {
+            future_block_buffer_capacity: self
+                .raw_conf
+                .future_block_buffer_capacity,
             enable_state_expose: self.raw_conf.enable_state_expose,
             is_consortium: self.raw_conf.is_consortium,
         }

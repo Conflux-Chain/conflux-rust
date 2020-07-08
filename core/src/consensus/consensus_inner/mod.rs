@@ -17,7 +17,7 @@ use crate::{
         pastset_cache::PastSetCache,
     },
     parameters::{consensus::*, consensus_internal::*},
-    pow::{target_difficulty, ProofOfWorkConfig},
+    pow::{target_difficulty, PowComputer, ProofOfWorkConfig},
     state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
 };
 use cfx_types::{H256, U256, U512};
@@ -413,6 +413,7 @@ pub struct ConsensusGraphInner {
     pub data_man: Arc<BlockDataManager>,
     pub inner_conf: ConsensusInnerConfig,
     pub pow_config: ProofOfWorkConfig,
+    pub pow: Arc<PowComputer>,
     //executor: Arc<ConsensusExecutor>,
     /// This slab hold consensus graph node data and the array index is the
     /// internal index.
@@ -552,9 +553,9 @@ impl ConsensusGraphNode {
 
 impl ConsensusGraphInner {
     pub fn with_era_genesis(
-        pow_config: ProofOfWorkConfig, data_man: Arc<BlockDataManager>,
-        inner_conf: ConsensusInnerConfig, cur_era_genesis_block_hash: &H256,
-        cur_era_stable_block_hash: &H256,
+        pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
+        data_man: Arc<BlockDataManager>, inner_conf: ConsensusInnerConfig,
+        cur_era_genesis_block_hash: &H256, cur_era_stable_block_hash: &H256,
     ) -> Self
     {
         let genesis_block_header = data_man
@@ -589,6 +590,7 @@ impl ConsensusGraphInner {
             invalid_block_queue: BinaryHeap::new(),
             block_body_caches: HashMap::new(),
             pow_config,
+            pow,
             current_difficulty: initial_difficulty.into(),
             data_man: data_man.clone(),
             inner_conf,
@@ -3758,5 +3760,31 @@ impl ConsensusGraphInner {
                     })
             );
         }
+    }
+
+    pub fn get_pivot_chain_and_weight(
+        &self, height_range: Option<(u64, u64)>,
+    ) -> Result<Vec<(H256, U256)>, String> {
+        let min_height = self.get_cur_era_genesis_height();
+        let max_height = self.arena[*self.pivot_chain.last().unwrap()].height;
+        let (start, end) = height_range.unwrap_or((min_height, max_height));
+        if start < min_height || end > max_height {
+            bail!(
+                "height_range out of bound: requested={:?} min={} max={}",
+                height_range,
+                min_height,
+                max_height
+            );
+        }
+
+        let mut chain = Vec::new();
+        for i in start..=end {
+            let pivot_arena_index = self.get_pivot_block_arena_index(i);
+            chain.push((
+                self.arena[pivot_arena_index].hash.into(),
+                (self.weight_tree.get(pivot_arena_index) as u64).into(),
+            ));
+        }
+        Ok(chain)
     }
 }

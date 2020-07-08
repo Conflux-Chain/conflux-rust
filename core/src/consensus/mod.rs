@@ -28,7 +28,7 @@ use crate::{
     parameters::{
         consensus::*, consensus_internal::*, staking::COLLATERAL_PER_BYTE,
     },
-    pow::ProofOfWorkConfig,
+    pow::{PowComputer, ProofOfWorkConfig},
     rpc_errors::Result as RpcResult,
     state::State,
     statedb::StateDb,
@@ -191,8 +191,9 @@ impl ConsensusGraph {
     pub fn with_era_genesis(
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
-        pow_config: ProofOfWorkConfig, era_genesis_block_hash: &H256,
-        era_stable_block_hash: &H256, notifications: Arc<Notifications>,
+        pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
+        era_genesis_block_hash: &H256, era_stable_block_hash: &H256,
+        notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, is_full_node: bool,
     ) -> Self
@@ -200,6 +201,7 @@ impl ConsensusGraph {
         let inner =
             Arc::new(RwLock::new(ConsensusGraphInner::with_era_genesis(
                 pow_config,
+                pow.clone(),
                 data_man.clone(),
                 conf.inner_conf.clone(),
                 era_genesis_block_hash,
@@ -252,7 +254,8 @@ impl ConsensusGraph {
     pub fn new(
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
-        pow_config: ProofOfWorkConfig, notifications: Arc<Notifications>,
+        pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
+        notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_conf: VerificationConfig, is_full_node: bool,
     ) -> Self
@@ -266,6 +269,7 @@ impl ConsensusGraph {
             statistics,
             data_man,
             pow_config,
+            pow,
             &genesis_hash,
             &stable_hash,
             notifications,
@@ -676,7 +680,11 @@ impl ConsensusGraph {
 
     pub fn get_transaction_receipt_and_block_info(
         &self, tx_hash: &H256,
-    ) -> Option<(BlockExecutionResultWithEpoch, TransactionIndex, H256)> {
+    ) -> Option<(
+        BlockExecutionResultWithEpoch,
+        TransactionIndex,
+        Option<H256>,
+    )> {
         // Note: `transaction_index_by_hash` might return outdated results if
         // there was a pivot chain reorg but the tx was not re-executed yet. In
         // this case, `block_execution_results_by_hash` will detect that the
@@ -697,22 +705,24 @@ impl ConsensusGraph {
             )
         };
         let epoch_hash = results_with_epoch.0;
-        match self.executor.wait_for_result(epoch_hash) {
+        let maybe_state_root = match self.executor.wait_for_result(epoch_hash) {
             Ok(execution_commitment) => {
                 // We already has transaction address with epoch_hash executed,
                 // so we can always get the state_root with
                 // `wait_for_result`
-                let state_root = execution_commitment
-                    .state_root_with_aux_info
-                    .aux_info
-                    .state_root_hash;
-                Some((results_with_epoch, address, state_root))
+                Some(
+                    execution_commitment
+                        .state_root_with_aux_info
+                        .aux_info
+                        .state_root_hash,
+                )
             }
             Err(msg) => {
                 warn!("get_transaction_receipt_and_block_info() gets the following error from ConsensusExecutor: {}", msg);
                 None
             }
-        }
+        };
+        Some((results_with_epoch, address, maybe_state_root))
     }
 
     pub fn next_nonce(

@@ -21,6 +21,11 @@ error_chain! {
     }
 
     errors {
+        AlreadyThrottled(msg_name: &'static str) {
+            description("packet already throttled"),
+            display("packet already throttled: {:?}", msg_name),
+        }
+
         GenesisMismatch {
             description("Genesis mismatch"),
             display("Genesis mismatch"),
@@ -29,11 +34,6 @@ error_chain! {
         ChainIdMismatch{ours: ChainIdParams, theirs: ChainIdParams} {
             description("ChainId mismatch"),
             display("ChainId mismatch, ours {:?}, theirs {:?}.", ours, theirs),
-        }
-
-        NoResponse {
-            description("NoResponse"),
-            display("NoResponse"),
         }
 
         InternalError {
@@ -86,6 +86,11 @@ error_chain! {
             display("Invalid tx signature"),
         }
 
+        NoResponse {
+            description("NoResponse"),
+            display("NoResponse"),
+        }
+
         PivotHashMismatch {
             description("Pivot hash mismatch"),
             display("Pivot hash mismatch"),
@@ -94,6 +99,11 @@ error_chain! {
         SendStatusFailed {
             description("Send status failed"),
             display("Send status failed"),
+        }
+
+        Throttled(msg_name: &'static str, response: Throttled) {
+            description("packet throttled"),
+            display("packet {:?} throttled: {:?}", msg_name, response),
         }
 
         UnableToProduceProof {
@@ -134,16 +144,6 @@ error_chain! {
         ValidationFailed {
             description("Validation failed"),
             display("Validation failed"),
-        }
-
-        AlreadyThrottled(msg_name: &'static str) {
-            description("packet already throttled"),
-            display("packet already throttled: {:?}", msg_name),
-        }
-
-        Throttled(msg_name: &'static str, response: Throttled) {
-            description("packet throttled"),
-            display("packet {:?} throttled: {:?}", msg_name, response),
         }
     }
 }
