@@ -168,6 +168,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
     let vm = VmFactory::new(1024 * 32);
     let pow_config = ProofOfWorkConfig::new(
         true,  /* test_mode */
+        false, /* use_octopus_in_test_mode */
         false, /* use_stratum */
         Some(10),
         String::from(""), /* stratum_listen_addr */

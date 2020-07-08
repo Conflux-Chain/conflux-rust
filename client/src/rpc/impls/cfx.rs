@@ -753,7 +753,15 @@ impl RpcImpl {
                 .get_data_manager()
                 .block_reward_result_by_hash(&b)
             {
-                ret.push(RpcRewardInfo::new(b, reward_result));
+                if let Some(block_header) =
+                    self.consensus.get_data_manager().block_header_by_hash(&b)
+                {
+                    ret.push(RpcRewardInfo::new(
+                        b,
+                        block_header.author().clone(),
+                        reward_result,
+                    ));
+                }
             }
         }
         Ok(ret)

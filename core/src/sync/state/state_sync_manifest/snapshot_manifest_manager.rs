@@ -31,6 +31,7 @@ use primitives::{
 use rand::{seq::SliceRandom, thread_rng};
 use std::{
     collections::HashSet,
+    fmt::{Debug, Formatter},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -565,6 +566,18 @@ impl SnapshotManifestManager {
 
     fn note_failure(&mut self, node_id: &NodeId) {
         self.active_peers.remove(node_id);
+    }
+}
+
+impl Debug for SnapshotManifestManager {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "(request_status = {:?}, candidate={:?} active_peers: {})",
+            self.manifest_request_status,
+            self.snapshot_candidate,
+            self.active_peers.len(),
+        )
     }
 }
 
