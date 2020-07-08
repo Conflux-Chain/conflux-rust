@@ -189,14 +189,14 @@ impl<'a> CallCreateExecutive<'a> {
                 trace!("ExecCall");
                 let mut contracts_in_callstack =
                     contracts_in_callstack.unwrap();
-                let code_address = params.code_address.clone();
+                let recipient_address = params.address.clone();
                 let is_contract_in_callstack =
-                    !contracts_in_callstack.insert(code_address.clone());
+                    !contracts_in_callstack.insert(recipient_address.clone());
                 CallCreateExecutiveKind::ExecCall(
                     params,
                     Substate::with_contracts_in_callstack(
                         contracts_in_callstack,
-                        code_address,
+                        recipient_address,
                         is_contract_in_callstack && !is_recursive_call,
                     ),
                 )
@@ -238,14 +238,14 @@ impl<'a> CallCreateExecutive<'a> {
 
         let gas = params.gas;
 
-        let code_address = params.code_address.clone();
-        assert!(!contracts_in_callstack.contains(&code_address));
-        contracts_in_callstack.insert(code_address.clone());
+        let recipient_address = params.address.clone();
+        assert!(!contracts_in_callstack.contains(&recipient_address));
+        contracts_in_callstack.insert(recipient_address.clone());
         let kind = CallCreateExecutiveKind::ExecCreate(
             params,
             Substate::with_contracts_in_callstack(
                 contracts_in_callstack,
-                code_address,
+                recipient_address,
                 false, /* reentrancy_encountered */
             ),
         );
@@ -1081,7 +1081,7 @@ impl<'a> CallCreateExecutive<'a> {
                     let substate = resume.unconfirmed_substate().unwrap();
                     let mut is_recursive_call = false;
                     let contracts_in_callstack = if is_not_internal_contract_and_has_code {
-                        is_recursive_call = substate.contract_address == subparams.code_address;
+                        is_recursive_call = substate.contract_address == subparams.address;
                         let mut contracts_in_callstack = HashSet::<Address>::new();
                         mem::swap(
                             &mut contracts_in_callstack,
@@ -1259,8 +1259,7 @@ impl<'a> Executive<'a> {
                 .is_none();
         let mut is_recursive_call = false;
         let contracts_in_callstack = if is_not_internal_contract_and_has_code {
-            is_recursive_call =
-                substate.contract_address == params.code_address;
+            is_recursive_call = substate.contract_address == params.address;
             let mut contracts_in_callstack = HashSet::<Address>::new();
             mem::swap(
                 &mut contracts_in_callstack,

@@ -41,10 +41,6 @@ loggers:
         level: info
     rpc:
         level: info
-    discovery:
-        level: info
-    sync:
-        level: info
     blockgen:
         level: info
     client:

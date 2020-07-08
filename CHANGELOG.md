@@ -107,6 +107,8 @@ avoids inconsistent transaction pool issues during the catch up.
 
 - New cfx_clientVersion() rpc call to return a string with versions
 
+- Change CREATE/CREATE2 maximum code size from 24K to 48K
+
 # 0.5.0
 
 ## Improvements

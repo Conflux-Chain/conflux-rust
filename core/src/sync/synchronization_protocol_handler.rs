@@ -228,7 +228,12 @@ struct FutureBlockContainerInner {
     capacity: usize,
     size: usize,
     container: BTreeMap<u64, HashSet<H256>>,
-    hash_to_header: HashMap<H256, BlockHeader>,
+
+    // The value is a tuple of the header corresponding to a hash and the peer
+    // that we receive this header from. Since a header is only broadcast
+    // after receiving its body, we should be able to receive the block body
+    // from the peer successfully.
+    hash_to_header_and_peer: HashMap<H256, (BlockHeader, NodeId)>,
 }
 
 impl FutureBlockContainerInner {
@@ -237,7 +242,7 @@ impl FutureBlockContainerInner {
             capacity,
             size: 0,
             container: BTreeMap::new(),
-            hash_to_header: Default::default(),
+            hash_to_header_and_peer: Default::default(),
         }
     }
 }
@@ -253,10 +258,10 @@ impl FutureBlockContainer {
         }
     }
 
-    pub fn insert(&self, header: BlockHeader) {
+    pub fn insert(&self, header: BlockHeader, peer: NodeId) {
         let mut inner = &mut *self.inner.write();
         let header_hash = header.hash();
-        if inner.hash_to_header.contains_key(&header_hash) {
+        if inner.hash_to_header_and_peer.contains_key(&header_hash) {
             return;
         }
         let entry = inner
@@ -265,7 +270,9 @@ impl FutureBlockContainer {
             .or_insert(HashSet::new());
         if !entry.contains(&header_hash) {
             entry.insert(header_hash);
-            inner.hash_to_header.insert(header_hash, header);
+            inner
+                .hash_to_header_and_peer
+                .insert(header_hash, (header, peer));
             inner.size += 1;
         }
 
@@ -280,7 +287,7 @@ impl FutureBlockContainer {
 
                 let hash = *entry.1.iter().next().unwrap();
                 entry.1.remove(&hash);
-                inner.hash_to_header.remove(&hash);
+                inner.hash_to_header_and_peer.remove(&hash);
                 removed = true;
 
                 if entry.1.is_empty() {
@@ -299,7 +306,7 @@ impl FutureBlockContainer {
         }
     }
 
-    pub fn get_before(&self, timestamp: u64) -> Vec<BlockHeader> {
+    pub fn get_before(&self, timestamp: u64) -> Vec<(BlockHeader, NodeId)> {
         let mut inner = self.inner.write();
         let mut result = Vec::new();
 
@@ -317,7 +324,7 @@ impl FutureBlockContainer {
             let entry = inner.container.remove(&slot.unwrap()).unwrap();
 
             for header_hash in entry {
-                result.push(inner.hash_to_header.remove(&header_hash).expect(
+                result.push(inner.hash_to_header_and_peer.remove(&header_hash).expect(
                     "hash and header are inserted/removed together atomically",
                 ));
             }
@@ -327,7 +334,10 @@ impl FutureBlockContainer {
     }
 
     pub fn contains(&self, header_hash: &H256) -> bool {
-        self.inner.read().hash_to_header.contains_key(header_hash)
+        self.inner
+            .read()
+            .hash_to_header_and_peer
+            .contains_key(header_hash)
     }
 }
 
@@ -1407,7 +1417,7 @@ impl SynchronizationProtocolHandler {
             .unwrap()
             .as_secs();
 
-        let mut missed_body_block_hashes = HashSet::new();
+        let mut missed_body_block_hashes = HashMap::new();
         let mut need_to_relay = HashSet::new();
         let headers = self.graph.future_blocks.get_before(now_timestamp);
 
@@ -1415,7 +1425,7 @@ impl SynchronizationProtocolHandler {
             return;
         }
 
-        for mut header in headers {
+        for (mut header, peer) in headers {
             let hash = header.hash();
             let (insert_result, to_relay) = self.graph.insert_block_header(
                 &mut header,
@@ -1429,22 +1439,21 @@ impl SynchronizationProtocolHandler {
 
                 // check block body
                 if !self.graph.contains_block(&hash) {
-                    missed_body_block_hashes.insert(hash);
+                    // There are no duplicate headers in `future_blocks`, so
+                    // using Vec for each peer is enough.
+                    missed_body_block_hashes
+                        .entry(peer)
+                        .or_insert(Vec::new())
+                        .push(hash);
                 }
             }
         }
 
-        let chosen_peer = PeerFilter::new(msgid::GET_CMPCT_BLOCKS)
-            .throttle(msgid::GET_BLOCKS)
-            .select(&self.syn);
-
-        // request missing blocks
-        self.request_missing_blocks(
-            io,
-            chosen_peer,
-            missed_body_block_hashes.into_iter().collect(),
-        )
-        .ok();
+        for (peer, missing_hashes) in missed_body_block_hashes {
+            // request missing blocks from the peer where we receive their
+            // headers.
+            self.request_missing_blocks(io, Some(peer), missing_hashes);
+        }
 
         // relay if necessary
         self.relay_blocks(io, need_to_relay.into_iter().collect())
@@ -1554,7 +1563,7 @@ impl SynchronizationProtocolHandler {
     pub fn request_missing_blocks(
         &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
         hashes: Vec<H256>,
-    ) -> Result<(), Error>
+    )
     {
         let catch_up_mode = self.catch_up_mode();
         if catch_up_mode {
@@ -1563,7 +1572,6 @@ impl SynchronizationProtocolHandler {
             self.request_manager
                 .request_compact_blocks(io, peer_id, hashes, None);
         }
-        Ok(())
     }
 
     pub fn request_blocks(

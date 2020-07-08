@@ -79,6 +79,10 @@ threadpool = "1.0"
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 itertools = "0.9"
 either = "1.5.3"
+primal = "0.2.3"
+static_assertions = "1.1.0"
+memmap = "0.6"
+tempdir = "0.3"
 
 [dev-dependencies]
 criterion = "0.2"
