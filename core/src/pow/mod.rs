@@ -63,6 +63,7 @@ pub struct ProofOfWorkSolution {
 #[derive(Debug, Clone, DeriveMallocSizeOf)]
 pub struct ProofOfWorkConfig {
     pub test_mode: bool,
+    pub use_octopus_in_test_mode: bool,
     pub use_stratum: bool,
     pub initial_difficulty: u64,
     pub block_generation_period: u64,
@@ -74,14 +75,15 @@ pub struct ProofOfWorkConfig {
 
 impl ProofOfWorkConfig {
     pub fn new(
-        test_mode: bool, use_stratum: bool, initial_difficulty: Option<u64>,
-        stratum_listen_addr: String, stratum_port: u16,
-        stratum_secret: Option<H256>,
+        test_mode: bool, use_octopus_in_test_mode: bool, use_stratum: bool,
+        initial_difficulty: Option<u64>, stratum_listen_addr: String,
+        stratum_port: u16, stratum_secret: Option<H256>,
     ) -> Self
     {
         if test_mode {
             ProofOfWorkConfig {
                 test_mode,
+                use_octopus_in_test_mode,
                 use_stratum,
                 initial_difficulty: initial_difficulty.unwrap_or(4),
                 block_generation_period: 1000000,
@@ -93,6 +95,7 @@ impl ProofOfWorkConfig {
         } else {
             ProofOfWorkConfig {
                 test_mode,
+                use_octopus_in_test_mode,
                 use_stratum,
                 initial_difficulty: INITIAL_DIFFICULTY,
                 block_generation_period: TARGET_AVERAGE_BLOCK_GENERATION_PERIOD,
@@ -103,6 +106,10 @@ impl ProofOfWorkConfig {
                 stratum_secret,
             }
         }
+    }
+
+    pub fn use_octopus(&self) -> bool {
+        !self.test_mode || self.use_octopus_in_test_mode
     }
 
     pub fn target_difficulty(
@@ -203,14 +210,14 @@ pub fn compute_inv_x_times_2_pow_256_floor(x: &U256) -> U256 {
 }
 
 pub struct PowComputer {
-    test_mode: bool,
+    use_octopus: bool,
     cache_builder: CacheBuilder,
 }
 
 impl PowComputer {
-    pub fn new(test_mode: bool) -> Self {
+    pub fn new(use_octopus: bool) -> Self {
         PowComputer {
-            test_mode,
+            use_octopus,
             cache_builder: CacheBuilder::new(),
         }
     }
@@ -218,7 +225,7 @@ impl PowComputer {
     pub fn compute(
         &self, nonce: &U256, block_hash: &H256, block_height: u64,
     ) -> H256 {
-        if self.test_mode {
+        if !self.use_octopus {
             let mut buf = [0u8; 64];
             for i in 0..32 {
                 buf[i] = block_hash[i];
@@ -231,6 +238,12 @@ impl PowComputer {
             }
             keccak_hash(tmp)
         } else {
+            println!(
+                "header_hash: {:?}, block_height: {}, nonce: {}",
+                block_hash,
+                block_height,
+                nonce.low_u64()
+            );
             let light = self.cache_builder.light(block_height);
             light
                 .compute(block_hash.as_fixed_bytes(), nonce.low_u64())
@@ -406,4 +419,15 @@ impl TargetDifficultyManager {
     pub fn set(&self, hash: H256, difficulty: U256) {
         self.cache.set(hash, difficulty);
     }
+}
+
+#[test]
+fn test_octopus() {
+    let pow = PowComputer::new(true);
+
+    let block_hash =
+        "4d99d0b41c7eb0dd1a801c35aae2df28ae6b53bc7743f0818a34b6ec97f5b4ae"
+            .parse()
+            .unwrap();
+    pow.compute(&U256::from(3812), &block_hash, 2);
 }

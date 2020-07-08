@@ -81,7 +81,7 @@ impl Worker {
             .spawn(move || {
                 let sleep_duration = time::Duration::from_millis(100);
                 let mut problem: Option<ProofOfWorkProblem> = None;
-                let bg_pow = Arc::new(PowComputer::new(bg_handle.pow_config.test_mode));
+                let bg_pow = Arc::new(PowComputer::new(bg_handle.pow_config.use_octopus()));
 
                 loop {
                     match *bg_handle.state.read() {

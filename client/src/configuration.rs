@@ -129,6 +129,7 @@ build_config! {
         (stratum_port, (u16), 32525)
         (stratum_secret, (Option<String>), None)
         (use_stratum, (bool), false)
+        (use_octopus_in_test_mode, (bool), false)
 
         // Network section.
         (jsonrpc_local_tcp_port, (Option<u16>), None)
@@ -456,6 +457,7 @@ impl Configuration {
 
         ProofOfWorkConfig::new(
             self.is_test_or_dev_mode(),
+            self.raw_conf.use_octopus_in_test_mode,
             self.raw_conf.use_stratum,
             self.raw_conf.initial_difficulty,
             self.raw_conf.stratum_listen_address.clone(),
