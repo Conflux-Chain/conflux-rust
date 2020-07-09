@@ -182,24 +182,16 @@ impl<'a> CallCreateExecutive<'a> {
                 "CallInternalContract: address={:?} data={:?}",
                 params.code_address, params.data
             );
-            let recipient_address = params.address.clone();
             CallCreateExecutiveKind::CallInternalContract(
                 params,
-                Substate::with_adding_contracts_to_call_stack(
-                    contracts_in_callstack,
-                    recipient_address,
-                ),
+                Substate::with_call_stack(contracts_in_callstack),
             )
         } else {
             if params.code.is_some() {
                 trace!("ExecCall");
-                let recipient_address = params.address.clone();
                 CallCreateExecutiveKind::ExecCall(
                     params,
-                    Substate::with_adding_contracts_to_call_stack(
-                        contracts_in_callstack,
-                        recipient_address,
-                    ),
+                    Substate::with_call_stack(contracts_in_callstack),
                 )
             } else {
                 trace!("Transfer");
@@ -239,13 +231,9 @@ impl<'a> CallCreateExecutive<'a> {
 
         let gas = params.gas;
 
-        let recipient_address = params.address.clone();
         let kind = CallCreateExecutiveKind::ExecCreate(
             params,
-            Substate::with_adding_contracts_to_call_stack(
-                contracts_in_callstack,
-                recipient_address,
-            ),
+            Substate::with_call_stack(contracts_in_callstack),
         );
 
         Self {
@@ -1000,7 +988,7 @@ impl<'a> CallCreateExecutive<'a> {
     ) -> vm::Result<FinalizationResult> {
         let mut last_res =
             Some((false, self.gas, self.exec(state, top_substate)));
-        if last_res.clone().unwrap().2.is_ok() {
+        if let Some((_, _, Ok(_))) = &last_res {
             top_substate.pop_callstack();
         }
 
@@ -1020,7 +1008,7 @@ impl<'a> CallCreateExecutive<'a> {
 
                             last_res = Some((exec.is_create, exec.gas, exec.exec(state, parent_substate)));
 
-                            if last_res.clone().unwrap().2.is_ok() {
+                            if let Some((_, _, Ok(_))) = &last_res {
                                 parent_substate.pop_callstack();
                             }
                         }
@@ -1066,6 +1054,7 @@ impl<'a> CallCreateExecutive<'a> {
                 }
                 Some((_, _, Err(TrapError::Call(subparams, mut resume)))) => {
                     let substate = resume.unconfirmed_substate().unwrap();
+                    substate.push_callstack(subparams.address.clone());
                     let contracts_in_callstack = substate.contracts_in_callstack.clone();
 
                     let sub_exec = CallCreateExecutive::new_call_raw(
@@ -1087,6 +1076,7 @@ impl<'a> CallCreateExecutive<'a> {
                 }
                 Some((_, _, Err(TrapError::Create(subparams, address, mut resume)))) => {
                     let substate = resume.unconfirmed_substate().unwrap();
+                    substate.push_callstack(subparams.address.clone());
                     let contracts_in_callstack = substate.contracts_in_callstack.clone();
 
                     let sub_exec = CallCreateExecutive::new_create_raw(
@@ -1191,6 +1181,7 @@ impl<'a> Executive<'a> {
         let _gas = params.gas;
 
         let vm_factory = self.state.vm_factory();
+        substate.push_callstack(_address);
         let result = CallCreateExecutive::new_create_raw(
             params,
             self.env,
@@ -1221,6 +1212,7 @@ impl<'a> Executive<'a> {
     {
         let vm_factory = self.state.vm_factory();
 
+        substate.push_callstack(params.address.clone());
         let result = CallCreateExecutive::new_call_raw(
             params,
             self.env,

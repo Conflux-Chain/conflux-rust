@@ -41,6 +41,10 @@ impl CallStackInfo {
         maybe_address
     }
 
+    pub fn last(&self) -> Option<&Address> {
+        self.call_stack_recipient_addresses.last()
+    }
+
     pub fn contains_key(&self, key: &Address) -> bool {
         self.address_depth_lookup_table
             .get(key)
@@ -81,30 +85,24 @@ pub struct Substate {
     /// and passed back to caller when callee returns,
     /// through mem::swap.
     pub contracts_in_callstack: Rc<RefCell<CallStackInfo>>,
-    /// Contract address in current call
-    pub contract_address: Address,
 }
 
 impl Substate {
     /// Creates new substate.
     pub fn new() -> Self { Substate::default() }
 
-    pub fn with_adding_contracts_to_call_stack(
-        contracts: Rc<RefCell<CallStackInfo>>, contract_address: Address,
-    ) -> Self {
+    pub fn with_call_stack(callstack: Rc<RefCell<CallStackInfo>>) -> Self {
         let mut substate = Substate::default();
-        substate.contracts_in_callstack = contracts;
-        substate
-            .contracts_in_callstack
-            .borrow_mut()
-            .push(contract_address.clone());
-        substate.contract_address = contract_address;
+        substate.contracts_in_callstack = callstack;
         substate
     }
 
-    /// Called when substate is not dropped by accrue function.
+    pub fn push_callstack(&self, contract: Address) {
+        self.contracts_in_callstack.borrow_mut().push(contract);
+    }
+
     #[inline]
-    pub fn pop_callstack(&mut self) {
+    pub fn pop_callstack(&self) {
         self.contracts_in_callstack.borrow_mut().pop();
     }
 
