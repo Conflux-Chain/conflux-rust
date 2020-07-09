@@ -2,17 +2,18 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::H256;
-use primitives::{
-    BlockHashOrEpochNumber as PrimitiveBlockHashOrEpochNumber,
-    EpochNumber as PrimitiveEpochNumber,
-};
+use std::{fmt, str::FromStr};
+
 use serde::{
     de::{Error, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use std::{fmt, str::FromStr};
-use crate::rpc::types::U64;
+
+use cfx_types::{H256, U64};
+use primitives::{
+    BlockHashOrEpochNumber as PrimitiveBlockHashOrEpochNumber,
+    EpochNumber as PrimitiveEpochNumber,
+};
 
 /// Represents rpc api epoch number param.
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
@@ -72,7 +73,7 @@ impl EpochNumber {
             EpochNumber::Earliest => PrimitiveEpochNumber::Earliest,
             EpochNumber::LatestMined => PrimitiveEpochNumber::LatestMined,
             EpochNumber::LatestState => PrimitiveEpochNumber::LatestState,
-            EpochNumber::Num(num) => PrimitiveEpochNumber::Number(num),
+            EpochNumber::Num(num) => PrimitiveEpochNumber::Number(num.as_u64()),
             EpochNumber::LatestCheckpoint => {
                 PrimitiveEpochNumber::LatestCheckpoint
             }
@@ -94,6 +95,7 @@ impl FromStr for EpochNumber {
             "earliest" => Ok(EpochNumber::Earliest),
             "latest_checkpoint" => Ok(EpochNumber::LatestCheckpoint),
             _ if s.starts_with("0x") => u64::from_str_radix(&s[2..], 16)
+                .map(U64::from)
                 .map(EpochNumber::Num)
                 .map_err(|e| format!("Invalid epoch number: {}", e)),
             _ => Err("Invalid epoch number: missing 0x prefix".to_string()),
@@ -106,7 +108,7 @@ impl Into<PrimitiveEpochNumber> for EpochNumber {
 }
 
 impl Into<EpochNumber> for u64 {
-    fn into(self) -> EpochNumber { EpochNumber::Num(self) }
+    fn into(self) -> EpochNumber { EpochNumber::Num(U64::from(self)) }
 }
 
 struct EpochNumberVisitor;

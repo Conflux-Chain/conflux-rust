@@ -10,7 +10,6 @@ mod call_request;
 mod consensus_graph_states;
 mod epoch_number;
 mod filter;
-mod hash;
 mod index;
 mod log;
 mod provenance;
@@ -20,7 +19,6 @@ mod status;
 mod storage_root;
 mod sync_graph_states;
 mod transaction;
-mod uint;
 
 pub mod pubsub;
 
@@ -36,7 +34,6 @@ pub use self::{
     consensus_graph_states::ConsensusGraphStates,
     epoch_number::{BlockHashOrEpochNumber, EpochNumber},
     filter::Filter,
-    hash::{H160, H2048, H256, H512, H520, H64},
     index::Index,
     log::Log,
     provenance::Origin,
@@ -46,5 +43,4 @@ pub use self::{
     storage_root::StorageRoot,
     sync_graph_states::SyncGraphStates,
     transaction::{SendTxRequest, Transaction},
-    uint::{U128, U256, U64},
 };

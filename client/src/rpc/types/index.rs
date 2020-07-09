@@ -2,11 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use std::fmt;
+
 use serde::{
     de::{Error, Visitor},
     Deserialize, Deserializer,
 };
-use std::fmt;
 
 /// Represents usize.
 #[derive(Debug, PartialEq)]
@@ -57,8 +58,9 @@ impl<'a> Visitor<'a> for IndexVisitor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json;
+
+    use super::*;
 
     #[test]
     fn block_number_deserialization() {

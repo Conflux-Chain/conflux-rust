@@ -20,9 +20,12 @@
 
 //! Pub-Sub types.
 
-use super::{Filter, Header, Log, H256, U256};
 use serde::{de::Error, Deserialize, Deserializer, Serialize};
 use serde_json::{from_value, Value};
+
+use cfx_types::{H256, U256};
+
+use super::{Filter, Header, Log};
 
 /// Subscription result.
 #[allow(dead_code)]

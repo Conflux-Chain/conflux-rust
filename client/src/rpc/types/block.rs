@@ -2,14 +2,21 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{Receipt, Transaction, H160, H256, U256, U64};
-use cfx_types::U256 as CfxU256;
+use std::sync::Arc;
+
+use jsonrpc_core::Error as RpcError;
+use serde::{
+    de::{Deserialize, Deserializer, Error, Unexpected},
+    Serialize, Serializer,
+};
+use serde_json::Value;
+
+use cfx_types::{H160, H256, U256, U64};
 use cfxcore::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     consensus::ConsensusGraphInner,
     SharedConsensusGraph,
 };
-use jsonrpc_core::Error as RpcError;
 use primitives::{
     receipt::{
         TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
@@ -19,12 +26,8 @@ use primitives::{
     Block as PrimitiveBlock, BlockHeader as PrimitiveBlockHeader,
     BlockHeaderBuilder, TransactionIndex,
 };
-use serde::{
-    de::{Deserialize, Deserializer, Error, Unexpected},
-    Serialize, Serializer,
-};
-use serde_json::Value;
-use std::sync::Arc;
+
+use crate::rpc::types::{Receipt, Transaction};
 
 #[derive(PartialEq, Debug)]
 pub enum BlockTransactions {
@@ -151,7 +154,7 @@ impl Block {
                         .map(|(idx, tx)| {
                             let receipt = execution_result.block_receipts.receipts.get(idx).unwrap();
                             let prior_gas_used = if idx == 0 {
-                                 CfxU256::zero()
+                                 U256::zero()
                             } else {
                                 execution_result.block_receipts.receipts.get(idx - 1).unwrap().accumulated_gas_used
                             };
@@ -215,7 +218,7 @@ impl Block {
             deferred_logs_bloom_hash: H256::from(
                 b.block_header.deferred_logs_bloom_hash().clone(),
             ),
-            blame: b.block_header.blame(),
+            blame: U64::from(b.block_header.blame()),
             transactions_root: H256::from(
                 b.block_header.transactions_root().clone(),
             ),
@@ -258,7 +261,7 @@ impl Block {
                     .with_deferred_logs_bloom_hash(
                         self.deferred_logs_bloom_hash.into(),
                     )
-                    .with_blame(self.blame)
+                    .with_blame(self.blame.as_u32())
                     .with_difficulty(self.difficulty.into())
                     .with_adaptive(self.adaptive)
                     .with_gas_limit(self.gas_limit.into())
@@ -368,10 +371,12 @@ impl Header {
 
 #[cfg(test)]
 mod tests {
-    use super::{Block, BlockTransactions, Header};
-    use crate::rpc::types::{Transaction, H160, H256, U256};
     use keccak_hash::KECCAK_EMPTY_LIST_RLP;
     use serde_json;
+
+    use crate::rpc::types::{Transaction, H160, H256, U256};
+
+    use super::{Block, BlockTransactions, Header};
 
     #[test]
     fn test_serialize_block_transactions() {

@@ -1,49 +1,47 @@
 #![allow(dead_code, unused_imports, unused_variables)]
 
-use jsonrpc_pubsub::{
-    typed::{Sink, Subscriber},
-    SubscriptionId,
-};
-
-use crate::rpc::{
-    error_codes,
-    helpers::{SubscriberId, Subscribers},
-    metadata::Metadata,
-    traits::PubSub,
-    types::{pubsub, Header as RpcHeader, Log as RpcLog, H256 as RpcH256},
-};
-
-use jsonrpc_core::{
-    futures::{sync::mpsc, Future, IntoFuture, Stream},
-    BoxFuture, Error, Result as RpcResult,
-};
-
 use std::{
     collections::BTreeMap,
     sync::{Arc, Weak},
     time::Duration,
 };
 
-use cfxcore::{
-    block_data_manager::BlockExecutionResult, channel::Channel,
-    BlockDataManager, Notifications, SharedConsensusGraph,
-    SynchronizationGraph,
-};
-
-use cfx_types::H256;
 use futures::{
     compat::Future01CompatExt,
     future::{join_all, FutureExt, TryFutureExt},
 };
 use itertools::zip;
+use jsonrpc_core::{
+    futures::{sync::mpsc, Future, IntoFuture, Stream},
+    BoxFuture, Error, Result as RpcResult,
+};
+use jsonrpc_pubsub::{
+    typed::{Sink, Subscriber},
+    SubscriptionId,
+};
 use parking_lot::RwLock;
+use tokio_timer::sleep;
+
+use cfx_types::{H160, H256, H520, U128, U256, U64};
+use cfxcore::{
+    block_data_manager::BlockExecutionResult, channel::Channel,
+    BlockDataManager, Notifications, SharedConsensusGraph,
+    SynchronizationGraph,
+};
 use primitives::{
     filter::Filter,
     log_entry::{LocalizedLogEntry, LogEntry},
     BlockHeader, BlockReceipts,
 };
 use runtime::Executor;
-use tokio_timer::sleep;
+
+use crate::rpc::{
+    error_codes,
+    helpers::{SubscriberId, Subscribers},
+    metadata::Metadata,
+    traits::PubSub,
+    types::{pubsub, Header as RpcHeader, Log as RpcLog},
+};
 
 type Client = Sink<pubsub::Result>;
 
@@ -256,7 +254,7 @@ impl ChainNotificationHandler {
         trace!("notify_epoch({:?})", epoch);
 
         let (epoch, hashes) = epoch;
-        let hashes = hashes.into_iter().map(RpcH256::from).collect();
+        let hashes = hashes.into_iter().map(H256::from).collect();
 
         Self::notify_async(
             &subscriber,

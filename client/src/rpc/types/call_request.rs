@@ -2,12 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::Bytes;
+use std::cmp::min;
+
 use cfx_types::{address_util::AddressUtil, Address, H160, U256, U64};
 use primitives::{
     transaction::Action, SignedTransaction, Transaction as PrimitiveTransaction,
 };
-use std::cmp::min;
+
+use crate::rpc::types::Bytes;
+
+// use serde_json::de::ParserNumber::U64;
 
 #[derive(Debug, Default, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -67,7 +71,10 @@ pub fn sign_call(
         gas,
         gas_price: request.gas_price.unwrap_or_default(),
         value: request.value.unwrap_or_default(),
-        storage_limit: request.storage_limit.unwrap_or(std::u64::MAX),
+        storage_limit: request
+            .storage_limit
+            .map(|v| v.as_u64())
+            .unwrap_or(std::u64::MAX),
         epoch_height,
         chain_id,
         data: request.data.unwrap_or_default().into_vec(),
@@ -77,11 +84,14 @@ pub fn sign_call(
 
 #[cfg(test)]
 mod tests {
-    use super::CallRequest;
-    use cfx_types::{H160, U256};
+    use std::str::FromStr;
+
     use rustc_hex::FromHex;
     use serde_json;
-    use std::str::FromStr;
+
+    use cfx_types::{H160, U256};
+
+    use super::CallRequest;
 
     #[test]
     fn call_request_deserialize() {

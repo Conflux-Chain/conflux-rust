@@ -2,14 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{Log, H256, U256, U64};
-use cfx_types::{Address, Bloom, H256 as CfxH256, U256 as CfxU256};
+use serde_derive::Serialize;
+
+use cfx_types::{Address, Bloom, H256, U256, U64};
 use cfxcore::{executive::contract_address, vm::CreateContractAddress};
 use primitives::{
     receipt::Receipt as PrimitiveReceipt, transaction::Action,
     SignedTransaction as PrimitiveTransaction, TransactionIndex,
 };
-use serde_derive::Serialize;
+
+use crate::rpc::types::Log;
 
 #[derive(Debug, Serialize, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,8 +48,8 @@ pub struct Receipt {
 impl Receipt {
     pub fn new(
         transaction: PrimitiveTransaction, receipt: PrimitiveReceipt,
-        transaction_index: TransactionIndex, prior_gas_used: CfxU256,
-        epoch_number: Option<u64>, maybe_state_root: Option<CfxH256>,
+        transaction_index: TransactionIndex, prior_gas_used: U256,
+        epoch_number: Option<u64>, maybe_state_root: Option<H256>,
     ) -> Receipt
     {
         let mut address = None;
@@ -62,7 +64,7 @@ impl Receipt {
         }
         Receipt {
             transaction_hash: transaction.hash.into(),
-            index: transaction_index.index,
+            index: U64::from(transaction_index.index),
             block_hash: transaction_index.block_hash.into(),
             gas_used: (receipt.accumulated_gas_used - prior_gas_used).into(),
             gas_fee: receipt.gas_fee.into(),
@@ -71,13 +73,13 @@ impl Receipt {
                 Action::Create => None,
                 Action::Call(ref address) => Some(address.clone()),
             },
-            outcome_status: receipt.outcome_status,
+            outcome_status: U64::from(receipt.outcome_status),
             contract_created: address,
             logs: receipt.logs.into_iter().map(Log::from).collect(),
             logs_bloom: receipt.log_bloom,
             state_root: maybe_state_root
                 .map_or_else(Default::default, Into::into),
-            epoch_number,
+            epoch_number: epoch_number.map(U64::from),
         }
     }
 }

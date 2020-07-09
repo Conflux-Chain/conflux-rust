@@ -1,5 +1,4 @@
-use crate::rpc::types::{H256, U256};
-use cfx_types::H256 as CfxH256;
+use cfx_types::{H256, U256};
 use cfxcore::block_data_manager::BlockRewardResult;
 
 #[derive(Debug, Serialize, Clone, Deserialize)]
@@ -12,7 +11,7 @@ pub struct RewardInfo {
 }
 
 impl RewardInfo {
-    pub fn new(block_hash: CfxH256, reward_result: BlockRewardResult) -> Self {
+    pub fn new(block_hash: H256, reward_result: BlockRewardResult) -> Self {
         RewardInfo {
             block_hash: block_hash.into(),
             total_reward: reward_result.total_reward.into(),
