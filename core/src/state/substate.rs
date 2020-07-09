@@ -31,12 +31,18 @@ pub struct Substate {
     pub sstore_clears_refund: i128,
     /// Created contracts.
     pub contracts_created: Vec<Address>,
+
+    /// The following three variables are parts in params
+    /// other than substate. We implement them in substate
+    /// for performance. So they are not considered in accruing
+    /// operation.
+
     /// Contracts called in call stack.
     /// Used to detect reentrancy.
     /// Passed from caller to callee when calling happens
     /// and passed back to caller when callee returns,
     /// through mem::swap.
-    pub contracts_in_callstack: HashSet<Address>,
+    pub contracts_in_callstack: HashMap<Address, u64>,
     /// Reentrancy happens in current call
     pub reentrancy_encountered: bool,
     /// Contract address in current call
@@ -52,7 +58,7 @@ impl Substate {
     }
 
     pub fn with_contracts_in_callstack(
-        contracts: HashSet<Address>, contract_address: Address,
+        contracts: HashMap<Address, u64>, contract_address: Address,
         reentrancy_encountered: bool,
     ) -> Self
     {
@@ -80,12 +86,12 @@ impl Substate {
     }
 
     pub fn pop_callstack_contract(&mut self, s: &mut Substate) {
-        let mut contract_in_callstack = HashSet::<Address>::new();
+        let mut contract_in_callstack = HashMap::<Address, u64>::new();
         mem::swap(&mut contract_in_callstack, &mut s.contracts_in_callstack);
         if !s.reentrancy_encountered
             && self.contract_address != s.contract_address
         {
-            contract_in_callstack.remove(&s.contract_address);
+            *contract_in_callstack.get_mut(&s.contract_address).expect("The current contract address should be in contract_in_callstack") -= 1;
         }
         self.contracts_in_callstack = contract_in_callstack;
     }

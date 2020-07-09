@@ -27,7 +27,7 @@ use primitives::{
     receipt::StorageChange, transaction::Action, SignedTransaction,
 };
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     convert::{TryFrom, TryInto},
     mem,
     sync::Arc,
@@ -147,7 +147,7 @@ impl<'a> CallCreateExecutive<'a> {
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
         stack_depth: usize, parent_static_flag: bool,
         internal_contract_map: &'a InternalContractMap,
-        contracts_in_callstack: Option<HashSet<Address>>,
+        contracts_in_callstack: Option<HashMap<Address, u64>>,
         is_recursive_call: bool,
     ) -> Self
     {
@@ -190,8 +190,13 @@ impl<'a> CallCreateExecutive<'a> {
                 let mut contracts_in_callstack =
                     contracts_in_callstack.unwrap();
                 let recipient_address = params.address.clone();
+                let recipient_address_count_in_callstack =
+                    contracts_in_callstack
+                        .entry(recipient_address.clone())
+                        .or_insert(0);
                 let is_contract_in_callstack =
-                    !contracts_in_callstack.insert(recipient_address.clone());
+                    *recipient_address_count_in_callstack != 0;
+                *recipient_address_count_in_callstack += 1;
                 CallCreateExecutiveKind::ExecCall(
                     params,
                     Substate::with_contracts_in_callstack(
@@ -226,7 +231,7 @@ impl<'a> CallCreateExecutive<'a> {
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
         stack_depth: usize, static_flag: bool,
         internal_contract_map: &'a InternalContractMap,
-        mut contracts_in_callstack: HashSet<Address>,
+        mut contracts_in_callstack: HashMap<Address, u64>,
     ) -> Self
     {
         trace!(
@@ -239,8 +244,11 @@ impl<'a> CallCreateExecutive<'a> {
         let gas = params.gas;
 
         let recipient_address = params.address.clone();
-        assert!(!contracts_in_callstack.contains(&recipient_address));
-        contracts_in_callstack.insert(recipient_address.clone());
+        let recipient_address_count_in_callstack = contracts_in_callstack
+            .entry(recipient_address.clone())
+            .or_insert(0);
+        assert_eq!(*recipient_address_count_in_callstack, 0);
+        *recipient_address_count_in_callstack += 1;
         let kind = CallCreateExecutiveKind::ExecCreate(
             params,
             Substate::with_contracts_in_callstack(
@@ -1035,10 +1043,10 @@ impl<'a> CallCreateExecutive<'a> {
                             };
 
                             last_res = Some((exec.is_create, exec.gas, exec.exec(state, parent_substate)));
-                        },
+                        }
                         None => panic!("When callstack only had one item and it was executed, this function would return; callstack never reaches zero item; qed"),
                     }
-                },
+                }
                 Some((is_create, _gas, Ok(val))) => {
                     let current = callstack.pop();
 
@@ -1072,17 +1080,17 @@ impl<'a> CallCreateExecutive<'a> {
                                     parent_substate,
                                 )));
                             }
-                        },
+                        }
                         None => return val,
                     }
-                },
+                }
                 Some((_, _, Err(TrapError::Call(subparams, mut resume)))) => {
                     let is_not_internal_contract_and_has_code = subparams.code.is_some() && resume.internal_contract_map.contract(&subparams.code_address).is_none();
                     let substate = resume.unconfirmed_substate().unwrap();
                     let mut is_recursive_call = false;
                     let contracts_in_callstack = if is_not_internal_contract_and_has_code {
                         is_recursive_call = substate.contract_address == subparams.address;
-                        let mut contracts_in_callstack = HashSet::<Address>::new();
+                        let mut contracts_in_callstack = HashMap::<Address,u64>::new();
                         mem::swap(
                             &mut contracts_in_callstack,
                             &mut substate.contracts_in_callstack,
@@ -1109,10 +1117,10 @@ impl<'a> CallCreateExecutive<'a> {
                     callstack.push((None, resume));
                     callstack.push((None, sub_exec));
                     last_res = None;
-                },
+                }
                 Some((_, _, Err(TrapError::Create(subparams, address, mut resume)))) => {
                     let substate = resume.unconfirmed_substate().unwrap();
-                    let mut contracts_in_callstack = HashSet::<Address>::new();
+                    let mut contracts_in_callstack = HashMap::<Address,u64>::new();
                     mem::swap(
                         &mut contracts_in_callstack,
                         &mut substate.contracts_in_callstack,
@@ -1133,7 +1141,7 @@ impl<'a> CallCreateExecutive<'a> {
                     callstack.push((Some(address), resume));
                     callstack.push((None, sub_exec));
                     last_res = None;
-                },
+                }
             }
         }
     }
@@ -1142,6 +1150,7 @@ impl<'a> CallCreateExecutive<'a> {
 /// Trap result returned by executive.
 pub type ExecutiveTrapResult<'a, T> =
     vm::TrapResult<T, CallCreateExecutive<'a>, CallCreateExecutive<'a>>;
+
 /// Trap error for executive.
 //pub type ExecutiveTrapError<'a> =
 //    vm::TrapError<CallCreateExecutive<'a>, CallCreateExecutive<'a>>;
@@ -1218,7 +1227,7 @@ impl<'a> Executive<'a> {
         let _gas = params.gas;
 
         let vm_factory = self.state.vm_factory();
-        let mut contracts_in_callstack = HashSet::<Address>::new();
+        let mut contracts_in_callstack = HashMap::<Address, u64>::new();
         mem::swap(
             &mut contracts_in_callstack,
             &mut substate.contracts_in_callstack,
@@ -1260,7 +1269,7 @@ impl<'a> Executive<'a> {
         let mut is_recursive_call = false;
         let contracts_in_callstack = if is_not_internal_contract_and_has_code {
             is_recursive_call = substate.contract_address == params.address;
-            let mut contracts_in_callstack = HashSet::<Address>::new();
+            let mut contracts_in_callstack = HashMap::<Address, u64>::new();
             mem::swap(
                 &mut contracts_in_callstack,
                 &mut substate.contracts_in_callstack,
@@ -1345,7 +1354,7 @@ impl<'a> Executive<'a> {
                             .env
                             .transaction_epoch_bound,
                     },
-                ))
+                ));
             }
             Ok(()) => {}
         }
