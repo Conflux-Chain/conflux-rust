@@ -841,6 +841,26 @@ impl<Cost: CostType> Interpreter<Cost> {
                         },
                     );
 
+                let recipient_address = match instruction {
+                    instructions::CALL | instructions::STATICCALL => {
+                        &code_address
+                    }
+                    instructions::CALLCODE | instructions::DELEGATECALL => {
+                        &self.params.address
+                    }
+                    _ => unreachable!(),
+                };
+                let not_reentrancy_attack =
+                    if context.is_reentrancy(recipient_address) {
+                        if in_size > 0 {
+                            false
+                        } else {
+                            call_gas <= context.spec().call_stipend;
+                        }
+                    } else {
+                        true
+                    };
+
                 // Get sender & receive addresses, check if we have balance
                 let (sender_address, receive_address, has_balance, call_type) =
                     match instruction {
@@ -898,8 +918,9 @@ impl<Cost: CostType> Interpreter<Cost> {
                 // clear return data buffer before creating new call frame.
                 self.return_data = ReturnData::empty();
 
-                let can_call =
-                    has_balance && context.depth() < context.spec().max_depth;
+                let can_call = has_balance
+                    && context.depth() < context.spec().max_depth
+                    && not_reentrancy_attack;
                 if !can_call {
                     self.stack.push(U256::zero());
                     return Ok(InstructionResult::UnusedGas(call_gas));

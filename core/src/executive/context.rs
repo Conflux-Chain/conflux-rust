@@ -437,6 +437,22 @@ impl<'a> ContextTrait for Context<'a> {
     ) {
         // TODO
     }
+
+    fn is_reentrancy(&self, calling_address: &Address) -> bool {
+        let is_recursive_call =
+            calling_address == self.substate.contract_address;
+        let contract_in_callstack = self
+            .substate
+            .contracts_in_callstack
+            .contains_key(calling_address);
+        let is_not_internal_contract_and_has_code = self
+            .internal_contract_map
+            .contract(&calling_address)
+            .is_none();
+        return !is_recursive_call
+            && contract_in_callstack
+            && is_not_internal_contract_and_has_code;
+    }
 }
 
 #[cfg(test)]
@@ -651,24 +667,24 @@ mod tests {
 
         // this should panic because we have no balance on any account
         ctx.call(
-        &"0000000000000000000000000000000000000000000000000000000000120000"
-            .parse::<U256>()
-            .unwrap(),
-        &Address::zero(),
-        &Address::zero(),
-        Some(
-            "0000000000000000000000000000000000000000000000000000000000150000"
+            &"0000000000000000000000000000000000000000000000000000000000120000"
                 .parse::<U256>()
                 .unwrap(),
-        ),
-        &[],
-        &Address::zero(),
-        CallType::Call,
-        false,
-    )
+            &Address::zero(),
+            &Address::zero(),
+            Some(
+                "0000000000000000000000000000000000000000000000000000000000150000"
+                    .parse::<U256>()
+                    .unwrap(),
+            ),
+            &[],
+            &Address::zero(),
+            CallType::Call,
+            false,
+        )
             .unwrap()
-    .ok()
-    .unwrap();
+            .ok()
+            .unwrap();
     }
 
     #[test]
@@ -831,8 +847,8 @@ mod tests {
             {
                 Ok(ContractCreateResult::Created(address, _)) => address,
                 _ => panic!(
-                "Test create failed; expected Created, got Failed/Reverted."
-            ),
+                    "Test create failed; expected Created, got Failed/Reverted."
+                ),
             }
         };
 
@@ -842,5 +858,4 @@ mod tests {
                 .unwrap()
         );
     }
-
 }
