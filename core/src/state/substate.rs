@@ -50,6 +50,12 @@ impl CallStackInfo {
             .get(key)
             .map_or(false, |x| x.len() != 0)
     }
+
+    pub fn entrancy_happening_at_this_level(&self) -> bool {
+        self.last()
+            .and_then(|addr| self.address_depth_lookup_table.get(addr))
+            .map_or(false, |x| x.len() > 1)
+    }
 }
 
 /// State changes which should be applied in finalize,
