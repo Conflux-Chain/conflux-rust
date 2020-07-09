@@ -2,20 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::{
-    collections::{BTreeMap, HashSet},
-    net::SocketAddr,
-    sync::Arc,
-    time::Duration,
+use crate::rpc::types::{
+    Block as RpcBlock, BlockHashOrEpochNumber, Bytes, EpochNumber,
+    Status as RpcStatus, Transaction as RpcTransaction,
 };
-
 use bigdecimal::BigDecimal;
-use clap::crate_version;
-use jsonrpc_core::{Error as RpcError, Result as RpcResult, Value as RpcValue};
-use keccak_hash::keccak;
-use num_bigint::{BigInt, ToBigInt};
-use parking_lot::{Condvar, Mutex};
-
 use cfx_types::{Address, H160, H256, H520, U128, U256, U64};
 use cfxcore::{
     BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
@@ -23,16 +14,22 @@ use cfxcore::{
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
+use clap::crate_version;
+use jsonrpc_core::{Error as RpcError, Result as RpcResult, Value as RpcValue};
+use keccak_hash::keccak;
 use network::{
     node_table::{Node, NodeEndpoint, NodeEntry, NodeId},
     throttling::{self, THROTTLING_SERVICE},
     NetworkService, SessionDetails, UpdateNodeOperation,
 };
+use num_bigint::{BigInt, ToBigInt};
+use parking_lot::{Condvar, Mutex};
 use primitives::{Action, SignedTransaction};
-
-use crate::rpc::types::{
-    Block as RpcBlock, BlockHashOrEpochNumber, Bytes, EpochNumber,
-    Status as RpcStatus, Transaction as RpcTransaction,
+use std::{
+    collections::{BTreeMap, HashSet},
+    net::SocketAddr,
+    sync::Arc,
+    time::Duration,
 };
 
 fn grouped_txs<T, F>(

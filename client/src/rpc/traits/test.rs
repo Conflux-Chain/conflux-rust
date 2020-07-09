@@ -2,16 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::net::SocketAddr;
-
-use jsonrpc_core::Result as RpcResult;
-use jsonrpc_derive::rpc;
-
+use super::super::types::{BlameInfo, Block, Bytes};
 use cfx_types::{H256, U256};
 use cfxcore::PeerInfo;
+use jsonrpc_core::Result as RpcResult;
+use jsonrpc_derive::rpc;
 use network::node_table::NodeId;
-
-use super::super::types::{BlameInfo, Block, Bytes};
+use std::net::SocketAddr;
 
 #[rpc(server)]
 pub trait TestRpc {

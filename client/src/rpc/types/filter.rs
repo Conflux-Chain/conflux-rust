@@ -2,17 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use super::EpochNumber;
+use cfx_types::{H160, H256, U64};
 use jsonrpc_core::Error as RpcError;
+use primitives::filter::Filter as PrimitiveFilter;
 use serde::{
     de::{DeserializeOwned, Error},
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use serde_json::{from_value, Value};
-
-use cfx_types::{H160, H256, U64};
-use primitives::filter::Filter as PrimitiveFilter;
-
-use super::EpochNumber;
 
 const FILTER_BLOCK_HASH_LIMIT: usize = 128;
 
@@ -177,17 +175,14 @@ impl Filter {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
-    use serde_json;
-
+    use super::{EpochNumber, Filter, VariadicValue};
     use cfx_types::{Address, H160, H256, U64};
     use primitives::{
         epoch::EpochNumber as PrimitiveEpochNumber,
         filter::Filter as PrimitiveFilter,
     };
-
-    use super::{EpochNumber, Filter, VariadicValue};
+    use serde_json;
+    use std::str::FromStr;
 
     #[test]
     fn test_serialize_variadic_value() {

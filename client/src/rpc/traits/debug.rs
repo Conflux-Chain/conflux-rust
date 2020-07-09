@@ -2,23 +2,19 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::collections::BTreeMap;
-
-use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
-use jsonrpc_derive::rpc;
-
-use cfx_types::{H160, H256, H520, U128};
-use network::{
-    node_table::{Node, NodeId},
-    throttling, SessionDetails, UpdateNodeOperation,
-};
-
-use crate::rpc::types::SendTxRequest;
-
 use super::super::types::{
     Bytes as RpcBytes, ConsensusGraphStates, SyncGraphStates,
     Transaction as RpcTransaction,
 };
+use crate::rpc::types::SendTxRequest;
+use cfx_types::{H160, H256, H520, U128};
+use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
+use jsonrpc_derive::rpc;
+use network::{
+    node_table::{Node, NodeId},
+    throttling, SessionDetails, UpdateNodeOperation,
+};
+use std::collections::BTreeMap;
 
 #[rpc(server)]
 pub trait LocalRpc {

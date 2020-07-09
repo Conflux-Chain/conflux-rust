@@ -2,8 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::sync::Arc;
-
+use crate::rpc::types::{receipt::Receipt, Bytes};
 use cfx_types::{H160, H256, U256, U64};
 use cfxcore_accounts::AccountProvider;
 use cfxkey::{Error, Password};
@@ -12,8 +11,7 @@ use primitives::{
     Transaction as PrimitiveTransaction, TransactionWithSignature,
     TransactionWithSignatureSerializePart,
 };
-
-use crate::rpc::types::{receipt::Receipt, Bytes};
+use std::sync::Arc;
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

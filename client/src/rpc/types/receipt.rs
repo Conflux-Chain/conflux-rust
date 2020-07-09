@@ -2,16 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use serde_derive::Serialize;
-
+use crate::rpc::types::Log;
 use cfx_types::{Address, Bloom, H256, U256, U64};
 use cfxcore::{executive::contract_address, vm::CreateContractAddress};
 use primitives::{
     receipt::Receipt as PrimitiveReceipt, transaction::Action,
     SignedTransaction as PrimitiveTransaction, TransactionIndex,
 };
-
-use crate::rpc::types::Log;
+use serde_derive::Serialize;
 
 #[derive(Debug, Serialize, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]

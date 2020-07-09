@@ -2,13 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
-use jsonrpc_derive::rpc;
-
-use cfx_types::{H160, H256, U256, U64};
-
-use crate::rpc::types::BlockHashOrEpochNumber;
-
 use super::super::types::{
     Account as RpcAccount, Block, Bytes, CallRequest,
     CheckBalanceAgainstTransactionResponse, EpochNumber,
@@ -17,6 +10,10 @@ use super::super::types::{
     SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
     StorageRoot as RpcStorageRoot, Transaction,
 };
+use crate::rpc::types::BlockHashOrEpochNumber;
+use cfx_types::{H160, H256, U256, U64};
+use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
+use jsonrpc_derive::rpc;
 
 /// Cfx rpc interface.
 #[rpc(server)]

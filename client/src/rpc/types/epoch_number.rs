@@ -2,18 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::{fmt, str::FromStr};
-
-use serde::{
-    de::{Error, Visitor},
-    Deserialize, Deserializer, Serialize, Serializer,
-};
-
 use cfx_types::{H256, U64};
 use primitives::{
     BlockHashOrEpochNumber as PrimitiveBlockHashOrEpochNumber,
     EpochNumber as PrimitiveEpochNumber,
 };
+use serde::{
+    de::{Error, Visitor},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
+use std::{fmt, str::FromStr};
 
 /// Represents rpc api epoch number param.
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]

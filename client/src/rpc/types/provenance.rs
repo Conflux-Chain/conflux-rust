@@ -16,9 +16,8 @@
 
 //! Request Provenance
 
-use std::{fmt, net::SocketAddr};
-
 use cfx_types::H256;
+use std::{fmt, net::SocketAddr};
 
 /// RPC request origin
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

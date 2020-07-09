@@ -371,13 +371,11 @@ impl Header {
 
 #[cfg(test)]
 mod tests {
-    use keccak_hash::KECCAK_EMPTY_LIST_RLP;
-    use serde_json;
-
+    use super::{Block, BlockTransactions, Header};
     use crate::rpc::types::Transaction;
     use cfx_types::{H160, H256, U256};
-
-    use super::{Block, BlockTransactions, Header};
+    use keccak_hash::KECCAK_EMPTY_LIST_RLP;
+    use serde_json;
 
     #[test]
     fn test_serialize_block_transactions() {

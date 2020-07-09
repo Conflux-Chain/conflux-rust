@@ -2,12 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
-
-use jsonrpc_core::{BoxFuture, Error as JsonRpcError, Result as JsonRpcResult};
-use parking_lot::Mutex;
-use rlp::Rlp;
-
 use blockgen::BlockGenerator;
 use cfx_types::{address_util::AddressUtil, H160, H256, H520, U128, U256, U64};
 use cfxcore::{
@@ -21,16 +15,19 @@ use cfxcore::{
 };
 use cfxcore_accounts::AccountProvider;
 use delegate::delegate;
+use jsonrpc_core::{BoxFuture, Error as JsonRpcError, Result as JsonRpcResult};
 use network::{
     node_table::{Node, NodeId},
     throttling, SessionDetails, UpdateNodeOperation,
 };
+use parking_lot::Mutex;
 use primitives::{
     filter::Filter, transaction::Action::Call, Account, SignedTransaction,
     TransactionWithSignature,
 };
+use rlp::Rlp;
+use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
-
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
 use crate::{
     common::delegate_convert,
