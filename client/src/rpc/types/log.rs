@@ -82,7 +82,8 @@ mod tests {
 
     use serde_json;
 
-    use crate::rpc::types::{Log, H160, H256, U256};
+    use crate::rpc::types::Log;
+    use cfx_types::{H160, H256, U256};
 
     #[test]
     fn log_serialization() {

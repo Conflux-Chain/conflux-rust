@@ -89,7 +89,7 @@ mod tests {
     use rustc_hex::FromHex;
     use serde_json;
 
-    use cfx_types::{H160, U256};
+    use cfx_types::{H160, U256, U64};
 
     use super::CallRequest;
 
@@ -102,7 +102,7 @@ mod tests {
             "gas":"0x2",
             "value":"0x3",
             "data":"0x123456",
-            "storageLimit":123,
+            "storageLimit":"0x7b",
             "nonce":"0x4"
         }"#;
         let deserialized: CallRequest = serde_json::from_str(s).unwrap();
@@ -116,7 +116,7 @@ mod tests {
                 gas: Some(U256::from(2)),
                 value: Some(U256::from(3)),
                 data: Some(vec![0x12, 0x34, 0x56].into()),
-                storage_limit: Some(123),
+                storage_limit: Some(U64::from_str("7b").unwrap()),
                 nonce: Some(U256::from(4)),
             }
         );
@@ -130,7 +130,7 @@ mod tests {
             "gas": "0x76c0",
             "gasPrice": "0x9184e72a000",
             "value": "0x9184e72a",
-            "storageLimit":53758687,
+            "storageLimit":"0x3344adf",
             "data": "0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"
         }"#;
         let deserialized: CallRequest = serde_json::from_str(s).unwrap();
@@ -141,7 +141,7 @@ mod tests {
             gas_price: Some(U256::from_str("9184e72a000").unwrap()),
             gas: Some(U256::from_str("76c0").unwrap()),
             value: Some(U256::from_str("9184e72a").unwrap()),
-            storage_limit: Some(53758687),
+            storage_limit: Some(U64::from_str("3344adf").unwrap()),
             data: Some("d46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675".from_hex().unwrap().into()),
             nonce: None
         });
