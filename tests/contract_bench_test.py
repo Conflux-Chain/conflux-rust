@@ -312,14 +312,14 @@ class ContractBenchTest(SmartContractBenchBase):
         for i in range(5):
           data = contract.functions.rely(Web3.toChecksumAddress(self.pub[i])).buildTransaction(self.tx_conf)["data"]
           result = self.call_contract(self.sender, self.priv_key, contractAddr, data, 0, storage_limit=64)
-          assert_equal(result["outcomeStatus"], 0)
+          assert_equal(result["outcomeStatus"], "0x0")
 
         # deny 1, 3
         for i in range(5):
           if (i % 2 == 1):
             data = contract.functions.deny(Web3.toChecksumAddress(self.pub[i])).buildTransaction(self.tx_conf)["data"]
             result = self.call_contract(self.pub[i - 1], self.pri[i - 1], contractAddr, data, 0)
-            assert_equal(result["outcomeStatus"], 0)
+            assert_equal(result["outcomeStatus"], "0x0")
 
         # check wards
         for i in range(5):
@@ -350,17 +350,17 @@ class ContractBenchTest(SmartContractBenchBase):
         # insufficient balance
         data = contract.functions.transfer(self.sender_checksum, 200000).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.pub[0], self.pri[0], contractAddr, data, storage_limit=128)
-        assert(result["outcomeStatus"] != 0)
+        assert(result["outcomeStatus"] != "0x0")
 
         # insuffcient allowance 
         data = contract.functions.transferFrom(Web3.toChecksumAddress(self.pub[0]), self.sender_checksum, 10000).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.pub[1], self.pri[1], contractAddr, data, storage_limit=128)
-        assert(result["outcomeStatus"] != 0)
+        assert(result["outcomeStatus"] != "0x0")
 
         # transfer 50000 use allowance
         data = contract.functions.transferFrom(Web3.toChecksumAddress(self.pub[0]), Web3.toChecksumAddress(self.pub[1]), 50000).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data, storage_limit=64)
-        assert(result["outcomeStatus"] == 0)
+        assert(result["outcomeStatus"] == "0x0")
 
         # get digest and sign it
         ts = int(time.time()) + 7200
@@ -376,7 +376,7 @@ class ContractBenchTest(SmartContractBenchBase):
         # premit
         data = contract.functions.permit(Web3.toChecksumAddress(self.pub[0]), Web3.toChecksumAddress(self.pub[1]), 0, ts, True, v, r, s).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.pub[5], self.pri[5], contractAddr, data, storage_limit=128)
-        assert(result["outcomeStatus"] == 0)
+        assert(result["outcomeStatus"] == "0x0")
 
         # check allowance
         data = contract.functions.allowance(Web3.toChecksumAddress(self.pub[0]), self.sender_checksum).buildTransaction(self.tx_conf)["data"]
@@ -389,7 +389,7 @@ class ContractBenchTest(SmartContractBenchBase):
         # burn pub[0]
         data = contract.functions.burn(Web3.toChecksumAddress(self.pub[0]), 50000).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.pub[1], self.pri[1], contractAddr, data, storage_limit=64)
-        assert(result["outcomeStatus"] == 0)
+        assert(result["outcomeStatus"] == "0x0")
 
         # check balance
         data = contract.functions.balanceOf(Web3.toChecksumAddress(self.pub[0])).buildTransaction(self.tx_conf)["data"]
@@ -437,26 +437,26 @@ class ContractBenchTest(SmartContractBenchBase):
         self.tx_conf["to"] = dai_addr
         data = dai.functions.mint(Web3.toChecksumAddress(self.pub[0]), 100000).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, dai_addr, data, 0, storage_limit=128)
-        assert(result["outcomeStatus"] == 0)
+        assert(result["outcomeStatus"] == "0x0")
         data = dai.functions.approve(dai_join_addr, 100000).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.pub[0], self.pri[0], dai_addr, data, 0, storage_limit=64)
-        assert(result["outcomeStatus"] == 0)
+        assert(result["outcomeStatus"] == "0x0")
         data = dai.functions.allowance(Web3.toChecksumAddress(self.pub[0]), dai_join_addr).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(dai_addr, data)
         assert_equal(int(result, 0), 100000)
         data = dai.functions.rely(dai_join_addr).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, dai_addr, data, 0, storage_limit=64)
-        assert(result["outcomeStatus"] == 0)
+        assert(result["outcomeStatus"] == "0x0")
 
 
         # mint dai tokens for join_addr in vat & add approval
         self.tx_conf["to"] = vat_addr
         data = vat.functions.mint(dai_join_addr, 100000000000).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, vat_addr, data, 0, storage_limit=128)
-        assert(result["outcomeStatus"] == 0)
+        assert(result["outcomeStatus"] == "0x0")
         data = vat.functions.hope(dai_join_addr).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.pub[0], self.pri[0], vat_addr, data, 0, storage_limit=64)
-        assert(result["outcomeStatus"] == 0)
+        assert(result["outcomeStatus"] == "0x0")
         data = vat.functions.balanceOf(dai_join_addr).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(vat_addr, data)
         assert_equal(int(result, 0), 100000000000)
@@ -465,7 +465,7 @@ class ContractBenchTest(SmartContractBenchBase):
         self.tx_conf["to"] = dai_join_addr
         data = dai_join.functions.join(Web3.toChecksumAddress(self.pub[0]), 50000).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.pub[0], self.pri[0], dai_join_addr, data, 0, storage_limit=320)
-        assert(result["outcomeStatus"] == 0)
+        assert(result["outcomeStatus"] == "0x0")
 
         # check
         self.tx_conf["to"] = dai_addr
@@ -486,7 +486,7 @@ class ContractBenchTest(SmartContractBenchBase):
         self.tx_conf["to"] = dai_join_addr
         data = dai_join.functions.exit(Web3.toChecksumAddress(self.pub[0]), 50000).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.pub[0], self.pri[0], dai_join_addr, data, 0, storage_limit=128)
-        assert(result["outcomeStatus"] == 0)
+        assert(result["outcomeStatus"] == "0x0")
 
         # check
         self.tx_conf["to"] = dai_addr
