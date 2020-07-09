@@ -374,8 +374,8 @@ mod tests {
     use keccak_hash::KECCAK_EMPTY_LIST_RLP;
     use serde_json;
 
-    use cfx_types::{H160, H256, U256};
     use crate::rpc::types::Transaction;
+    use cfx_types::{H160, H256, U256};
 
     use super::{Block, BlockTransactions, Header};
 

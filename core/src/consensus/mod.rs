@@ -877,26 +877,19 @@ impl ConsensusGraph {
     fn filter_single_epoch<'a>(
         &'a self, filter: &'a Filter, bloom_possibilities: &'a Vec<Bloom>,
         epoch: u64,
-    ) -> impl ParallelIterator<Item = Result<LocalizedLogEntry, FilterError>> + 'a
+    ) -> Result<Vec<LocalizedLogEntry>, FilterError>
     {
         // retrieve epoch hashes and pivot hash
         let mut epoch_hashes =
-            match self.inner.read_recursive().block_hashes_by_epoch(epoch) {
-                Ok(hs) => hs,
-                Err(e) => {
-                    let error = Err(e.into());
-                    return rayon::iter::Either::Left(rayon::iter::once(error));
-                }
-            };
+            self.inner.read_recursive().block_hashes_by_epoch(epoch)?;
 
         let pivot_hash = *epoch_hashes.last().expect("Epoch set not empty");
 
         // process hashes in reverse order
         epoch_hashes.reverse();
 
-        let res = epoch_hashes
-            // process each block of this epoch in parallel
-            .into_par_iter()
+        epoch_hashes
+            .into_iter()
             .map(move |block_hash| {
                 self.filter_block(
                     &filter,
@@ -907,13 +900,13 @@ impl ConsensusGraph {
                 )
             })
             // flatten results
-            // ParIt<Result<Iterator<_>>> --> ParIt<Result<_>>
+            // Iterator<Result<Iterator<_>>> -> Iterator<Result<_>>
             .flat_map(|res| match res {
-                Ok(it) => rayon::iter::Either::Left(it.par_bridge().map(Ok)),
-                Err(e) => rayon::iter::Either::Right(rayon::iter::once(Err(e))),
-            });
-
-        rayon::iter::Either::Right(res)
+                Ok(it) => Either::Left(it.map(Ok)),
+                Err(e) => Either::Right(std::iter::once(Err(e))),
+            })
+            .take(filter.limit.unwrap_or(::std::usize::MAX))
+            .collect()
     }
 
     fn filter_epoch_batch(
@@ -947,11 +940,16 @@ impl ConsensusGraph {
             inner.get_pivot_hash_from_epoch_number(epochs[0])?,
         ));
 
-        epochs
+        let epoch_batch_logs = epochs
             .into_par_iter() // process each epoch of this batch in parallel
             .map(|e| self.filter_single_epoch(filter, bloom_possibilities, e))
+            .collect::<Result<Vec<Vec<LocalizedLogEntry>>, FilterError>>()?; // short-circuit on error
+
+        Ok(epoch_batch_logs
+            .into_iter()
             .flatten()
-            .collect() // short-circuit on error
+            .take(filter.limit.unwrap_or(::std::usize::MAX))
+            .collect())
     }
 
     pub fn get_filter_epoch_range(
@@ -1010,7 +1008,7 @@ impl ConsensusGraph {
             })
             // flatten results
             .flat_map(|res| match res {
-                Ok(it) => Either::Left(it.into_iter().map(Ok)),
+                Ok(vec) => Either::Left(vec.into_iter().map(Ok)),
                 Err(e) => Either::Right(std::iter::once(Err(e))),
             })
             // take as many as we need

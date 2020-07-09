@@ -14,7 +14,7 @@ from test_framework.util import *
 from test_framework.mininode import *
 
 CONTRACT_PATH = "../contracts/EventsTestContract_bytecode.dat"
-CALLED_TOPIC = encode_hex_0x(keccak(b"Called(address,uint32)"))
+FOO_TOPIC = encode_hex_0x(keccak(b"Foo(address,uint32)"))
 
 ARCHIVE_NODE = 0
 FULL_NODE = 1
@@ -85,14 +85,14 @@ class Issue1513Test(ConfluxTestFramework):
         assert_greater_than(latest_checkpoint, 0)
 
         # filtering the whole epoch range should fail on full nodes
-        filter = Filter(from_epoch="earliest", to_epoch="latest_state", topics=[CALLED_TOPIC])
+        filter = Filter(from_epoch="earliest", to_epoch="latest_state", topics=[FOO_TOPIC])
         logs_archive = self.rpc[ARCHIVE_NODE].get_logs(filter)
         assert_equal(len(logs_archive), num_events)
 
         assert_raises_rpc_error(None, None, self.rpc[FULL_NODE].get_logs, filter)
 
         # filtering since the latest checkpoint should yield the same result
-        filter = Filter(from_epoch="latest_checkpoint", to_epoch="latest_state", topics=[CALLED_TOPIC])
+        filter = Filter(from_epoch="latest_checkpoint", to_epoch="latest_state", topics=[FOO_TOPIC])
         logs_archive = self.rpc[ARCHIVE_NODE].get_logs(filter)
         assert_greater_than(len(logs_archive), 0)
 

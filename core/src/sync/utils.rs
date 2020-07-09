@@ -168,6 +168,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
     let vm = VmFactory::new(1024 * 32);
     let pow_config = ProofOfWorkConfig::new(
         true,  /* test_mode */
+        false, /* use_octopus_in_test_mode */
         false, /* use_stratum */
         Some(10),
         String::from(""), /* stratum_listen_addr */
@@ -198,7 +199,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
                                * execution */
             transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
             referee_bound: REFEREE_DEFAULT_BOUND,
-            get_logs_epoch_batch_size: 128,
+            get_logs_epoch_batch_size: 32,
         },
         vm.clone(),
         txpool.clone(),
