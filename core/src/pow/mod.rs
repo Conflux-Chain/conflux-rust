@@ -238,12 +238,6 @@ impl PowComputer {
             }
             keccak_hash(tmp)
         } else {
-            println!(
-                "header_hash: {:?}, block_height: {}, nonce: {}",
-                block_hash,
-                block_height,
-                nonce.low_u64()
-            );
             let light = self.cache_builder.light(block_height);
             light
                 .compute(block_hash.as_fixed_bytes(), nonce.low_u64())
