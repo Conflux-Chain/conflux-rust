@@ -52,8 +52,18 @@ impl CallStackInfo {
     }
 
     pub fn entrancy_happening_at_this_level(&self) -> bool {
-        self.last()
-            .and_then(|addr| self.address_depth_lookup_table.get(addr))
+        let current = self
+            .last()
+            .expect("The contract stack should not empty during execution");
+        let maybe_last =
+            self.call_stack_recipient_addresses.iter().rev().nth(1);
+        if let Some(last) = maybe_last {
+            if *current == *last {
+                return false;
+            }
+        }
+        self.address_depth_lookup_table
+            .get(current)
             .map_or(false, |x| x.len() > 1)
     }
 }
