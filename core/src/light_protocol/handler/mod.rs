@@ -5,9 +5,10 @@
 pub mod sync;
 
 use crate::{
+    channel::TryRecvError,
     consensus::SharedConsensusGraph,
     light_protocol::{
-        common::{validate_chain_id, FullPeerState, Peers},
+        common::{validate_chain_id, FullPeerState, LedgerInfo, Peers},
         handle_error,
         message::{
             msgid, BlockHashes as GetBlockHashesResponse,
@@ -25,11 +26,15 @@ use crate::{
     },
     message::{decode_msg, decode_rlp_and_check_deprecation, Message, MsgId},
     network::{NetworkContext, NetworkProtocolHandler},
-    parameters::light::{
-        CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, SYNC_PERIOD,
+    parameters::{
+        consensus::DEFERRED_STATE_EPOCH_COUNT,
+        light::{
+            BLAME_CHECK_OFFSET, CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD,
+            SYNC_PERIOD,
+        },
     },
     sync::{message::Throttled, SynchronizationGraph},
-    UniqueId,
+    Notifications, UniqueId,
 };
 use cfx_types::H256;
 use io::TimerToken;
@@ -37,7 +42,10 @@ use network::{node_table::NodeId, service::ProtocolVersion};
 use parking_lot::RwLock;
 use rlp::Rlp;
 use std::{
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 use sync::{
@@ -88,6 +96,9 @@ pub struct Handler {
     // state root sync manager
     pub state_roots: Arc<StateRoots>,
 
+    // whether the blame verification worker thread should be stopped
+    stopped: Arc<AtomicBool>,
+
     // tx sync manager
     pub txs: Arc<Txs>,
 
@@ -105,6 +116,7 @@ impl Handler {
     pub fn new(
         consensus: SharedConsensusGraph, graph: Arc<SynchronizationGraph>,
         throttling_config_file: Option<String>,
+        notifications: Arc<Notifications>,
     ) -> Self
     {
         let peers = Arc::new(Peers::new());
@@ -176,6 +188,15 @@ impl Handler {
             receipts.clone(),
         );
 
+        let stopped = Arc::new(AtomicBool::new(false));
+
+        Self::start_blame_verification_thread(
+            consensus.clone(),
+            notifications,
+            witnesses.clone(),
+            stopped.clone(),
+        );
+
         Handler {
             protocol_version: LIGHT_PROTOCOL_VERSION,
             block_txs,
@@ -187,11 +208,149 @@ impl Handler {
             receipts,
             state_entries,
             state_roots,
+            stopped,
             txs,
             tx_infos,
             throttling_config_file,
             witnesses,
         }
+    }
+
+    // start a standalone thread for pivot chain blame verification. this thread
+    // will step through the pivot chain headers one-by-one (received from
+    // `ConsensusExecutor`), retrieving the correct roots for blamed ones. if
+    // there is a pivot chain reorg, the corresponding headers will be processed
+    // again. this thread will be stopped once `Handler` is dropped.
+    fn start_blame_verification_thread(
+        consensus: SharedConsensusGraph, notifications: Arc<Notifications>,
+        witnesses: Arc<Witnesses>, stopped: Arc<AtomicBool>,
+    )
+    {
+        let ledger = LedgerInfo::new(consensus);
+        let mut receiver = notifications.epochs_ordered.subscribe();
+
+        // detach thread as we do not need to join it
+        let _handle = std::thread::Builder::new()
+            .name("Blame Verification Worker".into())
+            .spawn(move || {
+                let mut last_epoch_received = 0;
+                let mut next_epoch_to_process = 0;
+
+                loop {
+                    // `stopped` is set during Drop
+                    if stopped.load(Ordering::Relaxed) {
+                        break;
+                    }
+
+                    // receive epoch number and keep offset
+                    // we need to keep an offset so that we have enough headers to calculate the blame ratio
+                    let epoch = match receiver.try_recv() {
+                        Ok((e, _)) if e < BLAME_CHECK_OFFSET => continue,
+                        Ok((e, _)) => e - BLAME_CHECK_OFFSET,
+                        Err(TryRecvError::Closed) => return,
+                        Err(TryRecvError::Empty) => continue,
+                    };
+
+                    match epoch {
+                        // chain reorg => process again
+                        e if e <= last_epoch_received => {
+                            debug!("Chain reorg, re-processing epochs (e = {}, last_epoch_received = {})", e, last_epoch_received);
+                            last_epoch_received = e;
+                            next_epoch_to_process = e;
+
+                            // NOTE: we set `witnesses.latest_verified_header` at the end of the
+                            // loop, so outdated items retrieved previously should not be used.
+                        }
+
+                        // sanity check: epochs are sent in order, one-by-one
+                        e if e > last_epoch_received + 1 => {
+                            error!("Unexpected epoch number: e = {}, last_epoch_received = {}", e, last_epoch_received);
+                            assert!(false);
+                        }
+
+                        // epoch already handled through witness
+                        e if e < next_epoch_to_process => {
+                            debug!("Epoch already covered, skipping (e = {}, next_epoch_to_process = {})", e, next_epoch_to_process);
+                            last_epoch_received = e;
+                            continue;
+                        }
+
+                        // sanity check: no epochs are skipped
+                        e if e > next_epoch_to_process => {
+                            error!("Unexpected epoch number: e = {}, next_epoch_to_process = {}", e, next_epoch_to_process);
+                            assert!(false);
+                        }
+
+                        // e == last_epoch_received + 1
+                        // e == next_epoch_to_process
+                        e => {
+                            last_epoch_received = e;
+                        }
+                    }
+
+                    // convert epoch number into pivot height
+                    let height = epoch + DEFERRED_STATE_EPOCH_COUNT;
+
+                    // check blaming
+                    match ledger.witness_of_header_at(height) {
+                        // no witness found
+                        None => {
+                            error!("No witness found for epoch {} (height {})", epoch, height);
+
+                            // this can happen in two cases
+                            // (1) we are lagging behind so much that `height` is no longer maintained in memory.
+                            //     --> this seems unlikely.
+                            // (2) there are too many blamed blocks on the `BLAME_CHECK_OFFSET` suffix of the
+                            //     pivot chain so we cannot reliably determine the witness.
+                            //     --> this is also unlikely but can in theory happen.
+                            // TODO(thegaram): add retry logic for (2)
+                        }
+
+                        // header is not blamed (i.e. it is its own witness)
+                        Some(w) if w == height => {
+                            debug!("Epoch {} (height {}) is NOT blamed", epoch, height);
+
+                            let header = ledger.pivot_header_of(height).expect("pivot header should exist");
+
+                            // in case `w == height` but this header is also blaming previous headers,
+                            // we must have already requested the corresponding roots in a previous
+                            // iteration and skipped this header using `next_epoch_to_process`.
+                            assert_eq!(header.blame(), 0);
+
+                            // TODO(thegaram): storing roots of correct headers is redundant.
+                            // should we use a simple placeholder instead?
+                            witnesses.verified.write().insert(
+                                epoch,
+                                (
+                                    *header.deferred_state_root(),
+                                    *header.deferred_receipts_root(),
+                                    *header.deferred_logs_bloom_hash(),
+                                )
+                            );
+
+                            // continue from the next header on the pivot chain
+                            next_epoch_to_process = epoch + 1;
+                        }
+
+                        // header is blamed
+                        Some(w) => {
+                            debug!("Epoch {} (height {}) is blamed, requesting witness {}", epoch, height, w);
+
+                            // this request covers all blamed headers:
+                            // [height, height + 1, ..., w]
+                            witnesses.request(std::iter::once(w));
+
+                            // skip all subsequent headers requested
+                            assert!(w > DEFERRED_STATE_EPOCH_COUNT);
+                            let witness_epoch = w - DEFERRED_STATE_EPOCH_COUNT;
+                            next_epoch_to_process = witness_epoch + 1;
+                        }
+                    }
+
+                    *witnesses.latest_verified_header.write() = height;
+                }
+            })
+            .expect("Starting the Blame Verification Worker should succeed");
     }
 
     #[inline]
@@ -664,6 +823,10 @@ impl Handler {
 
         Ok(())
     }
+}
+
+impl Drop for Handler {
+    fn drop(&mut self) { self.stopped.store(true, Ordering::Relaxed); }
 }
 
 impl NetworkProtocolHandler for Handler {

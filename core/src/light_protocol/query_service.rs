@@ -17,6 +17,7 @@ use crate::{
     },
     rpc_errors::{account_result_to_rpc_result, Error as RpcError},
     sync::SynchronizationGraph,
+    Notifications,
 };
 use cfx_types::{BigEndianHash, Bloom, H160, H256, KECCAK_EMPTY_BLOOM, U256};
 use futures::{
@@ -83,12 +84,14 @@ impl QueryService {
     pub fn new(
         consensus: SharedConsensusGraph, graph: Arc<SynchronizationGraph>,
         network: Arc<NetworkService>, throttling_config_file: Option<String>,
+        notifications: Arc<Notifications>,
     ) -> Self
     {
         let handler = Arc::new(LightHandler::new(
             consensus.clone(),
             graph,
             throttling_config_file,
+            notifications,
         ));
         let ledger = LedgerInfo::new(consensus.clone());
 

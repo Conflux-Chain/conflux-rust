@@ -227,7 +227,8 @@ impl LedgerInfo {
     #[inline]
     pub fn witness_of_header_at(&self, height: u64) -> Option<u64> {
         self.consensus.first_trusted_header_starting_from(
-            height, None, /* blame_bound */
+            height,
+            Some(1000), /* blame_bound */
         )
     }
 

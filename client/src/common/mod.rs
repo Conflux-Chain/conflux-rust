@@ -131,6 +131,7 @@ pub fn initialize_common_modules(
         Arc<NetworkService>,
         Arc<CommonRpcImpl>,
         Arc<AccountProvider>,
+        Arc<Notifications>,
         PubSubClient,
         Runtime,
     ),
@@ -276,8 +277,11 @@ pub fn initialize_common_modules(
     ));
 
     let runtime = Runtime::with_default_thread_count();
-    let pubsub =
-        PubSubClient::new(runtime.executor(), consensus.clone(), notifications);
+    let pubsub = PubSubClient::new(
+        runtime.executor(),
+        consensus.clone(),
+        notifications.clone(),
+    );
     Ok((
         machine,
         secret_store,
@@ -289,6 +293,7 @@ pub fn initialize_common_modules(
         network,
         common_impl,
         accounts,
+        notifications,
         pubsub,
         runtime,
     ))
@@ -323,6 +328,7 @@ pub fn initialize_not_light_node_modules(
         network,
         common_impl,
         accounts,
+        _notifications,
         pubsub,
         runtime,
     ) = initialize_common_modules(&conf, exit.clone(), is_full_node)?;

@@ -6,7 +6,9 @@ use crate::UniqueId;
 use cfx_types::H256;
 use parking_lot::RwLock;
 use std::{collections::BTreeMap, sync::Arc};
-use tokio::sync::mpsc::{self, error::TryRecvError};
+use tokio::sync::mpsc;
+
+pub use tokio::sync::mpsc::error::TryRecvError;
 
 pub struct Receiver<T> {
     pub id: u64,

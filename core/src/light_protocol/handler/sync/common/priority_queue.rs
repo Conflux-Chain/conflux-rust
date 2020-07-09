@@ -111,7 +111,7 @@ mod tests {
         queue.push(Item::new(3, 3));
         queue.push(Item::new(4, 2));
 
-        // push items with dubplicate keys
+        // push items with duplicate keys
         queue.push(Item::new(0, 5));
         queue.push(Item::new(1, 9));
         queue.push(Item::new(2, 6));

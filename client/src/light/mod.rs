@@ -64,6 +64,7 @@ impl LightClient {
             network,
             common_impl,
             accounts,
+            notifications,
             pubsub,
             runtime,
         ) = initialize_common_modules(
@@ -77,6 +78,7 @@ impl LightClient {
             sync_graph,
             network.clone(),
             conf.raw_conf.throttling_conf.clone(),
+            notifications,
         ));
         light.register().unwrap();
 

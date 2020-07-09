@@ -1133,6 +1133,7 @@ impl ConsensusGraphInner {
 
         let total_vote_count = votes.len();
 
+        // TODO(thegaram): compute `total_vote_count` on non-past set, not on future
         total_blame_count as f64 / total_vote_count as f64
     }
 

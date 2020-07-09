@@ -11,15 +11,14 @@ use crate::{
     light_protocol::{
         common::{FullPeerState, LedgerInfo, Peers},
         message::{msgid, GetWitnessInfo, WitnessInfoWithHeight},
-        Error, ErrorKind,
+        Error,
     },
     message::{Message, RequestId},
     network::NetworkContext,
     parameters::{
         consensus::DEFERRED_STATE_EPOCH_COUNT,
         light::{
-            BLAME_CHECK_OFFSET, MAX_WITNESSES_IN_FLIGHT,
-            NUM_WAITING_WITNESSES_THRESHOLD, WITNESS_REQUEST_BATCH_SIZE,
+            MAX_WITNESSES_IN_FLIGHT, WITNESS_REQUEST_BATCH_SIZE,
             WITNESS_REQUEST_TIMEOUT,
         },
     },
@@ -40,11 +39,8 @@ struct Statistics {
 type MissingWitness = KeyReverseOrdered<u64>;
 
 pub struct Witnesses {
-    // shared consensus graph
-    consensus: SharedConsensusGraph,
-
     // latest header for which we have trusted information
-    latest_verified_header: RwLock<u64>,
+    pub latest_verified_header: RwLock<u64>,
 
     // helper API for retrieving ledger information
     ledger: LedgerInfo,
@@ -57,7 +53,7 @@ pub struct Witnesses {
 
     // roots received from full node
     // (state_root_hash, receipts_root_hash, logs_bloom_hash)
-    verified: RwLock<HashMap<u64, (H256, H256, H256)>>,
+    pub verified: RwLock<HashMap<u64, (H256, H256, H256)>>,
 }
 
 impl Witnesses {
@@ -73,7 +69,6 @@ impl Witnesses {
         let verified = RwLock::new(HashMap::new());
 
         Witnesses {
-            consensus,
             latest_verified_header,
             ledger,
             request_id_allocator,
@@ -214,105 +209,10 @@ impl Witnesses {
     pub fn sync(&self, io: &dyn NetworkContext) {
         debug!("witness sync statistics: {:?}", self.get_statistics());
 
-        if let Err(e) = self.verify_pivot_chain() {
-            warn!("Failed to verify pivot chain: {:?}", e);
-            return;
-        }
-
-        if let Err(e) = self.collect_witnesses() {
-            warn!("Failed to collect witnesses: {:?}", e);
-            return;
-        }
-
         self.sync_manager.sync(
             MAX_WITNESSES_IN_FLIGHT,
             WITNESS_REQUEST_BATCH_SIZE,
             |peer, witnesses| self.send_request(io, peer, witnesses),
         );
-    }
-
-    #[inline]
-    fn is_blamed(&self, height: u64) -> bool {
-        self.ledger.witness_of_header_at(height) != Some(height)
-    }
-
-    // a header is trusted if
-    //     a) it is not blamed (i.e. it is its own witness)
-    //     b) we have received and validated the corresponding root
-    #[inline]
-    fn is_header_trusted(&self, height: u64) -> bool {
-        let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
-        !self.is_blamed(height) || self.verified.read().contains_key(&epoch)
-    }
-
-    fn verify_pivot_chain(&self) -> Result<(), Error> {
-        let best = match self.consensus.best_epoch_number() {
-            epoch if epoch < BLAME_CHECK_OFFSET => return Ok(()),
-            epoch => epoch - BLAME_CHECK_OFFSET,
-        };
-
-        let mut latest = self.latest_verified_header.write();
-        let mut height = *latest + 1;
-
-        // iterate through all trusted pivot headers
-        // TODO(thegaram): consider chain-reorg
-        while height < best && self.is_header_trusted(height) {
-            trace!("header {} is valid", height);
-            let header = self.ledger.pivot_header_of(height)?;
-            let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
-
-            // for blamed and blaming blocks, we've stored the correct roots in
-            // the `on_witness_info` response handler
-            if !self.is_blamed(height) && header.blame() == 0 {
-                self.verified.write().insert(
-                    epoch,
-                    (
-                        *header.deferred_state_root(),
-                        *header.deferred_receipts_root(),
-                        *header.deferred_logs_bloom_hash(),
-                    ),
-                );
-            }
-
-            *latest = height;
-            height += 1;
-        }
-
-        Ok(())
-    }
-
-    fn collect_witnesses(&self) -> Result<(), Error> {
-        let best = match self.consensus.best_epoch_number() {
-            epoch if epoch < BLAME_CHECK_OFFSET => return Ok(()),
-            epoch => epoch - BLAME_CHECK_OFFSET,
-        };
-
-        let mut height = *self.latest_verified_header.read() + 1;
-
-        while height <= best
-            && self.sync_manager.num_waiting() < NUM_WAITING_WITNESSES_THRESHOLD
-        {
-            // header trusted
-            if !self.is_blamed(height) {
-                height += 1;
-                continue;
-            }
-
-            // header not trusted
-            let witness = match self.ledger.witness_of_header_at(height) {
-                Some(w) => w,
-                None => {
-                    warn!("Unable to get witness!");
-                    return Err(ErrorKind::InternalError.into());
-                }
-            };
-
-            debug!("header {} is NOT valid, witness: {}", height, witness);
-            self.request(std::iter::once(witness));
-
-            height = witness + 1;
-        }
-
-        Ok(())
     }
 }
