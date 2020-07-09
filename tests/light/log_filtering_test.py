@@ -18,7 +18,7 @@ from test_framework.util import *
 
 CONTRACT_PATH = "../contracts/EventsTestContract_bytecode.dat"
 CONSTRUCTED_TOPIC = encode_hex_0x(keccak(b"Constructed(address)"))
-CALLED_TOPIC = encode_hex_0x(keccak(b"Called(address,uint32)"))
+FOO_TOPIC = encode_hex_0x(keccak(b"Foo(address,uint32)"))
 NUM_CALLS = 20
 
 FULLNODE0 = 0
@@ -110,9 +110,9 @@ class LogFilteringTest(ConfluxTestFramework):
         # apply filter for specific topics
         self.log.info("testing filter topics...")
         self.check_filter(Filter(topics=[CONSTRUCTED_TOPIC]))
-        self.check_filter(Filter(topics=[CALLED_TOPIC]))
+        self.check_filter(Filter(topics=[FOO_TOPIC]))
         self.check_filter(Filter(topics=[None, self.address_to_topic(sender)]))
-        self.check_filter(Filter(topics=[CALLED_TOPIC, None, [self.number_to_topic(3), self.number_to_topic(4)]]))
+        self.check_filter(Filter(topics=[FOO_TOPIC, None, [self.number_to_topic(3), self.number_to_topic(4)]]))
 
         # apply filter with limit
         self.log.info("testing filter limit...")

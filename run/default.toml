@@ -416,7 +416,7 @@ jsonrpc_local_http_port=12539
 # Epoch batch size used in log filtering.
 # Larger batch sizes may improve performance but might also prevent consensus from making progress under high RPC load.
 #
-# get_logs_epoch_batch_size = 128
+# get_logs_epoch_batch_size = 32
 
 # Maximum number of transactions allowed for peers to send to a catch-up node.
 #
