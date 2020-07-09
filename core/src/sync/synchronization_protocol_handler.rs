@@ -973,6 +973,7 @@ impl SynchronizationProtocolHandler {
                 // A block might be loaded from db and sent to the local queue
                 // multiple times, but we should only process it and request its
                 // dependence once.
+                received_blocks.insert(hash);
                 continue;
             }
             if !task.requested.contains(&hash) {

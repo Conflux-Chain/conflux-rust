@@ -21,7 +21,7 @@
 				"type": "uint32"
 			}
 		],
-		"name": "Called",
+		"name": "Bar",
 		"type": "event"
 	},
 	{
@@ -42,6 +42,34 @@
 		],
 		"name": "Constructed",
 		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "by",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "uint32",
+				"name": "num",
+				"type": "uint32"
+			}
+		],
+		"name": "Foo",
+		"type": "event"
+	},
+	{
+		"constant": false,
+		"inputs": [],
+		"name": "bar",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
 	},
 	{
 		"constant": false,
