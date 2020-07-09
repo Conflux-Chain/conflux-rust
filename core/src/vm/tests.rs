@@ -237,4 +237,8 @@ impl Context for MockContext {
     ) -> bool {
         self.tracing
     }
+
+    fn is_reentrancy(&self, calling_address: &Address) -> bool {
+        unimplemented!()
+    }
 }

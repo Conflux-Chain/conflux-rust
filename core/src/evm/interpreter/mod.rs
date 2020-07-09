@@ -852,10 +852,10 @@ impl<Cost: CostType> Interpreter<Cost> {
                 };
                 let not_reentrancy_attack =
                     if context.is_reentrancy(recipient_address) {
-                        if in_size > 0 {
-                            false
+                        if in_size.is_zero() {
+                            call_gas <= Cost::from(context.spec().call_stipend)
                         } else {
-                            call_gas <= context.spec().call_stipend;
+                            false
                         }
                     } else {
                         true

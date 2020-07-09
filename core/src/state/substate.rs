@@ -7,9 +7,46 @@ use crate::evm::{CleanDustMode, Spec};
 use cfx_types::Address;
 use primitives::LogEntry;
 use std::{
+    cell::RefCell,
     collections::{HashMap, HashSet},
-    mem,
+    rc::Rc,
 };
+
+#[derive(Debug, Default)]
+pub struct CallStackInfo {
+    call_stack_recipient_addresses: Vec<Address>,
+    address_depth_lookup_table: HashMap<Address, Vec<usize>>,
+}
+
+impl CallStackInfo {
+    fn push(&mut self, address: Address) {
+        self.call_stack_recipient_addresses.push(address.clone());
+        let depth = self.call_stack_recipient_addresses.len();
+        self.address_depth_lookup_table
+            .entry(address)
+            .or_insert(Vec::new())
+            .push(depth);
+    }
+
+    fn pop(&mut self) -> Option<Address> {
+        let depth = self.call_stack_recipient_addresses.len();
+        let maybe_address = self.call_stack_recipient_addresses.pop();
+        if let Some(address) = &maybe_address {
+            let idx = self
+                .address_depth_lookup_table
+                .get_mut(address)
+                .map_or(None, |x| x.pop());
+            assert_eq!(Some(depth), idx);
+        }
+        maybe_address
+    }
+
+    pub fn contains_key(&self, key: &Address) -> bool {
+        self.address_depth_lookup_table
+            .get(key)
+            .map_or(false, |x| x.len() != 0)
+    }
+}
 
 /// State changes which should be applied in finalize,
 /// after transaction is fully executed.
@@ -32,41 +69,43 @@ pub struct Substate {
     /// Created contracts.
     pub contracts_created: Vec<Address>,
 
-    /// The following three variables are parts in params
-    /// other than substate. We implement them in substate
-    /// for performance. So they are not considered in accruing
-    /// operation.
+    /// The following two variables are parts in call params.
+    /// (Parameters in spec other than Params struct in code)
+    /// We implement them in substate for performance.
+    /// So they are not considered in accruing substate and
+    /// must be maintained carefully.
 
     /// Contracts called in call stack.
     /// Used to detect reentrancy.
     /// Passed from caller to callee when calling happens
     /// and passed back to caller when callee returns,
     /// through mem::swap.
-    pub contracts_in_callstack: HashMap<Address, u64>,
-    /// Reentrancy happens in current call
-    pub reentrancy_encountered: bool,
+    pub contracts_in_callstack: Rc<RefCell<CallStackInfo>>,
     /// Contract address in current call
     pub contract_address: Address,
 }
 
 impl Substate {
     /// Creates new substate.
-    pub fn new() -> Self {
+    pub fn new() -> Self { Substate::default() }
+
+    pub fn with_adding_contracts_to_call_stack(
+        contracts: Rc<RefCell<CallStackInfo>>, contract_address: Address,
+    ) -> Self {
         let mut substate = Substate::default();
-        substate.reentrancy_encountered = false;
+        substate.contracts_in_callstack = contracts;
+        substate
+            .contracts_in_callstack
+            .borrow_mut()
+            .push(contract_address.clone());
+        substate.contract_address = contract_address;
         substate
     }
 
-    pub fn with_contracts_in_callstack(
-        contracts: HashMap<Address, u64>, contract_address: Address,
-        reentrancy_encountered: bool,
-    ) -> Self
-    {
-        let mut substate = Substate::default();
-        substate.contracts_in_callstack = contracts;
-        substate.reentrancy_encountered = reentrancy_encountered;
-        substate.contract_address = contract_address;
-        substate
+    /// Called when substate is not dropped by accrue function.
+    #[inline]
+    pub fn pop_callstack(&mut self) {
+        self.contracts_in_callstack.borrow_mut().pop();
     }
 
     /// Merge secondary substate `s` into self, accruing each element
@@ -83,17 +122,6 @@ impl Substate {
         for (address, amount) in s.storage_released {
             *self.storage_released.entry(address).or_insert(0) += amount;
         }
-    }
-
-    pub fn pop_callstack_contract(&mut self, s: &mut Substate) {
-        let mut contract_in_callstack = HashMap::<Address, u64>::new();
-        mem::swap(&mut contract_in_callstack, &mut s.contracts_in_callstack);
-        if !s.reentrancy_encountered
-            && self.contract_address != s.contract_address
-        {
-            *contract_in_callstack.get_mut(&s.contract_address).expect("The current contract address should be in contract_in_callstack") -= 1;
-        }
-        self.contracts_in_callstack = contract_in_callstack;
     }
 
     /// Get the cleanup mode object from this.
