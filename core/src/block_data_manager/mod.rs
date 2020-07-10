@@ -647,7 +647,7 @@ impl BlockDataManager {
     }
 
     pub fn block_epoch_number(&self, hash: &H256) -> Option<u64> {
-        if hash == self.true_genesis.hash() {
+        if hash == &self.true_genesis.hash() {
             // True genesis is not executed and does not have an execution
             // result, so we need to process it specially.
             return Some(0);
