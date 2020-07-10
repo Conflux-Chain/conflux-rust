@@ -36,7 +36,7 @@ use std::{
     rc::Rc,
     sync::Arc,
 };
- 
+
 /// Returns new address created from address, nonce, and code hash
 pub fn contract_address(
     address_scheme: CreateContractAddress, sender: &Address, nonce: &U256,
