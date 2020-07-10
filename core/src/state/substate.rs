@@ -51,14 +51,15 @@ impl CallStackInfo {
             .map_or(false, |x| x.len() != 0)
     }
 
-    pub fn entrancy_happening_at_this_level(&self) -> bool {
+    pub fn is_reentrancy_at_this_level(&self) -> bool {
         let current = self
             .last()
             .expect("The contract stack should not empty during execution");
-        let maybe_last =
+        let maybe_caller =
             self.call_stack_recipient_addresses.iter().rev().nth(1);
-        if let Some(last) = maybe_last {
-            if *current == *last {
+        if let Some(caller) = maybe_caller {
+            if *current == *caller {
+                // Recursive call is not regarded as reentrancy.
                 return false;
             }
         }

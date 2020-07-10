@@ -647,7 +647,7 @@ impl<'a> CallCreateExecutive<'a> {
                         if unconfirmed_substate
                             .contracts_in_callstack
                             .borrow()
-                            .entrancy_happening_at_this_level()
+                            .is_reentrancy_at_this_level()
                         {
                             state.discard_checkpoint();
                             return Err(VmError::Reentrancy);
@@ -1045,6 +1045,9 @@ impl<'a> CallCreateExecutive<'a> {
                                     state,
                                     parent_substate,
                                 )));
+                                if let Some((_, _, Ok(_))) = &last_res {
+                                    parent_substate.pop_callstack();
+                                }
                             } else {
                                 let second_last = callstack.last_mut();
                                 let parent_substate = match second_last {
@@ -1057,6 +1060,9 @@ impl<'a> CallCreateExecutive<'a> {
                                     state,
                                     parent_substate,
                                 )));
+                                if let Some((_, _, Ok(_))) = &last_res {
+                                    parent_substate.pop_callstack();
+                                }
                             }
                         }
                         None => return val,
