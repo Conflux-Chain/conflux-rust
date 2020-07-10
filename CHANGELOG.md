@@ -35,7 +35,17 @@ before.
 
 ## Improvements
 
-- Unify all public rpc with hex number.
+- Unify all public rpc with hex number, the following fields from RPC will be changed from decimal to hexadecimal:
+    - BlameInfo.blame
+    - Block.blame
+    - CallRequest.storageLimit
+    - ConsensusGraphBlockState.blockStatus
+    - EpochNumber::Num
+    - Receipt.index
+    - Receipt.epochNumber
+    - Receipt.outcomeStatus
+    - Status.pending_tx_number
+    - SyncGraphBlockState.timestamp
 
 - Rename local rpc send_transaction with cfx_sendTransaction.
 
