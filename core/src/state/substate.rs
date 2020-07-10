@@ -15,28 +15,21 @@ use std::{
 #[derive(Debug, Default)]
 pub struct CallStackInfo {
     call_stack_recipient_addresses: Vec<Address>,
-    address_depth_lookup_table: HashMap<Address, Vec<usize>>,
+    address_counter: HashMap<Address, u32>,
 }
 
 impl CallStackInfo {
     fn push(&mut self, address: Address) {
         self.call_stack_recipient_addresses.push(address.clone());
-        let depth = self.call_stack_recipient_addresses.len();
-        self.address_depth_lookup_table
-            .entry(address)
-            .or_insert(Vec::new())
-            .push(depth);
+        *self.address_counter.entry(address).or_insert(0) += 1;
     }
 
     fn pop(&mut self) -> Option<Address> {
-        let depth = self.call_stack_recipient_addresses.len();
         let maybe_address = self.call_stack_recipient_addresses.pop();
         if let Some(address) = &maybe_address {
-            let idx = self
-                .address_depth_lookup_table
-                .get_mut(address)
-                .map_or(None, |x| x.pop());
-            assert_eq!(Some(depth), idx);
+            *self.address_counter.get_mut(address).expect(
+                "The lookup table should consistent with call stack",
+            ) -= 1;
         }
         maybe_address
     }
@@ -46,9 +39,7 @@ impl CallStackInfo {
     }
 
     pub fn contains_key(&self, key: &Address) -> bool {
-        self.address_depth_lookup_table
-            .get(key)
-            .map_or(false, |x| x.len() != 0)
+        self.address_counter.get(key).map_or(false, |x| *x > 0)
     }
 
     pub fn is_reentrancy_at_this_level(&self) -> bool {
@@ -63,9 +54,9 @@ impl CallStackInfo {
                 return false;
             }
         }
-        self.address_depth_lookup_table
-            .get(current)
-            .map_or(false, |x| x.len() > 1)
+        *self.address_counter.get(current).expect(
+            "Since `current` is in call stack, it must be in address_counter",
+        ) > 1
     }
 }
 
