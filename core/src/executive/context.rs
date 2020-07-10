@@ -437,27 +437,6 @@ impl<'a> ContextTrait for Context<'a> {
     ) {
         // TODO
     }
-
-    fn is_reentrancy(&self, calling_address: &Address) -> bool {
-        let current_address = self
-            .substate
-            .contracts_in_callstack
-            .borrow()
-            .last()
-            .expect("The contract call stack can not be empty during execution")
-            .clone();
-        let is_recursive_call = *calling_address == current_address;
-        let contract_in_callstack = self
-            .substate
-            .contracts_in_callstack
-            .borrow()
-            .contains_key(calling_address);
-        let has_code = self
-            .internal_contract_map
-            .contract(calling_address)
-            .is_none();
-        return !is_recursive_call && contract_in_callstack && has_code;
-    }
 }
 
 #[cfg(test)]

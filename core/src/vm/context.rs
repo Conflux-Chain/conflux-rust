@@ -181,7 +181,4 @@ pub trait Context {
 
     /// Check if running in static context.
     fn is_static(&self) -> bool;
-
-    /// Check if met reenterancy when calling an address.
-    fn is_reentrancy(&self, calling_address: &Address) -> bool;
 }
