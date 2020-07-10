@@ -44,7 +44,7 @@ before.
     - Receipt.index
     - Receipt.epochNumber
     - Receipt.outcomeStatus
-    - Status.pending_tx_number
+    - Status.pendingTxNumber
     - SyncGraphBlockState.timestamp
 
 - Rename local rpc send_transaction with cfx_sendTransaction.
