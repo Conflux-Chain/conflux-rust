@@ -53,7 +53,7 @@ pub struct CheckBalanceAgainstTransactionResponse {
 }
 
 pub fn sign_call(
-    epoch_height: u64, chain_id: u64, request: CallRequest,
+    epoch_height: u64, chain_id: u32, request: CallRequest,
 ) -> SignedTransaction {
     let max_gas = U256::from(500_000_000);
     let gas = min(request.gas.unwrap_or(max_gas), max_gas);

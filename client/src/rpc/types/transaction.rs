@@ -88,9 +88,9 @@ impl Transaction {
                         Some(address) => Action::Call(address.into()),
                     },
                     value: self.value.into(),
-                    storage_limit: self.storage_limit.as_usize() as u64,
-                    epoch_height: self.epoch_height.as_usize() as u64,
-                    chain_id: self.chain_id.as_usize() as u64,
+                    storage_limit: self.storage_limit.as_u64(),
+                    epoch_height: self.epoch_height.as_u64(),
+                    chain_id: self.chain_id.as_u32(),
                     data: self.data.into(),
                 },
                 v: self.v.as_usize() as u8,
@@ -122,7 +122,7 @@ pub struct SendTxRequest {
 
 impl SendTxRequest {
     pub fn sign_with(
-        self, best_epoch_height: u64, chain_id: u64, password: Option<String>,
+        self, best_epoch_height: u64, chain_id: u32, password: Option<String>,
         accounts: Arc<AccountProvider>,
     ) -> Result<TransactionWithSignature, String>
     {
@@ -143,8 +143,7 @@ impl SendTxRequest {
                 .epoch_height
                 .unwrap_or(best_epoch_height.into())
                 .as_usize() as u64,
-            chain_id: self.chain_id.unwrap_or(chain_id.into()).as_usize()
-                as u64,
+            chain_id: self.chain_id.unwrap_or(chain_id.into()).as_u32(),
             data: self.data.unwrap_or(Bytes::new(vec![])).into(),
         };
 

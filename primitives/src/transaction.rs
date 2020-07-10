@@ -32,7 +32,7 @@ pub enum TransactionError {
     /// Transaction is already imported to the queue
     AlreadyImported,
     /// Chain id in the transaction doesn't match the chain id of the network.
-    ChainIdMismatch { expected: u64, got: u64 },
+    ChainIdMismatch { expected: u32, got: u32 },
     /// Epoch height out of bound.
     EpochHeightOutOfBound {
         block_height: u64,
@@ -234,7 +234,7 @@ pub struct Transaction {
     /// TRANSACTION_EPOCH_BOUND, epoch_height + TRANSACTION_EPOCH_BOUND]
     pub epoch_height: u64,
     /// The chain id of the transaction
-    pub chain_id: u64,
+    pub chain_id: u32,
     /// Transaction data.
     pub data: Bytes,
 }
