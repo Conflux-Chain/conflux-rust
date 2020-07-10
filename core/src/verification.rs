@@ -237,7 +237,7 @@ impl VerificationConfig {
     /// should discard this block and all its descendants.
     #[inline]
     pub fn verify_block_basic(
-        &self, block: &Block, chain_id: u64,
+        &self, block: &Block, chain_id: u32,
     ) -> Result<(), Error> {
         self.verify_block_integrity(block)?;
 
@@ -310,7 +310,7 @@ impl VerificationConfig {
     }
 
     pub fn verify_transaction_in_block(
-        &self, tx: &TransactionWithSignature, chain_id: u64, block_height: u64,
+        &self, tx: &TransactionWithSignature, chain_id: u32, block_height: u64,
     ) -> Result<(), TransactionError> {
         self.verify_transaction_common(tx, chain_id)?;
         Self::verify_transaction_epoch_height(
@@ -321,7 +321,7 @@ impl VerificationConfig {
     }
 
     pub fn verify_transaction_common(
-        &self, tx: &TransactionWithSignature, chain_id: u64,
+        &self, tx: &TransactionWithSignature, chain_id: u32,
     ) -> Result<(), TransactionError> {
         tx.check_low_s()?;
 
