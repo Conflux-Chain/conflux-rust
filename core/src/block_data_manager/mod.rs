@@ -647,6 +647,11 @@ impl BlockDataManager {
     }
 
     pub fn block_epoch_number(&self, hash: &H256) -> Option<u64> {
+        if hash == &self.true_genesis.hash() {
+            // True genesis is not executed and does not have an execution
+            // result, so we need to process it specially.
+            return Some(0);
+        }
         self.block_execution_result_by_hash_from_db(&hash)
             .map(|execution_result| execution_result.0)
             .and_then(|pivot| self.block_header_by_hash(&pivot))
