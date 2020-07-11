@@ -1509,7 +1509,7 @@ fn test_storage_commission_privilege() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(
+            .collect_ownership_changed_and_settle(
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate,
@@ -1809,7 +1809,7 @@ fn test_storage_commission_privilege() {
     let mut substate = Substate::new();
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(
+            .collect_ownership_changed_and_settle(
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate,
