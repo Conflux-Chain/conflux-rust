@@ -32,7 +32,7 @@ pub enum TransactionError {
     /// Transaction is already imported to the queue
     AlreadyImported,
     /// Chain id in the transaction doesn't match the chain id of the network.
-    ChainIdMismatch { expected: u64, got: u64 },
+    ChainIdMismatch { expected: u32, got: u32 },
     /// Epoch height out of bound.
     EpochHeightOutOfBound {
         block_height: u64,
@@ -197,12 +197,12 @@ impl Encodable for Action {
 #[derive(Clone, Debug, Eq, RlpEncodable, RlpDecodable, PartialEq)]
 pub struct ChainIdParams {
     /// Preconfigured chain_id.
-    pub chain_id: u64,
+    pub chain_id: u32,
 }
 
 impl ChainIdParams {
     /// The function return the chain_id with given parameters
-    pub fn get_chain_id(&self, _epoch_number: u64) -> u64 { self.chain_id }
+    pub fn get_chain_id(&self, _epoch_number: u64) -> u32 { self.chain_id }
 }
 
 #[derive(
@@ -234,7 +234,7 @@ pub struct Transaction {
     /// TRANSACTION_EPOCH_BOUND, epoch_height + TRANSACTION_EPOCH_BOUND]
     pub epoch_height: u64,
     /// The chain id of the transaction
-    pub chain_id: u64,
+    pub chain_id: u32,
     /// Transaction data.
     pub data: Bytes,
 }

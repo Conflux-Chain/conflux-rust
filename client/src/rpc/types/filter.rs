@@ -6,7 +6,6 @@ use super::EpochNumber;
 use cfx_types::{H160, H256, U64};
 use jsonrpc_core::Error as RpcError;
 use primitives::filter::Filter as PrimitiveFilter;
-
 use serde::{
     de::{DeserializeOwned, Error},
     Deserialize, Deserializer, Serialize, Serializer,

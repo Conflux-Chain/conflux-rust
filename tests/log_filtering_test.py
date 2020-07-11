@@ -228,7 +228,7 @@ class LogFilteringTest(ConfluxTestFramework):
         tx = self.rpc.new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key, storage_limit=575)
         assert_equal(self.rpc.send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc.get_transaction_receipt(tx.hash_hex())
-        assert_equal(receipt["outcomeStatus"], 0)
+        assert_equal(receipt["outcomeStatus"], "0x0")
         address = receipt["contractCreated"]
         c1 = self.rpc.get_collateral_for_storage(sender)
         assert_equal(c1 - c0, 575 * 10 ** 18 // 1024)
@@ -240,7 +240,7 @@ class LogFilteringTest(ConfluxTestFramework):
         tx = self.rpc.new_contract_tx(receiver=contract, data_hex=data_hex, sender=sender, priv_key=priv_key, storage_limit=storage_limit)
         assert_equal(self.rpc.send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc.get_transaction_receipt(tx.hash_hex())
-        assert_equal(receipt["outcomeStatus"], 0)
+        assert_equal(receipt["outcomeStatus"], "0x0")
         c1 = self.rpc.get_collateral_for_storage(sender)
         assert_equal(c1 - c0, storage_limit * 10 ** 18 // 1024)
         return receipt

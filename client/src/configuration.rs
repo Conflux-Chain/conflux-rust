@@ -107,7 +107,7 @@ build_config! {
         // Genesis section.
         (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
         (anticone_penalty_ratio, (u64), ANTICONE_PENALTY_RATIO)
-        (chain_id, (Option<u64>), None)
+        (chain_id, (Option<u32>), None)
         // Snapshot Epoch Count is a consensus parameter. This flag overrides
         // the parameter, which only take effect in `dev` mode.
         (dev_snapshot_epoch_count, (u32), SNAPSHOT_EPOCHS_CAPACITY)
@@ -294,7 +294,7 @@ impl Configuration {
             Some(x) => x,
             // The default network id is 1 for historic reason. It doesn't
             // really matter.
-            None => self.raw_conf.chain_id.unwrap_or(1),
+            None => self.raw_conf.chain_id.unwrap_or(1) as u64,
         }
     }
 

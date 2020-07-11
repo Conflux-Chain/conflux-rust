@@ -118,7 +118,7 @@ impl ConsensusGraphStatistics {
 
 #[derive(Default, DeriveMallocSizeOf)]
 pub struct BestInformation {
-    pub chain_id: u64,
+    pub chain_id: u32,
     pub best_block_hash: H256,
     pub best_epoch_number: u64,
     pub current_difficulty: U256,
@@ -126,7 +126,7 @@ pub struct BestInformation {
 }
 
 impl BestInformation {
-    pub fn best_chain_id(&self) -> u64 { self.chain_id }
+    pub fn best_chain_id(&self) -> u32 { self.chain_id }
 }
 
 /// ConsensusGraph is a layer on top of SynchronizationGraph. A SyncGraph
@@ -1346,7 +1346,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
             .get_confirmed_epoch_num(std::u64::MAX)
     }
 
-    fn best_chain_id(&self) -> u64 {
+    fn best_chain_id(&self) -> u32 {
         self.best_info.read_recursive().best_chain_id()
     }
 
