@@ -71,6 +71,7 @@ struct StakingState {
     // This is the total number of CFX used as staking.
     total_staking_tokens: U256,
     // This is the total number of CFX used as collateral.
+    // This field should never be read during tx execution. (Can be updated)
     total_storage_tokens: U256,
     // This is the interest rate per block.
     interest_rate_per_block: U256,
@@ -235,7 +236,8 @@ impl State {
         Ok(CollateralCheckResult::Valid)
     }
 
-    // This function only returns valid or db error
+    /// This function updates the substate for storage collateral from cache (overlay account)
+    /// This function is idempotent. But it execution is cost.
     pub fn checkout_ownership_changed(
         &mut self, substate: &mut Substate,
     ) -> DbResult<CollateralCheckResult> {
