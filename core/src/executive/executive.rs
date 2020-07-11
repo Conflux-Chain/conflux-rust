@@ -395,13 +395,13 @@ impl<'a> CallCreateExecutive<'a> {
             Err(vm::Error::StateDbError(_)) => result,
             Ok(_) => {
                 let check_result = if is_bottom_ex {
-                    state.check_collateral_for_storage_finally(
+                    state.collect_ownership_changed_and_settle(
                         sender,
                         storage_limit,
                         &mut unconfirmed_substate,
                     )
                 } else {
-                    state.checkout_ownership_changed(&mut unconfirmed_substate)
+                    state.collect_ownership_changed(&mut unconfirmed_substate)
                 }?;
                 match check_result {
                     CollateralCheckResult::ExceedStorageLimit { .. } => {
@@ -588,13 +588,13 @@ impl<'a> CallCreateExecutive<'a> {
                         Err(e.into())
                     } else {
                         let cres = if depth == 0 {
-                            state.check_collateral_for_storage_finally(
+                            state.collect_ownership_changed_and_settle(
                                 &params.original_sender,
                                 &params.storage_limit_in_drip,
                                 &mut unconfirmed_substate,
                             )
                         } else {
-                            state.checkout_ownership_changed(
+                            state.collect_ownership_changed(
                                 &mut unconfirmed_substate,
                             )
                         };

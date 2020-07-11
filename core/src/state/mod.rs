@@ -190,7 +190,8 @@ impl State {
         index
     }
 
-    pub fn checkout_collateral_for_storage(
+    /// Charges or refund storage collateral and update `total_storage_tokens`. 
+    pub fn settle_collateral_for_storage(
         &mut self, addr: &Address,
     ) -> DbResult<CollateralCheckResult> {
         let (inc, sub) =
@@ -236,9 +237,10 @@ impl State {
         Ok(CollateralCheckResult::Valid)
     }
 
-    /// This function updates the substate for storage collateral from cache (overlay account)
-    /// This function is idempotent. But it execution is cost.
-    pub fn checkout_ownership_changed(
+    /// Collects the cache (`ownership_change` in `OverlayAccount`) of storage change
+    /// and write to substate and `storage_released`/`storage_collateralized` in overlay account.
+    // It is idempotent. But its execution is cost.
+    pub fn collect_ownership_changed(
         &mut self, substate: &mut Substate,
     ) -> DbResult<CollateralCheckResult> {
         let mut collateral_for_storage_sub = HashMap::new();
@@ -270,6 +272,8 @@ impl State {
                 }
             }
         }
+        /// TODO: the overlay account and substate seem store the same content, to be remove one of them.
+        /// TODO: But the current impl of suicide breaks this consistency, it may be changed later.
         for (addr, sub) in &collateral_for_storage_sub {
             self.require_exists(&addr, false)?
                 .add_unrefunded_storage_entries(*sub);
@@ -285,12 +289,12 @@ impl State {
         Ok(CollateralCheckResult::Valid)
     }
 
-    pub fn check_collateral_for_storage_finally(
+    pub fn collect_ownership_changed_and_settle(
         &mut self, storage_owner: &Address, storage_limit: &U256,
         substate: &mut Substate,
     ) -> DbResult<CollateralCheckResult>
     {
-        self.checkout_ownership_changed(substate)?;
+        self.collect_ownership_changed(substate)?;
 
         let touched_addresses =
             if let Some(checkpoint) = self.checkpoints.get_mut().last() {
@@ -300,7 +304,7 @@ impl State {
             };
         // No new addresses added to checkpoint in this for-loop.
         for address in touched_addresses.iter() {
-            match self.checkout_collateral_for_storage(address)? {
+            match self.settle_collateral_for_storage(address)? {
                 CollateralCheckResult::Valid => {}
                 res => return Ok(res),
             }

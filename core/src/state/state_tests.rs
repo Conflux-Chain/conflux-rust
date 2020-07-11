@@ -239,7 +239,7 @@ fn checkpoint_from_empty_get_storage_at() {
 
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(&a, &U256::MAX, &mut substate)
+            .collect_ownership_changed_and_settle(&a, &U256::MAX, &mut substate)
             .unwrap(),
         CollateralCheckResult::Valid
     );
@@ -294,7 +294,7 @@ fn checkpoint_from_empty_get_storage_at() {
 
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(&a, &U256::MAX, &mut substate)
+            .collect_ownership_changed_and_settle(&a, &U256::MAX, &mut substate)
             .unwrap(),
         CollateralCheckResult::Valid
     );
@@ -334,7 +334,7 @@ fn checkpoint_from_empty_get_storage_at() {
 
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(&a, &U256::MAX, &mut substate)
+            .collect_ownership_changed_and_settle(&a, &U256::MAX, &mut substate)
             .unwrap(),
         CollateralCheckResult::Valid
     );
@@ -395,7 +395,7 @@ fn checkpoint_get_storage_at() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(&a, &U256::MAX, &mut substate)
+            .collect_ownership_changed_and_settle(&a, &U256::MAX, &mut substate)
             .unwrap(),
         CollateralCheckResult::Valid
     );
@@ -508,7 +508,7 @@ fn checkpoint_get_storage_at() {
 
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(
+            .collect_ownership_changed_and_settle(
                 &contract_a,
                 &U256::MAX,
                 &mut substate
@@ -586,7 +586,7 @@ fn checkpoint_get_storage_at() {
 
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(
+            .collect_ownership_changed_and_settle(
                 &contract_a,
                 &U256::MAX,
                 &mut substate
@@ -652,7 +652,7 @@ fn checkpoint_get_storage_at() {
 
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(
+            .collect_ownership_changed_and_settle(
                 &contract_a,
                 &U256::MAX,
                 &mut substate
@@ -720,7 +720,7 @@ fn create_contract_fail() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(&a, &U256::MAX, &mut substate)
+            .collect_ownership_changed_and_settle(&a, &U256::MAX, &mut substate)
             .unwrap(),
         CollateralCheckResult::Valid
     );
@@ -761,7 +761,7 @@ fn create_contract_fail_previous_storage() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(&a, &U256::MAX, &mut substate)
+            .collect_ownership_changed_and_settle(&a, &U256::MAX, &mut substate)
             .unwrap(),
         CollateralCheckResult::Valid
     );
@@ -869,7 +869,7 @@ fn test_automatic_collateral_normal_account() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(
+            .collect_ownership_changed_and_settle(
                 &normal_account,
                 &U256::MAX,
                 &mut substate
@@ -904,7 +904,7 @@ fn test_automatic_collateral_normal_account() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(
+            .collect_ownership_changed_and_settle(
                 &normal_account,
                 &U256::MAX,
                 &mut substate
@@ -937,7 +937,7 @@ fn test_automatic_collateral_normal_account() {
         .unwrap();
     assert_ne!(
         state
-            .check_collateral_for_storage_finally(
+            .collect_ownership_changed_and_settle(
                 &normal_account,
                 &U256::MAX,
                 &mut substate
@@ -967,7 +967,7 @@ fn test_automatic_collateral_normal_account() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(
+            .collect_ownership_changed_and_settle(
                 &normal_account,
                 &U256::MAX,
                 &mut substate
@@ -1002,7 +1002,7 @@ fn test_automatic_collateral_normal_account() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(
+            .collect_ownership_changed_and_settle(
                 &normal_account,
                 &U256::MAX,
                 &mut substate
@@ -1036,7 +1036,7 @@ fn test_automatic_collateral_normal_account() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(
+            .collect_ownership_changed_and_settle(
                 &normal_account,
                 &U256::MAX,
                 &mut substate
@@ -1114,7 +1114,7 @@ fn test_automatic_collateral_contract_account() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(
+            .collect_ownership_changed_and_settle(
                 &contract_account,
                 &U256::MAX,
                 &mut substate
@@ -1148,7 +1148,7 @@ fn test_automatic_collateral_contract_account() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(
+            .collect_ownership_changed_and_settle(
                 &contract_account,
                 &U256::MAX,
                 &mut substate
@@ -1190,7 +1190,7 @@ fn test_automatic_collateral_contract_account() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(
+            .collect_ownership_changed_and_settle(
                 &contract_account,
                 &U256::MAX,
                 &mut substate
@@ -1230,7 +1230,7 @@ fn test_automatic_collateral_contract_account() {
 
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(
+            .collect_ownership_changed_and_settle(
                 &contract_account,
                 &U256::MAX,
                 &mut substate
@@ -1267,7 +1267,7 @@ fn test_automatic_collateral_contract_account() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(
+            .collect_ownership_changed_and_settle(
                 &contract_account,
                 &U256::MAX,
                 &mut substate
@@ -1302,7 +1302,7 @@ fn test_automatic_collateral_contract_account() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage_finally(
+            .collect_ownership_changed_and_settle(
                 &contract_account,
                 &U256::MAX,
                 &mut substate

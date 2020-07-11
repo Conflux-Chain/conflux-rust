@@ -33,8 +33,8 @@ pub fn suicide(
     spec: &Spec, substate: &mut Substate,
 ) -> vm::Result<()>
 {
-    state.checkout_ownership_changed(substate)?;
-    match state.checkout_collateral_for_storage(contract_address)? {
+    state.collect_ownership_changed(substate)?;
+    match state.settle_collateral_for_storage(contract_address)? {
         CollateralCheckResult::Valid => {}
         CollateralCheckResult::ExceedStorageLimit { .. } => unreachable!(),
         CollateralCheckResult::NotEnoughBalance { required, got } => {
