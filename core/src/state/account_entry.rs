@@ -66,7 +66,7 @@ pub struct OverlayAccount {
     // be returned to balance if the storage is released.
     collateral_for_storage: U256,
     // This is the accumulated interest return.
-        accumulated_interest_return: U256,
+    accumulated_interest_return: U256,
     // This is the list of deposit info, sorted in increasing order of
     // `deposit_time`.
     // If it is not `None`, which means it has been loaded from db.

@@ -51,7 +51,9 @@ use crate::{
     },
 };
 use bit_set::BitSet;
-use cfx_types::{Address, address_util::AddressUtil, BigEndianHash, H256, U256, U512};
+use cfx_types::{
+    address_util::AddressUtil, Address, BigEndianHash, H256, U256, U512,
+};
 use std::{cmp, convert::TryFrom, marker::PhantomData, mem, sync::Arc};
 
 const GASOMETER_PROOF: &str = "If gasometer is None, Err is immediately returned in step; this function is only called by step; qed";
@@ -900,8 +902,9 @@ impl<Cost: CostType> Interpreter<Cost> {
 
                 let valid_code_address = code_address.is_valid_address();
 
-                let can_call =
-                    has_balance && context.depth() < context.spec().max_depth && valid_code_address;
+                let can_call = has_balance
+                    && context.depth() < context.spec().max_depth
+                    && valid_code_address;
                 if !can_call {
                     self.stack.push(U256::zero());
                     return Ok(InstructionResult::UnusedGas(call_gas));
@@ -986,7 +989,11 @@ impl<Cost: CostType> Interpreter<Cost> {
             }
             instructions::SUICIDE => {
                 let address = self.stack.pop_back();
-                context.suicide(&u256_to_address(&address))?;
+                let mut refund_address = u256_to_address(&address);
+                if !refund_address.is_valid_address() {
+                    refund_address = self.params.address.clone();
+                }
+                context.suicide(&refund_address)?;
                 return Ok(InstructionResult::StopExecution);
             }
             instructions::LOG0
