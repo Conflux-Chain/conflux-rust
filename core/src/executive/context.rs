@@ -651,24 +651,24 @@ mod tests {
 
         // this should panic because we have no balance on any account
         ctx.call(
-            &"0000000000000000000000000000000000000000000000000000000000120000"
+        &"0000000000000000000000000000000000000000000000000000000000120000"
+            .parse::<U256>()
+            .unwrap(),
+        &Address::zero(),
+        &Address::zero(),
+        Some(
+            "0000000000000000000000000000000000000000000000000000000000150000"
                 .parse::<U256>()
                 .unwrap(),
-            &Address::zero(),
-            &Address::zero(),
-            Some(
-                "0000000000000000000000000000000000000000000000000000000000150000"
-                    .parse::<U256>()
-                    .unwrap(),
-            ),
-            &[],
-            &Address::zero(),
-            CallType::Call,
-            false,
-        )
+        ),
+        &[],
+        &Address::zero(),
+        CallType::Call,
+        false,
+    )
             .unwrap()
-            .ok()
-            .unwrap();
+    .ok()
+    .unwrap();
     }
 
     #[test]
@@ -831,8 +831,8 @@ mod tests {
             {
                 Ok(ContractCreateResult::Created(address, _)) => address,
                 _ => panic!(
-                    "Test create failed; expected Created, got Failed/Reverted."
-                ),
+                "Test create failed; expected Created, got Failed/Reverted."
+            ),
             }
         };
 
@@ -842,4 +842,5 @@ mod tests {
                 .unwrap()
         );
     }
+
 }
