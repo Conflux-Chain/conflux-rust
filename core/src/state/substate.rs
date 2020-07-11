@@ -43,7 +43,7 @@ impl CallStackInfo {
     }
 
     pub fn contains_key(&self, key: &Address) -> bool {
-        self.address_counter.get(key).map_or(false, |x| *x > 0)
+        self.address_counter.contains_key(key)
     }
 
     pub fn is_reentrancy_at_this_level(&self) -> bool {
