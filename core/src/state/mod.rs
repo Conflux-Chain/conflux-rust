@@ -273,9 +273,9 @@ impl State {
                 }
             }
         }
-        /// TODO: the overlay account and substate seem store the same content,
-        /// to be remove one of them. But the current impl of suicide breaks
-        /// this consistency, it may be changed later.
+        // TODO: the overlay account and substate seem store the same content,
+        // to be remove one of them. But the current impl of suicide breaks
+        // this consistency, it may be changed later.
         for (addr, sub) in &collateral_for_storage_sub {
             self.require_exists(&addr, false)?
                 .add_unrefunded_storage_entries(*sub);
