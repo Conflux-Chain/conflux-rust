@@ -33,6 +33,8 @@ before.
 
 - Changed RewardInfo struct to add author info.
 
+- Invalid address in transaction execution will trigger an error. 
+
 ## Improvements
 
 - Unify all public rpc with hex number, the following fields from RPC will be changed from decimal to hexadecimal:
