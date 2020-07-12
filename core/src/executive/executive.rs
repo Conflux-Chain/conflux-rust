@@ -274,6 +274,20 @@ impl<'a> CallCreateExecutive<'a> {
         }
     }
 
+    pub fn get_recipient(&self) -> &Address {
+        match &self.kind {
+            CallCreateExecutiveKind::ExecCall(params, _)
+            | CallCreateExecutiveKind::ExecCreate(params, _)
+            | CallCreateExecutiveKind::CallInternalContract(params, _)
+            | CallCreateExecutiveKind::Transfer(params)
+            | CallCreateExecutiveKind::CallBuiltin(params) => &params.address,
+            CallCreateExecutiveKind::ResumeCreate(origin, ..)
+            | CallCreateExecutiveKind::ResumeCall(origin, ..) => {
+                origin.recipient()
+            }
+        }
+    }
+
     fn check_static_flag(
         params: &ActionParams, static_flag: bool, is_create: bool,
     ) -> vm::Result<()> {
@@ -647,7 +661,7 @@ impl<'a> CallCreateExecutive<'a> {
                         if unconfirmed_substate
                             .contracts_in_callstack
                             .borrow()
-                            .is_reentrancy_at_this_level()
+                            .is_reentrancy_at_this_level(&params.address)
                         {
                             state.discard_checkpoint();
                             return Err(VmError::Reentrancy);
@@ -998,9 +1012,6 @@ impl<'a> CallCreateExecutive<'a> {
     ) -> vm::Result<FinalizationResult> {
         let mut last_res =
             Some((false, self.gas, self.exec(state, top_substate)));
-        if let Some((_, _, Ok(_))) = &last_res {
-            top_substate.pop_callstack();
-        }
 
         let mut callstack: Vec<(Option<Address>, CallCreateExecutive<'a>)> =
             Vec::new();
@@ -1008,7 +1019,9 @@ impl<'a> CallCreateExecutive<'a> {
         loop {
             match last_res {
                 None => {
-                    match callstack.pop() {
+                    let current = callstack.pop();
+                    top_substate.pop_callstack();
+                    match current {
                         Some((_, exec)) => {
                             let second_last = callstack.last_mut();
                             let parent_substate = match second_last {
@@ -1017,16 +1030,13 @@ impl<'a> CallCreateExecutive<'a> {
                             };
 
                             last_res = Some((exec.is_create, exec.gas, exec.exec(state, parent_substate)));
-
-                            if let Some((_, _, Ok(_))) = &last_res {
-                                parent_substate.pop_callstack();
-                            }
                         }
                         None => panic!("When callstack only had one item and it was executed, this function would return; callstack never reaches zero item; qed"),
                     }
                 }
                 Some((is_create, _gas, Ok(val))) => {
                     let current = callstack.pop();
+                    top_substate.pop_callstack();
 
                     match current {
                         Some((address, mut exec)) => {
@@ -1040,14 +1050,15 @@ impl<'a> CallCreateExecutive<'a> {
                                 };
 
                                 let contract_create_result = into_contract_create_result(val, &address, exec.unconfirmed_substate().expect("Executive is resumed from a create; it has an unconfirmed substate; qed"));
-                                last_res = Some((exec.is_create, exec.gas, exec.resume_create(
-                                    contract_create_result,
-                                    state,
-                                    parent_substate,
-                                )));
-                                if let Some((_, _, Ok(_))) = &last_res {
-                                    parent_substate.pop_callstack();
-                                }
+                                last_res = Some((
+                                    exec.is_create,
+                                    exec.gas,
+                                    exec.resume_create(
+                                        contract_create_result,
+                                        state,
+                                        parent_substate,
+                                    ),
+                                ));
                             } else {
                                 let second_last = callstack.last_mut();
                                 let parent_substate = match second_last {
@@ -1055,24 +1066,21 @@ impl<'a> CallCreateExecutive<'a> {
                                     None => top_substate,
                                 };
 
-                                last_res = Some((exec.is_create, exec.gas, exec.resume_call(
-                                    into_message_call_result(val),
-                                    state,
-                                    parent_substate,
-                                )));
-                                if let Some((_, _, Ok(_))) = &last_res {
-                                    parent_substate.pop_callstack();
-                                }
+                                last_res = Some((
+                                    exec.is_create,
+                                    exec.gas,
+                                    exec.resume_call(
+                                        into_message_call_result(val),
+                                        state,
+                                        parent_substate,
+                                    ),
+                                ));
                             }
                         }
                         None => return val,
                     }
                 }
-                Some((_, _, Err(TrapError::Call(subparams, mut resume)))) => {
-                    let substate = resume.unconfirmed_substate().unwrap();
-                    substate.push_callstack(subparams.address.clone());
-                    let contracts_in_callstack = substate.contracts_in_callstack.clone();
-
+                Some((_, _, Err(TrapError::Call(subparams, resume)))) => {
                     let sub_exec = CallCreateExecutive::new_call_raw(
                         subparams,
                         resume.env,
@@ -1083,18 +1091,21 @@ impl<'a> CallCreateExecutive<'a> {
                         resume.stack_depth,
                         resume.static_flag,
                         resume.internal_contract_map,
-                        contracts_in_callstack,
+                        top_substate.contracts_in_callstack.clone(),
                     );
 
+                    top_substate.push_callstack(resume.get_recipient().clone());
                     callstack.push((None, resume));
+                    top_substate
+                        .push_callstack(sub_exec.get_recipient().clone());
                     callstack.push((None, sub_exec));
                     last_res = None;
                 }
-                Some((_, _, Err(TrapError::Create(subparams, address, mut resume)))) => {
-                    let substate = resume.unconfirmed_substate().unwrap();
-                    substate.push_callstack(subparams.address.clone());
-                    let contracts_in_callstack = substate.contracts_in_callstack.clone();
-
+                Some((
+                    _,
+                    _,
+                    Err(TrapError::Create(subparams, address, resume)),
+                )) => {
                     let sub_exec = CallCreateExecutive::new_create_raw(
                         subparams,
                         resume.env,
@@ -1105,10 +1116,13 @@ impl<'a> CallCreateExecutive<'a> {
                         resume.stack_depth,
                         resume.static_flag,
                         resume.internal_contract_map,
-                        contracts_in_callstack,
+                        top_substate.contracts_in_callstack.clone(),
                     );
 
+                    top_substate.push_callstack(resume.get_recipient().clone());
                     callstack.push((Some(address), resume));
+                    top_substate
+                        .push_callstack(sub_exec.get_recipient().clone());
                     callstack.push((None, sub_exec));
                     last_res = None;
                 }
@@ -1197,7 +1211,6 @@ impl<'a> Executive<'a> {
         let _gas = params.gas;
 
         let vm_factory = self.state.vm_factory();
-        substate.push_callstack(_address);
         let result = CallCreateExecutive::new_create_raw(
             params,
             self.env,
@@ -1228,7 +1241,6 @@ impl<'a> Executive<'a> {
     {
         let vm_factory = self.state.vm_factory();
 
-        substate.push_callstack(params.address.clone());
         let result = CallCreateExecutive::new_call_raw(
             params,
             self.env,

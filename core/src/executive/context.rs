@@ -59,6 +59,8 @@ impl OriginInfo {
         }
     }
 
+    pub fn recipient(&self) -> &Address { &self.address }
+
     pub fn original_sender(&self) -> &Address { &self.original_sender }
 
     pub fn storage_limit(&self) -> &U256 { &self.storage_limit_in_drip }
