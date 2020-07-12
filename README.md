@@ -6,7 +6,7 @@ This version depends on rustc 1.42.0.
 
 ## Contribution
 
-Thank you for considering helping out with our source code. We appreciate any contributions, even the smallest fixes. Please read the [guideline](https://github.com/Conflux-Chain/conflux-rust/blob/master/CONTRIBUTE.md) on how to submit issues and pull requests. Note that if you want to propose significant changes to the Conflux protocol. Please submit a [CIP](https://github.com/Conflux-Chain/CIPs). 
+Thank you for considering helping out with our source code. We appreciate any contributions, even the smallest fixes. Please read the [guideline](https://github.com/Conflux-Chain/conflux-rust/blob/master/CONTRIBUTING.md) on how to submit issues and pull requests. Note that if you want to propose significant changes to the Conflux protocol. Please submit a [CIP](https://github.com/Conflux-Chain/CIPs). 
 
 ## Resources
 
