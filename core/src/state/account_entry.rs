@@ -730,12 +730,12 @@ impl OverlayAccount {
     /// value of the key is nonzero.
     fn original_ownership_at(
         &self, db: &StateDb, key: &Vec<u8>,
-    ) -> Option<Address> {
+    ) -> DbResult<Option<Address>> {
         if let Some(value) = self.ownership_cache.read().get(key) {
-            return value.clone();
+            return Ok(value.clone());
         }
         if self.is_newly_created_contract {
-            return None;
+            return Ok(None);
         }
         let ownership_cache = &mut *self.ownership_cache.write();
         Self::get_and_cache_storage(
@@ -745,9 +745,8 @@ impl OverlayAccount {
             &self.address,
             key,
             true, /* cache_ownership */
-        )
-        .ok();
-        ownership_cache.get(key).expect("key exists").clone()
+        )?;
+        Ok(ownership_cache.get(key).expect("key exists").clone())
     }
 
     /// Return the storage change of each related account.
@@ -757,7 +756,7 @@ impl OverlayAccount {
     /// account in current execution.
     pub fn commit_ownership_change(
         &mut self, db: &StateDb,
-    ) -> HashMap<Address, (u64, u64)> {
+    ) -> DbResult<HashMap<Address, (u64, u64)>> {
         let mut storage_delta = HashMap::new();
         let ownership_changes: Vec<_> =
             self.ownership_changes.drain().collect();
@@ -771,7 +770,7 @@ impl OverlayAccount {
             // Get the owner of `k` before execution. If it is `None`, it means
             // the value of the key is zero before execution. Otherwise, the
             // value of the key is nonzero.
-            let original_ownership_opt = self.original_ownership_at(db, &k);
+            let original_ownership_opt = self.original_ownership_at(db, &k)?;
             if let Some(original_ownership) = original_ownership_opt {
                 if v == original_ownership {
                     ownership_changed = false;
@@ -798,7 +797,7 @@ impl OverlayAccount {
             }
         }
         assert!(self.ownership_changes.is_empty());
-        storage_delta
+        Ok(storage_delta)
     }
 
     pub fn commit(

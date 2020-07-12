@@ -13,7 +13,7 @@ use crate::{
     hash::keccak,
     machine::Machine,
     parameters::staking::*,
-    state::{CleanupMode, CollateralCheckResult, State, Substate},
+    state::{CleanupMode, State, Substate},
     statedb::Result as DbResult,
     verification::VerificationConfig,
     vm::{
@@ -359,7 +359,6 @@ impl<'a> CallCreateExecutive<'a> {
     fn enact_result(
         result: vm::Result<FinalizationResult>, state: &mut State,
         substate: &mut Substate, mut unconfirmed_substate: Substate,
-        sender: &Address, storage_limit: &U256, is_bottom_ex: bool,
     ) -> vm::Result<FinalizationResult>
     {
         substate.pop_callstack_contract(&mut unconfirmed_substate);
@@ -394,37 +393,12 @@ impl<'a> CallCreateExecutive<'a> {
             // The whole epoch execution fails. No need to revert state.
             Err(vm::Error::StateDbError(_)) => result,
             Ok(_) => {
-                let check_result = if is_bottom_ex {
-                    state.collect_ownership_changed_and_settle(
-                        sender,
-                        storage_limit,
-                        &mut unconfirmed_substate,
-                    )
-                } else {
-                    state.collect_ownership_changed(&mut unconfirmed_substate)
-                }?;
-                match check_result {
-                    CollateralCheckResult::ExceedStorageLimit { .. } => {
-                        state.revert_to_checkpoint();
-                        Err(vm::Error::ExceedStorageLimit)
-                    }
-                    CollateralCheckResult::NotEnoughBalance {
-                        required,
-                        got,
-                    } => {
-                        state.revert_to_checkpoint();
-                        Err(vm::Error::NotEnoughBalanceForStorage {
-                            required,
-                            got,
-                        })
-                    }
-                    CollateralCheckResult::Valid => {
-                        state.discard_checkpoint();
-                        substate.accrue(unconfirmed_substate);
+                state.collect_ownership_changed(&mut unconfirmed_substate)?;
 
-                        result
-                    }
-                }
+                state.discard_checkpoint();
+                substate.accrue(unconfirmed_substate);
+
+                result
             }
         }
     }
@@ -551,7 +525,7 @@ impl<'a> CallCreateExecutive<'a> {
                 let spec = self.spec;
                 let internal_contract_map = self.internal_contract_map;
 
-                let inner = |depth| {
+                let inner = || {
                     if params.call_type != CallType::Call {
                         return Err(vm::Error::InternalContract(
                             "Incorrect call type.",
@@ -587,58 +561,27 @@ impl<'a> CallCreateExecutive<'a> {
                         state.revert_to_checkpoint();
                         Err(e.into())
                     } else {
-                        let cres = if depth == 0 {
-                            state.collect_ownership_changed_and_settle(
-                                &params.original_sender,
-                                &params.storage_limit_in_drip,
-                                &mut unconfirmed_substate,
-                            )
-                        } else {
-                            state.collect_ownership_changed(
-                                &mut unconfirmed_substate,
-                            )
-                        };
-                        match cres {
-                            Ok(CollateralCheckResult::ExceedStorageLimit {
-                                ..
-                            }) => {
-                                state.revert_to_checkpoint();
-                                Err(vm::Error::ExceedStorageLimit)
-                            }
-                            Ok(CollateralCheckResult::NotEnoughBalance {
-                                required,
-                                got,
-                            }) => {
-                                state.revert_to_checkpoint();
-                                Err(vm::Error::NotEnoughBalanceForStorage {
-                                    required,
-                                    got,
-                                })
-                            }
-                            Ok(CollateralCheckResult::Valid) => {
-                                state.discard_checkpoint();
-                                substate.accrue(unconfirmed_substate);
-                                let internal_contract_out_buffer = Vec::new();
-                                let out_len =
-                                    internal_contract_out_buffer.len();
-                                Ok(FinalizationResult {
-                                    gas_left: params.gas - gas_cost,
-                                    return_data: ReturnData::new(
-                                        internal_contract_out_buffer,
-                                        0,
-                                        out_len,
-                                    ),
-                                    apply_state: true,
-                                })
-                            }
-                            Err(_) => {
-                                panic!("db error occurred during execution");
-                            }
-                        }
+                        state.collect_ownership_changed(
+                            &mut unconfirmed_substate,
+                        )?;
+                        state.discard_checkpoint();
+                        substate.accrue(unconfirmed_substate);
+
+                        let internal_contract_out_buffer = Vec::new();
+                        let out_len = internal_contract_out_buffer.len();
+                        Ok(FinalizationResult {
+                            gas_left: params.gas - gas_cost,
+                            return_data: ReturnData::new(
+                                internal_contract_out_buffer,
+                                0,
+                                out_len,
+                            ),
+                            apply_state: true,
+                        })
                     }
                 };
 
-                Ok(inner(self.depth))
+                Ok(inner())
             }
 
             CallCreateExecutiveKind::ExecCall(
@@ -672,8 +615,6 @@ impl<'a> CallCreateExecutive<'a> {
                 }
 
                 let origin = OriginInfo::from(&params);
-                let sender = *origin.original_sender();
-                let storage_limit = *origin.storage_limit();
 
                 let out = if unconfirmed_substate.reentrancy_encountered {
                     Ok(Err(vm::Error::Reentrancy))
@@ -729,9 +670,6 @@ impl<'a> CallCreateExecutive<'a> {
                     state,
                     substate,
                     unconfirmed_substate,
-                    &sender,
-                    &storage_limit,
-                    self.depth == 0,
                 ))
             }
 
@@ -770,8 +708,6 @@ impl<'a> CallCreateExecutive<'a> {
                 }
 
                 let origin = OriginInfo::from(&params);
-                let sender = *origin.original_sender();
-                let storage_limit = *origin.storage_limit();
 
                 let out = if unconfirmed_substate.reentrancy_encountered {
                     Ok(Err(vm::Error::Reentrancy))
@@ -827,9 +763,6 @@ impl<'a> CallCreateExecutive<'a> {
                     state,
                     substate,
                     unconfirmed_substate,
-                    &sender,
-                    &storage_limit,
-                    self.depth == 0,
                 ))
             }
 
@@ -878,9 +811,6 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                let sender = *origin.original_sender();
-                let storage_limit = *origin.storage_limit();
-
                 let res = match out {
                     Ok(val) => val,
                     Err(TrapError::Call(subparams, resume)) => {
@@ -908,9 +838,6 @@ impl<'a> CallCreateExecutive<'a> {
                     state,
                     substate,
                     unconfirmed_substate,
-                    &sender,
-                    &storage_limit,
-                    self.depth == 0,
                 ))
             }
             CallCreateExecutiveKind::ResumeCreate(..) => {
@@ -938,9 +865,6 @@ impl<'a> CallCreateExecutive<'a> {
                 resume,
                 mut unconfirmed_substate,
             ) => {
-                let sender = *origin.original_sender();
-                let storage_limit = *origin.storage_limit();
-
                 let out = {
                     let exec = resume.resume_create(result);
 
@@ -994,9 +918,6 @@ impl<'a> CallCreateExecutive<'a> {
                     state,
                     substate,
                     unconfirmed_substate,
-                    &sender,
-                    &storage_limit,
-                    self.depth == 0,
                 ))
             }
             CallCreateExecutiveKind::ResumeCall(..) => {
@@ -1517,7 +1438,9 @@ impl<'a> Executive<'a> {
             )?;
         }
 
-        let (result, output) = match tx.action {
+        self.state.checkpoint();
+
+        let res = match tx.action {
             Action::Create => {
                 let (new_address, _code_hash) = contract_address(
                     CreateContractAddress::FromSenderNonceAndCodeHash,
@@ -1532,6 +1455,7 @@ impl<'a> Executive<'a> {
                 // future. We add this check just in case it
                 // helps in future.
                 if self.state.is_contract_with_code(&new_address) {
+                    self.state.revert_to_checkpoint();
                     return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                         ExecutionError::ContractAddressConflict,
                         Executed::execution_error_fully_charged(tx),
@@ -1554,12 +1478,7 @@ impl<'a> Executive<'a> {
                     params_type: vm::ParamsType::Embedded,
                     storage_limit_in_drip: total_storage_limit,
                 };
-                let res = self.create(params, &mut substate);
-                let out = match &res {
-                    Ok(res) => res.return_data.to_vec(),
-                    _ => Vec::new(),
-                };
-                (res, out)
+                self.create(params, &mut substate)
             }
             Action::Call(ref address) => {
                 let params = ActionParams {
@@ -1578,14 +1497,36 @@ impl<'a> Executive<'a> {
                     params_type: vm::ParamsType::Separate,
                     storage_limit_in_drip: total_storage_limit,
                 };
-
-                let res = self.call(params, &mut substate);
-                let out = match &res {
-                    Ok(res) => res.return_data.to_vec(),
-                    _ => Vec::new(),
-                };
-                (res, out)
+                self.call(params, &mut substate)
             }
+        };
+
+        let (result, output) = {
+            let res = res.and_then(|finalize_res| {
+                self.state
+                    .settle_collateral(
+                        &storage_owner,
+                        &total_storage_limit,
+                        &mut substate,
+                    )?
+                    .into_vm_result()
+                    .and(Ok(finalize_res))
+            });
+            let out = match &res {
+                Ok(res) => {
+                    self.state.discard_checkpoint();
+                    res.return_data.to_vec()
+                }
+                Err(vm::Error::StateDbError(_)) => {
+                    // The whole epoch execution fails. No need to revert state.
+                    Vec::new()
+                }
+                Err(_) => {
+                    self.state.revert_to_checkpoint();
+                    Vec::new()
+                }
+            };
+            (res, out)
         };
 
         let refund_receiver = if gas_free_of_charge {

@@ -4,7 +4,6 @@
 
 use super::super::InternalContractTrait;
 use crate::{
-    parameters::staking::*,
     state::{CollateralCheckResult, State, Substate},
     vm::{self, ActionParams, CallType, Spec},
 };
@@ -33,8 +32,10 @@ pub fn suicide(
     spec: &Spec, substate: &mut Substate,
 ) -> vm::Result<()>
 {
-    state.collect_ownership_changed(substate)?;
-    match state.settle_collateral_for_storage(contract_address)? {
+    match state.update_substate_suicide_and_settle_collateral(
+        substate,
+        contract_address,
+    )? {
         CollateralCheckResult::Valid => {}
         CollateralCheckResult::ExceedStorageLimit { .. } => unreachable!(),
         CollateralCheckResult::NotEnoughBalance { required, got } => {
@@ -58,8 +59,6 @@ pub fn suicide(
         let code_owner = state
             .code_owner(contract_address)?
             .expect("code owner exists");
-        let collateral_for_code = U256::from(code_size) * *COLLATERAL_PER_BYTE;
-        state.sub_collateral_for_storage(&code_owner, &collateral_for_code)?;
         *substate.storage_released.entry(code_owner).or_insert(0) +=
             code_size as u64;
     }
@@ -112,7 +111,6 @@ pub fn suicide(
             substate.to_cleanup_mode(spec),
         )?;
     }
-    substate.suicides.insert(*contract_address);
 
     Ok(())
 }

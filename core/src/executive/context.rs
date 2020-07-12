@@ -58,10 +58,6 @@ impl OriginInfo {
             },
         }
     }
-
-    pub fn original_sender(&self) -> &Address { &self.original_sender }
-
-    pub fn storage_limit(&self) -> &U256 { &self.storage_limit_in_drip }
 }
 
 /// Implementation of evm context.
@@ -347,10 +343,6 @@ impl<'a> ContextTrait for Context<'a> {
                     .storage_collateralized
                     .entry(self.origin.storage_owner)
                     .or_insert(0) += data.len() as u64;
-                self.state.add_collateral_for_storage(
-                    &self.origin.storage_owner,
-                    &collateral_for_code,
-                )?;
 
                 self.state.init_code(
                     &self.origin.address,

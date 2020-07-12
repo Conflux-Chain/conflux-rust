@@ -170,7 +170,6 @@ fn checkpoint_revert_to_get_storage_at() {
 #[test]
 fn checkpoint_from_empty_get_storage_at() {
     let storage_manager = new_state_manager_for_unit_test();
-    let mut substate = Substate::new();
     let mut state = get_state_for_genesis_write(&storage_manager);
     let mut a = Address::zero();
     a.set_contract_type_bits();
@@ -181,7 +180,11 @@ fn checkpoint_from_empty_get_storage_at() {
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
     state.clear();
 
+    let mut substates = Vec::<Substate>::new();
+    substates.push(Substate::new());
+
     let c0 = state.checkpoint();
+    substates.push(Substate::new());
     state.new_contract(&a, U256::zero(), U256::zero()).unwrap();
     state
         .set_sponsor_for_collateral(
@@ -203,14 +206,19 @@ fn checkpoint_from_empty_get_storage_at() {
         *COLLATERAL_PER_STORAGE_KEY * U256::from(2),
     );
     let c1 = state.checkpoint();
+    substates.push(Substate::new());
     state.set_storage(&a, k.clone(), U256::one(), a).unwrap();
     let c2 = state.checkpoint();
+    substates.push(Substate::new());
     let c3 = state.checkpoint();
+    substates.push(Substate::new());
     state.set_storage(&a, k2.clone(), U256::from(3), a).unwrap();
     state.set_storage(&a, k.clone(), U256::from(3), a).unwrap();
     let c4 = state.checkpoint();
+    substates.push(Substate::new());
     state.set_storage(&a, k.clone(), U256::from(4), a).unwrap();
     let c5 = state.checkpoint();
+    substates.push(Substate::new());
 
     assert_eq!(
         state.checkpoint_storage_at(c0, &a, &k).unwrap(),
@@ -239,11 +247,20 @@ fn checkpoint_from_empty_get_storage_at() {
 
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(&a, &U256::MAX, &mut substate)
+            .collect_and_settle_collateral(
+                &a,
+                &U256::MAX,
+                &mut substates.last_mut().unwrap()
+            )
             .unwrap(),
         CollateralCheckResult::Valid
     );
+    state
+        .collect_ownership_changed(&mut substates.last_mut().unwrap())
+        .unwrap();
     state.discard_checkpoint(); // Commit/discard c5.
+    let substate = substates.pop().unwrap();
+    substates.last_mut().unwrap().accrue(substate);
     assert_eq!(*state.total_storage_tokens(), U256::from(0));
     assert_eq!(state.collateral_for_storage(&a).unwrap(), U256::from(0));
     assert_eq!(state.balance(&a).unwrap(), U256::zero());
@@ -273,6 +290,7 @@ fn checkpoint_from_empty_get_storage_at() {
     );
 
     state.revert_to_checkpoint(); // Revert to c4.
+    substates.pop();
     assert_eq!(*state.total_storage_tokens(), U256::from(0));
     assert_eq!(state.collateral_for_storage(&a).unwrap(), U256::from(0));
     assert_eq!(
@@ -294,11 +312,21 @@ fn checkpoint_from_empty_get_storage_at() {
 
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(&a, &U256::MAX, &mut substate)
+            .collect_and_settle_collateral(
+                &a,
+                &U256::MAX,
+                &mut substates.last_mut().unwrap()
+            )
             .unwrap(),
         CollateralCheckResult::Valid
     );
+
+    state
+        .collect_ownership_changed(&mut substates.last_mut().unwrap())
+        .unwrap();
     state.discard_checkpoint(); // Commit/discard c3.
+    let substate = substates.pop().unwrap();
+    substates.last_mut().unwrap().accrue(substate);
     assert_eq!(
         *state.total_storage_tokens(),
         *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
@@ -321,6 +349,7 @@ fn checkpoint_from_empty_get_storage_at() {
     );
 
     state.revert_to_checkpoint(); // Revert to c2.
+    substates.pop();
     assert_eq!(*state.total_storage_tokens(), U256::from(0));
     assert_eq!(state.collateral_for_storage(&a).unwrap(), U256::from(0));
     assert_eq!(
@@ -334,11 +363,20 @@ fn checkpoint_from_empty_get_storage_at() {
 
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(&a, &U256::MAX, &mut substate)
+            .collect_and_settle_collateral(
+                &a,
+                &U256::MAX,
+                &mut substates.last_mut().unwrap()
+            )
             .unwrap(),
         CollateralCheckResult::Valid
     );
+    state
+        .collect_ownership_changed(&mut substates.last_mut().unwrap())
+        .unwrap();
     state.discard_checkpoint(); // Commit/discard c1.
+    let substate = substates.pop().unwrap();
+    substates.last_mut().unwrap().accrue(substate);
     assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
     assert_eq!(
         state.collateral_for_storage(&a).unwrap(),
@@ -358,7 +396,6 @@ fn checkpoint_from_empty_get_storage_at() {
 #[test]
 fn checkpoint_get_storage_at() {
     let storage_manager = new_state_manager_for_unit_test();
-    let mut substate = Substate::new();
     let mut state = get_state_for_genesis_write(&storage_manager);
     let mut a = Address::zero();
     a.set_user_account_type_bits();
@@ -368,7 +405,11 @@ fn checkpoint_get_storage_at() {
     let k = u256_to_vec(&U256::from(0));
     let k2 = u256_to_vec(&U256::from(1));
 
+    let mut substates = Vec::<Substate>::new();
+    substates.push(Substate::new());
+
     state.checkpoint();
+    substates.push(Substate::new());
     state
         .add_balance(
             &a,
@@ -395,11 +436,20 @@ fn checkpoint_get_storage_at() {
         .unwrap();
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(&a, &U256::MAX, &mut substate)
+            .collect_and_settle_collateral(
+                &a,
+                &U256::MAX,
+                &mut substates.last_mut().unwrap()
+            )
             .unwrap(),
         CollateralCheckResult::Valid
     );
+    state
+        .collect_ownership_changed(&mut substates.last_mut().unwrap())
+        .unwrap();
     state.discard_checkpoint();
+    let substate = substates.pop().unwrap();
+    substates.last_mut().unwrap().accrue(substate);
     assert_eq!(state.balance(&a).unwrap(), *COLLATERAL_PER_STORAGE_KEY,);
     assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
     assert_eq!(
@@ -410,6 +460,7 @@ fn checkpoint_get_storage_at() {
         .commit(BigEndianHash::from_uint(&U256::from(1u64)), None)
         .unwrap();
     state.clear();
+    substates.clear();
 
     state = get_state(
         &storage_manager,
@@ -430,8 +481,11 @@ fn checkpoint_get_storage_at() {
     );
     state.clear();
 
+    substates.push(Substate::new());
     let cm1 = state.checkpoint();
+    substates.push(Substate::new());
     let c0 = state.checkpoint();
+    substates.push(Substate::new());
     state
         .new_contract(&contract_a, U256::zero(), U256::zero())
         .unwrap();
@@ -460,11 +514,14 @@ fn checkpoint_get_storage_at() {
         U256::zero(),
     );
     let c1 = state.checkpoint();
+    substates.push(Substate::new());
     state
         .set_storage(&contract_a, k.clone(), U256::one(), contract_a)
         .unwrap();
     let c2 = state.checkpoint();
+    substates.push(Substate::new());
     let c3 = state.checkpoint();
+    substates.push(Substate::new());
     state
         .set_storage(&contract_a, k2.clone(), U256::from(3), contract_a)
         .unwrap();
@@ -472,10 +529,12 @@ fn checkpoint_get_storage_at() {
         .set_storage(&contract_a, k.clone(), U256::from(3), contract_a)
         .unwrap();
     let c4 = state.checkpoint();
+    substates.push(Substate::new());
     state
         .set_storage(&contract_a, k.clone(), U256::from(4), contract_a)
         .unwrap();
     let c5 = state.checkpoint();
+    substates.push(Substate::new());
 
     assert_eq!(
         state.checkpoint_storage_at(cm1, &contract_a, &k).unwrap(),
@@ -508,15 +567,20 @@ fn checkpoint_get_storage_at() {
 
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(
+            .collect_and_settle_collateral(
                 &contract_a,
                 &U256::MAX,
-                &mut substate
+                &mut substates.last_mut().unwrap()
             )
             .unwrap(),
         CollateralCheckResult::Valid
     );
+    state
+        .collect_ownership_changed(&mut substates.last_mut().unwrap())
+        .unwrap();
     state.discard_checkpoint(); // Commit/discard c5.
+    let substate = substates.pop().unwrap();
+    substates.last_mut().unwrap().accrue(substate);
     assert_eq!(state.balance(&contract_a).unwrap(), U256::zero());
     assert_eq!(
         state.sponsor_balance_for_collateral(&contract_a).unwrap(),
@@ -553,6 +617,7 @@ fn checkpoint_get_storage_at() {
     );
 
     state.revert_to_checkpoint(); // Revert to c4.
+    substates.pop();
     assert_eq!(state.balance(&contract_a).unwrap(), U256::zero());
     assert_eq!(
         state.sponsor_balance_for_collateral(&contract_a).unwrap(),
@@ -586,15 +651,20 @@ fn checkpoint_get_storage_at() {
 
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(
+            .collect_and_settle_collateral(
                 &contract_a,
                 &U256::MAX,
-                &mut substate
+                &mut substates.last_mut().unwrap()
             )
             .unwrap(),
         CollateralCheckResult::Valid
     );
+    state
+        .collect_ownership_changed(&mut substates.last_mut().unwrap())
+        .unwrap();
     state.discard_checkpoint(); // Commit/discard c3.
+    let substate = substates.pop().unwrap();
+    substates.last_mut().unwrap().accrue(substate);
 
     assert_eq!(state.balance(&contract_a).unwrap(), U256::zero());
     assert_eq!(
@@ -627,6 +697,7 @@ fn checkpoint_get_storage_at() {
     );
 
     state.revert_to_checkpoint(); // Revert to c2.
+    substates.pop();
     assert_eq!(state.balance(&contract_a).unwrap(), U256::zero());
     assert_eq!(
         state.sponsor_balance_for_collateral(&contract_a).unwrap(),
@@ -652,15 +723,20 @@ fn checkpoint_get_storage_at() {
 
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(
+            .collect_and_settle_collateral(
                 &contract_a,
                 &U256::MAX,
-                &mut substate
+                &mut substates.last_mut().unwrap()
             )
             .unwrap(),
         CollateralCheckResult::Valid
     );
+    state
+        .collect_ownership_changed(&mut substates.last_mut().unwrap())
+        .unwrap();
     state.discard_checkpoint(); // Commit/discard c1.
+    let substate = substates.pop().unwrap();
+    substates.last_mut().unwrap().accrue(substate);
     assert_eq!(state.balance(&contract_a).unwrap(), U256::zero());
     assert_eq!(
         state.sponsor_balance_for_collateral(&contract_a).unwrap(),
@@ -720,7 +796,7 @@ fn create_contract_fail() {
         .unwrap();
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(&a, &U256::MAX, &mut substate)
+            .collect_and_settle_collateral(&a, &U256::MAX, &mut substate)
             .unwrap(),
         CollateralCheckResult::Valid
     );
@@ -761,7 +837,7 @@ fn create_contract_fail_previous_storage() {
         .unwrap();
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(&a, &U256::MAX, &mut substate)
+            .collect_and_settle_collateral(&a, &U256::MAX, &mut substate)
             .unwrap(),
         CollateralCheckResult::Valid
     );
@@ -814,7 +890,6 @@ fn create_contract_fail_previous_storage() {
 #[test]
 fn test_automatic_collateral_normal_account() {
     let storage_manager = new_state_manager_for_unit_test();
-    let mut substate = Substate::new();
     let mut state = get_state_for_genesis_write(&storage_manager);
     let mut normal_account = Address::from_low_u64_be(0);
     normal_account.set_user_account_type_bits();
@@ -823,6 +898,9 @@ fn test_automatic_collateral_normal_account() {
     let k1 = u256_to_vec(&U256::from(0));
     let k2 = u256_to_vec(&U256::from(1));
     let k3 = u256_to_vec(&U256::from(3));
+
+    let mut substates = Vec::<Substate>::new();
+    substates.push(Substate::new());
 
     state
         .add_balance(
@@ -859,6 +937,7 @@ fn test_automatic_collateral_normal_account() {
 
     // simple set one key with zero value for normal account
     state.checkpoint();
+    substates.push(Substate::new());
     state
         .set_storage(
             &contract_account,
@@ -869,15 +948,20 @@ fn test_automatic_collateral_normal_account() {
         .unwrap();
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(
+            .collect_and_settle_collateral(
                 &normal_account,
                 &U256::MAX,
-                &mut substate
+                &mut substates.last_mut().unwrap()
             )
             .unwrap(),
         CollateralCheckResult::Valid
     );
+    state
+        .collect_ownership_changed(&mut substates.last_mut().unwrap())
+        .unwrap();
     state.discard_checkpoint();
+    let substate = substates.pop().unwrap();
+    substates.last_mut().unwrap().accrue(substate);
 
     assert_eq!(*state.total_storage_tokens(), U256::from(0));
     assert_eq!(
@@ -899,20 +983,26 @@ fn test_automatic_collateral_normal_account() {
 
     // simple set one key with nonzero value for normal account
     state.checkpoint();
+    substates.push(Substate::new());
     state
         .set_storage(&contract_account, k1.clone(), U256::one(), normal_account)
         .unwrap();
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(
+            .collect_and_settle_collateral(
                 &normal_account,
                 &U256::MAX,
-                &mut substate
+                &mut substates.last_mut().unwrap()
             )
             .unwrap(),
         CollateralCheckResult::Valid
     );
+    state
+        .collect_ownership_changed(&mut substates.last_mut().unwrap())
+        .unwrap();
     state.discard_checkpoint();
+    let substate = substates.pop().unwrap();
+    substates.last_mut().unwrap().accrue(substate);
     assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
     assert_eq!(
         state.collateral_for_storage(&normal_account).unwrap(),
@@ -929,6 +1019,8 @@ fn test_automatic_collateral_normal_account() {
 
     // test not sufficient balance
     state.checkpoint();
+    substates.push(Substate::new());
+
     state
         .set_storage(&contract_account, k2.clone(), U256::one(), normal_account)
         .unwrap();
@@ -937,10 +1029,10 @@ fn test_automatic_collateral_normal_account() {
         .unwrap();
     assert_ne!(
         state
-            .collect_ownership_changed_and_settle(
+            .collect_and_settle_collateral(
                 &normal_account,
                 &U256::MAX,
-                &mut substate
+                &mut substates.last_mut().unwrap()
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -962,20 +1054,27 @@ fn test_automatic_collateral_normal_account() {
 
     // use all balance
     state.checkpoint();
+    substates.push(Substate::new());
+
     state
         .set_storage(&contract_account, k2.clone(), U256::one(), normal_account)
         .unwrap();
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(
+            .collect_and_settle_collateral(
                 &normal_account,
                 &U256::MAX,
-                &mut substate
+                &mut substates.last_mut().unwrap()
             )
             .unwrap(),
         CollateralCheckResult::Valid
     );
+    state
+        .collect_ownership_changed(&mut substates.last_mut().unwrap())
+        .unwrap();
     state.discard_checkpoint();
+    let substate = substates.pop().unwrap();
+    substates.last_mut().unwrap().accrue(substate);
     assert_eq!(
         *state.total_storage_tokens(),
         *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
@@ -992,6 +1091,7 @@ fn test_automatic_collateral_normal_account() {
 
     // set one key to zero
     state.checkpoint();
+    substates.push(Substate::new());
     state
         .set_storage(
             &contract_account,
@@ -1002,15 +1102,20 @@ fn test_automatic_collateral_normal_account() {
         .unwrap();
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(
+            .collect_and_settle_collateral(
                 &normal_account,
                 &U256::MAX,
-                &mut substate
+                &mut substates.last_mut().unwrap()
             )
             .unwrap(),
         CollateralCheckResult::Valid
     );
+    state
+        .collect_ownership_changed(&mut substates.last_mut().unwrap())
+        .unwrap();
     state.discard_checkpoint();
+    let substate = substates.pop().unwrap();
+    substates.last_mut().unwrap().accrue(substate);
     assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
     assert_eq!(
         state.collateral_for_storage(&normal_account).unwrap(),
@@ -1026,6 +1131,7 @@ fn test_automatic_collateral_normal_account() {
     );
     // set another key to zero
     state.checkpoint();
+    substates.push(Substate::new());
     state
         .set_storage(
             &contract_account,
@@ -1036,15 +1142,20 @@ fn test_automatic_collateral_normal_account() {
         .unwrap();
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(
+            .collect_and_settle_collateral(
                 &normal_account,
                 &U256::MAX,
-                &mut substate
+                &mut substates.last_mut().unwrap()
             )
             .unwrap(),
         CollateralCheckResult::Valid
     );
+    state
+        .collect_ownership_changed(&mut substates.last_mut().unwrap())
+        .unwrap();
     state.discard_checkpoint();
+    let substate = substates.pop().unwrap();
+    substates.last_mut().unwrap().accrue(substate);
     assert_eq!(*state.total_storage_tokens(), U256::from(0));
     assert_eq!(
         state.collateral_for_storage(&normal_account).unwrap(),
@@ -1063,7 +1174,6 @@ fn test_automatic_collateral_normal_account() {
 #[test]
 fn test_automatic_collateral_contract_account() {
     let storage_manager = new_state_manager_for_unit_test();
-    let mut substate = Substate::new();
     let mut state = get_state_for_genesis_write(&storage_manager);
     let mut contract_account = Address::from_low_u64_be(1);
     contract_account.set_contract_type_bits();
@@ -1071,6 +1181,9 @@ fn test_automatic_collateral_contract_account() {
     let k1 = u256_to_vec(&U256::from(0));
     let k2 = u256_to_vec(&U256::from(1));
     let k3 = u256_to_vec(&U256::from(3));
+
+    let mut substates = Vec::<Substate>::new();
+    substates.push(Substate::new());
 
     state
         .new_contract(&contract_account, U256::zero(), U256::zero())
@@ -1104,6 +1217,7 @@ fn test_automatic_collateral_contract_account() {
 
     // simple set one key with zero value for contract account
     state.checkpoint();
+    substates.push(Substate::new());
     state
         .set_storage(
             &contract_account,
@@ -1114,15 +1228,16 @@ fn test_automatic_collateral_contract_account() {
         .unwrap();
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(
+            .collect_and_settle_collateral(
                 &contract_account,
                 &U256::MAX,
-                &mut substate
+                &mut substates.last_mut().unwrap()
             )
             .unwrap(),
         CollateralCheckResult::Valid
     );
     state.discard_checkpoint();
+    substates.pop();
     assert_eq!(*state.total_storage_tokens(), U256::from(0));
     assert_eq!(
         state.collateral_for_storage(&contract_account).unwrap(),
@@ -1138,6 +1253,7 @@ fn test_automatic_collateral_contract_account() {
 
     // simple set one key with nonzero value for contract account
     state.checkpoint();
+    substates.push(Substate::new());
     state
         .set_storage(
             &contract_account,
@@ -1148,15 +1264,21 @@ fn test_automatic_collateral_contract_account() {
         .unwrap();
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(
+            .collect_and_settle_collateral(
                 &contract_account,
                 &U256::MAX,
-                &mut substate
+                &mut substates.last_mut().unwrap()
             )
             .unwrap(),
         CollateralCheckResult::Valid
     );
+    state
+        .collect_ownership_changed(&mut substates.last_mut().unwrap())
+        .unwrap();
     state.discard_checkpoint();
+    let substate = substates.pop().unwrap();
+    substates.last_mut().unwrap().accrue(substate);
+
     assert_eq!(state.balance(&contract_account).unwrap(), U256::from(0));
     assert_eq!(
         state
@@ -1172,6 +1294,7 @@ fn test_automatic_collateral_contract_account() {
 
     // test not sufficient balance
     state.checkpoint();
+    substates.push(Substate::new());
     state
         .set_storage(
             &contract_account,
@@ -1190,10 +1313,10 @@ fn test_automatic_collateral_contract_account() {
         .unwrap();
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(
+            .collect_and_settle_collateral(
                 &contract_account,
                 &U256::MAX,
-                &mut substate
+                &mut substates.last_mut().unwrap()
             )
             .unwrap(),
         CollateralCheckResult::NotEnoughBalance {
@@ -1203,6 +1326,7 @@ fn test_automatic_collateral_contract_account() {
     );
 
     state.revert_to_checkpoint();
+    substates.pop();
 
     assert_eq!(state.balance(&contract_account).unwrap(), U256::from(0));
     assert_eq!(
@@ -1219,6 +1343,7 @@ fn test_automatic_collateral_contract_account() {
 
     // use all balance
     state.checkpoint();
+    substates.push(Substate::new());
     state
         .set_storage(
             &contract_account,
@@ -1230,15 +1355,20 @@ fn test_automatic_collateral_contract_account() {
 
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(
+            .collect_and_settle_collateral(
                 &contract_account,
                 &U256::MAX,
-                &mut substate
+                &mut substates.last_mut().unwrap()
             )
             .unwrap(),
         CollateralCheckResult::Valid,
     );
+    state
+        .collect_ownership_changed(&mut substates.last_mut().unwrap())
+        .unwrap();
     state.discard_checkpoint();
+    let substate = substates.pop().unwrap();
+    substates.last_mut().unwrap().accrue(substate);
     assert_eq!(state.balance(&contract_account).unwrap(), U256::from(0));
     assert_eq!(
         state
@@ -1257,6 +1387,7 @@ fn test_automatic_collateral_contract_account() {
 
     // set one key to zero
     state.checkpoint();
+    substates.push(Substate::new());
     state
         .set_storage(
             &contract_account,
@@ -1267,15 +1398,20 @@ fn test_automatic_collateral_contract_account() {
         .unwrap();
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(
+            .collect_and_settle_collateral(
                 &contract_account,
                 &U256::MAX,
-                &mut substate
+                &mut substates.last_mut().unwrap()
             )
             .unwrap(),
         CollateralCheckResult::Valid
     );
+    state
+        .collect_ownership_changed(&mut substates.last_mut().unwrap())
+        .unwrap();
     state.discard_checkpoint();
+    let substate = substates.pop().unwrap();
+    substates.last_mut().unwrap().accrue(substate);
     assert_eq!(state.balance(&contract_account).unwrap(), U256::from(0));
     assert_eq!(
         state
@@ -1292,6 +1428,7 @@ fn test_automatic_collateral_contract_account() {
 
     // set another key to zero
     state.checkpoint();
+    substates.push(Substate::new());
     state
         .set_storage(
             &contract_account,
@@ -1302,15 +1439,20 @@ fn test_automatic_collateral_contract_account() {
         .unwrap();
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(
+            .collect_and_settle_collateral(
                 &contract_account,
                 &U256::MAX,
-                &mut substate
+                &mut substates.last_mut().unwrap()
             )
             .unwrap(),
         CollateralCheckResult::Valid
     );
+    state
+        .collect_ownership_changed(&mut substates.last_mut().unwrap())
+        .unwrap();
     state.discard_checkpoint();
+    let substate = substates.pop().unwrap();
+    substates.last_mut().unwrap().accrue(substate);
     assert_eq!(state.balance(&contract_account).unwrap(), U256::from(0));
     assert_eq!(
         state
