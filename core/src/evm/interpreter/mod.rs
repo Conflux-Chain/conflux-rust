@@ -991,7 +991,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let address = self.stack.pop_back();
                 let mut refund_address = u256_to_address(&address);
                 if !refund_address.is_valid_address() {
-                    refund_address = self.params.address.clone();
+                    return Err(vm::Error::InvalidAddress(refund_address));
                 }
                 context.suicide(&refund_address)?;
                 return Ok(InstructionResult::StopExecution);
