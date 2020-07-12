@@ -812,13 +812,17 @@ fn create_contract_fail() {
 #[test]
 fn create_contract_fail_previous_storage() {
     let storage_manager = new_state_manager_for_unit_test();
-    let mut substate = Substate::new();
     let mut state = get_state_for_genesis_write(&storage_manager);
     let mut a = Address::from_low_u64_be(1000);
     a.set_user_account_type_bits();
     let k = u256_to_vec(&U256::from(0));
 
+    let mut substates = Vec::<Substate>::new();
+    substates.push(Substate::new());
+
     state.checkpoint();
+    substates.push(Substate::new());
+
     state
         .add_balance(&a, &COLLATERAL_PER_STORAGE_KEY, CleanupMode::NoEmpty)
         .unwrap();
@@ -837,11 +841,21 @@ fn create_contract_fail_previous_storage() {
         .unwrap();
     assert_eq!(
         state
-            .collect_and_settle_collateral(&a, &U256::MAX, &mut substate)
+            .collect_and_settle_collateral(
+                &a,
+                &U256::MAX,
+                &mut substates.last_mut().unwrap()
+            )
             .unwrap(),
         CollateralCheckResult::Valid
     );
+
+    state
+        .collect_ownership_changed(&mut substates.last_mut().unwrap())
+        .unwrap();
     state.discard_checkpoint();
+    let substate = substates.pop().unwrap();
+    substates.last_mut().unwrap().accrue(substate);
     assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
     assert_eq!(
         state.collateral_for_storage(&a).unwrap(),
@@ -852,6 +866,9 @@ fn create_contract_fail_previous_storage() {
         .commit(BigEndianHash::from_uint(&U256::from(1)), None)
         .unwrap();
     state.clear();
+    substates.clear();
+
+    substates.push(Substate::new());
 
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::from(0xffff));
     state.clear();
@@ -865,15 +882,19 @@ fn create_contract_fail_previous_storage() {
     assert_eq!(state.balance(&a).unwrap(), U256::from(0));
 
     state.checkpoint(); // c1
+    substates.push(Substate::new());
     state.new_contract(&a, U256::zero(), U256::zero()).unwrap();
     state.checkpoint(); // c2
+    substates.push(Substate::new());
     state.set_storage(&a, k.clone(), U256::from(2), a).unwrap();
-    state.revert_to_checkpoint(); // revert to c2
+    state.revert_to_checkpoint();
+    substates.pop(); // revert to c2
     assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
     assert_eq!(state.collateral_for_storage(&a).unwrap(), U256::from(0));
     assert_eq!(state.balance(&a).unwrap(), U256::from(0));
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
-    state.revert_to_checkpoint(); // revert to c1
+    state.revert_to_checkpoint();
+    substates.pop(); // revert to c1
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::from(0xffff));
     assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
     assert_eq!(
