@@ -383,6 +383,7 @@ impl<'a> CallCreateExecutive<'a> {
             | Err(vm::Error::MutableCallInStaticContext)
             | Err(vm::Error::OutOfBounds)
             | Err(vm::Error::Reverted)
+            | Err(vm::Error::InvalidAddress(..))
             | Ok(FinalizationResult {
                 apply_state: false, ..
             }) => {

@@ -989,7 +989,7 @@ impl<Cost: CostType> Interpreter<Cost> {
             }
             instructions::SUICIDE => {
                 let address = self.stack.pop_back();
-                let mut refund_address = u256_to_address(&address);
+                let refund_address = u256_to_address(&address);
                 if !refund_address.is_valid_address() {
                     return Err(vm::Error::InvalidAddress(refund_address));
                 }
