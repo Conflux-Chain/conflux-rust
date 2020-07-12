@@ -210,11 +210,11 @@ impl State {
     ) -> DbResult<CollateralCheckResult> {
         self.collect_ownership_changed(substate)?;
         substate.suicides.insert(suicide_address.clone());
-        self.settle_collateral_for_storage(suicide_address, substate)
+        self.settle_collateral_from_address(suicide_address, substate)
     }
 
     /// Charges or refund storage collateral and update `total_storage_tokens`.
-    fn settle_collateral_for_storage(
+    fn settle_collateral_from_address(
         &mut self, addr: &Address, substate: &Substate,
     ) -> DbResult<CollateralCheckResult> {
         let (inc, sub) = (
@@ -255,8 +255,7 @@ impl State {
     }
 
     /// Collects the cache (`ownership_change` in `OverlayAccount`) of storage
-    /// change and write to substate and
-    /// `storage_released`/`storage_collateralized` in overlay account.
+    /// change and write to substate.
     // It is idempotent. But its execution is cost.
     pub fn collect_ownership_changed(
         &mut self, substate: &mut Substate,
@@ -290,9 +289,6 @@ impl State {
                 }
             }
         }
-        // TODO: the overlay account and substate seem store the same content,
-        // to be remove one of them. But the current impl of suicide breaks
-        // this consistency, it may be changed later.
         for (addr, sub) in &collateral_for_storage_sub {
             *substate.storage_released.entry(*addr).or_insert(0) +=
                 sub * BYTES_PER_STORAGE_KEY;
@@ -304,6 +300,10 @@ impl State {
         return Ok(());
     }
 
+    /// Charge and refund all the storage collaterals.
+    /// The suisided addresses are skimmed because their collateral have been
+    /// checked out. This function should only be called in post-processing
+    /// of a transaction.
     pub fn settle_collateral(
         &mut self, storage_owner: &Address, storage_limit: &U256,
         substate: &mut Substate,
@@ -314,7 +314,7 @@ impl State {
             .iter()
             .filter(|&addr| !substate.suicides.contains(addr))
         {
-            match self.settle_collateral_for_storage(address, substate)? {
+            match self.settle_collateral_from_address(address, substate)? {
                 CollateralCheckResult::Valid => {}
                 res => return Ok(res),
             }
