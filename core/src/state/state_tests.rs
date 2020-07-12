@@ -461,6 +461,8 @@ fn checkpoint_get_storage_at() {
         .unwrap();
     state.clear();
     substates.clear();
+    substates.push(Substate::new());
+
 
     state = get_state(
         &storage_manager,
@@ -480,7 +482,7 @@ fn checkpoint_get_storage_at() {
         *COLLATERAL_PER_STORAGE_KEY
     );
     state.clear();
-
+    substates.clear();
     substates.push(Substate::new());
     let cm1 = state.checkpoint();
     substates.push(Substate::new());
@@ -865,13 +867,15 @@ fn create_contract_fail_previous_storage() {
     state
         .commit(BigEndianHash::from_uint(&U256::from(1)), None)
         .unwrap();
+    return;
     state.clear();
     substates.clear();
-
     substates.push(Substate::new());
 
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::from(0xffff));
     state.clear();
+    substates.clear();
+    substates.push(Substate::new());
     state =
         get_state(&storage_manager, BigEndianHash::from_uint(&U256::from(1)));
     assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);

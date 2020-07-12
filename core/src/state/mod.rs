@@ -294,14 +294,10 @@ impl State {
         // to be remove one of them. But the current impl of suicide breaks
         // this consistency, it may be changed later.
         for (addr, sub) in &collateral_for_storage_sub {
-            self.require_exists(&addr, false)?
-                .add_unrefunded_storage_entries(*sub);
             *substate.storage_released.entry(*addr).or_insert(0) +=
                 sub * BYTES_PER_STORAGE_KEY;
         }
         for (addr, inc) in &collateral_for_storage_inc {
-            self.require_exists(&addr, false)?
-                .add_unpaid_storage_entries(*inc);
             *substate.storage_collateralized.entry(*addr).or_insert(0) +=
                 inc * BYTES_PER_STORAGE_KEY;
         }
@@ -902,7 +898,7 @@ impl State {
     }
 
     #[allow(dead_code)]
-    fn touch(&mut self, address: &Address) -> DbResult<()> {
+    pub fn touch(&mut self, address: &Address) -> DbResult<()> {
         drop(self.require_exists(address, false)?);
         Ok(())
     }
