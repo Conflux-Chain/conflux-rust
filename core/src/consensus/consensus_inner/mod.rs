@@ -33,7 +33,7 @@ use primitives::{
 };
 use slab::Slab;
 use std::{
-    cmp::max,
+    cmp::{max, min},
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     convert::TryFrom,
     mem,
@@ -3144,10 +3144,13 @@ impl ConsensusGraphInner {
                 Some(last_lca) => *last_lca,
                 None => self.cur_era_genesis_block_arena_index,
             };
-            for i in self.timer_chain.len()..(fork_at_index + tmp_chain.len()) {
-                if i < self.inner_conf.timer_chain_beta as usize {
-                    continue;
-                }
+            let s = max(
+                self.timer_chain.len(),
+                self.inner_conf.timer_chain_beta as usize,
+            );
+            let e =
+                min(tmp_chain.len(), self.inner_conf.timer_chain_beta as usize);
+            for i in s..(fork_at_index + e) {
                 // `end` is the timer chain index of the end of
                 // `timer_chain_beta` consecutive blocks which
                 // we will compute accumulative lca.
