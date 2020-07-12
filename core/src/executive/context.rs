@@ -391,6 +391,10 @@ impl<'a> ContextTrait for Context<'a> {
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
+        if !refund_address.is_valid_address() {
+            return Err(vm::Error::InvalidAddress(*refund_address));
+        }
+
         suicide_impl(
             &self.origin.address,
             refund_address,

@@ -990,9 +990,6 @@ impl<Cost: CostType> Interpreter<Cost> {
             instructions::SUICIDE => {
                 let address = self.stack.pop_back();
                 let refund_address = u256_to_address(&address);
-                if !refund_address.is_valid_address() {
-                    return Err(vm::Error::InvalidAddress(refund_address));
-                }
                 context.suicide(&refund_address)?;
                 return Ok(InstructionResult::StopExecution);
             }
