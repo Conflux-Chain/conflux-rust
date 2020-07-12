@@ -463,7 +463,6 @@ fn checkpoint_get_storage_at() {
     substates.clear();
     substates.push(Substate::new());
 
-
     state = get_state(
         &storage_manager,
         BigEndianHash::from_uint(&U256::from(1u64)),
