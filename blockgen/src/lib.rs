@@ -197,7 +197,7 @@ impl BlockGenerator {
         let parent_height =
             self.graph.block_height_by_hash(&parent_hash).unwrap();
 
-        let parent_timestamp = 
+        let parent_timestamp =
             self.graph.block_timestamp_by_hash(&parent_hash).unwrap();
 
         trace!("{} txs packed", transactions.len());
