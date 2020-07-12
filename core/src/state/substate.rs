@@ -27,9 +27,10 @@ impl CallStackInfo {
     fn pop(&mut self) -> Option<Address> {
         let maybe_address = self.call_stack_recipient_addresses.pop();
         if let Some(address) = &maybe_address {
-            let poped_address_cnt = self.address_counter.get_mut(address).expect(
-                "The lookup table should consistent with call stack",
-            );
+            let poped_address_cnt = self
+                .address_counter
+                .get_mut(address)
+                .expect("The lookup table should consistent with call stack");
             *poped_address_cnt -= 1;
             if *poped_address_cnt == 0 {
                 self.address_counter.remove(address);
@@ -152,7 +153,7 @@ impl Substate {
 
 #[cfg(test)]
 mod tests {
-    use super::{Substate, CallStackInfo};
+    use super::{CallStackInfo, Substate};
     use cfx_types::Address;
     use primitives::LogEntry;
 
@@ -193,54 +194,52 @@ mod tests {
         assert_eq!(sub_state.suicides.len(), 1);
     }
 
-    fn get_test_address(n: u8) -> Address{
-        Address::from([n; 20])
-    }
+    fn get_test_address(n: u8) -> Address { Address::from([n; 20]) }
 
     #[test]
     fn test_callstack_info() {
         let mut call_stack = CallStackInfo::default();
         call_stack.push(get_test_address(1));
         call_stack.push(get_test_address(2));
-        assert_eq!(call_stack.pop(),Some(get_test_address(2)));
-        assert_eq!(call_stack.contains_key(&get_test_address(2)),false);
+        assert_eq!(call_stack.pop(), Some(get_test_address(2)));
+        assert_eq!(call_stack.contains_key(&get_test_address(2)), false);
 
         call_stack.push(get_test_address(3));
         call_stack.push(get_test_address(4));
         call_stack.push(get_test_address(3));
-        assert_eq!(call_stack.last().unwrap().clone(),get_test_address(3));
+        assert_eq!(call_stack.last().unwrap().clone(), get_test_address(3));
 
-        assert_eq!(call_stack.pop(),Some(get_test_address(3)));
-        assert_eq!(call_stack.contains_key(&get_test_address(3)),true);
-        assert_eq!(call_stack.last().unwrap().clone(),get_test_address(4));
+        assert_eq!(call_stack.pop(), Some(get_test_address(3)));
+        assert_eq!(call_stack.contains_key(&get_test_address(3)), true);
+        assert_eq!(call_stack.last().unwrap().clone(), get_test_address(4));
 
-        assert_eq!(call_stack.pop(),Some(get_test_address(4)));
-        assert_eq!(call_stack.contains_key(&get_test_address(4)),false);
-        assert_eq!(call_stack.last().unwrap().clone(),get_test_address(3));
+        assert_eq!(call_stack.pop(), Some(get_test_address(4)));
+        assert_eq!(call_stack.contains_key(&get_test_address(4)), false);
+        assert_eq!(call_stack.last().unwrap().clone(), get_test_address(3));
 
-        assert_eq!(call_stack.pop(),Some(get_test_address(3)));
-        assert_eq!(call_stack.contains_key(&get_test_address(3)),false);
-        assert_eq!(call_stack.last().unwrap().clone(),get_test_address(1));
+        assert_eq!(call_stack.pop(), Some(get_test_address(3)));
+        assert_eq!(call_stack.contains_key(&get_test_address(3)), false);
+        assert_eq!(call_stack.last().unwrap().clone(), get_test_address(1));
 
         call_stack.push(get_test_address(3));
         call_stack.push(get_test_address(4));
         call_stack.push(get_test_address(3));
-        assert_eq!(call_stack.last().unwrap().clone(),get_test_address(3));
+        assert_eq!(call_stack.last().unwrap().clone(), get_test_address(3));
 
-        assert_eq!(call_stack.pop(),Some(get_test_address(3)));
-        assert_eq!(call_stack.contains_key(&get_test_address(3)),true);
-        assert_eq!(call_stack.last().unwrap().clone(),get_test_address(4));
+        assert_eq!(call_stack.pop(), Some(get_test_address(3)));
+        assert_eq!(call_stack.contains_key(&get_test_address(3)), true);
+        assert_eq!(call_stack.last().unwrap().clone(), get_test_address(4));
 
-        assert_eq!(call_stack.pop(),Some(get_test_address(4)));
-        assert_eq!(call_stack.contains_key(&get_test_address(4)),false);
-        assert_eq!(call_stack.last().unwrap().clone(),get_test_address(3));
+        assert_eq!(call_stack.pop(), Some(get_test_address(4)));
+        assert_eq!(call_stack.contains_key(&get_test_address(4)), false);
+        assert_eq!(call_stack.last().unwrap().clone(), get_test_address(3));
 
-        assert_eq!(call_stack.pop(),Some(get_test_address(3)));
-        assert_eq!(call_stack.contains_key(&get_test_address(3)),false);
-        assert_eq!(call_stack.last().unwrap().clone(),get_test_address(1));
+        assert_eq!(call_stack.pop(), Some(get_test_address(3)));
+        assert_eq!(call_stack.contains_key(&get_test_address(3)), false);
+        assert_eq!(call_stack.last().unwrap().clone(), get_test_address(1));
 
-        assert_eq!(call_stack.pop(),Some(get_test_address(1)));
-        assert_eq!(call_stack.pop(),None);
-        assert_eq!(call_stack.last(),None);
+        assert_eq!(call_stack.pop(), Some(get_test_address(1)));
+        assert_eq!(call_stack.pop(), None);
+        assert_eq!(call_stack.last(), None);
     }
 }
