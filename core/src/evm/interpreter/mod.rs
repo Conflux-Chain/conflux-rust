@@ -902,9 +902,30 @@ impl<Cost: CostType> Interpreter<Cost> {
 
                 let valid_code_address = code_address.is_valid_address();
 
+                let recipient_address = match instruction {
+                    instructions::CALL | instructions::STATICCALL => {
+                        &code_address
+                    }
+                    instructions::CALLCODE | instructions::DELEGATECALL => {
+                        &self.params.address
+                    }
+                    _ => unreachable!(),
+                };
+                let not_reentrancy_attack =
+                    if context.is_reentrancy(recipient_address) {
+                        if in_size.is_zero() {
+                            call_gas <= Cost::from(context.spec().call_stipend)
+                        } else {
+                            false
+                        }
+                    } else {
+                        true
+                    };
+
                 let can_call = has_balance
                     && context.depth() < context.spec().max_depth
-                    && valid_code_address;
+                    && valid_code_address
+                    && not_reentrancy_attack;
                 if !can_call {
                     self.stack.push(U256::zero());
                     return Ok(InstructionResult::UnusedGas(call_gas));
