@@ -31,7 +31,10 @@ mod state_tests;
 mod account_entry;
 mod substate;
 
-pub use self::{account_entry::OverlayAccount, substate::Substate};
+pub use self::{
+    account_entry::OverlayAccount,
+    substate::{CallStackInfo, Substate},
+};
 use crate::evm::Spec;
 use parking_lot::{MappedRwLockWriteGuard, RwLock, RwLockWriteGuard};
 

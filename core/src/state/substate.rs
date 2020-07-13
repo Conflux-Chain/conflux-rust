@@ -7,9 +7,57 @@ use crate::evm::{CleanDustMode, Spec};
 use cfx_types::Address;
 use primitives::LogEntry;
 use std::{
+    cell::RefCell,
     collections::{HashMap, HashSet},
-    mem,
+    rc::Rc,
 };
+
+#[derive(Debug, Default)]
+pub struct CallStackInfo {
+    call_stack_recipient_addresses: Vec<Address>,
+    address_counter: HashMap<Address, u32>,
+}
+
+impl CallStackInfo {
+    fn push(&mut self, address: Address) {
+        self.call_stack_recipient_addresses.push(address.clone());
+        *self.address_counter.entry(address).or_insert(0) += 1;
+    }
+
+    fn pop(&mut self) -> Option<Address> {
+        let maybe_address = self.call_stack_recipient_addresses.pop();
+        if let Some(address) = &maybe_address {
+            let poped_address_cnt = self
+                .address_counter
+                .get_mut(address)
+                .expect("The lookup table should consistent with call stack");
+            *poped_address_cnt -= 1;
+            if *poped_address_cnt == 0 {
+                self.address_counter.remove(address);
+            }
+        }
+        maybe_address
+    }
+
+    pub fn last(&self) -> Option<&Address> {
+        self.call_stack_recipient_addresses.last()
+    }
+
+    pub fn contains_key(&self, key: &Address) -> bool {
+        self.address_counter.contains_key(key)
+    }
+
+    pub fn is_reentrancy_at_this_level(&self, callee: &Address) -> bool {
+        let maybe_caller = self.last();
+        if let Some(caller) = maybe_caller {
+            if *callee == *caller {
+                // Recursive call is not regarded as reentrancy.
+                return false;
+            }
+        }
+        self.contains_key(callee)
+    }
+}
 
 /// State changes which should be applied in finalize,
 /// after transaction is fully executed.
@@ -31,36 +79,38 @@ pub struct Substate {
     pub sstore_clears_refund: i128,
     /// Created contracts.
     pub contracts_created: Vec<Address>,
+
+    /// The following two variables are parts in call params.
+    /// (Parameters in spec other than Params struct in code)
+    /// We implement them in substate for performance.
+    /// So they are not considered in accruing substate and
+    /// must be maintained carefully.
+
     /// Contracts called in call stack.
     /// Used to detect reentrancy.
     /// Passed from caller to callee when calling happens
     /// and passed back to caller when callee returns,
     /// through mem::swap.
-    pub contracts_in_callstack: HashSet<Address>,
-    /// Reentrancy happens in current call
-    pub reentrancy_encountered: bool,
-    /// Contract address in current call
-    pub contract_address: Address,
+    pub contracts_in_callstack: Rc<RefCell<CallStackInfo>>,
 }
 
 impl Substate {
     /// Creates new substate.
-    pub fn new() -> Self {
+    pub fn new() -> Self { Substate::default() }
+
+    pub fn with_call_stack(callstack: Rc<RefCell<CallStackInfo>>) -> Self {
         let mut substate = Substate::default();
-        substate.reentrancy_encountered = false;
+        substate.contracts_in_callstack = callstack;
         substate
     }
 
-    pub fn with_contracts_in_callstack(
-        contracts: HashSet<Address>, contract_address: Address,
-        reentrancy_encountered: bool,
-    ) -> Self
-    {
-        let mut substate = Substate::default();
-        substate.contracts_in_callstack = contracts;
-        substate.reentrancy_encountered = reentrancy_encountered;
-        substate.contract_address = contract_address;
-        substate
+    pub fn push_callstack(&self, contract: Address) {
+        self.contracts_in_callstack.borrow_mut().push(contract);
+    }
+
+    #[inline]
+    pub fn pop_callstack(&self) {
+        self.contracts_in_callstack.borrow_mut().pop();
     }
 
     /// Merge secondary substate `s` into self, accruing each element
@@ -77,17 +127,6 @@ impl Substate {
         for (address, amount) in s.storage_released {
             *self.storage_released.entry(address).or_insert(0) += amount;
         }
-    }
-
-    pub fn pop_callstack_contract(&mut self, s: &mut Substate) {
-        let mut contract_in_callstack = HashSet::<Address>::new();
-        mem::swap(&mut contract_in_callstack, &mut s.contracts_in_callstack);
-        if !s.reentrancy_encountered
-            && self.contract_address != s.contract_address
-        {
-            contract_in_callstack.remove(&s.contract_address);
-        }
-        self.contracts_in_callstack = contract_in_callstack;
     }
 
     /// Get the cleanup mode object from this.
@@ -108,7 +147,7 @@ impl Substate {
 
 #[cfg(test)]
 mod tests {
-    use super::Substate;
+    use super::{CallStackInfo, Substate};
     use cfx_types::Address;
     use primitives::LogEntry;
 
@@ -147,5 +186,54 @@ mod tests {
         assert_eq!(sub_state.contracts_created.len(), 2);
         assert_eq!(sub_state.sstore_clears_refund, (15000 * 12).into());
         assert_eq!(sub_state.suicides.len(), 1);
+    }
+
+    fn get_test_address(n: u8) -> Address { Address::from([n; 20]) }
+
+    #[test]
+    fn test_callstack_info() {
+        let mut call_stack = CallStackInfo::default();
+        call_stack.push(get_test_address(1));
+        call_stack.push(get_test_address(2));
+        assert_eq!(call_stack.pop(), Some(get_test_address(2)));
+        assert_eq!(call_stack.contains_key(&get_test_address(2)), false);
+
+        call_stack.push(get_test_address(3));
+        call_stack.push(get_test_address(4));
+        call_stack.push(get_test_address(3));
+        assert_eq!(call_stack.last().unwrap().clone(), get_test_address(3));
+
+        assert_eq!(call_stack.pop(), Some(get_test_address(3)));
+        assert_eq!(call_stack.contains_key(&get_test_address(3)), true);
+        assert_eq!(call_stack.last().unwrap().clone(), get_test_address(4));
+
+        assert_eq!(call_stack.pop(), Some(get_test_address(4)));
+        assert_eq!(call_stack.contains_key(&get_test_address(4)), false);
+        assert_eq!(call_stack.last().unwrap().clone(), get_test_address(3));
+
+        assert_eq!(call_stack.pop(), Some(get_test_address(3)));
+        assert_eq!(call_stack.contains_key(&get_test_address(3)), false);
+        assert_eq!(call_stack.last().unwrap().clone(), get_test_address(1));
+
+        call_stack.push(get_test_address(3));
+        call_stack.push(get_test_address(4));
+        call_stack.push(get_test_address(3));
+        assert_eq!(call_stack.last().unwrap().clone(), get_test_address(3));
+
+        assert_eq!(call_stack.pop(), Some(get_test_address(3)));
+        assert_eq!(call_stack.contains_key(&get_test_address(3)), true);
+        assert_eq!(call_stack.last().unwrap().clone(), get_test_address(4));
+
+        assert_eq!(call_stack.pop(), Some(get_test_address(4)));
+        assert_eq!(call_stack.contains_key(&get_test_address(4)), false);
+        assert_eq!(call_stack.last().unwrap().clone(), get_test_address(3));
+
+        assert_eq!(call_stack.pop(), Some(get_test_address(3)));
+        assert_eq!(call_stack.contains_key(&get_test_address(3)), false);
+        assert_eq!(call_stack.last().unwrap().clone(), get_test_address(1));
+
+        assert_eq!(call_stack.pop(), Some(get_test_address(1)));
+        assert_eq!(call_stack.pop(), None);
+        assert_eq!(call_stack.last(), None);
     }
 }
