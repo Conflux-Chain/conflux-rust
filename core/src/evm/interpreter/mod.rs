@@ -912,7 +912,12 @@ impl<Cost: CostType> Interpreter<Cost> {
                     _ => unreachable!(),
                 };
                 let not_reentrancy_attack =
-                    if context.is_reentrancy(recipient_address) {
+                    // If this message call is not recursive call and reentering another contract,
+                    // we regard it as reentrancy.
+                    if context.is_reentrancy(&self.params.address, recipient_address) {
+                        // If this message call is invoked by `transfer()` or `send()`,
+                        // formally, the call data is empty and available gas is no more than 2300,
+                        // the reentrancy protection will not be triggered.
                         if in_size.is_zero() {
                             call_gas <= Cost::from(context.spec().call_stipend)
                         } else {

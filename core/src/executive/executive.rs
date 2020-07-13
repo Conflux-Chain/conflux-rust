@@ -23,8 +23,7 @@ use crate::{
     verification::VerificationConfig,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
-        Error as VmError, ResumeCall, ResumeCreate, ReturnData, Spec,
-        TrapError,
+        ResumeCall, ResumeCreate, ReturnData, Spec, TrapError,
     },
     vm_factory::VmFactory,
 };

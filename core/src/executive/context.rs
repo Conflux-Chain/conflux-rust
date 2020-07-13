@@ -443,6 +443,16 @@ impl<'a> ContextTrait for Context<'a> {
     ) {
         // TODO
     }
+
+    fn is_reentrancy(&self, caller: &Address, callee: &Address) -> bool {
+        let is_recursive_call = *caller == *callee;
+        let contract_in_callstack = self
+            .substate
+            .contracts_in_callstack
+            .borrow()
+            .contains_key(callee);
+        return !is_recursive_call && contract_in_callstack;
+    }
 }
 
 #[cfg(test)]
