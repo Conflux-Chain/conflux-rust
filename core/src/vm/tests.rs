@@ -244,6 +244,7 @@ impl Context for MockContext {
     }
 
     fn is_reentrancy(&self, _: &Address, _: &Address) -> bool {
-        unimplemented!()
+        // The MockContext doesn't have message call
+        false
     }
 }

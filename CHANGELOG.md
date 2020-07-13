@@ -37,6 +37,9 @@ before.
 
 - The SELFDECONSTRUCT operation will fail if refund to invalid address.
 
+- Change the logic when reentrancy happens. (Message call with empty data and <= 2300 gas is exempt from reentrancy check.)
+
+
 ## Improvements
 
 - Unify all public rpc with hex number, the following fields from RPC will be changed from decimal to hexadecimal:
