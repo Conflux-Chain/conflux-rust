@@ -33,10 +33,10 @@ pub fn suicide(
     spec: &Spec, substate: &mut Substate,
 ) -> vm::Result<()>
 {
-    match state.update_substate_suicide_and_settle_collateral(
-        substate,
-        contract_address,
-    )? {
+    substate.suicides.insert(suicide_address.clone());
+    match state
+        .collect_and_settle_collateral_for_suicide(substate, contract_address)?
+    {
         CollateralCheckResult::Valid => {}
         CollateralCheckResult::ExceedStorageLimit { .. } => unreachable!(),
         CollateralCheckResult::NotEnoughBalance { required, got } => {

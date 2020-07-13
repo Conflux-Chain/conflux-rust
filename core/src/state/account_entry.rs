@@ -309,10 +309,11 @@ impl OverlayAccount {
     pub fn staking_balance(&self) -> &U256 { &self.staking_balance }
 
     pub fn collateral_for_storage(&self) -> &U256 {
-        assert!(
-            self.collateral_for_storage == self.fresh_collateral_for_storage
-        );
         &self.collateral_for_storage
+    }
+
+    pub fn fresh_collateral_for_storage(&self) -> &U256 {
+        &self.fresh_collateral_for_storage
     }
 
     #[cfg(test)]

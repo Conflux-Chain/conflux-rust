@@ -1504,7 +1504,7 @@ impl<'a> Executive<'a> {
         let (result, output) = {
             let res = res.and_then(|finalize_res| {
                 self.state
-                    .settle_collateral(
+                    .settle_collateral_for_all(
                         &storage_owner,
                         &total_storage_limit,
                         &mut substate,

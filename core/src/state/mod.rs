@@ -205,51 +205,45 @@ impl State {
         index
     }
 
-    pub fn update_substate_suicide_and_settle_collateral(
+    pub fn collect_and_settle_collateral_for_suicide(
         &mut self, substate: &mut Substate, suicide_address: &Address,
     ) -> DbResult<CollateralCheckResult> {
         self.collect_ownership_changed(substate)?;
-        substate.suicides.insert(suicide_address.clone());
-        self.settle_collateral_from_address(suicide_address, substate)
+        self.settle_collateral_for_address(suicide_address)
     }
 
     /// Charges or refund storage collateral and update `total_storage_tokens`.
-    fn settle_collateral_from_address(
-        &mut self, addr: &Address, substate: &Substate,
+    fn settle_collateral_for_address(
+        &mut self, addr: &Address,
     ) -> DbResult<CollateralCheckResult> {
-        let (inc, sub) = (
-            substate
-                .storage_collateralized
-                .get(addr)
-                .map_or(0u64, |x| *x),
-            substate.storage_released.get(addr).map_or(0u64, |x| *x),
+        let (new, old) = (
+            self.fresh_collateral_for_storage(addr)?,
+            self.collateral_for_storage(addr)?,
         );
-        let (inc, sub) = if inc > sub {
-            (inc - sub, 0)
+        let (inc, sub) = if new > old {
+            (new - old, U256::zero())
         } else {
-            (0, sub - inc)
+            (U256::zero(), old - new)
         };
 
-        if sub > 0 {
-            let delta = U256::from(sub) * *COLLATERAL_PER_BYTE;
+        if !sub.is_zero() {
             assert!(self.exists(addr)?);
-            self.sub_collateral_for_storage(addr, &delta)?;
+            self.sub_collateral_for_storage(addr, &sub)?;
         }
-        if inc > 0 {
-            let delta = U256::from(inc) * *COLLATERAL_PER_BYTE;
+        if !inc.is_zero() {
             let balance = if addr.is_contract_address() {
                 self.sponsor_balance_for_collateral(addr)?
             } else {
                 self.balance(addr)?
             };
             // sponsor_balance is not enough to cover storage incremental.
-            if delta > balance {
+            if inc > balance {
                 return Ok(CollateralCheckResult::NotEnoughBalance {
                     required: delta,
                     got: balance,
                 });
             }
-            self.add_collateral_for_storage(addr, &delta)?;
+            self.add_collateral_for_storage(addr, &inc)?;
         }
         Ok(CollateralCheckResult::Valid)
     }
@@ -308,17 +302,13 @@ impl State {
     /// The suisided addresses are skimmed because their collateral have been
     /// checked out. This function should only be called in post-processing
     /// of a transaction.
-    pub fn settle_collateral(
+    pub fn settle_collateral_for_all(
         &mut self, storage_owner: &Address, storage_limit: &U256,
         substate: &mut Substate,
     ) -> DbResult<CollateralCheckResult>
     {
-        for address in substate
-            .keys_for_collateral_changed()
-            .iter()
-            .filter(|&addr| !substate.suicides.contains(addr))
-        {
-            match self.settle_collateral_from_address(address, substate)? {
+        for address in substate.keys_for_collateral_changed().iter() {
+            match self.settle_collateral_for_address(address)? {
                 CollateralCheckResult::Valid => {}
                 res => return Ok(res),
             }
@@ -342,12 +332,12 @@ impl State {
     ) -> DbResult<CollateralCheckResult>
     {
         self.collect_ownership_changed(substate)?;
-        self.settle_collateral(storage_owner, storage_limit, substate)
+        self.settle_collateral_for_all(storage_owner, storage_limit, substate)
     }
 
     /// Merge last checkpoint with previous.
     /// Caller should make sure the function
-    /// `check_collateral_for_storage()` was called before calling
+    /// `collect_ownership_changed()` was called before calling
     /// this function.
     pub fn discard_checkpoint(&mut self) {
         // merge with previous checkpoint
@@ -704,6 +694,16 @@ impl State {
         self.ensure_cached(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |account| {
                 *account.collateral_for_storage()
+            })
+        })
+    }
+
+    pub fn fresh_collateral_for_storage(
+        &self, address: &Address,
+    ) -> DbResult<U256> {
+        self.ensure_cached(address, RequireCache::None, |acc| {
+            acc.map_or(U256::zero(), |account| {
+                *account.fresh_collateral_for_storage()
             })
         })
     }
