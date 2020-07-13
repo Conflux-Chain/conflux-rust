@@ -16,7 +16,7 @@ use crate::{
         ReturnData, Spec, TrapKind,
     },
 };
-use cfx_types::{Address, H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use primitives::{transaction::UNSIGNED_SENDER, StorageLayout};
 use std::sync::Arc;
 
@@ -58,6 +58,8 @@ impl OriginInfo {
             },
         }
     }
+
+    pub fn recipient(&self) -> &Address { &self.address }
 }
 
 /// Implementation of evm context.
@@ -360,6 +362,10 @@ impl<'a> ContextTrait for Context<'a> {
     fn suicide(&mut self, refund_address: &Address) -> vm::Result<()> {
         if self.static_flag {
             return Err(vm::Error::MutableCallInStaticContext);
+        }
+
+        if !refund_address.is_valid_address() {
+            return Err(vm::Error::InvalidAddress(*refund_address));
         }
 
         suicide_impl(

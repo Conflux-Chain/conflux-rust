@@ -35,6 +35,10 @@ before.
 
 - Move all the collateral settlement to the end of execution
 
+- Invalid address in transaction execution will trigger an error. 
+
+- The SELFDECONSTRUCT operation will fail if refund to invalid address.
+
 ## Improvements
 
 - Unify all public rpc with hex number, the following fields from RPC will be changed from decimal to hexadecimal:

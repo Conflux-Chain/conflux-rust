@@ -6,7 +6,7 @@ use blockgen::BlockGenerator;
 use cfx_types::{address_util::AddressUtil, H160, H256, H520, U128, U256, U64};
 use cfxcore::{
     block_data_manager::BlockExecutionResultWithEpoch,
-    executive::{ExecutionError, ExecutionOutcome},
+    executive::{ExecutionError, ExecutionOutcome, TxDropError},
     rpc_errors::account_result_to_rpc_result,
     state_exposer::STATE_EXPOSER,
     test_context::*,
@@ -775,10 +775,16 @@ impl RpcImpl {
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
         match self.exec_transaction(request, epoch)? {
-            ExecutionOutcome::NotExecutedOldNonce(expected, got) => {
+            ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(expected, got)) => {
                 bail!(call_execution_error(
                     "Transaction can not be executed".into(),
                     format! {"nonce is too old expected {:?} got {:?}", expected, got}.into_bytes()
+                ))
+            }
+            ExecutionOutcome::NotExecutedDrop(TxDropError::InvalidRecipientAddress(recipient)) => {
+                bail!(call_execution_error(
+                    "Transaction can not be executed".into(),
+                    format! {"invalid recipient address {:?}", recipient}.into_bytes()
                 ))
             }
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
@@ -808,10 +814,16 @@ impl RpcImpl {
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<EstimateGasAndCollateralResponse> {
         let executed = match self.exec_transaction(request, epoch)? {
-            ExecutionOutcome::NotExecutedOldNonce(expected, got) => {
+            ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(expected, got)) => {
                 bail!(call_execution_error(
                     "Can not estimate: transaction can not be executed".into(),
                     format! {"nonce is too old expected {:?} got {:?}", expected, got}.into_bytes()
+                ))
+            }
+            ExecutionOutcome::NotExecutedDrop(TxDropError::InvalidRecipientAddress(recipient)) => {
+                bail!(call_execution_error(
+                    "Can not estimate: transaction can not be executed".into(),
+                    format! {"invalid recipient address {:?}", recipient}.into_bytes()
                 ))
             }
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {

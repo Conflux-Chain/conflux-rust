@@ -117,6 +117,8 @@ pub enum Error {
     Reverted,
     /// Reentrancy encountered
     Reentrancy,
+    /// Invalid address
+    InvalidAddress(Address),
 }
 
 #[derive(Debug)]
@@ -184,6 +186,7 @@ impl fmt::Display for Error {
             OutOfBounds => write!(f, "Out of bounds"),
             Reverted => write!(f, "Reverted"),
             Reentrancy => write!(f, "Reentrancy"),
+            InvalidAddress(ref addr) => write!(f, "InvalidAddress: {}", addr),
         }
     }
 }
