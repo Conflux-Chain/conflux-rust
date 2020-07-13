@@ -33,7 +33,7 @@ pub fn suicide(
     spec: &Spec, substate: &mut Substate,
 ) -> vm::Result<()>
 {
-    substate.suicides.insert(suicide_address.clone());
+    substate.suicides.insert(contract_address.clone());
     match state
         .collect_and_settle_collateral_for_suicide(substate, contract_address)?
     {

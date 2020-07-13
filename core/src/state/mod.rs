@@ -239,7 +239,7 @@ impl State {
             // sponsor_balance is not enough to cover storage incremental.
             if inc > balance {
                 return Ok(CollateralCheckResult::NotEnoughBalance {
-                    required: delta,
+                    required: inc,
                     got: balance,
                 });
             }
