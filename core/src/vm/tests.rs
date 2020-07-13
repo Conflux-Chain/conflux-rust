@@ -25,11 +25,11 @@ use std::{
 
 use super::{
     error::TrapKind, CallType, Context, ContractCreateResult,
-    CreateContractAddress, Env, GasLeft, MessageCallResult, Result, ReturnData,
-    Spec,
+    CreateContractAddress, Env, Error, GasLeft, MessageCallResult, Result,
+    ReturnData, Spec,
 };
 use crate::{bytes::Bytes, hash::keccak, statedb};
-use cfx_types::{Address, H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 
 pub struct MockLogEntry {
     pub topics: Vec<H256>,
@@ -210,6 +210,11 @@ impl Context for MockContext {
     }
 
     fn suicide(&mut self, refund_address: &Address) -> Result<()> {
+        if !refund_address.is_valid_address() {
+            return Err(Error::InvalidAddress(*refund_address));
+        }
+        // The following code is from Parity, but it confuse me. Why refund
+        // address is pushed to suicides list.
         self.suicides.insert(refund_address.clone());
         Ok(())
     }

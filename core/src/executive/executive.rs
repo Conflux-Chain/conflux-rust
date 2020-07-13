@@ -9,7 +9,10 @@ use super::{
 use crate::{
     bytes::{Bytes, BytesRef},
     evm::{FinalizationResult, Finalize},
-    executive::executed::{ExecutionOutcome, ToRepackError},
+    executive::{
+        executed::{ExecutionOutcome, ToRepackError},
+        TxDropError,
+    },
     hash::keccak,
     machine::Machine,
     parameters::staking::*,
@@ -380,6 +383,7 @@ impl<'a> CallCreateExecutive<'a> {
             | Err(vm::Error::MutableCallInStaticContext)
             | Err(vm::Error::OutOfBounds)
             | Err(vm::Error::Reverted)
+            | Err(vm::Error::InvalidAddress(..))
             | Ok(FinalizationResult {
                 apply_state: false, ..
             }) => {
@@ -1320,7 +1324,9 @@ impl<'a> Executive<'a> {
 
         // Validate transaction nonce
         if tx.nonce < nonce {
-            return Ok(ExecutionOutcome::NotExecutedOldNonce(nonce, tx.nonce));
+            return Ok(ExecutionOutcome::NotExecutedDrop(
+                TxDropError::OldNonce(nonce, tx.nonce),
+            ));
         } else if tx.nonce > nonce {
             return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
                 ToRepackError::InvalidNonce {
@@ -1370,6 +1376,11 @@ impl<'a> Executive<'a> {
         let mut storage_sponsored = false;
         match tx.action {
             Action::Call(ref address) => {
+                if !address.is_valid_address() {
+                    return Ok(ExecutionOutcome::NotExecutedDrop(
+                        TxDropError::InvalidRecipientAddress(*address),
+                    ));
+                }
                 if address.is_contract_address() {
                     code_address = *address;
                     if self
