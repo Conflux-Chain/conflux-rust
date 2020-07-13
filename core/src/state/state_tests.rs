@@ -59,6 +59,9 @@ fn checkpoint_basic() {
         .add_balance(&address, &U256::from(1069u64), CleanupMode::NoEmpty)
         .unwrap();
     state
+        .register_unpaid_collateral(&address, &U256::from(1000))
+        .unwrap();
+    state
         .add_collateral_for_storage(&address, &U256::from(1000))
         .unwrap();
     assert_eq!(state.balance(&address).unwrap(), U256::from(69u64));
@@ -72,6 +75,9 @@ fn checkpoint_basic() {
     state.checkpoint();
     state
         .add_balance(&address, &U256::from(1u64), CleanupMode::NoEmpty)
+        .unwrap();
+    state
+        .register_unrefunded_collateral(&address, &U256::from(1000))
         .unwrap();
     state
         .sub_collateral_for_storage(&address, &U256::from(1000))
@@ -107,6 +113,9 @@ fn checkpoint_nested() {
     state.checkpoint();
     state
         .add_balance(&address, &U256::from(1069u64), CleanupMode::NoEmpty)
+        .unwrap();
+    state
+        .register_unpaid_collateral(&address, &U256::from(1000))
         .unwrap();
     state
         .add_collateral_for_storage(&address, &U256::from(1000))
@@ -866,7 +875,6 @@ fn create_contract_fail_previous_storage() {
     state
         .commit(BigEndianHash::from_uint(&U256::from(1)), None)
         .unwrap();
-    return;
     state.clear();
     substates.clear();
     substates.push(Substate::new());

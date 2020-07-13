@@ -16,7 +16,7 @@ use crate::{
         ReturnData, Spec, TrapKind,
     },
 };
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use cfx_types::{Address, H256, U256};
 use primitives::{transaction::UNSIGNED_SENDER, StorageLayout};
 use std::sync::Arc;
 
@@ -312,37 +312,16 @@ impl<'a> ContextTrait for Context<'a> {
                 }
                 let collateral_for_code =
                     U256::from(data.len()) * *COLLATERAL_PER_BYTE;
-                let collateral_for_storage = self
-                    .state
-                    .collateral_for_storage(&self.origin.storage_owner)?;
-                let balance = if self.origin.storage_owner.is_contract_address()
-                {
-                    self.state.sponsor_balance_for_collateral(
-                        &self.origin.storage_owner,
-                    )?
-                } else {
-                    self.state.balance(&self.origin.storage_owner)?
-                };
-                debug!(
-                    "ret() balance={:?} collateral_for_code={:?}",
-                    balance, collateral_for_code
-                );
-                if balance < collateral_for_code {
-                    return Err(vm::Error::NotEnoughBalanceForStorage {
-                        required: collateral_for_code,
-                        got: balance,
-                    });
-                }
-                if collateral_for_storage + collateral_for_code
-                    > self.origin.storage_limit_in_drip
-                {
-                    return Err(vm::Error::ExceedStorageLimit);
-                }
+                debug!("ret()  collateral_for_code={:?}", collateral_for_code);
                 *self
                     .substate
                     .storage_collateralized
                     .entry(self.origin.storage_owner)
                     .or_insert(0) += data.len() as u64;
+                self.state.register_unpaid_collateral(
+                    &self.origin.storage_owner,
+                    &collateral_for_code,
+                )?;
 
                 self.state.init_code(
                     &self.origin.address,

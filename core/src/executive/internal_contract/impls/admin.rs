@@ -4,6 +4,7 @@
 
 use super::super::InternalContractTrait;
 use crate::{
+    parameters::staking::*,
     state::{CollateralCheckResult, State, Substate},
     vm::{self, ActionParams, CallType, Spec},
 };
@@ -61,6 +62,9 @@ pub fn suicide(
             .expect("code owner exists");
         *substate.storage_released.entry(code_owner).or_insert(0) +=
             code_size as u64;
+        let refund_collateral = *COLLATERAL_PER_BYTE * code_size;
+        state
+            .register_unrefunded_collateral(&code_owner, &refund_collateral)?;
     }
 
     let sponsor_for_gas = state.sponsor_for_gas(contract_address)?;

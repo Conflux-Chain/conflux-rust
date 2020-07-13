@@ -290,10 +290,14 @@ impl State {
             }
         }
         for (addr, sub) in &collateral_for_storage_sub {
+            let to_refund_collateral = *COLLATERAL_PER_STORAGE_KEY * *sub;
+            self.register_unrefunded_collateral(addr, &to_refund_collateral)?;
             *substate.storage_released.entry(*addr).or_insert(0) +=
                 sub * BYTES_PER_STORAGE_KEY;
         }
         for (addr, inc) in &collateral_for_storage_inc {
+            let to_pay_collateral = *COLLATERAL_PER_STORAGE_KEY * *inc;
+            self.register_unpaid_collateral(addr, &to_pay_collateral)?;
             *substate.storage_collateralized.entry(*addr).or_insert(0) +=
                 inc * BYTES_PER_STORAGE_KEY;
         }
@@ -580,6 +584,26 @@ impl State {
         if !by.is_zero() {
             self.require_exists(address, false)?
                 .add_sponsor_balance_for_collateral(by);
+        }
+        Ok(())
+    }
+
+    pub fn register_unrefunded_collateral(
+        &mut self, address: &Address, by: &U256,
+    ) -> DbResult<()> {
+        if !by.is_zero() {
+            self.require_exists(address, false)?
+                .register_unrefunded_collateral(by);
+        }
+        Ok(())
+    }
+
+    pub fn register_unpaid_collateral(
+        &mut self, address: &Address, by: &U256,
+    ) -> DbResult<()> {
+        if !by.is_zero() {
+            self.require_exists(address, false)?
+                .register_unpaid_collateral(by);
         }
         Ok(())
     }
@@ -997,6 +1021,10 @@ impl State {
                         let storage_owner =
                             storage_value.owner.as_ref().unwrap_or(&address);
                         assert!(self.exists(storage_owner)?);
+                        self.register_unrefunded_collateral(
+                            storage_owner,
+                            &COLLATERAL_PER_STORAGE_KEY,
+                        )?;
                         self.sub_collateral_for_storage(
                             storage_owner,
                             &COLLATERAL_PER_STORAGE_KEY,
