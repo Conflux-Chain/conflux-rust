@@ -1555,11 +1555,11 @@ impl SynchronizationGraph {
                 // become ready and being processed in the loop later. It
                 // requires this block already being inserted
                 // into the BlockDataManager!
-                if index == header_index_to_insert {
+                if index == header_index_to_insert && persistent {
                     self.data_man.insert_block_header(
                         inner.arena[index].block_header.hash(),
                         inner.arena[index].block_header.clone(),
-                        persistent,
+                        true,
                     );
                 }
                 if insert_to_consensus {
@@ -1608,11 +1608,11 @@ impl SynchronizationGraph {
                     inner.arena[index].parent,
                     inner.arena[index].block_header.hash()
                 );
-                if index == header_index_to_insert {
+                if index == header_index_to_insert && persistent {
                     self.data_man.insert_block_header(
                         inner.arena[index].block_header.hash(),
                         inner.arena[index].block_header.clone(),
-                        persistent,
+                        true,
                     );
                 }
             }
