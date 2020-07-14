@@ -53,12 +53,6 @@ impl ProofOfWorkProblem {
         against_lower_bound_u256.lt(boundary)
             || boundary.eq(&ProofOfWorkProblem::NO_BOUNDARY)
     }
-
-    pub fn validate_pow_quality_against_difficulty(
-        pow_quality: &U256, difficulty: &U256,
-    ) -> bool {
-        pow_quality.gt(difficulty)
-    }
 }
 
 #[derive(Debug, Copy, Clone)]
