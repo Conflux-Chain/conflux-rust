@@ -99,7 +99,10 @@ fn main() -> Result<(), Error> {
         delta_mpt_iterator,
         info,
     )?;
-    storage_manager.register_new_snapshot(snapshot_info1.clone())?;
+    storage_manager.register_new_snapshot(
+        snapshot_info1.clone(),
+        &mut storage_manager.snapshot_info_map_by_epoch.write(),
+    )?;
     println!("After merging: {:?}", snapshot_info1);
     let state_root = StateRoot {
         snapshot_root: MERKLE_NULL_NODE,
@@ -167,7 +170,10 @@ fn main() -> Result<(), Error> {
         snapshot_info2,
         accounts_map.len()
     );
-    storage_manager.register_new_snapshot(snapshot_info2.clone())?;
+    storage_manager.register_new_snapshot(
+        snapshot_info2.clone(),
+        &mut storage_manager.snapshot_info_map_by_epoch.write(),
+    )?;
     let snapshot2 = snapshot_db_manager
         .get_snapshot_by_epoch_id(
             &snapshot2_epoch,
@@ -219,7 +225,10 @@ fn main() -> Result<(), Error> {
         delta_mpt_iterator,
         info,
     )?;
-    storage_manager.register_new_snapshot(snapshot_info3.clone())?;
+    storage_manager.register_new_snapshot(
+        snapshot_info3.clone(),
+        &mut storage_manager.snapshot_info_map_by_epoch.write(),
+    )?;
     assert_eq!(snapshot_info3.merkle_root, snapshot_info2.merkle_root);
     Ok(())
 }

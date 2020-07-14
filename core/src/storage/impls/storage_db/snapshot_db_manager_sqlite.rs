@@ -359,11 +359,15 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             .join(&self.get_snapshot_db_name(snapshot_epoch_id))
     }
 
-    fn new_snapshot_by_merging(
+    fn new_snapshot_by_merging<'m>(
         &self, old_snapshot_epoch_id: &EpochId, snapshot_epoch_id: EpochId,
         delta_mpt: DeltaMptIterator,
         mut in_progress_snapshot_info: SnapshotInfo,
-    ) -> Result<SnapshotInfo>
+        snapshot_info_map_rwlock: &'m RwLock<HashMap<EpochId, SnapshotInfo>>,
+    ) -> Result<(
+        RwLockWriteGuard<'m, HashMap<EpochId, SnapshotInfo>>,
+        SnapshotInfo,
+    )>
     {
         debug!(
             "new_snapshot_by_merging: old={:?} new={:?}",
@@ -380,7 +384,10 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 // resulting into an empty snapshot, falls into this code path,
                 // where we do nothing.
                 in_progress_snapshot_info.merkle_root = MERKLE_NULL_NODE;
-                Ok(in_progress_snapshot_info)
+                Ok((
+                    snapshot_info_map_rwlock.write(),
+                    in_progress_snapshot_info,
+                ))
             }
             Some(_) => {
                 // Unwrap here is safe because the delta MPT is guaranteed not
@@ -440,12 +447,13 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 in_progress_snapshot_info.merkle_root =
                     new_snapshot_root.clone();
                 drop(snapshot_db);
+                let locked = snapshot_info_map_rwlock.write();
                 Self::rename_snapshot_db(
                     &temp_db_path,
                     &self.get_snapshot_db_path(&snapshot_epoch_id),
                 )?;
 
-                Ok(in_progress_snapshot_info)
+                Ok((locked, in_progress_snapshot_info))
             }
         }
     }
@@ -506,15 +514,19 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         )
     }
 
-    fn finalize_full_sync_snapshot(
+    fn finalize_full_sync_snapshot<'m>(
         &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
-    ) -> Result<()> {
+        snapshot_info_map_rwlock: &'m RwLock<HashMap<EpochId, SnapshotInfo>>,
+    ) -> Result<RwLockWriteGuard<'m, HashMap<EpochId, SnapshotInfo>>>
+    {
         let temp_db_path = self.get_full_sync_temp_snapshot_db_path(
             snapshot_epoch_id,
             merkle_root,
         );
         let final_db_path = self.get_snapshot_db_path(snapshot_epoch_id);
-        Self::rename_snapshot_db(&temp_db_path, &final_db_path)
+        let locked = snapshot_info_map_rwlock.write();
+        Self::rename_snapshot_db(&temp_db_path, &final_db_path)?;
+        Ok(locked)
     }
 }
 
@@ -528,7 +540,7 @@ use crate::storage::{
 use fs_extra::dir::CopyOptions;
 use futures::executor;
 use parity_bytes::ToPretty;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::{Mutex, RwLock, RwLockWriteGuard};
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
 use std::{
     collections::HashMap,

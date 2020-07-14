@@ -55,10 +55,14 @@ pub trait SnapshotDbManagerTrait {
             .collect())
     }
 
-    fn new_snapshot_by_merging(
+    fn new_snapshot_by_merging<'m>(
         &self, old_snapshot_epoch_id: &EpochId, snapshot_epoch_id: EpochId,
         delta_mpt: DeltaMptIterator, in_progress_snapshot_info: SnapshotInfo,
-    ) -> Result<SnapshotInfo>;
+        snapshot_info_map: &'m RwLock<HashMap<EpochId, SnapshotInfo>>,
+    ) -> Result<(
+        RwLockWriteGuard<'m, HashMap<EpochId, SnapshotInfo>>,
+        SnapshotInfo,
+    )>;
     fn get_snapshot_by_epoch_id(
         &self, epoch_id: &EpochId, try_open: bool,
     ) -> Result<Option<Arc<Self::SnapshotDb>>>;
@@ -67,16 +71,17 @@ pub trait SnapshotDbManagerTrait {
     fn new_temp_snapshot_for_full_sync(
         &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
     ) -> Result<Self::SnapshotDb>;
-
-    fn finalize_full_sync_snapshot(
+    fn finalize_full_sync_snapshot<'m>(
         &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
-    ) -> Result<()>;
+        snapshot_info_map_rwlock: &'m RwLock<HashMap<EpochId, SnapshotInfo>>,
+    ) -> Result<RwLockWriteGuard<'m, HashMap<EpochId, SnapshotInfo>>>;
 }
 
 use super::{
     super::impls::{delta_mpt::DeltaMptIterator, errors::*},
     snapshot_db::*,
 };
+use parking_lot::{RwLock, RwLockWriteGuard};
 use primitives::{EpochId, MerkleHash};
 use std::{
     collections::HashMap,
