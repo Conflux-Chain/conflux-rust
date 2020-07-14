@@ -23,8 +23,7 @@ use crate::{
     verification::VerificationConfig,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
-        Error as VmError, ResumeCall, ResumeCreate, ReturnData, Spec,
-        TrapError,
+        ResumeCall, ResumeCreate, ReturnData, Spec, TrapError,
     },
     vm_factory::VmFactory,
 };
@@ -390,7 +389,6 @@ impl<'a> CallCreateExecutive<'a> {
                 state.revert_to_checkpoint();
                 result
             }
-            Err(vm::Error::Reentrancy) => unreachable!(),
             // The whole epoch execution fails. No need to revert state.
             Err(vm::Error::StateDbError(_)) => result,
             Ok(_) => {
@@ -662,14 +660,6 @@ impl<'a> CallCreateExecutive<'a> {
                         Self::transfer_exec_balance(
                             &params, spec, state, substate,
                         )?;
-                        if unconfirmed_substate
-                            .contracts_in_callstack
-                            .borrow()
-                            .is_reentrancy_at_this_level(&params.address)
-                        {
-                            state.discard_checkpoint();
-                            return Err(VmError::Reentrancy);
-                        }
                         Ok(())
                     };
 

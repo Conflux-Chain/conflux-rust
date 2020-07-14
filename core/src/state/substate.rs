@@ -46,17 +46,6 @@ impl CallStackInfo {
     pub fn contains_key(&self, key: &Address) -> bool {
         self.address_counter.contains_key(key)
     }
-
-    pub fn is_reentrancy_at_this_level(&self, callee: &Address) -> bool {
-        let maybe_caller = self.last();
-        if let Some(caller) = maybe_caller {
-            if *callee == *caller {
-                // Recursive call is not regarded as reentrancy.
-                return false;
-            }
-        }
-        self.contains_key(callee)
-    }
 }
 
 /// State changes which should be applied in finalize,
