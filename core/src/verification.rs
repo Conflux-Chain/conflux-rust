@@ -103,8 +103,21 @@ impl VerificationConfig {
         let pow_hash: H256 = pow
             .compute(&nonce, &header.problem_hash(), header.height())
             .into();
-        header.pow_quality = pow::pow_hash_to_quality(&pow_hash, &nonce);
+        header.pow_quality = Some(pow::pow_hash_to_quality(&pow_hash, &nonce));
         pow_hash
+    }
+
+    pub fn fill_header_pow_quality(
+        pow: Arc<PowComputer>, header: &mut BlockHeader,
+    ) {
+        if header.pow_quality.is_some() {
+            return;
+        }
+        let nonce = header.nonce();
+        let pow_hash: H256 = pow
+            .compute(&nonce, &header.problem_hash(), header.height())
+            .into();
+        header.pow_quality = Some(pow::pow_hash_to_quality(&pow_hash, &nonce));
     }
 
     #[inline]
@@ -143,7 +156,7 @@ impl VerificationConfig {
             )));
         }
 
-        assert!(header.pow_quality >= *header.difficulty());
+        assert!(header.pow_quality.unwrap() >= *header.difficulty());
 
         Ok(())
     }

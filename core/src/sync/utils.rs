@@ -49,11 +49,13 @@ pub fn create_simple_block_impl(
         .with_author(author)
         .build();
     header.compute_hash();
-    header.pow_quality = if block_weight > 1 {
-        diff * block_weight
-    } else {
-        diff
-    };
+    header.pow_quality = Some(
+        if block_weight > 1 {
+            diff * block_weight
+        } else {
+            diff
+        },
+    );
     let block = Block::new(header, vec![]);
     (block.hash(), block)
 }

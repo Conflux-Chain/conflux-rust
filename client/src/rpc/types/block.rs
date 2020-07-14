@@ -228,7 +228,7 @@ impl Block {
             gas_limit: b.block_header.gas_limit().into(),
             timestamp: b.block_header.timestamp().into(),
             difficulty: b.block_header.difficulty().clone().into(),
-            pow_quality: Some(b.block_header.pow_quality.clone().into()),
+            pow_quality: b.block_header.pow_quality.map(Into::into),
             adaptive: b.block_header.adaptive(),
             referee_hashes: b
                 .block_header
@@ -363,8 +363,8 @@ impl Header {
             adaptive: h.adaptive(),
             referee_hashes,
             nonce: h.nonce().into(),
-            pow_quality: Some(h.pow_quality.into()), /* TODO(thegaram):
-                                                      * include custom */
+            pow_quality: h.pow_quality.map(Into::into), /* TODO(thegaram):
+                                                         * include custom */
         }
     }
 }

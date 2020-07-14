@@ -1386,23 +1386,25 @@ impl SynchronizationGraph {
                         header
                     })
                 } else {
-                    self.data_man.block_by_hash(hash, false).map(|block| {
-                        let mut header = block.block_header.clone();
-                        self.insert_block_header(
-                            &mut header,
-                            true,  /* need_to_verify */
-                            false, /* bench_mode */
-                            false, /* insert_to_consensus */
-                            false, /* persistent */
-                        );
-                        self.insert_block(
-                            block.as_ref().clone(),
-                            true,  /* need_to_verify */
-                            false, /* persistent */
-                            true,  /* recover_from_db */
-                        );
-                        Arc::new(header)
-                    })
+                    self.data_man
+                        .block_by_hash(hash, true /* update_cache */)
+                        .map(|block| {
+                            let mut header = block.block_header.clone();
+                            self.insert_block_header(
+                                &mut header,
+                                true,  /* need_to_verify */
+                                false, /* bench_mode */
+                                false, /* insert_to_consensus */
+                                false, /* persistent */
+                            );
+                            self.insert_block(
+                                block.as_ref().clone(),
+                                true,  /* need_to_verify */
+                                false, /* persistent */
+                                true,  /* recover_from_db */
+                            );
+                            Arc::new(header)
+                        })
                 }
             };
 
@@ -1645,7 +1647,10 @@ impl SynchronizationGraph {
                 if need_to_verify && !self.is_consortium() {
                     // Compute pow_quality, because the input header may be used
                     // as a part of block later
-                    VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(self.pow.clone(), header);
+                    VerificationConfig::fill_header_pow_quality(
+                        self.pow.clone(),
+                        header,
+                    );
                 }
                 return (
                     BlockHeaderInsertionResult::AlreadyProcessedInConsensus,
@@ -1658,7 +1663,10 @@ impl SynchronizationGraph {
             if need_to_verify {
                 // Compute pow_quality, because the input header may be used as
                 // a part of block later
-                VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(self.pow.clone(), header);
+                VerificationConfig::fill_header_pow_quality(
+                    self.pow.clone(),
+                    header,
+                );
             }
             return (
                 BlockHeaderInsertionResult::AlreadyProcessedInSync,

@@ -1659,10 +1659,10 @@ impl ConsensusGraphInner {
     fn insert(&mut self, block_header: &BlockHeader) -> (usize, usize) {
         let hash = block_header.hash();
 
-        let is_heavy = U512::from(block_header.pow_quality)
+        let is_heavy = U512::from(block_header.pow_quality.unwrap())
             >= U512::from(self.inner_conf.heavy_block_difficulty_ratio)
                 * U512::from(block_header.difficulty());
-        let is_timer = U512::from(block_header.pow_quality)
+        let is_timer = U512::from(block_header.pow_quality.unwrap())
             >= U512::from(self.inner_conf.timer_chain_block_difficulty_ratio)
                 * U512::from(block_header.difficulty());
 
@@ -1915,7 +1915,7 @@ impl ConsensusGraphInner {
                 .data_man
                 .block_by_hash(
                     &self.arena[*idx].hash,
-                    false, /* update_cache */
+                    true, /* update_cache */
                 )
                 .expect("Exist");
             epoch_blocks.push(block);
