@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::H256;
+use cfx_types::{H256, U64};
 use primitives::{
     BlockHashOrEpochNumber as PrimitiveBlockHashOrEpochNumber,
     EpochNumber as PrimitiveEpochNumber,
@@ -17,7 +17,7 @@ use std::{fmt, str::FromStr};
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum EpochNumber {
     /// Number
-    Num(u64),
+    Num(U64),
     /// Earliest epoch (true genesis)
     Earliest,
     /// The latest checkpoint (cur_era_genesis)
@@ -71,7 +71,7 @@ impl EpochNumber {
             EpochNumber::Earliest => PrimitiveEpochNumber::Earliest,
             EpochNumber::LatestMined => PrimitiveEpochNumber::LatestMined,
             EpochNumber::LatestState => PrimitiveEpochNumber::LatestState,
-            EpochNumber::Num(num) => PrimitiveEpochNumber::Number(num),
+            EpochNumber::Num(num) => PrimitiveEpochNumber::Number(num.as_u64()),
             EpochNumber::LatestCheckpoint => {
                 PrimitiveEpochNumber::LatestCheckpoint
             }
@@ -93,6 +93,7 @@ impl FromStr for EpochNumber {
             "earliest" => Ok(EpochNumber::Earliest),
             "latest_checkpoint" => Ok(EpochNumber::LatestCheckpoint),
             _ if s.starts_with("0x") => u64::from_str_radix(&s[2..], 16)
+                .map(U64::from)
                 .map(EpochNumber::Num)
                 .map_err(|e| format!("Invalid epoch number: {}", e)),
             _ => Err("Invalid epoch number: missing 0x prefix".to_string()),
@@ -105,7 +106,7 @@ impl Into<PrimitiveEpochNumber> for EpochNumber {
 }
 
 impl Into<EpochNumber> for u64 {
-    fn into(self) -> EpochNumber { EpochNumber::Num(self) }
+    fn into(self) -> EpochNumber { EpochNumber::Num(U64::from(self)) }
 }
 
 struct EpochNumberVisitor;

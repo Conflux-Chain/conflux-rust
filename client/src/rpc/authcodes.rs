@@ -16,6 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+use cfx_types::H256;
+use itertools::Itertools;
+use keccak_hash::keccak;
+use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
 use std::{
     fs,
     io::{self, Read, Write},
@@ -23,11 +27,6 @@ use std::{
     path::Path,
     time,
 };
-
-use cfx_types::H256;
-use itertools::Itertools;
-use keccak_hash::keccak;
-use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
 
 /// Providing current time in seconds
 pub trait TimeProvider {
@@ -227,6 +226,8 @@ impl<T: TimeProvider> AuthCodes<T> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use cfx_types::H256;
     use keccak_hash::keccak;
     use std::{
         cell::Cell,
@@ -235,9 +236,6 @@ mod tests {
         time,
     };
     use tempdir::TempDir;
-
-    use super::*;
-    use cfx_types::H256;
 
     fn generate_hash(val: &str, time: u64) -> H256 {
         keccak(format!("{}:{}", val, time))

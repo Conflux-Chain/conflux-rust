@@ -1152,15 +1152,14 @@ impl ConsensusExecutionHandler {
                 let mut gas_sponsor_paid = false;
                 let mut storage_sponsor_paid = false;
                 match r {
-                    ExecutionOutcome::NotExecutedOldNonce(expected, got) => {
+                    ExecutionOutcome::NotExecutedDrop(e) => {
                         tx_outcome_status =
                             TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING;
                         trace!(
-                            "tx not executed due to old nonce: \
-                             transaction={:?}, expected={:?}, got={:?}",
+                            "tx not executed, not to reconsider packing: \
+                             transaction={:?},err={:?}",
                             transaction,
-                            expected,
-                            got
+                            e
                         );
                         gas_fee = U256::zero();
                     }

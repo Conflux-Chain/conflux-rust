@@ -105,7 +105,7 @@ class Issue1513Test(ConfluxTestFramework):
         tx = self.rpc[ARCHIVE_NODE].new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key, storage_limit=1000)
         assert_equal(self.rpc[ARCHIVE_NODE].send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc[ARCHIVE_NODE].get_transaction_receipt(tx.hash_hex())
-        assert_equal(receipt["outcomeStatus"], 0)
+        assert_equal(receipt["outcomeStatus"], "0x0")
         address = receipt["contractCreated"]
         assert_is_hex_string(address)
         return receipt, address
@@ -114,7 +114,7 @@ class Issue1513Test(ConfluxTestFramework):
         tx = self.rpc[ARCHIVE_NODE].new_contract_tx(receiver=contract, data_hex=data_hex, sender=sender, priv_key=priv_key, storage_limit=1000)
         assert_equal(self.rpc[ARCHIVE_NODE].send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc[ARCHIVE_NODE].get_transaction_receipt(tx.hash_hex())
-        assert_equal(receipt["outcomeStatus"], 0)
+        assert_equal(receipt["outcomeStatus"], "0x0")
         return receipt
 
 if __name__ == "__main__":

@@ -53,7 +53,7 @@ class TxRelayTest(ConfluxTestFramework):
         if node is None: node = self.random_full_node()
 
         blame_info = {}
-        blame_info['blame'] = 1
+        blame_info['blame'] = "0x1"
         blame_info['deferredStateRoot'] = "0x1111111111111111111111111111111111111111111111111111111111111111"
 
         return self.nodes[node].test_generateblockwithblameinfo(1, 0, blame_info)[0]

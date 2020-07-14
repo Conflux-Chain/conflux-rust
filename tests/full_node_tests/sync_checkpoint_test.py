@@ -8,7 +8,8 @@ from jsonrpcclient.exceptions import ReceivedErrorResponseError
 sys.path.insert(1, os.path.dirname(sys.path[0]))
 
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.util import sync_blocks, connect_nodes, connect_sample_nodes, assert_equal, assert_blocks_valid
+from test_framework.util import sync_blocks, connect_nodes, connect_sample_nodes, assert_equal, assert_blocks_valid, \
+    wait_until
 from conflux.rpc import RpcClient
 
 class SyncCheckpointTests(ConfluxTestFramework):
@@ -81,6 +82,8 @@ class SyncCheckpointTests(ConfluxTestFramework):
         # There is no state from epoch 1 to snapshot_epoch
         # Note, state of genesis epoch always exists
         assert full_node_client.epoch_number() >= snapshot_epoch
+        wait_until(lambda: full_node_client.epoch_number() == archive_node_client.epoch_number() and
+                   full_node_client.epoch_number("latest_state") == archive_node_client.epoch_number("latest_state"))
         # We have snapshot_epoch for state execution but
         # don't offer snapshot_epoch for Rpc clients.
         for i in range(1, snapshot_epoch + 1):

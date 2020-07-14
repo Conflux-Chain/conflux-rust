@@ -470,7 +470,7 @@ impl QueryService {
         Ok(matching)
     }
 
-    pub fn get_latest_verifiable_chain_id(&self) -> Result<u64, FilterError> {
+    pub fn get_latest_verifiable_chain_id(&self) -> Result<u32, FilterError> {
         let epoch_number = self.get_latest_verifiable_epoch_number()?;
         Ok(self
             .consensus

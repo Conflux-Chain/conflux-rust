@@ -33,7 +33,26 @@ before.
 
 - Changed RewardInfo struct to add author info.
 
+- Invalid address in transaction execution will trigger an error. 
+
+- The SELFDECONSTRUCT operation will fail if refund to invalid address.
+
+- Change the logic when reentrancy happens. (Message call with empty data and <= 2300 gas is exempt from reentrancy check.)
+
+
 ## Improvements
+
+- Unify all public rpc with hex number, the following fields from RPC will be changed from decimal to hexadecimal:
+    - BlameInfo.blame
+    - Block.blame
+    - CallRequest.storageLimit
+    - ConsensusGraphBlockState.blockStatus
+    - EpochNumber::Num
+    - Receipt.index
+    - Receipt.epochNumber
+    - Receipt.outcomeStatus
+    - Status.pendingTxNumber
+    - SyncGraphBlockState.timestamp
 
 - Rename local rpc send_transaction with cfx_sendTransaction.
 

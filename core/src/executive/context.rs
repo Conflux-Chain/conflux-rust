@@ -59,6 +59,8 @@ impl OriginInfo {
         }
     }
 
+    pub fn recipient(&self) -> &Address { &self.address }
+
     pub fn original_sender(&self) -> &Address { &self.original_sender }
 
     pub fn storage_limit(&self) -> &U256 { &self.storage_limit_in_drip }
@@ -391,6 +393,10 @@ impl<'a> ContextTrait for Context<'a> {
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
+        if !refund_address.is_valid_address() {
+            return Err(vm::Error::InvalidAddress(*refund_address));
+        }
+
         suicide_impl(
             &self.origin.address,
             refund_address,
@@ -436,6 +442,16 @@ impl<'a> ContextTrait for Context<'a> {
         &mut self, _gas_used: U256, _stack_push: &[U256], _mem: &[u8],
     ) {
         // TODO
+    }
+
+    fn is_reentrancy(&self, caller: &Address, callee: &Address) -> bool {
+        let is_recursive_call = *caller == *callee;
+        let contract_in_callstack = self
+            .substate
+            .contracts_in_callstack
+            .borrow()
+            .contains_key(callee);
+        return !is_recursive_call && contract_in_callstack;
     }
 }
 
