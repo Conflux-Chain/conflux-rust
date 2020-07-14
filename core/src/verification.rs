@@ -6,7 +6,10 @@ use crate::{
     error::{BlockError, Error},
     executive::Executive,
     parameters::block::*,
-    pow::{self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem},
+    pow::{
+        self, difficulty_to_boundary, nonce_to_lower_bound, PowComputer,
+        ProofOfWorkProblem,
+    },
     storage::{make_simple_mpt, simple_mpt_merkle_root, TrieProof},
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
     vm,
@@ -95,18 +98,6 @@ impl VerificationConfig {
     }
 
     #[inline]
-    /// Note that this function returns *pow_hash* of the block, not its quality
-    pub fn compute_pow_hash_and_fill_header_pow_quality(
-        pow: Arc<PowComputer>, header: &mut BlockHeader,
-    ) -> H256 {
-        let nonce = header.nonce();
-        let pow_hash: H256 = pow
-            .compute(&nonce, &header.problem_hash(), header.height())
-            .into();
-        header.pow_quality = Some(pow::pow_hash_to_quality(&pow_hash, &nonce));
-        pow_hash
-    }
-
     pub fn fill_header_pow_quality(
         pow: Arc<PowComputer>, header: &mut BlockHeader,
     ) {
@@ -124,8 +115,7 @@ impl VerificationConfig {
     pub fn verify_pow(
         &self, pow: Arc<PowComputer>, header: &mut BlockHeader,
     ) -> Result<(), Error> {
-        let pow_hash =
-            Self::compute_pow_hash_and_fill_header_pow_quality(pow, header);
+        Self::fill_header_pow_quality(pow, header);
         if header.difficulty().is_zero() {
             return Err(BlockError::InvalidDifficulty(OutOfBounds {
                 min: Some(0.into()),
@@ -134,12 +124,14 @@ impl VerificationConfig {
             })
             .into());
         }
-        let boundary = pow::difficulty_to_boundary(header.difficulty());
-        if !ProofOfWorkProblem::validate_hash_against_boundary(
-            &pow_hash,
-            &header.nonce(),
-            &boundary,
+        if !ProofOfWorkProblem::validate_pow_quality_against_difficulty(
+            &header.pow_quality.unwrap(),
+            &header.difficulty(),
         ) {
+            let boundary = pow::difficulty_to_boundary(header.difficulty());
+            let pow_hash: H256 = BigEndianHash::from_uint(
+                &difficulty_to_boundary(&header.pow_quality.unwrap()),
+            );
             let lower_bound = nonce_to_lower_bound(&header.nonce());
             // Because the lower_bound first bit is always zero, as long as the
             // difficulty is not 1, this should not overflow.
