@@ -827,14 +827,13 @@ impl BlockDataManager {
         V: Clone,
         LoadF: Fn(&K) -> Option<V>,
     {
-        let upgradable_read_lock = in_mem.upgradable_read();
-        if let Some(value) = upgradable_read_lock.get(key) {
+        if let Some(value) = in_mem.read().get(key) {
             return Some(value.clone());
         }
         load_f(key).map(|value| {
             if let Some(cache_id) = maybe_cache_id {
-                RwLockUpgradableReadGuard::upgrade(upgradable_read_lock)
-                    .insert(key.clone(), value.clone());
+                let mut write = in_mem.write();
+                write.insert(key.clone(), value.clone());
                 self.cache_man.lock().note_used(cache_id);
             }
             value
