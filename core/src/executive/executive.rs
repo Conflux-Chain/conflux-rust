@@ -16,9 +16,7 @@ use crate::{
     hash::keccak,
     machine::Machine,
     parameters::staking::*,
-    state::{
-        CallStackInfo, CleanupMode, State, Substate,
-    },
+    state::{CallStackInfo, CleanupMode, State, Substate},
     statedb::Result as DbResult,
     verification::VerificationConfig,
     vm::{
