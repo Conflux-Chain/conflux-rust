@@ -32,8 +32,14 @@ pub struct StorageManager {
     // children snapshots.
     // Note that for archive node the list here is just a subset of what's
     // available.
+    //
+    // Lock order: while this is locked, in load_persist_state,
+    // snapshot_associated_mpts_by_epoch is locked.
     current_snapshots: RwLock<Vec<SnapshotInfo>>,
-    snapshot_info_map_by_epoch: RwLock<HashMap<EpochId, SnapshotInfo>>,
+    // Lock order: while this is locked, in register_new_snapshot and
+    // load_persist_state, current_snapshots and
+    // snapshot_associated_mpts_by_epoch are locked.
+    pub snapshot_info_map_by_epoch: RwLock<HashMap<EpochId, SnapshotInfo>>,
 
     last_confirmed_snapshottable_epoch_id: Mutex<Option<EpochId>>,
 
@@ -206,10 +212,10 @@ impl StorageManager {
             GuardedValue<RwLockReadGuard<Vec<SnapshotInfo>>, Arc<SnapshotDb>>,
         >,
     > {
-        // After a snapshot is returned from this function, it can be deleted,
-        // then getting intermediate mpt for the snapshot can fail,
-        // which is not a nice error to state queries from clients.
-        //
+        // Make sure that the snapshot info is ready at the same time of the
+        // snapshot db. This variable is used for the whole scope
+        // however prefixed with _ to please cargo fmt.
+        let _snapshot_info_lock = self.snapshot_info_map_by_epoch.read();
         // maintain_snapshots_pivot_chain_confirmed() can not delete snapshot
         // while the current_snapshots are read locked.
         let guard = self.current_snapshots.read();
@@ -499,10 +505,10 @@ impl StorageManager {
                 .name("Background Snapshotting".into()).spawn(move || {
                 // TODO: add support for cancellation and io throttling.
                 let f = || -> Result<()> {
-                    let new_snapshot_info = match maybe_delta_db {
+                    let (mut snapshot_info_map_locked, new_snapshot_info) = match maybe_delta_db {
                         None => {
                             in_progress_snapshot_info_cloned.merkle_root = MERKLE_NULL_NODE;
-                            Ok(in_progress_snapshot_info_cloned)
+                            (this.snapshot_info_map_by_epoch.write(), in_progress_snapshot_info_cloned)
                         }
                         Some(delta_db) => {
                             this.snapshot_manager
@@ -510,10 +516,11 @@ impl StorageManager {
                                 .new_snapshot_by_merging(
                                     &parent_snapshot_epoch_id_cloned,
                                     snapshot_epoch_id.clone(), delta_db,
-                                    in_progress_snapshot_info_cloned)
+                                    in_progress_snapshot_info_cloned,
+                                &this.snapshot_info_map_by_epoch)?
                         }
-                    }?;
-                    if let Err(e) = this.register_new_snapshot(new_snapshot_info.clone()) {
+                    };
+                    if let Err(e) = this.register_new_snapshot(new_snapshot_info.clone(), &mut snapshot_info_map_locked) {
                         error!(
                             "Failed to register new snapshot {:?} {:?}.",
                             snapshot_epoch_id, new_snapshot_info
@@ -660,7 +667,9 @@ impl StorageManager {
     /// This function is made public only for testing.
     pub fn register_new_snapshot(
         &self, new_snapshot_info: SnapshotInfo,
-    ) -> Result<()> {
+        snapshot_info_map_locked: &mut HashMap<EpochId, SnapshotInfo>,
+    ) -> Result<()>
+    {
         debug!("register_new_snapshot: info={:?}", new_snapshot_info);
         let snapshot_epoch_id = new_snapshot_info.get_snapshot_epoch_id();
         // Register intermediate MPT for the new snapshot.
@@ -710,8 +719,7 @@ impl StorageManager {
         );
 
         drop(snapshot_associated_mpts_locked);
-        self.snapshot_info_map_by_epoch
-            .write()
+        snapshot_info_map_locked
             .insert(snapshot_epoch_id.clone(), new_snapshot_info.clone());
         self.snapshot_info_db
             .put(snapshot_epoch_id.as_ref(), &new_snapshot_info.rlp_bytes())?;
@@ -1042,6 +1050,7 @@ impl StorageManager {
             current_snapshots_locked.retain(|x| {
                 !snapshots_to_remove.contains(x.get_snapshot_epoch_id())
             });
+            drop(current_snapshots_locked);
             {
                 let mut snapshot_info_map =
                     self.snapshot_info_map_by_epoch.write();
