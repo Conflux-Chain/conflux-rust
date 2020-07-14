@@ -122,11 +122,6 @@ impl Handler {
         let peers = Arc::new(Peers::new());
         let request_id_allocator = Arc::new(UniqueId::new());
 
-        // TODO(thegaram): At this point the light node does not persist
-        // anything. Need to make sure we persist the checkpoint hashes,
-        // along with a Merkle-root for headers in each era.
-        graph.recover_graph_from_db(true /* header_only */);
-
         let headers = Arc::new(Headers::new(
             graph.clone(),
             peers.clone(),
@@ -197,6 +192,8 @@ impl Handler {
             stopped.clone(),
         );
 
+        graph.recover_graph_from_db(true /* header_only */);
+
         Handler {
             protocol_version: LIGHT_PROTOCOL_VERSION,
             block_txs,
@@ -226,7 +223,7 @@ impl Handler {
         witnesses: Arc<Witnesses>, stopped: Arc<AtomicBool>,
     )
     {
-        let ledger = LedgerInfo::new(consensus);
+        let ledger = LedgerInfo::new(consensus.clone());
         let mut receiver = notifications.epochs_ordered.subscribe();
 
         // detach thread as we do not need to join it
@@ -242,8 +239,11 @@ impl Handler {
                         break;
                     }
 
+                    debug!("!!!!!!!! try_recv...");
+
                     // receive epoch number and keep offset
                     // we need to keep an offset so that we have enough headers to calculate the blame ratio
+                    // TODO: use blocking recv with timeout instead
                     let epoch = match receiver.try_recv() {
                         Ok((e, _)) if e < BLAME_CHECK_OFFSET => continue,
                         Ok((e, _)) => e - BLAME_CHECK_OFFSET,
@@ -251,10 +251,13 @@ impl Handler {
                         Err(TryRecvError::Empty) => continue,
                     };
 
+                    // TODO
+                    debug!("!!!!!!!! Blame verification received epoch {}", epoch);
+
                     match epoch {
                         // chain reorg => process again
                         e if e <= last_epoch_received => {
-                            debug!("Chain reorg, re-processing epochs (e = {}, last_epoch_received = {})", e, last_epoch_received);
+                            debug!("!!!!!!!! Chain reorg, re-processing epochs (e = {}, last_epoch_received = {})", e, last_epoch_received);
                             last_epoch_received = e;
                             next_epoch_to_process = e;
 
@@ -264,20 +267,20 @@ impl Handler {
 
                         // sanity check: epochs are sent in order, one-by-one
                         e if e > last_epoch_received + 1 => {
-                            error!("Unexpected epoch number: e = {}, last_epoch_received = {}", e, last_epoch_received);
+                            error!("!!!!!!!! Unexpected epoch number: e = {}, last_epoch_received = {}", e, last_epoch_received);
                             assert!(false);
                         }
 
                         // epoch already handled through witness
                         e if e < next_epoch_to_process => {
-                            debug!("Epoch already covered, skipping (e = {}, next_epoch_to_process = {})", e, next_epoch_to_process);
+                            debug!("!!!!!!!! Epoch already covered, skipping (e = {}, next_epoch_to_process = {})", e, next_epoch_to_process);
                             last_epoch_received = e;
                             continue;
                         }
 
                         // sanity check: no epochs are skipped
                         e if e > next_epoch_to_process => {
-                            error!("Unexpected epoch number: e = {}, next_epoch_to_process = {}", e, next_epoch_to_process);
+                            error!("!!!!!!!! Unexpected epoch number: e = {}, next_epoch_to_process = {}", e, next_epoch_to_process);
                             assert!(false);
                         }
 
@@ -291,11 +294,16 @@ impl Handler {
                     // convert epoch number into pivot height
                     let height = epoch + DEFERRED_STATE_EPOCH_COUNT;
 
+                    debug!("!!!!!!!! Finding witness for epoch {}...", epoch);
+
                     // check blaming
                     match ledger.witness_of_header_at(height) {
                         // no witness found
                         None => {
-                            error!("No witness found for epoch {} (height {})", epoch, height);
+                            error!("!!!!!!!! No witness found for epoch {} (height {})", epoch, height);
+
+                            error!("!!!!!!!! best_epoch_number: {}", consensus.best_epoch_number());
+                            error!("!!!!!!!! latest_checkpoint_epoch_number: {}", consensus.latest_checkpoint_epoch_number());
 
                             // this can happen in two cases
                             // (1) we are lagging behind so much that `height` is no longer maintained in memory.
@@ -308,7 +316,7 @@ impl Handler {
 
                         // header is not blamed (i.e. it is its own witness)
                         Some(w) if w == height => {
-                            debug!("Epoch {} (height {}) is NOT blamed", epoch, height);
+                            debug!("!!!!!!!! Epoch {} (height {}) is NOT blamed", epoch, height);
 
                             let header = ledger.pivot_header_of(height).expect("pivot header should exist");
 
@@ -334,7 +342,7 @@ impl Handler {
 
                         // header is blamed
                         Some(w) => {
-                            debug!("Epoch {} (height {}) is blamed, requesting witness {}", epoch, height, w);
+                            debug!("!!!!!!!! Epoch {} (height {}) is blamed, requesting witness {}", epoch, height, w);
 
                             // this request covers all blamed headers:
                             // [height, height + 1, ..., w]
