@@ -202,6 +202,7 @@ pub struct StateEntryWithKey {
     pub key: StateKey,
     pub entry: Option<Vec<u8>>,
     pub proof: StateProof,
+    pub state_root: PrimitiveStateRoot,
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]

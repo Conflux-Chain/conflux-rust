@@ -28,7 +28,7 @@ use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
     Account, BlockReceipts, CodeInfo, EpochNumber, Receipt, SignedTransaction,
-    StateRoot, StorageKey, StorageValue, TransactionIndex,
+    StorageKey, StorageValue, TransactionIndex,
 };
 use rlp::Rlp;
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
@@ -119,20 +119,6 @@ impl QueryService {
             .expect("Unable to access network service")
     }
 
-    #[allow(dead_code)]
-    async fn retrieve_state_root(
-        &self, epoch: u64,
-    ) -> Result<StateRoot, String> {
-        trace!("retrieve_state_root epoch = {}", epoch);
-
-        with_timeout(
-            *MAX_POLL_TIME,
-            format!("Timeout while retrieving state root for epoch {}", epoch),
-            self.with_io(|io| self.handler.state_roots.request_now(io, epoch)),
-        )
-        .await
-    }
-
     async fn retrieve_state_entry_raw(
         &self, epoch: u64, key: Vec<u8>,
     ) -> Result<Option<Vec<u8>>, String> {
@@ -141,11 +127,6 @@ impl QueryService {
             epoch,
             key
         );
-
-        // trigger state root request but don't wait for result
-        // FIXME(thegaram): is there a better way?
-        let _ =
-            self.with_io(|io| self.handler.state_roots.request_now(io, epoch));
 
         with_timeout(
             *MAX_POLL_TIME,
