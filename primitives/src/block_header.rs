@@ -78,7 +78,7 @@ pub struct BlockHeader {
     /// Hash of the block
     hash: Option<H256>,
     /// POW quality of the block
-    pub pow_quality: U256,
+    pub pow_hash: Option<H256>,
     /// Approximated rlp size of the block header
     pub approximated_rlp_size: usize,
 }
@@ -407,7 +407,7 @@ impl BlockHeaderBuilder {
                 nonce: self.nonce,
             },
             hash: None,
-            pow_quality: U256::zero(),
+            pow_hash: None,
             approximated_rlp_size: 0,
         };
 
@@ -494,7 +494,7 @@ impl Decodable for BlockHeader {
         let mut header = BlockHeader {
             rlp_part,
             hash: None,
-            pow_quality: U256::zero(),
+            pow_hash: None,
             approximated_rlp_size: rlp_size,
         };
         header.compute_hash();

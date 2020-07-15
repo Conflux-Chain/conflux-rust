@@ -19,6 +19,7 @@ use crate::{
     parameters::{consensus::*, consensus_internal::*},
     pow::{target_difficulty, PowComputer, ProofOfWorkConfig},
     state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
+    verification::VerificationConfig,
 };
 use cfx_types::{H256, U256, U512};
 use hashbrown::HashMap as FastHashMap;
@@ -1659,10 +1660,15 @@ impl ConsensusGraphInner {
     fn insert(&mut self, block_header: &BlockHeader) -> (usize, usize) {
         let hash = block_header.hash();
 
-        let is_heavy = U512::from(block_header.pow_quality)
+        let pow_quality =
+            U512::from(VerificationConfig::get_or_compute_header_pow_quality(
+                &self.pow,
+                block_header,
+            ));
+        let is_heavy = pow_quality
             >= U512::from(self.inner_conf.heavy_block_difficulty_ratio)
                 * U512::from(block_header.difficulty());
-        let is_timer = U512::from(block_header.pow_quality)
+        let is_timer = pow_quality
             >= U512::from(self.inner_conf.timer_chain_block_difficulty_ratio)
                 * U512::from(block_header.difficulty());
 
@@ -1915,7 +1921,7 @@ impl ConsensusGraphInner {
                 .data_man
                 .block_by_hash(
                     &self.arena[*idx].hash,
-                    false, /* update_cache */
+                    true, /* update_cache */
                 )
                 .expect("Exist");
             epoch_blocks.push(block);

@@ -153,6 +153,7 @@ pub fn genesis_block(
         genesis.hash()
     );
     state.commit(genesis.block_header.hash()).unwrap();
+    genesis.block_header.pow_hash = Some(Default::default());
     genesis
 }
 

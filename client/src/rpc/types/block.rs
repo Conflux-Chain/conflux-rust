@@ -15,7 +15,7 @@ use cfx_types::{H160, H256, U256, U64};
 use cfxcore::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     consensus::ConsensusGraphInner,
-    SharedConsensusGraph,
+    pow, SharedConsensusGraph,
 };
 use primitives::{
     receipt::{
@@ -228,7 +228,10 @@ impl Block {
             gas_limit: b.block_header.gas_limit().into(),
             timestamp: b.block_header.timestamp().into(),
             difficulty: b.block_header.difficulty().clone().into(),
-            pow_quality: Some(b.block_header.pow_quality.clone().into()),
+            pow_quality: b
+                .block_header
+                .pow_hash
+                .map(|h| pow::pow_hash_to_quality(&h, &b.block_header.nonce())),
             adaptive: b.block_header.adaptive(),
             referee_hashes: b
                 .block_header
@@ -363,8 +366,10 @@ impl Header {
             adaptive: h.adaptive(),
             referee_hashes,
             nonce: h.nonce().into(),
-            pow_quality: Some(h.pow_quality.into()), /* TODO(thegaram):
-                                                      * include custom */
+            pow_quality: h.pow_hash.map(|pow_hash| {
+                pow::pow_hash_to_quality(&pow_hash, &h.nonce())
+            }), /* TODO(thegaram):
+                 * include custom */
         }
     }
 }

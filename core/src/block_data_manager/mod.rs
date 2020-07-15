@@ -225,6 +225,10 @@ pub struct BlockDataManager {
     tx_data_manager: TransactionDataManager,
     pub db_manager: DBManager,
 
+    // TODO Add MallocSizeOf.
+    #[ignore_malloc_size_of = "Add later"]
+    pub pow: Arc<PowComputer>,
+
     /// This is the original genesis block.
     pub true_genesis: Arc<Block>,
     pub storage_manager: Arc<StorageManager>,
@@ -275,10 +279,11 @@ impl BlockDataManager {
             worker_pool,
         );
         let db_manager = match config.db_type {
-            DbType::Rocksdb => DBManager::new_from_rocksdb(db, pow),
-            DbType::Sqlite => {
-                DBManager::new_from_sqlite(Path::new("./sqlite_db"), pow)
-            }
+            DbType::Rocksdb => DBManager::new_from_rocksdb(db, pow.clone()),
+            DbType::Sqlite => DBManager::new_from_sqlite(
+                Path::new("./sqlite_db"),
+                pow.clone(),
+            ),
         };
 
         let data_man = Self {
@@ -306,6 +311,7 @@ impl BlockDataManager {
             cur_consensus_era_stable_hash: RwLock::new(true_genesis.hash()),
             tx_data_manager,
             db_manager,
+            pow,
             state_availability_boundary: RwLock::new(
                 StateAvailabilityBoundary::new(true_genesis.hash(), 0),
             ),
@@ -827,14 +833,13 @@ impl BlockDataManager {
         V: Clone,
         LoadF: Fn(&K) -> Option<V>,
     {
-        let upgradable_read_lock = in_mem.upgradable_read();
-        if let Some(value) = upgradable_read_lock.get(key) {
+        if let Some(value) = in_mem.read().get(key) {
             return Some(value.clone());
         }
         load_f(key).map(|value| {
             if let Some(cache_id) = maybe_cache_id {
-                RwLockUpgradableReadGuard::upgrade(upgradable_read_lock)
-                    .insert(key.clone(), value.clone());
+                let mut write = in_mem.write();
+                write.insert(key.clone(), value.clone());
                 self.cache_man.lock().note_used(cache_id);
             }
             value

@@ -1386,23 +1386,25 @@ impl SynchronizationGraph {
                         header
                     })
                 } else {
-                    self.data_man.block_by_hash(hash, false).map(|block| {
-                        let mut header = block.block_header.clone();
-                        self.insert_block_header(
-                            &mut header,
-                            true,  /* need_to_verify */
-                            false, /* bench_mode */
-                            false, /* insert_to_consensus */
-                            false, /* persistent */
-                        );
-                        self.insert_block(
-                            block.as_ref().clone(),
-                            true,  /* need_to_verify */
-                            false, /* persistent */
-                            true,  /* recover_from_db */
-                        );
-                        Arc::new(header)
-                    })
+                    self.data_man
+                        .block_by_hash(hash, true /* update_cache */)
+                        .map(|block| {
+                            let mut header = block.block_header.clone();
+                            self.insert_block_header(
+                                &mut header,
+                                true,  /* need_to_verify */
+                                false, /* bench_mode */
+                                false, /* insert_to_consensus */
+                                false, /* persistent */
+                            );
+                            self.insert_block(
+                                block.as_ref().clone(),
+                                true,  /* need_to_verify */
+                                false, /* persistent */
+                                true,  /* recover_from_db */
+                            );
+                            Arc::new(header)
+                        })
                 }
             };
 
@@ -1553,11 +1555,11 @@ impl SynchronizationGraph {
                 // become ready and being processed in the loop later. It
                 // requires this block already being inserted
                 // into the BlockDataManager!
-                if index == header_index_to_insert {
+                if index == header_index_to_insert && persistent {
                     self.data_man.insert_block_header(
                         inner.arena[index].block_header.hash(),
                         inner.arena[index].block_header.clone(),
-                        persistent,
+                        true,
                     );
                 }
                 if insert_to_consensus {
@@ -1606,11 +1608,11 @@ impl SynchronizationGraph {
                     inner.arena[index].parent,
                     inner.arena[index].block_header.hash()
                 );
-                if index == header_index_to_insert {
+                if index == header_index_to_insert && persistent {
                     self.data_man.insert_block_header(
                         inner.arena[index].block_header.hash(),
                         inner.arena[index].block_header.clone(),
-                        persistent,
+                        true,
                     );
                 }
             }
@@ -1645,7 +1647,9 @@ impl SynchronizationGraph {
                 if need_to_verify && !self.is_consortium() {
                     // Compute pow_quality, because the input header may be used
                     // as a part of block later
-                    VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(self.pow.clone(), header);
+                    VerificationConfig::get_or_fill_header_pow_quality(
+                        &self.pow, header,
+                    );
                 }
                 return (
                     BlockHeaderInsertionResult::AlreadyProcessedInConsensus,
@@ -1658,7 +1662,9 @@ impl SynchronizationGraph {
             if need_to_verify {
                 // Compute pow_quality, because the input header may be used as
                 // a part of block later
-                VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(self.pow.clone(), header);
+                VerificationConfig::get_or_fill_header_pow_quality(
+                    &self.pow, header,
+                );
             }
             return (
                 BlockHeaderInsertionResult::AlreadyProcessedInSync,
@@ -1673,7 +1679,7 @@ impl SynchronizationGraph {
                 || !(self.parent_or_referees_invalid(header)
                     || self
                         .verification_config
-                        .verify_header_params(self.pow.clone(), header)
+                        .verify_header_params(&self.pow, header)
                         .or_else(|e| {
                             warn!(
                                 "Invalid header: err={} header={:?}",
@@ -1685,7 +1691,7 @@ impl SynchronizationGraph {
         } else {
             if !bench_mode && !self.is_consortium() {
                 self.verification_config
-                    .verify_pow(self.pow.clone(), header)
+                    .verify_pow(&self.pow, header)
                     .expect("local mined block should pass this check!");
             }
             true
