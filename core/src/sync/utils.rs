@@ -14,7 +14,7 @@ use crate::{
         consensus_internal::INITIAL_BASE_MINING_REWARD_IN_UCFX,
         WORKER_COMPUTATION_PARALLELISM,
     },
-    pow::{difficulty_to_boundary, PowComputer, ProofOfWorkConfig},
+    pow::{self, PowComputer, ProofOfWorkConfig},
     statistics::Statistics,
     storage::{StorageConfiguration, StorageManager},
     sync::{SyncGraphConfig, SynchronizationGraph},
@@ -23,9 +23,7 @@ use crate::{
     vm_factory::VmFactory,
     ConsensusGraph, Notifications, TransactionPool,
 };
-use cfx_types::{
-    address_util::AddressUtil, Address, BigEndianHash, H256, U256,
-};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use core::str::FromStr;
 use parking_lot::Mutex;
 use primitives::{Block, BlockHeaderBuilder, ChainIdParams};
@@ -58,9 +56,11 @@ pub fn create_simple_block_impl(
     };
     // To convert pow_quality back to pow_hash can be inaccurate, but it should
     // be okay in tests.
-    header.pow_hash = Some(BigEndianHash::from_uint(&difficulty_to_boundary(
-        &pow_quality,
-    )));
+    header.pow_hash =
+        Some(pow::pow_quality_to_hash(&pow_quality, &header.nonce()));
+    // println!("simple_block: difficulty={:?} pow_hash={:?} pow_quality={}",
+    // pow_quality, header.pow_hash,
+    // pow::pow_hash_to_quality(&header.pow_hash.unwrap(), &header.nonce()));
     let block = Block::new(header, vec![]);
     (block.hash(), block)
 }
