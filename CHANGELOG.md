@@ -130,8 +130,6 @@ avoids inconsistent transaction pool issues during the catch up.
 
 - Change CREATE/CREATE2 maximum code size from 24K to 48K
 
-- Remove `pow_quality` from block fields in block-related RPCs.
-
 # 0.5.0
 
 ## Improvements
