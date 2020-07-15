@@ -1,7 +1,9 @@
 use crate::{
     block_data_manager::{
-        BlockExecutionResultWithEpoch, BlockRewardResult, CheckpointHashes,
-        EpochExecutionCommitment, EpochExecutionContext, LocalBlockInfo,
+        db_decode_list, db_encode_list, BlockExecutionResultWithEpoch,
+        BlockRewardResult, CheckpointHashes, DatabaseDecodable,
+        DatabaseEncodable, EpochExecutionCommitment, EpochExecutionContext,
+        LocalBlockInfo,
     },
     db::{COL_BLOCKS, COL_EPOCH_NUMBER, COL_MISC, COL_TX_INDEX},
     pow::PowComputer,
@@ -16,7 +18,7 @@ use cfx_types::H256;
 use db::SystemDB;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use primitives::{Block, BlockHeader, SignedTransaction, TransactionIndex};
-use rlp::{Decodable, Encodable, Rlp};
+use rlp::Rlp;
 use std::{collections::HashMap, fs, path::Path, sync::Arc};
 
 const LOCAL_BLOCK_INFO_SUFFIX_BYTE: u8 = 1;
@@ -424,30 +426,30 @@ impl DBManager {
 
     fn insert_encodable_val<V>(
         &self, table: DBTable, db_key: &[u8], value: &V,
-    ) where V: Encodable {
-        self.insert_to_db(table, db_key, rlp::encode(value))
+    ) where V: DatabaseEncodable {
+        self.insert_to_db(table, db_key, value.db_encode())
     }
 
     fn insert_encodable_list<V>(
         &self, table: DBTable, db_key: &[u8], value: &Vec<V>,
-    ) where V: Encodable {
-        self.insert_to_db(table, db_key, rlp::encode_list(value))
+    ) where V: DatabaseEncodable {
+        self.insert_to_db(table, db_key, db_encode_list(value))
     }
 
     fn load_decodable_val<V>(
         &self, table: DBTable, db_key: &[u8],
     ) -> Option<V>
-    where V: Decodable {
+    where V: DatabaseDecodable {
         let encoded = self.load_from_db(table, db_key)?;
-        Some(Rlp::new(&encoded).as_val().expect("decode succeeds"))
+        Some(V::db_decode(&encoded).expect("decode succeeds"))
     }
 
     fn load_decodable_list<V>(
         &self, table: DBTable, db_key: &[u8],
     ) -> Option<Vec<V>>
-    where V: Decodable {
+    where V: DatabaseDecodable {
         let encoded = self.load_from_db(table, db_key)?;
-        Some(Rlp::new(&encoded).as_list().expect("decode succeeds"))
+        Some(db_decode_list(&encoded).expect("decode succeeds"))
     }
 }
 

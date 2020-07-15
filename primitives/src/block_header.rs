@@ -256,6 +256,75 @@ impl BlockHeader {
         }
     }
 
+    /// Place this header and its `pow_hash` into an RLP stream `stream`.
+    pub fn stream_rlp_with_pow_hash(&self, stream: &mut RlpStream) {
+        let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
+        let list_len = if self.custom.is_empty() {
+            15
+        } else {
+            15 + self.custom.len()
+        };
+        stream
+            .begin_list(list_len)
+            .append(&self.parent_hash)
+            .append(&self.height)
+            .append(&self.timestamp)
+            .append(&self.author)
+            .append(&self.transactions_root)
+            .append(&self.deferred_state_root)
+            .append(&self.deferred_receipts_root)
+            .append(&self.deferred_logs_bloom_hash)
+            .append(&self.blame)
+            .append(&self.difficulty)
+            .append(&adaptive_n)
+            .append(&self.gas_limit)
+            .append_list(&self.referee_hashes)
+            .append(&self.nonce)
+            // Just encode the Option for future compatibility.
+            // It should always be Some when it is being inserted to db.
+            .append(&self.pow_hash);
+
+        if list_len > 15 {
+            for b in &self.custom {
+                stream.append_raw(b, 1);
+            }
+        }
+    }
+
+    pub fn decode_with_pow_hash(bytes: &[u8]) -> Result<Self, DecoderError> {
+        let r = Rlp::new(bytes);
+        let mut rlp_part = BlockHeaderRlpPart {
+            parent_hash: r.val_at(0)?,
+            height: r.val_at(1)?,
+            timestamp: r.val_at(2)?,
+            author: r.val_at(3)?,
+            transactions_root: r.val_at(4)?,
+            deferred_state_root: r.val_at(5)?,
+            deferred_receipts_root: r.val_at(6)?,
+            deferred_logs_bloom_hash: r.val_at(7)?,
+            blame: r.val_at(8)?,
+            difficulty: r.val_at(9)?,
+            adaptive: r.val_at::<u8>(10)? == 1,
+            gas_limit: r.val_at(11)?,
+            referee_hashes: r.list_at(12)?,
+            custom: vec![],
+            nonce: r.val_at(13)?,
+        };
+        let pow_hash = r.val_at(14)?;
+        for i in 15..r.item_count()? {
+            rlp_part.custom.push(r.at(i)?.as_raw().to_vec())
+        }
+
+        let mut header = BlockHeader {
+            rlp_part,
+            hash: None,
+            pow_hash,
+            approximated_rlp_size: bytes.len(),
+        };
+        header.compute_hash();
+        Ok(header)
+    }
+
     pub fn size(&self) -> usize {
         // FIXME: We need to revisit the size of block header once we finished
         // the persistent storage part
