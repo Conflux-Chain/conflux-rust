@@ -97,7 +97,7 @@ impl VerificationConfig {
     #[inline]
     /// Note that this function returns *pow_hash* of the block, not its quality
     pub fn compute_pow_hash_and_fill_header_pow_quality(
-        pow: Arc<PowComputer>, header: &mut BlockHeader,
+        pow: &PowComputer, header: &mut BlockHeader,
     ) -> H256 {
         let nonce = header.nonce();
         let pow_hash: H256 = pow
@@ -107,22 +107,37 @@ impl VerificationConfig {
         pow_hash
     }
 
-    pub fn fill_header_pow_quality(
-        pow: Arc<PowComputer>, header: &mut BlockHeader,
-    ) {
-        if header.pow_quality.is_some() {
-            return;
+    pub fn get_or_fill_header_pow_quality(
+        pow: &PowComputer, header: &mut BlockHeader,
+    ) -> U256 {
+        if header.pow_quality.is_none() {
+            header.pow_quality = Some(Self::compute_pow_quality(pow, header));
         }
+        return header.pow_quality.unwrap();
+    }
+
+    pub fn get_or_compute_header_pow_quality(
+        pow: &PowComputer, header: &BlockHeader,
+    ) -> U256 {
+        if header.pow_quality.is_some() {
+            return header.pow_quality.unwrap();
+        }
+        Self::compute_pow_quality(pow, header)
+    }
+
+    pub fn compute_pow_quality(
+        pow: &PowComputer, header: &BlockHeader,
+    ) -> U256 {
         let nonce = header.nonce();
         let pow_hash: H256 = pow
             .compute(&nonce, &header.problem_hash(), header.height())
             .into();
-        header.pow_quality = Some(pow::pow_hash_to_quality(&pow_hash, &nonce));
+        pow::pow_hash_to_quality(&pow_hash, &nonce)
     }
 
     #[inline]
     pub fn verify_pow(
-        &self, pow: Arc<PowComputer>, header: &mut BlockHeader,
+        &self, pow: &PowComputer, header: &mut BlockHeader,
     ) -> Result<(), Error> {
         let pow_hash =
             Self::compute_pow_hash_and_fill_header_pow_quality(pow, header);
@@ -156,7 +171,10 @@ impl VerificationConfig {
             )));
         }
 
-        assert!(header.pow_quality.unwrap() >= *header.difficulty());
+        assert!(
+            Self::get_or_fill_header_pow_quality(pow, header)
+                >= *header.difficulty()
+        );
 
         Ok(())
     }
@@ -177,7 +195,7 @@ impl VerificationConfig {
     /// This does not require header to be graph or parental tree ready.
     #[inline]
     pub fn verify_header_params(
-        &self, pow: Arc<PowComputer>, header: &mut BlockHeader,
+        &self, pow: &PowComputer, header: &mut BlockHeader,
     ) -> Result<(), Error> {
         // Check header custom data length
         let custom_len = header.custom().iter().fold(0, |acc, x| acc + x.len());

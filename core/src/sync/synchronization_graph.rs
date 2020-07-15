@@ -1647,9 +1647,8 @@ impl SynchronizationGraph {
                 if need_to_verify && !self.is_consortium() {
                     // Compute pow_quality, because the input header may be used
                     // as a part of block later
-                    VerificationConfig::fill_header_pow_quality(
-                        self.pow.clone(),
-                        header,
+                    VerificationConfig::get_or_fill_header_pow_quality(
+                        &self.pow, header,
                     );
                 }
                 return (
@@ -1663,9 +1662,8 @@ impl SynchronizationGraph {
             if need_to_verify {
                 // Compute pow_quality, because the input header may be used as
                 // a part of block later
-                VerificationConfig::fill_header_pow_quality(
-                    self.pow.clone(),
-                    header,
+                VerificationConfig::get_or_fill_header_pow_quality(
+                    &self.pow, header,
                 );
             }
             return (
@@ -1681,7 +1679,7 @@ impl SynchronizationGraph {
                 || !(self.parent_or_referees_invalid(header)
                     || self
                         .verification_config
-                        .verify_header_params(self.pow.clone(), header)
+                        .verify_header_params(&self.pow, header)
                         .or_else(|e| {
                             warn!(
                                 "Invalid header: err={} header={:?}",
@@ -1693,7 +1691,7 @@ impl SynchronizationGraph {
         } else {
             if !bench_mode && !self.is_consortium() {
                 self.verification_config
-                    .verify_pow(self.pow.clone(), header)
+                    .verify_pow(&self.pow, header)
                     .expect("local mined block should pass this check!");
             }
             true
