@@ -20,6 +20,9 @@ pub struct StorageManager {
         HashMap<EpochId, (Option<Arc<DeltaMpt>>, Option<Arc<DeltaMpt>>)>,
     >,
 
+    // Lock order: while this is locked, in
+    // check_make_register_snapshot_background, snapshot_info_map_by_epoch
+    // is locked later.
     pub in_progress_snapshotting_tasks:
         RwLock<HashMap<EpochId, Arc<RwLock<InProgressSnapshotTask>>>>,
     in_progress_snapshot_finish_signaler: Arc<Mutex<Sender<Option<EpochId>>>>,
@@ -34,11 +37,11 @@ pub struct StorageManager {
     // available.
     //
     // Lock order: while this is locked, in load_persist_state,
-    // snapshot_associated_mpts_by_epoch is locked.
+    // snapshot_associated_mpts_by_epoch is locked later.
     current_snapshots: RwLock<Vec<SnapshotInfo>>,
     // Lock order: while this is locked, in register_new_snapshot and
     // load_persist_state, current_snapshots and
-    // snapshot_associated_mpts_by_epoch are locked.
+    // snapshot_associated_mpts_by_epoch are locked later.
     pub snapshot_info_map_by_epoch: RwLock<HashMap<EpochId, SnapshotInfo>>,
 
     last_confirmed_snapshottable_epoch_id: Mutex<Option<EpochId>>,
@@ -227,6 +230,7 @@ impl StorageManager {
                 Ok(Some(GuardedValue::new(guard, snapshot_db)))
             }
             None => {
+                drop(_snapshot_info_lock);
                 drop(guard);
                 // Wait for in progress snapshot.
                 if let Some(in_progress_snapshot_task) = self
@@ -335,7 +339,6 @@ impl StorageManager {
     ) -> Result<Arc<DeltaMpt>>
     {
         // Don't hold the lock while doing db io.
-        // FIXME This always succeeds with the same delta_db opened now.
         // If the DeltaMpt already exists, the empty delta db creation should
         // fail already.
         let db_result = storage_manager.delta_db_manager.new_empty_delta_db(
@@ -458,10 +461,10 @@ impl StorageManager {
             } else {
                 let delta_db = maybe_delta_db.as_ref().unwrap();
                 while delta_height > 0 {
-                    // FIXME: maybe not unwrap, but throw an error about db
-                    // corruption.
-                    epoch_id =
-                        delta_db.mpt.get_parent_epoch(&epoch_id)?.unwrap();
+                    epoch_id = match delta_db.mpt.get_parent_epoch(&epoch_id)? {
+                        None => bail!(ErrorKind::DbValueError),
+                        Some(epoch_id) => epoch_id,
+                    };
                     delta_height -= 1;
                     pivot_chain_parts[delta_height] = epoch_id.clone();
                     trace!(
@@ -530,6 +533,7 @@ impl StorageManager {
 
                     task_finished_sender_cloned.lock().send(Some(snapshot_epoch_id))
                         .or(Err(Error::from(ErrorKind::MpscError)))?;
+                    drop(snapshot_info_map_locked);
 
                     let debug_snapshot_checkers =
                         this.storage_conf.debug_snapshot_checker_threads;
@@ -774,6 +778,7 @@ impl StorageManager {
                 states_to_remove.insert(hash);
             }
         }
+        // FIXME: we don't need these since there is StateAvailabilityBoundary.
         for hash in states_to_remove {
             // FIXME Commitments of non-pivot states are not removed.
             // Need to check if this will take too much time.
