@@ -1393,7 +1393,7 @@ impl<'a> Executive<'a> {
             {
                 // sponsor will pay for collateral for storage
                 let collateral_for_storage =
-                    self.state.collateral_for_storage(&code_address)?;
+                    self.state.collateral_for_storage(&sender)?;
                 (
                     tx_storage_limit_in_drip + collateral_for_storage,
                     code_address,
