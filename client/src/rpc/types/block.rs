@@ -27,7 +27,7 @@ use primitives::{
     BlockHeaderBuilder, TransactionIndex,
 };
 
-use crate::rpc::types::{Receipt, Transaction};
+use crate::rpc::types::{transaction::PackedOrExecuted, Receipt, Transaction};
 
 #[derive(PartialEq, Debug)]
 pub enum BlockTransactions {
@@ -161,21 +161,22 @@ impl Block {
                             match receipt.outcome_status {
                                 TRANSACTION_OUTCOME_SUCCESS
                                 | TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING => {
+                                    let tx_index = TransactionIndex {
+                                        block_hash: b.hash(),
+                                        index: idx,
+                                    };
                                     Transaction::from_signed(
                                         tx,
-                                        Some(Receipt::new(
+                                        Some(PackedOrExecuted::Executed(Receipt::new(
                                             (**tx).clone(),
                                             receipt.clone(),
-                                            TransactionIndex {
-                                                block_hash: b.hash(),
-                                                index: idx,
-                                            },
+                                            tx_index,
                                             prior_gas_used,
                                             // TODO: set these fields below.
                                             /* maybe_epoch_number = */
                                             None,
                                             /* maybe_state_root = */ None,
-                                        )),
+                                        ))),
                                     )
                                 }
                                 TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING => {
