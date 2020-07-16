@@ -8,8 +8,8 @@ use cfxcore_accounts::AccountProvider;
 use cfxkey::{Error, Password};
 use primitives::{
     transaction::Action, SignedTransaction,
-    Transaction as PrimitiveTransaction, TransactionWithSignature,
-    TransactionWithSignatureSerializePart,
+    Transaction as PrimitiveTransaction, TransactionIndex,
+    TransactionWithSignature, TransactionWithSignatureSerializePart,
 };
 use std::sync::Arc;
 
@@ -39,23 +39,41 @@ pub struct Transaction {
     pub s: U256,
 }
 
+pub enum PackedOrExecuted {
+    Packed(TransactionIndex),
+    Executed(Receipt),
+}
+
 impl Transaction {
     pub fn from_signed(
-        t: &SignedTransaction, receipt: Option<Receipt>,
-    ) -> Transaction {
+        t: &SignedTransaction,
+        maybe_packed_or_executed: Option<PackedOrExecuted>,
+    ) -> Transaction
+    {
         let mut contract_created = None;
         let mut status: Option<U64> = None;
-        if let Some(ref receipt) = receipt {
-            if let Some(ref address) = receipt.contract_created {
-                contract_created = Some(address.clone().into());
+        let mut block_hash = None;
+        let mut transaction_index = None;
+        match maybe_packed_or_executed {
+            None => {}
+            Some(PackedOrExecuted::Packed(tx_index)) => {
+                block_hash = Some(tx_index.block_hash);
+                transaction_index = Some(tx_index.index.into());
             }
-            status = Some(receipt.outcome_status);
+            Some(PackedOrExecuted::Executed(receipt)) => {
+                block_hash = Some(receipt.block_hash);
+                transaction_index = Some(receipt.index.into());
+                if let Some(ref address) = receipt.contract_created {
+                    contract_created = Some(address.clone().into());
+                }
+                status = Some(receipt.outcome_status);
+            }
         }
         Transaction {
             hash: t.transaction.hash().into(),
             nonce: t.nonce.into(),
-            block_hash: receipt.clone().map(|x| x.block_hash),
-            transaction_index: receipt.map(|x| x.index.into()),
+            block_hash,
+            transaction_index,
             status,
             contract_created,
             from: t.sender().into(),

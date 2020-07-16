@@ -342,6 +342,17 @@ impl BlockDataManager {
                 data_man.true_genesis.clone(),
                 true, /* persistent */
             );
+            for (index, tx) in
+                data_man.true_genesis.transactions.iter().enumerate()
+            {
+                data_man.insert_transaction_index(
+                    &tx.hash,
+                    &TransactionIndex {
+                        block_hash: cur_era_genesis_hash,
+                        index,
+                    },
+                );
+            }
             // Initialize ExecutionContext for true genesis
             data_man.insert_epoch_execution_context(
                 cur_era_genesis_hash,
