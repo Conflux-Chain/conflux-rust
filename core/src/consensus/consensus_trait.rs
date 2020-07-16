@@ -72,7 +72,7 @@ pub trait ConsensusGraphTrait: Send + Sync {
     // FIXME: return type.
     fn get_transaction_info_by_hash(
         &self, hash: &H256,
-    ) -> Option<(SignedTransaction, Receipt, TransactionIndex, U256)>;
+    ) -> Option<(SignedTransaction, TransactionIndex, Option<(Receipt, U256)>)>;
 
     fn get_block_epoch_number(&self, hash: &H256) -> Option<u64>;
 

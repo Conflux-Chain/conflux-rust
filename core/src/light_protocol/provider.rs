@@ -197,7 +197,7 @@ impl Provider {
     #[inline]
     fn tx_info_by_hash(&self, hash: H256) -> Option<TxInfo> {
         let addr = match self.consensus.get_transaction_info_by_hash(&hash) {
-            Some(info) => info.2,
+            Some(info) => info.1,
             None => {
                 warn!("Unable to get tx info for {:?}", hash);
                 return None;

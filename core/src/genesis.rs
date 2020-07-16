@@ -8,13 +8,13 @@ use crate::{
     state::OverlayAccount,
     statedb::{Result as DbResult, StateDb},
     storage::{StorageManager, StorageManagerTrait},
-    verification::compute_receipts_root,
+    verification::{compute_receipts_root, compute_transaction_root},
 };
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use keylib::KeyPair;
 use primitives::{
     Account, Block, BlockHeaderBuilder, BlockReceipts, StorageKey,
-    StorageLayout,
+    StorageLayout, Transaction,
 };
 use secret_store::SecretStore;
 use std::{
@@ -30,6 +30,9 @@ pub const DEV_GENESIS_PRI_KEY: &'static str =
 /// Used in Ethereum replay e2e test.
 pub const DEV_GENESIS_PRI_KEY_2: &'static str =
     "9a6d3ba2b0c7514b16a006ee605055d71b9edfad183aeb2d9790e9d4ccced471";
+pub const GENESIS_TRANSACTION_DATA_STR: &'static str =
+    "26870.10643898104687425822313361.30
+Cogito ergo sum. - René Descartes";
 
 lazy_static! {
     pub static ref DEV_GENESIS_KEY_PAIR: KeyPair =
@@ -136,6 +139,10 @@ pub fn genesis_block(
         receipts: vec![],
         secondary_reward: U256::zero(),
     })]);
+    let mut genesis_transaction = Transaction::default();
+    genesis_transaction.data = GENESIS_TRANSACTION_DATA_STR.as_bytes().into();
+    let genesis_transactions =
+        vec![Arc::new(genesis_transaction.fake_sign(Default::default()))];
     let mut genesis = Block::new(
         BlockHeaderBuilder::new()
             .with_deferred_state_root(state_root.aux_info.state_root_hash)
@@ -143,8 +150,11 @@ pub fn genesis_block(
             .with_gas_limit(GENESIS_GAS_LIMIT.into())
             .with_author(genesis_block_author)
             .with_difficulty(initial_difficulty)
+            .with_transactions_root(compute_transaction_root(
+                &genesis_transactions,
+            ))
             .build(),
-        Vec::new(),
+        genesis_transactions,
     );
     genesis.block_header.compute_hash();
     debug!(
