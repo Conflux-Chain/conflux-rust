@@ -301,12 +301,13 @@ impl State {
         return Ok(());
     }
 
+
     /// Charge and refund all the storage collaterals.
     /// The suisided addresses are skimmed because their collateral have been
     /// checked out. This function should only be called in post-processing
     /// of a transaction.
-    pub fn settle_collateral_for_all(
-        &mut self, storage_owner: &Address, storage_limit: &U256,
+    pub fn collect_ownership_changed_and_settle(
+        &mut self, original_sender: &Address, storage_limit: &U256,
         substate: &mut Substate,
     ) -> DbResult<CollateralCheckResult>
     {
@@ -318,7 +319,7 @@ impl State {
         }
 
         let collateral_for_storage =
-            self.collateral_for_storage(storage_owner)?;
+            self.collateral_for_storage(original_sender)?;
         if collateral_for_storage > *storage_limit {
             Ok(CollateralCheckResult::ExceedStorageLimit {
                 limit: *storage_limit,

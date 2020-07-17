@@ -115,8 +115,6 @@ pub enum Error {
     OutOfBounds,
     /// Execution has been reverted with REVERT.
     Reverted,
-    /// Reentrancy encountered
-    Reentrancy,
     /// Invalid address
     InvalidAddress(Address),
 }
@@ -185,7 +183,6 @@ impl fmt::Display for Error {
             Wasm(ref msg) => write!(f, "Internal error: {}", msg),
             OutOfBounds => write!(f, "Out of bounds"),
             Reverted => write!(f, "Reverted"),
-            Reentrancy => write!(f, "Reentrancy"),
             InvalidAddress(ref addr) => write!(f, "InvalidAddress: {}", addr),
         }
     }

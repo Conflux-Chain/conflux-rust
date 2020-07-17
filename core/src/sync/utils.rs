@@ -14,7 +14,7 @@ use crate::{
         consensus_internal::INITIAL_BASE_MINING_REWARD_IN_UCFX,
         WORKER_COMPUTATION_PARALLELISM,
     },
-    pow::{PowComputer, ProofOfWorkConfig},
+    pow::{self, PowComputer, ProofOfWorkConfig},
     statistics::Statistics,
     storage::{StorageConfiguration, StorageManager},
     sync::{SyncGraphConfig, SynchronizationGraph},
@@ -49,11 +49,18 @@ pub fn create_simple_block_impl(
         .with_author(author)
         .build();
     header.compute_hash();
-    header.pow_quality = if block_weight > 1 {
+    let pow_quality = if block_weight > 1 {
         diff * block_weight
     } else {
         diff
     };
+    // To convert pow_quality back to pow_hash can be inaccurate, but it should
+    // be okay in tests.
+    header.pow_hash =
+        Some(pow::pow_quality_to_hash(&pow_quality, &header.nonce()));
+    // println!("simple_block: difficulty={:?} pow_hash={:?} pow_quality={}",
+    // pow_quality, header.pow_hash,
+    // pow::pow_hash_to_quality(&header.pow_hash.unwrap(), &header.nonce()));
     let block = Block::new(header, vec![]);
     (block.hash(), block)
 }

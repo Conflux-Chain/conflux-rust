@@ -177,6 +177,19 @@ pub fn pow_hash_to_quality(hash: &H256, nonce: &U256) -> U256 {
     }
 }
 
+/// This should only be used in tests.
+pub fn pow_quality_to_hash(pow_quality: &U256, nonce: &U256) -> H256 {
+    let lower_bound = nonce_to_lower_bound(nonce);
+    let hash_u256 = if pow_quality.eq(&U256::MAX) {
+        U256::one()
+    } else {
+        let boundary = difficulty_to_boundary(&(pow_quality + U256::one()));
+        let (against_bound_u256, _) = boundary.overflowing_add(lower_bound);
+        against_bound_u256
+    };
+    BigEndianHash::from_uint(&hash_u256)
+}
+
 /// Convert boundary to its original difficulty. Basically just `f(x) = 2^256 /
 /// x`.
 pub fn boundary_to_difficulty(boundary: &U256) -> U256 {

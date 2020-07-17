@@ -43,8 +43,9 @@ use crate::{
             BlockHashOrEpochNumber, Bytes, CallRequest,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
             EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
-            Log as RpcLog, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
-            SendTxRequest, SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
+            Log as RpcLog, PackedOrExecuted, Receipt as RpcReceipt,
+            RewardInfo as RpcRewardInfo, SendTxRequest,
+            SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
             StorageRoot as RpcStorageRoot, SyncGraphStates,
             Transaction as RpcTransaction,
         },
@@ -440,18 +441,22 @@ impl RpcImpl {
         info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
 
         if let Some(info) = self.consensus.get_transaction_info_by_hash(&hash) {
-            let (tx, receipt, tx_index, prior_gas_used) = info;
-            let rpc_receipt = RpcReceipt::new(
-                tx.clone(),
-                receipt,
-                tx_index,
-                prior_gas_used,
-                // TODO: set these fields below.
-                /* maybe_epoch_number = */
-                None,
-                /* maybe_state_root = */ None,
-            );
-            let rpc_tx = RpcTransaction::from_signed(&tx, Some(rpc_receipt));
+            let (tx, tx_index, maybe_executed) = info;
+            let packed_or_executed = match maybe_executed {
+                None => PackedOrExecuted::Packed(tx_index),
+                Some((receipt, prior_gas_used)) => {
+                    PackedOrExecuted::Executed(RpcReceipt::new(
+                        tx.clone(),
+                        receipt,
+                        tx_index,
+                        prior_gas_used,
+                        None,
+                        None,
+                    ))
+                }
+            };
+            let rpc_tx =
+                RpcTransaction::from_signed(&tx, Some(packed_or_executed));
             return Ok(Some(rpc_tx));
         }
 

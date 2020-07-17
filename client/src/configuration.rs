@@ -168,7 +168,7 @@ build_config! {
         (max_handshakes, (usize), 64)
         (max_incoming_peers, (usize), 64)
         (max_inflight_request_count, (u64), 64)
-        (max_outgoing_peers, (usize), 16)
+        (max_outgoing_peers, (usize), 8)
         (max_outgoing_peers_archive, (Option<usize>), None)
         (max_peers_tx_propagation, (usize), 128)
         (max_unprocessed_block_size_mb, (usize), (128))
@@ -196,11 +196,11 @@ build_config! {
         (node_table_timeout_s, (u64), 300)
         (node_table_promotion_timeout_s, (u64), 3 * 24 * 3600)
         (session_ip_limits, (String), "1,8,4,2".into())
-        (subnet_quota, (usize), 32)
+        (subnet_quota, (usize), 128)
 
         // Transaction cache/transaction pool section.
         (tx_cache_index_maintain_timeout_ms, (u64), 300_000)
-        (tx_pool_size, (usize), 500_000)
+        (tx_pool_size, (usize), 200_000)
         (tx_pool_min_tx_gas_price, (u64), 1)
         (tx_weight_scaling, (u64), 1)
         (tx_weight_exp, (u8), 1)

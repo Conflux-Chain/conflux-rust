@@ -126,6 +126,9 @@ impl ConfirmationMeter {
     pub fn confirmation_risk_by_hash(
         &self, g_inner: &ConsensusGraphInner, hash: H256,
     ) -> Option<f64> {
+        if hash == g_inner.data_man.true_genesis.hash() {
+            return Some(CONFIRMATION_METER_MIN_MAINTAINED_RISK);
+        }
         let index = match g_inner.hash_to_arena_indices.get(&hash) {
             Some(i) => *i,
             None => {

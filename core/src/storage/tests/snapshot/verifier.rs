@@ -369,10 +369,14 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
         unreachable!()
     }
 
-    fn new_snapshot_by_merging(
+    fn new_snapshot_by_merging<'m>(
         &self, _old_snapshot_epoch_id: &EpochId, _snapshot_epoch_id: EpochId,
         _delta_mpt: DeltaMptIterator, _in_progress_snapshot_info: SnapshotInfo,
-    ) -> Result<SnapshotInfo>
+        _snapshot_info_map: &'m RwLock<HashMap<EpochId, SnapshotInfo>>,
+    ) -> Result<(
+        RwLockWriteGuard<'m, HashMap<EpochId, SnapshotInfo>>,
+        SnapshotInfo,
+    )>
     {
         unreachable!()
     }
@@ -393,9 +397,11 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
         Ok(self.temp_snapshot.clone())
     }
 
-    fn finalize_full_sync_snapshot(
+    fn finalize_full_sync_snapshot<'m>(
         &self, _snapshot_epoch_id: &MerkleHash, _merkle_root: &MerkleHash,
-    ) -> Result<()> {
+        _snapshot_info_map_rwlock: &'m RwLock<HashMap<EpochId, SnapshotInfo>>,
+    ) -> Result<RwLockWriteGuard<'m, HashMap<EpochId, SnapshotInfo>>>
+    {
         unreachable!()
     }
 }
@@ -596,7 +602,7 @@ use crate::storage::{
     },
     DeltaMptIterator, MptSlicer,
 };
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock, RwLockWriteGuard};
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
 use rand::Rng;
 use std::{
