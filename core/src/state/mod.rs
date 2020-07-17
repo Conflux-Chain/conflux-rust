@@ -64,7 +64,7 @@ pub enum CleanupMode<'a> {
 pub enum CollateralCheckResult {
     ExceedStorageLimit { limit: U256, required: U256 },
     NotEnoughBalance { required: U256, got: U256 },
-    Valid,
+    Valid, 
 }
 
 #[derive(Copy, Clone, Debug)]
