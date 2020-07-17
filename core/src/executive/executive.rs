@@ -1385,25 +1385,21 @@ impl<'a> Executive<'a> {
         } else {
             0.into()
         };
-        // Find the upper bound of `collateral_for_storage` and `storage_owner`
-        // in this execution.
-        let (total_storage_limit, storage_owner) = {
+        // No matter who pays the collateral, we only focuses on the storage
+        // limit of sender.
+        let total_storage_limit = self.state.collateral_for_storage(&sender)?
+            + tx_storage_limit_in_drip;
+        // Find the `storage_owner` in this execution.
+        let storage_owner = {
             if storage_sponsored
                 && tx_storage_limit_in_drip <= storage_sponsor_balance
             {
                 // sponsor will pay for collateral for storage
-                let collateral_for_storage =
-                    self.state.collateral_for_storage(&code_address)?;
-                (
-                    tx_storage_limit_in_drip + collateral_for_storage,
-                    code_address,
-                )
+                code_address
             } else {
                 // sender will pay for collateral for storage
                 total_cost += tx_storage_limit_in_drip.into();
-                let collateral_for_storage =
-                    self.state.collateral_for_storage(&sender)?;
-                (tx_storage_limit_in_drip + collateral_for_storage, sender)
+                sender
             }
         };
 
