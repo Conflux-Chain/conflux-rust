@@ -214,7 +214,20 @@ impl Provider {
             };
 
         let block_hash = tx_index.block_hash;
+
+        let block = match self.ledger.block(block_hash) {
+            Ok(b) => b,
+            Err(e) => {
+                warn!("Unable to retrieve block {:?}: {}", block_hash, e);
+                return None;
+            }
+        };
+
         let tx_index_in_block = tx_index.index;
+        let num_txs_in_block = block.transactions.len();
+
+        let tx_proof =
+            compute_transaction_proof(&block.transactions, tx_index_in_block);
 
         let epoch = match self.consensus.get_block_epoch_number(&block_hash) {
             Some(epoch) => epoch,
@@ -232,6 +245,8 @@ impl Provider {
             }
         };
 
+        let num_blocks_in_epoch = epoch_hashes.len();
+
         let block_index_in_epoch =
             match epoch_hashes.iter().position(|h| *h == block_hash) {
                 Some(id) => id,
@@ -242,7 +257,7 @@ impl Provider {
             };
 
         let epoch_receipts = match self.ledger.receipts_of(epoch) {
-            Ok(rs) => rs,
+            Ok(rs) => rs.iter().cloned().map(Arc::new).collect::<Vec<_>>(),
             Err(e) => {
                 warn!("Unable to retrieve receipts for {}: {}", epoch, e);
                 return None;
@@ -250,11 +265,7 @@ impl Provider {
         };
 
         let epoch_receipt_proof = compute_epoch_receipt_proof(
-            &epoch_receipts
-                .iter()
-                .cloned()
-                .map(Arc::new)
-                .collect::<Vec<_>>(),
+            &epoch_receipts,
             block_index_in_epoch,
             tx_index_in_block,
         );
@@ -268,11 +279,7 @@ impl Provider {
                         .clone();
 
                     let proof = compute_epoch_receipt_proof(
-                        &epoch_receipts
-                            .iter()
-                            .cloned()
-                            .map(Arc::new)
-                            .collect::<Vec<_>>(),
+                        &epoch_receipts,
                         block_index_in_epoch,
                         tx_index_in_block - 1,
                     );
@@ -280,20 +287,6 @@ impl Provider {
                     (Some(receipt), Some(proof.block_receipt_proof))
                 }
             };
-
-        let block = match self.ledger.block(block_hash) {
-            Ok(b) => b,
-            Err(e) => {
-                warn!("Unable to retrieve block {:?}: {}", block_hash, e);
-                return None;
-            }
-        };
-
-        let tx_proof =
-            compute_transaction_proof(&block.transactions, tx_index_in_block);
-
-        let num_blocks_in_epoch = epoch_hashes.len();
-        let num_txs_in_block = block.transactions.len();
 
         Some(TxInfo {
             epoch,

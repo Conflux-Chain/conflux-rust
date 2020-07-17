@@ -224,6 +224,8 @@ impl TxInfos {
             match self.witnesses.root_hashes_of(epoch) {
                 Some((_, receipts_root, _)) => receipts_root,
                 None => {
+                    // TODO(thegaram): signal to RPC layer that the
+                    // corresponding roots are not available yet
                     warn!("Receipt root not found, epoch={}", epoch,);
                     return Err(ErrorKind::InternalError.into());
                 }
@@ -259,7 +261,7 @@ impl TxInfos {
             &receipt,
             &receipt_proof,
         ) {
-            debug!("receipt proof verification failed");
+            debug!("Receipt proof verification failed");
             return Err(ErrorKind::InvalidTxInfo.into());
         }
 
@@ -286,7 +288,7 @@ impl TxInfos {
                     &prev_receipt,
                     &prev_receipt_proof,
                 ) {
-                    debug!("receipt proof verification failed");
+                    debug!("Receipt proof verification failed");
                     return Err(ErrorKind::InvalidTxInfo.into());
                 }
 

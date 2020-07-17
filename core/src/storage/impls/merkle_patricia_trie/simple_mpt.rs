@@ -83,12 +83,13 @@ pub fn simple_mpt_proof(
     >::new(simple_mpt);
 
     cursor.load_root().expect("load_root should succeed");
+
     cursor
         .open_path_for_key::<access_mode::Read>(access_key)
         .expect("open_path_for_key should succeed");
+
     let proof = cursor.to_proof();
     cursor.finish().expect("finish should succeed");
-
     proof
 }
 
