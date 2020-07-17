@@ -144,7 +144,7 @@ impl TrieProof {
         (proves, proof_node)
     }
 
-    /// Get the value under `key` starting from `root.
+    /// Get the value under `key` starting from `root`.
     pub fn get_value(&self, key: &[u8], root: &MerkleHash) -> Option<&[u8]> {
         let mut proof_node = None;
         let proof_node_mut = &mut proof_node;
