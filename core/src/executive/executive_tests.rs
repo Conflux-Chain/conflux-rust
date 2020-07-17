@@ -30,7 +30,7 @@ use std::{
 };
 
 fn make_byzantium_machine(max_depth: usize) -> Machine {
-    let mut machine = crate::machine::new_machine_with_builtin();
+    let mut machine = crate::machine::new_machine_with_builtin(0);
     machine
         .set_spec_creation_rules(Box::new(move |s, _| s.max_depth = max_depth));
     machine
@@ -400,7 +400,7 @@ fn test_revert() {
     params.code = Some(Arc::new(code));
     params.value = ActionValue::Transfer(U256::zero());
     let env = Env::default();
-    let machine = crate::machine::new_machine_with_builtin();
+    let machine = crate::machine::new_machine_with_builtin(0);
     let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
     let mut substate = Substate::new();

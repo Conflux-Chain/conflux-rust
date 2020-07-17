@@ -519,7 +519,7 @@ mod tests {
 
         fn new() -> Self {
             let storage_manager = Box::new(new_storage_manager_for_testing());
-            let machine = new_machine_with_builtin();
+            let machine = new_machine_with_builtin(0);
             let env = get_test_env();
             let spec = machine.spec(env.number);
             let internal_contract_map = InternalContractMap::new();

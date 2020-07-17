@@ -471,12 +471,8 @@ impl QueryService {
     }
 
     pub fn get_latest_verifiable_chain_id(&self) -> Result<u32, FilterError> {
-        let epoch_number = self.get_latest_verifiable_epoch_number()?;
-        Ok(self
-            .consensus
-            .get_config()
-            .chain_id
-            .get_chain_id(epoch_number))
+        // let epoch_number = self.get_latest_verifiable_epoch_number()?;
+        Ok(self.consensus.get_config().chain_id.get_chain_id())
     }
 
     pub fn get_latest_verifiable_epoch_number(
