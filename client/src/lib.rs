@@ -28,4 +28,4 @@ mod tests;
 
 /// Used in Genesis author to indicate test-net/main-net version.
 /// Increased for every test-net/main-net release with reset.
-const GENESIS_VERSION: &str = "1000000000000000000000000000000000000060";
+const GENESIS_VERSION: &str = "1000000000000000000000000000000000000000";
