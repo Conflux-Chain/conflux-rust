@@ -44,6 +44,7 @@ use crate::{
         MAX_EPOCHS_TO_SEND, MAX_HEADERS_TO_SEND, MAX_TXS_TO_SEND,
     },
     sync::{message::Throttled, SynchronizationGraph},
+    verification::{compute_epoch_receipt_proof, compute_transaction_proof},
     TransactionPool,
 };
 use network::{node_table::NodeId, service::ProtocolVersion};
@@ -196,16 +197,24 @@ impl Provider {
 
     #[inline]
     fn tx_info_by_hash(&self, hash: H256) -> Option<TxInfo> {
-        let addr = match self.consensus.get_transaction_info_by_hash(&hash) {
-            Some(info) => info.1,
-            None => {
-                warn!("Unable to get tx info for {:?}", hash);
-                return None;
-            }
-        };
+        let (tx, tx_index, receipt) =
+            match self.consensus.get_transaction_info_by_hash(&hash) {
+                None => {
+                    warn!("Unable to get tx info for {:?}", hash);
+                    return None;
+                }
+                Some((_, _, None)) => {
+                    warn!("Unable to get receipt for {:?}", hash);
+                    return None;
+                }
+                Some((tx, tx_index, Some((receipt, _)))) => {
+                    assert_eq!(tx.hash(), hash); // sanity check
+                    (tx, tx_index, receipt)
+                }
+            };
 
-        let block_hash = addr.block_hash;
-        let index = addr.index;
+        let block_hash = tx_index.block_hash;
+        let tx_index_in_block = tx_index.index;
 
         let epoch = match self.consensus.get_block_epoch_number(&block_hash) {
             Some(epoch) => epoch,
@@ -215,6 +224,23 @@ impl Provider {
             }
         };
 
+        let epoch_hashes = match self.ledger.block_hashes_in(epoch) {
+            Ok(hs) => hs,
+            Err(e) => {
+                warn!("Unable to epoch hashes for {}: {}", epoch, e);
+                return None;
+            }
+        };
+
+        let block_index_in_epoch =
+            match epoch_hashes.iter().position(|h| *h == block_hash) {
+                Some(id) => id,
+                None => {
+                    warn!("Unable to find {:?} in {}", block_hash, epoch);
+                    return None;
+                }
+            };
+
         let epoch_receipts = match self.ledger.receipts_of(epoch) {
             Ok(rs) => rs,
             Err(e) => {
@@ -222,6 +248,38 @@ impl Provider {
                 return None;
             }
         };
+
+        let epoch_receipt_proof = compute_epoch_receipt_proof(
+            &epoch_receipts
+                .iter()
+                .cloned()
+                .map(Arc::new)
+                .collect::<Vec<_>>(),
+            block_index_in_epoch,
+            tx_index_in_block,
+        );
+
+        let (maybe_prev_receipt, maybe_prev_receipt_proof) =
+            match tx_index_in_block {
+                0 => (None, None),
+                _ => {
+                    let receipt = epoch_receipts[block_index_in_epoch].receipts
+                        [tx_index_in_block - 1]
+                        .clone();
+
+                    let proof = compute_epoch_receipt_proof(
+                        &epoch_receipts
+                            .iter()
+                            .cloned()
+                            .map(Arc::new)
+                            .collect::<Vec<_>>(),
+                        block_index_in_epoch,
+                        tx_index_in_block - 1,
+                    );
+
+                    (Some(receipt), Some(proof.block_receipt_proof))
+                }
+            };
 
         let block = match self.ledger.block(block_hash) {
             Ok(b) => b,
@@ -231,20 +289,31 @@ impl Provider {
             }
         };
 
-        let block_txs = block
-            .transactions
-            .clone()
-            .into_iter()
-            .map(|arc_tx| (*arc_tx).clone())
-            .collect();
+        let tx_proof =
+            compute_transaction_proof(&block.transactions, tx_index_in_block);
+
+        let num_blocks_in_epoch = epoch_hashes.len();
+        let num_txs_in_block = block.transactions.len();
 
         Some(TxInfo {
-            tx_hash: hash,
             epoch,
-            block_hash,
-            index,
-            epoch_receipts,
-            block_txs,
+
+            // tx-related fields
+            tx,
+            tx_index_in_block,
+            num_txs_in_block,
+            tx_proof,
+
+            // receipt-related fields
+            receipt,
+            block_index_in_epoch,
+            num_blocks_in_epoch,
+            block_index_proof: epoch_receipt_proof.block_index_proof,
+            receipt_proof: epoch_receipt_proof.block_receipt_proof,
+
+            // prior_gas_used-related fields
+            maybe_prev_receipt,
+            maybe_prev_receipt_proof,
         })
     }
 

@@ -169,11 +169,10 @@ impl Handler {
         ));
 
         let tx_infos = TxInfos::new(
-            block_txs.clone(),
             consensus.clone(),
             peers.clone(),
             request_id_allocator.clone(),
-            receipts.clone(),
+            witnesses.clone(),
         );
 
         Handler {
