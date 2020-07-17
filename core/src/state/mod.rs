@@ -301,12 +301,11 @@ impl State {
         return Ok(());
     }
 
-
     /// Charge and refund all the storage collaterals.
     /// The suisided addresses are skimmed because their collateral have been
     /// checked out. This function should only be called in post-processing
     /// of a transaction.
-    pub fn collect_ownership_changed_and_settle(
+    pub fn settle_collateral_for_all(
         &mut self, original_sender: &Address, storage_limit: &U256,
         substate: &mut Substate,
     ) -> DbResult<CollateralCheckResult>
