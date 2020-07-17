@@ -2319,35 +2319,37 @@ impl ConsensusGraphInner {
 
     pub fn get_transaction_receipt_with_address(
         &self, tx_hash: &H256,
-    ) -> Option<(Receipt, TransactionIndex, U256)> {
+    ) -> Option<(TransactionIndex, Option<(Receipt, U256)>)> {
         trace!("Get receipt with tx_hash {}", tx_hash);
         let tx_index = self.data_man.transaction_index_by_hash(
             tx_hash, false, /* update_cache */
         )?;
         // receipts should never be None if transaction index isn't none.
-        let block_receipts = self
+        let maybe_executed = self
             .block_execution_results_by_hash(
                 &tx_index.block_hash,
                 false, /* update_cache */
-            )?
-            .1
-            .block_receipts;
+            )
+            .map(|receipt| {
+                let block_receipts = receipt.1.block_receipts;
 
-        let prior_gas_used = if tx_index.index == 0 {
-            U256::zero()
-        } else {
-            block_receipts.receipts[tx_index.index - 1].accumulated_gas_used
-        };
+                let prior_gas_used = if tx_index.index == 0 {
+                    U256::zero()
+                } else {
+                    block_receipts.receipts[tx_index.index - 1]
+                        .accumulated_gas_used
+                };
+                (
+                    block_receipts
+                        .receipts
+                        .get(tx_index.index)
+                        .expect("Error: can't get receipt by tx_index ")
+                        .clone(),
+                    prior_gas_used,
+                )
+            });
 
-        Some((
-            block_receipts
-                .receipts
-                .get(tx_index.index)
-                .expect("Error: can't get receipt by tx_index ")
-                .clone(),
-            tx_index,
-            prior_gas_used,
-        ))
+        Some((tx_index, maybe_executed))
     }
 
     pub fn check_block_pivot_assumption(
