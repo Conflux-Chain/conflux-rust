@@ -1548,7 +1548,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
         let best_epoch_number = inner.best_epoch_number();
         *best_info = Arc::new(BestInformation {
-            chain_id: self.config.chain_id.get_chain_id(),
+            chain_id: self.config.chain_id.get_chain_id(best_epoch_number),
             best_block_hash: inner.best_block_hash(),
             best_epoch_number,
             current_difficulty: inner.current_difficulty,

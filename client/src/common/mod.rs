@@ -215,9 +215,8 @@ pub fn initialize_common_modules(
     ));
 
     let consensus_conf = conf.consensus_config();
-    let machine = Arc::new(new_machine_with_builtin(
-        consensus_conf.chain_id.get_chain_id() as u64,
-    ));
+    let machine =
+        Arc::new(new_machine_with_builtin(consensus_conf.chain_id.clone()));
 
     let txpool = Arc::new(TransactionPool::new(
         conf.txpool_config(),
