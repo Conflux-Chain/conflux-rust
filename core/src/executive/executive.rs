@@ -21,7 +21,7 @@ use crate::{
     verification::VerificationConfig,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
-        ResumeCall, ResumeCreate, ReturnData, Spec, TrapError,
+        ExecTrapResult, ResumeCall, ResumeCreate, ReturnData, Spec, TrapError,
     },
     vm_factory::VmFactory,
 };
@@ -128,6 +128,9 @@ enum CallCreateExecutiveKind {
     ExecCreate(ActionParams, Substate),
     ResumeCall(OriginInfo, Box<dyn ResumeCall>, Substate),
     ResumeCreate(OriginInfo, Box<dyn ResumeCreate>, Substate),
+    // A temporally status to handle the ownership check in rust.
+    // It should only appear in function `enact_output`.
+    Moved,
 }
 
 pub struct CallCreateExecutive<'a> {
@@ -271,6 +274,9 @@ impl<'a> CallCreateExecutive<'a> {
             }
             CallCreateExecutiveKind::Transfer(..)
             | CallCreateExecutiveKind::CallBuiltin(..) => None,
+            CallCreateExecutiveKind::Moved => {
+                panic!("A temporally status in function `enact_output`, should not appear during execution.");
+            }
         }
     }
 
@@ -284,6 +290,9 @@ impl<'a> CallCreateExecutive<'a> {
             CallCreateExecutiveKind::ResumeCreate(origin, ..)
             | CallCreateExecutiveKind::ResumeCall(origin, ..) => {
                 origin.recipient()
+            }
+            CallCreateExecutiveKind::Moved => {
+                panic!("A temporally status in function `enact_output`, should not appear during execution.");
             }
         }
     }
@@ -357,45 +366,93 @@ impl<'a> CallCreateExecutive<'a> {
         Ok(())
     }
 
-    fn enact_result(
-        result: vm::Result<FinalizationResult>, state: &mut State,
-        substate: &mut Substate, mut unconfirmed_substate: Substate,
-    ) -> vm::Result<FinalizationResult>
+    fn enact_output(
+        mut self, output: ExecTrapResult<FinalizationResult>,
+        origin: OriginInfo, state: &mut State, substate: &mut Substate,
+        mut unconfirmed_substate: Substate,
+    ) -> ExecutiveTrapResult<'a, FinalizationResult>
     {
-        match result {
-            Err(vm::Error::OutOfGas)
-            | Err(vm::Error::BadJumpDestination { .. })
-            | Err(vm::Error::BadInstruction { .. })
-            | Err(vm::Error::StackUnderflow { .. })
-            | Err(vm::Error::BuiltIn { .. })
-            | Err(vm::Error::InternalContract { .. })
-            | Err(vm::Error::Wasm { .. })
-            | Err(vm::Error::OutOfStack { .. })
-            | Err(vm::Error::InvalidSubEntry)
-            | Err(vm::Error::SubStackUnderflow { .. })
-            | Err(vm::Error::OutOfSubStack { .. })
-            | Err(vm::Error::ExceedStorageLimit)
-            | Err(vm::Error::NotEnoughBalanceForStorage { .. })
-            | Err(vm::Error::MutableCallInStaticContext)
-            | Err(vm::Error::OutOfBounds)
-            | Err(vm::Error::Reverted)
-            | Err(vm::Error::InvalidAddress(..))
-            | Ok(FinalizationResult {
+        // You should avoid calling functions for self here, since `self.kind`
+        // is moved temporally.
+
+        // TODO: `ExecTrapResult` is a nested `Result`. It is ambiguous to deal
+        // with result like `Ok(Err(e))`. I plan to rename it in a separated PR.
+
+        // In case the execution is done and the state will be reverted, there
+        // will be no need be collect ownership.
+
+        // We check it here only for performance. Even if we regard all the case
+        // as ``need_collect_ownership'', the result should be same. But we
+        // don't want to execute heavy function collect_ownership_changed if it
+        // is unnecessary.
+        let need_collect_ownership = match &output {
+            Ok(Err(_))
+            | Ok(Ok(FinalizationResult {
                 apply_state: false, ..
-            }) => {
-                state.revert_to_checkpoint();
-                result
+            })) => true,
+            _ => false,
+        };
+        let output = if need_collect_ownership {
+            match state.collect_ownership_changed(&mut unconfirmed_substate) {
+                Ok(_) => output,
+                Err(db_err) => Ok(Err(db_err.into())),
             }
-            // The whole epoch execution fails. No need to revert state.
-            Err(vm::Error::StateDbError(_)) => result,
-            Ok(_) => {
-                state.collect_ownership_changed(&mut unconfirmed_substate)?;
+        } else {
+            output
+        };
 
-                state.discard_checkpoint();
-                substate.accrue(unconfirmed_substate);
+        match output {
+            Ok(result) => match result {
+                Err(vm::Error::OutOfGas)
+                | Err(vm::Error::BadJumpDestination { .. })
+                | Err(vm::Error::BadInstruction { .. })
+                | Err(vm::Error::StackUnderflow { .. })
+                | Err(vm::Error::BuiltIn { .. })
+                | Err(vm::Error::InternalContract { .. })
+                | Err(vm::Error::Wasm { .. })
+                | Err(vm::Error::OutOfStack { .. })
+                | Err(vm::Error::InvalidSubEntry)
+                | Err(vm::Error::SubStackUnderflow { .. })
+                | Err(vm::Error::OutOfSubStack { .. })
+                | Err(vm::Error::ExceedStorageLimit)
+                | Err(vm::Error::NotEnoughBalanceForStorage { .. })
+                | Err(vm::Error::MutableCallInStaticContext)
+                | Err(vm::Error::OutOfBounds)
+                | Err(vm::Error::Reverted)
+                | Err(vm::Error::InvalidAddress(..))
+                | Ok(FinalizationResult {
+                    apply_state: false, ..
+                }) => {
+                    state.revert_to_checkpoint();
+                    Ok(result)
+                }
+                // The whole epoch execution fails. No need to revert state.
+                Err(vm::Error::StateDbError(_)) => Ok(result),
+                Ok(_) => {
+                    state.discard_checkpoint();
+                    substate.accrue(unconfirmed_substate);
 
-                result
-            }
+                    Ok(result)
+                }
+            },
+            Err(trap_err) => match trap_err {
+                TrapError::Call(subparams, resume) => {
+                    self.kind = CallCreateExecutiveKind::ResumeCall(
+                        origin,
+                        resume,
+                        unconfirmed_substate,
+                    );
+                    Err(TrapError::Call(subparams, self))
+                }
+                TrapError::Create(subparams, address, resume) => {
+                    self.kind = CallCreateExecutiveKind::ResumeCreate(
+                        origin,
+                        resume,
+                        unconfirmed_substate,
+                    );
+                    Err(TrapError::Create(subparams, address, self))
+                }
+            },
         }
     }
 
@@ -633,34 +690,14 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                let res = match out {
-                    Ok(val) => val,
-                    Err(TrapError::Call(subparams, resume)) => {
-                        self.kind = CallCreateExecutiveKind::ResumeCall(
-                            origin,
-                            resume,
-                            unconfirmed_substate,
-                        );
-                        return Err(TrapError::Call(subparams, self));
-                    }
-                    Err(TrapError::Create(subparams, address, resume)) => {
-                        self.kind = CallCreateExecutiveKind::ResumeCreate(
-                            origin,
-                            resume,
-                            unconfirmed_substate,
-                        );
-                        return Err(TrapError::Create(
-                            subparams, address, self,
-                        ));
-                    }
-                };
-
-                Ok(Self::enact_result(
-                    res,
+                self.kind = CallCreateExecutiveKind::Moved;
+                self.enact_output(
+                    out,
+                    origin,
                     state,
                     substate,
                     unconfirmed_substate,
-                ))
+                )
             }
 
             CallCreateExecutiveKind::ExecCreate(
@@ -720,39 +757,23 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                let res = match out {
-                    Ok(val) => val,
-                    Err(TrapError::Call(subparams, resume)) => {
-                        self.kind = CallCreateExecutiveKind::ResumeCall(
-                            origin,
-                            resume,
-                            unconfirmed_substate,
-                        );
-                        return Err(TrapError::Call(subparams, self));
-                    }
-                    Err(TrapError::Create(subparams, address, resume)) => {
-                        self.kind = CallCreateExecutiveKind::ResumeCreate(
-                            origin,
-                            resume,
-                            unconfirmed_substate,
-                        );
-                        return Err(TrapError::Create(
-                            subparams, address, self,
-                        ));
-                    }
-                };
-
-                Ok(Self::enact_result(
-                    res,
+                self.kind = CallCreateExecutiveKind::Moved;
+                self.enact_output(
+                    out,
+                    origin,
                     state,
                     substate,
                     unconfirmed_substate,
-                ))
+                )
             }
 
             CallCreateExecutiveKind::ResumeCall(..)
             | CallCreateExecutiveKind::ResumeCreate(..) => {
                 panic!("This executive has already been executed once.")
+            }
+
+            CallCreateExecutiveKind::Moved => {
+                panic!("A temporally status in function `enact_output`, should not appear during execution.")
             }
         }
     }
@@ -795,34 +816,14 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                let res = match out {
-                    Ok(val) => val,
-                    Err(TrapError::Call(subparams, resume)) => {
-                        self.kind = CallCreateExecutiveKind::ResumeCall(
-                            origin,
-                            resume,
-                            unconfirmed_substate,
-                        );
-                        return Err(TrapError::Call(subparams, self));
-                    }
-                    Err(TrapError::Create(subparams, address, resume)) => {
-                        self.kind = CallCreateExecutiveKind::ResumeCreate(
-                            origin,
-                            resume,
-                            unconfirmed_substate,
-                        );
-                        return Err(TrapError::Create(
-                            subparams, address, self,
-                        ));
-                    }
-                };
-
-                Ok(Self::enact_result(
-                    res,
+                self.kind = CallCreateExecutiveKind::Moved;
+                self.enact_output(
+                    out,
+                    origin,
                     state,
                     substate,
                     unconfirmed_substate,
-                ))
+                )
             }
             CallCreateExecutiveKind::ResumeCreate(..) => {
                 panic!("Resumable as create, but called resume_call")
@@ -833,6 +834,9 @@ impl<'a> CallCreateExecutive<'a> {
             | CallCreateExecutiveKind::ExecCall(..)
             | CallCreateExecutiveKind::ExecCreate(..) => {
                 panic!("Not resumable")
+            }
+            CallCreateExecutiveKind::Moved => {
+                panic!("A temporally status in function `enact_output`, should not appear during execution.")
             }
         }
     }
@@ -875,34 +879,14 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                let res = match out {
-                    Ok(val) => val,
-                    Err(TrapError::Call(subparams, resume)) => {
-                        self.kind = CallCreateExecutiveKind::ResumeCall(
-                            origin,
-                            resume,
-                            unconfirmed_substate,
-                        );
-                        return Err(TrapError::Call(subparams, self));
-                    }
-                    Err(TrapError::Create(subparams, address, resume)) => {
-                        self.kind = CallCreateExecutiveKind::ResumeCreate(
-                            origin,
-                            resume,
-                            unconfirmed_substate,
-                        );
-                        return Err(TrapError::Create(
-                            subparams, address, self,
-                        ));
-                    }
-                };
-
-                Ok(Self::enact_result(
-                    res,
+                self.kind = CallCreateExecutiveKind::Moved;
+                self.enact_output(
+                    out,
+                    origin,
                     state,
                     substate,
                     unconfirmed_substate,
-                ))
+                )
             }
             CallCreateExecutiveKind::ResumeCall(..) => {
                 panic!("Resumable as call, but called resume_create")
@@ -913,6 +897,9 @@ impl<'a> CallCreateExecutive<'a> {
             | CallCreateExecutiveKind::ExecCall(..)
             | CallCreateExecutiveKind::ExecCreate(..) => {
                 panic!("Not resumable")
+            }
+            CallCreateExecutiveKind::Moved => {
+                panic!("A temporally status in function `enact_output`, should not appear during execution.")
             }
         }
     }
