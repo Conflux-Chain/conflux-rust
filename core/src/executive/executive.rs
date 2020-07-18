@@ -405,7 +405,8 @@ impl<'a> CallCreateExecutive<'a> {
             Ok(result) => match result {
                 // The whole epoch execution fails. No need to revert state.
                 Err(vm::Error::StateDbError(_)) => Ok(result),
-                Err(_) | Ok(FinalizationResult {
+                Err(_)
+                | Ok(FinalizationResult {
                     apply_state: false, ..
                 }) => {
                     state.revert_to_checkpoint();
