@@ -389,8 +389,8 @@ impl<'a> CallCreateExecutive<'a> {
             Ok(Err(_))
             | Ok(Ok(FinalizationResult {
                 apply_state: false, ..
-            })) => true,
-            _ => false,
+            })) => false,
+            _ => true,
         };
         let output = if need_collect_ownership {
             match state.collect_ownership_changed(&mut unconfirmed_substate) {
@@ -403,31 +403,14 @@ impl<'a> CallCreateExecutive<'a> {
 
         match output {
             Ok(result) => match result {
-                Err(vm::Error::OutOfGas)
-                | Err(vm::Error::BadJumpDestination { .. })
-                | Err(vm::Error::BadInstruction { .. })
-                | Err(vm::Error::StackUnderflow { .. })
-                | Err(vm::Error::BuiltIn { .. })
-                | Err(vm::Error::InternalContract { .. })
-                | Err(vm::Error::Wasm { .. })
-                | Err(vm::Error::OutOfStack { .. })
-                | Err(vm::Error::InvalidSubEntry)
-                | Err(vm::Error::SubStackUnderflow { .. })
-                | Err(vm::Error::OutOfSubStack { .. })
-                | Err(vm::Error::ExceedStorageLimit)
-                | Err(vm::Error::NotEnoughBalanceForStorage { .. })
-                | Err(vm::Error::MutableCallInStaticContext)
-                | Err(vm::Error::OutOfBounds)
-                | Err(vm::Error::Reverted)
-                | Err(vm::Error::InvalidAddress(..))
-                | Ok(FinalizationResult {
+                // The whole epoch execution fails. No need to revert state.
+                Err(vm::Error::StateDbError(_)) => Ok(result),
+                Err(_) | Ok(FinalizationResult {
                     apply_state: false, ..
                 }) => {
                     state.revert_to_checkpoint();
                     Ok(result)
                 }
-                // The whole epoch execution fails. No need to revert state.
-                Err(vm::Error::StateDbError(_)) => Ok(result),
                 Ok(_) => {
                     state.discard_checkpoint();
                     substate.accrue(unconfirmed_substate);
