@@ -49,7 +49,7 @@ bench_cmd = os.getenv(
     default=os.path.join(
         test_dir,
         "../target/release/consensus_bench"))
-test_input_dir = os.path.join(test_dir, "../core/benchmark/consensus/test/")
+test_input_dir = os.path.join(test_dir, "./ghast_cases/")
 
 failed = set()
 for inp in TEST_INPUT:
