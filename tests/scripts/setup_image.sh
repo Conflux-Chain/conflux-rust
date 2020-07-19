@@ -58,6 +58,7 @@ cp ../../target/release/conflux throttle_bitcoin_bandwidth.sh remote_start_confl
 echo "LABEL=cloudimg-rootfs   /        ext4   defaults,noatime,nodiratime,barrier=0       0 0" > fstab
 sudo cp fstab /etc/fstab
 echo "ulimit -n 65535" >> ~/.profile
+# Cannot assign a value more than half of `/proc/sys/kernel/threads-max`, which is about 120,000.
 echo "ulimit -u 60000" >> ~/.profile
 echo "*            -          nproc     65535 " | sudo tee -a /etc/security/limits.conf
 echo "*            -          nfile     65535 " | sudo tee -a /etc/security/limits.conf
