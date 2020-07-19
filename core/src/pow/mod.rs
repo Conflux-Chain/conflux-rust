@@ -2,9 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    block_data_manager::BlockDataManager, hash::keccak, parameters::pow::*,
-};
+mod cache;
+mod compute;
+mod keccak;
+mod seed_compute;
+mod shared;
+
+pub use self::{cache::CacheBuilder, shared::POW_STAGE_LENGTH};
+use crate::hash::keccak as keccak_hash;
+
+use crate::{block_data_manager::BlockDataManager, parameters::pow::*};
 use cfx_types::{BigEndianHash, H256, U256, U512};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -12,10 +19,12 @@ use parking_lot::RwLock;
 use std::{
     collections::{HashMap, VecDeque},
     convert::TryFrom,
+    sync::Arc,
 };
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub struct ProofOfWorkProblem {
+    pub block_height: u64,
     pub block_hash: H256,
     pub difficulty: U256,
     pub boundary: U256,
@@ -24,9 +33,10 @@ pub struct ProofOfWorkProblem {
 impl ProofOfWorkProblem {
     pub const NO_BOUNDARY: U256 = U256::MAX;
 
-    pub fn new(block_hash: H256, difficulty: U256) -> Self {
+    pub fn new(block_height: u64, block_hash: H256, difficulty: U256) -> Self {
         let boundary = difficulty_to_boundary(&difficulty);
         Self {
+            block_height,
             block_hash,
             difficulty,
             boundary,
@@ -53,6 +63,7 @@ pub struct ProofOfWorkSolution {
 #[derive(Debug, Clone, DeriveMallocSizeOf)]
 pub struct ProofOfWorkConfig {
     pub test_mode: bool,
+    pub use_octopus_in_test_mode: bool,
     pub use_stratum: bool,
     pub initial_difficulty: u64,
     pub block_generation_period: u64,
@@ -64,14 +75,15 @@ pub struct ProofOfWorkConfig {
 
 impl ProofOfWorkConfig {
     pub fn new(
-        test_mode: bool, use_stratum: bool, initial_difficulty: Option<u64>,
-        stratum_listen_addr: String, stratum_port: u16,
-        stratum_secret: Option<H256>,
+        test_mode: bool, use_octopus_in_test_mode: bool, use_stratum: bool,
+        initial_difficulty: Option<u64>, stratum_listen_addr: String,
+        stratum_port: u16, stratum_secret: Option<H256>,
     ) -> Self
     {
         if test_mode {
             ProofOfWorkConfig {
                 test_mode,
+                use_octopus_in_test_mode,
                 use_stratum,
                 initial_difficulty: initial_difficulty.unwrap_or(4),
                 block_generation_period: 1000000,
@@ -83,6 +95,7 @@ impl ProofOfWorkConfig {
         } else {
             ProofOfWorkConfig {
                 test_mode,
+                use_octopus_in_test_mode,
                 use_stratum,
                 initial_difficulty: INITIAL_DIFFICULTY,
                 block_generation_period: TARGET_AVERAGE_BLOCK_GENERATION_PERIOD,
@@ -93,6 +106,10 @@ impl ProofOfWorkConfig {
                 stratum_secret,
             }
         }
+    }
+
+    pub fn use_octopus(&self) -> bool {
+        !self.test_mode || self.use_octopus_in_test_mode
     }
 
     pub fn target_difficulty(
@@ -160,6 +177,19 @@ pub fn pow_hash_to_quality(hash: &H256, nonce: &U256) -> U256 {
     }
 }
 
+/// This should only be used in tests.
+pub fn pow_quality_to_hash(pow_quality: &U256, nonce: &U256) -> H256 {
+    let lower_bound = nonce_to_lower_bound(nonce);
+    let hash_u256 = if pow_quality.eq(&U256::MAX) {
+        U256::one()
+    } else {
+        let boundary = difficulty_to_boundary(&(pow_quality + U256::one()));
+        let (against_bound_u256, _) = boundary.overflowing_add(lower_bound);
+        against_bound_u256
+    };
+    BigEndianHash::from_uint(&hash_u256)
+}
+
 /// Convert boundary to its original difficulty. Basically just `f(x) = 2^256 /
 /// x`.
 pub fn boundary_to_difficulty(boundary: &U256) -> U256 {
@@ -192,25 +222,50 @@ pub fn compute_inv_x_times_2_pow_256_floor(x: &U256) -> U256 {
     }
 }
 
-pub fn compute(nonce: &U256, block_hash: &H256) -> H256 {
-    let mut buf = [0u8; 64];
-    for i in 0..32 {
-        buf[i] = block_hash[i];
+pub struct PowComputer {
+    use_octopus: bool,
+    cache_builder: CacheBuilder,
+}
+
+impl PowComputer {
+    pub fn new(use_octopus: bool) -> Self {
+        PowComputer {
+            use_octopus,
+            cache_builder: CacheBuilder::new(),
+        }
     }
-    nonce.to_little_endian(&mut buf[32..64]);
-    let intermediate = keccak(&buf[..]);
-    let mut tmp = [0u8; 32];
-    for i in 0..32 {
-        tmp[i] = intermediate[i] ^ block_hash[i];
+
+    pub fn compute(
+        &self, nonce: &U256, block_hash: &H256, block_height: u64,
+    ) -> H256 {
+        if !self.use_octopus {
+            let mut buf = [0u8; 64];
+            for i in 0..32 {
+                buf[i] = block_hash[i];
+            }
+            nonce.to_little_endian(&mut buf[32..64]);
+            let intermediate = keccak_hash(&buf[..]);
+            let mut tmp = [0u8; 32];
+            for i in 0..32 {
+                tmp[i] = intermediate[i] ^ block_hash[i]
+            }
+            keccak_hash(tmp)
+        } else {
+            let light = self.cache_builder.light(block_height);
+            light
+                .compute(block_hash.as_fixed_bytes(), nonce.low_u64())
+                .into()
+        }
     }
-    keccak(tmp)
 }
 
 pub fn validate(
-    problem: &ProofOfWorkProblem, solution: &ProofOfWorkSolution,
-) -> bool {
+    pow: Arc<PowComputer>, problem: &ProofOfWorkProblem,
+    solution: &ProofOfWorkSolution,
+) -> bool
+{
     let nonce = solution.nonce;
-    let hash = compute(&nonce, &problem.block_hash);
+    let hash = pow.compute(&nonce, &problem.block_hash, problem.block_height);
     ProofOfWorkProblem::validate_hash_against_boundary(
         &hash,
         &nonce,
@@ -371,4 +426,15 @@ impl TargetDifficultyManager {
     pub fn set(&self, hash: H256, difficulty: U256) {
         self.cache.set(hash, difficulty);
     }
+}
+
+#[test]
+fn test_octopus() {
+    let pow = PowComputer::new(true);
+
+    let block_hash =
+        "4d99d0b41c7eb0dd1a801c35aae2df28ae6b53bc7743f0818a34b6ec97f5b4ae"
+            .parse()
+            .unwrap();
+    pow.compute(&U256::from(3812), &block_hash, 2);
 }

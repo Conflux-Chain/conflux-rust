@@ -30,7 +30,9 @@ use cfx_stratum::{
     Stratum as StratumService,
 };
 use cfx_types::{H256, U256};
-use cfxcore::pow::{validate, ProofOfWorkProblem, ProofOfWorkSolution};
+use cfxcore::pow::{
+    validate, PowComputer, ProofOfWorkProblem, ProofOfWorkSolution,
+};
 use log::{info, trace, warn};
 use parking_lot::Mutex;
 use std::{
@@ -113,6 +115,7 @@ impl fmt::Display for PayloadError {
 pub struct StratumJobDispatcher {
     current_problem: Mutex<Option<ProofOfWorkProblem>>,
     solution_sender: Mutex<mpsc::Sender<ProofOfWorkSolution>>,
+    pow: Arc<PowComputer>,
 }
 
 impl JobDispatcher for StratumJobDispatcher {
@@ -143,7 +146,7 @@ impl JobDispatcher for StratumJobDispatcher {
                         .into(),
                     ));
                 }
-                if !validate(&prob, &sol) {
+                if !validate(self.pow.clone(), &prob, &sol) {
                     return Err(StratumServiceError::InvalidSolution(
                         format!(
                             "Incorrect Nonce! worker_id = {}!",
@@ -180,10 +183,13 @@ impl StratumJobDispatcher {
     /// New stratum job dispatcher given the miner and client
     fn new(
         solution_sender: mpsc::Sender<ProofOfWorkSolution>,
-    ) -> StratumJobDispatcher {
+        pow: Arc<PowComputer>,
+    ) -> StratumJobDispatcher
+    {
         StratumJobDispatcher {
             current_problem: Mutex::new(None),
             solution_sender: Mutex::new(solution_sender),
+            pow,
         }
     }
 
@@ -192,12 +198,14 @@ impl StratumJobDispatcher {
     }
 
     /// Serializes payload for stratum service
-    fn payload(&self, pow_hash: H256, boundary: U256) -> String {
+    fn payload(
+        &self, block_height: u64, pow_hash: H256, boundary: U256,
+    ) -> String {
         // Now we just fill the job_id as pow_hash. This will be more consistent
         // with the convention.
         format!(
-            r#"["0x{:x}", "0x{:x}","0x{:x}"]"#,
-            pow_hash, pow_hash, boundary
+            r#"["0x{:x}", "{}", "0x{:x}","0x{:x}"]"#,
+            pow_hash, block_height, pow_hash, boundary
         )
     }
 }
@@ -233,7 +241,7 @@ impl NotifyWork for Stratum {
 
         self.dispatcher.set_current_problem(&prob);
         self.service.push_work_all(
-            self.dispatcher.payload(prob.block_hash, prob.boundary)
+            self.dispatcher.payload(prob.block_height, prob.block_hash, prob.boundary)
         ).unwrap_or_else(
             |e| warn!(target: "stratum", "Error while pushing work: {:?}", e)
         );
@@ -244,11 +252,14 @@ impl Stratum {
     /// New stratum job dispatcher, given the miner, client and dedicated
     /// stratum service
     pub fn start(
-        options: &Options, solution_sender: mpsc::Sender<ProofOfWorkSolution>,
-    ) -> Result<Stratum, Error> {
+        options: &Options, pow: Arc<PowComputer>,
+        solution_sender: mpsc::Sender<ProofOfWorkSolution>,
+    ) -> Result<Stratum, Error>
+    {
         use std::net::IpAddr;
 
-        let dispatcher = Arc::new(StratumJobDispatcher::new(solution_sender));
+        let dispatcher =
+            Arc::new(StratumJobDispatcher::new(solution_sender, pow));
 
         let stratum_svc = StratumService::start(
             &SocketAddr::new(

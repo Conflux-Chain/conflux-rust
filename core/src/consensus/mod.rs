@@ -28,7 +28,7 @@ use crate::{
     parameters::{
         consensus::*, consensus_internal::*, staking::COLLATERAL_PER_BYTE,
     },
-    pow::ProofOfWorkConfig,
+    pow::{PowComputer, ProofOfWorkConfig},
     rpc_errors::Result as RpcResult,
     state::State,
     statedb::StateDb,
@@ -118,7 +118,7 @@ impl ConsensusGraphStatistics {
 
 #[derive(Default, DeriveMallocSizeOf)]
 pub struct BestInformation {
-    pub chain_id: u64,
+    pub chain_id: u32,
     pub best_block_hash: H256,
     pub best_epoch_number: u64,
     pub current_difficulty: U256,
@@ -126,7 +126,7 @@ pub struct BestInformation {
 }
 
 impl BestInformation {
-    pub fn best_chain_id(&self) -> u64 { self.chain_id }
+    pub fn best_chain_id(&self) -> u32 { self.chain_id }
 }
 
 /// ConsensusGraph is a layer on top of SynchronizationGraph. A SyncGraph
@@ -191,8 +191,9 @@ impl ConsensusGraph {
     pub fn with_era_genesis(
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
-        pow_config: ProofOfWorkConfig, era_genesis_block_hash: &H256,
-        era_stable_block_hash: &H256, notifications: Arc<Notifications>,
+        pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
+        era_genesis_block_hash: &H256, era_stable_block_hash: &H256,
+        notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, is_full_node: bool,
     ) -> Self
@@ -200,6 +201,7 @@ impl ConsensusGraph {
         let inner =
             Arc::new(RwLock::new(ConsensusGraphInner::with_era_genesis(
                 pow_config,
+                pow.clone(),
                 data_man.clone(),
                 conf.inner_conf.clone(),
                 era_genesis_block_hash,
@@ -252,7 +254,8 @@ impl ConsensusGraph {
     pub fn new(
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
-        pow_config: ProofOfWorkConfig, notifications: Arc<Notifications>,
+        pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
+        notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_conf: VerificationConfig, is_full_node: bool,
     ) -> Self
@@ -266,6 +269,7 @@ impl ConsensusGraph {
             statistics,
             data_man,
             pow_config,
+            pow,
             &genesis_hash,
             &stable_hash,
             notifications,
@@ -676,7 +680,11 @@ impl ConsensusGraph {
 
     pub fn get_transaction_receipt_and_block_info(
         &self, tx_hash: &H256,
-    ) -> Option<(BlockExecutionResultWithEpoch, TransactionIndex, H256)> {
+    ) -> Option<(
+        BlockExecutionResultWithEpoch,
+        TransactionIndex,
+        Option<H256>,
+    )> {
         // Note: `transaction_index_by_hash` might return outdated results if
         // there was a pivot chain reorg but the tx was not re-executed yet. In
         // this case, `block_execution_results_by_hash` will detect that the
@@ -697,22 +705,24 @@ impl ConsensusGraph {
             )
         };
         let epoch_hash = results_with_epoch.0;
-        match self.executor.wait_for_result(epoch_hash) {
+        let maybe_state_root = match self.executor.wait_for_result(epoch_hash) {
             Ok(execution_commitment) => {
                 // We already has transaction address with epoch_hash executed,
                 // so we can always get the state_root with
                 // `wait_for_result`
-                let state_root = execution_commitment
-                    .state_root_with_aux_info
-                    .aux_info
-                    .state_root_hash;
-                Some((results_with_epoch, address, state_root))
+                Some(
+                    execution_commitment
+                        .state_root_with_aux_info
+                        .aux_info
+                        .state_root_hash,
+                )
             }
             Err(msg) => {
                 warn!("get_transaction_receipt_and_block_info() gets the following error from ConsensusExecutor: {}", msg);
                 None
             }
-        }
+        };
+        Some((results_with_epoch, address, maybe_state_root))
     }
 
     pub fn next_nonce(
@@ -867,26 +877,19 @@ impl ConsensusGraph {
     fn filter_single_epoch<'a>(
         &'a self, filter: &'a Filter, bloom_possibilities: &'a Vec<Bloom>,
         epoch: u64,
-    ) -> impl ParallelIterator<Item = Result<LocalizedLogEntry, FilterError>> + 'a
+    ) -> Result<Vec<LocalizedLogEntry>, FilterError>
     {
         // retrieve epoch hashes and pivot hash
         let mut epoch_hashes =
-            match self.inner.read_recursive().block_hashes_by_epoch(epoch) {
-                Ok(hs) => hs,
-                Err(e) => {
-                    let error = Err(e.into());
-                    return rayon::iter::Either::Left(rayon::iter::once(error));
-                }
-            };
+            self.inner.read_recursive().block_hashes_by_epoch(epoch)?;
 
         let pivot_hash = *epoch_hashes.last().expect("Epoch set not empty");
 
         // process hashes in reverse order
         epoch_hashes.reverse();
 
-        let res = epoch_hashes
-            // process each block of this epoch in parallel
-            .into_par_iter()
+        epoch_hashes
+            .into_iter()
             .map(move |block_hash| {
                 self.filter_block(
                     &filter,
@@ -897,13 +900,13 @@ impl ConsensusGraph {
                 )
             })
             // flatten results
-            // ParIt<Result<Iterator<_>>> --> ParIt<Result<_>>
+            // Iterator<Result<Iterator<_>>> -> Iterator<Result<_>>
             .flat_map(|res| match res {
-                Ok(it) => rayon::iter::Either::Left(it.par_bridge().map(Ok)),
-                Err(e) => rayon::iter::Either::Right(rayon::iter::once(Err(e))),
-            });
-
-        rayon::iter::Either::Right(res)
+                Ok(it) => Either::Left(it.map(Ok)),
+                Err(e) => Either::Right(std::iter::once(Err(e))),
+            })
+            .take(filter.limit.unwrap_or(::std::usize::MAX))
+            .collect()
     }
 
     fn filter_epoch_batch(
@@ -937,11 +940,16 @@ impl ConsensusGraph {
             inner.get_pivot_hash_from_epoch_number(epochs[0])?,
         ));
 
-        epochs
+        let epoch_batch_logs = epochs
             .into_par_iter() // process each epoch of this batch in parallel
             .map(|e| self.filter_single_epoch(filter, bloom_possibilities, e))
+            .collect::<Result<Vec<Vec<LocalizedLogEntry>>, FilterError>>()?; // short-circuit on error
+
+        Ok(epoch_batch_logs
+            .into_iter()
             .flatten()
-            .collect() // short-circuit on error
+            .take(filter.limit.unwrap_or(::std::usize::MAX))
+            .collect())
     }
 
     pub fn get_filter_epoch_range(
@@ -1000,7 +1008,7 @@ impl ConsensusGraph {
             })
             // flatten results
             .flat_map(|res| match res {
-                Ok(it) => Either::Left(it.into_iter().map(Ok)),
+                Ok(vec) => Either::Left(vec.into_iter().map(Ok)),
                 Err(e) => Either::Right(std::iter::once(Err(e))),
             })
             // take as many as we need
@@ -1338,7 +1346,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
             .get_confirmed_epoch_num(std::u64::MAX)
     }
 
-    fn best_chain_id(&self) -> u64 {
+    fn best_chain_id(&self) -> u32 {
         self.best_info.read_recursive().best_chain_id()
     }
 
@@ -1405,11 +1413,12 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn get_transaction_info_by_hash(
         &self, hash: &H256,
-    ) -> Option<(SignedTransaction, Receipt, TransactionIndex, U256)> {
+    ) -> Option<(SignedTransaction, TransactionIndex, Option<(Receipt, U256)>)>
+    {
         // We need to hold the inner lock to ensure that tx_index and receipts
         // are consistent
         let inner = self.inner.read();
-        if let Some((receipt, tx_index, prior_gas_used)) =
+        if let Some((tx_index, maybe_executed)) =
             inner.get_transaction_receipt_with_address(hash)
         {
             let block = self.data_man.block_by_hash(
@@ -1417,7 +1426,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
                 false, /* update_cache */
             )?;
             let transaction = (*block.transactions[tx_index.index]).clone();
-            Some((transaction, receipt, tx_index, prior_gas_used))
+            Some((transaction, tx_index, maybe_executed))
         } else {
             None
         }

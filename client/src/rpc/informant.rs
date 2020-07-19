@@ -253,7 +253,6 @@ impl ActivityNotifier for ClientNotifier {
 
 #[cfg(test)]
 mod tests {
-
     use super::{RateCalculator, RpcStats, StatsCalculator};
 
     #[test]

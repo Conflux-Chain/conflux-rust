@@ -4,10 +4,10 @@
 
 use super::super::types::{
     Bytes as RpcBytes, ConsensusGraphStates, SyncGraphStates,
-    Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
-    H520 as RpcH520, U128 as RpcU128,
+    Transaction as RpcTransaction,
 };
 use crate::rpc::types::SendTxRequest;
+use cfx_types::{H160, H256, H520, U128};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
 use jsonrpc_derive::rpc;
 use network::{
@@ -22,9 +22,8 @@ pub trait LocalRpc {
     fn txpool_status(&self) -> JsonRpcResult<BTreeMap<String, usize>>;
 
     #[rpc(name = "tx_inspect")]
-    fn tx_inspect(
-        &self, hash: RpcH256,
-    ) -> JsonRpcResult<BTreeMap<String, String>>;
+    fn tx_inspect(&self, hash: H256)
+        -> JsonRpcResult<BTreeMap<String, String>>;
 
     #[rpc(name = "txpool_inspect")]
     fn txpool_inspect(
@@ -79,28 +78,28 @@ pub trait LocalRpc {
     #[rpc(name = "cfx_sendTransaction")]
     fn send_transaction(
         &self, tx: SendTxRequest, password: Option<String>,
-    ) -> BoxFuture<RpcH256>;
+    ) -> BoxFuture<H256>;
 
     /// Returns accounts list.
     #[rpc(name = "accounts")]
-    fn accounts(&self) -> JsonRpcResult<Vec<RpcH160>>;
+    fn accounts(&self) -> JsonRpcResult<Vec<H160>>;
 
     /// Create a new account
     #[rpc(name = "new_account")]
-    fn new_account(&self, password: String) -> JsonRpcResult<RpcH160>;
+    fn new_account(&self, password: String) -> JsonRpcResult<H160>;
 
     /// Unlock an account
     #[rpc(name = "unlock_account")]
     fn unlock_account(
-        &self, address: RpcH160, password: String, duration: Option<RpcU128>,
+        &self, address: H160, password: String, duration: Option<U128>,
     ) -> JsonRpcResult<bool>;
 
     /// Lock an account
     #[rpc(name = "lock_account")]
-    fn lock_account(&self, address: RpcH160) -> JsonRpcResult<bool>;
+    fn lock_account(&self, address: H160) -> JsonRpcResult<bool>;
 
     #[rpc(name = "sign")]
     fn sign(
-        &self, data: RpcBytes, address: RpcH160, password: Option<String>,
-    ) -> JsonRpcResult<RpcH520>;
+        &self, data: RpcBytes, address: H160, password: Option<String>,
+    ) -> JsonRpcResult<H520>;
 }

@@ -1,9 +1,12 @@
 use crate::{
     block_data_manager::{
-        BlockExecutionResultWithEpoch, BlockRewardResult, CheckpointHashes,
-        EpochExecutionCommitment, EpochExecutionContext, LocalBlockInfo,
+        db_decode_list, db_encode_list, BlockExecutionResultWithEpoch,
+        BlockRewardResult, CheckpointHashes, DatabaseDecodable,
+        DatabaseEncodable, EpochExecutionCommitment, EpochExecutionContext,
+        LocalBlockInfo,
     },
     db::{COL_BLOCKS, COL_EPOCH_NUMBER, COL_MISC, COL_TX_INDEX},
+    pow::PowComputer,
     storage::{
         storage_db::KeyValueDbTrait, KvdbRocksdb, KvdbSqlite,
         KvdbSqliteStatements,
@@ -15,7 +18,7 @@ use cfx_types::H256;
 use db::SystemDB;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use primitives::{Block, BlockHeader, SignedTransaction, TransactionIndex};
-use rlp::{Decodable, Encodable, Rlp};
+use rlp::Rlp;
 use std::{collections::HashMap, fs, path::Path, sync::Arc};
 
 const LOCAL_BLOCK_INFO_SUFFIX_BYTE: u8 = 1;
@@ -58,10 +61,11 @@ fn sqlite_db_table(table: DBTable) -> String {
 
 pub struct DBManager {
     table_db: HashMap<DBTable, Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>>,
+    pow: Arc<PowComputer>,
 }
 
 impl DBManager {
-    pub fn new_from_rocksdb(db: Arc<SystemDB>) -> Self {
+    pub fn new_from_rocksdb(db: Arc<SystemDB>, pow: Arc<PowComputer>) -> Self {
         let mut table_db = HashMap::new();
         for table in vec![
             DBTable::Misc,
@@ -78,12 +82,12 @@ impl DBManager {
                     as Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>,
             );
         }
-        Self { table_db }
+        Self { table_db, pow }
     }
 }
 
 impl DBManager {
-    pub fn new_from_sqlite(db_path: &Path) -> Self {
+    pub fn new_from_sqlite(db_path: &Path, pow: Arc<PowComputer>) -> Self {
         if let Err(e) = fs::create_dir_all(db_path) {
             panic!("Error creating database directory: {:?}", e);
         }
@@ -117,7 +121,7 @@ impl DBManager {
                     as Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>,
             );
         }
-        Self { table_db }
+        Self { table_db, pow }
     }
 }
 
@@ -141,7 +145,8 @@ impl DBManager {
     pub fn block_header_from_db(&self, hash: &H256) -> Option<BlockHeader> {
         let mut block_header =
             self.load_decodable_val(DBTable::Blocks, hash.as_bytes())?;
-        VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(
+        VerificationConfig::get_or_fill_header_pow_quality(
+            &self.pow,
             &mut block_header,
         );
         Some(block_header)
@@ -421,30 +426,30 @@ impl DBManager {
 
     fn insert_encodable_val<V>(
         &self, table: DBTable, db_key: &[u8], value: &V,
-    ) where V: Encodable {
-        self.insert_to_db(table, db_key, rlp::encode(value))
+    ) where V: DatabaseEncodable {
+        self.insert_to_db(table, db_key, value.db_encode())
     }
 
     fn insert_encodable_list<V>(
         &self, table: DBTable, db_key: &[u8], value: &Vec<V>,
-    ) where V: Encodable {
-        self.insert_to_db(table, db_key, rlp::encode_list(value))
+    ) where V: DatabaseEncodable {
+        self.insert_to_db(table, db_key, db_encode_list(value))
     }
 
     fn load_decodable_val<V>(
         &self, table: DBTable, db_key: &[u8],
     ) -> Option<V>
-    where V: Decodable {
+    where V: DatabaseDecodable {
         let encoded = self.load_from_db(table, db_key)?;
-        Some(Rlp::new(&encoded).as_val().expect("decode succeeds"))
+        Some(V::db_decode(&encoded).expect("decode succeeds"))
     }
 
     fn load_decodable_list<V>(
         &self, table: DBTable, db_key: &[u8],
     ) -> Option<Vec<V>>
-    where V: Decodable {
+    where V: DatabaseDecodable {
         let encoded = self.load_from_db(table, db_key)?;
-        Some(Rlp::new(&encoded).as_list().expect("decode succeeds"))
+        Some(db_decode_list(&encoded).expect("decode succeeds"))
     }
 }
 

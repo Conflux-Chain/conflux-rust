@@ -107,7 +107,7 @@ build_config! {
         // Genesis section.
         (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
         (anticone_penalty_ratio, (u64), ANTICONE_PENALTY_RATIO)
-        (chain_id, (Option<u64>), None)
+        (chain_id, (Option<u32>), None)
         // Snapshot Epoch Count is a consensus parameter. This flag overrides
         // the parameter, which only take effect in `dev` mode.
         (dev_snapshot_epoch_count, (u32), SNAPSHOT_EPOCHS_CAPACITY)
@@ -129,6 +129,7 @@ build_config! {
         (stratum_port, (u16), 32525)
         (stratum_secret, (Option<String>), None)
         (use_stratum, (bool), false)
+        (use_octopus_in_test_mode, (bool), false)
 
         // Network section.
         (jsonrpc_local_tcp_port, (Option<u16>), None)
@@ -167,7 +168,7 @@ build_config! {
         (max_handshakes, (usize), 64)
         (max_incoming_peers, (usize), 64)
         (max_inflight_request_count, (u64), 64)
-        (max_outgoing_peers, (usize), 16)
+        (max_outgoing_peers, (usize), 8)
         (max_outgoing_peers_archive, (Option<usize>), None)
         (max_peers_tx_propagation, (usize), 128)
         (max_unprocessed_block_size_mb, (usize), (128))
@@ -195,11 +196,11 @@ build_config! {
         (node_table_timeout_s, (u64), 300)
         (node_table_promotion_timeout_s, (u64), 3 * 24 * 3600)
         (session_ip_limits, (String), "1,8,4,2".into())
-        (subnet_quota, (usize), 32)
+        (subnet_quota, (usize), 128)
 
         // Transaction cache/transaction pool section.
         (tx_cache_index_maintain_timeout_ms, (u64), 300_000)
-        (tx_pool_size, (usize), 500_000)
+        (tx_pool_size, (usize), 200_000)
         (tx_pool_min_tx_gas_price, (u64), 1)
         (tx_weight_scaling, (u64), 1)
         (tx_weight_exp, (u8), 1)
@@ -228,7 +229,7 @@ build_config! {
         (enable_optimistic_execution, (bool), true)
         (future_block_buffer_capacity, (usize), 32768)
         (get_logs_filter_max_limit, (Option<usize>), None)
-        (get_logs_epoch_batch_size, (usize), 128)
+        (get_logs_epoch_batch_size, (usize), 32)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (persist_tx_index, (bool), false)
         (print_memory_usage_period_s, (Option<u64>), None)
@@ -293,7 +294,7 @@ impl Configuration {
             Some(x) => x,
             // The default network id is 1 for historic reason. It doesn't
             // really matter.
-            None => self.raw_conf.chain_id.unwrap_or(1),
+            None => self.raw_conf.chain_id.unwrap_or(1) as u64,
         }
     }
 
@@ -456,6 +457,7 @@ impl Configuration {
 
         ProofOfWorkConfig::new(
             self.is_test_or_dev_mode(),
+            self.raw_conf.use_octopus_in_test_mode,
             self.raw_conf.use_stratum,
             self.raw_conf.initial_difficulty,
             self.raw_conf.stratum_listen_address.clone(),
@@ -573,9 +575,6 @@ impl Configuration {
                 .max_trans_count_received_in_catch_up,
             min_peers_tx_propagation: self.raw_conf.min_peers_tx_propagation,
             max_peers_tx_propagation: self.raw_conf.max_peers_tx_propagation,
-            future_block_buffer_capacity: self
-                .raw_conf
-                .future_block_buffer_capacity,
             max_downloading_chunks: self.raw_conf.max_downloading_chunks,
             test_mode: self.is_test_mode(),
             dev_mode: self.is_dev_mode(),
@@ -644,6 +643,9 @@ impl Configuration {
 
     pub fn sync_graph_config(&self) -> SyncGraphConfig {
         SyncGraphConfig {
+            future_block_buffer_capacity: self
+                .raw_conf
+                .future_block_buffer_capacity,
             enable_state_expose: self.raw_conf.enable_state_expose,
             is_consortium: self.raw_conf.is_consortium,
         }

@@ -91,6 +91,13 @@ pub trait TestRpc {
     #[rpc(name = "expireblockgc")]
     fn expire_block_gc(&self, timeout: u64) -> RpcResult<()>;
 
+    #[rpc(name = "getPivotChainAndWeight")]
+    fn get_pivot_chain_and_weight(
+        &self, height_range: Option<(u64, u64)>,
+    ) -> RpcResult<Vec<(H256, U256)>>;
+
+    #[rpc(name = "getExecutedInfo")]
+    fn get_executed_info(&self, block_hash: H256) -> RpcResult<(H256, H256)>;
     #[rpc(name = "test_sendUsableGenesisAccounts")]
     fn send_usable_genesis_accounts(
         &self, account_start_index: usize,

@@ -18,10 +18,9 @@
 
 //! RPC Error codes and error objects
 
-use std::fmt;
-
 use crate::rpc::types::Bytes;
 use jsonrpc_core::{Error, ErrorCode, Value};
+use std::fmt;
 
 pub mod codes {
     /// JsonRPC spec reserved from and including -32768 to -32000 for

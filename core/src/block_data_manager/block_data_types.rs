@@ -2,7 +2,8 @@ use crate::storage::StateRootWithAuxInfo;
 use cfx_types::{Bloom, H256, U256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
-use primitives::BlockReceipts;
+use parity_bytes::Bytes;
+use primitives::{BlockHeader, BlockReceipts, TransactionIndex};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::sync::Arc;
@@ -245,5 +246,72 @@ impl CheckpointHashes {
             prev_hash,
             cur_hash,
         }
+    }
+}
+
+pub trait DatabaseEncodable {
+    fn db_encode(&self) -> Bytes;
+}
+
+pub trait DatabaseDecodable: Sized {
+    fn db_decode(bytes: &[u8]) -> Result<Self, DecoderError>;
+}
+
+pub fn db_encode_list<T>(list: &[T]) -> Bytes
+where T: DatabaseEncodable {
+    let mut rlp_stream = RlpStream::new();
+    rlp_stream.begin_list(list.len());
+    for e in list {
+        rlp_stream.append_raw(&e.db_encode(), 1);
+    }
+    rlp_stream.drain()
+}
+
+pub fn db_decode_list<T>(bytes: &[u8]) -> Result<Vec<T>, DecoderError>
+where T: DatabaseDecodable {
+    let rlp_encoded = Rlp::new(bytes);
+    let mut list = Vec::new();
+    for e in rlp_encoded.iter() {
+        list.push(T::db_decode(e.as_raw())?);
+    }
+    Ok(list)
+}
+
+macro_rules! impl_db_encoding_as_rlp {
+    ($type:ty) => {
+        impl DatabaseEncodable for $type {
+            fn db_encode(&self) -> Bytes { rlp::encode(self) }
+        }
+
+        impl DatabaseDecodable for $type {
+            fn db_decode(bytes: &[u8]) -> Result<$type, DecoderError> {
+                rlp::decode(bytes)
+            }
+        }
+    };
+}
+
+impl_db_encoding_as_rlp!(BlockExecutionResult);
+impl_db_encoding_as_rlp!(LocalBlockInfo);
+impl_db_encoding_as_rlp!(CheckpointHashes);
+impl_db_encoding_as_rlp!(EpochExecutionCommitment);
+impl_db_encoding_as_rlp!(H256);
+impl_db_encoding_as_rlp!(u64);
+impl_db_encoding_as_rlp!(EpochExecutionContext);
+impl_db_encoding_as_rlp!(BlockRewardResult);
+impl_db_encoding_as_rlp!(BlockExecutionResultWithEpoch);
+impl_db_encoding_as_rlp!(TransactionIndex);
+
+impl DatabaseDecodable for BlockHeader {
+    fn db_decode(bytes: &[u8]) -> Result<Self, DecoderError> {
+        BlockHeader::decode_with_pow_hash(bytes)
+    }
+}
+
+impl DatabaseEncodable for BlockHeader {
+    fn db_encode(&self) -> Bytes {
+        let mut rlp_stream = RlpStream::new();
+        self.stream_rlp_with_pow_hash(&mut rlp_stream);
+        rlp_stream.drain()
     }
 }

@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{H256, U64};
+use cfx_types::{H256, U64};
 use serde_derive::Serialize;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -17,5 +17,5 @@ pub struct Status {
     /// The number of blocks
     pub block_number: U64,
     /// The number of pending transactions
-    pub pending_tx_number: usize,
+    pub pending_tx_number: U64,
 }

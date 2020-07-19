@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{H256, U256};
+use cfx_types::{H256, U256, U64};
 use cfxcore::state_exposer::SyncGraphStates as PrimitiveSyncGraphStates;
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -12,7 +12,7 @@ pub struct SyncGraphBlockState {
     pub parent: H256,
     pub referees: Vec<H256>,
     pub nonce: U256,
-    pub timestamp: u64,
+    pub timestamp: U64,
     pub adaptive: bool,
 }
 
@@ -36,7 +36,7 @@ impl SyncGraphStates {
                     .map(|x| H256::from(*x))
                     .collect(),
                 nonce: block_state.nonce.into(),
-                timestamp: block_state.timestamp,
+                timestamp: U64::from(block_state.timestamp),
                 adaptive: block_state.adaptive,
             })
         }

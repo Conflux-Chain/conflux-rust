@@ -6,7 +6,7 @@
 /// All	values are represented in MB.
 use std::cmp::max;
 
-pub const DEFAULT_LEDGER_CACHE_SIZE: usize = 1024;
+pub const DEFAULT_LEDGER_CACHE_SIZE: usize = 512;
 const MIN_LEDGER_CACHE_MB: usize = 4;
 
 pub const DEFAULT_INVALID_BLOCK_HASH_CACHE_SIZE_IN_COUNT: usize = 32 * 1024;

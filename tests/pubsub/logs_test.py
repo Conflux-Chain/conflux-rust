@@ -8,11 +8,12 @@ sys.path.insert(1, os.path.join(sys.path[0], '..'))
 import asyncio
 import eth_utils
 
+from eth_utils import decode_hex
 from conflux.config import default_config
 from conflux.filter import Filter
 from conflux.pubsub import PubSubClient
 from conflux.rpc import RpcClient
-from conflux.utils import sha3 as keccak, priv_to_addr
+from conflux.utils import sha3 as keccak, priv_to_addr, bytes_to_int
 from test_framework.blocktools import encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import assert_equal, assert_is_hex_string, connect_nodes, sync_blocks
@@ -92,7 +93,7 @@ class PubSubTest(ConfluxTestFramework):
         old_tip = self.rpc[FULLNODE0].best_block_hash()
         old_tip_epoch = self.rpc[FULLNODE0].epoch_number()
         fork_hash = receipts[len(receipts) // 2]["blockHash"]
-        fork_epoch = receipts[len(receipts) // 2]["epochNumber"]
+        fork_epoch = int(receipts[len(receipts) // 2]["epochNumber"], 16)
 
         self.log.info(f"Creating fork at {fork_hash[:20]}... (#{fork_epoch})")
 
@@ -105,7 +106,7 @@ class PubSubTest(ConfluxTestFramework):
         self.log.info(f"Tip: {old_tip[:20]}... (#{old_tip_epoch}) --> {new_tip[:20]}... (#{new_tip_epoch})")
 
         # block order changed, some transactions need to be re-executed
-        num_to_reexecute = sum(1 for r in receipts if r["epochNumber"] > fork_epoch)
+        num_to_reexecute = sum(1 for r in receipts if int(r["epochNumber"], 16) > fork_epoch)
 
         msg = await sub_all.next(timeout=5)
         assert(msg["revertTo"] != None)

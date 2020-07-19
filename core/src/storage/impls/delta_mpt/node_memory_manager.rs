@@ -76,7 +76,7 @@ impl<
     /// 12B*4x LRU) * number of nodes + 200M * 4B NodeRef. 5GB + extra 800M
     /// ~ 20_000_000 nodes.
     // TODO(yz): Need to calculate a factor in LRU (currently made up to 4).
-    pub const MAX_CACHED_TRIE_NODES_DISK_HYBRID: u32 = 10_000_000;
+    pub const MAX_CACHED_TRIE_NODES_DISK_HYBRID: u32 = 5_000_000;
     pub const MAX_CACHED_TRIE_NODES_R_LFU_COUNTER: u32 = (Self::R_LFU_FACTOR
         * Self::MAX_CACHED_TRIE_NODES_DISK_HYBRID as f64)
         as u32;
@@ -94,7 +94,7 @@ impl<
     /// leaf node. This assumption is for delta_trie.
     pub const MAX_TRIE_NODES_MEM_ONLY: u32 = 27_600_000;
     pub const R_LFU_FACTOR: f64 = 4.0;
-    pub const START_CAPACITY: u32 = 2_000_000;
+    pub const START_CAPACITY: u32 = 1_000_000;
 }
 
 impl<

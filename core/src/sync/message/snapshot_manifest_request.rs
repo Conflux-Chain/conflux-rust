@@ -114,13 +114,20 @@ impl SnapshotManifestRequest {
         self.trusted_blame_block.is_some()
     }
 
+    /// This function returns the receipts of REWARD_EPOCH_COUNT epochs
+    /// backward from the epoch of *snapshot_to_sync*. It needs to
+    /// return receipts of so many epochs to the request sender due to
+    /// the following reason. Let the epoch of *snapshot_to_sync* be E(i).
+    /// In the node of the request sender, to compute the state of E(i+1),
+    /// it would require to compute and include the reward of
+    /// E(i+1-REWARD_EPOCH_COUNT).
     fn get_block_receipts(
         &self, ctx: &Context,
     ) -> Option<Vec<BlockExecutionResult>> {
         let mut epoch_receipts = Vec::new();
         let mut epoch_hash =
             self.snapshot_to_sync.get_snapshot_epoch_id().clone();
-        for _ in 0..REWARD_EPOCH_COUNT {
+        for i in 0..REWARD_EPOCH_COUNT {
             if let Some(block) =
                 ctx.manager.graph.data_man.block_header_by_hash(&epoch_hash)
             {
@@ -128,6 +135,16 @@ impl SnapshotManifestRequest {
                     EpochNumber::Number(block.height()),
                 ) {
                     Ok(ordered_executable_epoch_blocks) => {
+                        if i == 0
+                            && *ordered_executable_epoch_blocks.last().unwrap()
+                                != epoch_hash
+                        {
+                            debug!(
+                                "Snapshot epoch id mismatched for epoch {}",
+                                block.height()
+                            );
+                            return None;
+                        }
                         for hash in &ordered_executable_epoch_blocks {
                             match ctx
                                 .manager

@@ -17,8 +17,9 @@ use crate::{
         pastset_cache::PastSetCache,
     },
     parameters::{consensus::*, consensus_internal::*},
-    pow::{target_difficulty, ProofOfWorkConfig},
+    pow::{target_difficulty, PowComputer, ProofOfWorkConfig},
     state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
+    verification::VerificationConfig,
 };
 use cfx_types::{H256, U256, U512};
 use hashbrown::HashMap as FastHashMap;
@@ -33,7 +34,7 @@ use primitives::{
 };
 use slab::Slab;
 use std::{
-    cmp::max,
+    cmp::{max, min},
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     convert::TryFrom,
     mem,
@@ -413,6 +414,7 @@ pub struct ConsensusGraphInner {
     pub data_man: Arc<BlockDataManager>,
     pub inner_conf: ConsensusInnerConfig,
     pub pow_config: ProofOfWorkConfig,
+    pub pow: Arc<PowComputer>,
     //executor: Arc<ConsensusExecutor>,
     /// This slab hold consensus graph node data and the array index is the
     /// internal index.
@@ -552,9 +554,9 @@ impl ConsensusGraphNode {
 
 impl ConsensusGraphInner {
     pub fn with_era_genesis(
-        pow_config: ProofOfWorkConfig, data_man: Arc<BlockDataManager>,
-        inner_conf: ConsensusInnerConfig, cur_era_genesis_block_hash: &H256,
-        cur_era_stable_block_hash: &H256,
+        pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
+        data_man: Arc<BlockDataManager>, inner_conf: ConsensusInnerConfig,
+        cur_era_genesis_block_hash: &H256, cur_era_stable_block_hash: &H256,
     ) -> Self
     {
         let genesis_block_header = data_man
@@ -589,6 +591,7 @@ impl ConsensusGraphInner {
             invalid_block_queue: BinaryHeap::new(),
             block_body_caches: HashMap::new(),
             pow_config,
+            pow,
             current_difficulty: initial_difficulty.into(),
             data_man: data_man.clone(),
             inner_conf,
@@ -1657,10 +1660,15 @@ impl ConsensusGraphInner {
     fn insert(&mut self, block_header: &BlockHeader) -> (usize, usize) {
         let hash = block_header.hash();
 
-        let is_heavy = U512::from(block_header.pow_quality)
+        let pow_quality =
+            U512::from(VerificationConfig::get_or_compute_header_pow_quality(
+                &self.pow,
+                block_header,
+            ));
+        let is_heavy = pow_quality
             >= U512::from(self.inner_conf.heavy_block_difficulty_ratio)
                 * U512::from(block_header.difficulty());
-        let is_timer = U512::from(block_header.pow_quality)
+        let is_timer = pow_quality
             >= U512::from(self.inner_conf.timer_chain_block_difficulty_ratio)
                 * U512::from(block_header.difficulty());
 
@@ -1913,7 +1921,7 @@ impl ConsensusGraphInner {
                 .data_man
                 .block_by_hash(
                     &self.arena[*idx].hash,
-                    false, /* update_cache */
+                    true, /* update_cache */
                 )
                 .expect("Exist");
             epoch_blocks.push(block);
@@ -2311,35 +2319,37 @@ impl ConsensusGraphInner {
 
     pub fn get_transaction_receipt_with_address(
         &self, tx_hash: &H256,
-    ) -> Option<(Receipt, TransactionIndex, U256)> {
+    ) -> Option<(TransactionIndex, Option<(Receipt, U256)>)> {
         trace!("Get receipt with tx_hash {}", tx_hash);
         let tx_index = self.data_man.transaction_index_by_hash(
             tx_hash, false, /* update_cache */
         )?;
         // receipts should never be None if transaction index isn't none.
-        let block_receipts = self
+        let maybe_executed = self
             .block_execution_results_by_hash(
                 &tx_index.block_hash,
                 false, /* update_cache */
-            )?
-            .1
-            .block_receipts;
+            )
+            .map(|receipt| {
+                let block_receipts = receipt.1.block_receipts;
 
-        let prior_gas_used = if tx_index.index == 0 {
-            U256::zero()
-        } else {
-            block_receipts.receipts[tx_index.index - 1].accumulated_gas_used
-        };
+                let prior_gas_used = if tx_index.index == 0 {
+                    U256::zero()
+                } else {
+                    block_receipts.receipts[tx_index.index - 1]
+                        .accumulated_gas_used
+                };
+                (
+                    block_receipts
+                        .receipts
+                        .get(tx_index.index)
+                        .expect("Error: can't get receipt by tx_index ")
+                        .clone(),
+                    prior_gas_used,
+                )
+            });
 
-        Some((
-            block_receipts
-                .receipts
-                .get(tx_index.index)
-                .expect("Error: can't get receipt by tx_index ")
-                .clone(),
-            tx_index,
-            prior_gas_used,
-        ))
+        Some((tx_index, maybe_executed))
     }
 
     pub fn check_block_pivot_assumption(
@@ -3134,14 +3144,70 @@ impl ConsensusGraphInner {
 
         // We compute the accumulative lca list after this
         let mut tmp_lca = Vec::new();
+        if tmp_chain.len() > self.timer_chain.len() - fork_at_index
+            && self.timer_chain.len() - fork_at_index
+                < self.inner_conf.timer_chain_beta as usize
+        {
+            let mut last_lca = match self.timer_chain_accumulative_lca.last() {
+                Some(last_lca) => *last_lca,
+                None => self.cur_era_genesis_block_arena_index,
+            };
+            let s = max(
+                self.timer_chain.len(),
+                self.inner_conf.timer_chain_beta as usize,
+            );
+            let e =
+                min(tmp_chain.len(), self.inner_conf.timer_chain_beta as usize);
+            for i in s..(fork_at_index + e) {
+                // `end` is the timer chain index of the end of
+                // `timer_chain_beta` consecutive blocks which
+                // we will compute accumulative lca.
+                let end = i - self.inner_conf.timer_chain_beta as usize;
+                if end < self.inner_conf.timer_chain_beta as usize {
+                    tmp_lca.push(self.cur_era_genesis_block_arena_index);
+                    continue;
+                }
+                let mut lca = self.timer_chain[end];
+                for j in
+                    (end - self.inner_conf.timer_chain_beta as usize + 1)..end
+                {
+                    // Note that we may have timer_chain blocks that are
+                    // outside the genesis tree temporarily.
+                    // Therefore we have to deal with the case that lca
+                    // becomes NULL
+                    if lca == NULL {
+                        break;
+                    }
+                    lca = self.lca(lca, self.timer_chain[j]);
+                }
+                // Note that we have the assumption that the force
+                // confirmation point will always move
+                // along parental edges, i.e., it is not possible for the
+                // point to move to a sibling tree. This
+                // assumption is true if the timer_chain_beta
+                // and the timer_chain_difficulty_ratio are set to large
+                // enough values.
+                //
+                // It is therefore safe here to use the height to compare.
+                if lca != NULL
+                    && self.arena[last_lca].height < self.arena[lca].height
+                {
+                    last_lca = lca;
+                }
+                tmp_lca.push(last_lca);
+            }
+        }
         if tmp_chain.len() > self.inner_conf.timer_chain_beta as usize {
-            let mut last_lca = if fork_at_index == 0 {
+            let mut last_lca = if let Some(lca) = tmp_lca.last() {
+                *lca
+            } else if fork_at_index == 0 {
                 self.cur_era_genesis_block_arena_index
             } else {
-                // This is guaranteed to be inside the bound because: 1) fork_at
-                // + tmp_chain.len() cannot be longer than the current
-                // maintained longest timer chain. 2) tmp_chain.len() is greater
-                // than timer_chain_beta.
+                // This is guaranteed to be inside the bound because it
+                // means that the lca computation on old nodes do not need to
+                // be extended. The gap between the fork_at_index and the
+                // self.timer_chain.len() is greater than or equal to
+                // timer_chain_beta.
                 self.timer_chain_accumulative_lca[fork_at_index - 1]
             };
             for i in 0..(tmp_chain.len()
@@ -3199,49 +3265,6 @@ impl ConsensusGraphInner {
                     }
                     tmp_lca.push(last_lca);
                 }
-            }
-        } else if tmp_chain.len() > self.timer_chain.len() - fork_at_index {
-            let mut last_lca = match self.timer_chain_accumulative_lca.last() {
-                Some(last_lca) => *last_lca,
-                None => self.cur_era_genesis_block_arena_index,
-            };
-            for i in self.timer_chain.len()..(fork_at_index + tmp_chain.len()) {
-                // `end` is the timer chain index of the end of
-                // `timer_chain_beta` consecutive blocks which
-                // we will compute accumulative lca.
-                let end = i - self.inner_conf.timer_chain_beta as usize;
-                if end < self.inner_conf.timer_chain_beta as usize {
-                    tmp_lca.push(self.cur_era_genesis_block_arena_index);
-                    continue;
-                }
-                let mut lca = self.timer_chain[end];
-                for j in
-                    (end - self.inner_conf.timer_chain_beta as usize + 1)..end
-                {
-                    // Note that we may have timer_chain blocks that are
-                    // outside the genesis tree temporarily.
-                    // Therefore we have to deal with the case that lca
-                    // becomes NULL
-                    if lca == NULL {
-                        break;
-                    }
-                    lca = self.lca(lca, self.timer_chain[j]);
-                }
-                // Note that we have the assumption that the force
-                // confirmation point will always move
-                // along parental edges, i.e., it is not possible for the
-                // point to move to a sibling tree. This
-                // assumption is true if the timer_chain_beta
-                // and the timer_chain_difficulty_ratio are set to large
-                // enough values.
-                //
-                // It is therefore safe here to use the height to compare.
-                if lca != NULL
-                    && self.arena[last_lca].height < self.arena[lca].height
-                {
-                    last_lca = lca;
-                }
-                tmp_lca.push(last_lca);
             }
         }
 
@@ -3758,5 +3781,31 @@ impl ConsensusGraphInner {
                     })
             );
         }
+    }
+
+    pub fn get_pivot_chain_and_weight(
+        &self, height_range: Option<(u64, u64)>,
+    ) -> Result<Vec<(H256, U256)>, String> {
+        let min_height = self.get_cur_era_genesis_height();
+        let max_height = self.arena[*self.pivot_chain.last().unwrap()].height;
+        let (start, end) = height_range.unwrap_or((min_height, max_height));
+        if start < min_height || end > max_height {
+            bail!(
+                "height_range out of bound: requested={:?} min={} max={}",
+                height_range,
+                min_height,
+                max_height
+            );
+        }
+
+        let mut chain = Vec::new();
+        for i in start..=end {
+            let pivot_arena_index = self.get_pivot_block_arena_index(i);
+            chain.push((
+                self.arena[pivot_arena_index].hash.into(),
+                (self.weight_tree.get(pivot_arena_index) as u64).into(),
+            ));
+        }
+        Ok(chain)
     }
 }

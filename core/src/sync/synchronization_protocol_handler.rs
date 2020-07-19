@@ -18,6 +18,7 @@ use crate::{
             GetBlockHeadersResponse, NewBlockHashes, StatusDeprecatedV1,
             StatusV2, TransactionDigests,
         },
+        request_manager::{try_get_block_hashes, Request},
         state::SnapshotChunkSync,
         synchronization_phases::{SyncPhaseType, SynchronizationPhaseManager},
         synchronization_state::PeerFilter,
@@ -226,7 +227,13 @@ impl TaskSize for LocalMessageTask {}
 struct FutureBlockContainerInner {
     capacity: usize,
     size: usize,
-    container: BTreeMap<u64, HashMap<H256, BlockHeader>>,
+    container: BTreeMap<u64, HashSet<H256>>,
+
+    // The value is a tuple of the header corresponding to a hash and the peer
+    // that we receive this header from. Since a header is only broadcast
+    // after receiving its body, we should be able to receive the block body
+    // from the peer successfully.
+    hash_to_header_and_peer: HashMap<H256, (BlockHeader, NodeId)>,
 }
 
 impl FutureBlockContainerInner {
@@ -235,6 +242,7 @@ impl FutureBlockContainerInner {
             capacity,
             size: 0,
             container: BTreeMap::new(),
+            hash_to_header_and_peer: Default::default(),
         }
     }
 }
@@ -250,14 +258,21 @@ impl FutureBlockContainer {
         }
     }
 
-    pub fn insert(&self, header: BlockHeader) {
-        let mut inner = self.inner.write();
+    pub fn insert(&self, header: BlockHeader, peer: NodeId) {
+        let mut inner = &mut *self.inner.write();
+        let header_hash = header.hash();
+        if inner.hash_to_header_and_peer.contains_key(&header_hash) {
+            return;
+        }
         let entry = inner
             .container
             .entry(header.timestamp())
-            .or_insert(HashMap::new());
-        if !entry.contains_key(&header.hash()) {
-            entry.insert(header.hash(), header);
+            .or_insert(HashSet::new());
+        if !entry.contains(&header_hash) {
+            entry.insert(header_hash);
+            inner
+                .hash_to_header_and_peer
+                .insert(header_hash, (header, peer));
             inner.size += 1;
         }
 
@@ -270,8 +285,9 @@ impl FutureBlockContainer {
                     continue;
                 }
 
-                let hash = *entry.1.iter().find(|_| true).unwrap().0;
+                let hash = *entry.1.iter().next().unwrap();
                 entry.1.remove(&hash);
+                inner.hash_to_header_and_peer.remove(&hash);
                 removed = true;
 
                 if entry.1.is_empty() {
@@ -290,7 +306,7 @@ impl FutureBlockContainer {
         }
     }
 
-    pub fn get_before(&self, timestamp: u64) -> Vec<BlockHeader> {
+    pub fn get_before(&self, timestamp: u64) -> Vec<(BlockHeader, NodeId)> {
         let mut inner = self.inner.write();
         let mut result = Vec::new();
 
@@ -307,12 +323,21 @@ impl FutureBlockContainer {
 
             let entry = inner.container.remove(&slot.unwrap()).unwrap();
 
-            for (_, header) in entry {
-                result.push(header);
+            for header_hash in entry {
+                result.push(inner.hash_to_header_and_peer.remove(&header_hash).expect(
+                    "hash and header are inserted/removed together atomically",
+                ));
             }
         }
 
         result
+    }
+
+    pub fn contains(&self, header_hash: &H256) -> bool {
+        self.inner
+            .read()
+            .hash_to_header_and_peer
+            .contains_key(header_hash)
     }
 }
 
@@ -325,7 +350,6 @@ pub struct SynchronizationProtocolHandler {
     pub request_manager: Arc<RequestManager>,
     /// The latest `(requested_epoch_number, request_time)`
     pub latest_epoch_requested: Mutex<(u64, Instant)>,
-    pub future_blocks: FutureBlockContainer,
     pub phase_manager: SynchronizationPhaseManager,
     pub phase_manager_lock: Mutex<u32>,
 
@@ -370,7 +394,6 @@ pub struct ProtocolConfiguration {
     pub max_trans_count_received_in_catch_up: u64,
     pub min_peers_tx_propagation: usize,
     pub max_peers_tx_propagation: usize,
-    pub future_block_buffer_capacity: usize,
     pub max_downloading_chunks: usize,
     pub test_mode: bool,
     pub dev_mode: bool,
@@ -407,9 +430,6 @@ impl SynchronizationProtocolHandler {
             recover_public_queue.clone(),
         ));
 
-        let future_block_buffer_capacity =
-            protocol_config.future_block_buffer_capacity;
-
         let state_sync = Arc::new(SnapshotChunkSync::new(state_sync_config));
 
         Self {
@@ -419,9 +439,6 @@ impl SynchronizationProtocolHandler {
             syn: sync_state.clone(),
             request_manager,
             latest_epoch_requested: Mutex::new((0, Instant::now())),
-            future_blocks: FutureBlockContainer::new(
-                future_block_buffer_capacity,
-            ),
             phase_manager: SynchronizationPhaseManager::new(
                 initial_sync_phase,
                 sync_state.clone(),
@@ -956,6 +973,7 @@ impl SynchronizationProtocolHandler {
                 // A block might be loaded from db and sent to the local queue
                 // multiple times, but we should only process it and request its
                 // dependence once.
+                received_blocks.insert(hash);
                 continue;
             }
             if !task.requested.contains(&hash) {
@@ -1400,15 +1418,15 @@ impl SynchronizationProtocolHandler {
             .unwrap()
             .as_secs();
 
-        let mut missed_body_block_hashes = HashSet::new();
+        let mut missed_body_block_hashes = HashMap::new();
         let mut need_to_relay = HashSet::new();
-        let headers = self.future_blocks.get_before(now_timestamp);
+        let headers = self.graph.future_blocks.get_before(now_timestamp);
 
         if headers.is_empty() {
             return;
         }
 
-        for mut header in headers {
+        for (mut header, peer) in headers {
             let hash = header.hash();
             let (insert_result, to_relay) = self.graph.insert_block_header(
                 &mut header,
@@ -1422,22 +1440,21 @@ impl SynchronizationProtocolHandler {
 
                 // check block body
                 if !self.graph.contains_block(&hash) {
-                    missed_body_block_hashes.insert(hash);
+                    // There are no duplicate headers in `future_blocks`, so
+                    // using Vec for each peer is enough.
+                    missed_body_block_hashes
+                        .entry(peer)
+                        .or_insert(Vec::new())
+                        .push(hash);
                 }
             }
         }
 
-        let chosen_peer = PeerFilter::new(msgid::GET_CMPCT_BLOCKS)
-            .throttle(msgid::GET_BLOCKS)
-            .select(&self.syn);
-
-        // request missing blocks
-        self.request_missing_blocks(
-            io,
-            chosen_peer,
-            missed_body_block_hashes.into_iter().collect(),
-        )
-        .ok();
+        for (peer, missing_hashes) in missed_body_block_hashes {
+            // request missing blocks from the peer where we receive their
+            // headers.
+            self.request_missing_blocks(io, Some(peer), missing_hashes);
+        }
 
         // relay if necessary
         self.relay_blocks(io, need_to_relay.into_iter().collect())
@@ -1468,8 +1485,30 @@ impl SynchronizationProtocolHandler {
 
     pub fn remove_expired_flying_request(&self, io: &dyn NetworkContext) {
         self.request_manager.resend_timeout_requests(io);
-        self.request_manager
+        let cancelled_requests = self
+            .request_manager
             .resend_waiting_requests(io, !self.catch_up_mode());
+        self.handle_cancelled_requests(cancelled_requests);
+    }
+
+    /// Remove the blocks in `cancelled_requests` and their future set from sync
+    /// graph, so if they are needed in the future, they will be requested
+    /// again.
+    fn handle_cancelled_requests(
+        &self, cancelled_requests: Vec<Box<dyn Request>>,
+    ) {
+        let mut to_remove_blocks = HashSet::new();
+        for request in cancelled_requests {
+            // We do not need to handle `GetBlockHeaders` because if a header is
+            // not received, the block will not exist in our sync
+            // graph.
+            if let Some(block_hashes) = try_get_block_hashes(&request) {
+                for hash in block_hashes {
+                    to_remove_blocks.insert(*hash);
+                }
+            }
+        }
+        self.graph.remove_blocks_and_future(&to_remove_blocks);
     }
 
     pub fn send_heartbeat(&self, io: &dyn NetworkContext) {
@@ -1525,7 +1564,7 @@ impl SynchronizationProtocolHandler {
     pub fn request_missing_blocks(
         &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
         hashes: Vec<H256>,
-    ) -> Result<(), Error>
+    )
     {
         let catch_up_mode = self.catch_up_mode();
         if catch_up_mode {
@@ -1534,7 +1573,6 @@ impl SynchronizationProtocolHandler {
             self.request_manager
                 .request_compact_blocks(io, peer_id, hashes, None);
         }
-        Ok(())
     }
 
     pub fn request_blocks(
@@ -1611,7 +1649,7 @@ impl SynchronizationProtocolHandler {
         if let Some(block) = self
             .graph
             .data_man
-            .block_by_hash(hash, false /* update_cache */)
+            .block_by_hash(hash, true /* update_cache */)
         {
             debug!("Recovered block {:?} from db", hash);
             // Process blocks from db
