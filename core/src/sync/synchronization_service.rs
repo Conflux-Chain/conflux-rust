@@ -14,13 +14,17 @@ use crate::{
     },
 };
 use cfx_types::H256;
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{NetworkService, ProtocolId};
 use primitives::{transaction::SignedTransaction, Block};
 use std::sync::Arc;
 
+#[derive(DeriveMallocSizeOf)]
 pub struct SynchronizationService {
+    #[ignore_malloc_size_of = "channels are not handled in MallocSizeOf"]
     network: Arc<NetworkService>,
     protocol_handler: Arc<SynchronizationProtocolHandler>,
+    #[ignore_malloc_size_of = "insignificant"]
     protocol: ProtocolId,
 }
 

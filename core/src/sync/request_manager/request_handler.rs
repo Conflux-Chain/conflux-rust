@@ -12,6 +12,8 @@ use crate::{
         Error, ErrorKind,
     },
 };
+use malloc_size_of::MallocSizeOf;
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{
     node_table::NodeId, ErrorKind as NetworkErrorKind, NetworkContext,
     UpdateNodeOperation,
@@ -30,6 +32,7 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
+#[derive(DeriveMallocSizeOf)]
 pub struct RequestHandler {
     protocol_config: ProtocolConfiguration,
     peers: Mutex<HashMap<NodeId, RequestContainer>>,
@@ -213,7 +216,7 @@ impl RequestHandler {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, DeriveMallocSizeOf)]
 struct RequestContainer {
     peer_id: NodeId,
     pub inflight_requests: HashMap<u64, SynchronizationPeerRequest>,
@@ -405,7 +408,7 @@ impl RequestContainer {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, DeriveMallocSizeOf)]
 pub struct SynchronizationPeerRequest {
     pub message: RequestMessage,
     pub timed_req: Arc<TimedSyncRequests>,
@@ -418,7 +421,9 @@ pub trait AsAny {
 }
 
 /// Trait of request message
-pub trait Request: Send + Debug + AsAny + Message + SetRequestId {
+pub trait Request:
+    Send + Debug + AsAny + Message + SetRequestId + MallocSizeOf
+{
     /// Request timeout for resend purpose.
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration;
 
@@ -452,7 +457,7 @@ pub trait Request: Send + Debug + AsAny + Message + SetRequestId {
     fn notify_timeout(&mut self) {}
 }
 
-#[derive(Debug)]
+#[derive(Debug, DeriveMallocSizeOf)]
 pub struct RequestMessage {
     pub request: Box<dyn Request>,
     pub delay: Option<Duration>,
@@ -501,7 +506,7 @@ impl RequestMessage {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, DeriveMallocSizeOf)]
 pub struct TimedSyncRequests {
     pub peer_id: NodeId,
     pub timeout_time: Instant,

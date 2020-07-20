@@ -46,24 +46,29 @@ use crate::{
     sync::{message::Throttled, SynchronizationGraph},
     TransactionPool,
 };
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{node_table::NodeId, service::ProtocolVersion};
 use rand::prelude::SliceRandom;
 use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
 
+#[derive(DeriveMallocSizeOf)]
 pub struct Provider {
     pub protocol_version: ProtocolVersion,
 
     // shared consensus graph
+    #[ignore_malloc_size_of = "arc already counted"]
     consensus: SharedConsensusGraph,
 
     // shared synchronization graph
     graph: Arc<SynchronizationGraph>,
 
     // helper API for retrieving ledger information
+    #[ignore_malloc_size_of = "arc already counted"]
     ledger: LedgerInfo,
 
     // shared network service
     // NOTE: use weak pointer in order to avoid circular references
+    #[ignore_malloc_size_of = "channels are not handled in MallocSizeOf"]
     network: Weak<NetworkService>,
 
     // collection of all peers available
