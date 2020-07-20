@@ -5,6 +5,7 @@
 use crate::{
     message::{Message, MsgId},
     network::{self, NetworkContext, UpdateNodeOperation},
+    statedb,
     sync::message::Throttled,
 };
 use error_chain::ChainedError;
@@ -15,6 +16,7 @@ use rlp::DecoderError;
 error_chain! {
     links {
         Network(network::Error, network::ErrorKind);
+        StateDb(statedb::Error, statedb::ErrorKind);
     }
 
     foreign_links {
@@ -251,6 +253,8 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
                 op = Some(UpdateNodeOperation::Failure)
             }
         },
+
+        ErrorKind::StateDb(_) => disconnect = false,
 
         ErrorKind::__Nonexhaustive {} => {
             op = Some(UpdateNodeOperation::Failure)
