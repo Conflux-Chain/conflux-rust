@@ -12,9 +12,8 @@ use crate::{
 };
 
 use primitives::{
-    BlockHeader as PrimitiveBlockHeader, BlockReceipts, ChainIdParams,
-    SignedTransaction, StateRoot as PrimitiveStateRoot,
-    StorageRoot as PrimitiveStorageRoot,
+    BlockHeader, BlockReceipts, ChainIdParams, SignedTransaction, StateRoot,
+    StorageRoot,
 };
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
@@ -70,7 +69,7 @@ pub struct GetBlockHeaders {
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct BlockHeaders {
     pub request_id: RequestId,
-    pub headers: Vec<PrimitiveBlockHeader>,
+    pub headers: Vec<BlockHeader>,
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
@@ -178,7 +177,7 @@ pub struct GetStateRoots {
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct StateRootWithEpoch {
     pub epoch: u64,
-    pub state_root: PrimitiveStateRoot,
+    pub state_root: StateRoot,
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
@@ -270,15 +269,15 @@ pub struct GetStorageRoots {
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct StorageRootProof {
-    pub state_root: PrimitiveStateRoot,
-    pub prev_state_root: Option<PrimitiveStateRoot>,
+    pub state_root: StateRoot,
+    pub prev_state_root: Option<StateRoot>,
     pub merkle_proof: NodeMerkleProof,
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct StorageRootWithKey {
     pub key: StorageRootKey,
-    pub root: Option<PrimitiveStorageRoot>,
+    pub root: Option<StorageRoot>,
     pub proof: StorageRootProof,
 }
 
