@@ -214,7 +214,9 @@ pub fn initialize_common_modules(
         pow.clone(),
     ));
 
-    let machine = Arc::new(new_machine_with_builtin());
+    let consensus_conf = conf.consensus_config();
+    let machine =
+        Arc::new(new_machine_with_builtin(consensus_conf.chain_id.clone()));
 
     let txpool = Arc::new(TransactionPool::new(
         conf.txpool_config(),
@@ -228,7 +230,7 @@ pub fn initialize_common_modules(
     let notifications = Notifications::init();
 
     let consensus = Arc::new(ConsensusGraph::new(
-        conf.consensus_config(),
+        consensus_conf,
         vm,
         txpool.clone(),
         statistics,

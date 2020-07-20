@@ -1313,14 +1313,17 @@ impl ConsensusExecutionHandler {
                     debug_out.no_reward_blocks.push(block.hash());
                 }
             } else {
-                let mut reward = if block.block_header.pow_quality
-                    >= *epoch_difficulty
-                {
+                let pow_quality =
+                    VerificationConfig::get_or_compute_header_pow_quality(
+                        &self.data_man.pow,
+                        &block.block_header,
+                    );
+                let mut reward = if pow_quality >= *epoch_difficulty {
                     base_reward_per_block
                 } else {
                     debug!(
                         "Block {} pow_quality {} is less than epoch_difficulty {}!",
-                        block.hash(), block.block_header.pow_quality, epoch_difficulty
+                        block.hash(), pow_quality, epoch_difficulty
                     );
                     0.into()
                 };
