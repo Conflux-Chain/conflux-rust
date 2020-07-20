@@ -699,7 +699,7 @@ use crate::storage::{
     StateRootWithAuxInfo,
 };
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
-use primitives::{Account, StateRoot, StorageKey};
+use primitives::{Account, StorageKey};
 use rand::{
     distributions::{Distribution, Uniform},
     seq::SliceRandom,
