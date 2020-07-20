@@ -34,20 +34,6 @@ use cfx_types::H160;
 use network::node_table::NodeId;
 use primitives::{StorageKey, StorageRoot};
 
-impl Ord for StorageRootKey {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.epoch
-            .cmp(&other.epoch)
-            .then(self.address.cmp(&other.address))
-    }
-}
-
-impl PartialOrd for StorageRootKey {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
 #[derive(Debug)]
 struct Statistics {
     cached: usize,

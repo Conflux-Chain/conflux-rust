@@ -188,7 +188,16 @@ pub struct StateRoots {
 }
 
 #[derive(
-    Clone, Debug, Default, PartialEq, Eq, Hash, RlpEncodable, RlpDecodable,
+    Clone,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    RlpEncodable,
+    RlpDecodable,
 )]
 pub struct StateKey {
     pub epoch: u64,
@@ -237,7 +246,16 @@ pub struct TxInfos {
 }
 
 #[derive(
-    Clone, Debug, Default, PartialEq, Eq, Hash, RlpEncodable, RlpDecodable,
+    Clone,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    RlpEncodable,
+    RlpDecodable,
 )]
 pub struct StorageRootKey {
     pub epoch: u64,
