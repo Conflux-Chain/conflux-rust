@@ -485,7 +485,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "0.6.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -657,7 +657,7 @@ dependencies = [
 
 [[package]]
 name = "client"
-version = "0.6.0"
+version = "1.0.0"
 dependencies = [
  "app_dirs",
  "bigdecimal",
@@ -741,7 +741,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "0.6.0"
+version = "1.0.0"
 dependencies = [
  "app_dirs",
  "blockgen",

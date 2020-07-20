@@ -53,6 +53,9 @@ pub fn simple_mpt_merkle_root(simple_mpt: &mut SimpleMpt) -> MerkleHash {
     match maybe_root_node {
         None => MERKLE_NULL_NODE,
         Some(root_node) => {
+            // if all keys share the same prefix (e.g. 0x00, ..., 0x0f share
+            // the first nibble) then they will all be under the first child of
+            // the root. in this case, we will use this first child as the root.
             if root_node.get_children_count() == 1 {
                 trace!(
                     "debug receipts calculation: root node {:?}",
@@ -63,8 +66,7 @@ pub fn simple_mpt_merkle_root(simple_mpt: &mut SimpleMpt) -> MerkleHash {
                         )
                     )
                 );
-                // The actual root is the root's child 0 because
-                // the first nibble for all keys are 0.
+
                 root_node.get_child(0).expect("Child 0 must exist").merkle
             } else {
                 trace!("debug receipts calculation: root node {:?}", root_node);
@@ -88,8 +90,14 @@ pub fn simple_mpt_proof(
         .open_path_for_key::<access_mode::Read>(access_key)
         .expect("open_path_for_key should succeed");
 
-    let proof = cursor.to_proof();
+    let mut proof = cursor.to_proof();
     cursor.finish().expect("finish should succeed");
+
+    // see comment in `simple_mpt_merkle_root`
+    if proof.get_proof_nodes()[0].get_children_count() == 1 {
+        proof.delete_root();
+    }
+
     proof
 }
 
