@@ -124,11 +124,13 @@ pub fn initialize_common_modules(
         Arc<Machine>,
         Arc<SecretStore>,
         Arc<BlockDataManager>,
+        Arc<PowComputer>,
         Arc<TransactionPool>,
         Arc<ConsensusGraph>,
         Arc<SynchronizationGraph>,
         Arc<NetworkService>,
         Arc<CommonRpcImpl>,
+        Arc<AccountProvider>,
         PubSubClient,
         Runtime,
     ),
@@ -199,6 +201,9 @@ pub fn initialize_common_modules(
     );
     debug!("Initialize genesis_block={:?}", genesis_block);
 
+    let pow_config = conf.pow_config();
+    let pow = Arc::new(PowComputer::new(pow_config.use_octopus()));
+
     let data_man = Arc::new(BlockDataManager::new(
         cache_config,
         Arc::new(genesis_block),
@@ -206,9 +211,12 @@ pub fn initialize_common_modules(
         storage_manager,
         worker_thread_pool,
         conf.data_mananger_config(),
+        pow.clone(),
     ));
 
-    let machine = Arc::new(new_machine_with_builtin());
+    let consensus_conf = conf.consensus_config();
+    let machine =
+        Arc::new(new_machine_with_builtin(consensus_conf.chain_id.clone()));
 
     let txpool = Arc::new(TransactionPool::new(
         conf.txpool_config(),
@@ -219,19 +227,20 @@ pub fn initialize_common_modules(
 
     let statistics = Arc::new(Statistics::new());
     let vm = VmFactory::new(1024 * 32);
-    let pow_config = conf.pow_config();
     let notifications = Notifications::init();
 
     let consensus = Arc::new(ConsensusGraph::new(
-        conf.consensus_config(),
+        consensus_conf,
         vm,
         txpool.clone(),
         statistics,
         data_man.clone(),
         pow_config.clone(),
+        pow.clone(),
         notifications.clone(),
         conf.execution_config(),
         conf.verification_config(),
+        is_full_node,
     ));
 
     let verification_config = conf.verification_config();
@@ -241,6 +250,7 @@ pub fn initialize_common_modules(
         consensus.clone(),
         verification_config,
         pow_config,
+        pow.clone(),
         sync_config,
         notifications.clone(),
         is_full_node,
@@ -253,11 +263,18 @@ pub fn initialize_common_modules(
         Arc::new(network)
     };
 
+    let accounts = Arc::new(
+        account_provider(Some(keys_path()), None)
+            .ok()
+            .expect("failed to initialize account provider"),
+    );
+
     let common_impl = Arc::new(CommonRpcImpl::new(
         exit,
         consensus.clone(),
         network.clone(),
         txpool.clone(),
+        accounts.clone(),
     ));
 
     let runtime = Runtime::with_default_thread_count();
@@ -267,11 +284,13 @@ pub fn initialize_common_modules(
         machine,
         secret_store,
         data_man,
+        pow,
         txpool,
         consensus,
         sync_graph,
         network,
         common_impl,
+        accounts,
         pubsub,
         runtime,
     ))
@@ -282,6 +301,7 @@ pub fn initialize_not_light_node_modules(
 ) -> Result<
     (
         Arc<BlockDataManager>,
+        Arc<PowComputer>,
         Arc<TransactionPool>,
         Arc<ConsensusGraph>,
         Arc<SynchronizationService>,
@@ -295,14 +315,16 @@ pub fn initialize_not_light_node_modules(
     String,
 > {
     let (
-        machine,
+        _machine,
         secret_store,
         data_man,
+        pow,
         txpool,
         consensus,
         sync_graph,
         network,
         common_impl,
+        accounts,
         pubsub,
         runtime,
     ) = initialize_common_modules(&conf, exit.clone(), is_full_node)?;
@@ -343,16 +365,24 @@ pub fn initialize_not_light_node_modules(
         thread::Builder::new().name("MallocSizeOf".into()).spawn(
             move || loop {
                 let start = Instant::now();
+                let mb = 1_000_000;
                 let mut ops = new_malloc_size_ops();
-                let secret_store_size = secret_store.size_of(&mut ops);
-                let data_man_size = data_man.size_of(&mut ops);
-                let tx_pool_size = txpool.size_of(&mut ops);
-                let consensus_graph_size = consensus.size_of(&mut ops);
+                let secret_store_size = secret_store.size_of(&mut ops) / mb;
+                // Note `db_manager` is not wrapped in Arc, so it will still be included
+                // in `data_man_size`.
+                let data_manager_db_cache_size = data_man.db_manager.size_of(&mut ops) / mb;
+                let storage_manager_size = data_man.storage_manager.size_of(&mut ops) / mb;
+                let data_man_size = data_man.size_of(&mut ops) / mb;
+                let tx_pool_size = txpool.size_of(&mut ops) / mb;
+                let consensus_graph_size = consensus.size_of(&mut ops) / mb;
                 let sync_graph_size =
-                    sync.get_synchronization_graph().size_of(&mut ops);
+                    sync.get_synchronization_graph().size_of(&mut ops) / mb;
                 info!(
-                    "Malloc Size: secret_store={} data_man={} txpool={} consensus={} sync={}, time elapsed={:?}",
-                    secret_store_size, data_man_size, tx_pool_size, consensus_graph_size, sync_graph_size,
+                    "Malloc Size(MB): secret_store={} data_manager_db_cache_size={} \
+                    storage_manager_size={} data_man={} txpool={} consensus={} sync={}, \
+                    time elapsed={:?}",
+                    secret_store_size,data_manager_db_cache_size,storage_manager_size,
+                    data_man_size, tx_pool_size, consensus_graph_size, sync_graph_size,
                     start.elapsed(),
                 );
                 thread::sleep(Duration::from_secs(
@@ -383,6 +413,7 @@ pub fn initialize_not_light_node_modules(
         sync.clone(),
         maybe_txgen.clone(),
         conf.pow_config(),
+        pow.clone(),
         maybe_author.clone().unwrap_or_default(),
     ));
     if conf.is_dev_mode() {
@@ -416,7 +447,7 @@ pub fn initialize_not_light_node_modules(
         maybe_txgen.clone(),
         maybe_direct_txgen,
         conf.rpc_impl_config(),
-        machine,
+        accounts,
     ));
 
     let debug_rpc_http_server = super::rpc::start_http(
@@ -479,6 +510,7 @@ pub fn initialize_not_light_node_modules(
     )?;
     Ok((
         data_man,
+        pow,
         txpool,
         consensus,
         sync,
@@ -549,7 +581,7 @@ pub fn initialize_txgens(
 pub mod delegate_convert {
     use crate::rpc::{
         error_codes::{codes::EXCEPTION_ERROR, invalid_params},
-        JsonRpcErrorKind, RpcError, RpcErrorKind, RpcResult,
+        JsonRpcErrorKind, RpcBoxFuture, RpcError, RpcErrorKind, RpcResult,
     };
     use jsonrpc_core::{
         futures::{future::IntoFuture, Future},
@@ -569,6 +601,12 @@ pub mod delegate_convert {
         fn into(x: Self) -> BoxFuture<T> { x }
     }
 
+    impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for RpcBoxFuture<T> {
+        fn into(x: Self) -> BoxFuture<T> {
+            Box::new(x.map_err(|rpc_error| Into::into(rpc_error)))
+        }
+    }
+
     impl Into<JsonRpcError> for RpcError {
         fn into(e: Self) -> JsonRpcError {
             match e.0 {
@@ -579,6 +617,7 @@ pub mod delegate_convert {
                 RpcErrorKind::Msg(_)
                 | RpcErrorKind::Decoder(_)
                 | RpcErrorKind::FilterError(_)
+                | RpcErrorKind::LightProtocol(_)
                 | RpcErrorKind::StateDb(_)
                 | RpcErrorKind::Storage(_) => JsonRpcError {
                     code: jsonrpc_core::ErrorCode::ServerError(EXCEPTION_ERROR),
@@ -646,6 +685,7 @@ pub mod delegate_convert {
 
 pub use crate::configuration::Configuration;
 use crate::{
+    accounts::{account_provider, keys_path},
     rpc::{
         extractor::RpcExtractor,
         impls::{
@@ -662,6 +702,7 @@ use cfxcore::{
     block_data_manager::BlockDataManager,
     genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
     machine::{new_machine_with_builtin, Machine},
+    pow::PowComputer,
     statistics::Statistics,
     storage::StorageManager,
     sync::SyncPhaseType,
@@ -670,6 +711,7 @@ use cfxcore::{
     SynchronizationGraph, SynchronizationService, TransactionPool,
     WORKER_COMPUTATION_PARALLELISM,
 };
+use cfxcore_accounts::AccountProvider;
 use cfxkey::public_to_address;
 use jsonrpc_http_server::Server as HttpServer;
 use jsonrpc_tcp_server::Server as TcpServer;

@@ -32,7 +32,7 @@ pub trait StateTrait {
     // pairs.
     fn delete_all(
         &mut self, access_key_prefix: StorageKey,
-    ) -> Result<Option<Vec<(Vec<u8>, Box<[u8]>)>>>;
+    ) -> Result<Option<Vec<MptKeyValue>>>;
 
     // Finalize
     /// It's costly to compute state root however it's only necessary to compute
@@ -54,6 +54,6 @@ use super::{
     impls::{
         errors::*, node_merkle_proof::NodeMerkleProof, state_proof::StateProof,
     },
-    StateRootWithAuxInfo,
+    MptKeyValue, StateRootWithAuxInfo,
 };
 use primitives::{EpochId, NodeMerkleTriplet, StorageKey};

@@ -15,12 +15,10 @@ use crate::{
     sync::{
         message::{
             msgid, Context, DynamicCapability, Handleable, KeyContainer,
+            SnapshotManifestResponse,
         },
         request_manager::{AsAny, Request},
-        state::{
-            snapshot_manifest_response::SnapshotManifestResponse,
-            storage::{RangedManifest, SnapshotSyncCandidate},
-        },
+        state::storage::{RangedManifest, SnapshotSyncCandidate},
         Error, ProtocolConfiguration, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
 };
@@ -52,6 +50,7 @@ impl Handleable for SnapshotManifestRequest {
             self.start_chunk.clone(),
             &ctx.manager.graph.data_man.storage_manager,
             ctx.manager.protocol_config.chunk_size_byte,
+            ctx.manager.protocol_config.max_chunk_number_in_manifest,
         ) {
             Ok(Some((m, merkle_root))) => {
                 snapshot_merkle_root = merkle_root;
@@ -67,35 +66,47 @@ impl Handleable for SnapshotManifestRequest {
                 return Ok(());
             }
         };
+        if self.is_initial_request() {
+            let (state_root_vec, receipt_blame_vec, bloom_blame_vec) =
+                self.get_blame_states(ctx).unwrap_or_default();
+            let block_receipts =
+                self.get_block_receipts(ctx).unwrap_or_default();
 
-        let (state_root_vec, receipt_blame_vec, bloom_blame_vec) =
-            self.get_blame_states(ctx).unwrap_or_default();
-        let block_receipts = self.get_block_receipts(ctx).unwrap_or_default();
-
-        debug!("handle SnapshotManifestRequest {:?}", self,);
-        ctx.send_response(&SnapshotManifestResponse {
-            request_id: self.request_id,
-            manifest,
-            state_root_vec,
-            receipt_blame_vec,
-            bloom_blame_vec,
-            block_receipts,
-            snapshot_merkle_root,
-        })
+            debug!("handle SnapshotManifestRequest {:?}", self,);
+            ctx.send_response(&SnapshotManifestResponse {
+                request_id: self.request_id,
+                manifest,
+                snapshot_merkle_root,
+                state_root_vec,
+                receipt_blame_vec,
+                bloom_blame_vec,
+                block_receipts,
+            })
+        } else {
+            ctx.send_response(&SnapshotManifestResponse {
+                request_id: self.request_id,
+                manifest,
+                snapshot_merkle_root: Default::default(),
+                state_root_vec: Default::default(),
+                receipt_blame_vec: Default::default(),
+                bloom_blame_vec: Default::default(),
+                block_receipts: Default::default(),
+            })
+        }
     }
 }
 
 impl SnapshotManifestRequest {
     pub fn new(
         snapshot_sync_candidate: SnapshotSyncCandidate,
-        trusted_blame_block: H256,
+        trusted_blame_block: Option<H256>, start_chunk: Option<Vec<u8>>,
     ) -> Self
     {
         SnapshotManifestRequest {
             request_id: 0,
             snapshot_to_sync: snapshot_sync_candidate,
-            start_chunk: None,
-            trusted_blame_block: Some(trusted_blame_block),
+            start_chunk,
+            trusted_blame_block,
         }
     }
 
@@ -103,13 +114,20 @@ impl SnapshotManifestRequest {
         self.trusted_blame_block.is_some()
     }
 
+    /// This function returns the receipts of REWARD_EPOCH_COUNT epochs
+    /// backward from the epoch of *snapshot_to_sync*. It needs to
+    /// return receipts of so many epochs to the request sender due to
+    /// the following reason. Let the epoch of *snapshot_to_sync* be E(i).
+    /// In the node of the request sender, to compute the state of E(i+1),
+    /// it would require to compute and include the reward of
+    /// E(i+1-REWARD_EPOCH_COUNT).
     fn get_block_receipts(
         &self, ctx: &Context,
     ) -> Option<Vec<BlockExecutionResult>> {
         let mut epoch_receipts = Vec::new();
         let mut epoch_hash =
             self.snapshot_to_sync.get_snapshot_epoch_id().clone();
-        for _ in 0..REWARD_EPOCH_COUNT {
+        for i in 0..REWARD_EPOCH_COUNT {
             if let Some(block) =
                 ctx.manager.graph.data_man.block_header_by_hash(&epoch_hash)
             {
@@ -117,6 +135,16 @@ impl SnapshotManifestRequest {
                     EpochNumber::Number(block.height()),
                 ) {
                     Ok(ordered_executable_epoch_blocks) => {
+                        if i == 0
+                            && *ordered_executable_epoch_blocks.last().unwrap()
+                                != epoch_hash
+                        {
+                            debug!(
+                                "Snapshot epoch id mismatched for epoch {}",
+                                block.height()
+                            );
+                            return None;
+                        }
                         for hash in &ordered_executable_epoch_blocks {
                             match ctx
                                 .manager

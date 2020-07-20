@@ -20,7 +20,9 @@ use crate::{
     },
 };
 use blockgen::BlockGenerator;
-use cfxcore::{ConsensusGraph, LightQueryService, TransactionPool};
+use cfxcore::{
+    pow::PowComputer, ConsensusGraph, LightQueryService, TransactionPool,
+};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use runtime::Runtime;
 
@@ -34,6 +36,7 @@ pub struct LightClientExtraComponents {
     pub runtime: Runtime,
     pub secret_store: Arc<SecretStore>,
     pub txpool: Arc<TransactionPool>,
+    pub pow: Arc<PowComputer>,
 }
 
 impl MallocSizeOf for LightClientExtraComponents {
@@ -54,11 +57,13 @@ impl LightClient {
             _machine,
             secret_store,
             data_man,
+            pow,
             txpool,
             consensus,
             sync_graph,
             network,
             common_impl,
+            accounts,
             pubsub,
             runtime,
         ) = initialize_common_modules(
@@ -75,7 +80,11 @@ impl LightClient {
         ));
         light.register().unwrap();
 
-        let rpc_impl = Arc::new(RpcImpl::new(light.clone()));
+        let rpc_impl = Arc::new(RpcImpl::new(
+            conf.rpc_impl_config(),
+            light.clone(),
+            accounts,
+        ));
         let debug_rpc_http_server = super::rpc::start_http(
             conf.local_http_config(),
             setup_debug_rpc_apis_light(
@@ -145,6 +154,7 @@ impl LightClient {
                 runtime,
                 secret_store,
                 txpool,
+                pow,
             },
         }))
     }

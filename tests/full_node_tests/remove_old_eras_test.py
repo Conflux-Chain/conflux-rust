@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-import os
+import os, sys, time
 import eth_utils
-import time
+
+sys.path.insert(1, os.path.dirname(sys.path[0]))
 
 from conflux.rpc import RpcClient
 from test_framework.test_framework import ConfluxTestFramework
@@ -69,8 +70,10 @@ class FullNodeRemoveOldErasTest(ConfluxTestFramework):
 
         self.log.info(f"checking existing blocks...")
 
+        # TODO We can use `num_blocks` here if we can guarantee all blocks form a chain.
+        latest_epoch = self.rpc[ARCHIVE_NODE].epoch_number()
         # we expect the last few eras are not removed
-        for epoch in range(7 * ERA_EPOCH_COUNT, 10 * ERA_EPOCH_COUNT):
+        for epoch in range(7 * ERA_EPOCH_COUNT, latest_epoch+1):
             archive_block = self.rpc[ARCHIVE_NODE].block_by_epoch(hex(epoch), include_txs=True)
             assert(archive_block != None)
 

@@ -52,8 +52,8 @@ error_chain! {
 
         RequestNotFound {
             description("The response is received after the request timeout or \
-            there is not request for the response"),
-            display("Request not found for the respond"),
+            there is no request matching the response"),
+            display("No matching request found for response"),
         }
 
         TooManyTrans {
@@ -101,6 +101,11 @@ error_chain! {
         Throttled(msg_name: &'static str, response: Throttled) {
             description("packet throttled"),
             display("packet {:?} throttled: {:?}", msg_name, response),
+        }
+
+        InCatchUpMode(reason: String) {
+            description("Cannot process the message due to the catch up mode."),
+            display("Cannot process the message due to the catch up mode: {:?}", reason),
         }
 
         InternalError(reason: String) {

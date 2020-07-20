@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub type SnapshotMptValue = (Vec<u8>, Box<[u8]>);
-
 pub type SnapshotMptDbValue = Box<[u8]>;
 /// We use VanillaTrieNode<(MerkleHash, i64)> instead of
 /// (VanillaTrieNode<MerkleHash>, i64) to make seeking by rlp size position

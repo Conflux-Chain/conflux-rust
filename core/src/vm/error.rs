@@ -37,7 +37,7 @@ pub enum TrapError<Call, Create> {
 }
 
 /// VM errors.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum Error {
     /// `OutOfGas` is returned when transaction execution runs out of gas.
     /// The state should be reverted to the state from before the
@@ -90,10 +90,14 @@ pub enum Error {
         /// What was the stack limit
         limit: usize,
     },
+    InvalidSubEntry,
     /// When balance is not enough for `collateral_for_storage`.
     /// The state should be reverted to the state from before the
     /// transaction execution.
-    NotEnoughBalanceForStorage { required: U256, got: U256 },
+    NotEnoughBalanceForStorage {
+        required: U256,
+        got: U256,
+    },
     /// `ExceedStorageLimit` is returned when the `collateral_for_storage`
     /// exceed the `storage_limit`.
     ExceedStorageLimit,
@@ -104,21 +108,28 @@ pub enum Error {
     /// When execution tries to modify the state in static context
     MutableCallInStaticContext,
     /// Error from storage.
-    StateDbError(String),
+    StateDbError(PartialEqWrapper<DbError>),
     /// Wasm runtime error
     Wasm(String),
     /// Out of bounds access in RETURNDATACOPY.
     OutOfBounds,
     /// Execution has been reverted with REVERT.
     Reverted,
-    /// Reentrancy encountered
-    Reentrancy,
+    /// Invalid address
+    InvalidAddress(Address),
+}
+
+#[derive(Debug)]
+pub struct PartialEqWrapper<T: std::fmt::Debug>(pub T);
+
+impl<T: std::fmt::Debug> PartialEq for PartialEqWrapper<T> {
+    fn eq(&self, other: &Self) -> bool {
+        format!("{:?}", self.0) == format!("{:?}", other.0)
+    }
 }
 
 impl From<DbError> for Error {
-    fn from(err: DbError) -> Self {
-        Error::StateDbError(format!("Internal error: {}", err))
-    }
+    fn from(err: DbError) -> Self { Error::StateDbError(PartialEqWrapper(err)) }
 }
 
 impl fmt::Display for Error {
@@ -149,6 +160,9 @@ impl fmt::Display for Error {
             SubStackUnderflow { wanted, on_stack } => {
                 write!(f, "Subroutine stack underflow {}/{}", wanted, on_stack)
             }
+            InvalidSubEntry => {
+                write!(f, "Invalid Subroutine Entry via BEGINSUB")
+            }
             OutOfSubStack { wanted, limit } => {
                 write!(f, "Out of subroutine stack {}/{}", wanted, limit)
             }
@@ -160,14 +174,16 @@ impl fmt::Display for Error {
             InternalContract(name) => {
                 write!(f, "InternalContract failed: {}", name)
             }
-            StateDbError(ref msg) => write!(f, "Internal error: {}", msg),
+            StateDbError(ref msg) => {
+                write!(f, "Irrecoverable state db error: {}", msg.0)
+            }
             MutableCallInStaticContext => {
                 write!(f, "Mutable call in static context")
             }
             Wasm(ref msg) => write!(f, "Internal error: {}", msg),
             OutOfBounds => write!(f, "Out of bounds"),
             Reverted => write!(f, "Reverted"),
-            Reentrancy => write!(f, "Reentrancy"),
+            InvalidAddress(ref addr) => write!(f, "InvalidAddress: {}", addr),
         }
     }
 }

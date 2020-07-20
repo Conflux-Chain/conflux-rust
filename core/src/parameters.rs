@@ -152,7 +152,7 @@ pub mod pow {
     // growth of the metadata, the memory consumption of the consensus graph,
     // and the confirmation speed
     pub const TARGET_AVERAGE_BLOCK_GENERATION_PERIOD: u64 = 500000;
-    pub const INITIAL_DIFFICULTY: u64 = 5_000_000;
+    pub const INITIAL_DIFFICULTY: u64 = 30_000;
 }
 
 pub mod block {
@@ -313,7 +313,7 @@ pub mod light {
     /// During log filtering, we stream a set of items (blooms, receipts, txs)
     /// to match against. To make the process faster, we need to make sure that
     /// there's always plenty of items in flight. This way, we can reduce idle
-    /// time when we're waiting to recveive an item.
+    /// time when we're waiting to receive an item.
     pub const LOG_FILTERING_LOOKAHEAD: usize = 100;
 }
 

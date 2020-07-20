@@ -27,14 +27,14 @@ use super::{
     return_data::ReturnData,
     spec::Spec,
 };
-use crate::bytes::Bytes;
+use crate::{bytes::Bytes, statedb};
 use cfx_types::{Address, H256, U256};
 use std::sync::Arc;
 
 #[derive(Debug)]
 /// Result of externalities create function.
 pub enum ContractCreateResult {
-    /// Returned when creation was successfull.
+    /// Returned when creation was successful.
     /// Contains an address of newly created contract and gas left.
     Created(Address, U256),
     /// Returned when contract creation failed.
@@ -47,7 +47,7 @@ pub enum ContractCreateResult {
 #[derive(Debug)]
 /// Result of externalities call function.
 pub enum MessageCallResult {
-    /// Returned when message call was successfull.
+    /// Returned when message call was successful.
     /// Contains gas left and output data.
     Success(U256, ReturnData),
     /// Returned when message call failed.
@@ -72,10 +72,10 @@ pub enum CreateContractAddress {
 /// Context for VMs
 pub trait Context {
     /// Returns a value for given key.
-    fn storage_at(&self, key: &Vec<u8>) -> Result<H256>;
+    fn storage_at(&self, key: &Vec<u8>) -> Result<U256>;
 
     /// Stores a value for given key.
-    fn set_storage(&mut self, key: Vec<u8>, value: H256) -> Result<()>;
+    fn set_storage(&mut self, key: Vec<u8>, value: U256) -> Result<()>;
 
     /// Determine whether an account exists.
     fn exists(&self, address: &Address) -> Result<bool>;
@@ -100,18 +100,18 @@ pub trait Context {
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
         address: CreateContractAddress, trap: bool,
-    ) -> ::std::result::Result<ContractCreateResult, TrapKind>;
+    ) -> statedb::Result<::std::result::Result<ContractCreateResult, TrapKind>>;
 
     /// Message call.
     ///
     /// Returns Err, if we run out of gas.
     /// Otherwise returns call_result which contains gas left
-    /// and true if subcall was successfull.
+    /// and true if subcall was successful.
     fn call(
         &mut self, gas: &U256, sender_address: &Address,
         receive_address: &Address, value: Option<U256>, data: &[u8],
         code_address: &Address, call_type: CallType, trap: bool,
-    ) -> ::std::result::Result<MessageCallResult, TrapKind>;
+    ) -> statedb::Result<::std::result::Result<MessageCallResult, TrapKind>>;
 
     /// Returns code at given address
     fn extcode(&self, address: &Address) -> Result<Option<Arc<Bytes>>>;
@@ -181,4 +181,9 @@ pub trait Context {
 
     /// Check if running in static context.
     fn is_static(&self) -> bool;
+
+    /// Check if reentrancy happens
+    /// The call stack doesn't have the current executive, so the caller address
+    /// should be passed.
+    fn is_reentrancy(&self, caller: &Address, callee: &Address) -> bool;
 }

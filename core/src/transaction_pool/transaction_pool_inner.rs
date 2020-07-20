@@ -694,7 +694,7 @@ impl TransactionPoolInner {
     ) {
         for account in &accounts_from_execution {
             self.recalculate_readiness_with_fixed_info(
-                &account.address,
+                account.address(),
                 account.nonce,
                 account.balance,
             );
@@ -833,7 +833,7 @@ mod test_transaction_pool_inner {
                 gas: U256::from(50000),
                 action: Action::Call(Address::random()),
                 value: U256::from(value),
-                storage_limit: U256::zero(),
+                storage_limit: 0,
                 epoch_height: 0,
                 chain_id: 0,
                 data: Vec::new(),

@@ -2,10 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+#[cfg(test)]
+mod test;
+
 mod command;
 
 use crate::command::rpc::RpcCommand;
-use clap::{load_yaml, App, ArgMatches};
+use clap::{crate_version, load_yaml, App, ArgMatches};
 use client::{
     archive::ArchiveClient,
     common::{client_methods, ClientTrait},
@@ -51,7 +54,7 @@ fn main() -> Result<(), String> {
     } // only for #[cfg]
 
     let yaml = load_yaml!("cli.yaml");
-    let matches = App::from_yaml(yaml).get_matches();
+    let matches = App::from_yaml(yaml).version(crate_version!()).get_matches();
 
     if let Some(output) = handle_sub_command(&matches)? {
         println!("{}", output);
@@ -131,9 +134,8 @@ fn main() -> Result<(), String> {
     );
 
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
-    const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 
-    print!(
+    info!(
         "
 :'######:::'#######::'##::: ##:'########:'##:::::::'##::::'##:'##::::'##:
 '##... ##:'##.... ##: ###:: ##: ##.....:: ##::::::: ##:::: ##:. ##::'##::
@@ -145,7 +147,7 @@ fn main() -> Result<(), String> {
 :......::::.......:::..::::..::..::::::::........:::.......:::..:::::..::
 Current Version: {}
 ",
-        VERSION.unwrap_or("unknown")
+        crate_version!()
     );
 
     let client_handle: Box<dyn ClientTrait>;

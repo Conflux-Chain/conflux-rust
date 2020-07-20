@@ -16,9 +16,10 @@ use crate::{
         consensus::DEFERRED_STATE_EPOCH_COUNT,
         light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME},
     },
+    rpc_errors::{account_result_to_rpc_result, Error as RpcError},
     sync::SynchronizationGraph,
 };
-use cfx_types::{Bloom, H160, H256, KECCAK_EMPTY_BLOOM, U256};
+use cfx_types::{BigEndianHash, Bloom, H160, H256, KECCAK_EMPTY_BLOOM, U256};
 use futures::{
     future::{self, Either},
     stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
@@ -30,6 +31,7 @@ use primitives::{
     Account, BlockReceipts, CodeInfo, EpochNumber, Receipt, SignedTransaction,
     StorageKey, StorageRoot, StorageValue, TransactionIndex,
 };
+use rlp::Rlp;
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 
 // FIXME: struct
@@ -240,43 +242,52 @@ impl QueryService {
 
     pub async fn get_account(
         &self, epoch: EpochNumber, address: H160,
-    ) -> Result<Option<Account>, Error> {
+    ) -> Result<Option<Account>, RpcError> {
         debug!("get_account epoch={:?} address={:?}", epoch, address);
 
         let epoch = self.get_height_from_epoch_number(epoch)?;
         let key = Self::account_key(&address);
 
-        self.retrieve_state_entry(epoch, key).await
+        match self.retrieve_state_entry_raw(epoch, key).await? {
+            None => Ok(None),
+            Some(rlp) => Ok(Some(account_result_to_rpc_result(
+                "address",
+                Account::new_from_rlp(address, &Rlp::new(&rlp)),
+            )?)),
+        }
     }
 
     pub async fn get_code(
         &self, epoch: EpochNumber, address: H160,
-    ) -> Result<Option<Vec<u8>>, Error> {
+    ) -> Result<Option<Vec<u8>>, RpcError> {
         debug!("get_code epoch={:?} address={:?}", epoch, address);
 
         let epoch = self.get_height_from_epoch_number(epoch)?;
         let key = Self::account_key(&address);
 
-        let code_hash =
-            match self.retrieve_state_entry::<Account>(epoch, key).await {
-                Err(e) => return Err(e),
-                Ok(None) => return Ok(None),
-                Ok(Some(account)) => account.code_hash,
-            };
+        let code_hash = match self.retrieve_state_entry_raw(epoch, key).await {
+            Err(e) => bail!(e),
+            Ok(None) => return Ok(None),
+            Ok(Some(rlp)) => {
+                account_result_to_rpc_result(
+                    "address",
+                    Account::new_from_rlp(address, &Rlp::new(&rlp)),
+                )?
+                .code_hash
+            }
+        };
 
         let key = Self::code_key(&address, &code_hash);
 
-        match self.retrieve_state_entry::<CodeInfo>(epoch, key).await {
-            Err(e) => Err(e),
-            Ok(None) => {
-                // this can only happen if the state corresponding to `epoch` is
-                // removed between the two queries
-                // TODO(thegaram): add state availability checks and return
-                // meaningful errors
+        match self.retrieve_state_entry::<CodeInfo>(epoch, key).await? {
+            None => {
+                // this should not happen
+                // if the corresponding state becomes unavailable between the
+                // two requests, we will fail with timeout instead
                 error!("Account {:?} found but code {:?} does not exist (epoch={:?})",  address, code_hash, epoch);
-                Err(ErrorKind::InternalError.into())
+                bail!(format!("Unable to retrieve code: internal error"));
             }
-            Ok(Some(info)) => Ok(Some(info.code)),
+            Some(info) => Ok(Some(info.code)),
         }
     }
 
@@ -294,7 +305,7 @@ impl QueryService {
         match self.retrieve_state_entry::<StorageValue>(epoch, key).await {
             Err(e) => Err(e),
             Ok(None) => Ok(None),
-            Ok(Some(entry)) => Ok(Some(entry.value)),
+            Ok(Some(entry)) => Ok(Some(H256::from_uint(&entry.value))),
         }
     }
 
@@ -465,7 +476,7 @@ impl QueryService {
         Ok(matching)
     }
 
-    pub fn get_latest_verifiable_chain_id(&self) -> Result<u64, FilterError> {
+    pub fn get_latest_verifiable_chain_id(&self) -> Result<u32, FilterError> {
         let epoch_number = self.get_latest_verifiable_epoch_number()?;
         Ok(self
             .consensus
@@ -514,6 +525,9 @@ impl QueryService {
             EpochNumber::Earliest => Ok(0),
             EpochNumber::LatestCheckpoint => {
                 Ok(self.consensus.latest_checkpoint_epoch_number())
+            }
+            EpochNumber::LatestConfirmed => {
+                Ok(self.consensus.latest_confirmed_epoch_number())
             }
             EpochNumber::LatestMined => Ok(latest_verifiable),
             EpochNumber::LatestState => Ok(latest_verifiable),

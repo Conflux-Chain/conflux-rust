@@ -1,9 +1,12 @@
 use crate::{
     block_data_manager::{
-        BlockExecutionResultWithEpoch, BlockRewardResult, CheckpointHashes,
-        EpochExecutionCommitment, EpochExecutionContext, LocalBlockInfo,
+        db_decode_list, db_encode_list, BlockExecutionResultWithEpoch,
+        BlockRewardResult, CheckpointHashes, DatabaseDecodable,
+        DatabaseEncodable, EpochExecutionCommitment, EpochExecutionContext,
+        LocalBlockInfo,
     },
     db::{COL_BLOCKS, COL_EPOCH_NUMBER, COL_MISC, COL_TX_INDEX},
+    pow::PowComputer,
     storage::{
         storage_db::KeyValueDbTrait, KvdbRocksdb, KvdbSqlite,
         KvdbSqliteStatements,
@@ -13,8 +16,9 @@ use crate::{
 use byteorder::{ByteOrder, LittleEndian};
 use cfx_types::H256;
 use db::SystemDB;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use primitives::{Block, BlockHeader, SignedTransaction, TransactionIndex};
-use rlp::{Decodable, Encodable, Rlp};
+use rlp::Rlp;
 use std::{collections::HashMap, fs, path::Path, sync::Arc};
 
 const LOCAL_BLOCK_INFO_SUFFIX_BYTE: u8 = 1;
@@ -25,6 +29,8 @@ const EPOCH_CONSENSUS_EXECUTION_INFO_SUFFIX_BYTE: u8 = 5;
 const EPOCH_EXECUTED_BLOCK_SET_SUFFIX_BYTE: u8 = 6;
 const EPOCH_SKIPPED_BLOCK_SET_SUFFIX_BYTE: u8 = 7;
 const BLOCK_REWARD_RESULT_SUFFIX_BYTE: u8 = 8;
+const BLOCK_TERMINAL_KEY: &[u8] = b"block_terminals";
+const HEADER_TERMINAL_KEY: &[u8] = b"header_terminals";
 
 #[derive(Clone, Copy, Hash, Ord, PartialOrd, Eq, PartialEq)]
 enum DBTable {
@@ -55,10 +61,11 @@ fn sqlite_db_table(table: DBTable) -> String {
 
 pub struct DBManager {
     table_db: HashMap<DBTable, Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>>,
+    pow: Arc<PowComputer>,
 }
 
 impl DBManager {
-    pub fn new_from_rocksdb(db: Arc<SystemDB>) -> Self {
+    pub fn new_from_rocksdb(db: Arc<SystemDB>, pow: Arc<PowComputer>) -> Self {
         let mut table_db = HashMap::new();
         for table in vec![
             DBTable::Misc,
@@ -75,12 +82,12 @@ impl DBManager {
                     as Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>,
             );
         }
-        Self { table_db }
+        Self { table_db, pow }
     }
 }
 
 impl DBManager {
-    pub fn new_from_sqlite(db_path: &Path) -> Self {
+    pub fn new_from_sqlite(db_path: &Path, pow: Arc<PowComputer>) -> Self {
         if let Err(e) = fs::create_dir_all(db_path) {
             panic!("Error creating database directory: {:?}", e);
         }
@@ -114,7 +121,7 @@ impl DBManager {
                     as Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>,
             );
         }
-        Self { table_db }
+        Self { table_db, pow }
     }
 }
 
@@ -138,7 +145,8 @@ impl DBManager {
     pub fn block_header_from_db(&self, hash: &H256) -> Option<BlockHeader> {
         let mut block_header =
             self.load_decodable_val(DBTable::Blocks, hash.as_bytes())?;
-        VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(
+        VerificationConfig::get_or_fill_header_pow_quality(
+            &self.pow,
             &mut block_header,
         );
         Some(block_header)
@@ -309,12 +317,28 @@ impl DBManager {
         )
     }
 
-    pub fn insert_terminals_to_db(&self, terminals: &Vec<H256>) {
-        self.insert_encodable_list(DBTable::Misc, b"terminals", terminals);
+    pub fn insert_block_terminals_to_db(&self, terminals: &Vec<H256>) {
+        self.insert_encodable_list(
+            DBTable::Misc,
+            BLOCK_TERMINAL_KEY,
+            terminals,
+        );
     }
 
-    pub fn terminals_from_db(&self) -> Option<Vec<H256>> {
-        self.load_decodable_list(DBTable::Misc, b"terminals")
+    pub fn block_terminals_from_db(&self) -> Option<Vec<H256>> {
+        self.load_decodable_list(DBTable::Misc, BLOCK_TERMINAL_KEY)
+    }
+
+    pub fn insert_header_terminals_to_db(&self, terminals: &Vec<H256>) {
+        self.insert_encodable_list(
+            DBTable::Misc,
+            HEADER_TERMINAL_KEY,
+            terminals,
+        );
+    }
+
+    pub fn header_terminals_from_db(&self) -> Option<Vec<H256>> {
+        self.load_decodable_list(DBTable::Misc, HEADER_TERMINAL_KEY)
     }
 
     pub fn insert_epoch_execution_commitment_to_db(
@@ -402,30 +426,30 @@ impl DBManager {
 
     fn insert_encodable_val<V>(
         &self, table: DBTable, db_key: &[u8], value: &V,
-    ) where V: Encodable {
-        self.insert_to_db(table, db_key, rlp::encode(value))
+    ) where V: DatabaseEncodable {
+        self.insert_to_db(table, db_key, value.db_encode())
     }
 
     fn insert_encodable_list<V>(
         &self, table: DBTable, db_key: &[u8], value: &Vec<V>,
-    ) where V: Encodable {
-        self.insert_to_db(table, db_key, rlp::encode_list(value))
+    ) where V: DatabaseEncodable {
+        self.insert_to_db(table, db_key, db_encode_list(value))
     }
 
     fn load_decodable_val<V>(
         &self, table: DBTable, db_key: &[u8],
     ) -> Option<V>
-    where V: Decodable {
+    where V: DatabaseDecodable {
         let encoded = self.load_from_db(table, db_key)?;
-        Some(Rlp::new(&encoded).as_val().expect("decode succeeds"))
+        Some(V::db_decode(&encoded).expect("decode succeeds"))
     }
 
     fn load_decodable_list<V>(
         &self, table: DBTable, db_key: &[u8],
     ) -> Option<Vec<V>>
-    where V: Decodable {
+    where V: DatabaseDecodable {
         let encoded = self.load_from_db(table, db_key)?;
-        Some(Rlp::new(&encoded).as_list().expect("decode succeeds"))
+        Some(db_decode_list(&encoded).expect("decode succeeds"))
     }
 }
 
@@ -472,4 +496,15 @@ fn epoch_execution_context_key(hash: &H256) -> Vec<u8> {
 
 fn epoch_consensus_epoch_execution_commitment_key(hash: &H256) -> Vec<u8> {
     append_suffix(hash, EPOCH_CONSENSUS_EXECUTION_INFO_SUFFIX_BYTE)
+}
+
+impl MallocSizeOf for DBManager {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        // Here we only handle the case that all columns are stored within the
+        // same rocksdb.
+        self.table_db
+            .get(&DBTable::Blocks)
+            .expect("DBManager initialized")
+            .size_of(ops)
+    }
 }

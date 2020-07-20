@@ -6,7 +6,7 @@ use crate::{
     cache_config::CacheConfig,
     cache_manager::{CacheId, CacheManager, CacheSize},
     ext_db::SystemDB,
-    pow::TargetDifficultyManager,
+    pow::{PowComputer, TargetDifficultyManager},
     storage::{
         state_manager::StateIndex, utils::guarded_value::*,
         StateRootWithAuxInfo, StorageManager, StorageManagerTrait,
@@ -61,7 +61,10 @@ pub struct StateAvailabilityBoundary {
     pub pivot_chain: Vec<H256>,
 
     pub synced_state_height: u64,
-    /// This is the lower boundary height of available state.
+    /// This is the lower boundary height of available state where we can
+    /// execute new epochs based on it. Note that `synced_state_height` is
+    /// within this bound for execution, but its state cannot be accessed
+    /// through `get_state_no_commit`.
     pub lower_bound: u64,
     /// This is the upper boundary height of available state.
     pub upper_bound: u64,
@@ -83,6 +86,7 @@ impl StateAvailabilityBoundary {
         }
     }
 
+    /// Check if the state can be accessed for reading.
     pub fn check_availability(&self, height: u64, block_hash: &H256) -> bool {
         (height == 0 || height != self.synced_state_height)
             && self.lower_bound <= height
@@ -110,12 +114,6 @@ impl StateAvailabilityBoundary {
             && executed_block.hash() == self.pivot_chain[next_index]
         {
             self.upper_bound += 1;
-        }
-        if self.lower_bound == self.synced_state_height
-            && self.synced_state_height != 0
-            && self.upper_bound > self.synced_state_height
-        {
-            self.adjust_lower_bound(self.lower_bound + 1)
         }
     }
 
@@ -192,6 +190,7 @@ impl InvalidBlockSet {
     }
 }
 
+#[derive(DeriveMallocSizeOf)]
 pub struct BlockDataManager {
     block_headers: RwLock<HashMap<H256, Arc<BlockHeader>>>,
     blocks: RwLock<HashMap<H256, Arc<Block>>>,
@@ -224,7 +223,11 @@ pub struct BlockDataManager {
     config: DataManagerConfiguration,
 
     tx_data_manager: TransactionDataManager,
-    db_manager: DBManager,
+    pub db_manager: DBManager,
+
+    // TODO Add MallocSizeOf.
+    #[ignore_malloc_size_of = "Add later"]
+    pub pow: Arc<PowComputer>,
 
     /// This is the original genesis block.
     pub true_genesis: Arc<Block>,
@@ -255,53 +258,12 @@ pub struct BlockDataManager {
     pub state_availability_boundary: RwLock<StateAvailabilityBoundary>,
 }
 
-impl MallocSizeOf for BlockDataManager {
-    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        let block_headers_size = self.block_headers.read().size_of(ops);
-        let blocks_size = self.blocks.read().size_of(ops);
-        let compact_blocks_size = self.compact_blocks.read().size_of(ops);
-        let block_receipts_size = self.block_receipts.read().size_of(ops);
-        let block_reward_size = self.block_rewards.read().size_of(ops);
-        let transaction_indices_size =
-            self.transaction_indices.read().size_of(ops);
-        let epoch_execution_commitments_size =
-            self.epoch_execution_commitments.read().size_of(ops);
-        let epoch_execution_contexts_size =
-            self.epoch_execution_contexts.read().size_of(ops);
-        let invalid_block_set_size = self.invalid_block_set.read().size_of(ops);
-        let cur_consensus_era_genesis_hash_size =
-            self.cur_consensus_era_genesis_hash.read().size_of(ops);
-        let cur_consensus_era_stable_hash_size =
-            self.cur_consensus_era_stable_hash.read().size_of(ops);
-        let cache_man_size = self.cache_man.lock().size_of(ops);
-        let state_availability_boundary_size =
-            self.state_availability_boundary.read().size_of(ops);
-
-        block_headers_size
-            + blocks_size
-            + compact_blocks_size
-            + block_receipts_size
-            + block_reward_size
-            + transaction_indices_size
-            + epoch_execution_commitments_size
-            + epoch_execution_contexts_size
-            + invalid_block_set_size
-            + cur_consensus_era_genesis_hash_size
-            + cur_consensus_era_stable_hash_size
-            + self.config.size_of(ops)
-            + self.tx_data_manager.size_of(ops)
-            + self.true_genesis.size_of(ops)
-            + cache_man_size
-            + self.target_difficulty_manager.size_of(ops)
-            + state_availability_boundary_size
-    }
-}
-
 impl BlockDataManager {
     pub fn new(
         cache_conf: CacheConfig, true_genesis: Arc<Block>, db: Arc<SystemDB>,
         storage_manager: Arc<StorageManager>,
         worker_pool: Arc<Mutex<ThreadPool>>, config: DataManagerConfiguration,
+        pow: Arc<PowComputer>,
     ) -> Self
     {
         let mb = 1024 * 1024;
@@ -317,10 +279,11 @@ impl BlockDataManager {
             worker_pool,
         );
         let db_manager = match config.db_type {
-            DbType::Rocksdb => DBManager::new_from_rocksdb(db),
-            DbType::Sqlite => {
-                DBManager::new_from_sqlite(Path::new("./sqlite_db"))
-            }
+            DbType::Rocksdb => DBManager::new_from_rocksdb(db, pow.clone()),
+            DbType::Sqlite => DBManager::new_from_sqlite(
+                Path::new("./sqlite_db"),
+                pow.clone(),
+            ),
         };
 
         let data_man = Self {
@@ -341,11 +304,14 @@ impl BlockDataManager {
             cache_man,
             instance_id: Mutex::new(0),
             config,
-            target_difficulty_manager: TargetDifficultyManager::new(),
+            target_difficulty_manager: TargetDifficultyManager::new(
+                cache_conf.target_difficulties_cache_size_in_count,
+            ),
             cur_consensus_era_genesis_hash: RwLock::new(true_genesis.hash()),
             cur_consensus_era_stable_hash: RwLock::new(true_genesis.hash()),
             tx_data_manager,
             db_manager,
+            pow,
             state_availability_boundary: RwLock::new(
                 StateAvailabilityBoundary::new(true_genesis.hash(), 0),
             ),
@@ -376,6 +342,17 @@ impl BlockDataManager {
                 data_man.true_genesis.clone(),
                 true, /* persistent */
             );
+            for (index, tx) in
+                data_man.true_genesis.transactions.iter().enumerate()
+            {
+                data_man.insert_transaction_index(
+                    &tx.hash,
+                    &TransactionIndex {
+                        block_hash: cur_era_genesis_hash,
+                        index,
+                    },
+                );
+            }
             // Initialize ExecutionContext for true genesis
             data_man.insert_epoch_execution_context(
                 cur_era_genesis_hash,
@@ -687,6 +664,11 @@ impl BlockDataManager {
     }
 
     pub fn block_epoch_number(&self, hash: &H256) -> Option<u64> {
+        if hash == &self.true_genesis.hash() {
+            // True genesis is not executed and does not have an execution
+            // result, so we need to process it specially.
+            return Some(0);
+        }
         self.block_execution_result_by_hash_from_db(&hash)
             .map(|execution_result| execution_result.0)
             .and_then(|pivot| self.block_header_by_hash(&pivot))
@@ -807,6 +789,9 @@ impl BlockDataManager {
             self.transaction_indices
                 .write()
                 .insert(hash.clone(), tx_index.clone());
+            self.cache_man
+                .lock()
+                .note_used(CacheId::TransactionAddress(*hash));
         }
     }
 
@@ -859,26 +844,33 @@ impl BlockDataManager {
         V: Clone,
         LoadF: Fn(&K) -> Option<V>,
     {
-        let upgradable_read_lock = in_mem.upgradable_read();
-        if let Some(value) = upgradable_read_lock.get(key) {
+        if let Some(value) = in_mem.read().get(key) {
             return Some(value.clone());
         }
         load_f(key).map(|value| {
             if let Some(cache_id) = maybe_cache_id {
-                RwLockUpgradableReadGuard::upgrade(upgradable_read_lock)
-                    .insert(key.clone(), value.clone());
+                let mut write = in_mem.write();
+                write.insert(key.clone(), value.clone());
                 self.cache_man.lock().note_used(cache_id);
             }
             value
         })
     }
 
-    pub fn insert_terminals_to_db(&self, terminals: Vec<H256>) {
-        self.db_manager.insert_terminals_to_db(&terminals)
+    pub fn insert_block_terminals_to_db(&self, terminals: Vec<H256>) {
+        self.db_manager.insert_block_terminals_to_db(&terminals)
     }
 
-    pub fn terminals_from_db(&self) -> Option<Vec<H256>> {
-        self.db_manager.terminals_from_db()
+    pub fn block_terminals_from_db(&self) -> Option<Vec<H256>> {
+        self.db_manager.block_terminals_from_db()
+    }
+
+    pub fn insert_header_terminals_to_db(&self, terminals: Vec<H256>) {
+        self.db_manager.insert_header_terminals_to_db(&terminals)
+    }
+
+    pub fn header_terminals_from_db(&self) -> Option<Vec<H256>> {
+        self.db_manager.header_terminals_from_db()
     }
 
     pub fn insert_executed_epoch_set_hashes_to_db(
@@ -1193,8 +1185,9 @@ impl BlockDataManager {
         let mut local_block_info = self.local_block_info.write();
         let mut cache_man = self.cache_man.lock();
         debug!(
-            "Before gc cache_size={} {} {} {} {} {} {}",
+            "Before gc cache_size={} {} {} {} {} {} {} {}",
             current_size,
+            block_headers.len(),
             blocks.len(),
             compact_blocks.len(),
             executed_results.len(),
@@ -1297,23 +1290,19 @@ impl BlockDataManager {
     }
 
     /// Caller should make sure the state exists.
-    pub fn get_state_readonly_index<'a>(
-        &'a self, block_hash: &'a EpochId,
-    ) -> GuardedValue<
-        RwLockReadGuard<'a, HashMap<H256, EpochExecutionCommitment>>,
-        Option<StateIndex<'a>>,
-    > {
-        let (guard, maybe_commitment) =
-            self.get_epoch_execution_commitment(block_hash).into();
-        let maybe_state_index = match &*maybe_commitment {
+    pub fn get_state_readonly_index(
+        &self, block_hash: &EpochId,
+    ) -> Option<StateIndex> {
+        let maybe_commitment =
+            self.get_epoch_execution_commitment_with_db(block_hash);
+        let maybe_state_index = match maybe_commitment {
             None => None,
             Some(execution_commitment) => Some(StateIndex::new_for_readonly(
                 block_hash,
                 &execution_commitment.state_root_with_aux_info,
             )),
         };
-
-        GuardedValue::new(guard, maybe_state_index)
+        maybe_state_index
     }
 
     // TODO: There could be io error when getting block by hash.

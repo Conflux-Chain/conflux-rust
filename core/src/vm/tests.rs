@@ -25,11 +25,11 @@ use std::{
 
 use super::{
     error::TrapKind, CallType, Context, ContractCreateResult,
-    CreateContractAddress, Env, GasLeft, MessageCallResult, Result, ReturnData,
-    Spec,
+    CreateContractAddress, Env, Error, GasLeft, MessageCallResult, Result,
+    ReturnData, Spec,
 };
-use crate::{bytes::Bytes, hash::keccak};
-use cfx_types::{Address, H256, U256};
+use crate::{bytes::Bytes, hash::keccak, statedb};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 
 pub struct MockLogEntry {
     pub topics: Vec<H256>,
@@ -59,7 +59,7 @@ pub struct MockCall {
 /// Can't do recursive calls.
 #[derive(Default)]
 pub struct MockContext {
-    pub store: HashMap<Vec<u8>, H256>,
+    pub store: HashMap<Vec<u8>, U256>,
     pub suicides: HashSet<Address>,
     pub calls: HashSet<MockCall>,
     pub sstore_clears: i128,
@@ -114,11 +114,11 @@ impl MockContext {
 }
 
 impl Context for MockContext {
-    fn storage_at(&self, key: &Vec<u8>) -> Result<H256> {
-        Ok(self.store.get(key).unwrap_or(&H256::zero()).clone())
+    fn storage_at(&self, key: &Vec<u8>) -> Result<U256> {
+        Ok(self.store.get(key).unwrap_or(&U256::zero()).clone())
     }
 
-    fn set_storage(&mut self, key: Vec<u8>, value: H256) -> Result<()> {
+    fn set_storage(&mut self, key: Vec<u8>, value: U256) -> Result<()> {
         self.store.insert(key, value);
         Ok(())
     }
@@ -147,7 +147,7 @@ impl Context for MockContext {
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
         address: CreateContractAddress, _trap: bool,
-    ) -> ::std::result::Result<ContractCreateResult, TrapKind>
+    ) -> statedb::Result<::std::result::Result<ContractCreateResult, TrapKind>>
     {
         self.calls.insert(MockCall {
             call_type: MockCallType::Create,
@@ -160,14 +160,14 @@ impl Context for MockContext {
             code_address: None,
         });
         // TODO: support traps in testing.
-        Ok(ContractCreateResult::Failed)
+        Ok(Ok(ContractCreateResult::Failed))
     }
 
     fn call(
         &mut self, gas: &U256, sender_address: &Address,
         receive_address: &Address, value: Option<U256>, data: &[u8],
         code_address: &Address, _call_type: CallType, _trap: bool,
-    ) -> ::std::result::Result<MessageCallResult, TrapKind>
+    ) -> statedb::Result<::std::result::Result<MessageCallResult, TrapKind>>
     {
         self.calls.insert(MockCall {
             call_type: MockCallType::Call,
@@ -180,7 +180,7 @@ impl Context for MockContext {
             code_address: Some(code_address.clone()),
         });
         // TODO: support traps in testing.
-        Ok(MessageCallResult::Success(*gas, ReturnData::empty()))
+        Ok(Ok(MessageCallResult::Success(*gas, ReturnData::empty())))
     }
 
     fn extcode(&self, address: &Address) -> Result<Option<Arc<Bytes>>> {
@@ -210,6 +210,11 @@ impl Context for MockContext {
     }
 
     fn suicide(&mut self, refund_address: &Address) -> Result<()> {
+        if !refund_address.is_valid_address() {
+            return Err(Error::InvalidAddress(*refund_address));
+        }
+        // The following code is from Parity, but it confuse me. Why refund
+        // address is pushed to suicides list.
         self.suicides.insert(refund_address.clone());
         Ok(())
     }
@@ -236,5 +241,10 @@ impl Context for MockContext {
         &mut self, _pc: usize, _instruction: u8, _gas: U256,
     ) -> bool {
         self.tracing
+    }
+
+    fn is_reentrancy(&self, _: &Address, _: &Address) -> bool {
+        // The MockContext doesn't have message call
+        false
     }
 }

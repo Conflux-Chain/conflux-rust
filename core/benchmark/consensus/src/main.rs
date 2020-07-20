@@ -14,7 +14,7 @@ use cfxcore::{
     },
     consensus_parameters::*,
     db::NUM_COLUMNS,
-    pow::ProofOfWorkConfig,
+    pow::{PowComputer, ProofOfWorkConfig},
     statistics::Statistics,
     storage::{StorageConfiguration, StorageManager},
     sync::{
@@ -382,6 +382,7 @@ fn main() {
 
     data_man.initialize_instance_id();
 
+    let pow = Arc::new(PowComputer::new(true));
     let (sync_n, consensus_n) =
         initialize_synchronization_graph_with_data_manager(
             data_man,
@@ -390,6 +391,7 @@ fn main() {
             timer_ratio,
             timer_beta,
             era_epoch_count,
+            pow,
         );
 
     println!("Checkpoint generated in the process. Going to test the last checkpoint recovery, genesis hash {} stable hash {}.", genesis_hash, stable_hash);

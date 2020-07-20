@@ -273,7 +273,7 @@ impl Spec {
     }
 
     pub fn new_spec() -> Spec {
-        let mut spec = Self::new(24576, true, true, true);
+        let mut spec = Self::new(49152, true, true, true);
         spec.have_create2 = true;
         spec.have_revert = true;
         spec.have_static_call = true;

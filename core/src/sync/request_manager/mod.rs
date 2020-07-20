@@ -838,16 +838,18 @@ impl RequestManager {
         }
     }
 
-    /// Send waiting requests that their backoff delay have passes
+    /// Send waiting requests that their backoff delay have passes.
+    /// Return the cancelled requests that have timeout too many times.
     pub fn resend_waiting_requests(
         &self, io: &dyn NetworkContext, remove_timeout_requests: bool,
-    ) {
+    ) -> Vec<Box<dyn Request>> {
         debug!("resend_waiting_requests: start");
         let mut waiting_requests = self.waiting_requests.lock();
         let now = Instant::now();
         let mut batcher =
             RequestBatcher::new(*DEFAULT_REQUEST_BATCH_BUCKET_SIZE);
 
+        let mut cancelled_requests = Vec::new();
         while let Some(req) = waiting_requests.pop() {
             if req.time_to_send >= now {
                 waiting_requests.push(req);
@@ -858,6 +860,7 @@ impl RequestManager {
                 // Discard stale requests
                 warn!("Request is in-flight for over an hour: {:?}", req);
                 req.request.0.on_removed(&self.inflight_keys);
+                cancelled_requests.push(req.request.0);
                 continue;
             }
 
@@ -925,6 +928,7 @@ impl RequestManager {
                 ));
             }
         }
+        cancelled_requests
     }
 
     pub fn on_peer_connected(&self, peer: &NodeId) {
@@ -984,7 +988,7 @@ impl RequestManager {
 
 /// Return block hashes in `request` if it's requesting blocks.
 /// Return None otherwise.
-fn try_get_block_hashes(request: &Box<dyn Request>) -> Option<&Vec<H256>> {
+pub fn try_get_block_hashes(request: &Box<dyn Request>) -> Option<&Vec<H256>> {
     match request.msg_id() {
         msgid::GET_BLOCKS | msgid::GET_CMPCT_BLOCKS => {
             let hashes = if let Some(req) =

@@ -8,7 +8,8 @@ from jsonrpcclient.exceptions import ReceivedErrorResponseError
 sys.path.insert(1, os.path.dirname(sys.path[0]))
 
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.util import sync_blocks, connect_nodes, connect_sample_nodes, assert_equal, assert_blocks_valid
+from test_framework.util import sync_blocks, connect_nodes, connect_sample_nodes, assert_equal, assert_blocks_valid, \
+    wait_until
 from conflux.rpc import RpcClient
 
 class SyncCheckpointTests(ConfluxTestFramework):
@@ -29,7 +30,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
         for i in range(self.num_nodes - 1):
             self.start_node(i)
         connect_sample_nodes(self.nodes[:-1], self.log, latency_max=1)
-    
+
     def _generate_txs(self, peer, num):
         client = RpcClient(self.nodes[peer])
         txs = []
@@ -50,11 +51,12 @@ class SyncCheckpointTests(ConfluxTestFramework):
         self.genesis_nonce = archive_node_client.get_nonce(archive_node_client.GENESIS_ADDR)
         blocks_in_era = []
         for i in range(num_blocks):
-            txs = self._generate_txs(0, random.randint(5, 10))
+            txs = self._generate_txs(0, random.randint(50, 100))
             block_hash = archive_node_client.generate_block_with_fake_txs(txs)
             if i >= snapshot_epoch:
                 blocks_in_era.append(block_hash)
         sync_blocks(self.nodes[:-1])
+        self.log.info("All archive nodes synced")
 
         # Start node[full_node_index] as full node to sync checkpoint
         # Change phase from CatchUpSyncBlockHeader to CatchUpCheckpoint
@@ -64,7 +66,8 @@ class SyncCheckpointTests(ConfluxTestFramework):
         for i in range(self.num_nodes - 1):
             connect_nodes(self.nodes, full_node_index, i)
 
-        self.nodes[full_node_index].wait_for_phase(["NormalSyncPhase"], wait_time=60)
+        self.log.info("Wait for full node to sync, index=%d", full_node_index)
+        self.nodes[full_node_index].wait_for_phase(["NormalSyncPhase"], wait_time=240)
 
         sync_blocks(self.nodes, sync_count=False)
 
@@ -79,6 +82,8 @@ class SyncCheckpointTests(ConfluxTestFramework):
         # There is no state from epoch 1 to snapshot_epoch
         # Note, state of genesis epoch always exists
         assert full_node_client.epoch_number() >= snapshot_epoch
+        wait_until(lambda: full_node_client.epoch_number() == archive_node_client.epoch_number() and
+                   full_node_client.epoch_number("latest_state") == archive_node_client.epoch_number("latest_state"))
         # We have snapshot_epoch for state execution but
         # don't offer snapshot_epoch for Rpc clients.
         for i in range(1, snapshot_epoch + 1):

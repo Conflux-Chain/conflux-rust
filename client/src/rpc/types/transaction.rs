@@ -2,64 +2,78 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    accounts::account_provider,
-    rpc::types::{
-        receipt::Receipt, Bytes, H160 as RpcH160, H256 as RpcH256,
-        U256 as RpcU256,
-    },
-};
-use cfx_types::U256;
+use crate::rpc::types::{receipt::Receipt, Bytes};
+use cfx_types::{H160, H256, U256, U64};
+use cfxcore_accounts::AccountProvider;
 use cfxkey::{Error, Password};
 use primitives::{
     transaction::Action, SignedTransaction,
-    Transaction as PrimitiveTransaction, TransactionWithSignature,
-    TransactionWithSignatureSerializePart,
+    Transaction as PrimitiveTransaction, TransactionIndex,
+    TransactionWithSignature, TransactionWithSignatureSerializePart,
 };
+use std::sync::Arc;
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
-    pub hash: RpcH256,
-    pub nonce: RpcU256,
-    pub block_hash: Option<RpcH256>,
-    pub transaction_index: Option<RpcU256>,
-    pub from: RpcH160,
-    pub to: Option<RpcH160>,
-    pub value: RpcU256,
-    pub gas_price: RpcU256,
-    pub gas: RpcU256,
-    pub contract_created: Option<RpcH160>,
+    pub hash: H256,
+    pub nonce: U256,
+    pub block_hash: Option<H256>,
+    pub transaction_index: Option<U64>,
+    pub from: H160,
+    pub to: Option<H160>,
+    pub value: U256,
+    pub gas_price: U256,
+    pub gas: U256,
+    pub contract_created: Option<H160>,
     pub data: Bytes,
-    pub storage_limit: RpcU256,
-    pub epoch_height: RpcU256,
-    pub chain_id: RpcU256,
-    pub status: Option<RpcU256>,
+    pub storage_limit: U256,
+    pub epoch_height: U256,
+    pub chain_id: U256,
+    pub status: Option<U64>,
     /// The standardised V field of the signature.
-    pub v: RpcU256,
+    pub v: U256,
     /// The R field of the signature.
-    pub r: RpcU256,
+    pub r: U256,
     /// The S field of the signature.
-    pub s: RpcU256,
+    pub s: U256,
+}
+
+pub enum PackedOrExecuted {
+    Packed(TransactionIndex),
+    Executed(Receipt),
 }
 
 impl Transaction {
     pub fn from_signed(
-        t: &SignedTransaction, receipt: Option<Receipt>,
-    ) -> Transaction {
+        t: &SignedTransaction,
+        maybe_packed_or_executed: Option<PackedOrExecuted>,
+    ) -> Transaction
+    {
         let mut contract_created = None;
-        let mut status: Option<RpcU256> = None;
-        if let Some(ref receipt) = receipt {
-            if let Some(ref address) = receipt.contract_created {
-                contract_created = Some(address.clone().into());
+        let mut status: Option<U64> = None;
+        let mut block_hash = None;
+        let mut transaction_index = None;
+        match maybe_packed_or_executed {
+            None => {}
+            Some(PackedOrExecuted::Packed(tx_index)) => {
+                block_hash = Some(tx_index.block_hash);
+                transaction_index = Some(tx_index.index.into());
             }
-            status = Some(receipt.outcome_status.into());
+            Some(PackedOrExecuted::Executed(receipt)) => {
+                block_hash = Some(receipt.block_hash);
+                transaction_index = Some(receipt.index.into());
+                if let Some(ref address) = receipt.contract_created {
+                    contract_created = Some(address.clone().into());
+                }
+                status = Some(receipt.outcome_status);
+            }
         }
         Transaction {
             hash: t.transaction.hash().into(),
             nonce: t.nonce.into(),
-            block_hash: receipt.clone().map(|x| x.block_hash),
-            transaction_index: receipt.map(|x| x.index.into()),
+            block_hash,
+            transaction_index,
             status,
             contract_created,
             from: t.sender().into(),
@@ -92,9 +106,9 @@ impl Transaction {
                         Some(address) => Action::Call(address.into()),
                     },
                     value: self.value.into(),
-                    storage_limit: self.storage_limit.into(),
-                    epoch_height: self.epoch_height.as_usize() as u64,
-                    chain_id: self.chain_id.as_usize() as u64,
+                    storage_limit: self.storage_limit.as_u64(),
+                    epoch_height: self.epoch_height.as_u64(),
+                    chain_id: self.chain_id.as_u32(),
                     data: self.data.into(),
                 },
                 v: self.v.as_usize() as u8,
@@ -112,22 +126,24 @@ impl Transaction {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SendTxRequest {
-    pub from: RpcH160,
-    pub to: Option<RpcH160>,
-    pub gas: RpcU256,
-    pub gas_price: RpcU256,
-    pub value: RpcU256,
+    pub from: H160,
+    pub to: Option<H160>,
+    pub gas: U256,
+    pub gas_price: U256,
+    pub value: U256,
     pub data: Option<Bytes>,
-    pub nonce: Option<RpcU256>,
-    pub storage_limit: Option<RpcU256>,
-    pub chain_id: Option<RpcU256>,
-    pub epoch_height: Option<RpcU256>,
+    pub nonce: Option<U256>,
+    pub storage_limit: Option<U256>,
+    pub chain_id: Option<U256>,
+    pub epoch_height: Option<U256>,
 }
 
 impl SendTxRequest {
     pub fn sign_with(
-        self, best_epoch_height: u64, chain_id: u64, password: Option<String>,
-    ) -> Result<TransactionWithSignature, String> {
+        self, best_epoch_height: u64, chain_id: u32, password: Option<String>,
+        accounts: Arc<AccountProvider>,
+    ) -> Result<TransactionWithSignature, String>
+    {
         let tx = PrimitiveTransaction {
             nonce: self.nonce.unwrap_or_default().into(),
             gas_price: self.gas_price.into(),
@@ -139,19 +155,18 @@ impl SendTxRequest {
             value: self.value.into(),
             storage_limit: self
                 .storage_limit
-                .unwrap_or(U256::MAX.into())
-                .into(),
+                .unwrap_or(std::u64::MAX.into())
+                .as_usize() as u64,
             epoch_height: self
                 .epoch_height
                 .unwrap_or(best_epoch_height.into())
                 .as_usize() as u64,
-            chain_id: self.chain_id.unwrap_or(chain_id.into()).as_usize()
-                as u64,
+            chain_id: self.chain_id.unwrap_or(chain_id.into()).as_u32(),
             data: self.data.unwrap_or(Bytes::new(vec![])).into(),
         };
 
         let password = password.map(Password::from);
-        let sig = account_provider(None, None)?
+        let sig = accounts
             .sign(self.from.into(), password, tx.hash())
             .map_err(|e| format!("failed to sign transaction: {:?}", e))?;
 

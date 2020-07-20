@@ -33,7 +33,7 @@ mod traits;
 mod types;
 
 pub use cfxcore::rpc_errors::{
-    Error as RpcError, ErrorKind as RpcErrorKind,
+    BoxFuture as RpcBoxFuture, Error as RpcError, ErrorKind as RpcErrorKind,
     ErrorKind::JsonRpcError as JsonRpcErrorKind, Result as RpcResult,
 };
 

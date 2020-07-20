@@ -51,7 +51,9 @@ use crate::{
     },
 };
 use bit_set::BitSet;
-use cfx_types::{Address, BigEndianHash, H256, U256, U512};
+use cfx_types::{
+    address_util::AddressUtil, Address, BigEndianHash, H256, U256, U512,
+};
 use std::{cmp, convert::TryFrom, marker::PhantomData, mem, sync::Arc};
 
 const GASOMETER_PROOF: &str = "If gasometer is None, Err is immediately returned in step; this function is only called by step; qed";
@@ -71,7 +73,7 @@ const TWO_POW_248: U256 = U256([0, 0, 0, 0x100000000000000]); //0x1 00000000 000
 
 /// Maximal subroutine stack size as specified in
 /// https://eips.ethereum.org/EIPS/eip-2315.
-pub const MAX_SUB_STACK_SIZE: usize = 1024;
+pub const MAX_SUB_STACK_SIZE: usize = 1023;
 
 /// Abstraction over raw vector of Bytes. Easier state management of PC.
 struct CodeReader {
@@ -182,7 +184,7 @@ impl From<vm::Error> for InterpreterResult {
     }
 }
 
-/// Intepreter EVM implementation
+/// Interpreter EVM implementation
 pub struct Interpreter<Cost: CostType> {
     mem: Vec<u8>,
     cache: Arc<SharedCache>,
@@ -712,9 +714,9 @@ impl<Cost: CostType> Interpreter<Cost> {
                 // ignore
             }
             instructions::BEGINSUB => {
-                // BEGINSUB should not be executed. If so, returns OutOfGas
-                // (EIP-2315).
-                return Err(vm::Error::OutOfGas);
+                // BEGINSUB should not be executed. If so, returns
+                // InvalidSubEntry (EIP-2315).
+                return Err(vm::Error::InvalidSubEntry);
             }
             instructions::JUMPSUB => {
                 if self.return_stack.len() >= MAX_SUB_STACK_SIZE {
@@ -776,7 +778,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                     contract_code,
                     address_scheme,
                     true,
-                );
+                )?;
                 return match create_result {
                     Ok(ContractCreateResult::Created(address, gas_left)) => {
                         self.stack.push(address_to_u256(address));
@@ -898,8 +900,37 @@ impl<Cost: CostType> Interpreter<Cost> {
                 // clear return data buffer before creating new call frame.
                 self.return_data = ReturnData::empty();
 
-                let can_call =
-                    has_balance && context.depth() < context.spec().max_depth;
+                let valid_code_address = code_address.is_valid_address();
+
+                let recipient_address = match instruction {
+                    instructions::CALL | instructions::STATICCALL => {
+                        &code_address
+                    }
+                    instructions::CALLCODE | instructions::DELEGATECALL => {
+                        &self.params.address
+                    }
+                    _ => unreachable!(),
+                };
+                let not_reentrancy_attack =
+                    // If this message call is not recursive call and reentering another contract,
+                    // we regard it as reentrancy.
+                    if context.is_reentrancy(&self.params.address, recipient_address) {
+                        // If this message call is invoked by `transfer()` or `send()`,
+                        // formally, the call data is empty and available gas is no more than 2300,
+                        // the reentrancy protection will not be triggered.
+                        if in_size.is_zero() {
+                            call_gas <= Cost::from(context.spec().call_stipend)
+                        } else {
+                            false
+                        }
+                    } else {
+                        true
+                    };
+
+                let can_call = has_balance
+                    && context.depth() < context.spec().max_depth
+                    && valid_code_address
+                    && not_reentrancy_attack;
                 if !can_call {
                     self.stack.push(U256::zero());
                     return Ok(InstructionResult::UnusedGas(call_gas));
@@ -916,7 +947,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                         &code_address,
                         call_type,
                         true,
-                    )
+                    )?
                 };
 
                 self.resume_output_range = Some((out_off, out_size));
@@ -984,7 +1015,8 @@ impl<Cost: CostType> Interpreter<Cost> {
             }
             instructions::SUICIDE => {
                 let address = self.stack.pop_back();
-                context.suicide(&u256_to_address(&address))?;
+                let refund_address = u256_to_address(&address);
+                context.suicide(&refund_address)?;
                 return Ok(InstructionResult::StopExecution);
             }
             instructions::LOG0
@@ -1070,7 +1102,7 @@ impl<Cost: CostType> Interpreter<Cost> {
             instructions::SLOAD => {
                 let mut key = vec![0; 32];
                 self.stack.pop_back().to_big_endian(key.as_mut());
-                let word = context.storage_at(&key)?.into_uint();
+                let word = context.storage_at(&key)?;
                 self.stack.push(word);
             }
             instructions::SSTORE => {
@@ -1078,7 +1110,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                 self.stack.pop_back().to_big_endian(key.as_mut());
                 let val = self.stack.pop_back();
 
-                context.set_storage(key, BigEndianHash::from_uint(&val))?;
+                context.set_storage(key, val)?;
             }
             instructions::PC => {
                 self.stack.push(U256::from(self.reader.position - 1));
@@ -1629,7 +1661,7 @@ mod tests {
 
     #[test]
     fn should_not_fail_on_tracing_mem() {
-        let code = "7feeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff006000527faaffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffaa6020526000620f120660406000601773945304eb96065b2a98b57a48a06ae28d285a71b56101f4f1600055".from_hex().unwrap();
+        let code = "7feeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff006000527faaffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffaa6020526000620f120660406000601773145304eb96065b2a98b57a48a06ae28d285a71b56101f4f1600055".from_hex().unwrap();
 
         let mut params = ActionParams::default();
         params.address = Address::from_low_u64_be(5);

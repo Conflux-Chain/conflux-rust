@@ -415,7 +415,7 @@ impl StateTrait for State {
     /// necessary.
     fn delete_all(
         &mut self, access_key_prefix: StorageKey,
-    ) -> Result<Option<Vec<(Vec<u8>, Box<[u8]>)>>> {
+    ) -> Result<Option<Vec<MptKeyValue>>> {
         self.pre_modification();
         // TODO: add unit tests
 
@@ -853,7 +853,7 @@ impl State {
         }
     }
 
-    pub fn dump<DUMPER: KVInserter<(Vec<u8>, Box<[u8]>)>>(
+    pub fn dump<DUMPER: KVInserter<MptKeyValue>>(
         &self, dumper: &mut DUMPER,
     ) -> Result<()> {
         let inserter = DeltaMptIterator {
@@ -872,7 +872,7 @@ use crate::storage::{
         merkle_patricia_trie::{
             mpt_cursor::{BasicPathNode, CursorOpenPathTerminal, MptCursor},
             walk::access_mode,
-            KVInserter, MptValue, TrieProof, VanillaChildrenTable,
+            KVInserter, MptKeyValue, MptValue, TrieProof, VanillaChildrenTable,
         },
         node_merkle_proof::NodeMerkleProof,
         state_manager::*,

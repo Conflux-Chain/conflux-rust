@@ -11,8 +11,8 @@ use cfxcore::{
         storage_db::{
             KeyValueDbTraitRead, SnapshotDbManagerTrait, SnapshotInfo,
         },
-        DeltaMptIterator, StateIndex, StateRootAuxInfo, StateRootWithAuxInfo,
-        StorageConfiguration,
+        DeltaMptIterator, Error as StorageError, StateIndex, StateRootAuxInfo,
+        StateRootWithAuxInfo, StorageConfiguration,
     },
     sync::Error,
 };
@@ -93,13 +93,18 @@ fn main() -> Result<(), Error> {
         pivot_chain_parts: vec![snapshot1_epoch],
         serve_one_step_sync: false,
     };
-    let snapshot_info1 = snapshot_db_manager.new_snapshot_by_merging(
-        &NULL_EPOCH,
-        snapshot1_epoch,
-        delta_mpt_iterator,
-        info,
+    let (mut snapshot_info_map_locked, snapshot_info1) = snapshot_db_manager
+        .new_snapshot_by_merging(
+            &NULL_EPOCH,
+            snapshot1_epoch,
+            delta_mpt_iterator,
+            info,
+            &storage_manager.snapshot_info_map_by_epoch,
+        )?;
+    storage_manager.register_new_snapshot(
+        snapshot_info1.clone(),
+        &mut snapshot_info_map_locked,
     )?;
-    storage_manager.register_new_snapshot(snapshot_info1.clone())?;
     println!("After merging: {:?}", snapshot_info1);
     let state_root = StateRoot {
         snapshot_root: MERKLE_NULL_NODE,
@@ -156,18 +161,23 @@ fn main() -> Result<(), Error> {
         pivot_chain_parts: vec![snapshot2_epoch],
         serve_one_step_sync: false,
     };
-    let snapshot_info2 = snapshot_db_manager.new_snapshot_by_merging(
-        &snapshot1_epoch,
-        snapshot2_epoch,
-        delta_mpt_iterator,
-        info,
-    )?;
+    let (mut snapshot_info_map_locked, snapshot_info2) = snapshot_db_manager
+        .new_snapshot_by_merging(
+            &snapshot1_epoch,
+            snapshot2_epoch,
+            delta_mpt_iterator,
+            info,
+            &storage_manager.snapshot_info_map_by_epoch,
+        )?;
     println!(
         "After merging: {:?}, accounts size {}",
         snapshot_info2,
         accounts_map.len()
     );
-    storage_manager.register_new_snapshot(snapshot_info2.clone())?;
+    storage_manager.register_new_snapshot(
+        snapshot_info2.clone(),
+        &mut snapshot_info_map_locked,
+    )?;
     let snapshot2 = snapshot_db_manager
         .get_snapshot_by_epoch_id(
             &snapshot2_epoch,
@@ -213,13 +223,18 @@ fn main() -> Result<(), Error> {
         pivot_chain_parts: vec![snapshot3_epoch],
         serve_one_step_sync: false,
     };
-    let snapshot_info3 = snapshot_db_manager.new_snapshot_by_merging(
-        &NULL_EPOCH,
-        snapshot3_epoch,
-        delta_mpt_iterator,
-        info,
+    let (mut snapshot_info_map_locked, snapshot_info3) = snapshot_db_manager
+        .new_snapshot_by_merging(
+            &NULL_EPOCH,
+            snapshot3_epoch,
+            delta_mpt_iterator,
+            info,
+            &storage_manager.snapshot_info_map_by_epoch,
+        )?;
+    storage_manager.register_new_snapshot(
+        snapshot_info3.clone(),
+        &mut snapshot_info_map_locked,
     )?;
-    storage_manager.register_new_snapshot(snapshot_info3.clone())?;
     assert_eq!(snapshot_info3.merkle_root, snapshot_info2.merkle_root);
     Ok(())
 }
@@ -309,13 +324,13 @@ fn prepare_state(
     manager: &StateManager, parent: H256, height: &mut u64, accounts: usize,
     accounts_per_epoch: usize, account_map: &mut HashMap<Address, Account>,
     old_state_root: &StateRootWithAuxInfo, state_root: &StateRootWithAuxInfo,
-) -> Result<(H256, MerkleHash), Error>
+) -> Result<(H256, MerkleHash), StorageError>
 {
     let mut new_account_map = HashMap::new();
     for i in 0..accounts {
         let addr = Address::random();
         let account =
-            Account::new_empty_with_balance(&addr, &i.into(), &0.into());
+            Account::new_empty_with_balance(&addr, &i.into(), &0.into())?;
         new_account_map.insert(addr, account);
     }
     let r = add_accounts(
@@ -335,7 +350,7 @@ fn add_accounts(
     manager: &StateManager, parent: H256, height: &mut u64,
     accounts_per_epoch: usize, new_account_map: &HashMap<Address, Account>,
     old_state_root: &StateRootWithAuxInfo, state_root: &StateRootWithAuxInfo,
-) -> Result<(H256, MerkleHash), Error>
+) -> Result<(H256, MerkleHash), StorageError>
 {
     let accounts = new_account_map.len();
     println!("begin to add {} accounts for snapshot...", accounts);

@@ -32,6 +32,8 @@ pub use self::{
     walk::access_mode,
 };
 
+pub type MptKeyValue = (Vec<u8>, Box<[u8]>);
+
 /// Classes implement KVInserter is used to store key-values in MPT iteration.
 pub trait KVInserter<Value> {
     fn push(&mut self, v: Value) -> Result<()>;

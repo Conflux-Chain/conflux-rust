@@ -35,7 +35,7 @@ fn test_slice_verifier_zero_or_one_chunk() {
     let mut rng = get_rng_for_test();
     let mut keys: Vec<Vec<u8>> = generate_keys(number_keys);
     keys.sort();
-    let mpt_kv_iter = DumpedDeltaMptIterator {
+    let mpt_kv_iter = DumpedMptKvIterator {
         kv: keys
             .iter()
             .map(|k| {
@@ -88,7 +88,7 @@ fn test_slice_verifier() {
         .cloned()
         .collect();
     keys.sort();
-    let mpt_kv_iter = DumpedDeltaMptIterator {
+    let mpt_kv_iter = DumpedMptKvIterator {
         kv: keys
             .iter()
             .map(|k| {
@@ -369,10 +369,14 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
         unreachable!()
     }
 
-    fn new_snapshot_by_merging(
+    fn new_snapshot_by_merging<'m>(
         &self, _old_snapshot_epoch_id: &EpochId, _snapshot_epoch_id: EpochId,
         _delta_mpt: DeltaMptIterator, _in_progress_snapshot_info: SnapshotInfo,
-    ) -> Result<SnapshotInfo>
+        _snapshot_info_map: &'m RwLock<HashMap<EpochId, SnapshotInfo>>,
+    ) -> Result<(
+        RwLockWriteGuard<'m, HashMap<EpochId, SnapshotInfo>>,
+        SnapshotInfo,
+    )>
     {
         unreachable!()
     }
@@ -393,9 +397,11 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
         Ok(self.temp_snapshot.clone())
     }
 
-    fn finalize_full_sync_snapshot(
+    fn finalize_full_sync_snapshot<'m>(
         &self, _snapshot_epoch_id: &MerkleHash, _merkle_root: &MerkleHash,
-    ) -> Result<()> {
+        _snapshot_info_map_rwlock: &'m RwLock<HashMap<EpochId, SnapshotInfo>>,
+    ) -> Result<RwLockWriteGuard<'m, HashMap<EpochId, SnapshotInfo>>>
+    {
         unreachable!()
     }
 }
@@ -405,7 +411,7 @@ fn test_full_sync_verifier_one_chunk() {
     let mut rng = get_rng_for_test();
     let mut keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS);
     keys.sort();
-    let mpt_kv_iter = DumpedDeltaMptIterator {
+    let mpt_kv_iter = DumpedMptKvIterator {
         kv: keys
             .iter()
             .map(|k| {
@@ -466,7 +472,7 @@ fn test_full_sync_verifier() {
         .cloned()
         .collect();
     keys.sort();
-    let mpt_kv_iter = DumpedDeltaMptIterator {
+    let mpt_kv_iter = DumpedMptKvIterator {
         kv: keys
             .iter()
             .map(|k| {
@@ -592,11 +598,11 @@ use crate::storage::{
     },
     tests::{
         generate_keys, get_rng_for_test, snapshot::FakeSnapshotMptDb,
-        DumpedDeltaMptIterator, TEST_NUMBER_OF_KEYS,
+        DumpedMptKvIterator, TEST_NUMBER_OF_KEYS,
     },
     DeltaMptIterator, MptSlicer,
 };
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock, RwLockWriteGuard};
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
 use rand::Rng;
 use std::{

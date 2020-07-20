@@ -14,7 +14,7 @@ use crate::{
         consensus_internal::INITIAL_BASE_MINING_REWARD_IN_UCFX,
         WORKER_COMPUTATION_PARALLELISM,
     },
-    pow::ProofOfWorkConfig,
+    pow::{self, PowComputer, ProofOfWorkConfig},
     statistics::Statistics,
     storage::{StorageConfiguration, StorageManager},
     sync::{SyncGraphConfig, SynchronizationGraph},
@@ -49,11 +49,18 @@ pub fn create_simple_block_impl(
         .with_author(author)
         .build();
     header.compute_hash();
-    header.pow_quality = if block_weight > 1 {
+    let pow_quality = if block_weight > 1 {
         diff * block_weight
     } else {
         diff
     };
+    // To convert pow_quality back to pow_hash can be inaccurate, but it should
+    // be okay in tests.
+    header.pow_hash =
+        Some(pow::pow_quality_to_hash(&pow_quality, &header.nonce()));
+    // println!("simple_block: difficulty={:?} pow_hash={:?} pow_quality={}",
+    // pow_quality, header.pow_hash,
+    // pow::pow_hash_to_quality(&header.pow_hash.unwrap(), &header.nonce()));
     let block = Block::new(header, vec![]);
     (block.hash(), block)
 }
@@ -86,7 +93,7 @@ pub fn create_simple_block(
 }
 
 pub fn initialize_data_manager(
-    db_dir: &str, dbtype: DbType,
+    db_dir: &str, dbtype: DbType, pow: Arc<PowComputer>,
 ) -> (Arc<BlockDataManager>, Arc<Block>) {
     let ledger_db = db::open_database(
         db_dir,
@@ -138,23 +145,24 @@ pub fn initialize_data_manager(
             Duration::from_millis(300_000), /* max cached tx count */
             dbtype,
         ),
+        pow,
     ));
     (data_man, genesis_block)
 }
 
 pub fn initialize_synchronization_graph_with_data_manager(
     data_man: Arc<BlockDataManager>, beta: u64, h: u64, tcr: u64, tcb: u64,
-    era_epoch_count: u64,
+    era_epoch_count: u64, pow: Arc<PowComputer>,
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
 {
     let verification_config = VerificationConfig::new(
-        true,
+        true, /* test_mode */
         REFEREE_DEFAULT_BOUND,
         MAX_BLOCK_SIZE_IN_BYTES,
         TRANSACTION_DEFAULT_EPOCH_BOUND,
     );
 
-    let machine = Arc::new(new_machine_with_builtin());
+    let machine = Arc::new(new_machine_with_builtin(Default::default()));
 
     let txpool = Arc::new(TransactionPool::new(
         TxPoolConfig::default(),
@@ -167,6 +175,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
     let vm = VmFactory::new(1024 * 32);
     let pow_config = ProofOfWorkConfig::new(
         true,  /* test_mode */
+        false, /* use_octopus_in_test_mode */
         false, /* use_stratum */
         Some(10),
         String::from(""), /* stratum_listen_addr */
@@ -174,6 +183,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         None,             /* stratum_secret */
     );
     let sync_config = SyncGraphConfig {
+        future_block_buffer_capacity: 1,
         enable_state_expose: false,
         is_consortium: false,
     };
@@ -196,27 +206,31 @@ pub fn initialize_synchronization_graph_with_data_manager(
                                * execution */
             transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
             referee_bound: REFEREE_DEFAULT_BOUND,
+            get_logs_epoch_batch_size: 32,
         },
         vm.clone(),
         txpool.clone(),
         statistics.clone(),
         data_man.clone(),
         pow_config.clone(),
+        pow.clone(),
         notifications.clone(),
         ConsensusExecutionConfiguration {
             anticone_penalty_ratio: tcr - 1,
             base_reward_table_in_ucfx: vec![INITIAL_BASE_MINING_REWARD_IN_UCFX],
         },
         verification_config.clone(),
+        false, /* is_full_node */
     ));
 
     let sync = Arc::new(SynchronizationGraph::new(
         consensus.clone(),
         verification_config,
         pow_config,
+        pow.clone(),
         sync_config,
         notifications,
-        false,
+        false, /* is_full_node */
         machine,
     ));
 
@@ -234,7 +248,10 @@ pub fn initialize_synchronization_graph(
     Arc<Block>,
 )
 {
-    let (data_man, genesis_block) = initialize_data_manager(db_dir, dbtype);
+    let pow = Arc::new(PowComputer::new(true));
+
+    let (data_man, genesis_block) =
+        initialize_data_manager(db_dir, dbtype, pow.clone());
 
     let (sync, consensus) = initialize_synchronization_graph_with_data_manager(
         data_man.clone(),
@@ -243,6 +260,7 @@ pub fn initialize_synchronization_graph(
         tcr,
         tcb,
         era_epoch_count,
+        pow,
     );
 
     (sync, consensus, data_man, genesis_block)

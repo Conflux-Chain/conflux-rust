@@ -683,11 +683,8 @@ impl ConsensusExecutor {
         // do it again
         debug!("compute_state_for_block {:?}", block_hash);
         {
-            let (_guarded_state_index, maybe_state_index) = self
-                .handler
-                .data_man
-                .get_state_readonly_index(&block_hash)
-                .into();
+            let maybe_state_index =
+                self.handler.data_man.get_state_readonly_index(&block_hash);
             // The state is computed and is retrievable from storage.
             if let Some(maybe_cached_state_result) =
                 maybe_state_index.map(|state_readonly_index| {
@@ -1155,15 +1152,14 @@ impl ConsensusExecutionHandler {
                 let mut gas_sponsor_paid = false;
                 let mut storage_sponsor_paid = false;
                 match r {
-                    ExecutionOutcome::NotExecutedOldNonce(expected, got) => {
+                    ExecutionOutcome::NotExecutedDrop(e) => {
                         tx_outcome_status =
                             TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING;
                         trace!(
-                            "tx not executed due to old nonce: \
-                             transaction={:?}, expected={:?}, got={:?}",
+                            "tx not executed, not to reconsider packing: \
+                             transaction={:?},err={:?}",
                             transaction,
-                            expected,
-                            got
+                            e
                         );
                         gas_fee = U256::zero();
                     }
@@ -1196,8 +1192,8 @@ impl ConsensusExecutionHandler {
                         env.accumulated_gas_used += executed.gas_used;
                         gas_fee = executed.fee;
                         debug!(
-                            "tx execution error: transaction={:?}, err={:?}",
-                            transaction, error
+                            "tx execution error: err={:?}, transaction={:?}",
+                            error, transaction
                         );
                     }
                     ExecutionOutcome::Finished(executed) => {
@@ -1214,7 +1210,7 @@ impl ConsensusExecutionHandler {
                         gas_sponsor_paid = executed.gas_sponsor_paid;
                         storage_sponsor_paid = executed.storage_sponsor_paid;
 
-                        trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
+                        trace!("tx executed successfully: result={:?}, transaction={:?}, in block {:?}", executed, transaction, block.hash());
                     }
                 }
 
@@ -1317,14 +1313,17 @@ impl ConsensusExecutionHandler {
                     debug_out.no_reward_blocks.push(block.hash());
                 }
             } else {
-                let mut reward = if block.block_header.pow_quality
-                    >= *epoch_difficulty
-                {
+                let pow_quality =
+                    VerificationConfig::get_or_compute_header_pow_quality(
+                        &self.data_man.pow,
+                        &block.block_header,
+                    );
+                let mut reward = if pow_quality >= *epoch_difficulty {
                     base_reward_per_block
                 } else {
                     debug!(
                         "Block {} pow_quality {} is less than epoch_difficulty {}!",
-                        block.hash(), block.block_header.pow_quality, epoch_difficulty
+                        block.hash(), pow_quality, epoch_difficulty
                     );
                     0.into()
                 };
@@ -1652,8 +1651,7 @@ impl ConsensusExecutionHandler {
         {
             bail!("state is not ready");
         }
-        let (_state_index_guard, state_index) =
-            self.data_man.get_state_readonly_index(epoch_id).into();
+        let state_index = self.data_man.get_state_readonly_index(epoch_id);
         trace!("best_block_header: {:?}", best_block_header);
         let time_stamp = best_block_header.timestamp();
         let mut state = State::new(
@@ -1664,8 +1662,7 @@ impl ConsensusExecutionHandler {
                         state_index.unwrap(),
                         /* try_open = */ true,
                     )?
-                    // Safe because the state exists.
-                    .expect("State Exists"),
+                    .ok_or("state deleted")?,
             ),
             self.vm.clone(),
             &spec,

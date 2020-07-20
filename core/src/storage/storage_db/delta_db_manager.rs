@@ -15,6 +15,7 @@ pub trait DeltaDbTrait:
     + KeyValueDbToOwnedReadTrait
     + KeyValueDbTraitRead
     + KeyValueDbTraitTransactionalDyn
+    + MallocSizeOf
 {
 }
 
@@ -106,6 +107,7 @@ use crate::storage::{
     impls::errors::*,
     storage_db::{key_value_db::*, SnapshotInfo},
 };
+use malloc_size_of::MallocSizeOf;
 use primitives::EpochId;
 use std::{
     collections::HashMap,

@@ -40,13 +40,13 @@ fn txexe_benchmark(c: &mut Criterion) {
         gas: U256::from(21000u64),
         value: 1.into(),
         action: Action::Call(receiver_kp.address()),
-        storage_limit: U256::zero(),
+        storage_limit: 0,
         epoch_height: 0,
         chain_id: 0,
         data: Bytes::new(),
     };
     let tx = tx.sign(kp.secret());
-    let machine = new_machine_with_builtin();
+    let machine = new_machine_with_builtin(Default::default());
     let internal_contract_map = InternalContractMap::new();
     let env = Env {
         number: 0,

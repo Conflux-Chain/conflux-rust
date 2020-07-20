@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    impls::cfx::RpcImplConfiguration, HttpConfiguration, TcpConfiguration,
+    impls::RpcImplConfiguration, HttpConfiguration, TcpConfiguration,
     WsConfiguration,
 };
 use cfx_types::H256;
@@ -13,6 +13,7 @@ use cfxcore::{
     cache_config::{
         DEFAULT_INVALID_BLOCK_HASH_CACHE_SIZE_IN_COUNT,
         DEFAULT_LEDGER_CACHE_SIZE,
+        DEFAULT_TARGET_DIFFICULTIES_CACHE_SIZE_IN_COUNT,
     },
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
@@ -106,7 +107,7 @@ build_config! {
         // Genesis section.
         (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
         (anticone_penalty_ratio, (u64), ANTICONE_PENALTY_RATIO)
-        (chain_id, (Option<u64>), None)
+        (chain_id, (Option<u32>), None)
         // Snapshot Epoch Count is a consensus parameter. This flag overrides
         // the parameter, which only take effect in `dev` mode.
         (dev_snapshot_epoch_count, (u32), SNAPSHOT_EPOCHS_CAPACITY)
@@ -124,9 +125,11 @@ build_config! {
         // Mining section.
         (mining_author, (Option<String>), None)
         (start_mining, (bool), false)
+        (stratum_listen_address, (String), "127.0.0.1".into())
         (stratum_port, (u16), 32525)
         (stratum_secret, (Option<String>), None)
         (use_stratum, (bool), false)
+        (use_octopus_in_test_mode, (bool), false)
 
         // Network section.
         (jsonrpc_local_tcp_port, (Option<u16>), None)
@@ -160,11 +163,12 @@ build_config! {
         (heartbeat_timeout_ms, (u64), 180_000)
         (inflight_pending_tx_index_maintain_timeout_ms, (u64), 30_000)
         (max_allowed_timeout_in_observing_period, (u64), 10)
+        (max_chunk_number_in_manifest, (usize), 500)
         (max_downloading_chunks, (usize), 8)
         (max_handshakes, (usize), 64)
         (max_incoming_peers, (usize), 64)
         (max_inflight_request_count, (u64), 64)
-        (max_outgoing_peers, (usize), 16)
+        (max_outgoing_peers, (usize), 8)
         (max_outgoing_peers_archive, (Option<usize>), None)
         (max_peers_tx_propagation, (usize), 128)
         (max_unprocessed_block_size_mb, (usize), (128))
@@ -192,11 +196,11 @@ build_config! {
         (node_table_timeout_s, (u64), 300)
         (node_table_promotion_timeout_s, (u64), 3 * 24 * 3600)
         (session_ip_limits, (String), "1,8,4,2".into())
-        (subnet_quota, (usize), 32)
+        (subnet_quota, (usize), 128)
 
         // Transaction cache/transaction pool section.
         (tx_cache_index_maintain_timeout_ms, (u64), 300_000)
-        (tx_pool_size, (usize), 500_000)
+        (tx_pool_size, (usize), 200_000)
         (tx_pool_min_tx_gas_price, (u64), 1)
         (tx_weight_scaling, (u64), 1)
         (tx_weight_exp, (u8), 1)
@@ -208,8 +212,10 @@ build_config! {
         (conflux_data_dir, (String), "./".to_string())
         // FIXME: use a fixed sub-dir of conflux_data_dir instead.
         (block_db_dir, (String), "./blockchain_db".to_string())
+        (additional_maintained_snapshot_count, (u32), 0)
         (ledger_cache_size, (usize), DEFAULT_LEDGER_CACHE_SIZE)
         (invalid_block_hash_cache_size_in_count, (usize), DEFAULT_INVALID_BLOCK_HASH_CACHE_SIZE_IN_COUNT)
+        (target_difficulties_cache_size_in_count, (usize), DEFAULT_TARGET_DIFFICULTIES_CACHE_SIZE_IN_COUNT)
         (rocksdb_cache_size, (Option<usize>), Some(128))
         (rocksdb_compaction_profile, (Option<String>), None)
         (storage_delta_mpts_cache_recent_lfu_factor, (f64), storage::defaults::DEFAULT_DELTA_MPTS_CACHE_RECENT_LFU_FACTOR)
@@ -223,6 +229,7 @@ build_config! {
         (enable_optimistic_execution, (bool), true)
         (future_block_buffer_capacity, (usize), 32768)
         (get_logs_filter_max_limit, (Option<usize>), None)
+        (get_logs_epoch_batch_size, (usize), 32)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (persist_tx_index, (bool), false)
         (print_memory_usage_period_s, (Option<u64>), None)
@@ -287,7 +294,7 @@ impl Configuration {
             Some(x) => x,
             // The default network id is 1 for historic reason. It doesn't
             // really matter.
-            None => self.raw_conf.chain_id.unwrap_or(1),
+            None => self.raw_conf.chain_id.unwrap_or(1) as u64,
         }
     }
 
@@ -361,6 +368,8 @@ impl Configuration {
         cache_config.ledger = self.raw_conf.ledger_cache_size;
         cache_config.invalid_block_hashes_cache_size_in_count =
             self.raw_conf.invalid_block_hash_cache_size_in_count;
+        cache_config.target_difficulties_cache_size_in_count =
+            self.raw_conf.target_difficulties_cache_size_in_count;
         cache_config
     }
 
@@ -434,17 +443,11 @@ impl Configuration {
             bench_mode: false,
             transaction_epoch_bound: self.raw_conf.transaction_epoch_bound,
             referee_bound: self.raw_conf.referee_bound,
+            get_logs_epoch_batch_size: self.raw_conf.get_logs_epoch_batch_size,
         }
     }
 
     pub fn pow_config(&self) -> ProofOfWorkConfig {
-        let stratum_listen_addr =
-            if let Some(listen_addr) = self.raw_conf.public_address.clone() {
-                listen_addr
-            } else {
-                String::from("")
-            };
-
         let stratum_secret =
             self.raw_conf
                 .stratum_secret
@@ -454,9 +457,10 @@ impl Configuration {
 
         ProofOfWorkConfig::new(
             self.is_test_or_dev_mode(),
+            self.raw_conf.use_octopus_in_test_mode,
             self.raw_conf.use_stratum,
             self.raw_conf.initial_difficulty,
-            stratum_listen_addr,
+            self.raw_conf.stratum_listen_address.clone(),
             self.raw_conf.stratum_port,
             stratum_secret,
         )
@@ -472,7 +476,7 @@ impl Configuration {
     }
 
     pub fn tx_gen_config(&self) -> Option<TransactionGeneratorConfig> {
-        if self.is_test_mode() &&
+        if self.is_test_or_dev_mode() &&
             // FIXME: this is not a good condition to check.
             self.raw_conf.genesis_secrets.is_some()
         {
@@ -489,6 +493,9 @@ impl Configuration {
     pub fn storage_config(&self) -> StorageConfiguration {
         let conflux_data_path = Path::new(&self.raw_conf.conflux_data_dir);
         StorageConfiguration {
+            additional_maintained_snapshot_count: self
+                .raw_conf
+                .additional_maintained_snapshot_count,
             consensus_param: ConsensusParam {
                 snapshot_epoch_count: if self.is_test_mode() {
                     self.raw_conf.dev_snapshot_epoch_count
@@ -568,9 +575,6 @@ impl Configuration {
                 .max_trans_count_received_in_catch_up,
             min_peers_tx_propagation: self.raw_conf.min_peers_tx_propagation,
             max_peers_tx_propagation: self.raw_conf.max_peers_tx_propagation,
-            future_block_buffer_capacity: self
-                .raw_conf
-                .future_block_buffer_capacity,
             max_downloading_chunks: self.raw_conf.max_downloading_chunks,
             test_mode: self.is_test_mode(),
             dev_mode: self.is_dev_mode(),
@@ -585,6 +589,9 @@ impl Configuration {
                 self.raw_conf.snapshot_chunk_request_timeout_ms,
             ),
             chunk_size_byte: self.raw_conf.chunk_size_byte,
+            max_chunk_number_in_manifest: self
+                .raw_conf
+                .max_chunk_number_in_manifest,
             timeout_observing_period_s: self
                 .raw_conf
                 .timeout_observing_period_s,
@@ -636,6 +643,9 @@ impl Configuration {
 
     pub fn sync_graph_config(&self) -> SyncGraphConfig {
         SyncGraphConfig {
+            future_block_buffer_capacity: self
+                .raw_conf
+                .future_block_buffer_capacity,
             enable_state_expose: self.raw_conf.enable_state_expose,
             is_consortium: self.raw_conf.is_consortium,
         }

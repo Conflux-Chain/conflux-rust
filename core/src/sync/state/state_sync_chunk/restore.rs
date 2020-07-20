@@ -11,10 +11,7 @@ use crate::{
     sync::state::storage::{Chunk, ChunkKey},
 };
 use primitives::{EpochId, MerkleHash};
-use std::sync::{
-    atomic::{AtomicUsize, Ordering::Relaxed},
-    Arc,
-};
+use std::sync::Arc;
 
 pub struct Restorer {
     pub snapshot_epoch_id: EpochId,
@@ -25,15 +22,13 @@ pub struct Restorer {
     verifier: Option<FullSyncVerifier<SnapshotDbManagerSqlite>>,
 }
 
-impl Default for Restorer {
-    fn default() -> Self { Self::new(EpochId::default()) }
-}
-
 impl Restorer {
-    pub fn new(snapshot_epoch_id: EpochId) -> Self {
+    pub fn new(
+        snapshot_epoch_id: EpochId, snapshot_merkle_root: MerkleHash,
+    ) -> Self {
         Restorer {
             snapshot_epoch_id,
-            snapshot_merkle_root: Default::default(),
+            snapshot_merkle_root,
             verifier: None,
         }
     }
@@ -56,7 +51,11 @@ impl Restorer {
                     chunk.values,
                 ) {
                     Ok(true) => true,
-                    _ => false,
+                    Ok(false) => false,
+                    Err(e) => {
+                        warn!("error for restore_chunk: err={:?}", e);
+                        false
+                    }
                 }
             }
         }
@@ -72,34 +71,23 @@ impl Restorer {
         // `self.verifier` is never unwrapped, so it's safe to set it to None,
         self.verifier = None;
 
-        state_manager
-            .get_storage_manager()
+        // FIMXE: rename with current_snapshots lock acquired.
+        let storage_manager = state_manager.get_storage_manager();
+        let mut snapshot_info_map_locked = storage_manager
             .get_snapshot_manager()
             .get_snapshot_db_manager()
             .finalize_full_sync_snapshot(
                 &self.snapshot_epoch_id,
                 &self.snapshot_merkle_root,
+                &storage_manager.snapshot_info_map_by_epoch,
             )
             .expect("Fail to finalize full sync");
-        state_manager
-            .get_storage_manager()
-            .register_new_snapshot(snapshot_info)?;
+        storage_manager.register_new_snapshot(
+            snapshot_info,
+            &mut snapshot_info_map_locked,
+        )?;
 
         debug!("Completed snapshot restoration.");
         Ok(())
-    }
-}
-
-#[derive(Default, Debug)]
-pub struct RestoreProgress {
-    total: AtomicUsize,
-    completed: AtomicUsize,
-}
-
-impl RestoreProgress {
-    pub fn is_completed(&self) -> bool {
-        let total = self.total.load(Relaxed);
-        let completed = self.completed.load(Relaxed);
-        completed >= total
     }
 }

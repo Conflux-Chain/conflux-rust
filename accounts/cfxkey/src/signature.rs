@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use ethereum_types::{H256, H520};
+use cfx_types::{H256, H520};
 use public_to_address;
 use rustc_hex::{FromHex, ToHex};
 use secp256k1::{

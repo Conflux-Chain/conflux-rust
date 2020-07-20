@@ -3,6 +3,8 @@
 from conflux.rpc import RpcClient
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import assert_equal
+from eth_utils import decode_hex
+from conflux.utils import encode_hex, bytes_to_int, int_to_hex
 
 FULLNODE0 = 0
 FORK_LENGTH = 100
@@ -46,7 +48,7 @@ class Issue1303Test(ConfluxTestFramework):
         r1 = self.rpc.get_transaction_receipt(tx1.hash_hex())
         assert(r1 != None)
 
-        r1_original_epoch = r1["epochNumber"]
+        r1_original_epoch = int(r1["epochNumber"], 16)
 
         # create fork
         tip1 = self.generate_chain(fork_hash, FORK_LENGTH)[-1]
@@ -78,7 +80,7 @@ class Issue1303Test(ConfluxTestFramework):
         # check if updated receipt exists
         r1 = self.rpc.get_transaction_receipt(tx1.hash_hex())
         assert(r1 != None)
-        assert(r1["epochNumber"] > r1_original_epoch)
+        assert(int(r1["epochNumber"], 16) > r1_original_epoch)
 
         self.log.info(f"Pass")
 

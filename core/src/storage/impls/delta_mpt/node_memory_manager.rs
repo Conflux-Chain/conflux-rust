@@ -37,6 +37,7 @@ pub type DeltaMptsCacheManager =
 
 impl CacheIndexTrait for DeltaMptDbKey {}
 
+#[derive(MallocSizeOfDerive)]
 pub struct NodeMemoryManager<
     CacheAlgoDataT: CacheAlgoDataTrait,
     CacheAlgorithmT: CacheAlgorithm<CacheAlgoData = CacheAlgoDataT>,
@@ -75,7 +76,7 @@ impl<
     /// 12B*4x LRU) * number of nodes + 200M * 4B NodeRef. 5GB + extra 800M
     /// ~ 20_000_000 nodes.
     // TODO(yz): Need to calculate a factor in LRU (currently made up to 4).
-    pub const MAX_CACHED_TRIE_NODES_DISK_HYBRID: u32 = 10_000_000;
+    pub const MAX_CACHED_TRIE_NODES_DISK_HYBRID: u32 = 5_000_000;
     pub const MAX_CACHED_TRIE_NODES_R_LFU_COUNTER: u32 = (Self::R_LFU_FACTOR
         * Self::MAX_CACHED_TRIE_NODES_DISK_HYBRID as f64)
         as u32;
@@ -93,7 +94,7 @@ impl<
     /// leaf node. This assumption is for delta_trie.
     pub const MAX_TRIE_NODES_MEM_ONLY: u32 = 27_600_000;
     pub const R_LFU_FACTOR: f64 = 4.0;
-    pub const START_CAPACITY: u32 = 2_000_000;
+    pub const START_CAPACITY: u32 = 1_000_000;
 }
 
 impl<
@@ -143,18 +144,19 @@ impl<
     /// Method that requires mut borrow of allocator.
     pub fn enlarge(&self) -> Result<()> {
         let allocator_upgradable_read = self.allocator.upgradable_read();
-        let idle = allocator_upgradable_read.capacity()
-            - allocator_upgradable_read.len();
+        let allocator_capacity = allocator_upgradable_read.capacity();
+        let occupied_size = allocator_upgradable_read.len();
+        let idle = allocator_capacity - occupied_size;
         let should_idle = self.idle_size as usize;
-        if idle >= should_idle {
+        if idle >= should_idle || allocator_capacity == self.size_limit as usize
+        {
             return Ok(());
         }
         let mut add_size = should_idle - idle;
-        if add_size < allocator_upgradable_read.capacity() {
-            add_size = allocator_upgradable_read.capacity();
+        if add_size < allocator_capacity {
+            add_size = allocator_capacity;
         }
-        let max_add_size =
-            self.size_limit as usize - allocator_upgradable_read.len();
+        let max_add_size = self.size_limit as usize - occupied_size;
         if add_size >= max_add_size {
             add_size = max_add_size;
         }
@@ -786,6 +788,7 @@ use super::{
     slab::Slab,
     NodeRefDeltaMpt,
 };
+use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
 use parking_lot::{
     Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard,
 };

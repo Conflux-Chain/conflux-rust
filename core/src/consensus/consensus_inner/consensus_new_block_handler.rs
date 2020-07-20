@@ -263,15 +263,6 @@ impl ConsensusNewBlockHandler {
         inner.cur_era_genesis_block_arena_index = new_era_block_arena_index;
         inner.cur_era_genesis_height = new_era_height;
 
-        // TODO: maybe archive node has other logic.
-        {
-            let state_availability_boundary =
-                &mut *inner.data_man.state_availability_boundary.write();
-            if new_era_height > state_availability_boundary.lower_bound {
-                state_availability_boundary.adjust_lower_bound(new_era_height);
-            }
-        }
-
         let cur_era_hash = inner.arena[new_era_block_arena_index].hash.clone();
         let stable_era_arena_index =
             inner.get_pivot_block_arena_index(inner.cur_era_stable_height);
@@ -854,12 +845,16 @@ impl ConsensusNewBlockHandler {
         inner.cur_era_genesis_block_arena_index
     }
 
-    fn persist_terminals(&self, inner: &ConsensusGraphInner) {
+    fn persist_terminals(&self, inner: &ConsensusGraphInner, has_body: bool) {
         let mut terminals = Vec::with_capacity(inner.terminal_hashes.len());
         for h in &inner.terminal_hashes {
             terminals.push(h.clone());
         }
-        self.data_man.insert_terminals_to_db(terminals);
+        if has_body {
+            self.data_man.insert_block_terminals_to_db(terminals);
+        } else {
+            self.data_man.insert_header_terminals_to_db(terminals);
+        }
     }
 
     fn try_clear_blockset_in_own_view_of_epoch(
@@ -1329,7 +1324,7 @@ impl ConsensusNewBlockHandler {
                     != inner.cur_era_stable_block_hash))
             && !self.conf.bench_mode
         {
-            self.persist_terminals(inner);
+            self.persist_terminals(inner, has_body);
             if pivot_changed {
                 // If we switch to a chain without stable block,
                 // we should avoid execute unavailable states.
@@ -1501,9 +1496,13 @@ impl ConsensusNewBlockHandler {
         // FIXME: we need a function to compute the deferred epoch
         // FIXME: number. the current codebase may not be
         // FIXME: consistent at all places.
+        // The bound_height ensures that the snapshot before stable_genesis will
+        // not be removed, so that the execution of the epochs following
+        // stable_genesis can go through a normal path where both
+        // snapshot and intermediate delta mpt exist.
         let mut confirmed_height = meter.get_confirmed_epoch_num(
             inner.cur_era_stable_height
-                + 2 * self.data_man.get_snapshot_epoch_count() as u64
+                + self.data_man.get_snapshot_epoch_count() as u64
                 + DEFERRED_STATE_EPOCH_COUNT,
         );
         if confirmed_height < DEFERRED_STATE_EPOCH_COUNT {
@@ -1513,32 +1512,16 @@ impl ConsensusNewBlockHandler {
         }
         // We can not assume that confirmed epoch are already executed,
         // but we can assume that the deferred block are executed.
-        let confirmed_epoch_hash = inner
-            .get_pivot_hash_from_epoch_number(confirmed_height)
-            // FIXME: shouldn't unwrap but the function doesn't return error...
+        self.data_man
+            .storage_manager
+            .get_storage_manager()
+            .maintain_state_confirmed(
+                inner,
+                confirmed_height,
+                &self.data_man.state_availability_boundary,
+            )
+            // FIXME: propogate error.
             .expect(&concat!(file!(), ":", line!(), ":", column!()));
-        // FIXME: we also need more helper function to get the execution result
-        // FIXME: for block deferred or not.
-        if let Some(confirmed_epoch) = &*self
-            .data_man
-            .get_epoch_execution_commitment(&confirmed_epoch_hash)
-        {
-            if confirmed_height
-                > self.data_man.state_availability_boundary.read().lower_bound
-            {
-                self.data_man
-                    .storage_manager
-                    .get_storage_manager()
-                    .maintain_snapshots_pivot_chain_confirmed(
-                        confirmed_height,
-                        &confirmed_epoch_hash,
-                        &confirmed_epoch.state_root_with_aux_info,
-                        &self.data_man.state_availability_boundary,
-                    )
-                    // FIXME: propogate error.
-                    .expect(&concat!(file!(), ":", line!(), ":", column!()));
-            }
-        }
 
         let era_genesis_height =
             inner.get_era_genesis_height(inner.arena[parent].height);
@@ -1679,7 +1662,7 @@ impl ConsensusNewBlockHandler {
             }
         }
 
-        self.persist_terminals(inner);
+        self.persist_terminals(inner, has_body);
         debug!(
             "Finish activating block in ConsensusGraph: index={:?} hash={:?}",
             me, inner.arena[me].hash
