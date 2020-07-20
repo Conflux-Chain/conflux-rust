@@ -186,25 +186,54 @@ fn get_invalid_hash(rng: &mut ChaChaRng, hash: H256) -> H256 {
     new_hash
 }
 
-fn get_invalid_state_root(rng: &mut ChaChaRng, root: &StateRoot) -> StateRoot {
-    let delta = get_invalid_hash(rng, root.delta_root);
-    let intermediate = get_invalid_hash(rng, root.intermediate_delta_root);
-    let snapshot = get_invalid_hash(rng, root.snapshot_root);
+fn get_invalid_maybe_hash(
+    rng: &mut ChaChaRng, maybe_hash: Option<H256>,
+) -> Option<H256> {
+    // randomly mutate hash
+    let mut new_maybe_hash = maybe_hash.map(|h| get_invalid_hash(rng, h));
 
-    StateRoot {
-        delta_root: delta,
-        intermediate_delta_root: intermediate,
-        snapshot_root: snapshot,
+    // randomly change Some(_) to None
+    if rng.gen_bool(0.1) {
+        new_maybe_hash = None;
     }
+
+    new_maybe_hash
+}
+
+fn opt_to_bin<T>(opt: &Option<T>) -> usize {
+    match opt {
+        None => 0,
+        Some(_) => 1,
+    }
+}
+
+fn get_invalid_state_root(
+    rng: &mut ChaChaRng, mut root: StateRoot, num_proofs: usize,
+) -> StateRoot {
+    // num_proofs: if only one proof is provided (i.e. the value is in the delta
+    // trie), we only mutate the delta root. if two or three were provided, we
+    // randomly mutate one of the corresponding roots.
+
+    match rng.gen_range(0, num_proofs) {
+        0 => root.delta_root = get_invalid_hash(rng, root.delta_root),
+        1 => {
+            root.intermediate_delta_root =
+                get_invalid_hash(rng, root.intermediate_delta_root)
+        }
+        2 => root.snapshot_root = get_invalid_hash(rng, root.snapshot_root),
+        _ => assert!(false, "Unexpected random number"),
+    }
+
+    root
 }
 
 fn get_invalid_merkle_triplet(
     rng: &mut ChaChaRng, triplet: &NodeMerkleTriplet,
 ) -> NodeMerkleTriplet {
     NodeMerkleTriplet {
-        delta: triplet.delta.map(|h| get_invalid_hash(rng, h)),
-        intermediate: triplet.intermediate.map(|h| get_invalid_hash(rng, h)),
-        snapshot: triplet.snapshot.map(|h| get_invalid_hash(rng, h)),
+        delta: get_invalid_maybe_hash(rng, triplet.delta),
+        intermediate: get_invalid_maybe_hash(rng, triplet.intermediate),
+        snapshot: get_invalid_maybe_hash(rng, triplet.snapshot),
     }
 }
 
@@ -290,7 +319,13 @@ fn test_invalid_state_proof() {
         let value = value.as_ref().map(|b| &**b);
 
         // checking proof with invalid state root should fail
-        let invalid_root = get_invalid_state_root(&mut rng, &root);
+        let num_proofs = opt_to_bin(&proof.delta_proof)
+            + opt_to_bin(&proof.intermediate_proof)
+            + opt_to_bin(&proof.snapshot_proof);
+
+        let invalid_root =
+            get_invalid_state_root(&mut rng, root.clone(), num_proofs);
+
         assert!(!proof.is_valid_kv(key, value, invalid_root));
 
         // checking proof with invalid value should fail
@@ -388,10 +423,16 @@ fn test_invalid_node_merkle_proof() {
                 || triplet.snapshot.is_some()
         );
 
+        assert!(
+            proof.delta_proof.is_some()
+                || proof.intermediate_proof.is_some()
+                || proof.snapshot_proof.is_some()
+        );
+
         let key = &key.to_vec();
 
         // checking proof with invalid state root should fail
-        let invalid_root = get_invalid_state_root(&mut rng, &root);
+        let invalid_root = get_invalid_state_root(&mut rng, root.clone(), 3);
 
         assert!(!proof.is_valid_triplet(
             key,
