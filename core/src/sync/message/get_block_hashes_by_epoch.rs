@@ -13,10 +13,13 @@ use crate::{
         Error, ProtocolConfiguration,
     },
 };
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, time::Duration};
 
-#[derive(Debug, PartialEq, Clone, RlpDecodable, RlpEncodable)]
+#[derive(
+    Debug, PartialEq, Clone, RlpDecodable, RlpEncodable, DeriveMallocSizeOf,
+)]
 pub struct GetBlockHashesByEpoch {
     pub request_id: RequestId,
     pub epochs: Vec<u64>,

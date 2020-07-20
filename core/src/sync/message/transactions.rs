@@ -17,6 +17,7 @@ use crate::{
     },
 };
 use cfx_types::H256;
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::MeterTimer;
 use network::service::ProtocolVersion;
 use primitives::{transaction::TxPropagateId, TransactionWithSignature};
@@ -288,7 +289,7 @@ impl TransactionDigests {
 
 /////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, DeriveMallocSizeOf)]
 pub struct GetTransactions {
     pub request_id: RequestId,
     pub window_index: usize,
@@ -439,7 +440,7 @@ impl Decodable for GetTransactions {
 
 /////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, DeriveMallocSizeOf)]
 pub struct GetTransactionsFromTxHashes {
     pub request_id: RequestId,
     pub window_index: usize,

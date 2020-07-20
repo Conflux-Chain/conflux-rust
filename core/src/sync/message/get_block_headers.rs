@@ -14,10 +14,13 @@ use crate::{
     },
 };
 use cfx_types::H256;
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, time::Duration};
 
-#[derive(Debug, PartialEq, Clone, RlpDecodable, RlpEncodable)]
+#[derive(
+    Debug, PartialEq, Clone, RlpDecodable, RlpEncodable, DeriveMallocSizeOf,
+)]
 pub struct GetBlockHeaders {
     pub request_id: RequestId,
     pub hashes: Vec<H256>,
