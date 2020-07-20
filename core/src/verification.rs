@@ -166,8 +166,9 @@ pub fn is_valid_receipt_inclusion_proof(
 
     let block_receipts_root_bytes =
         match block_index_proof.get_value(key, &verified_epoch_receipts_root) {
-            None => return false,
-            Some(val) => val,
+            (false, _) => return false,
+            (true, None) => return false,
+            (true, Some(val)) => val,
         };
 
     // parse block receipts root as H256

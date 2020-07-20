@@ -145,7 +145,9 @@ impl TrieProof {
     }
 
     /// Get the value under `key` starting from `root`.
-    pub fn get_value(&self, key: &[u8], root: &MerkleHash) -> Option<&[u8]> {
+    pub fn get_value(
+        &self, key: &[u8], root: &MerkleHash,
+    ) -> (bool, Option<&[u8]>) {
         let mut proof_node = None;
         let proof_node_mut = &mut proof_node;
 
@@ -156,12 +158,10 @@ impl TrieProof {
 
         drop(proof_node_mut);
 
-        if !proves {
-            // incomplete proof (missing node)
-            None
-        } else {
-            proof_node.and_then(|node| node.value_as_slice().into_option())
-        }
+        (
+            proves,
+            proof_node.and_then(|node| node.value_as_slice().into_option()),
+        )
     }
 
     #[cfg(test)]
