@@ -270,21 +270,23 @@ impl LedgerInfo {
     pub fn witness_info(
         &self, witness: u64,
     ) -> Result<WitnessInfoWithHeight, Error> {
-        let mut states = vec![];
-        let mut receipts = vec![];
-        let mut blooms = vec![];
+        let mut state_root_hashes = vec![];
+        let mut receipt_hashes = vec![];
+        let mut bloom_hashes = vec![];
 
         for h in self.headers_seen_by_witness(witness)? {
-            states.push(self.correct_deferred_state_root_hash_of(h)?);
-            receipts.push(self.correct_deferred_receipts_root_hash_of(h)?);
-            blooms.push(self.correct_deferred_logs_root_hash_of(h)?);
+            state_root_hashes
+                .push(self.correct_deferred_state_root_hash_of(h)?);
+            receipt_hashes
+                .push(self.correct_deferred_receipts_root_hash_of(h)?);
+            bloom_hashes.push(self.correct_deferred_logs_root_hash_of(h)?);
         }
 
         Ok(WitnessInfoWithHeight {
             height: witness,
-            state_roots: states,
-            receipt_hashes: receipts,
-            bloom_hashes: blooms,
+            state_root_hashes,
+            receipt_hashes,
+            bloom_hashes,
         })
     }
 }

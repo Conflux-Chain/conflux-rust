@@ -121,7 +121,7 @@ pub struct GetWitnessInfo {
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct WitnessInfoWithHeight {
     pub height: u64,
-    pub state_roots: Vec<H256>,
+    pub state_root_hashes: Vec<H256>,
     pub receipt_hashes: Vec<H256>,
     pub bloom_hashes: Vec<H256>,
 }
@@ -177,6 +177,9 @@ pub struct GetStateRoots {
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct StateRootWithEpoch {
     pub epoch: u64,
+
+    // state root is validated against witness info retrieved previously;
+    // no additional proof needed
     pub state_root: StateRoot,
 }
 
@@ -269,9 +272,12 @@ pub struct GetStorageRoots {
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct StorageRootProof {
-    pub state_root: StateRoot,
-    pub prev_state_root: Option<StateRoot>,
     pub merkle_proof: NodeMerkleProof,
+
+    // state root is validated against witness info retrieved previously;
+    // no additional proof needed
+    pub state_root: StateRoot,
+    pub prev_snapshot_state_root: Option<StateRoot>,
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]

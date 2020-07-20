@@ -206,7 +206,7 @@ impl StorageRoots {
             })?;
 
         // validate previous state root
-        let maybe_prev_root = proof.prev_state_root;
+        let maybe_prev_root = proof.prev_snapshot_state_root;
 
         match maybe_prev_root {
             Some(ref root) => {

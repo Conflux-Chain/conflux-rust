@@ -110,7 +110,7 @@ impl Witnesses {
         &self, item: WitnessInfoWithHeight,
     ) -> Result<(), Error> {
         let witness = item.height;
-        let state_roots = item.state_roots;
+        let state_roots = item.state_root_hashes;
         let receipts = item.receipt_hashes;
         let blooms = item.bloom_hashes;
 

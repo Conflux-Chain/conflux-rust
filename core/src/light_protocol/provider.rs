@@ -643,7 +643,7 @@ impl Provider {
         let state_root = self.ledger.state_root_of(key.epoch)?.state_root;
 
         // state root in previous snapshot period
-        let prev_state_root = match key.epoch {
+        let prev_snapshot_state_root = match key.epoch {
             e if e <= snapshot_epoch_count => None,
             _ => Some(
                 self.ledger
@@ -658,7 +658,7 @@ impl Provider {
 
         let proof = StorageRootProof {
             state_root,
-            prev_state_root,
+            prev_snapshot_state_root,
             merkle_proof,
         };
 
