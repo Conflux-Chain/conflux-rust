@@ -2,7 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{Bytes, H160, H256, U256};
+use crate::rpc::types::Bytes;
+use cfx_types::{H160, H256, U256};
 use primitives::log_entry::{LocalizedLogEntry, LogEntry};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
@@ -76,7 +77,8 @@ impl From<LogEntry> for Log {
 
 #[cfg(test)]
 mod tests {
-    use crate::rpc::types::{Log, H160, H256, U256};
+    use crate::rpc::types::Log;
+    use cfx_types::{H160, H256, U256};
     use serde_json;
     use std::str::FromStr;
 

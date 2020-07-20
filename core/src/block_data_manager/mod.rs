@@ -225,6 +225,10 @@ pub struct BlockDataManager {
     tx_data_manager: TransactionDataManager,
     pub db_manager: DBManager,
 
+    // TODO Add MallocSizeOf.
+    #[ignore_malloc_size_of = "Add later"]
+    pub pow: Arc<PowComputer>,
+
     /// This is the original genesis block.
     pub true_genesis: Arc<Block>,
     pub storage_manager: Arc<StorageManager>,
@@ -275,10 +279,11 @@ impl BlockDataManager {
             worker_pool,
         );
         let db_manager = match config.db_type {
-            DbType::Rocksdb => DBManager::new_from_rocksdb(db, pow),
-            DbType::Sqlite => {
-                DBManager::new_from_sqlite(Path::new("./sqlite_db"), pow)
-            }
+            DbType::Rocksdb => DBManager::new_from_rocksdb(db, pow.clone()),
+            DbType::Sqlite => DBManager::new_from_sqlite(
+                Path::new("./sqlite_db"),
+                pow.clone(),
+            ),
         };
 
         let data_man = Self {
@@ -306,6 +311,7 @@ impl BlockDataManager {
             cur_consensus_era_stable_hash: RwLock::new(true_genesis.hash()),
             tx_data_manager,
             db_manager,
+            pow,
             state_availability_boundary: RwLock::new(
                 StateAvailabilityBoundary::new(true_genesis.hash(), 0),
             ),
@@ -336,6 +342,17 @@ impl BlockDataManager {
                 data_man.true_genesis.clone(),
                 true, /* persistent */
             );
+            for (index, tx) in
+                data_man.true_genesis.transactions.iter().enumerate()
+            {
+                data_man.insert_transaction_index(
+                    &tx.hash,
+                    &TransactionIndex {
+                        block_hash: cur_era_genesis_hash,
+                        index,
+                    },
+                );
+            }
             // Initialize ExecutionContext for true genesis
             data_man.insert_epoch_execution_context(
                 cur_era_genesis_hash,
@@ -647,6 +664,11 @@ impl BlockDataManager {
     }
 
     pub fn block_epoch_number(&self, hash: &H256) -> Option<u64> {
+        if hash == &self.true_genesis.hash() {
+            // True genesis is not executed and does not have an execution
+            // result, so we need to process it specially.
+            return Some(0);
+        }
         self.block_execution_result_by_hash_from_db(&hash)
             .map(|execution_result| execution_result.0)
             .and_then(|pivot| self.block_header_by_hash(&pivot))
@@ -822,14 +844,13 @@ impl BlockDataManager {
         V: Clone,
         LoadF: Fn(&K) -> Option<V>,
     {
-        let upgradable_read_lock = in_mem.upgradable_read();
-        if let Some(value) = upgradable_read_lock.get(key) {
+        if let Some(value) = in_mem.read().get(key) {
             return Some(value.clone());
         }
         load_f(key).map(|value| {
             if let Some(cache_id) = maybe_cache_id {
-                RwLockUpgradableReadGuard::upgrade(upgradable_read_lock)
-                    .insert(key.clone(), value.clone());
+                let mut write = in_mem.write();
+                write.insert(key.clone(), value.clone());
                 self.cache_man.lock().note_used(cache_id);
             }
             value

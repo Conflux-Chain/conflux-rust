@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::H256;
+use cfx_types::{H256, U64};
 use cfxcore::state_exposer::ConsensusGraphStates as PrimitiveConsensusGraphStates;
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -10,7 +10,7 @@ use cfxcore::state_exposer::ConsensusGraphStates as PrimitiveConsensusGraphState
 pub struct ConsensusGraphBlockState {
     pub block_hash: H256,
     pub best_block_hash: H256,
-    pub block_status: u8,
+    pub block_status: U64,
     pub era_block_hash: H256,
     pub adaptive: bool,
 }
@@ -42,7 +42,7 @@ impl ConsensusGraphStates {
             block_state_vec.push(ConsensusGraphBlockState {
                 block_hash: block_state.block_hash.into(),
                 best_block_hash: block_state.best_block_hash.into(),
-                block_status: block_state.block_status as u8,
+                block_status: (block_state.block_status as u8).into(),
                 era_block_hash: block_state.era_block_hash.into(),
                 adaptive: block_state.adaptive,
             })

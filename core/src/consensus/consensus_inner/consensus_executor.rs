@@ -1152,15 +1152,14 @@ impl ConsensusExecutionHandler {
                 let mut gas_sponsor_paid = false;
                 let mut storage_sponsor_paid = false;
                 match r {
-                    ExecutionOutcome::NotExecutedOldNonce(expected, got) => {
+                    ExecutionOutcome::NotExecutedDrop(e) => {
                         tx_outcome_status =
                             TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING;
                         trace!(
-                            "tx not executed due to old nonce: \
-                             transaction={:?}, expected={:?}, got={:?}",
+                            "tx not executed, not to reconsider packing: \
+                             transaction={:?},err={:?}",
                             transaction,
-                            expected,
-                            got
+                            e
                         );
                         gas_fee = U256::zero();
                     }
@@ -1314,14 +1313,17 @@ impl ConsensusExecutionHandler {
                     debug_out.no_reward_blocks.push(block.hash());
                 }
             } else {
-                let mut reward = if block.block_header.pow_quality
-                    >= *epoch_difficulty
-                {
+                let pow_quality =
+                    VerificationConfig::get_or_compute_header_pow_quality(
+                        &self.data_man.pow,
+                        &block.block_header,
+                    );
+                let mut reward = if pow_quality >= *epoch_difficulty {
                     base_reward_per_block
                 } else {
                     debug!(
                         "Block {} pow_quality {} is less than epoch_difficulty {}!",
-                        block.hash(), block.block_header.pow_quality, epoch_difficulty
+                        block.hash(), pow_quality, epoch_difficulty
                     );
                     0.into()
                 };

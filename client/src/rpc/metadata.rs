@@ -15,12 +15,10 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Parity RPC requests Metadata.
-use std::sync::Arc;
-
+use super::types::Origin;
 use jsonrpc_core;
 use jsonrpc_pubsub::{PubSubMetadata, Session};
-
-use super::types::Origin;
+use std::sync::Arc;
 
 /// RPC methods metadata.
 #[derive(Clone, Default, Debug)]

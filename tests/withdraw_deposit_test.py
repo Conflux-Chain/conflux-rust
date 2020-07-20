@@ -3,7 +3,7 @@ from http.client import CannotSendRequest
 from eth_utils import decode_hex
 from conflux.rpc import RpcClient
 from conflux.transactions import CONTRACT_DEFAULT_GAS, charged_of_huge_gas
-from conflux.utils import encode_hex, priv_to_addr, parse_as_int
+from conflux.utils import encode_hex, priv_to_addr, parse_as_int, bytes_to_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework
@@ -21,7 +21,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
     
     def get_block_number(self, client, tx_hash):
         receipt = client.get_transaction_receipt(tx_hash)
-        epoch_number = receipt['epochNumber']
+        epoch_number = int(receipt['epochNumber'], 16)
         assert epoch_number is not None
         block_hash = receipt['blockHash']
         blocks = []

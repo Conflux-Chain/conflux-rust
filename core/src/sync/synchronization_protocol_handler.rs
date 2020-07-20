@@ -1649,7 +1649,7 @@ impl SynchronizationProtocolHandler {
         if let Some(block) = self
             .graph
             .data_man
-            .block_by_hash(hash, false /* update_cache */)
+            .block_by_hash(hash, true /* update_cache */)
         {
             debug!("Recovered block {:?} from db", hash);
             // Process blocks from db

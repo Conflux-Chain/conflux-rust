@@ -118,7 +118,7 @@ impl ConsensusGraphStatistics {
 
 #[derive(Default, DeriveMallocSizeOf)]
 pub struct BestInformation {
-    pub chain_id: u64,
+    pub chain_id: u32,
     pub best_block_hash: H256,
     pub best_epoch_number: u64,
     pub current_difficulty: U256,
@@ -126,7 +126,7 @@ pub struct BestInformation {
 }
 
 impl BestInformation {
-    pub fn best_chain_id(&self) -> u64 { self.chain_id }
+    pub fn best_chain_id(&self) -> u32 { self.chain_id }
 }
 
 /// ConsensusGraph is a layer on top of SynchronizationGraph. A SyncGraph
@@ -1346,7 +1346,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
             .get_confirmed_epoch_num(std::u64::MAX)
     }
 
-    fn best_chain_id(&self) -> u64 {
+    fn best_chain_id(&self) -> u32 {
         self.best_info.read_recursive().best_chain_id()
     }
 
@@ -1413,11 +1413,12 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn get_transaction_info_by_hash(
         &self, hash: &H256,
-    ) -> Option<(SignedTransaction, Receipt, TransactionIndex, U256)> {
+    ) -> Option<(SignedTransaction, TransactionIndex, Option<(Receipt, U256)>)>
+    {
         // We need to hold the inner lock to ensure that tx_index and receipts
         // are consistent
         let inner = self.inner.read();
-        if let Some((receipt, tx_index, prior_gas_used)) =
+        if let Some((tx_index, maybe_executed)) =
             inner.get_transaction_receipt_with_address(hash)
         {
             let block = self.data_man.block_by_hash(
@@ -1425,7 +1426,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
                 false, /* update_cache */
             )?;
             let transaction = (*block.transactions[tx_index.index]).clone();
-            Some((transaction, receipt, tx_index, prior_gas_used))
+            Some((transaction, tx_index, maybe_executed))
         } else {
             None
         }
