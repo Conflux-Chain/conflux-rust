@@ -6,11 +6,15 @@ use cfx_types::{Bloom, H256};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 use super::NodeType;
-use crate::{message::RequestId, storage::StateProof};
+use crate::{
+    message::RequestId,
+    storage::{StateProof, TrieProof},
+};
 
 use primitives::{
     BlockHeader as PrimitiveBlockHeader, BlockReceipts, ChainIdParams,
-    SignedTransaction, StateRoot as PrimitiveStateRoot,
+    Receipt as PrimitiveReceipt, SignedTransaction,
+    StateRoot as PrimitiveStateRoot,
 };
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
@@ -216,14 +220,28 @@ pub struct GetTxInfos {
     pub hashes: Vec<H256>,
 }
 
-#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+// TODO(thegaram): consider combining `receipt_proof` and
+// `maybe_prev_receipt_proof` into a single proof in later protocol versions.
+#[derive(Clone, Debug, RlpEncodable, RlpDecodable)]
 pub struct TxInfo {
     pub epoch: u64,
-    pub block_hash: H256,
-    pub index: usize,
-    pub epoch_receipts: Vec<BlockReceipts>,
-    pub block_txs: Vec<SignedTransaction>,
-    pub tx_hash: H256,
+
+    // tx-related fields
+    pub tx: SignedTransaction,
+    pub tx_index_in_block: usize,
+    pub num_txs_in_block: usize,
+    pub tx_proof: TrieProof,
+
+    // receipt-related fields
+    pub receipt: PrimitiveReceipt,
+    pub block_index_in_epoch: usize,
+    pub num_blocks_in_epoch: usize,
+    pub block_index_proof: TrieProof,
+    pub receipt_proof: TrieProof,
+
+    // prior_gas_used-related fields
+    pub maybe_prev_receipt: Option<PrimitiveReceipt>,
+    pub maybe_prev_receipt_proof: Option<TrieProof>,
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]

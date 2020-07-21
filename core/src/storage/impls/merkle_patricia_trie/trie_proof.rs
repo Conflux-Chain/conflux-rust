@@ -144,6 +144,26 @@ impl TrieProof {
         (proves, proof_node)
     }
 
+    /// Get the value under `key` starting from `root`.
+    pub fn get_value(
+        &self, key: &[u8], root: &MerkleHash,
+    ) -> (bool, Option<&[u8]>) {
+        let mut proof_node = None;
+        let proof_node_mut = &mut proof_node;
+
+        let proves = self.is_valid(key, root, |maybe_node| {
+            *proof_node_mut = maybe_node.clone();
+            true
+        });
+
+        drop(proof_node_mut);
+
+        (
+            proves,
+            proof_node.and_then(|node| node.value_as_slice().into_option()),
+        )
+    }
+
     #[cfg(test)]
     /// Verify that the trie `root` has a node with `hash` under `path`.
     /// Use `MERKLE_NULL_NODE` for exclusion proofs (i.e. `path` does not exist
@@ -176,9 +196,10 @@ impl TrieProof {
 
         loop {
             let node = match self.merkle_to_node_index.get(hash) {
-                Some(node_index) =>
-                // The node_index is guaranteed to exist so it's actually safe.
-                unsafe { self.nodes.get_unchecked(*node_index) }
+                Some(node_index) => self
+                    .nodes
+                    .get(*node_index)
+                    .expect("Proof node guaranteed to exist"),
                 None => {
                     // Missing node. The proof can be invalid or incomplete for
                     // the key.
@@ -247,9 +268,10 @@ impl TrieProof {
 
         loop {
             let node = match self.merkle_to_node_index.get(hash) {
-                Some(node_index) =>
-                // The node_index is guaranteed to exist so it's actually safe.
-                unsafe { self.nodes.get_unchecked(*node_index) }
+                Some(node_index) => self
+                    .nodes
+                    .get(*node_index)
+                    .expect("Proof node guaranteed to exist"),
                 None => {
                     // Missing node. The proof can be invalid or incomplete for
                     // the key.
