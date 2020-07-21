@@ -88,6 +88,7 @@ class StorageRootTest(ConfluxTestFramework):
         tx = self.rpc[FULLNODE0].new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key, storage_limit=20000)
         assert_equal(self.rpc[FULLNODE0].send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc[FULLNODE0].get_transaction_receipt(tx.hash_hex())
+        assert_equal(receipt["outcomeStatus"], "0x0")
         address = receipt["contractCreated"]
         assert_is_hex_string(address)
         return receipt, address
@@ -96,6 +97,7 @@ class StorageRootTest(ConfluxTestFramework):
         tx = self.rpc[FULLNODE0].new_contract_tx(receiver=contract, data_hex=data_hex, sender=sender, priv_key=priv_key)
         assert_equal(self.rpc[FULLNODE0].send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc[FULLNODE0].get_transaction_receipt(tx.hash_hex())
+        assert_equal(receipt["outcomeStatus"], "0x0")
         return receipt
 
 if __name__ == "__main__":

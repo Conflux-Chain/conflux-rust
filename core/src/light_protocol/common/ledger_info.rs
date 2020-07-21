@@ -180,7 +180,6 @@ impl LedgerInfo {
         &self, epoch: u64, address: &Address,
     ) -> Result<(Option<StorageRoot>, NodeMerkleProof), Error> {
         let state = self.state_of(epoch)?;
-
         Ok(StateDb::new(state).get_storage_root_with_proof(address)?)
     }
 

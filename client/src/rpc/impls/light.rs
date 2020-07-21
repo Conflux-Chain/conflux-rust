@@ -393,7 +393,6 @@ impl RpcImpl {
         Box::new(fut.boxed().compat())
     }
 
-    #[allow(unused_variables)]
     fn storage_root(
         &self, address: H160, epoch_num: Option<EpochNumber>,
     ) -> RpcBoxFuture<Option<RpcStorageRoot>> {
