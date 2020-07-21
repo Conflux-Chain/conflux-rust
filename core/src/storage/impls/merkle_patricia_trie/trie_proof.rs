@@ -50,21 +50,6 @@ impl TrieProofNode {
 impl TrieProof {
     pub const MAX_NODES: usize = 1000;
 
-    pub fn delete_root(&mut self) {
-        // remove from indices
-        let root_merkle = self.nodes[0].get_merkle();
-        self.merkle_to_node_index.remove(&root_merkle);
-
-        // remove from nodes
-        self.nodes.drain(0..1);
-
-        // adjust indices
-        for (_, val) in self.merkle_to_node_index.iter_mut() {
-            assert!(*val > 0);
-            *val -= 1;
-        }
-    }
-
     /// Makes sure that the proof nodes are valid and connected at the time of
     /// creation.
     pub fn new(nodes: Vec<TrieProofNode>) -> Result<Self> {

@@ -20,7 +20,7 @@ impl<Mpt, PathNode> MptCursor<Mpt, PathNode> {
 
     /// Never call this method after pop_root.
     pub fn current_node_mut(&mut self) -> &mut PathNode {
-        self.path_nodes.last_mut().unwrap()
+        self.path_nodes.last_mut().expect("Root exists in cursor")
     }
 }
 

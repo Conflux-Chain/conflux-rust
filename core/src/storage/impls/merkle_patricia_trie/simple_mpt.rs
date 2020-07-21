@@ -86,6 +86,9 @@ pub fn simple_mpt_proof(
 
     cursor.load_root().expect("load_root should succeed");
 
+    // see comment in `simple_mpt_merkle_root`
+    let remove_root = cursor.current_node_mut().get_children_count() == 1;
+
     cursor
         .open_path_for_key::<access_mode::Read>(access_key)
         .expect("open_path_for_key should succeed");
@@ -93,9 +96,9 @@ pub fn simple_mpt_proof(
     let mut proof = cursor.to_proof();
     cursor.finish().expect("finish should succeed");
 
-    // see comment in `simple_mpt_merkle_root`
-    if proof.get_proof_nodes()[0].get_children_count() == 1 {
-        proof.delete_root();
+    if remove_root {
+        proof = TrieProof::new(proof.get_proof_nodes()[1..].to_vec())
+            .expect("Proof with root removed is still connected");
     }
 
     proof
