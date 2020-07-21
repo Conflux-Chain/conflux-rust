@@ -1542,7 +1542,7 @@ impl ConsensusNewBlockHandler {
         for epoch_number in from..to {
             let arena_index = inner.get_pivot_block_arena_index(epoch_number);
             let epoch_hashes = inner.get_epoch_block_hashes(arena_index);
-            info!("!!!!!!!! sending epoch {}", epoch_number);
+            trace!("ConsensusNewBlockHandler sending epoch {}", epoch_number);
             self.epochs_sender.send((epoch_number, epoch_hashes));
         }
 
