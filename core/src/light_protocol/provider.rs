@@ -21,15 +21,16 @@ use crate::{
             BlockTxs as GetBlockTxsResponse, BlockTxsWithHash, BloomWithEpoch,
             Blooms as GetBloomsResponse, GetBlockHashesByEpoch,
             GetBlockHeaders, GetBlockTxs, GetBlooms, GetReceipts,
-            GetStateEntries, GetStateRoots, GetTxInfos, GetTxs, GetWitnessInfo,
-            NewBlockHashes, NodeType, Receipts as GetReceiptsResponse,
-            ReceiptsWithEpoch, SendRawTx,
+            GetStateEntries, GetStateRoots, GetStorageRoots, GetTxInfos,
+            GetTxs, GetWitnessInfo, NewBlockHashes, NodeType,
+            Receipts as GetReceiptsResponse, ReceiptsWithEpoch, SendRawTx,
             StateEntries as GetStateEntriesResponse, StateEntryWithKey,
             StateRootWithEpoch, StateRoots as GetStateRootsResponse,
             StatusPingDeprecatedV1, StatusPingV2, StatusPongDeprecatedV1,
-            StatusPongV2, TxInfo, TxInfos as GetTxInfosResponse,
-            Txs as GetTxsResponse, WitnessInfo as GetWitnessInfoResponse,
-            WitnessInfoWithHeight,
+            StatusPongV2, StorageRootKey, StorageRootProof, StorageRootWithKey,
+            StorageRoots as GetStorageRootsResponse, TxInfo,
+            TxInfos as GetTxInfosResponse, Txs as GetTxsResponse,
+            WitnessInfo as GetWitnessInfoResponse, WitnessInfoWithHeight,
         },
         Error, ErrorKind, LIGHT_PROTOCOL_ID,
         LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT, LIGHT_PROTOCOL_VERSION,
@@ -44,6 +45,7 @@ use crate::{
         MAX_EPOCHS_TO_SEND, MAX_HEADERS_TO_SEND, MAX_TXS_TO_SEND,
     },
     sync::{message::Throttled, SynchronizationGraph},
+    verification::{compute_epoch_receipt_proof, compute_transaction_proof},
     TransactionPool,
 };
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -176,6 +178,7 @@ impl Provider {
             msgid::GET_BLOOMS => self.on_get_blooms(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::GET_BLOCK_TXS => self.on_get_block_txs(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::GET_TX_INFOS => self.on_get_tx_infos(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::GET_STORAGE_ROOTS => self.on_get_storage_roots(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             _ => Err(ErrorKind::UnknownMessage.into()),
         }
     }
@@ -201,32 +204,23 @@ impl Provider {
 
     #[inline]
     fn tx_info_by_hash(&self, hash: H256) -> Option<TxInfo> {
-        let addr = match self.consensus.get_transaction_info_by_hash(&hash) {
-            Some(info) => info.1,
-            None => {
-                warn!("Unable to get tx info for {:?}", hash);
-                return None;
-            }
-        };
+        let (tx, tx_index, receipt) =
+            match self.consensus.get_transaction_info_by_hash(&hash) {
+                None => {
+                    warn!("Unable to get tx info for {:?}", hash);
+                    return None;
+                }
+                Some((_, _, None)) => {
+                    warn!("Unable to get receipt for {:?}", hash);
+                    return None;
+                }
+                Some((tx, tx_index, Some((receipt, _)))) => {
+                    assert_eq!(tx.hash(), hash); // sanity check
+                    (tx, tx_index, receipt)
+                }
+            };
 
-        let block_hash = addr.block_hash;
-        let index = addr.index;
-
-        let epoch = match self.consensus.get_block_epoch_number(&block_hash) {
-            Some(epoch) => epoch,
-            None => {
-                warn!("Unable to get epoch number for block {:?}", block_hash);
-                return None;
-            }
-        };
-
-        let epoch_receipts = match self.ledger.receipts_of(epoch) {
-            Ok(rs) => rs,
-            Err(e) => {
-                warn!("Unable to retrieve receipts for {}: {}", epoch, e);
-                return None;
-            }
-        };
+        let block_hash = tx_index.block_hash;
 
         let block = match self.ledger.block(block_hash) {
             Ok(b) => b,
@@ -236,20 +230,90 @@ impl Provider {
             }
         };
 
-        let block_txs = block
-            .transactions
-            .clone()
-            .into_iter()
-            .map(|arc_tx| (*arc_tx).clone())
-            .collect();
+        let tx_index_in_block = tx_index.index;
+        let num_txs_in_block = block.transactions.len();
+
+        let tx_proof =
+            compute_transaction_proof(&block.transactions, tx_index_in_block);
+
+        let epoch = match self.consensus.get_block_epoch_number(&block_hash) {
+            Some(epoch) => epoch,
+            None => {
+                warn!("Unable to get epoch number for block {:?}", block_hash);
+                return None;
+            }
+        };
+
+        let epoch_hashes = match self.ledger.block_hashes_in(epoch) {
+            Ok(hs) => hs,
+            Err(e) => {
+                warn!("Unable to epoch hashes for {}: {}", epoch, e);
+                return None;
+            }
+        };
+
+        let num_blocks_in_epoch = epoch_hashes.len();
+
+        let block_index_in_epoch =
+            match epoch_hashes.iter().position(|h| *h == block_hash) {
+                Some(id) => id,
+                None => {
+                    warn!("Unable to find {:?} in {}", block_hash, epoch);
+                    return None;
+                }
+            };
+
+        let epoch_receipts = match self.ledger.receipts_of(epoch) {
+            Ok(rs) => rs.iter().cloned().map(Arc::new).collect::<Vec<_>>(),
+            Err(e) => {
+                warn!("Unable to retrieve receipts for {}: {}", epoch, e);
+                return None;
+            }
+        };
+
+        let epoch_receipt_proof = compute_epoch_receipt_proof(
+            &epoch_receipts,
+            block_index_in_epoch,
+            tx_index_in_block,
+        );
+
+        let (maybe_prev_receipt, maybe_prev_receipt_proof) =
+            match tx_index_in_block {
+                0 => (None, None),
+                _ => {
+                    let receipt = epoch_receipts[block_index_in_epoch].receipts
+                        [tx_index_in_block - 1]
+                        .clone();
+
+                    let proof = compute_epoch_receipt_proof(
+                        &epoch_receipts,
+                        block_index_in_epoch,
+                        tx_index_in_block - 1,
+                    );
+
+                    (Some(receipt), Some(proof.block_receipt_proof))
+                }
+            };
 
         Some(TxInfo {
-            tx_hash: hash,
             epoch,
-            block_hash,
-            index,
-            epoch_receipts,
-            block_txs,
+
+            // tx-related fields
+            tx,
+            tx_index_in_block,
+            num_txs_in_block,
+            tx_proof,
+
+            // receipt-related fields
+            receipt,
+            block_index_in_epoch,
+            num_blocks_in_epoch,
+            block_index_proof: epoch_receipt_proof.block_index_proof,
+            receipt_proof: epoch_receipt_proof.block_receipt_proof,
+
+            // prior_gas_used-related fields
+            maybe_prev_receipt,
+            maybe_prev_receipt_proof,
         })
     }
 
@@ -640,6 +704,58 @@ impl Provider {
 
         let msg: Box<dyn Message> =
             Box::new(GetTxInfosResponse { request_id, infos });
+
+        msg.send(io, peer)?;
+        Ok(())
+    }
+
+    fn storage_root(
+        &self, key: StorageRootKey,
+    ) -> Result<StorageRootWithKey, Error> {
+        let snapshot_epoch_count = self.ledger.snapshot_epoch_count() as u64;
+
+        // state root in current snapshot period
+        let state_root = self.ledger.state_root_of(key.epoch)?.state_root;
+
+        // state root in previous snapshot period
+        let prev_snapshot_state_root = match key.epoch {
+            e if e <= snapshot_epoch_count => None,
+            _ => Some(
+                self.ledger
+                    .state_root_of(key.epoch - snapshot_epoch_count)?
+                    .state_root,
+            ),
+        };
+
+        // storage root and merkle proof
+        let (root, merkle_proof) =
+            self.ledger.storage_root_of(key.epoch, &key.address)?;
+
+        let proof = StorageRootProof {
+            state_root,
+            prev_snapshot_state_root,
+            merkle_proof,
+        };
+
+        Ok(StorageRootWithKey { key, root, proof })
+    }
+
+    fn on_get_storage_roots(
+        &self, io: &dyn NetworkContext, peer: &NodeId, req: GetStorageRoots,
+    ) -> Result<(), Error> {
+        debug!("on_get_storage_roots req={:?}", req);
+        self.throttle(peer, &req)?;
+        let request_id = req.request_id;
+
+        let roots = req
+            .keys
+            .into_iter()
+            .map(|key| self.storage_root(key))
+            .filter_map(Result::ok)
+            .collect();
+
+        let msg: Box<dyn Message> =
+            Box::new(GetStorageRootsResponse { request_id, roots });
 
         msg.send(io, peer)?;
         Ok(())

@@ -5,19 +5,23 @@
 use crate::{
     message::{Message, MsgId},
     network::{self, NetworkContext, UpdateNodeOperation},
+    statedb,
     sync::message::Throttled,
 };
+use error_chain::ChainedError;
 use network::node_table::NodeId;
-use primitives::ChainIdParams;
+use primitives::{filter::FilterError, ChainIdParams};
 use rlp::DecoderError;
 
 error_chain! {
     links {
         Network(network::Error, network::ErrorKind);
+        StateDb(statedb::Error, statedb::ErrorKind);
     }
 
     foreign_links {
         Decoder(DecoderError);
+        Filter(FilterError);
     }
 
     errors {
@@ -26,14 +30,14 @@ error_chain! {
             display("packet already throttled: {:?}", msg_name),
         }
 
-        GenesisMismatch {
-            description("Genesis mismatch"),
-            display("Genesis mismatch"),
-        }
-
         ChainIdMismatch{ours: ChainIdParams, theirs: ChainIdParams} {
             description("ChainId mismatch"),
             display("ChainId mismatch, ours {:?}, theirs {:?}.", ours, theirs),
+        }
+
+        GenesisMismatch {
+            description("Genesis mismatch"),
+            display("Genesis mismatch"),
         }
 
         InternalError {
@@ -71,6 +75,11 @@ error_chain! {
             display("Invalid state root"),
         }
 
+        InvalidStorageRootProof(reason: &'static str) {
+            description("Invalid storage root proof"),
+            display("Invalid storage root proof: {}", reason),
+        }
+
         InvalidTxInfo {
             description("Invalid tx info"),
             display("Invalid tx info"),
@@ -86,19 +95,14 @@ error_chain! {
             display("Invalid tx signature"),
         }
 
-        NoResponse {
-            description("NoResponse"),
-            display("NoResponse"),
-        }
-
-        PivotHashMismatch {
-            description("Pivot hash mismatch"),
-            display("Pivot hash mismatch"),
-        }
-
         SendStatusFailed {
             description("Send status failed"),
             display("Send status failed"),
+        }
+
+        Timeout(details: String) {
+            description("Operation timeout"),
+            display("Operation timeout: {:?}", details),
         }
 
         Throttled(msg_name: &'static str, response: Throttled) {
@@ -140,18 +144,15 @@ error_chain! {
             description("Unknown peer"),
             display("Unknown peer"),
         }
-
-        ValidationFailed {
-            description("Validation failed"),
-            display("Validation failed"),
-        }
     }
 }
 
 pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
     warn!(
         "Error while handling message, peer={}, msg_id={:?}, error={}",
-        peer, msg_id, e
+        peer,
+        msg_id,
+        e.display_chain().to_string(),
     );
 
     let mut disconnect = true;
@@ -161,20 +162,18 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
     // NOTE: do not use wildcard; this way, the compiler
     // will help covering all the cases.
     match e.0 {
-        ErrorKind::NoResponse
+        ErrorKind::Filter(_)
         | ErrorKind::InternalError
 
         // NOTE: we should be tolerant of non-critical errors,
         // e.g. do not disconnect on requesting non-existing epoch
         | ErrorKind::Msg(_)
 
-        // NOTE: this can happen in normal scenarios
-        // where the pivot chain has not converged
-        | ErrorKind::PivotHashMismatch
-
         // NOTE: in order to let other protocols run,
         // we should not disconnect on protocol failure
         | ErrorKind::SendStatusFailed
+
+        | ErrorKind::Timeout(_)
 
         // NOTE: if we do not have a confirmed (non-blamed) block
         // with the info needed to produce a state root proof, we
@@ -184,6 +183,7 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
         // NOTE: to help with backward-compatibility, we
         // should not disconnect on `UnknownMessage`
         | ErrorKind::UnknownMessage => disconnect = false,
+
 
         ErrorKind::GenesisMismatch
         | ErrorKind::ChainIdMismatch{..}
@@ -201,10 +201,10 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
         | ErrorKind::InvalidReceipts
         | ErrorKind::InvalidStateProof
         | ErrorKind::InvalidStateRoot
+        | ErrorKind::InvalidStorageRootProof(_)
         | ErrorKind::InvalidTxInfo
         | ErrorKind::InvalidTxRoot
         | ErrorKind::InvalidTxSignature
-        | ErrorKind::ValidationFailed
         | ErrorKind::AlreadyThrottled(_)
         | ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
 
@@ -253,6 +253,8 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
                 op = Some(UpdateNodeOperation::Failure)
             }
         },
+
+        ErrorKind::StateDb(_) => disconnect = false,
 
         ErrorKind::__Nonexhaustive {} => {
             op = Some(UpdateNodeOperation::Failure)

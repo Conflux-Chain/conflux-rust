@@ -223,6 +223,13 @@ impl VanillaTrieNode<MerkleHash> {
             None
         }
     }
+
+    pub fn get_merkle_hash_wo_compressed_path(&self) -> MerkleHash {
+        compute_node_merkle(
+            self.get_children_merkles(),
+            self.value_as_slice().into_option(),
+        )
+    }
 }
 
 impl<NodeRefT: 'static + NodeRefTrait> Encodable for VanillaTrieNode<NodeRefT>
@@ -268,7 +275,7 @@ use super::{
     super::super::utils::WrappedCreateFrom,
     children_table::*,
     compressed_path::*,
-    merkle::{compute_merkle, MaybeMerkleTableRef},
+    merkle::{compute_merkle, compute_node_merkle, MaybeMerkleTableRef},
     mpt_value::MptValue,
     walk::*,
 };

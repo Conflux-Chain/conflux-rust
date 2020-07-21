@@ -10,6 +10,7 @@
 // TODO: at intermediate_epoch_id with delta_proof.
 #[derive(Clone, Debug, Default, PartialEq, RlpEncodable, RlpDecodable)]
 pub struct StateProof {
+    // TODO(thegaram): get rid of maybe_intermediate_padding
     pub maybe_intermediate_padding: Option<DeltaMptKeyPadding>,
     pub delta_proof: Option<TrieProof>,
     pub intermediate_proof: Option<TrieProof>,
