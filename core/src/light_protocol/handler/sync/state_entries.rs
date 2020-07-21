@@ -29,6 +29,7 @@ use super::{
     state_roots::StateRoots,
 };
 use network::node_table::NodeId;
+use primitives::StateRoot;
 
 pub type StateEntry = Option<Vec<u8>>;
 
@@ -107,12 +108,20 @@ impl StateEntries {
         entries: impl Iterator<Item = StateEntryWithKey>,
     ) -> Result<(), Error>
     {
-        for StateEntryWithKey { key, entry, proof } in entries {
+        for StateEntryWithKey {
+            key,
+            entry,
+            proof,
+            state_root,
+        } in entries
+        {
             debug!("Validating state entry {:?} with key {:?}", entry, key);
 
             match self.sync_manager.check_if_requested(peer, id, &key)? {
                 None => continue,
-                Some(_) => self.validate_and_store(key, entry, proof)?,
+                Some(_) => {
+                    self.validate_and_store(key, entry, proof, state_root)?
+                }
             };
         }
 
@@ -122,9 +131,13 @@ impl StateEntries {
     #[inline]
     pub fn validate_and_store(
         &self, key: StateKey, entry: Option<Vec<u8>>, proof: StateProof,
-    ) -> Result<(), Error> {
+        state_root: StateRoot,
+    ) -> Result<(), Error>
+    {
         // validate state entry
-        self.validate_state_entry(key.epoch, &key.key, &entry, proof)?;
+        self.validate_state_entry(
+            key.epoch, &key.key, &entry, proof, state_root,
+        )?;
 
         // store state entry by state key
         self.verified
@@ -181,23 +194,14 @@ impl StateEntries {
     #[inline]
     fn validate_state_entry(
         &self, epoch: u64, key: &Vec<u8>, value: &Option<Vec<u8>>,
-        proof: StateProof,
+        proof: StateProof, state_root: StateRoot,
     ) -> Result<(), Error>
     {
-        // retrieve local state root
-        let root = match self.state_roots.state_root_of(epoch) {
-            Some(root) => root.clone(),
-            None => {
-                warn!(
-                    "State root not found, epoch={}, key={:?}, value={:?}, proof={:?}",
-                    epoch, key, value, proof
-                );
-                return Err(ErrorKind::InternalError.into());
-            }
-        };
+        // validate state root
+        self.state_roots.validate_state_root(epoch, &state_root)?;
 
-        // validate proof
-        if !proof.is_valid_kv(key, value.as_ref().map(|v| &**v), root) {
+        // validate state entry
+        if !proof.is_valid_kv(key, value.as_ref().map(|v| &**v), state_root) {
             warn!("Invalid state proof for {:?} under key {:?}", value, key);
             return Err(ErrorKind::InvalidStateProof.into());
         }

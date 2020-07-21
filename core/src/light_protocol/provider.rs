@@ -448,13 +448,21 @@ impl Provider {
         let entries = req
             .keys
             .into_iter()
-            .map(|key| {
-                self.ledger
-                    .state_entry_at(key.epoch, &key.key)
-                    .map(|(entry, proof)| (key, entry, proof))
+            .map::<Result<_, Error>, _>(|key| {
+                let state_root =
+                    self.ledger.state_root_of(key.epoch)?.state_root;
+
+                let (entry, proof) =
+                    self.ledger.state_entry_at(key.epoch, &key.key)?;
+
+                Ok(StateEntryWithKey {
+                    key,
+                    entry,
+                    proof,
+                    state_root,
+                })
             })
             .filter_map(Result::ok)
-            .map(|(key, entry, proof)| StateEntryWithKey { key, entry, proof })
             .collect();
 
         let msg: Box<dyn Message> = Box::new(GetStateEntriesResponse {
