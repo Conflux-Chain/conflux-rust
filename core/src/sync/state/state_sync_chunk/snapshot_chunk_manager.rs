@@ -12,6 +12,7 @@ use crate::{
         synchronization_state::PeerFilter,
     },
 };
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::node_table::NodeId;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
@@ -209,11 +210,13 @@ impl Debug for SnapshotChunkManager {
     }
 }
 
+#[derive(DeriveMallocSizeOf)]
 struct DownloadingChunkStatus {
     peer: NodeId,
     start_time: Instant,
 }
 
+#[derive(DeriveMallocSizeOf)]
 pub struct SnapshotChunkConfig {
     pub max_downloading_chunks: usize,
     pub chunk_request_timeout: Duration,
