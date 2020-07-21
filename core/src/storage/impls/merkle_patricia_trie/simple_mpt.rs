@@ -146,21 +146,16 @@ mod tests {
         assert_eq!(into_simple_mpt_key(0x01, 65536), vec![0x01, 0x00, 0x00]);
     }
 
-    #[test]
-    fn test_simple_proof() {
-        let num_items: usize = 100; // max 127
-
+    fn check_proofs(num_items: usize, proof_size: Vec<usize>) {
         // create k-v pairs:
-        // (0x00, 0x00 + num_items)
-        // (0x01, 0x01 + num_items)
-        // (0x02, 0x02 + num_items)
+        // (0x00, 0x00)
+        // (0x01, 0x01)
         // ...
 
-        let value_from_key = |key| key as u8 + num_items as u8;
+        let value_from_key = |key| into_simple_mpt_key(key, num_items);
 
         let values: Vec<Box<[u8]>> = (0..num_items)
-            .map(|k| value_from_key(k))
-            .map(|v| vec![v].into_boxed_slice())
+            .map(|k| value_from_key(k).into_boxed_slice())
             .collect();
 
         let mut mpt = make_simple_mpt(values);
@@ -170,17 +165,19 @@ mod tests {
             let key = into_simple_mpt_key(k, num_items);
             let proof = simple_mpt_proof(&mut mpt, &key);
 
+            assert!(proof_size.contains(&proof.get_proof_nodes().len()));
+
             // proof should be able to verify correct k-v
             assert!(proof.is_valid_kv(
                 &into_simple_mpt_key(k, num_items),
-                Some(&[value_from_key(k)]),
+                Some(&value_from_key(k)[..]),
                 &root
             ));
 
             // proof with incorrect value should fail
             assert!(!proof.is_valid_kv(
                 &into_simple_mpt_key(k, num_items),
-                Some(&[value_from_key(k) - 1]),
+                Some(&value_from_key(k + 1)[..]),
                 &root
             ));
 
@@ -192,10 +189,69 @@ mod tests {
 
                 assert!(!proof.is_valid_kv(
                     &into_simple_mpt_key(other, num_items),
-                    Some(&[value_from_key(other)]),
+                    Some(&value_from_key(other)[..]),
                     &root
                 ));
             }
         }
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_simple_mpt_proof() {
+        // number of items: 0x01
+        // keys: 0x00
+        // proof size: 1 (root)
+        check_proofs(0x01, vec![1]);
+
+        // number of items: 0x02
+        // keys: 0x00, 0x01
+        //          ^     ^
+        // proof size: 2 (root + 2nd nibble)
+        check_proofs(0x02, vec![2]);
+
+        // number of items: 0x10
+        // keys: 0x00, 0x01, ..., 0x0f
+        //          ^     ^          ^
+        // proof size: 2 (root + 2nd nibble)
+        check_proofs(0x10, vec![2]);
+
+        // number of items: 0x11
+        // keys: 0x00, 0x01, ..., 0x0f, 0x10
+        // proof size:
+        //   0x00, 0x01, ..., 0x0f -> 3 (root + 1st nibble + 2nd nibble)
+        //     ^^    ^^         ^^
+        //   0x10                  -> 2 (root + 1st nibble)
+        //     ^
+        check_proofs(0x11, vec![2, 3]);
+
+        // number of items: 0x12
+        // keys: 0x00, 0x01, ..., 0x0f, 0x10, 0x11
+        //         ^^    ^^         ^^    ^^    ^^
+        // proof size: 3 (root + 1st nibble + 2nd nibble)
+        check_proofs(0x12, vec![3]);
+
+        // number of items: 0xff
+        // keys: 0x00, 0x01, ..., 0xfe
+        //         ^^    ^^         ^^
+        // proof size: 3 (root + 1st nibble + 2nd nibble)
+        check_proofs(0xff, vec![3]);
+
+        // number of items: 0x0100
+        // keys: [0x00, 0x00], [0x01, 0x00], [0x02, 0x00], ..., [0xff, 0x00] (little-endian)
+        //          ^^            ^^            ^^                 ^^
+        // FIXME(thegaram): this is a bug, see #1693
+        assert_eq!(into_simple_mpt_key(0x00, 0x0100), vec![0x00, 0x00]);
+        // proof size: 3 (root + 1st nibble + 2nd nibble)
+        check_proofs(0x0100, vec![3]);
+
+        // number of items: 0x101
+        // keys: [0x00, 0x00], [0x01, 0x00], [0x02, 0x00], ..., [0x00, 0x01] (little-endian)
+        // proof size:
+        //   [0x01, 0x00], ..., [0xff, 0x00] -> 3 (root + 1st nibble + 2nd nibble)
+        //      ^^                 ^^
+        //   [0x00, 0x00], [0x00, 0x10]      -> 4 (root + 1st nibble [=0] + 2nd nibble [=0] + 3rd nibble)
+        //      ^^    ^       ^^    ^
+        check_proofs(0x0101, vec![3, 4]);
     }
 }
