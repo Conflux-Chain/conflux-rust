@@ -177,6 +177,18 @@ impl TrieProof {
         })
     }
 
+    /// Verify that the trie `root` has a node with `hash` under `key`.
+    /// Use `MERKLE_NULL_NODE` for exclusion proofs (i.e. `key` does not exist
+    /// or leads to another hash).
+    pub fn is_valid_node_merkle(
+        &self, key: &[u8], hash: &MerkleHash, root: &MerkleHash,
+    ) -> bool {
+        self.is_valid(key, root, |node| match node {
+            None => hash.eq(&MERKLE_NULL_NODE),
+            Some(node) => hash == &node.get_merkle_hash_wo_compressed_path(),
+        })
+    }
+
     fn is_valid<'this: 'pred_param, 'pred_param>(
         &'this self, path: &[u8], root: &MerkleHash,
         pred: impl FnOnce(Option<&'pred_param TrieProofNode>) -> bool,

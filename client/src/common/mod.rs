@@ -618,7 +618,12 @@ pub mod delegate_convert {
                 }
                 RpcErrorKind::Msg(_)
                 | RpcErrorKind::Decoder(_)
+
+                // TODO(thegaram): consider returning InvalidParams instead
                 | RpcErrorKind::FilterError(_)
+
+                // TODO(thegaram): make error conversion more fine-grained here
+                | RpcErrorKind::LightProtocol(_)
                 | RpcErrorKind::StateDb(_)
                 | RpcErrorKind::Storage(_) => JsonRpcError {
                     code: jsonrpc_core::ErrorCode::ServerError(EXCEPTION_ERROR),

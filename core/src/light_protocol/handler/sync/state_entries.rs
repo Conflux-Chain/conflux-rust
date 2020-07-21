@@ -32,18 +32,6 @@ use network::node_table::NodeId;
 
 pub type StateEntry = Option<Vec<u8>>;
 
-impl Ord for StateKey {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.epoch.cmp(&other.epoch).then(self.key.cmp(&other.key))
-    }
-}
-
-impl PartialOrd for StateKey {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
 #[derive(Debug)]
 struct Statistics {
     cached: usize,

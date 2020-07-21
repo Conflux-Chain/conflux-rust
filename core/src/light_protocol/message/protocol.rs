@@ -2,19 +2,18 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{Bloom, H256};
+use cfx_types::{Bloom, H160, H256};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 use super::NodeType;
 use crate::{
     message::RequestId,
-    storage::{StateProof, TrieProof},
+    storage::{NodeMerkleProof, StateProof, TrieProof},
 };
 
 use primitives::{
-    BlockHeader as PrimitiveBlockHeader, BlockReceipts, ChainIdParams,
-    Receipt as PrimitiveReceipt, SignedTransaction,
-    StateRoot as PrimitiveStateRoot,
+    BlockHeader, BlockReceipts, ChainIdParams, Receipt, SignedTransaction,
+    StateRoot, StorageRoot,
 };
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
@@ -70,7 +69,7 @@ pub struct GetBlockHeaders {
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct BlockHeaders {
     pub request_id: RequestId,
-    pub headers: Vec<PrimitiveBlockHeader>,
+    pub headers: Vec<BlockHeader>,
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
@@ -122,7 +121,7 @@ pub struct GetWitnessInfo {
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct WitnessInfoWithHeight {
     pub height: u64,
-    pub state_roots: Vec<H256>,
+    pub state_root_hashes: Vec<H256>,
     pub receipt_hashes: Vec<H256>,
     pub bloom_hashes: Vec<H256>,
 }
@@ -178,7 +177,10 @@ pub struct GetStateRoots {
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct StateRootWithEpoch {
     pub epoch: u64,
-    pub state_root: PrimitiveStateRoot,
+
+    // state root is validated against witness info retrieved previously;
+    // no additional proof needed
+    pub state_root: StateRoot,
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
@@ -188,7 +190,16 @@ pub struct StateRoots {
 }
 
 #[derive(
-    Clone, Debug, Default, PartialEq, Eq, Hash, RlpEncodable, RlpDecodable,
+    Clone,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    RlpEncodable,
+    RlpDecodable,
 )]
 pub struct StateKey {
     pub epoch: u64,
@@ -233,14 +244,14 @@ pub struct TxInfo {
     pub tx_proof: TrieProof,
 
     // receipt-related fields
-    pub receipt: PrimitiveReceipt,
+    pub receipt: Receipt,
     pub block_index_in_epoch: usize,
     pub num_blocks_in_epoch: usize,
     pub block_index_proof: TrieProof,
     pub receipt_proof: TrieProof,
 
     // prior_gas_used-related fields
-    pub maybe_prev_receipt: Option<PrimitiveReceipt>,
+    pub maybe_prev_receipt: Option<Receipt>,
     pub maybe_prev_receipt_proof: Option<TrieProof>,
 }
 
@@ -248,4 +259,50 @@ pub struct TxInfo {
 pub struct TxInfos {
     pub request_id: RequestId,
     pub infos: Vec<TxInfo>,
+}
+
+#[derive(
+    Clone,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    RlpEncodable,
+    RlpDecodable,
+)]
+pub struct StorageRootKey {
+    pub epoch: u64,
+    pub address: H160,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct GetStorageRoots {
+    pub request_id: RequestId,
+    pub keys: Vec<StorageRootKey>,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct StorageRootProof {
+    pub merkle_proof: NodeMerkleProof,
+
+    // state root is validated against witness info retrieved previously;
+    // no additional proof needed
+    pub state_root: StateRoot,
+    pub prev_snapshot_state_root: Option<StateRoot>,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct StorageRootWithKey {
+    pub key: StorageRootKey,
+    pub root: Option<StorageRoot>,
+    pub proof: StorageRootProof,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct StorageRoots {
+    pub request_id: RequestId,
+    pub roots: Vec<StorageRootWithKey>,
 }

@@ -11,6 +11,7 @@ error_chain! {
         Storage(StorageError);
         StateDb(StateDbError);
         Decoder(DecoderError);
+        LightProtocol(LightProtocolError);
     }
 
     errors {
@@ -62,7 +63,10 @@ pub fn account_result_to_rpc_result<T>(
     }
 }
 
-use crate::{statedb::Error as StateDbError, storage::Error as StorageError};
+use crate::{
+    light_protocol::Error as LightProtocolError,
+    statedb::Error as StateDbError, storage::Error as StorageError,
+};
 use jsonrpc_core::Error as JsonRpcError;
 use primitives::{account::AccountError, filter::FilterError};
 use rlp::DecoderError;
