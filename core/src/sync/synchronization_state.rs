@@ -11,6 +11,7 @@ use crate::{
         random, Error, ErrorKind,
     },
 };
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{
     node_table::NodeId, service::ProtocolVersion, Error as NetworkError,
     ErrorKind as NetworkErrorKind,
@@ -24,6 +25,7 @@ use std::{
 };
 use throttling::token_bucket::{ThrottledManager, TokenBucketManager};
 
+#[derive(DeriveMallocSizeOf)]
 pub struct SynchronizationPeerState {
     pub node_id: NodeId,
     // This field is only used for consortium setup.
@@ -59,6 +61,7 @@ pub struct SynchronizationPeerState {
 pub type SynchronizationPeers =
     HashMap<NodeId, Arc<RwLock<SynchronizationPeerState>>>;
 
+#[derive(DeriveMallocSizeOf)]
 pub struct SynchronizationState {
     is_consortium: bool,
     is_full_node: bool,

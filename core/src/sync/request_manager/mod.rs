@@ -21,6 +21,8 @@ use crate::{
     },
 };
 use cfx_types::H256;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Meter, MeterTimer,
 };
@@ -93,6 +95,12 @@ lazy_static! {
 #[derive(Debug)]
 struct WaitingRequest(Box<dyn Request>, Duration); // (request, delay)
 
+impl MallocSizeOf for WaitingRequest {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.0.size_of(ops) + self.1.size_of(ops)
+    }
+}
+
 /// When a header or block is requested by the `RequestManager`, it is ensured
 /// that if it's not fully received, its hash exists
 /// in `in_flight` after every function call.
@@ -102,6 +110,7 @@ struct WaitingRequest(Box<dyn Request>, Duration); // (request, delay)
 ///
 /// No lock is held when we call another function in this struct, and all locks
 /// are acquired in the same order, so there should exist no deadlocks.
+#[derive(DeriveMallocSizeOf)]
 pub struct RequestManager {
     // used to avoid send duplicated requests.
     inflight_keys: KeyContainer,
@@ -123,6 +132,8 @@ pub struct RequestManager {
     request_handler: Arc<RequestHandler>,
 
     syn: Arc<SynchronizationState>,
+
+    #[ignore_malloc_size_of = "channels are not handled in MallocSizeOf"]
     recover_public_queue: Arc<AsyncTaskQueue<RecoverPublicTask>>,
 }
 
@@ -1011,7 +1022,7 @@ pub fn try_get_block_hashes(request: &Box<dyn Request>) -> Option<&Vec<H256>> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, DeriveMallocSizeOf)]
 struct TimedWaitingRequest {
     time_to_send: Instant,
     request: WaitingRequest,

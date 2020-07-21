@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-#[derive(Clone, Default, Derivative)]
+#[derive(Clone, Default, Derivative, DeriveMallocSizeOf)]
 #[derivative(Debug)]
 pub struct SnapshotInfo {
     // FIXME: update serve_one_step_sync at maintenance.
@@ -141,6 +141,7 @@ use crate::storage::{
     },
 };
 use derivative::Derivative;
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{path::Path, sync::Arc};
