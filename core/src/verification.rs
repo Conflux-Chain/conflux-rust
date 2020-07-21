@@ -172,10 +172,19 @@ pub fn is_valid_receipt_inclusion_proof(
         };
 
     // parse block receipts root as H256
-    let block_receipts_root: H256 =
-        TryInto::<[u8; 32]>::try_into(block_receipts_root_bytes)
-            .expect("Contents of valid block index MPT should be correct")
-            .into();
+    let block_receipts_root: H256 = match TryInto::<[u8; 32]>::try_into(
+        block_receipts_root_bytes,
+    ) {
+        Ok(hash) => hash.into(),
+        Err(e) => {
+            // this should not happen
+            error!(
+                "Invalid content found in valid MPT: key = {:?}, value = {:?}; error = {:?}",
+                key, block_receipts_root_bytes, e,
+            );
+            return false;
+        }
+    };
 
     // validate receipt in the block receipts trie
     let key = &into_simple_mpt_key(tx_index_in_block, num_txs_in_block);
