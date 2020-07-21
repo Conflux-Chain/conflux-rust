@@ -377,13 +377,15 @@ pub fn initialize_not_light_node_modules(
                 let consensus_graph_size = consensus.size_of(&mut ops) / mb;
                 let sync_graph_size =
                     sync.get_synchronization_graph().size_of(&mut ops) / mb;
+                let sync_service_size = sync.size_of(&mut ops) / mb;
                 info!(
                     "Malloc Size(MB): secret_store={} data_manager_db_cache_size={} \
-                    storage_manager_size={} data_man={} txpool={} consensus={} sync={}, \
+                    storage_manager_size={} data_man={} txpool={} consensus={} sync_graph={}\
+                    sync_service={}, \
                     time elapsed={:?}",
                     secret_store_size,data_manager_db_cache_size,storage_manager_size,
                     data_man_size, tx_pool_size, consensus_graph_size, sync_graph_size,
-                    start.elapsed(),
+                    sync_service_size, start.elapsed(),
                 );
                 thread::sleep(Duration::from_secs(
                     print_memory_usage_period_s,

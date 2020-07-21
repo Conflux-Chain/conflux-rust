@@ -4,10 +4,11 @@
 
 use crate::{message::MsgId, sync::message::msgid};
 use cfx_types::H256;
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::collections::HashSet;
 
-#[derive(Hash, Eq, PartialEq, Debug)]
+#[derive(Hash, Eq, PartialEq, Debug, DeriveMallocSizeOf)]
 pub enum Key {
     Hash(H256),
     Num(u64),
@@ -16,6 +17,7 @@ pub enum Key {
 
 /// Common key container for all inflight requests. The supported message types
 /// are all registered in the Default constructor.
+#[derive(DeriveMallocSizeOf)]
 pub struct KeyContainer {
     keys: Vec<Option<RwLock<HashSet<Key>>>>,
 }
