@@ -102,6 +102,7 @@ pub use self::{
         merkle_patricia_trie::{
             simple_mpt::*, KVInserter, MptKeyValue, TrieProof,
         },
+        node_merkle_proof::NodeMerkleProof,
         snapshot_sync::{FullSyncVerifier, MptSlicer},
         state_proof::StateProof,
         storage_db::{

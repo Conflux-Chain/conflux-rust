@@ -186,7 +186,7 @@ impl StateRoots {
     }
 
     #[inline]
-    fn validate_state_root(
+    pub fn validate_state_root(
         &self, epoch: u64, state_root: &StateRoot,
     ) -> Result<(), Error> {
         // calculate received state root hash

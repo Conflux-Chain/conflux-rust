@@ -9,7 +9,7 @@ mod slicer;
 #[cfg(test)]
 mod verifier;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct FakeSnapshotMptDb {
     db: BTreeMap<Vec<u8>, SnapshotMptNode>,
     in_place_mode: bool,

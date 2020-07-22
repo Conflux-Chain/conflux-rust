@@ -21,6 +21,7 @@ use crate::{
 use cfx_bytes::Bytes;
 use keccak_hash::keccak;
 use keylib::{sign, Generator, KeyPair, Random, Secret};
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use mio::{tcp::*, udp::*, *};
 use parity_path::restrict_permissions_owner;
 use parking_lot::{Mutex, RwLock};
@@ -89,6 +90,10 @@ const DEFAULT_CHECK_SESSIONS_TIMEOUT: Duration = Duration::from_secs(10);
     Deserialize,
 )]
 pub struct ProtocolVersion(pub u8);
+
+impl MallocSizeOf for ProtocolVersion {
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
+}
 
 pub const MAX_DATAGRAM_SIZE: usize = 1280;
 pub const UDP_PROTOCOL_DISCOVERY: u8 = 1;

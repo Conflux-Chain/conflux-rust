@@ -23,12 +23,13 @@ use crate::{
     },
 };
 use cfx_types::H256;
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::service::ProtocolVersion;
 use primitives::{EpochNumber, StateRoot};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, time::Duration};
 
-#[derive(Debug, Clone, RlpDecodable, RlpEncodable)]
+#[derive(Debug, Clone, RlpDecodable, RlpEncodable, DeriveMallocSizeOf)]
 pub struct SnapshotManifestRequest {
     pub request_id: u64,
     pub snapshot_to_sync: SnapshotSyncCandidate,

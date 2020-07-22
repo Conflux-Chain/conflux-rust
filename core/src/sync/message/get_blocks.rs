@@ -15,11 +15,20 @@ use crate::{
     },
 };
 use cfx_types::H256;
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::Block;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, time::Duration};
 
-#[derive(Debug, PartialEq, Default, Clone, RlpDecodable, RlpEncodable)]
+#[derive(
+    Debug,
+    PartialEq,
+    Default,
+    Clone,
+    RlpDecodable,
+    RlpEncodable,
+    DeriveMallocSizeOf,
+)]
 pub struct GetBlocks {
     pub request_id: RequestId,
     pub with_public: bool,

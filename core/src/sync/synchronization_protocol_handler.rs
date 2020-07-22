@@ -341,6 +341,7 @@ impl FutureBlockContainer {
     }
 }
 
+#[derive(DeriveMallocSizeOf)]
 pub struct SynchronizationProtocolHandler {
     pub protocol_version: ProtocolVersion,
 
@@ -350,16 +351,20 @@ pub struct SynchronizationProtocolHandler {
     pub request_manager: Arc<RequestManager>,
     /// The latest `(requested_epoch_number, request_time)`
     pub latest_epoch_requested: Mutex<(u64, Instant)>,
+    #[ignore_malloc_size_of = "only stores reference to others"]
     pub phase_manager: SynchronizationPhaseManager,
     pub phase_manager_lock: Mutex<u32>,
 
     // Worker task queue for recover public
+    #[ignore_malloc_size_of = "channels are not handled in MallocSizeOf"]
     pub recover_public_queue: Arc<AsyncTaskQueue<RecoverPublicTask>>,
 
     // Worker task queue for local message
+    #[ignore_malloc_size_of = "channels are not handled in MallocSizeOf"]
     local_message: AsyncTaskQueue<LocalMessageTask>,
 
     // state sync for any checkpoint
+    #[ignore_malloc_size_of = "not used on archive nodes"]
     pub state_sync: Arc<SnapshotChunkSync>,
 
     /// The epoch id of the remotely synchronized state.
@@ -370,7 +375,7 @@ pub struct SynchronizationProtocolHandler {
     light_provider: Arc<LightProvider>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, DeriveMallocSizeOf)]
 pub struct ProtocolConfiguration {
     pub is_consortium: bool,
     pub send_tx_period: Duration,
