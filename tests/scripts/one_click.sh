@@ -12,6 +12,8 @@ repo="${4:-https://github.com/Conflux-Chain/conflux-rust}"
 enable_flamegraph=${5:-false}
 slave_role=${key_pair}_exp_slave
 
+nodes_per_host=1
+
 run_latency_exp () {
     branch=$1
     exp_config=$2
@@ -25,11 +27,12 @@ run_latency_exp () {
     #2) Launch slave instances
     master_ip=`cat ips`
     slave_image=`cat slave_image`
-    ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;rm -rf ~/.ssh/known_hosts;./launch-on-demand.sh $slave_count $key_pair $slave_role $slave_image;"
+    ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;rm exp.log;rm -rf ~/.ssh/known_hosts;./launch-on-demand.sh $slave_count $key_pair $slave_role $slave_image;"
 
-    #3) compile, and distributed binary to slaves: You can make change on the MASTER node and run the changed code against SLAVES nodes.
-    ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;cargo build --release ;\
-    parallel-scp -O \"StrictHostKeyChecking no\" -h ips -l ubuntu -p 1000 ../../target/release/conflux ~ |grep FAILURE|wc -l;"
+    # The images already have the compiled binary setup in `setup_image.sh`,
+    # but we can use the following to recompile if we have code updated after image setup.
+    #ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;export RUSTFLAGS=\"-g\" && cargo build --release ;\
+    #parallel-scp -O \"StrictHostKeyChecking no\" -h ips -l ubuntu -p 1000 ../../target/release/conflux ~ |grep FAILURE|wc -l;"
 
     #4) Run experiments
     flamegraph_option=""
@@ -42,10 +45,11 @@ run_latency_exp () {
     --storage-memory-gb 16 \
     --bandwidth 20 \
     --tps $tps \
-    --enable-tx-propagation \
     --send-tx-period-ms 200 \
     $flamegraph_option \
-    --max-block-size-in-bytes $max_block_size_in_bytes "
+    --nodes-per-host $nodes_per_host \
+    --max-block-size-in-bytes $max_block_size_in_bytes \
+    --enable-tx-propagation "
 
     #5) Terminate slave instances
     rm -rf tmp_data
@@ -68,7 +72,7 @@ run_latency_exp () {
 # Parameter for one experiment is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>
 # Different experiments in a batch is divided by commas
 # Example: "250:1:150000:1000,250:1:150000:1000,250:1:150000:1000,250:1:150000:1000"
-exp_config="250:1:300000:4000"
+exp_config="250:1:300000:2000"
 
 # For experiments with --enable-tx-propagation , <txs_per_block> and <tx_size> will not take effects.
 # Block size is limited by `max_block_size_in_bytes`.
@@ -80,4 +84,4 @@ run_latency_exp $branch $exp_config $tps $max_block_size_in_bytes
 
 # Terminate master instance and delete slave images
 # Comment this line if the data on the master instances are needed for further analysis
- ./terminate-on-demand.sh
+./terminate-on-demand.sh

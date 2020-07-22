@@ -16,6 +16,8 @@ import time
 from scripts.stat_latency_map_reduce import Statistics
 import os
 
+CONFIRMATION_THRESHOLD = 0.1**6 * 2**256
+
 def execute(cmd, retry, cmd_description):
     while True:
         ret = os.system(cmd)
@@ -69,7 +71,6 @@ class RemoteSimulate(ConfluxTestFramework):
         egress_max_throttle = 1024,
         egress_queue_capacity = 2048,
         genesis_secrets = "/home/ubuntu/genesis_secrets.txt",
-        record_tx_index = False,
         send_tx_period_ms = 1300,
         txgen_account_count = 1000,
         tx_pool_size = conflux.config.default_conflux_conf["tx_pool_size"],
@@ -108,13 +109,14 @@ class RemoteSimulate(ConfluxTestFramework):
             self.options.tx_pool_size // target_memory * self.options.storage_memory_gb
 
         # Do not keep track of tx index to save CPU/Disk costs because they are not used in the experiments
-        self.conf_parameters["record_tx_index"] = "false"
+        self.conf_parameters["persist_tx_index"] = "false"
 
         if self.enable_tx_propagation:
             self.conf_parameters["generate_tx"] = "true"
             self.conf_parameters["generate_tx_period_us"] = str(1000000 * len(self.ips) // self.options.tps)
         else:
             self.conf_parameters["send_tx_period_ms"] = "31536000000" # one year to disable txs propagation
+            del self.conf_parameters["genesis_secrets"]
         # FIXME: Double check if disabling this improves performance.
         self.conf_parameters["enable_optimistic_execution"] = "false"
 
@@ -148,7 +150,7 @@ class RemoteSimulate(ConfluxTestFramework):
 
         # add remote nodes and start all
         for ip in self.ips:
-            self.add_remote_nodes(self.options.nodes_per_host, user="ubuntu", ip=ip)
+            self.add_remote_nodes(self.options.nodes_per_host, user="ubuntu", ip=ip, no_pssh=False)
         for i in range(len(self.nodes)):
             self.log.info("Node[{}]: ip={}, p2p_port={}, rpc_port={}".format(
                 i, self.nodes[i].ip, self.nodes[i].port, self.nodes[i].rpcport))
@@ -201,10 +203,12 @@ class RemoteSimulate(ConfluxTestFramework):
 
             if self.enable_tx_propagation:
                 # Generate a block with the transactions in the node's local tx pool
-                thread = SimpleGenerateThread(self.nodes, p, self.options.max_block_size_in_bytes, self.log, rpc_times)
+                thread = SimpleGenerateThread(self.nodes, p, self.options.max_block_size_in_bytes, self.log, rpc_times,
+                                              self.confirm_info)
             else:
                 # Generate a fixed-size block with fake tx
-                thread = GenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len, self.log, rpc_times)
+                thread = GenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len,
+                                        self.options.max_block_size_in_bytes, self.log, rpc_times, self.confirm_info)
             thread.start()
             threads[p] = thread
 
@@ -220,26 +224,64 @@ class RemoteSimulate(ConfluxTestFramework):
             elif elapsed > 0.01:
                 self.log.warn("%d generating block slowly %.2f", p, elapsed)
         self.log.info("generateoneblock RPC latency: {}".format(Statistics(rpc_times, 3).__dict__))
+        self.log.info(f"average confirmation latency: {self.confirm_info.get_average_latency()}")
+
+    def gather_confirmation_latency_async(self):
+        executor = ThreadPoolExecutor()
+        query_count = 80
+
+        def get_risk(block):
+            p = random.randint(0, len(self.nodes) - 1)
+            risk = self.nodes[p].cfx_getConfirmationRiskByHash(block)
+            self.log.debug(f"risk: {block} {risk}")
+            return (block, risk)
+
+        while not self.stopped:
+            futures = []
+            for block in self.confirm_info.get_unconfirmed_blocks()[:query_count]:
+                futures.append(executor.submit(get_risk, block))
+            for f in futures:
+                block, risk = f.result()
+                if risk is not None and int(risk, 16) <= CONFIRMATION_THRESHOLD:
+                    self.confirm_info.confirm_block(block)
+            self.log.info(self.confirm_info.progress())
+            time.sleep(0.5)
 
     def run_test(self):
         # setup monitor to report the current block count periodically
         cur_block_count = self.nodes[0].getblockcount()
         # The monitor will check the block_count of nodes[0]
         self.progress = 0
+        self.stopped = False
+        self.confirm_info = BlockConfirmationInfo()
         monitor_thread = threading.Thread(target=self.monitor, args=(cur_block_count, 100), daemon=True)
         monitor_thread.start()
-
+        threading.Thread(target=self.gather_confirmation_latency_async, daemon=True).start()
         # When enable_tx_propagation is set, let conflux nodes generate tx automatically.
         self.init_txgen()
+
         # We instruct nodes to generate blocks.
         self.generate_blocks_async()
 
         monitor_thread.join()
+        self.stopped = True
 
         self.log.info("Goodput: {}".format(self.nodes[0].getgoodput()))
         self.wait_until_nodes_synced()
 
-        self.log.info("Best block: {}".format(RpcClient(self.nodes[0]).best_block_hash()))
+        ghost_confirmation_time = []
+        node0 = RpcClient(self.nodes[0])
+        self.log.info("Best block: {}, height: {}".format(node0.best_block_hash(), node0.epoch_number()))
+        for i in range(1, node0.epoch_number()+1):
+            pivot_block = node0.block_by_epoch(node0.EPOCH_NUM(i))["hash"]
+            if pivot_block in self.confirm_info.block_confirmation_time:
+                ghost_confirmation_time.append(self.confirm_info.block_confirmation_time[pivot_block])
+        if len(ghost_confirmation_time) != 0:
+            self.log.info("GHOST average confirmation time: {} confirmed number: {}".format(
+                sum(ghost_confirmation_time)/len(ghost_confirmation_time),
+                len(ghost_confirmation_time)
+            ))
+
 
     def wait_until_nodes_synced(self):
         """
@@ -305,8 +347,45 @@ class RemoteSimulate(ConfluxTestFramework):
         self.log.info("monitor completed.")
 
 
+class BlockConfirmationInfo:
+    def __init__(self):
+        self.block_start_time = {}
+        self.block_confirmation_time = {}
+        self.unconfirmed_block = set()
+        self._lock = threading.Lock()
+
+    def add_block(self, h):
+        self._lock.acquire()
+        self.block_start_time[h] = time.time()
+        self.unconfirmed_block.add(h)
+        self._lock.release()
+
+    def confirm_block(self, h):
+        self._lock.acquire()
+        self.block_confirmation_time[h] = time.time() - self.block_start_time[h]
+        self.unconfirmed_block.remove(h)
+        self._lock.release()
+
+    def get_unconfirmed_blocks(self):
+        self._lock.acquire()
+        sorted_blocks = sorted(self.unconfirmed_block, key=lambda h: self.block_start_time[h])
+        self._lock.release()
+        return sorted_blocks
+
+    def get_average_latency(self):
+        self._lock.acquire()
+        confirmation_time = self.block_confirmation_time.values()
+        self._lock.release()
+        return sum(confirmation_time) / len(confirmation_time)
+
+    def progress(self):
+        self._lock.acquire()
+        s = f"generated: {len(self.block_start_time)}, confirmed: {len(self.block_confirmation_time)}"
+        self._lock.release()
+        return s
+
 class GenerateThread(threading.Thread):
-    def __init__(self, nodes, i, tx_n, tx_data_len, max_block_size, log, rpc_times:list):
+    def __init__(self, nodes, i, tx_n, tx_data_len, max_block_size, log, rpc_times:list, confirm_info: BlockConfirmationInfo):
         threading.Thread.__init__(self, daemon=True)
         self.nodes = nodes
         self.i = i
@@ -315,6 +394,7 @@ class GenerateThread(threading.Thread):
         self.max_block_size = max_block_size
         self.log = log
         self.rpc_times = rpc_times
+        self.confirm_info = confirm_info
 
     def run(self):
         try:
@@ -331,6 +411,7 @@ class GenerateThread(threading.Thread):
 
             start = time.time()
             h = self.nodes[self.i].test_generateblockwithfaketxs(encoded_txs, False, self.tx_data_len)
+            self.confirm_info.add_block(h)
             self.rpc_times.append(round(time.time() - start, 3))
             self.log.debug("node %d actually generate block %s", self.i, h)
         except Exception as e:
@@ -339,13 +420,14 @@ class GenerateThread(threading.Thread):
 
 
 class SimpleGenerateThread(threading.Thread):
-    def __init__(self, nodes, i, max_block_size, log, rpc_times:list):
+    def __init__(self, nodes, i, max_block_size, log, rpc_times:list, confirm_info: BlockConfirmationInfo):
         threading.Thread.__init__(self, daemon=True)
         self.nodes = nodes
         self.i = i
         self.max_block_size = max_block_size
         self.log = log
         self.rpc_times = rpc_times
+        self.confirm_info = confirm_info
 
     def run(self):
         try:
@@ -353,6 +435,7 @@ class SimpleGenerateThread(threading.Thread):
             # Do not limit num tx in blocks, and block size is already limited by `max_block_size_in_bytes`
             start = time.time()
             h = client.generate_block(10000000, self.max_block_size)
+            self.confirm_info.add_block(h)
             self.rpc_times.append(round(time.time() - start, 3))
             self.log.debug("node %d actually generate block %s", self.i, h)
         except Exception as e:

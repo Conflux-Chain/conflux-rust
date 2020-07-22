@@ -13,6 +13,9 @@ from test_framework.test_framework import OptionHelper
 def cleanup_remote_logs(ips_file:str):
     pssh(ips_file, "rm -f *.tgz *.out; rm -rf /tmp/conflux_test_*")
 
+def setup_bandwidth_limit(ips_file:str, bandwidth: float, nodes_per_host: int):
+    pssh(ips_file, f"./throttle_bitcoin_bandwidth.sh {bandwidth} {nodes_per_host}")
+
 class RemoteSimulateConfig:
     def __init__(self, block_gen_interval_ms, txs_per_block, tx_size, num_blocks):
         self.block_gen_interval_ms = block_gen_interval_ms
@@ -88,6 +91,7 @@ class LatencyExperiment:
             print("kill remote conflux and cleanup logs ...")
             kill_remote_conflux(self.options.ips_file)
             cleanup_remote_logs(self.options.ips_file)
+            setup_bandwidth_limit(self.options.ips_file, self.options.bandwidth, self.options.nodes_per_host)
 
             print("Run remote simulator ...")
             self.run_remote_simulate(config)
@@ -109,6 +113,7 @@ class LatencyExperiment:
             print("Collecting metrics ...")
             tag = self.tag(config)
             execute("./copy_file_from_slave.sh metrics.log {} > /dev/null".format(tag), 3, "collect metrics")
+            execute("./copy_file_from_slave.sh conflux.log {} > /dev/null".format(tag), 3, "collect rust log")
             if self.options.enable_flamegraph:
                 try:
                     execute("./copy_file_from_slave.sh conflux.svg {} > /dev/null".format(tag), 10, "collect flamegraph")
@@ -119,7 +124,7 @@ class LatencyExperiment:
 
         print("=========================================================")
         print("archive the experiment results into [{}] ...".format(self.stat_archive_file))
-        cmd = "tar cvfz {} {} *.exp.log *nodes.csv *.metrics.log".format(self.stat_archive_file, self.stat_log_file)
+        cmd = "tar cvfz {} {} *.exp.log *nodes.csv *.metrics.log *.conflux.log".format(self.stat_archive_file, self.stat_log_file)
         if self.options.enable_flamegraph:
             cmd = cmd + " *.conflux.svg"
         os.system(cmd)
@@ -137,13 +142,14 @@ class LatencyExperiment:
             "--txs-per-block", str(config.txs_per_block),
             "--generate-tx-data-len", str(config.tx_size),
             "--tx-pool-size", str(1_000_000),
-            "--conflux-binary", "~/conflux"
+            "--conflux-binary", "~/conflux",
+            "--nocleanup"
         ] + OptionHelper.parsed_options_to_args(
             dict(filter(lambda kv: kv[0] not in self.exp_latency_options, vars(self.options).items()))
         )
 
-        log_file = open(self.simulate_log_file, "w")
-        print("[CMD]: {} > {}".format(cmd, self.simulate_log_file))
+        log_file = open(self.simulate_log_file, "a")
+        print("[CMD]: {} >> {}".format(cmd, self.simulate_log_file))
         ret = subprocess.run(cmd, stdout = log_file, stderr=log_file).returncode
         assert ret == 0, "Failed to run remote simulator, return code = {}. Please check [{}] for more details".format(ret, self.simulate_log_file)
 
@@ -169,6 +175,7 @@ class LatencyExperiment:
             print("begin to statistic confirmation latency ...")
             ret = os.system("python3 stat_confirmation.py logs 4 >> {}".format(self.stat_log_file))
             assert ret == 0, "Failed to statistic block confirmation latency, return code = {}".format(ret)
+
 
 if __name__ == "__main__":
     LatencyExperiment().run()

@@ -24,7 +24,7 @@ apt_wait () {
 sudo apt update
 echo "Wait for apt to be unlocked"
 apt_wait
-sudo apt install -y iotop clang git jq pssh libsqlite3-dev xutils-dev cmake pkg-config libssl-dev
+sudo apt install -y iotop iftop htop clang git jq pssh libsqlite3-dev xutils-dev cmake pkg-config libssl-dev
 pip3 install prettytable
 pip3 install jsonrpcclient
 
@@ -48,9 +48,20 @@ fi
 
 git fetch --all
 git checkout $repo/$branch
-cargo build --release #--features "deadlock_detection"
+export RUSTFLAGS="-g" && cargo build --release #--features "deadlock_detection"
 ./dev-support/dep_pip3.sh
 cd tests/scripts
 wget https://s3-ap-southeast-1.amazonaws.com/conflux-test/genesis_secrets.txt
 cp ../../target/release/conflux throttle_bitcoin_bandwidth.sh remote_start_conflux.sh remote_collect_log.sh stat_latency_map_reduce.py genesis_secrets.txt ~
 
+# Remove process number limit.
+echo "LABEL=cloudimg-rootfs   /        ext4   defaults,noatime,nodiratime,barrier=0       0 0" > fstab
+sudo cp fstab /etc/fstab
+echo "ulimit -n 65535" >> ~/.profile
+# Cannot assign a value more than half of `/proc/sys/kernel/threads-max`, which is about 120,000.
+echo "ulimit -u 60000" >> ~/.profile
+echo "*            -          nproc     65535 " | sudo tee -a /etc/security/limits.conf
+echo "*            -          nfile     65535 " | sudo tee -a /etc/security/limits.conf
+echo "DefaultTasksMax=65535" | sudo tee -a /etc/systemd/system.conf
+sudo mkdir -p /etc/systemd/logind.conf.d
+echo "[Login] \nUserTasksMax=infinity" |sudo tee -a /etc/systemd/logind.conf.d/override.conf
