@@ -47,9 +47,6 @@ pub struct StorageRoots {
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
 
-    // number of epochs per snapshot period
-    snapshot_epoch_count: u64,
-
     // state_root sync manager
     state_roots: Arc<StateRoots>,
 
@@ -63,8 +60,8 @@ pub struct StorageRoots {
 
 impl StorageRoots {
     pub fn new(
-        peers: Arc<Peers<FullPeerState>>, snapshot_epoch_count: u64,
-        state_roots: Arc<StateRoots>, request_id_allocator: Arc<UniqueId>,
+        peers: Arc<Peers<FullPeerState>>, state_roots: Arc<StateRoots>,
+        request_id_allocator: Arc<UniqueId>,
     ) -> Self
     {
         let sync_manager =
@@ -75,7 +72,6 @@ impl StorageRoots {
 
         StorageRoots {
             request_id_allocator,
-            snapshot_epoch_count,
             sync_manager,
             verified,
             state_roots,
@@ -197,6 +193,7 @@ impl StorageRoots {
     {
         // validate state root
         let state_root = proof.state_root;
+
         self.state_roots
             .validate_state_root(epoch, &state_root)
             .chain_err(|| {
@@ -208,35 +205,13 @@ impl StorageRoots {
         // validate previous state root
         let maybe_prev_root = proof.prev_snapshot_state_root;
 
-        match maybe_prev_root {
-            Some(ref root) => {
-                if epoch <= self.snapshot_epoch_count {
-                    return Err(ErrorKind::InvalidStorageRootProof(
-                        "Validation of previous state root failed",
-                    )
-                    .into());
-                }
-
-                self.state_roots
-                    .validate_state_root(
-                        epoch - self.snapshot_epoch_count,
-                        &root,
-                    )
-                    .chain_err(|| {
-                        ErrorKind::InvalidStorageRootProof(
-                            "Validation of previous state root failed",
-                        )
-                    })?;
-            }
-            None => {
-                if epoch > self.snapshot_epoch_count {
-                    return Err(ErrorKind::InvalidStorageRootProof(
-                        "Validation of previous state root failed",
-                    )
-                    .into());
-                }
-            }
-        }
+        self.state_roots
+            .validate_prev_snapshot_state_root(epoch, &maybe_prev_root)
+            .chain_err(|| {
+                ErrorKind::InvalidStorageRootProof(
+                    "Validation of previous state root failed",
+                )
+            })?;
 
         // construct padding
         let maybe_intermediate_padding = maybe_prev_root.map(|root| {
