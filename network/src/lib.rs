@@ -83,6 +83,7 @@ use std::{
 
 pub const NODE_TAG_NODE_TYPE: &str = "node_type";
 pub const NODE_TAG_ARCHIVE: &str = "archive";
+pub const NODE_TAG_FULL: &str = "full";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NetworkConfiguration {
@@ -283,6 +284,8 @@ pub trait NetworkContext {
     ) -> Result<(), Error>;
 
     fn dispatch_work(&self, work_type: HandlerWorkType);
+
+    fn insert_peer_node_tag(&self, peer: NodeId, key: &str, value: &str);
 
     fn is_peer_self(&self, _node_id: &NodeId) -> bool;
 
