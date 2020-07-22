@@ -2,16 +2,18 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-fn min_repr_bytes(mut value: usize) -> u8 {
-    if value == 0 {
-        return 1;
-    }
+fn min_repr_bytes(number_of_keys: usize) -> u8 {
+    let mut largest_value = match number_of_keys {
+        n if n == 0 => return 0,
+        n if n == 1 => return 1,
+        n => n - 1,
+    };
 
     let mut min_repr_bytes = 0;
 
-    while value != 0 {
+    while largest_value != 0 {
         min_repr_bytes += 1;
-        value >>= 8;
+        largest_value >>= 8;
     }
 
     min_repr_bytes
@@ -30,19 +32,16 @@ fn to_index_bytes(mut index: usize, len: u8) -> Vec<u8> {
 /// Given an integer-indexed `SimpleMpt` with `num_keys` elements
 /// stored in it, convert `key` into the corresponding key format.
 pub fn into_simple_mpt_key(key: usize, num_keys: usize) -> Vec<u8> {
-    let largest_key = num_keys.saturating_sub(1);
-    let key_length = min_repr_bytes(largest_key);
+    let key_length = min_repr_bytes(num_keys);
     to_index_bytes(key, key_length)
 }
 
 pub fn make_simple_mpt(mut values: Vec<Box<[u8]>>) -> SimpleMpt {
     let mut mpt = SimpleMpt::default();
+    let keys = values.len();
+    let mut mpt_kvs = Vec::with_capacity(keys);
 
-    let num_keys = values.len();
-    let largest_key = num_keys.saturating_sub(1);
-
-    let mut mpt_kvs = Vec::with_capacity(num_keys);
-    let index_byte_len = min_repr_bytes(largest_key);
+    let index_byte_len = min_repr_bytes(keys);
 
     for (index, value) in values.drain(..).enumerate() {
         mpt_kvs.push((to_index_bytes(index, index_byte_len), value));
@@ -136,16 +135,16 @@ mod tests {
 
     #[test]
     fn test_min_repr_bytes() {
-        assert_eq!(min_repr_bytes(0x00_00_00), 1); // 0
+        assert_eq!(min_repr_bytes(0x00_00_00_00), 0); // 0
 
-        assert_eq!(min_repr_bytes(0x00_00_01), 1); // 1
-        assert_eq!(min_repr_bytes(0x00_00_ff), 1); // 255
+        assert_eq!(min_repr_bytes(0x00_00_00_01), 1); // 1
+        assert_eq!(min_repr_bytes(0x00_00_01_00), 1); // 256
 
-        assert_eq!(min_repr_bytes(0x00_01_00), 2); // 256
-        assert_eq!(min_repr_bytes(0x00_ff_ff), 2); // 65535
+        assert_eq!(min_repr_bytes(0x00_00_01_01), 2); // 257
+        assert_eq!(min_repr_bytes(0x00_01_00_00), 2); // 65536
 
-        assert_eq!(min_repr_bytes(0x01_00_00), 3); // 65536
-        assert_eq!(min_repr_bytes(0xff_ff_ff), 3); // 16777215
+        assert_eq!(min_repr_bytes(0x00_01_00_01), 3); // 65537
+        assert_eq!(min_repr_bytes(0x01_00_00_00), 3); // 16777216
     }
 
     #[test]
