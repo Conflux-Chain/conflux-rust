@@ -264,9 +264,15 @@ pub fn initialize_common_modules(
     };
 
     let accounts = Arc::new(
-        account_provider(Some(keys_path()), None)
-            .ok()
-            .expect("failed to initialize account provider"),
+        account_provider(
+            Some(keys_path()),
+            None,
+            Some(Duration::from_millis(
+                conf.raw_conf.account_provider_refresh_time_ms,
+            )),
+        )
+        .ok()
+        .expect("failed to initialize account provider"),
     );
 
     let common_impl = Arc::new(CommonRpcImpl::new(
