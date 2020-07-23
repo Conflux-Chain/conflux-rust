@@ -65,9 +65,9 @@ error_chain! {
             display("Invalid receipts"),
         }
 
-        InvalidStateProof {
+        InvalidStateProof(reason: &'static str) {
             description("Invalid state proof"),
-            display("Invalid state proof"),
+            display("Invalid state proof: {}", reason),
         }
 
         InvalidStateRoot {
@@ -199,7 +199,7 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
         | ErrorKind::InvalidLedgerProof
         | ErrorKind::InvalidMessageFormat
         | ErrorKind::InvalidReceipts
-        | ErrorKind::InvalidStateProof
+        | ErrorKind::InvalidStateProof(_)
         | ErrorKind::InvalidStateRoot
         | ErrorKind::InvalidStorageRootProof(_)
         | ErrorKind::InvalidTxInfo

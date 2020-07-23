@@ -24,10 +24,11 @@ use crate::{
             GetStateEntries, GetStateRoots, GetStorageRoots, GetTxInfos,
             GetTxs, GetWitnessInfo, NewBlockHashes, NodeType,
             Receipts as GetReceiptsResponse, ReceiptsWithEpoch, SendRawTx,
-            StateEntries as GetStateEntriesResponse, StateEntryWithKey,
-            StateRootWithEpoch, StateRoots as GetStateRootsResponse,
-            StatusPingDeprecatedV1, StatusPingV2, StatusPongDeprecatedV1,
-            StatusPongV2, StorageRootKey, StorageRootProof, StorageRootWithKey,
+            StateEntries as GetStateEntriesResponse, StateEntryProof,
+            StateEntryWithKey, StateKey, StateRootWithEpoch,
+            StateRoots as GetStateRootsResponse, StatusPingDeprecatedV1,
+            StatusPingV2, StatusPongDeprecatedV1, StatusPongV2, StorageRootKey,
+            StorageRootProof, StorageRootWithKey,
             StorageRoots as GetStorageRootsResponse, TxInfo,
             TxInfos as GetTxInfosResponse, Txs as GetTxsResponse,
             WitnessInfo as GetWitnessInfoResponse, WitnessInfoWithHeight,
@@ -448,6 +449,35 @@ impl Provider {
         Ok(())
     }
 
+    fn state_entry(&self, key: StateKey) -> Result<StateEntryWithKey, Error> {
+        let snapshot_epoch_count = self.ledger.snapshot_epoch_count() as u64;
+
+        // state root in current snapshot period
+        let state_root = self.ledger.state_root_of(key.epoch)?.state_root;
+
+        // state root in previous snapshot period
+        let prev_snapshot_state_root = match key.epoch {
+            e if e <= snapshot_epoch_count => None,
+            _ => Some(
+                self.ledger
+                    .state_root_of(key.epoch - snapshot_epoch_count)?
+                    .state_root,
+            ),
+        };
+
+        // state entry and state proof
+        let (entry, state_proof) =
+            self.ledger.state_entry_at(key.epoch, &key.key)?;
+
+        let proof = StateEntryProof {
+            state_root,
+            prev_snapshot_state_root,
+            state_proof,
+        };
+
+        Ok(StateEntryWithKey { key, entry, proof })
+    }
+
     fn on_get_state_entries(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetStateEntries,
     ) -> Result<(), Error> {
@@ -458,20 +488,7 @@ impl Provider {
         let entries = req
             .keys
             .into_iter()
-            .map::<Result<_, Error>, _>(|key| {
-                let state_root =
-                    self.ledger.state_root_of(key.epoch)?.state_root;
-
-                let (entry, proof) =
-                    self.ledger.state_entry_at(key.epoch, &key.key)?;
-
-                Ok(StateEntryWithKey {
-                    key,
-                    entry,
-                    proof,
-                    state_root,
-                })
-            })
+            .map(|key| self.state_entry(key))
             .filter_map(Result::ok)
             .collect();
 

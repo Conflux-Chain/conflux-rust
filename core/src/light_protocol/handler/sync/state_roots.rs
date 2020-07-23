@@ -43,6 +43,9 @@ pub struct StateRoots {
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
 
+    // number of epochs per snapshot period
+    snapshot_epoch_count: u64,
+
     // sync and request manager
     sync_manager: SyncManager<u64, MissingStateRoot>,
 
@@ -56,7 +59,7 @@ pub struct StateRoots {
 impl StateRoots {
     pub fn new(
         peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
-        witnesses: Arc<Witnesses>,
+        snapshot_epoch_count: u64, witnesses: Arc<Witnesses>,
     ) -> Self
     {
         let sync_manager =
@@ -68,6 +71,7 @@ impl StateRoots {
         StateRoots {
             request_id_allocator,
             sync_manager,
+            snapshot_epoch_count,
             verified,
             witnesses,
         }
@@ -211,6 +215,36 @@ impl StateRoots {
                 received, local
             );
             return Err(ErrorKind::InvalidStateRoot.into());
+        }
+
+        Ok(())
+    }
+
+    #[inline]
+    pub fn validate_prev_snapshot_state_root(
+        &self, current_epoch: u64,
+        maybe_prev_snapshot_state_root: &Option<StateRoot>,
+    ) -> Result<(), Error>
+    {
+        match maybe_prev_snapshot_state_root {
+            Some(ref root) => {
+                // root provided for non-existent epoch
+                if current_epoch <= self.snapshot_epoch_count {
+                    return Err(ErrorKind::InvalidStateRoot.into());
+                }
+
+                // root provided for previous snapshot
+                self.validate_state_root(
+                    current_epoch - self.snapshot_epoch_count,
+                    &root,
+                )?;
+            }
+            None => {
+                // root not provided even though previous snapshot exists
+                if current_epoch > self.snapshot_epoch_count {
+                    return Err(ErrorKind::InvalidStateRoot.into());
+                }
+            }
         }
 
         Ok(())
