@@ -337,6 +337,7 @@ pub fn initialize_not_light_node_modules(
         Arc::downgrade(&network),
         txpool.clone(),
         conf.raw_conf.throttling_conf.clone(),
+        is_full_node,
     ));
     light_provider.register(network.clone()).unwrap();
 

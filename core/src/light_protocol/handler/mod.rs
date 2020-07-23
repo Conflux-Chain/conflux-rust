@@ -249,6 +249,7 @@ impl Handler {
     #[inline]
     fn validate_peer_type(&self, node_type: &NodeType) -> Result<(), Error> {
         match node_type {
+            NodeType::Archive => Ok(()),
             NodeType::Full => Ok(()),
             _ => Err(ErrorKind::UnexpectedPeerType.into()),
         }

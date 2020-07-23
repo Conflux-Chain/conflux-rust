@@ -18,6 +18,7 @@ use crate::{
             GetBlockHeadersResponse, NewBlockHashes, StatusDeprecatedV1,
             StatusV2, TransactionDigests,
         },
+        node_type::NodeType,
         request_manager::{try_get_block_hashes, Request},
         state::SnapshotChunkSync,
         synchronization_phases::{SyncPhaseType, SynchronizationPhaseManager},
@@ -459,6 +460,14 @@ impl SynchronizationProtocolHandler {
             state_sync,
             synced_epoch_id: Default::default(),
             light_provider,
+        }
+    }
+
+    pub fn node_type(&self) -> NodeType {
+        if self.syn.is_full_node() {
+            NodeType::Full
+        } else {
+            NodeType::Archive
         }
     }
 
@@ -1167,6 +1176,7 @@ impl SynchronizationProtocolHandler {
 
         StatusV2 {
             chain_id,
+            node_type: self.node_type(),
             genesis_hash: self.graph.data_man.true_genesis.hash(),
             best_epoch: best_info.best_epoch_number,
             terminal_block_hashes: terminal_hashes,

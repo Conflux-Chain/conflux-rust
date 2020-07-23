@@ -8,6 +8,7 @@ use crate::{
     message::MsgId,
     sync::{
         message::{DynamicCapability, DynamicCapabilitySet},
+        node_type::NodeType,
         random, Error, ErrorKind,
     },
 };
@@ -28,6 +29,7 @@ use throttling::token_bucket::{ThrottledManager, TokenBucketManager};
 #[derive(DeriveMallocSizeOf)]
 pub struct SynchronizationPeerState {
     pub node_id: NodeId,
+    pub node_type: NodeType,
     // This field is only used for consortium setup.
     // Whether this node is a validator.
     pub is_validator: bool,
@@ -230,10 +232,32 @@ impl SynchronizationState {
     }
 }
 
+pub struct EpochGapLimit {
+    base_epoch: u64,
+    gap_limit: u64,
+}
+
+impl EpochGapLimit {
+    pub fn new(base_epoch: u64, gap_limit: u64) -> Self {
+        Self {
+            base_epoch,
+            gap_limit,
+        }
+    }
+
+    pub fn base_epoch(&self) -> u64 { self.base_epoch }
+
+    pub fn gap_limit(&self) -> u64 { self.gap_limit }
+}
+
 #[derive(Default)]
 /// Filter peers that match ``all'' the provided conditions.
 pub struct PeerFilter<'a> {
     throttle_msg_ids: Option<HashSet<MsgId>>,
+    // When the gap between the base epoch and the best epoch
+    // of the peer is larger than the gap limit, archive node
+    // is required.
+    epoch_gap_limit: Option<EpochGapLimit>,
     excludes: Option<HashSet<NodeId>>,
     choose_from: Option<&'a HashSet<NodeId>>,
     cap: Option<DynamicCapability>,
@@ -242,6 +266,13 @@ pub struct PeerFilter<'a> {
 
 impl<'a> PeerFilter<'a> {
     pub fn new(msg_id: MsgId) -> Self { PeerFilter::default().throttle(msg_id) }
+
+    pub fn with_epoch_gap_limit(
+        mut self, epoch_gap_limit: EpochGapLimit,
+    ) -> Self {
+        self.epoch_gap_limit = Some(epoch_gap_limit);
+        self
+    }
 
     pub fn throttle(mut self, msg_id: MsgId) -> Self {
         self.throttle_msg_ids
@@ -281,6 +312,22 @@ impl<'a> PeerFilter<'a> {
             || self.min_best_epoch.is_some();
 
         for (id, peer) in syn.peers.read().iter() {
+            let (peer_best_epoch, peer_node_type) = {
+                let peer = peer.read();
+                (peer.best_epoch, peer.node_type.clone())
+            };
+            if let Some(ref epoch_gap_limit) = self.epoch_gap_limit {
+                if epoch_gap_limit.base_epoch() > peer_best_epoch {
+                    continue;
+                }
+                if peer_best_epoch - epoch_gap_limit.base_epoch()
+                    > epoch_gap_limit.gap_limit()
+                    && peer_node_type != NodeType::Archive
+                {
+                    continue;
+                }
+            }
+
             if let Some(ref excludes) = self.excludes {
                 if excludes.contains(id) {
                     continue;

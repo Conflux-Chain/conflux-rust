@@ -3,11 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 mod message;
-mod node_type;
 mod protocol;
 
+pub use crate::sync::node_type::NodeType;
 pub use message::msgid;
-pub use node_type::NodeType;
 pub use protocol::{
     BlockHashes, BlockHeaders, BlockTxs, BlockTxsWithHash, BloomWithEpoch,
     Blooms, GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxs, GetBlooms,

@@ -542,6 +542,9 @@ impl RequestManager {
         debug!("send_request_again, request={:?}", msg.request);
         if let Some(request) = msg.request.resend() {
             let mut filter = PeerFilter::new(request.msg_id());
+            if let Some(epoch_gap_limit) = request.epoch_gap_limit() {
+                filter = filter.with_epoch_gap_limit(epoch_gap_limit);
+            }
             if let Some(cap) = request.required_capability() {
                 filter = filter.with_cap(cap);
             }
