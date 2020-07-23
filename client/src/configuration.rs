@@ -76,7 +76,7 @@ build_config! {
         //     * Open port 12535 for ws rpc if `jsonrpc_ws_port` is not provided.
         //     * Open port 12536 for tcp rpc if `jsonrpc_tcp_port` is not provided.
         //     * Open port 12537 for http rpc if `jsonrpc_http_port` is not provided.
-        //     * generate blocks automatically without PoW if `start_mining` is false
+        //     * generate blocks automatically without PoW if `stop_mining` is false.
         //     * Skip catch-up mode even there is no peer
         //
         (mode, (Option<String>), None)
@@ -85,7 +85,7 @@ build_config! {
         (debug_invalid_state_root_epoch, (Option<String>), None)
         (debug_dump_dir_invalid_state_root, (String), "./storage_db/debug_dump_invalid_state_root/".to_string())
         // Controls block generation speed.
-        // Only effective in `dev` mode and `start_mining` is false
+        // Only effective in `dev` mode and `stop_mining` is false
         (dev_block_interval_ms, (u64), 250)
         (enable_state_expose, (bool), false)
         (generate_tx, (bool), false)
@@ -124,7 +124,7 @@ build_config! {
 
         // Mining section.
         (mining_author, (Option<String>), None)
-        (start_mining, (bool), false)
+        (stop_mining, (bool), false)
         (stratum_listen_address, (String), "127.0.0.1".into())
         (stratum_port, (u16), 32525)
         (stratum_secret, (Option<String>), None)

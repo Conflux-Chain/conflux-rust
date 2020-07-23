@@ -420,31 +420,29 @@ pub fn initialize_not_light_node_modules(
         pow.clone(),
         maybe_author.clone().unwrap_or_default(),
     ));
-    if conf.is_dev_mode() {
-        let bg = blockgen.clone();
-        let interval_ms = conf.raw_conf.dev_block_interval_ms;
-        info!("Start auto block generation");
-        thread::Builder::new()
-            .name("auto_mining".into())
-            .spawn(move || {
-                bg.auto_block_generation(interval_ms);
-            })
-            .expect("Mining thread spawn error");
-    } else if conf.raw_conf.start_mining {
-        if let Some(author) = maybe_author {
+    if !conf.raw_conf.stop_mining {
+        if conf.is_dev_mode() {
+            let bg = blockgen.clone();
+            let interval_ms = conf.raw_conf.dev_block_interval_ms;
+            info!("Start auto block generation");
+            thread::Builder::new()
+                .name("auto_mining".into())
+                .spawn(move || {
+                    bg.auto_block_generation(interval_ms);
+                })
+                .expect("Mining thread spawn error");
+        } else if let Some(author) = maybe_author {
             if !author.is_valid_address() || author.is_builtin_address() {
                 panic!("mining-author must starts with 0x1 (user address) or 0x8 (contract address), otherwise you will not get mining rewards!!!");
             }
-        } else {
-            panic!("mining-author is not set correctly, so you'll not get mining rewards!!!");
+            let bg = blockgen.clone();
+            thread::Builder::new()
+                .name("mining".into())
+                .spawn(move || {
+                    BlockGenerator::start_mining(bg, 0);
+                })
+                .expect("Mining thread spawn error");
         }
-        let bg = blockgen.clone();
-        thread::Builder::new()
-            .name("mining".into())
-            .spawn(move || {
-                BlockGenerator::start_mining(bg, 0);
-            })
-            .expect("Mining thread spawn error");
     }
 
     let rpc_impl = Arc::new(RpcImpl::new(

@@ -25,7 +25,7 @@ bootnodes="cfxnode://25265e1aa470d9d8667947820c4830a64e9f9678d6cb23ecde91e044752
 #     * Open port 12535 for ws rpc if `jsonrpc_ws_port` is not provided.
 #     * Open port 12536 for tcp rpc if `jsonrpc_tcp_port` is not provided.
 #     * Open port 12537 for http rpc if `jsonrpc_http_port` is not provided.
-#     * generate blocks automatically without PoW if `start_mining` is false
+#     * generate blocks automatically without PoW if `stop_mining` is false
 #     * Skip catch-up mode even there is no peer
 #
 # mode = ""
@@ -41,13 +41,8 @@ bootnodes="cfxnode://25265e1aa470d9d8667947820c4830a64e9f9678d6cb23ecde91e044752
 
 # ----------------- Mining Configuration -----------------
 
-# `start_mining` controls whether a thread is started to mine new blocks.
-# If not set, the node will not start mining blocks.
-# If the value is true, `mining_author` must be set.
-#
-# start_mining=true
-
 # `mining_author` is the address to receive mining rewards.
+# If set, the node will start mining unless `stop_mining` is set to true.
 # The value is a 40-digit hex string without 0x prefix.
 # By default, the value is not set.
 #
@@ -70,6 +65,11 @@ bootnodes="cfxnode://25265e1aa470d9d8667947820c4830a64e9f9678d6cb23ecde91e044752
 # If not set, the RPC subscription will not check the authorization.
 #
 # stratum_secret = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+# `stop_mining` is mainly used for testing.
+# If set to true, the node will not mine blocks even when `mining_author` is set or in dev mode.
+#
+# stop_mining=false
 
 # -------------- Log-related Configuration -------------
 
