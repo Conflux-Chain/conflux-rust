@@ -263,13 +263,14 @@ pub fn initialize_common_modules(
         Arc::new(network)
     };
 
+    let refresh_time =
+        Duration::from_millis(conf.raw_conf.account_provider_refresh_time_ms);
+
     let accounts = Arc::new(
         account_provider(
             Some(keys_path()),
-            None,
-            Some(Duration::from_millis(
-                conf.raw_conf.account_provider_refresh_time_ms,
-            )),
+            None, /* sstore_iterations */
+            Some(refresh_time),
         )
         .ok()
         .expect("failed to initialize account provider"),
