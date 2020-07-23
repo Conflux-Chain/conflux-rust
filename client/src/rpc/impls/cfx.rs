@@ -271,7 +271,8 @@ impl RpcImpl {
     }
 
     fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256> {
-        info!("RPC Request: cfx_sendRawTransaction bytes={:?}", raw);
+        info!("RPC Request: cfx_sendRawTransaction len={:?}", raw.0.len());
+        debug!("RawTransaction bytes={:?}", raw);
 
         // FIXME: input parse error.
         let tx = Rlp::new(&raw.into_vec()).as_val().map_err(|err| {
