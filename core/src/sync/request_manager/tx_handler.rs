@@ -88,6 +88,7 @@ impl<T> TimeWindow<T> {
     }
 }
 
+#[derive(DeriveMallocSizeOf)]
 struct ReceivedTransactionContainerInner {
     tx_hashes_map: HashMap<TxPropagateId, HashSet<H256>>,
     tx_hashes_set: HashSet<H256>,
@@ -104,6 +105,7 @@ impl ReceivedTransactionContainerInner {
     }
 }
 
+#[derive(DeriveMallocSizeOf)]
 pub struct ReceivedTransactionContainer {
     inner: ReceivedTransactionContainerInner,
 }
@@ -220,6 +222,7 @@ impl ReceivedTransactionContainer {
     }
 }
 
+#[derive(DeriveMallocSizeOf)]
 struct SentTransactionContainerInner {
     window_size: usize,
     base_time_tick: usize,
@@ -247,6 +250,7 @@ impl SentTransactionContainerInner {
 /// currently it is only used under protection of lock
 /// on SynchronizationState. Later we may refine the
 /// locking design to make it thread-safe.
+#[derive(DeriveMallocSizeOf)]
 pub struct SentTransactionContainer {
     inner: SentTransactionContainerInner,
 }
@@ -306,7 +310,7 @@ impl SentTransactionContainer {
     }
 }
 
-#[derive(Eq, PartialEq, Hash)]
+#[derive(Eq, PartialEq, Hash, DeriveMallocSizeOf)]
 pub struct InflightPendingTrasnactionItem {
     pub fixed_byte_part: TxPropagateId,
     pub random_byte_part: u8,
@@ -335,6 +339,7 @@ impl InflightPendingTrasnactionItem {
     }
 }
 
+#[derive(DeriveMallocSizeOf)]
 struct InflightPendingTransactionContainerInner {
     txid_hashmap:
         HashMap<TxPropagateId, HashSet<Arc<InflightPendingTrasnactionItem>>>,
@@ -350,6 +355,7 @@ impl InflightPendingTransactionContainerInner {
     }
 }
 
+#[derive(DeriveMallocSizeOf)]
 pub struct InflightPendingTransactionContainer {
     inner: InflightPendingTransactionContainerInner,
 }

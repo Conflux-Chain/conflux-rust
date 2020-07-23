@@ -9,9 +9,10 @@ use crate::{
         Error,
     },
 };
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
-#[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
+#[derive(Debug, PartialEq, RlpDecodable, RlpEncodable, DeriveMallocSizeOf)]
 pub struct GetTerminalBlockHashes {
     pub request_id: RequestId,
 }

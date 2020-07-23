@@ -13,11 +13,12 @@ use crate::{
         Error, ProtocolConfiguration, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
 };
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::service::ProtocolVersion;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, time::Duration};
 
-#[derive(Clone, RlpEncodable, RlpDecodable, Debug)]
+#[derive(Clone, RlpEncodable, RlpDecodable, Debug, DeriveMallocSizeOf)]
 pub struct StateSyncCandidateRequest {
     pub request_id: RequestId,
     pub candidates: Vec<SnapshotSyncCandidate>,

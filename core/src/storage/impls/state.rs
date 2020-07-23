@@ -243,28 +243,46 @@ impl StateTrait for State {
     }
 
     fn get_node_merkle_all_versions(
-        &self, access_key: StorageKey,
-    ) -> Result<(Option<MerkleHash>, Option<MerkleHash>, Option<MerkleHash>)>
-    {
+        &self, access_key: StorageKey, with_proof: bool,
+    ) -> Result<(NodeMerkleTriplet, NodeMerkleProof)> {
+        let mut proof = NodeMerkleProof::default();
+
         // ----------- get from delta -----------
-        let maybe_delta = match self.delta_trie_root {
+        let delta = match self.delta_trie_root {
             Some(ref root_node) => {
                 let key = access_key
                     .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
 
-                SubTrieVisitor::new(
+                let delta = SubTrieVisitor::new(
                     &self.delta_trie,
                     root_node.clone(),
-                    &mut Some(Default::default()), /* won't create any new
-                                                    * nodes */
+                    // won't create any new nodes
+                    &mut Some(Default::default()),
                 )?
-                .get_merkle_hash_wo_compressed_path(&key)?
+                .get_merkle_hash_wo_compressed_path(&key)?;
+
+                let maybe_proof = match with_proof {
+                    false => None,
+                    true => Some(
+                        SubTrieVisitor::new(
+                            &self.delta_trie,
+                            root_node.clone(),
+                            // won't create any new nodes
+                            &mut Some(Default::default()),
+                        )?
+                        .get_proof(&key)?,
+                    ),
+                };
+
+                proof.with_delta(maybe_proof);
+
+                delta
             }
             None => None,
         };
 
         // ----------- get from intermediate -----------
-        let maybe_intermediate = match (
+        let intermediate = match (
             &self.intermediate_trie_root,
             &self.maybe_intermediate_trie,
             &self.maybe_intermediate_trie_key_padding,
@@ -277,13 +295,30 @@ impl StateTrait for State {
                 let key = access_key
                     .to_delta_mpt_key_bytes(&intermediate_trie_key_padding);
 
-                SubTrieVisitor::new(
+                let intermediate = SubTrieVisitor::new(
                     &intermediate_trie,
                     root_node.clone(),
-                    &mut Some(Default::default()), /* won't create any new
-                                                    * nodes */
+                    // won't create any new nodes
+                    &mut Some(Default::default()),
                 )?
-                .get_merkle_hash_wo_compressed_path(&key)?
+                .get_merkle_hash_wo_compressed_path(&key)?;
+
+                let maybe_proof = match with_proof {
+                    false => None,
+                    true => Some(
+                        SubTrieVisitor::new(
+                            &intermediate_trie,
+                            root_node.clone(),
+                            // won't create any new nodes
+                            &mut Some(Default::default()),
+                        )?
+                        .get_proof(&key)?,
+                    ),
+                };
+
+                proof.with_intermediate(maybe_proof);
+
+                intermediate
             }
             _ => None,
         };
@@ -297,7 +332,7 @@ impl StateTrait for State {
             BasicPathNode<&mut dyn SnapshotMptTraitRead>,
         >::new(&mut mpt);
         cursor.load_root()?;
-        let maybe_snapshot =
+        let snapshot =
             match cursor.open_path_for_key::<access_mode::Read>(&key)? {
                 CursorOpenPathTerminal::Arrived => Some(
                     cursor
@@ -307,9 +342,20 @@ impl StateTrait for State {
                 ),
                 _ => None,
             };
+        let maybe_proof = match with_proof {
+            false => None,
+            true => Some(cursor.to_proof()),
+        };
         cursor.finish()?;
+        proof.with_snapshot(maybe_proof);
 
-        Ok((maybe_delta, maybe_intermediate, maybe_snapshot))
+        let triplet = NodeMerkleTriplet {
+            delta,
+            intermediate,
+            snapshot,
+        };
+
+        Ok((triplet, proof))
     }
 
     fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()> {
@@ -828,6 +874,7 @@ use crate::storage::{
             walk::access_mode,
             KVInserter, MptKeyValue, MptValue, TrieProof, VanillaChildrenTable,
         },
+        node_merkle_proof::NodeMerkleProof,
         state_manager::*,
         state_proof::StateProof,
     },
@@ -838,8 +885,8 @@ use crate::storage::{
 use fallible_iterator::FallibleIterator;
 use parity_bytes::ToPretty;
 use primitives::{
-    DeltaMptKeyPadding, EpochId, MerkleHash, StateRoot, StorageKey,
-    MERKLE_NULL_NODE, NULL_EPOCH,
+    DeltaMptKeyPadding, EpochId, MerkleHash, NodeMerkleTriplet, StateRoot,
+    StorageKey, MERKLE_NULL_NODE, NULL_EPOCH,
 };
 use std::{
     cell::UnsafeCell,

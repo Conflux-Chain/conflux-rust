@@ -319,7 +319,7 @@ class ConfluxTestFramework:
                     recovery_timeout=recovery_timeout
                 ))
 
-    def add_remote_nodes(self, num_nodes, ip, user, rpchost=None, binary=None):
+    def add_remote_nodes(self, num_nodes, ip, user, rpchost=None, binary=None, no_pssh=True):
         """Instantiate TestNode objects"""
         if binary is None:
             binary = [self.options.conflux] * num_nodes
@@ -334,7 +334,8 @@ class ConfluxTestFramework:
                     user=user,
                     rpc_timeout=self.rpc_timewait,
                     confluxd=binary[i],
-                    remote=True
+                    remote=True,
+                    no_pssh=no_pssh,
                 ))
 
     def start_node(self, i, extra_args=None, phase_to_wait=("NormalSyncPhase", "CatchUpSyncBlockPhase"), wait_time=30, *args, **kwargs):

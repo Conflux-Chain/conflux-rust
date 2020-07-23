@@ -18,6 +18,7 @@ use crate::{
             SendRawTx, StateEntries as GetStateEntriesResponse,
             StateRoots as GetStateRootsResponse, StatusPingDeprecatedV1,
             StatusPingV2, StatusPongDeprecatedV1, StatusPongV2,
+            StorageRoots as GetStorageRootsResponse,
             TxInfos as GetTxInfosResponse, Txs as GetTxsResponse,
             WitnessInfo as GetWitnessInfoResponse,
         },
@@ -50,7 +51,7 @@ use std::{
 };
 use sync::{
     BlockTxs, Blooms, Epochs, HashSource, Headers, Receipts, StateEntries,
-    StateRoots, TxInfos, Txs, Witnesses,
+    StateRoots, StorageRoots, TxInfos, Txs, Witnesses,
 };
 use throttling::token_bucket::TokenBucketManager;
 
@@ -98,6 +99,9 @@ pub struct Handler {
 
     // whether the blame verification worker thread should be stopped
     stopped: Arc<AtomicBool>,
+
+    // storage root sync manager
+    pub storage_roots: StorageRoots,
 
     // tx sync manager
     pub txs: Arc<Txs>,
@@ -165,6 +169,16 @@ impl Handler {
             request_id_allocator.clone(),
         );
 
+        let snapshot_epoch_count =
+            consensus.get_data_manager().get_snapshot_epoch_count() as u64;
+
+        let storage_roots = StorageRoots::new(
+            peers.clone(),
+            snapshot_epoch_count,
+            state_roots.clone(),
+            request_id_allocator.clone(),
+        );
+
         let txs =
             Arc::new(Txs::new(peers.clone(), request_id_allocator.clone()));
 
@@ -176,11 +190,10 @@ impl Handler {
         ));
 
         let tx_infos = TxInfos::new(
-            block_txs.clone(),
             consensus.clone(),
             peers.clone(),
             request_id_allocator.clone(),
-            receipts.clone(),
+            witnesses.clone(),
         );
 
         let stopped = Arc::new(AtomicBool::new(false));
@@ -206,6 +219,7 @@ impl Handler {
             state_entries,
             state_roots,
             stopped,
+            storage_roots,
             txs,
             tx_infos,
             throttling_config_file,
@@ -447,6 +461,7 @@ impl Handler {
             msgid::RECEIPTS => self.on_receipts(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::STATE_ENTRIES => self.on_state_entries(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::STATE_ROOTS => self.on_state_roots(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::STORAGE_ROOTS => self.on_storage_roots(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::TXS => self.on_txs(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::TX_INFOS => self.on_tx_infos(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::WITNESS_INFO => self.on_witness_info(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
@@ -732,6 +747,23 @@ impl Handler {
         Ok(())
     }
 
+    fn on_storage_roots(
+        &self, io: &dyn NetworkContext, peer: &NodeId,
+        resp: GetStorageRootsResponse,
+    ) -> Result<(), Error>
+    {
+        debug!("on_storage_roots resp={:?}", resp);
+
+        self.storage_roots.receive(
+            peer,
+            resp.request_id,
+            resp.roots.into_iter(),
+        )?;
+
+        self.storage_roots.sync(io);
+        Ok(())
+    }
+
     fn on_txs(
         &self, io: &dyn NetworkContext, peer: &NodeId, resp: GetTxsResponse,
     ) -> Result<(), Error> {
@@ -793,6 +825,7 @@ impl Handler {
         self.block_txs.sync(io);
         self.state_entries.sync(io);
         self.state_roots.sync(io);
+        self.storage_roots.sync(io);
         self.txs.sync(io);
         self.tx_infos.sync(io);
     }
@@ -806,6 +839,7 @@ impl Handler {
         self.receipts.clean_up();
         self.state_entries.clean_up();
         self.state_roots.clean_up();
+        self.storage_roots.clean_up();
         self.tx_infos.clean_up();
         self.txs.clean_up();
         self.witnesses.clean_up();
