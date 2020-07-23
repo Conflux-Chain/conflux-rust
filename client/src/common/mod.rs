@@ -406,10 +406,8 @@ pub fn initialize_not_light_node_modules(
     );
 
     let maybe_author: Option<Address> =
-        conf.raw_conf.mining_author.clone().map(|hex_str| {
-            hex_str
-                .trim_start_matches("0x")
-                .parse()
+        conf.raw_conf.mining_author.as_ref().map(|hex_str| {
+            parse_hex_string(hex_str)
                 .expect("mining-author should be 40-digit hex string")
         });
     let blockgen = Arc::new(BlockGenerator::new(
@@ -697,6 +695,7 @@ pub mod delegate_convert {
 pub use crate::configuration::Configuration;
 use crate::{
     accounts::{account_provider, keys_path},
+    configuration::parse_hex_string,
     rpc::{
         extractor::RpcExtractor,
         impls::{

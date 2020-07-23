@@ -84,7 +84,7 @@ fn test_mining_10_epochs() {
     conf.raw_conf.tcp_port = 13001;
     conf.raw_conf.jsonrpc_http_port = Some(18001);
     conf.raw_conf.mining_author =
-        Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into());
+        Some("1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into());
 
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
     let handle = ArchiveClient::start(conf, exit).unwrap();

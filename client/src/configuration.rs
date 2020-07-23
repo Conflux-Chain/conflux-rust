@@ -312,10 +312,8 @@ impl Configuration {
             network_config.config_path = self.raw_conf.netconf_dir.clone();
         }
         network_config.use_secret =
-            self.raw_conf.net_key.clone().map(|sec_str| {
-                sec_str
-                    .trim_start_matches("0x")
-                    .parse()
+            self.raw_conf.net_key.as_ref().map(|sec_str| {
+                parse_hex_string(sec_str)
                     .expect("net_key is not a valid secret string")
             });
         if let Some(addr) = self.raw_conf.public_address.clone() {
@@ -450,10 +448,8 @@ impl Configuration {
 
     pub fn pow_config(&self) -> ProofOfWorkConfig {
         let stratum_secret =
-            self.raw_conf.stratum_secret.clone().map(|hex_str| {
-                hex_str
-                    .trim_start_matches("0x")
-                    .parse()
+            self.raw_conf.stratum_secret.as_ref().map(|hex_str| {
+                parse_hex_string(hex_str)
                     .expect("Stratum secret should be 64-digit hex string")
             });
 
@@ -784,4 +780,8 @@ pub fn build_base_reward_table() -> Vec<u64> {
         base_reward_table[i] = reward;
     }
     base_reward_table
+}
+
+pub fn parse_hex_string<F: FromStr>(hex_str: &str) -> Result<F, F::Err> {
+    hex_str.trim_start_matches("0x").parse()
 }
