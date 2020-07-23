@@ -43,7 +43,7 @@ bootnodes="cfxnode://25265e1aa470d9d8667947820c4830a64e9f9678d6cb23ecde91e044752
 
 # `mining_author` is the address to receive mining rewards.
 # If set, the node will start mining unless `stop_mining` is set to true.
-# The value is a 40-digit hex string without 0x prefix.
+# The value is a 40-digit hex string.
 # By default, the value is not set.
 #
 # mining_author="1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -61,7 +61,7 @@ bootnodes="cfxnode://25265e1aa470d9d8667947820c4830a64e9f9678d6cb23ecde91e044752
 # stratum_port = 32525
 
 # Secret key for stratum.
-# The value is 64-digit hex string without 0x prefix.
+# The value is 64-digit hex string.
 # If not set, the RPC subscription will not check the authorization.
 #
 # stratum_secret = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -296,7 +296,7 @@ jsonrpc_local_http_port=12539
 # netconf_dir="./net_config"
 
 # `net_key` is the 256-bit private key to generate a unique node id for this node.
-# The value is a 64-digit hex string without 0x prefix.
+# The value is a 64-digit hex string.
 # If not set, the node will try to read from the file "key" under the directory `netconf_dir`.
 # If the file is not found, the node will generate a random key.
 # By default, the value is not set.

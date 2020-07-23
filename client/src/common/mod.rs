@@ -407,9 +407,10 @@ pub fn initialize_not_light_node_modules(
 
     let maybe_author: Option<Address> =
         conf.raw_conf.mining_author.clone().map(|hex_str| {
-            Address::from_str(hex_str.as_str()).expect(
-                "mining-author should be 40-digit hex string without 0x prefix",
-            )
+            hex_str
+                .trim_start_matches("0x")
+                .parse()
+                .expect("mining-author should be 40-digit hex string")
         });
     let blockgen = Arc::new(BlockGenerator::new(
         sync_graph,

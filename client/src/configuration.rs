@@ -314,6 +314,7 @@ impl Configuration {
         network_config.use_secret =
             self.raw_conf.net_key.clone().map(|sec_str| {
                 sec_str
+                    .trim_start_matches("0x")
                     .parse()
                     .expect("net_key is not a valid secret string")
             });
@@ -449,11 +450,12 @@ impl Configuration {
 
     pub fn pow_config(&self) -> ProofOfWorkConfig {
         let stratum_secret =
-            self.raw_conf
-                .stratum_secret
-                .clone()
-                .map(|hex_str| H256::from_str(hex_str.as_str())
-                    .expect("Stratum secret should be 64-digit hex string without 0x prefix"));
+            self.raw_conf.stratum_secret.clone().map(|hex_str| {
+                hex_str
+                    .trim_start_matches("0x")
+                    .parse()
+                    .expect("Stratum secret should be 64-digit hex string")
+            });
 
         ProofOfWorkConfig::new(
             self.is_test_or_dev_mode(),
