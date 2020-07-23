@@ -226,6 +226,7 @@ build_config! {
         (storage_max_open_snapshots, (u16), storage::defaults::DEFAULT_MAX_OPEN_SNAPSHOTS)
 
         // General/Unclassified section.
+        (account_provider_refresh_time_ms, (u64), 1000)
         (enable_optimistic_execution, (bool), true)
         (future_block_buffer_capacity, (usize), 32768)
         (get_logs_filter_max_limit, (Option<usize>), None)
