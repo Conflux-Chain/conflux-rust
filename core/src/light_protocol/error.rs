@@ -185,7 +185,8 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
         // should not disconnect the peer
         | ErrorKind::UnableToProduceProof
 
-        // if a peer requests a tx that has been removed, we should not disconnect the peer
+        // if the tx requested has been removed locally,
+        // we should not disconnect the peer
         | ErrorKind::UnableToProduceTxInfo(_)
 
         // NOTE: to help with backward-compatibility, we

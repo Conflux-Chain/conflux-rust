@@ -454,7 +454,7 @@ impl Provider {
         let (state_roots, errors) = partition_results(it);
 
         if !errors.is_empty() {
-            info!("Errors while serving GetStateRoots request: {:?}", errors);
+            debug!("Errors while serving GetStateRoots request: {:?}", errors);
         }
 
         let msg: Box<dyn Message> = Box::new(GetStateRootsResponse {
@@ -495,7 +495,10 @@ impl Provider {
         let (entries, errors) = partition_results(it);
 
         if !errors.is_empty() {
-            info!("Errors while serving GetStateEntries request: {:?}", errors);
+            debug!(
+                "Errors while serving GetStateEntries request: {:?}",
+                errors
+            );
         }
 
         let msg: Box<dyn Message> = Box::new(GetStateEntriesResponse {
@@ -525,7 +528,7 @@ impl Provider {
         let (hashes, errors) = partition_results(it);
 
         if !errors.is_empty() {
-            info!(
+            debug!(
                 "Errors while serving GetBlockHashesByEpoch request: {:?}",
                 errors
             );
@@ -565,8 +568,8 @@ impl Provider {
         let (headers, errors) = partition_results(it);
 
         if !errors.is_empty() {
-            info!(
-                "Errors while serving GetBlockHashesByEpoch request: {:?}",
+            debug!(
+                "Errors while serving GetBlockHeaders request: {:?}",
                 errors
             );
         }
@@ -634,7 +637,7 @@ impl Provider {
         let (receipts, errors) = partition_results(it);
 
         if !errors.is_empty() {
-            info!("Errors while serving GetReceipts request: {:?}", errors);
+            debug!("Errors while serving GetReceipts request: {:?}", errors);
         }
 
         let msg: Box<dyn Message> = Box::new(GetReceiptsResponse {
@@ -666,10 +669,7 @@ impl Provider {
         let (txs, errors) = partition_results(it);
 
         if !errors.is_empty() {
-            info!(
-                "Errors while serving GetBlockHashesByEpoch request: {:?}",
-                errors
-            );
+            debug!("Errors while serving GetTxs request: {:?}", errors);
         }
 
         let msg: Box<dyn Message> =
@@ -695,7 +695,7 @@ impl Provider {
         let (infos, errors) = partition_results(it);
 
         if !errors.is_empty() {
-            info!("Errors while serving GetWitnessInfo request: {:?}", errors);
+            debug!("Errors while serving GetWitnessInfo request: {:?}", errors);
         }
 
         let msg: Box<dyn Message> =
@@ -721,7 +721,7 @@ impl Provider {
         let (blooms, errors) = partition_results(it);
 
         if !errors.is_empty() {
-            info!("Errors while serving GetBlooms request: {:?}", errors);
+            debug!("Errors while serving GetBlooms request: {:?}", errors);
         }
 
         let msg: Box<dyn Message> =
@@ -751,6 +751,7 @@ impl Provider {
                     .into_iter()
                     .map(|arc_tx| (*arc_tx).clone())
                     .collect();
+
                 Ok(BlockTxsWithHash {
                     hash: block.hash(),
                     block_txs,
@@ -760,7 +761,7 @@ impl Provider {
         let (block_txs, errors) = partition_results(it);
 
         if !errors.is_empty() {
-            info!("Errors while serving GetBlockTxs request: {:?}", errors);
+            debug!("Errors while serving GetBlockTxs request: {:?}", errors);
         }
 
         let msg: Box<dyn Message> = Box::new(GetBlockTxsResponse {
@@ -788,10 +789,7 @@ impl Provider {
         let (infos, errors) = partition_results(it);
 
         if !errors.is_empty() {
-            info!(
-                "Errors while serving GetBlockHashesByEpoch request: {:?}",
-                errors
-            );
+            debug!("Errors while serving GetTxInfos request: {:?}", errors);
         }
 
         let msg: Box<dyn Message> =
@@ -848,7 +846,10 @@ impl Provider {
         let (roots, errors) = partition_results(it);
 
         if !errors.is_empty() {
-            info!("Errors while serving GetStorageRoots request: {:?}", errors);
+            debug!(
+                "Errors while serving GetStorageRoots request: {:?}",
+                errors
+            );
         }
 
         let msg: Box<dyn Message> =
