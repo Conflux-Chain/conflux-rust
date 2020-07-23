@@ -13,7 +13,10 @@ use primitives::{SignedTransaction, TransactionWithSignature};
 use crate::{
     consensus::SharedConsensusGraph,
     light_protocol::{
-        common::{validate_chain_id, LedgerInfo, LightPeerState, Peers},
+        common::{
+            partition_results, validate_chain_id, LedgerInfo, LightPeerState,
+            Peers,
+        },
         handle_error,
         message::{
             msgid, BlockHashes as GetBlockHashesResponse,
@@ -30,7 +33,7 @@ use crate::{
             StatusPongV2, StorageRootKey, StorageRootProof, StorageRootWithKey,
             StorageRoots as GetStorageRootsResponse, TxInfo,
             TxInfos as GetTxInfosResponse, Txs as GetTxsResponse,
-            WitnessInfo as GetWitnessInfoResponse, WitnessInfoWithHeight,
+            WitnessInfo as GetWitnessInfoResponse,
         },
         Error, ErrorKind, LIGHT_PROTOCOL_ID,
         LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT, LIGHT_PROTOCOL_VERSION,
@@ -42,7 +45,8 @@ use crate::{
         NetworkService,
     },
     parameters::light::{
-        MAX_EPOCHS_TO_SEND, MAX_HEADERS_TO_SEND, MAX_TXS_TO_SEND,
+        MAX_EPOCHS_TO_SEND, MAX_HEADERS_TO_SEND, MAX_ITEMS_TO_SEND,
+        MAX_TXS_TO_SEND,
     },
     sync::{message::Throttled, SynchronizationGraph},
     verification::{compute_epoch_receipt_proof, compute_transaction_proof},
@@ -203,16 +207,22 @@ impl Provider {
     }
 
     #[inline]
-    fn tx_info_by_hash(&self, hash: H256) -> Option<TxInfo> {
+    fn tx_info_by_hash(&self, hash: H256) -> Result<TxInfo, Error> {
         let (tx, tx_index, receipt) =
             match self.consensus.get_transaction_info_by_hash(&hash) {
                 None => {
-                    warn!("Unable to get tx info for {:?}", hash);
-                    return None;
+                    return Err(ErrorKind::UnableToProduceTxInfo(format!(
+                        "Unable to get tx info for {:?}",
+                        hash
+                    ))
+                    .into());
                 }
                 Some((_, _, None)) => {
-                    warn!("Unable to get receipt for {:?}", hash);
-                    return None;
+                    return Err(ErrorKind::UnableToProduceTxInfo(format!(
+                        "Unable to get receipt for {:?}",
+                        hash
+                    ))
+                    .into());
                 }
                 Some((tx, tx_index, Some((receipt, _)))) => {
                     assert_eq!(tx.hash(), hash); // sanity check
@@ -225,8 +235,11 @@ impl Provider {
         let block = match self.ledger.block(block_hash) {
             Ok(b) => b,
             Err(e) => {
-                warn!("Unable to retrieve block {:?}: {}", block_hash, e);
-                return None;
+                return Err(ErrorKind::UnableToProduceTxInfo(format!(
+                    "Unable to retrieve block {:?}: {}",
+                    block_hash, e
+                ))
+                .into());
             }
         };
 
@@ -239,16 +252,22 @@ impl Provider {
         let epoch = match self.consensus.get_block_epoch_number(&block_hash) {
             Some(epoch) => epoch,
             None => {
-                warn!("Unable to get epoch number for block {:?}", block_hash);
-                return None;
+                return Err(ErrorKind::UnableToProduceTxInfo(format!(
+                    "Unable to get epoch number for block {:?}",
+                    block_hash
+                ))
+                .into());
             }
         };
 
         let epoch_hashes = match self.ledger.block_hashes_in(epoch) {
             Ok(hs) => hs,
             Err(e) => {
-                warn!("Unable to epoch hashes for {}: {}", epoch, e);
-                return None;
+                return Err(ErrorKind::UnableToProduceTxInfo(format!(
+                    "Unable to find epoch hashes for {}: {}",
+                    epoch, e
+                ))
+                .into());
             }
         };
 
@@ -258,16 +277,22 @@ impl Provider {
             match epoch_hashes.iter().position(|h| *h == block_hash) {
                 Some(id) => id,
                 None => {
-                    warn!("Unable to find {:?} in {}", block_hash, epoch);
-                    return None;
+                    return Err(ErrorKind::UnableToProduceTxInfo(format!(
+                        "Unable to find {:?} in epoch {}",
+                        block_hash, epoch
+                    ))
+                    .into());
                 }
             };
 
         let epoch_receipts = match self.ledger.receipts_of(epoch) {
             Ok(rs) => rs.iter().cloned().map(Arc::new).collect::<Vec<_>>(),
             Err(e) => {
-                warn!("Unable to retrieve receipts for {}: {}", epoch, e);
-                return None;
+                return Err(ErrorKind::UnableToProduceTxInfo(format!(
+                    "Unable to retrieve receipts for {}: {}",
+                    epoch, e
+                ))
+                .into());
             }
         };
 
@@ -295,7 +320,7 @@ impl Provider {
                 }
             };
 
-        Some(TxInfo {
+        Ok(TxInfo {
             epoch,
 
             // tx-related fields
@@ -417,17 +442,20 @@ impl Provider {
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
-        let state_roots = req
+        let it = req
             .epochs
             .into_iter()
-            .map(|e| {
-                self.ledger
-                    .state_root_of(e)
-                    .map(|root| (e, root.state_root))
-            })
-            .filter_map(Result::ok)
-            .map(|(epoch, state_root)| StateRootWithEpoch { epoch, state_root })
-            .collect();
+            .take(MAX_ITEMS_TO_SEND)
+            .map::<Result<_, Error>, _>(|epoch| {
+                let state_root = self.ledger.state_root_of(epoch)?.state_root;
+                Ok(StateRootWithEpoch { epoch, state_root })
+            });
+
+        let (state_roots, errors) = partition_results(it);
+
+        if !errors.is_empty() {
+            info!("Errors while serving GetStateRoots request: {:?}", errors);
+        }
 
         let msg: Box<dyn Message> = Box::new(GetStateRootsResponse {
             request_id,
@@ -445,9 +473,10 @@ impl Provider {
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
-        let entries = req
+        let it = req
             .keys
             .into_iter()
+            .take(MAX_ITEMS_TO_SEND)
             .map::<Result<_, Error>, _>(|key| {
                 let state_root =
                     self.ledger.state_root_of(key.epoch)?.state_root;
@@ -461,9 +490,13 @@ impl Provider {
                     proof,
                     state_root,
                 })
-            })
-            .filter_map(Result::ok)
-            .collect();
+            });
+
+        let (entries, errors) = partition_results(it);
+
+        if !errors.is_empty() {
+            info!("Errors while serving GetStateEntries request: {:?}", errors);
+        }
 
         let msg: Box<dyn Message> = Box::new(GetStateEntriesResponse {
             request_id,
@@ -483,18 +516,25 @@ impl Provider {
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
-        let hashes = req
+        let it = req
             .epochs
             .iter()
             .take(MAX_EPOCHS_TO_SEND)
-            .filter_map(|&e| self.graph.get_all_block_hashes_by_epoch(e).ok())
-            .fold(vec![], |mut res, sub| {
-                res.extend(sub);
-                res
-            });
+            .map(|&e| self.graph.get_all_block_hashes_by_epoch(e));
 
-        let msg: Box<dyn Message> =
-            Box::new(GetBlockHashesResponse { request_id, hashes });
+        let (hashes, errors) = partition_results(it);
+
+        if !errors.is_empty() {
+            info!(
+                "Errors while serving GetBlockHashesByEpoch request: {:?}",
+                errors
+            );
+        }
+
+        let msg: Box<dyn Message> = Box::new(GetBlockHashesResponse {
+            request_id,
+            hashes: hashes.into_iter().flatten().collect(),
+        });
 
         msg.send(io, peer)?;
         Ok(())
@@ -507,17 +547,29 @@ impl Provider {
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
-        let headers = req
+        let it = req
             .hashes
             .iter()
             .take(MAX_HEADERS_TO_SEND)
-            .filter_map(|h| {
+            .map::<Result<_, Error>, _>(|h| {
                 self.graph
                     .data_man
                     .block_header_by_hash(&h)
                     .map(|header_arc| header_arc.as_ref().clone())
-            })
-            .collect();
+                    .ok_or_else(|| {
+                        ErrorKind::Msg(format!("Block {:?} not found", h))
+                            .into()
+                    })
+            });
+
+        let (headers, errors) = partition_results(it);
+
+        if !errors.is_empty() {
+            info!(
+                "Errors while serving GetBlockHashesByEpoch request: {:?}",
+                errors
+            );
+        }
 
         let msg: Box<dyn Message> = Box::new(GetBlockHeadersResponse {
             request_id,
@@ -570,16 +622,20 @@ impl Provider {
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
-        let receipts = req
-            .epochs
-            .into_iter()
-            .map(|e| self.ledger.receipts_of(e).map(|receipts| (e, receipts)))
-            .filter_map(Result::ok)
-            .map(|(epoch, epoch_receipts)| ReceiptsWithEpoch {
-                epoch,
-                epoch_receipts,
+        let it = req.epochs.into_iter().take(MAX_ITEMS_TO_SEND).map(|epoch| {
+            self.ledger.receipts_of(epoch).map(|epoch_receipts| {
+                ReceiptsWithEpoch {
+                    epoch,
+                    epoch_receipts,
+                }
             })
-            .collect();
+        });
+
+        let (receipts, errors) = partition_results(it);
+
+        if !errors.is_empty() {
+            info!("Errors while serving GetReceipts request: {:?}", errors);
+        }
 
         let msg: Box<dyn Message> = Box::new(GetReceiptsResponse {
             request_id,
@@ -597,12 +653,24 @@ impl Provider {
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
-        let txs = req
+        let it = req
             .hashes
             .into_iter()
             .take(MAX_TXS_TO_SEND)
-            .filter_map(|h| self.tx_by_hash(h))
-            .collect();
+            .map::<Result<_, Error>, _>(|h| {
+                self.tx_by_hash(h).ok_or_else(|| {
+                    ErrorKind::Msg(format!("Tx {:?} not found", h)).into()
+                })
+            });
+
+        let (txs, errors) = partition_results(it);
+
+        if !errors.is_empty() {
+            info!(
+                "Errors while serving GetBlockHashesByEpoch request: {:?}",
+                errors
+            );
+        }
 
         let msg: Box<dyn Message> =
             Box::new(GetTxsResponse { request_id, txs });
@@ -618,11 +686,17 @@ impl Provider {
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
-        let infos = req
+        let it = req
             .witnesses
             .into_iter()
-            .map(|w| self.ledger.witness_info(w))
-            .collect::<Result<Vec<WitnessInfoWithHeight>, Error>>()?;
+            .take(MAX_ITEMS_TO_SEND)
+            .map(|w| self.ledger.witness_info(w));
+
+        let (infos, errors) = partition_results(it);
+
+        if !errors.is_empty() {
+            info!("Errors while serving GetWitnessInfo request: {:?}", errors);
+        }
 
         let msg: Box<dyn Message> =
             Box::new(GetWitnessInfoResponse { request_id, infos });
@@ -638,13 +712,17 @@ impl Provider {
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
-        let blooms = req
-            .epochs
-            .into_iter()
-            .map(|e| self.ledger.bloom_of(e).map(|bloom| (e, bloom)))
-            .filter_map(Result::ok)
-            .map(|(epoch, bloom)| BloomWithEpoch { epoch, bloom })
-            .collect();
+        let it = req.epochs.into_iter().take(MAX_ITEMS_TO_SEND).map(|epoch| {
+            self.ledger
+                .bloom_of(epoch)
+                .map(|bloom| BloomWithEpoch { epoch, bloom })
+        });
+
+        let (blooms, errors) = partition_results(it);
+
+        if !errors.is_empty() {
+            info!("Errors while serving GetBlooms request: {:?}", errors);
+        }
 
         let msg: Box<dyn Message> =
             Box::new(GetBloomsResponse { request_id, blooms });
@@ -660,24 +738,30 @@ impl Provider {
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
-        let block_txs = req
+        let it = req
             .hashes
             .into_iter()
-            .map(|h| self.ledger.block(h))
-            .filter_map(Result::ok)
-            .map(|block| {
+            .take(MAX_ITEMS_TO_SEND)
+            .map::<Result<_, Error>, _>(|h| {
+                let block = self.ledger.block(h)?;
+
                 let block_txs = block
                     .transactions
                     .clone()
                     .into_iter()
                     .map(|arc_tx| (*arc_tx).clone())
                     .collect();
-                BlockTxsWithHash {
+                Ok(BlockTxsWithHash {
                     hash: block.hash(),
                     block_txs,
-                }
-            })
-            .collect();
+                })
+            });
+
+        let (block_txs, errors) = partition_results(it);
+
+        if !errors.is_empty() {
+            info!("Errors while serving GetBlockTxs request: {:?}", errors);
+        }
 
         let msg: Box<dyn Message> = Box::new(GetBlockTxsResponse {
             request_id,
@@ -695,12 +779,20 @@ impl Provider {
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
-        // TODO(thegaram): consider merging overlapping tx infos
-        let infos = req
+        let it = req
             .hashes
             .into_iter()
-            .filter_map(|h| self.tx_info_by_hash(h))
-            .collect();
+            .take(MAX_ITEMS_TO_SEND)
+            .map(|h| self.tx_info_by_hash(h));
+
+        let (infos, errors) = partition_results(it);
+
+        if !errors.is_empty() {
+            info!(
+                "Errors while serving GetBlockHashesByEpoch request: {:?}",
+                errors
+            );
+        }
 
         let msg: Box<dyn Message> =
             Box::new(GetTxInfosResponse { request_id, infos });
@@ -747,12 +839,17 @@ impl Provider {
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
-        let roots = req
+        let it = req
             .keys
             .into_iter()
-            .map(|key| self.storage_root(key))
-            .filter_map(Result::ok)
-            .collect();
+            .take(MAX_ITEMS_TO_SEND)
+            .map(|key| self.storage_root(key));
+
+        let (roots, errors) = partition_results(it);
+
+        if !errors.is_empty() {
+            info!("Errors while serving GetStorageRoots request: {:?}", errors);
+        }
 
         let msg: Box<dyn Message> =
             Box::new(GetStorageRootsResponse { request_id, roots });
