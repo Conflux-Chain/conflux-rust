@@ -502,6 +502,20 @@ impl SynchronizationProtocolHandler {
             || current_phase.phase_type() == SyncPhaseType::Normal
     }
 
+    pub fn need_block_from_archive_node(&self) -> bool {
+        let current_phase = self.phase_manager.get_current_phase();
+        current_phase.phase_type() == SyncPhaseType::CatchUpSyncBlock
+            && !self.syn.is_full_node()
+    }
+
+    pub fn preferred_peer_node_type_for_get_block(&self) -> Option<NodeType> {
+        if self.need_block_from_archive_node() {
+            Some(NodeType::Archive)
+        } else {
+            None
+        }
+    }
+
     pub fn get_synchronization_graph(&self) -> SharedSynchronizationGraph {
         self.graph.clone()
     }
@@ -836,7 +850,12 @@ impl SynchronizationProtocolHandler {
             {
                 debug!("Recovered epoch {} from db", from);
                 if self.need_requesting_blocks() {
-                    self.request_blocks(io, None, epoch_hashes);
+                    self.request_blocks(
+                        io,
+                        None,
+                        epoch_hashes,
+                        self.preferred_peer_node_type_for_get_block(),
+                    );
                 } else {
                     self.request_block_headers(
                         io,
@@ -1065,8 +1084,14 @@ impl SynchronizationProtocolHandler {
             !task.compact,
             chosen_peer.clone(),
             task.delay,
+            self.preferred_peer_node_type_for_get_block(),
         );
-        self.request_blocks(io, chosen_peer, missing_dependencies);
+        self.request_blocks(
+            io,
+            chosen_peer,
+            missing_dependencies,
+            self.preferred_peer_node_type_for_get_block(),
+        );
 
         self.relay_blocks(io, need_to_relay)
     }
@@ -1583,7 +1608,12 @@ impl SynchronizationProtocolHandler {
     {
         let catch_up_mode = self.catch_up_mode();
         if catch_up_mode {
-            self.request_blocks(io, peer_id, hashes);
+            self.request_blocks(
+                io,
+                peer_id,
+                hashes,
+                self.preferred_peer_node_type_for_get_block(),
+            );
         } else {
             self.request_manager
                 .request_compact_blocks(io, peer_id, hashes, None);
@@ -1592,7 +1622,7 @@ impl SynchronizationProtocolHandler {
 
     pub fn request_blocks(
         &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
-        mut hashes: Vec<H256>,
+        mut hashes: Vec<H256>, preferred_node_type: Option<NodeType>,
     )
     {
         hashes.retain(|hash| !self.try_request_block_from_db(io, hash));
@@ -1605,6 +1635,7 @@ impl SynchronizationProtocolHandler {
             hashes,
             self.request_block_need_public(),
             None,
+            preferred_node_type,
         );
     }
 
@@ -1695,6 +1726,7 @@ impl SynchronizationProtocolHandler {
         &self, io: &dyn NetworkContext, requested_hashes: HashSet<H256>,
         returned_blocks: HashSet<H256>, ask_full_block: bool,
         peer: Option<NodeId>, delay: Option<Duration>,
+        preferred_node_type_for_block_request: Option<NodeType>,
     )
     {
         self.request_manager.blocks_received(
@@ -1705,6 +1737,7 @@ impl SynchronizationProtocolHandler {
             peer,
             self.request_block_need_public(),
             delay,
+            preferred_node_type_for_block_request,
         )
     }
 
