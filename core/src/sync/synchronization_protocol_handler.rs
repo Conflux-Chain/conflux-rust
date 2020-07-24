@@ -850,12 +850,7 @@ impl SynchronizationProtocolHandler {
             {
                 debug!("Recovered epoch {} from db", from);
                 if self.need_requesting_blocks() {
-                    self.request_blocks(
-                        io,
-                        None,
-                        epoch_hashes,
-                        self.preferred_peer_node_type_for_get_block(),
-                    );
+                    self.request_blocks(io, None, epoch_hashes);
                 } else {
                     self.request_block_headers(
                         io,
@@ -1086,12 +1081,7 @@ impl SynchronizationProtocolHandler {
             task.delay,
             self.preferred_peer_node_type_for_get_block(),
         );
-        self.request_blocks(
-            io,
-            chosen_peer,
-            missing_dependencies,
-            self.preferred_peer_node_type_for_get_block(),
-        );
+        self.request_blocks(io, chosen_peer, missing_dependencies);
 
         self.relay_blocks(io, need_to_relay)
     }
@@ -1608,12 +1598,7 @@ impl SynchronizationProtocolHandler {
     {
         let catch_up_mode = self.catch_up_mode();
         if catch_up_mode {
-            self.request_blocks(
-                io,
-                peer_id,
-                hashes,
-                self.preferred_peer_node_type_for_get_block(),
-            );
+            self.request_blocks(io, peer_id, hashes);
         } else {
             self.request_manager
                 .request_compact_blocks(io, peer_id, hashes, None);
@@ -1622,13 +1607,14 @@ impl SynchronizationProtocolHandler {
 
     pub fn request_blocks(
         &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
-        mut hashes: Vec<H256>, preferred_node_type: Option<NodeType>,
+        mut hashes: Vec<H256>,
     )
     {
         hashes.retain(|hash| !self.try_request_block_from_db(io, hash));
         // Blocks may have been inserted into sync graph before as dependent
         // blocks
         hashes.retain(|h| !self.graph.contains_block(h));
+        let preferred_node_type = self.preferred_peer_node_type_for_get_block();
         self.request_manager.request_blocks(
             io,
             peer_id,
