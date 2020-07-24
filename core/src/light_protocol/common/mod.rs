@@ -35,6 +35,9 @@ pub fn validate_chain_id(
     }
 }
 
+// TODO(thegaram): consider distinguishing between expected and unexpected
+// errors, e.g. some errors suggest the peer requested a non-existent item
+// (normal) while others suggest a local db inconsistency (exception).
 pub fn partition_results<I, E>(
     it: impl Iterator<Item = Result<I, E>>,
 ) -> (Vec<I>, Vec<E>)

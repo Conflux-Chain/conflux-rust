@@ -132,7 +132,7 @@ impl Provider {
                 // NOTE: this should not happen as we register
                 // all peers in `on_peer_connected`
                 error!("Received message from unknown peer={:?}", peer);
-                Err(ErrorKind::InternalError.into())
+                bail!(ErrorKind::InternalError)
             }
         }
     }
@@ -153,7 +153,7 @@ impl Provider {
             && !state.read().handshake_completed
         {
             warn!("Received msg={:?} from handshaking peer={:?}", msg_id, peer);
-            return Err(ErrorKind::UnexpectedMessage.into());
+            bail!(ErrorKind::UnexpectedMessage);
         }
 
         Ok(())
@@ -183,7 +183,7 @@ impl Provider {
             msgid::GET_BLOCK_TXS => self.on_get_block_txs(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::GET_TX_INFOS => self.on_get_tx_infos(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::GET_STORAGE_ROOTS => self.on_get_storage_roots(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
-            _ => Err(ErrorKind::UnknownMessage.into()),
+            _ => bail!(ErrorKind::UnknownMessage),
         }
     }
 
@@ -211,18 +211,16 @@ impl Provider {
         let (tx, tx_index, receipt) =
             match self.consensus.get_transaction_info_by_hash(&hash) {
                 None => {
-                    return Err(ErrorKind::UnableToProduceTxInfo(format!(
+                    bail!(ErrorKind::UnableToProduceTxInfo(format!(
                         "Unable to get tx info for {:?}",
                         hash
-                    ))
-                    .into());
+                    )));
                 }
                 Some((_, _, None)) => {
-                    return Err(ErrorKind::UnableToProduceTxInfo(format!(
+                    bail!(ErrorKind::UnableToProduceTxInfo(format!(
                         "Unable to get receipt for {:?}",
                         hash
-                    ))
-                    .into());
+                    )));
                 }
                 Some((tx, tx_index, Some((receipt, _)))) => {
                     assert_eq!(tx.hash(), hash); // sanity check
@@ -235,11 +233,10 @@ impl Provider {
         let block = match self.ledger.block(block_hash) {
             Ok(b) => b,
             Err(e) => {
-                return Err(ErrorKind::UnableToProduceTxInfo(format!(
+                bail!(ErrorKind::UnableToProduceTxInfo(format!(
                     "Unable to retrieve block {:?}: {}",
                     block_hash, e
-                ))
-                .into());
+                )));
             }
         };
 
@@ -252,22 +249,20 @@ impl Provider {
         let epoch = match self.consensus.get_block_epoch_number(&block_hash) {
             Some(epoch) => epoch,
             None => {
-                return Err(ErrorKind::UnableToProduceTxInfo(format!(
+                bail!(ErrorKind::UnableToProduceTxInfo(format!(
                     "Unable to get epoch number for block {:?}",
                     block_hash
-                ))
-                .into());
+                )));
             }
         };
 
         let epoch_hashes = match self.ledger.block_hashes_in(epoch) {
             Ok(hs) => hs,
             Err(e) => {
-                return Err(ErrorKind::UnableToProduceTxInfo(format!(
+                bail!(ErrorKind::UnableToProduceTxInfo(format!(
                     "Unable to find epoch hashes for {}: {}",
                     epoch, e
-                ))
-                .into());
+                )));
             }
         };
 
@@ -277,22 +272,20 @@ impl Provider {
             match epoch_hashes.iter().position(|h| *h == block_hash) {
                 Some(id) => id,
                 None => {
-                    return Err(ErrorKind::UnableToProduceTxInfo(format!(
+                    bail!(ErrorKind::UnableToProduceTxInfo(format!(
                         "Unable to find {:?} in epoch {}",
                         block_hash, epoch
-                    ))
-                    .into());
+                    )));
                 }
             };
 
         let epoch_receipts = match self.ledger.receipts_of(epoch) {
             Ok(rs) => rs.iter().cloned().map(Arc::new).collect::<Vec<_>>(),
             Err(e) => {
-                return Err(ErrorKind::UnableToProduceTxInfo(format!(
+                bail!(ErrorKind::UnableToProduceTxInfo(format!(
                     "Unable to retrieve receipts for {}: {}",
                     epoch, e
-                ))
-                .into());
+                )));
             }
         };
 
@@ -377,7 +370,7 @@ impl Provider {
     fn validate_peer_type(&self, node_type: &NodeType) -> Result<(), Error> {
         match node_type {
             NodeType::Light => Ok(()),
-            _ => Err(ErrorKind::UnexpectedPeerType.into()),
+            _ => bail!(ErrorKind::UnexpectedPeerType),
         }
     }
 
@@ -390,7 +383,7 @@ impl Provider {
                     "Genesis mismatch (ours: {:?}, theirs: {:?})",
                     h, genesis
                 );
-                Err(ErrorKind::GenesisMismatch.into())
+                bail!(ErrorKind::GenesisMismatch)
             }
         }
     }
@@ -410,7 +403,7 @@ impl Provider {
 
         if let Err(e) = self.send_status(io, peer) {
             warn!("Failed to send status to peer={:?}: {:?}", peer, e);
-            return Err(ErrorKind::SendStatusFailed.into());
+            bail!(ErrorKind::SendStatusFailed);
         };
 
         let state = self.get_existing_peer_state(peer)?;
@@ -613,7 +606,7 @@ impl Provider {
                     "insert_new_transactions failed: {:?}, {:?}",
                     passed, failed
                 );
-                Err(ErrorKind::InternalError.into())
+                bail!(ErrorKind::InternalError)
             }
         }
     }
@@ -900,7 +893,7 @@ impl Provider {
             Some(network) => network,
             None => {
                 error!("Network unavailable, not relaying hashes");
-                return Err(ErrorKind::InternalError.into());
+                bail!(ErrorKind::InternalError);
             }
         };
 
@@ -939,10 +932,10 @@ impl Provider {
                     request_id: msg.get_request_id(),
                 };
 
-                Err(ErrorKind::Throttled(msg.msg_name(), throttled).into())
+                bail!(ErrorKind::Throttled(msg.msg_name(), throttled))
             }
             ThrottleResult::AlreadyThrottled => {
-                Err(ErrorKind::AlreadyThrottled(msg.msg_name()).into())
+                bail!(ErrorKind::AlreadyThrottled(msg.msg_name()))
             }
         }
     }
