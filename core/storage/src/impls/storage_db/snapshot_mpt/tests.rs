@@ -15,7 +15,7 @@ fn check_snapshot_mpt_integrity() {
     let mut key_value_iter = snapshot_db.snapshot_kv_iterator().unwrap();
     let total_kvs = check_key_value_load(
         &snapshot_db,
-        key_value_iter.iter_range(&[], None).unwrap(),
+        key_value_iter.iter_range(&[], None).unwrap().take(),
         /* check_value = */ true,
     )
     .unwrap();
@@ -31,7 +31,7 @@ fn check_snapshot_mpt_root() {
     let snapshot_db =
         open_snapshot_db_for_testing(db_path, /* readonly = */ true).unwrap();
     let mut key_value_iter = snapshot_db.snapshot_kv_iterator().unwrap();
-    let mut kv_iter = key_value_iter.iter_range(&[], None).unwrap();
+    let mut kv_iter = key_value_iter.iter_range(&[], None).unwrap().take();
 
     let merkle_root =
         (&snapshot_db.open_snapshot_mpt_shared().unwrap()).get_merkle_root();
@@ -153,7 +153,7 @@ where KvdbIterIterator<
         snapshot_db.snapshot_kv_iterator_n().unwrap().take();
     let mut kv_iter = key_value_iter
         .to_constrain_object_mut()
-        .iter_range2(&[], None)
+        .iter_range(&[], None)
         .unwrap()
         .take();
 
