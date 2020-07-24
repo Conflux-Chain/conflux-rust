@@ -1009,7 +1009,7 @@ impl SynchronizationGraphInner {
                 invalid_set.insert(*child);
             }
         }
-        mem::replace(&mut self.arena[index].children, children);
+        self.arena[index].children = children;
         let referrers =
             mem::replace(&mut self.arena[index].referrers, Vec::new());
         for referrer in &referrers {
@@ -1019,7 +1019,7 @@ impl SynchronizationGraphInner {
                 invalid_set.insert(*referrer);
             }
         }
-        mem::replace(&mut self.arena[index].referrers, referrers);
+        self.arena[index].referrers = referrers;
     }
 }
 

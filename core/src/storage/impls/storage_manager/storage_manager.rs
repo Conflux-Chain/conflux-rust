@@ -1264,7 +1264,7 @@ impl StorageManager {
             snapshots.sort_by(|x, y| x.height.partial_cmp(&y.height).unwrap());
 
             let current_snapshots = &mut *self.current_snapshots.write();
-            std::mem::replace(current_snapshots, snapshots);
+            *current_snapshots = snapshots;
 
             let snapshot_associated_mpts =
                 &mut *self.snapshot_associated_mpts_by_epoch.write();

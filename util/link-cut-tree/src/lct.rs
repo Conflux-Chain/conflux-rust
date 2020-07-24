@@ -88,7 +88,7 @@ macro_rules! construct_link_cut_node {
         impl_default_for_lct_node!(MinNode, );
     };
     (SizeMinNode) => {
-        /// subtree size of current node in the Auxiliary Tree
+        // subtree size of current node in the Auxiliary Tree
         define_lct_node!(SizeMinNode, size: usize);
         impl_default_for_lct_node!(SizeMinNode, size: 1);
     };
