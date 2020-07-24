@@ -7,9 +7,11 @@ use crate::sync::{
         handleable::{Context, Handleable},
         DynamicCapability,
     },
+    node_type::NodeType,
     Error, ErrorKind, SynchronizationPeerState,
 };
 use cfx_types::H256;
+use network::{NODE_TAG_ARCHIVE, NODE_TAG_FULL, NODE_TAG_NODE_TYPE};
 use primitives::ChainIdParams;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{collections::HashSet, time::Instant};
@@ -20,6 +22,7 @@ pub struct StatusV2 {
     pub chain_id: ChainIdParams,
     pub genesis_hash: H256,
     pub best_epoch: u64,
+    pub node_type: NodeType,
     pub terminal_block_hashes: Vec<H256>,
 }
 
@@ -48,9 +51,24 @@ impl Handleable for StatusV2 {
         let latest: HashSet<H256> =
             self.terminal_block_hashes.iter().cloned().collect();
 
+        match self.node_type {
+            NodeType::Archive => {
+                let key: String = NODE_TAG_NODE_TYPE.into();
+                let value: String = NODE_TAG_ARCHIVE.into();
+                ctx.insert_peer_node_tag(ctx.node_id(), &key, &value);
+            }
+            NodeType::Full => {
+                let key: String = NODE_TAG_NODE_TYPE.into();
+                let value: String = NODE_TAG_FULL.into();
+                ctx.insert_peer_node_tag(ctx.node_id(), &key, &value);
+            }
+            _ => {}
+        };
+
         if let Ok(peer_info) = ctx.manager.syn.get_peer_info(&ctx.node_id) {
             let latest_updated = {
                 let mut peer_info = peer_info.write();
+                peer_info.node_type = self.node_type;
                 peer_info.heartbeat = Instant::now();
 
                 let updated = self.best_epoch != peer_info.best_epoch
@@ -94,6 +112,7 @@ impl Handleable for StatusV2 {
 
             let mut peer_state = SynchronizationPeerState {
                 node_id: ctx.node_id(),
+                node_type: self.node_type,
                 is_validator: false,
                 protocol_version: peer_protocol_version,
                 genesis_hash,
@@ -143,6 +162,7 @@ impl Handleable for StatusDeprecatedV1 {
 
         StatusV2 {
             chain_id: ctx.manager.graph.consensus.get_config().chain_id.clone(),
+            node_type: ctx.manager.node_type(),
             best_epoch: self.best_epoch,
             genesis_hash: self.genesis_hash,
             terminal_block_hashes: self.terminal_block_hashes,

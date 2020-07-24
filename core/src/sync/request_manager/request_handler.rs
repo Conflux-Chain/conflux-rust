@@ -9,6 +9,7 @@ use crate::{
         message::{DynamicCapability, KeyContainer},
         request_manager::RequestManager,
         synchronization_protocol_handler::ProtocolConfiguration,
+        synchronization_state::EpochGapLimit,
         Error, ErrorKind,
     },
 };
@@ -455,6 +456,9 @@ pub trait Request:
 
     /// Notify the handler when the request gets timeout.
     fn notify_timeout(&mut self) {}
+
+    /// Epoch-gap-limit required by this request.
+    fn epoch_gap_limit(&self) -> Option<EpochGapLimit> { None }
 }
 
 #[derive(Debug, DeriveMallocSizeOf)]

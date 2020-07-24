@@ -6,17 +6,25 @@ use app_dirs::{get_app_root, AppDataType, AppInfo};
 use cfxcore_accounts::{AccountProvider, AccountProviderSettings};
 use cfxstore::{accounts_dir::RootDiskDirectory, CfxStore};
 use dir::helpers::replace_home;
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 pub fn account_provider(
     dir: Option<String>, sstore_iterations: Option<u32>,
-) -> Result<AccountProvider, String> {
+    refresh_time: Option<Duration>,
+) -> Result<AccountProvider, String>
+{
     let dir = match dir {
         Some(dir) => dir,
         None => keys_path(),
     };
+
     let dir = Box::new(keys_dir(dir)?);
     let secret_store = Box::new(secret_store(dir, sstore_iterations)?);
+
+    if let Some(t) = refresh_time {
+        secret_store.set_refresh_time(t);
+    }
+
     Ok(AccountProvider::new(
         secret_store,
         AccountProviderSettings::default(),
