@@ -193,10 +193,7 @@ impl State {
                     with_proof,
                 )?;
 
-                proof.with_intermediate(
-                    maybe_proof,
-                    self.maybe_intermediate_trie_key_padding.clone(),
-                );
+                proof.with_intermediate(maybe_proof);
 
                 match maybe_value {
                     MptValue::Some(value) => {

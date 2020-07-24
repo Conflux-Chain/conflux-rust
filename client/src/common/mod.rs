@@ -266,10 +266,17 @@ pub fn initialize_common_modules(
         Arc::new(network)
     };
 
+    let refresh_time =
+        Duration::from_millis(conf.raw_conf.account_provider_refresh_time_ms);
+
     let accounts = Arc::new(
-        account_provider(Some(keys_path()), None)
-            .ok()
-            .expect("failed to initialize account provider"),
+        account_provider(
+            Some(keys_path()),
+            None, /* sstore_iterations */
+            Some(refresh_time),
+        )
+        .ok()
+        .expect("failed to initialize account provider"),
     );
 
     let common_impl = Arc::new(CommonRpcImpl::new(
@@ -343,6 +350,7 @@ pub fn initialize_not_light_node_modules(
         Arc::downgrade(&network),
         txpool.clone(),
         conf.raw_conf.throttling_conf.clone(),
+        is_full_node,
     ));
     light_provider.register(network.clone()).unwrap();
 

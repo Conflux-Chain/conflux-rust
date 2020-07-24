@@ -24,10 +24,11 @@ use crate::{
             GetStateEntries, GetStateRoots, GetStorageRoots, GetTxInfos,
             GetTxs, GetWitnessInfo, NewBlockHashes, NodeType,
             Receipts as GetReceiptsResponse, ReceiptsWithEpoch, SendRawTx,
-            StateEntries as GetStateEntriesResponse, StateEntryWithKey,
-            StateRootWithEpoch, StateRoots as GetStateRootsResponse,
-            StatusPingDeprecatedV1, StatusPingV2, StatusPongDeprecatedV1,
-            StatusPongV2, StorageRootKey, StorageRootProof, StorageRootWithKey,
+            StateEntries as GetStateEntriesResponse, StateEntryProof,
+            StateEntryWithKey, StateKey, StateRootWithEpoch,
+            StateRoots as GetStateRootsResponse, StatusPingDeprecatedV1,
+            StatusPingV2, StatusPongDeprecatedV1, StatusPongV2, StorageRootKey,
+            StorageRootProof, StorageRootWithKey,
             StorageRoots as GetStorageRootsResponse, TxInfo,
             TxInfos as GetTxInfosResponse, Txs as GetTxsResponse,
             WitnessInfo as GetWitnessInfoResponse, WitnessInfoWithHeight,
@@ -56,6 +57,7 @@ use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
 #[derive(DeriveMallocSizeOf)]
 pub struct Provider {
     pub protocol_version: ProtocolVersion,
+    is_full_node: bool,
 
     // shared consensus graph
     #[ignore_malloc_size_of = "arc already counted"]
@@ -86,7 +88,7 @@ impl Provider {
     pub fn new(
         consensus: SharedConsensusGraph, graph: Arc<SynchronizationGraph>,
         network: Weak<NetworkService>, tx_pool: Arc<TransactionPool>,
-        throttling_config_file: Option<String>,
+        throttling_config_file: Option<String>, is_full_node: bool,
     ) -> Self
     {
         let ledger = LedgerInfo::new(consensus.clone());
@@ -94,6 +96,7 @@ impl Provider {
 
         Provider {
             protocol_version: LIGHT_PROTOCOL_VERSION,
+            is_full_node,
             consensus,
             graph,
             ledger,
@@ -101,6 +104,14 @@ impl Provider {
             peers,
             tx_pool,
             throttling_config_file,
+        }
+    }
+
+    pub fn node_type(&self) -> NodeType {
+        if self.is_full_node {
+            NodeType::Full
+        } else {
+            NodeType::Archive
         }
     }
 
@@ -331,7 +342,7 @@ impl Provider {
                 protocol_version: self.protocol_version.0,
                 best_epoch: best_info.best_epoch_number,
                 genesis_hash,
-                node_type: NodeType::Full,
+                node_type: self.node_type(),
                 terminals,
             });
         } else {
@@ -339,7 +350,7 @@ impl Provider {
                 chain_id: self.consensus.get_config().chain_id.clone(),
                 best_epoch: best_info.best_epoch_number,
                 genesis_hash,
-                node_type: NodeType::Full,
+                node_type: self.node_type(),
                 terminals,
             });
         }
@@ -438,6 +449,35 @@ impl Provider {
         Ok(())
     }
 
+    fn state_entry(&self, key: StateKey) -> Result<StateEntryWithKey, Error> {
+        let snapshot_epoch_count = self.ledger.snapshot_epoch_count() as u64;
+
+        // state root in current snapshot period
+        let state_root = self.ledger.state_root_of(key.epoch)?.state_root;
+
+        // state root in previous snapshot period
+        let prev_snapshot_state_root = match key.epoch {
+            e if e <= snapshot_epoch_count => None,
+            _ => Some(
+                self.ledger
+                    .state_root_of(key.epoch - snapshot_epoch_count)?
+                    .state_root,
+            ),
+        };
+
+        // state entry and state proof
+        let (entry, state_proof) =
+            self.ledger.state_entry_at(key.epoch, &key.key)?;
+
+        let proof = StateEntryProof {
+            state_root,
+            prev_snapshot_state_root,
+            state_proof,
+        };
+
+        Ok(StateEntryWithKey { key, entry, proof })
+    }
+
     fn on_get_state_entries(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetStateEntries,
     ) -> Result<(), Error> {
@@ -448,20 +488,7 @@ impl Provider {
         let entries = req
             .keys
             .into_iter()
-            .map::<Result<_, Error>, _>(|key| {
-                let state_root =
-                    self.ledger.state_root_of(key.epoch)?.state_root;
-
-                let (entry, proof) =
-                    self.ledger.state_entry_at(key.epoch, &key.key)?;
-
-                Ok(StateEntryWithKey {
-                    key,
-                    entry,
-                    proof,
-                    state_root,
-                })
-            })
+            .map(|key| self.state_entry(key))
             .filter_map(Result::ok)
             .collect();
 

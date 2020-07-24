@@ -163,6 +163,11 @@ args:
         long: get-logs-epoch-batch-size
         value_name: SIZE
         takes_value: true
+    - account-provider-refresh-time-ms:
+        help: Sets the time after which accounts are re-read from disk.
+        long: account-provider-refresh-time-ms
+        value_name: MS
+        takes_value: true
     - light:
         long: light
     - archive:

@@ -157,9 +157,13 @@ impl Handler {
             witnesses.clone(),
         ));
 
+        let snapshot_epoch_count =
+            consensus.get_data_manager().get_snapshot_epoch_count() as u64;
+
         let state_roots = Arc::new(StateRoots::new(
             peers.clone(),
             request_id_allocator.clone(),
+            snapshot_epoch_count,
             witnesses.clone(),
         ));
 
@@ -169,12 +173,8 @@ impl Handler {
             request_id_allocator.clone(),
         );
 
-        let snapshot_epoch_count =
-            consensus.get_data_manager().get_snapshot_epoch_count() as u64;
-
         let storage_roots = StorageRoots::new(
             peers.clone(),
-            snapshot_epoch_count,
             state_roots.clone(),
             request_id_allocator.clone(),
         );
@@ -434,6 +434,7 @@ impl Handler {
     #[inline]
     fn validate_peer_type(&self, node_type: &NodeType) -> Result<(), Error> {
         match node_type {
+            NodeType::Archive => Ok(()),
             NodeType::Full => Ok(()),
             _ => Err(ErrorKind::UnexpectedPeerType.into()),
         }
