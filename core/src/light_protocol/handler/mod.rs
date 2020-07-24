@@ -258,121 +258,136 @@ impl Handler {
                     // TODO: use blocking recv with timeout instead
                     trace!("try_recv...");
 
-                    let epoch = match receiver.try_recv() {
-                        Ok((e, _)) if e < BLAME_CHECK_OFFSET => continue,
-                        Ok((e, _)) => e - BLAME_CHECK_OFFSET,
-                        Err(TryRecvError::Closed) => return,
-                        Err(TryRecvError::Empty) => continue,
-                    };
+                    let mut epochs = vec![];
 
-                    trace!("Blame verification received epoch {}", epoch);
-
-                    match epoch {
-                        // chain reorg => process again
-                        e if e <= last_epoch_received => {
-                            debug!("Chain reorg, re-processing epochs (e = {}, last_epoch_received = {})", e, last_epoch_received);
-                            last_epoch_received = e;
-                            next_epoch_to_process = e;
-
-                            // NOTE: we set `witnesses.latest_verified_header` at the end of the
-                            // loop, so outdated items retrieved previously should not be used.
-                        }
-
-                        // sanity check: epochs are sent in order, one-by-one
-                        e if e > last_epoch_received + 1 => {
-                            error!("Unexpected epoch number: e = {}, last_epoch_received = {}", e, last_epoch_received);
-                            assert!(false);
-                        }
-
-                        // epoch already handled through witness
-                        e if e < next_epoch_to_process => {
-                            trace!("Epoch already covered, skipping (e = {}, next_epoch_to_process = {})", e, next_epoch_to_process);
-                            last_epoch_received = e;
-                            continue;
-                        }
-
-                        // sanity check: no epochs are skipped
-                        e if e > next_epoch_to_process => {
-                            error!("Unexpected epoch number: e = {}, next_epoch_to_process = {}", e, next_epoch_to_process);
-                            assert!(false);
-                        }
-
-                        // e == last_epoch_received + 1
-                        // e == next_epoch_to_process
-                        e => {
-                            last_epoch_received = e;
+                    loop {
+                        match receiver.try_recv() {
+                            Ok((e, _)) if e < BLAME_CHECK_OFFSET => continue,
+                            Ok((e, _)) => epochs.push(e - BLAME_CHECK_OFFSET),
+                            Err(TryRecvError::Closed) => return,
+                            Err(TryRecvError::Empty) => break,
                         }
                     }
 
-                    // convert epoch number into pivot height
-                    let height = epoch + DEFERRED_STATE_EPOCH_COUNT;
-
-                    trace!("Finding witness for epoch {}...", epoch);
-
-                    // check blaming
-                    match ledger.witness_of_header_at(height) {
-                        // no witness found
-                        None => {
-                            error!(
-                                "No witness found for epoch {} (height {});
-                                best_epoch_number = {}, latest_checkpoint_epoch_number = {}",
-                                epoch,
-                                height,
-                                consensus.best_epoch_number(),
-                                consensus.latest_checkpoint_epoch_number()
-                            );
-
-                            // this can happen in two cases
-                            // (1) we are lagging behind so much that `height` is no longer maintained in memory.
-                            //     --> this seems unlikely.
-                            // (2) there are too many blamed blocks on the `BLAME_CHECK_OFFSET` suffix of the
-                            //     pivot chain so we cannot reliably determine the witness.
-                            //     --> this is also unlikely but can in theory happen.
-                            // TODO(thegaram): add retry logic for (2)
-                        }
-
-                        // header is not blamed (i.e. it is its own witness)
-                        Some(w) if w == height => {
-                            trace!("Epoch {} (height {}) is NOT blamed", epoch, height);
-
-                            let header = ledger.pivot_header_of(height).expect("pivot header should exist");
-
-                            // in case `w == height` but this header is also blaming previous headers,
-                            // we must have already requested the corresponding roots in a previous
-                            // iteration and skipped this header using `next_epoch_to_process`.
-                            assert_eq!(header.blame(), 0);
-
-                            // TODO(thegaram): storing roots of correct headers is redundant.
-                            // should we use a simple placeholder instead?
-                            witnesses.verified.write().insert(
-                                epoch,
-                                (
-                                    *header.deferred_state_root(),
-                                    *header.deferred_receipts_root(),
-                                    *header.deferred_logs_bloom_hash(),
-                                )
-                            );
-
-                            // continue from the next header on the pivot chain
-                            next_epoch_to_process = epoch + 1;
-                        }
-
-                        // header is blamed
-                        Some(w) => {
-                            debug!("Epoch {} (height {}) is blamed, requesting witness {}", epoch, height, w);
-
-                            // this request covers all blamed headers:
-                            // [height, height + 1, ..., w]
-                            witnesses.request(std::iter::once(w));
-
-                            // skip all subsequent headers requested
-                            assert!(w > DEFERRED_STATE_EPOCH_COUNT);
-                            let witness_epoch = w - DEFERRED_STATE_EPOCH_COUNT;
-                            next_epoch_to_process = witness_epoch + 1;
-                        }
+                    if epochs.is_empty() {
+                        continue;
                     }
 
-                    *witnesses.latest_verified_header.write() = height;
+                    trace!("Blame verification received epochs {:?}", epochs);
+
+                    // lock ConsensusInner while processing this batch
+                    // to make sure we are not lagging behind too much
+                    // TODO(thegaram): review this
+                    let _guard = consensus.lock_inner();
+
+                    for epoch in epochs {
+                        match epoch {
+                            // chain reorg => process again
+                            e if e <= last_epoch_received => {
+                                debug!("Chain reorg, re-processing epochs (e = {}, last_epoch_received = {})", e, last_epoch_received);
+                                last_epoch_received = e;
+                                next_epoch_to_process = e;
+
+                                // NOTE: we set `witnesses.latest_verified_header` at the end of the
+                                // loop, so outdated items retrieved previously should not be used.
+                            }
+
+                            // sanity check: epochs are sent in order, one-by-one
+                            e if e > last_epoch_received + 1 => {
+                                error!("Unexpected epoch number: e = {}, last_epoch_received = {}", e, last_epoch_received);
+                                assert!(false);
+                            }
+
+                            // epoch already handled through witness
+                            e if e < next_epoch_to_process => {
+                                trace!("Epoch already covered, skipping (e = {}, next_epoch_to_process = {})", e, next_epoch_to_process);
+                                last_epoch_received = e;
+                                continue;
+                            }
+
+                            // sanity check: no epochs are skipped
+                            e if e > next_epoch_to_process => {
+                                error!("Unexpected epoch number: e = {}, next_epoch_to_process = {}", e, next_epoch_to_process);
+                                assert!(false);
+                            }
+
+                            // e == last_epoch_received + 1
+                            // e == next_epoch_to_process
+                            e => {
+                                last_epoch_received = e;
+                            }
+                        }
+
+                        // convert epoch number into pivot height
+                        let height = epoch + DEFERRED_STATE_EPOCH_COUNT;
+
+                        trace!("Finding witness for epoch {}...", epoch);
+
+                        // check blaming
+                        match ledger.witness_of_header_at(height) {
+                            // no witness found
+                            None => {
+                                error!(
+                                    "No witness found for epoch {} (height {});
+                                    best_epoch_number = {}, latest_checkpoint_epoch_number = {}",
+                                    epoch,
+                                    height,
+                                    consensus.best_epoch_number(),
+                                    consensus.latest_checkpoint_epoch_number()
+                                );
+
+                                // this can happen in two cases
+                                // (1) we are lagging behind so much that `height` is no longer maintained in memory.
+                                //     --> this seems unlikely.
+                                // (2) there are too many blamed blocks on the `BLAME_CHECK_OFFSET` suffix of the
+                                //     pivot chain so we cannot reliably determine the witness.
+                                //     --> this is also unlikely but can in theory happen.
+                                // TODO(thegaram): add retry logic for (2)
+                            }
+
+                            // header is not blamed (i.e. it is its own witness)
+                            Some(w) if w == height => {
+                                trace!("Epoch {} (height {}) is NOT blamed", epoch, height);
+
+                                let header = ledger.pivot_header_of(height).expect("pivot header should exist");
+
+                                // in case `w == height` but this header is also blaming previous headers,
+                                // we must have already requested the corresponding roots in a previous
+                                // iteration and skipped this header using `next_epoch_to_process`.
+                                assert_eq!(header.blame(), 0);
+
+                                // TODO(thegaram): storing roots of correct headers is redundant.
+                                // should we use a simple placeholder instead?
+                                witnesses.verified.write().insert(
+                                    epoch,
+                                    (
+                                        *header.deferred_state_root(),
+                                        *header.deferred_receipts_root(),
+                                        *header.deferred_logs_bloom_hash(),
+                                    )
+                                );
+
+                                // continue from the next header on the pivot chain
+                                next_epoch_to_process = epoch + 1;
+                            }
+
+                            // header is blamed
+                            Some(w) => {
+                                trace!("Epoch {} (height {}) is blamed, requesting witness {}", epoch, height, w);
+
+                                // this request covers all blamed headers:
+                                // [height, height + 1, ..., w]
+                                witnesses.request(std::iter::once(w));
+
+                                // skip all subsequent headers requested
+                                assert!(w > DEFERRED_STATE_EPOCH_COUNT);
+                                let witness_epoch = w - DEFERRED_STATE_EPOCH_COUNT;
+                                next_epoch_to_process = witness_epoch + 1;
+                            }
+                        }
+
+                        *witnesses.latest_verified_header.write() = height;
+                    }
                 }
             })
             .expect("Starting the Blame Verification Worker should succeed");

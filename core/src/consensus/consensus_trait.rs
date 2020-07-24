@@ -3,12 +3,14 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    block_data_manager::BlockDataManager, consensus::BestInformation,
-    state::State, statistics::SharedStatistics,
+    block_data_manager::BlockDataManager,
+    consensus::{
+        consensus_inner::ConsensusGraphInner, BestInformation, ConsensusConfig,
+    },
+    state::State,
+    statistics::SharedStatistics,
     transaction_pool::SharedTransactionPool,
 };
-
-use crate::consensus::ConsensusConfig;
 use cfx_types::{H256, U256};
 use primitives::{
     receipt::Receipt, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
@@ -93,6 +95,8 @@ pub trait ConsensusGraphTrait: Send + Sync {
     fn set_initial_sequence_number(&self, initial_sn: u64);
 
     fn update_best_info(&self);
+
+    fn lock_inner(&self) -> parking_lot::RwLockReadGuard<ConsensusGraphInner>;
 }
 
 pub type SharedConsensusGraph =

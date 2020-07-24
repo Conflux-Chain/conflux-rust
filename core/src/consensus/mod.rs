@@ -1387,7 +1387,9 @@ impl ConsensusGraphTrait for ConsensusGraph {
     ) -> Result<H256, String> {
         self.get_height_from_epoch_number(epoch_number)
             .and_then(|height| {
-                self.inner.read().get_pivot_hash_from_epoch_number(height)
+                self.inner
+                    .read_recursive()
+                    .get_pivot_hash_from_epoch_number(height)
             })
     }
 
@@ -1497,6 +1499,10 @@ impl ConsensusGraphTrait for ConsensusGraph {
         self.inner.read().get_to_sync_epoch_id()
     }
 
+    fn lock_inner(&self) -> parking_lot::RwLockReadGuard<ConsensusGraphInner> {
+        return self.inner.read();
+    }
+
     /// Starting from header `height` on the pivot chain, find the first header
     /// with sufficiently low blame ratio within `blame_bound`.
     /// Return `None` if no such header exists OR if `height` is not available
@@ -1504,7 +1510,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
     fn first_trusted_header_starting_from(
         &self, height: u64, blame_bound: Option<u32>,
     ) -> Option<u64> {
-        let inner = self.inner.read();
+        let inner = self.inner.read_recursive();
 
         // check if `height` is available in memory
         let pivot_index = match height {
