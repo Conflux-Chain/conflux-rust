@@ -13,6 +13,7 @@ fn underflow_can_not_happen_u256() {
 
 #[test]
 #[should_panic]
+#[allow(arithmetic_overflow)]
 fn underflow_can_not_happen_native_u64() {
     let mut balance = 1u64;
     balance -= 2;
