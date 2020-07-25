@@ -232,32 +232,11 @@ impl SynchronizationState {
     }
 }
 
-pub struct EpochGapLimit {
-    base_epoch: u64,
-    gap_limit: u64,
-}
-
-impl EpochGapLimit {
-    pub fn new(base_epoch: u64, gap_limit: u64) -> Self {
-        Self {
-            base_epoch,
-            gap_limit,
-        }
-    }
-
-    pub fn base_epoch(&self) -> u64 { self.base_epoch }
-
-    pub fn gap_limit(&self) -> u64 { self.gap_limit }
-}
-
 #[derive(Default)]
 /// Filter peers that match ``all'' the provided conditions.
 pub struct PeerFilter<'a> {
     throttle_msg_ids: Option<HashSet<MsgId>>,
-    // When the gap between the base epoch and the best epoch
-    // of the peer is larger than the gap limit, archive node
-    // is required.
-    epoch_gap_limit: Option<EpochGapLimit>,
+    preferred_node_type: Option<NodeType>,
     excludes: Option<HashSet<NodeId>>,
     choose_from: Option<&'a HashSet<NodeId>>,
     cap: Option<DynamicCapability>,
@@ -267,10 +246,8 @@ pub struct PeerFilter<'a> {
 impl<'a> PeerFilter<'a> {
     pub fn new(msg_id: MsgId) -> Self { PeerFilter::default().throttle(msg_id) }
 
-    pub fn with_epoch_gap_limit(
-        mut self, epoch_gap_limit: EpochGapLimit,
-    ) -> Self {
-        self.epoch_gap_limit = Some(epoch_gap_limit);
+    pub fn with_preferred_node_type(mut self, node_type: NodeType) -> Self {
+        self.preferred_node_type = Some(node_type);
         self
     }
 
@@ -312,18 +289,9 @@ impl<'a> PeerFilter<'a> {
             || self.min_best_epoch.is_some();
 
         for (id, peer) in syn.peers.read().iter() {
-            let (peer_best_epoch, peer_node_type) = {
-                let peer = peer.read();
-                (peer.best_epoch, peer.node_type.clone())
-            };
-            if let Some(ref epoch_gap_limit) = self.epoch_gap_limit {
-                if epoch_gap_limit.base_epoch() > peer_best_epoch {
-                    continue;
-                }
-                if peer_best_epoch - epoch_gap_limit.base_epoch()
-                    > epoch_gap_limit.gap_limit()
-                    && peer_node_type != NodeType::Archive
-                {
+            let peer_node_type = peer.read().node_type.clone();
+            if let Some(ref preferred_node_type) = self.preferred_node_type {
+                if *preferred_node_type != peer_node_type {
                     continue;
                 }
             }

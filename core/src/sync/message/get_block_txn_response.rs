@@ -133,6 +133,7 @@ impl Handleable for GetBlockTxnResponse {
             true,
             peer,
             delay,
+            None, /* preferred_node_type_for_block_request */
         );
         Ok(())
     }

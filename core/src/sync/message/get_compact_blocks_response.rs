@@ -164,6 +164,7 @@ impl Handleable for GetCompactBlocksResponse {
             true,
             Some(ctx.node_id.clone()),
             delay,
+            None, /* preferred_node_type_for_block_request */
         );
 
         ctx.manager.recover_public_queue.dispatch(

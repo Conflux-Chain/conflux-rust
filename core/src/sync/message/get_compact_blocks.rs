@@ -60,6 +60,7 @@ impl Request for GetCompactBlocks {
             request_id: 0,
             with_public: true,
             hashes: self.hashes.iter().cloned().collect(),
+            preferred_node_type: None,
         }))
     }
 }

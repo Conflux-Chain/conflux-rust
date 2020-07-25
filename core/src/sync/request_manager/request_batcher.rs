@@ -1,5 +1,6 @@
 use crate::sync::{
     message::{GetBlockHashesByEpoch, GetBlockHeaders, GetBlocks},
+    node_type::NodeType,
     request_manager::Request,
 };
 use cfx_types::H256;
@@ -70,7 +71,7 @@ impl RequestBatcher {
     /// Batch inserted requests according to their request types.
     /// Requests with close delays are batched together.
     pub fn get_batched_requests(
-        mut self,
+        mut self, is_full_node: bool,
     ) -> impl Iterator<Item = (Duration, Box<dyn Request>)> {
         let mut requests = Vec::new();
         for (delay, hashes) in
@@ -84,6 +85,11 @@ impl RequestBatcher {
                 }) as Box<dyn Request>,
             ));
         }
+        let preferred_node_type = if is_full_node {
+            None
+        } else {
+            Some(NodeType::Archive)
+        };
         for (delay, hashes) in
             self.blocks.batch_iter(DEFAULT_REQUEST_BLOCK_BATCH_SIZE)
         {
@@ -91,8 +97,9 @@ impl RequestBatcher {
                 delay,
                 Box::new(GetBlocks {
                     request_id: 0,
-                    hashes,
                     with_public: false,
+                    hashes,
+                    preferred_node_type: preferred_node_type.clone(),
                 }) as Box<dyn Request>,
             ));
         }
