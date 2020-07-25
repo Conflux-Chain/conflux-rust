@@ -52,6 +52,20 @@ pub mod consensus_internal {
     pub const MINING_REWARD_DECAY_RATIO_PER_QUARTER: f64 = 0.958;
     // How many quarters that the mining reward keep decaying.
     pub const MINING_REWARD_DECAY_PERIOD_IN_QUARTER: usize = 40;
+    // Computed from `INITIAL_BASE_MINING_REWARD_IN_UCFX` and
+    // `MINING_REWARD_DECAY_RATIO_PER_QUARTER`. The n^th element equals to
+    // floor(11300000 * 0.958^n)
+    pub const BASE_MINING_REWARD_IN_UCFX_LOOKUP_TABLE: [u64;
+        MINING_REWARD_DECAY_PERIOD_IN_QUARTER] = [
+        11_300_000, 10_825_400, 10_370_733, 9_935_162, 9_517_885, 9_118_134,
+        8_735_172, 8_368_295, 8_016_827, 7_680_120, 7_357_555, 7_048_537,
+        6_752_499, 6_468_894, 6_197_200, 5_936_918, 5_687_567, 5_448_689,
+        5_219_844, 5_000_611, 4_790_585, 4_589_381, 4_396_627, 4_211_968,
+        4_035_066, 3_865_593, 3_703_238, 3_547_702, 3_398_698, 3_255_953,
+        3_119_203, 2_988_196, 2_862_692, 2_742_459, 2_627_276, 2_516_930,
+        2_411_219, 2_309_948, 2_212_930, 2_119_987,
+    ];
+
     pub const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
     pub const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
 
