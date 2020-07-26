@@ -34,9 +34,7 @@ use parking_lot::{Mutex, RwLock};
 use slab::Slab;
 use std::{
     collections::HashMap,
-    sync::{
-        Arc, Condvar as SCondvar, Mutex as SMutex, Weak,
-    },
+    sync::{Arc, Condvar as SCondvar, Mutex as SMutex, Weak},
     thread::{self, JoinHandle},
     time::Duration,
 };
