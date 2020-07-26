@@ -90,20 +90,13 @@ impl SocketWorker {
     ) where
         Message: Send + Sync + 'static,
     {
-        loop {
-            if deleting.load(AtomicOrdering::Acquire) {
-                return;
-            }
-            while !deleting.load(AtomicOrdering::Acquire) {
-                // Add timeout because if the worker is dropped, we can check
-                // `deleting` without blocking forever.
-                match rx.recv_timeout(Duration::from_millis(500)) {
-                    Ok(work) => SocketWorker::do_work(work, channel.clone()),
-                    Err(crossbeam_channel::RecvTimeoutError::Timeout) => break,
-                    Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
-                        return
-                    }
-                }
+        while !deleting.load(AtomicOrdering::Acquire) {
+            // Add timeout because if the worker is dropped, we can check
+            // `deleting` without blocking forever.
+            match rx.recv_timeout(Duration::from_millis(500)) {
+                Ok(work) => SocketWorker::do_work(work, channel.clone()),
+                Err(crossbeam_channel::RecvTimeoutError::Timeout) => continue,
+                Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break,
             }
         }
     }
