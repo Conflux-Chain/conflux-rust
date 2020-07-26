@@ -35,7 +35,6 @@ use slab::Slab;
 use std::{
     collections::HashMap,
     sync::{
-        mpsc::{self, Sender as AsyncSender},
         Arc, Condvar as SCondvar, Mutex as SMutex, Weak,
     },
     thread::{self, JoinHandle},
@@ -263,7 +262,8 @@ where Message: Send + Sync
     workers: Vec<Worker>,
     worker_channel: crossbeam_deque::Worker<Work<Message>>,
     work_ready: Arc<SCondvar>,
-    socket_workers: Vec<(AsyncSender<Work<Message>>, SocketWorker)>,
+    socket_workers:
+        Vec<(crossbeam_channel::Sender<Work<Message>>, SocketWorker)>,
     network_poll: Arc<Poll>,
 }
 
@@ -300,7 +300,7 @@ where Message: Send + Sync + 'static
         let num_socket_workers = 4;
         let socket_workers = (0..num_socket_workers)
             .map(|i| {
-                let (tx, rx) = mpsc::channel();
+                let (tx, rx) = crossbeam_channel::unbounded();
                 (
                     tx,
                     SocketWorker::new(

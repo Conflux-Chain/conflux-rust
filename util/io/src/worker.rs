@@ -22,17 +22,20 @@ use crate::{
     service_mio::{HandlerId, IoChannel, IoContext},
     IoHandler, LOCAL_STACK_SIZE,
 };
+use crossbeam_channel;
 use crossbeam_deque;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering as AtomicOrdering},
-        mpsc::Receiver,
         Arc,
     },
     thread::{self, JoinHandle},
 };
 
-use std::sync::{Condvar as SCondvar, Mutex as SMutex};
+use std::{
+    sync::{Condvar as SCondvar, Mutex as SMutex},
+    time::Duration,
+};
 
 const STACK_SIZE: usize = 16 * 1024 * 1024;
 
@@ -57,9 +60,12 @@ pub struct SocketWorker {
 impl SocketWorker {
     /// Creates a socket worker instance
     pub fn new<Message>(
-        index: usize, rx: Receiver<Work<Message>>, channel: IoChannel<Message>,
+        index: usize, rx: crossbeam_channel::Receiver<Work<Message>>,
+        channel: IoChannel<Message>,
     ) -> SocketWorker
-    where Message: Send + Sync + 'static {
+    where
+        Message: Send + Sync + 'static,
+    {
         let deleting = Arc::new(AtomicBool::new(false));
         let mut worker = SocketWorker {
             thread: None,
@@ -79,8 +85,8 @@ impl SocketWorker {
     }
 
     fn work_loop<Message>(
-        rx: Receiver<Work<Message>>, channel: IoChannel<Message>,
-        deleting: Arc<AtomicBool>,
+        rx: crossbeam_channel::Receiver<Work<Message>>,
+        channel: IoChannel<Message>, deleting: Arc<AtomicBool>,
     ) where
         Message: Send + Sync + 'static,
     {
@@ -89,11 +95,14 @@ impl SocketWorker {
                 return;
             }
             while !deleting.load(AtomicOrdering::Acquire) {
-                // TODO recv_timeout() may panic, not sure if it's the cause for
-                // returning SendError on the sender
-                match rx.recv() {
+                // Add timeout because if the worker is dropped, we can check
+                // `deleting` without blocking forever.
+                match rx.recv_timeout(Duration::from_millis(500)) {
                     Ok(work) => SocketWorker::do_work(work, channel.clone()),
-                    _ => break,
+                    Err(crossbeam_channel::RecvTimeoutError::Timeout) => break,
+                    Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
+                        return
+                    }
                 }
             }
         }
