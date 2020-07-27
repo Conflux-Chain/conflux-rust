@@ -4,7 +4,7 @@
 
 use cfx_types::{Address, H256};
 use cfxcore::{
-    statedb::StateDb,
+    statedb::{StateDb, StateDbExt},
     storage::{
         state::StateTrait,
         state_manager::{StateManager, StateManagerTrait},

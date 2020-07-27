@@ -113,8 +113,11 @@ impl<'a> MptSlicer<'a> {
 }
 
 use super::super::super::{
-    super::storage_db::snapshot_mpt::{
-        SnapshotMptTraitRead, SubtreeMerkleWithSize,
+    super::{
+        storage_db::snapshot_mpt::{
+            SnapshotMptTraitRead, SubtreeMerkleWithSize,
+        },
+        utils::access_mode,
     },
     errors::*,
     merkle_patricia_trie::{mpt_cursor::*, *},
