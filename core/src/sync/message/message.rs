@@ -187,6 +187,7 @@ pub fn handle_rlp_message(
 ) -> Result<bool, Error> {
     match id {
         msgid::STATUS_V2 => handle_message::<StatusV2>(ctx, rlp)?,
+        msgid::STATUS_V3 => handle_message::<StatusV3>(ctx, rlp)?,
         msgid::NEW_BLOCK => handle_message::<NewBlock>(ctx, rlp)?,
         msgid::NEW_BLOCK_HASHES => {
             handle_message::<NewBlockHashes>(ctx, rlp)?;
