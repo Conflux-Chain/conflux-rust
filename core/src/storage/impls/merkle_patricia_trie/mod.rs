@@ -29,7 +29,6 @@ pub use self::{
     mpt_value::MptValue,
     trie_node::{TrieNodeTrait, VanillaTrieNode},
     trie_proof::TrieProof,
-    walk::access_mode,
 };
 
 pub type MptKeyValue = (Vec<u8>, Box<[u8]>);

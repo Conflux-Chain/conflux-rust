@@ -10,6 +10,65 @@ pub mod arc_ext;
 pub mod guarded_value;
 pub mod wrap;
 
+pub fn to_key_prefix_iter_upper_bound(key_prefix: &[u8]) -> Option<Vec<u8>> {
+    let mut upper_bound_excl_value = key_prefix.to_vec();
+    if upper_bound_excl_value.len() == 0 {
+        None
+    } else {
+        let mut carry = 1;
+        let len = upper_bound_excl_value.len();
+        for i in 0..len {
+            if upper_bound_excl_value[len - 1 - i] == 255 {
+                upper_bound_excl_value[len - 1 - i] = 0;
+            } else {
+                upper_bound_excl_value[len - 1 - i] += 1;
+                carry = 0;
+                break;
+            }
+        }
+        // all bytes in lower_bound_incl are 255, which means no upper bound
+        // is needed.
+        if carry == 1 {
+            None
+        } else {
+            Some(upper_bound_excl_value)
+        }
+    }
+}
+
+pub mod access_mode {
+    pub trait AccessMode {
+        fn is_read_only() -> bool;
+    }
+
+    pub struct Read {}
+    pub struct Write {}
+
+    impl AccessMode for Read {
+        fn is_read_only() -> bool { return true; }
+    }
+
+    impl AccessMode for Write {
+        fn is_read_only() -> bool { return false; }
+    }
+}
+
+// General static bool value for compile time flag optimization.
+pub trait StaticBool {
+    fn value() -> bool;
+}
+
+pub struct No {}
+pub struct Yes {}
+
+impl StaticBool for No {
+    fn value() -> bool { false }
+}
+
+impl StaticBool for Yes {
+    fn value() -> bool { true }
+}
+
 /// The purpose of this trait is to create a new value of a passed object,
 /// when the passed object is the value, simply move the value;
 /// when the passed object is the reference, create the new value by clone.
