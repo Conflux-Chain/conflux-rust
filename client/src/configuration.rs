@@ -719,9 +719,8 @@ impl Configuration {
     pub fn execution_config(&self) -> ConsensusExecutionConfiguration {
         ConsensusExecutionConfiguration {
             anticone_penalty_ratio: self.raw_conf.anticone_penalty_ratio,
-            base_reward_table_in_ucfx: Vec::from(
-                BASE_MINING_REWARD_IN_UCFX_LOOKUP_TABLE,
-            ),
+            base_reward_table_in_ucfx: BASE_MINING_REWARD_IN_UCFX_LOOKUP_TABLE
+                .to_vec(),
         }
     }
 
