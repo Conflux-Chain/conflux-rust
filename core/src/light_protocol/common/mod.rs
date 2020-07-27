@@ -10,7 +10,7 @@ pub use peers::{FullPeerFilter, FullPeerState, LightPeerState, Peers};
 
 use super::{Error, ErrorKind};
 use primitives::ChainIdParams;
-use std::cmp;
+use std::{cmp, fmt::Debug};
 
 pub fn max_of_collection<I, T: Ord>(collection: I) -> Option<T>
 where I: Iterator<Item = T> {
@@ -33,4 +33,20 @@ pub fn validate_chain_id(
     } else {
         Ok(())
     }
+}
+
+// TODO(thegaram): consider distinguishing between expected and unexpected
+// errors, e.g. some errors suggest the peer requested a non-existent item
+// (normal) while others suggest a local db inconsistency (exception).
+pub fn partition_results<I, E>(
+    it: impl Iterator<Item = Result<I, E>>,
+) -> (Vec<I>, Vec<E>)
+where
+    I: Debug,
+    E: Debug,
+{
+    let (success, failure): (Vec<_>, Vec<_>) = it.partition(Result::is_ok);
+    let success = success.into_iter().map(Result::unwrap).collect();
+    let failure = failure.into_iter().map(Result::unwrap_err).collect();
+    (success, failure)
 }
