@@ -738,7 +738,7 @@ impl State {
             //
             // The logic here is intended for incorrect miner coin-base. In this
             // case, the mining reward get lost.
-            warn!(
+            debug!(
                 "add_balance: address does not already exist and is not a valid address. {:?}",
                 address
             );

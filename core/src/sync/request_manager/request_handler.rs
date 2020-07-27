@@ -7,9 +7,9 @@ use crate::{
     parameters::sync::FAILED_REQUEST_RESEND_WAIT,
     sync::{
         message::{DynamicCapability, KeyContainer},
+        node_type::NodeType,
         request_manager::RequestManager,
         synchronization_protocol_handler::ProtocolConfiguration,
-        synchronization_state::EpochGapLimit,
         Error, ErrorKind,
     },
 };
@@ -458,7 +458,7 @@ pub trait Request:
     fn notify_timeout(&mut self) {}
 
     /// Epoch-gap-limit required by this request.
-    fn epoch_gap_limit(&self) -> Option<EpochGapLimit> { None }
+    fn preferred_node_type(&self) -> Option<NodeType> { None }
 }
 
 #[derive(Debug, DeriveMallocSizeOf)]
