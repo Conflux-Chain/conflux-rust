@@ -16,6 +16,7 @@ mod get_compact_blocks_response;
 mod get_terminal_block_hashes;
 mod get_terminal_block_hashes_response;
 mod handleable;
+mod heartbeat;
 mod keys;
 mod message;
 mod metrics;
@@ -48,6 +49,7 @@ pub use self::{
     get_terminal_block_hashes::GetTerminalBlockHashes,
     get_terminal_block_hashes_response::GetTerminalBlockHashesResponse,
     handleable::{Context, Handleable},
+    heartbeat::Heartbeat,
     keys::{Key, KeyContainer},
     message::{handle_rlp_message, msgid},
     new_block::NewBlock,
@@ -58,7 +60,7 @@ pub use self::{
     snapshot_manifest_response::SnapshotManifestResponse,
     state_sync_candidate_request::StateSyncCandidateRequest,
     state_sync_candidate_response::StateSyncCandidateResponse,
-    status::{StatusDeprecatedV1, StatusV2},
+    status::{StatusV2, StatusV3},
     throttling::Throttled,
     transactions::{
         GetTransactions, GetTransactionsFromTxHashes,

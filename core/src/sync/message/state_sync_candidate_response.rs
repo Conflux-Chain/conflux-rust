@@ -6,7 +6,7 @@ use crate::{
     sync::{
         message::{msgid, Context, Handleable, StateSyncCandidateRequest},
         state::storage::SnapshotSyncCandidate,
-        Error, SYNC_PROTO_V1, SYNC_PROTO_V2,
+        Error, SYNC_PROTO_V1, SYNC_PROTO_V3,
     },
 };
 use network::service::ProtocolVersion;
@@ -20,7 +20,7 @@ pub struct StateSyncCandidateResponse {
 
 build_msg_impl! {
     StateSyncCandidateResponse, msgid::STATE_SYNC_CANDIDATE_RESPONSE,
-    "StateSyncCandidateResponse", SYNC_PROTO_V1, SYNC_PROTO_V2
+    "StateSyncCandidateResponse", SYNC_PROTO_V1, SYNC_PROTO_V3
 }
 
 impl Handleable for StateSyncCandidateResponse {
