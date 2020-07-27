@@ -1561,7 +1561,8 @@ impl ConsensusGraphInner {
         }
 
         if parent == NULL && referees.is_empty() {
-            self.old_era_block_set.lock().push_back(hash);
+            // FIXME These blocks will not be garbage collected from disk if
+            // they are never referred.
             return (sn, NULL);
         }
 

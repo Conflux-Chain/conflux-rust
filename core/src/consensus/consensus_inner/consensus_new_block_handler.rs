@@ -62,6 +62,41 @@ impl ConsensusNewBlockHandler {
         }
     }
 
+    /// Return (old_era_block_set, new_era_block_set).
+    fn compute_old_era_and_new_era_block_set(
+        inner: &mut ConsensusGraphInner, new_era_block_arena_index: usize,
+    ) -> (HashSet<usize>, HashSet<usize>) {
+        // We first compute the set of blocks inside the new era and we
+        // recompute the past_weight inside the stable height.
+        let mut old_era_block_arena_index_set = HashSet::new();
+        let mut queue = VecDeque::new();
+        queue.push_back(new_era_block_arena_index);
+        while let Some(x) = queue.pop_front() {
+            if inner.arena[x].parent != NULL
+                && !old_era_block_arena_index_set
+                    .contains(&inner.arena[x].parent)
+            {
+                old_era_block_arena_index_set.insert(inner.arena[x].parent);
+                queue.push_back(inner.arena[x].parent);
+            }
+            for referee in &inner.arena[x].referees {
+                if *referee != NULL
+                    && !old_era_block_arena_index_set.contains(referee)
+                {
+                    old_era_block_arena_index_set.insert(*referee);
+                    queue.push_back(*referee);
+                }
+            }
+        }
+        let mut new_era_block_arena_index_set = HashSet::new();
+        for (i, _) in &inner.arena {
+            if !old_era_block_arena_index_set.contains(&i) {
+                new_era_block_arena_index_set.insert(i);
+            }
+        }
+        (old_era_block_arena_index_set, new_era_block_arena_index_set)
+    }
+
     /// Note that there is an important assumption: the timer chain must have no
     /// block in the anticone of new_era_block_arena_index. If this is not
     /// true, it cannot become a checkpoint block
@@ -69,29 +104,15 @@ impl ConsensusNewBlockHandler {
         inner: &mut ConsensusGraphInner, new_era_block_arena_index: usize,
     ) {
         let new_era_height = inner.arena[new_era_block_arena_index].height;
+        let (outside_block_arena_indices, new_era_block_arena_index_set) =
+            Self::compute_old_era_and_new_era_block_set(
+                inner,
+                new_era_block_arena_index,
+            );
 
-        // We first compute the set of blocks inside the new era and we
-        // recompute the past_weight inside the stable height.
-        let mut new_era_block_arena_index_set = HashSet::new();
-        let mut queue = VecDeque::new();
-        queue.push_back(new_era_block_arena_index);
-        new_era_block_arena_index_set.insert(new_era_block_arena_index);
-        while let Some(x) = queue.pop_front() {
-            for child in &inner.arena[x].children {
-                if !new_era_block_arena_index_set.contains(child) {
-                    queue.push_back(*child);
-                    new_era_block_arena_index_set.insert(*child);
-                }
-            }
-            for referrer in &inner.arena[x].referrers {
-                if !new_era_block_arena_index_set.contains(referrer) {
-                    queue.push_back(*referrer);
-                    new_era_block_arena_index_set.insert(*referrer);
-                }
-            }
-        }
-        // This is the arena indices for legacy blocks
+        // This is the arena indices for legacy blocks.
         let mut new_era_genesis_subtree = HashSet::new();
+        let mut queue = VecDeque::new();
         queue.push_back(new_era_block_arena_index);
         while let Some(x) = queue.pop_front() {
             new_era_genesis_subtree.insert(x);
@@ -104,13 +125,6 @@ impl ConsensusNewBlockHandler {
                 .difference(&new_era_genesis_subtree)
                 .collect();
 
-        // Now we topologically sort the blocks outside the era
-        let mut outside_block_arena_indices = HashSet::new();
-        for (index, _) in inner.arena.iter() {
-            if !new_era_block_arena_index_set.contains(&index) {
-                outside_block_arena_indices.insert(index);
-            }
-        }
         // Next we are going to recompute all referee and referrer information
         // in arena
         let new_era_pivot_index = inner.height_to_pivot_index(new_era_height);
