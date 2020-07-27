@@ -6,15 +6,15 @@ use crate::{
     executive::InternalContractMap,
     parameters::consensus::GENESIS_GAS_LIMIT,
     state::OverlayAccount,
-    statedb::{Result as DbResult, StateDb},
+    statedb::{Result as DbResult, StateDb, StateDbExt},
     storage::{StorageManager, StorageManagerTrait},
     verification::{compute_receipts_root, compute_transaction_root},
 };
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use keylib::KeyPair;
 use primitives::{
-    Account, Action, Block, BlockHeaderBuilder, BlockReceipts, StorageKey,
-    StorageLayout, Transaction,
+    storage::STORAGE_LAYOUT_REGULAR_V0, Account, Action, Block,
+    BlockHeaderBuilder, BlockReceipts, StorageKey, Transaction,
 };
 use secret_store::SecretStore;
 use std::{
@@ -83,19 +83,12 @@ pub fn initialize_internal_contract_accounts(state: &mut StateDb) {
                     address,
                     /* balance = */ U256::zero(),
                     /* nonce = */ U256::one(),
+                    Some(STORAGE_LAYOUT_REGULAR_V0),
                 )
                 .as_account()?;
                 state.set(
                     StorageKey::AccountKey(address.as_bytes()),
                     &account,
-                    None,
-                )?;
-                // initialize storage layout for internal contracts to make sure
-                // that _all_ Conflux contracts have a storage
-                // root in our state trie
-                state.set_storage_layout(
-                    address,
-                    &StorageLayout::Regular(0),
                     None,
                 )?;
             }
