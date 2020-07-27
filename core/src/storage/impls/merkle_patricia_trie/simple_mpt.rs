@@ -19,6 +19,7 @@ fn to_index_bytes(mut index: usize, len: u8) -> Vec<u8> {
         index >>= 8;
     }
 
+    bytes.reverse();
     bytes
 }
 
@@ -141,9 +142,9 @@ mod tests {
     fn test_into_simple_mpt_key() {
         assert_eq!(into_simple_mpt_key(0x01, 1), vec![0x01]);
         assert_eq!(into_simple_mpt_key(0x01, 255), vec![0x01]);
-        assert_eq!(into_simple_mpt_key(0x01, 256), vec![0x01, 0x00]);
-        assert_eq!(into_simple_mpt_key(0x01, 65535), vec![0x01, 0x00]);
-        assert_eq!(into_simple_mpt_key(0x01, 65536), vec![0x01, 0x00, 0x00]);
+        assert_eq!(into_simple_mpt_key(0x01, 256), vec![0x00, 0x01]);
+        assert_eq!(into_simple_mpt_key(0x01, 65535), vec![0x00, 0x01]);
+        assert_eq!(into_simple_mpt_key(0x01, 65536), vec![0x00, 0x00, 0x01]);
     }
 
     fn check_proofs(num_items: usize, proof_size: Vec<usize>) {
@@ -238,20 +239,20 @@ mod tests {
         check_proofs(0xff, vec![3]);
 
         // number of items: 0x0100
-        // keys: [0x00, 0x00], [0x01, 0x00], [0x02, 0x00], ..., [0xff, 0x00] (little-endian)
-        //          ^^            ^^            ^^                 ^^
+        // keys: [0x00, 0x00], [0x00, 0x01], [0x00, 0x02], ..., [0x00, 0xff]
+        //                ^^            ^^            ^^                 ^^
         // FIXME(thegaram): this is a bug, see #1693
         assert_eq!(into_simple_mpt_key(0x00, 0x0100), vec![0x00, 0x00]);
-        // proof size: 3 (root + 1st nibble + 2nd nibble)
+        // proof size: 3 (root + 3rd nibble + 4th nibble)
         check_proofs(0x0100, vec![3]);
 
         // number of items: 0x101
-        // keys: [0x00, 0x00], [0x01, 0x00], [0x02, 0x00], ..., [0x00, 0x01] (little-endian)
+        // keys: [0x00, 0x00], [0x00, 0x01], [0x00, 0x02], ..., [0x01, 0x00]
         // proof size:
-        //   [0x01, 0x00], ..., [0xff, 0x00] -> 3 (root + 1st nibble + 2nd nibble)
-        //      ^^                 ^^
-        //   [0x00, 0x00], [0x00, 0x10]      -> 4 (root + 1st nibble [=0] + 2nd nibble [=0] + 3rd nibble)
-        //      ^^    ^       ^^    ^
-        check_proofs(0x0101, vec![3, 4]);
+        //   [0x00, 0x00], ..., [0x00, 0xff] -> 4 (root + 2nd nibble + 3rd nibble + 4th nibble)
+        //       ^    ^^            ^    ^^
+        //   [0x01, 0x00]      -> 2 (root + 2nd nibble)
+        //       ^
+        check_proofs(0x0101, vec![2, 4]);
     }
 }
