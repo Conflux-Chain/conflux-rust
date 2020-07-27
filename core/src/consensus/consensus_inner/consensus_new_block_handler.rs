@@ -1611,7 +1611,7 @@ impl ConsensusNewBlockHandler {
                             - state_availability_boundary.lower_bound;
                         state_availability_boundary
                             .pivot_chain
-                            .split_off(split_off_index as usize);
+                            .truncate(split_off_index as usize);
                         for i in inner.height_to_pivot_index(capped_fork_at)
                             ..inner.pivot_chain.len()
                         {

@@ -184,15 +184,21 @@ impl Worker {
                 if deleting.load(AtomicOrdering::Acquire) {
                     return;
                 }
-                let _ = wait.wait(lock);
+                std::mem::drop(wait.wait(lock));
             }
 
+            // TODO: If a `work` is enqueued and notified after the following
+            // loop end but before we start waiting on `wait`, this
+            // work may not be processed in time because all workers are
+            // waiting? This is not an issue so far because we have
+            // many timeout events that always notify workers.
             while !deleting.load(AtomicOrdering::Acquire) {
                 match stealer.steal() {
                     crossbeam_deque::Steal::Success(work) => {
                         Worker::do_work(work, channel.clone())
                     }
-                    _ => break,
+                    crossbeam_deque::Steal::Retry => {}
+                    crossbeam_deque::Steal::Empty => break,
                 }
             }
         }
@@ -220,9 +226,12 @@ impl Worker {
 impl Drop for Worker {
     fn drop(&mut self) {
         trace!(target: "shutdown", "[IoWorker] Closing...");
-        let _ = self.wait_mutex.lock().expect("Poisoned work_loop mutex");
-        self.deleting.store(true, AtomicOrdering::Release);
-        self.wait.notify_all();
+        {
+            let _lock =
+                self.wait_mutex.lock().expect("Poisoned work_loop mutex");
+            self.deleting.store(true, AtomicOrdering::Release);
+            self.wait.notify_all();
+        }
         if let Some(thread) = self.thread.take() {
             thread.join().ok();
         }

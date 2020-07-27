@@ -105,10 +105,7 @@ impl NoncePoolNode {
     ) -> InsertResult
     {
         if node.is_none() {
-            mem::replace(
-                node,
-                Some(Box::new(NoncePoolNode::new(tx, priority))),
-            );
+            *node = Some(Box::new(NoncePoolNode::new(tx, priority)));
             return InsertResult::NewAdded;
         }
         let cmp = tx.nonce().cmp(&node.as_ref().unwrap().tx.nonce);
@@ -267,7 +264,7 @@ impl NoncePoolNode {
                 &mut node.as_mut().unwrap().child[ch ^ 1],
             );
             c.as_mut().unwrap().update();
-            mem::replace(&mut node.as_mut().unwrap().child[ch ^ 1], c);
+            node.as_mut().unwrap().child[ch ^ 1] = c;
             node.as_mut().unwrap().update();
         }
     }
