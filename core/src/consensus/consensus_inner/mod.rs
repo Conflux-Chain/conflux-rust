@@ -475,7 +475,8 @@ pub struct ConsensusGraphInner {
 
     /// Blocks in the past of the current block set. They will be merged into
     /// `last_old_era_block_set` when this checkpoint moves forward.
-    /// Note that `last_old_era_block_set` is locked before `current_old_era_block_set`.
+    /// Note that `last_old_era_block_set` is locked before
+    /// `current_old_era_block_set`.
     current_old_era_block_set: Mutex<VecDeque<H256>>,
     /// Block set of each old era. It will be garbage collected by sync graph
     /// via `pop_old_era_block_set()`. This is a helper for full nodes to
