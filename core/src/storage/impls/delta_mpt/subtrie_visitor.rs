@@ -95,7 +95,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
             if is_loaded_from_db {
                 db_load_count += 1;
             }
-            match trie_node.walk::<Read>(key) {
+            match trie_node.walk::<access_mode::Read>(key) {
                 WalkStop::Arrived => {
                     node_memory_manager.log_uncached_key_access(db_load_count);
                     let (guard, trie_node) = trie_node.into();
@@ -161,7 +161,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                 )?;
 
             // update variables for subsequent traversal
-            match trie_node.walk::<Read>(key) {
+            match trie_node.walk::<access_mode::Read>(key) {
                 WalkStop::Arrived => {
                     finished = true;
                 }
@@ -264,7 +264,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
             &allocator,
             &mut **self.db.get_mut(),
         )?;
-        match trie_node_ref.walk::<Read>(key) {
+        match trie_node_ref.walk::<access_mode::Read>(key) {
             WalkStop::Arrived => {
                 // If value doesn't exists, returns invalid key error.
                 let result = trie_node_ref.check_delete_value();
@@ -432,7 +432,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
         )?;
 
         let key_prefix: CompressedPathRaw;
-        match trie_node_ref.walk::<Write>(key_remaining) {
+        match trie_node_ref.walk::<access_mode::Write>(key_remaining) {
             WalkStop::ChildNotFound {
                 key_remaining: _,
                 child_index: _,
@@ -580,7 +580,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
         )?;
 
         let key_prefix: CompressedPathRaw;
-        match trie_node_ref.walk::<Write>(key_remaining) {
+        match trie_node_ref.walk::<access_mode::Write>(key_remaining) {
             WalkStop::ChildNotFound { .. } => return Ok(None),
             WalkStop::Arrived => {
                 // To enumerate the subtree.
@@ -656,7 +656,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
             &allocator,
             &mut **self.db.get_mut(),
         )?;
-        match trie_node_ref.walk::<Write>(key) {
+        match trie_node_ref.walk::<access_mode::Write>(key) {
             WalkStop::Arrived => {
                 let node_ref_changed = !is_owned;
                 let trie_node = GuardedValue::take(trie_node_ref);
@@ -831,13 +831,13 @@ use super::{
     super::{
         super::{
             storage_db::delta_db_manager::DeltaDbOwnedReadTraitObj,
-            utils::guarded_value::GuardedValue,
+            utils::{access_mode, guarded_value::GuardedValue},
         },
         errors::*,
         merkle_patricia_trie::{
             merkle::*,
             trie_proof::TrieProofNode,
-            walk::{access_mode::*, KeyPart, TrieNodeWalkTrait, WalkStop},
+            walk::{KeyPart, TrieNodeWalkTrait, WalkStop},
             *,
         },
     },

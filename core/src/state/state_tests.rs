@@ -11,11 +11,12 @@ use crate::{
         tests::new_state_manager_for_unit_test, StateIndex, StorageManager,
         StorageManagerTrait,
     },
+    test_helpers::get_state_for_genesis_write,
     vm::Spec,
     vm_factory::VmFactory,
 };
 use cfx_types::{address_util::AddressUtil, Address, BigEndianHash, U256};
-use primitives::{EpochId, StorageLayout};
+use primitives::EpochId;
 
 fn get_state(storage_manager: &StorageManager, epoch_id: EpochId) -> State {
     State::new(
@@ -27,15 +28,6 @@ fn get_state(storage_manager: &StorageManager, epoch_id: EpochId) -> State {
                 .unwrap()
                 .unwrap(),
         ),
-        VmFactory::default(),
-        &Spec::new_spec(),
-        0, /* block_number */
-    )
-}
-
-fn get_state_for_genesis_write(storage_manager: &StorageManager) -> State {
-    State::new(
-        StateDb::new(storage_manager.get_state_for_genesis_write()),
         VmFactory::default(),
         &Spec::new_spec(),
         0, /* block_number */
@@ -384,11 +376,6 @@ fn checkpoint_get_storage_at() {
     state
         .new_contract(&contract_a, U256::zero(), U256::zero())
         .unwrap();
-    // make sure storage layout is present
-    // (normally inserted during contract creation)
-    state
-        .set_storage_layout(&contract_a, StorageLayout::Regular(0))
-        .expect("should be able to set storage layout");
 
     state
         .set_storage(&contract_a, k.clone(), U256::from(0xffff), a)
@@ -740,6 +727,8 @@ fn create_contract_fail_previous_storage() {
     let mut state = get_state_for_genesis_write(&storage_manager);
     let mut a = Address::from_low_u64_be(1000);
     a.set_user_account_type_bits();
+    let mut contract_addr = a;
+    contract_addr.set_contract_type_bits();
     let k = u256_to_vec(&U256::from(0));
 
     state.checkpoint();
@@ -750,14 +739,11 @@ fn create_contract_fail_previous_storage() {
     assert_eq!(state.collateral_for_storage(&a).unwrap(), U256::from(0));
     assert_eq!(state.balance(&a).unwrap(), *COLLATERAL_PER_STORAGE_KEY);
 
-    // make sure strorage layout is present
-    // (normally inserted during contract creation)
     state
-        .set_storage_layout(&a, StorageLayout::Regular(0))
-        .expect("should be able to set storage layout");
-
+        .new_contract(&contract_addr, U256::zero(), U256::zero())
+        .unwrap();
     state
-        .set_storage(&a, k.clone(), U256::from(0xffff), a)
+        .set_storage(&contract_addr, k.clone(), U256::from(0xffff), a)
         .unwrap();
     assert_eq!(
         state
@@ -777,7 +763,10 @@ fn create_contract_fail_previous_storage() {
         .unwrap();
     state.clear();
 
-    assert_eq!(state.storage_at(&a, &k).unwrap(), U256::from(0xffff));
+    assert_eq!(
+        state.storage_at(&contract_addr, &k).unwrap(),
+        U256::from(0xffff)
+    );
     state.clear();
     state =
         get_state(&storage_manager, BigEndianHash::from_uint(&U256::from(1)));
@@ -789,16 +778,27 @@ fn create_contract_fail_previous_storage() {
     assert_eq!(state.balance(&a).unwrap(), U256::from(0));
 
     state.checkpoint(); // c1
-    state.new_contract(&a, U256::zero(), U256::zero()).unwrap();
+    state.kill_account(&a);
+    // parking_lot::lock_api::MappedRwLockWriteGuard must be used, so we drop()
+    // it.
+    drop(state.require_or_new_basic_account(&a).unwrap());
+    state
+        .new_contract(&contract_addr, U256::zero(), U256::zero())
+        .unwrap();
     state.checkpoint(); // c2
-    state.set_storage(&a, k.clone(), U256::from(2), a).unwrap();
+    state
+        .set_storage(&contract_addr, k.clone(), U256::from(2), a)
+        .unwrap();
     state.revert_to_checkpoint(); // revert to c2
     assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
     assert_eq!(state.collateral_for_storage(&a).unwrap(), U256::from(0));
     assert_eq!(state.balance(&a).unwrap(), U256::from(0));
-    assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
+    assert_eq!(state.storage_at(&contract_addr, &k).unwrap(), U256::zero());
     state.revert_to_checkpoint(); // revert to c1
-    assert_eq!(state.storage_at(&a, &k).unwrap(), U256::from(0xffff));
+    assert_eq!(
+        state.storage_at(&contract_addr, &k).unwrap(),
+        U256::from(0xffff)
+    );
     assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
     assert_eq!(
         state.collateral_for_storage(&a).unwrap(),

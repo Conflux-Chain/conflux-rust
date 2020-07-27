@@ -219,7 +219,7 @@ impl TrieProof {
                 }
             };
 
-            match node.walk::<Read>(key) {
+            match node.walk::<access_mode::Read>(key) {
                 WalkStop::Arrived => {
                     return pred(Some(node));
                 }
@@ -309,7 +309,7 @@ impl TrieProof {
                 full_paths.push(full_path);
             }
 
-            match node.walk::<Read>(key_remaining) {
+            match node.walk::<access_mode::Read>(key_remaining) {
                 WalkStop::Arrived => {
                     return keys_child_indices_and_nodes;
                 }
@@ -372,9 +372,9 @@ impl DerefMut for TrieProofNode {
 }
 
 use super::{
-    super::errors::*,
+    super::{super::utils::access_mode, errors::*},
     merkle::compute_merkle,
-    walk::{access_mode::Read, TrieNodeWalkTrait, WalkStop},
+    walk::{TrieNodeWalkTrait, WalkStop},
     CompressedPathRaw, CompressedPathTrait, TrieNodeTrait,
     VanillaChildrenTable, VanillaTrieNode,
 };

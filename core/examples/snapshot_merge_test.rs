@@ -4,7 +4,7 @@
 
 use cfx_types::{Address, H256};
 use cfxcore::{
-    statedb::StateDb,
+    statedb::{StateDb, StateDbExt},
     storage::{
         state::StateTrait,
         state_manager::{StateManager, StateManagerTrait},
@@ -426,7 +426,7 @@ where
             .unwrap();
     }
     let epoch = H256::random();
-    state.commit(epoch).unwrap();
+    state.commit(epoch, /* debug_record = */ None).unwrap();
     epoch
 }
 
