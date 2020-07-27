@@ -1331,20 +1331,6 @@ lazy_static! {
     );
 }
 
-use super::super::{
-    super::{
-        snapshot_manager::*,
-        state_manager::*,
-        storage_db::{
-            delta_db_manager::*, snapshot_db::*,
-            snapshot_db_manager::SnapshotDbManagerTrait,
-        },
-        utils::arc_ext::*,
-    },
-    delta_mpt::*,
-    errors::*,
-    state_manager::*,
-};
 use crate::{
     block_data_manager::StateAvailabilityBoundary,
     consensus::ConsensusGraphInner,
@@ -1356,23 +1342,25 @@ use crate::{
                 },
                 node_ref_map::DeltaMptId,
             },
-            merkle_patricia_trie::{
-                mpt_cursor::{BasicPathNode, MptCursor},
-                walk::access_mode,
-            },
+            errors::*,
+            merkle_patricia_trie::mpt_cursor::{BasicPathNode, MptCursor},
+            state_manager::{DeltaDbManager, SnapshotDb, SnapshotDbManager},
             storage_db::kvdb_sqlite::{
                 kvdb_sqlite_iter_range_impl, KvdbSqliteDestructureTrait,
                 KvdbSqliteStatements,
             },
             storage_manager::snapshot_manager::SnapshotManager,
         },
+        snapshot_manager::SnapshotManagerTrait,
         storage_db::{
-            key_value_db::KeyValueDbIterableTrait, SnapshotMptTraitRead,
+            key_value_db::KeyValueDbIterableTrait,
+            snapshot_db::OpenSnapshotMptTrait, DeltaDbManagerTrait,
+            SnapshotDbManagerTrait, SnapshotInfo, SnapshotMptTraitRead,
         },
         storage_dir,
-        utils::guarded_value::GuardedValue,
-        KeyValueDbTrait, KvdbSqlite, StateRootWithAuxInfo,
-        StorageConfiguration,
+        utils::{access_mode, arc_ext::*, guarded_value::GuardedValue},
+        DeltaMpt, DeltaMptIdGen, DeltaMptIterator, KeyValueDbTrait, KvdbSqlite,
+        StateIndex, StateRootWithAuxInfo, StorageConfiguration,
     },
 };
 use fallible_iterator::FallibleIterator;

@@ -92,6 +92,12 @@ pub mod address_util {
         }
     }
 
+    impl AddressUtil for &[u8] {
+        fn type_byte(&self) -> &u8 { &self[0] }
+
+        fn type_byte_mut(&mut self) -> &mut u8 { unreachable!() }
+    }
+
     #[cfg(test)]
     mod tests {
         use super::{Address, AddressUtil};

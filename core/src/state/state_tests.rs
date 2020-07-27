@@ -15,7 +15,7 @@ use crate::{
     vm_factory::VmFactory,
 };
 use cfx_types::{address_util::AddressUtil, Address, BigEndianHash, U256};
-use primitives::{EpochId, StorageLayout};
+use primitives::EpochId;
 
 fn get_state(storage_manager: &StorageManager, epoch_id: EpochId) -> State {
     State::new(
@@ -384,11 +384,6 @@ fn checkpoint_get_storage_at() {
     state
         .new_contract(&contract_a, U256::zero(), U256::zero())
         .unwrap();
-    // make sure storage layout is present
-    // (normally inserted during contract creation)
-    state
-        .set_storage_layout(&contract_a, StorageLayout::Regular(0))
-        .expect("should be able to set storage layout");
 
     state
         .set_storage(&contract_a, k.clone(), U256::from(0xffff), a)
@@ -749,12 +744,6 @@ fn create_contract_fail_previous_storage() {
     assert_eq!(*state.total_storage_tokens(), U256::from(0));
     assert_eq!(state.collateral_for_storage(&a).unwrap(), U256::from(0));
     assert_eq!(state.balance(&a).unwrap(), *COLLATERAL_PER_STORAGE_KEY);
-
-    // make sure strorage layout is present
-    // (normally inserted during contract creation)
-    state
-        .set_storage_layout(&a, StorageLayout::Regular(0))
-        .expect("should be able to set storage layout");
 
     state
         .set_storage(&a, k.clone(), U256::from(0xffff), a)

@@ -10,6 +10,39 @@ pub mod arc_ext;
 pub mod guarded_value;
 pub mod wrap;
 
+pub mod access_mode {
+    pub trait AccessMode {
+        fn is_read_only() -> bool;
+    }
+
+    pub struct Read {}
+    pub struct Write {}
+
+    impl AccessMode for Read {
+        fn is_read_only() -> bool { return true; }
+    }
+
+    impl AccessMode for Write {
+        fn is_read_only() -> bool { return false; }
+    }
+}
+
+// General static bool value for compile time flag optimization.
+pub trait StaticBool {
+    fn value() -> bool;
+}
+
+pub struct No {}
+pub struct Yes {}
+
+impl StaticBool for No {
+    fn value() -> bool { false }
+}
+
+impl StaticBool for Yes {
+    fn value() -> bool { true }
+}
+
 /// The purpose of this trait is to create a new value of a passed object,
 /// when the passed object is the value, simply move the value;
 /// when the passed object is the reference, create the new value by clone.

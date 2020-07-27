@@ -29,7 +29,8 @@ use crate::{
 };
 use cfx_types::{address_util::AddressUtil, Address, H256, U256, U512};
 use primitives::{
-    receipt::StorageChange, transaction::Action, SignedTransaction,
+    receipt::StorageChange, storage::STORAGE_LAYOUT_REGULAR_V0,
+    transaction::Action, SignedTransaction, StorageLayout,
 };
 use std::{
     cell::RefCell,
@@ -329,7 +330,7 @@ impl<'a> CallCreateExecutive<'a> {
 
     fn transfer_exec_balance_and_init_contract(
         params: &ActionParams, spec: &Spec, state: &mut State,
-        substate: &mut Substate,
+        substate: &mut Substate, storage_layout: StorageLayout,
     ) -> vm::Result<()>
     {
         if let ActionValue::Transfer(val) = params.value {
@@ -346,6 +347,7 @@ impl<'a> CallCreateExecutive<'a> {
                 &params.original_sender,
                 val.saturating_add(prev_balance),
                 state.contract_start_nonce(),
+                storage_layout,
             )?;
         } else {
             state.new_contract_with_admin(
@@ -353,6 +355,7 @@ impl<'a> CallCreateExecutive<'a> {
                 &params.original_sender,
                 U256::zero(),
                 state.contract_start_nonce(),
+                storage_layout,
             )?;
         }
 
@@ -750,7 +753,11 @@ impl<'a> CallCreateExecutive<'a> {
                         )?;
                         state.checkpoint();
                         Self::transfer_exec_balance_and_init_contract(
-                            &params, spec, state, substate,
+                            &params,
+                            spec,
+                            state,
+                            substate,
+                            STORAGE_LAYOUT_REGULAR_V0,
                         )?;
                         Ok(())
                     };
