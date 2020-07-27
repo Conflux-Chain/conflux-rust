@@ -789,10 +789,11 @@ impl NetworkServiceInner {
 
     // Connect to all reserved and trusted peers if not yet
     fn connect_peers(&self, io: &IoContext<NetworkIoMessage>) {
-        assert!(
-                self.metadata.minimum_peer_protocol_version.read().len() > 0,
-                "Protocols should have been registered before the HOUSEKEEPING timeout."
-            );
+        if self.metadata.minimum_peer_protocol_version.read().len() == 0 {
+            // The protocol handler has not been registered, we just wait for
+            // the next time.
+            return;
+        }
 
         let self_id = self.metadata.id().clone();
 
