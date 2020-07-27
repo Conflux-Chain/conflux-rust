@@ -25,10 +25,12 @@ pub fn get_state_for_genesis_write_with_factory(
 
     initialize_internal_contract_accounts(&mut statedb);
     let genesis_epoch_id = EpochId::default();
-    statedb.commit(genesis_epoch_id).expect(
-        // This is a comment to let cargo format the rest in a single line.
-        &concat!(file!(), ":", line!(), ":", column!()),
-    );
+    statedb
+        .commit(genesis_epoch_id, /* debug_record = */ None)
+        .expect(
+            // This is a comment to let cargo format the rest in a single line.
+            &concat!(file!(), ":", line!(), ":", column!()),
+        );
 
     State::new(
         StateDb::new(

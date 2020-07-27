@@ -21,7 +21,9 @@ use cfx_types::{
     address_util::AddressUtil, Address, BigEndianHash, U256, U512,
 };
 use keylib::{Generator, Random};
-use primitives::{transaction::Action, Transaction};
+use primitives::{
+    storage::STORAGE_LAYOUT_REGULAR_V0, transaction::Action, Transaction,
+};
 use rustc_hex::FromHex;
 use std::{
     cmp::{self, min},
@@ -1037,6 +1039,7 @@ fn test_commission_privilege() {
             &sender.address(),
             U256::zero(),
             U256::one(),
+            STORAGE_LAYOUT_REGULAR_V0,
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state.init_code(&address, code, sender.address()).unwrap();
@@ -1404,6 +1407,7 @@ fn test_storage_commission_privilege() {
             &sender.address(),
             U256::zero(),
             U256::one(),
+            STORAGE_LAYOUT_REGULAR_V0,
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state.init_code(&address, code, sender.address()).unwrap();
