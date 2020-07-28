@@ -177,7 +177,16 @@ impl ConsensusNewBlockHandler {
         }
         // Now we are ready to cleanup outside blocks in inner data structures
         {
-            let mut old_era_block_set = inner.old_era_block_set.lock();
+            let mut last_old_era_block_set =
+                inner.last_old_era_block_set.lock();
+            let mut old_era_block_set = inner.current_old_era_block_set.lock();
+
+            // We can delete blocks in `current_old_era_block_set` now since the
+            // checkpoint has moved forward, so put them into
+            // `last_old_era_block_set`.
+            for old_era_block_hash in old_era_block_set.drain(..) {
+                last_old_era_block_set.push_back(old_era_block_hash);
+            }
             inner
                 .pastset_cache
                 .intersect_update(&outside_block_arena_indices);
