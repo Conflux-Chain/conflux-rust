@@ -727,6 +727,8 @@ fn create_contract_fail_previous_storage() {
     let mut state = get_state_for_genesis_write(&storage_manager);
     let mut a = Address::from_low_u64_be(1000);
     a.set_user_account_type_bits();
+    let mut contract_addr = a;
+    contract_addr.set_contract_type_bits();
     let k = u256_to_vec(&U256::from(0));
 
     state.checkpoint();
@@ -738,7 +740,10 @@ fn create_contract_fail_previous_storage() {
     assert_eq!(state.balance(&a).unwrap(), *COLLATERAL_PER_STORAGE_KEY);
 
     state
-        .set_storage(&a, k.clone(), U256::from(0xffff), a)
+        .new_contract(&contract_addr, U256::zero(), U256::zero())
+        .unwrap();
+    state
+        .set_storage(&contract_addr, k.clone(), U256::from(0xffff), a)
         .unwrap();
     assert_eq!(
         state
@@ -758,7 +763,10 @@ fn create_contract_fail_previous_storage() {
         .unwrap();
     state.clear();
 
-    assert_eq!(state.storage_at(&a, &k).unwrap(), U256::from(0xffff));
+    assert_eq!(
+        state.storage_at(&contract_addr, &k).unwrap(),
+        U256::from(0xffff)
+    );
     state.clear();
     state =
         get_state(&storage_manager, BigEndianHash::from_uint(&U256::from(1)));
@@ -770,16 +778,23 @@ fn create_contract_fail_previous_storage() {
     assert_eq!(state.balance(&a).unwrap(), U256::from(0));
 
     state.checkpoint(); // c1
-    state.new_contract(&a, U256::zero(), U256::zero()).unwrap();
+    state
+        .new_contract(&contract_addr, U256::zero(), U256::zero())
+        .unwrap();
     state.checkpoint(); // c2
-    state.set_storage(&a, k.clone(), U256::from(2), a).unwrap();
+    state
+        .set_storage(&contract_addr, k.clone(), U256::from(2), a)
+        .unwrap();
     state.revert_to_checkpoint(); // revert to c2
     assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
     assert_eq!(state.collateral_for_storage(&a).unwrap(), U256::from(0));
     assert_eq!(state.balance(&a).unwrap(), U256::from(0));
-    assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
+    assert_eq!(state.storage_at(&contract_addr, &k).unwrap(), U256::zero());
     state.revert_to_checkpoint(); // revert to c1
-    assert_eq!(state.storage_at(&a, &k).unwrap(), U256::from(0xffff));
+    assert_eq!(
+        state.storage_at(&contract_addr, &k).unwrap(),
+        U256::from(0xffff)
+    );
     assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
     assert_eq!(
         state.collateral_for_storage(&a).unwrap(),
