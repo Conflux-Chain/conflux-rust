@@ -538,6 +538,10 @@ impl NodeDatabase {
             return;
         }
 
+        if !self.ip_limit.is_enabled() {
+            return;
+        }
+
         let subnet = self
             .ip_limit
             .subnet(&id)

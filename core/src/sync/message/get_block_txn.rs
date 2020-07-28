@@ -65,6 +65,7 @@ impl Request for GetBlockTxn {
             // where GetBlockTxn can not be initiated.
             with_public: false,
             hashes: vec![self.block_hash.clone()],
+            preferred_node_type: None,
         }))
     }
 }

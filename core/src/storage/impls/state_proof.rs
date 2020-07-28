@@ -10,8 +10,6 @@
 // TODO: at intermediate_epoch_id with delta_proof.
 #[derive(Clone, Debug, Default, PartialEq, RlpEncodable, RlpDecodable)]
 pub struct StateProof {
-    // TODO(thegaram): get rid of maybe_intermediate_padding
-    pub maybe_intermediate_padding: Option<DeltaMptKeyPadding>,
     pub delta_proof: Option<TrieProof>,
     pub intermediate_proof: Option<TrieProof>,
     pub snapshot_proof: Option<TrieProof>,
@@ -27,11 +25,8 @@ impl StateProof {
 
     pub fn with_intermediate(
         &mut self, maybe_intermediate_proof: Option<TrieProof>,
-        maybe_intermediate_padding: Option<DeltaMptKeyPadding>,
-    ) -> &mut Self
-    {
+    ) -> &mut Self {
         self.intermediate_proof = maybe_intermediate_proof;
-        self.maybe_intermediate_padding = maybe_intermediate_padding;
         self
     }
 
@@ -44,7 +39,9 @@ impl StateProof {
 
     pub fn is_valid_kv(
         &self, key: &Vec<u8>, value: Option<&[u8]>, root: StateRoot,
-    ) -> bool {
+        maybe_intermediate_padding: Option<DeltaMptKeyPadding>,
+    ) -> bool
+    {
         let delta_root = &root.delta_root;
         let intermediate_root = &root.intermediate_delta_root;
         let snapshot_root = &root.snapshot_root;
@@ -54,8 +51,7 @@ impl StateProof {
         let storage_key = StorageKey::from_key_bytes(&key);
         let delta_mpt_key =
             storage_key.to_delta_mpt_key_bytes(&delta_mpt_padding);
-        let maybe_intermediate_mpt_key = self
-            .maybe_intermediate_padding
+        let maybe_intermediate_mpt_key = maybe_intermediate_padding
             .as_ref()
             .map(|p| storage_key.to_delta_mpt_key_bytes(p));
 

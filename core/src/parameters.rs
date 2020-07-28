@@ -304,6 +304,7 @@ pub mod light {
     pub const MAX_EPOCHS_TO_SEND: usize = 128;
     pub const MAX_HEADERS_TO_SEND: usize = 512;
     pub const MAX_TXS_TO_SEND: usize = 1024;
+    pub const MAX_ITEMS_TO_SEND: usize = 50;
 
     /// During syncing, we might transiently have enough malicious blaming
     /// blocks to consider a correct header incorrect. For this reason, we

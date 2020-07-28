@@ -213,11 +213,20 @@ pub struct GetStateEntries {
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct StateEntryProof {
+    pub state_proof: StateProof,
+
+    // state root is validated against witness info retrieved previously;
+    // no additional proof needed
+    pub state_root: StateRoot,
+    pub prev_snapshot_state_root: Option<StateRoot>,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct StateEntryWithKey {
     pub key: StateKey,
     pub entry: Option<Vec<u8>>,
-    pub proof: StateProof,
-    pub state_root: StateRoot,
+    pub proof: StateEntryProof,
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]

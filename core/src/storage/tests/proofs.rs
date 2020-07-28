@@ -255,7 +255,7 @@ fn test_valid_state_proof_for_existing_key() {
     let mut rng = get_rng_for_test();
 
     // note: do not drop state_manager (_mgr)
-    let (_mgr, state, _, keys) = generate_random_state(&mut rng);
+    let (_mgr, state, padding, keys) = generate_random_state(&mut rng);
     let root = state.get_state_root().unwrap().state_root;
 
     for key in keys {
@@ -268,7 +268,12 @@ fn test_valid_state_proof_for_existing_key() {
         // validation of valid proof should succeed
         let key = &key.to_vec();
         let value = value.as_ref().map(|b| &**b);
-        assert!(proof.is_valid_kv(key, value, root.clone()));
+        assert!(proof.is_valid_kv(
+            key,
+            value,
+            root.clone(),
+            Some(padding.clone())
+        ));
 
         // proof should be serializable
         assert_eq!(proof, rlp::decode(&rlp::encode(&proof)).unwrap());
@@ -280,7 +285,7 @@ fn test_valid_state_proof_for_nonexistent_key() {
     let mut rng = get_rng_for_test();
 
     // note: do not drop state_manager (_mgr)
-    let (_mgr, state, _, keys) = generate_random_state(&mut rng);
+    let (_mgr, state, padding, keys) = generate_random_state(&mut rng);
     let root = state.get_state_root().unwrap().state_root;
     let keys = generate_nonexistent_keys(&mut rng, keys);
 
@@ -293,7 +298,12 @@ fn test_valid_state_proof_for_nonexistent_key() {
 
         // validation of valid proof should succeed
         let key = &key.to_vec();
-        assert!(proof.is_valid_kv(key, None, root.clone()));
+        assert!(proof.is_valid_kv(
+            key,
+            None,
+            root.clone(),
+            Some(padding.clone())
+        ));
 
         // proof should be serializable
         assert_eq!(proof, rlp::decode(&rlp::encode(&proof)).unwrap());
@@ -305,7 +315,7 @@ fn test_invalid_state_proof() {
     let mut rng = get_rng_for_test();
 
     // note: do not drop state_manager (_mgr)
-    let (_mgr, state, _, keys) = generate_random_state(&mut rng);
+    let (_mgr, state, padding, keys) = generate_random_state(&mut rng);
     let root = state.get_state_root().unwrap().state_root;
 
     for key in keys {
@@ -326,14 +336,43 @@ fn test_invalid_state_proof() {
         let invalid_root =
             get_invalid_state_root(&mut rng, root.clone(), num_proofs);
 
-        assert!(!proof.is_valid_kv(key, value, invalid_root));
+        assert!(!proof.is_valid_kv(
+            key,
+            value,
+            invalid_root,
+            Some(padding.clone())
+        ));
 
         // checking proof with invalid value should fail
         let invalid_value = Some(&[0x00; 100][..]);
-        assert!(!proof.is_valid_kv(key, invalid_value, root.clone()));
+        assert!(!proof.is_valid_kv(
+            key,
+            invalid_value,
+            root.clone(),
+            Some(padding.clone())
+        ));
+
+        // checking proof with invalid padding should fail
+        if proof.intermediate_proof.is_some() {
+            let invalid_padding = get_invalid_delta_padding(&padding);
+
+            assert!(!proof.is_valid_kv(
+                key,
+                value,
+                root.clone(),
+                Some(invalid_padding),
+            ));
+
+            assert!(!proof.is_valid_kv(key, value, root.clone(), None));
+        }
 
         // checking valid existence proof as non-existence proof should fail
-        assert!(!proof.is_valid_kv(key, None, root.clone()));
+        assert!(!proof.is_valid_kv(
+            key,
+            None,
+            root.clone(),
+            Some(padding.clone())
+        ));
     }
 }
 

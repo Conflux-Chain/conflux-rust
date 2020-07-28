@@ -8,6 +8,7 @@ use crate::{
     message::MsgId,
     sync::{
         message::{DynamicCapability, DynamicCapabilitySet},
+        node_type::NodeType,
         random, Error, ErrorKind,
     },
 };
@@ -28,6 +29,7 @@ use throttling::token_bucket::{ThrottledManager, TokenBucketManager};
 #[derive(DeriveMallocSizeOf)]
 pub struct SynchronizationPeerState {
     pub node_id: NodeId,
+    pub node_type: NodeType,
     // This field is only used for consortium setup.
     // Whether this node is a validator.
     pub is_validator: bool,
@@ -234,6 +236,7 @@ impl SynchronizationState {
 /// Filter peers that match ``all'' the provided conditions.
 pub struct PeerFilter<'a> {
     throttle_msg_ids: Option<HashSet<MsgId>>,
+    preferred_node_type: Option<NodeType>,
     excludes: Option<HashSet<NodeId>>,
     choose_from: Option<&'a HashSet<NodeId>>,
     cap: Option<DynamicCapability>,
@@ -242,6 +245,11 @@ pub struct PeerFilter<'a> {
 
 impl<'a> PeerFilter<'a> {
     pub fn new(msg_id: MsgId) -> Self { PeerFilter::default().throttle(msg_id) }
+
+    pub fn with_preferred_node_type(mut self, node_type: NodeType) -> Self {
+        self.preferred_node_type = Some(node_type);
+        self
+    }
 
     pub fn throttle(mut self, msg_id: MsgId) -> Self {
         self.throttle_msg_ids
@@ -281,6 +289,13 @@ impl<'a> PeerFilter<'a> {
             || self.min_best_epoch.is_some();
 
         for (id, peer) in syn.peers.read().iter() {
+            let peer_node_type = peer.read().node_type.clone();
+            if let Some(ref preferred_node_type) = self.preferred_node_type {
+                if *preferred_node_type != peer_node_type {
+                    continue;
+                }
+            }
+
             if let Some(ref excludes) = self.excludes {
                 if excludes.contains(id) {
                     continue;

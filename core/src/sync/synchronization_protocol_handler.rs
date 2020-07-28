@@ -18,6 +18,7 @@ use crate::{
             GetBlockHeadersResponse, NewBlockHashes, StatusDeprecatedV1,
             StatusV2, TransactionDigests,
         },
+        node_type::NodeType,
         request_manager::{try_get_block_hashes, Request},
         state::SnapshotChunkSync,
         synchronization_phases::{SyncPhaseType, SynchronizationPhaseManager},
@@ -462,6 +463,14 @@ impl SynchronizationProtocolHandler {
         }
     }
 
+    pub fn node_type(&self) -> NodeType {
+        if self.syn.is_full_node() {
+            NodeType::Full
+        } else {
+            NodeType::Archive
+        }
+    }
+
     pub fn is_consortium(&self) -> bool { self.protocol_config.is_consortium }
 
     fn get_to_propagate_trans(&self) -> HashMap<H256, Arc<SignedTransaction>> {
@@ -491,6 +500,20 @@ impl SynchronizationProtocolHandler {
         let current_phase = self.phase_manager.get_current_phase();
         current_phase.phase_type() == SyncPhaseType::CatchUpSyncBlock
             || current_phase.phase_type() == SyncPhaseType::Normal
+    }
+
+    pub fn need_block_from_archive_node(&self) -> bool {
+        let current_phase = self.phase_manager.get_current_phase();
+        current_phase.phase_type() == SyncPhaseType::CatchUpSyncBlock
+            && !self.syn.is_full_node()
+    }
+
+    pub fn preferred_peer_node_type_for_get_block(&self) -> Option<NodeType> {
+        if self.need_block_from_archive_node() {
+            Some(NodeType::Archive)
+        } else {
+            None
+        }
     }
 
     pub fn get_synchronization_graph(&self) -> SharedSynchronizationGraph {
@@ -1056,6 +1079,7 @@ impl SynchronizationProtocolHandler {
             !task.compact,
             chosen_peer.clone(),
             task.delay,
+            self.preferred_peer_node_type_for_get_block(),
         );
         self.request_blocks(io, chosen_peer, missing_dependencies);
 
@@ -1167,6 +1191,7 @@ impl SynchronizationProtocolHandler {
 
         StatusV2 {
             chain_id,
+            node_type: self.node_type(),
             genesis_hash: self.graph.data_man.true_genesis.hash(),
             best_epoch: best_info.best_epoch_number,
             terminal_block_hashes: terminal_hashes,
@@ -1589,12 +1614,14 @@ impl SynchronizationProtocolHandler {
         // Blocks may have been inserted into sync graph before as dependent
         // blocks
         hashes.retain(|h| !self.graph.contains_block(h));
+        let preferred_node_type = self.preferred_peer_node_type_for_get_block();
         self.request_manager.request_blocks(
             io,
             peer_id,
             hashes,
             self.request_block_need_public(),
             None,
+            preferred_node_type,
         );
     }
 
@@ -1685,6 +1712,7 @@ impl SynchronizationProtocolHandler {
         &self, io: &dyn NetworkContext, requested_hashes: HashSet<H256>,
         returned_blocks: HashSet<H256>, ask_full_block: bool,
         peer: Option<NodeId>, delay: Option<Duration>,
+        preferred_node_type_for_block_request: Option<NodeType>,
     )
     {
         self.request_manager.blocks_received(
@@ -1695,6 +1723,7 @@ impl SynchronizationProtocolHandler {
             peer,
             self.request_block_need_public(),
             delay,
+            preferred_node_type_for_block_request,
         )
     }
 
