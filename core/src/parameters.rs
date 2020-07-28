@@ -59,7 +59,7 @@ pub mod consensus_internal {
         4_162_224, 3_985_760, 3_816_777, 3_654_958, 3_500_000, 3_351_611,
         3_209_514, 3_073_441, 2_943_137, 2_818_358, 2_698_868, 2_584_445,
         2_474_873, 2_369_947, 2_269_469, 2_173_251, 2_081_112, 1_992_880,
-        1_908_388, 1_827_479, 
+        1_908_388, 1_827_479,
     ];
     // How many quarters that the mining reward keep decaying.
     pub const MINING_REWARD_DECAY_PERIOD_IN_QUARTER: usize = 32;
