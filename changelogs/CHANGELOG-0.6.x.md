@@ -1,3 +1,8 @@
+# 0.6.1
+
+## Improvement
+- Start stratum services automatically if `mining_author` is set and `start_mining` is `false`.
+
 # 0.6.0
 
 ## Bug Fixes
