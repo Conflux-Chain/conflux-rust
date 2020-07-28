@@ -59,7 +59,7 @@ impl<K: Ord, V: Clone, W: Add<Output = W> + Sub<Output = W> + Ord + Clone>
         node: &mut Option<Box<Node<K, V, W>>>, new: Node<K, V, W>,
     ) -> Option<V> {
         if node.is_none() {
-            mem::replace(node, Some(Box::new(new)));
+            *node = Some(Box::new(new));
             return None;
         }
         match new.key.cmp(&node.as_ref().unwrap().key) {
@@ -177,7 +177,7 @@ impl<K: Ord, V: Clone, W: Add<Output = W> + Sub<Output = W> + Ord + Clone>
                 &mut new.as_mut().unwrap().left,
             );
             new.as_mut().unwrap().update_weight();
-            mem::replace(&mut node.as_mut().unwrap().right, new);
+            node.as_mut().unwrap().right = new;
             node.as_mut().unwrap().update_weight();
         }
     }
@@ -191,7 +191,7 @@ impl<K: Ord, V: Clone, W: Add<Output = W> + Sub<Output = W> + Ord + Clone>
                 &mut new.as_mut().unwrap().right,
             );
             new.as_mut().unwrap().update_weight();
-            mem::replace(&mut node.as_mut().unwrap().left, new);
+            node.as_mut().unwrap().left = new;
             node.as_mut().unwrap().update_weight();
         }
     }

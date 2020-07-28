@@ -1004,10 +1004,8 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
 
                     child_trie_node.set_compressed_path(new_path);
 
-                    mem::replace(
-                        &mut self.trie_node,
-                        mem::replace(child_trie_node, Default::default()),
-                    );
+                    self.trie_node =
+                        mem::replace(child_trie_node, Default::default());
                 }
                 // Write out the child, reset to empty in case of path
                 // compression, or write out without change.

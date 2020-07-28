@@ -60,7 +60,7 @@ impl Memory for Vec<u8> {
         let off = init_off_u.low_u64() as usize;
         let size = init_size_u.low_u64() as usize;
         if !is_valid_range(off, size) {
-            &self[0..0]
+            &[]
         } else {
             &self[off..off + size]
         }
@@ -75,7 +75,7 @@ impl Memory for Vec<u8> {
         let off = offset.low_u64() as usize;
         let s = size.low_u64() as usize;
         if !is_valid_range(off, s) {
-            &mut self[0..0]
+            &mut []
         } else {
             &mut self[off..off + s]
         }

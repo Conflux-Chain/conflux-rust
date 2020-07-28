@@ -17,7 +17,6 @@
 use parking_lot::{Mutex, RwLock};
 use std::{
     collections::{BTreeMap, HashMap},
-    mem,
     path::PathBuf,
     time::{Duration, Instant},
 };
@@ -435,7 +434,7 @@ impl CfxMultiStore {
             }
         }
 
-        mem::replace(&mut *cache, new_accounts);
+        *cache = new_accounts;
         Ok(())
     }
 
