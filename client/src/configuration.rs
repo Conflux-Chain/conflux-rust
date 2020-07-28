@@ -753,6 +753,8 @@ pub fn to_bootnodes(bootnodes: &Option<String>) -> Result<Vec<String>, String> {
     match *bootnodes {
         Some(ref x) if !x.is_empty() => x
             .split(',')
+            // ignore empty strings
+            .filter(|s| !s.is_empty())
             .map(|s| match validate_node_url(s).map(Into::into) {
                 None => Ok(s.to_owned()),
                 Some(ErrorKind::AddressResolve(_)) => Err(format!(
@@ -787,5 +789,5 @@ pub fn build_base_reward_table() -> Vec<u64> {
 }
 
 pub fn parse_hex_string<F: FromStr>(hex_str: &str) -> Result<F, F::Err> {
-    hex_str.trim_start_matches("0x").parse()
+    hex_str.strip_prefix("0x").unwrap_or(hex_str).parse()
 }
