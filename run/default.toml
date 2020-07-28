@@ -25,7 +25,7 @@ bootnodes="cfxnode://25265e1aa470d9d8667947820c4830a64e9f9678d6cb23ecde91e044752
 #     * Open port 12535 for ws rpc if `jsonrpc_ws_port` is not provided.
 #     * Open port 12536 for tcp rpc if `jsonrpc_tcp_port` is not provided.
 #     * Open port 12537 for http rpc if `jsonrpc_http_port` is not provided.
-#     * generate blocks automatically without PoW if `stop_mining` is false
+#     * generate blocks automatically without PoW
 #     * Skip catch-up mode even there is no peer
 #
 # mode = ""
@@ -42,15 +42,18 @@ bootnodes="cfxnode://25265e1aa470d9d8667947820c4830a64e9f9678d6cb23ecde91e044752
 # ----------------- Mining Configuration -----------------
 
 # `mining_author` is the address to receive mining rewards.
-# If set, the node will start mining unless `stop_mining` is set to true.
+# If set, the node will enable stratum unless `disable_stratum` is set to true.
 # The value is a 40-digit hex string.
 # By default, the value is not set.
 #
 # mining_author="1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
-# `use_stratum` controls whether the mining process goes through the
+# `disable_stratum` controls whether the mining process goes through the
 # stratum protocol.
-# use_stratum=true
+# If `disable_stratum` is false, stratum services will be enabled
+# automatically if `mining_author` is set,
+#
+# disable_stratum=true
 
 # Listen address for stratum
 #
@@ -66,10 +69,9 @@ bootnodes="cfxnode://25265e1aa470d9d8667947820c4830a64e9f9678d6cb23ecde91e044752
 #
 # stratum_secret = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
-# `stop_mining` is mainly used for testing.
-# If set to true, the node will not mine blocks even when `mining_author` is set or in dev mode.
+# If `start_mining` is true, the node will mine blocks with CPU and will not start stratum services.
 #
-# stop_mining=false
+# start_mining=false
 
 # -------------- Log-related Configuration -------------
 
