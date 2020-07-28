@@ -1022,14 +1022,25 @@ impl State {
         assert!(self.checkpoints.get_mut().is_empty());
         assert!(self.staking_state_checkpoints.get_mut().is_empty());
 
+        // recycle storage for killed addresses must be executed first because
+        // the collateral refund will modify more accounts.
+        // TODO: The recycle storage operation should happen at the end of the
+        //  transaction execution, not epoch commit.
+        let mut killed_addresses = Vec::new();
+        for (address, entry) in self.cache.get_mut().iter() {
+            if entry.account.is_none() {
+                killed_addresses.push(*address)
+            }
+        }
+        self.recycle_storage(killed_addresses, debug_record.as_deref_mut())?;
+
         self.precommit_make_dirty_accounts_list();
         self.commit_staking_state(debug_record.as_deref_mut())?;
 
-        let mut killed_addresses = Vec::new();
         for (address, entry) in self.dirty_accounts_to_commit.iter_mut() {
             entry.state = AccountState::Committed;
             match &mut entry.account {
-                None => killed_addresses.push(*address),
+                None => {}
                 Some(account) => {
                     account
                         .commit(&mut self.db, debug_record.as_deref_mut())?;
@@ -1041,7 +1052,6 @@ impl State {
                 }
             }
         }
-        self.recycle_storage(killed_addresses, debug_record)?;
         Ok(self.db.commit(epoch_id)?)
     }
 
