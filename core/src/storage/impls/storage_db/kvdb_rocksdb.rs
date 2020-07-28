@@ -98,7 +98,7 @@ impl KeyValueDbTransactionTrait for KvdbRocksDbTransaction {
     }
 
     fn revert(&mut self) -> Result<()> {
-        std::mem::replace(&mut self.pending.ops, vec![]);
+        self.pending.ops = vec![];
         Ok(())
     }
 

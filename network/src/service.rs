@@ -21,6 +21,7 @@ use crate::{
 use cfx_bytes::Bytes;
 use keccak_hash::keccak;
 use keylib::{sign, Generator, KeyPair, Random, Secret};
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use mio::{tcp::*, udp::*, *};
 use parity_path::restrict_permissions_owner;
 use parking_lot::{Mutex, RwLock};
@@ -89,6 +90,10 @@ const DEFAULT_CHECK_SESSIONS_TIMEOUT: Duration = Duration::from_secs(10);
     Deserialize,
 )]
 pub struct ProtocolVersion(pub u8);
+
+impl MallocSizeOf for ProtocolVersion {
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
+}
 
 pub const MAX_DATAGRAM_SIZE: usize = 1280;
 pub const UDP_PROTOCOL_DISCOVERY: u8 = 1;
@@ -784,10 +789,11 @@ impl NetworkServiceInner {
 
     // Connect to all reserved and trusted peers if not yet
     fn connect_peers(&self, io: &IoContext<NetworkIoMessage>) {
-        assert!(
-                self.metadata.minimum_peer_protocol_version.read().len() > 0,
-                "Protocols should have been registered before the HOUSEKEEPING timeout."
-            );
+        if self.metadata.minimum_peer_protocol_version.read().len() == 0 {
+            // The protocol handler has not been registered, we just wait for
+            // the next time.
+            return;
+        }
 
         let self_id = self.metadata.id().clone();
 
@@ -2018,6 +2024,13 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
                 work_type,
             })
             .expect("Error sending network IO message");
+    }
+
+    fn insert_peer_node_tag(&self, peer: NodeId, key: &str, value: &str) {
+        self.network_service
+            .node_db
+            .write()
+            .set_tag(peer, key, value);
     }
 }
 

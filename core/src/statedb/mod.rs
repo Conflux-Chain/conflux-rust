@@ -7,13 +7,14 @@ use crate::{
     parameters::staking::*,
     storage::{
         Error as StorageError, ErrorKind as StorageErrorKind, MptKeyValue,
-        StateProof, StateRootWithAuxInfo, StorageState, StorageStateTrait,
+        NodeMerkleProof, StateProof, StateRootWithAuxInfo, StorageState,
+        StorageStateTrait,
     },
 };
 use cfx_types::{Address, H256, U256};
 use primitives::{
     Account, CodeInfo, DepositList, EpochId, StorageKey, StorageLayout,
-    StorageRoot, VoteStakeList, MERKLE_NULL_NODE,
+    StorageRoot, VoteStakeList,
 };
 
 mod error;
@@ -99,17 +100,24 @@ impl StateDb {
     ) -> Result<Option<StorageRoot>> {
         let key = StorageKey::new_storage_root_key(address);
 
-        match self.storage.get_node_merkle_all_versions(key)? {
-            (None, None, None) => Ok(None),
-            (maybe_delta, maybe_intermediate, maybe_snapshot) => {
-                Ok(Some(StorageRoot {
-                    delta: maybe_delta.unwrap_or(MERKLE_NULL_NODE),
-                    intermediate: maybe_intermediate
-                        .unwrap_or(MERKLE_NULL_NODE),
-                    snapshot: maybe_snapshot.unwrap_or(MERKLE_NULL_NODE),
-                }))
-            }
-        }
+        let (triplet, _) = self
+            .storage
+            .get_node_merkle_all_versions(key, false /* with_proof */)?;
+
+        Ok(StorageRoot::from_node_merkle_triplet(triplet))
+    }
+
+    pub fn get_storage_root_with_proof(
+        &self, address: &Address,
+    ) -> Result<(Option<StorageRoot>, NodeMerkleProof)> {
+        let key = StorageKey::new_storage_root_key(address);
+
+        let (triplet, proof) = self
+            .storage
+            .get_node_merkle_all_versions(key, true /* with_proof */)?;
+
+        let root = StorageRoot::from_node_merkle_triplet(triplet);
+        Ok((root, proof))
     }
 
     pub fn get_raw(&self, key: StorageKey) -> Result<Option<Box<[u8]>>> {

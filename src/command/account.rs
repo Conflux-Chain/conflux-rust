@@ -101,8 +101,12 @@ fn new(new_cmd: NewAccount) -> Result<String, String> {
         None => password_prompt()?,
     };
 
-    let acc_provider =
-        account_provider(new_cmd.path, Some(new_cmd.iterations))?;
+    let acc_provider = account_provider(
+        new_cmd.path,
+        Some(new_cmd.iterations), /* sstore_iterations */
+        None,                     /* refresh_time */
+    )?;
+
     let new_account = acc_provider
         .new_account(&password)
         .map_err(|e| format!("Could not create new account: {}", e))?;
@@ -110,7 +114,12 @@ fn new(new_cmd: NewAccount) -> Result<String, String> {
 }
 
 fn list(list_cmd: ListAccounts) -> Result<String, String> {
-    let acc_provider = account_provider(list_cmd.path, None)?;
+    let acc_provider = account_provider(
+        list_cmd.path,
+        None, /* sstore_iterations */
+        None, /* refresh_time */
+    )?;
+
     let accounts = acc_provider.accounts().map_err(|e| format!("{}", e))?;
     let result = accounts
         .into_iter()

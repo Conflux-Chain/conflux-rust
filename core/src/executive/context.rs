@@ -410,7 +410,12 @@ impl<'a> ContextTrait for Context<'a> {
 
     fn env(&self) -> &Env { &self.env }
 
-    fn chain_id(&self) -> u64 { self.machine.params().chain_id }
+    fn chain_id(&self) -> u64 {
+        self.machine
+            .params()
+            .chain_id
+            .get_chain_id(self.env.epoch_height) as u64
+    }
 
     fn depth(&self) -> usize { self.depth }
 
@@ -519,7 +524,7 @@ mod tests {
 
         fn new() -> Self {
             let storage_manager = Box::new(new_storage_manager_for_testing());
-            let machine = new_machine_with_builtin();
+            let machine = new_machine_with_builtin(Default::default());
             let env = get_test_env();
             let spec = machine.spec(env.number);
             let internal_contract_map = InternalContractMap::new();

@@ -35,8 +35,10 @@ build_msgid! {
     BLOCK_TXS = 0x015
     GET_TX_INFOS = 0x016
     TX_INFOS = 0x017
-    STATUS_PING_V2 = 0x018
-    STATUS_PONG_V2 = 0x019
+    STATUS_PING_V2 = 0x18
+    STATUS_PONG_V2 = 0x19
+    GET_STORAGE_ROOTS = 0x1a
+    STORAGE_ROOTS = 0x1b
 
     THROTTLED = 0xfe
     INVALID = 0xff
@@ -69,3 +71,5 @@ build_msg_impl! { GetBlockTxs, msgid::GET_BLOCK_TXS, "GetBlockTxs", LIGHT_PROTO_
 build_msg_impl! { BlockTxs, msgid::BLOCK_TXS, "BlockTxs", LIGHT_PROTO_V1, LIGHT_PROTO_V2 }
 build_msg_impl! { GetTxInfos, msgid::GET_TX_INFOS, "GetTxInfos", LIGHT_PROTO_V1, LIGHT_PROTO_V2 }
 build_msg_impl! { TxInfos, msgid::TX_INFOS, "TxInfos", LIGHT_PROTO_V1, LIGHT_PROTO_V2 }
+build_msg_impl! { GetStorageRoots, msgid::GET_STORAGE_ROOTS, "GetStorageRoots", LIGHT_PROTO_V2, LIGHT_PROTO_V2 }
+build_msg_impl! { StorageRoots, msgid::STORAGE_ROOTS, "StorageRoots", LIGHT_PROTO_V2, LIGHT_PROTO_V2 }

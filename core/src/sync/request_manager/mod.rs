@@ -14,6 +14,7 @@ use crate::{
             GetBlocks, GetCompactBlocks, GetTransactions,
             GetTransactionsFromTxHashes, Key, KeyContainer, TransactionDigests,
         },
+        node_type::NodeType,
         request_manager::request_batcher::RequestBatcher,
         synchronization_protocol_handler::{AsyncTaskQueue, RecoverPublicTask},
         synchronization_state::PeerFilter,
@@ -21,6 +22,8 @@ use crate::{
     },
 };
 use cfx_types::H256;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Meter, MeterTimer,
 };
@@ -93,6 +96,12 @@ lazy_static! {
 #[derive(Debug)]
 struct WaitingRequest(Box<dyn Request>, Duration); // (request, delay)
 
+impl MallocSizeOf for WaitingRequest {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.0.size_of(ops) + self.1.size_of(ops)
+    }
+}
+
 /// When a header or block is requested by the `RequestManager`, it is ensured
 /// that if it's not fully received, its hash exists
 /// in `in_flight` after every function call.
@@ -102,6 +111,7 @@ struct WaitingRequest(Box<dyn Request>, Duration); // (request, delay)
 ///
 /// No lock is held when we call another function in this struct, and all locks
 /// are acquired in the same order, so there should exist no deadlocks.
+#[derive(DeriveMallocSizeOf)]
 pub struct RequestManager {
     // used to avoid send duplicated requests.
     inflight_keys: KeyContainer,
@@ -123,6 +133,8 @@ pub struct RequestManager {
     request_handler: Arc<RequestHandler>,
 
     syn: Arc<SynchronizationState>,
+
+    #[ignore_malloc_size_of = "channels are not handled in MallocSizeOf"]
     recover_public_queue: Arc<AsyncTaskQueue<RecoverPublicTask>>,
 }
 
@@ -258,6 +270,7 @@ impl RequestManager {
     pub fn request_blocks(
         &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
         hashes: Vec<H256>, with_public: bool, delay: Option<Duration>,
+        preferred_node_type: Option<NodeType>,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
@@ -267,6 +280,7 @@ impl RequestManager {
             request_id: 0,
             with_public,
             hashes,
+            preferred_node_type,
         };
 
         self.request_with_delay(io, Box::new(request), peer_id, delay);
@@ -531,6 +545,9 @@ impl RequestManager {
         debug!("send_request_again, request={:?}", msg.request);
         if let Some(request) = msg.request.resend() {
             let mut filter = PeerFilter::new(request.msg_id());
+            if let Some(preferred_node_type) = request.preferred_node_type() {
+                filter = filter.with_preferred_node_type(preferred_node_type);
+            }
             if let Some(cap) = request.required_capability() {
                 filter = filter.with_cap(cap);
             }
@@ -654,6 +671,7 @@ impl RequestManager {
         &self, io: &dyn NetworkContext, requested_hashes: HashSet<H256>,
         mut received_blocks: HashSet<H256>, ask_full_block: bool,
         peer: Option<NodeId>, with_public: bool, delay: Option<Duration>,
+        preferred_node_type_for_block_request: Option<NodeType>,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
@@ -708,6 +726,7 @@ impl RequestManager {
                     missing_blocks,
                     with_public,
                     delay,
+                    preferred_node_type_for_block_request,
                 );
             } else {
                 self.request_compact_blocks(
@@ -887,7 +906,9 @@ impl RequestManager {
             batcher.insert(delay, request);
         }
 
-        for (next_delay, request) in batcher.get_batched_requests() {
+        let is_full_node = self.syn.is_full_node();
+        for (next_delay, request) in batcher.get_batched_requests(is_full_node)
+        {
             let mut filter = PeerFilter::new(request.msg_id());
             if let Some(cap) = request.required_capability() {
                 filter = filter.with_cap(cap);
@@ -1011,7 +1032,7 @@ pub fn try_get_block_hashes(request: &Box<dyn Request>) -> Option<&Vec<H256>> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, DeriveMallocSizeOf)]
 struct TimedWaitingRequest {
     time_to_send: Instant,
     request: WaitingRequest,

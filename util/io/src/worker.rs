@@ -22,17 +22,20 @@ use crate::{
     service_mio::{HandlerId, IoChannel, IoContext},
     IoHandler, LOCAL_STACK_SIZE,
 };
+use crossbeam_channel;
 use crossbeam_deque;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering as AtomicOrdering},
-        mpsc::Receiver,
         Arc,
     },
     thread::{self, JoinHandle},
 };
 
-use std::sync::{Condvar as SCondvar, Mutex as SMutex};
+use std::{
+    sync::{Condvar as SCondvar, Mutex as SMutex},
+    time::Duration,
+};
 
 const STACK_SIZE: usize = 16 * 1024 * 1024;
 
@@ -57,9 +60,12 @@ pub struct SocketWorker {
 impl SocketWorker {
     /// Creates a socket worker instance
     pub fn new<Message>(
-        index: usize, rx: Receiver<Work<Message>>, channel: IoChannel<Message>,
+        index: usize, rx: crossbeam_channel::Receiver<Work<Message>>,
+        channel: IoChannel<Message>,
     ) -> SocketWorker
-    where Message: Send + Sync + 'static {
+    where
+        Message: Send + Sync + 'static,
+    {
         let deleting = Arc::new(AtomicBool::new(false));
         let mut worker = SocketWorker {
             thread: None,
@@ -79,22 +85,18 @@ impl SocketWorker {
     }
 
     fn work_loop<Message>(
-        rx: Receiver<Work<Message>>, channel: IoChannel<Message>,
-        deleting: Arc<AtomicBool>,
+        rx: crossbeam_channel::Receiver<Work<Message>>,
+        channel: IoChannel<Message>, deleting: Arc<AtomicBool>,
     ) where
         Message: Send + Sync + 'static,
     {
-        loop {
-            if deleting.load(AtomicOrdering::Acquire) {
-                return;
-            }
-            while !deleting.load(AtomicOrdering::Acquire) {
-                // TODO recv_timeout() may panic, not sure if it's the cause for
-                // returning SendError on the sender
-                match rx.recv() {
-                    Ok(work) => SocketWorker::do_work(work, channel.clone()),
-                    _ => break,
-                }
+        while !deleting.load(AtomicOrdering::Acquire) {
+            // Add timeout because if the worker is dropped, we can check
+            // `deleting` without blocking forever.
+            match rx.recv_timeout(Duration::from_millis(500)) {
+                Ok(work) => SocketWorker::do_work(work, channel.clone()),
+                Err(crossbeam_channel::RecvTimeoutError::Timeout) => continue,
+                Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break,
             }
         }
     }
@@ -182,15 +184,21 @@ impl Worker {
                 if deleting.load(AtomicOrdering::Acquire) {
                     return;
                 }
-                let _ = wait.wait(lock);
+                std::mem::drop(wait.wait(lock));
             }
 
+            // TODO: If a `work` is enqueued and notified after the following
+            // loop end but before we start waiting on `wait`, this
+            // work may not be processed in time because all workers are
+            // waiting? This is not an issue so far because we have
+            // many timeout events that always notify workers.
             while !deleting.load(AtomicOrdering::Acquire) {
                 match stealer.steal() {
                     crossbeam_deque::Steal::Success(work) => {
                         Worker::do_work(work, channel.clone())
                     }
-                    _ => break,
+                    crossbeam_deque::Steal::Retry => {}
+                    crossbeam_deque::Steal::Empty => break,
                 }
             }
         }
@@ -218,9 +226,12 @@ impl Worker {
 impl Drop for Worker {
     fn drop(&mut self) {
         trace!(target: "shutdown", "[IoWorker] Closing...");
-        let _ = self.wait_mutex.lock().expect("Poisoned work_loop mutex");
-        self.deleting.store(true, AtomicOrdering::Release);
-        self.wait.notify_all();
+        {
+            let _lock =
+                self.wait_mutex.lock().expect("Poisoned work_loop mutex");
+            self.deleting.store(true, AtomicOrdering::Release);
+            self.wait.notify_all();
+        }
         if let Some(thread) = self.thread.take() {
             thread.join().ok();
         }

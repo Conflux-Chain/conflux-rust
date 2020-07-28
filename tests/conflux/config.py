@@ -13,6 +13,8 @@ default_config = dict(
     GENESIS_RECEIPTS_ROOT=trie.EMPTY_EPOCH_RECEIPT_ROOT_BY_NUMBER_OF_BLOCKS[0],
     GENESIS_LOGS_BLOOM_HASH=decode_hex("0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5"), # KECCAK_EMPTY_BLOOM    ~ keccak(b'\0' * 256)
     GENESIS_AUTHOR=decode_hex("0x2000000000000000000000000000000000000060"),
+    GENESIS_TRANSACTION_ROOT=decode_hex("0x835cd391da58faedec5486f31c3392ed21386b3926d3ac5301c4c8af5cf8e27f"),
+    GENESIS_AUTHOR=decode_hex("0x1000000000000000000000000000000000000000"),
     GENESIS_GAS_LIMIT=30_000_000,
     MAX_BLOCK_SIZE_IN_BYTES=200 * 1024,
 )
@@ -25,7 +27,7 @@ default_conflux_conf = dict(
     storage_delta_mpts_cache_start_size = 2_000_000,
     storage_delta_mpts_slab_idle_size = 2_000_000,
     tx_pool_size = 500_000,
-    record_tx_index = "true",
+    persist_tx_index = "true",
 )
 
 production_conf = default_conflux_conf
@@ -44,5 +46,5 @@ small_local_test_conf = dict(
     storage_delta_mpts_cache_start_size = 200_000,
     storage_delta_mpts_slab_idle_size = 2_000_000,
     subnet_quota = 0,
-    record_tx_index = "true",
+    persist_tx_index = "true",
 )

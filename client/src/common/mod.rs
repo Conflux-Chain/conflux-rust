@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_types::address_util::AddressUtil;
+
 /// Hold all top-level components for a type of client.
 /// This struct implement ClientShutdownTrait.
 pub struct ClientComponents<BlockGenT, Rest> {
@@ -214,7 +216,9 @@ pub fn initialize_common_modules(
         pow.clone(),
     ));
 
-    let machine = Arc::new(new_machine_with_builtin());
+    let consensus_conf = conf.consensus_config();
+    let machine =
+        Arc::new(new_machine_with_builtin(consensus_conf.chain_id.clone()));
 
     let txpool = Arc::new(TransactionPool::new(
         conf.txpool_config(),
@@ -228,7 +232,7 @@ pub fn initialize_common_modules(
     let notifications = Notifications::init();
 
     let consensus = Arc::new(ConsensusGraph::new(
-        conf.consensus_config(),
+        consensus_conf,
         vm,
         txpool.clone(),
         statistics,
@@ -261,10 +265,17 @@ pub fn initialize_common_modules(
         Arc::new(network)
     };
 
+    let refresh_time =
+        Duration::from_millis(conf.raw_conf.account_provider_refresh_time_ms);
+
     let accounts = Arc::new(
-        account_provider(Some(keys_path()), None)
-            .ok()
-            .expect("failed to initialize account provider"),
+        account_provider(
+            Some(keys_path()),
+            None, /* sstore_iterations */
+            Some(refresh_time),
+        )
+        .ok()
+        .expect("failed to initialize account provider"),
     );
 
     let common_impl = Arc::new(CommonRpcImpl::new(
@@ -333,6 +344,7 @@ pub fn initialize_not_light_node_modules(
         Arc::downgrade(&network),
         txpool.clone(),
         conf.raw_conf.throttling_conf.clone(),
+        is_full_node,
     ));
     light_provider.register(network.clone()).unwrap();
 
@@ -375,13 +387,15 @@ pub fn initialize_not_light_node_modules(
                 let consensus_graph_size = consensus.size_of(&mut ops) / mb;
                 let sync_graph_size =
                     sync.get_synchronization_graph().size_of(&mut ops) / mb;
+                let sync_service_size = sync.size_of(&mut ops) / mb;
                 info!(
                     "Malloc Size(MB): secret_store={} data_manager_db_cache_size={} \
-                    storage_manager_size={} data_man={} txpool={} consensus={} sync={}, \
+                    storage_manager_size={} data_man={} txpool={} consensus={} sync_graph={}\
+                    sync_service={}, \
                     time elapsed={:?}",
                     secret_store_size,data_manager_db_cache_size,storage_manager_size,
                     data_man_size, tx_pool_size, consensus_graph_size, sync_graph_size,
-                    start.elapsed(),
+                    sync_service_size, start.elapsed(),
                 );
                 thread::sleep(Duration::from_secs(
                     print_memory_usage_period_s,
@@ -425,7 +439,11 @@ pub fn initialize_not_light_node_modules(
             })
             .expect("Mining thread spawn error");
     } else if conf.raw_conf.start_mining {
-        if maybe_author.is_none() {
+        if let Some(author) = maybe_author {
+            if !author.is_valid_address() || author.is_builtin_address() {
+                panic!("mining-author must starts with 0x1 (user address) or 0x8 (contract address), otherwise you will not get mining rewards!!!");
+            }
+        } else {
             panic!("mining-author is not set correctly, so you'll not get mining rewards!!!");
         }
         let bg = blockgen.clone();
@@ -614,7 +632,12 @@ pub mod delegate_convert {
                 }
                 RpcErrorKind::Msg(_)
                 | RpcErrorKind::Decoder(_)
+
+                // TODO(thegaram): consider returning InvalidParams instead
                 | RpcErrorKind::FilterError(_)
+
+                // TODO(thegaram): make error conversion more fine-grained here
+                | RpcErrorKind::LightProtocol(_)
                 | RpcErrorKind::StateDb(_)
                 | RpcErrorKind::Storage(_) => JsonRpcError {
                     code: jsonrpc_core::ErrorCode::ServerError(EXCEPTION_ERROR),

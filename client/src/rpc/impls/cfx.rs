@@ -43,8 +43,9 @@ use crate::{
             BlockHashOrEpochNumber, Bytes, CallRequest,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
             EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
-            Log as RpcLog, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
-            SendTxRequest, SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
+            Log as RpcLog, PackedOrExecuted, Receipt as RpcReceipt,
+            RewardInfo as RpcRewardInfo, SendTxRequest,
+            SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
             StorageRoot as RpcStorageRoot, SyncGraphStates,
             Transaction as RpcTransaction,
         },
@@ -270,7 +271,8 @@ impl RpcImpl {
     }
 
     fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256> {
-        info!("RPC Request: cfx_sendRawTransaction bytes={:?}", raw);
+        info!("RPC Request: cfx_sendRawTransaction len={:?}", raw.0.len());
+        debug!("RawTransaction bytes={:?}", raw);
 
         // FIXME: input parse error.
         let tx = Rlp::new(&raw.into_vec()).as_val().map_err(|err| {
@@ -397,7 +399,7 @@ impl RpcImpl {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
 
         info!(
-            "RPC Request: storage_hash address={:?} epoch_num={:?}",
+            "RPC Request: cfx_getStorageRoot address={:?} epoch={:?}",
             address, epoch_num
         );
 
@@ -440,18 +442,22 @@ impl RpcImpl {
         info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
 
         if let Some(info) = self.consensus.get_transaction_info_by_hash(&hash) {
-            let (tx, receipt, tx_index, prior_gas_used) = info;
-            let rpc_receipt = RpcReceipt::new(
-                tx.clone(),
-                receipt,
-                tx_index,
-                prior_gas_used,
-                // TODO: set these fields below.
-                /* maybe_epoch_number = */
-                None,
-                /* maybe_state_root = */ None,
-            );
-            let rpc_tx = RpcTransaction::from_signed(&tx, Some(rpc_receipt));
+            let (tx, tx_index, maybe_executed) = info;
+            let packed_or_executed = match maybe_executed {
+                None => PackedOrExecuted::Packed(tx_index),
+                Some((receipt, prior_gas_used)) => {
+                    PackedOrExecuted::Executed(RpcReceipt::new(
+                        tx.clone(),
+                        receipt,
+                        tx_index,
+                        prior_gas_used,
+                        None,
+                        None,
+                    ))
+                }
+            };
+            let rpc_tx =
+                RpcTransaction::from_signed(&tx, Some(packed_or_executed));
             return Ok(Some(rpc_tx));
         }
 
@@ -1070,7 +1076,7 @@ impl Cfx for CfxHandler {
                 -> BoxFuture<Option<H256>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
-            fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> JsonRpcResult<Option<RpcStorageRoot>>;
+            fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<RpcStorageRoot>>;
         }
     }
 }

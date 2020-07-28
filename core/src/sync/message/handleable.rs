@@ -30,6 +30,10 @@ impl<'a> Context<'a> {
         Ok(())
     }
 
+    pub fn insert_peer_node_tag(&self, peer: NodeId, key: &str, value: &str) {
+        self.io.insert_peer_node_tag(peer, key, value)
+    }
+
     pub fn node_id(&self) -> NodeId { self.node_id.clone() }
 }
 

@@ -400,6 +400,10 @@ jsonrpc_local_http_port=12539
 
 # -------------------- Others -------------------
 
+# Time (in milliseconds) after which accounts are re-read from disk.
+#
+# account_provider_refresh_time_ms = 1000
+
 # Whether to allow execution without deferring if the execution thread is idle.
 #
 # enable_optimistic_execution = true

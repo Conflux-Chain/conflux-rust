@@ -295,7 +295,7 @@ impl State {
     }
 
     pub fn collect_ownership_changed_and_settle(
-        &mut self, storage_owner: &Address, storage_limit: &U256,
+        &mut self, original_sender: &Address, storage_limit: &U256,
         substate: &mut Substate,
     ) -> DbResult<CollateralCheckResult>
     {
@@ -316,7 +316,7 @@ impl State {
         }
 
         let collateral_for_storage =
-            self.collateral_for_storage(storage_owner)?;
+            self.collateral_for_storage(original_sender)?;
         if collateral_for_storage > *storage_limit {
             Ok(CollateralCheckResult::ExceedStorageLimit {
                 limit: *storage_limit,
@@ -738,7 +738,7 @@ impl State {
             //
             // The logic here is intended for incorrect miner coin-base. In this
             // case, the mining reward get lost.
-            warn!(
+            debug!(
                 "add_balance: address does not already exist and is not a valid address. {:?}",
                 address
             );

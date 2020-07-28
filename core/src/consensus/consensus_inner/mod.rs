@@ -19,6 +19,7 @@ use crate::{
     parameters::{consensus::*, consensus_internal::*},
     pow::{target_difficulty, PowComputer, ProofOfWorkConfig},
     state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
+    verification::VerificationConfig,
 };
 use cfx_types::{H256, U256, U512};
 use hashbrown::HashMap as FastHashMap;
@@ -471,10 +472,16 @@ pub struct ConsensusGraphInner {
     anticone_cache: AnticoneCache,
     pastset_cache: PastSetCache,
     sequence_number_of_block_entrance: u64,
-    /// Block set of each old era. It will garbage collected by sync graph via
-    /// `pop_old_era_block_set()`. This is a helper for full nodes to determine
-    /// which blocks it can safely remove
-    old_era_block_set: Mutex<VecDeque<H256>>,
+
+    /// Blocks in the past of the current block set. They will be merged into
+    /// `last_old_era_block_set` when this checkpoint moves forward.
+    /// Note that `last_old_era_block_set` is locked before
+    /// `current_old_era_block_set`.
+    current_old_era_block_set: Mutex<VecDeque<H256>>,
+    /// Block set of each old era. It will be garbage collected by sync graph
+    /// via `pop_old_era_block_set()`. This is a helper for full nodes to
+    /// determine which blocks it can safely remove
+    last_old_era_block_set: Mutex<VecDeque<H256>>,
 
     /// This is a cache map to speed up the lca computation of terminals in the
     /// best terminals call. The basic idea is that if no major
@@ -507,7 +514,7 @@ impl MallocSizeOf for ConsensusGraphInner {
             + self.data_man.size_of(ops)
             + self.anticone_cache.size_of(ops)
             + self.pastset_cache.size_of(ops)
-            + self.old_era_block_set.lock().size_of(ops)
+            + self.current_old_era_block_set.lock().size_of(ops)
             + self.best_terminals_lca_height_cache.size_of(ops)
             + self.best_terminals_reorg_height.size_of(ops)
     }
@@ -597,7 +604,8 @@ impl ConsensusGraphInner {
             anticone_cache: AnticoneCache::new(),
             pastset_cache: Default::default(),
             sequence_number_of_block_entrance: 0,
-            old_era_block_set: Mutex::new(VecDeque::new()),
+            current_old_era_block_set: Default::default(),
+            last_old_era_block_set: Default::default(),
             best_terminals_lca_height_cache: Default::default(),
             best_terminals_reorg_height: NULLU64,
             has_timer_block_in_anticone_cache: Default::default(),
@@ -1560,7 +1568,8 @@ impl ConsensusGraphInner {
         }
 
         if parent == NULL && referees.is_empty() {
-            self.old_era_block_set.lock().push_back(hash);
+            // FIXME These blocks will not be garbage collected from disk if
+            // they are never referred.
             return (sn, NULL);
         }
 
@@ -1659,10 +1668,15 @@ impl ConsensusGraphInner {
     fn insert(&mut self, block_header: &BlockHeader) -> (usize, usize) {
         let hash = block_header.hash();
 
-        let is_heavy = U512::from(block_header.pow_quality)
+        let pow_quality =
+            U512::from(VerificationConfig::get_or_compute_header_pow_quality(
+                &self.pow,
+                block_header,
+            ));
+        let is_heavy = pow_quality
             >= U512::from(self.inner_conf.heavy_block_difficulty_ratio)
                 * U512::from(block_header.difficulty());
-        let is_timer = U512::from(block_header.pow_quality)
+        let is_timer = pow_quality
             >= U512::from(self.inner_conf.timer_chain_block_difficulty_ratio)
                 * U512::from(block_header.difficulty());
 
@@ -1915,7 +1929,7 @@ impl ConsensusGraphInner {
                 .data_man
                 .block_by_hash(
                     &self.arena[*idx].hash,
-                    false, /* update_cache */
+                    true, /* update_cache */
                 )
                 .expect("Exist");
             epoch_blocks.push(block);
@@ -2313,35 +2327,37 @@ impl ConsensusGraphInner {
 
     pub fn get_transaction_receipt_with_address(
         &self, tx_hash: &H256,
-    ) -> Option<(Receipt, TransactionIndex, U256)> {
+    ) -> Option<(TransactionIndex, Option<(Receipt, U256)>)> {
         trace!("Get receipt with tx_hash {}", tx_hash);
         let tx_index = self.data_man.transaction_index_by_hash(
             tx_hash, false, /* update_cache */
         )?;
         // receipts should never be None if transaction index isn't none.
-        let block_receipts = self
+        let maybe_executed = self
             .block_execution_results_by_hash(
                 &tx_index.block_hash,
                 false, /* update_cache */
-            )?
-            .1
-            .block_receipts;
+            )
+            .map(|receipt| {
+                let block_receipts = receipt.1.block_receipts;
 
-        let prior_gas_used = if tx_index.index == 0 {
-            U256::zero()
-        } else {
-            block_receipts.receipts[tx_index.index - 1].accumulated_gas_used
-        };
+                let prior_gas_used = if tx_index.index == 0 {
+                    U256::zero()
+                } else {
+                    block_receipts.receipts[tx_index.index - 1]
+                        .accumulated_gas_used
+                };
+                (
+                    block_receipts
+                        .receipts
+                        .get(tx_index.index)
+                        .expect("Error: can't get receipt by tx_index ")
+                        .clone(),
+                    prior_gas_used,
+                )
+            });
 
-        Some((
-            block_receipts
-                .receipts
-                .get(tx_index.index)
-                .expect("Error: can't get receipt by tx_index ")
-                .clone(),
-            tx_index,
-            prior_gas_used,
-        ))
+        Some((tx_index, maybe_executed))
     }
 
     pub fn check_block_pivot_assumption(
@@ -3749,7 +3765,7 @@ impl ConsensusGraphInner {
     /// `old_era_block_set`. The set contains all the blocks that should be
     /// eliminated by full nodes
     pub fn pop_old_era_block_set(&self) -> Option<H256> {
-        self.old_era_block_set.lock().pop_front()
+        self.last_old_era_block_set.lock().pop_front()
     }
 
     /// Finish block recovery and prepare for normal block processing.

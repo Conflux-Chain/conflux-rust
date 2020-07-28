@@ -152,7 +152,7 @@ pub mod pow {
     // growth of the metadata, the memory consumption of the consensus graph,
     // and the confirmation speed
     pub const TARGET_AVERAGE_BLOCK_GENERATION_PERIOD: u64 = 500000;
-    pub const INITIAL_DIFFICULTY: u64 = 5_000;
+    pub const INITIAL_DIFFICULTY: u64 = 30_000;
 }
 
 pub mod block {
@@ -242,6 +242,7 @@ pub mod light {
         pub static ref STATE_ENTRY_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
         pub static ref TX_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
         pub static ref TX_INFO_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref STORAGE_ROOT_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
 
         /// Maximum time period we wait for a response for an on-demand query.
         /// After this timeout has been reached, we try another peer or give up.
@@ -271,6 +272,7 @@ pub mod light {
     pub const STATE_ENTRY_REQUEST_BATCH_SIZE: usize = 30;
     pub const TX_REQUEST_BATCH_SIZE: usize = 30;
     pub const TX_INFO_REQUEST_BATCH_SIZE: usize = 30;
+    pub const STORAGE_ROOT_REQUEST_BATCH_SIZE: usize = 30;
 
     /// Maximum number of in-flight items at any given time.
     /// If we reach this limit, we will not request any more.
@@ -283,6 +285,7 @@ pub mod light {
     pub const MAX_STATE_ENTRIES_IN_FLIGHT: usize = 100;
     pub const MAX_TXS_IN_FLIGHT: usize = 100;
     pub const MAX_TX_INFOS_IN_FLIGHT: usize = 100;
+    pub const MAX_STORAGE_ROOTS_IN_FLIGHT: usize = 100;
 
     /// Maximum number of in-flight epoch requests at any given time.
     /// Similar to `MAX_HEADERS_IN_FLIGHT`. However, it is hard to match
@@ -301,6 +304,7 @@ pub mod light {
     pub const MAX_EPOCHS_TO_SEND: usize = 128;
     pub const MAX_HEADERS_TO_SEND: usize = 512;
     pub const MAX_TXS_TO_SEND: usize = 1024;
+    pub const MAX_ITEMS_TO_SEND: usize = 50;
 
     /// During syncing, we might transiently have enough malicious blaming
     /// blocks to consider a correct header incorrect. For this reason, we
