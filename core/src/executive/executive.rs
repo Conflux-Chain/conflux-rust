@@ -1211,7 +1211,7 @@ impl<'a> Executive<'a> {
             self.depth,
             stack_depth,
             self.static_flag,
-            self.internal_contract_map,
+            self.internal_contract_map, 
             substate.contracts_in_callstack.clone(),
         )
         .consume(self.state, substate);
