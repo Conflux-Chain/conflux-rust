@@ -11,6 +11,8 @@ use std::{
 };
 
 use crate::message::MsgId;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{node_table::NodeId, service::ProtocolVersion};
 use rand::prelude::SliceRandom;
 use throttling::token_bucket::{ThrottledManager, TokenBucketManager};
@@ -25,7 +27,7 @@ pub struct FullPeerState {
     pub unexpected_msgs: TokenBucketManager,
 }
 
-#[derive(Default)]
+#[derive(Default, DeriveMallocSizeOf)]
 pub struct LightPeerState {
     pub handshake_completed: bool,
     pub protocol_version: ProtocolVersion,
@@ -34,6 +36,12 @@ pub struct LightPeerState {
 
 #[derive(Default)]
 pub struct Peers<T: Default>(RwLock<HashMap<NodeId, Arc<RwLock<T>>>>);
+
+impl<T: Default + MallocSizeOf> MallocSizeOf for Peers<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.0.size_of(ops)
+    }
+}
 
 impl<T> Peers<T>
 where T: Default

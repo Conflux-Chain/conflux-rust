@@ -37,7 +37,8 @@ class ErrorMatch(Enum):
 
 class TestNode:
     def __init__(self, index, datadir, rpchost, confluxd, rpc_timeout=None, remote=False, ip=None, user=None,
-                 rpcport=None, auto_recovery=False, recovery_timeout=30, chain_id=DEFAULT_PY_TEST_CHAIN_ID):
+                 rpcport=None, auto_recovery=False, recovery_timeout=30, chain_id=DEFAULT_PY_TEST_CHAIN_ID,
+                 no_pssh=True):
         self.chain_id = chain_id
         self.index = index
         self.datadir = datadir
@@ -45,8 +46,7 @@ class TestNode:
         self.stderr_dir = os.path.join(self.datadir, "stderr")
         self.log = os.path.join(self.datadir, "node" + str(index) + ".log")
         self.remote = remote
-        # FIXME: When will it be False?
-        self.no_pssh = True
+        self.no_pssh = no_pssh
         self.rpchost = rpchost
         self.auto_recovery = auto_recovery
         self.recovery_timeout = recovery_timeout
@@ -126,7 +126,7 @@ class TestNode:
         if extra_args is not None:
             self.args += extra_args
         if "--public-address" not in self.args:
-            self.args += ["--public-address", "{}:{}".format(self.ip, self.port)]
+            self.args += ["--public-address", "{}".format(self.ip)]
 
         # Delete any existing cookie file -- if such a file exists (eg due to
         # unclean shutdown), it will get overwritten anyway by bitcoind, and
@@ -134,31 +134,34 @@ class TestNode:
         delete_cookie_file(self.datadir)
         my_env = os.environ.copy()
         my_env["RUST_BACKTRACE"] = "full"
-        if self.remote and self.no_pssh:
-            ssh_args = '-o "StrictHostKeyChecking no"'
-            cli_mkdir = "ssh {} {}@{} mkdir -p {};".format(
-                ssh_args, self.user, self.ip, self.datadir
-            )
-            cli_conf = "scp {3} -r {0} {1}@{2}:`dirname {0}`;".format(
-                self.datadir, self.user, self.ip, ssh_args
-            )
-            cli_kill = "ssh {}@{} killall conflux;".format(self.user, self.ip)
-            cli_exe = 'ssh {} {}@{} "{} > ~/stdout"'.format(
-                ssh_args,
-                self.user,
-                self.ip,
-                "cd {} && export RUST_BACKTRACE=full && ".format(self.datadir)
-                + " ".join(self.args),
+        if self.remote:
+            # If no_pssh is False, we have started the conflux nodes before this, so
+            # we can just skip the start here.
+            if self.no_pssh:
+                ssh_args = '-o "StrictHostKeyChecking no"'
+                cli_mkdir = "ssh {} {}@{} mkdir -p {};".format(
+                    ssh_args, self.user, self.ip, self.datadir
                 )
-            print(cli_mkdir + cli_kill + cli_conf + cli_exe)
-            self.process = subprocess.Popen(
-                cli_mkdir + cli_kill + cli_conf + cli_exe,
-                stdout=stdout,
-                stderr=stderr,
-                cwd=self.datadir,
-                shell=True,
-                **kwargs,
+                cli_conf = "scp {3} -r {0} {1}@{2}:`dirname {0}`;".format(
+                    self.datadir, self.user, self.ip, ssh_args
                 )
+                cli_kill = "ssh {}@{} killall -9 conflux;".format(self.user, self.ip)
+                cli_exe = 'ssh {} {}@{} "{} > ~/stdout"'.format(
+                    ssh_args,
+                    self.user,
+                    self.ip,
+                    "cd {} && export RUST_BACKTRACE=full && cgexec -g net_cls:limit{} ".format(self.datadir, self.index+1)
+                    + " ".join(self.args),
+                    )
+                print(cli_mkdir + cli_kill + cli_conf + cli_exe)
+                self.process = subprocess.Popen(
+                    cli_mkdir + cli_kill + cli_conf + cli_exe,
+                    stdout=stdout,
+                    stderr=stderr,
+                    cwd=self.datadir,
+                    shell=True,
+                    **kwargs,
+                    )
         else:
             self.process = subprocess.Popen(
                 self.args, stdout=stdout, stderr=stderr, cwd=self.datadir, env=my_env, **kwargs)

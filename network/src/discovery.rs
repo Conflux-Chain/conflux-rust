@@ -535,7 +535,7 @@ impl Discovery {
         self.in_flight_find_nodes
             .insert(node.id.clone(), FindNodeRequest::default());
 
-        trace!("Sent FindNode to {:?}", &node.endpoint);
+        trace!("Sent FindNode to {:?}", node);
         Ok(())
     }
 

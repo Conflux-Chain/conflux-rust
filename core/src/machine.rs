@@ -8,7 +8,7 @@ use crate::{
     vm::Spec,
 };
 use cfx_types::{Address, H256, U256};
-use primitives::BlockNumber;
+use primitives::{BlockNumber, ChainIdParams};
 use std::{collections::BTreeMap, str::FromStr, sync::Arc};
 
 #[derive(Debug, PartialEq, Default)]
@@ -20,7 +20,7 @@ pub struct CommonParams {
     /// Network id.
     pub network_id: u64,
     /// Chain id.
-    pub chain_id: u64,
+    pub chain_id: ChainIdParams,
     /// Main subprotocol name.
     pub subprotocol_name: String,
     /// Minimum gas limit.
@@ -40,12 +40,12 @@ pub struct CommonParams {
 }
 
 impl CommonParams {
-    fn common_params() -> Self {
+    fn common_params(chain_id: ChainIdParams) -> Self {
         CommonParams {
             account_start_nonce: 0x00.into(),
             maximum_extra_data_size: 0x20,
             network_id: 0x1,
-            chain_id: 0x1,
+            chain_id,
             subprotocol_name: "cfx".into(),
             min_gas_limit: 10_000_000.into(),
             gas_limit_bound_divisor: 0x0400.into(),
@@ -102,15 +102,15 @@ impl Machine {
     pub fn builtins(&self) -> &BTreeMap<Address, Builtin> { &*self.builtins }
 }
 
-pub fn new_machine() -> Machine {
+pub fn new_machine(chain_id: ChainIdParams) -> Machine {
     Machine {
-        params: CommonParams::common_params(),
+        params: CommonParams::common_params(chain_id),
         builtins: Arc::new(BTreeMap::new()),
         spec_rules: None,
     }
 }
 
-pub fn new_machine_with_builtin() -> Machine {
+pub fn new_machine_with_builtin(chain_id: ChainIdParams) -> Machine {
     let mut btree = BTreeMap::new();
     btree.insert(
         Address::from(H256::from_low_u64_be(1)),
@@ -145,7 +145,7 @@ pub fn new_machine_with_builtin() -> Machine {
         ),
     );
     Machine {
-        params: CommonParams::common_params(),
+        params: CommonParams::common_params(chain_id),
         builtins: Arc::new(btree),
         spec_rules: None,
     }

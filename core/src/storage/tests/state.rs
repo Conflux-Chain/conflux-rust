@@ -690,88 +690,6 @@ fn test_set_order_concurrent() {
     }
 }
 
-// FIXME: Redesign the test for proof.
-#[test]
-fn test_proofs() {
-    let mut rng = get_rng_for_test();
-    let state_manager = new_state_manager_for_unit_test();
-    let mut state = state_manager.get_state_for_genesis_write();
-    let mut keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS)
-        .iter()
-        .filter(|_| rng.gen_bool(0.5))
-        .cloned()
-        .collect();
-
-    for key in &keys {
-        state
-            .set(StorageKey::AccountKey(key), key[..].into())
-            .expect("Failed to insert key.");
-    }
-
-    let mut epoch_id = H256::default();
-    epoch_id.as_bytes_mut()[0] = 1;
-    let root = state.compute_state_root().unwrap().state_root;
-    state.commit(epoch_id).unwrap();
-
-    keys.shuffle(&mut rng);
-
-    for key in &keys {
-        let (value, proof) = state
-            .get_with_proof(StorageKey::AccountKey(key))
-            .expect("Failed to get key.");
-
-        let key = &key.to_vec();
-        let value = value.as_ref().map(|b| &**b);
-
-        // valid proof
-        assert!(proof.is_valid_kv(key, value, root.clone()));
-
-        // invalid state root
-        let mut invalid_root = root.delta_root.clone();
-        invalid_root.as_bytes_mut()[0] = 0x00;
-
-        assert!(!proof.is_valid_kv(
-            key,
-            value,
-            StateRoot {
-                snapshot_root: invalid_root,
-                intermediate_delta_root: invalid_root,
-                delta_root: invalid_root
-            },
-        ));
-
-        // invalid value
-        assert!(!proof.is_valid_kv(key, Some(&[0x00; 100][..]), root.clone()));
-
-        // invalid non-existence.
-        assert!(!proof.is_valid_kv(key, None, root.clone()));
-
-        // test rlp
-        assert_eq!(proof, rlp::decode(&rlp::encode(&proof)).unwrap());
-    }
-
-    let nonexistent_keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS)
-        .iter()
-        .filter(|_| rng.gen_bool(0.5))
-        .cloned()
-        .collect();
-
-    for key in &nonexistent_keys {
-        if keys.contains(key) {
-            continue;
-        }
-
-        let (value, proof) = state
-            .get_with_proof(StorageKey::AccountKey(key))
-            .expect("Failed to get key.");
-
-        assert_eq!(value, None);
-
-        // valid non-existence proof
-        assert!(proof.is_valid_kv(&key.to_vec(), None, root.clone()));
-    }
-}
-
 use super::{
     super::{state::*, state_manager::*},
     generate_keys, get_rng_for_test, new_state_manager_for_unit_test,
@@ -781,7 +699,7 @@ use crate::storage::{
     StateRootWithAuxInfo,
 };
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
-use primitives::{Account, StateRoot, StorageKey};
+use primitives::{Account, StorageKey};
 use rand::{
     distributions::{Distribution, Uniform},
     seq::SliceRandom,

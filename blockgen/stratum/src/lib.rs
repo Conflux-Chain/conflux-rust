@@ -122,7 +122,7 @@ impl Stratum {
 
 impl PushWorkHandler for Stratum {
     fn push_work_all(&self, payload: String) -> Result<(), Error> {
-        warn!("Pushing job {} to miners", payload);
+        debug!("Pushing job {} to miners", payload);
 
         self.implementation
             .push_work_all(payload, &self.tcp_dispatcher)

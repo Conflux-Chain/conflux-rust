@@ -129,6 +129,7 @@ class Status(rlp.Serializable):
         ("chain_id", ChainIdParams),
         ("genesis_hash", hash32),
         ("best_epoch", big_endian_int),
+        ("node_type", big_endian_int),
         ("terminal_block_hashes", CountableList(hash32)),
     ]
 

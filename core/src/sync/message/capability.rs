@@ -9,10 +9,11 @@ use crate::{
         Error, SynchronizationState,
     },
 };
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{node_table::NodeId, NetworkContext};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy, DeriveMallocSizeOf)]
 pub enum DynamicCapability {
     NormalPhase(bool),  // provide tx relay
     ServeHeaders(bool), // provide block header downloads
@@ -71,7 +72,7 @@ impl Decodable for DynamicCapability {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, DeriveMallocSizeOf)]
 pub struct DynamicCapabilitySet {
     caps: [Option<DynamicCapability>; 3],
 }

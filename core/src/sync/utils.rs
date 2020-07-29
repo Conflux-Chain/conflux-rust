@@ -162,7 +162,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         TRANSACTION_DEFAULT_EPOCH_BOUND,
     );
 
-    let machine = Arc::new(new_machine_with_builtin());
+    let machine = Arc::new(new_machine_with_builtin(Default::default()));
 
     let txpool = Arc::new(TransactionPool::new(
         TxPoolConfig::default(),

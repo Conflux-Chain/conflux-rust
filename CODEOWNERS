@@ -31,4 +31,4 @@ core/src/sync/message/message.rs		@yangzhe1990
 core/src/sync/mod.rs			@yangzhe1990
 
 
-CHANGELOG.md	@Conflux-Chain/spec-change-review
+changelogs/*.md	@Conflux-Chain/spec-change-review

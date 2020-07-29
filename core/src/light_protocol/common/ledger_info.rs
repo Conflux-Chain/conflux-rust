@@ -2,10 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{Bloom, H256};
+use cfx_types::{Address, Bloom, H256};
 use primitives::{
     Block, BlockHeader, BlockHeaderBuilder, BlockReceipts, EpochNumber,
-    StorageKey,
+    StorageKey, StorageRoot,
 };
 
 use crate::{
@@ -16,7 +16,7 @@ use crate::{
     storage::{
         state::{State, StateTrait},
         state_manager::StateManagerTrait,
-        StateProof, StateRootWithAuxInfo,
+        NodeMerkleProof, StateProof, StateRootWithAuxInfo,
     },
 };
 
@@ -121,6 +121,12 @@ impl LedgerInfo {
             .ok_or(ErrorKind::InternalError.into())
     }
 
+    /// Get the number of epochs per snapshot period.
+    #[inline]
+    pub fn snapshot_epoch_count(&self) -> u32 {
+        self.consensus.get_data_manager().get_snapshot_epoch_count()
+    }
+
     /// Get the state trie corresponding to the execution of `epoch`.
     #[inline]
     pub fn state_of(&self, epoch: u64) -> Result<State, Error> {
@@ -162,11 +168,19 @@ impl LedgerInfo {
         let state = self.state_of(epoch)?;
 
         let (value, proof) = StateDb::new(state)
-            .get_raw_with_proof(StorageKey::from_key_bytes(&key))
-            .or(Err(ErrorKind::InternalError))?;
+            .get_raw_with_proof(StorageKey::from_key_bytes(&key))?;
 
         let value = value.map(|x| x.to_vec());
         Ok((value, proof))
+    }
+
+    /// Get the storage root of contract `address` at `epoch`.
+    #[inline]
+    pub fn storage_root_of(
+        &self, epoch: u64, address: &Address,
+    ) -> Result<(Option<StorageRoot>, NodeMerkleProof), Error> {
+        let state = self.state_of(epoch)?;
+        Ok(StateDb::new(state).get_storage_root_with_proof(address)?)
     }
 
     /// Get the epoch receipts corresponding to the execution of `epoch`.
@@ -254,21 +268,23 @@ impl LedgerInfo {
     pub fn witness_info(
         &self, witness: u64,
     ) -> Result<WitnessInfoWithHeight, Error> {
-        let mut states = vec![];
-        let mut receipts = vec![];
-        let mut blooms = vec![];
+        let mut state_root_hashes = vec![];
+        let mut receipt_hashes = vec![];
+        let mut bloom_hashes = vec![];
 
         for h in self.headers_seen_by_witness(witness)? {
-            states.push(self.correct_deferred_state_root_hash_of(h)?);
-            receipts.push(self.correct_deferred_receipts_root_hash_of(h)?);
-            blooms.push(self.correct_deferred_logs_root_hash_of(h)?);
+            state_root_hashes
+                .push(self.correct_deferred_state_root_hash_of(h)?);
+            receipt_hashes
+                .push(self.correct_deferred_receipts_root_hash_of(h)?);
+            bloom_hashes.push(self.correct_deferred_logs_root_hash_of(h)?);
         }
 
         Ok(WitnessInfoWithHeight {
             height: witness,
-            state_roots: states,
-            receipt_hashes: receipts,
-            bloom_hashes: blooms,
+            state_root_hashes,
+            receipt_hashes,
+            bloom_hashes,
         })
     }
 }
