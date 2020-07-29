@@ -142,15 +142,15 @@ fn secret_store_laod_geth_files() {
         store.accounts().unwrap(),
         vec![
             StoreAccountRef::root(
-                Address::from_str("3f49624084b67849c7b4e805c5988c21a430f9d9")
+                Address::from_str("0x3f49624084b67849c7b4e805c5988c21a430f9d9")
                     .unwrap()
             ),
             StoreAccountRef::root(
-                Address::from_str("5ba4dcf897e97c2bdf8315b9ef26c13c085988cf")
+                Address::from_str("0x5ba4dcf897e97c2bdf8315b9ef26c13c085988cf")
                     .unwrap()
             ),
             StoreAccountRef::root(
-                Address::from_str("63121b431a52f8043c16fcf0d1df9cb7b5f66649")
+                Address::from_str("0x63121b431a52f8043c16fcf0d1df9cb7b5f66649")
                     .unwrap()
             ),
         ]
@@ -165,11 +165,11 @@ fn secret_store_load_pat_files() {
         store.accounts().unwrap(),
         vec![
             StoreAccountRef::root(
-                Address::from_str("3f49624084b67849c7b4e805c5988c21a430f9d9")
+                Address::from_str("0x3f49624084b67849c7b4e805c5988c21a430f9d9")
                     .unwrap()
             ),
             StoreAccountRef::root(
-                Address::from_str("5ba4dcf897e97c2bdf8315b9ef26c13c085988cf")
+                Address::from_str("0x5ba4dcf897e97c2bdf8315b9ef26c13c085988cf")
                     .unwrap()
             ),
         ]
@@ -199,11 +199,11 @@ fn test_decrypting_files_with_short_ciphertext() {
         accounts,
         vec![
             StoreAccountRef::root(
-                Address::from_str("11e64e5480bfaf733ba7d48712decb8227797a4e")
+                Address::from_str("0x11e64e5480bfaf733ba7d48712decb8227797a4e")
                     .unwrap()
             ),
             StoreAccountRef::root(
-                Address::from_str("11e9d1e6d844bd3a536800ef8d8be6a9975db509")
+                Address::from_str("0x11e9d1e6d844bd3a536800ef8d8be6a9975db509")
                     .unwrap()
             ),
         ]
