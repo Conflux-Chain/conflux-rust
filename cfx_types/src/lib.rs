@@ -39,6 +39,8 @@ pub mod address_util {
 
         fn type_byte_mut(&mut self) -> &mut u8;
 
+        fn is_null_address(&self) -> bool;
+
         #[inline]
         fn address_type_bits(&self) -> u8 { self.type_byte() & 0xf0 }
 
@@ -69,6 +71,7 @@ pub mod address_util {
         #[inline]
         fn is_builtin_address(&self) -> bool {
             self.address_type_bits() == TYPE_BITS_BUILTIN
+                && !self.is_null_address()
         }
 
         #[inline]
@@ -90,12 +93,22 @@ pub mod address_util {
         fn type_byte_mut(&mut self) -> &mut u8 {
             &mut self.as_fixed_bytes_mut()[0]
         }
+
+        #[inline]
+        fn is_null_address(&self) -> bool { self.is_zero() }
     }
 
     impl AddressUtil for &[u8] {
+        #[inline]
         fn type_byte(&self) -> &u8 { &self[0] }
 
+        #[inline]
         fn type_byte_mut(&mut self) -> &mut u8 { unreachable!() }
+
+        #[inline]
+        fn is_null_address(&self) -> bool {
+            self.iter().all(|&byte| byte == 0u8)
+        }
     }
 
     #[cfg(test)]
