@@ -97,7 +97,7 @@ impl SafeAccount {
     {
         let crypto = Crypto::from(json.crypto);
         let address = match (password, &json.address) {
-			(None, Some(json_address)) => json_address.into(),
+			(None, Some(json_address)) => json_address.clone(),
 			(None, None) => return Err(Error::Custom(
 				"This keystore does not contain address. You need to provide password to import it".into())),
 			(Some(password), json_address) => {
@@ -107,8 +107,7 @@ impl SafeAccount {
 
 				match json_address {
 					Some(json_address) => {
-						let json_address = json_address.into();
-						if derived_address != json_address {
+						if derived_address != *json_address {
                             warn!("Detected address mismatch when opening an account. Derived: {:?}, in json got: {:?}. Are you trying to import an Ethkey for Conflux? Note that the address scheme between Ethereum and Conflux are different.", derived_address, json_address);
                             return Err(Error::Custom(format!("Address mismatch. Derived: {:?}, in json got: {:?}.", derived_address, json_address)));
 						}

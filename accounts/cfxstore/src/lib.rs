@@ -19,7 +19,7 @@
 #![warn(missing_docs)]
 
 extern crate cfx_types;
-extern crate cfxkey as _cfxkey;
+extern crate cfxkey;
 extern crate dir;
 extern crate libc;
 extern crate parity_crypto as crypto;
@@ -44,7 +44,6 @@ extern crate matches;
 
 mod account;
 pub mod accounts_dir;
-pub mod cfxkey;
 mod cfxstore;
 mod error;
 mod import;

@@ -15,16 +15,17 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 extern crate cfx_types;
+extern crate cfxkey;
 extern crate cfxstore;
 extern crate rand;
 
 mod util;
 
 use cfx_types::Address;
+use cfxkey::{verify_address, Generator, KeyPair, Random, Secret};
 use cfxstore::{
-    accounts_dir::RootDiskDirectory,
-    cfxkey::{verify_address, Generator, KeyPair, Random, Secret},
-    CfxStore, SecretVaultRef, SimpleSecretStore, StoreAccountRef,
+    accounts_dir::RootDiskDirectory, CfxStore, SecretVaultRef,
+    SimpleSecretStore, StoreAccountRef,
 };
 use std::str::FromStr;
 use util::TransientDir;

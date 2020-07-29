@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::{Crypto, Uuid, Version, H160};
+use super::{Crypto, Uuid, Version};
+use cfx_types::H160;
 use serde::{
     de::{DeserializeOwned, Error, MapAccess, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
@@ -203,6 +204,7 @@ impl KeyFile {
 
 #[cfg(test)]
 mod tests {
+    use cfx_types::{Address, H128, H256};
     use json::{
         Aes128Ctr, Cipher, Crypto, Kdf, KeyFile, Scrypt, Uuid, Version,
     };
@@ -213,12 +215,12 @@ mod tests {
     fn basic_keyfile() {
         let json = r#"
 		{
-			"address": "6edddfc6349aff20bc6467ccf276c5b52487f7a8",
+			"address": "0x6edddfc6349aff20bc6467ccf276c5b52487f7a8",
 			"crypto": {
 				"cipher": "aes-128-ctr",
 				"ciphertext": "7203da0676d141b138cd7f8e1a4365f59cc1aa6978dc5443f364ca943d7cb4bc",
 				"cipherparams": {
-					"iv": "b5a7ec855ec9e2c405371356855fec83"
+					"iv": "0xb5a7ec855ec9e2c405371356855fec83"
 				},
 				"kdf": "scrypt",
 				"kdfparams": {
@@ -228,7 +230,7 @@ mod tests {
 					"r": 8,
 					"salt": "1e8642fdf1f87172492c1412fc62f8db75d796cdfa9c53c3f2b11e44a2a1b209"
 				},
-				"mac": "46325c5d4e8c991ad2683d525c7854da387138b6ca45068985aa4959fa2b8c8f"
+				"mac": "0x46325c5d4e8c991ad2683d525c7854da387138b6ca45068985aa4959fa2b8c8f"
 			},
 			"id": "8777d9f6-7860-4b9b-88b7-0b57ee6b3a73",
 			"version": 3,
@@ -239,10 +241,10 @@ mod tests {
         let expected = KeyFile {
 			id: Uuid::from_str("8777d9f6-7860-4b9b-88b7-0b57ee6b3a73").unwrap(),
 			version: Version::V3,
-			address: Some("6edddfc6349aff20bc6467ccf276c5b52487f7a8".into()),
+			address: Some(Address::from_str("6edddfc6349aff20bc6467ccf276c5b52487f7a8").unwrap()),
 			crypto: Crypto {
 				cipher: Cipher::Aes128Ctr(Aes128Ctr {
-					iv: "b5a7ec855ec9e2c405371356855fec83".into(),
+					iv: H128::from_str("b5a7ec855ec9e2c405371356855fec83").unwrap(),
 				}),
 				ciphertext: "7203da0676d141b138cd7f8e1a4365f59cc1aa6978dc5443f364ca943d7cb4bc".into(),
 				kdf: Kdf::Scrypt(Scrypt {
@@ -252,7 +254,7 @@ mod tests {
 					r: 8,
 					salt: "1e8642fdf1f87172492c1412fc62f8db75d796cdfa9c53c3f2b11e44a2a1b209".into(),
 				}),
-				mac: "46325c5d4e8c991ad2683d525c7854da387138b6ca45068985aa4959fa2b8c8f".into(),
+				mac: H256::from_str("46325c5d4e8c991ad2683d525c7854da387138b6ca45068985aa4959fa2b8c8f").unwrap(),
 			},
 			name: Some("Test".to_owned()),
 			meta: Some("{}".to_owned()),
@@ -266,12 +268,12 @@ mod tests {
     fn capital_crypto_keyfile() {
         let json = r#"
 		{
-			"address": "6edddfc6349aff20bc6467ccf276c5b52487f7a8",
+			"address": "0x6edddfc6349aff20bc6467ccf276c5b52487f7a8",
 			"Crypto": {
 				"cipher": "aes-128-ctr",
 				"ciphertext": "7203da0676d141b138cd7f8e1a4365f59cc1aa6978dc5443f364ca943d7cb4bc",
 				"cipherparams": {
-					"iv": "b5a7ec855ec9e2c405371356855fec83"
+					"iv": "0xb5a7ec855ec9e2c405371356855fec83"
 				},
 				"kdf": "scrypt",
 				"kdfparams": {
@@ -281,7 +283,7 @@ mod tests {
 					"r": 8,
 					"salt": "1e8642fdf1f87172492c1412fc62f8db75d796cdfa9c53c3f2b11e44a2a1b209"
 				},
-				"mac": "46325c5d4e8c991ad2683d525c7854da387138b6ca45068985aa4959fa2b8c8f"
+				"mac": "0x46325c5d4e8c991ad2683d525c7854da387138b6ca45068985aa4959fa2b8c8f"
 			},
 			"id": "8777d9f6-7860-4b9b-88b7-0b57ee6b3a73",
 			"version": 3
@@ -290,10 +292,10 @@ mod tests {
         let expected = KeyFile {
 			id: "8777d9f6-7860-4b9b-88b7-0b57ee6b3a73".into(),
 			version: Version::V3,
-			address: Some("6edddfc6349aff20bc6467ccf276c5b52487f7a8".into()),
+			address: Some(Address::from_str("6edddfc6349aff20bc6467ccf276c5b52487f7a8").unwrap()),
 			crypto: Crypto {
 				cipher: Cipher::Aes128Ctr(Aes128Ctr {
-					iv: "b5a7ec855ec9e2c405371356855fec83".into(),
+					iv: H128::from_str("b5a7ec855ec9e2c405371356855fec83").unwrap(),
 				}),
 				ciphertext: "7203da0676d141b138cd7f8e1a4365f59cc1aa6978dc5443f364ca943d7cb4bc".into(),
 				kdf: Kdf::Scrypt(Scrypt {
@@ -303,7 +305,7 @@ mod tests {
 					r: 8,
 					salt: "1e8642fdf1f87172492c1412fc62f8db75d796cdfa9c53c3f2b11e44a2a1b209".into(),
 				}),
-				mac: "46325c5d4e8c991ad2683d525c7854da387138b6ca45068985aa4959fa2b8c8f".into(),
+				mac: H256::from_str("46325c5d4e8c991ad2683d525c7854da387138b6ca45068985aa4959fa2b8c8f").unwrap(),
 			},
 			name: None,
 			meta: None,
@@ -318,10 +320,10 @@ mod tests {
         let file = KeyFile {
 			id: "8777d9f6-7860-4b9b-88b7-0b57ee6b3a73".into(),
 			version: Version::V3,
-			address: Some("6edddfc6349aff20bc6467ccf276c5b52487f7a8".into()),
+			address: Some(Address::from_str("6edddfc6349aff20bc6467ccf276c5b52487f7a8").unwrap()),
 			crypto: Crypto {
 				cipher: Cipher::Aes128Ctr(Aes128Ctr {
-					iv: "b5a7ec855ec9e2c405371356855fec83".into(),
+					iv: H128::from_str("b5a7ec855ec9e2c405371356855fec83").unwrap(),
 				}),
 				ciphertext: "7203da0676d141b138cd7f8e1a4365f59cc1aa6978dc5443f364ca943d7cb4bc".into(),
 				kdf: Kdf::Scrypt(Scrypt {
@@ -331,7 +333,7 @@ mod tests {
 					r: 8,
 					salt: "1e8642fdf1f87172492c1412fc62f8db75d796cdfa9c53c3f2b11e44a2a1b209".into(),
 				}),
-				mac: "46325c5d4e8c991ad2683d525c7854da387138b6ca45068985aa4959fa2b8c8f".into(),
+				mac: H256::from_str("46325c5d4e8c991ad2683d525c7854da387138b6ca45068985aa4959fa2b8c8f").unwrap(),
 			},
 			name: Some("Test".to_owned()),
 			meta: None,

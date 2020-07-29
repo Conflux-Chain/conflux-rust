@@ -20,7 +20,6 @@ mod bytes;
 mod cipher;
 mod crypto;
 mod error;
-mod hash;
 mod id;
 mod kdf;
 mod key_file;
@@ -33,7 +32,6 @@ pub use self::{
     cipher::{Aes128Ctr, Cipher, CipherSer, CipherSerParams},
     crypto::{CipherText, Crypto},
     error::Error,
-    hash::{H128, H160, H256},
     id::Uuid,
     kdf::{Kdf, KdfSer, KdfSerParams, Pbkdf2, Prf, Scrypt},
     key_file::{KeyFile, OpaqueKeyFile},
