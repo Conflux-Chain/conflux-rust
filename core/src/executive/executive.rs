@@ -1166,7 +1166,7 @@ impl<'a> Executive<'a> {
         self.transact(tx)
     }
 
-    pub fn transact( 
+    pub fn transact(
         &mut self, tx: &SignedTransaction,
     ) -> DbResult<ExecutionOutcome> {
         let spec = &self.spec;
