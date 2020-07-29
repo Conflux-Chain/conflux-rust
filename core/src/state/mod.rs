@@ -1136,6 +1136,7 @@ impl State {
         })
     }
 
+    #[allow(unused)]
     pub fn kill_garbage(
         &mut self, touched: &HashSet<Address>, remove_empty_touched: bool,
         min_balance: &Option<U256>, kill_contracts: bool,
