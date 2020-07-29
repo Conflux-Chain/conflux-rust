@@ -41,15 +41,17 @@ impl VaultFile {
 
 #[cfg(test)]
 mod test {
+    use cfx_types::{H128, H256};
     use json::{Aes128Ctr, Cipher, Crypto, Kdf, Pbkdf2, Prf, VaultFile};
     use serde_json;
+    use std::str::FromStr;
 
     #[test]
     fn to_and_from_json() {
         let file = VaultFile {
 			crypto: Crypto {
 				cipher: Cipher::Aes128Ctr(Aes128Ctr {
-					iv: "0155e3690be19fbfbecabcd440aa284b".into(),
+					iv: H128::from_str("0155e3690be19fbfbecabcd440aa284b").unwrap(),
 				}),
 				ciphertext: "4d6938a1f49b7782".into(),
 				kdf: Kdf::Pbkdf2(Pbkdf2 {
@@ -58,7 +60,7 @@ mod test {
 					prf: Prf::HmacSha256,
 					salt: "b6a9338a7ccd39288a86dba73bfecd9101b4f3db9c9830e7c76afdbd4f6872e5".into(),
 				}),
-				mac: "16381463ea11c6eb2239a9f339c2e780516d29d234ce30ac5f166f9080b5a262".into(),
+				mac: H256::from_str("16381463ea11c6eb2239a9f339c2e780516d29d234ce30ac5f166f9080b5a262").unwrap(),
 			},
 			meta: Some("{}".into()),
 		};
@@ -74,7 +76,7 @@ mod test {
         let file = VaultFile {
 			crypto: Crypto {
 				cipher: Cipher::Aes128Ctr(Aes128Ctr {
-					iv: "0155e3690be19fbfbecabcd440aa284b".into(),
+					iv: H128::from_str("0155e3690be19fbfbecabcd440aa284b").unwrap(),
 				}),
 				ciphertext: "4d6938a1f49b7782".into(),
 				kdf: Kdf::Pbkdf2(Pbkdf2 {
@@ -83,7 +85,7 @@ mod test {
 					prf: Prf::HmacSha256,
 					salt: "b6a9338a7ccd39288a86dba73bfecd9101b4f3db9c9830e7c76afdbd4f6872e5".into(),
 				}),
-				mac: "16381463ea11c6eb2239a9f339c2e780516d29d234ce30ac5f166f9080b5a262".into(),
+				mac: H256::from_str("16381463ea11c6eb2239a9f339c2e780516d29d234ce30ac5f166f9080b5a262").unwrap(),
 			},
 			meta: None,
 		};

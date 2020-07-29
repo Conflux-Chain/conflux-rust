@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::{Error, H128};
+use super::Error;
+use cfx_types::H128;
 use serde::{
     de::{Error as SerdeError, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,

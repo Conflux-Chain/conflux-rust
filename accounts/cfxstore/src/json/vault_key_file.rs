@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::{Crypto, Uuid, Version, H160};
+use super::{Crypto, Uuid, Version};
+use cfx_types::H160;
 use serde::de::Error;
 use serde_json::{self, error, value::Value};
 use std::io::{Read, Write};
@@ -114,11 +115,13 @@ impl VaultKeyMeta {
 
 #[cfg(test)]
 mod test {
+    use cfx_types::{H128, H256};
     use json::{
         insert_vault_name_to_json_meta, remove_vault_name_from_json_meta,
         Aes128Ctr, Cipher, Crypto, Kdf, Pbkdf2, Prf, VaultKeyFile, Version,
     };
     use serde_json;
+    use std::str::FromStr;
 
     #[test]
     fn to_and_from_json() {
@@ -127,7 +130,7 @@ mod test {
 			version: Version::V3,
 			crypto: Crypto {
 				cipher: Cipher::Aes128Ctr(Aes128Ctr {
-					iv: "fecb968bbc8c7e608a89ebcfe53a41d0".into(),
+					iv: H128::from_str("fecb968bbc8c7e608a89ebcfe53a41d0").unwrap(),
 				}),
 				ciphertext: "4befe0a66d9a4b6fec8e39eb5c90ac5dafdeaab005fff1af665fd1f9af925c91".into(),
 				kdf: Kdf::Pbkdf2(Pbkdf2 {
@@ -136,11 +139,11 @@ mod test {
 					prf: Prf::HmacSha256,
 					salt: "f17731e84ecac390546692dbd4ccf6a3a2720dc9652984978381e61c28a471b2".into(),
 				}),
-				mac: "7c7c3daafb24cf11eb3079dfb9064a11e92f309a0ee1dd676486bab119e686b7".into(),
+				mac: H256::from_str("7c7c3daafb24cf11eb3079dfb9064a11e92f309a0ee1dd676486bab119e686b7").unwrap(),
 			},
 			metacrypto: Crypto {
 				cipher: Cipher::Aes128Ctr(Aes128Ctr {
-					iv: "9c353fb3f894fc05946843616c26bb3f".into(),
+					iv: H128::from_str("9c353fb3f894fc05946843616c26bb3f").unwrap(),
 				}),
 				ciphertext: "fef0d113d7576c1702daf380ad6f4c5408389e57991cae2a174facd74bd549338e1014850bddbab7eb486ff5f5c9c5532800c6a6d4db2be2212cd5cd3769244ab230e1f369e8382a9e6d7c0a".into(),
 				kdf: Kdf::Pbkdf2(Pbkdf2 {
@@ -149,7 +152,7 @@ mod test {
 					prf: Prf::HmacSha256,
 					salt: "aca82865174a82249a198814b263f43a631f272cbf7ed329d0f0839d259c652a".into(),
 				}),
-				mac: "b7413946bfe459d2801268dc331c04b3a84d92be11ef4dd9a507f895e8d9b5bd".into(),
+				mac: H256::from_str("b7413946bfe459d2801268dc331c04b3a84d92be11ef4dd9a507f895e8d9b5bd").unwrap(),
 			}
 		};
 

@@ -15,8 +15,9 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::{
-    Bytes, Cipher, CipherSer, CipherSerParams, Kdf, KdfSer, KdfSerParams, H256,
+    Bytes, Cipher, CipherSer, CipherSerParams, Kdf, KdfSer, KdfSerParams,
 };
+use cfx_types::H256;
 use serde::{
     de::{Error, MapAccess, Visitor},
     ser::SerializeStruct,
