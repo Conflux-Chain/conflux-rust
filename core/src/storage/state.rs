@@ -11,10 +11,12 @@
 /// state manager. State is supposed to be owned by single user.
 pub use super::impls::state::State;
 
+pub type WithProof = utils::Yes;
+pub type NoProof = utils::No;
+
 // The trait is created to separate the implementation to another file, and the
 // concrete struct is put into inner mod, because the implementation is
 // anticipated to be too complex to present in the same file of the API.
-// TODO(yz): check if this is the best way to organize code for this library.
 pub trait StateTrait {
     // Verifiable proof related methods.
     fn get_with_proof(
@@ -30,7 +32,7 @@ pub trait StateTrait {
     ) -> Result<Option<Box<[u8]>>>;
     // Delete everything prefixed by access_key and return deleted key value
     // pairs.
-    fn delete_all(
+    fn delete_all<AM: access_mode::AccessMode>(
         &mut self, access_key_prefix: StorageKey,
     ) -> Result<Option<Vec<MptKeyValue>>>;
 
@@ -45,8 +47,8 @@ pub trait StateTrait {
     /// Compute the merkle of the node under `access_key` in all tries.
     /// Node merkle is computed on the value and children hashes, ignoring the
     /// compressed path.
-    fn get_node_merkle_all_versions(
-        &self, access_key: StorageKey, with_proof: bool,
+    fn get_node_merkle_all_versions<WithProof: utils::StaticBool>(
+        &self, access_key: StorageKey,
     ) -> Result<(NodeMerkleTriplet, NodeMerkleProof)>;
 }
 
@@ -54,6 +56,7 @@ use super::{
     impls::{
         errors::*, node_merkle_proof::NodeMerkleProof, state_proof::StateProof,
     },
+    utils::{self, access_mode},
     MptKeyValue, StateRootWithAuxInfo,
 };
 use primitives::{EpochId, NodeMerkleTriplet, StorageKey};
