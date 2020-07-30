@@ -305,7 +305,7 @@ class P2PInterface(P2PConnection):
 
         # Default protocol version
         self.protocol = b'cfx'
-        self.protocol_version = 2
+        self.protocol_version = 3
         self.genesis = make_genesis()
         self.best_block_hash = self.genesis.block_header.hash
         self.blocks = {self.genesis.block_header.hash: self.genesis}
@@ -352,7 +352,7 @@ class P2PInterface(P2PConnection):
                 logger.debug("%s %s", packet_type, rlp.decode(payload))
                 if msg_class is not None:
                     msg = rlp.decode(payload, msg_class)
-                if packet_type == STATUS_V2:
+                if packet_type == STATUS_V3:
                     self._log_message("receive", "STATUS, terminal_hashes:{}"
                                       .format([utils.encode_hex(i) for i in msg.terminal_block_hashes]))
                     self.had_status = True
