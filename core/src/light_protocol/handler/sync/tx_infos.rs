@@ -12,7 +12,7 @@ use std::{future::Future, sync::Arc};
 
 use super::{
     common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
-    BlockTxs, Receipts,
+    Witnesses,
 };
 use crate::{
     consensus::SharedConsensusGraph,
@@ -26,6 +26,9 @@ use crate::{
     parameters::light::{
         CACHE_TIMEOUT, MAX_TX_INFOS_IN_FLIGHT, TX_INFO_REQUEST_BATCH_SIZE,
         TX_INFO_REQUEST_TIMEOUT,
+    },
+    verification::{
+        is_valid_receipt_inclusion_proof, is_valid_tx_inclusion_proof,
     },
     UniqueId,
 };
@@ -45,14 +48,8 @@ type MissingTxInfo = TimeOrdered<H256>;
 pub type TxInfoValidated = (SignedTransaction, Receipt, TransactionIndex, U256);
 
 pub struct TxInfos {
-    // block tx sync manager
-    block_txs: Arc<BlockTxs>,
-
     // helper API for retrieving ledger information
     ledger: LedgerInfo,
-
-    // receipt sync manager
-    receipts: Arc<Receipts>,
 
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
@@ -62,13 +59,15 @@ pub struct TxInfos {
 
     // block txs received from full node
     verified: Arc<RwLock<LruCache<H256, PendingItem<TxInfoValidated>>>>,
+
+    // witness sync manager
+    pub witnesses: Arc<Witnesses>,
 }
 
 impl TxInfos {
     pub fn new(
-        block_txs: Arc<BlockTxs>, consensus: SharedConsensusGraph,
-        peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
-        receipts: Arc<Receipts>,
+        consensus: SharedConsensusGraph, peers: Arc<Peers<FullPeerState>>,
+        request_id_allocator: Arc<UniqueId>, witnesses: Arc<Witnesses>,
     ) -> Self
     {
         let ledger = LedgerInfo::new(consensus.clone());
@@ -78,12 +77,11 @@ impl TxInfos {
         let verified = Arc::new(RwLock::new(cache));
 
         TxInfos {
-            block_txs,
             ledger,
-            receipts,
             request_id_allocator,
             sync_manager,
             verified,
+            witnesses,
         }
     }
 
@@ -123,7 +121,7 @@ impl TxInfos {
             match self.sync_manager.check_if_requested(
                 peer,
                 id,
-                &info.tx_hash,
+                &info.tx.hash(),
             )? {
                 None => continue,
                 Some(_) => self.validate_and_store(info)?,
@@ -137,60 +135,193 @@ impl TxInfos {
     pub fn validate_and_store(&self, info: TxInfo) -> Result<(), Error> {
         let TxInfo {
             epoch,
-            block_hash,
-            index: _,
-            mut epoch_receipts,
-            block_txs,
-            tx_hash: _,
+
+            // tx-related fields
+            tx,
+            tx_index_in_block,
+            num_txs_in_block,
+            tx_proof,
+
+            // receipt-related fields
+            receipt,
+            block_index_in_epoch,
+            num_blocks_in_epoch,
+            block_index_proof,
+            receipt_proof,
+
+            // prior_gas_used-related fields
+            maybe_prev_receipt,
+            maybe_prev_receipt_proof,
         } = info;
 
-        // find index of block within epoch
-        let hashes = self.ledger.block_hashes_in(epoch)?;
-        let block_index = hashes.iter().position(|h| *h == block_hash);
+        // quick check for well-formedness
+        if block_index_in_epoch >= num_blocks_in_epoch {
+            debug!(
+                "Inconsisent block index: {} >= {}",
+                block_index_in_epoch, num_blocks_in_epoch
+            );
+            return Err(ErrorKind::InvalidTxInfo.into());
+        }
 
-        let block_index = match block_index {
-            Some(index) => index,
-            None => {
-                warn!(
-                    "Block {:?} does not exist in epoch {} (hashes: {:?})",
-                    block_hash, epoch, hashes
+        if tx_index_in_block >= num_txs_in_block {
+            debug!(
+                "Inconsisent tx index: {} >= {}",
+                tx_index_in_block, num_txs_in_block
+            );
+            return Err(ErrorKind::InvalidTxInfo.into());
+        }
+
+        // only executed instances of the transaction are acceptable;
+        // receipts belonging to non-executed instances should not be sent
+        if receipt.outcome_status != 0 && receipt.outcome_status != 1 {
+            debug!(
+                "Unexpected outcome status in tx info: {}",
+                receipt.outcome_status
+            );
+            return Err(ErrorKind::InvalidTxInfo.into());
+        }
+
+        let block_hash = match self.ledger.block_hashes_in(epoch)? {
+            hs if hs.len() != num_blocks_in_epoch => {
+                debug!("Number of blocks in epoch mismatch: local = {}, received = {}", hs.len(), num_blocks_in_epoch);
+                return Err(ErrorKind::InvalidTxInfo.into());
+            }
+            hs => hs[block_index_in_epoch],
+        };
+
+        // verify tx proof
+        let tx_hash = tx.hash();
+        let block_tx_root =
+            *self.ledger.header(block_hash)?.transactions_root();
+
+        trace!(
+            "verifying tx proof with\n
+            block_tx_root = {:?}\n
+            tx_index_in_block = {:?}\n
+            num_txs_in_block = {:?}\n
+            tx_hash = {:?}\n
+            tx_proof = {:?}",
+            block_tx_root,
+            tx_index_in_block,
+            num_txs_in_block,
+            tx_hash,
+            tx_proof
+        );
+
+        if !is_valid_tx_inclusion_proof(
+            block_tx_root,
+            tx_index_in_block,
+            num_txs_in_block,
+            tx_hash,
+            &tx_proof,
+        ) {
+            debug!("Transaction proof verification failed");
+            return Err(ErrorKind::InvalidTxInfo.into());
+        }
+
+        // verify receipt proof
+        let verified_epoch_receipts_root =
+            match self.witnesses.root_hashes_of(epoch) {
+                Some((_, receipts_root, _)) => receipts_root,
+                None => {
+                    // TODO(thegaram): signal to RPC layer that the
+                    // corresponding roots are not available yet
+                    warn!("Receipt root not found, epoch={}", epoch,);
+                    return Err(ErrorKind::InternalError.into());
+                }
+            };
+
+        trace!(
+            "verifying receipt proof with\n
+            verified_epoch_receipts_root = {:?}\n
+            block_index_in_epoch = {:?}\n
+            num_blocks_in_epoch = {:?}\n
+            block_index_proof = {:?}\n
+            tx_index_in_block = {:?}\n
+            num_txs_in_block = {:?}\n
+            receipt = {:?}\n
+            receipt_proof = {:?}",
+            verified_epoch_receipts_root,
+            block_index_in_epoch,
+            num_blocks_in_epoch,
+            block_index_proof,
+            tx_index_in_block,
+            num_txs_in_block,
+            receipt,
+            receipt_proof,
+        );
+
+        if !is_valid_receipt_inclusion_proof(
+            verified_epoch_receipts_root,
+            block_index_in_epoch,
+            num_blocks_in_epoch,
+            &block_index_proof,
+            tx_index_in_block,
+            num_txs_in_block,
+            &receipt,
+            &receipt_proof,
+        ) {
+            debug!("Receipt proof verification failed");
+            return Err(ErrorKind::InvalidTxInfo.into());
+        }
+
+        // find prior gas used
+        let prior_gas_used = match (
+            tx_index_in_block,
+            maybe_prev_receipt,
+            maybe_prev_receipt_proof,
+        ) {
+            // first receipt in block
+            (0, _, _) => U256::zero(),
+
+            // not the first receipt so we will use the previous receipt
+            (_n, Some(prev_receipt), Some(prev_receipt_proof)) => {
+                let prev_receipt_index = tx_index_in_block - 1;
+
+                if !is_valid_receipt_inclusion_proof(
+                    verified_epoch_receipts_root,
+                    block_index_in_epoch,
+                    num_blocks_in_epoch,
+                    &block_index_proof,
+                    prev_receipt_index,
+                    num_txs_in_block,
+                    &prev_receipt,
+                    &prev_receipt_proof,
+                ) {
+                    debug!("Receipt proof verification failed");
+                    return Err(ErrorKind::InvalidTxInfo.into());
+                }
+
+                prev_receipt.accumulated_gas_used
+            }
+
+            // not the first receipt but no previous receipt was provided
+            (_, maybe_prev_receipt, maybe_prev_receipt_proof) => {
+                debug!(
+                    "Expected two receipts; received one.
+                    tx_index_in_block = {:?},
+                    maybe_prev_receipt = {:?},
+                    maybe_prev_receipt_proof = {:?}",
+                    tx_index_in_block,
+                    maybe_prev_receipt,
+                    maybe_prev_receipt_proof
                 );
+
                 return Err(ErrorKind::InvalidTxInfo.into());
             }
         };
 
-        // validate receipts
-        let receipts = epoch_receipts.clone();
-        self.receipts.validate_and_store(epoch, receipts)?;
+        // store
+        let address = TransactionIndex {
+            block_hash,
+            index: tx_index_in_block,
+        };
 
-        // validate block txs
-        let txs = block_txs.clone();
-        self.block_txs.validate_and_store(block_hash, txs)?;
-
-        // `epoch_receipts` is valid and `block_hash` exists in epoch
-        assert!(block_index < epoch_receipts.len());
-        let block_receipts = epoch_receipts.swap_remove(block_index);
-
-        // `block_txs` is valid and `block_hash` exists in epoch
-        assert!(block_txs.len() == block_receipts.receipts.len());
-        let items = block_txs
-            .into_iter()
-            .zip(block_receipts.receipts.into_iter());
-
-        let mut prior_gas_used = U256::zero();
-        for (index, (tx, receipt)) in items.enumerate() {
-            let hash = tx.hash();
-            let address = TransactionIndex { block_hash, index };
-            let prior_accumulated_gas_used = receipt.accumulated_gas_used;
-            self.verified
-                .write()
-                .entry(hash)
-                .or_insert(PendingItem::pending())
-                .set((tx, receipt, address, prior_gas_used));
-            prior_gas_used = prior_accumulated_gas_used;
-
-            self.sync_manager.remove_in_flight(&hash);
-        }
+        self.verified
+            .write()
+            .entry(tx_hash)
+            .or_insert(PendingItem::pending())
+            .set((tx, receipt, address, prior_gas_used));
 
         Ok(())
     }

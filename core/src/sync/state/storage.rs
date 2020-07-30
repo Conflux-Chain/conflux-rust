@@ -13,11 +13,14 @@ use crate::{
 };
 use cfx_types::H256;
 use fallible_iterator::FallibleIterator;
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::{EpochId, MerkleHash};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
-#[derive(Clone, Hash, Ord, PartialOrd, PartialEq, Eq, Debug)]
+#[derive(
+    Clone, Hash, Ord, PartialOrd, PartialEq, Eq, Debug, DeriveMallocSizeOf,
+)]
 pub enum SnapshotSyncCandidate {
     OneStepSync {
         height: u64,
@@ -132,6 +135,7 @@ impl Decodable for SnapshotSyncCandidate {
     PartialEq,
     Debug,
     Hash,
+    DeriveMallocSizeOf,
 )]
 pub struct ChunkKey {
     lower_bound_incl: Option<Vec<u8>>,

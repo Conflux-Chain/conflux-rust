@@ -20,7 +20,7 @@ impl<Mpt, PathNode> MptCursor<Mpt, PathNode> {
 
     /// Never call this method after pop_root.
     pub fn current_node_mut(&mut self) -> &mut PathNode {
-        self.path_nodes.last_mut().unwrap()
+        self.path_nodes.last_mut().expect("Root exists in cursor")
     }
 }
 
@@ -1004,10 +1004,8 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
 
                     child_trie_node.set_compressed_path(new_path);
 
-                    mem::replace(
-                        &mut self.trie_node,
-                        mem::replace(child_trie_node, Default::default()),
-                    );
+                    self.trie_node =
+                        mem::replace(child_trie_node, Default::default());
                 }
                 // Write out the child, reset to empty in case of path
                 // compression, or write out without change.

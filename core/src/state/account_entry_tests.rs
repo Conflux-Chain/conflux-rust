@@ -300,6 +300,7 @@ fn test_deposit_and_withdraw() {
 
     // add storage
     assert_eq!(*overlay_account.collateral_for_storage(), U256::from(0));
+    overlay_account.register_unpaid_collateral(&11116.into());
     overlay_account.add_collateral_for_storage(&11116.into());
     assert_eq!(
         *overlay_account.collateral_for_storage(),
@@ -319,6 +320,7 @@ fn test_deposit_and_withdraw() {
     );
 
     // sub storage
+    overlay_account.register_unrefunded_collateral(&11116.into());
     overlay_account.sub_collateral_for_storage(&11116.into());
     assert_eq!(*overlay_account.collateral_for_storage(), U256::zero());
     assert_eq!(

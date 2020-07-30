@@ -44,14 +44,15 @@ pub mod consensus_internal {
     /// The maximum number of blocks to be executed in each epoch
     pub const EPOCH_EXECUTED_BLOCK_BOUND: usize = 200;
     // The initial base mining reward in uCFX.
-    pub const INITIAL_BASE_MINING_REWARD_IN_UCFX: u64 = 11_300_000;
+    pub const INITIAL_BASE_MINING_REWARD_IN_UCFX: u64 = 7_000_000;
     // The ultimate base mining reward in uCFX.
-    pub const ULTIMATE_BASE_MINING_REWARD_IN_UCFX: u64 = 2_030_000;
+    pub const ULTIMATE_BASE_MINING_REWARD_IN_UCFX: u64 = 1_750_000;
+    pub const INITIAL_NO_DECAY_PERIOD: u64 = 252288000;
     // The average number of blocks mined per quarter.
     pub const MINED_BLOCK_COUNT_PER_QUARTER: u64 = 15768000;
     pub const MINING_REWARD_DECAY_RATIO_PER_QUARTER: f64 = 0.958;
     // How many quarters that the mining reward keep decaying.
-    pub const MINING_REWARD_DECAY_PERIOD_IN_QUARTER: usize = 40;
+    pub const MINING_REWARD_DECAY_PERIOD_IN_QUARTER: usize = 32;
     pub const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
     pub const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
 
@@ -242,6 +243,7 @@ pub mod light {
         pub static ref STATE_ENTRY_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
         pub static ref TX_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
         pub static ref TX_INFO_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref STORAGE_ROOT_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
 
         /// Maximum time period we wait for a response for an on-demand query.
         /// After this timeout has been reached, we try another peer or give up.
@@ -271,6 +273,7 @@ pub mod light {
     pub const STATE_ENTRY_REQUEST_BATCH_SIZE: usize = 30;
     pub const TX_REQUEST_BATCH_SIZE: usize = 30;
     pub const TX_INFO_REQUEST_BATCH_SIZE: usize = 30;
+    pub const STORAGE_ROOT_REQUEST_BATCH_SIZE: usize = 30;
 
     /// Maximum number of in-flight items at any given time.
     /// If we reach this limit, we will not request any more.
@@ -283,6 +286,7 @@ pub mod light {
     pub const MAX_STATE_ENTRIES_IN_FLIGHT: usize = 100;
     pub const MAX_TXS_IN_FLIGHT: usize = 100;
     pub const MAX_TX_INFOS_IN_FLIGHT: usize = 100;
+    pub const MAX_STORAGE_ROOTS_IN_FLIGHT: usize = 100;
 
     /// Maximum number of in-flight epoch requests at any given time.
     /// Similar to `MAX_HEADERS_IN_FLIGHT`. However, it is hard to match
@@ -301,6 +305,7 @@ pub mod light {
     pub const MAX_EPOCHS_TO_SEND: usize = 128;
     pub const MAX_HEADERS_TO_SEND: usize = 512;
     pub const MAX_TXS_TO_SEND: usize = 1024;
+    pub const MAX_ITEMS_TO_SEND: usize = 50;
 
     /// During syncing, we might transiently have enough malicious blaming
     /// blocks to consider a correct header incorrect. For this reason, we

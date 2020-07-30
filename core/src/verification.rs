@@ -7,17 +7,20 @@ use crate::{
     executive::Executive,
     parameters::block::*,
     pow::{self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem},
-    storage::{make_simple_mpt, simple_mpt_merkle_root, TrieProof},
+    storage::{
+        into_simple_mpt_key, make_simple_mpt, simple_mpt_merkle_root,
+        simple_mpt_proof, SimpleMpt, TrieProof,
+    },
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
     vm,
 };
 use cfx_types::{BigEndianHash, H256, U256};
 use primitives::{
     transaction::TransactionError, Action, Block, BlockHeader, BlockReceipts,
-    MerkleHash, SignedTransaction, TransactionWithSignature,
+    MerkleHash, Receipt, SignedTransaction, TransactionWithSignature,
 };
 use rlp::Encodable;
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, convert::TryInto, sync::Arc};
 use unexpected::{Mismatch, OutOfBounds};
 
 #[derive(Debug, Clone)]
@@ -29,44 +32,168 @@ pub struct VerificationConfig {
     vm_spec: vm::Spec,
 }
 
-pub fn compute_transaction_root(
-    transactions: &Vec<Arc<SignedTransaction>>,
-) -> MerkleHash {
-    simple_mpt_merkle_root(&mut make_simple_mpt(
+/// Create an MPT from the ordered list of block transactions.
+/// Keys are transaction indices, values are transaction hashes.
+fn transaction_trie(transactions: &Vec<Arc<SignedTransaction>>) -> SimpleMpt {
+    make_simple_mpt(
         transactions
             .iter()
             .map(|tx| tx.hash.as_bytes().into())
             .collect(),
-    ))
+    )
 }
 
-pub fn compute_receipts_root(receipts: &Vec<Arc<BlockReceipts>>) -> MerkleHash {
-    let mut block_receipts_roots = Vec::with_capacity(receipts.len());
-    for block_receipts in receipts {
-        let block_receipts_root = simple_mpt_merkle_root(&mut make_simple_mpt(
-            block_receipts
-                .receipts
-                .iter()
-                .map(|receipt| receipt.rlp_bytes().into_boxed_slice())
-                .collect(),
-        ));
-        block_receipts_roots.push(block_receipts_root.as_bytes().into());
+/// Compute block transaction root.
+/// This value is stored in the `transactions_root` header field.
+pub fn compute_transaction_root(
+    transactions: &Vec<Arc<SignedTransaction>>,
+) -> MerkleHash {
+    simple_mpt_merkle_root(&mut transaction_trie(transactions))
+}
+
+/// Compute a proof for the `tx_index_in_block`-th transaction in a block.
+pub fn compute_transaction_proof(
+    transactions: &Vec<Arc<SignedTransaction>>, tx_index_in_block: usize,
+) -> TrieProof {
+    simple_mpt_proof(
+        &mut transaction_trie(transactions),
+        &into_simple_mpt_key(tx_index_in_block, transactions.len()),
+    )
+}
+
+/// Create an MPT from the ordered list of block receipts.
+/// Keys are receipt indices, values are RLP serialized receipts.
+fn block_receipts_trie(block_receipts: &Vec<Receipt>) -> SimpleMpt {
+    make_simple_mpt(
+        block_receipts
+            .iter()
+            .map(|receipt| receipt.rlp_bytes().into_boxed_slice())
+            .collect(),
+    )
+}
+
+/// Compute block receipts root.
+fn compute_block_receipts_root(block_receipts: &Vec<Receipt>) -> MerkleHash {
+    simple_mpt_merkle_root(&mut block_receipts_trie(block_receipts))
+}
+
+/// Compute a proof for the `tx_index_in_block`-th receipt in a block.
+pub fn compute_block_receipt_proof(
+    block_receipts: &Vec<Receipt>, tx_index_in_block: usize,
+) -> TrieProof {
+    simple_mpt_proof(
+        &mut block_receipts_trie(block_receipts),
+        &into_simple_mpt_key(tx_index_in_block, block_receipts.len()),
+    )
+}
+
+/// Create an MPT from the ordered list of epoch receipts.
+/// Keys are block indices in the epoch, values are block receipts roots.
+fn epoch_receipts_trie(epoch_receipts: &Vec<Arc<BlockReceipts>>) -> SimpleMpt {
+    make_simple_mpt(
+        epoch_receipts
+            .iter()
+            .map(|block_receipts| &block_receipts.receipts)
+            .map(|rs| compute_block_receipts_root(&rs).as_bytes().into())
+            .collect(),
+    )
+}
+
+/// Compute epoch receipts root.
+/// This value is stored in the `deferred_receipts_root` header field.
+pub fn compute_receipts_root(
+    epoch_receipts: &Vec<Arc<BlockReceipts>>,
+) -> MerkleHash {
+    simple_mpt_merkle_root(&mut epoch_receipts_trie(epoch_receipts))
+}
+
+pub struct EpochReceiptProof {
+    pub block_index_proof: TrieProof,
+    pub block_receipt_proof: TrieProof,
+}
+
+/// Compute a proof for the `tx_index_in_block`-th receipt
+/// in the `block_index_in_epoch`-th block in an epoch.
+pub fn compute_epoch_receipt_proof(
+    epoch_receipts: &Vec<Arc<BlockReceipts>>, block_index_in_epoch: usize,
+    tx_index_in_block: usize,
+) -> EpochReceiptProof
+{
+    let block_receipt_proof = compute_block_receipt_proof(
+        &epoch_receipts[block_index_in_epoch].receipts,
+        tx_index_in_block,
+    );
+
+    let block_index_proof = simple_mpt_proof(
+        &mut epoch_receipts_trie(epoch_receipts),
+        &into_simple_mpt_key(block_index_in_epoch, epoch_receipts.len()),
+    );
+
+    EpochReceiptProof {
+        block_index_proof,
+        block_receipt_proof,
     }
-    simple_mpt_merkle_root(&mut make_simple_mpt(block_receipts_roots))
 }
 
-// FIXME:
-//   Write a unit test with data from sample chain.
-//   Pay attention to the index matching.
-#[allow(unused)]
-pub fn verify_tx_receipt_inclusion_proof(
-    tx_hash: H256, block_index_in_epoch: usize, tx_index_in_block: usize,
-    verified_transaction_root: MerkleHash, transaction_proof: TrieProof,
-    verified_receipts_root: MerkleHash, block_index_proof: TrieProof,
-    receipts_proof: TrieProof,
+/// Use `proof` to verify that `tx_hash` is indeed the `tx_index_in_block`-th
+/// transaction in a block with `num_txs_in_block` transactions and transaction
+/// root `block_tx_root`.
+pub fn is_valid_tx_inclusion_proof(
+    block_tx_root: MerkleHash, tx_index_in_block: usize,
+    num_txs_in_block: usize, tx_hash: H256, proof: &TrieProof,
 ) -> bool
 {
-    unimplemented!()
+    let key = &into_simple_mpt_key(tx_index_in_block, num_txs_in_block);
+    proof.is_valid_kv(key, Some(tx_hash.as_bytes()), &block_tx_root)
+}
+
+/// Use `block_index_proof` to get the correct block receipts trie root for the
+/// `block_index_in_epoch`-th block in an epoch with `num_blocks_in_epoch`
+/// blocks and receipts root `verified_epoch_receipts_root`.
+/// Then, use `block_receipt_proof` to verify that `receipt` is indeed the
+/// `tx_index_in_block`-th receipt in a block with `num_txs_in_block`
+/// transactions and the transaction root from the previous step.
+pub fn is_valid_receipt_inclusion_proof(
+    verified_epoch_receipts_root: MerkleHash, block_index_in_epoch: usize,
+    num_blocks_in_epoch: usize, block_index_proof: &TrieProof,
+    tx_index_in_block: usize, num_txs_in_block: usize, receipt: &Receipt,
+    block_receipt_proof: &TrieProof,
+) -> bool
+{
+    // get block receipts root from block index trie (proof)
+    // traversing along `key` also means we're validating the proof
+    let key = &into_simple_mpt_key(block_index_in_epoch, num_blocks_in_epoch);
+
+    let block_receipts_root_bytes =
+        match block_index_proof.get_value(key, &verified_epoch_receipts_root) {
+            (false, _) => return false,
+            (true, None) => return false,
+            (true, Some(val)) => val,
+        };
+
+    // parse block receipts root as H256
+    let block_receipts_root: H256 = match TryInto::<[u8; 32]>::try_into(
+        block_receipts_root_bytes,
+    ) {
+        Ok(hash) => hash.into(),
+        Err(e) => {
+            // this should not happen
+            error!(
+                "Invalid content found in valid MPT: key = {:?}, value = {:?}; error = {:?}",
+                key, block_receipts_root_bytes, e,
+            );
+            return false;
+        }
+    };
+
+    // validate receipt in the block receipts trie
+    let key = &into_simple_mpt_key(tx_index_in_block, num_txs_in_block);
+
+    block_receipt_proof.is_valid_kv(
+        key,
+        Some(&receipt.rlp_bytes()[..]),
+        &block_receipts_root,
+    )
 }
 
 impl VerificationConfig {

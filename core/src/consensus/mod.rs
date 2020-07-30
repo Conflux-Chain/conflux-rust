@@ -44,7 +44,9 @@ use either::Either;
 use itertools::Itertools;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
-use metrics::{register_meter_with_group, Meter, MeterTimer};
+use metrics::{
+    register_meter_with_group, Gauge, GaugeUsize, Meter, MeterTimer,
+};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     epoch::BlockHashOrEpochNumber,
@@ -67,6 +69,8 @@ use std::{
 lazy_static! {
     static ref CONSENSIS_ON_NEW_BLOCK_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "consensus_on_new_block_timer");
+    static ref BEST_EPOCH_NUMBER: Arc<dyn Gauge<usize>> =
+        GaugeUsize::register_with_group("graph_statistic", "best_epoch_number");
 }
 
 #[derive(Clone)]
@@ -1547,6 +1551,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
             };
 
         let best_epoch_number = inner.best_epoch_number();
+        BEST_EPOCH_NUMBER.update(best_epoch_number as usize);
         *best_info = Arc::new(BestInformation {
             chain_id: self.config.chain_id.get_chain_id(best_epoch_number),
             best_block_hash: inner.best_block_hash(),

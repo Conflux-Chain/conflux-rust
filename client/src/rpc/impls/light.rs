@@ -306,6 +306,7 @@ impl RpcImpl {
             let logs = light
                 .get_logs(filter)
                 .await
+                .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
                 .map_err(RpcError::invalid_params)?;
 
             Ok(logs.into_iter().map(RpcLog::from).collect())
@@ -392,12 +393,29 @@ impl RpcImpl {
         Box::new(fut.boxed().compat())
     }
 
-    #[allow(unused_variables)]
     fn storage_root(
         &self, address: H160, epoch_num: Option<EpochNumber>,
-    ) -> RpcResult<Option<RpcStorageRoot>> {
-        // TODO(thegaram)
-        Err(error_codes::unimplemented(None))
+    ) -> RpcBoxFuture<Option<RpcStorageRoot>> {
+        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
+
+        info!(
+            "RPC Request: cfx_getStorageRoot address={:?} epoch={:?})",
+            address, epoch_num
+        );
+
+        // clone `self.light` to avoid lifetime issues due to capturing `self`
+        let light = self.light.clone();
+
+        let fut = async move {
+            let root = invalid_params_check(
+                "address",
+                light.get_storage_root(epoch_num.into(), address).await,
+            )?;
+
+            Ok(root.map(RpcStorageRoot::from_primitive))
+        };
+
+        Box::new(fut.boxed().compat())
     }
 
     fn storage_at(
@@ -419,6 +437,7 @@ impl RpcImpl {
             let maybe_entry = light
                 .get_storage(epoch_num.into(), address, position)
                 .await
+                .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
                 .map_err(RpcError::invalid_params)?;
 
             Ok(maybe_entry.map(Into::into))
@@ -441,6 +460,7 @@ impl RpcImpl {
             let tx = light
                 .get_tx(hash.into())
                 .await
+                .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
                 .map_err(RpcError::invalid_params)?;
 
             Ok(Some(RpcTransaction::from_signed(&tx, None)))
@@ -470,6 +490,7 @@ impl RpcImpl {
             ) = light
                 .get_tx_info(hash)
                 .await
+                .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
                 .map_err(RpcError::invalid_params)?;
 
             let receipt = RpcReceipt::new(
@@ -529,7 +550,7 @@ impl Cfx for CfxHandler {
             fn sponsor_info(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<RpcSponsorInfo>;
             fn staking_balance(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn storage_at(&self, addr: H160, pos: H256, epoch_number: Option<EpochNumber>) -> BoxFuture<Option<H256>>;
-            fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> RpcResult<Option<RpcStorageRoot>>;
+            fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<RpcStorageRoot>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
         }

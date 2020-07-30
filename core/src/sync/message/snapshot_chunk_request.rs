@@ -14,14 +14,15 @@ use crate::{
         },
         request_manager::{AsAny, Request},
         state::storage::{Chunk, ChunkKey, SnapshotSyncCandidate},
-        Error, ErrorKind, ProtocolConfiguration, SYNC_PROTO_V1, SYNC_PROTO_V2,
+        Error, ErrorKind, ProtocolConfiguration, SYNC_PROTO_V1, SYNC_PROTO_V3,
     },
 };
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::service::ProtocolVersion;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, time::Duration};
 
-#[derive(Debug, Clone, RlpDecodable, RlpEncodable)]
+#[derive(Debug, Clone, RlpDecodable, RlpEncodable, DeriveMallocSizeOf)]
 pub struct SnapshotChunkRequest {
     // request_id for SnapshotChunkRequest is independent from each other
     // because request_id is set per message when the request is sent.
@@ -32,7 +33,7 @@ pub struct SnapshotChunkRequest {
 
 build_msg_with_request_id_impl! {
     SnapshotChunkRequest, msgid::GET_SNAPSHOT_CHUNK,
-    "SnapshotChunkRequest", SYNC_PROTO_V1, SYNC_PROTO_V2
+    "SnapshotChunkRequest", SYNC_PROTO_V1, SYNC_PROTO_V3
 }
 
 impl SnapshotChunkRequest {

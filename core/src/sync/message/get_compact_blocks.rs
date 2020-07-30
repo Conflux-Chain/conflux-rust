@@ -15,10 +15,13 @@ use crate::{
     },
 };
 use cfx_types::H256;
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, time::Duration};
 
-#[derive(Debug, PartialEq, Default, RlpDecodable, RlpEncodable)]
+#[derive(
+    Debug, PartialEq, Default, RlpDecodable, RlpEncodable, DeriveMallocSizeOf,
+)]
 pub struct GetCompactBlocks {
     pub request_id: RequestId,
     pub hashes: Vec<H256>,
@@ -57,6 +60,7 @@ impl Request for GetCompactBlocks {
             request_id: 0,
             with_public: true,
             hashes: self.hashes.iter().cloned().collect(),
+            preferred_node_type: None,
         }))
     }
 }

@@ -60,10 +60,6 @@ impl OriginInfo {
     }
 
     pub fn recipient(&self) -> &Address { &self.address }
-
-    pub fn original_sender(&self) -> &Address { &self.original_sender }
-
-    pub fn storage_limit(&self) -> &U256 { &self.storage_limit_in_drip }
 }
 
 /// Implementation of evm context.
@@ -318,38 +314,13 @@ impl<'a> ContextTrait for Context<'a> {
                 }
                 let collateral_for_code =
                     U256::from(data.len()) * *COLLATERAL_PER_BYTE;
-                let collateral_for_storage = self
-                    .state
-                    .collateral_for_storage(&self.origin.storage_owner)?;
-                let balance = if self.origin.storage_owner.is_contract_address()
-                {
-                    self.state.sponsor_balance_for_collateral(
-                        &self.origin.storage_owner,
-                    )?
-                } else {
-                    self.state.balance(&self.origin.storage_owner)?
-                };
-                debug!(
-                    "ret() balance={:?} collateral_for_code={:?}",
-                    balance, collateral_for_code
-                );
-                if balance < collateral_for_code {
-                    return Err(vm::Error::NotEnoughBalanceForStorage {
-                        required: collateral_for_code,
-                        got: balance,
-                    });
-                }
-                if collateral_for_storage + collateral_for_code
-                    > self.origin.storage_limit_in_drip
-                {
-                    return Err(vm::Error::ExceedStorageLimit);
-                }
+                debug!("ret()  collateral_for_code={:?}", collateral_for_code);
                 *self
                     .substate
                     .storage_collateralized
                     .entry(self.origin.storage_owner)
                     .or_insert(0) += data.len() as u64;
-                self.state.add_collateral_for_storage(
+                self.state.register_unpaid_collateral(
                     &self.origin.storage_owner,
                     &collateral_for_code,
                 )?;

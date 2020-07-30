@@ -24,7 +24,7 @@ class StorageMaintenanceTest(ConfluxTestFramework):
         self.rpc = RpcClient(self.nodes[0])
         priv_key = default_config["GENESIS_PRI_KEY"]
         sender = eth_utils.encode_hex(priv_to_addr(priv_key))
-        block_reward = 11300000000000000000
+        block_reward = 7000000000000000000
 
         # deploy storage test contract
         bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), CONTRACT_PATH)
@@ -54,7 +54,7 @@ class StorageMaintenanceTest(ConfluxTestFramework):
         transaction_fee = parse_as_int(receipt['gasFee'])
         expected += block_reward + transaction_fee
         self.log.info("block count: %d, balance: %d, expected: %d, transaction_fee: %d", count, balance, expected,
-                      transaction_fee)
+                transaction_fee)
         assert_equal(balance, expected)
 
         # 5. Produce 1 empty block, and the miner will receive reward for the third empty block. This block reward
@@ -66,7 +66,7 @@ class StorageMaintenanceTest(ConfluxTestFramework):
         storage_fee = collateral_for_storage * 4 // 100 // 63072000
         expected += block_reward + storage_fee
         self.log.info("block count: %d, balance: %d, expected: %d, collateral_for_storage: %d, storage_fee: %d", count,
-                      balance, expected, collateral_for_storage, storage_fee)
+                balance, expected, collateral_for_storage, storage_fee)
         assert_equal(balance, expected)
 
         # 6. Produce 1 empty block, and the miner will receive reward for the forth empty block. This block reward
@@ -78,14 +78,14 @@ class StorageMaintenanceTest(ConfluxTestFramework):
         storage_fee = collateral_for_storage * 4 // 100 // 63072000
         expected += storage_fee + block_reward
         self.log.info("block count: %d, balance: %d, expected: %d, collateral_for_storage: %d, storage_fee: %d", count,
-                      balance, expected, collateral_for_storage, storage_fee)
+                balance, expected, collateral_for_storage, storage_fee)
 
         assert_equal(balance, expected)
 
     def deploy_contract(self, sender, priv_key, data_hex):
         tx = self.rpc.new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key, nonce=None,
-                                      gas_price=self.gasPrice,
-                                      storage_limit=20000)
+                gas_price=self.gasPrice,
+                storage_limit=20000)
         assert_equal(self.rpc.send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc.get_transaction_receipt(tx.hash_hex())
         address = receipt["contractCreated"]

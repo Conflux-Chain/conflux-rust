@@ -19,16 +19,17 @@ use crate::{
         },
         request_manager::{AsAny, Request},
         state::storage::{RangedManifest, SnapshotSyncCandidate},
-        Error, ProtocolConfiguration, SYNC_PROTO_V1, SYNC_PROTO_V2,
+        Error, ProtocolConfiguration, SYNC_PROTO_V1, SYNC_PROTO_V3,
     },
 };
 use cfx_types::H256;
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::service::ProtocolVersion;
 use primitives::{EpochNumber, StateRoot};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, time::Duration};
 
-#[derive(Debug, Clone, RlpDecodable, RlpEncodable)]
+#[derive(Debug, Clone, RlpDecodable, RlpEncodable, DeriveMallocSizeOf)]
 pub struct SnapshotManifestRequest {
     pub request_id: u64,
     pub snapshot_to_sync: SnapshotSyncCandidate,
@@ -38,7 +39,7 @@ pub struct SnapshotManifestRequest {
 
 build_msg_with_request_id_impl! {
     SnapshotManifestRequest, msgid::GET_SNAPSHOT_MANIFEST,
-    "SnapshotManifestRequest", SYNC_PROTO_V1, SYNC_PROTO_V2
+    "SnapshotManifestRequest", SYNC_PROTO_V1, SYNC_PROTO_V3
 }
 
 impl Handleable for SnapshotManifestRequest {

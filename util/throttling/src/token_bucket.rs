@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use malloc_size_of::MallocSizeOf;
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::Mutex;
 use std::{
     cmp::{max, min},
@@ -20,6 +22,7 @@ pub enum ThrottleResult {
     AlreadyThrottled,
 }
 
+#[derive(DeriveMallocSizeOf)]
 pub struct ThrottleTokens {
     max_tokens: u64,    // maximum tokens allowed in bucket
     cur_tokens: u64,    // current tokens in bucket
@@ -40,6 +43,7 @@ impl ThrottleTokens {
     }
 }
 
+#[derive(DeriveMallocSizeOf)]
 pub struct TokenBucket {
     cpu_tokens: ThrottleTokens,
     message_size_tokens: ThrottleTokens,
@@ -251,7 +255,7 @@ impl FromStr for TokenBucket {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, DeriveMallocSizeOf)]
 pub struct TokenBucketManager {
     // manage buckets by name
     buckets: HashMap<String, Arc<Mutex<TokenBucket>>>,
@@ -308,12 +312,12 @@ impl TokenBucketManager {
     }
 }
 
-#[derive(Default)]
-pub struct ThrottledManager<K: Eq + Hash> {
+#[derive(Default, DeriveMallocSizeOf)]
+pub struct ThrottledManager<K: Eq + Hash + MallocSizeOf> {
     items: HashMap<K, Instant>,
 }
 
-impl<K: Eq + Hash> ThrottledManager<K> {
+impl<K: Eq + Hash + MallocSizeOf> ThrottledManager<K> {
     pub fn set_throttled(&mut self, k: K, until: Instant) {
         let current = self.items.entry(k).or_insert(until);
         if *current < until {

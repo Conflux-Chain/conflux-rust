@@ -6,6 +6,8 @@ mod snapshot;
 pub use snapshot::FakeSnapshotMptDb;
 
 #[cfg(test)]
+mod proofs;
+#[cfg(test)]
 mod sharded_iter_merger;
 #[cfg(test)]
 mod state;
@@ -59,7 +61,9 @@ pub struct FakeStateManager {
 
 #[cfg(test)]
 impl FakeStateManager {
-    fn new(conflux_data_dir: String) -> Result<Self> {
+    fn new(
+        conflux_data_dir: String, snapshot_epoch_count: u32,
+    ) -> Result<Self> {
         fs::create_dir_all(conflux_data_dir.as_str())?;
         let mut unit_test_data_dir = "".to_string();
         for i in 0..100 {
@@ -81,7 +85,7 @@ impl FakeStateManager {
                 state_manager: Some(StateManager::new(StorageConfiguration {
                     additional_maintained_snapshot_count: 0,
                     consensus_param: ConsensusParam {
-                        snapshot_epoch_count: 10_000_000,
+                        snapshot_epoch_count,
                     },
                     debug_snapshot_checker_threads: 0,
                     delta_mpts_cache_recent_lfu_factor: 4.0,
@@ -131,7 +135,9 @@ impl DerefMut for FakeStateManager {
 }
 
 #[cfg(test)]
-pub fn new_state_manager_for_unit_test() -> FakeStateManager {
+pub fn new_state_manager_for_unit_test_with_snapshot_epoch_count(
+    snapshot_epoch_count: u32,
+) -> FakeStateManager {
     const WITH_LOGGER: bool = false;
     if WITH_LOGGER {
         log4rs::init_config(
@@ -155,7 +161,19 @@ pub fn new_state_manager_for_unit_test() -> FakeStateManager {
         .ok();
     }
 
-    FakeStateManager::new("./conflux_unit_test_data_dir/".to_string()).unwrap()
+    FakeStateManager::new(
+        "./conflux_unit_test_data_dir/".to_string(),
+        snapshot_epoch_count,
+    )
+    .unwrap()
+}
+
+#[cfg(test)]
+pub fn new_state_manager_for_unit_test() -> FakeStateManager {
+    let snapshot_epoch_count = 10_000_000;
+    new_state_manager_for_unit_test_with_snapshot_epoch_count(
+        snapshot_epoch_count,
+    )
 }
 
 #[derive(Default)]
@@ -228,6 +246,14 @@ fn generate_keys(number_of_keys: usize) -> Vec<Vec<u8>> {
 
     keys.shuffle(&mut rng);
     keys
+}
+
+#[cfg(test)]
+fn generate_account_keys(number_of_keys: usize) -> Vec<Vec<u8>> {
+    let mut rng = get_rng_for_test();
+    (0..number_of_keys)
+        .map(|_| rng.gen::<[u8; 20]>().to_vec())
+        .collect()
 }
 
 #[cfg(test)]

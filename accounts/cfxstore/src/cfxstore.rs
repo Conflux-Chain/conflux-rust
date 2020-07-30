@@ -17,7 +17,6 @@
 use parking_lot::{Mutex, RwLock};
 use std::{
     collections::{BTreeMap, HashMap},
-    mem,
     path::PathBuf,
     time::{Duration, Instant},
 };
@@ -397,15 +396,19 @@ impl CfxMultiStore {
     fn reload_if_changed(&self) -> Result<(), Error> {
         let mut last_timestamp = self.timestamp.lock();
         let now = Instant::now();
+
         if now - last_timestamp.last_checked > last_timestamp.refresh_time {
             let dir_hash = Some(self.dir.unique_repr()?);
             last_timestamp.last_checked = now;
+
             if last_timestamp.dir_hash == dir_hash {
                 return Ok(());
             }
+
             self.reload_accounts()?;
             last_timestamp.dir_hash = dir_hash;
         }
+
         Ok(())
     }
 
@@ -431,7 +434,7 @@ impl CfxMultiStore {
             }
         }
 
-        mem::replace(&mut *cache, new_accounts);
+        *cache = new_accounts;
         Ok(())
     }
 

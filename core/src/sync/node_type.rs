@@ -2,11 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, DeriveMallocSizeOf)]
 #[repr(u8)]
 pub enum NodeType {
+    Archive,
     Full,
     Light,
     Unknown,
@@ -19,8 +21,9 @@ impl Default for NodeType {
 impl From<u8> for NodeType {
     fn from(raw: u8) -> NodeType {
         match raw {
-            0 => NodeType::Full,
-            1 => NodeType::Light,
+            0 => NodeType::Archive,
+            1 => NodeType::Full,
+            2 => NodeType::Light,
             _ => NodeType::Unknown,
         }
     }
@@ -29,8 +32,9 @@ impl From<u8> for NodeType {
 impl From<&NodeType> for u8 {
     fn from(node_type: &NodeType) -> u8 {
         match node_type {
-            NodeType::Full => 0,
-            NodeType::Light => 1,
+            NodeType::Archive => 0,
+            NodeType::Full => 1,
+            NodeType::Light => 2,
             NodeType::Unknown => 0xff,
         }
     }
