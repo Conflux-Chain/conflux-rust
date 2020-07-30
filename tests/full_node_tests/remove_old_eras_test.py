@@ -61,7 +61,7 @@ class FullNodeRemoveOldErasTest(ConfluxTestFramework):
         # we expect the first few eras are removed
         self.log.info(f"checking deleted blocks...")
 
-        for epoch in range(0, 6 * ERA_EPOCH_COUNT):
+        for epoch in range(0, 4 * ERA_EPOCH_COUNT):
             archive_block = self.rpc[ARCHIVE_NODE].block_by_epoch(hex(epoch), include_txs=True)
             assert(archive_block != None)
 

@@ -832,7 +832,7 @@ impl NetworkServiceInner {
             .filter(|id| !self.sessions.contains_node(id) && *id != self_id)
             .take(min(
                 max_handshakes_per_round,
-                self.config.max_handshakes - handshake_count,
+                self.config.max_handshakes.saturating_sub(handshake_count),
             ))
         {
             self.connect_peer(&id, io);

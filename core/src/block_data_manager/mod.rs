@@ -531,10 +531,20 @@ impl BlockDataManager {
         self.insert_block_body(hash, block, persistent);
     }
 
-    /// remove block body and block header in memory cache and db
-    pub fn remove_block(&self, hash: &H256, remove_db: bool) {
-        self.remove_block_header(hash, remove_db);
-        self.remove_block_body(hash, remove_db);
+    /// Remove block body and block header in memory cache and db.
+    /// This is used to delete invalid blocks or dangling blocks never connected
+    /// to the pivot chain.
+    pub fn remove_useless_block(&self, hash: &H256, remove_db: bool) {
+        // If a block has entered consensus before, it is a part of the
+        // blockchain and we should not remove it here.
+        if self
+            .local_block_info_by_hash(hash)
+            .map(|info| info.get_status() == BlockStatus::Invalid)
+            .unwrap_or(true)
+        {
+            self.remove_block_header(hash, remove_db);
+            self.remove_block_body(hash, remove_db);
+        }
     }
 
     pub fn block_header_by_hash(
