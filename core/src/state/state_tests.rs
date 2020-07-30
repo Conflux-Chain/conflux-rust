@@ -704,10 +704,12 @@ fn kill_account_with_checkpoints() {
         .unwrap()
         .commit_ownership_change(&state_0.db);
     state_0.discard_checkpoint();
-    let epoch_id = EpochId::from_uint(&U256::from(1));
-    state_0.commit(epoch_id, /* debug_record = */ None).unwrap();
+    let epoch_id_1 = EpochId::from_uint(&U256::from(1));
+    state_0
+        .commit(epoch_id_1, /* debug_record = */ None)
+        .unwrap();
 
-    let mut state = get_state(&storage_manager, &epoch_id);
+    let mut state = get_state(&storage_manager, &epoch_id_1);
     // Storage before the account is killed.
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::one());
     state.kill_account(&a);
@@ -722,6 +724,22 @@ fn kill_account_with_checkpoints() {
     state.commit(epoch_id, /* debug_record = */ None).unwrap();
     let state = get_state(&storage_manager, &epoch_id);
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
+
+    // Test checkpoint.
+    let mut state = get_state(&storage_manager, &epoch_id_1);
+    state.checkpoint();
+    state.kill_account(&a);
+    // The new contract in the same place should have empty storage.
+    state.checkpoint();
+    state.new_contract(&a, U256::zero(), U256::one()).unwrap();
+    // The new contract in the same place should have empty storage.
+    assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
+    state.revert_to_checkpoint();
+    // The account is killed. The storage should be empty.
+    assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
+    state.revert_to_checkpoint();
+    // Storage before the account is killed.
+    assert_eq!(state.storage_at(&a, &k).unwrap(), U256::one());
 }
 
 #[test]
