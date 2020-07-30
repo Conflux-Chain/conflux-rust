@@ -8,7 +8,7 @@ use crate::sync::{
 };
 use cfx_types::H256;
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::{collections::HashSet, time::Instant};
+use std::collections::HashSet;
 
 #[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
 pub struct Heartbeat {
@@ -26,20 +26,7 @@ impl Handleable for Heartbeat {
 
             let latest_updated = {
                 let mut peer_info = peer_info.write();
-                peer_info.heartbeat = Instant::now();
-
-                let updated = self.best_epoch != peer_info.best_epoch
-                    || latest != peer_info.latest_block_hashes;
-
-                // NOTE: we need to update best_epoch even if it's smaller than
-                // the previous value, otherwise sync will get stuck in tests
-                // with large chain reorg (decreasing best epoch value)
-                if updated {
-                    peer_info.best_epoch = self.best_epoch;
-                    peer_info.latest_block_hashes = latest;
-                }
-
-                updated
+                peer_info.update(None, latest, self.best_epoch)
             };
 
             if latest_updated {

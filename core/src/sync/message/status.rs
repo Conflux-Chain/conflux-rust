@@ -53,21 +53,11 @@ impl Handleable for StatusV2 {
         if let Ok(peer_info) = ctx.manager.syn.get_peer_info(&ctx.node_id) {
             let latest_updated = {
                 let mut peer_info = peer_info.write();
-                peer_info.node_type = NodeType::Unknown;
-                peer_info.heartbeat = Instant::now();
-
-                let updated = self.best_epoch != peer_info.best_epoch
-                    || latest != peer_info.latest_block_hashes;
-
-                // NOTE: we need to update best_epoch even if it's smaller than
-                // the previous value, otherwise sync will get stuck in tests
-                // with large chain reorg (decreasing best epoch value)
-                if updated {
-                    peer_info.best_epoch = self.best_epoch;
-                    peer_info.latest_block_hashes = latest;
-                }
-
-                updated
+                peer_info.update(
+                    Some(NodeType::Unknown),
+                    latest,
+                    self.best_epoch,
+                )
             };
 
             if latest_updated {
@@ -184,21 +174,7 @@ impl Handleable for StatusV3 {
         if let Ok(peer_info) = ctx.manager.syn.get_peer_info(&ctx.node_id) {
             let latest_updated = {
                 let mut peer_info = peer_info.write();
-                peer_info.node_type = self.node_type;
-                peer_info.heartbeat = Instant::now();
-
-                let updated = self.best_epoch != peer_info.best_epoch
-                    || latest != peer_info.latest_block_hashes;
-
-                // NOTE: we need to update best_epoch even if it's smaller than
-                // the previous value, otherwise sync will get stuck in tests
-                // with large chain reorg (decreasing best epoch value)
-                if updated {
-                    peer_info.best_epoch = self.best_epoch;
-                    peer_info.latest_block_hashes = latest;
-                }
-
-                updated
+                peer_info.update(Some(self.node_type), latest, self.best_epoch)
             };
 
             if latest_updated {

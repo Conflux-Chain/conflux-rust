@@ -60,6 +60,32 @@ pub struct SynchronizationPeerState {
     pub throttled_msgs: ThrottledManager<MsgId>,
 }
 
+impl SynchronizationPeerState {
+    pub fn update(
+        &mut self, node_type: Option<NodeType>,
+        latest_block_hashes: HashSet<H256>, best_epoch: u64,
+    ) -> bool
+    {
+        if let Some(node_type) = node_type {
+            self.node_type = node_type;
+        }
+        self.heartbeat = Instant::now();
+
+        let updated = best_epoch != self.best_epoch
+            || latest_block_hashes != self.latest_block_hashes;
+
+        // NOTE: we need to update best_epoch even if it's smaller than
+        // the previous value, otherwise sync will get stuck in tests
+        // with large chain reorg (decreasing best epoch value)
+        if updated {
+            self.best_epoch = best_epoch;
+            self.latest_block_hashes = latest_block_hashes;
+        }
+
+        updated
+    }
+}
+
 pub type SynchronizationPeers =
     HashMap<NodeId, Arc<RwLock<SynchronizationPeerState>>>;
 
