@@ -33,8 +33,10 @@ pub fn suicide(
     spec: &Spec, substate: &mut Substate,
 ) -> vm::Result<()>
 {
-    state.collect_ownership_changed(substate)?;
-    match state.settle_collateral_for_storage(contract_address)? {
+    substate.suicides.insert(contract_address.clone());
+    match state
+        .collect_and_settle_collateral_for_suicide(substate, contract_address)?
+    {
         CollateralCheckResult::Valid => {}
         CollateralCheckResult::ExceedStorageLimit { .. } => unreachable!(),
         CollateralCheckResult::NotEnoughBalance { required, got } => {
@@ -58,10 +60,11 @@ pub fn suicide(
         let code_owner = state
             .code_owner(contract_address)?
             .expect("code owner exists");
-        let collateral_for_code = U256::from(code_size) * *COLLATERAL_PER_BYTE;
-        state.sub_collateral_for_storage(&code_owner, &collateral_for_code)?;
         *substate.storage_released.entry(code_owner).or_insert(0) +=
             code_size as u64;
+        let refund_collateral = *COLLATERAL_PER_BYTE * code_size;
+        state
+            .register_unrefunded_collateral(&code_owner, &refund_collateral)?;
     }
 
     let sponsor_for_gas = state.sponsor_for_gas(contract_address)?;
@@ -112,7 +115,6 @@ pub fn suicide(
             substate.to_cleanup_mode(spec),
         )?;
     }
-    substate.suicides.insert(*contract_address);
 
     Ok(())
 }
