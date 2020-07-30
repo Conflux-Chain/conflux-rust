@@ -21,7 +21,9 @@ use cfx_types::{
     address_util::AddressUtil, Address, BigEndianHash, U256, U512,
 };
 use keylib::{Generator, Random};
-use primitives::{transaction::Action, Transaction};
+use primitives::{
+    storage::STORAGE_LAYOUT_REGULAR_V0, transaction::Action, Transaction,
+};
 use rustc_hex::FromHex;
 use std::{
     cmp::{self, min},
@@ -611,7 +613,6 @@ fn test_deposit_withdraw_lock() {
         *state.total_issued_tokens(),
         U256::from(2_000_000_000_000_000_000u64)
     );
-    assert_eq!(state.block_number(), 0);
 
     let mut params = ActionParams::default();
     params.code_address = STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS.clone();
@@ -646,7 +647,6 @@ fn test_deposit_withdraw_lock() {
         U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(*state.total_staking_tokens(), U256::zero());
-    assert_eq!(state.block_number(), 0);
 
     // deposit 10^18 - 1, not enough
     params.call_type = CallType::Call;
@@ -692,7 +692,6 @@ fn test_deposit_withdraw_lock() {
         *state.total_staking_tokens(),
         U256::from(1_000_000_000_000_000_000u64)
     );
-    assert_eq!(state.block_number(), 0);
 
     // empty data
     params.data = None;
@@ -725,7 +724,6 @@ fn test_deposit_withdraw_lock() {
         *state.total_staking_tokens(),
         U256::from(1_000_000_000_000_000_000u64)
     );
-    assert_eq!(state.block_number(), 0);
 
     // less data
     params.data = Some("b6b55f25000000000000000000000000000000000000000000000000000000174876e8".from_hex().unwrap());
@@ -758,7 +756,6 @@ fn test_deposit_withdraw_lock() {
         *state.total_staking_tokens(),
         U256::from(1_000_000_000_000_000_000u64)
     );
-    assert_eq!(state.block_number(), 0);
 
     // more data
     params.data = Some("b6b55f25000000000000000000000000000000000000000000000000000000174876e80000".from_hex().unwrap());
@@ -791,7 +788,6 @@ fn test_deposit_withdraw_lock() {
         *state.total_staking_tokens(),
         U256::from(1_000_000_000_000_000_000u64)
     );
-    assert_eq!(state.block_number(), 0);
 
     // withdraw
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000000000ba43b7400".from_hex().unwrap());
@@ -820,7 +816,6 @@ fn test_deposit_withdraw_lock() {
         *state.total_staking_tokens(),
         U256::from(999_999_950_000_000_000u64)
     );
-    assert_eq!(state.block_number(), 0);
     // withdraw more than staking balance
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000de0b6a803288c01".from_hex().unwrap());
     let result = Executive::new(
@@ -854,7 +849,6 @@ fn test_deposit_withdraw_lock() {
         *state.total_staking_tokens(),
         U256::from(999_999_950_000_000_000u64)
     );
-    assert_eq!(state.block_number(), 0);
 
     // lock until block_number = 0
     params.data = Some("5547dedb00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap());
@@ -1062,6 +1056,7 @@ fn test_commission_privilege() {
             &sender.address(),
             U256::zero(),
             U256::one(),
+            Some(STORAGE_LAYOUT_REGULAR_V0),
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state.init_code(&address, code, sender.address()).unwrap();
@@ -1429,6 +1424,7 @@ fn test_storage_commission_privilege() {
             &sender.address(),
             U256::zero(),
             U256::one(),
+            Some(STORAGE_LAYOUT_REGULAR_V0),
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state.init_code(&address, code, sender.address()).unwrap();

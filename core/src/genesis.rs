@@ -3,9 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    consensus::debug::ComputeEpochDebugRecord,
+    evm::Spec,
     executive::InternalContractMap,
     parameters::consensus::GENESIS_GAS_LIMIT,
-    state::OverlayAccount,
+    state::{CleanupMode, State},
     statedb::{Result as DbResult, StateDb},
     storage::{StorageManager, StorageManagerTrait},
     verification::{compute_receipts_root, compute_transaction_root},
@@ -13,8 +15,8 @@ use crate::{
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use keylib::KeyPair;
 use primitives::{
-    Account, Action, Block, BlockHeaderBuilder, BlockReceipts, StorageKey,
-    StorageLayout, Transaction,
+    storage::STORAGE_LAYOUT_REGULAR_V0, Action, Block, BlockHeaderBuilder,
+    BlockReceipts, Transaction,
 };
 use secret_store::SecretStore;
 use std::{
@@ -75,28 +77,16 @@ pub fn load_secrets_file(
     Ok(accounts)
 }
 
-pub fn initialize_internal_contract_accounts(state: &mut StateDb) {
+pub fn initialize_internal_contract_accounts(state: &mut State) {
     || -> DbResult<()> {
         {
             for address in InternalContractMap::new().keys() {
-                let account = OverlayAccount::new_basic(
+                state.new_contract_with_admin(
                     address,
+                    /* No admin; admin = */ &Address::zero(),
                     /* balance = */ U256::zero(),
-                    /* nonce = */ U256::one(),
-                )
-                .as_account()?;
-                state.set(
-                    StorageKey::AccountKey(address.as_bytes()),
-                    &account,
-                    None,
-                )?;
-                // initialize storage layout for internal contracts to make sure
-                // that _all_ Conflux contracts have a storage
-                // root in our state trie
-                state.set_storage_layout(
-                    address,
-                    &StorageLayout::Regular(0),
-                    None,
+                    state.contract_start_nonce(),
+                    Some(STORAGE_LAYOUT_REGULAR_V0),
                 )?;
             }
             Ok(())
@@ -112,29 +102,29 @@ pub fn genesis_block(
     test_net_version: Address, initial_difficulty: U256,
 ) -> Block
 {
-    let mut state = StateDb::new(storage_manager.get_state_for_genesis_write());
+    let mut state = State::new(
+        StateDb::new(storage_manager.get_state_for_genesis_write()),
+        Default::default(),
+        &Spec::new_spec(),
+        0, /* block_number */
+    );
     let mut genesis_block_author = test_net_version;
     genesis_block_author.set_user_account_type_bits();
 
     let mut total_balance = U256::from(0);
+    initialize_internal_contract_accounts(&mut state);
     for (addr, balance) in genesis_accounts {
-        let account = Account::new_empty_with_balance(
-            &addr,
-            &balance,
-            &0.into(), /* nonce */
-        )
-        .unwrap();
         state
-            .set(StorageKey::new_account_key(&addr), &account, None)
+            .add_balance(&addr, &balance, CleanupMode::NoEmpty)
             .unwrap();
         total_balance += balance;
     }
-    state
-        .set_total_issued_tokens(&total_balance, None)
-        .expect("Cannot set issued tokens in the database!");
-    initialize_internal_contract_accounts(&mut state);
+    state.add_total_issued(total_balance);
 
-    let state_root = state.compute_state_root().unwrap();
+    let mut debug_record = Some(ComputeEpochDebugRecord::default());
+    let state_root = state
+        .compute_state_root(/* debug_record = */ debug_record.as_mut())
+        .unwrap();
     let receipt_root = compute_receipts_root(&vec![Arc::new(BlockReceipts {
         receipts: vec![],
         secondary_reward: U256::zero(),
@@ -164,8 +154,17 @@ pub fn genesis_block(
         genesis,
         genesis.hash()
     );
-    state.commit(genesis.block_header.hash()).unwrap();
+    state
+        .commit(
+            genesis.block_header.hash(),
+            /* debug_record = */ debug_record.as_mut(),
+        )
+        .unwrap();
     genesis.block_header.pow_hash = Some(Default::default());
+    debug!(
+        "genesis debug_record {}",
+        serde_json::to_string(&debug_record).unwrap()
+    );
     genesis
 }
 

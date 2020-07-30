@@ -2155,7 +2155,7 @@ fn main() -> errors::Result<()> {
 use cfx_types::hexstr_to_h256;
 use cfxcore::{
     block_data_manager::StateAvailabilityBoundary,
-    statedb::StateDb,
+    statedb::{StateDb, StateDbExt},
     storage::{
         state::StateTrait,
         storage_db::key_value_db::{KeyValueDbTrait, KeyValueDbTraitRead},
