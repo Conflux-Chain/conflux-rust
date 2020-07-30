@@ -12,7 +12,8 @@ use crate::{
 };
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use primitives::{
-    account::ContractAccount, Account, SponsorInfo, VoteStakeList,
+    account::ContractAccount, storage::STORAGE_LAYOUT_REGULAR_V0, Account,
+    SponsorInfo, VoteStakeList,
 };
 
 #[test]
@@ -81,7 +82,7 @@ fn test_overlay_account_create() {
 
     // test new basic
     let overlay_account =
-        OverlayAccount::new_basic(&user_addr, 1011.into(), 12345.into());
+        OverlayAccount::new_basic(&user_addr, 1011.into(), 12345.into(), None);
     assert!(overlay_account.deposit_list().is_none());
     assert!(overlay_account.vote_stake_list().is_none());
     assert_eq!(*overlay_account.address(), user_addr);
@@ -122,6 +123,7 @@ fn test_overlay_account_create() {
         5678.into(),
         1234.into(),
         &admin,
+        STORAGE_LAYOUT_REGULAR_V0,
     );
     assert!(overlay_account.deposit_list().is_none());
     assert!(overlay_account.vote_stake_list().is_none());

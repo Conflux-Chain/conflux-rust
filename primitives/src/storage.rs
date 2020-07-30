@@ -12,6 +12,8 @@ pub enum StorageLayout {
     Regular(u8), // type: 0, fields: version
 }
 
+pub const STORAGE_LAYOUT_REGULAR_V0: StorageLayout = StorageLayout::Regular(0);
+
 impl StorageLayout {
     pub fn to_bytes(&self) -> Vec<u8> {
         match self {

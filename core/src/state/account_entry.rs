@@ -7,14 +7,14 @@ use crate::{
     consensus::debug::ComputeEpochDebugRecord,
     hash::{keccak, KECCAK_EMPTY},
     state::{AccountEntryProtectedMethods, State},
-    statedb::{Result as DbResult, StateDb},
+    statedb::{Result as DbResult, StateDb, StateDbExt},
 };
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use parking_lot::RwLock;
 use primitives::{
-    account::AccountError, Account, CodeInfo, DepositInfo, DepositList,
-    SponsorInfo, StorageKey, StorageLayout, StorageValue, VoteStakeInfo,
-    VoteStakeList,
+    account::AccountError, storage::STORAGE_LAYOUT_REGULAR_V0, Account,
+    CodeInfo, DepositInfo, DepositList, SponsorInfo, StorageKey, StorageLayout,
+    StorageValue, VoteStakeInfo, VoteStakeList,
 };
 use std::{collections::HashMap, sync::Arc};
 
@@ -46,6 +46,9 @@ pub struct OverlayAccount {
 
     // This is the sponsor information of the contract.
     sponsor_info: SponsorInfo,
+
+    // FIXME: there are changes, so no need to have cache for both storage and
+    // ownership
 
     // This is a cache for storage change.
     storage_cache: RwLock<HashMap<Vec<u8>, U256>>,
@@ -124,7 +127,11 @@ impl OverlayAccount {
 
     /// Create an OverlayAccount of basic account when the account doesn't exist
     /// before.
-    pub fn new_basic(address: &Address, balance: U256, nonce: U256) -> Self {
+    pub fn new_basic(
+        address: &Address, balance: U256, nonce: U256,
+        storage_layout: Option<StorageLayout>,
+    ) -> Self
+    {
         OverlayAccount {
             address: address.clone(),
             balance,
@@ -135,7 +142,11 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: Default::default(),
             ownership_changes: HashMap::new(),
-            storage_layout_change: None,
+            storage_layout_change: if address.is_builtin_address() {
+                storage_layout
+            } else {
+                None
+            },
             staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
             accumulated_interest_return: 0.into(),
@@ -147,18 +158,25 @@ impl OverlayAccount {
         }
     }
 
-    #[cfg(test)]
     /// Create an OverlayAccount of contract account when the account doesn't
     /// exist before.
     pub fn new_contract(address: &Address, balance: U256, nonce: U256) -> Self {
-        Self::new_contract_with_admin(address, balance, nonce, &Address::zero())
+        Self::new_contract_with_admin(
+            address,
+            balance,
+            nonce,
+            &Address::zero(),
+            STORAGE_LAYOUT_REGULAR_V0,
+        )
     }
 
     /// Create an OverlayAccount of contract account when the account doesn't
     /// exist before.
     pub fn new_contract_with_admin(
         address: &Address, balance: U256, nonce: U256, admin: &Address,
-    ) -> Self {
+        storage_layout: StorageLayout,
+    ) -> Self
+    {
         OverlayAccount {
             address: address.clone(),
             balance,
@@ -169,7 +187,7 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: Default::default(),
             ownership_changes: HashMap::new(),
-            storage_layout_change: None,
+            storage_layout_change: Some(storage_layout),
             staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
             accumulated_interest_return: 0.into(),
@@ -751,33 +769,13 @@ impl OverlayAccount {
     }
 
     pub fn commit(
-        &mut self, state: &mut State,
+        &mut self, state: &mut State, address: &Address,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()>
     {
         if self.is_newly_created_contract {
             state.recycle_storage(
                 vec![self.address],
-                debug_record.as_deref_mut(),
-            )?;
-        }
-
-        // reinsert storage_layout to delta trie if storage is updated
-        // FIXME: load storage layout on first storage access instead
-        if !self.storage_changes.is_empty()
-            && self.storage_layout_change.is_none()
-        {
-            // try to get from delta tries or snapshot
-            let layout = state
-                .db
-                .get_storage_layout(&self.address)?
-                // layout must exist for existing accounts
-                // storage_layout_change cannot be None for new accounts
-                .expect("storage layout should exist");
-
-            state.db.set_storage_layout(
-                &self.address,
-                &layout,
                 debug_record.as_deref_mut(),
             )?;
         }
@@ -863,11 +861,19 @@ impl OverlayAccount {
             }
         }
 
-        if let Some(ref layout) = self.storage_layout_change {
-            state
-                .db
-                .set_storage_layout(&self.address, layout, debug_record)?;
+        if let Some(layout) = self.storage_layout_change.clone() {
+            state.db.set_storage_layout(
+                &self.address,
+                layout,
+                debug_record.as_deref_mut(),
+            )?;
         }
+
+        state.db.set::<Account>(
+            StorageKey::new_account_key(address),
+            &self.as_account()?,
+            debug_record,
+        )?;
 
         Ok(())
     }
@@ -900,11 +906,13 @@ pub struct AccountEntry {
     pub account: Option<OverlayAccount>,
     /// Unmodified account balance.
     pub old_balance: Option<U256>,
+    // FIXME: remove it.
     /// Entry state.
     pub state: AccountState,
 }
 
 impl AccountEntry {
+    // FIXME: remove it.
     pub fn is_dirty(&self) -> bool { self.state == AccountState::Dirty }
 
     pub fn overwrite_with(&mut self, other: AccountEntry) {

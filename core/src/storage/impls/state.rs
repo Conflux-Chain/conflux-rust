@@ -574,10 +574,11 @@ impl StateTrait for State {
         // the dirty node is removed from cache.
         let commit_result = self.do_db_commit(epoch_id, &merkle_root);
         debug!(
-            "commit state for epoch {:?}: delta_trie_height={:?} \
+            "commit state for epoch {:?}: merkle_root = {:?}, delta_trie_height={:?} \
             has_intermediate={}, height={:?}, snapshot_epoch_id={:?}, \
             intermediate_epoch_id={:?}, intermediate_mpt_id={:?}, delta_mpt_id={}.",
             epoch_id,
+            merkle_root,
             self.delta_trie_height,
             self.maybe_intermediate_trie.is_some(),
             self.height,
