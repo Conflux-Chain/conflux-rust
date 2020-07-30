@@ -95,7 +95,6 @@ fn test_sender_balance() {
     let mut substate = Substate::new();
 
     let FinalizationResult { gas_left, .. } = {
-        state.checkpoint();
         let mut ex = Executive::new(
             &mut state,
             &env,
@@ -103,18 +102,7 @@ fn test_sender_balance() {
             &spec,
             &internal_contract_map,
         );
-        let res = ex.create(params.clone(), &mut substate).unwrap();
-        state
-            .settle_collateral_for_all(
-                &params.storage_owner,
-                &params.storage_limit_in_drip,
-                &mut substate,
-            )
-            .unwrap()
-            .into_vm_result()
-            .unwrap();
-        state.discard_checkpoint();
-        res
+        ex.create(params, &mut substate).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(94_595));
@@ -318,7 +306,6 @@ fn test_call_to_create() {
     params.code = Some(Arc::new(code));
     params.value = ActionValue::Transfer(U256::from(100));
     params.call_type = CallType::Call;
-    params.storage_limit_in_drip = U256::from(78_125_000_000_000_000u64);
 
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
@@ -352,7 +339,6 @@ fn test_call_to_create() {
     let mut substate = Substate::new();
 
     let FinalizationResult { gas_left, .. } = {
-        state.checkpoint();
         let mut ex = Executive::new(
             &mut state,
             &env,
@@ -360,18 +346,7 @@ fn test_call_to_create() {
             &spec,
             &internal_contract_map,
         );
-        let res = ex.call(params.clone(), &mut substate).unwrap();
-        state
-            .settle_collateral_for_all(
-                &params.storage_owner,
-                &params.storage_limit_in_drip,
-                &mut substate,
-            )
-            .unwrap()
-            .into_vm_result()
-            .unwrap();
-        state.discard_checkpoint();
-        res
+        ex.call(params, &mut substate).unwrap()
     };
     assert_eq!(state.balance(&sender).unwrap(), U256::from(0));
     assert_eq!(
@@ -1535,7 +1510,7 @@ fn test_storage_commission_privilege() {
         .unwrap();
     assert_eq!(
         state
-            .collect_and_settle_collateral(
+            .collect_ownership_changed_and_settle(
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate,
@@ -1835,7 +1810,7 @@ fn test_storage_commission_privilege() {
     let mut substate = Substate::new();
     assert_eq!(
         state
-            .collect_and_settle_collateral(
+            .collect_ownership_changed_and_settle(
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate,

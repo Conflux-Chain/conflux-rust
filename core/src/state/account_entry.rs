@@ -54,8 +54,8 @@ pub struct OverlayAccount {
     ownership_cache: RwLock<HashMap<Vec<u8>, Option<Address>>>,
     ownership_changes: HashMap<Vec<u8>, Address>,
 
-    // This is a cache including both the paid collateral and unpaid collateral
-    fresh_collateral_for_storage: U256,
+    unpaid_storage_entries: u64,
+    unrefunded_storage_entries: u64,
 
     // Storage layout change.
     storage_layout_change: Option<StorageLayout>,
@@ -103,10 +103,11 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: Default::default(),
             ownership_changes: HashMap::new(),
+            unpaid_storage_entries: 0,
+            unrefunded_storage_entries: 0,
             storage_layout_change: None,
             staking_balance: account.staking_balance,
             collateral_for_storage: account.collateral_for_storage,
-            fresh_collateral_for_storage: account.collateral_for_storage,
             accumulated_interest_return: account.accumulated_interest_return,
             deposit_list: None,
             vote_stake_list: None,
@@ -131,10 +132,11 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: Default::default(),
             ownership_changes: HashMap::new(),
+            unpaid_storage_entries: 0,
+            unrefunded_storage_entries: 0,
             storage_layout_change: None,
             staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
-            fresh_collateral_for_storage: 0.into(),
             accumulated_interest_return: 0.into(),
             deposit_list: None,
             vote_stake_list: None,
@@ -164,10 +166,11 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: Default::default(),
             ownership_changes: HashMap::new(),
+            unpaid_storage_entries: 0,
+            unrefunded_storage_entries: 0,
             storage_layout_change: None,
             staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
-            fresh_collateral_for_storage: 0.into(),
             accumulated_interest_return: 0.into(),
             deposit_list: None,
             vote_stake_list: None,
@@ -187,9 +190,6 @@ impl OverlayAccount {
         account.code_hash = self.code_hash;
         account.staking_balance = self.staking_balance;
         account.collateral_for_storage = self.collateral_for_storage;
-        assert!(
-            self.fresh_collateral_for_storage == self.collateral_for_storage
-        );
         account.accumulated_interest_return = self.accumulated_interest_return;
         account.admin = self.admin;
         account.sponsor_info = self.sponsor_info.clone();
@@ -249,14 +249,6 @@ impl OverlayAccount {
         }
     }
 
-    pub fn register_unrefunded_collateral(&mut self, by: &U256) {
-        self.fresh_collateral_for_storage -= *by;
-    }
-
-    pub fn register_unpaid_collateral(&mut self, by: &U256) {
-        self.fresh_collateral_for_storage += *by;
-    }
-
     pub fn check_commission_privilege(
         &self, db: &StateDb, contract_address: &Address, user: &Address,
     ) -> DbResult<bool> {
@@ -310,10 +302,6 @@ impl OverlayAccount {
 
     pub fn collateral_for_storage(&self) -> &U256 {
         &self.collateral_for_storage
-    }
-
-    pub fn fresh_collateral_for_storage(&self) -> &U256 {
-        &self.fresh_collateral_for_storage
     }
 
     #[cfg(test)]
@@ -541,6 +529,27 @@ impl OverlayAccount {
         self.collateral_for_storage -= *by;
     }
 
+    pub fn get_uncleared_storage_entries(&self) -> (u64, u64) {
+        return (self.unpaid_storage_entries, self.unrefunded_storage_entries);
+    }
+
+    pub fn reset_uncleared_storage_entries(&mut self) {
+        self.unpaid_storage_entries = 0;
+        self.unrefunded_storage_entries = 0;
+    }
+
+    pub fn add_unrefunded_storage_entries(&mut self, by: u64) {
+        let delta = std::cmp::min(self.unpaid_storage_entries, by);
+        self.unpaid_storage_entries -= delta;
+        self.unrefunded_storage_entries += by - delta;
+    }
+
+    pub fn add_unpaid_storage_entries(&mut self, by: u64) {
+        let delta = std::cmp::min(self.unrefunded_storage_entries, by);
+        self.unrefunded_storage_entries -= delta;
+        self.unpaid_storage_entries += by - delta;
+    }
+
     pub fn cache_code(&mut self, db: &StateDb) -> Option<Arc<Bytes>> {
         trace!("OverlayAccount::cache_code: ic={}; self.code_hash={:?}, self.code_cache={}", self.is_cached(), self.code_hash, self.code_cache.pretty());
 
@@ -589,10 +598,11 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: Default::default(),
             ownership_changes: HashMap::new(),
+            unpaid_storage_entries: 0,
+            unrefunded_storage_entries: 0,
             storage_layout_change: None,
             staking_balance: self.staking_balance,
             collateral_for_storage: self.collateral_for_storage,
-            fresh_collateral_for_storage: self.fresh_collateral_for_storage,
             accumulated_interest_return: self.accumulated_interest_return,
             deposit_list: self.deposit_list.clone(),
             vote_stake_list: self.vote_stake_list.clone(),
@@ -611,6 +621,8 @@ impl OverlayAccount {
         account.ownership_cache =
             RwLock::new(self.ownership_cache.read().clone());
         account.ownership_changes = self.ownership_changes.clone();
+        account.unrefunded_storage_entries = self.unrefunded_storage_entries;
+        account.unpaid_storage_entries = self.unpaid_storage_entries;
         account.storage_layout_change = self.storage_layout_change.clone();
         account
     }
@@ -702,10 +714,11 @@ impl OverlayAccount {
         self.storage_changes = other.storage_changes;
         self.ownership_cache = other.ownership_cache;
         self.ownership_changes = other.ownership_changes;
+        self.unpaid_storage_entries = other.unpaid_storage_entries;
+        self.unrefunded_storage_entries = other.unrefunded_storage_entries;
         self.storage_layout_change = other.storage_layout_change;
         self.staking_balance = other.staking_balance;
         self.collateral_for_storage = other.collateral_for_storage;
-        self.fresh_collateral_for_storage = other.fresh_collateral_for_storage;
         self.accumulated_interest_return = other.accumulated_interest_return;
         self.deposit_list = other.deposit_list;
         self.vote_stake_list = other.vote_stake_list;
@@ -717,12 +730,12 @@ impl OverlayAccount {
     /// value of the key is nonzero.
     fn original_ownership_at(
         &self, db: &StateDb, key: &Vec<u8>,
-    ) -> DbResult<Option<Address>> {
+    ) -> Option<Address> {
         if let Some(value) = self.ownership_cache.read().get(key) {
-            return Ok(value.clone());
+            return value.clone();
         }
         if self.is_newly_created_contract {
-            return Ok(None);
+            return None;
         }
         let ownership_cache = &mut *self.ownership_cache.write();
         Self::get_and_cache_storage(
@@ -732,8 +745,9 @@ impl OverlayAccount {
             &self.address,
             key,
             true, /* cache_ownership */
-        )?;
-        Ok(ownership_cache.get(key).expect("key exists").clone())
+        )
+        .ok();
+        ownership_cache.get(key).expect("key exists").clone()
     }
 
     /// Return the storage change of each related account.
@@ -743,7 +757,7 @@ impl OverlayAccount {
     /// account in current execution.
     pub fn commit_ownership_change(
         &mut self, db: &StateDb,
-    ) -> DbResult<HashMap<Address, (u64, u64)>> {
+    ) -> HashMap<Address, (u64, u64)> {
         let mut storage_delta = HashMap::new();
         let ownership_changes: Vec<_> =
             self.ownership_changes.drain().collect();
@@ -757,7 +771,7 @@ impl OverlayAccount {
             // Get the owner of `k` before execution. If it is `None`, it means
             // the value of the key is zero before execution. Otherwise, the
             // value of the key is nonzero.
-            let original_ownership_opt = self.original_ownership_at(db, &k)?;
+            let original_ownership_opt = self.original_ownership_at(db, &k);
             if let Some(original_ownership) = original_ownership_opt {
                 if v == original_ownership {
                     ownership_changed = false;
@@ -784,7 +798,7 @@ impl OverlayAccount {
             }
         }
         assert!(self.ownership_changes.is_empty());
-        Ok(storage_delta)
+        storage_delta
     }
 
     pub fn commit(
@@ -812,6 +826,8 @@ impl OverlayAccount {
         }
 
         assert!(self.ownership_changes.is_empty());
+        assert_eq!(self.unpaid_storage_entries, 0);
+        assert_eq!(self.unrefunded_storage_entries, 0);
         let ownership_cache = self.ownership_cache.get_mut();
         for (k, v) in self.storage_changes.drain() {
             let address_key =
