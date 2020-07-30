@@ -355,12 +355,9 @@ impl<'a> CallCreateExecutive<'a> {
                 state.contract_start_nonce(),
             )?;
         } else {
-            state.new_contract_with_admin(
-                &params.address,
-                &params.original_sender,
-                U256::zero(),
-                state.contract_start_nonce(),
-            )?;
+            // In contract creation, the `params.value` should never be
+            // `Apparent`.
+            unreachable!();
         }
 
         Ok(())
