@@ -132,6 +132,17 @@ impl Substate {
             }
         }
     }
+
+    pub fn keys_for_collateral_changed(&self) -> HashSet<&Address> {
+        let affected_address1: HashSet<_> =
+            self.storage_collateralized.keys().collect();
+        let affected_address2: HashSet<_> =
+            self.storage_released.keys().collect();
+        affected_address1
+            .union(&affected_address2)
+            .cloned()
+            .collect()
+    }
 }
 
 #[cfg(test)]
