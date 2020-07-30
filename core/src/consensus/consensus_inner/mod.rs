@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+mod blame_verifier;
 pub mod confirmation_meter;
 pub mod consensus_executor;
 pub mod consensus_new_block_handler;
@@ -1141,6 +1142,8 @@ impl ConsensusGraphInner {
 
         let total_vote_count = votes.len();
 
+        // TODO(thegaram): compute `total_vote_count` on non-past set,
+        // not on future
         total_blame_count as f64 / total_vote_count as f64
     }
 

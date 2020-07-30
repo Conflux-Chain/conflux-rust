@@ -180,7 +180,7 @@ where
         }
 
         // choose set of hashes to request
-        let num_to_request = max_in_flight - self.num_in_flight();
+        let num_to_request = max_in_flight.saturating_sub(self.num_in_flight());
 
         let items = match self.collect_to_request(num_to_request) {
             ref hs if hs.is_empty() => return,

@@ -236,15 +236,6 @@ impl LedgerInfo {
         Ok(BlockHeaderBuilder::compute_aggregated_bloom(blooms))
     }
 
-    /// Get the witness height that can be used to retrieve the correct header
-    /// information of the pivot block at `height`.
-    #[inline]
-    pub fn witness_of_header_at(&self, height: u64) -> Option<u64> {
-        self.consensus.first_trusted_header_starting_from(
-            height, None, /* blame_bound */
-        )
-    }
-
     /// Get a list of all headers for which the block at height `witness` on the
     /// pivot chain stores the correct roots based on the blame information.
     /// NOTE: This list will contains `witness` in all cases.

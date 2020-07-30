@@ -7,7 +7,7 @@ pub mod sync;
 use crate::{
     consensus::SharedConsensusGraph,
     light_protocol::{
-        common::{validate_chain_id, FullPeerState, Peers},
+        common::{validate_chain_id, FullPeerState, LedgerInfo, Peers},
         handle_error,
         message::{
             msgid, BlockHashes as GetBlockHashesResponse,
@@ -26,11 +26,12 @@ use crate::{
     },
     message::{decode_msg, decode_rlp_and_check_deprecation, Message, MsgId},
     network::{NetworkContext, NetworkProtocolHandler},
-    parameters::light::{
-        CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, SYNC_PERIOD,
+    parameters::{
+        consensus::DEFERRED_STATE_EPOCH_COUNT,
+        light::{CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, SYNC_PERIOD},
     },
     sync::{message::Throttled, SynchronizationGraph},
-    UniqueId,
+    Notifications, UniqueId,
 };
 use cfx_types::H256;
 use io::TimerToken;
@@ -38,7 +39,10 @@ use network::{node_table::NodeId, service::ProtocolVersion};
 use parking_lot::RwLock;
 use rlp::Rlp;
 use std::{
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 use sync::{
@@ -89,6 +93,9 @@ pub struct Handler {
     // state root sync manager
     pub state_roots: Arc<StateRoots>,
 
+    // whether the witness worker thread should be stopped
+    stopped: Arc<AtomicBool>,
+
     // storage root sync manager
     pub storage_roots: StorageRoots,
 
@@ -109,15 +116,11 @@ impl Handler {
     pub fn new(
         consensus: SharedConsensusGraph, graph: Arc<SynchronizationGraph>,
         throttling_config_file: Option<String>,
+        notifications: Arc<Notifications>,
     ) -> Self
     {
         let peers = Arc::new(Peers::new());
         let request_id_allocator = Arc::new(UniqueId::new());
-
-        // TODO(thegaram): At this point the light node does not persist
-        // anything. Need to make sure we persist the checkpoint hashes,
-        // along with a Merkle-root for headers in each era.
-        graph.recover_graph_from_db(true /* header_only */);
 
         let headers = Arc::new(Headers::new(
             graph.clone(),
@@ -189,6 +192,17 @@ impl Handler {
             witnesses.clone(),
         );
 
+        let stopped = Arc::new(AtomicBool::new(false));
+
+        Self::start_witness_worker(
+            consensus.clone(),
+            notifications,
+            witnesses.clone(),
+            stopped.clone(),
+        );
+
+        graph.recover_graph_from_db(true /* header_only */);
+
         Handler {
             protocol_version: LIGHT_PROTOCOL_VERSION,
             block_txs,
@@ -200,12 +214,88 @@ impl Handler {
             receipts,
             state_entries,
             state_roots,
+            stopped,
             storage_roots,
             txs,
             tx_infos,
             throttling_config_file,
             witnesses,
         }
+    }
+
+    // start a standalone thread for requesting witnesses.
+    // this thread will be stopped once `Handler` is dropped.
+    fn start_witness_worker(
+        consensus: SharedConsensusGraph, notifications: Arc<Notifications>,
+        witnesses: Arc<Witnesses>, stopped: Arc<AtomicBool>,
+    )
+    {
+        // detach thread as we do not need to join it
+        let _handle = std::thread::Builder::new()
+            .name("Witness Worker".into())
+            .spawn(move || {
+                let ledger = LedgerInfo::new(consensus.clone());
+                let mut receiver =
+                    notifications.blame_verification_results.subscribe();
+
+                loop {
+                    // `stopped` is set during Drop
+                    if stopped.load(Ordering::Relaxed) {
+                        break;
+                    }
+
+                    // receive next item from channel
+                    let wait_for = Duration::from_secs(1);
+
+                    let (height, maybe_witness) =
+                        match receiver.recv_with_timeout(wait_for) {
+                            Err(_) => continue, // channel empty, try again
+                            Ok(None) => return, // sender dropped, terminate
+                            Ok(Some(val)) => val,
+                        };
+
+                    debug!(
+                        "Witness worker received: height = {:?}, maybe_witness = {:?}",
+                        height, maybe_witness
+                    );
+
+                    match maybe_witness {
+                        // header is not blamed, store directly
+                        None => {
+                            // TODO(thegaram): storing roots of correct headers
+                            // is redundant. should we use a simple placeholder
+                            // instead?
+
+                            assert!(height >= DEFERRED_STATE_EPOCH_COUNT);
+                            let epoch = height - DEFERRED_STATE_EPOCH_COUNT;
+
+                            let header = ledger
+                                .pivot_header_of(height)
+                                .expect("pivot header should exist");
+
+                            witnesses.verified.write().insert(
+                                epoch,
+                                (
+                                    *header.deferred_state_root(),
+                                    *header.deferred_receipts_root(),
+                                    *header.deferred_logs_bloom_hash(),
+                                ),
+                            );
+                        }
+
+                        // header is blamed, request witness
+                        Some(w) => {
+                            // this request covers all blamed headers:
+                            // [w - w.blame, w - w.blame + 1, ..., w]
+                            debug!("Requesting witness at height {}", w);
+                            witnesses.request(std::iter::once(w));
+                        }
+                    }
+
+                    *witnesses.latest_verified_header.write() = height;
+                }
+            })
+            .expect("Starting the Witness Worker should succeed");
     }
 
     #[inline]
@@ -699,6 +789,10 @@ impl Handler {
 
         Ok(())
     }
+}
+
+impl Drop for Handler {
+    fn drop(&mut self) { self.stopped.store(true, Ordering::Relaxed); }
 }
 
 impl NetworkProtocolHandler for Handler {

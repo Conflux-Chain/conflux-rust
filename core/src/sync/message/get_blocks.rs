@@ -10,10 +10,10 @@ use crate::{
             msgid, Context, GetBlocksResponse, GetBlocksWithPublicResponse,
             Handleable, Key, KeyContainer,
         },
-        node_type::NodeType,
         request_manager::{AsAny, Request},
         Error, ErrorKind, ProtocolConfiguration,
     },
+    NodeType,
 };
 use cfx_types::H256;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;

@@ -61,7 +61,7 @@ use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
 #[derive(DeriveMallocSizeOf)]
 pub struct Provider {
     pub protocol_version: ProtocolVersion,
-    is_full_node: bool,
+    node_type: NodeType,
 
     // shared consensus graph
     #[ignore_malloc_size_of = "arc already counted"]
@@ -92,7 +92,7 @@ impl Provider {
     pub fn new(
         consensus: SharedConsensusGraph, graph: Arc<SynchronizationGraph>,
         network: Weak<NetworkService>, tx_pool: Arc<TransactionPool>,
-        throttling_config_file: Option<String>, is_full_node: bool,
+        throttling_config_file: Option<String>, node_type: NodeType,
     ) -> Self
     {
         let ledger = LedgerInfo::new(consensus.clone());
@@ -100,7 +100,7 @@ impl Provider {
 
         Provider {
             protocol_version: LIGHT_PROTOCOL_VERSION,
-            is_full_node,
+            node_type,
             consensus,
             graph,
             ledger,
@@ -108,14 +108,6 @@ impl Provider {
             peers,
             tx_pool,
             throttling_config_file,
-        }
-    }
-
-    pub fn node_type(&self) -> NodeType {
-        if self.is_full_node {
-            NodeType::Full
-        } else {
-            NodeType::Archive
         }
     }
 
@@ -360,7 +352,7 @@ impl Provider {
                 protocol_version: self.protocol_version.0,
                 best_epoch: best_info.best_epoch_number,
                 genesis_hash,
-                node_type: self.node_type(),
+                node_type: self.node_type,
                 terminals,
             });
         } else {
@@ -368,7 +360,7 @@ impl Provider {
                 chain_id: self.consensus.get_config().chain_id.clone(),
                 best_epoch: best_info.best_epoch_number,
                 genesis_hash,
-                node_type: self.node_type(),
+                node_type: self.node_type,
                 terminals,
             });
         }

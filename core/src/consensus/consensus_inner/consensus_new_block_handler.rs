@@ -16,7 +16,7 @@ use crate::{
     parameters::{consensus::*, consensus_internal::*},
     state_exposer::{ConsensusGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,
-    Notifications, SharedTransactionPool,
+    NodeType, Notifications, SharedTransactionPool,
 };
 use cfx_types::H256;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
@@ -28,6 +28,8 @@ use std::{
     sync::Arc,
 };
 
+use super::blame_verifier::BlameVerifier;
+
 pub struct ConsensusNewBlockHandler {
     conf: ConsensusConfig,
     txpool: SharedTransactionPool,
@@ -38,6 +40,12 @@ pub struct ConsensusNewBlockHandler {
     /// Channel used to send epochs to PubSub
     /// Each element is <epoch_number, epoch_hashes>
     epochs_sender: Arc<Channel<(u64, Vec<H256>)>>,
+
+    /// API used for verifying blaming on light nodes.
+    blame_verifier: BlameVerifier,
+
+    /// The type of this node: Archive, Full, or Light.
+    node_type: NodeType,
 }
 
 /// ConsensusNewBlockHandler contains all sub-routines for handling new arriving
@@ -48,9 +56,12 @@ impl ConsensusNewBlockHandler {
         conf: ConsensusConfig, txpool: SharedTransactionPool,
         data_man: Arc<BlockDataManager>, executor: Arc<ConsensusExecutor>,
         statistics: SharedStatistics, notifications: Arc<Notifications>,
+        node_type: NodeType,
     ) -> Self
     {
         let epochs_sender = notifications.epochs_ordered.clone();
+        let blame_verifier =
+            BlameVerifier::new(data_man.clone(), notifications);
 
         Self {
             conf,
@@ -59,6 +70,8 @@ impl ConsensusNewBlockHandler {
             executor,
             statistics,
             epochs_sender,
+            blame_verifier,
+            node_type,
         }
     }
 
@@ -1565,7 +1578,14 @@ impl ConsensusNewBlockHandler {
         for epoch_number in from..to {
             let arena_index = inner.get_pivot_block_arena_index(epoch_number);
             let epoch_hashes = inner.get_epoch_block_hashes(arena_index);
+
+            // send epoch to pub-sub layer
             self.epochs_sender.send((epoch_number, epoch_hashes));
+
+            // send epoch to blame verifier
+            if let NodeType::Light = self.node_type {
+                self.blame_verifier.check(inner, epoch_number);
+            }
         }
 
         // If we are inserting header only, we will skip execution and

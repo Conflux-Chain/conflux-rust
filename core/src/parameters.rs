@@ -310,6 +310,7 @@ pub mod light {
     /// During syncing, we might transiently have enough malicious blaming
     /// blocks to consider a correct header incorrect. For this reason, we
     /// first wait for enough header to accumulate before checking blaming.
+    /// TODO(thegaram): review value and expose this as a parameter
     pub const BLAME_CHECK_OFFSET: u64 = 20;
 
     /// During log filtering, we stream a set of items (blooms, receipts, txs)

@@ -37,7 +37,7 @@ use crate::{
     transaction_pool::SharedTransactionPool,
     verification::VerificationConfig,
     vm_factory::VmFactory,
-    Notifications,
+    NodeType, Notifications,
 };
 use cfx_types::{BigEndianHash, Bloom, H160, H256, U256, U512};
 use either::Either;
@@ -171,8 +171,8 @@ pub struct ConsensusGraph {
     pub synced_epoch_id: Mutex<Option<EpochId>>,
     pub config: ConsensusConfig,
 
-    /// Whether this instance is an archive or full node.
-    is_full_node: bool,
+    /// The type of this node: Archive, Full, or Light.
+    node_type: NodeType,
 }
 
 impl MallocSizeOf for ConsensusGraph {
@@ -199,7 +199,7 @@ impl ConsensusGraph {
         era_genesis_block_hash: &H256, era_stable_block_hash: &H256,
         notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
-        verification_config: VerificationConfig, is_full_node: bool,
+        verification_config: VerificationConfig, node_type: NodeType,
     ) -> Self
     {
         let inner =
@@ -235,13 +235,14 @@ impl ConsensusGraph {
                 executor,
                 statistics,
                 notifications,
+                node_type,
             ),
             confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),
             pivot_block_state_valid_map: Default::default(),
             synced_epoch_id: Default::default(),
             config: conf,
-            is_full_node,
+            node_type,
         };
         graph.update_best_info();
         graph
@@ -261,7 +262,7 @@ impl ConsensusGraph {
         pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
         notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
-        verification_conf: VerificationConfig, is_full_node: bool,
+        verification_conf: VerificationConfig, node_type: NodeType,
     ) -> Self
     {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
@@ -279,7 +280,7 @@ impl ConsensusGraph {
             notifications,
             execution_conf,
             verification_conf,
-            is_full_node,
+            node_type,
         )
     }
 
@@ -758,10 +759,9 @@ impl ConsensusGraph {
     }
 
     fn earliest_epoch_available(&self) -> u64 {
-        if self.is_full_node {
-            self.latest_checkpoint_epoch_number()
-        } else {
-            0
+        match self.node_type {
+            NodeType::Archive => 0,
+            _ => self.latest_checkpoint_epoch_number(),
         }
     }
 
@@ -1499,24 +1499,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
     /// Return the epoch that we are going to sync the state
     fn get_to_sync_epoch_id(&self) -> EpochId {
         self.inner.read().get_to_sync_epoch_id()
-    }
-
-    fn first_trusted_header_starting_from(
-        &self, height: u64, blame_bound: Option<u32>,
-    ) -> Option<u64> {
-        // TODO(thegaram): change logic to work with arbitrary height, not just
-        // the ones from the current era (i.e. use epoch instead of pivot index)
-        let inner = self.inner.read();
-
-        // for now, make sure to avoid underflow
-        let pivot_index = match height {
-            h if h < inner.get_cur_era_genesis_height() => return None,
-            h => inner.height_to_pivot_index(h),
-        };
-
-        let trusted =
-            inner.find_first_trusted_starting_from(pivot_index, blame_bound);
-        trusted.map(|index| inner.pivot_index_to_height(index))
     }
 
     /// Find a trusted blame block for checkpoint

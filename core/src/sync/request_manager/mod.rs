@@ -14,12 +14,12 @@ use crate::{
             GetBlocks, GetCompactBlocks, GetTransactions,
             GetTransactionsFromTxHashes, Key, KeyContainer, TransactionDigests,
         },
-        node_type::NodeType,
         request_manager::request_batcher::RequestBatcher,
         synchronization_protocol_handler::{AsyncTaskQueue, RecoverPublicTask},
         synchronization_state::PeerFilter,
         Error,
     },
+    NodeType,
 };
 use cfx_types::H256;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};

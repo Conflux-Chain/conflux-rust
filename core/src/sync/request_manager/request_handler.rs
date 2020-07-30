@@ -7,11 +7,11 @@ use crate::{
     parameters::sync::FAILED_REQUEST_RESEND_WAIT,
     sync::{
         message::{DynamicCapability, KeyContainer},
-        node_type::NodeType,
         request_manager::RequestManager,
         synchronization_protocol_handler::ProtocolConfiguration,
         Error, ErrorKind,
     },
+    NodeType,
 };
 use malloc_size_of::MallocSizeOf;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
