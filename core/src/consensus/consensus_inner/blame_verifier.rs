@@ -103,37 +103,21 @@ impl BlameVerifier {
 
             // pivot chain reorg (BLAME_CHECK_OFFSET = 2):
             //
-            //                                   ---        ---        ---
-            //                               .- | D | <--- | E | <--- | F | <--- ...
-            //  ---        ---        ---    |   ---        ---        ---
+            //                                   ---        ---
+            //                               .- | D | <--- | E | <--- ...
+            //  ---        ---        ---    |   ---        ---
             // | A | <--- | B | <--- | C | <-*
             //  ---        ---        ---    |   ---
-            //                               .- | G | <--- ...
+            //                               .- | F | <--- ...
             //                                   ---
             //
-            // example 1: depth <= BLAME_CHECK_OFFSET
-            //    check is called with    C, D, E, C, G
+            // example:
+            //    check is called with    C, D, E, C, F
             //    we will process epochs  A, B, C, A, B
-            //    --> A, B, C can be skipped the second time
-            //
-            // example 2: depth > BLAME_CHECK_OFFSET
-            //    check is called with    C, D, E, F, C, G
-            //    we will process epochs  A, B, C, D, A, B
-            //    --> we have to re-execute from C
             //
             // TODO(thegaram): can a fork change the blame status of a header?
 
             e if e <= *last_epoch_received => {
-                let depth = *last_epoch_received - e;
-
-                if depth <= BLAME_CHECK_OFFSET {
-                    // epoch has been processed previously, safe to skip
-                    // (we skip by not resetting `next_epoch_to_process`)
-                    debug!("Chain reorg ({} --> {}), skipping", *last_epoch_received, e);
-                    *last_epoch_received = e;
-                    return;
-                }
-
                 // re-process from fork point
                 debug!("Chain reorg ({} --> {}), re-executing", *last_epoch_received, e);
                 *last_epoch_received = e;
