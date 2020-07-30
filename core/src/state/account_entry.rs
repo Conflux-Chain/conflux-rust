@@ -6,6 +6,7 @@ use crate::{
     bytes::{Bytes, ToPretty},
     consensus::debug::ComputeEpochDebugRecord,
     hash::{keccak, KECCAK_EMPTY},
+    state::State,
     statedb::{Result as DbResult, StateDb},
 };
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
@@ -802,23 +803,31 @@ impl OverlayAccount {
     }
 
     pub fn commit(
-        &mut self, db: &mut StateDb,
+        &mut self, state: &mut State,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()>
     {
+        if self.is_newly_created_contract {
+            state.recycle_storage(
+                vec![self.address],
+                debug_record.as_deref_mut(),
+            )?;
+        }
+
         // reinsert storage_layout to delta trie if storage is updated
         // FIXME: load storage layout on first storage access instead
         if !self.storage_changes.is_empty()
             && self.storage_layout_change.is_none()
         {
             // try to get from delta tries or snapshot
-            let layout = db
+            let layout = state
+                .db
                 .get_storage_layout(&self.address)?
                 // layout must exist for existing accounts
                 // storage_layout_change cannot be None for new accounts
                 .expect("storage layout should exist");
 
-            db.set_storage_layout(
+            state.db.set_storage_layout(
                 &self.address,
                 &layout,
                 debug_record.as_deref_mut(),
@@ -833,14 +842,16 @@ impl OverlayAccount {
             let address_key =
                 StorageKey::new_storage_key(&self.address, k.as_ref());
             match v.is_zero() {
-                true => db.delete(address_key, debug_record.as_deref_mut())?,
+                true => {
+                    state.db.delete(address_key, debug_record.as_deref_mut())?
+                }
                 false => {
                     let owner = ownership_cache
                         .get(&k)
                         .expect("all key must exist")
                         .expect("owner exists");
 
-                    db.set::<StorageValue>(
+                    state.db.set::<StorageValue>(
                         address_key,
                         &StorageValue {
                             value: v,
@@ -864,7 +875,7 @@ impl OverlayAccount {
                         &self.address,
                         &self.code_hash,
                     );
-                    db.set::<CodeInfo>(
+                    state.db.set::<CodeInfo>(
                         storage_key,
                         &CodeInfo {
                             code: (*code).clone(),
@@ -882,9 +893,11 @@ impl OverlayAccount {
                 let storage_key =
                     StorageKey::new_deposit_list_key(&self.address);
                 if deposit_list.is_empty() {
-                    db.delete(storage_key, debug_record.as_deref_mut())?;
+                    state
+                        .db
+                        .delete(storage_key, debug_record.as_deref_mut())?;
                 } else {
-                    db.set::<DepositList>(
+                    state.db.set::<DepositList>(
                         storage_key,
                         deposit_list,
                         debug_record.as_deref_mut(),
@@ -898,9 +911,11 @@ impl OverlayAccount {
             Some(vote_stake_list) => {
                 let storage_key = StorageKey::new_vote_list_key(&self.address);
                 if vote_stake_list.is_empty() {
-                    db.delete(storage_key, debug_record.as_deref_mut())?;
+                    state
+                        .db
+                        .delete(storage_key, debug_record.as_deref_mut())?;
                 } else {
-                    db.set::<VoteStakeList>(
+                    state.db.set::<VoteStakeList>(
                         storage_key,
                         vote_stake_list,
                         debug_record.as_deref_mut(),
@@ -910,7 +925,9 @@ impl OverlayAccount {
         }
 
         if let Some(ref layout) = self.storage_layout_change {
-            db.set_storage_layout(&self.address, layout, debug_record)?;
+            state
+                .db
+                .set_storage_layout(&self.address, layout, debug_record)?;
         }
 
         Ok(())

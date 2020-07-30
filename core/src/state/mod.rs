@@ -955,7 +955,7 @@ impl State {
 
     /// Assume that only contract with zero `collateral_for_storage` will be
     /// killed.
-    fn recycle_storage(
+    pub fn recycle_storage(
         &mut self, killed_addresses: Vec<Address>,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()>
@@ -1026,13 +1026,14 @@ impl State {
         self.commit_staking_state(debug_record.as_deref_mut())?;
 
         let mut killed_addresses = Vec::new();
-        for (address, entry) in self.dirty_accounts_to_commit.iter_mut() {
+        for (address, entry) in
+            std::mem::take(&mut self.dirty_accounts_to_commit).iter_mut()
+        {
             entry.state = AccountState::Committed;
             match &mut entry.account {
                 None => killed_addresses.push(*address),
                 Some(account) => {
-                    account
-                        .commit(&mut self.db, debug_record.as_deref_mut())?;
+                    account.commit(self, debug_record.as_deref_mut())?;
                     self.db.set::<Account>(
                         StorageKey::new_account_key(address),
                         &account.as_account()?,
