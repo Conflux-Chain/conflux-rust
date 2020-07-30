@@ -6,9 +6,9 @@ use crate::{
     executive::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
     parameters::staking::*,
     storage::{
-        Error as StorageError, ErrorKind as StorageErrorKind, MptKeyValue,
-        NodeMerkleProof, StateProof, StateRootWithAuxInfo, StorageState,
-        StorageStateTrait,
+        utils::access_mode, Error as StorageError,
+        ErrorKind as StorageErrorKind, MptKeyValue, NodeMerkleProof,
+        StateProof, StateRootWithAuxInfo, StorageState, StorageStateTrait,
     },
 };
 use cfx_types::{Address, H256, U256};
@@ -20,7 +20,10 @@ use primitives::{
 mod error;
 
 pub use self::error::{Error, ErrorKind, Result};
-use crate::consensus::debug::{ComputeEpochDebugRecord, StateOp};
+use crate::{
+    consensus::debug::{ComputeEpochDebugRecord, StateOp},
+    storage::state::{NoProof, WithProof},
+};
 use rlp::Rlp;
 
 pub struct StateDb {
@@ -100,9 +103,8 @@ impl StateDb {
     ) -> Result<Option<StorageRoot>> {
         let key = StorageKey::new_storage_root_key(address);
 
-        let (triplet, _) = self
-            .storage
-            .get_node_merkle_all_versions(key, false /* with_proof */)?;
+        let (triplet, _) =
+            self.storage.get_node_merkle_all_versions::<NoProof>(key)?;
 
         Ok(StorageRoot::from_node_merkle_triplet(triplet))
     }
@@ -114,7 +116,7 @@ impl StateDb {
 
         let (triplet, proof) = self
             .storage
-            .get_node_merkle_all_versions(key, true /* with_proof */)?;
+            .get_node_merkle_all_versions::<WithProof>(key)?;
 
         let root = StorageRoot::from_node_merkle_triplet(triplet);
         Ok((root, proof))
@@ -193,7 +195,7 @@ impl StateDb {
                 maybe_value: None,
             })
         }
-        Ok(self.storage.delete_all(key_prefix)?)
+        Ok(self.storage.delete_all::<access_mode::Write>(key_prefix)?)
     }
 
     /// This method is only used for genesis block because state root is
