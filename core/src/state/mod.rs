@@ -18,7 +18,10 @@ use crate::{
     vm_factory::VmFactory,
 };
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
-use primitives::{Account, EpochId, StorageKey, StorageLayout, StorageValue};
+use primitives::{
+    Account, DepositList, EpochId, StorageKey, StorageLayout, StorageValue,
+    VoteStakeList,
+};
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     sync::Arc,
@@ -42,7 +45,6 @@ use parking_lot::{MappedRwLockWriteGuard, RwLock, RwLockWriteGuard};
 #[derive(Copy, Clone)]
 enum RequireCache {
     None,
-    CodeSize,
     Code,
     DepositList,
     VoteStakeList,
@@ -661,7 +663,7 @@ impl State {
     }
 
     pub fn code_size(&self, address: &Address) -> DbResult<Option<usize>> {
-        self.ensure_cached(address, RequireCache::CodeSize, |acc| {
+        self.ensure_cached(address, RequireCache::Code, |acc| {
             acc.and_then(|acc| acc.code_size())
         })
     }
@@ -920,7 +922,7 @@ impl State {
         trace!("update_account_cache account={:?}", account);
         match require {
             RequireCache::None => false,
-            RequireCache::Code | RequireCache::CodeSize => !account.is_cached(),
+            RequireCache::Code => !account.is_code_loaded(),
             RequireCache::DepositList => account.deposit_list().is_none(),
             RequireCache::VoteStakeList => account.vote_stake_list().is_none(),
         }
@@ -930,26 +932,20 @@ impl State {
     /// cache succeeds.
     fn update_account_cache(
         require: RequireCache, account: &mut OverlayAccount, db: &StateDb,
-    ) -> bool {
+    ) -> DbResult<bool> {
         match require {
-            RequireCache::None => true,
-            RequireCache::Code | RequireCache::CodeSize => {
-                account.cache_code(db).is_some()
-            }
-            RequireCache::DepositList => account
-                .cache_staking_info(
-                    true,  /* cache_deposit_list */
-                    false, /* cache_vote_list */
-                    db,
-                )
-                .is_ok(),
-            RequireCache::VoteStakeList => account
-                .cache_staking_info(
-                    false, /* cache_deposit_list */
-                    true,  /* cache_vote_list */
-                    db,
-                )
-                .is_ok(),
+            RequireCache::None => Ok(true),
+            RequireCache::Code => account.cache_code(db),
+            RequireCache::DepositList => account.cache_staking_info(
+                true,  /* cache_deposit_list */
+                false, /* cache_vote_list */
+                db,
+            ),
+            RequireCache::VoteStakeList => account.cache_staking_info(
+                false, /* cache_deposit_list */
+                true,  /* cache_vote_list */
+                db,
+            ),
         }
     }
 
@@ -1163,10 +1159,11 @@ impl State {
         })
     }
 
+    #[allow(unused)]
     pub fn exists_and_has_code_or_nonce(
         &self, address: &Address,
     ) -> DbResult<bool> {
-        self.ensure_cached(address, RequireCache::CodeSize, |acc| {
+        self.ensure_cached(address, RequireCache::Code, |acc| {
             acc.map_or(false, |acc| {
                 acc.code_hash() != KECCAK_EMPTY
                     || *acc.nonce() != self.account_start_nonce
@@ -1355,7 +1352,7 @@ impl State {
         if needs_update {
             if let Some(maybe_acc) = self.cache.write().get_mut(address) {
                 if let Some(account) = &mut maybe_acc.account {
-                    if Self::update_account_cache(require, account, &self.db) {
+                    if Self::update_account_cache(require, account, &self.db)? {
                         return Ok(f(Some(account)));
                     } else {
                         return Err(DbErrorKind::IncompleteDatabase(
@@ -1376,7 +1373,7 @@ impl State {
 
         let account = cache.get_mut(address).unwrap();
         if let Some(maybe_acc) = &mut account.account {
-            if !Self::update_account_cache(require, maybe_acc, &self.db) {
+            if !Self::update_account_cache(require, maybe_acc, &self.db)? {
                 return Err(DbErrorKind::IncompleteDatabase(
                     maybe_acc.address().clone(),
                 )
@@ -1465,7 +1462,7 @@ impl State {
                     .as_mut()
                     .expect("Required account must exist."),
                 &self.db,
-            ) {
+            )? {
                 bail!(DbErrorKind::IncompleteDatabase(*address));
             }
         }
@@ -1495,4 +1492,14 @@ impl State {
         self.staking_state.total_storage_tokens =
             self.db.get_total_storage_tokens().expect("No db error");
     }
+}
+
+/// Methods that are intentionally kept private because the fields may not have
+/// been loaded from db.
+trait AccountEntryProtectedMethods {
+    fn deposit_list(&self) -> Option<&DepositList>;
+    fn vote_stake_list(&self) -> Option<&VoteStakeList>;
+    fn code_size(&self) -> Option<usize>;
+    fn code(&self) -> Option<Arc<Bytes>>;
+    fn code_owner(&self) -> Option<Address>;
 }
