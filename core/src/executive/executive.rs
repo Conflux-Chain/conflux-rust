@@ -1526,7 +1526,7 @@ impl<'a> Executive<'a> {
 
         // perform suicides
         for address in &substate.suicides {
-            self.state.kill_account(address);
+            self.state.kill_account(address)?;
         }
 
         // TODO should be added back after enabling dust collection

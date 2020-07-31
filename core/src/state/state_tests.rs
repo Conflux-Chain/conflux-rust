@@ -791,9 +791,6 @@ fn kill_account_with_checkpoints() {
     state_0
         .add_collateral_for_storage(&a, &COLLATERAL_PER_STORAGE_KEY)
         .unwrap();
-    state_0
-        .register_unpaid_collateral(&a, &COLLATERAL_PER_STORAGE_KEY)
-        .unwrap();
     state_0.discard_checkpoint();
     let epoch_id_1 = EpochId::from_uint(&U256::from(1));
     state_0
@@ -866,9 +863,6 @@ fn check_result_of_simple_payment_to_killed_account() {
         .unwrap();
     state_0
         .add_collateral_for_storage(&sender_addr, &COLLATERAL_PER_STORAGE_KEY)
-        .unwrap();
-    state_0
-        .register_unpaid_collateral(&sender_addr, &COLLATERAL_PER_STORAGE_KEY)
         .unwrap();
     state_0.discard_checkpoint();
     let epoch_id_1 = EpochId::from_uint(&U256::from(1));

@@ -183,19 +183,24 @@ impl StateDb {
         }
     }
 
-    pub fn delete_all(
+    pub fn delete_all<AM: access_mode::AccessMode>(
         &mut self, key_prefix: StorageKey,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<Option<Vec<MptKeyValue>>>
     {
         if let Some(record) = debug_record {
             record.state_ops.push(StateOp::StorageLevelOp {
-                op_name: "delete_all".into(),
+                op_name: if AM::is_read_only() {
+                    "iterate"
+                } else {
+                    "delete_all"
+                }
+                .into(),
                 key: key_prefix.to_key_bytes(),
                 maybe_value: None,
             })
         }
-        Ok(self.storage.delete_all::<access_mode::Write>(key_prefix)?)
+        Ok(self.storage.delete_all::<AM>(key_prefix)?)
     }
 
     /// This method is only used for genesis block because state root is

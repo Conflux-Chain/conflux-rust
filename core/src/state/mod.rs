@@ -12,7 +12,7 @@ use crate::{
     hash::KECCAK_EMPTY,
     parameters::staking::*,
     statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb},
-    storage::StateRootWithAuxInfo,
+    storage::{utils::access_mode, StateRootWithAuxInfo},
     transaction_pool::SharedTransactionPool,
     vm::Error as vmError,
     vm_factory::VmFactory,
@@ -983,34 +983,16 @@ impl State {
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()>
     {
+        // TODO: Think about kill_dust and collateral refund.
         for address in &killed_addresses {
-            let storages_opt = self.db.delete_all(
+            self.db.delete_all::<access_mode::Write>(
                 StorageKey::new_storage_root_key(address),
                 debug_record.as_deref_mut(),
             )?;
-            self.db.delete_all(
+            self.db.delete_all::<access_mode::Write>(
                 StorageKey::new_code_root_key(address),
                 debug_record.as_deref_mut(),
             )?;
-            if let Some(storage_key_value) = storages_opt {
-                for (key, value) in storage_key_value {
-                    if let StorageKey::StorageKey { .. } =
-                        StorageKey::from_delta_mpt_key(&key[..])
-                    {
-                        let storage_value =
-                            rlp::decode::<StorageValue>(value.as_ref())?;
-                        let storage_owner =
-                            storage_value.owner.as_ref().unwrap_or(address);
-                        assert!(self.exists(storage_owner)?);
-                        self.sub_collateral_for_storage(
-                            storage_owner,
-                            &COLLATERAL_PER_STORAGE_KEY,
-                        )?;
-                    }
-                }
-            }
-        }
-        for address in &killed_addresses {
             self.db.delete(
                 StorageKey::new_account_key(address),
                 debug_record.as_deref_mut(),
@@ -1125,13 +1107,69 @@ impl State {
         Ok(())
     }
 
-    pub fn kill_account(&mut self, address: &Address) {
+    pub fn kill_account(&mut self, address: &Address) -> DbResult<()> {
+        let account_cache_read_guard = self.cache.read();
+        let maybe_account = account_cache_read_guard
+            .get(address)
+            .and_then(|acc| acc.account.as_ref());
+
+        let mut storage_refund_list = vec![];
+        // Process collateral for removed storage.
+        // TODO: try to do it in a better way, e.g. first log the deletion
+        //  somewhere then apply the collateral change.
+        if let Some(storage_key_value) =
+            self.db.delete_all::<access_mode::Read>(
+                StorageKey::new_storage_root_key(address),
+                None,
+            )?
+        {
+            for (key, value) in storage_key_value {
+                if let StorageKey::StorageKey { storage_key, .. } =
+                    StorageKey::from_key_bytes(&key[..])
+                {
+                    // Check if the key has been touched. We use the local
+                    // information to find out if collateral refund is necessary
+                    // for touched keys.
+                    if maybe_account.map_or(true, |acc| {
+                        acc.storage_changes().get(storage_key).is_none()
+                    }) {
+                        let storage_value =
+                            rlp::decode::<StorageValue>(value.as_ref())?;
+                        let storage_owner =
+                            storage_value.owner.as_ref().unwrap_or(address);
+                        storage_refund_list.push(*storage_owner);
+                    }
+                }
+            }
+        }
+        if let Some(acc) = maybe_account {
+            // The current value isn't important because it will be deleted.
+            for (key, _value) in acc.storage_changes() {
+                if let Some(storage_owner) =
+                    acc.original_ownership_at(&self.db, key)?
+                {
+                    storage_refund_list.push(storage_owner)
+                }
+            }
+        }
+        drop(account_cache_read_guard);
+        for storage_owner in &storage_refund_list {
+            self.sub_collateral_for_storage(
+                storage_owner,
+                &COLLATERAL_PER_STORAGE_KEY,
+            )?;
+        }
+
+        // TODO: examine where to do the code collateral refund.
+
         Self::update_cache(
             self.cache.get_mut(),
             self.checkpoints.get_mut(),
             address,
             AccountEntry::new_dirty(None),
-        )
+        );
+
+        Ok(())
     }
 
     /// Return whether or not the address exists.
@@ -1171,6 +1209,8 @@ impl State {
         })
     }
 
+    // FIXME: rewrite this method before enable it for the first time, because
+    //  there have been changes to kill_account and collateral processing.
     #[allow(unused)]
     pub fn kill_garbage(
         &mut self, touched: &HashSet<Address>, remove_empty_touched: bool,
@@ -1364,10 +1404,11 @@ impl State {
             }
         }
 
+        // TODO: save this load if the overlay account exists.
         let maybe_acc = self
             .db
             .get_account(address)?
-            .map(|acc| OverlayAccount::new(address, acc));
+            .map(|acc| OverlayAccount::from_loaded(address, acc));
         let cache = &mut *self.cache.write();
         Self::insert_cache_if_fresh_account(cache, address, maybe_acc);
 
@@ -1429,7 +1470,7 @@ impl State {
             let account = self
                 .db
                 .get_account(address)?
-                .map(|acc| OverlayAccount::new(address, acc));
+                .map(|acc| OverlayAccount::from_loaded(address, acc));
             cache = self.cache.write();
             Self::insert_cache_if_fresh_account(&mut *cache, address, account);
         } else {

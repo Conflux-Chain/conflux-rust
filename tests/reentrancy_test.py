@@ -158,7 +158,9 @@ class ReentrancyTest(ConfluxTestFramework):
         user2_balance_after_contract_construction = parse_as_int(self.nodes[0].cfx_getBalance(user2_addr_hex))
         self.log.debug("user2 balance contract created %s" % user2_balance_after_contract_construction)
         assert_greater_than_or_equal(user2_balance_before_contract_construction, user2_balance_after_contract_construction)
-        user2_balance_refund_upper_bound = user2_balance_before_contract_construction - user2_balance_after_contract_construction
+        user2_refund_upper_bound = \
+            user2_balance_before_contract_construction - \
+            user2_balance_after_contract_construction
 
         transaction = self.call_contract_function(self.buggy_contract, "addBalance", [], user1, 10 ** 18,
                                                   contract_addr, True, True, storage_limit=128)
@@ -168,6 +170,8 @@ class ReentrancyTest(ConfluxTestFramework):
         user1_balance = parse_as_int(self.nodes[0].cfx_getBalance(user1_addr_hex))
         assert_greater_than_or_equal(user1_balance, 899999999999999999999999950000000)
         user2_balance_after_deposit = parse_as_int(self.nodes[0].cfx_getBalance(user2_addr_hex))
+        # User2 paid storage collateral `vulnerable_contract` in deposit call.
+        user2_refund_upper_bound = user2_refund_upper_bound + 10 ** 18 // 16
         self.log.debug("user2 balance after deposit %s" % user2_balance_after_deposit)
         assert_greater_than_or_equal(user2_balance_after_contract_construction, user2_balance_after_deposit + 10 ** 18)
         assert_greater_than_or_equal(user2_balance_after_deposit, 899999999999999999999999900000000)
@@ -186,7 +190,7 @@ class ReentrancyTest(ConfluxTestFramework):
         user2_balance_after_contract_destruct = parse_as_int(self.nodes[0].cfx_getBalance(user2_addr_hex))
         self.log.debug("user2 balance after contract destruct %s" % user2_balance_after_contract_destruct)
         assert_greater_than_or_equal(
-            user2_balance_after_deposit + user2_balance_refund_upper_bound + 10 ** 18 // 16,
+            user2_balance_after_deposit + user2_refund_upper_bound,
             user2_balance_after_contract_destruct)
 
         block_gen_thread.stop()
