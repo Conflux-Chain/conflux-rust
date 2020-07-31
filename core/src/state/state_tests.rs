@@ -17,12 +17,12 @@ use crate::{
 use cfx_types::{address_util::AddressUtil, Address, BigEndianHash, U256};
 use primitives::{EpochId, StorageLayout};
 
-fn get_state(storage_manager: &StorageManager, epoch_id: EpochId) -> State {
+fn get_state(storage_manager: &StorageManager, epoch_id: &EpochId) -> State {
     State::new(
         StateDb::new(
             storage_manager
                 .get_state_for_next_epoch(
-                    StateIndex::new_for_test_only_delta_mpt(&epoch_id),
+                    StateIndex::new_for_test_only_delta_mpt(epoch_id),
                 )
                 .unwrap()
                 .unwrap(),
@@ -474,7 +474,7 @@ fn checkpoint_get_storage_at() {
 
     state = get_state(
         &storage_manager,
-        BigEndianHash::from_uint(&U256::from(1u64)),
+        &BigEndianHash::from_uint(&U256::from(1u64)),
     );
     assert_eq!(
         state.storage_at(&contract_a, &k).unwrap(),
@@ -773,18 +773,58 @@ fn checkpoint_get_storage_at() {
 #[test]
 fn kill_account_with_checkpoints() {
     let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state_0 = get_state_for_genesis_write(&storage_manager);
     let mut a = Address::zero();
     a.set_contract_type_bits();
     let k = u256_to_vec(&U256::from(0));
-    state.checkpoint();
+    // Need the checkpoint for ownership commitment.
+    state_0.checkpoint();
+    state_0.new_contract(&a, U256::zero(), U256::one()).unwrap();
+    state_0.set_storage(&a, k.clone(), U256::one(), a).unwrap();
+    state_0
+        .set_storage_layout(&a, StorageLayout::Regular(0))
+        .unwrap();
+    // We don't charge the collateral in this test.
+    state_0
+        .require_exists(&a, /* require_code = */ false)
+        .unwrap()
+        .commit_ownership_change(&state_0.db);
+    state_0.discard_checkpoint();
+    let epoch_id_1 = EpochId::from_uint(&U256::from(1));
+    state_0
+        .commit(epoch_id_1, /* debug_record = */ None)
+        .unwrap();
+
+    let mut state = get_state(&storage_manager, &epoch_id_1);
+    // Storage before the account is killed.
+    assert_eq!(state.storage_at(&a, &k).unwrap(), U256::one());
+    state.kill_account(&a);
+    // The account is killed. The storage should be empty.
+    assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
+    // The new contract in the same place should have empty storage.
     state.new_contract(&a, U256::zero(), U256::one()).unwrap();
-    state.set_storage(&a, k.clone(), U256::one(), a).unwrap();
+    assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
+
+    // Commit the state and repeat the assertion.
+    let epoch_id = EpochId::from_uint(&U256::from(2));
+    state.commit(epoch_id, /* debug_record = */ None).unwrap();
+    let state = get_state(&storage_manager, &epoch_id);
+    assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
+
+    // Test checkpoint.
+    let mut state = get_state(&storage_manager, &epoch_id_1);
     state.checkpoint();
     state.kill_account(&a);
-
+    // The new contract in the same place should have empty storage.
+    state.checkpoint();
+    state.new_contract(&a, U256::zero(), U256::one()).unwrap();
+    // The new contract in the same place should have empty storage.
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
     state.revert_to_checkpoint();
+    // The account is killed. The storage should be empty.
+    assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
+    state.revert_to_checkpoint();
+    // Storage before the account is killed.
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::one());
 }
 
@@ -884,7 +924,7 @@ fn create_contract_fail_previous_storage() {
     substates.clear();
     substates.push(Substate::new());
     state =
-        get_state(&storage_manager, BigEndianHash::from_uint(&U256::from(1)));
+        get_state(&storage_manager, &BigEndianHash::from_uint(&U256::from(1)));
     assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
     assert_eq!(
         state.collateral_for_storage(&a).unwrap(),
