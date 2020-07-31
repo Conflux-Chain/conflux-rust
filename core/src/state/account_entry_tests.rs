@@ -99,8 +99,8 @@ fn test_overlay_account_create() {
     // test new contract
     let mut overlay_account =
         OverlayAccount::new_contract(&contract_addr, 5678.into(), 1234.into());
-    assert!(overlay_account.deposit_list().is_none());
-    assert!(overlay_account.vote_stake_list().is_none());
+    assert_eq!(overlay_account.deposit_list().unwrap().len(), 0);
+    assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 0);
     assert_eq!(*overlay_account.address(), contract_addr);
     assert_eq!(*overlay_account.balance(), 5678.into());
     assert_eq!(*overlay_account.nonce(), 1234.into());
@@ -122,8 +122,8 @@ fn test_overlay_account_create() {
         1234.into(),
         &admin,
     );
-    assert!(overlay_account.deposit_list().is_none());
-    assert!(overlay_account.vote_stake_list().is_none());
+    assert_eq!(overlay_account.deposit_list().unwrap().len(), 0);
+    assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 0);
     assert_eq!(*overlay_account.address(), contract_addr);
     assert_eq!(*overlay_account.balance(), 5678.into());
     assert_eq!(*overlay_account.nonce(), 1234.into());
