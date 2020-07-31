@@ -858,7 +858,8 @@ fn check_result_of_simple_payment_to_killed_account() {
     state_0
         .require_exists(&a, /* require_code = */ false)
         .unwrap()
-        .commit_ownership_change(&state_0.db).unwrap();
+        .commit_ownership_change(&state_0.db)
+        .unwrap();
     state_0.discard_checkpoint();
     let epoch_id_1 = EpochId::from_uint(&U256::from(1));
     state_0
