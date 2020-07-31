@@ -6,6 +6,7 @@ use super::account_entry::OverlayAccount;
 use crate::{
     hash::KECCAK_EMPTY,
     parameters::staking::*,
+    state::AccountEntryProtectedMethods,
     statedb::StateDb,
     storage::{tests::new_state_manager_for_unit_test, StorageManagerTrait},
 };
