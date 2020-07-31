@@ -88,11 +88,18 @@ pub struct OverlayAccount {
     // This flag indicates whether it is a newly created contract. For such
     // account, we will skip looking data from the disk. This flag will stay
     // true until the contract being committed and cleared from the memory.
+    //
+    // If the contract account at the same address is killed, then the same
+    // account is re-created, this flag is also true, to indicate that any
+    // pending cleanups must be done. The re-creation of the account can
+    // also be caused by a simple payment transaction, which result into a new
+    // basic account at the same address.
     is_newly_created_contract: bool,
 }
 
 impl OverlayAccount {
-    pub fn new(address: &Address, account: Account) -> Self {
+    /// Create an OverlayAccount from loaded account.
+    pub fn from_loaded(address: &Address, account: Account) -> Self {
         let overlay_account = OverlayAccount {
             address: address.clone(),
             balance: account.balance,
@@ -118,6 +125,8 @@ impl OverlayAccount {
         overlay_account
     }
 
+    /// Create an OverlayAccount of basic account when the account doesn't exist
+    /// before.
     pub fn new_basic(address: &Address, balance: U256, nonce: U256) -> Self {
         OverlayAccount {
             address: address.clone(),
@@ -138,15 +147,19 @@ impl OverlayAccount {
             vote_stake_list: None,
             code_hash: KECCAK_EMPTY,
             code: None,
-            is_newly_created_contract: false,
+            is_newly_created_contract: address.is_contract_address(),
         }
     }
 
     #[cfg(test)]
+    /// Create an OverlayAccount of contract account when the account doesn't
+    /// exist before.
     pub fn new_contract(address: &Address, balance: U256, nonce: U256) -> Self {
         Self::new_contract_with_admin(address, balance, nonce, &Address::zero())
     }
 
+    /// Create an OverlayAccount of contract account when the account doesn't
+    /// exist before.
     pub fn new_contract_with_admin(
         address: &Address, balance: U256, nonce: U256, admin: &Address,
     ) -> Self {
