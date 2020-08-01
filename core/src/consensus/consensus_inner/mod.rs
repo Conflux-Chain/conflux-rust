@@ -27,6 +27,7 @@ use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use link_cut_tree::{CaterpillarMinLinkCutTree, SizeMinLinkCutTree};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
+use metrics::{Counter, CounterUsize};
 use parking_lot::Mutex;
 use primitives::{
     receipt::Receipt, Block, BlockHeader, BlockHeaderBuilder, EpochId,
@@ -40,6 +41,13 @@ use std::{
     mem,
     sync::Arc,
 };
+lazy_static! {
+    static ref INVALID_BLAME_OR_STATE_ROOT_COUNTER: Arc<dyn Counter<usize>> =
+        CounterUsize::register_with_group(
+            "system_metrics",
+            "invalid_blame_or_state_root_count"
+        );
+}
 
 #[derive(Clone)]
 pub struct ConsensusInnerConfig {
@@ -2683,6 +2691,7 @@ impl ConsensusGraphInner {
                 block_header.deferred_receipts_root(), state_blame_info.receipts_vec_root,
                 block_header.deferred_logs_bloom_hash(), state_blame_info.logs_bloom_vec_root,
             );
+            INVALID_BLAME_OR_STATE_ROOT_COUNTER.inc(1);
 
             if self.inner_conf.debug_dump_dir_invalid_state_root.is_some() {
                 debug_recompute = true;
