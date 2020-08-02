@@ -955,18 +955,22 @@ impl State {
 
     /// Assume that only contract with zero `collateral_for_storage` will be
     /// killed.
-    pub fn recycle_storage(
+    fn recycle_storage(
         &mut self, killed_addresses: Vec<Address>,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()>
     {
-        for address in &killed_addresses {
+        for address in killed_addresses {
+            self.db.delete(
+                StorageKey::new_account_key(&address),
+                debug_record.as_deref_mut(),
+            )?;
             let storages_opt = self.db.delete_all(
-                StorageKey::new_storage_root_key(address),
+                StorageKey::new_storage_root_key(&address),
                 debug_record.as_deref_mut(),
             )?;
             self.db.delete_all(
-                StorageKey::new_code_root_key(address),
+                StorageKey::new_code_root_key(&address),
                 debug_record.as_deref_mut(),
             )?;
             if let Some(storage_key_value) = storages_opt {
@@ -977,7 +981,7 @@ impl State {
                         let storage_value =
                             rlp::decode::<StorageValue>(value.as_ref())?;
                         let storage_owner =
-                            storage_value.owner.as_ref().unwrap_or(address);
+                            storage_value.owner.as_ref().unwrap_or(&address);
                         assert!(self.exists(storage_owner)?);
                         self.sub_collateral_for_storage(
                             storage_owner,
@@ -986,12 +990,6 @@ impl State {
                     }
                 }
             }
-        }
-        for address in &killed_addresses {
-            self.db.delete(
-                StorageKey::new_account_key(address),
-                debug_record.as_deref_mut(),
-            )?;
         }
         Ok(())
     }
@@ -1028,14 +1026,13 @@ impl State {
         self.commit_staking_state(debug_record.as_deref_mut())?;
 
         let mut killed_addresses = Vec::new();
-        for (address, entry) in
-            std::mem::take(&mut self.dirty_accounts_to_commit).iter_mut()
-        {
+        for (address, entry) in self.dirty_accounts_to_commit.iter_mut() {
             entry.state = AccountState::Committed;
             match &mut entry.account {
                 None => killed_addresses.push(*address),
                 Some(account) => {
-                    account.commit(self, debug_record.as_deref_mut())?;
+                    account
+                        .commit(&mut self.db, debug_record.as_deref_mut())?;
                     self.db.set::<Account>(
                         StorageKey::new_account_key(address),
                         &account.as_account()?,
@@ -1139,7 +1136,6 @@ impl State {
         })
     }
 
-    #[allow(unused)]
     pub fn kill_garbage(
         &mut self, touched: &HashSet<Address>, remove_empty_touched: bool,
         min_balance: &Option<U256>, kill_contracts: bool,
