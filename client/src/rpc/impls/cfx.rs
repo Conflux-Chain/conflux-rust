@@ -26,6 +26,7 @@ use primitives::{
     TransactionWithSignature,
 };
 use rlp::Rlp;
+use rustc_hex::ToHex;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
@@ -354,6 +355,16 @@ impl RpcImpl {
 
         self.prepare_transaction(tx, password)
             .and_then(|tx| self.send_transaction_with_signature(tx))
+    }
+
+    pub fn sign_transaction(
+        &self, tx: SendTxRequest, password: Option<String>,
+    ) -> RpcResult<String> {
+        let tx = self.prepare_transaction(tx, password).map_err(|e| {
+            invalid_params("tx", format!("failed to sign transaction: {:?}", e))
+        })?;
+        let raw_tx = rlp::encode(&tx);
+        Ok(format!("0x{}", raw_tx.to_hex()))
     }
 
     fn storage_root(
@@ -1118,6 +1129,7 @@ impl LocalRpc for LocalRpcImpl {
             fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
             fn send_transaction(
                 &self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<H256>;
+            fn sign_transaction(&self, tx: SendTxRequest, password: Option<String>) -> JsonRpcResult<String>;
         }
     }
 }

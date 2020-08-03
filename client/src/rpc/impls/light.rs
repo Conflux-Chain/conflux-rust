@@ -652,5 +652,6 @@ impl LocalRpc for DebugRpcImpl {
         fn current_sync_phase(&self) -> RpcResult<String>;
         fn consensus_graph_state(&self) -> RpcResult<ConsensusGraphStates>;
         fn sync_graph_state(&self) -> RpcResult<SyncGraphStates>;
+        fn sign_transaction(&self, tx: SendTxRequest, password: Option<String>) -> RpcResult<String>;
     }
 }
