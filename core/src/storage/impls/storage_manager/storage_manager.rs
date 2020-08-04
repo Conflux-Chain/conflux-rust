@@ -778,14 +778,14 @@ impl StorageManager {
                 states_to_remove.insert(hash);
             }
         }
-        // FIXME: we don't need these since there is StateAvailabilityBoundary.
-        for hash in states_to_remove {
-            // FIXME Commitments of non-pivot states are not removed.
-            // Need to check if this will take too much time.
-            consensus_inner
-                .data_man
-                .remove_epoch_execution_commitment_from_db(&hash);
-        }
+        // // FIXME: we don't need these since there is
+        // StateAvailabilityBoundary. for hash in states_to_remove {
+        //     // FIXME Commitments of non-pivot states are not removed.
+        //     // Need to check if this will take too much time.
+        //     consensus_inner
+        //         .data_man
+        //         .remove_epoch_execution_commitment_from_db(&hash);
+        // }
         Ok(())
     }
 

@@ -19,7 +19,7 @@ FULLNODE1 = 1
 LIGHTNODE = 2
 
 ERA_EPOCH_COUNT = 100
-CHAIN_LENGTH = 100 # TODO: set higher
+CHAIN_LENGTH = 1000
 BLAME_CHECK_OFFSET = 30
 
 CONTRACT_PATH = "../contracts/EventsTestContract_bytecode.dat"
