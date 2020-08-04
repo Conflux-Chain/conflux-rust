@@ -436,5 +436,6 @@ fn test_octopus() {
         "4d99d0b41c7eb0dd1a801c35aae2df28ae6b53bc7743f0818a34b6ec97f5b4ae"
             .parse()
             .unwrap();
-    pow.compute(&U256::from(0), &block_hash, 2);
+    let start_nonce = 0x2333333333u64 & (!0x1f);
+    pow.compute(&U256::from(start_nonce), &block_hash, 2);
 }
