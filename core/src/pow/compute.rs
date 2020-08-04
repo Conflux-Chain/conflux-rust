@@ -163,13 +163,12 @@ fn hash_compute(
     let c = v2 % POW_MOD64;
     let w = v3 % POW_MOD64;
 
-    let warp_start = nonce - nonce % (POW_WARP_SIZE as u64);
+    let warp_id = nonce / POW_WARP_SIZE;
     for i in 0..POW_WARP_SIZE {
         let mut hasher = SipHasher::new(v0, v1, v2, v3);
         for j in 0..POW_DATA_PER_THREAD {
             hasher.hash24(
-                (warp_start * POW_WARP_SIZE + i) * POW_DATA_PER_THREAD
-                    + j as u64,
+                (warp_id * POW_WARP_SIZE + i) * POW_DATA_PER_THREAD + j as u64,
             );
             d[(j * POW_WARP_SIZE + i) as usize] =
                 ((hasher.xor_lanes() & (u32::MAX as u64)) % POW_MOD64) as u32;
