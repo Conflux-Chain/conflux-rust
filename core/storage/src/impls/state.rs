@@ -491,10 +491,12 @@ impl StateTrait for State {
         let lower_bound_incl = access_key_prefix.to_key_bytes();
         let upper_bound_excl =
             to_key_prefix_iter_upper_bound(&lower_bound_incl);
-        let mut kvs = kv_iterator.iter_range(
-            lower_bound_incl.as_slice(),
-            upper_bound_excl.as_ref().map(|v| &**v),
-        )?;
+        let mut kvs = kv_iterator
+            .iter_range(
+                lower_bound_incl.as_slice(),
+                upper_bound_excl.as_ref().map(|v| &**v),
+            )?
+            .take();
 
         let mut snapshot_kvs = Vec::new();
         while let Some((key, value)) = kvs.next()? {

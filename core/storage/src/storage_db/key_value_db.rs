@@ -55,32 +55,55 @@ pub trait KvdbIterImpl<'db, ImplKind: ?Sized> {
     ) -> Result<Self::Iterator>;
 }
 
-// FIXME: create a marker ImplESByTransmute<Trait> and then auto impl transmute.
-impl<Item, T: FallibleIterator<Item = Item, Error = Error>>
-    ElementSatisfy<dyn FallibleIterator<Item = Item, Error = Error> + 'static>
-    for T
-{
-    fn to_constrain_object(
-        &self,
-    ) -> &(dyn 'static + FallibleIterator<Item = Item, Error = Error>) {
-        unsafe {
-            std::mem::transmute(
-                self as &(dyn '_
-                      + FallibleIterator<Item = Item, Error = Error>),
-            )
-        }
-    }
+// Auto impl transmute for ElementSatisfy<trait obj>.
+// Macro parser doesn't allow 'path' followed by '+',
+// use '|' in generic part instead, e.g. 'generic A, B: traitA | traitB, C;'.
+// FIXME: lifetime support for generic part
+macro_rules! enable_impl_transmute_for_element_satisfy {
+    (
+        generic $( $N:ident $(: $b0:path $(|$b:path)* )? ),*;
+        trait $lifetime:lifetime + $trait:path;
+        for $generic_type:ident;
+    ) => {
+        impl<$( $N $(: $b0 $(+$b)* )? ),*> ElementSatisfy<dyn $trait + $lifetime> for $generic_type
+        {
+            fn to_constrain_object(
+                &self,
+            ) -> &(dyn $lifetime + $trait) {
+                unsafe {
+                    std::mem::transmute(
+                        self as &(dyn '_ + $trait),
+                    )
+                }
+            }
 
-    fn to_constrain_object_mut(
-        &mut self,
-    ) -> &mut (dyn FallibleIterator<Item = Item, Error = Error> + 'static) {
-        unsafe {
-            std::mem::transmute(
-                self as &mut (dyn '_
-                          + FallibleIterator<Item = Item, Error = Error>),
-            )
+            fn to_constrain_object_mut(
+                &mut self,
+            ) -> &mut (dyn $lifetime + $trait) {
+                unsafe {
+                    std::mem::transmute(
+                        self as &mut (dyn '_ + $trait),
+                    )
+                }
+            }
+        }
+    };
+
+    (
+        generic $( $N:ident $(: $b0:path $(|$b:path)* )? ),*;
+        trait $lifetime:lifetime + $trait:path;
+    ) => {
+        enable_impl_transmute_for_element_satisfy! {
+            generic $( $N $(: $b0 $(|$b)* )? ),* , TempGeneric:$trait;
+            trait $lifetime + $trait;
+            for TempGeneric;
         }
     }
+}
+
+enable_impl_transmute_for_element_satisfy! {
+    generic Item;
+    trait 'static + FallibleIterator<Item = Item, Error = Error>;
 }
 
 // FIXME: this is temporary
