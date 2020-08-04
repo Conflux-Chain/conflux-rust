@@ -15,16 +15,17 @@ use crate::{
     sync::{
         message::{
             handle_rlp_message, msgid, Context, DynamicCapability,
-            GetBlockHeadersResponse, NewBlockHashes, StatusDeprecatedV1,
-            StatusV2, TransactionDigests,
+            GetBlockHeadersResponse, Heartbeat, NewBlockHashes, StatusV2,
+            StatusV3, TransactionDigests,
         },
+        node_type::NodeType,
         request_manager::{try_get_block_hashes, Request},
         state::SnapshotChunkSync,
         synchronization_phases::{SyncPhaseType, SynchronizationPhaseManager},
         synchronization_state::PeerFilter,
         StateSyncConfiguration,
         SYNCHRONIZATION_PROTOCOL_OLD_VERSIONS_TO_SUPPORT,
-        SYNCHRONIZATION_PROTOCOL_VERSION, SYNC_PROTO_V1,
+        SYNCHRONIZATION_PROTOCOL_VERSION, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
 };
 use cfx_types::H256;
@@ -462,6 +463,14 @@ impl SynchronizationProtocolHandler {
         }
     }
 
+    pub fn node_type(&self) -> NodeType {
+        if self.syn.is_full_node() {
+            NodeType::Full
+        } else {
+            NodeType::Archive
+        }
+    }
+
     pub fn is_consortium(&self) -> bool { self.protocol_config.is_consortium }
 
     fn get_to_propagate_trans(&self) -> HashMap<H256, Arc<SignedTransaction>> {
@@ -493,6 +502,20 @@ impl SynchronizationProtocolHandler {
             || current_phase.phase_type() == SyncPhaseType::Normal
     }
 
+    pub fn need_block_from_archive_node(&self) -> bool {
+        let current_phase = self.phase_manager.get_current_phase();
+        current_phase.phase_type() == SyncPhaseType::CatchUpSyncBlock
+            && !self.syn.is_full_node()
+    }
+
+    pub fn preferred_peer_node_type_for_get_block(&self) -> Option<NodeType> {
+        if self.need_block_from_archive_node() {
+            Some(NodeType::Archive)
+        } else {
+            None
+        }
+    }
+
     pub fn get_synchronization_graph(&self) -> SharedSynchronizationGraph {
         self.graph.clone()
     }
@@ -522,7 +545,7 @@ impl SynchronizationProtocolHandler {
                 // `syn.peers`, and this peer should be in
                 // `syn.handshaking_peers`
                 if !self.syn.handshaking_peers.read().contains_key(peer)
-                    || (msg_id != msgid::STATUS_DEPRECATED
+                    || (msg_id != msgid::STATUS_V3
                         && msg_id != msgid::STATUS_V2)
                 {
                     debug!("Message from unknown peer {:?}", msg_id);
@@ -856,8 +879,9 @@ impl SynchronizationProtocolHandler {
             }
 
             let until = {
-                let max_to_send = EPOCH_SYNC_MAX_INFLIGHT
-                    - self.request_manager.num_epochs_in_flight();
+                let max_to_send = EPOCH_SYNC_MAX_INFLIGHT.saturating_sub(
+                    self.request_manager.num_epochs_in_flight(),
+                );
                 let maybe_peer_info = self.syn.get_peer_info(&peer.unwrap());
                 if maybe_peer_info.is_err() {
                     // The peer is disconnected after we chose it.
@@ -1056,6 +1080,7 @@ impl SynchronizationProtocolHandler {
             !task.compact,
             chosen_peer.clone(),
             task.delay,
+            self.preferred_peer_node_type_for_get_block(),
         );
         self.request_blocks(io, chosen_peer, missing_dependencies);
 
@@ -1148,18 +1173,6 @@ impl SynchronizationProtocolHandler {
         Ok(())
     }
 
-    fn produce_status_message_deprecated(&self) -> StatusDeprecatedV1 {
-        let best_info = self.graph.consensus.best_info();
-        let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
-
-        StatusDeprecatedV1 {
-            protocol_version: SYNC_PROTO_V1.0,
-            genesis_hash: self.graph.data_man.true_genesis.hash(),
-            best_epoch: best_info.best_epoch_number,
-            terminal_block_hashes: terminal_hashes,
-        }
-    }
-
     fn produce_status_message_v2(&self) -> StatusV2 {
         let best_info = self.graph.consensus.best_info();
         let chain_id = self.graph.consensus.get_config().chain_id.clone();
@@ -1173,41 +1186,62 @@ impl SynchronizationProtocolHandler {
         }
     }
 
+    fn produce_status_message_v3(&self) -> StatusV3 {
+        let best_info = self.graph.consensus.best_info();
+        let chain_id = self.graph.consensus.get_config().chain_id.clone();
+        let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
+
+        StatusV3 {
+            chain_id,
+            node_type: self.node_type(),
+            genesis_hash: self.graph.data_man.true_genesis.hash(),
+            best_epoch: best_info.best_epoch_number,
+            terminal_block_hashes: terminal_hashes,
+        }
+    }
+
+    fn produce_heartbeat_message(&self) -> Heartbeat {
+        let best_info = self.graph.consensus.best_info();
+        let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
+
+        Heartbeat {
+            best_epoch: best_info.best_epoch_number,
+            terminal_block_hashes: terminal_hashes,
+        }
+    }
+
     fn send_status(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         peer_protocol_version: ProtocolVersion,
     ) -> Result<(), NetworkError>
     {
-        if peer_protocol_version == SYNC_PROTO_V1 {
-            let status_message = self.produce_status_message_deprecated();
+        if peer_protocol_version == SYNC_PROTO_V2 {
+            let status_message = self.produce_status_message_v2();
             debug!("Sending status message to {}: {:?}", peer, status_message);
             status_message.send(io, peer)
         } else {
-            let status_message = self.produce_status_message_v2();
+            let status_message = self.produce_status_message_v3();
             debug!("Sending status message to {}: {:?}", peer, status_message);
             status_message.send(io, peer)
         }
     }
 
-    fn broadcast_status(&self, io: &dyn NetworkContext) {
-        let status_message_v1 = self.produce_status_message_deprecated();
-        let status_message_v2 = self.produce_status_message_v2();
-        debug!(
-            "Broadcasting status message v1 + v2: {:?}",
-            status_message_v2
-        );
+    fn broadcast_heartbeat(&self, io: &dyn NetworkContext) {
+        let status_message = self.produce_status_message_v2();
+        let heartbeat_message = self.produce_heartbeat_message();
+        debug!("Broadcasting heartbeat message: {:?}", heartbeat_message);
 
         if self
-            .broadcast_message(io, &Default::default(), &status_message_v1)
+            .broadcast_message(io, &Default::default(), &heartbeat_message)
             .is_err()
         {
-            warn!("Error broadcsting status message");
+            warn!("Error broadcasting heartbeat message");
         }
         if self
-            .broadcast_message(io, &Default::default(), &status_message_v2)
+            .broadcast_message(io, &Default::default(), &status_message)
             .is_err()
         {
-            warn!("Error broadcsting status message");
+            warn!("Error broadcasting status message");
         }
     }
 
@@ -1517,7 +1551,7 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn send_heartbeat(&self, io: &dyn NetworkContext) {
-        self.broadcast_status(io);
+        self.broadcast_heartbeat(io);
     }
 
     fn cache_gc(&self) { self.graph.data_man.cache_gc() }
@@ -1589,12 +1623,14 @@ impl SynchronizationProtocolHandler {
         // Blocks may have been inserted into sync graph before as dependent
         // blocks
         hashes.retain(|h| !self.graph.contains_block(h));
+        let preferred_node_type = self.preferred_peer_node_type_for_get_block();
         self.request_manager.request_blocks(
             io,
             peer_id,
             hashes,
             self.request_block_need_public(),
             None,
+            preferred_node_type,
         );
     }
 
@@ -1685,6 +1721,7 @@ impl SynchronizationProtocolHandler {
         &self, io: &dyn NetworkContext, requested_hashes: HashSet<H256>,
         returned_blocks: HashSet<H256>, ask_full_block: bool,
         peer: Option<NodeId>, delay: Option<Duration>,
+        preferred_node_type_for_block_request: Option<NodeType>,
     )
     {
         self.request_manager.blocks_received(
@@ -1695,6 +1732,7 @@ impl SynchronizationProtocolHandler {
             peer,
             self.request_block_need_public(),
             delay,
+            preferred_node_type_for_block_request,
         )
     }
 

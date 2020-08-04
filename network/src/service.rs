@@ -789,10 +789,11 @@ impl NetworkServiceInner {
 
     // Connect to all reserved and trusted peers if not yet
     fn connect_peers(&self, io: &IoContext<NetworkIoMessage>) {
-        assert!(
-                self.metadata.minimum_peer_protocol_version.read().len() > 0,
-                "Protocols should have been registered before the HOUSEKEEPING timeout."
-            );
+        if self.metadata.minimum_peer_protocol_version.read().len() == 0 {
+            // The protocol handler has not been registered, we just wait for
+            // the next time.
+            return;
+        }
 
         let self_id = self.metadata.id().clone();
 
@@ -831,7 +832,7 @@ impl NetworkServiceInner {
             .filter(|id| !self.sessions.contains_node(id) && *id != self_id)
             .take(min(
                 max_handshakes_per_round,
-                self.config.max_handshakes - handshake_count,
+                self.config.max_handshakes.saturating_sub(handshake_count),
             ))
         {
             self.connect_peer(&id, io);
@@ -2023,6 +2024,13 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
                 work_type,
             })
             .expect("Error sending network IO message");
+    }
+
+    fn insert_peer_node_tag(&self, peer: NodeId, key: &str, value: &str) {
+        self.network_service
+            .node_db
+            .write()
+            .set_tag(peer, key, value);
     }
 }
 

@@ -65,9 +65,9 @@ error_chain! {
             display("Invalid receipts"),
         }
 
-        InvalidStateProof {
+        InvalidStateProof(reason: &'static str) {
             description("Invalid state proof"),
-            display("Invalid state proof"),
+            display("Invalid state proof: {}", reason),
         }
 
         InvalidStateRoot {
@@ -113,6 +113,11 @@ error_chain! {
         UnableToProduceProof {
             description("Unable to produce proof"),
             display("Unable to produce proof"),
+        }
+
+        UnableToProduceTxInfo(details: String) {
+            description("Unable to produce tx info"),
+            display("Unable to produce tx info: {:?}", details),
         }
 
         UnexpectedMessage {
@@ -180,6 +185,10 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
         // should not disconnect the peer
         | ErrorKind::UnableToProduceProof
 
+        // if the tx requested has been removed locally,
+        // we should not disconnect the peer
+        | ErrorKind::UnableToProduceTxInfo(_)
+
         // NOTE: to help with backward-compatibility, we
         // should not disconnect on `UnknownMessage`
         | ErrorKind::UnknownMessage => disconnect = false,
@@ -199,7 +208,7 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
         | ErrorKind::InvalidLedgerProof
         | ErrorKind::InvalidMessageFormat
         | ErrorKind::InvalidReceipts
-        | ErrorKind::InvalidStateProof
+        | ErrorKind::InvalidStateProof(_)
         | ErrorKind::InvalidStateRoot
         | ErrorKind::InvalidStorageRootProof(_)
         | ErrorKind::InvalidTxInfo

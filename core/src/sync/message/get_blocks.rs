@@ -10,6 +10,7 @@ use crate::{
             msgid, Context, GetBlocksResponse, GetBlocksWithPublicResponse,
             Handleable, Key, KeyContainer,
         },
+        node_type::NodeType,
         request_manager::{AsAny, Request},
         Error, ErrorKind, ProtocolConfiguration,
     },
@@ -17,22 +18,37 @@ use crate::{
 use cfx_types::H256;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::Block;
-use rlp_derive::{RlpDecodable, RlpEncodable};
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{any::Any, time::Duration};
 
-#[derive(
-    Debug,
-    PartialEq,
-    Default,
-    Clone,
-    RlpDecodable,
-    RlpEncodable,
-    DeriveMallocSizeOf,
-)]
+#[derive(Debug, PartialEq, Default, Clone, DeriveMallocSizeOf)]
 pub struct GetBlocks {
     pub request_id: RequestId,
     pub with_public: bool,
     pub hashes: Vec<H256>,
+    // This field specifies what node type of peers this
+    // request needs to be sent to.
+    pub preferred_node_type: Option<NodeType>,
+}
+
+impl Encodable for GetBlocks {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_list(3)
+            .append(&self.request_id)
+            .append(&self.with_public)
+            .append_list(&self.hashes);
+    }
+}
+
+impl Decodable for GetBlocks {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        Ok(GetBlocks {
+            request_id: rlp.val_at(0)?,
+            with_public: rlp.val_at(1)?,
+            hashes: rlp.list_at(2)?,
+            preferred_node_type: None,
+        })
+    }
 }
 
 impl AsAny for GetBlocks {
@@ -65,6 +81,10 @@ impl Request for GetBlocks {
 
     fn resend(&self) -> Option<Box<dyn Request>> {
         Some(Box::new(self.clone()))
+    }
+
+    fn preferred_node_type(&self) -> Option<NodeType> {
+        self.preferred_node_type.clone()
     }
 }
 

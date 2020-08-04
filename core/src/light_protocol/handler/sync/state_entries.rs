@@ -11,8 +11,11 @@ use std::{future::Future, sync::Arc};
 use crate::{
     light_protocol::{
         common::{FullPeerState, Peers},
-        message::{msgid, GetStateEntries, StateEntryWithKey, StateKey},
-        Error, ErrorKind,
+        error::*,
+        message::{
+            msgid, GetStateEntries, StateEntryProof, StateEntryWithKey,
+            StateKey,
+        },
     },
     message::{Message, RequestId},
     network::NetworkContext,
@@ -20,7 +23,6 @@ use crate::{
         CACHE_TIMEOUT, MAX_STATE_ENTRIES_IN_FLIGHT,
         STATE_ENTRY_REQUEST_BATCH_SIZE, STATE_ENTRY_REQUEST_TIMEOUT,
     },
-    storage::StateProof,
     UniqueId,
 };
 
@@ -29,6 +31,7 @@ use super::{
     state_roots::StateRoots,
 };
 use network::node_table::NodeId;
+use primitives::StorageKey;
 
 pub type StateEntry = Option<Vec<u8>>;
 
@@ -105,7 +108,7 @@ impl StateEntries {
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         entries: impl Iterator<Item = StateEntryWithKey>,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         for StateEntryWithKey { key, entry, proof } in entries {
             debug!("Validating state entry {:?} with key {:?}", entry, key);
@@ -121,8 +124,8 @@ impl StateEntries {
 
     #[inline]
     pub fn validate_and_store(
-        &self, key: StateKey, entry: Option<Vec<u8>>, proof: StateProof,
-    ) -> Result<(), Error> {
+        &self, key: StateKey, entry: Option<Vec<u8>>, proof: StateEntryProof,
+    ) -> Result<()> {
         // validate state entry
         self.validate_state_entry(key.epoch, &key.key, &entry, proof)?;
 
@@ -152,7 +155,7 @@ impl StateEntries {
     #[inline]
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, keys: Vec<StateKey>,
-    ) -> Result<Option<RequestId>, Error> {
+    ) -> Result<Option<RequestId>> {
         debug!("send_request peer={:?} keys={:?}", peer, keys);
 
         if keys.is_empty() {
@@ -181,25 +184,51 @@ impl StateEntries {
     #[inline]
     fn validate_state_entry(
         &self, epoch: u64, key: &Vec<u8>, value: &Option<Vec<u8>>,
-        proof: StateProof,
-    ) -> Result<(), Error>
+        proof: StateEntryProof,
+    ) -> Result<()>
     {
-        // retrieve local state root
-        let root = match self.state_roots.state_root_of(epoch) {
-            Some(root) => root.clone(),
-            None => {
-                warn!(
-                    "State root not found, epoch={}, key={:?}, value={:?}, proof={:?}",
-                    epoch, key, value, proof
-                );
-                return Err(ErrorKind::InternalError.into());
-            }
-        };
+        // validate state root
+        let state_root = proof.state_root;
 
-        // validate proof
-        if !proof.is_valid_kv(key, value.as_ref().map(|v| &**v), root) {
+        self.state_roots
+            .validate_state_root(epoch, &state_root)
+            .chain_err(|| {
+                ErrorKind::InvalidStateProof(
+                    "Validation of current state root failed",
+                )
+            })?;
+
+        // validate previous state root
+        let maybe_prev_root = proof.prev_snapshot_state_root;
+
+        self.state_roots
+            .validate_prev_snapshot_state_root(epoch, &maybe_prev_root)
+            .chain_err(|| {
+                ErrorKind::InvalidStateProof(
+                    "Validation of previous state root failed",
+                )
+            })?;
+
+        // construct padding
+        let maybe_intermediate_padding = maybe_prev_root.map(|root| {
+            StorageKey::delta_mpt_padding(
+                &root.snapshot_root,
+                &root.intermediate_delta_root,
+            )
+        });
+
+        // validate state entry
+        if !proof.state_proof.is_valid_kv(
+            key,
+            value.as_ref().map(|v| &**v),
+            state_root,
+            maybe_intermediate_padding,
+        ) {
             warn!("Invalid state proof for {:?} under key {:?}", value, key);
-            return Err(ErrorKind::InvalidStateProof.into());
+            return Err(ErrorKind::InvalidStateProof(
+                "State proof validation failed",
+            )
+            .into());
         }
 
         Ok(())

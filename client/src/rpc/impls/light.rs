@@ -243,6 +243,14 @@ impl RpcImpl {
         Err(error_codes::unimplemented(None))
     }
 
+    #[allow(unused_variables)]
+    fn sign_transaction(
+        &self, tx: SendTxRequest, password: Option<String>,
+    ) -> RpcResult<String> {
+        // TODO
+        Err(error_codes::unimplemented(None))
+    }
+
     fn code(
         &self, address: H160, epoch_num: Option<EpochNumber>,
     ) -> RpcBoxFuture<Bytes> {
@@ -645,6 +653,7 @@ impl LocalRpc for DebugRpcImpl {
 
         to self.rpc_impl {
             fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<H256>;
+            fn sign_transaction(&self, tx: SendTxRequest, password: Option<String>) -> RpcResult<String>;
         }
     }
 

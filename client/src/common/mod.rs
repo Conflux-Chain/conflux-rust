@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_types::address_util::AddressUtil;
+
 /// Hold all top-level components for a type of client.
 /// This struct implement ClientShutdownTrait.
 pub struct ClientComponents<BlockGenT, Rest> {
@@ -263,10 +265,17 @@ pub fn initialize_common_modules(
         Arc::new(network)
     };
 
+    let refresh_time =
+        Duration::from_millis(conf.raw_conf.account_provider_refresh_time_ms);
+
     let accounts = Arc::new(
-        account_provider(Some(keys_path()), None)
-            .ok()
-            .expect("failed to initialize account provider"),
+        account_provider(
+            Some(keys_path()),
+            None, /* sstore_iterations */
+            Some(refresh_time),
+        )
+        .ok()
+        .expect("failed to initialize account provider"),
     );
 
     let common_impl = Arc::new(CommonRpcImpl::new(
@@ -335,6 +344,7 @@ pub fn initialize_not_light_node_modules(
         Arc::downgrade(&network),
         txpool.clone(),
         conf.raw_conf.throttling_conf.clone(),
+        is_full_node,
     ));
     light_provider.register(network.clone()).unwrap();
 
@@ -429,7 +439,11 @@ pub fn initialize_not_light_node_modules(
             })
             .expect("Mining thread spawn error");
     } else if conf.raw_conf.start_mining {
-        if maybe_author.is_none() {
+        if let Some(author) = maybe_author {
+            if !author.is_valid_address() || author.is_builtin_address() {
+                panic!("mining-author must starts with 0x1 (user address) or 0x8 (contract address), otherwise you will not get mining rewards!!!");
+            }
+        } else {
             panic!("mining-author is not set correctly, so you'll not get mining rewards!!!");
         }
         let bg = blockgen.clone();

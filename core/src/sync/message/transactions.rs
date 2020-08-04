@@ -13,7 +13,7 @@ use crate::{
             Handleable, Key, KeyContainer,
         },
         request_manager::{AsAny, Request},
-        Error, ErrorKind, ProtocolConfiguration, SYNC_PROTO_V1, SYNC_PROTO_V2,
+        Error, ErrorKind, ProtocolConfiguration, SYNC_PROTO_V1, SYNC_PROTO_V3,
     },
 };
 use cfx_types::H256;
@@ -307,7 +307,7 @@ impl AsAny for GetTransactions {
     fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
-mark_msg_version_bound!(GetTransactions, SYNC_PROTO_V1, SYNC_PROTO_V2);
+mark_msg_version_bound!(GetTransactions, SYNC_PROTO_V1, SYNC_PROTO_V3);
 impl Message for GetTransactions {
     fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS }
 
@@ -459,7 +459,7 @@ impl AsAny for GetTransactionsFromTxHashes {
 mark_msg_version_bound!(
     GetTransactionsFromTxHashes,
     SYNC_PROTO_V1,
-    SYNC_PROTO_V2
+    SYNC_PROTO_V3
 );
 impl Message for GetTransactionsFromTxHashes {
     fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS_FROM_TX_HASHES }

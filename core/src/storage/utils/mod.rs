@@ -19,9 +19,7 @@ pub mod wrap;
 pub trait WrappedCreateFrom<FromType, ToType> {
     fn take(x: FromType) -> ToType;
     /// Unoptimized default implementation.
-    fn take_from(dest: &mut ToType, x: FromType) {
-        std::mem::replace(dest, Self::take(x));
-    }
+    fn take_from(dest: &mut ToType, x: FromType) { *dest = Self::take(x); }
 }
 
 /*
