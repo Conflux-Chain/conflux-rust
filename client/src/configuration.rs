@@ -719,7 +719,7 @@ impl Configuration {
     pub fn execution_config(&self) -> ConsensusExecutionConfiguration {
         ConsensusExecutionConfiguration {
             anticone_penalty_ratio: self.raw_conf.anticone_penalty_ratio,
-            base_reward_table_in_ucfx: build_base_reward_table(),
+            base_reward_table_in_ucfx: MINING_REWARD_TABLE_IN_UCFX.to_vec(),
         }
     }
 
@@ -767,20 +767,4 @@ pub fn to_bootnodes(bootnodes: &Option<String>) -> Result<Vec<String>, String> {
         Some(_) => Ok(vec![]),
         None => Ok(vec![]),
     }
-}
-
-pub fn build_base_reward_table() -> Vec<u64> {
-    let mut base_reward_table = Vec::new();
-    base_reward_table.resize(MINING_REWARD_DECAY_PERIOD_IN_QUARTER, 0);
-    for i in 0..MINING_REWARD_DECAY_PERIOD_IN_QUARTER {
-        let reward = if i == 0 {
-            INITIAL_BASE_MINING_REWARD_IN_UCFX
-        } else {
-            (base_reward_table[i - 1] as f64
-                * MINING_REWARD_DECAY_RATIO_PER_QUARTER)
-                .round() as u64
-        };
-        base_reward_table[i] = reward;
-    }
-    base_reward_table
 }
