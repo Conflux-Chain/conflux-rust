@@ -449,10 +449,10 @@ pub fn initialize_not_light_node_modules(
     } else if conf.raw_conf.start_mining {
         if let Some(author) = maybe_author {
             if !author.is_valid_address() || author.is_builtin_address() {
-                panic!("mining-author must starts with 0x1 (user address) or 0x8 (contract address), otherwise you will not get mining rewards!!!");
+                panic!("mining-author must start with 0x1 (user address) or 0x8 (contract address), otherwise you will not get mining rewards!!!");
             }
         } else {
-            panic!("mining-author is not set correctly, so you'll not get mining rewards!!!");
+            panic!("mining-author is not set correctly, so you will not get mining rewards!!!");
         }
         let bg = blockgen.clone();
         thread::Builder::new()

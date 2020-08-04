@@ -278,7 +278,7 @@ pub mod light {
     /// Maximum number of in-flight items at any given time.
     /// If we reach this limit, we will not request any more.
     pub const MAX_HEADERS_IN_FLIGHT: usize = 500;
-    pub const MAX_WITNESSES_IN_FLIGHT: usize = 30;
+    pub const MAX_WITNESSES_IN_FLIGHT: usize = 500;
     pub const MAX_BLOOMS_IN_FLIGHT: usize = 500;
     pub const MAX_RECEIPTS_IN_FLIGHT: usize = 100;
     pub const MAX_BLOCK_TXS_IN_FLIGHT: usize = 100;

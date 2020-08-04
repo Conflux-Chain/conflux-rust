@@ -1,11 +1,14 @@
 use crate::{
     block_data_manager::{
-        db_decode_list, db_encode_list, BlockExecutionResultWithEpoch,
-        BlockRewardResult, CheckpointHashes, DatabaseDecodable,
-        DatabaseEncodable, EpochExecutionCommitment, EpochExecutionContext,
-        LocalBlockInfo,
+        db_decode_list, db_encode_list, BlamedHeaderVerifiedRoots,
+        BlockExecutionResultWithEpoch, BlockRewardResult, CheckpointHashes,
+        DatabaseDecodable, DatabaseEncodable, EpochExecutionCommitment,
+        EpochExecutionContext, LocalBlockInfo,
     },
-    db::{COL_BLOCKS, COL_EPOCH_NUMBER, COL_MISC, COL_TX_INDEX},
+    db::{
+        COL_BLAMED_HEADER_VERIFIED_ROOTS, COL_BLOCKS, COL_EPOCH_NUMBER,
+        COL_MISC, COL_TX_INDEX,
+    },
     pow::PowComputer,
     storage::{
         storage_db::KeyValueDbTrait, KvdbRocksdb, KvdbSqlite,
@@ -38,6 +41,7 @@ enum DBTable {
     Blocks,
     Transactions,
     EpochNumbers,
+    BlamedHeaderVerifiedRoots,
 }
 
 fn rocks_db_col(table: DBTable) -> u32 {
@@ -46,6 +50,7 @@ fn rocks_db_col(table: DBTable) -> u32 {
         DBTable::Blocks => COL_BLOCKS,
         DBTable::Transactions => COL_TX_INDEX,
         DBTable::EpochNumbers => COL_EPOCH_NUMBER,
+        DBTable::BlamedHeaderVerifiedRoots => COL_BLAMED_HEADER_VERIFIED_ROOTS,
     }
 }
 
@@ -55,6 +60,7 @@ fn sqlite_db_table(table: DBTable) -> String {
         DBTable::Blocks => "blocks",
         DBTable::Transactions => "transactions",
         DBTable::EpochNumbers => "epoch_numbers",
+        DBTable::BlamedHeaderVerifiedRoots => "blamed_header_verified_roots",
     }
     .into()
 }
@@ -72,6 +78,7 @@ impl DBManager {
             DBTable::Blocks,
             DBTable::Transactions,
             DBTable::EpochNumbers,
+            DBTable::BlamedHeaderVerifiedRoots,
         ] {
             table_db.insert(
                 table,
@@ -97,6 +104,7 @@ impl DBManager {
             DBTable::Blocks,
             DBTable::Transactions,
             DBTable::EpochNumbers,
+            DBTable::BlamedHeaderVerifiedRoots,
         ] {
             let table_str = sqlite_db_table(table);
             let (_, sqlite_db) = KvdbSqlite::open_or_create(
@@ -193,6 +201,27 @@ impl DBManager {
         self.load_decodable_val(
             DBTable::Blocks,
             &local_block_info_key(block_hash),
+        )
+    }
+
+    pub fn insert_blamed_header_verified_roots_to_db(
+        &self, block_height: u64, value: &BlamedHeaderVerifiedRoots,
+    ) {
+        self.insert_encodable_val(
+            DBTable::BlamedHeaderVerifiedRoots,
+            &blamed_header_verified_roots_key(block_height),
+            value,
+        );
+    }
+
+    /// Get correct roots of blamed headers from db.
+    /// These are maintained on light nodes only.
+    pub fn blamed_header_verified_roots_from_db(
+        &self, block_height: u64,
+    ) -> Option<BlamedHeaderVerifiedRoots> {
+        self.load_decodable_val(
+            DBTable::BlamedHeaderVerifiedRoots,
+            &blamed_header_verified_roots_key(block_height),
         )
     }
 
@@ -462,6 +491,12 @@ fn append_suffix(h: &H256, suffix: u8) -> Vec<u8> {
 
 fn local_block_info_key(block_hash: &H256) -> Vec<u8> {
     append_suffix(block_hash, LOCAL_BLOCK_INFO_SUFFIX_BYTE)
+}
+
+fn blamed_header_verified_roots_key(block_height: u64) -> [u8; 8] {
+    let mut height_key = [0; 8];
+    LittleEndian::write_u64(&mut height_key[0..8], block_height);
+    height_key
 }
 
 fn block_body_key(block_hash: &H256) -> Vec<u8> {

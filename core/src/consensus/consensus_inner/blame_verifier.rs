@@ -35,8 +35,20 @@ impl BlameVerifier {
         data_man: Arc<BlockDataManager>, notifications: Arc<Notifications>,
     ) -> Self {
         let blame_sender = notifications.blame_verification_results.clone();
-        let last_epoch_received = Mutex::new(0);
-        let next_epoch_to_process = Mutex::new(0);
+
+        let stable_hash = data_man.get_cur_consensus_era_stable_hash();
+
+        let stable_height = data_man
+            .block_header_by_hash(&stable_hash)
+            .expect("Current era stable header should exist")
+            .height();
+
+        let start_height = stable_height.saturating_sub(BLAME_CHECK_OFFSET);
+
+        debug!("Starting Blame Verifier from height {}", start_height);
+
+        let last_epoch_received = Mutex::new(start_height);
+        let next_epoch_to_process = Mutex::new(start_height + 1);
 
         Self {
             data_man,
@@ -90,7 +102,7 @@ impl BlameVerifier {
             e => e - BLAME_CHECK_OFFSET,
         };
 
-        trace!(
+        debug!(
             "Blame verification received epoch {:?} (last_epoch_received = {}, next_epoch_to_process = {})",
             epoch, *last_epoch_received, *next_epoch_to_process
         );

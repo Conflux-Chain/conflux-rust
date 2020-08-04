@@ -57,6 +57,9 @@ where
             }
         }
     }
+
+    #[inline]
+    pub fn contains(&self, key: &K) -> bool { self.keys.contains(key) }
 }
 
 impl<K, V> Extend<V> for PriorityQueue<K, V>

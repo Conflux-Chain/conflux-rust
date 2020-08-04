@@ -4,9 +4,12 @@
 
 use cfx_types::H256;
 use parking_lot::RwLock;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use crate::{
+    block_data_manager::{
+        block_data_types::BlamedHeaderVerifiedRoots, BlockDataManager,
+    },
     consensus::SharedConsensusGraph,
     light_protocol::{
         common::{FullPeerState, LedgerInfo, Peers},
@@ -38,7 +41,11 @@ struct Statistics {
 // prioritize lower epochs
 type MissingWitness = KeyReverseOrdered<u64>;
 
+// TODO(thegaram): consider adding a cache for recent blamed headers
 pub struct Witnesses {
+    // block data manager
+    data_man: Arc<BlockDataManager>,
+
     // latest header for which we have trusted information
     pub latest_verified_header: RwLock<u64>,
 
@@ -50,10 +57,6 @@ pub struct Witnesses {
 
     // sync and request manager
     sync_manager: SyncManager<u64, MissingWitness>,
-
-    // roots received from full node
-    // (state_root_hash, receipts_root_hash, logs_bloom_hash)
-    pub verified: RwLock<HashMap<u64, (H256, H256, H256)>>,
 }
 
 impl Witnesses {
@@ -62,18 +65,18 @@ impl Witnesses {
         request_id_allocator: Arc<UniqueId>,
     ) -> Self
     {
+        let data_man = consensus.get_data_manager().clone();
         let latest_verified_header = RwLock::new(0);
         let ledger = LedgerInfo::new(consensus.clone());
         let sync_manager =
             SyncManager::new(peers.clone(), msgid::GET_WITNESS_INFO);
-        let verified = RwLock::new(HashMap::new());
 
         Witnesses {
+            data_man,
             latest_verified_header,
             ledger,
             request_id_allocator,
             sync_manager,
-            verified,
         }
     }
 
@@ -91,7 +94,65 @@ impl Witnesses {
     /// Get root hashes for `epoch` from local cache.
     #[inline]
     pub fn root_hashes_of(&self, epoch: u64) -> Option<(H256, H256, H256)> {
-        self.verified.read().get(&epoch).cloned()
+        let height = epoch + DEFERRED_STATE_EPOCH_COUNT;
+
+        if height > *self.latest_verified_header.read() {
+            return None;
+        }
+
+        match self.data_man.verified_blamed_roots_by_height(height) {
+            Some(roots) => {
+                // TODO(thegaram): consider case when there's a chain reorg and
+                // recent blocks' blame status changes; we need avoid serving
+                // stale roots from db; maybe explicitly remove all non-blamed
+                // blocks from db?
+                //
+                //                 blame
+                //              ............
+                //              v          |
+                //             ---        ---
+                //         .- | B | <--- | C | <--- ...
+                //  ---    |   ---        ---
+                // | A | <-*
+                //  ---    |   ---
+                //         .- | D | <--- ...
+                //             ---
+                //              ^
+                //          height = X
+                //
+                // we receive A, B, C, ..., A, D (chain reorg);
+                // we stored the verified roots of B on disk;
+                // after chain reorg, height X's blame status changes
+                // --> need to make sure to serve correct roots directly from
+                //     header D instead of the stale roots retrieved for B
+
+                Some(roots.into_tuple())
+            }
+            None => {
+                // we set `latest_verified_header` before receiving the
+                // response for blamed headers. thus, in some cases, `None`
+                // might mean *haven't received yet* instead of *not blamed*.
+                // TODO(thegaram): add mechanism to detect such race condition
+                if self.sync_manager.contains(&height) {
+                    // FIXME(thegaram): if `height - 1` is blamed by `height`,
+                    // sync manager will not contain `height - 1` but it will
+                    // still be incorrect to get it from disk
+                    error!("Witness {} still in flight!", height);
+                    panic!("Witness requested still in flight!");
+                }
+
+                let header = self
+                    .ledger
+                    .pivot_header_of(height)
+                    .expect("pivot header should exist");
+
+                Some((
+                    *header.deferred_state_root(),
+                    *header.deferred_receipts_root(),
+                    *header.deferred_logs_bloom_hash(),
+                ))
+            }
+        }
     }
 
     #[inline]
@@ -120,22 +181,17 @@ impl Witnesses {
         assert!(receipts.len() == blooms.len());
 
         // handle valid hashes
-        let mut verified = self.verified.write();
-
         for ii in 0..state_roots.len() as u64 {
             // find corresponding epoch
             let height = witness - ii;
-            let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
 
-            // store receipts root and logs bloom hash
-            verified.insert(
-                epoch,
-                (
-                    state_roots[ii as usize],
-                    receipts[ii as usize],
-                    blooms[ii as usize],
-                ),
-            );
+            let r = BlamedHeaderVerifiedRoots {
+                deferred_state_root: state_roots[ii as usize],
+                deferred_receipts_root: receipts[ii as usize],
+                deferred_logs_bloom_hash: blooms[ii as usize],
+            };
+
+            self.data_man.insert_blamed_header_verified_roots(height, r);
         }
 
         Ok(())

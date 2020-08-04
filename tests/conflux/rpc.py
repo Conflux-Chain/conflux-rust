@@ -88,7 +88,7 @@ class RpcClient:
 
     def generate_blocks_to_state(self, num_blocks: int = 5, num_txs: int = 1) -> list:
         return self.generate_blocks(num_blocks, num_txs)
-    
+
     def generate_block_with_parent(self, parent_hash: str, referee: list = [], num_txs: int = 0, adaptive: bool = False) -> str:
         assert_is_hash_string(parent_hash)
 

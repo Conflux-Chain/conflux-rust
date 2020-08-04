@@ -85,8 +85,18 @@ impl LedgerInfo {
         &self, height: u64,
     ) -> Result<H256, Error> {
         let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
-        let root = self.state_root_of(epoch)?;
-        Ok(root.aux_info.state_root_hash)
+        let pivot = self.pivot_hash_of(epoch)?;
+
+        // FIXME(thegaram): old exec commitments are not available on db
+        self.consensus
+            .get_data_manager()
+            .get_epoch_execution_commitment_with_db(&pivot)
+            .map(|c| {
+                c.state_root_with_aux_info
+                    .state_root
+                    .compute_state_root_hash()
+            })
+            .ok_or(ErrorKind::InternalError.into())
     }
 
     /// Get the correct deferred receipts root of the block at `height` on the
@@ -98,9 +108,10 @@ impl LedgerInfo {
         let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
         let pivot = self.pivot_hash_of(epoch)?;
 
+        // FIXME(thegaram): old exec commitments are not available on db
         self.consensus
             .get_data_manager()
-            .get_epoch_execution_commitment(&pivot)
+            .get_epoch_execution_commitment_with_db(&pivot)
             .map(|c| c.receipts_root)
             .ok_or(ErrorKind::InternalError.into())
     }
@@ -114,9 +125,10 @@ impl LedgerInfo {
         let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
         let pivot = self.pivot_hash_of(epoch)?;
 
+        // FIXME(thegaram): old exec commitments are not available on db
         self.consensus
             .get_data_manager()
-            .get_epoch_execution_commitment(&pivot)
+            .get_epoch_execution_commitment_with_db(&pivot)
             .map(|c| c.logs_bloom_hash)
             .ok_or(ErrorKind::InternalError.into())
     }

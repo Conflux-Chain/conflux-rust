@@ -7,7 +7,7 @@ pub mod sync;
 use crate::{
     consensus::SharedConsensusGraph,
     light_protocol::{
-        common::{validate_chain_id, FullPeerState, LedgerInfo, Peers},
+        common::{validate_chain_id, FullPeerState, Peers},
         handle_error,
         message::{
             msgid, BlockHashes as GetBlockHashesResponse,
@@ -26,9 +26,8 @@ use crate::{
     },
     message::{decode_msg, decode_rlp_and_check_deprecation, Message, MsgId},
     network::{NetworkContext, NetworkProtocolHandler},
-    parameters::{
-        consensus::DEFERRED_STATE_EPOCH_COUNT,
-        light::{CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, SYNC_PERIOD},
+    parameters::light::{
+        CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, SYNC_PERIOD,
     },
     sync::{message::Throttled, SynchronizationGraph},
     Notifications, UniqueId,
@@ -195,7 +194,6 @@ impl Handler {
         let stopped = Arc::new(AtomicBool::new(false));
 
         Self::start_witness_worker(
-            consensus.clone(),
             notifications,
             witnesses.clone(),
             stopped.clone(),
@@ -226,15 +224,14 @@ impl Handler {
     // start a standalone thread for requesting witnesses.
     // this thread will be stopped once `Handler` is dropped.
     fn start_witness_worker(
-        consensus: SharedConsensusGraph, notifications: Arc<Notifications>,
-        witnesses: Arc<Witnesses>, stopped: Arc<AtomicBool>,
+        notifications: Arc<Notifications>, witnesses: Arc<Witnesses>,
+        stopped: Arc<AtomicBool>,
     )
     {
         // detach thread as we do not need to join it
         let _handle = std::thread::Builder::new()
             .name("Witness Worker".into())
             .spawn(move || {
-                let ledger = LedgerInfo::new(consensus.clone());
                 let mut receiver =
                     notifications.blame_verification_results.subscribe();
 
@@ -259,37 +256,13 @@ impl Handler {
                         height, maybe_witness
                     );
 
-                    match maybe_witness {
-                        // header is not blamed, store directly
-                        None => {
-                            // TODO(thegaram): storing roots of correct headers
-                            // is redundant. should we use a simple placeholder
-                            // instead?
-
-                            assert!(height >= DEFERRED_STATE_EPOCH_COUNT);
-                            let epoch = height - DEFERRED_STATE_EPOCH_COUNT;
-
-                            let header = ledger
-                                .pivot_header_of(height)
-                                .expect("pivot header should exist");
-
-                            witnesses.verified.write().insert(
-                                epoch,
-                                (
-                                    *header.deferred_state_root(),
-                                    *header.deferred_receipts_root(),
-                                    *header.deferred_logs_bloom_hash(),
-                                ),
-                            );
-                        }
-
-                        // header is blamed, request witness
-                        Some(w) => {
-                            // this request covers all blamed headers:
-                            // [w - w.blame, w - w.blame + 1, ..., w]
-                            debug!("Requesting witness at height {}", w);
-                            witnesses.request(std::iter::once(w));
-                        }
+                    // request witness for blamed headers
+                    // for non-blamed headers, we will serve roots from disk
+                    if let Some(w) = maybe_witness {
+                        // this request covers all blamed headers:
+                        // [w - w.blame, w - w.blame + 1, ..., w]
+                        debug!("Requesting witness at height {}", w);
+                        witnesses.request(std::iter::once(w));
                     }
 
                     *witnesses.latest_verified_header.write() = height;
