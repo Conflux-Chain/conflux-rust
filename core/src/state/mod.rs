@@ -197,7 +197,9 @@ impl State {
     pub fn vm_factory(&self) -> VmFactory { self.vm.clone() }
 
     /// Create a recoverable checkpoint of this state. Return the checkpoint
-    /// index.
+    /// index. The checkpoint records any old value which is alive at the
+    /// creation time of the checkpoint and updated after that and before
+    /// the creation of the next checkpoint.
     pub fn checkpoint(&mut self) -> usize {
         self.staking_state_checkpoints
             .get_mut()
