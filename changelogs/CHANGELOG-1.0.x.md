@@ -7,3 +7,4 @@
 ## Incompatible changes
 
 - CIP-8 Move all the collateral settlement to the end of execution.
+- CIP-10 Base mining reward finalization.
