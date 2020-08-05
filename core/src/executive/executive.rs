@@ -1440,8 +1440,11 @@ impl<'a> Executive<'a> {
 
         let (result, output) = {
             let res = res.and_then(|finalize_res| {
+                // TODO: in fact, we don't need collect again here. But this is
+                // only the performance optimization and we put it in the later
+                // PR.
                 self.state
-                    .settle_collateral_for_all(
+                    .collect_and_settle_collateral(
                         &sender,
                         &total_storage_limit,
                         &mut substate,

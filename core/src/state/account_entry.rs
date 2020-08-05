@@ -55,9 +55,6 @@ pub struct OverlayAccount {
     ownership_cache: RwLock<HashMap<Vec<u8>, Option<Address>>>,
     ownership_changes: HashMap<Vec<u8>, Address>,
 
-    // This is a cache including both the paid collateral and unpaid collateral
-    fresh_collateral_for_storage: U256,
-
     // Storage layout change.
     storage_layout_change: Option<StorageLayout>,
 
@@ -107,7 +104,6 @@ impl OverlayAccount {
             storage_layout_change: None,
             staking_balance: account.staking_balance,
             collateral_for_storage: account.collateral_for_storage,
-            fresh_collateral_for_storage: account.collateral_for_storage,
             accumulated_interest_return: account.accumulated_interest_return,
             deposit_list: None,
             vote_stake_list: None,
@@ -135,7 +131,6 @@ impl OverlayAccount {
             storage_layout_change: None,
             staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
-            fresh_collateral_for_storage: 0.into(),
             accumulated_interest_return: 0.into(),
             deposit_list: None,
             vote_stake_list: None,
@@ -168,7 +163,6 @@ impl OverlayAccount {
             storage_layout_change: None,
             staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
-            fresh_collateral_for_storage: 0.into(),
             accumulated_interest_return: 0.into(),
             deposit_list: None,
             vote_stake_list: None,
@@ -188,9 +182,6 @@ impl OverlayAccount {
         account.code_hash = self.code_hash;
         account.staking_balance = self.staking_balance;
         account.collateral_for_storage = self.collateral_for_storage;
-        assert!(
-            self.fresh_collateral_for_storage == self.collateral_for_storage
-        );
         account.accumulated_interest_return = self.accumulated_interest_return;
         account.admin = self.admin;
         account.sponsor_info = self.sponsor_info.clone();
@@ -250,14 +241,6 @@ impl OverlayAccount {
         }
     }
 
-    pub fn register_unrefunded_collateral(&mut self, by: &U256) {
-        self.fresh_collateral_for_storage -= *by;
-    }
-
-    pub fn register_unpaid_collateral(&mut self, by: &U256) {
-        self.fresh_collateral_for_storage += *by;
-    }
-
     pub fn check_commission_privilege(
         &self, db: &StateDb, contract_address: &Address, user: &Address,
     ) -> DbResult<bool> {
@@ -311,10 +294,6 @@ impl OverlayAccount {
 
     pub fn collateral_for_storage(&self) -> &U256 {
         &self.collateral_for_storage
-    }
-
-    pub fn fresh_collateral_for_storage(&self) -> &U256 {
-        &self.fresh_collateral_for_storage
     }
 
     #[cfg(test)]
@@ -593,7 +572,6 @@ impl OverlayAccount {
             storage_layout_change: None,
             staking_balance: self.staking_balance,
             collateral_for_storage: self.collateral_for_storage,
-            fresh_collateral_for_storage: self.fresh_collateral_for_storage,
             accumulated_interest_return: self.accumulated_interest_return,
             deposit_list: self.deposit_list.clone(),
             vote_stake_list: self.vote_stake_list.clone(),
@@ -706,7 +684,6 @@ impl OverlayAccount {
         self.storage_layout_change = other.storage_layout_change;
         self.staking_balance = other.staking_balance;
         self.collateral_for_storage = other.collateral_for_storage;
-        self.fresh_collateral_for_storage = other.fresh_collateral_for_storage;
         self.accumulated_interest_return = other.accumulated_interest_return;
         self.deposit_list = other.deposit_list;
         self.vote_stake_list = other.vote_stake_list;
