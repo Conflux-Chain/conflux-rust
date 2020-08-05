@@ -817,11 +817,16 @@ impl State {
     pub fn sub_collateral_for_storage(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
-        if !by.is_zero() {
+        let collateral = self.collateral_for_storage(address)?;
+        let refundable = if by > &collateral { &collateral } else { by };
+        let burnt = *by - *refundable;
+        if !refundable.is_zero() {
             self.require_exists(address, false)?
-                .sub_collateral_for_storage(by);
-            self.staking_state.total_storage_tokens -= *by;
+                .sub_collateral_for_storage(refundable);
         }
+        self.staking_state.total_storage_tokens -= *by;
+        self.staking_state.total_issued_tokens -= burnt;
+
         Ok(())
     }
 

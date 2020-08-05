@@ -8,3 +8,4 @@
 
 - CIP-8 Move all the collateral settlement to the end of execution.
 - CIP-10 Base mining reward finalization.
+- CIP-12 Allow non-zero collateral contract to be killed
