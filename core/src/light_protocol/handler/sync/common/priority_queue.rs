@@ -59,6 +59,7 @@ where
     }
 
     #[inline]
+    #[allow(dead_code)]
     pub fn contains(&self, key: &K) -> bool { self.keys.contains(key) }
 }
 

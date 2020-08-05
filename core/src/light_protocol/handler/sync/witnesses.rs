@@ -4,7 +4,7 @@
 
 use cfx_types::H256;
 use parking_lot::RwLock;
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use crate::{
     block_data_manager::{
@@ -46,6 +46,12 @@ pub struct Witnesses {
     // block data manager
     data_man: Arc<BlockDataManager>,
 
+    // collection used to track the heights for which we have requested
+    // witnesses. e.g. if header 3 is blamed by header 4, we will request
+    // witness 4 and insert both 3 and 4 into `in_flight` (as opposed to
+    // `sync_manager.in_flight` that will only contain 4).
+    pub in_flight: RwLock<HashSet<u64>>,
+
     // latest header for which we have trusted information
     pub latest_verified_header: RwLock<u64>,
 
@@ -66,6 +72,7 @@ impl Witnesses {
     ) -> Self
     {
         let data_man = consensus.get_data_manager().clone();
+        let in_flight = RwLock::new(HashSet::new());
         let latest_verified_header = RwLock::new(0);
         let ledger = LedgerInfo::new(consensus.clone());
         let sync_manager =
@@ -75,6 +82,7 @@ impl Witnesses {
             data_man,
             latest_verified_header,
             ledger,
+            in_flight,
             request_id_allocator,
             sync_manager,
         }
@@ -106,11 +114,8 @@ impl Witnesses {
                 // we set `latest_verified_header` before receiving the
                 // response for blamed headers. thus, in some cases, `None`
                 // might mean *haven't received yet* instead of *not blamed*.
-                // TODO(thegaram): add mechanism to detect such race condition
-                if self.sync_manager.contains(&height) {
-                    // FIXME(thegaram): if `height - 1` is blamed by `height`,
-                    // sync manager will not contain `height - 1` but it will
-                    // still be incorrect to get it from disk
+                if self.in_flight.read().contains(&height) {
+                    // TODO(thegaram): recover from this
                     error!("Witness {} still in flight!", height);
                     panic!("Witness requested still in flight!");
                 }
@@ -130,10 +135,21 @@ impl Witnesses {
     }
 
     #[inline]
-    pub fn request<I>(&self, witnesses: I)
-    where I: Iterator<Item = u64> {
-        let witnesses = witnesses.map(|h| MissingWitness::new(h));
-        self.sync_manager.insert_waiting(witnesses);
+    pub fn request(&self, witness: u64) {
+        let blame = self
+            .ledger
+            .pivot_header_of(witness)
+            .expect("Pivot header should exist")
+            .blame() as u64;
+
+        let mut in_flight = self.in_flight.write();
+
+        for h in (witness - blame)..=witness {
+            in_flight.insert(h);
+        }
+
+        let missing = MissingWitness::new(witness);
+        self.sync_manager.insert_waiting(std::iter::once(missing));
     }
 
     fn handle_witness_info(
@@ -154,11 +170,21 @@ impl Witnesses {
         assert!(state_roots.len() == receipts.len());
         assert!(receipts.len() == blooms.len());
 
+        // if we only get one root, that means that the witness is not blaming
+        // any previous headers.
+        if state_roots.len() == 1 {
+            error!("Received witness info of length 1");
+            return Ok(());
+        }
+
+        let mut in_flight = self.in_flight.write();
+
         // handle valid hashes
         for ii in 0..state_roots.len() as u64 {
             // find corresponding epoch
             let height = witness - ii;
 
+            // insert into db
             let r = BlamedHeaderVerifiedRoots {
                 deferred_state_root: state_roots[ii as usize],
                 deferred_receipts_root: receipts[ii as usize],
@@ -166,6 +192,9 @@ impl Witnesses {
             };
 
             self.data_man.insert_blamed_header_verified_roots(height, r);
+
+            // signal receipt
+            in_flight.remove(&height);
         }
 
         Ok(())

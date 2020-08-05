@@ -79,6 +79,7 @@ where
     pub fn num_in_flight(&self) -> usize { self.in_flight.read().len() }
 
     #[inline]
+    #[allow(dead_code)]
     pub fn contains(&self, key: &Key) -> bool {
         self.in_flight.read().contains_key(key)
             || self.waiting.read().contains(&key)

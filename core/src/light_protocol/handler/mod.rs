@@ -280,13 +280,21 @@ impl Handler {
                     //     header D instead of the stale roots retrieved for B
                     data_man.remove_blamed_header_verified_roots(height);
 
-                    // request witness for blamed headers
-                    // for non-blamed headers, we will serve roots from disk
-                    if let Some(w) = maybe_witness {
-                        // this request covers all blamed headers:
-                        // [w - w.blame, w - w.blame + 1, ..., w]
-                        debug!("Requesting witness at height {}", w);
-                        witnesses.request(std::iter::once(w));
+                    // handle witness
+                    match maybe_witness {
+                        // request witness for blamed headers
+                        Some(w) => {
+                            // this request covers all blamed headers:
+                            // [w - w.blame, w - w.blame + 1, ..., w]
+                            debug!("Requesting witness at height {}", w);
+                            witnesses.request(w);
+                        }
+
+                        // for non-blamed headers, we will serve roots from disk
+                        None => {
+                            // `height` might have been blamed before a chain reorg
+                            witnesses.in_flight.write().remove(&height);
+                        }
                     }
 
                     *witnesses.latest_verified_header.write() = height;
