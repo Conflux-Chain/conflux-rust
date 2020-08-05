@@ -2,11 +2,18 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-fn min_repr_bytes(mut number_of_keys: usize) -> u8 {
+fn min_repr_bytes(number_of_keys: usize) -> u8 {
+    let mut largest_value = match number_of_keys {
+        n if n == 0 => return 0,
+        n if n == 1 => return 1,
+        n => n - 1,
+    };
+
     let mut min_repr_bytes = 0;
-    while number_of_keys != 0 {
+
+    while largest_value != 0 {
         min_repr_bytes += 1;
-        number_of_keys >>= 8;
+        largest_value >>= 8;
     }
 
     min_repr_bytes
@@ -35,6 +42,7 @@ pub fn make_simple_mpt(mut values: Vec<Box<[u8]>>) -> SimpleMpt {
     let mut mpt_kvs = Vec::with_capacity(keys);
 
     let index_byte_len = min_repr_bytes(keys);
+
     for (index, value) in values.drain(..).enumerate() {
         mpt_kvs.push((to_index_bytes(index, index_byte_len), value));
     }
@@ -104,8 +112,6 @@ pub fn simple_mpt_proof(
     proof
 }
 
-// FIXME: add tests and verification code with Vec<TrieProofNode>.
-
 use crate::storage::{
     impls::merkle_patricia_trie::{
         mpt_cursor::{BasicPathNode, MptCursor},
@@ -124,26 +130,43 @@ pub use crate::storage::tests::FakeSnapshotMptDb as SimpleMpt;
 mod tests {
     use super::{
         into_simple_mpt_key, make_simple_mpt, min_repr_bytes,
-        simple_mpt_merkle_root, simple_mpt_proof,
+        simple_mpt_merkle_root, simple_mpt_proof, MerkleHash,
     };
 
     #[test]
     fn test_min_repr_bytes() {
-        assert_eq!(min_repr_bytes(0x000000), 0); // 0
-        assert_eq!(min_repr_bytes(0x000001), 1); // 1
-        assert_eq!(min_repr_bytes(0x0000ff), 1); // 255
-        assert_eq!(min_repr_bytes(0x000100), 2); // 256
-        assert_eq!(min_repr_bytes(0x00ff00), 2); // 65535
-        assert_eq!(min_repr_bytes(0x010000), 3); // 65536
+        assert_eq!(min_repr_bytes(0x00_00_00_00), 0); // 0
+
+        assert_eq!(min_repr_bytes(0x00_00_00_01), 1); // 1
+        assert_eq!(min_repr_bytes(0x00_00_01_00), 1); // 256
+
+        assert_eq!(min_repr_bytes(0x00_00_01_01), 2); // 257
+        assert_eq!(min_repr_bytes(0x00_01_00_00), 2); // 65536
+
+        assert_eq!(min_repr_bytes(0x00_01_00_01), 3); // 65537
+        assert_eq!(min_repr_bytes(0x01_00_00_00), 3); // 16777216
     }
 
     #[test]
     fn test_into_simple_mpt_key() {
         assert_eq!(into_simple_mpt_key(0x01, 1), vec![0x01]);
-        assert_eq!(into_simple_mpt_key(0x01, 255), vec![0x01]);
-        assert_eq!(into_simple_mpt_key(0x01, 256), vec![0x01, 0x00]);
-        assert_eq!(into_simple_mpt_key(0x01, 65535), vec![0x01, 0x00]);
-        assert_eq!(into_simple_mpt_key(0x01, 65536), vec![0x01, 0x00, 0x00]);
+        assert_eq!(into_simple_mpt_key(0x01, 256), vec![0x01]);
+        assert_eq!(into_simple_mpt_key(0x01, 257), vec![0x01, 0x00]);
+        assert_eq!(into_simple_mpt_key(0x01, 65536), vec![0x01, 0x00]);
+        assert_eq!(into_simple_mpt_key(0x01, 65537), vec![0x01, 0x00, 0x00]);
+    }
+
+    #[test]
+    fn test_empty_simple_mpt() {
+        let mut mpt = make_simple_mpt(vec![]);
+        let root = simple_mpt_merkle_root(&mut mpt);
+
+        assert_eq!(
+            root,
+            "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+                .parse::<MerkleHash>()
+                .unwrap()
+        );
     }
 
     fn check_proofs(num_items: usize, proof_size: Vec<usize>) {
@@ -231,17 +254,9 @@ mod tests {
         // proof size: 3 (root + 1st nibble + 2nd nibble)
         check_proofs(0x12, vec![3]);
 
-        // number of items: 0xff
-        // keys: 0x00, 0x01, ..., 0xfe
-        //         ^^    ^^         ^^
-        // proof size: 3 (root + 1st nibble + 2nd nibble)
-        check_proofs(0xff, vec![3]);
-
         // number of items: 0x0100
-        // keys: [0x00, 0x00], [0x01, 0x00], [0x02, 0x00], ..., [0xff, 0x00] (little-endian)
-        //          ^^            ^^            ^^                 ^^
-        // FIXME(thegaram): this is a bug, see #1693
-        assert_eq!(into_simple_mpt_key(0x00, 0x0100), vec![0x00, 0x00]);
+        // keys: 0x00, 0x01, ..., 0xff
+        //         ^^    ^^         ^^
         // proof size: 3 (root + 1st nibble + 2nd nibble)
         check_proofs(0x0100, vec![3]);
 
