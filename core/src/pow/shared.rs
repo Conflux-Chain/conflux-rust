@@ -12,7 +12,7 @@ pub const POW_ACCESSES: usize = 64;
 pub const POW_DATASET_PARENTS: u32 = 256;
 pub const POW_MOD: u32 = 1032193;
 
-pub const POW_NK: u64 = 9;
+pub const POW_NK: u64 = 10;
 pub const POW_N: u64 = 1 << POW_NK;
 pub const POW_WARP_SIZE: u64 = 32;
 pub const POW_DATA_PER_THREAD: u64 = POW_N / POW_WARP_SIZE;
