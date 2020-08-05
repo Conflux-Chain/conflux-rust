@@ -306,7 +306,7 @@ impl State {
     /// checked out. This function should only be called in post-processing
     /// of a transaction.
     pub fn settle_collateral_for_all(
-        &mut self, substate: &mut Substate,
+        &mut self, substate: &Substate,
     ) -> DbResult<CollateralCheckResult> {
         for address in substate.keys_for_collateral_changed().iter() {
             match self.settle_collateral_for_address(address, substate)? {
