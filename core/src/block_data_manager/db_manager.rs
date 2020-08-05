@@ -225,6 +225,15 @@ impl DBManager {
         )
     }
 
+    pub fn remove_blamed_header_verified_roots_from_db(
+        &self, block_height: u64,
+    ) {
+        self.remove_from_db(
+            DBTable::BlamedHeaderVerifiedRoots,
+            &blamed_header_verified_roots_key(block_height),
+        )
+    }
+
     pub fn insert_block_body_to_db(&self, block: &Block) {
         self.insert_to_db(
             DBTable::Blocks,

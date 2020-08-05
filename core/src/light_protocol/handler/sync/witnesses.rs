@@ -101,33 +101,7 @@ impl Witnesses {
         }
 
         match self.data_man.verified_blamed_roots_by_height(height) {
-            Some(roots) => {
-                // TODO(thegaram): consider case when there's a chain reorg and
-                // recent blocks' blame status changes; we need avoid serving
-                // stale roots from db; maybe explicitly remove all non-blamed
-                // blocks from db?
-                //
-                //                 blame
-                //              ............
-                //              v          |
-                //             ---        ---
-                //         .- | B | <--- | C | <--- ...
-                //  ---    |   ---        ---
-                // | A | <-*
-                //  ---    |   ---
-                //         .- | D | <--- ...
-                //             ---
-                //              ^
-                //          height = X
-                //
-                // we receive A, B, C, ..., A, D (chain reorg);
-                // we stored the verified roots of B on disk;
-                // after chain reorg, height X's blame status changes
-                // --> need to make sure to serve correct roots directly from
-                //     header D instead of the stale roots retrieved for B
-
-                Some(roots.into_tuple())
-            }
+            Some(roots) => Some(roots.into_tuple()),
             None => {
                 // we set `latest_verified_header` before receiving the
                 // response for blamed headers. thus, in some cases, `None`

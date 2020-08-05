@@ -5,6 +5,7 @@
 pub mod sync;
 
 use crate::{
+    block_data_manager::BlockDataManager,
     consensus::SharedConsensusGraph,
     light_protocol::{
         common::{validate_chain_id, FullPeerState, Peers},
@@ -197,6 +198,7 @@ impl Handler {
             notifications,
             witnesses.clone(),
             stopped.clone(),
+            consensus.get_data_manager().clone(),
         );
 
         graph.recover_graph_from_db(true /* header_only */);
@@ -225,7 +227,7 @@ impl Handler {
     // this thread will be stopped once `Handler` is dropped.
     fn start_witness_worker(
         notifications: Arc<Notifications>, witnesses: Arc<Witnesses>,
-        stopped: Arc<AtomicBool>,
+        stopped: Arc<AtomicBool>, data_man: Arc<BlockDataManager>,
     )
     {
         // detach thread as we do not need to join it
@@ -255,6 +257,28 @@ impl Handler {
                         "Witness worker received: height = {:?}, maybe_witness = {:?}",
                         height, maybe_witness
                     );
+
+                    // avoid serving stale roots from db
+                    //
+                    //                 blame
+                    //              ............
+                    //              v          |
+                    //             ---        ---
+                    //         .- | B | <--- | C | <--- ...
+                    //  ---    |   ---        ---
+                    // | A | <-*
+                    //  ---    |   ---
+                    //         .- | D | <--- ...
+                    //             ---
+                    //              ^
+                    //          height = X
+                    //
+                    // we receive A, B, C, ..., A, D (chain reorg)
+                    // we stored the verified roots of B on disk
+                    // after chain reorg, height X's blame status changes
+                    // --> need to make sure to serve correct roots directly from
+                    //     header D instead of the stale roots retrieved for B
+                    data_man.remove_blamed_header_verified_roots(height);
 
                     // request witness for blamed headers
                     // for non-blamed headers, we will serve roots from disk

@@ -861,6 +861,12 @@ impl BlockDataManager {
         )
     }
 
+    pub fn remove_blamed_header_verified_roots(&self, height: u64) {
+        self.blamed_header_verified_roots.write().remove(&height);
+        self.db_manager
+            .remove_blamed_header_verified_roots_from_db(height);
+    }
+
     fn insert<K, V, InsertF>(
         &self, key: K, value: V, in_mem: &RwLock<HashMap<K, V>>,
         insert_f: InsertF, maybe_cache_id: Option<CacheId>, persistent: bool,
