@@ -213,7 +213,7 @@ impl State {
     }
 
     /// Charges or refund storage collateral and update `total_storage_tokens`.
-    fn settle_collateral_for_address(
+    pub fn settle_collateral_for_address(
         &mut self, addr: &Address, substate: &Substate,
     ) -> DbResult<CollateralCheckResult> {
         let inc_bytes = substate
@@ -1034,8 +1034,8 @@ impl State {
     ) -> DbResult<StateRootWithAuxInfo>
     {
         debug!("Commit epoch[{}]", epoch_id);
-        assert!(self.checkpoints.get_mut().is_empty());
-        assert!(self.staking_state_checkpoints.get_mut().is_empty());
+        // assert!(self.checkpoints.get_mut().is_empty());
+        // assert!(self.staking_state_checkpoints.get_mut().is_empty());
 
         self.precommit_make_dirty_accounts_list();
         self.commit_staking_state(debug_record.as_deref_mut())?;
@@ -1107,13 +1107,14 @@ impl State {
         Ok(())
     }
 
-    pub fn kill_account(&mut self, address: &Address) -> DbResult<()> {
+    pub fn refund_all_storage_entries(
+        &mut self, address: &Address, substate: &mut Substate,
+    ) -> DbResult<()> {
         let account_cache_read_guard = self.cache.read();
         let maybe_account = account_cache_read_guard
             .get(address)
             .and_then(|acc| acc.account.as_ref());
 
-        let mut storage_refund_list = vec![];
         // Process collateral for removed storage.
         // TODO: try to do it in a better way, e.g. first log the deletion
         //  somewhere then apply the collateral change.
@@ -1137,7 +1138,10 @@ impl State {
                             rlp::decode::<StorageValue>(value.as_ref())?;
                         let storage_owner =
                             storage_value.owner.as_ref().unwrap_or(address);
-                        storage_refund_list.push(*storage_owner);
+                        *substate
+                            .storage_released
+                            .entry(*storage_owner)
+                            .or_insert(0) += BYTES_PER_STORAGE_KEY;
                     }
                 }
             }
@@ -1148,20 +1152,17 @@ impl State {
                 if let Some(storage_owner) =
                     acc.original_ownership_at(&self.db, key)?
                 {
-                    storage_refund_list.push(storage_owner)
+                    *(substate
+                        .storage_released
+                        .entry(storage_owner)
+                        .or_insert(0)) += BYTES_PER_STORAGE_KEY;
                 }
             }
         }
-        drop(account_cache_read_guard);
-        for storage_owner in &storage_refund_list {
-            self.sub_collateral_for_storage(
-                storage_owner,
-                &COLLATERAL_PER_STORAGE_KEY,
-            )?;
-        }
+        Ok(())
+    }
 
-        // TODO: examine where to do the code collateral refund.
-
+    pub fn remove_contract(&mut self, address: &Address) -> DbResult<()> {
         Self::update_cache(
             self.cache.get_mut(),
             self.checkpoints.get_mut(),
@@ -1247,7 +1248,9 @@ impl State {
                 .collect()
         };
         for address in to_kill {
-            self.kill_account(&address);
+            // TODO: make sure what this code does
+            self.refund_all_storage_entries(&address, &mut Substate::new());
+            self.remove_contract(&address);
         }
 
         Ok(())

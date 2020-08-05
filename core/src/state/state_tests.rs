@@ -800,7 +800,8 @@ fn kill_account_with_checkpoints() {
     let mut state = get_state(&storage_manager, &epoch_id_1);
     // Storage before the account is killed.
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::one());
-    state.kill_account(&a).unwrap();
+    state.refund_all_storage_entries(&a, &mut Substate::new()).unwrap();
+    state.remove_contract(&a).unwrap();
     // The account is killed. The storage should be empty.
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
     // The new contract in the same place should have empty storage.
@@ -816,7 +817,8 @@ fn kill_account_with_checkpoints() {
     // Test checkpoint.
     let mut state = get_state(&storage_manager, &epoch_id_1);
     state.checkpoint();
-    state.kill_account(&a).unwrap();
+    state.refund_all_storage_entries(&a, &mut Substate::new()).unwrap();
+    state.remove_contract(&a).unwrap();
     // The new contract in the same place should have empty storage.
     state.checkpoint();
     state.new_contract(&a, U256::zero(), U256::one()).unwrap();
@@ -871,7 +873,8 @@ fn check_result_of_simple_payment_to_killed_account() {
         .unwrap();
 
     let mut state = get_state(&storage_manager, &epoch_id_1);
-    state.kill_account(&a).unwrap();
+    state.refund_all_storage_entries(&a, &mut Substate::new()).unwrap();
+    state.remove_contract(&a).unwrap();
     // The account is killed. The storage should be empty.
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
     // Transfer balance to the killed account.
