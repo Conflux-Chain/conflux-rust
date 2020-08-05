@@ -218,7 +218,7 @@ impl State {
     }
 
     /// Charges or refund storage collateral and update `total_storage_tokens`.
-    fn settle_collateral_for_address(
+    pub fn settle_collateral_for_address(
         &mut self, addr: &Address,
     ) -> DbResult<CollateralCheckResult> {
         let (new, old) = (
@@ -1068,8 +1068,8 @@ impl State {
     ) -> DbResult<StateRootWithAuxInfo>
     {
         debug!("Commit epoch[{}]", epoch_id);
-        assert!(self.checkpoints.get_mut().is_empty());
-        assert!(self.staking_state_checkpoints.get_mut().is_empty());
+        // assert!(self.checkpoints.get_mut().is_empty());
+        // assert!(self.staking_state_checkpoints.get_mut().is_empty());
 
         self.precommit_make_dirty_accounts_list();
         self.commit_staking_state(debug_record.as_deref_mut())?;

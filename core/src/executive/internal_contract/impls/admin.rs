@@ -34,69 +34,8 @@ pub fn suicide(
 ) -> vm::Result<()>
 {
     substate.suicides.insert(contract_address.clone());
-    match state
-        .collect_and_settle_collateral_for_suicide(substate, contract_address)?
-    {
-        CollateralCheckResult::Valid => {}
-        CollateralCheckResult::ExceedStorageLimit { .. } => unreachable!(),
-        CollateralCheckResult::NotEnoughBalance { required, got } => {
-            return Err(vm::Error::NotEnoughBalanceForStorage {
-                required,
-                got,
-            });
-        }
-    }
-
-    if !state.collateral_for_storage(contract_address)?.is_zero() {
-        return Err(vm::Error::InternalContract(
-            "contract has nonzero collateral_for_storage",
-        ));
-    }
     let balance = state.balance(contract_address)?;
 
-    if let Some(code_size) = state.code_size(contract_address)? {
-        // Only refund the code collateral when code exists.
-        // If a contract suicides during creation, the code will be empty.
-        let code_owner = state
-            .code_owner(contract_address)?
-            .expect("code owner exists");
-        *substate.storage_released.entry(code_owner).or_insert(0) +=
-            code_size as u64;
-        let refund_collateral = *COLLATERAL_PER_BYTE * code_size;
-        state
-            .register_unrefunded_collateral(&code_owner, &refund_collateral)?;
-    }
-
-    let sponsor_for_gas = state.sponsor_for_gas(contract_address)?;
-    let sponsor_for_collateral =
-        state.sponsor_for_collateral(contract_address)?;
-    let sponsor_balance_for_gas =
-        state.sponsor_balance_for_gas(contract_address)?;
-    let sponsor_balance_for_collateral =
-        state.sponsor_balance_for_collateral(contract_address)?;
-
-    if sponsor_for_gas.is_some() {
-        state.add_balance(
-            sponsor_for_gas.as_ref().unwrap(),
-            &sponsor_balance_for_gas,
-            substate.to_cleanup_mode(spec),
-        )?;
-        state.sub_sponsor_balance_for_gas(
-            contract_address,
-            &sponsor_balance_for_gas,
-        )?;
-    }
-    if sponsor_for_collateral.is_some() {
-        state.add_balance(
-            sponsor_for_collateral.as_ref().unwrap(),
-            &sponsor_balance_for_collateral,
-            substate.to_cleanup_mode(spec),
-        )?;
-        state.sub_sponsor_balance_for_collateral(
-            contract_address,
-            &sponsor_balance_for_collateral,
-        )?;
-    }
     if refund_address == contract_address {
         // This is the corner case that the sponsor of the contract is itself.
         // When destroying, the balance will be burnt.

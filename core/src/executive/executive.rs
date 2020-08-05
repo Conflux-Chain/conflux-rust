@@ -1482,6 +1482,99 @@ impl<'a> Executive<'a> {
         )?)
     }
 
+    #[allow(dead_code)]
+    fn kill_process(&mut self, suicides: &HashSet<Address>) -> DbResult<Substate> {
+        let mut top_substate = Substate::new();
+        for address in suicides {
+            let mut substate = Substate::new();
+            if let Some(code_size) = self.state.code_size(address)? {
+                // Only refund the code collateral when code exists.
+                // If a contract suicides during creation, the code will be empty.
+                let code_owner = self.state
+                    .code_owner(address)?
+                    .expect("code owner exists");
+                *substate.storage_released.entry(code_owner).or_insert(0) +=
+                    code_size as u64;
+            }
+
+            // TODO: recycle storage
+            top_substate.accrue(substate);
+        }
+
+        for key in top_substate.keys_for_collateral_changed() {
+            let inc = top_substate
+                .storage_collateralized
+                .get(key)
+                .map_or(0, |x| *x);
+            let sub = top_substate.storage_released.get(key).map_or(0, |x| *x);
+            assert_eq!(inc,0);
+            if sub>0{
+                let refund = *COLLATERAL_PER_BYTE * sub;
+                self.state.sub_collateral_for_storage(key,&refund)?;
+            }
+        }
+
+
+        for contract_address in suicides {
+            let sponsor_for_gas = self.state.sponsor_for_gas(contract_address)?;
+            let sponsor_for_collateral =
+                self.state.sponsor_for_collateral(contract_address)?;
+            let sponsor_balance_for_gas =
+                self.state.sponsor_balance_for_gas(contract_address)?;
+            let sponsor_balance_for_collateral =
+                self.state.sponsor_balance_for_collateral(contract_address)?;
+
+            if sponsor_for_gas.is_some() {
+                self.state.add_balance(
+                    sponsor_for_gas.as_ref().unwrap(),
+                    &sponsor_balance_for_gas,
+                    top_substate.to_cleanup_mode(self.spec),
+                )?;
+                self.state.sub_sponsor_balance_for_gas(
+                    contract_address,
+                    &sponsor_balance_for_gas,
+                )?;
+            }
+            if sponsor_for_collateral.is_some() {
+                self.state.add_balance(
+                    sponsor_for_collateral.as_ref().unwrap(),
+                    &sponsor_balance_for_collateral,
+                    top_substate.to_cleanup_mode(self.spec),
+                )?;
+                self.state.sub_sponsor_balance_for_collateral(
+                    contract_address,
+                    &sponsor_balance_for_collateral,
+                )?;
+            }
+        }
+
+        for contract_address in suicides {
+            let refund_address = &self.state.admin(contract_address)?;
+            let balance = self.state.balance(contract_address)?;
+            if suicides.contains(refund_address) {
+                // This is the corner case that the sponsor of the contract is itself.
+                // When destroying, the balance will be burnt.
+                self.state.sub_balance(
+                    contract_address,
+                    &balance,
+                    &mut top_substate.to_cleanup_mode(self.spec),
+                )?;
+                self.state.subtract_total_issued(balance);
+            } else {
+                self.state.transfer_balance(
+                    contract_address,
+                    refund_address,
+                    &balance,
+                    top_substate.to_cleanup_mode(self.spec),
+                )?;
+            }
+            self.state.kill_account(contract_address);
+        }
+
+
+        Ok(top_substate)
+    }
+
     /// Finalizes the transaction (does refunds and suicides).
     fn finalize(
         &mut self, tx: &SignedTransaction, mut substate: Substate,
@@ -1522,9 +1615,8 @@ impl<'a> Executive<'a> {
         };
 
         // perform suicides
-        for address in &substate.suicides {
-            self.state.kill_account(address);
-        }
+        let subsubstate = self.kill_process(&substate.suicides)?;
+        substate.accrue(subsubstate);
 
         // TODO should be added back after enabling dust collection
         // Should be executed once per block, instead of per transaction?
