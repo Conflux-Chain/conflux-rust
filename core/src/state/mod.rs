@@ -1019,6 +1019,14 @@ impl State {
                 StorageKey::new_account_key(address),
                 debug_record.as_deref_mut(),
             )?;
+            self.db.delete(
+                StorageKey::new_deposit_list_key(address),
+                debug_record.as_deref_mut(),
+            )?;
+            self.db.delete(
+                StorageKey::new_vote_list_key(address),
+                debug_record.as_deref_mut(),
+            )?;
         }
         Ok(())
     }
