@@ -4,8 +4,7 @@
 
 use super::super::InternalContractTrait;
 use crate::{
-    parameters::staking::*,
-    state::{CollateralCheckResult, State, Substate},
+    state::{State, Substate},
     vm::{self, ActionParams, CallType, Spec},
 };
 use cfx_types::{Address, U256};

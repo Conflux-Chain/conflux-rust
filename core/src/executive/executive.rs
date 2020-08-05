@@ -1483,16 +1483,18 @@ impl<'a> Executive<'a> {
     }
 
     #[allow(dead_code)]
-    fn kill_process(&mut self, suicides: &HashSet<Address>) -> DbResult<Substate> {
+    fn kill_process(
+        &mut self, suicides: &HashSet<Address>,
+    ) -> DbResult<Substate> {
         let mut top_substate = Substate::new();
         for address in suicides {
             let mut substate = Substate::new();
             if let Some(code_size) = self.state.code_size(address)? {
                 // Only refund the code collateral when code exists.
-                // If a contract suicides during creation, the code will be empty.
-                let code_owner = self.state
-                    .code_owner(address)?
-                    .expect("code owner exists");
+                // If a contract suicides during creation, the code will be
+                // empty.
+                let code_owner =
+                    self.state.code_owner(address)?.expect("code owner exists");
                 *substate.storage_released.entry(code_owner).or_insert(0) +=
                     code_size as u64;
             }
@@ -1507,22 +1509,23 @@ impl<'a> Executive<'a> {
                 .get(key)
                 .map_or(0, |x| *x);
             let sub = top_substate.storage_released.get(key).map_or(0, |x| *x);
-            assert_eq!(inc,0);
-            if sub>0{
+            assert_eq!(inc, 0);
+            if sub > 0 {
                 let refund = *COLLATERAL_PER_BYTE * sub;
-                self.state.sub_collateral_for_storage(key,&refund)?;
+                self.state.sub_collateral_for_storage(key, &refund)?;
             }
         }
 
-
         for contract_address in suicides {
-            let sponsor_for_gas = self.state.sponsor_for_gas(contract_address)?;
+            let sponsor_for_gas =
+                self.state.sponsor_for_gas(contract_address)?;
             let sponsor_for_collateral =
                 self.state.sponsor_for_collateral(contract_address)?;
             let sponsor_balance_for_gas =
                 self.state.sponsor_balance_for_gas(contract_address)?;
-            let sponsor_balance_for_collateral =
-                self.state.sponsor_balance_for_collateral(contract_address)?;
+            let sponsor_balance_for_collateral = self
+                .state
+                .sponsor_balance_for_collateral(contract_address)?;
 
             if sponsor_for_gas.is_some() {
                 self.state.add_balance(
@@ -1552,8 +1555,9 @@ impl<'a> Executive<'a> {
             let refund_address = &self.state.admin(contract_address)?;
             let balance = self.state.balance(contract_address)?;
             if suicides.contains(refund_address) {
-                // This is the corner case that the sponsor of the contract is itself.
-                // When destroying, the balance will be burnt.
+                // This is the corner case that the sponsor of the contract is
+                // itself. When destroying, the balance will be
+                // burnt.
                 self.state.sub_balance(
                     contract_address,
                     &balance,
@@ -1570,7 +1574,6 @@ impl<'a> Executive<'a> {
             }
             self.state.kill_account(contract_address);
         }
-
 
         Ok(top_substate)
     }
