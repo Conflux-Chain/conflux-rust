@@ -332,6 +332,8 @@ impl State {
         }
     }
 
+    // TODO: This function can only be called after VM execution. There are some
+    // test cases breaks this assumption, which will be fixed in a separated PR.
     pub fn collect_and_settle_collateral(
         &mut self, storage_owner: &Address, storage_limit: &U256,
         substate: &mut Substate,
