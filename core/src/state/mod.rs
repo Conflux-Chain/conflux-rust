@@ -335,14 +335,14 @@ impl State {
     // TODO: This function can only be called after VM execution. There are some
     // test cases breaks this assumption, which will be fixed in a separated PR.
     pub fn collect_and_settle_collateral(
-        &mut self, storage_owner: &Address, storage_limit: &U256,
+        &mut self, original_sender: &Address, storage_limit: &U256,
         substate: &mut Substate,
     ) -> DbResult<CollateralCheckResult>
     {
         self.collect_ownership_changed(substate)?;
         let res = match self.settle_collateral_for_all(substate)? {
             CollateralCheckResult::Valid => {
-                self.check_storage_limit(storage_owner, storage_limit)?
+                self.check_storage_limit(original_sender, storage_limit)?
             }
             res => res,
         };
