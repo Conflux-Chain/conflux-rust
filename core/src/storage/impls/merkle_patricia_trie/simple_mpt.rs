@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-fn min_repr_bytes(number_of_keys: usize) -> u8 {
+fn min_repr_bytes(number_of_keys: usize) -> usize {
     let mut largest_value = match number_of_keys {
         n if n == 0 => return 0,
         n if n == 1 => return 1,
@@ -19,9 +19,10 @@ fn min_repr_bytes(number_of_keys: usize) -> u8 {
     min_repr_bytes
 }
 
-fn to_index_bytes(mut index: usize, len: u8) -> Vec<u8> {
-    let mut bytes = vec![0u8; len as usize];
-    for i in 0..(len as usize) {
+fn to_index_bytes(mut index: usize, len: usize) -> Vec<u8> {
+    let mut bytes = vec![0u8; len];
+
+    for i in (0..len).rev() {
         bytes[i] = index as u8;
         index >>= 8;
     }
@@ -151,9 +152,9 @@ mod tests {
     fn test_into_simple_mpt_key() {
         assert_eq!(into_simple_mpt_key(0x01, 1), vec![0x01]);
         assert_eq!(into_simple_mpt_key(0x01, 256), vec![0x01]);
-        assert_eq!(into_simple_mpt_key(0x01, 257), vec![0x01, 0x00]);
-        assert_eq!(into_simple_mpt_key(0x01, 65536), vec![0x01, 0x00]);
-        assert_eq!(into_simple_mpt_key(0x01, 65537), vec![0x01, 0x00, 0x00]);
+        assert_eq!(into_simple_mpt_key(0x01, 257), vec![0x00, 0x01]);
+        assert_eq!(into_simple_mpt_key(0x01, 65536), vec![0x00, 0x01]);
+        assert_eq!(into_simple_mpt_key(0x01, 65537), vec![0x00, 0x00, 0x01]);
     }
 
     #[test]
@@ -261,12 +262,12 @@ mod tests {
         check_proofs(0x0100, vec![3]);
 
         // number of items: 0x101
-        // keys: [0x00, 0x00], [0x01, 0x00], [0x02, 0x00], ..., [0x00, 0x01] (little-endian)
+        // keys: [0x00, 0x00], [0x00, 0x01], [0x00, 0x02], ..., [0x01, 0x00]
         // proof size:
-        //   [0x01, 0x00], ..., [0xff, 0x00] -> 3 (root + 1st nibble + 2nd nibble)
-        //      ^^                 ^^
-        //   [0x00, 0x00], [0x00, 0x10]      -> 4 (root + 1st nibble [=0] + 2nd nibble [=0] + 3rd nibble)
-        //      ^^    ^       ^^    ^
-        check_proofs(0x0101, vec![3, 4]);
+        //   [0x00, 0x00], ..., [0x00, 0xff] -> 4 (root + 2nd nibble + 3rd nibble + 4th nibble)
+        //       ^    ^^            ^    ^^
+        //   [0x01, 0x00]      -> 2 (root + 2nd nibble)
+        //       ^
+        check_proofs(0x0101, vec![2, 4]);
     }
 }
