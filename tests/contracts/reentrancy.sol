@@ -13,7 +13,8 @@ contract Reentrance {
 
     function withdrawBalance() public {
         uint x = balances[msg.sender];
-        msg.sender.call.value(x)("");
+        (bool success, ) = msg.sender.call.value(x)("");
+        require(success, "Fails to withdraw by callback.");
         balances[msg.sender] = 0;
     }
 }
