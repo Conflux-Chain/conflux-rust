@@ -1154,10 +1154,6 @@ impl State {
         }
         drop(account_cache_read_guard);
         for storage_owner in &storage_refund_list {
-            self.register_unrefunded_collateral(
-                storage_owner,
-                &COLLATERAL_PER_STORAGE_KEY,
-            )?;
             self.sub_collateral_for_storage(
                 storage_owner,
                 &COLLATERAL_PER_STORAGE_KEY,
