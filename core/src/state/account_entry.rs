@@ -528,11 +528,19 @@ impl OverlayAccount {
     ) -> DbResult<bool>
     {
         if cache_deposit_list && self.deposit_list.is_none() {
-            let deposit_list_opt = db.get_deposit_list(&self.address)?;
+            let deposit_list_opt = if self.is_newly_created_contract {
+                None
+            } else {
+                db.get_deposit_list(&self.address)?
+            };
             self.deposit_list = Some(deposit_list_opt.unwrap_or_default());
         }
         if cache_vote_list && self.vote_stake_list.is_none() {
-            let vote_list_opt = db.get_vote_list(&self.address)?;
+            let vote_list_opt = if self.is_newly_created_contract {
+                None
+            } else {
+                db.get_vote_list(&self.address)?
+            };
             self.vote_stake_list = Some(vote_list_opt.unwrap_or_default());
         }
         Ok(true)
