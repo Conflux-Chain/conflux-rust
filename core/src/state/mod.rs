@@ -1331,13 +1331,12 @@ impl State {
         &self, address: &Address, require: RequireCache, f: F,
     ) -> DbResult<U>
     where F: Fn(Option<&OverlayAccount>) -> U {
-        let maybe_acc = self
+        if let Some(account) = self
             .cache
             .write()
             .get_mut(address)
-            .and_then(|maybe_acc| maybe_acc.account.as_mut());
-
-        if let Some(account) = maybe_acc {
+            .and_then(|maybe_acc| maybe_acc.account.as_mut())
+        {
             if !Self::update_account_cache(require, account, &self.db) {
                 return Err(DbErrorKind::IncompleteDatabase(
                     account.address().clone(),
