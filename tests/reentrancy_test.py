@@ -193,7 +193,7 @@ class ReentrancyTest(ConfluxTestFramework):
             )["data"])
         assert_equal(contract_balance, 2 * 10 ** 18)
         # FIXME: this assertion fails.
-        # assert_equal(parse_as_int(user2_balance_in_contract), 10 ** 18)
+        assert_equal(parse_as_int(user2_balance_in_contract), 10 ** 18)
         # FIXME: Because the balances[user2] becomes 0 due to the bug, we have to add one more storage refund
         user2_refund_upper_bound += 10 ** 18 // 16
         self.log.debug("user2 balance in contract %s" % user2_balance_in_contract)
