@@ -1341,18 +1341,14 @@ impl State {
         &self, address: &Address, require: RequireCache, f: F,
     ) -> DbResult<U>
     where F: Fn(Option<&OverlayAccount>) -> U {
-        let needs_update =
-            if let Some(maybe_acc) = self.cache.read().get(address) {
-                if let Some(account) = &maybe_acc.account {
-                    Self::needs_update(require, account)
-                } else {
-                    false
-                }
-            } else {
-                false
-            };
+        let account_cached = self
+            .cache
+            .read()
+            .get(address)
+            .and_then(|maybe_acc| maybe_acc.account.as_ref())
+            .is_some();
 
-        if needs_update {
+        if account_cached {
             if let Some(maybe_acc) = self.cache.write().get_mut(address) {
                 if let Some(account) = &mut maybe_acc.account {
                     if Self::update_account_cache(require, account, &self.db) {
