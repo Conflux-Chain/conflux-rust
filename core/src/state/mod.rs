@@ -916,16 +916,6 @@ impl State {
         Ok(())
     }
 
-    fn needs_update(require: RequireCache, account: &OverlayAccount) -> bool {
-        trace!("update_account_cache account={:?}", account);
-        match require {
-            RequireCache::None => false,
-            RequireCache::Code | RequireCache::CodeSize => !account.is_cached(),
-            RequireCache::DepositList => account.deposit_list().is_none(),
-            RequireCache::VoteStakeList => account.vote_stake_list().is_none(),
-        }
-    }
-
     /// Load required account data from the databases. Returns whether the
     /// cache succeeds.
     fn update_account_cache(
