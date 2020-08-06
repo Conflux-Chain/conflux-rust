@@ -991,7 +991,8 @@ impl SynchronizationGraphInner {
             self.arena.remove(*index);
             self.hash_to_arena_indices.remove(&hash);
             // remove header/block in memory cache and header/block in db
-            self.data_man.remove_block(&hash, true /* remove_db */);
+            self.data_man
+                .remove_useless_block(&hash, true /* remove_db */);
         }
     }
 
@@ -1009,7 +1010,7 @@ impl SynchronizationGraphInner {
                 invalid_set.insert(*child);
             }
         }
-        mem::replace(&mut self.arena[index].children, children);
+        self.arena[index].children = children;
         let referrers =
             mem::replace(&mut self.arena[index].referrers, Vec::new());
         for referrer in &referrers {
@@ -1019,7 +1020,7 @@ impl SynchronizationGraphInner {
                 invalid_set.insert(*referrer);
             }
         }
-        mem::replace(&mut self.arena[index].referrers, referrers);
+        self.arena[index].referrers = referrers;
     }
 }
 

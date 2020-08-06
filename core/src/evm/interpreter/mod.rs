@@ -1318,18 +1318,41 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let b = self.stack.pop_back();
                 self.stack.push(
                     if !b.is_zero() {
-                        match b {
-                            ONE => a,
-                            TWO => a >> 1,
-                            TWO_POW_5 => a >> 5,
-                            TWO_POW_8 => a >> 8,
-                            TWO_POW_16 => a >> 16,
-                            TWO_POW_24 => a >> 24,
-                            TWO_POW_64 => a >> 64,
-                            TWO_POW_96 => a >> 96,
-                            TWO_POW_224 => a >> 224,
-                            TWO_POW_248 => a >> 248,
-                            _ => a / b,
+                        // match b {
+                        //     ONE => a,
+                        //     TWO => a >> 1,
+                        //     TWO_POW_5 => a >> 5,
+                        //     TWO_POW_8 => a >> 8,
+                        //     TWO_POW_16 => a >> 16,
+                        //     TWO_POW_24 => a >> 24,
+                        //     TWO_POW_64 => a >> 64,
+                        //     TWO_POW_96 => a >> 96,
+                        //     TWO_POW_224 => a >> 224,
+                        //     TWO_POW_248 => a >> 248,
+                        //     _ => a / b,
+                        // }
+                        if b == ONE {
+                            a
+                        } else if b == TWO {
+                            a >> 1
+                        } else if b == TWO_POW_5 {
+                            a >> 5
+                        } else if b == TWO_POW_8 {
+                            a >> 8
+                        } else if b == TWO_POW_16 {
+                            a >> 16
+                        } else if b == TWO_POW_24 {
+                            a >> 24
+                        } else if b == TWO_POW_64 {
+                            a >> 64
+                        } else if b == TWO_POW_96 {
+                            a >> 96
+                        } else if b == TWO_POW_224 {
+                            a >> 224
+                        } else if b == TWO_POW_248 {
+                            a >> 248
+                        } else {
+                            a / b
                         }
                     } else {
                         U256::zero()

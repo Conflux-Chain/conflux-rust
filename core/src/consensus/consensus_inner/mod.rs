@@ -27,6 +27,7 @@ use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use link_cut_tree::{CaterpillarMinLinkCutTree, SizeMinLinkCutTree};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
+use metrics::{Counter, CounterUsize};
 use parking_lot::Mutex;
 use primitives::{
     receipt::Receipt, Block, BlockHeader, BlockHeaderBuilder, EpochId,
@@ -40,6 +41,13 @@ use std::{
     mem,
     sync::Arc,
 };
+lazy_static! {
+    static ref INVALID_BLAME_OR_STATE_ROOT_COUNTER: Arc<dyn Counter<usize>> =
+        CounterUsize::register_with_group(
+            "system_metrics",
+            "invalid_blame_or_state_root_count"
+        );
+}
 
 #[derive(Clone)]
 pub struct ConsensusInnerConfig {
@@ -472,10 +480,16 @@ pub struct ConsensusGraphInner {
     anticone_cache: AnticoneCache,
     pastset_cache: PastSetCache,
     sequence_number_of_block_entrance: u64,
-    /// Block set of each old era. It will garbage collected by sync graph via
-    /// `pop_old_era_block_set()`. This is a helper for full nodes to determine
-    /// which blocks it can safely remove
-    old_era_block_set: Mutex<VecDeque<H256>>,
+
+    /// Blocks in the past of the current block set. They will be merged into
+    /// `last_old_era_block_set` when this checkpoint moves forward.
+    /// Note that `last_old_era_block_set` is locked before
+    /// `current_old_era_block_set`.
+    current_old_era_block_set: Mutex<VecDeque<H256>>,
+    /// Block set of each old era. It will be garbage collected by sync graph
+    /// via `pop_old_era_block_set()`. This is a helper for full nodes to
+    /// determine which blocks it can safely remove
+    last_old_era_block_set: Mutex<VecDeque<H256>>,
 
     /// This is a cache map to speed up the lca computation of terminals in the
     /// best terminals call. The basic idea is that if no major
@@ -508,7 +522,7 @@ impl MallocSizeOf for ConsensusGraphInner {
             + self.data_man.size_of(ops)
             + self.anticone_cache.size_of(ops)
             + self.pastset_cache.size_of(ops)
-            + self.old_era_block_set.lock().size_of(ops)
+            + self.current_old_era_block_set.lock().size_of(ops)
             + self.best_terminals_lca_height_cache.size_of(ops)
             + self.best_terminals_reorg_height.size_of(ops)
     }
@@ -598,7 +612,8 @@ impl ConsensusGraphInner {
             anticone_cache: AnticoneCache::new(),
             pastset_cache: Default::default(),
             sequence_number_of_block_entrance: 0,
-            old_era_block_set: Mutex::new(VecDeque::new()),
+            current_old_era_block_set: Default::default(),
+            last_old_era_block_set: Default::default(),
             best_terminals_lca_height_cache: Default::default(),
             best_terminals_reorg_height: NULLU64,
             has_timer_block_in_anticone_cache: Default::default(),
@@ -1561,7 +1576,8 @@ impl ConsensusGraphInner {
         }
 
         if parent == NULL && referees.is_empty() {
-            self.old_era_block_set.lock().push_back(hash);
+            // FIXME These blocks will not be garbage collected from disk if
+            // they are never referred.
             return (sn, NULL);
         }
 
@@ -2675,6 +2691,7 @@ impl ConsensusGraphInner {
                 block_header.deferred_receipts_root(), state_blame_info.receipts_vec_root,
                 block_header.deferred_logs_bloom_hash(), state_blame_info.logs_bloom_vec_root,
             );
+            INVALID_BLAME_OR_STATE_ROOT_COUNTER.inc(1);
 
             if self.inner_conf.debug_dump_dir_invalid_state_root.is_some() {
                 debug_recompute = true;
@@ -2966,6 +2983,13 @@ impl ConsensusGraphInner {
 
     fn get_timer_chain_index(&self, me: usize) -> usize {
         if !self.arena[me].is_timer || self.arena[me].data.partial_invalid {
+            return NULL;
+        }
+        if self.arena[me].data.ledger_view_timer_chain_height
+            < self.cur_era_genesis_timer_chain_height
+        {
+            // This is only possible if `me` is in the anticone of
+            // `cur_era_genesis`.
             return NULL;
         }
         let timer_chain_index =
@@ -3757,7 +3781,7 @@ impl ConsensusGraphInner {
     /// `old_era_block_set`. The set contains all the blocks that should be
     /// eliminated by full nodes
     pub fn pop_old_era_block_set(&self) -> Option<H256> {
-        self.old_era_block_set.lock().pop_front()
+        self.last_old_era_block_set.lock().pop_front()
     }
 
     /// Finish block recovery and prepare for normal block processing.

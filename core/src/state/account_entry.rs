@@ -6,6 +6,7 @@ use crate::{
     bytes::{Bytes, ToPretty},
     consensus::debug::ComputeEpochDebugRecord,
     hash::{keccak, KECCAK_EMPTY},
+    state::State,
     statedb::{Result as DbResult, StateDb},
 };
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
@@ -54,9 +55,6 @@ pub struct OverlayAccount {
     ownership_cache: RwLock<HashMap<Vec<u8>, Option<Address>>>,
     ownership_changes: HashMap<Vec<u8>, Address>,
 
-    unpaid_storage_entries: u64,
-    unrefunded_storage_entries: u64,
-
     // Storage layout change.
     storage_layout_change: Option<StorageLayout>,
 
@@ -103,8 +101,6 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: Default::default(),
             ownership_changes: HashMap::new(),
-            unpaid_storage_entries: 0,
-            unrefunded_storage_entries: 0,
             storage_layout_change: None,
             staking_balance: account.staking_balance,
             collateral_for_storage: account.collateral_for_storage,
@@ -132,8 +128,6 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: Default::default(),
             ownership_changes: HashMap::new(),
-            unpaid_storage_entries: 0,
-            unrefunded_storage_entries: 0,
             storage_layout_change: None,
             staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
@@ -166,8 +160,6 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: Default::default(),
             ownership_changes: HashMap::new(),
-            unpaid_storage_entries: 0,
-            unrefunded_storage_entries: 0,
             storage_layout_change: None,
             staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
@@ -529,27 +521,6 @@ impl OverlayAccount {
         self.collateral_for_storage -= *by;
     }
 
-    pub fn get_uncleared_storage_entries(&self) -> (u64, u64) {
-        return (self.unpaid_storage_entries, self.unrefunded_storage_entries);
-    }
-
-    pub fn reset_uncleared_storage_entries(&mut self) {
-        self.unpaid_storage_entries = 0;
-        self.unrefunded_storage_entries = 0;
-    }
-
-    pub fn add_unrefunded_storage_entries(&mut self, by: u64) {
-        let delta = std::cmp::min(self.unpaid_storage_entries, by);
-        self.unpaid_storage_entries -= delta;
-        self.unrefunded_storage_entries += by - delta;
-    }
-
-    pub fn add_unpaid_storage_entries(&mut self, by: u64) {
-        let delta = std::cmp::min(self.unrefunded_storage_entries, by);
-        self.unrefunded_storage_entries -= delta;
-        self.unpaid_storage_entries += by - delta;
-    }
-
     pub fn cache_code(&mut self, db: &StateDb) -> Option<Arc<Bytes>> {
         trace!("OverlayAccount::cache_code: ic={}; self.code_hash={:?}, self.code_cache={}", self.is_cached(), self.code_hash, self.code_cache.pretty());
 
@@ -598,8 +569,6 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: Default::default(),
             ownership_changes: HashMap::new(),
-            unpaid_storage_entries: 0,
-            unrefunded_storage_entries: 0,
             storage_layout_change: None,
             staking_balance: self.staking_balance,
             collateral_for_storage: self.collateral_for_storage,
@@ -621,8 +590,6 @@ impl OverlayAccount {
         account.ownership_cache =
             RwLock::new(self.ownership_cache.read().clone());
         account.ownership_changes = self.ownership_changes.clone();
-        account.unrefunded_storage_entries = self.unrefunded_storage_entries;
-        account.unpaid_storage_entries = self.unpaid_storage_entries;
         account.storage_layout_change = self.storage_layout_change.clone();
         account
     }
@@ -714,8 +681,6 @@ impl OverlayAccount {
         self.storage_changes = other.storage_changes;
         self.ownership_cache = other.ownership_cache;
         self.ownership_changes = other.ownership_changes;
-        self.unpaid_storage_entries = other.unpaid_storage_entries;
-        self.unrefunded_storage_entries = other.unrefunded_storage_entries;
         self.storage_layout_change = other.storage_layout_change;
         self.staking_balance = other.staking_balance;
         self.collateral_for_storage = other.collateral_for_storage;
@@ -730,12 +695,12 @@ impl OverlayAccount {
     /// value of the key is nonzero.
     fn original_ownership_at(
         &self, db: &StateDb, key: &Vec<u8>,
-    ) -> Option<Address> {
+    ) -> DbResult<Option<Address>> {
         if let Some(value) = self.ownership_cache.read().get(key) {
-            return value.clone();
+            return Ok(value.clone());
         }
         if self.is_newly_created_contract {
-            return None;
+            return Ok(None);
         }
         let ownership_cache = &mut *self.ownership_cache.write();
         Self::get_and_cache_storage(
@@ -745,9 +710,8 @@ impl OverlayAccount {
             &self.address,
             key,
             true, /* cache_ownership */
-        )
-        .ok();
-        ownership_cache.get(key).expect("key exists").clone()
+        )?;
+        Ok(ownership_cache.get(key).expect("key exists").clone())
     }
 
     /// Return the storage change of each related account.
@@ -757,7 +721,7 @@ impl OverlayAccount {
     /// account in current execution.
     pub fn commit_ownership_change(
         &mut self, db: &StateDb,
-    ) -> HashMap<Address, (u64, u64)> {
+    ) -> DbResult<HashMap<Address, (u64, u64)>> {
         let mut storage_delta = HashMap::new();
         let ownership_changes: Vec<_> =
             self.ownership_changes.drain().collect();
@@ -771,7 +735,7 @@ impl OverlayAccount {
             // Get the owner of `k` before execution. If it is `None`, it means
             // the value of the key is zero before execution. Otherwise, the
             // value of the key is nonzero.
-            let original_ownership_opt = self.original_ownership_at(db, &k);
+            let original_ownership_opt = self.original_ownership_at(db, &k)?;
             if let Some(original_ownership) = original_ownership_opt {
                 if v == original_ownership {
                     ownership_changed = false;
@@ -798,27 +762,35 @@ impl OverlayAccount {
             }
         }
         assert!(self.ownership_changes.is_empty());
-        storage_delta
+        Ok(storage_delta)
     }
 
     pub fn commit(
-        &mut self, db: &mut StateDb,
+        &mut self, state: &mut State,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()>
     {
+        if self.is_newly_created_contract {
+            state.recycle_storage(
+                vec![self.address],
+                debug_record.as_deref_mut(),
+            )?;
+        }
+
         // reinsert storage_layout to delta trie if storage is updated
         // FIXME: load storage layout on first storage access instead
         if !self.storage_changes.is_empty()
             && self.storage_layout_change.is_none()
         {
             // try to get from delta tries or snapshot
-            let layout = db
+            let layout = state
+                .db
                 .get_storage_layout(&self.address)?
                 // layout must exist for existing accounts
                 // storage_layout_change cannot be None for new accounts
                 .expect("storage layout should exist");
 
-            db.set_storage_layout(
+            state.db.set_storage_layout(
                 &self.address,
                 &layout,
                 debug_record.as_deref_mut(),
@@ -826,21 +798,21 @@ impl OverlayAccount {
         }
 
         assert!(self.ownership_changes.is_empty());
-        assert_eq!(self.unpaid_storage_entries, 0);
-        assert_eq!(self.unrefunded_storage_entries, 0);
         let ownership_cache = self.ownership_cache.get_mut();
         for (k, v) in self.storage_changes.drain() {
             let address_key =
                 StorageKey::new_storage_key(&self.address, k.as_ref());
             match v.is_zero() {
-                true => db.delete(address_key, debug_record.as_deref_mut())?,
+                true => {
+                    state.db.delete(address_key, debug_record.as_deref_mut())?
+                }
                 false => {
                     let owner = ownership_cache
                         .get(&k)
                         .expect("all key must exist")
                         .expect("owner exists");
 
-                    db.set::<StorageValue>(
+                    state.db.set::<StorageValue>(
                         address_key,
                         &StorageValue {
                             value: v,
@@ -864,7 +836,7 @@ impl OverlayAccount {
                         &self.address,
                         &self.code_hash,
                     );
-                    db.set::<CodeInfo>(
+                    state.db.set::<CodeInfo>(
                         storage_key,
                         &CodeInfo {
                             code: (*code).clone(),
@@ -882,9 +854,11 @@ impl OverlayAccount {
                 let storage_key =
                     StorageKey::new_deposit_list_key(&self.address);
                 if deposit_list.is_empty() {
-                    db.delete(storage_key, debug_record.as_deref_mut())?;
+                    state
+                        .db
+                        .delete(storage_key, debug_record.as_deref_mut())?;
                 } else {
-                    db.set::<DepositList>(
+                    state.db.set::<DepositList>(
                         storage_key,
                         deposit_list,
                         debug_record.as_deref_mut(),
@@ -898,9 +872,11 @@ impl OverlayAccount {
             Some(vote_stake_list) => {
                 let storage_key = StorageKey::new_vote_list_key(&self.address);
                 if vote_stake_list.is_empty() {
-                    db.delete(storage_key, debug_record.as_deref_mut())?;
+                    state
+                        .db
+                        .delete(storage_key, debug_record.as_deref_mut())?;
                 } else {
-                    db.set::<VoteStakeList>(
+                    state.db.set::<VoteStakeList>(
                         storage_key,
                         vote_stake_list,
                         debug_record.as_deref_mut(),
@@ -910,7 +886,9 @@ impl OverlayAccount {
         }
 
         if let Some(ref layout) = self.storage_layout_change {
-            db.set_storage_layout(&self.address, layout, debug_record)?;
+            state
+                .db
+                .set_storage_layout(&self.address, layout, debug_record)?;
         }
 
         Ok(())

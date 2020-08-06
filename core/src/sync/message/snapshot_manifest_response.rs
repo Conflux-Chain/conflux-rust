@@ -8,7 +8,7 @@ use crate::{
     sync::{
         message::{msgid, Context, Handleable, SnapshotManifestRequest},
         state::storage::RangedManifest,
-        Error, ErrorKind, SYNC_PROTO_V1, SYNC_PROTO_V2,
+        Error, ErrorKind, SYNC_PROTO_V1, SYNC_PROTO_V3,
     },
 };
 use cfx_types::H256;
@@ -44,7 +44,7 @@ pub struct SnapshotManifestResponse {
 
 build_msg_impl! {
     SnapshotManifestResponse, msgid::GET_SNAPSHOT_MANIFEST_RESPONSE,
-    "SnapshotManifestResponse", SYNC_PROTO_V1, SYNC_PROTO_V2
+    "SnapshotManifestResponse", SYNC_PROTO_V1, SYNC_PROTO_V3
 }
 
 impl Handleable for SnapshotManifestResponse {

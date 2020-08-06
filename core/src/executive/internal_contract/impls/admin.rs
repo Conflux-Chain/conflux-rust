@@ -4,8 +4,7 @@
 
 use super::super::InternalContractTrait;
 use crate::{
-    parameters::staking::*,
-    state::{CollateralCheckResult, State, Substate},
+    state::{State, Substate},
     vm::{self, ActionParams, CallType, Spec},
 };
 use cfx_types::{Address, U256};
@@ -33,23 +32,7 @@ pub fn suicide(
     spec: &Spec, substate: &mut Substate,
 ) -> vm::Result<()>
 {
-    state.collect_ownership_changed(substate)?;
-    match state.settle_collateral_for_storage(contract_address)? {
-        CollateralCheckResult::Valid => {}
-        CollateralCheckResult::ExceedStorageLimit { .. } => unreachable!(),
-        CollateralCheckResult::NotEnoughBalance { required, got } => {
-            return Err(vm::Error::NotEnoughBalanceForStorage {
-                required,
-                got,
-            });
-        }
-    }
-
-    if !state.collateral_for_storage(contract_address)?.is_zero() {
-        return Err(vm::Error::InternalContract(
-            "contract has nonzero collateral_for_storage",
-        ));
-    }
+    substate.suicides.insert(contract_address.clone());
     let balance = state.balance(contract_address)?;
 
     if let Some(code_size) = state.code_size(contract_address)? {
@@ -58,8 +41,6 @@ pub fn suicide(
         let code_owner = state
             .code_owner(contract_address)?
             .expect("code owner exists");
-        let collateral_for_code = U256::from(code_size) * *COLLATERAL_PER_BYTE;
-        state.sub_collateral_for_storage(&code_owner, &collateral_for_code)?;
         *substate.storage_released.entry(code_owner).or_insert(0) +=
             code_size as u64;
     }
@@ -112,7 +93,6 @@ pub fn suicide(
             substate.to_cleanup_mode(spec),
         )?;
     }
-    substate.suicides.insert(*contract_address);
 
     Ok(())
 }

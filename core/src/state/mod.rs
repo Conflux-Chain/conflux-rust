@@ -14,6 +14,7 @@ use crate::{
     statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb},
     storage::StateRootWithAuxInfo,
     transaction_pool::SharedTransactionPool,
+    vm::Error as vmError,
     vm_factory::VmFactory,
 };
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
@@ -65,6 +66,20 @@ pub enum CollateralCheckResult {
     ExceedStorageLimit { limit: U256, required: U256 },
     NotEnoughBalance { required: U256, got: U256 },
     Valid,
+}
+
+impl CollateralCheckResult {
+    pub fn into_vm_result(self) -> Result<(), vmError> {
+        match self {
+            CollateralCheckResult::ExceedStorageLimit { .. } => {
+                Err(vmError::ExceedStorageLimit)
+            }
+            CollateralCheckResult::NotEnoughBalance { required, got } => {
+                Err(vmError::NotEnoughBalanceForStorage { required, got })
+            }
+            CollateralCheckResult::Valid => Ok(()),
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -182,7 +197,9 @@ impl State {
     pub fn vm_factory(&self) -> VmFactory { self.vm.clone() }
 
     /// Create a recoverable checkpoint of this state. Return the checkpoint
-    /// index.
+    /// index. The checkpoint records any old value which is alive at the
+    /// creation time of the checkpoint and updated after that and before
+    /// the creation of the next checkpoint.
     pub fn checkpoint(&mut self) -> usize {
         self.staking_state_checkpoints
             .get_mut()
@@ -194,59 +211,56 @@ impl State {
     }
 
     /// Charges or refund storage collateral and update `total_storage_tokens`.
-    pub fn settle_collateral_for_storage(
-        &mut self, addr: &Address,
+    fn settle_collateral_for_address(
+        &mut self, addr: &Address, substate: &Substate,
     ) -> DbResult<CollateralCheckResult> {
-        let (inc, sub) =
-            self.ensure_cached(addr, RequireCache::None, |acc| {
-                acc.map_or((0, 0), |account| {
-                    account.get_uncleared_storage_entries()
-                })
-            })?;
-        if inc > 0 || sub > 0 {
-            self.require_exists(addr, false)?
-                .reset_uncleared_storage_entries();
-        }
+        let inc_bytes = substate
+            .storage_collateralized
+            .get(addr)
+            .cloned()
+            .unwrap_or(0);
+        let sub_bytes =
+            substate.storage_released.get(addr).cloned().unwrap_or(0);
+        let (inc, sub) = if inc_bytes > sub_bytes {
+            (
+                *COLLATERAL_PER_BYTE * (inc_bytes - sub_bytes),
+                U256::from(0),
+            )
+        } else {
+            (
+                U256::from(0),
+                *COLLATERAL_PER_BYTE * (sub_bytes - inc_bytes),
+            )
+        };
 
-        if sub > 0 {
-            let delta = U256::from(sub) * *COLLATERAL_PER_STORAGE_KEY;
+        if !sub.is_zero() {
             assert!(self.exists(addr)?);
-            self.sub_collateral_for_storage(addr, &delta)?;
+            self.sub_collateral_for_storage(addr, &sub)?;
         }
-        if inc > 0 {
-            let delta = U256::from(inc) * *COLLATERAL_PER_STORAGE_KEY;
-            if addr.is_contract_address() {
-                let sponsor_balance =
-                    self.sponsor_balance_for_collateral(addr)?;
-                // sponsor_balance is not enough to cover storage incremental.
-                if delta > sponsor_balance {
-                    return Ok(CollateralCheckResult::NotEnoughBalance {
-                        required: delta,
-                        got: sponsor_balance,
-                    });
-                }
+        if !inc.is_zero() {
+            let balance = if addr.is_contract_address() {
+                self.sponsor_balance_for_collateral(addr)?
             } else {
-                let balance = self.balance(addr)?;
-                // balance is not enough to cover storage incremental.
-                if delta > balance {
-                    return Ok(CollateralCheckResult::NotEnoughBalance {
-                        required: delta,
-                        got: balance,
-                    });
-                }
+                self.balance(addr)?
+            };
+            // sponsor_balance is not enough to cover storage incremental.
+            if inc > balance {
+                return Ok(CollateralCheckResult::NotEnoughBalance {
+                    required: inc,
+                    got: balance,
+                });
             }
-            self.add_collateral_for_storage(addr, &delta)?;
+            self.add_collateral_for_storage(addr, &inc)?;
         }
         Ok(CollateralCheckResult::Valid)
     }
 
     /// Collects the cache (`ownership_change` in `OverlayAccount`) of storage
-    /// change and write to substate and
-    /// `storage_released`/`storage_collateralized` in overlay account.
+    /// change and write to substate.
     // It is idempotent. But its execution is cost.
     pub fn collect_ownership_changed(
         &mut self, substate: &mut Substate,
-    ) -> DbResult<CollateralCheckResult> {
+    ) -> DbResult<()> {
         let mut collateral_for_storage_sub = HashMap::new();
         let mut collateral_for_storage_inc = HashMap::new();
         if let Some(checkpoint) = self.checkpoints.get_mut().last() {
@@ -259,7 +273,7 @@ impl State {
                 {
                     if let Some(ref mut acc) = maybe_acc.account.as_mut() {
                         let ownership_delta =
-                            acc.commit_ownership_change(&self.db);
+                            acc.commit_ownership_change(&self.db)?;
                         for (addr, (inc, sub)) in ownership_delta {
                             if inc > 0 {
                                 *collateral_for_storage_inc
@@ -276,45 +290,36 @@ impl State {
                 }
             }
         }
-        // TODO: the overlay account and substate seem store the same content,
-        // to be remove one of them. But the current impl of suicide breaks
-        // this consistency, it may be changed later.
         for (addr, sub) in &collateral_for_storage_sub {
-            self.require_exists(&addr, false)?
-                .add_unrefunded_storage_entries(*sub);
             *substate.storage_released.entry(*addr).or_insert(0) +=
                 sub * BYTES_PER_STORAGE_KEY;
         }
         for (addr, inc) in &collateral_for_storage_inc {
-            self.require_exists(&addr, false)?
-                .add_unpaid_storage_entries(*inc);
             *substate.storage_collateralized.entry(*addr).or_insert(0) +=
                 inc * BYTES_PER_STORAGE_KEY;
         }
-        Ok(CollateralCheckResult::Valid)
+        return Ok(());
     }
 
-    pub fn collect_ownership_changed_and_settle(
-        &mut self, original_sender: &Address, storage_limit: &U256,
-        substate: &mut Substate,
-    ) -> DbResult<CollateralCheckResult>
-    {
-        self.collect_ownership_changed(substate)?;
-
-        let touched_addresses =
-            if let Some(checkpoint) = self.checkpoints.get_mut().last() {
-                checkpoint.keys().cloned().collect()
-            } else {
-                HashSet::new()
-            };
-        // No new addresses added to checkpoint in this for-loop.
-        for address in touched_addresses.iter() {
-            match self.settle_collateral_for_storage(address)? {
+    /// Charge and refund all the storage collaterals.
+    /// The suisided addresses are skimmed because their collateral have been
+    /// checked out. This function should only be called in post-processing
+    /// of a transaction.
+    pub fn settle_collateral_for_all(
+        &mut self, substate: &Substate,
+    ) -> DbResult<CollateralCheckResult> {
+        for address in substate.keys_for_collateral_changed().iter() {
+            match self.settle_collateral_for_address(address, substate)? {
                 CollateralCheckResult::Valid => {}
                 res => return Ok(res),
             }
         }
+        Ok(CollateralCheckResult::Valid)
+    }
 
+    pub fn check_storage_limit(
+        &self, original_sender: &Address, storage_limit: &U256,
+    ) -> DbResult<CollateralCheckResult> {
         let collateral_for_storage =
             self.collateral_for_storage(original_sender)?;
         if collateral_for_storage > *storage_limit {
@@ -327,9 +332,26 @@ impl State {
         }
     }
 
+    // TODO: This function can only be called after VM execution. There are some
+    // test cases breaks this assumption, which will be fixed in a separated PR.
+    pub fn collect_and_settle_collateral(
+        &mut self, original_sender: &Address, storage_limit: &U256,
+        substate: &mut Substate,
+    ) -> DbResult<CollateralCheckResult>
+    {
+        self.collect_ownership_changed(substate)?;
+        let res = match self.settle_collateral_for_all(substate)? {
+            CollateralCheckResult::Valid => {
+                self.check_storage_limit(original_sender, storage_limit)?
+            }
+            res => res,
+        };
+        Ok(res)
+    }
+
     /// Merge last checkpoint with previous.
     /// Caller should make sure the function
-    /// `check_collateral_for_storage()` was called before calling
+    /// `collect_ownership_changed()` was called before calling
     /// this function.
     pub fn discard_checkpoint(&mut self) {
         // merge with previous checkpoint
@@ -774,11 +796,16 @@ impl State {
     pub fn sub_collateral_for_storage(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
-        if !by.is_zero() {
+        let collateral = self.collateral_for_storage(address)?;
+        let refundable = if by > &collateral { &collateral } else { by };
+        let burnt = *by - *refundable;
+        if !refundable.is_zero() {
             self.require_exists(address, false)?
-                .sub_collateral_for_storage(by);
-            self.staking_state.total_storage_tokens -= *by;
+                .sub_collateral_for_storage(refundable);
         }
+        self.staking_state.total_storage_tokens -= *by;
+        self.staking_state.total_issued_tokens -= burnt;
+
         Ok(())
     }
 
@@ -884,7 +911,7 @@ impl State {
     }
 
     #[allow(dead_code)]
-    fn touch(&mut self, address: &Address) -> DbResult<()> {
+    pub fn touch(&mut self, address: &Address) -> DbResult<()> {
         drop(self.require_exists(address, false)?);
         Ok(())
     }
@@ -955,22 +982,18 @@ impl State {
 
     /// Assume that only contract with zero `collateral_for_storage` will be
     /// killed.
-    fn recycle_storage(
+    pub fn recycle_storage(
         &mut self, killed_addresses: Vec<Address>,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()>
     {
-        for address in killed_addresses {
-            self.db.delete(
-                StorageKey::new_account_key(&address),
-                debug_record.as_deref_mut(),
-            )?;
+        for address in &killed_addresses {
             let storages_opt = self.db.delete_all(
-                StorageKey::new_storage_root_key(&address),
+                StorageKey::new_storage_root_key(address),
                 debug_record.as_deref_mut(),
             )?;
             self.db.delete_all(
-                StorageKey::new_code_root_key(&address),
+                StorageKey::new_code_root_key(address),
                 debug_record.as_deref_mut(),
             )?;
             if let Some(storage_key_value) = storages_opt {
@@ -981,7 +1004,7 @@ impl State {
                         let storage_value =
                             rlp::decode::<StorageValue>(value.as_ref())?;
                         let storage_owner =
-                            storage_value.owner.as_ref().unwrap_or(&address);
+                            storage_value.owner.as_ref().unwrap_or(address);
                         assert!(self.exists(storage_owner)?);
                         self.sub_collateral_for_storage(
                             storage_owner,
@@ -990,6 +1013,20 @@ impl State {
                     }
                 }
             }
+        }
+        for address in &killed_addresses {
+            self.db.delete(
+                StorageKey::new_account_key(address),
+                debug_record.as_deref_mut(),
+            )?;
+            self.db.delete(
+                StorageKey::new_deposit_list_key(address),
+                debug_record.as_deref_mut(),
+            )?;
+            self.db.delete(
+                StorageKey::new_vote_list_key(address),
+                debug_record.as_deref_mut(),
+            )?;
         }
         Ok(())
     }
@@ -1026,13 +1063,14 @@ impl State {
         self.commit_staking_state(debug_record.as_deref_mut())?;
 
         let mut killed_addresses = Vec::new();
-        for (address, entry) in self.dirty_accounts_to_commit.iter_mut() {
+        for (address, entry) in
+            std::mem::take(&mut self.dirty_accounts_to_commit).iter_mut()
+        {
             entry.state = AccountState::Committed;
             match &mut entry.account {
                 None => killed_addresses.push(*address),
                 Some(account) => {
-                    account
-                        .commit(&mut self.db, debug_record.as_deref_mut())?;
+                    account.commit(self, debug_record.as_deref_mut())?;
                     self.db.set::<Account>(
                         StorageKey::new_account_key(address),
                         &account.as_account()?,
@@ -1136,6 +1174,7 @@ impl State {
         })
     }
 
+    #[allow(unused)]
     pub fn kill_garbage(
         &mut self, touched: &HashSet<Address>, remove_empty_touched: bool,
         min_balance: &Option<U256>, kill_contracts: bool,

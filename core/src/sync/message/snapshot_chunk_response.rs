@@ -7,7 +7,7 @@ use crate::{
     sync::{
         message::{msgid, Context, Handleable, SnapshotChunkRequest},
         state::storage::Chunk,
-        Error, SYNC_PROTO_V1, SYNC_PROTO_V2,
+        Error, SYNC_PROTO_V1, SYNC_PROTO_V3,
     },
 };
 use network::service::ProtocolVersion;
@@ -21,7 +21,7 @@ pub struct SnapshotChunkResponse {
 
 build_msg_impl! {
     SnapshotChunkResponse, msgid::GET_SNAPSHOT_CHUNK_RESPONSE,
-    "SnapshotChunkResponse", SYNC_PROTO_V1, SYNC_PROTO_V2
+    "SnapshotChunkResponse", SYNC_PROTO_V1, SYNC_PROTO_V3
 }
 
 impl Handleable for SnapshotChunkResponse {

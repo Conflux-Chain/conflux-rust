@@ -102,4 +102,9 @@ pub trait LocalRpc {
     fn sign(
         &self, data: RpcBytes, address: H160, password: Option<String>,
     ) -> JsonRpcResult<H520>;
+
+    #[rpc(name = "cfx_signTransaction")]
+    fn sign_transaction(
+        &self, tx: SendTxRequest, password: Option<String>,
+    ) -> JsonRpcResult<String>;
 }

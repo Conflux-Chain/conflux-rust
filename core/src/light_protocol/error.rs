@@ -115,6 +115,11 @@ error_chain! {
             display("Unable to produce proof"),
         }
 
+        UnableToProduceTxInfo(details: String) {
+            description("Unable to produce tx info"),
+            display("Unable to produce tx info: {:?}", details),
+        }
+
         UnexpectedMessage {
             description("Unexpected message"),
             display("Unexpected message"),
@@ -179,6 +184,10 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
         // with the info needed to produce a state root proof, we
         // should not disconnect the peer
         | ErrorKind::UnableToProduceProof
+
+        // if the tx requested has been removed locally,
+        // we should not disconnect the peer
+        | ErrorKind::UnableToProduceTxInfo(_)
 
         // NOTE: to help with backward-compatibility, we
         // should not disconnect on `UnknownMessage`
