@@ -282,7 +282,7 @@ impl QueryService {
                 error!("Account {:?} found but code {:?} does not exist (epoch={:?})",  address, code_hash, epoch);
                 bail!(format!("Unable to retrieve code: internal error"));
             }
-            Some(info) => Ok(Some(info.code)),
+            Some(info) => Ok(Some((*info.code).clone())),
         }
     }
 

@@ -5,7 +5,8 @@
 use super::{CleanupMode, CollateralCheckResult, State, Substate};
 
 use crate::{
-    parameters::staking::*,
+    genesis::DEV_GENESIS_KEY_PAIR,
+    parameters::{consensus::ONE_CFX_IN_DRIP, staking::*},
     statedb::StateDb,
     storage::{
         tests::new_state_manager_for_unit_test, StateIndex, StorageManager,
@@ -15,7 +16,8 @@ use crate::{
     vm_factory::VmFactory,
 };
 use cfx_types::{address_util::AddressUtil, Address, BigEndianHash, U256};
-use primitives::{EpochId, StorageLayout};
+use keccak_hash::{keccak, KECCAK_EMPTY};
+use primitives::{EpochId, StorageKey, StorageLayout};
 
 fn get_state(storage_manager: &StorageManager, epoch_id: &EpochId) -> State {
     State::new(
@@ -770,7 +772,9 @@ fn kill_account_with_checkpoints() {
     let k = u256_to_vec(&U256::from(0));
     // Need the checkpoint for ownership commitment.
     state_0.checkpoint();
-    state_0.new_contract(&a, U256::zero(), U256::one()).unwrap();
+    state_0
+        .new_contract(&a, *COLLATERAL_PER_STORAGE_KEY, U256::one())
+        .unwrap();
     state_0.set_storage(&a, k.clone(), U256::one(), a).unwrap();
     state_0
         .set_storage_layout(&a, StorageLayout::Regular(0))
@@ -781,6 +785,12 @@ fn kill_account_with_checkpoints() {
         .unwrap()
         .commit_ownership_change(&state_0.db)
         .unwrap();
+    state_0
+        .add_sponsor_balance_for_collateral(&a, &COLLATERAL_PER_STORAGE_KEY)
+        .unwrap();
+    state_0
+        .add_collateral_for_storage(&a, &COLLATERAL_PER_STORAGE_KEY)
+        .unwrap();
     state_0.discard_checkpoint();
     let epoch_id_1 = EpochId::from_uint(&U256::from(1));
     state_0
@@ -790,7 +800,7 @@ fn kill_account_with_checkpoints() {
     let mut state = get_state(&storage_manager, &epoch_id_1);
     // Storage before the account is killed.
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::one());
-    state.kill_account(&a);
+    state.kill_account(&a).unwrap();
     // The account is killed. The storage should be empty.
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
     // The new contract in the same place should have empty storage.
@@ -806,7 +816,7 @@ fn kill_account_with_checkpoints() {
     // Test checkpoint.
     let mut state = get_state(&storage_manager, &epoch_id_1);
     state.checkpoint();
-    state.kill_account(&a);
+    state.kill_account(&a).unwrap();
     // The new contract in the same place should have empty storage.
     state.checkpoint();
     state.new_contract(&a, U256::zero(), U256::one()).unwrap();
@@ -818,6 +828,69 @@ fn kill_account_with_checkpoints() {
     state.revert_to_checkpoint();
     // Storage before the account is killed.
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::one());
+}
+
+#[test]
+fn check_result_of_simple_payment_to_killed_account() {
+    let storage_manager = new_state_manager_for_unit_test();
+    let mut state_0 = get_state_for_genesis_write(&storage_manager);
+    let sender_addr = DEV_GENESIS_KEY_PAIR.address();
+    state_0
+        .require_or_new_basic_account(&sender_addr)
+        .unwrap()
+        .add_balance(&ONE_CFX_IN_DRIP.into());
+    let mut a = Address::zero();
+    a.set_contract_type_bits();
+    let code = b"asdf"[..].into();
+    let code_hash = keccak(&code);
+    let code_key = StorageKey::new_code_key(&a, &code_hash);
+    let k = u256_to_vec(&U256::from(0));
+    // Need the checkpoint for ownership commitment.
+    state_0.checkpoint();
+    state_0.new_contract(&a, U256::zero(), U256::one()).unwrap();
+    state_0.init_code(&a, code, sender_addr).unwrap();
+    state_0
+        .set_storage(&a, k.clone(), U256::one(), sender_addr)
+        .unwrap();
+    state_0
+        .set_storage_layout(&a, StorageLayout::Regular(0))
+        .unwrap();
+    // We don't charge the collateral in this test.
+    state_0
+        .require_exists(&a, /* require_code = */ false)
+        .unwrap()
+        .commit_ownership_change(&state_0.db)
+        .unwrap();
+    state_0
+        .add_collateral_for_storage(&sender_addr, &COLLATERAL_PER_STORAGE_KEY)
+        .unwrap();
+    state_0.discard_checkpoint();
+    let epoch_id_1 = EpochId::from_uint(&U256::from(1));
+    state_0
+        .commit(epoch_id_1, /* debug_record = */ None)
+        .unwrap();
+
+    let mut state = get_state(&storage_manager, &epoch_id_1);
+    state.kill_account(&a).unwrap();
+    // The account is killed. The storage should be empty.
+    assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
+    // Transfer balance to the killed account.
+    state
+        .transfer_balance(&sender_addr, &a, &U256::one(), CleanupMode::NoEmpty)
+        .unwrap();
+    let epoch_id = EpochId::from_uint(&U256::from(2));
+    // Assert that the account has no storage and no code.
+    assert_eq!(state.code_hash(&a).unwrap(), Some(KECCAK_EMPTY));
+    assert_eq!(state.code(&a).unwrap(), None);
+    assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
+    state.commit(epoch_id, /* debug_record = */ None).unwrap();
+
+    // Commit the state and assert that the account has no storage and no code.
+    let state = get_state(&storage_manager, &epoch_id);
+    assert_eq!(state.code_hash(&a).unwrap(), Some(KECCAK_EMPTY));
+    assert_eq!(state.code(&a).unwrap(), None);
+    assert_eq!(state.db.get_raw(code_key).unwrap(), None);
+    assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
 }
 
 #[test]

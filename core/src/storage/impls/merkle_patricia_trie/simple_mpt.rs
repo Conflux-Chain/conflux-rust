@@ -117,11 +117,12 @@ use crate::storage::{
     impls::merkle_patricia_trie::{
         mpt_cursor::{BasicPathNode, MptCursor},
         trie_node::TrieNodeTrait,
-        walk::{access_mode, GetChildTrait},
+        walk::GetChildTrait,
         CompressedPathRaw, MptMerger, TrieProof,
     },
     storage_db::SnapshotMptTraitRead,
     tests::DumpedMptKvIterator,
+    utils::access_mode,
 };
 use primitives::{MerkleHash, MERKLE_NULL_NODE};
 

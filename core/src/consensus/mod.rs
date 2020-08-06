@@ -494,7 +494,7 @@ impl ConsensusGraph {
         };
 
         match state_db.get_code(&address, &acc.code_hash) {
-            Ok(Some(code)) => Ok(code.code),
+            Ok(Some(code)) => Ok((*code.code).clone()),
             _ => Ok(vec![]),
         }
     }

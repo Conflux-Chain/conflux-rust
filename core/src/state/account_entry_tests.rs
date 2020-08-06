@@ -6,6 +6,7 @@ use super::account_entry::OverlayAccount;
 use crate::{
     hash::KECCAK_EMPTY,
     parameters::staking::*,
+    state::AccountEntryProtectedMethods,
     statedb::StateDb,
     storage::{tests::new_state_manager_for_unit_test, StorageManagerTrait},
 };
@@ -22,7 +23,7 @@ fn test_overlay_account_create() {
         Account::new_empty_with_balance(&address, &U256::zero(), &U256::zero())
             .unwrap();
     // test new from account 1
-    let overlay_account = OverlayAccount::new(&address, account);
+    let overlay_account = OverlayAccount::from_loaded(&address, account);
     assert!(overlay_account.deposit_list().is_none());
     assert!(overlay_account.vote_stake_list().is_none());
     assert_eq!(*overlay_account.address(), address);
@@ -64,7 +65,7 @@ fn test_overlay_account_create() {
     .unwrap();
 
     // test new from account 2
-    let overlay_account = OverlayAccount::new(&contract_addr, account);
+    let overlay_account = OverlayAccount::from_loaded(&contract_addr, account);
     assert!(overlay_account.deposit_list().is_none());
     assert!(overlay_account.vote_stake_list().is_none());
     assert_eq!(*overlay_account.address(), contract_addr);
@@ -155,7 +156,7 @@ fn test_deposit_and_withdraw() {
                 / *INTEREST_RATE_PER_BLOCK_SCALE,
         );
     }
-    let mut overlay_account = OverlayAccount::new(&address, account);
+    let mut overlay_account = OverlayAccount::from_loaded(&address, account);
     overlay_account
         .cache_staking_info(
             true, /* cache_deposit_list */
@@ -441,7 +442,8 @@ fn init_test_account() -> OverlayAccount {
     )
     .unwrap();
 
-    let mut overlay_account = OverlayAccount::new(&address, account.clone());
+    let mut overlay_account =
+        OverlayAccount::from_loaded(&address, account.clone());
     overlay_account
         .cache_staking_info(
             true, /* cache_deposit_list */
@@ -677,8 +679,10 @@ fn test_clone_overwrite() {
     )
     .unwrap();
 
-    let mut overlay_account1 = OverlayAccount::new(&address, account1.clone());
-    let mut overlay_account2 = OverlayAccount::new(&address, account2.clone());
+    let mut overlay_account1 =
+        OverlayAccount::from_loaded(&address, account1.clone());
+    let mut overlay_account2 =
+        OverlayAccount::from_loaded(&address, account2.clone());
     assert_eq!(account1, overlay_account1.as_account().unwrap());
     assert_eq!(account2, overlay_account2.as_account().unwrap());
 
