@@ -448,7 +448,8 @@ impl StateTrait for State {
             }
         };
         let mut kvs = kv_iterator
-            .iter_range(lower_bound_incl.as_slice(), upper_bound_excl)?;
+            .iter_range(lower_bound_incl.as_slice(), upper_bound_excl)?
+            .take();
 
         let mut snapshot_kvs = Vec::new();
         while let Some((key, value)) = kvs.next()? {

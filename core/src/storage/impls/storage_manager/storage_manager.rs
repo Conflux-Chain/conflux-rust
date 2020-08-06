@@ -567,19 +567,23 @@ impl StorageManager {
 
                                 let set_iter = set_keys_iter.iter_range(
                                     &[begin_range],
-                                    end_range_excl.as_ref().map(|v| &**v))?;
+                                    end_range_excl.as_ref().map(|v| &**v))?
+                                    .take();
                                 checker_count += check_key_value_load(&snapshot_db, set_iter, /* check_value = */ true)?;
 
                                 let set_iter = previous_set_keys_iter.iter_range(
-                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?;
+                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?
+                                    .take();
                                 checker_count += check_key_value_load(&snapshot_db, set_iter, /* check_value = */ false)?;
 
                                 let delete_iter = delete_keys_iter.iter_range(
-                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?;
+                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?
+                                    .take();
                                 checker_count += check_key_value_load(&snapshot_db, delete_iter, /* check_value = */ false)?;
 
                                 let delete_iter = previous_delete_keys_iter.iter_range(
-                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?;
+                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?
+                                    .take();
                                 checker_count += check_key_value_load(&snapshot_db, delete_iter, /* check_value = */ false)?;
 
                                 debug!(

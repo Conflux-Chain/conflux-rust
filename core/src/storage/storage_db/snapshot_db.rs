@@ -86,7 +86,7 @@ pub trait SnapshotDbTrait:
     type SnapshotKvdbIterTraitTag;
 
     type SnapshotKvdbIterType: WrappedTrait<
-        dyn KvdbIterTrait<MptKeyValue, [u8], Self::SnapshotKvdbIterTraitTag>,
+        dyn KeyValueDbIterableTrait<MptKeyValue, [u8], Self::SnapshotKvdbIterTraitTag>,
     >;
 
     fn get_null_snapshot() -> Self;
@@ -122,7 +122,7 @@ pub trait SnapshotDbTrait:
     ) -> Result<
         Wrap<
             Self::SnapshotKvdbIterType,
-            dyn KvdbIterTrait<
+            dyn KeyValueDbIterableTrait<
                 MptKeyValue,
                 [u8],
                 Self::SnapshotKvdbIterTraitTag,
@@ -163,7 +163,7 @@ use super::{
 use crate::storage::{
     impls::storage_db::snapshot_db_manager_sqlite::AlreadyOpenSnapshots,
     storage_db::{
-        KeyValueDbTraitRead, KvdbIterTrait, SnapshotMptTraitRead,
+        KeyValueDbTraitRead, KeyValueDbIterableTrait, SnapshotMptTraitRead,
         SnapshotMptTraitRw,
     },
     utils::wrap::{Wrap, WrappedTrait},

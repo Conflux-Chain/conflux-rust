@@ -392,7 +392,8 @@ impl Chunk {
         let upper_bound_excl =
             chunk_key.upper_bound_excl.as_ref().map(|k| k.as_slice());
         let mut kvs = kv_iterator
-            .iter_range(lower_bound_incl.as_slice(), upper_bound_excl)?;
+            .iter_range(lower_bound_incl.as_slice(), upper_bound_excl)?
+            .take();
 
         let mut keys = Vec::new();
         let mut values = Vec::new();

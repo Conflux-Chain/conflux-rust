@@ -125,7 +125,7 @@ impl<DbType: SnapshotMptLoadNode + ?Sized, BorrowType: BorrowMut<DbType>>
 
 impl<
         DbType: SnapshotMptLoadNode
-            + for<'db> KeyValueDbIterableTrait<'db, MptKeyValue, Error, [u8]>
+            + KeyValueDbIterableTrait<MptKeyValue, [u8], SnapshotDbSqlite>
             + ?Sized,
         BorrowType: BorrowMut<DbType>,
     > SnapshotMptTraitReadAndIterate for SnapshotMpt<DbType, BorrowType>
@@ -143,6 +143,7 @@ impl<
             self.db
                 .borrow_mut()
                 .iter_range_excl(&begin_key_excl, &end_key_excl)?
+                .take()
                 .map(|(key, value)| {
                     Ok((
                         mpt_node_path_from_db_key(&key)?,
@@ -156,7 +157,7 @@ impl<
 impl<
         DbType: SnapshotMptLoadNode
             + KeyValueDbTraitSingleWriter<ValueType = SnapshotMptDbValue>
-            + for<'db> KeyValueDbIterableTrait<'db, MptKeyValue, Error, [u8]>
+            + KeyValueDbIterableTrait<MptKeyValue, [u8], SnapshotDbSqlite>
             + ?Sized,
         BorrowType: BorrowMut<DbType>,
     > SnapshotMptTraitRw for SnapshotMpt<DbType, BorrowType>
@@ -182,6 +183,7 @@ use crate::storage::{
     impls::{
         errors::*,
         merkle_patricia_trie::{CompressedPathRaw, CompressedPathTrait},
+        storage_db::snapshot_db_sqlite::SnapshotDbSqlite
     },
     storage_db::{
         key_value_db::{KeyValueDbIterableTrait, KeyValueDbTraitSingleWriter},

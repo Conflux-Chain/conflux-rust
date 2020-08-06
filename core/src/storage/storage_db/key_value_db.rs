@@ -55,54 +55,55 @@ pub trait KvdbIterImpl<'db, ImplKind: ?Sized> {
     ) -> Result<Self::Iterator>;
 }
 
-pub trait KeyValueDbIterableTrait<'db, Item, Error, KeyType: ?Sized> {
-    /// Initially we'd like to use FallibleStreamingIterator however it's only
-    /// possible to return a borrow from the iteration, but we want to be
-    /// able to extract value with static lifetime out from the iterator, so
-    /// we are using FallibleIterator. But then with FallibleIterator it's
-    /// not possible to just return borrow of the db row in iteration.
-    // TODO(yz): is it possible to write an iterator like what I did with 'self
-    // TODO(yz): lifetime? Then create a HRTB for it?
-    // TODO(yz): Maybe Lukas who wrote http://lukaskalbertodt.github.io/2018/08/03/solving-the-generalized-streaming-iterator-problem-without-gats.html#workaround-b-hrtbs--the-family-trait-pattern
-    // TODO(yz): has a library?
-    type Iterator: 'db + FallibleIterator<Item = Item, Error = Error>;
+// Auto impl transmute for ElementSatisfy<trait obj>.
+// Macro parser doesn't allow 'path' followed by '+',
+// use '|' in generic part instead, e.g. 'generic A, B: traitA | traitB, C;'.
+// FIXME: lifetime support for generic part
+macro_rules! enable_impl_transmute_for_element_satisfy {
+    (
+        generic $( $N:ident $(: $b0:path $(|$b:path)* )? ),*;
+        trait $lifetime:lifetime + $trait:path;
+        for $generic_type:ident;
+    ) => {
+        impl<$( $N $(: $b0 $(+$b)* )? ),*> ElementSatisfy<dyn $trait + $lifetime> for $generic_type
+        {
+            fn to_constrain_object(
+                &self,
+            ) -> &(dyn $lifetime + $trait) {
+                unsafe {
+                    std::mem::transmute(
+                        self as &(dyn '_ + $trait),
+                    )
+                }
+            }
+        
+            fn to_constrain_object_mut(
+                &mut self,
+            ) -> &mut (dyn $lifetime + $trait) {
+                unsafe {
+                    std::mem::transmute(
+                        self as &mut (dyn '_ + $trait),
+                    )
+                }
+            }
+        }
+    };
 
-    fn iter_range(
-        &'db mut self, lower_bound_incl: &KeyType,
-        upper_bound_excl: Option<&KeyType>,
-    ) -> Result<Self::Iterator>;
-
-    fn iter_range_excl(
-        &'db mut self, lower_bound_excl: &KeyType, upper_bound_excl: &KeyType,
-    ) -> Result<Self::Iterator>;
+    (
+        generic $( $N:ident $(: $b0:path $(|$b:path)* )? ),*;
+        trait $lifetime:lifetime + $trait:path;
+    ) => {
+        enable_impl_transmute_for_element_satisfy! {
+            generic $( $N $(: $b0 $(|$b)* )? ),* , TempGeneric:$trait;
+            trait $lifetime + $trait;
+            for TempGeneric;
+        }
+    }
 }
 
-// FIXME: create a marker ImplESByTransmute<Trait> and then auto impl transmute.
-impl<Item, T: FallibleIterator<Item = Item, Error = Error>>
-    ElementSatisfy<dyn FallibleIterator<Item = Item, Error = Error> + 'static>
-    for T
-{
-    fn to_constrain_object(
-        &self,
-    ) -> &(dyn 'static + FallibleIterator<Item = Item, Error = Error>) {
-        unsafe {
-            std::mem::transmute(
-                self as &(dyn '_
-                      + FallibleIterator<Item = Item, Error = Error>),
-            )
-        }
-    }
-
-    fn to_constrain_object_mut(
-        &mut self,
-    ) -> &mut (dyn FallibleIterator<Item = Item, Error = Error> + 'static) {
-        unsafe {
-            std::mem::transmute(
-                self as &mut (dyn '_
-                          + FallibleIterator<Item = Item, Error = Error>),
-            )
-        }
-    }
+enable_impl_transmute_for_element_satisfy! {
+    generic Item;
+    trait 'static + FallibleIterator<Item = Item, Error = Error>;
 }
 
 // FIXME: this is temporary
@@ -112,12 +113,11 @@ pub struct KvdbIterIterator<Item, KeyType: ?Sized, T: ?Sized> {
     __t_m: std::marker::PhantomData<T>,
 }
 
-// FIXME: rename
-pub trait KvdbIterTrait<Item, KeyType: ?Sized, Tag: ?Sized>
+pub trait KeyValueDbIterableTrait<Item, KeyType: ?Sized, Tag: ?Sized>
 where KvdbIterIterator<Item, KeyType, Tag>:
         WrappedTrait<dyn FallibleIterator<Item = Item, Error = Error>>
 {
-    fn iter_range2(
+    fn iter_range(
         &mut self, lower_bound_incl: &KeyType,
         upper_bound_excl: Option<&KeyType>,
     ) -> Result<
@@ -126,7 +126,7 @@ where KvdbIterIterator<Item, KeyType, Tag>:
             dyn FallibleIterator<Item = Item, Error = Error>,
         >,
     >;
-    fn iter_range_excl2(
+    fn iter_range_excl(
         &mut self, lower_bound_excl: &KeyType, upper_bound_excl: &KeyType,
     ) -> Result<
         Wrap<
@@ -493,43 +493,6 @@ impl<
         &mut self, key: i64,
     ) -> Result<Option<Self::ValueType>> {
         self.get_with_number_key(key)
-    }
-}
-
-impl<
-        'db,
-        ItemKey,
-        ValueType,
-        KeyType: ?Sized,
-        T: KvdbIterImplKind<ItemKey, ValueType>
-            + KvdbIterImpl<
-                'db,
-                <T as KvdbIterImplKind<ItemKey, ValueType>>::ImplKind,
-                KeyType = KeyType,
-            >,
-    > KeyValueDbIterableTrait<'db, (ItemKey, ValueType), Error, KeyType> for T
-where <T as KvdbIterImpl<
-        'db,
-        <T as KvdbIterImplKind<ItemKey, ValueType>>::ImplKind,
-    >>::Iterator: FallibleIterator<Item = (ItemKey, ValueType), Error = Error>
-{
-    type Iterator = <T as KvdbIterImpl<
-        'db,
-        <T as KvdbIterImplKind<ItemKey, ValueType>>::ImplKind,
-    >>::Iterator;
-
-    fn iter_range(
-        &'db mut self, lower_bound_incl: &KeyType,
-        upper_bound_excl: Option<&KeyType>,
-    ) -> Result<Self::Iterator>
-    {
-        self.iter_range_impl(lower_bound_incl, upper_bound_excl)
-    }
-
-    fn iter_range_excl(
-        &'db mut self, lower_bound_excl: &KeyType, upper_bound_excl: &KeyType,
-    ) -> Result<Self::Iterator> {
-        self.iter_range_excl_impl(lower_bound_excl, upper_bound_excl)
     }
 }
 

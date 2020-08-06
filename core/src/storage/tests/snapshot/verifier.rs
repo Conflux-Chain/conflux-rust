@@ -309,10 +309,10 @@ impl<'a>
     type Out = DumpedMptKvFallibleIterator;
 }
 
-impl KvdbIterTrait<MptKeyValue, [u8], FakeSnapshotDb>
+impl KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>
     for ArcMutexFakeSnapshotDbRef<'_>
 {
-    fn iter_range2(
+    fn iter_range(
         &mut self, lower_bound_incl: &[u8], upper_bound_excl: Option<&[u8]>,
     ) -> Result<
         Wrap<
@@ -335,7 +335,7 @@ impl KvdbIterTrait<MptKeyValue, [u8], FakeSnapshotDb>
         }))
     }
 
-    fn iter_range_excl2(
+    fn iter_range_excl(
         &mut self, lower_bound_excl: &[u8], upper_bound_excl: &[u8],
     ) -> Result<
         Wrap<
@@ -451,28 +451,28 @@ impl<'db> OpenSnapshotMptTrait<'db> for Arc<Mutex<FakeSnapshotDb>> {
 }
 
 // FIXME: create a marker ImplESByTransmute<Trait> and then auto impl transmute.
-impl ElementSatisfy<dyn KvdbIterTrait<MptKeyValue, [u8], FakeSnapshotDb>>
+impl ElementSatisfy<dyn KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>>
     for ArcMutexFakeSnapshotDbRef<'_>
 {
     fn to_constrain_object(
         &self,
-    ) -> &(dyn KvdbIterTrait<MptKeyValue, [u8], FakeSnapshotDb> + 'static) {
+    ) -> &(dyn KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb> + 'static) {
         unsafe {
             std::mem::transmute(
                 self as &(dyn '_
-                      + KvdbIterTrait<MptKeyValue, [u8], FakeSnapshotDb>),
+                      + KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>),
             )
         }
     }
 
     fn to_constrain_object_mut(
         &mut self,
-    ) -> &mut (dyn KvdbIterTrait<MptKeyValue, [u8], FakeSnapshotDb> + 'static)
+    ) -> &mut (dyn KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb> + 'static)
     {
         unsafe {
             std::mem::transmute(
                 self as &mut (dyn '_
-                          + KvdbIterTrait<
+                          + KeyValueDbIterableTrait<
                     MptKeyValue,
                     [u8],
                     FakeSnapshotDb,
@@ -482,7 +482,7 @@ impl ElementSatisfy<dyn KvdbIterTrait<MptKeyValue, [u8], FakeSnapshotDb>>
     }
 }
 
-impl WrappedTrait<dyn KvdbIterTrait<MptKeyValue, [u8], FakeSnapshotDb>>
+impl WrappedTrait<dyn KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>>
     for Arc<Mutex<FakeSnapshotDb>>
 {
 }
@@ -490,7 +490,7 @@ impl WrappedTrait<dyn KvdbIterTrait<MptKeyValue, [u8], FakeSnapshotDb>>
 impl<'a>
     WrappedLifetimeFamily<
         'a,
-        dyn KvdbIterTrait<MptKeyValue, [u8], FakeSnapshotDb>,
+        dyn KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>,
     > for Arc<Mutex<FakeSnapshotDb>>
 {
     type Out = ArcMutexFakeSnapshotDbRef<'a>;
@@ -537,7 +537,7 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
     ) -> Result<
         Wrap<
             Self::SnapshotKvdbIterType,
-            dyn KvdbIterTrait<MptKeyValue, [u8], FakeSnapshotDb>,
+            dyn KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>,
         >,
     > {
         Ok(Wrap(ArcMutexFakeSnapshotDbRef { r: self }))
@@ -785,7 +785,7 @@ use crate::storage::{
     storage_db::{
         DbValueType, KeyValueDbTraitOwnedRead, KeyValueDbTraitRead,
         KeyValueDbTraitSingleWriter, KeyValueDbTypes, KvdbIterImpl,
-        KvdbIterImplKind, KvdbIterIterator, KvdbIterTrait,
+        KvdbIterImplKind, KvdbIterIterator, KeyValueDbIterableTrait,
         OpenSnapshotMptTrait, SnapshotDbManagerTrait, SnapshotDbTrait,
         SnapshotInfo, SnapshotKvIterTrait, SnapshotMptIteraterTrait,
         SnapshotMptNode, SnapshotMptTraitRead, SnapshotMptTraitReadAndIterate,

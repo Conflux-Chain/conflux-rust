@@ -244,32 +244,39 @@ impl<'db> SnapshotKvIterTrait<'db> for SnapshotDbSqlite {
     }
 }
 
-impl WrappedTrait<dyn FallibleIterator<Item = MptKeyValue, Error = Error>>
-    for KvdbIterIterator<MptKeyValue, [u8], SnapshotDbSqlite>
-{
+macro_rules! make_wrap_from_KvdbIterIterator_to_FallibleIterator {
+    ($ItemKeyType:ty, $ItemValueType:ty, $KeyType:ty, $TagType:ty) => {
+        impl WrappedTrait<dyn FallibleIterator<Item = ($ItemKeyType, $ItemValueType), Error = Error>>
+            for KvdbIterIterator<($ItemKeyType, $ItemValueType), $KeyType, $TagType>
+        {
+        }
+        impl<'a>
+            WrappedLifetimeFamily<
+                'a,
+                dyn FallibleIterator<Item = ($ItemKeyType, $ItemValueType), Error = Error>,
+            > for KvdbIterIterator<($ItemKeyType, $ItemValueType), $KeyType, $TagType>
+        {
+            type Out = ShardedIterMerger<
+                $ItemKeyType,
+                $ItemValueType,
+                MappedRows<
+                    'a,
+                    for<'r, 's> fn(&'r Statement<'s>) -> Result<($ItemKeyType, $ItemValueType)>,
+                >,
+            >;
+        }
+    };
 }
-impl<'a>
-    WrappedLifetimeFamily<
-        'a,
-        dyn FallibleIterator<Item = MptKeyValue, Error = Error>,
-    > for KvdbIterIterator<MptKeyValue, [u8], SnapshotDbSqlite>
-{
-    type Out = ShardedIterMerger<
-        Vec<u8>,
-        Box<[u8]>,
-        MappedRows<
-            'a,
-            for<'r, 's> fn(&'r Statement<'s>) -> Result<MptKeyValue>,
-        >,
-    >;
-}
+
+make_wrap_from_KvdbIterIterator_to_FallibleIterator!(Vec<u8>, Box<[u8]>, [u8], SnapshotDbSqlite);
+make_wrap_from_KvdbIterIterator_to_FallibleIterator!(Vec<u8>, (), [u8], SnapshotDbSqlite);
 
 // FIXME: implement for more general types
 // (DerefOr...<KvdbSqliteShardedBorrow...>)
-impl KvdbIterTrait<MptKeyValue, [u8], SnapshotDbSqlite>
+impl KeyValueDbIterableTrait<MptKeyValue, [u8], SnapshotDbSqlite>
     for KvdbSqliteSharded<Box<[u8]>>
 {
-    fn iter_range2(
+    fn iter_range(
         &mut self, lower_bound_incl: &[u8], upper_bound_excl: Option<&[u8]>,
     ) -> Result<
         Wrap<
@@ -288,7 +295,7 @@ impl KvdbIterTrait<MptKeyValue, [u8], SnapshotDbSqlite>
         )?))
     }
 
-    fn iter_range_excl2(
+    fn iter_range_excl(
         &mut self, lower_bound_excl: &[u8], upper_bound_excl: &[u8],
     ) -> Result<
         Wrap<
@@ -308,37 +315,128 @@ impl KvdbIterTrait<MptKeyValue, [u8], SnapshotDbSqlite>
     }
 }
 
-// FIXME: create a macro to reduce the code boilerplates.
-impl ElementSatisfy<dyn KvdbIterTrait<MptKeyValue, [u8], SnapshotDbSqlite>>
-    for KvdbSqliteSharded<Box<[u8]>>
+impl KeyValueDbIterableTrait<(Vec<u8>, ()), [u8], SnapshotDbSqlite>
+    for KvdbSqliteSharded<()>
 {
-    fn to_constrain_object(
-        &self,
-    ) -> &(dyn KvdbIterTrait<MptKeyValue, [u8], SnapshotDbSqlite> + 'static)
-    {
-        self
+    fn iter_range(
+        &mut self, lower_bound_incl: &[u8], upper_bound_excl: Option<&[u8]>,
+    ) -> Result<
+        Wrap<
+            KvdbIterIterator<(Vec<u8>, ()), [u8], SnapshotDbSqlite>,
+            dyn FallibleIterator<Item = (Vec<u8>, ()), Error = Error>,
+        >,
+    > {
+        let (maybe_shards_connections, statements) = self.destructure_mut();
+        Ok(Wrap(kvdb_sqlite_sharded_iter_range_impl(
+            maybe_shards_connections,
+            statements,
+            lower_bound_incl,
+            upper_bound_excl,
+            KvdbSqlite::<()>::kv_from_iter_row::<Vec<u8>>
+                as for<'r, 's> fn(&'r Statement<'s>) -> Result<(Vec<u8>, ())>,
+        )?))
     }
 
-    fn to_constrain_object_mut(
-        &mut self,
-    ) -> &mut (dyn KvdbIterTrait<MptKeyValue, [u8], SnapshotDbSqlite> + 'static)
-    {
-        self
+    fn iter_range_excl(
+        &mut self, lower_bound_excl: &[u8], upper_bound_excl: &[u8],
+    ) -> Result<
+        Wrap<
+            KvdbIterIterator<(Vec<u8>, ()), [u8], SnapshotDbSqlite>,
+            dyn FallibleIterator<Item = (Vec<u8>, ()), Error = Error>,
+        >,
+    > {
+        let (maybe_shards_connections, statements) = self.destructure_mut();
+        Ok(Wrap(kvdb_sqlite_sharded_iter_range_excl_impl(
+            maybe_shards_connections,
+            statements,
+            lower_bound_excl,
+            upper_bound_excl,
+            KvdbSqlite::<()>::kv_from_iter_row::<Vec<u8>>
+                as for<'r, 's> fn(&'r Statement<'s>) -> Result<(Vec<u8>, ())>,
+        )?))
     }
 }
 
-impl WrappedTrait<dyn KvdbIterTrait<MptKeyValue, [u8], SnapshotDbSqlite>>
-    for KvdbSqliteSharded<Box<[u8]>>
+impl KeyValueDbIterableTrait<MptKeyValue, [u8], SnapshotDbSqlite>
+    for KvdbSqliteShardedBorrowMut<'static, Box<[u8]>>
 {
+    fn iter_range(
+        &mut self, lower_bound_incl: &[u8], upper_bound_excl: Option<&[u8]>,
+    ) -> Result<
+        Wrap<
+            KvdbIterIterator<MptKeyValue, [u8], SnapshotDbSqlite>,
+            dyn FallibleIterator<Item = (Vec<u8>, Box<[u8]>), Error = Error>,
+        >,
+    > {
+        let (maybe_shards_connections, statements) = self.destructure_mut();
+        Ok(Wrap(kvdb_sqlite_sharded_iter_range_impl(
+            maybe_shards_connections,
+            statements,
+            lower_bound_incl,
+            upper_bound_excl,
+            KvdbSqlite::<Box<[u8]>>::kv_from_iter_row::<Vec<u8>>
+                as for<'r, 's> fn(&'r Statement<'s>) -> Result<MptKeyValue>,
+        )?))
+    }
+
+    fn iter_range_excl(
+        &mut self, lower_bound_excl: &[u8], upper_bound_excl: &[u8],
+    ) -> Result<
+        Wrap<
+            KvdbIterIterator<MptKeyValue, [u8], SnapshotDbSqlite>,
+            dyn FallibleIterator<Item = (Vec<u8>, Box<[u8]>), Error = Error>,
+        >,
+    > {
+        let (maybe_shards_connections, statements) = self.destructure_mut();
+        Ok(Wrap(kvdb_sqlite_sharded_iter_range_excl_impl(
+            maybe_shards_connections,
+            statements,
+            lower_bound_excl,
+            upper_bound_excl,
+            KvdbSqlite::<Box<[u8]>>::kv_from_iter_row::<Vec<u8>>
+                as for<'r, 's> fn(&'r Statement<'s>) -> Result<MptKeyValue>,
+        )?))
+    }
 }
-impl
-    WrappedLifetimeFamily<
-        '_,
-        dyn KvdbIterTrait<MptKeyValue, [u8], SnapshotDbSqlite>,
-    > for KvdbSqliteSharded<Box<[u8]>>
-{
-    type Out = Self;
+
+macro_rules! make_wrap_from_KvdbSqliteSharded_to_KeyValueDbIterableTrait {
+    ($ItemType:ty, $Ttype:ty) => {
+        impl ElementSatisfy<dyn KeyValueDbIterableTrait<$ItemType, [u8], SnapshotDbSqlite>>
+            for $Ttype
+        {
+            fn to_constrain_object(
+                &self,
+            ) -> &(dyn KeyValueDbIterableTrait<$ItemType, [u8], SnapshotDbSqlite> + 'static)
+            {
+                self
+            }
+
+            fn to_constrain_object_mut(
+                &mut self,
+            ) -> &mut (dyn KeyValueDbIterableTrait<$ItemType, [u8], SnapshotDbSqlite> + 'static)
+            {
+                self
+            }
+        }
+
+        impl WrappedTrait<dyn KeyValueDbIterableTrait<$ItemType, [u8], SnapshotDbSqlite>>
+            for $Ttype
+        {
+        }
+        impl
+            WrappedLifetimeFamily<
+                '_,
+                dyn KeyValueDbIterableTrait<$ItemType, [u8], SnapshotDbSqlite>,
+            > for $Ttype
+        {
+            type Out = Self;
+        }
+    };
 }
+
+make_wrap_from_KvdbSqliteSharded_to_KeyValueDbIterableTrait!(MptKeyValue, KvdbSqliteSharded<Box<[u8]>>);
+make_wrap_from_KvdbSqliteSharded_to_KeyValueDbIterableTrait!((Vec<u8>, ()), KvdbSqliteSharded<()>);
+make_wrap_from_KvdbSqliteSharded_to_KeyValueDbIterableTrait!(MptKeyValue, KvdbSqliteShardedBorrowMut<'static, Box<[u8]>>);
 
 impl SnapshotDbTrait for SnapshotDbSqlite {
     type SnapshotKvdbIterTraitTag = Self;
@@ -436,8 +534,8 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             &mut mpt_to_modify as &mut dyn SnapshotMptTraitRw,
         );
         let snapshot_root = mpt_merger.merge_insertion_deletion_separated(
-            delete_keys_iter.iter_range(&[], None)?,
-            set_keys_iter.iter_range(&[], None)?,
+            delete_keys_iter.iter_range(&[], None)?.take(),
+            set_keys_iter.iter_range(&[], None)?.take(),
         )?;
         self.commit_transaction()?;
 
@@ -449,7 +547,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
     ) -> Result<MerkleHash> {
         debug!("copy_and_merge begins.");
         let mut kv_iter = old_snapshot_db.snapshot_kv_iterator()?;
-        let mut iter = kv_iter.iter_range(&[], None)?;
+        let mut iter = kv_iter.iter_range(&[], None)?.take();
         while let Ok(kv_item) = iter.next() {
             match kv_item {
                 Some((k, v)) => {
@@ -472,8 +570,8 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             &mut save_as_mpt as &mut dyn SnapshotMptTraitRw,
         );
         let snapshot_root = mpt_merger.merge_insertion_deletion_separated(
-            delete_keys_iter.iter_range(&[], None)?,
-            set_keys_iter.iter_range(&[], None)?,
+            delete_keys_iter.iter_range(&[], None)?.take(),
+            set_keys_iter.iter_range(&[], None)?.take(),
         )?;
         self.commit_transaction()?;
 
@@ -503,7 +601,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
     ) -> Result<
         Wrap<
             Self::SnapshotKvdbIterType,
-            dyn KvdbIterTrait<MptKeyValue, [u8], SnapshotDbSqlite>,
+            dyn KeyValueDbIterableTrait<MptKeyValue, [u8], SnapshotDbSqlite>,
         >,
     > {
         Ok(Wrap(KvdbSqliteSharded::new(
@@ -725,7 +823,7 @@ use crate::storage::{
     },
     storage_db::{
         KeyValueDbIterableTrait, KeyValueDbTraitSingleWriter, KeyValueDbTypes,
-        KvdbIterIterator, KvdbIterTrait, OpenSnapshotMptTrait,
+        KvdbIterIterator, OpenSnapshotMptTrait,
         OwnedReadImplByFamily, OwnedReadImplFamily, ReadImplByFamily,
         ReadImplFamily, SingleWriterImplByFamily, SingleWriterImplFamily,
         SnapshotDbTrait, SnapshotKvIterTrait, SnapshotMptDbValue,
