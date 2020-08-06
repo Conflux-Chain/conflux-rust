@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-fn min_repr_bytes(number_of_keys: usize) -> u8 {
+fn min_repr_bytes(number_of_keys: usize) -> usize {
     let mut largest_value = match number_of_keys {
         n if n == 0 => return 0,
         n if n == 1 => return 1,
@@ -19,14 +19,14 @@ fn min_repr_bytes(number_of_keys: usize) -> u8 {
     min_repr_bytes
 }
 
-fn to_index_bytes(mut index: usize, len: u8) -> Vec<u8> {
-    let mut bytes = vec![0u8; len as usize];
-    for i in 0..(len as usize) {
+fn to_index_bytes(mut index: usize, len: usize) -> Vec<u8> {
+    let mut bytes = vec![0u8; len];
+
+    for i in (0..len).rev() {
         bytes[i] = index as u8;
         index >>= 8;
     }
 
-    bytes.reverse();
     bytes
 }
 
