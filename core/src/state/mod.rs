@@ -216,24 +216,11 @@ impl State {
     pub fn settle_collateral_for_address(
         &mut self, addr: &Address, substate: &Substate,
     ) -> DbResult<CollateralCheckResult> {
-        let inc_bytes = substate
-            .storage_collateralized
-            .get(addr)
-            .cloned()
-            .unwrap_or(0);
-        let sub_bytes =
-            substate.storage_released.get(addr).cloned().unwrap_or(0);
-        let (inc, sub) = if inc_bytes > sub_bytes {
-            (
-                *COLLATERAL_PER_BYTE * (inc_bytes - sub_bytes),
-                U256::from(0),
-            )
-        } else {
-            (
-                U256::from(0),
-                *COLLATERAL_PER_BYTE * (sub_bytes - inc_bytes),
-            )
-        };
+        let (inc_bytes, sub_bytes) = substate.get_collateral_change(addr);
+        let (inc, sub) = (
+            *COLLATERAL_PER_BYTE * inc_bytes,
+            *COLLATERAL_PER_BYTE * sub_bytes,
+        );
 
         if !sub.is_zero() {
             assert!(self.exists(addr)?);
