@@ -40,7 +40,9 @@ pub use self::{
     substate::{CallStackInfo, Substate},
 };
 use crate::evm::Spec;
-use parking_lot::{MappedRwLockWriteGuard, RwLock, RwLockWriteGuard};
+use parking_lot::{
+    MappedRwLockWriteGuard, RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard,
+};
 
 #[derive(Copy, Clone)]
 enum RequireCache {
@@ -1404,14 +1406,28 @@ impl State {
             }
         }
 
-        // TODO: save this load if the overlay account exists.
-        let maybe_acc = self
-            .db
-            .get_account(address)?
-            .map(|acc| OverlayAccount::from_loaded(address, acc));
-        let cache = &mut *self.cache.write();
-        Self::insert_cache_if_fresh_account(cache, address, maybe_acc);
+        let mut cache_write_lock = {
+            let upgradable_lock = self.cache.upgradable_read();
+            if upgradable_lock.contains_key(address) {
+                RwLockUpgradableReadGuard::upgrade(upgradable_lock)
+            } else {
+                let maybe_acc = self
+                    .db
+                    .get_account(address)?
+                    .map(|acc| OverlayAccount::from_loaded(address, acc));
+                let mut cache_write_lock =
+                    RwLockUpgradableReadGuard::upgrade(upgradable_lock);
+                Self::insert_cache_if_fresh_account(
+                    &mut *cache_write_lock,
+                    address,
+                    maybe_acc,
+                );
 
+                cache_write_lock
+            }
+        };
+
+        let cache = &mut *cache_write_lock;
         let account = cache.get_mut(address).unwrap();
         if let Some(maybe_acc) = &mut account.account {
             if !Self::update_account_cache(require, maybe_acc, &self.db)? {
