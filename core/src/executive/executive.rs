@@ -1380,7 +1380,6 @@ impl<'a> Executive<'a> {
         self.state.checkpoint();
         let mut substate = Substate::new();
 
-
         let res = match tx.action {
             Action::Create => {
                 let (new_address, _code_hash) = contract_address(
