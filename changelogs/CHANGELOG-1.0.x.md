@@ -6,6 +6,7 @@
 - Fix code() return value for uninitialized contract.
 - Fix bug in kill_account after which the contract account is revived by simple transaction.
 - Fix the place of collateral refund for suicide contracts.
+- Fix missing StorageKey conversion from bytes of DepositList and VoteList.
 
 ## Incompatible changes
 
