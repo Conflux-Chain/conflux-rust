@@ -315,11 +315,10 @@ impl<'a> ContextTrait for Context<'a> {
                 let collateral_for_code =
                     U256::from(data.len()) * *COLLATERAL_PER_BYTE;
                 debug!("ret()  collateral_for_code={:?}", collateral_for_code);
-                *self
-                    .substate
-                    .storage_collateralized
-                    .entry(self.origin.storage_owner)
-                    .or_insert(0) += data.len() as u64;
+                self.substate.record_storage_occupy(
+                    &self.origin.storage_owner,
+                    data.len() as u64,
+                );
 
                 self.state.init_code(
                     &self.origin.address,

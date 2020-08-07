@@ -293,12 +293,10 @@ impl State {
             }
         }
         for (addr, sub) in &collateral_for_storage_sub {
-            *substate.storage_released.entry(*addr).or_insert(0) +=
-                sub * BYTES_PER_STORAGE_KEY;
+            substate.record_storage_release(addr, *sub * BYTES_PER_STORAGE_KEY);
         }
         for (addr, inc) in &collateral_for_storage_inc {
-            *substate.storage_collateralized.entry(*addr).or_insert(0) +=
-                inc * BYTES_PER_STORAGE_KEY;
+            substate.record_storage_occupy(addr, *inc * BYTES_PER_STORAGE_KEY);
         }
         return Ok(());
     }
@@ -1107,7 +1105,7 @@ impl State {
         Ok(())
     }
 
-    pub fn refund_all_storage_entries(
+    pub fn record_storage_entries_release(
         &mut self, address: &Address, substate: &mut Substate,
     ) -> DbResult<()> {
         let account_cache_read_guard = self.cache.read();
@@ -1249,7 +1247,7 @@ impl State {
         };
         for address in to_kill {
             // TODO: make sure what this code does
-            self.refund_all_storage_entries(&address, &mut Substate::new());
+            self.record_storage_entries_release(&address, &mut Substate::new());
             self.remove_contract(&address);
         }
 
