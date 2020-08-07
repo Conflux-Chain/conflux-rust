@@ -1136,10 +1136,10 @@ impl State {
                             rlp::decode::<StorageValue>(value.as_ref())?;
                         let storage_owner =
                             storage_value.owner.as_ref().unwrap_or(address);
-                        *substate
-                            .storage_released
-                            .entry(*storage_owner)
-                            .or_insert(0) += BYTES_PER_STORAGE_KEY;
+                        substate.record_storage_release(
+                            storage_owner,
+                            BYTES_PER_STORAGE_KEY,
+                        );
                     }
                 }
             }
@@ -1150,10 +1150,10 @@ impl State {
                 if let Some(storage_owner) =
                     acc.original_ownership_at(&self.db, key)?
                 {
-                    *(substate
-                        .storage_released
-                        .entry(storage_owner)
-                        .or_insert(0)) += BYTES_PER_STORAGE_KEY;
+                    substate.record_storage_release(
+                        &storage_owner,
+                        BYTES_PER_STORAGE_KEY,
+                    );
                 }
             }
         }
