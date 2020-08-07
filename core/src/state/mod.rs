@@ -802,7 +802,7 @@ impl State {
         let refundable = if by > &collateral { &collateral } else { by };
         let burnt = *by - *refundable;
         if !refundable.is_zero() {
-            self.require_exists(address, false)?
+            self.require_or_new_basic_account(address)?
                 .sub_collateral_for_storage(refundable);
         }
         self.staking_state.total_storage_tokens -= *by;
