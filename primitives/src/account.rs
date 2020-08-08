@@ -112,6 +112,15 @@ impl CodeInfo {
     pub fn code_size(&self) -> usize { self.code.len() }
 }
 
+impl Default for CodeInfo {
+    fn default() -> Self {
+        CodeInfo {
+            code: Arc::new(Bytes::new()),
+            owner: Address::default(),
+        }
+    }
+}
+
 impl Encodable for CodeInfo {
     fn rlp_append(&self, stream: &mut RlpStream) {
         stream.begin_list(2).append(&*self.code).append(&self.owner);

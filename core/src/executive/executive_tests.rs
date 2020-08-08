@@ -1051,7 +1051,7 @@ fn test_commission_privilege() {
     .0;
 
     state
-        .new_contract_with_admin(
+        .deploy_new_contract(
             &address,
             &sender.address(),
             U256::zero(),
@@ -1419,7 +1419,7 @@ fn test_storage_commission_privilege() {
     .0;
 
     state
-        .new_contract_with_admin(
+        .deploy_new_contract(
             &address,
             &sender.address(),
             U256::zero(),
