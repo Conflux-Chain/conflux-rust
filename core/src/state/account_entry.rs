@@ -983,3 +983,57 @@ impl AccountEntryProtectedMethods for OverlayAccount {
         self.code.as_ref().map(|c| c.owner)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        evm::{Factory, VMType},
+        storage::tests::new_state_manager_for_unit_test,
+        test_helpers::get_state_for_genesis_write_with_factory,
+    };
+    use primitives::is_default::IsDefault;
+    use std::str::FromStr;
+
+    fn test_account_is_default(account: &mut OverlayAccount) {
+        let factory = Factory::new(VMType::Interpreter, 1024 * 32);
+        let storage_manager = new_state_manager_for_unit_test();
+        let state =
+            get_state_for_genesis_write_with_factory(&storage_manager, factory);
+
+        assert!(account.as_account().unwrap().is_default());
+
+        account.cache_staking_info(true, true, &state.db).unwrap();
+        assert!(account.vote_stake_list().unwrap().is_default());
+        assert!(account.deposit_list().unwrap().is_default());
+    }
+
+    #[test]
+    fn new_overlay_account_is_default() {
+        let normal_addr =
+            Address::from_str("1000000000000000000000000000000000000000")
+                .unwrap();
+        let contract_addr =
+            Address::from_str("8000000000000000000000000000000000000000")
+                .unwrap();
+        let builtin_addr =
+            Address::from_str("0000000000000000000000000000000000000000")
+                .unwrap();
+
+        test_account_is_default(&mut OverlayAccount::new_basic(
+            &normal_addr,
+            U256::zero(),
+            U256::zero(),
+        ));
+        test_account_is_default(&mut OverlayAccount::new_contract(
+            &contract_addr,
+            U256::zero(),
+            U256::zero(),
+        ));
+        test_account_is_default(&mut OverlayAccount::new_basic(
+            &builtin_addr,
+            U256::zero(),
+            U256::zero(),
+        ));
+    }
+}
