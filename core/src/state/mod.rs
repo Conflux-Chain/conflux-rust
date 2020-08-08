@@ -40,7 +40,9 @@ pub use self::{
     substate::{CallStackInfo, Substate},
 };
 use crate::evm::Spec;
-use parking_lot::{MappedRwLockWriteGuard, RwLock, RwLockWriteGuard};
+use parking_lot::{
+    MappedRwLockWriteGuard, RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard,
+};
 
 #[derive(Copy, Clone)]
 enum RequireCache {
@@ -1378,40 +1380,46 @@ impl State {
         &self, address: &Address, require: RequireCache, f: F,
     ) -> DbResult<U>
     where F: Fn(Option<&OverlayAccount>) -> U {
-        let needs_update =
-            if let Some(maybe_acc) = self.cache.read().get(address) {
-                if let Some(account) = &maybe_acc.account {
-                    Self::needs_update(require, account)
-                } else {
-                    false
+        // Return immediately when there is no need to have db operation.
+        if let Some(maybe_acc) = self.cache.read().get(address) {
+            if let Some(account) = &maybe_acc.account {
+                let needs_update = Self::needs_update(require, account);
+                if !needs_update {
+                    return Ok(f(Some(account)));
                 }
             } else {
-                false
-            };
-
-        if needs_update {
-            if let Some(maybe_acc) = self.cache.write().get_mut(address) {
-                if let Some(account) = &mut maybe_acc.account {
-                    if Self::update_account_cache(require, account, &self.db)? {
-                        return Ok(f(Some(account)));
-                    } else {
-                        return Err(DbErrorKind::IncompleteDatabase(
-                            account.address().clone(),
-                        )
-                        .into());
-                    }
-                }
+                return Ok(f(None));
             }
         }
 
-        // TODO: save this load if the overlay account exists.
-        let maybe_acc = self
-            .db
-            .get_account(address)?
-            .map(|acc| OverlayAccount::from_loaded(address, acc));
-        let cache = &mut *self.cache.write();
-        Self::insert_cache_if_fresh_account(cache, address, maybe_acc);
+        let mut cache_write_lock = {
+            let upgradable_lock = self.cache.upgradable_read();
+            if upgradable_lock.contains_key(address) {
+                // TODO: the account can be updated here if the relevant methods
+                //  to update account can run with &OverlayAccount.
+                RwLockUpgradableReadGuard::upgrade(upgradable_lock)
+            } else {
+                // Load the account from db.
+                let mut maybe_loaded_acc = self
+                    .db
+                    .get_account(address)?
+                    .map(|acc| OverlayAccount::from_loaded(address, acc));
+                if let Some(account) = &mut maybe_loaded_acc {
+                    Self::update_account_cache(require, account, &self.db)?;
+                }
+                let mut cache_write_lock =
+                    RwLockUpgradableReadGuard::upgrade(upgradable_lock);
+                Self::insert_cache_if_fresh_account(
+                    &mut *cache_write_lock,
+                    address,
+                    maybe_loaded_acc,
+                );
 
+                cache_write_lock
+            }
+        };
+
+        let cache = &mut *cache_write_lock;
         let account = cache.get_mut(address).unwrap();
         if let Some(maybe_acc) = &mut account.account {
             if !Self::update_account_cache(require, maybe_acc, &self.db)? {
