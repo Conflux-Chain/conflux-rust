@@ -177,6 +177,16 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         }
     }
 
+    pub fn set_genesis_staking_stake(&mut self) {
+        self.staking_state = StakingState {
+            total_issued_tokens: U256::default(),
+            total_staking_tokens: U256::default(),
+            total_storage_tokens: U256::default(),
+            interest_rate_per_block: *INITIAL_INTEREST_RATE_PER_BLOCK,
+            accumulate_interest_rate: *ACCUMULATED_INTEREST_RATE_SCALE,
+        }
+    }
+
     pub fn contract_start_nonce(&self) -> U256 { self.contract_start_nonce }
 
     /// Increase block number and calculate the current secondary reward.

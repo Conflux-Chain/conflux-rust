@@ -424,6 +424,7 @@ fn checkpoint_get_storage_at() {
     state
         .set_storage(&contract_a, k.clone(), U256::from(0xffff), a)
         .unwrap();
+    state.inc_nonce(&contract_a).unwrap();
     assert_eq!(
         state
             .collect_and_settle_collateral(
@@ -936,7 +937,7 @@ fn create_contract_fail_previous_storage() {
     assert_eq!(state.balance(&a).unwrap(), *COLLATERAL_PER_STORAGE_KEY);
 
     state
-        .new_contract(&contract_addr, U256::zero(), U256::zero())
+        .new_contract(&contract_addr, U256::zero(), U256::one())
         .unwrap();
     state
         .set_storage(&contract_addr, k.clone(), U256::from(0xffff), a)
