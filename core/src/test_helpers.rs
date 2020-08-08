@@ -26,6 +26,7 @@ pub fn get_state_for_genesis_write_with_factory(
         &Spec::new_spec(),
         0, /* block_number */
     );
+    state.set_genesis_staking_stake();
 
     initialize_internal_contract_accounts(&mut state);
     let genesis_epoch_id = EpochId::default();

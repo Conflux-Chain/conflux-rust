@@ -109,6 +109,8 @@ pub fn genesis_block(
         &Spec::new_spec(),
         0, /* block_number */
     );
+    state.set_genesis_staking_stake();
+
     let mut genesis_block_author = test_net_version;
     genesis_block_author.set_user_account_type_bits();
 
