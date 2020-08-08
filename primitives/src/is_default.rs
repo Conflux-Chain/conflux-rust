@@ -47,3 +47,7 @@ impl IsDefault for StorageValue {
             && (self.owner == Some(Address::default()) || self.owner == None)
     }
 }
+
+impl IsDefault for U256 {
+    fn is_default(&self) -> bool { *self == Self::default() }
+}

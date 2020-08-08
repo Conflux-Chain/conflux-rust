@@ -11,7 +11,7 @@ pub trait StateDbExt {
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>
     where
-        T: ::rlp::Encodable;
+        T: ::rlp::Encodable + IsDefault;
 
     fn get_account(&self, address: &Address) -> Result<Option<Account>>;
 
@@ -78,9 +78,17 @@ impl StateDbExt for StateDb {
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>
     where
-        T: ::rlp::Encodable,
+        T: ::rlp::Encodable + IsDefault,
     {
-        self.set_raw(key, ::rlp::encode(value).into_boxed_slice(), debug_record)
+        if value.is_default() {
+            self.set_raw(
+                key,
+                ::rlp::encode(value).into_boxed_slice(),
+                debug_record,
+            )
+        } else {
+            self.delete(key, debug_record)
+        }
     }
 
     fn get_account(&self, address: &Address) -> Result<Option<Account>> {
@@ -245,5 +253,8 @@ use crate::{
     parameters::staking::*,
 };
 use cfx_types::{Address, H256, U256};
-use primitives::{Account, CodeInfo, DepositList, StorageKey, VoteStakeList};
+use primitives::{
+    is_default::IsDefault, Account, CodeInfo, DepositList, StorageKey,
+    VoteStakeList,
+};
 use rlp::Rlp;
