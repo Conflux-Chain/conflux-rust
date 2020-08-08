@@ -826,7 +826,7 @@ fn check_result_of_simple_payment_to_killed_account() {
     let mut state_0 = get_state_for_genesis_write(&storage_manager);
     let sender_addr = DEV_GENESIS_KEY_PAIR.address();
     state_0
-        .require_or_new_basic_account(&sender_addr)
+        .require_or_default(&sender_addr)
         .unwrap()
         .add_balance(&ONE_CFX_IN_DRIP.into());
     let mut a = Address::zero();
@@ -871,14 +871,14 @@ fn check_result_of_simple_payment_to_killed_account() {
     let epoch_id = EpochId::from_uint(&U256::from(2));
     // Assert that the account has no storage and no code.
     assert_eq!(state.code_hash(&a).unwrap(), Some(KECCAK_EMPTY));
-    assert_eq!(state.code(&a).unwrap(), None);
+    assert_eq!(state.code(&a).unwrap().unwrap().len(), 0);
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
     state.commit(epoch_id, /* debug_record = */ None).unwrap();
 
     // Commit the state and assert that the account has no storage and no code.
     let state = get_state(&storage_manager, &epoch_id);
     assert_eq!(state.code_hash(&a).unwrap(), Some(KECCAK_EMPTY));
-    assert_eq!(state.code(&a).unwrap(), None);
+    assert_eq!(state.code(&a).unwrap().unwrap().len(), 0);
     assert_eq!(state.db.get_raw(code_key).unwrap(), None);
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
 }
@@ -994,7 +994,7 @@ fn create_contract_fail_previous_storage() {
     state.remove_contract(&a).unwrap();
     // parking_lot::lock_api::MappedRwLockWriteGuard must be used, so we drop()
     // it.
-    drop(state.require_or_new_basic_account(&a).unwrap());
+    drop(state.require_or_default(&a).unwrap());
     state
         .new_contract(&contract_addr, U256::zero(), U256::zero())
         .unwrap();

@@ -346,16 +346,15 @@ impl<'a> CallCreateExecutive<'a> {
         if let ActionValue::Transfer(val) = params.value {
             // It is possible to first send money to a pre-calculated
             // contract address.
-            let prev_balance = state.balance(&params.address)?;
             state.sub_balance(
                 &params.sender,
                 &val,
                 &mut substate.to_cleanup_mode(&spec),
             )?;
-            state.new_contract_with_admin(
+            state.deploy_new_contract(
                 &params.address,
                 &params.original_sender,
-                val.saturating_add(prev_balance),
+                val,
                 state.contract_start_nonce(),
                 storage_layout,
             )?;
