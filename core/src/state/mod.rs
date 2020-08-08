@@ -44,6 +44,7 @@ mod account_entry_tests;
 pub mod prefetcher;
 #[cfg(test)]
 mod state_tests;
+
 mod substate;
 
 #[derive(Copy, Clone)]
@@ -418,24 +419,16 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         }
     }
 
-    pub fn new_contract_with_admin(
+    pub fn deploy_new_contract(
         &mut self, contract: &Address, admin: &Address, balance: U256,
         nonce: U256, storage_layout: Option<StorageLayout>,
     ) -> DbResult<()>
     {
-        Self::update_cache(
-            self.cache.get_mut(),
-            self.checkpoints.get_mut(),
-            contract,
-            AccountEntry::new_dirty(Some(
-                OverlayAccount::new_contract_with_admin(
-                    contract,
-                    balance,
-                    nonce,
-                    admin,
-                    storage_layout,
-                ),
-            )),
+        self.require_or_default(contract)?.deploy_new_contract(
+            balance,
+            admin,
+            nonce,
+            storage_layout,
         );
         Ok(())
     }
@@ -444,17 +437,14 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     pub fn new_contract(
         &mut self, contract: &Address, balance: U256, nonce: U256,
     ) -> DbResult<()> {
-        Self::update_cache(
-            self.cache.get_mut(),
-            self.checkpoints.get_mut(),
+        self.remove_contract(contract)?;
+        self.deploy_new_contract(
             contract,
-            AccountEntry::new_dirty(Some(OverlayAccount::new_contract(
-                contract,
-                balance,
-                nonce,
-                Some(STORAGE_LAYOUT_REGULAR_V0),
-            ))),
-        );
+            &Address::zero(),
+            balance,
+            nonce,
+            Some(STORAGE_LAYOUT_REGULAR_V0),
+        )?;
         Ok(())
     }
 
@@ -773,14 +763,13 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     pub fn inc_nonce(&mut self, address: &Address) -> DbResult<()> {
-        self.require_or_new_basic_account(address)
-            .map(|mut x| x.inc_nonce())
+        self.require_or_default(address).map(|mut x| x.inc_nonce())
     }
 
     pub fn set_nonce(
         &mut self, address: &Address, nonce: &U256,
     ) -> DbResult<()> {
-        self.require_or_new_basic_account(address)
+        self.require_or_default(address)
             .map(|mut x| x.set_nonce(nonce))
     }
 
@@ -821,7 +810,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         if !by.is_zero()
             || (cleanup_mode == CleanupMode::ForceCreate && !exists)
         {
-            self.require_or_new_basic_account(address)?.add_balance(by);
+            self.require_or_default(address)?.add_balance(by);
         }
 
         if let CleanupMode::TrackTouched(set) = cleanup_mode {
@@ -852,7 +841,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         let refundable = if by > &collateral { &collateral } else { by };
         let burnt = *by - *refundable;
         if !refundable.is_zero() {
-            self.require_or_new_basic_account(address)?
+            self.require_or_default(address)?
                 .sub_collateral_for_storage(refundable);
         }
         self.staking_state.total_storage_tokens -= *by;
@@ -1031,33 +1020,22 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     /// Assume that only contract with zero `collateral_for_storage` will be
     /// killed.
     pub fn recycle_storage(
-        &mut self, killed_addresses: Vec<Address>,
+        &mut self, killed_address: Address,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()>
     {
-        // TODO: Think about kill_dust and collateral refund.
-        for address in &killed_addresses {
-            self.db.delete_all::<access_mode::Write>(
-                StorageKey::new_storage_root_key(address),
-                debug_record.as_deref_mut(),
-            )?;
-            self.db.delete_all::<access_mode::Write>(
-                StorageKey::new_code_root_key(address),
-                debug_record.as_deref_mut(),
-            )?;
-            self.db.delete(
-                StorageKey::new_account_key(address),
-                debug_record.as_deref_mut(),
-            )?;
-            self.db.delete(
-                StorageKey::new_deposit_list_key(address),
-                debug_record.as_deref_mut(),
-            )?;
-            self.db.delete(
-                StorageKey::new_vote_list_key(address),
-                debug_record.as_deref_mut(),
-            )?;
-        }
+        // TODO: Think about kill_dust.
+
+        self.db.delete_all::<access_mode::Write>(
+            StorageKey::new_storage_root_key(&killed_address),
+            debug_record.as_deref_mut(),
+        )?;
+        // If we use a const string instead of code hash in code key,
+        // we can also skip this one.
+        self.db.delete_all::<access_mode::Write>(
+            StorageKey::new_code_root_key(&killed_address),
+            debug_record.as_deref_mut(),
+        )?;
         Ok(())
     }
 
@@ -1080,23 +1058,14 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
 
         self.precommit_make_dirty_accounts_list();
 
-        let mut killed_addresses = Vec::new();
         for (address, entry) in
             std::mem::take(&mut self.dirty_accounts_to_commit).iter_mut()
         {
             entry.state = AccountState::Committed;
-            match &mut entry.account {
-                None => killed_addresses.push(*address),
-                Some(account) => {
-                    account.commit(
-                        self,
-                        address,
-                        debug_record.as_deref_mut(),
-                    )?;
-                }
+            if let Some(account) = &mut entry.account {
+                account.commit(self, address, debug_record.as_deref_mut())?;
             }
         }
-        self.recycle_storage(killed_addresses, debug_record.as_deref_mut())?;
         self.commit_staking_state(debug_record.as_deref_mut())?;
         self.db.compute_state_root(debug_record)
     }
@@ -1217,7 +1186,9 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             self.cache.get_mut(),
             self.checkpoints.get_mut(),
             address,
-            AccountEntry::new_dirty(None),
+            AccountEntry::new_dirty(Some(OverlayAccount::new_account_full(
+                address,
+            ))),
         );
 
         Ok(())
@@ -1349,7 +1320,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                     })) => {
                         if let Some(value) = account.cached_storage_at(key) {
                             return Ok(Some(value));
-                        } else if account.is_newly_created_contract() {
+                        } else if account.vm_storage_deprecated() {
                             return Ok(Some(U256::zero()));
                         } else {
                             kind = Some(ReturnKind::OriginalAt);
@@ -1477,6 +1448,12 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
 
         let cache = &mut *cache_write_lock;
         let account = cache.get_mut(address).unwrap();
+        // TODO: we need to discuss if the basic component of an account is
+        // empty, can the other component be non-empty? This corner case
+        // can never happens in current spec. But it is non-trivial to gives
+        // such guarantee. Most implementation handles this corner case,
+        // but here does not handle. But anyway, this function may be
+        // merged to `require_or_set` since we no longer needs dirty flag.
         if let Some(maybe_acc) = &mut account.account {
             if !Self::update_account_cache(require, maybe_acc, &self.db)? {
                 return Err(DbErrorKind::IncompleteDatabase(
@@ -1502,20 +1479,28 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         self.require_or_set(address, require_code, no_account_is_an_error)
     }
 
-    fn require_or_new_basic_account(
+    fn require_or_default(
         &self, address: &Address,
     ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>> {
         self.require_or_set(address, false, |address| {
             if address.is_valid_address() {
-                // Note that it is possible to first send money to a pre-calculated contract
-                // address and then deploy contracts. So we are going to *allow* sending to a contract
-                // address and use new_basic() to create a *stub* there. Because the contract serialization
-                // is a super-set of the normal address serialization, this should just work.
-                Ok(OverlayAccount::new_basic(
-                    address,
-                    U256::zero(),
-                    self.account_start_nonce.into(),
-                    None,
+                // There are five components of an account (see section 3 of protocol
+                // specification). They are stored with different keys.
+                //
+                // If the `Option<OverlayAccount>` in the AccountEntry is None, it only means the
+                // **basic component** does not exists in world state. So we
+                // must use `new_basic_account` instead of `new_full_account` here.
+                //
+                // The difference between these two function is that, `new_basic_account` will
+                // set other components as "not been load" other than overwrite with
+                // initialization value.
+                //
+                // Currently, it seems when the basic component is empty, all the other components
+                // are always empty. But it is impossible to make all the code and CIP contributors
+                // remember this rule. So we need to handle it here.
+                Ok(OverlayAccount::new_account_basic_with_param(address,
+                                                                U256::zero(),
+                                                                self.account_start_nonce.into(),
                 ))
             } else {
                 unreachable!(
