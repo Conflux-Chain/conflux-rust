@@ -56,19 +56,19 @@ mod impls {
         /// Update the accessed_entries while getting the value.
         pub fn get_raw(&self, key: StorageKey) -> Result<Option<Arc<[u8]>>> {
             let key_bytes = key.to_key_bytes();
-            let r;
+            let mut r;
             let accessed_entries_read_guard = self.accessed_entries.read();
             if let Some(v) = accessed_entries_read_guard.get(&key_bytes) {
                 r = v.current_value.clone();
             } else {
                 drop(accessed_entries_read_guard);
+                r = self.storage.get(key)?.map(Into::into);
                 let mut accessed_entries = self.accessed_entries.write();
                 let entry = accessed_entries.entry(key_bytes);
                 let was_vacant = if let Occupied(o) = &entry {
                     r = o.get().current_value.clone();
                     false
                 } else {
-                    r = self.storage.get(key)?.map(Into::into);
                     true
                 };
                 if was_vacant {
