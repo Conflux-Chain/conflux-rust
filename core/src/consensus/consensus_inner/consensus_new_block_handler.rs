@@ -1994,7 +1994,7 @@ impl ConsensusNewBlockHandler {
                         // and states are stored in different databases.
                         compute_epoch = true;
                     }
-                    
+
                     self.data_man
                         .state_availability_boundary
                         .write()
