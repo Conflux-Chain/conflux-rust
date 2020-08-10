@@ -12,7 +12,7 @@ use crate::{
     consensus::SharedConsensusGraph,
     light_protocol::{message::WitnessInfoWithHeight, Error, ErrorKind},
     parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
-    statedb::StateDb,
+    statedb::{StateDb, StateDbGetOriginalMethods},
     storage::{
         state::{State, StateTrait},
         state_manager::StateManagerTrait,
@@ -168,7 +168,7 @@ impl LedgerInfo {
         let state = self.state_of(epoch)?;
 
         let (value, proof) = StateDb::new(state)
-            .get_raw_with_proof(StorageKey::from_key_bytes(&key))?;
+            .get_original_raw_with_proof(StorageKey::from_key_bytes(&key))?;
 
         let value = value.map(|x| x.to_vec());
         Ok((value, proof))
@@ -180,7 +180,10 @@ impl LedgerInfo {
         &self, epoch: u64, address: &Address,
     ) -> Result<(Option<StorageRoot>, NodeMerkleProof), Error> {
         let state = self.state_of(epoch)?;
-        Ok(StateDb::new(state).get_storage_root_with_proof(address)?)
+        Ok(
+            StateDb::new(state)
+                .get_original_storage_root_with_proof(address)?,
+        )
     }
 
     /// Get the epoch receipts corresponding to the execution of `epoch`.

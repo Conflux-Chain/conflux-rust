@@ -217,10 +217,7 @@ impl Account {
     }
 
     pub fn check_address_space(address: &Address) -> Result<(), AccountError> {
-        if address.is_user_account_address()
-            || address.is_builtin_address()
-            || address.is_contract_address()
-        {
+        if address.is_valid_address() {
             Ok(())
         } else {
             Err(AccountError::ReservedAddressSpace(*address))
@@ -307,13 +304,13 @@ impl Account {
     pub fn new_from_rlp(
         address: Address, rlp: &Rlp,
     ) -> Result<Self, AccountError> {
-        if address.is_user_account_address() || address.is_builtin_address() {
+        if address.is_contract_address() {
+            Self::from_contract_account(address, ContractAccount::decode(rlp)?)
+        } else if address.is_valid_address() {
             Ok(Self::from_basic_account(
                 address,
                 BasicAccount::decode(rlp)?,
             ))
-        } else if address.is_contract_address() {
-            Self::from_contract_account(address, ContractAccount::decode(rlp)?)
         } else {
             Err(AccountError::ReservedAddressSpace(address))
         }
@@ -322,15 +319,13 @@ impl Account {
 
 impl Encodable for Account {
     fn rlp_append(&self, stream: &mut RlpStream) {
-        if self.address_local_info.is_user_account_address()
-            || self.address_local_info.is_builtin_address()
-        {
-            stream.append_internal(&self.to_basic_account());
-        } else if self.address_local_info.is_contract_address() {
+        if self.address_local_info.is_contract_address() {
             // A contract address can hold balance before its initialization
             // as a recipient of a simple transaction.
             // So we always determine how to serialize by the address type bits.
             stream.append_internal(&self.to_contract_account());
+        } else if self.address_local_info.is_valid_address() {
+            stream.append_internal(&self.to_basic_account());
         } else {
             unreachable!("other types of address are not supported yet.");
         }

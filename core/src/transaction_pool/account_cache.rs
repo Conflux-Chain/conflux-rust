@@ -1,10 +1,10 @@
 use crate::{
     executive::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
     state::OverlayAccount,
-    statedb::{Result as StateDbResult, StateDb},
+    statedb::{Result as StateDbResult, StateDb, StateDbExt},
 };
 use cfx_types::{Address, U256};
-use primitives::Account;
+use primitives::{storage::STORAGE_LAYOUT_REGULAR_V0, Account};
 use std::{collections::hash_map::HashMap, sync::Arc};
 
 pub struct AccountCache {
@@ -39,6 +39,7 @@ impl AccountCache {
             &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
             U256::from(0),
             U256::from(0),
+            Some(STORAGE_LAYOUT_REGULAR_V0),
         )
         .check_commission_privilege(
             self.storage.as_ref(),

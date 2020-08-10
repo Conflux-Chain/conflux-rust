@@ -12,7 +12,8 @@ use crate::{
 };
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use primitives::{
-    account::ContractAccount, Account, SponsorInfo, VoteStakeList,
+    account::ContractAccount, storage::STORAGE_LAYOUT_REGULAR_V0, Account,
+    SponsorInfo, VoteStakeList,
 };
 
 #[test]
@@ -81,7 +82,7 @@ fn test_overlay_account_create() {
 
     // test new basic
     let overlay_account =
-        OverlayAccount::new_basic(&user_addr, 1011.into(), 12345.into());
+        OverlayAccount::new_basic(&user_addr, 1011.into(), 12345.into(), None);
     assert!(overlay_account.deposit_list().is_none());
     assert!(overlay_account.vote_stake_list().is_none());
     assert_eq!(*overlay_account.address(), user_addr);
@@ -98,30 +99,11 @@ fn test_overlay_account_create() {
     assert_eq!(*overlay_account.sponsor_info(), Default::default());
 
     // test new contract
-    let mut overlay_account =
-        OverlayAccount::new_contract(&contract_addr, 5678.into(), 1234.into());
-    assert!(overlay_account.deposit_list().is_none());
-    assert!(overlay_account.vote_stake_list().is_none());
-    assert_eq!(*overlay_account.address(), contract_addr);
-    assert_eq!(*overlay_account.balance(), 5678.into());
-    assert_eq!(*overlay_account.nonce(), 1234.into());
-    assert_eq!(*overlay_account.staking_balance(), 0.into());
-    assert_eq!(*overlay_account.collateral_for_storage(), 0.into());
-    assert_eq!(*overlay_account.accumulated_interest_return(), 0.into());
-    assert_eq!(overlay_account.code_hash(), KECCAK_EMPTY);
-    assert_eq!(overlay_account.is_newly_created_contract(), true);
-    assert_eq!(overlay_account.is_contract(), true);
-    assert_eq!(*overlay_account.admin(), Address::zero());
-    assert_eq!(*overlay_account.sponsor_info(), Default::default());
-    overlay_account.inc_nonce();
-    assert_eq!(*overlay_account.nonce(), 1235.into());
-
-    // test new contract with admin
-    let overlay_account = OverlayAccount::new_contract_with_admin(
+    let mut overlay_account = OverlayAccount::new_contract(
         &contract_addr,
         5678.into(),
         1234.into(),
-        &admin,
+        Some(STORAGE_LAYOUT_REGULAR_V0),
     );
     assert!(overlay_account.deposit_list().is_none());
     assert!(overlay_account.vote_stake_list().is_none());
@@ -134,6 +116,38 @@ fn test_overlay_account_create() {
     assert_eq!(overlay_account.code_hash(), KECCAK_EMPTY);
     assert_eq!(overlay_account.is_newly_created_contract(), true);
     assert_eq!(overlay_account.is_contract(), true);
+    assert_eq!(
+        overlay_account.storage_layout_change(),
+        Some(&STORAGE_LAYOUT_REGULAR_V0)
+    );
+    assert_eq!(*overlay_account.admin(), Address::zero());
+    assert_eq!(*overlay_account.sponsor_info(), Default::default());
+    overlay_account.inc_nonce();
+    assert_eq!(*overlay_account.nonce(), 1235.into());
+
+    // test new contract with admin
+    let overlay_account = OverlayAccount::new_contract_with_admin(
+        &contract_addr,
+        5678.into(),
+        1234.into(),
+        &admin,
+        Some(STORAGE_LAYOUT_REGULAR_V0),
+    );
+    assert!(overlay_account.deposit_list().is_none());
+    assert!(overlay_account.vote_stake_list().is_none());
+    assert_eq!(*overlay_account.address(), contract_addr);
+    assert_eq!(*overlay_account.balance(), 5678.into());
+    assert_eq!(*overlay_account.nonce(), 1234.into());
+    assert_eq!(*overlay_account.staking_balance(), 0.into());
+    assert_eq!(*overlay_account.collateral_for_storage(), 0.into());
+    assert_eq!(*overlay_account.accumulated_interest_return(), 0.into());
+    assert_eq!(overlay_account.code_hash(), KECCAK_EMPTY);
+    assert_eq!(overlay_account.is_newly_created_contract(), true);
+    assert_eq!(overlay_account.is_contract(), true);
+    assert_eq!(
+        overlay_account.storage_layout_change(),
+        Some(&STORAGE_LAYOUT_REGULAR_V0)
+    );
     assert_eq!(*overlay_account.admin(), admin);
     assert_eq!(*overlay_account.sponsor_info(), Default::default());
 }
