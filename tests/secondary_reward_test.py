@@ -14,7 +14,7 @@ class StorageMaintenanceTest(ConfluxTestFramework):
         self.setup_clean_chain = True
         self.mining_author = "0x10000000000000000000000000000000000000aa"
         self.conf_parameters = {"mining_author": "\"10000000000000000000000000000000000000aa\"",
-                                "disable_stratum": "true"
+                                "mining_type": "'disable'"
                                 }
         self.gasPrice = 1
 
