@@ -320,10 +320,6 @@ impl<'a> ContextTrait for Context<'a> {
                     .storage_collateralized
                     .entry(self.origin.storage_owner)
                     .or_insert(0) += data.len() as u64;
-                self.state.register_unpaid_collateral(
-                    &self.origin.storage_owner,
-                    &collateral_for_code,
-                )?;
 
                 self.state.init_code(
                     &self.origin.address,

@@ -10,6 +10,7 @@ use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{
     fmt,
     ops::{Deref, DerefMut},
+    sync::Arc,
 };
 
 #[derive(Debug, PartialEq, Clone)]
@@ -100,12 +101,30 @@ impl DerefMut for VoteStakeList {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
-#[derive(
-    Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
-)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub struct CodeInfo {
-    pub code: Bytes,
+    pub code: Arc<Bytes>,
     pub owner: Address,
+}
+
+impl CodeInfo {
+    #[inline]
+    pub fn code_size(&self) -> usize { self.code.len() }
+}
+
+impl Encodable for CodeInfo {
+    fn rlp_append(&self, stream: &mut RlpStream) {
+        stream.begin_list(2).append(&*self.code).append(&self.owner);
+    }
+}
+
+impl Decodable for CodeInfo {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        Ok(Self {
+            code: Arc::new(rlp.val_at(0)?),
+            owner: rlp.val_at(1)?,
+        })
+    }
 }
 
 #[derive(
@@ -318,8 +337,8 @@ impl Encodable for Account {
     }
 }
 
-impl From<rlp::DecoderError> for AccountError {
-    fn from(err: rlp::DecoderError) -> Self { AccountError::InvalidRlp(err) }
+impl From<DecoderError> for AccountError {
+    fn from(err: DecoderError) -> Self { AccountError::InvalidRlp(err) }
 }
 
 impl fmt::Display for AccountError {

@@ -105,7 +105,7 @@ fn test_sender_balance() {
         );
         let res = ex.create(params.clone(), &mut substate).unwrap();
         state
-            .settle_collateral_for_all(
+            .collect_and_settle_collateral(
                 &params.storage_owner,
                 &params.storage_limit_in_drip,
                 &mut substate,
@@ -362,7 +362,7 @@ fn test_call_to_create() {
         );
         let res = ex.call(params.clone(), &mut substate).unwrap();
         state
-            .settle_collateral_for_all(
+            .collect_and_settle_collateral(
                 &params.storage_owner,
                 &params.storage_limit_in_drip,
                 &mut substate,

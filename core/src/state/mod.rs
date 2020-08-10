@@ -12,13 +12,16 @@ use crate::{
     hash::KECCAK_EMPTY,
     parameters::staking::*,
     statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb},
-    storage::StateRootWithAuxInfo,
+    storage::{utils::access_mode, StateRootWithAuxInfo},
     transaction_pool::SharedTransactionPool,
     vm::Error as vmError,
     vm_factory::VmFactory,
 };
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
-use primitives::{Account, EpochId, StorageKey, StorageLayout, StorageValue};
+use primitives::{
+    Account, DepositList, EpochId, StorageKey, StorageLayout, StorageValue,
+    VoteStakeList,
+};
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     sync::Arc,
@@ -37,12 +40,13 @@ pub use self::{
     substate::{CallStackInfo, Substate},
 };
 use crate::evm::Spec;
-use parking_lot::{MappedRwLockWriteGuard, RwLock, RwLockWriteGuard};
+use parking_lot::{
+    MappedRwLockWriteGuard, RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard,
+};
 
 #[derive(Copy, Clone)]
 enum RequireCache {
     None,
-    CodeSize,
     Code,
     DepositList,
     VoteStakeList,
@@ -210,25 +214,27 @@ impl State {
         index
     }
 
-    pub fn collect_and_settle_collateral_for_suicide(
-        &mut self, substate: &mut Substate, suicide_address: &Address,
-    ) -> DbResult<CollateralCheckResult> {
-        self.collect_ownership_changed(substate)?;
-        self.settle_collateral_for_address(suicide_address)
-    }
-
     /// Charges or refund storage collateral and update `total_storage_tokens`.
     fn settle_collateral_for_address(
-        &mut self, addr: &Address,
+        &mut self, addr: &Address, substate: &Substate,
     ) -> DbResult<CollateralCheckResult> {
-        let (new, old) = (
-            self.fresh_collateral_for_storage(addr)?,
-            self.collateral_for_storage(addr)?,
-        );
-        let (inc, sub) = if new > old {
-            (new - old, U256::zero())
+        let inc_bytes = substate
+            .storage_collateralized
+            .get(addr)
+            .cloned()
+            .unwrap_or(0);
+        let sub_bytes =
+            substate.storage_released.get(addr).cloned().unwrap_or(0);
+        let (inc, sub) = if inc_bytes > sub_bytes {
+            (
+                *COLLATERAL_PER_BYTE * (inc_bytes - sub_bytes),
+                U256::from(0),
+            )
         } else {
-            (U256::zero(), old - new)
+            (
+                U256::from(0),
+                *COLLATERAL_PER_BYTE * (sub_bytes - inc_bytes),
+            )
         };
 
         if !sub.is_zero() {
@@ -289,14 +295,10 @@ impl State {
             }
         }
         for (addr, sub) in &collateral_for_storage_sub {
-            let to_refund_collateral = *COLLATERAL_PER_STORAGE_KEY * *sub;
-            self.register_unrefunded_collateral(addr, &to_refund_collateral)?;
             *substate.storage_released.entry(*addr).or_insert(0) +=
                 sub * BYTES_PER_STORAGE_KEY;
         }
         for (addr, inc) in &collateral_for_storage_inc {
-            let to_pay_collateral = *COLLATERAL_PER_STORAGE_KEY * *inc;
-            self.register_unpaid_collateral(addr, &to_pay_collateral)?;
             *substate.storage_collateralized.entry(*addr).or_insert(0) +=
                 inc * BYTES_PER_STORAGE_KEY;
         }
@@ -308,17 +310,20 @@ impl State {
     /// checked out. This function should only be called in post-processing
     /// of a transaction.
     pub fn settle_collateral_for_all(
-        &mut self, original_sender: &Address, storage_limit: &U256,
-        substate: &mut Substate,
-    ) -> DbResult<CollateralCheckResult>
-    {
+        &mut self, substate: &Substate,
+    ) -> DbResult<CollateralCheckResult> {
         for address in substate.keys_for_collateral_changed().iter() {
-            match self.settle_collateral_for_address(address)? {
+            match self.settle_collateral_for_address(address, substate)? {
                 CollateralCheckResult::Valid => {}
                 res => return Ok(res),
             }
         }
+        Ok(CollateralCheckResult::Valid)
+    }
 
+    pub fn check_storage_limit(
+        &self, original_sender: &Address, storage_limit: &U256,
+    ) -> DbResult<CollateralCheckResult> {
         let collateral_for_storage =
             self.collateral_for_storage(original_sender)?;
         if collateral_for_storage > *storage_limit {
@@ -331,13 +336,21 @@ impl State {
         }
     }
 
+    // TODO: This function can only be called after VM execution. There are some
+    // test cases breaks this assumption, which will be fixed in a separated PR.
     pub fn collect_and_settle_collateral(
-        &mut self, storage_owner: &Address, storage_limit: &U256,
+        &mut self, original_sender: &Address, storage_limit: &U256,
         substate: &mut Substate,
     ) -> DbResult<CollateralCheckResult>
     {
         self.collect_ownership_changed(substate)?;
-        self.settle_collateral_for_all(storage_owner, storage_limit, substate)
+        let res = match self.settle_collateral_for_all(substate)? {
+            CollateralCheckResult::Valid => {
+                self.check_storage_limit(original_sender, storage_limit)?
+            }
+            res => res,
+        };
+        Ok(res)
     }
 
     /// Merge last checkpoint with previous.
@@ -583,26 +596,6 @@ impl State {
         Ok(())
     }
 
-    pub fn register_unrefunded_collateral(
-        &mut self, address: &Address, by: &U256,
-    ) -> DbResult<()> {
-        if !by.is_zero() {
-            self.require_exists(address, false)?
-                .register_unrefunded_collateral(by);
-        }
-        Ok(())
-    }
-
-    pub fn register_unpaid_collateral(
-        &mut self, address: &Address, by: &U256,
-    ) -> DbResult<()> {
-        if !by.is_zero() {
-            self.require_exists(address, false)?
-                .register_unpaid_collateral(by);
-        }
-        Ok(())
-    }
-
     pub fn check_commission_privilege(
         &self, contract_address: &Address, user: &Address,
     ) -> DbResult<bool> {
@@ -672,7 +665,7 @@ impl State {
     }
 
     pub fn code_size(&self, address: &Address) -> DbResult<Option<usize>> {
-        self.ensure_cached(address, RequireCache::CodeSize, |acc| {
+        self.ensure_cached(address, RequireCache::Code, |acc| {
             acc.and_then(|acc| acc.code_size())
         })
     }
@@ -699,16 +692,6 @@ impl State {
         self.ensure_cached(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |account| {
                 *account.collateral_for_storage()
-            })
-        })
-    }
-
-    pub fn fresh_collateral_for_storage(
-        &self, address: &Address,
-    ) -> DbResult<U256> {
-        self.ensure_cached(address, RequireCache::None, |acc| {
-            acc.map_or(U256::zero(), |account| {
-                *account.fresh_collateral_for_storage()
             })
         })
     }
@@ -817,11 +800,16 @@ impl State {
     pub fn sub_collateral_for_storage(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
-        if !by.is_zero() {
-            self.require_exists(address, false)?
-                .sub_collateral_for_storage(by);
-            self.staking_state.total_storage_tokens -= *by;
+        let collateral = self.collateral_for_storage(address)?;
+        let refundable = if by > &collateral { &collateral } else { by };
+        let burnt = *by - *refundable;
+        if !refundable.is_zero() {
+            self.require_or_new_basic_account(address)?
+                .sub_collateral_for_storage(refundable);
         }
+        self.staking_state.total_storage_tokens -= *by;
+        self.staking_state.total_issued_tokens -= burnt;
+
         Ok(())
     }
 
@@ -936,7 +924,7 @@ impl State {
         trace!("update_account_cache account={:?}", account);
         match require {
             RequireCache::None => false,
-            RequireCache::Code | RequireCache::CodeSize => !account.is_cached(),
+            RequireCache::Code => !account.is_code_loaded(),
             RequireCache::DepositList => account.deposit_list().is_none(),
             RequireCache::VoteStakeList => account.vote_stake_list().is_none(),
         }
@@ -946,26 +934,20 @@ impl State {
     /// cache succeeds.
     fn update_account_cache(
         require: RequireCache, account: &mut OverlayAccount, db: &StateDb,
-    ) -> bool {
+    ) -> DbResult<bool> {
         match require {
-            RequireCache::None => true,
-            RequireCache::Code | RequireCache::CodeSize => {
-                account.cache_code(db).is_some()
-            }
-            RequireCache::DepositList => account
-                .cache_staking_info(
-                    true,  /* cache_deposit_list */
-                    false, /* cache_vote_list */
-                    db,
-                )
-                .is_ok(),
-            RequireCache::VoteStakeList => account
-                .cache_staking_info(
-                    false, /* cache_deposit_list */
-                    true,  /* cache_vote_list */
-                    db,
-                )
-                .is_ok(),
+            RequireCache::None => Ok(true),
+            RequireCache::Code => account.cache_code(db),
+            RequireCache::DepositList => account.cache_staking_info(
+                true,  /* cache_deposit_list */
+                false, /* cache_vote_list */
+                db,
+            ),
+            RequireCache::VoteStakeList => account.cache_staking_info(
+                false, /* cache_deposit_list */
+                true,  /* cache_vote_list */
+                db,
+            ),
         }
     }
 
@@ -1003,38 +985,16 @@ impl State {
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()>
     {
+        // TODO: Think about kill_dust and collateral refund.
         for address in &killed_addresses {
-            let storages_opt = self.db.delete_all(
+            self.db.delete_all::<access_mode::Write>(
                 StorageKey::new_storage_root_key(address),
                 debug_record.as_deref_mut(),
             )?;
-            self.db.delete_all(
+            self.db.delete_all::<access_mode::Write>(
                 StorageKey::new_code_root_key(address),
                 debug_record.as_deref_mut(),
             )?;
-            if let Some(storage_key_value) = storages_opt {
-                for (key, value) in storage_key_value {
-                    if let StorageKey::StorageKey { .. } =
-                        StorageKey::from_delta_mpt_key(&key[..])
-                    {
-                        let storage_value =
-                            rlp::decode::<StorageValue>(value.as_ref())?;
-                        let storage_owner =
-                            storage_value.owner.as_ref().unwrap_or(address);
-                        assert!(self.exists(storage_owner)?);
-                        self.register_unrefunded_collateral(
-                            storage_owner,
-                            &COLLATERAL_PER_STORAGE_KEY,
-                        )?;
-                        self.sub_collateral_for_storage(
-                            storage_owner,
-                            &COLLATERAL_PER_STORAGE_KEY,
-                        )?;
-                    }
-                }
-            }
-        }
-        for address in &killed_addresses {
             self.db.delete(
                 StorageKey::new_account_key(address),
                 debug_record.as_deref_mut(),
@@ -1149,13 +1109,69 @@ impl State {
         Ok(())
     }
 
-    pub fn kill_account(&mut self, address: &Address) {
+    pub fn kill_account(&mut self, address: &Address) -> DbResult<()> {
+        let account_cache_read_guard = self.cache.read();
+        let maybe_account = account_cache_read_guard
+            .get(address)
+            .and_then(|acc| acc.account.as_ref());
+
+        let mut storage_refund_list = vec![];
+        // Process collateral for removed storage.
+        // TODO: try to do it in a better way, e.g. first log the deletion
+        //  somewhere then apply the collateral change.
+        if let Some(storage_key_value) =
+            self.db.delete_all::<access_mode::Read>(
+                StorageKey::new_storage_root_key(address),
+                None,
+            )?
+        {
+            for (key, value) in storage_key_value {
+                if let StorageKey::StorageKey { storage_key, .. } =
+                    StorageKey::from_key_bytes(&key[..])
+                {
+                    // Check if the key has been touched. We use the local
+                    // information to find out if collateral refund is necessary
+                    // for touched keys.
+                    if maybe_account.map_or(true, |acc| {
+                        acc.storage_changes().get(storage_key).is_none()
+                    }) {
+                        let storage_value =
+                            rlp::decode::<StorageValue>(value.as_ref())?;
+                        let storage_owner =
+                            storage_value.owner.as_ref().unwrap_or(address);
+                        storage_refund_list.push(*storage_owner);
+                    }
+                }
+            }
+        }
+        if let Some(acc) = maybe_account {
+            // The current value isn't important because it will be deleted.
+            for (key, _value) in acc.storage_changes() {
+                if let Some(storage_owner) =
+                    acc.original_ownership_at(&self.db, key)?
+                {
+                    storage_refund_list.push(storage_owner)
+                }
+            }
+        }
+        drop(account_cache_read_guard);
+        for storage_owner in &storage_refund_list {
+            self.sub_collateral_for_storage(
+                storage_owner,
+                &COLLATERAL_PER_STORAGE_KEY,
+            )?;
+        }
+
+        // TODO: examine where to do the code collateral refund.
+
         Self::update_cache(
             self.cache.get_mut(),
             self.checkpoints.get_mut(),
             address,
             AccountEntry::new_dirty(None),
-        )
+        );
+
+        Ok(())
     }
 
     /// Return whether or not the address exists.
@@ -1183,10 +1199,11 @@ impl State {
         })
     }
 
+    #[allow(unused)]
     pub fn exists_and_has_code_or_nonce(
         &self, address: &Address,
     ) -> DbResult<bool> {
-        self.ensure_cached(address, RequireCache::CodeSize, |acc| {
+        self.ensure_cached(address, RequireCache::Code, |acc| {
             acc.map_or(false, |acc| {
                 acc.code_hash() != KECCAK_EMPTY
                     || *acc.nonce() != self.account_start_nonce
@@ -1194,6 +1211,8 @@ impl State {
         })
     }
 
+    // FIXME: rewrite this method before enable it for the first time, because
+    //  there have been changes to kill_account and collateral processing.
     #[allow(unused)]
     pub fn kill_garbage(
         &mut self, touched: &HashSet<Address>, remove_empty_touched: bool,
@@ -1361,42 +1380,49 @@ impl State {
         &self, address: &Address, require: RequireCache, f: F,
     ) -> DbResult<U>
     where F: Fn(Option<&OverlayAccount>) -> U {
-        let needs_update =
-            if let Some(maybe_acc) = self.cache.read().get(address) {
-                if let Some(account) = &maybe_acc.account {
-                    Self::needs_update(require, account)
-                } else {
-                    false
+        // Return immediately when there is no need to have db operation.
+        if let Some(maybe_acc) = self.cache.read().get(address) {
+            if let Some(account) = &maybe_acc.account {
+                let needs_update = Self::needs_update(require, account);
+                if !needs_update {
+                    return Ok(f(Some(account)));
                 }
             } else {
-                false
-            };
-
-        if needs_update {
-            if let Some(maybe_acc) = self.cache.write().get_mut(address) {
-                if let Some(account) = &mut maybe_acc.account {
-                    if Self::update_account_cache(require, account, &self.db) {
-                        return Ok(f(Some(account)));
-                    } else {
-                        return Err(DbErrorKind::IncompleteDatabase(
-                            account.address().clone(),
-                        )
-                        .into());
-                    }
-                }
+                return Ok(f(None));
             }
         }
 
-        let maybe_acc = self
-            .db
-            .get_account(address)?
-            .map(|acc| OverlayAccount::new(address, acc));
-        let cache = &mut *self.cache.write();
-        Self::insert_cache_if_fresh_account(cache, address, maybe_acc);
+        let mut cache_write_lock = {
+            let upgradable_lock = self.cache.upgradable_read();
+            if upgradable_lock.contains_key(address) {
+                // TODO: the account can be updated here if the relevant methods
+                //  to update account can run with &OverlayAccount.
+                RwLockUpgradableReadGuard::upgrade(upgradable_lock)
+            } else {
+                // Load the account from db.
+                let mut maybe_loaded_acc = self
+                    .db
+                    .get_account(address)?
+                    .map(|acc| OverlayAccount::from_loaded(address, acc));
+                if let Some(account) = &mut maybe_loaded_acc {
+                    Self::update_account_cache(require, account, &self.db)?;
+                }
+                let mut cache_write_lock =
+                    RwLockUpgradableReadGuard::upgrade(upgradable_lock);
+                Self::insert_cache_if_fresh_account(
+                    &mut *cache_write_lock,
+                    address,
+                    maybe_loaded_acc,
+                );
 
+                cache_write_lock
+            }
+        };
+
+        let cache = &mut *cache_write_lock;
         let account = cache.get_mut(address).unwrap();
         if let Some(maybe_acc) = &mut account.account {
-            if !Self::update_account_cache(require, maybe_acc, &self.db) {
+            if !Self::update_account_cache(require, maybe_acc, &self.db)? {
                 return Err(DbErrorKind::IncompleteDatabase(
                     maybe_acc.address().clone(),
                 )
@@ -1452,7 +1478,7 @@ impl State {
             let account = self
                 .db
                 .get_account(address)?
-                .map(|acc| OverlayAccount::new(address, acc));
+                .map(|acc| OverlayAccount::from_loaded(address, acc));
             cache = self.cache.write();
             Self::insert_cache_if_fresh_account(&mut *cache, address, account);
         } else {
@@ -1485,7 +1511,7 @@ impl State {
                     .as_mut()
                     .expect("Required account must exist."),
                 &self.db,
-            ) {
+            )? {
                 bail!(DbErrorKind::IncompleteDatabase(*address));
             }
         }
@@ -1515,4 +1541,14 @@ impl State {
         self.staking_state.total_storage_tokens =
             self.db.get_total_storage_tokens().expect("No db error");
     }
+}
+
+/// Methods that are intentionally kept private because the fields may not have
+/// been loaded from db.
+trait AccountEntryProtectedMethods {
+    fn deposit_list(&self) -> Option<&DepositList>;
+    fn vote_stake_list(&self) -> Option<&VoteStakeList>;
+    fn code_size(&self) -> Option<usize>;
+    fn code(&self) -> Option<Arc<Bytes>>;
+    fn code_owner(&self) -> Option<Address>;
 }

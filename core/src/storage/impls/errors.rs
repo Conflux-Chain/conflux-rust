@@ -130,6 +130,11 @@ error_chain! {
             ),
         }
 
+        UnsupportedByFreshlySyncedSnapshot(op: &'static str) {
+            description("The operation isn't possible on freshly synced snapshot."),
+            display("The operation \"{}\" isn't possible on freshly synced snapshot.", op),
+        }
+
         InvalidTrieProof {
             description("Trie proof is invalid."),
             display("Trie proof is invalid."),

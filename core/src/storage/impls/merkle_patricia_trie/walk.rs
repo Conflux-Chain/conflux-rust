@@ -2,7 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{compressed_path::*, trie_node::TrieNodeTrait};
+use super::{
+    super::super::utils::access_mode, compressed_path::*,
+    trie_node::TrieNodeTrait,
+};
 use std::cmp::min;
 
 /// Key length should be multiple of 8.
@@ -60,23 +63,6 @@ impl<'key, ChildIdType> WalkStop<'key, ChildIdType> {
             unmatched_child_index: 0,
             unmatched_path_remaining: Default::default(),
         }
-    }
-}
-
-pub mod access_mode {
-    pub trait AccessMode {
-        fn is_read_only() -> bool;
-    }
-
-    pub struct Read {}
-    pub struct Write {}
-
-    impl AccessMode for Read {
-        fn is_read_only() -> bool { return true; }
-    }
-
-    impl AccessMode for Write {
-        fn is_read_only() -> bool { return false; }
     }
 }
 

@@ -82,9 +82,21 @@ impl State {
         }
     }
 
-    fn get_from_delta(
+    fn check_freshly_synced_snapshot(&self, op: &'static str) -> Result<()> {
+        // Can't offer proof if we are operating on a synced snapshot, which is
+        // missing intermediate mpt.
+        if self.maybe_intermediate_trie_key_padding.is_some()
+            || self.intermediate_epoch_id == NULL_EPOCH
+        {
+            Ok(())
+        } else {
+            Err(ErrorKind::UnsupportedByFreshlySyncedSnapshot(op).into())
+        }
+    }
+
+    fn get_from_delta<WithProof: StaticBool>(
         &self, mpt: &DeltaMpt, maybe_root_node: Option<NodeRefDeltaMpt>,
-        access_key: &[u8], with_proof: bool,
+        access_key: &[u8],
     ) -> Result<(MptValue<Box<[u8]>>, Option<TrieProof>)>
     {
         // Get won't create any new nodes so it's fine to pass an empty
@@ -102,7 +114,7 @@ impl State {
                 )?
                 .get(access_key)?;
 
-                let maybe_proof = match with_proof {
+                let maybe_proof = match WithProof::value() {
                     false => None,
                     true => Some(
                         SubTrieVisitor::new(
@@ -119,13 +131,13 @@ impl State {
         }
     }
 
-    pub fn get_from_snapshot(
-        &self, access_key: &[u8], with_proof: bool,
+    pub fn get_from_snapshot<WithProof: StaticBool>(
+        &self, access_key: &[u8],
     ) -> Result<(Option<Box<[u8]>>, Option<TrieProof>)> {
         let value = self.snapshot_db.get(access_key)?;
         Ok((
             value,
-            if with_proof {
+            if WithProof::value() {
                 let mut mpt = self.snapshot_db.open_snapshot_mpt_shared()?;
                 let mut cursor = MptCursor::<
                     &mut dyn SnapshotMptTraitRead,
@@ -143,26 +155,18 @@ impl State {
         ))
     }
 
-    fn get_from_all_tries(
-        &self, access_key: StorageKey, mut with_proof: bool,
+    fn get_from_all_tries<WithProof: StaticBool>(
+        &self, access_key: StorageKey,
     ) -> Result<(Option<Box<[u8]>>, StateProof)> {
-        // Can't offer proof if we are operating on a synced snapshot, which is
-        // missing intermediate mpt.
-        if with_proof
-            && self.maybe_intermediate_trie_key_padding.is_none()
-            && self.intermediate_epoch_id != NULL_EPOCH
-        {
-            with_proof = false;
-        }
-
         let mut proof = StateProof::default();
 
-        let (maybe_value, maybe_delta_proof) = self.get_from_delta(
-            &self.delta_trie,
-            self.delta_trie_root.clone(),
-            &access_key.to_delta_mpt_key_bytes(&self.delta_trie_key_padding),
-            with_proof,
-        )?;
+        let (maybe_value, maybe_delta_proof) = self
+            .get_from_delta::<WithProof>(
+                &self.delta_trie,
+                self.delta_trie_root.clone(),
+                &access_key
+                    .to_delta_mpt_key_bytes(&self.delta_trie_key_padding),
+            )?;
         proof.with_delta(maybe_delta_proof);
 
         match maybe_value {
@@ -181,17 +185,17 @@ impl State {
             if let Some(intermediate_trie) =
                 self.maybe_intermediate_trie.as_ref()
             {
-                let (maybe_value, maybe_proof) = self.get_from_delta(
-                    intermediate_trie,
-                    self.intermediate_trie_root.clone(),
-                    &access_key.to_delta_mpt_key_bytes(
-                        &self
-                            .maybe_intermediate_trie_key_padding
-                            .as_ref()
-                            .unwrap(),
-                    ),
-                    with_proof,
-                )?;
+                let (maybe_value, maybe_proof) = self
+                    .get_from_delta::<WithProof>(
+                        intermediate_trie,
+                        self.intermediate_trie_root.clone(),
+                        &access_key.to_delta_mpt_key_bytes(
+                            &self
+                                .maybe_intermediate_trie_key_padding
+                                .as_ref()
+                                .unwrap(),
+                        ),
+                    )?;
 
                 proof.with_intermediate(maybe_proof);
 
@@ -208,7 +212,7 @@ impl State {
         }
 
         let (maybe_value, maybe_proof) =
-            self.get_from_snapshot(&access_key.to_key_bytes(), with_proof)?;
+            self.get_from_snapshot::<WithProof>(&access_key.to_key_bytes())?;
         proof.with_snapshot(maybe_proof);
 
         Ok((maybe_value, proof))
@@ -227,7 +231,7 @@ impl StateTrait for State {
     fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
         self.ensure_temp_slab_for_db_load();
 
-        self.get_from_all_tries(access_key, false)
+        self.get_from_all_tries::<NoProof>(access_key)
             .map(|(value, _)| value)
     }
 
@@ -236,12 +240,14 @@ impl StateTrait for State {
     ) -> Result<(Option<Box<[u8]>>, StateProof)> {
         self.ensure_temp_slab_for_db_load();
 
-        self.get_from_all_tries(access_key, true)
+        self.check_freshly_synced_snapshot("proof")?;
+        self.get_from_all_tries::<WithProof>(access_key)
     }
 
-    fn get_node_merkle_all_versions(
-        &self, access_key: StorageKey, with_proof: bool,
+    fn get_node_merkle_all_versions<WithProof: StaticBool>(
+        &self, access_key: StorageKey,
     ) -> Result<(NodeMerkleTriplet, NodeMerkleProof)> {
+        self.check_freshly_synced_snapshot("proof")?;
         let mut proof = NodeMerkleProof::default();
 
         // ----------- get from delta -----------
@@ -258,7 +264,7 @@ impl StateTrait for State {
                 )?
                 .get_merkle_hash_wo_compressed_path(&key)?;
 
-                let maybe_proof = match with_proof {
+                let maybe_proof = match WithProof::value() {
                     false => None,
                     true => Some(
                         SubTrieVisitor::new(
@@ -300,7 +306,7 @@ impl StateTrait for State {
                 )?
                 .get_merkle_hash_wo_compressed_path(&key)?;
 
-                let maybe_proof = match with_proof {
+                let maybe_proof = match WithProof::value() {
                     false => None,
                     true => Some(
                         SubTrieVisitor::new(
@@ -339,7 +345,7 @@ impl StateTrait for State {
                 ),
                 _ => None,
             };
-        let maybe_proof = match with_proof {
+        let maybe_proof = match WithProof::value() {
             false => None,
             true => Some(cursor.to_proof()),
         };
@@ -410,11 +416,16 @@ impl StateTrait for State {
     /// key/value pairs in Intermediate Trie and Snapshot DB, we try to
     /// enumerate all key/value pairs and set tombstone in Delta Trie only when
     /// necessary.
-    fn delete_all(
+    ///
+    /// When AM is Read, only calculate the key values to be deleted.
+    fn delete_all<AM: access_mode::AccessMode>(
         &mut self, access_key_prefix: StorageKey,
     ) -> Result<Option<Vec<MptKeyValue>>> {
-        self.pre_modification();
-        // TODO: add unit tests
+        if AM::is_read_only() {
+            self.ensure_temp_slab_for_db_load();
+        } else {
+            self.pre_modification();
+        }
 
         // Retrieve and delete key/value pairs from delta trie
         let delta_trie_kvs = match &self.delta_trie_root {
@@ -422,14 +433,25 @@ impl StateTrait for State {
             Some(old_root_node) => {
                 let delta_mpt_key_prefix = access_key_prefix
                     .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
-                let (deleted, _, root_node) = SubTrieVisitor::new(
-                    &self.delta_trie,
-                    old_root_node.clone(),
-                    &mut self.owned_node_set,
-                )?
-                .delete_all(&delta_mpt_key_prefix, &delta_mpt_key_prefix)?;
-                self.delta_trie_root =
-                    root_node.map(|maybe_node| maybe_node.into());
+                let deleted = if AM::is_read_only() {
+                    SubTrieVisitor::new(
+                        &self.delta_trie,
+                        old_root_node.clone(),
+                        &mut self.owned_node_set,
+                    )?
+                    .traversal(&delta_mpt_key_prefix, &delta_mpt_key_prefix)?
+                } else {
+                    let (deleted, _, root_node) = SubTrieVisitor::new(
+                        &self.delta_trie,
+                        old_root_node.clone(),
+                        &mut self.owned_node_set,
+                    )?
+                    .delete_all(&delta_mpt_key_prefix, &delta_mpt_key_prefix)?;
+                    self.delta_trie_root =
+                        root_node.map(|maybe_node| maybe_node.into());
+
+                    deleted
+                };
                 deleted
             }
         };
@@ -467,31 +489,12 @@ impl StateTrait for State {
         // Retrieve key/value pairs from snapshot
         let mut kv_iterator = self.snapshot_db.snapshot_kv_iterator()?;
         let lower_bound_incl = access_key_prefix.to_key_bytes();
-        let mut upper_bound_excl_value = lower_bound_incl.clone();
-        let upper_bound_excl = if lower_bound_incl.len() == 0 {
-            None
-        } else {
-            let mut carry = 1;
-            let len = upper_bound_excl_value.len();
-            for i in 0..len {
-                if upper_bound_excl_value[len - 1 - i] == 255 {
-                    upper_bound_excl_value[len - 1 - i] = 0;
-                } else {
-                    upper_bound_excl_value[len - 1 - i] += 1;
-                    carry = 0;
-                    break;
-                }
-            }
-            // all bytes in lower_bound_incl are 255, which means no upper bound
-            // is needed.
-            if carry == 1 {
-                None
-            } else {
-                Some(upper_bound_excl_value.as_slice())
-            }
-        };
-        let mut kvs = kv_iterator
-            .iter_range(lower_bound_incl.as_slice(), upper_bound_excl)?;
+        let upper_bound_excl =
+            to_key_prefix_iter_upper_bound(&lower_bound_incl);
+        let mut kvs = kv_iterator.iter_range(
+            lower_bound_incl.as_slice(),
+            upper_bound_excl.as_ref().map(|v| &**v),
+        )?;
 
         let mut snapshot_kvs = Vec::new();
         while let Some((key, value)) = kvs.next()? {
@@ -515,8 +518,8 @@ impl StateTrait for State {
         if let Some(kvs) = intermediate_trie_kvs {
             for (k, v) in kvs {
                 let storage_key = StorageKey::from_delta_mpt_key(&k);
-                // Only delete nonempty keys.
-                if v.len() > 0 {
+                // Only delete non-empty keys.
+                if v.len() > 0 && !AM::is_read_only() {
                     self.delete(storage_key)?;
                 }
                 let k = storage_key.to_key_bytes();
@@ -533,7 +536,9 @@ impl StateTrait for State {
         // snapshot.
         for (k, v) in snapshot_kvs {
             let storage_key = StorageKey::from_key_bytes(&k);
-            self.delete(storage_key)?;
+            if !AM::is_read_only() {
+                self.delete(storage_key)?;
+            }
             if !deleted_keys.contains(&k) {
                 result.push((k, v));
             }
@@ -868,7 +873,6 @@ use crate::storage::{
         errors::*,
         merkle_patricia_trie::{
             mpt_cursor::{BasicPathNode, CursorOpenPathTerminal, MptCursor},
-            walk::access_mode,
             KVInserter, MptKeyValue, MptValue, TrieProof, VanillaChildrenTable,
         },
         node_merkle_proof::NodeMerkleProof,
@@ -877,6 +881,7 @@ use crate::storage::{
     },
     state::*,
     storage_db::*,
+    utils::{access_mode, to_key_prefix_iter_upper_bound, StaticBool},
     StateRootAuxInfo, StateRootWithAuxInfo,
 };
 use fallible_iterator::FallibleIterator;
