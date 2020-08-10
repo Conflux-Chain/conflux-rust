@@ -81,6 +81,13 @@ impl RpcImpl {
             accounts,
         }
     }
+
+    fn consensus_graph(&self) -> &ConsensusGraph {
+        self.consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed")
+    }
 }
 
 // Cfx RPC implementation
@@ -91,11 +98,7 @@ impl RpcImpl {
     }
 
     pub fn gas_price(&self) -> RpcResult<U256> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         info!("RPC Request: cfx_gasPrice()");
         Ok(consensus_graph
             .gas_price()
@@ -106,11 +109,7 @@ impl RpcImpl {
     pub fn epoch_number(
         &self, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<U256> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestMined);
         info!("RPC Request: cfx_epochNumber({:?})", epoch_num);
         match consensus_graph.get_height_from_epoch_number(epoch_num.into()) {
@@ -122,11 +121,7 @@ impl RpcImpl {
     pub fn block_by_epoch_number(
         &self, epoch_num: EpochNumber, include_txs: bool,
     ) -> RpcResult<Option<RpcBlock>> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
         info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
 
@@ -149,11 +144,7 @@ impl RpcImpl {
     pub fn confirmation_risk_by_hash(
         &self, block_hash: H256,
     ) -> RpcResult<Option<U256>> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
         let result = consensus_graph
             .confirmation_meter
@@ -179,11 +170,7 @@ impl RpcImpl {
     pub fn block_by_hash(
         &self, hash: H256, include_txs: bool,
     ) -> RpcResult<Option<RpcBlock>> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let hash: H256 = hash.into();
         info!(
             "RPC Request: cfx_getBlockByHash hash={:?} include_txs={:?}",
@@ -203,11 +190,7 @@ impl RpcImpl {
     pub fn block_by_hash_with_pivot_assumption(
         &self, block_hash: H256, pivot_hash: H256, epoch_number: U64,
     ) -> RpcResult<RpcBlock> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
         let block_hash: H256 = block_hash.into();
         let pivot_hash: H256 = pivot_hash.into();
@@ -257,11 +240,7 @@ impl RpcImpl {
     pub fn next_nonce(
         &self, address: H160, num: Option<BlockHashOrEpochNumber>,
     ) -> RpcResult<U256> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let num = num.unwrap_or(BlockHashOrEpochNumber::EpochNumber(
             EpochNumber::LatestState,
         ));
@@ -305,11 +284,7 @@ impl RpcImpl {
 
     pub fn chain(&self) -> RpcResult<Vec<RpcBlock>> {
         info!("RPC Request: cfx_getChain");
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
 
         let construct_block = |hash| {
@@ -353,11 +328,7 @@ impl RpcImpl {
     }
 
     pub fn get_goodput(&self) -> RpcResult<String> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         info!("RPC Request: get_goodput");
         let mut all_block_set = HashSet::new();
         for epoch_number in 1..consensus_graph.best_epoch_number() {

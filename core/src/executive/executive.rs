@@ -1316,8 +1316,8 @@ impl<'a> Executive<'a> {
         }
 
         let mut substate = Substate::new();
-        // Sender is responsible for the insufficient balance.
         if balance512 < sender_intended_cost {
+            // Sender is responsible for the insufficient balance.
             // Sub tx fee if not enough cash, and substitute all remaining
             // balance if balance is not enough to pay the tx fee
             let actual_gas_cost: U256;
@@ -1330,7 +1330,8 @@ impl<'a> Executive<'a> {
             .try_into()
             .unwrap();
             // We don't want to bump nonce for non-existent account when we
-            // can't charge gas fee.
+            // can't charge gas fee. In this case, the sender account will
+            // not be created if it does not exist.
             if !self.state.exists(&sender)? {
                 return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
                     ToRepackError::SenderDoesNotExist,
@@ -1353,8 +1354,10 @@ impl<'a> Executive<'a> {
                 Executed::not_enough_balance_fee_charged(tx, &actual_gas_cost),
             ));
         } else {
-            // From now on sender balance >= total_cost, transaction execution
-            // is guaranteed.
+            // From now on sender balance >= total_cost, even if the sender
+            // account does not exist (since she may be sponsored). Transaction
+            // execution is guaranteed. Note that inc_nonce() will create a
+            // new account if the account does not exist.
             self.state.inc_nonce(&sender)?;
         }
 
@@ -1437,8 +1440,11 @@ impl<'a> Executive<'a> {
 
         let (result, output) = {
             let res = res.and_then(|finalize_res| {
+                // TODO: in fact, we don't need collect again here. But this is
+                // only the performance optimization and we put it in the later
+                // PR.
                 self.state
-                    .settle_collateral_for_all(
+                    .collect_and_settle_collateral(
                         &sender,
                         &total_storage_limit,
                         &mut substate,
@@ -1520,7 +1526,7 @@ impl<'a> Executive<'a> {
 
         // perform suicides
         for address in &substate.suicides {
-            self.state.kill_account(address);
+            self.state.kill_account(address)?;
         }
 
         // TODO should be added back after enabling dust collection

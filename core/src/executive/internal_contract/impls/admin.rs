@@ -4,8 +4,7 @@
 
 use super::super::InternalContractTrait;
 use crate::{
-    parameters::staking::*,
-    state::{CollateralCheckResult, State, Substate},
+    state::{State, Substate},
     vm::{self, ActionParams, CallType, Spec},
 };
 use cfx_types::{Address, U256};
@@ -34,24 +33,6 @@ pub fn suicide(
 ) -> vm::Result<()>
 {
     substate.suicides.insert(contract_address.clone());
-    match state
-        .collect_and_settle_collateral_for_suicide(substate, contract_address)?
-    {
-        CollateralCheckResult::Valid => {}
-        CollateralCheckResult::ExceedStorageLimit { .. } => unreachable!(),
-        CollateralCheckResult::NotEnoughBalance { required, got } => {
-            return Err(vm::Error::NotEnoughBalanceForStorage {
-                required,
-                got,
-            });
-        }
-    }
-
-    if !state.collateral_for_storage(contract_address)?.is_zero() {
-        return Err(vm::Error::InternalContract(
-            "contract has nonzero collateral_for_storage",
-        ));
-    }
     let balance = state.balance(contract_address)?;
 
     if let Some(code_size) = state.code_size(contract_address)? {
@@ -62,9 +43,6 @@ pub fn suicide(
             .expect("code owner exists");
         *substate.storage_released.entry(code_owner).or_insert(0) +=
             code_size as u64;
-        let refund_collateral = *COLLATERAL_PER_BYTE * code_size;
-        state
-            .register_unrefunded_collateral(&code_owner, &refund_collateral)?;
     }
 
     let sponsor_for_gas = state.sponsor_for_gas(contract_address)?;

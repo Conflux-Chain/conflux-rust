@@ -504,10 +504,8 @@ class ContractBenchTest(SmartContractBenchBase):
         assert_equal(int(result, 0), 0)
 
     def run_test(self):
-        file_path = os.path.dirname(os.path.realpath(__file__)).split("/")
-        file_path.pop(-1)
-        file_path.extend(["internal_contract", "metadata", "Staking.json"])
-        file_path = "/".join(file_path)
+        file_dir = os.path.dirname(os.path.realpath(__file__))
+        file_path = os.path.join(file_dir, "..", "internal_contract", "metadata", "Staking.json")
         staking_contract_dict = json.loads(open(os.path.join(file_path), "r").read())
         staking_contract = get_contract_instance(contract_dict=staking_contract_dict)
         staking_contract_addr = Web3.toChecksumAddress("0888000000000000000000000000000000000002")

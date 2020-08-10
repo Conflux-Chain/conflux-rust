@@ -26,6 +26,7 @@ use primitives::{
     TransactionWithSignature,
 };
 use rlp::Rlp;
+use rustc_hex::ToHex;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
@@ -85,6 +86,13 @@ impl RpcImpl {
         }
     }
 
+    fn consensus_graph(&self) -> &ConsensusGraph {
+        self.consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed")
+    }
+
     fn code(
         &self, addr: H160, epoch_number: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
@@ -94,11 +102,7 @@ impl RpcImpl {
             "RPC Request: cfx_getCode address={:?} epoch_num={:?}",
             address, epoch_number
         );
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
 
         Ok(Bytes::new(
             consensus_graph.get_code(address, epoch_number.into())?,
@@ -115,11 +119,7 @@ impl RpcImpl {
             address, num
         );
 
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
 
         Ok(consensus_graph.get_balance(address, num.into())?.into())
     }
@@ -134,11 +134,7 @@ impl RpcImpl {
             address, num
         );
 
-        let cg = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let cg = self.consensus_graph();
 
         Ok(cg
             .get_admin(address, num.into())?
@@ -155,11 +151,7 @@ impl RpcImpl {
             address, num
         );
 
-        let cg = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let cg = self.consensus_graph();
 
         Ok(RpcSponsorInfo::new(
             cg.get_sponsor_info(address, num.into())?,
@@ -176,11 +168,7 @@ impl RpcImpl {
             address, num
         );
 
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
 
         Ok(consensus_graph
             .get_staking_balance(address, num.into())?
@@ -197,11 +185,7 @@ impl RpcImpl {
             address, num
         );
 
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
 
         Ok(consensus_graph
             .get_collateral_for_storage(address, num.into())?
@@ -219,11 +203,8 @@ impl RpcImpl {
             "RPC Request: cfx_getAccount address={:?} epoch_num={:?}",
             address, epoch_num
         );
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+
+        let consensus_graph = self.consensus_graph();
 
         Ok(RpcAccount::new(
             match consensus_graph.get_account(address, epoch_num.into())? {
@@ -243,11 +224,7 @@ impl RpcImpl {
     /// Returns interest rate of the given epoch
     fn interest_rate(&self, epoch_num: Option<EpochNumber>) -> RpcResult<U256> {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
 
         Ok(consensus_graph
             .get_annual_interest_rate(epoch_num.into())?
@@ -259,11 +236,7 @@ impl RpcImpl {
         &self, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<U256> {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
 
         Ok(consensus_graph
             .get_accumulate_interest_rate(epoch_num.into())?
@@ -294,11 +267,7 @@ impl RpcImpl {
             address, position, epoch_num
         );
 
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
 
         Ok(consensus_graph
             .get_storage(address, position, epoch_num.into())?
@@ -344,11 +313,7 @@ impl RpcImpl {
     fn prepare_transaction(
         &self, mut tx: SendTxRequest, password: Option<String>,
     ) -> RpcResult<TransactionWithSignature> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
 
         if tx.nonce.is_none() {
             let nonce = consensus_graph
@@ -392,6 +357,16 @@ impl RpcImpl {
             .and_then(|tx| self.send_transaction_with_signature(tx))
     }
 
+    pub fn sign_transaction(
+        &self, tx: SendTxRequest, password: Option<String>,
+    ) -> RpcResult<String> {
+        let tx = self.prepare_transaction(tx, password).map_err(|e| {
+            invalid_params("tx", format!("failed to sign transaction: {:?}", e))
+        })?;
+        let raw_tx = rlp::encode(&tx);
+        Ok(format!("0x{}", raw_tx.to_hex()))
+    }
+
     fn storage_root(
         &self, address: H160, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<Option<RpcStorageRoot>> {
@@ -403,11 +378,7 @@ impl RpcImpl {
             address, epoch_num
         );
 
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
 
         Ok(consensus_graph
             .get_storage_root(address, epoch_num.into())?
@@ -471,11 +442,7 @@ impl RpcImpl {
 
     fn prepare_receipt(&self, hash: H256) -> RpcResult<Option<RpcReceipt>> {
         // Get a consistent view from ConsensusInner
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
 
         let maybe_results =
             consensus_graph.get_transaction_receipt_and_block_info(&hash);
@@ -720,11 +687,7 @@ impl RpcImpl {
     }
 
     fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
 
         info!("RPC Request: cfx_getLogs({:?})", filter);
         let mut filter: Filter = filter.into_primitive()?;
@@ -867,11 +830,7 @@ impl RpcImpl {
         gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>,
     ) -> JsonRpcResult<CheckBalanceAgainstTransactionResponse>
     {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let epoch = epoch.unwrap_or(EpochNumber::LatestState);
         let storage_limit_u256: U256 = storage_limit.into();
         if storage_limit_u256 > U256::from(std::u64::MAX) {
@@ -905,11 +864,7 @@ impl RpcImpl {
     fn exec_transaction(
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<ExecutionOutcome> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let epoch = epoch.unwrap_or(EpochNumber::LatestState);
 
         let best_epoch_height = consensus_graph.best_epoch_number();
@@ -931,11 +886,7 @@ impl RpcImpl {
     fn get_pivot_chain_and_weight(
         &self, height_range: Option<(u64, u64)>,
     ) -> RpcResult<Vec<(H256, U256)>> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         Ok(consensus_graph
             .inner
             .read()
@@ -978,11 +929,7 @@ impl RpcImpl {
     /// Return (block_info.status, state_valid)
     /// Return Error if either field is missing
     pub fn get_block_status(&self, block_hash: H256) -> RpcResult<(u8, bool)> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let status = consensus_graph
             .data_man
             .local_block_info_by_hash(&block_hash)
@@ -1182,6 +1129,7 @@ impl LocalRpc for LocalRpcImpl {
             fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
             fn send_transaction(
                 &self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<H256>;
+            fn sign_transaction(&self, tx: SendTxRequest, password: Option<String>) -> JsonRpcResult<String>;
         }
     }
 }
