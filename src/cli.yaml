@@ -163,9 +163,9 @@ args:
         long: get-logs-epoch-batch-size
         value_name: SIZE
         takes_value: true
-    - get-logs-filter-max-epoch-gap:
+    - get-logs-filter-max-epoch-range:
           help: Sets the maximum number of allowed epochs during log filtering.
-          long: get-logs-filter-max-epoch-gap
+          long: get-logs-filter-max-epoch-range
           value_name: SIZE
           takes_value: true
     - account-provider-refresh-time-ms:
