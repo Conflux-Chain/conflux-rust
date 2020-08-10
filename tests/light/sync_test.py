@@ -19,7 +19,8 @@ FULLNODE1 = 1
 LIGHTNODE = 2
 
 ERA_EPOCH_COUNT = 100
-CHAIN_LENGTH = 1000
+NORMAL_CHAIN_LENGTH = 1000
+BLAMED_SECTION_LENGTH = 100
 BLAME_CHECK_OFFSET = 30
 
 CONTRACT_PATH = "../contracts/EventsTestContract_bytecode.dat"
@@ -132,7 +133,7 @@ class LightSyncTest(ConfluxTestFramework):
         num_events = 0
         num_blamed = 0
 
-        for _ in range(0, CHAIN_LENGTH):
+        for _ in range(0, NORMAL_CHAIN_LENGTH):
             rnd = random.random()
 
             # ~20% of all block have events
@@ -151,7 +152,7 @@ class LightSyncTest(ConfluxTestFramework):
                 hashes.append(tx.hash_hex())
                 num_events += 1
 
-            # ~10% of all blocks are blamed
+            # ~10% of all blocks are incorrect and blamed
             elif rnd < 0.3:
                 blame_info = {}
                 blame_info['blame'] = "0x1"
@@ -164,10 +165,20 @@ class LightSyncTest(ConfluxTestFramework):
             else:
                 parent_hash = self.rpc[FULLNODE0].generate_block_with_parent(parent_hash=parent_hash)
 
-        # TODO: generate blamed blocks with txs in them (overlap)
+            # TODO: generate blamed blocks with txs in them (overlap)
+
+        # generate a pivot chain section where we might not be able to decide blaming
+        # in this section, all headers will have blame=1
+        # odd-numbered blocks are incorrect, even-numbered blocks are correct
+        for _ in range(0, BLAMED_SECTION_LENGTH):
+            blame_info = {}
+            blame_info['blame'] = "0x1"
+            parent_hash = self.nodes[FULLNODE0].test_generateblockwithblameinfo(1, 0, blame_info)
+
+        num_blamed += BLAMED_SECTION_LENGTH // 2
 
         # mine some more blocks to keep blame check offset
-        for _ in range(0, BLAME_CHECK_OFFSET):
+        for _ in range(0, BLAMED_SECTION_LENGTH):
             parent_hash = self.rpc[FULLNODE0].generate_custom_block(parent_hash=parent_hash, txs=[], referee=[])
 
         # check if all txs have been executed successfully
@@ -175,7 +186,8 @@ class LightSyncTest(ConfluxTestFramework):
             receipt = self.rpc[FULLNODE0].get_transaction_receipt(hash)
             assert_equal(receipt["outcomeStatus"], "0x0")
 
-        self.log.info(f"Generated {CHAIN_LENGTH + 30} blocks with {num_events} events and {num_blamed} incorrect blocks")
+        length = NORMAL_CHAIN_LENGTH + 2 * BLAMED_SECTION_LENGTH
+        self.log.info(f"Generated {length} blocks with {num_events} events and {num_blamed} incorrect blocks")
 
 
 if __name__ == "__main__":

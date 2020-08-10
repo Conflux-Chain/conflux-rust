@@ -1584,7 +1584,7 @@ impl ConsensusNewBlockHandler {
 
             // send epoch to blame verifier
             if let NodeType::Light = self.node_type {
-                self.blame_verifier.check(inner, epoch_number);
+                self.blame_verifier.process(inner, epoch_number);
             }
         }
 

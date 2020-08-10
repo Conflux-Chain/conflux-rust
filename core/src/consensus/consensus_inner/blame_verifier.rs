@@ -11,15 +11,15 @@ use crate::{
 };
 use parking_lot::Mutex;
 use primitives::BlockHeader;
-use std::sync::Arc;
+use std::{collections::VecDeque, sync::Arc};
 
 pub struct BlameVerifier {
-    /// Block data manager.
-    data_man: Arc<BlockDataManager>,
-
     /// Channel used to send verified headers to the light sync layer.
     /// Each element is <height, maybe_witness>
     blame_sender: Arc<Channel<(u64, Option<u64>)>>,
+
+    /// Block data manager.
+    data_man: Arc<BlockDataManager>,
 
     /// Last epoch received from ConsensusNewBlockHandler.
     // We use Mutex to allow for interior mutability.
@@ -28,6 +28,10 @@ pub struct BlameVerifier {
     /// Next epoch we plan to process.
     // We use Mutex to allow for interior mutability.
     next_epoch_to_process: Mutex<u64>,
+
+    /// Queue of epochs that need to be re-processed.
+    // We use Mutex to allow for interior mutability.
+    queue: Mutex<VecDeque<u64>>,
 }
 
 impl BlameVerifier {
@@ -49,12 +53,14 @@ impl BlameVerifier {
 
         let last_epoch_received = Mutex::new(start_height);
         let next_epoch_to_process = Mutex::new(start_height + 1);
+        let queue = Mutex::new(VecDeque::new());
 
         Self {
-            data_man,
             blame_sender,
+            data_man,
             last_epoch_received,
             next_epoch_to_process,
+            queue,
         }
     }
 
@@ -72,9 +78,7 @@ impl BlameVerifier {
 
     fn first_trusted_header_starting_from(
         &self, inner: &ConsensusGraphInner, height: u64,
-        blame_bound: Option<u32>,
-    ) -> Option<u64>
-    {
+    ) -> Option<u64> {
         // check if `height` is available in memory
         let pivot_index = match height {
             h if h < inner.get_cur_era_genesis_height() => return None,
@@ -82,17 +86,18 @@ impl BlameVerifier {
         };
 
         inner
-            .find_first_trusted_starting_from(pivot_index, blame_bound)
+            .find_first_trusted_starting_from(
+                pivot_index,
+                Some(1000), /* blame_bound */
+                10,         /* min_vote_count */
+            )
             .map(|index| inner.pivot_index_to_height(index))
     }
 
-    /// Check the blame corresponding to `epoch` and send the verification
-    /// results to the light node sync layer.
-    #[rustfmt::skip]
-    pub fn check(&self, inner: &ConsensusGraphInner, epoch: u64) {
+    /// Add `epoch` to the queue and start processing it.
+    pub fn process(&self, inner: &ConsensusGraphInner, epoch: u64) {
         // TODO(thegaram): is there a better way to achieve interior mutability?
-        let mut last_epoch_received = self.last_epoch_received.lock();
-        let mut next_epoch_to_process = self.next_epoch_to_process.lock();
+        let mut queue = self.queue.lock();
 
         // we need to keep an offset so that we have
         // enough headers to calculate the blame ratio
@@ -102,18 +107,44 @@ impl BlameVerifier {
             e => e - BLAME_CHECK_OFFSET,
         };
 
+        trace!("Blame verification received epoch {:?}", epoch);
+        queue.push_back(epoch);
+
+        loop {
+            // process while there are unprocessed epochs
+            let epoch = match queue.pop_front() {
+                Some(e) => e,
+                None => break,
+            };
+
+            // process until we encounter an epoch for which
+            // there is no blame information available
+            if !self.check(inner, epoch, &mut queue) {
+                break;
+            }
+        }
+    }
+
+    /// Check the blame corresponding to `epoch` and send the verification
+    /// results to the light node sync layer.
+    /// Returns false if the epoch cannot be processed, true otherwise.
+    #[rustfmt::skip]
+    pub fn check(
+        &self, inner: &ConsensusGraphInner, epoch: u64,
+        queue: &mut VecDeque<u64>,
+    ) -> bool
+    {
+        // TODO(thegaram): is there a better way to achieve interior mutability?
+        let mut last_epoch_received = self.last_epoch_received.lock();
+        let mut next_epoch_to_process = self.next_epoch_to_process.lock();
+
         debug!(
-            "Blame verification received epoch {:?} (last_epoch_received = {}, next_epoch_to_process = {})",
+            "Blame verification is processing epoch {:?} (last_epoch_received = {}, next_epoch_to_process = {})",
             epoch, *last_epoch_received, *next_epoch_to_process
         );
 
         match epoch {
-            // special case
-            e if e == 0 => {
-                // EMPTY
-            }
-
-            // pivot chain reorg (BLAME_CHECK_OFFSET = 2):
+            // pivot chain reorg
             //
             //                                   ---        ---
             //                               .- | D | <--- | E | <--- ...
@@ -123,7 +154,7 @@ impl BlameVerifier {
             //                               .- | F | <--- ...
             //                                   ---
             //
-            // example:
+            // example (BLAME_CHECK_OFFSET = 2):
             //    check is called with    C, D, E, C, F
             //    we will process epochs  A, B, C, A, B
             //
@@ -164,7 +195,7 @@ impl BlameVerifier {
             e if e < *next_epoch_to_process => {
                 debug!("Epoch already covered, skipping (e = {}, next_epoch_to_process = {})", e, *next_epoch_to_process);
                 *last_epoch_received = e;
-                return;
+                return true;
             }
 
             // sanity check: no epochs are skipped
@@ -196,14 +227,10 @@ impl BlameVerifier {
         // check blame
         debug!("Finding witness for header at height {} (epoch {})...", height, epoch);
 
-        match self.first_trusted_header_starting_from(
-            inner,
-            height,
-            Some(1000), /* blame_bound */
-        ) {
+        match self.first_trusted_header_starting_from(inner, height) {
             // no witness found
             None => {
-                error!(
+                warn!(
                     "No witness found for epoch {} (height {});
                     best_epoch_number = {}",
                     epoch,
@@ -212,16 +239,37 @@ impl BlameVerifier {
                 );
 
                 // this can happen in two cases:
+                //
                 // (1) we are lagging behind so much that `height`
                 //     is no longer maintained in memory.
-                //       --> this will not happen.
+                //       --> consensus and blame verification are
+                //           in sync so this should not happen.
+                //
                 // (2) there are too many blamed blocks on the
                 //     `BLAME_CHECK_OFFSET` suffix of the pivot
                 //     chain so we cannot reliably determine the
                 //     witness.
-                //       --> this is also unlikely but can in theory happen.
-                // TODO(thegaram): add retry logic for (2)
-                assert!(false);
+                //       --> we will retry during the next invocation of `check`
+                //
+                // example for (2):
+                //
+                //       blame     blame     blame
+                //       ......    ......    ......
+                //      /     |   /     |   /     |
+                //  ---       ---       ---       ---
+                // | A | <-- | B | <-- | C | <-- | D | <--- ...
+                //  ---       ---       ---       ---
+                //
+                // if we have such a section of the pivot chain of length
+                // `BLAME_CHECK_OFFSET` or more, then at the point of
+                // receiving A we might not be able to find the corresponding
+                // witness. in this case, we store this epoch for processing
+                // later. we assume here that the pivot chain will eventually
+                // normalize and we will be able to find the witness later.
+
+                // save for further processing and terminate
+                queue.push_front(epoch);
+                return false;
             }
 
             // header is not blamed (i.e. it is its own witness)
@@ -232,7 +280,7 @@ impl BlameVerifier {
                     .header_from_height(inner, height)
                     .expect("Pivot header exists");
 
-                // normal case: blaming block have been covered previously,
+                // normal case: blaming blocks have been covered previously,
                 // so this block must be non-blaming
                 if header.blame() == 0 {
                     // send non-blaming header
@@ -257,6 +305,7 @@ impl BlameVerifier {
                 // after the chain reorg, we will start re-executing from B
                 // B was already covered in A's iteration but it is blaming
                 //   --> we do nothing, skip it
+
                 else {
                     // EMPTY
                 }
@@ -279,5 +328,7 @@ impl BlameVerifier {
                 *next_epoch_to_process = witness_epoch + 1;
             }
         }
+
+        true
     }
 }
