@@ -11,6 +11,7 @@ use cfx_types::{Address, H160, H256, H520, U128, U256, U64};
 use cfxcore::{
     BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
     SharedConsensusGraph, SharedTransactionPool,
+    parameters::consensus::ONE_CFX_IN_DRIP
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
@@ -497,6 +498,10 @@ impl RpcImpl {
                     rpc_error
                 })?;
             ret.insert(
+                "tx nonce".into(),
+                serde_json::to_string(&tx.nonce).unwrap(),
+            );
+            ret.insert(
                 "local nonce".into(),
                 serde_json::to_string(&local_nonce).unwrap(),
             );
@@ -511,6 +516,22 @@ impl RpcImpl {
             ret.insert(
                 "state balance".into(),
                 serde_json::to_string(&state_balance).unwrap(),
+            );
+
+            let minimal_balance = tx.value + tx.gas * tx.gas_price + tx.storage_limit * ONE_CFX_IN_DRIP / 1024;
+            let local_balance_enough = local_balance > minimal_balance;
+            let state_balance_enough = state_balance > minimal_balance;
+            ret.insert(
+                "required balance".into(),
+                    serde_json::to_string(&minimal_balance).unwrap(),
+            );
+            ret.insert(
+                "local_balance_enough".into(),
+                serde_json::to_string(&local_balance_enough).unwrap(),
+            );
+            ret.insert(
+                "state_balance_enough".into(),
+                serde_json::to_string(&state_balance_enough).unwrap(),
             );
         } else {
             ret.insert("exist".into(), "false".into());
@@ -567,7 +588,7 @@ impl RpcImpl {
             };
 
             format!(
-                "{}: {:?} wei + {:?} gas * {:?} wei",
+                "{}: {:?} drip + {:?} gas * {:?} drip",
                 to, tx.value, tx.gas, tx.gas_price
             )
         };
