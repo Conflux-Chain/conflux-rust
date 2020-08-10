@@ -183,6 +183,12 @@ fn hash_compute(
         wpow = wpow * (w as u64) % POW_MOD64;
         w2pow = w2pow * w2 % POW_MOD64;
     }
+    let mut full_wpow = wpow;
+    let mut full_w2pow = w2pow;
+    for _ in nonce % POW_WARP_SIZE..POW_WARP_SIZE {
+        full_wpow = full_wpow * (w as u64) % POW_MOD64;
+        full_w2pow = full_w2pow * w2 % POW_MOD64;
+    }
 
     let mut result = 0u64;
     for i in 0..POW_DATA_PER_THREAD {
@@ -193,10 +199,8 @@ fn hash_compute(
         }
         result = fnv_hash64(result, pv);
         if i + 1 < POW_DATA_PER_THREAD {
-            for _ in 0..POW_WARP_SIZE {
-                wpow = wpow * (w as u64) % POW_MOD64;
-                w2pow = w2pow * w2 % POW_MOD64;
-            }
+            wpow = wpow * full_wpow % POW_MOD64;
+            w2pow = w2pow * full_w2pow % POW_MOD64;
         }
     }
 
