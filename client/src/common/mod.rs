@@ -441,7 +441,7 @@ pub fn initialize_not_light_node_modules(
         if !author.is_valid_address() || author.is_builtin_address() {
             panic!("mining-author must starts with 0x1 (user address) or 0x8 (contract address), otherwise you will not get mining rewards!!!");
         }
-        if blockgen.pow_config.use_stratum || conf.raw_conf.start_mining {
+        if blockgen.pow_config.enable_mining() {
             let bg = blockgen.clone();
             thread::Builder::new()
                 .name("mining".into())

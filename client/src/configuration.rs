@@ -124,11 +124,10 @@ build_config! {
 
         // Mining section.
         (mining_author, (Option<String>), None)
-        (start_mining, (bool), false)
+        (mining_type, (Option<String>), None)
         (stratum_listen_address, (String), "127.0.0.1".into())
         (stratum_port, (u16), 32525)
         (stratum_secret, (Option<String>), None)
-        (disable_stratum, (bool), false)
         (use_octopus_in_test_mode, (bool), false)
 
         // Network section.
@@ -457,10 +456,17 @@ impl Configuration {
         ProofOfWorkConfig::new(
             self.is_test_or_dev_mode(),
             self.raw_conf.use_octopus_in_test_mode,
-            // Enable stratum implicitly by setting `mining_author`.
-            self.raw_conf.mining_author.is_some()
-                && !self.raw_conf.disable_stratum
-                && !self.raw_conf.start_mining,
+            self.raw_conf.mining_type.as_ref().map_or_else(
+                || {
+                    // Enable stratum implicitly if `mining_author` is set.
+                    if self.raw_conf.mining_author.is_some() {
+                        "stratum"
+                    } else {
+                        "disable"
+                    }
+                },
+                |s| s.as_str(),
+            ),
             self.raw_conf.initial_difficulty,
             self.raw_conf.stratum_listen_address.clone(),
             self.raw_conf.stratum_port,
@@ -772,7 +778,6 @@ pub fn to_bootnodes(bootnodes: &Option<String>) -> Result<Vec<String>, String> {
     }
 }
 
-}
-
 pub fn parse_hex_string<F: FromStr>(hex_str: &str) -> Result<F, F::Err> {
     hex_str.strip_prefix("0x").unwrap_or(hex_str).parse()
+}
