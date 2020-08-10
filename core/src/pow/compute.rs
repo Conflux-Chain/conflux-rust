@@ -180,22 +180,24 @@ fn hash_compute(
     let mut w2pow = 1u64;
 
     for _ in 0..nonce % POW_WARP_SIZE {
-        for _ in 0..POW_DATA_PER_THREAD {
-            wpow = wpow * (w as u64) % POW_MOD64;
-            w2pow = w2pow * w2 % POW_MOD64;
-        }
+        wpow = wpow * (w as u64) % POW_MOD64;
+        w2pow = w2pow * w2 % POW_MOD64;
     }
 
     let mut result = 0u64;
-    for _ in 0..POW_DATA_PER_THREAD {
+    for i in 0..POW_DATA_PER_THREAD {
         let x = (a * w2pow + b * wpow + c) % POW_MOD64;
         let mut pv = 0;
         for j in 0..POW_N {
             pv = (pv * x + d[(POW_N - j - 1) as usize] as u64) % POW_MOD64;
         }
         result = fnv_hash64(result, pv);
-        wpow = wpow * (w as u64) % POW_MOD64;
-        w2pow = w2pow * w2 % POW_MOD64;
+        if i + 1 < POW_DATA_PER_THREAD {
+            for _ in 0..POW_WARP_SIZE {
+                wpow = wpow * (w as u64) % POW_MOD64;
+                w2pow = w2pow * w2 % POW_MOD64;
+            }
+        }
     }
 
     macro_rules! make_const_array {
