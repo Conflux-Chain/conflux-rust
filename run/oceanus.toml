@@ -25,7 +25,7 @@ bootnodes="cfxnode://25265e1aa470d9d8667947820c4830a64e9f9678d6cb23ecde91e044752
 #     * Open port 12535 for ws rpc if `jsonrpc_ws_port` is not provided.
 #     * Open port 12536 for tcp rpc if `jsonrpc_tcp_port` is not provided.
 #     * Open port 12537 for http rpc if `jsonrpc_http_port` is not provided.
-#     * generate blocks automatically without PoW if `start_mining` is false
+#     * generate blocks automatically without PoW
 #     * Skip catch-up mode even there is no peer
 #
 # mode = ""
@@ -41,21 +41,20 @@ bootnodes="cfxnode://25265e1aa470d9d8667947820c4830a64e9f9678d6cb23ecde91e044752
 
 # ----------------- Mining Configuration -----------------
 
-# `start_mining` controls whether a thread is started to mine new blocks.
-# If not set, the node will not start mining blocks.
-# If the value is true, `mining_author` must be set.
-#
-# start_mining=true
-
 # `mining_author` is the address to receive mining rewards.
-# The value is a 40-digit hex string without 0x prefix.
+# If set, `mining_type` will be "stratum" by default.
+# The value is a 40-digit hex string.
 # By default, the value is not set.
 #
 # mining_author="1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
-# `use_stratum` controls whether the mining process goes through the
-# stratum protocol.
-# use_stratum=true
+# `mining_type` controls whether the mining process goes through the
+# stratum protocol, uses CPU-mining, or disable mining.
+# Possible values are "stratum", "cpu", and "disable".
+# The default value is "stratum" if `mining_author` is set.
+# If the value is set and not "disable", `mining_author` must be set.
+#
+# mining_type = "stratum"
 
 # Listen address for stratum
 #
@@ -66,7 +65,7 @@ bootnodes="cfxnode://25265e1aa470d9d8667947820c4830a64e9f9678d6cb23ecde91e044752
 # stratum_port = 32525
 
 # Secret key for stratum.
-# The value is 64-digit hex string without 0x prefix.
+# The value is 64-digit hex string.
 # If not set, the RPC subscription will not check the authorization.
 #
 # stratum_secret = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -296,7 +295,7 @@ jsonrpc_local_http_port=12539
 # netconf_dir="./net_config"
 
 # `net_key` is the 256-bit private key to generate a unique node id for this node.
-# The value is a 64-digit hex string without 0x prefix.
+# The value is a 64-digit hex string.
 # If not set, the node will try to read from the file "key" under the directory `netconf_dir`.
 # If the file is not found, the node will generate a random key.
 # By default, the value is not set.
