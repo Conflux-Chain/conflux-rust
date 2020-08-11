@@ -62,9 +62,8 @@ macro_rules! make_solidity_contract {
 #[macro_export]
 macro_rules! make_function_table {
     ($($func:ident), *) => { {
-                let mut table = SolFnTable::new();
-                $( table.insert($func.function_sig(), Box::new($func)); ) *
-                table
-
-        }}
+        let mut table = SolFnTable::new();
+        $( table.insert($func.function_sig(), Box::new($func)); ) *
+        table
+    } }
 }

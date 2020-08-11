@@ -9,8 +9,6 @@ use crate::{
 use cfx_types::{address_util::AddressUtil, Address, U256};
 
 /// Implementation of `set_sponsor_for_gas(address,uint256)`.
-/// The input should consist of 32 bytes `contract_address` + 32 bytes
-/// `upper_bound`.
 pub fn set_sponsor_for_gas(
     contract_address: Address, upper_bound: U256, params: &ActionParams,
     spec: &Spec, state: &mut State, substate: &mut Substate,
@@ -111,7 +109,6 @@ pub fn set_sponsor_for_gas(
 }
 
 /// Implementation of `set_sponsor_for_collateral(address)`.
-/// The input should consist of 32 bytes `contract_address`.
 pub fn set_sponsor_for_collateral(
     contract_address: Address, params: &ActionParams, spec: &Spec,
     state: &mut State, substate: &mut Substate,
@@ -190,7 +187,6 @@ pub fn set_sponsor_for_collateral(
 }
 
 /// Implementation of `add_privilege(address[])`.
-/// The input should consist of 32 bytes location + 32 bytes `length` + ...
 pub fn add_privilege(
     addresses: Vec<Address>, params: &ActionParams, state: &mut State,
 ) -> vm::Result<()> {
@@ -213,7 +209,6 @@ pub fn add_privilege(
 }
 
 /// Implementation of `remove_privilege(address[])`.
-/// The input should consist of 32 bytes location + 32 bytes `length` + ...
 pub fn remove_privilege(
     addresses: Vec<Address>, params: &ActionParams, state: &mut State,
 ) -> vm::Result<()> {

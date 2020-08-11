@@ -19,6 +19,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use contracts::{internal_contract_factory, SolFnTable};
 
 pub use self::{
+    abi::utils::pull_slice,
     contracts::{
         ADMIN_CONTROL_CONTRACT_ADDRESS,
         SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
@@ -28,7 +29,6 @@ pub use self::{
 };
 
 pub use self::abi::ABIDecodeError;
-use self::abi::ABIReader;
 
 lazy_static! {
     static ref INTERNAL_CONTRACT_CODE: Arc<Bytes> =
@@ -50,10 +50,15 @@ pub trait InternalContractTrait: Send + Sync {
         substate: &mut Substate,
     ) -> vm::Result<GasLeft>
     {
-        let mut input =
-            ABIReader::new(params.data.as_ref().ok_or(ABIDecodeError)?.iter());
+        let call_data = params
+            .data
+            .as_ref()
+            .ok_or(ABIDecodeError("None call data"))?;
+        let mut pointer = call_data.iter();
 
-        let fn_sig = input.pull_sig()?;
+        let mut fn_sig = [0u8; 4];
+        fn_sig.clone_from_slice(pull_slice(&mut pointer, 4)?);
+        let input = pointer.as_slice();
 
         let solidity_fn = self
             .get_func_table()
@@ -73,7 +78,7 @@ pub trait InternalContractTrait: Send + Sync {
 /// Native implementation of a solidity-interface function.
 pub trait SolidityFunctionTrait: Send + Sync {
     fn execute(
-        &self, input: ABIReader, params: &ActionParams, spec: &Spec,
+        &self, input: &[u8], params: &ActionParams, spec: &Spec,
         state: &mut State, substate: &mut Substate,
     ) -> vm::Result<GasLeft>;
 
