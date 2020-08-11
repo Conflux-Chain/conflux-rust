@@ -95,6 +95,7 @@ pub struct ConsensusConfig {
     /// Larger batch sizes may improve performance but might also prevent
     /// consensus from making progress under high RPC load.
     pub get_logs_epoch_batch_size: usize,
+    pub get_logs_filter_max_epoch_range: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -979,6 +980,17 @@ impl ConsensusGraph {
                 epoch: from_epoch,
                 min: self.earliest_epoch_available(),
             });
+        }
+
+        if let Some(max_gap) = self.config.get_logs_filter_max_epoch_range {
+            // The range includes both ends.
+            if to_epoch - from_epoch + 1 > max_gap {
+                return Err(FilterError::EpochNumberGapTooLarge {
+                    from_epoch,
+                    to_epoch,
+                    max_gap,
+                });
+            }
         }
 
         return Ok((from_epoch..=to_epoch).rev());
