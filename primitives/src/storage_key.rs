@@ -5,7 +5,7 @@
 // The original StorageKeys unprocessed, in contrary to StorageKey which is
 // processed to use in DeltaMpt.
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StorageKey<'a> {
     AccountKey(&'a [u8]),
     StorageRootKey(&'a [u8]),

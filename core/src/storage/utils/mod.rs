@@ -10,6 +10,7 @@ pub mod arc_ext;
 pub mod guarded_value;
 pub mod wrap;
 
+// TODO: add comments and unit tests
 pub fn to_key_prefix_iter_upper_bound(key_prefix: &[u8]) -> Option<Vec<u8>> {
     let mut upper_bound_excl_value = key_prefix.to_vec();
     if upper_bound_excl_value.len() == 0 {
