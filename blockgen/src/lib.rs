@@ -174,7 +174,7 @@ impl BlockGenerator {
 
     /// Send new PoW problem to workers
     pub fn send_problem(bg: Arc<BlockGenerator>, problem: ProofOfWorkProblem) {
-        if bg.pow_config.use_stratum {
+        if bg.pow_config.use_stratum() {
             let stratum = bg.stratum.read();
             stratum.as_ref().unwrap().notify(problem);
         } else {
@@ -697,7 +697,7 @@ impl BlockGenerator {
             time::Duration::from_millis(BLOCKGEN_LOOP_SLEEP_IN_MILISECS);
 
         let receiver: mpsc::Receiver<ProofOfWorkSolution> =
-            if bg.pow_config.use_stratum {
+            if bg.pow_config.use_stratum() {
                 BlockGenerator::start_new_stratum_worker(bg.clone())
             } else {
                 BlockGenerator::start_new_worker(1, bg.clone())
@@ -793,7 +793,7 @@ impl BlockGenerator {
                     // disconnected people may lose the previous message
                     if let Some(problem) = current_problem {
                         if let Ok(elapsed) = last_notify.elapsed() {
-                            if bg.pow_config.use_stratum
+                            if bg.pow_config.use_stratum()
                                 && elapsed > Duration::from_secs(60)
                             {
                                 BlockGenerator::send_problem(

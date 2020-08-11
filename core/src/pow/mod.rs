@@ -16,6 +16,7 @@ use cfx_types::{BigEndianHash, H256, U256, U512};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::RwLock;
+use static_assertions::_core::str::FromStr;
 use std::{
     collections::{HashMap, VecDeque},
     convert::TryFrom,
@@ -61,10 +62,31 @@ pub struct ProofOfWorkSolution {
 }
 
 #[derive(Debug, Clone, DeriveMallocSizeOf)]
+pub enum MiningType {
+    Stratum,
+    CPU,
+    Disable,
+}
+
+impl FromStr for MiningType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mining_type = match s {
+            "stratum" => Self::Stratum,
+            "cpu" => Self::CPU,
+            "disable" => Self::Disable,
+            _ => return Err("invalid mining type".into()),
+        };
+        Ok(mining_type)
+    }
+}
+
+#[derive(Debug, Clone, DeriveMallocSizeOf)]
 pub struct ProofOfWorkConfig {
     pub test_mode: bool,
     pub use_octopus_in_test_mode: bool,
-    pub use_stratum: bool,
+    pub mining_type: MiningType,
     pub initial_difficulty: u64,
     pub block_generation_period: u64,
     pub difficulty_adjustment_epoch_period: u64,
@@ -75,7 +97,7 @@ pub struct ProofOfWorkConfig {
 
 impl ProofOfWorkConfig {
     pub fn new(
-        test_mode: bool, use_octopus_in_test_mode: bool, use_stratum: bool,
+        test_mode: bool, use_octopus_in_test_mode: bool, mining_type: &str,
         initial_difficulty: Option<u64>, stratum_listen_addr: String,
         stratum_port: u16, stratum_secret: Option<H256>,
     ) -> Self
@@ -84,7 +106,7 @@ impl ProofOfWorkConfig {
             ProofOfWorkConfig {
                 test_mode,
                 use_octopus_in_test_mode,
-                use_stratum,
+                mining_type: mining_type.parse().expect("Invalid mining type"),
                 initial_difficulty: initial_difficulty.unwrap_or(4),
                 block_generation_period: 1000000,
                 difficulty_adjustment_epoch_period: 20,
@@ -96,7 +118,7 @@ impl ProofOfWorkConfig {
             ProofOfWorkConfig {
                 test_mode,
                 use_octopus_in_test_mode,
-                use_stratum,
+                mining_type: mining_type.parse().expect("Invalid mining type"),
                 initial_difficulty: INITIAL_DIFFICULTY,
                 block_generation_period: TARGET_AVERAGE_BLOCK_GENERATION_PERIOD,
                 difficulty_adjustment_epoch_period:
@@ -110,6 +132,14 @@ impl ProofOfWorkConfig {
 
     pub fn use_octopus(&self) -> bool {
         !self.test_mode || self.use_octopus_in_test_mode
+    }
+
+    pub fn use_stratum(&self) -> bool {
+        matches!(self.mining_type, MiningType::Stratum)
+    }
+
+    pub fn enable_mining(&self) -> bool {
+        !matches!(self.mining_type, MiningType::Disable)
     }
 
     pub fn target_difficulty(

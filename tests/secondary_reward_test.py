@@ -13,7 +13,9 @@ class StorageMaintenanceTest(ConfluxTestFramework):
         self.num_nodes = 1
         self.setup_clean_chain = True
         self.mining_author = "0x10000000000000000000000000000000000000aa"
-        self.conf_parameters = {"mining_author": "\"10000000000000000000000000000000000000aa\""}
+        self.conf_parameters = {"mining_author": "\"10000000000000000000000000000000000000aa\"",
+                                "mining_type": "'disable'"
+                                }
         self.gasPrice = 1
 
     def setup_network(self):

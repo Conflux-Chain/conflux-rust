@@ -1,3 +1,9 @@
+# 0.6.2
+
+## Improvement
+- Start stratum services automatically if `mining_author` is set. 
+Use `mining_type` to allow start CPU mining or disable mining manually.
+
 # 0.6.0
 
 ## Bug Fixes
