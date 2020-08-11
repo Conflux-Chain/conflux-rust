@@ -125,9 +125,7 @@ impl StateDbExt for StateDb {
             INTEREST_RATE_KEY,
         );
         let interest_rate_opt = self.get::<U256>(interest_rate_key)?;
-        Ok(interest_rate_opt.unwrap_or(
-            *INITIAL_INTEREST_RATE_PER_BLOCK * U256::from(BLOCKS_PER_YEAR),
-        ))
+        Ok(interest_rate_opt.unwrap_or_default())
     }
 
     fn set_annual_interest_rate(
@@ -148,7 +146,7 @@ impl StateDbExt for StateDb {
             ACCUMULATE_INTEREST_RATE_KEY,
         );
         let acc_interest_rate_opt = self.get::<U256>(acc_interest_rate_key)?;
-        Ok(acc_interest_rate_opt.unwrap_or(*ACCUMULATED_INTEREST_RATE_SCALE))
+        Ok(acc_interest_rate_opt.unwrap_or_default())
     }
 
     fn set_accumulate_interest_rate(
@@ -174,7 +172,7 @@ impl StateDbExt for StateDb {
         );
         let total_issued_tokens_opt =
             self.get::<U256>(total_issued_tokens_key)?;
-        Ok(total_issued_tokens_opt.unwrap_or(U256::zero()))
+        Ok(total_issued_tokens_opt.unwrap_or_default())
     }
 
     fn set_total_issued_tokens(
@@ -200,7 +198,7 @@ impl StateDbExt for StateDb {
         );
         let total_staking_tokens_opt =
             self.get::<U256>(total_staking_tokens_key)?;
-        Ok(total_staking_tokens_opt.unwrap_or(U256::zero()))
+        Ok(total_staking_tokens_opt.unwrap_or_default())
     }
 
     fn set_total_staking_tokens(
@@ -226,7 +224,7 @@ impl StateDbExt for StateDb {
         );
         let total_storage_tokens_opt =
             self.get::<U256>(total_storage_tokens_key)?;
-        Ok(total_storage_tokens_opt.unwrap_or(U256::zero()))
+        Ok(total_storage_tokens_opt.unwrap_or_default())
     }
 
     fn set_total_storage_tokens(
@@ -250,7 +248,6 @@ use super::{Result, StateDb};
 use crate::{
     consensus::debug::ComputeEpochDebugRecord,
     executive::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-    parameters::staking::*,
 };
 use cfx_types::{Address, H256, U256};
 use primitives::{
