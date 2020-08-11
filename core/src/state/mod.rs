@@ -179,7 +179,7 @@ impl State {
             total_staking_tokens: U256::default(),
             total_storage_tokens: U256::default(),
             interest_rate_per_block: *INITIAL_INTEREST_RATE_PER_BLOCK,
-            accumulate_interest_rate: *ACCUMULATED_INTEREST_RATE_SCALE
+            accumulate_interest_rate: *ACCUMULATED_INTEREST_RATE_SCALE,
         }
     }
 
