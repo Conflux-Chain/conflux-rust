@@ -1,0 +1,16 @@
+[package]
+name = "consensus-graph-cast"
+version = "0.1.0"
+authors = ["Pana <pana.wang@outlook.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "1.0"
+quote = "1.0"
+
+[dependencies.proc-macro2]
+version = "1"

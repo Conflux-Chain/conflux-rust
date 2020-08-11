@@ -38,7 +38,7 @@ use crate::{
             request_rejected_in_catch_up_mode,
         },
         impls::{common::RpcImpl as CommonImpl, RpcImplConfiguration},
-        traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
+        traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc, ConsensusCast},
         types::{
             sign_call, Account as RpcAccount, BlameInfo, Block as RpcBlock,
             BlockHashOrEpochNumber, Bytes, CallRequest,
@@ -53,7 +53,9 @@ use crate::{
         RpcResult,
     },
 };
+use consensus_graph_cast::ConsensusCast;
 
+#[derive(ConsensusCast)]
 pub struct RpcImpl {
     config: RpcImplConfiguration,
     pub consensus: SharedConsensusGraph,
@@ -84,13 +86,6 @@ impl RpcImpl {
             config,
             accounts,
         }
-    }
-
-    fn consensus_graph(&self) -> &ConsensusGraph {
-        self.consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
     }
 
     fn code(

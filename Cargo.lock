@@ -698,6 +698,7 @@ dependencies = [
  "cfxkey",
  "cfxstore",
  "clap",
+ "consensus-graph-cast",
  "criterion",
  "ctrlc",
  "db",
@@ -819,6 +820,15 @@ dependencies = [
  "threadpool",
  "toml 0.4.10",
  "txgen",
+]
+
+[[package]]
+name = "consensus-graph-cast"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2 1.0.19",
+ "quote 1.0.7",
+ "syn 1.0.38",
 ]
 
 [[package]]

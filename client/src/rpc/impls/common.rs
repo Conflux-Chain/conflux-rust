@@ -2,20 +2,23 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{
-    Block as RpcBlock, BlockHashOrEpochNumber, Bytes, EpochNumber,
-    Status as RpcStatus, Transaction as RpcTransaction,
+use crate::rpc::{
+    traits::ConsensusCast,
+    types::{
+        Block as RpcBlock, BlockHashOrEpochNumber, Bytes, EpochNumber,
+        Status as RpcStatus, Transaction as RpcTransaction,
+    },
 };
 use bigdecimal::BigDecimal;
 use cfx_types::{Address, H160, H256, H520, U128, U256, U64};
 use cfxcore::{
-    BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
-    SharedConsensusGraph, SharedTransactionPool,
-    parameters::consensus::ONE_CFX_IN_DRIP
+    parameters::consensus::ONE_CFX_IN_DRIP, BlockDataManager, ConsensusGraph,
+    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
 use clap::crate_version;
+use consensus_graph_cast::ConsensusCast;
 use jsonrpc_core::{Error as RpcError, Result as RpcResult, Value as RpcValue};
 use keccak_hash::keccak;
 use network::{
@@ -55,6 +58,7 @@ where F: Fn(Arc<SignedTransaction>) -> T {
     addr_grouped_txs
 }
 
+#[derive(ConsensusCast)]
 pub struct RpcImpl {
     exit: Arc<(Mutex<bool>, Condvar)>,
     consensus: SharedConsensusGraph,
@@ -81,13 +85,6 @@ impl RpcImpl {
             tx_pool,
             accounts,
         }
-    }
-
-    fn consensus_graph(&self) -> &ConsensusGraph {
-        self.consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
     }
 }
 
@@ -518,12 +515,14 @@ impl RpcImpl {
                 serde_json::to_string(&state_balance).unwrap(),
             );
 
-            let minimal_balance = tx.value + tx.gas * tx.gas_price + tx.storage_limit * ONE_CFX_IN_DRIP / 1024;
+            let minimal_balance = tx.value
+                + tx.gas * tx.gas_price
+                + tx.storage_limit * ONE_CFX_IN_DRIP / 1024;
             let local_balance_enough = local_balance > minimal_balance;
             let state_balance_enough = state_balance > minimal_balance;
             ret.insert(
                 "required balance".into(),
-                    serde_json::to_string(&minimal_balance).unwrap(),
+                serde_json::to_string(&minimal_balance).unwrap(),
             );
             ret.insert(
                 "local_balance_enough".into(),
