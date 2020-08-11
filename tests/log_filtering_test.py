@@ -215,6 +215,15 @@ class LogFilteringTest(ConfluxTestFramework):
             assert_equal(logs[ii]["topics"][1], self.address_to_topic(sender))
             assert_equal(logs[ii]["topics"][2], self.number_to_topic(NUM_CALLS // 2 + ii))
 
+        # get-logs-filter-max-epoch-range should limit the number of epochs queried.
+        self.stop_node(0)
+        self.start_node(0, ["--get-logs-filter-max-epoch-range", "16"])
+        filter = Filter(from_epoch="0x0", to_epoch="0x0f", topics=[BAR_TOPIC])
+        # should not raise error
+        self.rpc.get_logs(filter)
+        filter = Filter(from_epoch="0x0", to_epoch="0x10", topics=[BAR_TOPIC])
+        assert_raises_rpc_error(None, None, self.rpc.get_logs, filter)
+
         self.log.info("Pass")
 
     def address_to_topic(self, address):

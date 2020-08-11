@@ -421,6 +421,12 @@ jsonrpc_local_http_port=12539
 #
 # get_logs_epoch_batch_size = 32
 
+# The maximal allowed number of epochs between `from_epoch` and `to_epoch` in the filter to call `cfx_getLogs`.
+# If not set, there is no limit on the gap.
+# By default it is not set.
+#
+# get_logs_filter_max_epoch_range = 10000
+
 # Maximum number of transactions allowed for peers to send to a catch-up node.
 #
 # max_trans_count_received_in_catch_up = 60_000
