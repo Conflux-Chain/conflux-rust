@@ -10,14 +10,14 @@ pub use cfx_bytes::Bytes;
 pub use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, Encodable, Rlp};
 
-pub use crate::network::{
-    throttling::THROTTLING_SERVICE, Error as NetworkError,
-    ErrorKind as NetworkErrorKind, NetworkContext, PeerId,
-};
 use crate::sync::msg_sender::metric_message;
 use network::{
     node_table::NodeId, parse_msg_id_leb128_2_bytes_at_most,
     service::ProtocolVersion, ProtocolId,
+};
+pub use network::{
+    throttling::THROTTLING_SERVICE, Error as NetworkError,
+    ErrorKind as NetworkErrorKind, NetworkContext, PeerId,
 };
 
 macro_rules! build_msgid {

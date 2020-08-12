@@ -9,8 +9,7 @@ mod message;
 mod provider;
 mod query_service;
 
-use crate::network::ProtocolId;
-use network::service::ProtocolVersion;
+use network::{service::ProtocolVersion, ProtocolId};
 
 const LIGHT_PROTOCOL_ID: ProtocolId = *b"clp"; // Conflux Light Protocol
 pub const LIGHT_PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion(2);

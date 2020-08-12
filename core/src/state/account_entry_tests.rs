@@ -4,11 +4,11 @@
 
 use super::account_entry::OverlayAccount;
 use crate::{
-    hash::KECCAK_EMPTY,
-    parameters::staking::*,
-    state::AccountEntryProtectedMethods,
-    statedb::StateDb,
-    storage::{tests::new_state_manager_for_unit_test, StorageManagerTrait},
+    hash::KECCAK_EMPTY, state::AccountEntryProtectedMethods, statedb::StateDb,
+};
+use cfx_parameters::staking::*;
+use cfx_storage::{
+    tests::new_state_manager_for_unit_test, StorageManagerTrait,
 };
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use primitives::{

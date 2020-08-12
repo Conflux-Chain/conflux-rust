@@ -11,20 +11,19 @@ use crate::{
         Error, ErrorKind, Handler as LightHandler, LIGHT_PROTOCOL_ID,
         LIGHT_PROTOCOL_VERSION,
     },
-    network::{NetworkContext, NetworkService},
-    parameters::{
-        consensus::DEFERRED_STATE_EPOCH_COUNT,
-        light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME},
-    },
     rpc_errors::{account_result_to_rpc_result, Error as RpcError},
     sync::SynchronizationGraph,
+};
+use cfx_parameters::{
+    consensus::DEFERRED_STATE_EPOCH_COUNT,
+    light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME},
 };
 use cfx_types::{BigEndianHash, Bloom, H160, H256, KECCAK_EMPTY_BLOOM, U256};
 use futures::{
     future::{self, Either},
     stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
 };
-use network::service::ProtocolVersion;
+use network::{service::ProtocolVersion, NetworkContext, NetworkService};
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},

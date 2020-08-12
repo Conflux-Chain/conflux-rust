@@ -9,18 +9,19 @@ edition = "2018"
 [dependencies]
 clap = "2"
 cfxcore = { path = "../core" }
+cfxkey = { path = "../accounts/cfxkey" }
+cfx-parameters = { path = "../core/parameters" }
 cfx-stratum = { path = "stratum" }
 cfx-types = { path = "../cfx_types" }
+db = { path = "../db" }
+lazy_static = "1.4"
+log = "0.4"
+metrics = { path = "../util/metrics" }
+network = { path = "../network" }
 primitives = { path = "../primitives" }
 parking_lot = "0.10"
 rlp = "0.4.0"
 rand = "0.7"
-cfxkey = { path = "../accounts/cfxkey" }
-txgen = { path = "../transactiongen" }
-log = "0.4"
-db = { path = "../db" }
-network = { path = "../network" }
 secret-store = { path = "../secret_store" }
 toml = "0.4"
-metrics = { path = "../util/metrics" }
-lazy_static = "1.2.0"
+txgen = { path = "../transactiongen" }

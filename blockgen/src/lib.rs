@@ -7,10 +7,10 @@ use crate::miner::{
     stratum::{Options as StratumOption, Stratum},
     work_notify::NotifyWork,
 };
+use cfx_parameters::consensus::GENESIS_GAS_LIMIT;
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
-    block_parameters::*, consensus::consensus_inner::StateBlameInfo,
-    parameters::consensus::GENESIS_GAS_LIMIT, pow::*,
+    block_parameters::*, consensus::consensus_inner::StateBlameInfo, pow::*,
     verification::compute_transaction_root, ConsensusGraph,
     ConsensusGraphTrait, SharedSynchronizationGraph,
     SharedSynchronizationService, SharedTransactionPool, Stopable,
