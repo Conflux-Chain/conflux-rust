@@ -98,8 +98,9 @@ pub fn initialize_internal_contract_accounts(state: &mut State) {
 /// ` test_net_version` is used to update the genesis author so that after
 /// resetting, the chain of the older version will be discarded
 pub fn genesis_block(
-    storage_manager: &StorageManager, genesis_accounts: HashMap<Address, U256>,
-    test_net_version: Address, initial_difficulty: U256,
+    storage_manager: &Arc<StorageManager>,
+    genesis_accounts: HashMap<Address, U256>, test_net_version: Address,
+    initial_difficulty: U256,
 ) -> Block
 {
     let mut state = State::new(

@@ -31,12 +31,12 @@ pub trait StateManagerTrait {
     /// With try_open == true, the call fails immediately when the max number of
     /// snapshot open is reached.
     fn get_state_no_commit(
-        &self, epoch_id: StateIndex, try_open: bool,
+        self: &Arc<Self>, epoch_id: StateIndex, try_open: bool,
     ) -> Result<Option<State>>;
     fn get_state_for_next_epoch(
-        &self, parent_epoch_id: StateIndex,
+        self: &Arc<Self>, parent_epoch_id: StateIndex,
     ) -> Result<Option<State>>;
-    fn get_state_for_genesis_write(&self) -> State;
+    fn get_state_for_genesis_write(self: &Arc<Self>) -> State;
 }
 
 impl StateIndex {
