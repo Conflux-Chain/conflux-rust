@@ -1,0 +1,56 @@
+[package]
+description = "Conflux core storage library"
+homepage = "http://www.conflux-chain.org"
+license = "GPL-3.0"
+name = "cfx-storage"
+version = "1.0.0"
+edition = "2018"
+
+[dependencies]
+cfx-bytes = { path = "../../cfx_bytes" }
+cfx-internal-common = { path = "../internal_common" }
+cfx-types = { path = "../../cfx_types" }
+derivative = "2.0.2"
+cfxkey = { path = "../../accounts/cfxkey" }
+error-chain = { version = "0.12", default-features = false }
+fallible-iterator = "0.2"
+fs_extra = "1.1.0"
+futures = { version = "0.3.3", features = ["compat"] }
+hashbrown = "0.7.1"
+keccak-hash = "0.5"
+kvdb = "0.4"
+kvdb-rocksdb = {path="../../db/src/kvdb-rocksdb"}
+lazy_static = "1.4"
+log = "0.4"
+log4rs = "0.9.0"
+malloc_size_of = {path = "../../util/malloc_size_of"}
+malloc_size_of_derive = {path = "../../util/malloc_size_of_derive"}
+memoffset = "0.5.1"
+parking_lot = "0.10"
+primitives = { path = "../../primitives", optional = true }
+rand = "0.7"
+rand_chacha="0.2.1"
+random-crash = { path = "../../util/random_crash" }
+rlp = "0.4.0"
+rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
+rustc-hex = "1.0"
+serde = { version = "1.0", features = ["rc"] }
+serde_derive = "1.0"
+sqlite = "0.25"
+sqlite3-sys = "0.12"
+strfmt = "0.1"
+tokio = { version = "0.2", features = ["full"] }
+
+[dev-dependencies]
+primitives = { path = "../../primitives", features = ["test_no_account_length_check"] }
+
+[dependencies.parity-util-mem]
+version = "0.5"
+default-features = false
+
+[features]
+default = ["primitives"]
+# Unfortunately cfg test attributes doesn't work across crates,
+# we have to define a feature for test code.
+# https://users.rust-lang.org/t/cfg-test-doesnt-propagate-to-external-crates/13046
+testonly_code = []

@@ -9,6 +9,10 @@ use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use std::{future::Future, sync::Arc};
 
+use super::{
+    common::{FutureItem, KeyOrdered, PendingItem, SyncManager},
+    witnesses::Witnesses,
+};
 use crate::{
     hash::keccak,
     light_protocol::{
@@ -17,20 +21,14 @@ use crate::{
         message::{msgid, BloomWithEpoch, GetBlooms},
     },
     message::{Message, RequestId},
-    network::NetworkContext,
-    parameters::light::{
-        BLOOM_REQUEST_BATCH_SIZE, BLOOM_REQUEST_TIMEOUT, CACHE_TIMEOUT,
-        MAX_BLOOMS_IN_FLIGHT,
-    },
     UniqueId,
 };
-
-use super::{
-    common::{FutureItem, KeyOrdered, PendingItem, SyncManager},
-    witnesses::Witnesses,
+use cfx_parameters::light::{
+    BLOOM_REQUEST_BATCH_SIZE, BLOOM_REQUEST_TIMEOUT, CACHE_TIMEOUT,
+    MAX_BLOOMS_IN_FLIGHT,
 };
 use futures::future::FutureExt;
-use network::node_table::NodeId;
+use network::{node_table::NodeId, NetworkContext};
 
 #[derive(Debug)]
 struct Statistics {

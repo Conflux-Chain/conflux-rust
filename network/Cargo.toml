@@ -29,7 +29,7 @@ enum-map-derive = "0.4.0"
 strum = "0.11.0"
 strum_macros = "0.11.0"
 cfxkey = { path = "../accounts/cfxkey" }
-lazy_static = "1.2.0"
+lazy_static = "1.4"
 byte-unit = "1.1.0"
 priority-send-queue = { path = "../util/priority-send-queue" }
 metrics = { path = "../util/metrics" }

@@ -715,6 +715,7 @@ use crate::{
     GENESIS_VERSION,
 };
 use blockgen::BlockGenerator;
+use cfx_storage::StorageManager;
 use cfx_types::{Address, U256};
 use cfxcore::{
     block_data_manager::BlockDataManager,
@@ -722,7 +723,6 @@ use cfxcore::{
     machine::{new_machine_with_builtin, Machine},
     pow::PowComputer,
     statistics::Statistics,
-    storage::StorageManager,
     sync::SyncPhaseType,
     vm_factory::VmFactory,
     ConsensusGraph, LightProvider, Notifications, Stopable,

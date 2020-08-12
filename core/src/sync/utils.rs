@@ -8,21 +8,21 @@ use crate::{
     db::NUM_COLUMNS,
     genesis::genesis_block,
     machine::new_machine_with_builtin,
-    parameters::{
-        block::{MAX_BLOCK_SIZE_IN_BYTES, REFEREE_DEFAULT_BOUND},
-        consensus::{GENESIS_GAS_LIMIT, TRANSACTION_DEFAULT_EPOCH_BOUND},
-        consensus_internal::INITIAL_BASE_MINING_REWARD_IN_UCFX,
-        WORKER_COMPUTATION_PARALLELISM,
-    },
     pow::{self, PowComputer, ProofOfWorkConfig},
     statistics::Statistics,
-    storage::{StorageConfiguration, StorageManager},
     sync::{SyncGraphConfig, SynchronizationGraph},
     transaction_pool::TxPoolConfig,
     verification::VerificationConfig,
     vm_factory::VmFactory,
     ConsensusGraph, Notifications, TransactionPool,
 };
+use cfx_parameters::{
+    block::{MAX_BLOCK_SIZE_IN_BYTES, REFEREE_DEFAULT_BOUND},
+    consensus::{GENESIS_GAS_LIMIT, TRANSACTION_DEFAULT_EPOCH_BOUND},
+    consensus_internal::INITIAL_BASE_MINING_REWARD_IN_UCFX,
+    WORKER_COMPUTATION_PARALLELISM,
+};
+use cfx_storage::{StorageConfiguration, StorageManager};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use core::str::FromStr;
 use parking_lot::Mutex;
@@ -116,6 +116,7 @@ pub fn initialize_data_manager(
     let storage_manager = Arc::new(
         StorageManager::new(StorageConfiguration::new_default(
             db_dir.to_string(),
+            cfx_parameters::consensus::SNAPSHOT_EPOCHS_CAPACITY,
         ))
         .expect("Failed to initialize storage."),
     );

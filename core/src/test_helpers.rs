@@ -3,8 +3,8 @@ use crate::{
     genesis::initialize_internal_contract_accounts,
     state::State,
     statedb::StateDb,
-    storage::{StateIndex, StorageManager, StorageManagerTrait},
 };
+use cfx_storage::{StateIndex, StorageManager, StorageManagerTrait};
 use primitives::EpochId;
 use std::sync::Arc;
 

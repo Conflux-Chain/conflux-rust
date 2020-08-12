@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{storage, sync::message::Throttled};
+use crate::sync::message::Throttled;
 use futures::channel::oneshot;
 use network;
 use rlp::DecoderError;
@@ -11,7 +11,7 @@ use std::io;
 error_chain! {
     links {
         Network(network::Error, network::ErrorKind);
-        Storage(storage::Error, storage::ErrorKind);
+        Storage(cfx_storage::Error, cfx_storage::ErrorKind);
     }
 
     foreign_links {
