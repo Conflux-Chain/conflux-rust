@@ -5,17 +5,17 @@
 use super::StateDbGeneric;
 use crate::storage::{
     utils::{access_mode, StaticBool},
-    MptKeyValue, NodeMerkleProof, Result, StateProof, StateRootWithAuxInfo,
-    StorageStateTrait,
+    ErrorKind, MptKeyValue, NodeMerkleProof, Result, StateProof,
+    StateRootWithAuxInfo, StorageStateTrait,
 };
-use primitives::{EpochId, NodeMerkleTriplet, StorageKey};
+use primitives::{EpochId, NodeMerkleTriplet, StorageKey, MERKLE_NULL_NODE};
 use std::{cell::RefCell, collections::HashMap};
 
 type StorageValue = Box<[u8]>;
-type RawStorage = HashMap<StorageKey<'static>, StorageValue>;
+type RawStorage = HashMap<Vec<u8>, StorageValue>;
 
 struct MockStorage {
-    contents: RawStorage,
+    pub contents: RawStorage,
     num_reads: RefCell<u64>,
     num_writes: RefCell<u64>,
 }
@@ -40,32 +40,52 @@ impl MockStorage {
 
     pub fn get_num_reads(&self) -> u64 { self.num_reads.borrow().clone() }
 
-    #[allow(unused)]
     pub fn get_num_writes(&self) -> u64 { self.num_writes.borrow().clone() }
 }
 
 #[allow(unused)]
 impl StorageStateTrait for MockStorage {
     fn commit(&mut self, epoch: EpochId) -> Result<StateRootWithAuxInfo> {
-        // TODO
-        unimplemented!()
+        self.compute_state_root()
     }
 
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {
-        // TODO
-        unimplemented!()
+        Ok(StateRootWithAuxInfo::genesis(&MERKLE_NULL_NODE))
     }
 
     fn delete(&mut self, access_key: StorageKey) -> Result<()> {
-        // TODO
-        unimplemented!()
+        *self.num_writes.borrow_mut() += 1;
+        let key = access_key.to_key_bytes();
+        self.contents.remove(&key);
+        Ok(())
     }
 
     fn delete_all<AM: access_mode::AccessMode>(
         &mut self, access_key_prefix: StorageKey,
     ) -> Result<Option<Vec<MptKeyValue>>> {
-        // TODO
-        unimplemented!()
+        let prefix = access_key_prefix.to_key_bytes();
+
+        let keys_to_delete: Vec<_> = self
+            .contents
+            .keys()
+            .filter(|k| k.starts_with(&prefix[..]))
+            .cloned()
+            .collect();
+
+        let mut deleted_kvs = vec![];
+
+        for k in keys_to_delete {
+            *self.num_reads.borrow_mut() += 1;
+            let v = self.contents.get(&k).unwrap();
+            deleted_kvs.push((k.clone(), v.clone()));
+
+            if !AM::is_read_only() {
+                *self.num_writes.borrow_mut() += 1;
+                self.contents.remove(&k);
+            }
+        }
+
+        Ok(Some(deleted_kvs))
     }
 
     fn delete_test_only(
@@ -76,7 +96,8 @@ impl StorageStateTrait for MockStorage {
 
     fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
         *self.num_reads.borrow_mut() += 1;
-        Ok(self.contents.get(&access_key).cloned())
+        let key = access_key.to_key_bytes();
+        Ok(self.contents.get(&key).cloned())
     }
 
     fn get_node_merkle_all_versions<WithProof: StaticBool>(
@@ -86,8 +107,7 @@ impl StorageStateTrait for MockStorage {
     }
 
     fn get_state_root(&self) -> Result<StateRootWithAuxInfo> {
-        // TODO
-        unimplemented!()
+        Err(ErrorKind::Msg("No state root".to_owned()).into())
     }
 
     fn get_with_proof(
@@ -99,43 +119,133 @@ impl StorageStateTrait for MockStorage {
     fn revert(&mut self) { unimplemented!() }
 
     fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()> {
-        // TODO
-        unimplemented!()
+        *self.num_writes.borrow_mut() += 1;
+        let key = access_key.to_key_bytes();
+        self.contents.insert(key, value);
+        Ok(())
     }
 }
 
 type StateDbTest = StateDbGeneric<MockStorage>;
 
-// TODO(thegaram): StateDb calls StorageKey::from_key_bytes
-// so we need to construct a legit storage key
-fn storage_key(key: &'static [u8]) -> StorageKey<'static> {
-    StorageKey::AccountKey(key)
-}
+// convert `key` to storage interface format
+fn storage_key(key: &'static [u8]) -> StorageKey { StorageKey::AccountKey(key) }
 
-fn storage_value(value: &'static [u8]) -> StorageValue { value.into() }
+// convert `key` to raw storage format
+fn key(key: &'static [u8]) -> Vec<u8> { storage_key(key).to_key_bytes() }
+
+// convert `value` to raw storage format
+fn value(value: &'static [u8]) -> StorageValue { value.into() }
 
 fn init_state_db() -> StateDbTest {
-    let mut contents = HashMap::new();
-    contents.insert(storage_key(b"0"), storage_value(b"0-v0"));
-    contents.insert(storage_key(b"1"), storage_value(b"1-v0"));
-    contents.insert(storage_key(b"2"), storage_value(b"2-v0"));
-    contents.insert(storage_key(b"3"), storage_value(b"3-v0"));
-    contents.insert(storage_key(b"4"), storage_value(b"4-v0"));
+    let mut contents = RawStorage::new();
+    contents.insert(key(b"00"), value(b"v0"));
+    contents.insert(key(b"01"), value(b"v0"));
+    contents.insert(key(b"11"), value(b"v0"));
+    contents.insert(key(b"22"), value(b"v0"));
 
     let storage = MockStorage::with_contents(contents);
     StateDbTest::new(storage)
+}
+
+#[allow(unused)]
+fn print_raw(raw: &RawStorage) {
+    let mut keys: Vec<_> = raw.keys().collect();
+    keys.sort();
+
+    for k in keys {
+        let v = &raw[k];
+        println!(
+            "k = {:?}; v = {:?}",
+            std::str::from_utf8(k).unwrap(),
+            std::str::from_utf8(v).unwrap()
+        );
+    }
 }
 
 #[test]
 fn test_basic() {
     let mut state_db = init_state_db();
 
+    // (11, v0) --> (11, v1)
     state_db
-        .set_raw(storage_key(b"0"), storage_value(b"0-v1"), None)
+        .set_raw(storage_key(b"11"), value(b"v1"), None)
         .unwrap();
 
-    // use super::StateDbCheckpointMethods;
-    // state_db.checkpoint(); // checkpoint #0
+    // delete (22, v0)
+    state_db.delete(storage_key(b"22"), None).unwrap();
 
-    assert_eq!(state_db.get_storage_mut().get_num_reads(), 1);
+    // delete (00, v0) and (01, v0)
+    state_db
+        .delete_all::<access_mode::Write>(storage_key(b"0"), None)
+        .unwrap();
+
+    state_db.commit(MERKLE_NULL_NODE, None).unwrap();
+    let storage = state_db.get_storage_mut();
+    let contents = &storage.contents;
+
+    assert_eq!(contents.get(&key(b"00")), None);
+    assert_eq!(contents.get(&key(b"01")), None);
+    assert_eq!(contents.get(&key(b"11")), Some(&value(b"v1")));
+    assert_eq!(contents.get(&key(b"22")), None);
+    assert_eq!(contents.len(), 1);
+
+    // we need to read all values touched
+    assert_eq!(storage.get_num_reads(), 4);
+
+    // we need to write all values modified or removed
+    assert_eq!(storage.get_num_writes(), 4);
+}
+
+#[test]
+fn test_checkpoint() {
+    use super::StateDbCheckpointMethods;
+
+    let mut state_db = init_state_db();
+
+    // (11, v0) --> (11, v1)
+    state_db
+        .set_raw(storage_key(b"11"), value(b"v1"), None)
+        .unwrap();
+
+    // create checkpoint #0
+    state_db.checkpoint();
+
+    // delete (22, v0)
+    state_db.delete(storage_key(b"22"), None).unwrap();
+
+    // create checkpoint #1
+    state_db.checkpoint();
+
+    // delete (00, v0) and (01, v0)
+    state_db
+        .delete_all::<access_mode::Write>(storage_key(b"0"), None)
+        .unwrap();
+
+    // discard checkpoint #1
+    state_db.discard_checkpoint();
+
+    // create (33, v0)
+    state_db
+        .set_raw(storage_key(b"33"), value(b"v0"), None)
+        .unwrap();
+
+    // revert to checkpoint #0 --> undo deletes
+    state_db.revert_to_checkpoint();
+
+    state_db.commit(MERKLE_NULL_NODE, None).unwrap();
+    let storage = state_db.get_storage_mut();
+    let contents = &storage.contents;
+
+    assert_eq!(contents.get(&key(b"00")), Some(&value(b"v0")));
+    assert_eq!(contents.get(&key(b"01")), Some(&value(b"v0")));
+    assert_eq!(contents.get(&key(b"11")), Some(&value(b"v1")));
+    assert_eq!(contents.get(&key(b"22")), Some(&value(b"v0")));
+    assert_eq!(contents.len(), 4);
+
+    // we need to read all values touched
+    assert_eq!(storage.get_num_reads(), 5);
+
+    // we need to write all values modified or removed
+    assert_eq!(storage.get_num_writes(), 1);
 }

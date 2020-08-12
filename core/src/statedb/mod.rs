@@ -24,7 +24,8 @@ mod impls {
     type Key = Vec<u8>;
     type Value = Option<Arc<[u8]>>;
 
-    // FIXME: why BTreeMap and not HashMap?
+    // use BTreeMap so that we can delete ranges efficiently
+    // see `delete_all`
     type AccessedEntries = BTreeMap<Key, EntryValue>;
 
     // A checkpoint contains the previous values for all keys
@@ -438,6 +439,11 @@ mod impls {
             debug_record: Option<&mut ComputeEpochDebugRecord>,
         ) -> Result<StateRootWithAuxInfo>
         {
+            if !self.checkpoints.get_mut().is_empty() {
+                // TODO: panic?
+                warn!("Active checkpoints during commit");
+            }
+
             let result = match self.storage.get_state_root() {
                 Ok(r) => r,
                 Err(_) => self.compute_state_root(debug_record)?,
