@@ -4,13 +4,12 @@
 
 use crate::{
     message::{Message, MsgId, RequestId},
-    network::{self, NetworkContext, UpdateNodeOperation},
     statedb,
     sync::{message::Throttled, node_type::NodeType},
 };
 use cfx_types::{H160, H256};
 use error_chain::ChainedError;
-use network::node_table::NodeId;
+use network::{node_table::NodeId, NetworkContext, UpdateNodeOperation};
 use parking_lot::Mutex;
 use primitives::{filter::FilterError, ChainIdParams, StateRoot};
 use rlp::DecoderError;

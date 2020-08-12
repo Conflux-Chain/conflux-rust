@@ -7,56 +7,57 @@ version = "1.0.0"
 edition = "2018"
 
 [dependencies]
-anyhow = "1.0"
-async-trait = "0.1"
 bit-set = "0.4"
 bn = { git = "https://github.com/paritytech/bn", default-features = false, rev="635c4cdd560bc0c8b262e6bf809dc709da8bcd7e" }
 byteorder = "1.0"
-cfx-types = { path = "../cfx_types" }
+cfxkey = { path = "../accounts/cfxkey" }
 cfx-bytes = { path = "../cfx_bytes" }
+cfx-internal-common = { path = "internal_common" }
+cfx-parameters = { path = "parameters" }
+cfx-storage = { path = "storage", optional = true }
+cfx-types = { path = "../cfx_types" }
 cfx-utils = { path = "../cfx_utils" }
 clap = "2"
 derivative = "2.0.2"
 db = { path = "../db" }
-cfxkey = { path = "../accounts/cfxkey" }
+either = "1.5.3"
 error-chain = { version = "0.12", default-features = false }
 fallible-iterator = "0.2"
 fs_extra = "1.1.0"
-hashbrown = "0.7.1"
-heapsize = "0.4"
 futures = {version="0.3.3", features = ["compat"]}
+hashbrown = "0.7.1"
 hibitset = { path = "../util/hibitset" }
+itertools = "0.9"
 io = { path = "../util/io" }
 jsonrpc-core = "14.0.0"
 keccak-hash = "0.5"
 kvdb = "0.4"
 kvdb-rocksdb = {path="../db/src/kvdb-rocksdb"}
-lazy_static = { version = "1.3.0", default-features = false }
+lazy_static = "1.4"
 link-cut-tree = { path = "../util/link-cut-tree" }
 log = "0.4"
-log-device = { path = "../util/log_device" }
 log4rs = "0.9.0"
-lru = "0.1.11"
 lru_time_cache = "0.9.0"
 malloc_size_of = {path = "../util/malloc_size_of"}
 malloc_size_of_derive = {path = "../util/malloc_size_of_derive"}
+memmap = "0.6"
 memoffset = "0.5.1"
 memory-cache = { path = "../util/memory-cache" }
 metrics = { path = "../util/metrics" }
-mirai-annotations = { version = "~1.8", default-features = false }
 network = { path = "../network" }
-num-derive = { version = "0.2.5", default-features = false }
-num-traits = { version = "0.2.8", default-features = false }
 num = "0.2"
+num-traits = { version = "0.2.8", default-features = false }
 parity-bytes = "0.1"
 parity-crypto = "0.3.0"
 parking_lot = "0.10"
-primitives = { path = "../primitives", optional = true }
+primal = "0.2.3"
+primitives = { path = "../primitives" }
 priority-send-queue = { path = "../util/priority-send-queue" }
 prometheus = { version = "0.7.0", default-features = false }
 rand = "0.7"
 rand_chacha="0.2.1"
 rand_xorshift="0.2"
+random-crash = { path = "../util/random_crash" }
 rayon = "1.0"
 rlp = "0.4.0"
 rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
@@ -69,24 +70,19 @@ siphasher = "0.3"
 slab = "0.4"
 sqlite = "0.25"
 sqlite3-sys = "0.12"
+static_assertions = "1.1.0"
 strfmt = "0.1"
-thiserror = "1.0"
+tempdir = "0.3"
+threadpool = "1.0"
 throttling = { path = "../util/throttling" }
 toml = "0.4"
 tokio = { version = "0.2", features = ["full"] }
 tokio-timer = "0.2.13"
-threadpool = "1.0"
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
-itertools = "0.9"
-either = "1.5.3"
-primal = "0.2.3"
-static_assertions = "1.1.0"
-memmap = "0.6"
-tempdir = "0.3"
 
 [dev-dependencies]
 criterion = "0.2"
-primitives = { path = "../primitives", features = ["test_no_account_length_check"] }
+cfx-storage = { path = "storage", features = ["testonly_code"] }
 tokio = { version = "0.2.11", features = ["time"] }
 
 [dependencies.parity-util-mem]
@@ -94,4 +90,4 @@ version = "0.5"
 default-features = false
 
 [features]
-default = ["primitives"]
+default = ["cfx-storage"]

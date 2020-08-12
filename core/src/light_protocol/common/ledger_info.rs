@@ -2,22 +2,22 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::{
+    consensus::SharedConsensusGraph,
+    light_protocol::{message::WitnessInfoWithHeight, Error, ErrorKind},
+    statedb::{StateDb, StateDbGetOriginalMethods},
+};
+use cfx_internal_common::StateRootWithAuxInfo;
+use cfx_parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
+use cfx_storage::{
+    state::{State, StateTrait},
+    state_manager::StateManagerTrait,
+    NodeMerkleProof, StateProof,
+};
 use cfx_types::{Address, Bloom, H256};
 use primitives::{
     Block, BlockHeader, BlockHeaderBuilder, BlockReceipts, EpochNumber,
     StorageKey, StorageRoot,
-};
-
-use crate::{
-    consensus::SharedConsensusGraph,
-    light_protocol::{message::WitnessInfoWithHeight, Error, ErrorKind},
-    parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
-    statedb::{StateDb, StateDbGetOriginalMethods},
-    storage::{
-        state::{State, StateTrait},
-        state_manager::StateManagerTrait,
-        NodeMerkleProof, StateProof, StateRootWithAuxInfo,
-    },
 };
 
 pub struct LedgerInfo {

@@ -7,9 +7,7 @@ use crate::{
     evm::{Factory, FinalizationResult, VMType},
     executive::ExecutionOutcome,
     machine::Machine,
-    parameters::staking::*,
     state::{CleanupMode, CollateralCheckResult, Substate},
-    storage::tests::new_state_manager_for_unit_test,
     test_helpers::{
         get_state_for_genesis_write, get_state_for_genesis_write_with_factory,
     },
@@ -17,6 +15,8 @@ use crate::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
     },
 };
+use cfx_parameters::staking::*;
+use cfx_storage::tests::new_state_manager_for_unit_test;
 use cfx_types::{
     address_util::AddressUtil, Address, BigEndianHash, U256, U512,
 };

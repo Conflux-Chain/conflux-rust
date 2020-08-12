@@ -456,14 +456,12 @@ mod impls {
     }
 
     use super::*;
-    use crate::{
-        consensus::debug::{ComputeEpochDebugRecord, StateOp},
-        storage::{
-            state::{NoProof, WithProof},
-            utils::{access_mode, to_key_prefix_iter_upper_bound},
-            MptKeyValue, NodeMerkleProof, StateProof, StateRootWithAuxInfo,
-            StorageStateTrait,
-        },
+    use crate::consensus::debug::{ComputeEpochDebugRecord, StateOp};
+    use cfx_internal_common::StateRootWithAuxInfo;
+    use cfx_storage::{
+        state::{NoProof, WithProof},
+        utils::{access_mode, to_key_prefix_iter_upper_bound},
+        MptKeyValue, NodeMerkleProof, StateProof, StorageStateTrait,
     };
     use cfx_types::{address_util::AddressUtil, Address};
     use hashbrown::HashMap;
@@ -476,4 +474,4 @@ mod impls {
     };
 }
 
-use crate::storage::StorageState;
+use cfx_storage::StorageState;

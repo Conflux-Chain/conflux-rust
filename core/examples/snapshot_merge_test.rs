@@ -2,18 +2,18 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_internal_common::state_root_with_aux_info::{
+    StateRootAuxInfo, StateRootWithAuxInfo,
+};
+use cfx_storage::{
+    state::StateTrait,
+    state_manager::{StateManager, StateManagerTrait},
+    storage_db::{KeyValueDbTraitRead, SnapshotDbManagerTrait, SnapshotInfo},
+    DeltaMptIterator, Error as StorageError, StateIndex, StorageConfiguration,
+};
 use cfx_types::{Address, H256};
 use cfxcore::{
     statedb::{StateDb, StateDbExt},
-    storage::{
-        state::StateTrait,
-        state_manager::{StateManager, StateManagerTrait},
-        storage_db::{
-            KeyValueDbTraitRead, SnapshotDbManagerTrait, SnapshotInfo,
-        },
-        DeltaMptIterator, Error as StorageError, StateIndex, StateRootAuxInfo,
-        StateRootWithAuxInfo, StorageConfiguration,
-    },
     sync::Error,
 };
 use clap::{App, Arg, ArgMatches};
@@ -288,8 +288,10 @@ where
 fn new_state_manager(
     conflux_data_dir: &str,
 ) -> Result<Arc<StateManager>, Error> {
-    let mut storage_conf =
-        StorageConfiguration::new_default(conflux_data_dir.to_string());
+    let mut storage_conf = StorageConfiguration::new_default(
+        conflux_data_dir.to_string(),
+        cfx_parameters::consensus::SNAPSHOT_EPOCHS_CAPACITY,
+    );
     storage_conf.consensus_param.snapshot_epoch_count = 10000000;
     Ok(Arc::new(StateManager::new(storage_conf).unwrap()))
 }

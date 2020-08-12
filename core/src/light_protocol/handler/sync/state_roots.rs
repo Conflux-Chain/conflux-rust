@@ -4,11 +4,10 @@
 
 extern crate lru_time_cache;
 
-use lru_time_cache::LruCache;
-use parking_lot::RwLock;
-use primitives::StateRoot;
-use std::{future::Future, sync::Arc};
-
+use super::{
+    common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
+    witnesses::Witnesses,
+};
 use crate::{
     light_protocol::{
         common::{FullPeerState, Peers},
@@ -16,20 +15,18 @@ use crate::{
         message::{msgid, GetStateRoots, StateRootWithEpoch},
     },
     message::{Message, RequestId},
-    network::NetworkContext,
-    parameters::light::{
-        CACHE_TIMEOUT, MAX_STATE_ROOTS_IN_FLIGHT,
-        STATE_ROOT_REQUEST_BATCH_SIZE, STATE_ROOT_REQUEST_TIMEOUT,
-    },
     UniqueId,
 };
-
-use super::{
-    common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
-    witnesses::Witnesses,
+use cfx_parameters::light::{
+    CACHE_TIMEOUT, MAX_STATE_ROOTS_IN_FLIGHT, STATE_ROOT_REQUEST_BATCH_SIZE,
+    STATE_ROOT_REQUEST_TIMEOUT,
 };
 use futures::future::FutureExt;
-use network::node_table::NodeId;
+use lru_time_cache::LruCache;
+use network::{node_table::NodeId, NetworkContext};
+use parking_lot::RwLock;
+use primitives::StateRoot;
+use std::{future::Future, sync::Arc};
 
 #[derive(Debug)]
 struct Statistics {

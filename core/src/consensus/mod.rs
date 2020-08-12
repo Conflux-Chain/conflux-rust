@@ -8,14 +8,15 @@ mod consensus_trait;
 pub mod debug;
 mod pastset_cache;
 
+pub use crate::consensus::{
+    consensus_inner::{ConsensusGraphInner, ConsensusInnerConfig},
+    consensus_trait::{ConsensusGraphTrait, SharedConsensusGraph},
+};
+
 use super::consensus::consensus_inner::{
     confirmation_meter::ConfirmationMeter,
     consensus_executor::ConsensusExecutor,
     consensus_new_block_handler::ConsensusNewBlockHandler,
-};
-pub use crate::consensus::{
-    consensus_inner::{ConsensusGraphInner, ConsensusInnerConfig},
-    consensus_trait::{ConsensusGraphTrait, SharedConsensusGraph},
 };
 use crate::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
@@ -25,20 +26,20 @@ use crate::{
     },
     evm::Spec,
     executive::ExecutionOutcome,
-    parameters::{
-        consensus::*, consensus_internal::*, staking::COLLATERAL_PER_BYTE,
-    },
     pow::{PowComputer, ProofOfWorkConfig},
     rpc_errors::Result as RpcResult,
     state::State,
     statedb::{StateDb, StateDbExt, StateDbGetOriginalMethods},
     statistics::SharedStatistics,
-    storage::state_manager::StateManagerTrait,
     transaction_pool::SharedTransactionPool,
     verification::VerificationConfig,
     vm_factory::VmFactory,
     Notifications,
 };
+use cfx_parameters::{
+    consensus::*, consensus_internal::*, staking::COLLATERAL_PER_BYTE,
+};
+use cfx_storage::state_manager::StateManagerTrait;
 use cfx_types::{BigEndianHash, Bloom, H160, H256, U256, U512};
 use either::Either;
 use itertools::Itertools;
