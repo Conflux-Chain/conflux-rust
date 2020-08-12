@@ -12,12 +12,12 @@ use crate::{
         LIGHT_PROTOCOL_VERSION,
     },
     network::{NetworkContext, NetworkService},
-    parameters::{
-        consensus::DEFERRED_STATE_EPOCH_COUNT,
-        light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME},
-    },
     rpc_errors::{account_result_to_rpc_result, Error as RpcError},
     sync::SynchronizationGraph,
+};
+use cfx_parameters::{
+    consensus::DEFERRED_STATE_EPOCH_COUNT,
+    light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME},
 };
 use cfx_types::{BigEndianHash, Bloom, H160, H256, KECCAK_EMPTY_BLOOM, U256};
 use futures::{

@@ -3,14 +3,14 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_bytes::Bytes;
+use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
+use cfx_storage::{state_manager::StateIndex, StorageManagerTrait};
 use cfx_types::{H256, U256};
 use cfxcore::{
     executive::{Executive, InternalContractMap},
     machine::new_machine_with_builtin,
-    parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
     state::State,
     statedb::StateDb,
-    storage::{state_manager::StateIndex, StorageManagerTrait},
     vm::{Env, Spec},
     vm_factory::VmFactory,
 };

@@ -2,33 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-#![allow(unused)]
-use cfx_types::{Address, H256, U256};
+use cfx_types::H256;
 use cfxcore::{
-    block_data_manager::{BlockDataManager, DataManagerConfiguration, DbType},
-    cache_config::CacheConfig,
-    cache_manager::CacheManager,
-    consensus::{
-        ConsensusConfig, ConsensusGraph, ConsensusGraphTrait,
-        ConsensusInnerConfig,
+    block_data_manager::DbType,
+    consensus::{ConsensusGraph, ConsensusGraphTrait},
+    pow::PowComputer,
+    sync::utils::{
+        create_simple_block, initialize_synchronization_graph,
+        initialize_synchronization_graph_with_data_manager,
     },
-    consensus_parameters::*,
-    db::NUM_COLUMNS,
-    pow::{PowComputer, ProofOfWorkConfig},
-    statistics::Statistics,
-    storage::{StorageConfiguration, StorageManager},
-    sync::{
-        request_manager::tx_handler::ReceivedTransactionContainer,
-        utils::{
-            create_simple_block, create_simple_block_impl,
-            initialize_synchronization_graph,
-            initialize_synchronization_graph_with_data_manager,
-        },
-        SynchronizationGraph,
-    },
-    verification::VerificationConfig,
-    vm_factory::VmFactory,
-    TransactionPool, WORKER_COMPUTATION_PARALLELISM,
 };
 use log::LevelFilter;
 use log4rs::{
@@ -36,17 +18,9 @@ use log4rs::{
     config::{Appender, Config as LogConfig, Logger, Root},
     encode::pattern::PatternEncoder,
 };
-use parking_lot::{Mutex, RwLock};
-use primitives::{Block, BlockHeader, BlockHeaderBuilder};
 use std::{
-    collections::{HashMap, HashSet},
-    env, fs,
-    path::Path,
-    str::FromStr,
-    sync::Arc,
-    thread, time,
+    collections::HashMap, env, fs, str::FromStr, sync::Arc, thread, time,
 };
-use threadpool::ThreadPool;
 
 pub const CHECKER_SLEEP_PERIOD: u64 = 50;
 

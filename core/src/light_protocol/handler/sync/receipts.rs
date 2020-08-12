@@ -4,10 +4,10 @@
 
 extern crate lru_time_cache;
 
-use lru_time_cache::LruCache;
-use parking_lot::RwLock;
-use std::{future::Future, sync::Arc};
-
+use super::{
+    common::{FutureItem, KeyOrdered, PendingItem, SyncManager},
+    witnesses::Witnesses,
+};
 use crate::{
     light_protocol::{
         common::{FullPeerState, Peers},
@@ -16,20 +16,18 @@ use crate::{
     },
     message::{Message, RequestId},
     network::NetworkContext,
-    parameters::light::{
-        CACHE_TIMEOUT, MAX_RECEIPTS_IN_FLIGHT, RECEIPT_REQUEST_BATCH_SIZE,
-        RECEIPT_REQUEST_TIMEOUT,
-    },
     primitives::BlockReceipts,
+    verification::compute_receipts_root,
     UniqueId,
 };
-
-use super::{
-    common::{FutureItem, KeyOrdered, PendingItem, SyncManager},
-    witnesses::Witnesses,
+use cfx_parameters::light::{
+    CACHE_TIMEOUT, MAX_RECEIPTS_IN_FLIGHT, RECEIPT_REQUEST_BATCH_SIZE,
+    RECEIPT_REQUEST_TIMEOUT,
 };
-use crate::verification::compute_receipts_root;
+use lru_time_cache::LruCache;
 use network::node_table::NodeId;
+use parking_lot::RwLock;
+use std::{future::Future, sync::Arc};
 
 #[derive(Debug)]
 struct Statistics {

@@ -12,12 +12,12 @@ use crate::{
     },
     message::{Message, RequestId},
     network::NetworkContext,
-    parameters::light::{
-        EPOCH_REQUEST_BATCH_SIZE, EPOCH_REQUEST_TIMEOUT,
-        MAX_PARALLEL_EPOCH_REQUESTS, NUM_EPOCHS_TO_REQUEST,
-        NUM_WAITING_HEADERS_THRESHOLD,
-    },
     UniqueId,
+};
+use cfx_parameters::light::{
+    EPOCH_REQUEST_BATCH_SIZE, EPOCH_REQUEST_TIMEOUT,
+    MAX_PARALLEL_EPOCH_REQUESTS, NUM_EPOCHS_TO_REQUEST,
+    NUM_WAITING_HEADERS_THRESHOLD,
 };
 use network::node_table::NodeId;
 use parking_lot::RwLock;

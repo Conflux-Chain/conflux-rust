@@ -4,12 +4,7 @@
 
 extern crate lru_time_cache;
 
-use cfx_types::H256;
-use lru_time_cache::LruCache;
-use parking_lot::RwLock;
-use primitives::SignedTransaction;
-use std::{future::Future, sync::Arc};
-
+use super::common::{FutureItem, PendingItem, SyncManager, TimeOrdered};
 use crate::{
     light_protocol::{
         common::{FullPeerState, Peers},
@@ -18,15 +13,17 @@ use crate::{
     },
     message::{Message, RequestId},
     network::NetworkContext,
-    parameters::light::{
-        CACHE_TIMEOUT, MAX_TXS_IN_FLIGHT, TX_REQUEST_BATCH_SIZE,
-        TX_REQUEST_TIMEOUT,
-    },
     UniqueId,
 };
-
-use super::common::{FutureItem, PendingItem, SyncManager, TimeOrdered};
+use cfx_parameters::light::{
+    CACHE_TIMEOUT, MAX_TXS_IN_FLIGHT, TX_REQUEST_BATCH_SIZE, TX_REQUEST_TIMEOUT,
+};
+use cfx_types::H256;
+use lru_time_cache::LruCache;
 use network::node_table::NodeId;
+use parking_lot::RwLock;
+use primitives::SignedTransaction;
+use std::{future::Future, sync::Arc};
 
 #[derive(Debug)]
 struct Statistics {

@@ -6,12 +6,12 @@ use crate::{
     consensus::debug::ComputeEpochDebugRecord,
     evm::Spec,
     executive::InternalContractMap,
-    parameters::consensus::GENESIS_GAS_LIMIT,
     state::{CleanupMode, State},
     statedb::{Result as DbResult, StateDb},
-    storage::{StorageManager, StorageManagerTrait},
     verification::{compute_receipts_root, compute_transaction_root},
 };
+use cfx_parameters::consensus::GENESIS_GAS_LIMIT;
+use cfx_storage::{StorageManager, StorageManagerTrait};
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use keylib::KeyPair;
 use primitives::{

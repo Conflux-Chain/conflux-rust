@@ -9,7 +9,6 @@ use cfxcore::{
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
     rpc_errors::account_result_to_rpc_result,
     state_exposer::STATE_EXPOSER,
-    test_context::*,
     vm, ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
@@ -25,6 +24,7 @@ use primitives::{
     filter::Filter, transaction::Action::Call, Account, SignedTransaction,
     TransactionWithSignature,
 };
+use random_crash::*;
 use rlp::Rlp;
 use rustc_hex::ToHex;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};

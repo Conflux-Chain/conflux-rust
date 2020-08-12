@@ -26,11 +26,11 @@ use crate::{
     },
     message::{decode_msg, decode_rlp_and_check_deprecation, Message, MsgId},
     network::{NetworkContext, NetworkProtocolHandler},
-    parameters::light::{
-        CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, SYNC_PERIOD,
-    },
     sync::{message::Throttled, SynchronizationGraph},
     UniqueId,
+};
+use cfx_parameters::light::{
+    CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, SYNC_PERIOD,
 };
 use cfx_types::H256;
 use io::TimerToken;

@@ -8,7 +8,6 @@ use crate::{
     consensus::SharedConsensusGraph,
     error::{BlockError, Error, ErrorKind},
     machine::Machine,
-    parameters::sync::OLD_ERA_BLOCK_GC_BATCH_SIZE,
     pow::{PowComputer, ProofOfWorkConfig},
     state_exposer::{SyncGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,
@@ -16,6 +15,7 @@ use crate::{
     verification::*,
     ConsensusGraph, Notifications,
 };
+use cfx_parameters::sync::OLD_ERA_BLOCK_GC_BATCH_SIZE;
 use cfx_types::{H256, U256};
 use futures::executor::block_on;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};

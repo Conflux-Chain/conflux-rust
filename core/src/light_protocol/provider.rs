@@ -2,14 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use io::TimerToken;
-use parking_lot::RwLock;
-use rlp::Rlp;
-use std::sync::{Arc, Weak};
-
-use cfx_types::H256;
-use primitives::{SignedTransaction, TransactionWithSignature};
-
 use crate::{
     consensus::SharedConsensusGraph,
     light_protocol::{
@@ -45,17 +37,22 @@ use crate::{
         throttling::THROTTLING_SERVICE, NetworkContext, NetworkProtocolHandler,
         NetworkService,
     },
-    parameters::light::{
-        MAX_EPOCHS_TO_SEND, MAX_HEADERS_TO_SEND, MAX_ITEMS_TO_SEND,
-        MAX_TXS_TO_SEND,
-    },
     sync::{message::Throttled, SynchronizationGraph},
     verification::{compute_epoch_receipt_proof, compute_transaction_proof},
     TransactionPool,
 };
+use cfx_parameters::light::{
+    MAX_EPOCHS_TO_SEND, MAX_HEADERS_TO_SEND, MAX_ITEMS_TO_SEND, MAX_TXS_TO_SEND,
+};
+use cfx_types::H256;
+use io::TimerToken;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{node_table::NodeId, service::ProtocolVersion};
+use parking_lot::RwLock;
+use primitives::{SignedTransaction, TransactionWithSignature};
 use rand::prelude::SliceRandom;
+use rlp::Rlp;
+use std::sync::{Arc, Weak};
 use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
 
 #[derive(DeriveMallocSizeOf)]

@@ -7,7 +7,7 @@ error_chain! {
 
     foreign_links {
         AccountError(::primitives::account::AccountError);
-        ConfluxStorageError(::cfxcore::storage::Error);
+        ConfluxStorageError(::cfx_storage::Error);
         EthKeyError(::ethkey::Error);
         Io(io::Error);
         ParseIntError(std::num::ParseIntError);

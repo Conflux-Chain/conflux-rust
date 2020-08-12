@@ -2,13 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    consensus::{
-        consensus_inner::{NULL, NULLU64},
-        ConsensusGraphInner, DEFERRED_STATE_EPOCH_COUNT,
-    },
-    parameters::consensus_internal::*,
+use crate::consensus::{
+    consensus_inner::{NULL, NULLU64},
+    ConsensusGraphInner, DEFERRED_STATE_EPOCH_COUNT,
 };
+use cfx_parameters::consensus_internal::*;
 use cfx_types::H256;
 use parking_lot::RwLock;
 use std::{
