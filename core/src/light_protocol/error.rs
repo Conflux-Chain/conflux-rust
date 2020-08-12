@@ -4,12 +4,11 @@
 
 use crate::{
     message::{Message, MsgId},
-    network::{self, NetworkContext, UpdateNodeOperation},
     statedb,
     sync::message::Throttled,
 };
 use error_chain::ChainedError;
-use network::node_table::NodeId;
+use network::{node_table::NodeId, NetworkContext, UpdateNodeOperation};
 use primitives::{filter::FilterError, ChainIdParams};
 use rlp::DecoderError;
 

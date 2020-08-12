@@ -2,13 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    storage::{
-        state_manager::StateManager,
-        storage_db::{SnapshotDbManagerTrait, SnapshotInfo},
-        FullSyncVerifier, Result as StorageResult, SnapshotDbManagerSqlite,
-    },
-    sync::state::storage::{Chunk, ChunkKey},
+use crate::sync::state::storage::{Chunk, ChunkKey};
+use cfx_storage::{
+    state_manager::StateManager,
+    storage_db::{SnapshotDbManagerTrait, SnapshotInfo},
+    FullSyncVerifier, Result as StorageResult, SnapshotDbManagerSqlite,
 };
 use primitives::{EpochId, MerkleHash};
 use std::sync::Arc;

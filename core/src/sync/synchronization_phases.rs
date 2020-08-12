@@ -3,9 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    block_data_manager::StateAvailabilityBoundary,
     consensus::{ConsensusGraph, ConsensusGraphInner},
-    parameters::{consensus::NULL, sync::CATCH_UP_EPOCH_LAG_THRESHOLD},
     sync::{
         message::DynamicCapability,
         state::{SnapshotChunkSync, Status},
@@ -14,6 +12,8 @@ use crate::{
         SharedSynchronizationGraph, SynchronizationGraphInner,
     },
 };
+use cfx_internal_common::StateAvailabilityBoundary;
+use cfx_parameters::{consensus::NULL, sync::CATCH_UP_EPOCH_LAG_THRESHOLD};
 use network::NetworkContext;
 use parking_lot::RwLock;
 use std::{
