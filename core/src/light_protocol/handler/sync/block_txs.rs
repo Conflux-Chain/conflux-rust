@@ -16,17 +16,16 @@ use crate::{
         Error, ErrorKind,
     },
     message::{Message, RequestId},
-    network::NetworkContext,
-    parameters::light::{
-        BLOCK_TX_REQUEST_BATCH_SIZE, BLOCK_TX_REQUEST_TIMEOUT, CACHE_TIMEOUT,
-        MAX_BLOCK_TXS_IN_FLIGHT,
-    },
     verification::compute_transaction_root,
     UniqueId,
 };
+use cfx_parameters::light::{
+    BLOCK_TX_REQUEST_BATCH_SIZE, BLOCK_TX_REQUEST_TIMEOUT, CACHE_TIMEOUT,
+    MAX_BLOCK_TXS_IN_FLIGHT,
+};
 use cfx_types::H256;
 use lru_time_cache::LruCache;
-use network::node_table::NodeId;
+use network::{node_table::NodeId, NetworkContext};
 use parking_lot::RwLock;
 use primitives::SignedTransaction;
 use std::{future::Future, sync::Arc};

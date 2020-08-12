@@ -2,14 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    storage::{
-        storage_db::{
-            key_value_db::KeyValueDbIterableTrait, OpenSnapshotMptTrait,
-        },
-        MptSlicer, StorageManager, TrieProof,
-    },
-    sync::{Error, ErrorKind},
+use crate::sync::{Error, ErrorKind};
+use cfx_storage::{
+    storage_db::{key_value_db::KeyValueDbIterableTrait, OpenSnapshotMptTrait},
+    MptSlicer, StorageManager, TrieProof,
 };
 use cfx_types::H256;
 use fallible_iterator::FallibleIterator;
