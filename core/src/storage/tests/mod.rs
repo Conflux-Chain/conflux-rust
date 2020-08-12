@@ -56,7 +56,7 @@ impl KeyValueDB for FakeDbForStateTest {
 #[cfg(test)]
 pub struct FakeStateManager {
     data_dir: String,
-    state_manager: Option<StateManager>,
+    state_manager: Option<Arc<StateManager>>,
 }
 
 #[cfg(test)]
@@ -82,27 +82,30 @@ impl FakeStateManager {
             let unit_test_data_path = Path::new(&unit_test_data_dir);
             Ok(FakeStateManager {
                 data_dir: unit_test_data_dir.clone(),
-                state_manager: Some(StateManager::new(StorageConfiguration {
-                    additional_maintained_snapshot_count: 0,
-                    consensus_param: ConsensusParam {
-                        snapshot_epoch_count,
+                state_manager: Some(Arc::new(StateManager::new(
+                    StorageConfiguration {
+                        additional_maintained_snapshot_count: 0,
+                        consensus_param: ConsensusParam {
+                            snapshot_epoch_count,
+                        },
+                        debug_snapshot_checker_threads: 0,
+                        delta_mpts_cache_recent_lfu_factor: 4.0,
+                        delta_mpts_cache_size: 20_000_000,
+                        delta_mpts_cache_start_size: 1_000_000,
+                        delta_mpts_node_map_vec_size: 20_000_000,
+                        delta_mpts_slab_idle_size: 200_000,
+                        max_open_snapshots:
+                            defaults::DEFAULT_MAX_OPEN_SNAPSHOTS,
+                        path_delta_mpts_dir: unit_test_data_path
+                            .join(&*storage_dir::DELTA_MPTS_DIR),
+                        path_snapshot_dir: unit_test_data_path
+                            .join(&*storage_dir::SNAPSHOT_DIR),
+                        path_snapshot_info_db: unit_test_data_path
+                            .join(&*storage_dir::SNAPSHOT_INFO_DB_PATH),
+                        path_storage_dir: unit_test_data_path
+                            .join(&*storage_dir::STORAGE_DIR),
                     },
-                    debug_snapshot_checker_threads: 0,
-                    delta_mpts_cache_recent_lfu_factor: 4.0,
-                    delta_mpts_cache_size: 20_000_000,
-                    delta_mpts_cache_start_size: 1_000_000,
-                    delta_mpts_node_map_vec_size: 20_000_000,
-                    delta_mpts_slab_idle_size: 200_000,
-                    max_open_snapshots: defaults::DEFAULT_MAX_OPEN_SNAPSHOTS,
-                    path_delta_mpts_dir: unit_test_data_path
-                        .join(&*storage_dir::DELTA_MPTS_DIR),
-                    path_snapshot_dir: unit_test_data_path
-                        .join(&*storage_dir::SNAPSHOT_DIR),
-                    path_snapshot_info_db: unit_test_data_path
-                        .join(&*storage_dir::SNAPSHOT_INFO_DB_PATH),
-                    path_storage_dir: unit_test_data_path
-                        .join(&*storage_dir::STORAGE_DIR),
-                })?),
+                )?)),
             })
         }
     }
@@ -122,7 +125,7 @@ impl Drop for FakeStateManager {
 
 #[cfg(test)]
 impl Deref for FakeStateManager {
-    type Target = StateManager;
+    type Target = Arc<StateManager>;
 
     fn deref(&self) -> &Self::Target { self.state_manager.as_ref().unwrap() }
 }
@@ -298,4 +301,5 @@ use std::{
     fs, mem,
     ops::{Deref, DerefMut},
     path::Path,
+    sync::Arc,
 };

@@ -19,8 +19,11 @@ use crate::{
 use cfx_types::{address_util::AddressUtil, Address, BigEndianHash, U256};
 use keccak_hash::{keccak, KECCAK_EMPTY};
 use primitives::{EpochId, StorageKey, StorageLayout};
+use std::sync::Arc;
 
-fn get_state(storage_manager: &StorageManager, epoch_id: &EpochId) -> State {
+fn get_state(
+    storage_manager: &Arc<StorageManager>, epoch_id: &EpochId,
+) -> State {
     State::new(
         StateDb::new(
             storage_manager
