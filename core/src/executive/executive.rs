@@ -16,7 +16,9 @@ use crate::{
     hash::keccak,
     machine::Machine,
     parameters::staking::*,
-    state::{CallStackInfo, CleanupMode, State, Substate},
+    state::{
+        CallStackInfo, CleanupMode, CollateralCheckResult, State, Substate,
+    },
     statedb::Result as DbResult,
     verification::VerificationConfig,
     vm::{
@@ -1321,7 +1323,7 @@ impl<'a> Executive<'a> {
             ));
         }
 
-        let mut substate = Substate::new();
+        let mut tx_substate = Substate::new();
         if balance512 < sender_intended_cost {
             // Sender is responsible for the insufficient balance.
             // Sub tx fee if not enough cash, and substitute all remaining
@@ -1347,7 +1349,7 @@ impl<'a> Executive<'a> {
             self.state.sub_balance(
                 &sender,
                 &actual_gas_cost,
-                &mut substate.to_cleanup_mode(&spec),
+                &mut tx_substate.to_cleanup_mode(&spec),
             )?;
 
             return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
@@ -1372,7 +1374,7 @@ impl<'a> Executive<'a> {
             self.state.sub_balance(
                 &sender,
                 &U256::try_from(gas_cost).unwrap(),
-                &mut substate.to_cleanup_mode(&spec),
+                &mut tx_substate.to_cleanup_mode(&spec),
             )?;
         } else {
             self.state.sub_sponsor_balance_for_gas(
@@ -1382,6 +1384,7 @@ impl<'a> Executive<'a> {
         }
 
         self.state.checkpoint();
+        let mut substate = Substate::new();
 
         let res = match tx.action {
             Action::Create => {
@@ -1461,6 +1464,7 @@ impl<'a> Executive<'a> {
             let out = match &res {
                 Ok(res) => {
                     self.state.discard_checkpoint();
+                    tx_substate.accrue(substate);
                     res.return_data.to_vec()
                 }
                 Err(vm::Error::StateDbError(_)) => {
@@ -1483,12 +1487,79 @@ impl<'a> Executive<'a> {
 
         Ok(self.finalize(
             tx,
-            substate,
+            tx_substate,
             result,
             output,
             refund_receiver,
             storage_sponsored,
         )?)
+    }
+
+    fn kill_process(
+        &mut self, suicides: &HashSet<Address>,
+    ) -> DbResult<Substate> {
+        let mut substate = Substate::new();
+        for address in suicides {
+            if let Some(code_size) = self.state.code_size(address)? {
+                // Only refund the code collateral when code exists.
+                // If a contract suicides during creation, the code will be
+                // empty.
+                let code_owner =
+                    self.state.code_owner(address)?.expect("code owner exists");
+                substate.record_storage_release(&code_owner, code_size as u64);
+            }
+
+            self.state
+                .record_storage_entries_release(address, &mut substate)?;
+        }
+
+        let res = self.state.settle_collateral_for_all(&substate)?;
+        // The storage recycling process should never occupy new collateral.
+        assert_eq!(res, CollateralCheckResult::Valid);
+
+        for contract_address in suicides {
+            let sponsor_for_gas =
+                self.state.sponsor_for_gas(contract_address)?;
+            let sponsor_for_collateral =
+                self.state.sponsor_for_collateral(contract_address)?;
+            let sponsor_balance_for_gas =
+                self.state.sponsor_balance_for_gas(contract_address)?;
+            let sponsor_balance_for_collateral = self
+                .state
+                .sponsor_balance_for_collateral(contract_address)?;
+
+            if sponsor_for_gas.is_some() {
+                self.state.add_balance(
+                    sponsor_for_gas.as_ref().unwrap(),
+                    &sponsor_balance_for_gas,
+                    substate.to_cleanup_mode(self.spec),
+                )?;
+                self.state.sub_sponsor_balance_for_gas(
+                    contract_address,
+                    &sponsor_balance_for_gas,
+                )?;
+            }
+            if sponsor_for_collateral.is_some() {
+                self.state.add_balance(
+                    sponsor_for_collateral.as_ref().unwrap(),
+                    &sponsor_balance_for_collateral,
+                    substate.to_cleanup_mode(self.spec),
+                )?;
+                self.state.sub_sponsor_balance_for_collateral(
+                    contract_address,
+                    &sponsor_balance_for_collateral,
+                )?;
+            }
+        }
+
+        for contract_address in suicides {
+            let burnt_balance = self.state.balance(contract_address)?
+                + self.state.staking_balance(contract_address)?;
+            self.state.remove_contract(contract_address)?;
+            self.state.subtract_total_issued(burnt_balance);
+        }
+
+        Ok(substate)
     }
 
     /// Finalizes the transaction (does refunds and suicides).
@@ -1531,9 +1602,9 @@ impl<'a> Executive<'a> {
         };
 
         // perform suicides
-        for address in &substate.suicides {
-            self.state.kill_account(address)?;
-        }
+
+        let subsubstate = self.kill_process(&substate.suicides)?;
+        substate.accrue(subsubstate);
 
         // TODO should be added back after enabling dust collection
         // Should be executed once per block, instead of per transaction?
@@ -1567,36 +1638,24 @@ impl<'a> Executive<'a> {
                 let mut storage_released = Vec::new();
 
                 if r.apply_state {
-                    let affected_address1: HashSet<_> = substate
-                        .storage_collateralized
-                        .keys()
+                    let mut affected_address: Vec<_> = substate
+                        .keys_for_collateral_changed()
+                        .iter()
                         .cloned()
                         .collect();
-                    let affected_address2: HashSet<_> =
-                        substate.storage_released.keys().cloned().collect();
-                    let mut affected_address: Vec<_> =
-                        affected_address1.union(&affected_address2).collect();
                     affected_address.sort();
                     for address in affected_address {
-                        let inc = substate
-                            .storage_collateralized
-                            .get(address)
-                            .cloned()
-                            .unwrap_or(0);
-                        let sub = substate
-                            .storage_released
-                            .get(address)
-                            .cloned()
-                            .unwrap_or(0);
-                        if inc > sub {
+                        let (inc, sub) =
+                            substate.get_collateral_change(address);
+                        if inc > 0 {
                             storage_collateralized.push(StorageChange {
                                 address: *address,
-                                amount: inc - sub,
+                                amount: inc,
                             });
-                        } else if inc < sub {
+                        } else if sub > 0 {
                             storage_released.push(StorageChange {
                                 address: *address,
-                                amount: sub - inc,
+                                amount: sub,
                             });
                         }
                     }

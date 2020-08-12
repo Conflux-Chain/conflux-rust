@@ -6,7 +6,8 @@ use crate::{
     bytes::Bytes,
     consensus::debug::ComputeEpochDebugRecord,
     hash::{keccak, KECCAK_EMPTY},
-    state::{AccountEntryProtectedMethods, State},
+    parameters::staking::BYTES_PER_STORAGE_KEY,
+    state::{AccountEntryProtectedMethods, State, Substate},
     statedb::{Result as DbResult, StateDb, StateDbExt},
 };
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
@@ -732,9 +733,8 @@ impl OverlayAccount {
     /// execution. The second value means the number of keys released by this
     /// account in current execution.
     pub fn commit_ownership_change(
-        &mut self, db: &StateDb,
-    ) -> DbResult<HashMap<Address, (u64, u64)>> {
-        let mut storage_delta = HashMap::new();
+        &mut self, db: &StateDb, substate: &mut Substate,
+    ) -> DbResult<()> {
         let ownership_changes: Vec<_> =
             self.ownership_changes.drain().collect();
         for (k, v) in ownership_changes {
@@ -755,16 +755,16 @@ impl OverlayAccount {
                 // If the current value is zero or the owner has changed for the
                 // key, it means the key has released from previous owner.
                 if cur_value_is_zero || ownership_changed {
-                    storage_delta
-                        .entry(original_ownership)
-                        .or_insert((0, 0))
-                        .1 += 1;
+                    substate.record_storage_release(
+                        &original_ownership,
+                        BYTES_PER_STORAGE_KEY,
+                    );
                 }
             }
             // If the current value is not zero and the owner has changed, it
             // means the owner has occupied a new key.
             if !cur_value_is_zero && ownership_changed {
-                storage_delta.entry(v).or_insert((0, 0)).0 += 1;
+                substate.record_storage_occupy(&v, BYTES_PER_STORAGE_KEY);
             }
             // Commit ownership change to `ownership_cache`.
             if cur_value_is_zero {
@@ -774,7 +774,7 @@ impl OverlayAccount {
             }
         }
         assert!(self.ownership_changes.is_empty());
-        Ok(storage_delta)
+        Ok(())
     }
 
     pub fn commit(
