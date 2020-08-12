@@ -118,6 +118,28 @@ impl Substate {
         }
     }
 
+    pub fn record_storage_occupy(&mut self, address: &Address, amount: u64) {
+        *self.storage_collateralized.entry(*address).or_insert(0) += amount;
+    }
+
+    pub fn record_storage_release(&mut self, address: &Address, amount: u64) {
+        *self.storage_released.entry(*address).or_insert(0) += amount;
+    }
+
+    pub fn get_collateral_change(&self, address: &Address) -> (u64, u64) {
+        let inc = self
+            .storage_collateralized
+            .get(address)
+            .cloned()
+            .unwrap_or(0);
+        let sub = self.storage_released.get(address).cloned().unwrap_or(0);
+        if inc > sub {
+            (inc - sub, 0)
+        } else {
+            (0, sub - inc)
+        }
+    }
+
     /// Get the cleanup mode object from this.
     pub fn to_cleanup_mode(&mut self, spec: &Spec) -> CleanupMode {
         match (
