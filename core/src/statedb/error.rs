@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::storage::Error as StorageError;
+use cfx_storage::Error as StorageError;
 use cfx_types::Address;
 use primitives::account::AccountError;
 use rlp::DecoderError;

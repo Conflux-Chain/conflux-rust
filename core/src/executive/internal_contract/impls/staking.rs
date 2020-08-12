@@ -4,10 +4,10 @@
 
 use super::super::InternalContractTrait;
 use crate::{
-    parameters::consensus::ONE_CFX_IN_DRIP,
     state::{State, Substate},
     vm::{self, ActionParams, CallType, Spec},
 };
+use cfx_parameters::consensus::ONE_CFX_IN_DRIP;
 use cfx_types::{Address, U256};
 use std::str::FromStr;
 

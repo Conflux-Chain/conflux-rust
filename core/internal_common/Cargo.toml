@@ -1,0 +1,22 @@
+[package]
+description = "Conflux internal common library"
+homepage = "http://www.conflux-chain.org"
+license = "GPL-3.0"
+name = "cfx-internal-common"
+version = "1.0.0"
+edition = "2018"
+
+[dependencies]
+cfx-bytes = { path = "../../cfx_bytes" }
+cfx-types = { path = "../../cfx_types" }
+cfx-parameters = { path = "../parameters" }
+derivative = "2.0.2"
+lazy_static = "1.4"
+log = "0.4"
+malloc_size_of = { path = "../../util/malloc_size_of" }
+malloc_size_of_derive = { path = "../../util/malloc_size_of_derive" }
+primitives = { path = "../../primitives" }
+rlp = "0.4.0"
+rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
+serde = "1.0"
+serde_derive = "1.0"

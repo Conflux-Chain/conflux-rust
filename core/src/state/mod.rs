@@ -10,13 +10,13 @@ use crate::{
     consensus::debug::ComputeEpochDebugRecord,
     executive::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
     hash::KECCAK_EMPTY,
-    parameters::staking::*,
     statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb},
-    storage::{utils::access_mode, StateRootWithAuxInfo},
     transaction_pool::SharedTransactionPool,
     vm::Error as vmError,
     vm_factory::VmFactory,
 };
+use cfx_parameters::staking::*;
+use cfx_storage::utils::access_mode;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 #[cfg(test)]
 use primitives::storage::STORAGE_LAYOUT_REGULAR_V0;
@@ -42,6 +42,7 @@ pub use self::{
     substate::{CallStackInfo, Substate},
 };
 use crate::{evm::Spec, statedb::StateDbExt};
+use cfx_internal_common::StateRootWithAuxInfo;
 use parking_lot::{
     MappedRwLockWriteGuard, RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };

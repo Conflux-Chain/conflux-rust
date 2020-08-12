@@ -6,10 +6,10 @@ use crate::{
     bytes::Bytes,
     consensus::debug::ComputeEpochDebugRecord,
     hash::{keccak, KECCAK_EMPTY},
-    parameters::staking::BYTES_PER_STORAGE_KEY,
     state::{AccountEntryProtectedMethods, State, Substate},
     statedb::{Result as DbResult, StateDb, StateDbExt},
 };
+use cfx_parameters::staking::BYTES_PER_STORAGE_KEY;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use parking_lot::RwLock;
 use primitives::{
@@ -1006,9 +1006,9 @@ mod tests {
     use super::*;
     use crate::{
         evm::{Factory, VMType},
-        storage::tests::new_state_manager_for_unit_test,
         test_helpers::get_state_for_genesis_write_with_factory,
     };
+    use cfx_storage::tests::new_state_manager_for_unit_test;
     use primitives::is_default::IsDefault;
     use std::str::FromStr;
 

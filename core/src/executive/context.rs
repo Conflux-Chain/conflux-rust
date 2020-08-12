@@ -7,7 +7,6 @@ use super::{executive::*, suicide as suicide_impl, InternalContractMap};
 use crate::{
     bytes::Bytes,
     machine::Machine,
-    parameters::staking::*,
     state::{State, Substate},
     statedb,
     vm::{
@@ -16,6 +15,7 @@ use crate::{
         ReturnData, Spec, TrapKind,
     },
 };
+use cfx_parameters::staking::COLLATERAL_PER_BYTE;
 use cfx_types::{Address, H256, U256};
 use primitives::transaction::UNSIGNED_SENDER;
 use std::sync::Arc;
@@ -422,14 +422,16 @@ mod tests {
     use super::{Context, InternalContractMap, OriginInfo, OutputPolicy};
     use crate::{
         machine::{new_machine_with_builtin, Machine},
-        parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
         state::{State, Substate},
-        storage::{new_storage_manager_for_testing, tests::FakeStateManager},
         test_helpers::get_state_for_genesis_write,
         vm::{
             CallType, Context as ContextTrait, ContractCreateResult,
             CreateContractAddress, Env, Spec,
         },
+    };
+    use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
+    use cfx_storage::{
+        new_storage_manager_for_testing, tests::FakeStateManager,
     };
     use cfx_types::{address_util::AddressUtil, Address, H256, U256};
     use std::str::FromStr;

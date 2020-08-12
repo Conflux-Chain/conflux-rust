@@ -5,16 +5,13 @@
 use super::{CleanupMode, CollateralCheckResult, State, Substate};
 
 use crate::{
-    genesis::DEV_GENESIS_KEY_PAIR,
-    parameters::{consensus::ONE_CFX_IN_DRIP, staking::*},
-    statedb::StateDb,
-    storage::{
-        tests::new_state_manager_for_unit_test, StateIndex, StorageManager,
-        StorageManagerTrait,
-    },
-    test_helpers::get_state_for_genesis_write,
-    vm::Spec,
-    vm_factory::VmFactory,
+    genesis::DEV_GENESIS_KEY_PAIR, statedb::StateDb,
+    test_helpers::get_state_for_genesis_write, vm::Spec, vm_factory::VmFactory,
+};
+use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
+use cfx_storage::{
+    tests::new_state_manager_for_unit_test, StateIndex, StorageManager,
+    StorageManagerTrait,
 };
 use cfx_types::{address_util::AddressUtil, Address, BigEndianHash, U256};
 use keccak_hash::{keccak, KECCAK_EMPTY};

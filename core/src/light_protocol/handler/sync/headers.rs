@@ -2,6 +2,23 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use super::common::{HasKey, SyncManager};
+use crate::{
+    light_protocol::{
+        common::{FullPeerState, Peers},
+        message::{msgid, GetBlockHeaders},
+        Error,
+    },
+    message::{Message, RequestId},
+    sync::SynchronizationGraph,
+    UniqueId,
+};
+use cfx_parameters::light::{
+    HEADER_REQUEST_BATCH_SIZE, HEADER_REQUEST_TIMEOUT, MAX_HEADERS_IN_FLIGHT,
+};
+use cfx_types::H256;
+use network::{node_table::NodeId, NetworkContext};
+use primitives::BlockHeader;
 use std::{
     cmp,
     collections::HashSet,
@@ -11,28 +28,6 @@ use std::{
     },
     time::Instant,
 };
-
-use cfx_types::H256;
-use primitives::BlockHeader;
-
-use crate::{
-    light_protocol::{
-        common::{FullPeerState, Peers},
-        message::{msgid, GetBlockHeaders},
-        Error,
-    },
-    message::{Message, RequestId},
-    network::NetworkContext,
-    parameters::light::{
-        HEADER_REQUEST_BATCH_SIZE, HEADER_REQUEST_TIMEOUT,
-        MAX_HEADERS_IN_FLIGHT,
-    },
-    sync::SynchronizationGraph,
-    UniqueId,
-};
-
-use super::common::{HasKey, SyncManager};
-use network::node_table::NodeId;
 
 #[derive(Debug)]
 struct Statistics {

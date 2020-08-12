@@ -10,8 +10,6 @@ use crate::{
     block_data_manager::BlockStatus,
     light_protocol::Provider as LightProvider,
     message::{decode_msg, Message, MsgId},
-    parameters::{block::MAX_BLOCK_SIZE_IN_BYTES, sync::*},
-    rand::Rng,
     sync::{
         message::{
             handle_rlp_message, msgid, Context, DynamicCapability,
@@ -28,6 +26,7 @@ use crate::{
         SYNCHRONIZATION_PROTOCOL_VERSION, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
 };
+use cfx_parameters::{block::MAX_BLOCK_SIZE_IN_BYTES, sync::*};
 use cfx_types::H256;
 use io::TimerToken;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
@@ -40,7 +39,7 @@ use network::{
 };
 use parking_lot::{Mutex, RwLock};
 use primitives::{Block, BlockHeader, EpochId, SignedTransaction};
-use rand::prelude::SliceRandom;
+use rand::{prelude::SliceRandom, Rng};
 use rlp::Rlp;
 use std::{
     cmp,
