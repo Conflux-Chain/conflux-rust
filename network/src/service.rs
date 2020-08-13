@@ -1172,7 +1172,10 @@ impl NetworkServiceInner {
                     let to_drop = self.dropped_nodes.read().contains(&node_id);
                     self.drop_peers(io);
                     if to_drop {
-                        return;
+                        // TODO: return here seems to fail python test.
+                        //  need more investigation on the correct behavior, and
+                        //  update session_readable as well.
+                        // return;
                     }
                 }
             }
