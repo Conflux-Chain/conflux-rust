@@ -518,11 +518,20 @@ impl RpcImpl {
         Ok(ret)
     }
 
-    pub fn txs_from_pool(&self) -> RpcResult<Vec<RpcTransaction>> {
-        let (ready_txs, deferred_txs) = self.tx_pool.content();
+    pub fn txs_from_pool(
+        &self, address: Option<H160>,
+    ) -> RpcResult<Vec<RpcTransaction>> {
+        let (mut ready_txs, mut deferred_txs) = self.tx_pool.content();
         let converter = |tx: &Arc<SignedTransaction>| -> RpcTransaction {
             RpcTransaction::from_signed(&tx, None)
         };
+        if let Some(addr) = address {
+            let address_filter =
+                |tx: &Arc<SignedTransaction>| -> bool { tx.sender == addr };
+            ready_txs = ready_txs.into_iter().filter(address_filter).collect();
+            deferred_txs =
+                deferred_txs.into_iter().filter(address_filter).collect();
+        }
         let result = ready_txs
             .iter()
             .map(converter)
@@ -532,17 +541,24 @@ impl RpcImpl {
     }
 
     pub fn txpool_content(
-        &self,
+        &self, address: Option<H160>,
     ) -> RpcResult<
         BTreeMap<
             String,
             BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
         >,
     > {
-        let (ready_txs, deferred_txs) = self.tx_pool.content();
+        let (mut ready_txs, mut deferred_txs) = self.tx_pool.content();
         let converter = |tx: Arc<SignedTransaction>| -> RpcTransaction {
             RpcTransaction::from_signed(&tx, None)
         };
+        if let Some(addr) = address {
+            let address_filter =
+                |tx: &Arc<SignedTransaction>| -> bool { tx.sender == addr };
+            ready_txs = ready_txs.into_iter().filter(address_filter).collect();
+            deferred_txs =
+                deferred_txs.into_iter().filter(address_filter).collect();
+        }
 
         let mut ret: BTreeMap<
             String,
@@ -555,11 +571,11 @@ impl RpcImpl {
     }
 
     pub fn txpool_inspect(
-        &self,
+        &self, address: Option<H160>,
     ) -> RpcResult<
         BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
     > {
-        let (ready_txs, deferred_txs) = self.tx_pool.content();
+        let (mut ready_txs, mut deferred_txs) = self.tx_pool.content();
         let converter = |tx: Arc<SignedTransaction>| -> String {
             let to = match tx.action {
                 Action::Create => "<Create contract>".into(),
@@ -571,6 +587,13 @@ impl RpcImpl {
                 to, tx.value, tx.gas, tx.gas_price
             )
         };
+        if let Some(addr) = address {
+            let address_filter =
+                |tx: &Arc<SignedTransaction>| -> bool { tx.sender == addr };
+            ready_txs = ready_txs.into_iter().filter(address_filter).collect();
+            deferred_txs =
+                deferred_txs.into_iter().filter(address_filter).collect();
+        }
 
         let mut ret: BTreeMap<
             String,

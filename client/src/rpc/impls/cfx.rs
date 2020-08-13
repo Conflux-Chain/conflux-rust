@@ -1107,10 +1107,10 @@ impl LocalRpc for LocalRpcImpl {
             fn net_sessions(&self, node_id: Option<NodeId>) -> JsonRpcResult<Vec<SessionDetails>>;
             fn net_throttling(&self) -> JsonRpcResult<throttling::Service>;
             fn tx_inspect(&self, hash: H256) -> JsonRpcResult<BTreeMap<String, String>>;
-            fn txpool_content(&self) -> JsonRpcResult<
+            fn txpool_content(&self, address: Option<H160>) -> JsonRpcResult<
                 BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
-            fn txs_from_pool(&self) -> JsonRpcResult<Vec<RpcTransaction>>;
-            fn txpool_inspect(&self) -> JsonRpcResult<
+            fn txs_from_pool(&self, address: Option<H160>) -> JsonRpcResult<Vec<RpcTransaction>>;
+            fn txpool_inspect(&self, address: Option<H160>) -> JsonRpcResult<
                 BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
             fn txpool_status(&self) -> JsonRpcResult<BTreeMap<String, usize>>;
             fn accounts(&self) -> JsonRpcResult<Vec<H160>>;

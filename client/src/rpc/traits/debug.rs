@@ -27,14 +27,14 @@ pub trait LocalRpc {
 
     #[rpc(name = "txpool_inspect")]
     fn txpool_inspect(
-        &self,
+        &self, address: Option<H160>,
     ) -> JsonRpcResult<
         BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
     >;
 
     #[rpc(name = "txpool_content")]
     fn txpool_content(
-        &self,
+        &self, address: Option<H160>,
     ) -> JsonRpcResult<
         BTreeMap<
             String,
@@ -43,7 +43,9 @@ pub trait LocalRpc {
     >;
 
     #[rpc(name = "getTransactionsFromPool")]
-    fn txs_from_pool(&self) -> JsonRpcResult<Vec<RpcTransaction>>;
+    fn txs_from_pool(
+        &self, address: Option<H160>,
+    ) -> JsonRpcResult<Vec<RpcTransaction>>;
 
     #[rpc(name = "clear_tx_pool")]
     fn clear_tx_pool(&self) -> JsonRpcResult<()>;
