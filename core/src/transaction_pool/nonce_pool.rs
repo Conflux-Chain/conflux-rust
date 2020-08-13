@@ -347,8 +347,8 @@ impl NoncePool {
     }
 
     /// find a transaction `tx` such that
-    ///   1. all nonce in `[nouce, tx.nonce]` exists
-    ///   2. tx.packed is false and tx.nouce is minimum
+    ///   1. all nonce in `[nonce, tx.nonce]` exists
+    ///   2. tx.packed is false and tx.nonce is minimum
     pub fn recalculate_readiness_with_local_info(
         &self, nonce: U256, balance: U256,
     ) -> Option<Arc<SignedTransaction>> {
@@ -359,11 +359,11 @@ impl NoncePool {
                 NoncePoolNode::rank(&self.root, &(nonce - 1))
             };
             let b = NoncePoolNode::rank(&self.root, &x.nonce);
-            // 1. b.1 - a.1 means the sum of cost of transactions in `[nouce,
-            // tx.nouce]`
-            // 2, b.0 - a.0 means number of transactions in `[nouce, tx.nouce]`
+            // 1. b.1 - a.1 means the sum of cost of transactions in `[nonce,
+            // tx.nonce]`
+            // 2. b.0 - a.0 means number of transactions in `[nonce, tx.nonce]`
             // 3. x.nonce - nonce + 1 means expected number of transactions in
-            // `[nouce, tx.nouce]`
+            // `[nonce, tx.nonce]`
             U256::from(b.0 - a.0 - 1) == x.nonce - nonce && b.1 - a.1 <= balance
         })
     }
