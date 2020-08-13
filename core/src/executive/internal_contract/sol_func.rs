@@ -116,18 +116,6 @@ impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
 /// 2. The string to compute interface signature.
 /// 3. The type of output parameters.
 ///
-/// For example, in order to make a function with interface
-/// get_whitelist(address user, address contract) public returns bool, you
-/// should use
-/// ```
-/// use cfxcore::make_solidity_function;
-/// use cfx_types::{Address,U256};
-/// use cfxcore::executive::sol_func::InterfaceTrait;
-///
-/// make_solidity_function!{
-///     struct WhateverStructName((Address, Address), "get_whitelist(address,address)", bool);
-/// }
-/// ```
 /// If the function has no return value, the third parameter can be omitted.
 macro_rules! make_solidity_function {
     ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($input:ty, $interface:expr ); ) => {
