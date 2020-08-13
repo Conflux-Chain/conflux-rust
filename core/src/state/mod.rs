@@ -409,7 +409,13 @@ impl State {
         &mut self, contract: &Address, balance: U256, nonce: U256,
     ) -> DbResult<()> {
         self.remove_contract(contract)?;
-        self.deploy_new_contract(contract,&Address::zero(),balance,nonce, Some(STORAGE_LAYOUT_REGULAR_V0))?;
+        self.deploy_new_contract(
+            contract,
+            &Address::zero(),
+            balance,
+            nonce,
+            Some(STORAGE_LAYOUT_REGULAR_V0),
+        )?;
         Ok(())
     }
 
@@ -1396,6 +1402,12 @@ impl State {
 
         let cache = &mut *cache_write_lock;
         let account = cache.get_mut(address).unwrap();
+        // TODO: we need to discuss if the basic component of an account is
+        // empty, can the other component be non-empty? This corner case
+        // can never happens in current spec. But it is non-trivial to gives
+        // such guarantee. Most implementation handles this corner case,
+        // but here does not handle. But anyway, this function may be
+        // merged to `require_or_set` since we no longer needs dirty flag.
         if let Some(maybe_acc) = &mut account.account {
             if !Self::update_account_cache(require, maybe_acc, &self.db)? {
                 return Err(DbErrorKind::IncompleteDatabase(
