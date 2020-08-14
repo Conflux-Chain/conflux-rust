@@ -43,7 +43,7 @@ mod impls {
         storage: Storage,
 
         /// Checkpoints allow callers to revert un-committed changes.
-        checkpoints: RwLock<Vec<Checkpoint>>,
+        checkpoints: Vec<Checkpoint>,
     }
 
     // We skip the accessed_entries for getting original value.
@@ -88,7 +88,7 @@ mod impls {
 
         /// Set `key` to `value` in latest checkpoint if not set previously.
         fn update_checkpoint(&mut self, key: &Key, value: &Value) {
-            if let Some(checkpoint) = self.checkpoints.get_mut().last_mut() {
+            if let Some(checkpoint) = self.checkpoints.last_mut() {
                 // only insert if key not in checkpoint already
                 checkpoint.entry(key.clone()).or_insert(value.clone());
             }
@@ -439,7 +439,7 @@ mod impls {
             debug_record: Option<&mut ComputeEpochDebugRecord>,
         ) -> Result<StateRootWithAuxInfo>
         {
-            if !self.checkpoints.get_mut().is_empty() {
+            if !self.checkpoints.is_empty() {
                 // TODO: panic?
                 warn!("Active checkpoints during commit");
             }
@@ -492,16 +492,13 @@ mod impls {
 
     impl<Storage: StorageStateTrait> StateDbCheckpointMethods for StateDb<Storage> {
         fn checkpoint(&mut self) {
-            let checkpoints = self.checkpoints.get_mut();
-            trace!("Creating checkpoint #{}", checkpoints.len());
-            checkpoints.push(BTreeMap::new()); // no values are modified yet
+            trace!("Creating checkpoint #{}", self.checkpoints.len());
+            self.checkpoints.push(BTreeMap::new()); // no values are modified yet
         }
 
         fn discard_checkpoint(&mut self) {
-            let checkpoints = self.checkpoints.get_mut();
-
             // checkpoint `n` (to be discarded)
-            let latest = match checkpoints.pop() {
+            let latest = match self.checkpoints.pop() {
                 Some(checkpoint) => checkpoint,
                 None => {
                     // TODO: panic?
@@ -510,10 +507,10 @@ mod impls {
                 }
             };
 
-            trace!("Discarding checkpoint #{}", checkpoints.len());
+            trace!("Discarding checkpoint #{}", self.checkpoints.len());
 
             // checkpoint `n - 1`
-            let previous = match checkpoints.last_mut() {
+            let previous = match self.checkpoints.last_mut() {
                 Some(checkpoint) => checkpoint,
                 None => return,
             };
@@ -529,9 +526,7 @@ mod impls {
         }
 
         fn revert_to_checkpoint(&mut self) {
-            let checkpoints = self.checkpoints.get_mut();
-
-            let checkpoint = match checkpoints.pop() {
+            let checkpoint = match self.checkpoints.pop() {
                 Some(checkpoint) => checkpoint,
                 None => {
                     // TODO: panic?
@@ -540,7 +535,7 @@ mod impls {
                 }
             };
 
-            trace!("Reverting to checkpoint #{}", checkpoints.len());
+            trace!("Reverting to checkpoint #{}", self.checkpoints.len());
 
             // revert all modified keys to their old version
             for (k, v) in checkpoint {
