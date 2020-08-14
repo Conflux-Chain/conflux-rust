@@ -703,6 +703,34 @@ impl RpcImpl {
     pub fn get_client_version(&self) -> RpcResult<String> {
         Ok(format!("conflux-rust-{}", crate_version!()).into())
     }
+
+    pub fn get_pending_transactions(
+        &self, address: H160,
+    ) -> RpcResult<BTreeMap<String, String>> {
+        let mut ret: BTreeMap<String, String> = BTreeMap::new();
+        let (mut deferred_txs, _) = self.tx_pool.content();
+        deferred_txs = deferred_txs
+            .into_iter()
+            .filter(|tx| {
+                tx.sender == address
+                    && !self.tx_pool.check_tx_packed_in_deferred_pool(&tx.hash)
+            })
+            .collect();
+        let mut max_nonce: U256 = U256::from(0);
+        let mut min_nonce: U256 = U256::max_value();
+        for tx in deferred_txs.iter() {
+            if tx.nonce > max_nonce {
+                max_nonce = tx.nonce;
+            }
+            if tx.nonce < min_nonce {
+                min_nonce = tx.nonce;
+            }
+        }
+        ret.insert("pending_count".into(), format!("{}", deferred_txs.len()));
+        ret.insert("min_nonce".into(), min_nonce.to_string());
+        ret.insert("max_nonce".into(), max_nonce.to_string());
+        Ok(ret)
+    }
 }
 
 /// Returns a eth_sign-compatible hash of data to sign.

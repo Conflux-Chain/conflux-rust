@@ -21,6 +21,11 @@ pub trait LocalRpc {
     #[rpc(name = "txpool_status")]
     fn txpool_status(&self) -> JsonRpcResult<BTreeMap<String, usize>>;
 
+    #[rpc(name = "cfx_getPendingTransactions")]
+    fn get_pending_transactions(
+        &self, address: H160,
+    ) -> JsonRpcResult<BTreeMap<String, String>>;
+
     #[rpc(name = "tx_inspect")]
     fn tx_inspect(&self, hash: H256) -> JsonRpcResult<TxWithPoolInfo>;
 

@@ -649,6 +649,7 @@ impl LocalRpc for DebugRpcImpl {
             fn unlock_account(&self, address: H160, password: String, duration: Option<U128>) -> RpcResult<bool>;
             fn lock_account(&self, address: H160) -> RpcResult<bool>;
             fn sign(&self, data: Bytes, address: H160, password: Option<String>) -> RpcResult<H520>;
+            fn get_pending_transactions(&self, address: H160) -> RpcResult<BTreeMap<String, String>>;
         }
 
         to self.rpc_impl {
