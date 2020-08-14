@@ -24,13 +24,13 @@ mod impls {
     type Key = Vec<u8>;
     type Value = Option<Arc<[u8]>>;
 
-    // use BTreeMap so that we can delete ranges efficiently
+    // Use BTreeMap so that we can delete ranges efficiently
     // see `delete_all`
     type AccessedEntries = BTreeMap<Key, EntryValue>;
 
     // A checkpoint contains the previous values for all keys
     // modified or deleted since the last checkpoint.
-    type Checkpoint = BTreeMap<Key, Value>;
+    type Checkpoint = BTreeMap<Key, Option<Value>>;
 
     // Use generic type for better test-ability.
     pub struct StateDb<Storage: StorageStateTrait> {
@@ -72,8 +72,7 @@ mod impls {
 
         /// Revert to checkpoint.
         /// Revert all values in `accessed_entries` to their value before
-        /// creating the latest checkpoint. If a value was read into
-        /// memory but not modified, it is not removed.
+        /// creating the latest checkpoint.
         fn revert_to_checkpoint(&mut self);
     }
 
@@ -87,16 +86,21 @@ mod impls {
         }
 
         /// Set `key` to `value` in latest checkpoint if not set previously.
-        fn update_checkpoint(&mut self, key: &Key, value: &Value) {
+        fn update_checkpoint(&mut self, key: &Key, value: Option<Value>) {
             if let Some(checkpoint) = self.checkpoints.last_mut() {
                 // only insert if key not in checkpoint already
-                checkpoint.entry(key.clone()).or_insert(value.clone());
+                checkpoint.entry(key.clone()).or_insert(value);
             }
         }
 
         // Used in storage benchmark.
         #[allow(unused)]
         pub fn get_storage_mut(&mut self) -> &mut Storage { &mut self.storage }
+
+        #[cfg(test)]
+        pub fn contains(&self, key: &Vec<u8>) -> bool {
+            self.accessed_entries.read().contains_key(key)
+        }
 
         /// Update the accessed_entries while getting the value.
         pub fn get_raw(&self, key: StorageKey) -> Result<Option<Arc<[u8]>>> {
@@ -138,7 +142,10 @@ mod impls {
             let old_value = match &mut entry {
                 Occupied(o) => {
                     // set `current_value` to `value` and keep the old value
-                    std::mem::replace(&mut o.get_mut().current_value, value)
+                    Some(std::mem::replace(
+                        &mut o.get_mut().current_value,
+                        value,
+                    ))
                 }
 
                 // Vacant
@@ -146,16 +153,16 @@ mod impls {
                     let original_value = self.storage.get(key)?.map(Into::into);
 
                     entry.or_insert(EntryValue::new_modified(
-                        original_value.clone(),
+                        original_value,
                         value,
                     ));
 
-                    original_value
+                    None
                 }
             };
 
             // store old value in latest checkpoint if not stored yet
-            self.update_checkpoint(&key_bytes, &old_value);
+            self.update_checkpoint(&key_bytes, old_value);
 
             Ok(())
         }
@@ -268,8 +275,8 @@ mod impls {
             // update latest checkpoint if necessary
             if !AM::is_read_only() {
                 for (k, v) in &deleted_kvs {
-                    let v = Some(v.clone().into());
-                    self.update_checkpoint(k, &v);
+                    let v: Value = Some(v.clone().into());
+                    self.update_checkpoint(k, Some(v));
                 }
             }
 
@@ -539,12 +546,21 @@ mod impls {
 
             // revert all modified keys to their old version
             for (k, v) in checkpoint {
-                match &mut self.accessed_entries.get_mut().entry(k) {
-                    Occupied(o) => {
-                        o.get_mut().current_value = v;
+                let entry = self.accessed_entries.get_mut().entry(k);
+
+                match (entry, v) {
+                    // prior to the checkpoint `k` was not present
+                    (Occupied(o), None) => {
+                        o.remove();
                     }
-                    _ => {
-                        // this should not happen
+                    // the value under `k` has been modified after checkpoint
+                    (Occupied(mut o), Some(original_value)) => {
+                        o.get_mut().current_value = original_value;
+                    }
+                    (_, _) => {
+                        // keys are not removed from `accessed_entries` other
+                        // than during revert and commit, so this should not
+                        // happen
                         panic!("Enountered non-existent key while reverting to checkpoint");
                     }
                 }

@@ -249,3 +249,49 @@ fn test_checkpoint() {
     // we need to write all values modified or removed
     assert_eq!(storage.get_num_writes(), 1);
 }
+
+#[test]
+fn test_checkpoint_evict_memory() {
+    use super::StateDbCheckpointMethods;
+
+    let mut state_db = init_state_db();
+
+    // value is not read yet
+    assert!(!state_db.contains(&key(b"00")));
+
+    // create checkpoint #0
+    state_db.checkpoint();
+
+    // (00, v0) --> (00, v1) [new value]
+    state_db
+        .set_raw(storage_key(b"00"), value(b"v1"), None)
+        .unwrap();
+
+    // value has been read
+    assert!(state_db.contains(&key(b"00")));
+
+    // create checkpoint #1
+    state_db.checkpoint();
+
+    // (00, v1) --> (00, v0) [back to original value]
+    state_db
+        .set_raw(storage_key(b"00"), value(b"v0"), None)
+        .unwrap();
+
+    // value stays in state-db
+    assert!(state_db.contains(&key(b"00")));
+
+    // revert to checkpoint #1
+    // (00, v0) --> (00, v1)
+    state_db.revert_to_checkpoint();
+
+    // value stays in state-db
+    assert!(state_db.contains(&key(b"00")));
+
+    // revert to checkpoint #0
+    // (00, v0) --> None
+    state_db.revert_to_checkpoint();
+
+    // value is removed from state-db
+    assert!(!state_db.contains(&key(b"00")));
+}
