@@ -161,9 +161,8 @@ impl BlockGenerator {
         }
     }
 
-    fn consensus_graph(&self) -> &ConsensusGraph{
-        self
-            .graph
+    fn consensus_graph(&self) -> &ConsensusGraph {
+        self.graph
             .consensus
             .as_any()
             .downcast_ref::<ConsensusGraph>()

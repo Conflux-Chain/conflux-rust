@@ -48,7 +48,7 @@ use crate::{
             RewardInfo as RpcRewardInfo, SendTxRequest,
             SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
             StorageRoot as RpcStorageRoot, SyncGraphStates,
-            Transaction as RpcTransaction,
+            Transaction as RpcTransaction, TxWithPoolInfo,
         },
         RpcResult,
     },
@@ -1106,7 +1106,7 @@ impl LocalRpc for LocalRpcImpl {
                 -> JsonRpcResult<bool>;
             fn net_sessions(&self, node_id: Option<NodeId>) -> JsonRpcResult<Vec<SessionDetails>>;
             fn net_throttling(&self) -> JsonRpcResult<throttling::Service>;
-            fn tx_inspect(&self, hash: H256) -> JsonRpcResult<BTreeMap<String, String>>;
+            fn tx_inspect(&self, hash: H256) -> JsonRpcResult<TxWithPoolInfo>;
             fn txpool_content(&self, address: Option<H160>) -> JsonRpcResult<
                 BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
             fn txs_from_pool(&self, address: Option<H160>) -> JsonRpcResult<Vec<RpcTransaction>>;

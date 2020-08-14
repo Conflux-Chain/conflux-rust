@@ -4,7 +4,7 @@
 
 use super::super::types::{
     Bytes as RpcBytes, ConsensusGraphStates, SyncGraphStates,
-    Transaction as RpcTransaction,
+    Transaction as RpcTransaction, TxWithPoolInfo,
 };
 use crate::rpc::types::SendTxRequest;
 use cfx_types::{H160, H256, H520, U128};
@@ -22,8 +22,7 @@ pub trait LocalRpc {
     fn txpool_status(&self) -> JsonRpcResult<BTreeMap<String, usize>>;
 
     #[rpc(name = "tx_inspect")]
-    fn tx_inspect(&self, hash: H256)
-        -> JsonRpcResult<BTreeMap<String, String>>;
+    fn tx_inspect(&self, hash: H256) -> JsonRpcResult<TxWithPoolInfo>;
 
     #[rpc(name = "txpool_inspect")]
     fn txpool_inspect(

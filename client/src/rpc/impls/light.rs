@@ -34,7 +34,7 @@ use crate::{
             Log as RpcLog, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
             SendTxRequest, SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
             StorageRoot as RpcStorageRoot, SyncGraphStates,
-            Transaction as RpcTransaction,
+            Transaction as RpcTransaction, TxWithPoolInfo,
         },
         RpcBoxFuture,
     },
@@ -639,7 +639,7 @@ impl LocalRpc for DebugRpcImpl {
             fn net_disconnect_node(&self, id: NodeId, op: Option<UpdateNodeOperation>) -> RpcResult<bool>;
             fn net_sessions(&self, node_id: Option<NodeId>) -> RpcResult<Vec<SessionDetails>>;
             fn net_throttling(&self) -> RpcResult<throttling::Service>;
-            fn tx_inspect(&self, hash: H256) -> RpcResult<BTreeMap<String, String>>;
+            fn tx_inspect(&self, hash: H256) -> RpcResult<TxWithPoolInfo>;
             fn txpool_content(&self, address: Option<H160>) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
             fn txs_from_pool(&self, address: Option<H160>) -> RpcResult<Vec<RpcTransaction>>;
             fn txpool_inspect(&self, address: Option<H160>) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;

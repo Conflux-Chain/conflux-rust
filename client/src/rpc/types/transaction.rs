@@ -173,3 +173,15 @@ impl SendTxRequest {
         Ok(tx.with_signature(sig))
     }
 }
+
+#[derive(Default, Serialize)]
+pub struct TxWithPoolInfo {
+    pub exist: bool,
+    pub packed: bool,
+    pub local_nonce: U256,
+    pub local_balance: U256,
+    pub state_nonce: U256,
+    pub state_balance: U256,
+    pub local_balance_enough: bool,
+    pub state_balance_enough: bool,
+}

@@ -4,13 +4,13 @@
 
 use crate::rpc::types::{
     Block as RpcBlock, BlockHashOrEpochNumber, Bytes, EpochNumber,
-    Status as RpcStatus, Transaction as RpcTransaction,
+    Status as RpcStatus, Transaction as RpcTransaction, TxWithPoolInfo,
 };
 use bigdecimal::BigDecimal;
 use cfx_types::{Address, H160, H256, H520, U128, U256, U64};
 use cfxcore::{
-    BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
-    SharedConsensusGraph, SharedTransactionPool,
+    parameters::consensus::ONE_CFX_IN_DRIP, BlockDataManager, ConsensusGraph,
+    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
@@ -474,17 +474,13 @@ impl RpcImpl {
         Ok(THROTTLING_SERVICE.read().clone())
     }
 
-    pub fn tx_inspect(
-        &self, hash: H256,
-    ) -> RpcResult<BTreeMap<String, String>> {
-        let mut ret: BTreeMap<String, String> = BTreeMap::new();
+    pub fn tx_inspect(&self, hash: H256) -> RpcResult<TxWithPoolInfo> {
+        let mut ret = TxWithPoolInfo::default();
         let hash: H256 = hash.into();
         if let Some(tx) = self.tx_pool.get_transaction(&hash) {
-            ret.insert("exist".into(), "true".into());
+            ret.exist = true;
             if self.tx_pool.check_tx_packed_in_deferred_pool(&hash) {
-                ret.insert("packed".into(), "true".into());
-            } else {
-                ret.insert("packed".into(), "false".into());
+                ret.packed = true;
             }
             let (local_nonce, local_balance) =
                 self.tx_pool.get_local_account_info(&tx.sender());
@@ -496,24 +492,15 @@ impl RpcImpl {
                     rpc_error.data = Some(RpcValue::String(format!("{}", e)));
                     rpc_error
                 })?;
-            ret.insert(
-                "local nonce".into(),
-                serde_json::to_string(&local_nonce).unwrap(),
-            );
-            ret.insert(
-                "local balance".into(),
-                serde_json::to_string(&local_balance).unwrap(),
-            );
-            ret.insert(
-                "state nonce".into(),
-                serde_json::to_string(&state_nonce).unwrap(),
-            );
-            ret.insert(
-                "state balance".into(),
-                serde_json::to_string(&state_balance).unwrap(),
-            );
-        } else {
-            ret.insert("exist".into(), "false".into());
+            let required_balance = tx.value
+                + tx.gas * tx.gas_price
+                + tx.storage_limit * ONE_CFX_IN_DRIP / 1024;
+            ret.local_balance_enough = local_balance > required_balance;
+            ret.state_balance_enough = state_balance > required_balance;
+            ret.local_balance = local_balance;
+            ret.local_nonce = local_nonce;
+            ret.state_balance = state_balance;
+            ret.state_nonce = state_nonce;
         }
         Ok(ret)
     }

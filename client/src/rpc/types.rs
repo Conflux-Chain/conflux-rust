@@ -42,5 +42,7 @@ pub use self::{
     status::Status,
     storage_root::StorageRoot,
     sync_graph_states::SyncGraphStates,
-    transaction::{PackedOrExecuted, SendTxRequest, Transaction},
+    transaction::{
+        PackedOrExecuted, SendTxRequest, Transaction, TxWithPoolInfo,
+    },
 };
