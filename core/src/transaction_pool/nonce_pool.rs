@@ -221,8 +221,8 @@ impl NoncePoolNode {
         }
     }
 
-    /// find a transaction `tx` where `tx.nonce >= nonce` and `tx.last_packed_ts
-    /// <= ts` and `tx.nonce` is minimum
+    /// find a transaction `tx` where `tx.nonce >= nonce`
+    /// and `tx.nonce` is minimum
     pub fn query(
         node: &Option<Box<NoncePoolNode>>, nonce: &U256,
     ) -> Option<Arc<SignedTransaction>> {
@@ -269,7 +269,7 @@ impl NoncePoolNode {
         }
     }
 
-    /// update subtree info: last_packed_ts and cost_sum
+    /// update subtree info: cost_sum, size, unpacked
     fn update(&mut self) {
         self.subtree_unpacked = 1 - self.tx.packed as u32;
         self.subtree_cost = self.tx.value
