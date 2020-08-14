@@ -540,23 +540,20 @@ impl StateManager {
 
 impl StateManagerTrait for StateManager {
     fn get_state_no_commit(
-        &self, state_index: StateIndex, try_open: bool,
+        self: &Arc<Self>, state_index: StateIndex, try_open: bool,
     ) -> Result<Option<State>> {
         let maybe_state_trees = self.get_state_trees(&state_index, try_open)?;
         match maybe_state_trees {
             None => Ok(None),
-            Some(state_trees) => Ok(Some(State::new(
-                // Safe because StateManager is always an Arc.
-                unsafe { shared_from_this(self) },
-                state_trees,
-            ))),
+            Some(state_trees) => {
+                Ok(Some(State::new(self.clone(), state_trees)))
+            }
         }
     }
 
-    fn get_state_for_genesis_write(&self) -> State {
+    fn get_state_for_genesis_write(self: &Arc<Self>) -> State {
         State::new(
-            // Safe because StateManager is always an Arc.
-            unsafe { shared_from_this(self) },
+            self.clone(),
             StateTrees {
                 snapshot_db: self
                     .storage_manager
@@ -600,7 +597,7 @@ impl StateManagerTrait for StateManager {
     // Due to the complexity of the latter approach, we stay with the
     // simple approach.
     fn get_state_for_next_epoch(
-        &self, parent_epoch_id: StateIndex,
+        self: &Arc<Self>, parent_epoch_id: StateIndex,
     ) -> Result<Option<State>> {
         let maybe_state_trees = self.get_state_trees_for_next_epoch(
             &parent_epoch_id,
@@ -608,11 +605,9 @@ impl StateManagerTrait for StateManager {
         )?;
         match maybe_state_trees {
             None => Ok(None),
-            Some(state_trees) => Ok(Some(State::new(
-                // Safe because StateManager is always an Arc.
-                unsafe { shared_from_this(self) },
-                state_trees,
-            ))),
+            Some(state_trees) => {
+                Ok(Some(State::new(self.clone(), state_trees)))
+            }
         }
     }
 }
@@ -630,7 +625,6 @@ use crate::storage::{
     state::*,
     state_manager::*,
     storage_db::*,
-    utils::arc_ext::shared_from_this,
     StorageConfiguration,
 };
 use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;

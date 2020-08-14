@@ -591,7 +591,7 @@ fn test_set_order() {
 #[test]
 fn test_set_order_concurrent() {
     let mut rng = get_rng_for_test();
-    let state_manager = Arc::new(new_state_manager_for_unit_test());
+    let state_manager = new_state_manager_for_unit_test();
     let keys = Arc::new(
         generate_keys(TEST_NUMBER_OF_KEYS / 10)
             .iter()

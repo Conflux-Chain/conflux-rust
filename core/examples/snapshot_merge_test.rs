@@ -295,7 +295,7 @@ fn new_state_manager(
 }
 
 fn initialize_genesis(
-    manager: &StateManager,
+    manager: &Arc<StateManager>,
 ) -> Result<(H256, MerkleHash), Error> {
     let mut state = manager.get_state_for_genesis_write();
 
@@ -321,8 +321,9 @@ fn initialize_genesis(
 }
 
 fn prepare_state(
-    manager: &StateManager, parent: H256, height: &mut u64, accounts: usize,
-    accounts_per_epoch: usize, account_map: &mut HashMap<Address, Account>,
+    manager: &Arc<StateManager>, parent: H256, height: &mut u64,
+    accounts: usize, accounts_per_epoch: usize,
+    account_map: &mut HashMap<Address, Account>,
     old_state_root: &StateRootWithAuxInfo, state_root: &StateRootWithAuxInfo,
 ) -> Result<(H256, MerkleHash), StorageError>
 {
@@ -347,7 +348,7 @@ fn prepare_state(
 }
 
 fn add_accounts(
-    manager: &StateManager, parent: H256, height: &mut u64,
+    manager: &Arc<StateManager>, parent: H256, height: &mut u64,
     accounts_per_epoch: usize, new_account_map: &HashMap<Address, Account>,
     old_state_root: &StateRootWithAuxInfo, state_root: &StateRootWithAuxInfo,
 ) -> Result<(H256, MerkleHash), StorageError>
@@ -407,7 +408,7 @@ fn add_accounts(
 }
 
 fn add_accounts_and_commit<'a, Iter>(
-    manager: &StateManager, accounts: usize, account_map: &mut Iter,
+    manager: &Arc<StateManager>, accounts: usize, account_map: &mut Iter,
     state_index: StateIndex,
 ) -> H256
 where
