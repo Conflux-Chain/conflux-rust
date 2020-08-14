@@ -131,7 +131,8 @@ mod impls {
             &mut self, key: StorageKey, value: Option<Box<[u8]>>,
         ) -> Result<()> {
             let key_bytes = key.to_key_bytes();
-            let mut entry = self.accessed_entries.get_mut().entry(key_bytes);
+            let mut entry =
+                self.accessed_entries.get_mut().entry(key_bytes.clone());
             let value = value.map(Into::into);
 
             let old_value = match &mut entry {
@@ -154,7 +155,7 @@ mod impls {
             };
 
             // store old value in latest checkpoint if not stored yet
-            self.update_checkpoint(&key.to_key_bytes(), &old_value);
+            self.update_checkpoint(&key_bytes, &old_value);
 
             Ok(())
         }
@@ -361,7 +362,6 @@ mod impls {
                     if let StorageKey::StorageKey { address_bytes, .. } =
                         &storage_key
                     {
-                        // FIXME: why not set for delete?
                         if v.current_value.is_some() {
                             Self::load_storage_layout(
                                 &mut storage_layouts_to_commit,
@@ -440,14 +440,14 @@ mod impls {
         ) -> Result<StateRootWithAuxInfo>
         {
             if !self.checkpoints.is_empty() {
-                // TODO: panic?
-                warn!("Active checkpoints during commit");
+                panic!("Active checkpoints during state-db commit");
             }
 
             let result = match self.storage.get_state_root() {
                 Ok(r) => r,
                 Err(_) => self.compute_state_root(debug_record)?,
             };
+
             self.storage.commit(epoch_id)?;
 
             Ok(result)
@@ -544,8 +544,8 @@ mod impls {
                         o.get_mut().current_value = v;
                     }
                     _ => {
-                        warn!("Enountered non-existent key while reverting to checkpoint; trying to revert after commit?");
-                        // TODO: panic?
+                        // this should not happen
+                        panic!("Enountered non-existent key while reverting to checkpoint");
                     }
                 }
             }
