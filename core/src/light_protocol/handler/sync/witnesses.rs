@@ -303,7 +303,10 @@ impl Witnesses {
                 Some(w) => w,
                 None => {
                     warn!("Unable to get witness!");
-                    return Err(ErrorKind::InternalError.into());
+                    bail!(ErrorKind::InternalError(format!(
+                        "Witness at height {} is not available",
+                        height
+                    )));
                 }
             };
 

@@ -48,8 +48,10 @@ type TxInfo = (
 // Because of this, our RPC runtime cannot handle tokio@0.2 timing primitives.
 // As a temporary workaround, we use the old `tokio_timer::Timeout` instead.
 async fn with_timeout<T>(
-    d: Duration, msg: String, fut: impl Future<Output = T> + Send + Sync,
-) -> Result<T, Error> {
+    d: Duration, msg: String,
+    fut: impl Future<Output = Result<T, Error>> + Send + Sync,
+) -> Result<T, Error>
+{
     // convert `fut` into futures@0.1
     let fut = fut.unit_error().boxed().compat();
 
@@ -63,7 +65,7 @@ async fn with_timeout<T>(
     // set error message
     with_timeout
         .await
-        .map_err(|_| ErrorKind::Timeout(msg).into())
+        .map_err(|_| Error::from(ErrorKind::Timeout(msg)))?
 }
 
 pub struct QueryService {

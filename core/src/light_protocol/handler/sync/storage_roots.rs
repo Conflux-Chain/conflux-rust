@@ -31,9 +31,9 @@ use super::{
     state_roots::StateRoots,
 };
 use cfx_types::H160;
+use futures::future::FutureExt;
 use network::node_table::NodeId;
 use primitives::{StorageKey, StorageRoot};
-
 #[derive(Debug)]
 struct Statistics {
     cached: usize,
@@ -42,6 +42,8 @@ struct Statistics {
 }
 
 type MissingStorageRoot = TimeOrdered<StorageRootKey>;
+
+type PendingStorageRoot = PendingItem<Option<StorageRoot>, ClonableError>;
 
 pub struct StorageRoots {
     // series of unique request ids
@@ -54,8 +56,7 @@ pub struct StorageRoots {
     sync_manager: SyncManager<StorageRootKey, MissingStorageRoot>,
 
     // state entries received from full node
-    verified:
-        Arc<RwLock<LruCache<StorageRootKey, PendingItem<Option<StorageRoot>>>>>,
+    verified: Arc<RwLock<LruCache<StorageRootKey, PendingStorageRoot>>>,
 }
 
 impl StorageRoots {
@@ -90,10 +91,11 @@ impl StorageRoots {
     #[inline]
     pub fn request_now(
         &self, io: &dyn NetworkContext, epoch: u64, address: H160,
-    ) -> impl Future<Output = Option<StorageRoot>> {
+    ) -> impl Future<Output = Result<Option<StorageRoot>>> {
+        let mut verified = self.verified.write();
         let key = StorageRootKey { epoch, address };
 
-        if !self.verified.read().contains_key(&key) {
+        if !verified.contains_key(&key) {
             let missing = std::iter::once(MissingStorageRoot::new(key.clone()));
 
             self.sync_manager.request_now(missing, |peer, keys| {
@@ -101,7 +103,13 @@ impl StorageRoots {
             });
         }
 
+        verified
+            .entry(key.clone())
+            .or_insert(PendingItem::pending())
+            .clear_error();
+
         FutureItem::new(key, self.verified.clone())
+            .map(|res| res.map_err(|e| e.into()))
     }
 
     #[inline]
@@ -129,7 +137,21 @@ impl StorageRoots {
     ) -> Result<()>
     {
         // validate storage root
-        self.validate_storage_root(key.epoch, &key.address, &root, proof)?;
+        if let Err(e) =
+            self.validate_storage_root(key.epoch, key.address, &root, proof)
+        {
+            // forward error to both rpc caller(s) and sync handler
+            // so we need to make it clonable
+            let e = ClonableError::from(e);
+
+            self.verified
+                .write()
+                .entry(key.clone())
+                .or_insert(PendingItem::pending())
+                .set_error(e.clone());
+
+            bail!(e);
+        }
 
         // store storage root by storage root key
         self.verified
@@ -187,7 +209,7 @@ impl StorageRoots {
 
     #[inline]
     fn validate_storage_root(
-        &self, epoch: u64, address: &H160, storage_root: &Option<StorageRoot>,
+        &self, epoch: u64, address: H160, storage_root: &Option<StorageRoot>,
         proof: StorageRootProof,
     ) -> Result<()>
     {
@@ -196,10 +218,10 @@ impl StorageRoots {
 
         self.state_roots
             .validate_state_root(epoch, &state_root)
-            .chain_err(|| {
-                ErrorKind::InvalidStorageRootProof(
-                    "Validation of current state root failed",
-                )
+            .chain_err(|| ErrorKind::InvalidStorageRootProof {
+                epoch,
+                address,
+                reason: "Validation of current state root failed",
             })?;
 
         // validate previous state root
@@ -207,10 +229,10 @@ impl StorageRoots {
 
         self.state_roots
             .validate_prev_snapshot_state_root(epoch, &maybe_prev_root)
-            .chain_err(|| {
-                ErrorKind::InvalidStorageRootProof(
-                    "Validation of previous state root failed",
-                )
+            .chain_err(|| ErrorKind::InvalidStorageRootProof {
+                epoch,
+                address,
+                reason: "Validation of previous state root failed",
             })?;
 
         // construct padding
@@ -230,14 +252,11 @@ impl StorageRoots {
             state_root,
             maybe_intermediate_padding,
         ) {
-            warn!(
-                "Invalid storage root proof for {:?} under key {:?}",
-                storage_root, key
-            );
-            return Err(ErrorKind::InvalidStorageRootProof(
-                "Validation of merkle proof failed",
-            )
-            .into());
+            bail!(ErrorKind::InvalidStorageRootProof {
+                epoch,
+                address,
+                reason: "Validation of merkle proof failed",
+            });
         }
 
         Ok(())

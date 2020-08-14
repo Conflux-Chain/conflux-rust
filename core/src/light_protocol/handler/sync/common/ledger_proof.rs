@@ -31,7 +31,7 @@ impl Index<usize> for LedgerProof {
 impl LedgerProof {
     pub fn validate(&self, witness: &BlockHeader) -> Result<(), Error> {
         // extract proof hashes and corresponding local root hash
-        let (hashes, local_root_hash) = match self {
+        let (hashes, expected) = match self {
             LedgerProof::StateRoot(hashes) => {
                 (hashes, *witness.deferred_state_root())
             }
@@ -44,19 +44,19 @@ impl LedgerProof {
         };
 
         // validate the number of hashes provided against local witness blame
+        let hash = witness.hash();
         let blame = witness.blame() as u64;
 
         if hashes.len() as u64 != blame + 1 {
-            info!(
-                "Invalid number of hashes provided: expected={}, received={}",
-                blame + 1,
-                hashes.len()
-            );
-            return Err(ErrorKind::InvalidLedgerProof.into());
+            bail!(ErrorKind::InvalidLedgerProofSize {
+                hash,
+                expected: blame + 1,
+                received: hashes.len() as u64
+            });
         }
 
         // compute witness deferred root hash from the hashes provided
-        let received_root_hash = match blame {
+        let received = match blame {
             0 => hashes[0],
             _ => {
                 let hashes = hashes.clone();
@@ -65,12 +65,12 @@ impl LedgerProof {
         };
 
         // validate against local witness deferred state root hash
-        if received_root_hash != local_root_hash {
-            info!(
-                "Witness root hash mismatch: local={:?}, received={:?}",
-                local_root_hash, received_root_hash
-            );
-            return Err(ErrorKind::InvalidLedgerProof.into());
+        if received != expected {
+            bail!(ErrorKind::InvalidWitnessRoot {
+                hash,
+                expected,
+                received,
+            });
         }
 
         Ok(())

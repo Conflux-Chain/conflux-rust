@@ -3,15 +3,18 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    message::{Message, MsgId},
+    message::{Message, MsgId, RequestId},
     network::{self, NetworkContext, UpdateNodeOperation},
     statedb,
-    sync::message::Throttled,
+    sync::{message::Throttled, node_type::NodeType},
 };
+use cfx_types::{H160, H256};
 use error_chain::ChainedError;
 use network::node_table::NodeId;
-use primitives::{filter::FilterError, ChainIdParams};
+use parking_lot::Mutex;
+use primitives::{filter::FilterError, ChainIdParams, StateRoot};
 use rlp::DecoderError;
+use std::sync::Arc;
 
 error_chain! {
     links {
@@ -30,29 +33,34 @@ error_chain! {
             display("packet already throttled: {:?}", msg_name),
         }
 
-        ChainIdMismatch{ours: ChainIdParams, theirs: ChainIdParams} {
+        ChainIdMismatch{ ours: ChainIdParams, theirs: ChainIdParams } {
             description("ChainId mismatch"),
-            display("ChainId mismatch, ours {:?}, theirs {:?}.", ours, theirs),
+            display("ChainId mismatch, ours={:?}, theirs={:?}.", ours, theirs),
         }
 
-        GenesisMismatch {
+        ClonableErrorWrapper(error: ClonableError) {
+            description("Clonable error"),
+            display("{:?}", error.0.lock().to_string()),
+        }
+
+        GenesisMismatch{ ours: H256, theirs: H256 } {
             description("Genesis mismatch"),
-            display("Genesis mismatch"),
+            display("Genesis mismatch, ours={:?}, theirs={:?}.", ours, theirs),
         }
 
-        InternalError {
+        InternalError(details: String) {
             description("Internal error"),
-            display("Internal error"),
+            display("Internal error: {:?}", details),
         }
 
-        InvalidBloom {
-            description("Invalid bloom"),
-            display("Invalid bloom"),
+        InvalidBloom{ epoch: u64, expected: H256, received: H256 } {
+            description("Logs bloom hash validation failed"),
+            display("Logs bloom hash validation for epoch {} failed, expected={:?}, received={:?}", epoch, expected, received),
         }
 
-        InvalidLedgerProof {
-            description("Invalid ledger proof"),
-            display("Invalid ledger proof"),
+        InvalidLedgerProofSize{ hash: H256, expected: u64, received: u64 } {
+            description("Invalid ledger proof size"),
+            display("Invalid ledger proof size for header {:?}: expected={}, received={}", hash, expected, received),
         }
 
         InvalidMessageFormat {
@@ -60,44 +68,54 @@ error_chain! {
             display("Invalid message format"),
         }
 
-        InvalidReceipts {
-            description("Invalid receipts"),
-            display("Invalid receipts"),
+        InvalidPreviousStateRoot{ current_epoch: u64, snapshot_epoch_count: u64, root: Option<StateRoot> } {
+            description("Invalid previous state root"),
+            display("Invalid previous state root for epoch {} with snapshot epoch count {}: {:?}", current_epoch, snapshot_epoch_count, root),
         }
 
-        InvalidStateProof(reason: &'static str) {
+        InvalidReceipts{ epoch: u64, expected: H256, received: H256 } {
+            description("Receipts root validation failed"),
+            display("Receipts root validation for epoch {} failed, expected={:?}, received={:?}", epoch, expected, received),
+        }
+
+        InvalidStateProof{ epoch: u64, key: Vec<u8>, value: Option<Vec<u8>>, reason: &'static str } {
             description("Invalid state proof"),
-            display("Invalid state proof: {}", reason),
+            display("Invalid state proof for key {:?} and value {:?} in epoch {}: {:?}", value, key, epoch, reason),
         }
 
-        InvalidStateRoot {
-            description("Invalid state root"),
-            display("Invalid state root"),
+        InvalidStateRoot{ epoch: u64, expected: H256, received: H256 } {
+            description("State root validation failed"),
+            display("State root validation for epoch {} failed, expected={:?}, received={:?}", epoch, expected, received),
         }
 
-        InvalidStorageRootProof(reason: &'static str) {
+        InvalidStorageRootProof{ epoch: u64, address: H160, reason: &'static str } {
             description("Invalid storage root proof"),
-            display("Invalid storage root proof: {}", reason),
+            display("Invalid storage root proof for address {:?} in epoch {}: {}", address, epoch, reason),
         }
 
-        InvalidTxInfo {
+        InvalidTxInfo{ reason: String } {
             description("Invalid tx info"),
-            display("Invalid tx info"),
+            display("Invalid tx info: {:?}", reason),
         }
 
-        InvalidTxRoot {
-            description("Invalid tx root"),
-            display("Invalid tx root"),
+        InvalidTxRoot{ hash: H256, expected: H256, received: H256 } {
+            description("Transaction root validation failed"),
+            display("Transaction root validation for block {:?} failed, expected={:?}, received={:?}", hash, expected, received),
         }
 
-        InvalidTxSignature {
+        InvalidTxSignature{ hash: H256 } {
             description("Invalid tx signature"),
-            display("Invalid tx signature"),
+            display("Invalid signature for transaction {:?}", hash),
         }
 
-        SendStatusFailed {
+        InvalidWitnessRoot{ hash: H256, expected: H256, received: H256 } {
+            description("Witness root validation failed"),
+            display("Witness root validation for header {:?} failed, expected={:?}, received={:?}", hash, expected, received),
+        }
+
+        SendStatusFailed{ peer: NodeId } {
             description("Send status failed"),
-            display("Send status failed"),
+            display("Failed to send status to peer {:?}", peer),
         }
 
         Timeout(details: String) {
@@ -110,49 +128,41 @@ error_chain! {
             display("packet {:?} throttled: {:?}", msg_name, response),
         }
 
-        UnableToProduceProof {
-            description("Unable to produce proof"),
-            display("Unable to produce proof"),
-        }
-
-        UnableToProduceTxInfo(details: String) {
+        UnableToProduceTxInfo{ reason: String } {
             description("Unable to produce tx info"),
-            display("Unable to produce tx info: {:?}", details),
+            display("Unable to produce tx info: {:?}", reason),
         }
 
-        UnexpectedMessage {
+        UnexpectedMessage{ expected: Vec<MsgId>, received: MsgId } {
             description("Unexpected message"),
-            display("Unexpected message"),
+            display("Unexpected message id={:?}, expected one of {:?}", received, expected),
         }
 
-        UnexpectedPeerType {
+        UnexpectedPeerType{ node_type: NodeType } {
             description("Unexpected peer type"),
-            display("Unexpected peer type"),
+            display("Unexpected peer type: {:?}", node_type),
         }
 
-        UnexpectedRequestId {
-            description("Unexpected request id"),
-            display("Unexpected request id"),
-        }
-
-        UnexpectedResponse {
+        UnexpectedResponse{ expected: Option<RequestId>, received: RequestId } {
             description("Unexpected response"),
-            display("Unexpected response"),
+            display("Unexpected response id; expected = {:?}, received = {:?}", expected, received),
         }
 
-        UnknownMessage {
+        UnknownMessage{ id: MsgId } {
             description("Unknown message"),
-            display("Unknown message"),
+            display("Unknown message: {:?}", id),
         }
 
-        UnknownPeer {
-            description("Unknown peer"),
-            display("Unknown peer"),
+        WitnessUnavailable{ epoch: u64 } {
+            description("Witness unavailable"),
+            display("Witness for epoch {} is not available", epoch),
         }
     }
 }
 
-pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
+pub fn handle(
+    io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: &Error,
+) {
     warn!(
         "Error while handling message, peer={}, msg_id={:?}, error={}",
         peer,
@@ -166,9 +176,14 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
 
     // NOTE: do not use wildcard; this way, the compiler
     // will help covering all the cases.
-    match e.0 {
+    match &e.0 {
+        // for wrapped errors, handle based on the inner error
+        ErrorKind::ClonableErrorWrapper(e) => {
+            handle(io, peer, msg_id, &*e.0.lock())
+        }
+
         ErrorKind::Filter(_)
-        | ErrorKind::InternalError
+        | ErrorKind::InternalError(_)
 
         // NOTE: we should be tolerant of non-critical errors,
         // e.g. do not disconnect on requesting non-existing epoch
@@ -176,44 +191,44 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
 
         // NOTE: in order to let other protocols run,
         // we should not disconnect on protocol failure
-        | ErrorKind::SendStatusFailed
+        | ErrorKind::SendStatusFailed{..}
 
         | ErrorKind::Timeout(_)
 
-        // NOTE: if we do not have a confirmed (non-blamed) block
-        // with the info needed to produce a state root proof, we
-        // should not disconnect the peer
-        | ErrorKind::UnableToProduceProof
-
         // if the tx requested has been removed locally,
         // we should not disconnect the peer
-        | ErrorKind::UnableToProduceTxInfo(_)
+        | ErrorKind::UnableToProduceTxInfo{..}
+
+        // if the witness is not available, it is probably
+        // due to the local witness sync process
+        | ErrorKind::WitnessUnavailable{..}
 
         // NOTE: to help with backward-compatibility, we
         // should not disconnect on `UnknownMessage`
-        | ErrorKind::UnknownMessage => disconnect = false,
+        | ErrorKind::UnknownMessage{..} => disconnect = false,
 
 
-        ErrorKind::GenesisMismatch
+        ErrorKind::GenesisMismatch{..}
         | ErrorKind::ChainIdMismatch{..}
-        | ErrorKind::UnexpectedMessage
-        | ErrorKind::UnexpectedPeerType
-        | ErrorKind::UnknownPeer => op = Some(UpdateNodeOperation::Failure),
+        | ErrorKind::UnexpectedMessage{..}
+        | ErrorKind::UnexpectedPeerType{..} => op = Some(UpdateNodeOperation::Failure),
 
-        ErrorKind::UnexpectedRequestId | ErrorKind::UnexpectedResponse => {
+        ErrorKind::UnexpectedResponse{..} => {
             op = Some(UpdateNodeOperation::Demotion)
         }
 
-        ErrorKind::InvalidBloom
-        | ErrorKind::InvalidLedgerProof
+        ErrorKind::InvalidBloom{..}
+        | ErrorKind::InvalidLedgerProofSize{..}
         | ErrorKind::InvalidMessageFormat
-        | ErrorKind::InvalidReceipts
-        | ErrorKind::InvalidStateProof(_)
-        | ErrorKind::InvalidStateRoot
-        | ErrorKind::InvalidStorageRootProof(_)
-        | ErrorKind::InvalidTxInfo
-        | ErrorKind::InvalidTxRoot
-        | ErrorKind::InvalidTxSignature
+        | ErrorKind::InvalidPreviousStateRoot{..}
+        | ErrorKind::InvalidReceipts{..}
+        | ErrorKind::InvalidStateProof{..}
+        | ErrorKind::InvalidStateRoot{..}
+        | ErrorKind::InvalidStorageRootProof{..}
+        | ErrorKind::InvalidTxInfo{..}
+        | ErrorKind::InvalidTxRoot{..}
+        | ErrorKind::InvalidTxSignature{..}
+        | ErrorKind::InvalidWitnessRoot{..}
         | ErrorKind::AlreadyThrottled(_)
         | ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
 
@@ -272,5 +287,18 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
 
     if disconnect {
         io.disconnect_peer(peer, op, reason.as_str());
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ClonableError(Arc<Mutex<Error>>);
+
+impl Into<Error> for ClonableError {
+    fn into(self) -> Error { ErrorKind::ClonableErrorWrapper(self).into() }
+}
+
+impl From<Error> for ClonableError {
+    fn from(e: Error) -> ClonableError {
+        ClonableError(Arc::new(Mutex::new(e)))
     }
 }
