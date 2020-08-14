@@ -7,7 +7,7 @@ use crate::{
     state::{State, Substate},
     vm::{self, ActionParams, CallType, Spec},
 };
-use cfx_types::{Address, U256};
+use cfx_types::{address_util::AddressUtil, Address, U256};
 use std::str::FromStr;
 
 lazy_static! {
@@ -35,48 +35,8 @@ pub fn suicide(
     substate.suicides.insert(contract_address.clone());
     let balance = state.balance(contract_address)?;
 
-    if let Some(code_size) = state.code_size(contract_address)? {
-        // Only refund the code collateral when code exists.
-        // If a contract suicides during creation, the code will be empty.
-        let code_owner = state
-            .code_owner(contract_address)?
-            .expect("code owner exists");
-        *substate.storage_released.entry(code_owner).or_insert(0) +=
-            code_size as u64;
-    }
-
-    let sponsor_for_gas = state.sponsor_for_gas(contract_address)?;
-    let sponsor_for_collateral =
-        state.sponsor_for_collateral(contract_address)?;
-    let sponsor_balance_for_gas =
-        state.sponsor_balance_for_gas(contract_address)?;
-    let sponsor_balance_for_collateral =
-        state.sponsor_balance_for_collateral(contract_address)?;
-
-    if sponsor_for_gas.is_some() {
-        state.add_balance(
-            sponsor_for_gas.as_ref().unwrap(),
-            &sponsor_balance_for_gas,
-            substate.to_cleanup_mode(spec),
-        )?;
-        state.sub_sponsor_balance_for_gas(
-            contract_address,
-            &sponsor_balance_for_gas,
-        )?;
-    }
-    if sponsor_for_collateral.is_some() {
-        state.add_balance(
-            sponsor_for_collateral.as_ref().unwrap(),
-            &sponsor_balance_for_collateral,
-            substate.to_cleanup_mode(spec),
-        )?;
-        state.sub_sponsor_balance_for_collateral(
-            contract_address,
-            &sponsor_balance_for_collateral,
-        )?;
-    }
-    if refund_address == contract_address {
-        // This is the corner case that the sponsor of the contract is itself.
+    if refund_address == contract_address || !refund_address.is_valid_address()
+    {
         // When destroying, the balance will be burnt.
         state.sub_balance(
             contract_address,

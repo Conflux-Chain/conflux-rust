@@ -770,7 +770,7 @@ fn kill_account_with_checkpoints() {
     state_0
         .require_exists(&a, /* require_code = */ false)
         .unwrap()
-        .commit_ownership_change(&state_0.db)
+        .commit_ownership_change(&state_0.db, &mut Substate::new())
         .unwrap();
     state_0
         .add_sponsor_balance_for_collateral(&a, &COLLATERAL_PER_STORAGE_KEY)
@@ -787,7 +787,7 @@ fn kill_account_with_checkpoints() {
     let mut state = get_state(&storage_manager, &epoch_id_1);
     // Storage before the account is killed.
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::one());
-    state.kill_account(&a).unwrap();
+    state.remove_contract(&a).unwrap();
     // The account is killed. The storage should be empty.
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
     // The new contract in the same place should have empty storage.
@@ -803,7 +803,7 @@ fn kill_account_with_checkpoints() {
     // Test checkpoint.
     let mut state = get_state(&storage_manager, &epoch_id_1);
     state.checkpoint();
-    state.kill_account(&a).unwrap();
+    state.remove_contract(&a).unwrap();
     // The new contract in the same place should have empty storage.
     state.checkpoint();
     state.new_contract(&a, U256::zero(), U256::one()).unwrap();
@@ -846,7 +846,7 @@ fn check_result_of_simple_payment_to_killed_account() {
     state_0
         .require_exists(&a, /* require_code = */ false)
         .unwrap()
-        .commit_ownership_change(&state_0.db)
+        .commit_ownership_change(&state_0.db, &mut Substate::new())
         .unwrap();
     state_0
         .add_collateral_for_storage(&sender_addr, &COLLATERAL_PER_STORAGE_KEY)
@@ -858,7 +858,7 @@ fn check_result_of_simple_payment_to_killed_account() {
         .unwrap();
 
     let mut state = get_state(&storage_manager, &epoch_id_1);
-    state.kill_account(&a).unwrap();
+    state.remove_contract(&a).unwrap();
     // The account is killed. The storage should be empty.
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
     // Transfer balance to the killed account.
@@ -988,7 +988,7 @@ fn create_contract_fail_previous_storage() {
 
     state.checkpoint(); // c1
     substates.push(Substate::new());
-    state.kill_account(&a).unwrap();
+    state.remove_contract(&a).unwrap();
     // parking_lot::lock_api::MappedRwLockWriteGuard must be used, so we drop()
     // it.
     drop(state.require_or_new_basic_account(&a).unwrap());
