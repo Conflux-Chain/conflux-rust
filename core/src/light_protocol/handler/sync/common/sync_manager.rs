@@ -93,8 +93,10 @@ where
         match self.peers.get(peer) {
             Some(state) => Ok(state),
             None => {
-                error!("Received message from unknown peer={:?}", peer);
-                Err(ErrorKind::InternalError.into())
+                bail!(ErrorKind::InternalError(format!(
+                    "Received message from unknown peer={:?}",
+                    peer
+                )));
             }
         }
     }
@@ -123,7 +125,10 @@ where
             ThrottleResult::Success => Ok(id),
             ThrottleResult::Throttled(_) => Ok(id),
             ThrottleResult::AlreadyThrottled => {
-                Err(ErrorKind::UnexpectedResponse.into())
+                bail!(ErrorKind::UnexpectedResponse {
+                    expected: id,
+                    received: request_id,
+                });
             }
         }
     }

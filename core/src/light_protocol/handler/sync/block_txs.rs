@@ -12,8 +12,8 @@ use crate::{
     consensus::SharedConsensusGraph,
     light_protocol::{
         common::{FullPeerState, LedgerInfo, Peers},
+        error::*,
         message::{msgid, BlockTxsWithHash, GetBlockTxs},
-        Error, ErrorKind,
     },
     message::{Message, RequestId},
     network::NetworkContext,
@@ -25,6 +25,7 @@ use crate::{
     UniqueId,
 };
 use cfx_types::H256;
+use futures::future::FutureExt;
 use lru_time_cache::LruCache;
 use network::node_table::NodeId;
 use parking_lot::RwLock;
@@ -41,6 +42,8 @@ struct Statistics {
 // prioritize earlier requests
 type MissingBlockTxs = TimeOrdered<H256>;
 
+type PendingBlockTxs = PendingItem<Vec<SignedTransaction>, ClonableError>;
+
 pub struct BlockTxs {
     // helper API for retrieving ledger information
     ledger: LedgerInfo,
@@ -55,7 +58,7 @@ pub struct BlockTxs {
     txs: Arc<Txs>,
 
     // block txs received from full node
-    verified: Arc<RwLock<LruCache<H256, PendingItem<Vec<SignedTransaction>>>>>,
+    verified: Arc<RwLock<LruCache<H256, PendingBlockTxs>>>,
 }
 
 impl BlockTxs {
@@ -92,20 +95,28 @@ impl BlockTxs {
     #[inline]
     pub fn request(
         &self, hash: H256,
-    ) -> impl Future<Output = Vec<SignedTransaction>> {
-        if !self.verified.read().contains_key(&hash) {
+    ) -> impl Future<Output = Result<Vec<SignedTransaction>>> {
+        let mut verified = self.verified.write();
+
+        if !verified.contains_key(&hash) {
             let missing = MissingBlockTxs::new(hash);
             self.sync_manager.insert_waiting(std::iter::once(missing));
         }
 
+        verified
+            .entry(hash)
+            .or_insert(PendingItem::pending())
+            .clear_error();
+
         FutureItem::new(hash, self.verified.clone())
+            .map(|res| res.map_err(|e| e.into()))
     }
 
     #[inline]
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         block_txs: impl Iterator<Item = BlockTxsWithHash>,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         for BlockTxsWithHash { hash, block_txs } in block_txs {
             debug!("Validating block_txs {:?} with hash {}", block_txs, hash);
@@ -122,14 +133,21 @@ impl BlockTxs {
     #[inline]
     pub fn validate_and_store(
         &self, hash: H256, block_txs: Vec<SignedTransaction>,
-    ) -> Result<(), Error> {
-        // validate and store each transaction
-        for tx in &block_txs {
-            self.txs.validate_and_store(tx.clone())?;
-        }
-
+    ) -> Result<()> {
         // validate block txs
-        self.validate_block_txs(hash, &block_txs)?;
+        if let Err(e) = self.validate_block_txs(hash, &block_txs) {
+            // forward error to both rpc caller(s) and sync handler
+            // so we need to make it clonable
+            let e = ClonableError::from(e);
+
+            self.verified
+                .write()
+                .entry(hash)
+                .or_insert(PendingItem::pending())
+                .set_error(e.clone());
+
+            bail!(e);
+        }
 
         // store block bodies by block hash
         self.verified
@@ -156,7 +174,7 @@ impl BlockTxs {
     #[inline]
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, hashes: Vec<H256>,
-    ) -> Result<Option<RequestId>, Error> {
+    ) -> Result<Option<RequestId>> {
         debug!("send_request peer={:?} hashes={:?}", peer, hashes);
 
         if hashes.is_empty() {
@@ -185,20 +203,22 @@ impl BlockTxs {
     #[inline]
     pub fn validate_block_txs(
         &self, hash: H256, txs: &Vec<SignedTransaction>,
-    ) -> Result<(), Error> {
-        // NOTE: tx signatures have been validated previously
+    ) -> Result<()> {
+        // validate each transaction first
+        for tx in txs {
+            self.txs.validate_tx(&tx)?;
+        }
 
-        let local = *self.ledger.header(hash)?.transactions_root();
-
+        let expected = *self.ledger.header(hash)?.transactions_root();
         let txs: Vec<_> = txs.iter().map(|tx| Arc::new(tx.clone())).collect();
         let received = compute_transaction_root(&txs);
 
-        if received != local {
-            warn!(
-                "Tx root validation failed, received={:?}, local={:?}",
-                received, local
-            );
-            return Err(ErrorKind::InvalidTxRoot.into());
+        if received != expected {
+            bail!(ErrorKind::InvalidTxRoot {
+                hash,
+                expected,
+                received,
+            });
         }
 
         Ok(())

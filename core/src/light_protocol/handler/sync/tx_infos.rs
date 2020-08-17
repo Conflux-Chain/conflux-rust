@@ -18,8 +18,8 @@ use crate::{
     consensus::SharedConsensusGraph,
     light_protocol::{
         common::{FullPeerState, LedgerInfo, Peers},
+        error::*,
         message::{msgid, GetTxInfos, TxInfo},
-        Error, ErrorKind,
     },
     message::{Message, RequestId},
     network::NetworkContext,
@@ -32,6 +32,7 @@ use crate::{
     },
     UniqueId,
 };
+use futures::future::FutureExt;
 use network::node_table::NodeId;
 
 #[derive(Debug)]
@@ -47,6 +48,8 @@ type MissingTxInfo = TimeOrdered<H256>;
 // FIXME: struct
 pub type TxInfoValidated = (SignedTransaction, Receipt, TransactionIndex, U256);
 
+type PendingTxInfo = PendingItem<TxInfoValidated, ClonableError>;
+
 pub struct TxInfos {
     // helper API for retrieving ledger information
     ledger: LedgerInfo,
@@ -58,7 +61,7 @@ pub struct TxInfos {
     sync_manager: SyncManager<H256, MissingTxInfo>,
 
     // block txs received from full node
-    verified: Arc<RwLock<LruCache<H256, PendingItem<TxInfoValidated>>>>,
+    verified: Arc<RwLock<LruCache<H256, PendingTxInfo>>>,
 
     // witness sync manager
     pub witnesses: Arc<Witnesses>,
@@ -97,8 +100,10 @@ impl TxInfos {
     #[inline]
     pub fn request_now(
         &self, io: &dyn NetworkContext, hash: H256,
-    ) -> impl Future<Output = TxInfoValidated> {
-        if !self.verified.read().contains_key(&hash) {
+    ) -> impl Future<Output = Result<TxInfoValidated>> {
+        let mut verified = self.verified.write();
+
+        if !verified.contains_key(&hash) {
             let missing = std::iter::once(MissingTxInfo::new(hash));
 
             self.sync_manager.request_now(missing, |peer, hashes| {
@@ -106,14 +111,20 @@ impl TxInfos {
             });
         }
 
+        verified
+            .entry(hash)
+            .or_insert(PendingItem::pending())
+            .clear_error();
+
         FutureItem::new(hash, self.verified.clone())
+            .map(|res| res.map_err(|e| e.into()))
     }
 
     #[inline]
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         infos: impl Iterator<Item = TxInfo>,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         for info in infos {
             debug!("Validating tx_info {:?}", info);
@@ -132,7 +143,29 @@ impl TxInfos {
     }
 
     #[inline]
-    pub fn validate_and_store(&self, info: TxInfo) -> Result<(), Error> {
+    fn validate_and_store(&self, info: TxInfo) -> Result<()> {
+        let tx_hash = info.tx.hash();
+
+        // validate bloom
+        if let Err(e) = self.validate_and_store_tx_info(info) {
+            // forward error to both rpc caller(s) and sync handler
+            // so we need to make it clonable
+            let e = ClonableError::from(e);
+
+            self.verified
+                .write()
+                .entry(tx_hash)
+                .or_insert(PendingItem::pending())
+                .set_error(e.clone());
+
+            bail!(e);
+        }
+
+        Ok(())
+    }
+
+    #[inline]
+    fn validate_and_store_tx_info(&self, info: TxInfo) -> Result<()> {
         let TxInfo {
             epoch,
 
@@ -156,35 +189,41 @@ impl TxInfos {
 
         // quick check for well-formedness
         if block_index_in_epoch >= num_blocks_in_epoch {
-            debug!(
-                "Inconsisent block index: {} >= {}",
-                block_index_in_epoch, num_blocks_in_epoch
-            );
-            return Err(ErrorKind::InvalidTxInfo.into());
+            bail!(ErrorKind::InvalidTxInfo {
+                reason: format!(
+                    "Inconsisent block index: {} >= {}",
+                    block_index_in_epoch, num_blocks_in_epoch
+                )
+            });
         }
 
         if tx_index_in_block >= num_txs_in_block {
-            debug!(
-                "Inconsisent tx index: {} >= {}",
-                tx_index_in_block, num_txs_in_block
-            );
-            return Err(ErrorKind::InvalidTxInfo.into());
+            bail!(ErrorKind::InvalidTxInfo {
+                reason: format!(
+                    "Inconsisent tx index: {} >= {}",
+                    tx_index_in_block, num_txs_in_block
+                )
+            });
         }
 
         // only executed instances of the transaction are acceptable;
         // receipts belonging to non-executed instances should not be sent
         if receipt.outcome_status != 0 && receipt.outcome_status != 1 {
-            debug!(
-                "Unexpected outcome status in tx info: {}",
-                receipt.outcome_status
-            );
-            return Err(ErrorKind::InvalidTxInfo.into());
+            bail!(ErrorKind::InvalidTxInfo {
+                reason: format!(
+                    "Unexpected outcome status in tx info: {}",
+                    receipt.outcome_status
+                )
+            });
         }
 
         let block_hash = match self.ledger.block_hashes_in(epoch)? {
             hs if hs.len() != num_blocks_in_epoch => {
-                debug!("Number of blocks in epoch mismatch: local = {}, received = {}", hs.len(), num_blocks_in_epoch);
-                return Err(ErrorKind::InvalidTxInfo.into());
+                bail!(ErrorKind::InvalidTxInfo {
+                    reason: format!(
+                        "Number of blocks in epoch mismatch: local = {}, received = {}",
+                        hs.len(), num_blocks_in_epoch),
+                });
             }
             hs => hs[block_index_in_epoch],
         };
@@ -215,20 +254,16 @@ impl TxInfos {
             tx_hash,
             &tx_proof,
         ) {
-            debug!("Transaction proof verification failed");
-            return Err(ErrorKind::InvalidTxInfo.into());
+            bail!(ErrorKind::InvalidTxInfo {
+                reason: "Transaction proof verification failed".to_owned()
+            });
         }
 
         // verify receipt proof
         let verified_epoch_receipts_root =
             match self.witnesses.root_hashes_of(epoch) {
                 Some((_, receipts_root, _)) => receipts_root,
-                None => {
-                    // TODO(thegaram): signal to RPC layer that the
-                    // corresponding roots are not available yet
-                    warn!("Receipt root not found, epoch={}", epoch,);
-                    return Err(ErrorKind::InternalError.into());
-                }
+                None => bail!(ErrorKind::WitnessUnavailable { epoch }),
             };
 
         trace!(
@@ -261,8 +296,9 @@ impl TxInfos {
             &receipt,
             &receipt_proof,
         ) {
-            debug!("Receipt proof verification failed");
-            return Err(ErrorKind::InvalidTxInfo.into());
+            bail!(ErrorKind::InvalidTxInfo {
+                reason: "Receipt proof verification failed".to_owned()
+            });
         }
 
         // find prior gas used
@@ -288,8 +324,10 @@ impl TxInfos {
                     &prev_receipt,
                     &prev_receipt_proof,
                 ) {
-                    debug!("Receipt proof verification failed");
-                    return Err(ErrorKind::InvalidTxInfo.into());
+                    bail!(ErrorKind::InvalidTxInfo {
+                        reason: "Previous receipt proof verification failed"
+                            .to_owned()
+                    });
                 }
 
                 prev_receipt.accumulated_gas_used
@@ -297,17 +335,17 @@ impl TxInfos {
 
             // not the first receipt but no previous receipt was provided
             (_, maybe_prev_receipt, maybe_prev_receipt_proof) => {
-                debug!(
-                    "Expected two receipts; received one.
-                    tx_index_in_block = {:?},
-                    maybe_prev_receipt = {:?},
-                    maybe_prev_receipt_proof = {:?}",
-                    tx_index_in_block,
-                    maybe_prev_receipt,
-                    maybe_prev_receipt_proof
-                );
-
-                return Err(ErrorKind::InvalidTxInfo.into());
+                bail!(ErrorKind::InvalidTxInfo {
+                    reason: format!(
+                        "Expected two receipts; received one.
+                        tx_index_in_block = {:?},
+                        maybe_prev_receipt = {:?},
+                        maybe_prev_receipt_proof = {:?}",
+                        tx_index_in_block,
+                        maybe_prev_receipt,
+                        maybe_prev_receipt_proof
+                    )
+                });
             }
         };
 
@@ -336,7 +374,7 @@ impl TxInfos {
     #[inline]
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, hashes: Vec<H256>,
-    ) -> Result<Option<RequestId>, Error> {
+    ) -> Result<Option<RequestId>> {
         debug!("send_request peer={:?} hashes={:?}", peer, hashes);
 
         if hashes.is_empty() {

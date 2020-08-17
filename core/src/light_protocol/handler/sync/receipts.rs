@@ -11,8 +11,8 @@ use std::{future::Future, sync::Arc};
 use crate::{
     light_protocol::{
         common::{FullPeerState, Peers},
+        error::*,
         message::{msgid, GetReceipts, ReceiptsWithEpoch},
-        Error, ErrorKind,
     },
     message::{Message, RequestId},
     network::NetworkContext,
@@ -29,6 +29,7 @@ use super::{
     witnesses::Witnesses,
 };
 use crate::verification::compute_receipts_root;
+use futures::future::FutureExt;
 use network::node_table::NodeId;
 
 #[derive(Debug)]
@@ -41,6 +42,8 @@ struct Statistics {
 // prioritize higher epochs
 type MissingReceipts = KeyOrdered<u64>;
 
+type PendingReceipts = PendingItem<Vec<BlockReceipts>, ClonableError>;
+
 pub struct Receipts {
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
@@ -49,7 +52,7 @@ pub struct Receipts {
     sync_manager: SyncManager<u64, MissingReceipts>,
 
     // epoch receipts received from full node
-    verified: Arc<RwLock<LruCache<u64, PendingItem<Vec<BlockReceipts>>>>>,
+    verified: Arc<RwLock<LruCache<u64, PendingReceipts>>>,
 
     // witness sync manager
     witnesses: Arc<Witnesses>,
@@ -86,24 +89,32 @@ impl Receipts {
     #[inline]
     pub fn request(
         &self, epoch: u64,
-    ) -> impl Future<Output = Vec<BlockReceipts>> {
+    ) -> impl Future<Output = Result<Vec<BlockReceipts>>> {
+        let mut verified = self.verified.write();
+
         if epoch == 0 {
-            self.verified.write().insert(0, PendingItem::ready(vec![]));
+            verified.insert(0, PendingItem::ready(vec![]));
         }
 
-        if !self.verified.read().contains_key(&epoch) {
+        if !verified.contains_key(&epoch) {
             let missing = MissingReceipts::new(epoch);
             self.sync_manager.insert_waiting(std::iter::once(missing));
         }
 
+        verified
+            .entry(epoch)
+            .or_insert(PendingItem::pending())
+            .clear_error();
+
         FutureItem::new(epoch, self.verified.clone())
+            .map(|res| res.map_err(|e| e.into()))
     }
 
     #[inline]
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         receipts: impl Iterator<Item = ReceiptsWithEpoch>,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         for ReceiptsWithEpoch {
             epoch,
@@ -127,9 +138,21 @@ impl Receipts {
     #[inline]
     pub fn validate_and_store(
         &self, epoch: u64, receipts: Vec<BlockReceipts>,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         // validate receipts
-        self.validate_receipts(epoch, &receipts)?;
+        if let Err(e) = self.validate_receipts(epoch, &receipts) {
+            // forward error to both rpc caller(s) and sync handler
+            // so we need to make it clonable
+            let e = ClonableError::from(e);
+
+            self.verified
+                .write()
+                .entry(epoch)
+                .or_insert(PendingItem::pending())
+                .set_error(e.clone());
+
+            bail!(e);
+        }
 
         // store receipts by epoch
         self.verified
@@ -156,7 +179,7 @@ impl Receipts {
     #[inline]
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, epochs: Vec<u64>,
-    ) -> Result<Option<RequestId>, Error> {
+    ) -> Result<Option<RequestId>> {
         debug!("send_request peer={:?} epochs={:?}", peer, epochs);
 
         if epochs.is_empty() {
@@ -185,7 +208,7 @@ impl Receipts {
     #[inline]
     fn validate_receipts(
         &self, epoch: u64, receipts: &Vec<BlockReceipts>,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         // calculate received receipts root
         // convert Vec<Vec<Receipt>> -> Vec<Arc<Vec<Receipt>>>
         // for API compatibility
@@ -198,24 +221,18 @@ impl Receipts {
         let received = compute_receipts_root(&rs);
 
         // retrieve local receipts root
-        let local = match self.witnesses.root_hashes_of(epoch) {
+        let expected = match self.witnesses.root_hashes_of(epoch) {
             Some((_, receipts_root, _)) => receipts_root,
-            None => {
-                warn!(
-                    "Receipt root not found, epoch={}, receipts={:?}",
-                    epoch, receipts
-                );
-                return Err(ErrorKind::InternalError.into());
-            }
+            None => bail!(ErrorKind::WitnessUnavailable { epoch }),
         };
 
         // check
-        if received != local {
-            warn!(
-                "Receipt validation failed, received={:?}, local={:?}",
-                received, local
-            );
-            return Err(ErrorKind::InvalidBloom.into());
+        if received != expected {
+            bail!(ErrorKind::InvalidReceipts {
+                epoch,
+                expected,
+                received,
+            });
         }
 
         Ok(())
