@@ -288,8 +288,10 @@ where
 fn new_state_manager(
     conflux_data_dir: &str,
 ) -> Result<Arc<StateManager>, Error> {
-    let mut storage_conf =
-        StorageConfiguration::new_default(conflux_data_dir.to_string());
+    let mut storage_conf = StorageConfiguration::new_default(
+        conflux_data_dir.to_string(),
+        cfx_parameters::consensus::SNAPSHOT_EPOCHS_CAPACITY,
+    );
     storage_conf.consensus_param.snapshot_epoch_count = 10000000;
     Ok(Arc::new(StateManager::new(storage_conf).unwrap()))
 }

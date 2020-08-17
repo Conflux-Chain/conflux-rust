@@ -74,12 +74,14 @@ pub struct StorageConfiguration {
 }
 
 impl StorageConfiguration {
-    pub fn new_default(conflux_data_dir: String) -> Self {
+    pub fn new_default(
+        conflux_data_dir: String, snapshot_epoch_count: u32,
+    ) -> Self {
         let conflux_data_path = Path::new(&conflux_data_dir);
         StorageConfiguration {
             additional_maintained_snapshot_count: 0,
             consensus_param: ConsensusParam {
-                snapshot_epoch_count: SNAPSHOT_EPOCHS_CAPACITY,
+                snapshot_epoch_count,
             },
             debug_snapshot_checker_threads:
                 defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS,
@@ -134,5 +136,4 @@ pub use self::{
 #[cfg(any(test, feature = "testonly_code"))]
 pub use self::tests::new_state_manager_for_unit_test as new_storage_manager_for_testing;
 use cfx_internal_common::StateRootWithAuxInfo;
-use cfx_parameters::consensus::SNAPSHOT_EPOCHS_CAPACITY;
 use std::path::{Path, PathBuf};

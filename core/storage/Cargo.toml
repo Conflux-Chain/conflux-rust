@@ -9,7 +9,6 @@ edition = "2018"
 [dependencies]
 cfx-bytes = { path = "../../cfx_bytes" }
 cfx-internal-common = { path = "../internal_common" }
-cfx-parameters = { path = "../parameters" }
 cfx-types = { path = "../../cfx_types" }
 derivative = "2.0.2"
 cfxkey = { path = "../../accounts/cfxkey" }
