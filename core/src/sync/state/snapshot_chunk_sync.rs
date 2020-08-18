@@ -2,29 +2,27 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    parameters::consensus_internal::REWARD_EPOCH_COUNT,
-    storage::Result as StorageResult,
-    sync::{
-        error::Error,
-        message::{
-            msgid, Context, SnapshotManifestRequest, SnapshotManifestResponse,
-            StateSyncCandidateRequest,
-        },
-        state::{
-            state_sync_candidate::state_sync_candidate_manager::StateSyncCandidateManager,
-            state_sync_chunk::snapshot_chunk_manager::{
-                SnapshotChunkConfig, SnapshotChunkManager,
-            },
-            state_sync_manifest::snapshot_manifest_manager::{
-                RelatedData, SnapshotManifestConfig, SnapshotManifestManager,
-            },
-            storage::{Chunk, ChunkKey, SnapshotSyncCandidate},
-        },
-        synchronization_state::PeerFilter,
-        SynchronizationProtocolHandler,
+use crate::sync::{
+    error::Error,
+    message::{
+        msgid, Context, SnapshotManifestRequest, SnapshotManifestResponse,
+        StateSyncCandidateRequest,
     },
+    state::{
+        state_sync_candidate::state_sync_candidate_manager::StateSyncCandidateManager,
+        state_sync_chunk::snapshot_chunk_manager::{
+            SnapshotChunkConfig, SnapshotChunkManager,
+        },
+        state_sync_manifest::snapshot_manifest_manager::{
+            RelatedData, SnapshotManifestConfig, SnapshotManifestManager,
+        },
+        storage::{Chunk, ChunkKey, SnapshotSyncCandidate},
+    },
+    synchronization_state::PeerFilter,
+    SynchronizationProtocolHandler,
 };
+use cfx_parameters::consensus_internal::REWARD_EPOCH_COUNT;
+use cfx_storage::Result as StorageResult;
 use cfx_types::H256;
 use network::{node_table::NodeId, NetworkContext};
 use parking_lot::RwLock;

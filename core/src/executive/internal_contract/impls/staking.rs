@@ -3,10 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    parameters::consensus::ONE_CFX_IN_DRIP,
     state::State,
     vm::{self, ActionParams},
 };
+use cfx_parameters::consensus::ONE_CFX_IN_DRIP;
 use cfx_types::U256;
 
 /// Implementation of `deposit(uint256)`.

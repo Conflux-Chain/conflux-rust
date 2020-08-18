@@ -5,14 +5,14 @@
 use crate::{
     error::{BlockError, Error},
     executive::Executive,
-    parameters::block::*,
     pow::{self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem},
-    storage::{
-        into_simple_mpt_key, make_simple_mpt, simple_mpt_merkle_root,
-        simple_mpt_proof, SimpleMpt, TrieProof,
-    },
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
     vm,
+};
+use cfx_parameters::block::*;
+use cfx_storage::{
+    into_simple_mpt_key, make_simple_mpt, simple_mpt_merkle_root,
+    simple_mpt_proof, SimpleMpt, TrieProof,
 };
 use cfx_types::{BigEndianHash, H256, U256};
 use primitives::{

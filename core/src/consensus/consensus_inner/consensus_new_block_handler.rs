@@ -13,12 +13,12 @@ use crate::{
         },
         ConsensusConfig,
     },
-    parameters::{consensus::*, consensus_internal::*},
     state_exposer::{ConsensusGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,
-    storage::{state_manager::StateManagerTrait, StateIndex},
     Notifications, SharedTransactionPool,
 };
+use cfx_parameters::{consensus::*, consensus_internal::*};
+use cfx_storage::{state_manager::StateManagerTrait, StateIndex};
 use cfx_types::H256;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use primitives::{BlockHeader, SignedTransaction};

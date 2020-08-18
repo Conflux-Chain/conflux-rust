@@ -6,11 +6,8 @@ use cfx_types::{Bloom, H160, H256};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 use super::NodeType;
-use crate::{
-    message::RequestId,
-    storage::{NodeMerkleProof, StateProof, TrieProof},
-};
-
+use crate::message::RequestId;
+use cfx_storage::{NodeMerkleProof, StateProof, TrieProof};
 use primitives::{
     BlockHeader, BlockReceipts, ChainIdParams, Receipt, SignedTransaction,
     StateRoot, StorageRoot,
