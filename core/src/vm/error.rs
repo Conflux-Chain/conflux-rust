@@ -21,7 +21,7 @@
 //! VM errors module
 
 use super::{action_params::ActionParams, ResumeCall, ResumeCreate};
-use crate::statedb::Error as DbError;
+use crate::{executive::ABIDecodeError, statedb::Error as DbError};
 use cfx_types::{Address, U256};
 use std::fmt;
 
@@ -130,6 +130,12 @@ impl<T: std::fmt::Debug> PartialEq for PartialEqWrapper<T> {
 
 impl From<DbError> for Error {
     fn from(err: DbError) -> Self { Error::StateDbError(PartialEqWrapper(err)) }
+}
+
+impl From<ABIDecodeError> for Error {
+    fn from(_err: ABIDecodeError) -> Self {
+        Error::InternalContract("Unable to parse input")
+    }
 }
 
 impl fmt::Display for Error {

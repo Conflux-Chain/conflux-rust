@@ -23,7 +23,8 @@ use crate::{
     verification::VerificationConfig,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
-        ExecTrapResult, ResumeCall, ResumeCreate, ReturnData, Spec, TrapError,
+        ExecTrapResult, GasLeft, ResumeCall, ResumeCreate, ReturnData, Spec,
+        TrapError,
     },
     vm_factory::VmFactory,
 };
@@ -323,7 +324,7 @@ impl<'a> CallCreateExecutive<'a> {
     fn transfer_exec_balance(
         params: &ActionParams, spec: &Spec, state: &mut State,
         substate: &mut Substate,
-    ) -> vm::Result<()>
+    ) -> DbResult<()>
     {
         if let ActionValue::Transfer(val) = params.value {
             state.transfer_balance(
@@ -563,63 +564,66 @@ impl<'a> CallCreateExecutive<'a> {
                 let spec = self.spec;
                 let internal_contract_map = self.internal_contract_map;
 
-                let inner = || {
-                    if params.call_type != CallType::Call {
-                        return Err(vm::Error::InternalContract(
-                            "Incorrect call type.",
-                        ));
-                    }
-
-                    Self::check_static_flag(&params, static_flag, is_create)?;
+                let mut pre_inner = || {
+                    Self::check_static_flag(
+                        &params,
+                        static_flag,
+                        is_create,
+                    )?;
                     state.checkpoint();
                     Self::transfer_exec_balance(
                         &params, spec, state, substate,
                     )?;
-
-                    let mut gas_cost = U256::zero();
-                    let result = if let Some(contract) =
-                        internal_contract_map.contract(&params.code_address)
-                    {
-                        gas_cost = contract.cost(&params, state);
-                        if gas_cost > params.gas {
-                            Err(vm::Error::OutOfGas)
-                        } else {
-                            contract.execute(
-                                &params,
-                                &spec,
-                                state,
-                                &mut unconfirmed_substate,
-                            )
-                        }
-                    } else {
-                        Ok(())
-                    };
-                    debug!("Internal Call Result: {:?}", result);
-                    if let Err(e) = result {
-                        state.revert_to_checkpoint();
-                        Err(e.into())
-                    } else {
-                        state.collect_ownership_changed(
-                            &mut unconfirmed_substate,
-                        )?;
-                        state.discard_checkpoint();
-                        substate.accrue(unconfirmed_substate);
-
-                        let internal_contract_out_buffer = Vec::new();
-                        let out_len = internal_contract_out_buffer.len();
-                        Ok(FinalizationResult {
-                            gas_left: params.gas - gas_cost,
-                            return_data: ReturnData::new(
-                                internal_contract_out_buffer,
-                                0,
-                                out_len,
-                            ),
-                            apply_state: true,
-                        })
-                    }
+                    Ok(())
                 };
 
-                Ok(inner())
+                match pre_inner() {
+                    Ok(()) => (),
+                    Err(err) => return Ok(Err(err)),
+                }
+
+                let origin = OriginInfo::from(&params);
+
+                let result = if params.call_type != CallType::Call {
+                    Err(vm::Error::InternalContract(
+                        "Incorrect call type.",
+                    ))
+                } else if let Some(contract) =
+                    internal_contract_map.contract(&params.code_address)
+                {
+                    contract.execute(
+                        &params,
+                        &spec,
+                        state,
+                        &mut unconfirmed_substate,
+                    )
+                } else {
+                    Ok(GasLeft::Known(params.gas))
+                };
+                debug!("Internal Call Result: {:?}", result);
+
+                let context = Self::as_context(
+                    state,
+                    self.env,
+                    self.machine,
+                    self.spec,
+                    self.depth,
+                    self.stack_depth,
+                    self.static_flag,
+                    &origin,
+                    &mut unconfirmed_substate,
+                    OutputPolicy::Return,
+                    self.internal_contract_map,
+                );
+                let out = Ok(result.finalize(context));
+                self.kind = CallCreateExecutiveKind::Moved;
+                self.enact_output(
+                    out,
+                    origin,
+                    state,
+                    substate,
+                    unconfirmed_substate,
+                )
             }
 
             CallCreateExecutiveKind::ExecCall(

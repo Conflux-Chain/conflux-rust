@@ -706,7 +706,7 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("invalid data")
+        vm::Error::InternalContract("Unable to parse input")
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -738,7 +738,7 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("invalid data")
+        vm::Error::InternalContract("Unable to parse input")
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -770,7 +770,7 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("invalid data")
+        vm::Error::InternalContract("Unable to parse input")
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
