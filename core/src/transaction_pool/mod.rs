@@ -526,10 +526,10 @@ impl TransactionPool {
 
     /// content retrieves the ready and deferred transactions.
     pub fn content(
-        &self,
+        &self, address: Option<Address>,
     ) -> (Vec<Arc<SignedTransaction>>, Vec<Arc<SignedTransaction>>) {
         let inner = self.inner.read();
-        inner.content()
+        inner.content(address)
     }
 
     pub fn notify_new_best_info(

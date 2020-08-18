@@ -48,7 +48,7 @@ use crate::{
             RewardInfo as RpcRewardInfo, SendTxRequest,
             SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
             StorageRoot as RpcStorageRoot, SyncGraphStates,
-            Transaction as RpcTransaction, TxWithPoolInfo,
+            Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
         },
         RpcResult,
     },
@@ -1121,7 +1121,7 @@ impl LocalRpc for LocalRpcImpl {
             fn lock_account(&self, address: H160) -> JsonRpcResult<bool>;
             fn sign(&self, data: Bytes, address: H160, password: Option<String>)
                 -> JsonRpcResult<H520>;
-            fn get_pending_transactions(&self, address: H160) -> JsonRpcResult<BTreeMap<String, String>>;
+            fn tx_inspect_pending(&self, address: H160) -> JsonRpcResult<TxPoolPendingInfo>;
 
         }
 

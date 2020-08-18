@@ -34,7 +34,7 @@ use crate::{
             Log as RpcLog, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
             SendTxRequest, SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
             StorageRoot as RpcStorageRoot, SyncGraphStates,
-            Transaction as RpcTransaction, TxWithPoolInfo,
+            Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
         },
         RpcBoxFuture,
     },
@@ -649,7 +649,7 @@ impl LocalRpc for DebugRpcImpl {
             fn unlock_account(&self, address: H160, password: String, duration: Option<U128>) -> RpcResult<bool>;
             fn lock_account(&self, address: H160) -> RpcResult<bool>;
             fn sign(&self, data: Bytes, address: H160, password: Option<String>) -> RpcResult<H520>;
-            fn get_pending_transactions(&self, address: H160) -> RpcResult<BTreeMap<String, String>>;
+            fn tx_inspect_pending(&self, address: H160) -> RpcResult<TxPoolPendingInfo>;
         }
 
         to self.rpc_impl {

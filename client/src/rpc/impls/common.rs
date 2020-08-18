@@ -4,7 +4,8 @@
 
 use crate::rpc::types::{
     Block as RpcBlock, BlockHashOrEpochNumber, Bytes, EpochNumber,
-    Status as RpcStatus, Transaction as RpcTransaction, TxWithPoolInfo,
+    Status as RpcStatus, Transaction as RpcTransaction, TxPoolPendingInfo,
+    TxWithPoolInfo,
 };
 use bigdecimal::BigDecimal;
 use cfx_types::{Address, H160, H256, H520, U128, U256, U64};
@@ -508,17 +509,10 @@ impl RpcImpl {
     pub fn txs_from_pool(
         &self, address: Option<H160>,
     ) -> RpcResult<Vec<RpcTransaction>> {
-        let (mut ready_txs, mut deferred_txs) = self.tx_pool.content();
+        let (ready_txs, deferred_txs) = self.tx_pool.content(address);
         let converter = |tx: &Arc<SignedTransaction>| -> RpcTransaction {
             RpcTransaction::from_signed(&tx, None)
         };
-        if let Some(addr) = address {
-            let address_filter =
-                |tx: &Arc<SignedTransaction>| -> bool { tx.sender == addr };
-            ready_txs = ready_txs.into_iter().filter(address_filter).collect();
-            deferred_txs =
-                deferred_txs.into_iter().filter(address_filter).collect();
-        }
         let result = ready_txs
             .iter()
             .map(converter)
@@ -535,17 +529,10 @@ impl RpcImpl {
             BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
         >,
     > {
-        let (mut ready_txs, mut deferred_txs) = self.tx_pool.content();
+        let (ready_txs, deferred_txs) = self.tx_pool.content(address);
         let converter = |tx: Arc<SignedTransaction>| -> RpcTransaction {
             RpcTransaction::from_signed(&tx, None)
         };
-        if let Some(addr) = address {
-            let address_filter =
-                |tx: &Arc<SignedTransaction>| -> bool { tx.sender == addr };
-            ready_txs = ready_txs.into_iter().filter(address_filter).collect();
-            deferred_txs =
-                deferred_txs.into_iter().filter(address_filter).collect();
-        }
 
         let mut ret: BTreeMap<
             String,
@@ -562,7 +549,7 @@ impl RpcImpl {
     ) -> RpcResult<
         BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
     > {
-        let (mut ready_txs, mut deferred_txs) = self.tx_pool.content();
+        let (ready_txs, deferred_txs) = self.tx_pool.content(address);
         let converter = |tx: Arc<SignedTransaction>| -> String {
             let to = match tx.action {
                 Action::Create => "<Create contract>".into(),
@@ -574,13 +561,6 @@ impl RpcImpl {
                 to, tx.value, tx.gas, tx.gas_price
             )
         };
-        if let Some(addr) = address {
-            let address_filter =
-                |tx: &Arc<SignedTransaction>| -> bool { tx.sender == addr };
-            ready_txs = ready_txs.into_iter().filter(address_filter).collect();
-            deferred_txs =
-                deferred_txs.into_iter().filter(address_filter).collect();
-        }
 
         let mut ret: BTreeMap<
             String,
@@ -704,21 +684,16 @@ impl RpcImpl {
         Ok(format!("conflux-rust-{}", crate_version!()).into())
     }
 
-    pub fn get_pending_transactions(
+    pub fn tx_inspect_pending(
         &self, address: H160,
-    ) -> RpcResult<BTreeMap<String, String>> {
-        let mut ret: BTreeMap<String, String> = BTreeMap::new();
-        let (mut deferred_txs, _) = self.tx_pool.content();
-        deferred_txs = deferred_txs
-            .into_iter()
-            .filter(|tx| {
-                tx.sender == address
-                    && !self.tx_pool.check_tx_packed_in_deferred_pool(&tx.hash)
-            })
-            .collect();
+    ) -> RpcResult<TxPoolPendingInfo> {
+        let mut ret = TxPoolPendingInfo::default();
+        let (deferred_txs, _) = self.tx_pool.content(Some(address));
         let mut max_nonce: U256 = U256::from(0);
         let mut min_nonce: U256 = U256::max_value();
+        let mut pending_count = 0;
         for tx in deferred_txs.iter() {
+            pending_count += 1;
             if tx.nonce > max_nonce {
                 max_nonce = tx.nonce;
             }
@@ -726,9 +701,9 @@ impl RpcImpl {
                 min_nonce = tx.nonce;
             }
         }
-        ret.insert("pending_count".into(), format!("{}", deferred_txs.len()));
-        ret.insert("min_nonce".into(), min_nonce.to_string());
-        ret.insert("max_nonce".into(), max_nonce.to_string());
+        ret.pending_count = pending_count;
+        ret.min_nonce = min_nonce;
+        ret.max_nonce = max_nonce;
         Ok(ret)
     }
 }

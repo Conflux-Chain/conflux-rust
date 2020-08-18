@@ -703,16 +703,22 @@ impl TransactionPoolInner {
 
     /// content retrieves the ready and deferred transactions.
     pub fn content(
-        &self,
+        &self, address: Option<Address>,
     ) -> (Vec<Arc<SignedTransaction>>, Vec<Arc<SignedTransaction>>) {
         let ready_txs = self
             .ready_account_pool
             .treap
             .iter()
+            .filter(|tx| address == None || &address.unwrap() == tx.0)
             .map(|(_, tx)| tx.clone())
             .collect();
 
-        let deferred_txs = self.txs.values().map(|v| v.clone()).collect();
+        let deferred_txs = self
+            .txs
+            .values()
+            .filter(|tx| address == None || tx.sender == address.unwrap())
+            .map(|v| v.clone())
+            .collect();
 
         (ready_txs, deferred_txs)
     }

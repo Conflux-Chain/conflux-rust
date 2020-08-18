@@ -185,3 +185,10 @@ pub struct TxWithPoolInfo {
     pub local_balance_enough: bool,
     pub state_balance_enough: bool,
 }
+
+#[derive(Default, Serialize)]
+pub struct TxPoolPendingInfo {
+    pub pending_count: i32,
+    pub min_nonce: U256,
+    pub max_nonce: U256,
+}

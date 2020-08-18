@@ -4,7 +4,7 @@
 
 use super::super::types::{
     Bytes as RpcBytes, ConsensusGraphStates, SyncGraphStates,
-    Transaction as RpcTransaction, TxWithPoolInfo,
+    Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
 };
 use crate::rpc::types::SendTxRequest;
 use cfx_types::{H160, H256, H520, U128};
@@ -21,10 +21,10 @@ pub trait LocalRpc {
     #[rpc(name = "txpool_status")]
     fn txpool_status(&self) -> JsonRpcResult<BTreeMap<String, usize>>;
 
-    #[rpc(name = "cfx_getPendingTransactions")]
-    fn get_pending_transactions(
+    #[rpc(name = "tx_inspect_pending")]
+    fn tx_inspect_pending(
         &self, address: H160,
-    ) -> JsonRpcResult<BTreeMap<String, String>>;
+    ) -> JsonRpcResult<TxPoolPendingInfo>;
 
     #[rpc(name = "tx_inspect")]
     fn tx_inspect(&self, hash: H256) -> JsonRpcResult<TxWithPoolInfo>;
