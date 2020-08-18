@@ -691,9 +691,7 @@ impl RpcImpl {
         let (deferred_txs, _) = self.tx_pool.content(Some(address));
         let mut max_nonce: U256 = U256::from(0);
         let mut min_nonce: U256 = U256::max_value();
-        let mut pending_count = 0;
         for tx in deferred_txs.iter() {
-            pending_count += 1;
             if tx.nonce > max_nonce {
                 max_nonce = tx.nonce;
             }
@@ -701,7 +699,7 @@ impl RpcImpl {
                 min_nonce = tx.nonce;
             }
         }
-        ret.pending_count = pending_count;
+        ret.pending_count = deferred_txs.len();
         ret.min_nonce = min_nonce;
         ret.max_nonce = max_nonce;
         Ok(ret)

@@ -709,7 +709,7 @@ impl TransactionPoolInner {
             .ready_account_pool
             .treap
             .iter()
-            .filter(|tx| address == None || &address.unwrap() == tx.0)
+            .filter(|address_tx| address == None || &address.unwrap() == address_tx.0)
             .map(|(_, tx)| tx.clone())
             .collect();
 

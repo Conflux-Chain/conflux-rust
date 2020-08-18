@@ -188,7 +188,7 @@ pub struct TxWithPoolInfo {
 
 #[derive(Default, Serialize)]
 pub struct TxPoolPendingInfo {
-    pub pending_count: i32,
+    pub pending_count: usize,
     pub min_nonce: U256,
     pub max_nonce: U256,
 }
