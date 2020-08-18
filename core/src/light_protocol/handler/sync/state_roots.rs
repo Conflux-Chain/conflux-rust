@@ -12,8 +12,8 @@ use std::{future::Future, sync::Arc};
 use crate::{
     light_protocol::{
         common::{FullPeerState, Peers},
+        error::*,
         message::{msgid, GetStateRoots, StateRootWithEpoch},
-        Error, ErrorKind,
     },
     message::{Message, RequestId},
     network::NetworkContext,
@@ -28,6 +28,7 @@ use super::{
     common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
     witnesses::Witnesses,
 };
+use futures::future::FutureExt;
 use network::node_table::NodeId;
 
 #[derive(Debug)]
@@ -38,6 +39,8 @@ struct Statistics {
 }
 
 type MissingStateRoot = TimeOrdered<u64>;
+
+type PendingStateRoot = PendingItem<StateRoot, ClonableError>;
 
 pub struct StateRoots {
     // series of unique request ids
@@ -50,7 +53,7 @@ pub struct StateRoots {
     sync_manager: SyncManager<u64, MissingStateRoot>,
 
     // bloom filters received from full node
-    verified: Arc<RwLock<LruCache<u64, PendingItem<StateRoot>>>>,
+    verified: Arc<RwLock<LruCache<u64, PendingStateRoot>>>,
 
     // witness sync manager
     witnesses: Arc<Witnesses>,
@@ -98,8 +101,10 @@ impl StateRoots {
     #[inline]
     pub fn request_now(
         &self, io: &dyn NetworkContext, epoch: u64,
-    ) -> impl Future<Output = StateRoot> {
-        if !self.verified.read().contains_key(&epoch) {
+    ) -> impl Future<Output = Result<StateRoot>> {
+        let mut verified = self.verified.write();
+
+        if !verified.contains_key(&epoch) {
             let missing = std::iter::once(MissingStateRoot::new(epoch));
 
             self.sync_manager.request_now(missing, |peer, epochs| {
@@ -107,14 +112,20 @@ impl StateRoots {
             });
         }
 
+        verified
+            .entry(epoch)
+            .or_insert(PendingItem::pending())
+            .clear_error();
+
         FutureItem::new(epoch, self.verified.clone())
+            .map(|res| res.map_err(|e| e.into()))
     }
 
     #[inline]
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         state_roots: impl Iterator<Item = StateRootWithEpoch>,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         for StateRootWithEpoch { epoch, state_root } in state_roots {
             debug!(
@@ -134,9 +145,21 @@ impl StateRoots {
     #[inline]
     pub fn validate_and_store(
         &self, epoch: u64, state_root: StateRoot,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         // validate state root
-        self.validate_state_root(epoch, &state_root)?;
+        if let Err(e) = self.validate_state_root(epoch, &state_root) {
+            // forward error to both rpc caller(s) and sync handler
+            // so we need to make it clonable
+            let e = ClonableError::from(e);
+
+            self.verified
+                .write()
+                .entry(epoch)
+                .or_insert(PendingItem::pending())
+                .set_error(e.clone());
+
+            bail!(e);
+        }
 
         // store state root by epoch
         self.verified
@@ -163,7 +186,7 @@ impl StateRoots {
     #[inline]
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, epochs: Vec<u64>,
-    ) -> Result<Option<RequestId>, Error> {
+    ) -> Result<Option<RequestId>> {
         debug!("send_request peer={:?} epochs={:?}", peer, epochs);
 
         if epochs.is_empty() {
@@ -192,29 +215,23 @@ impl StateRoots {
     #[inline]
     pub fn validate_state_root(
         &self, epoch: u64, state_root: &StateRoot,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         // calculate received state root hash
         let received = state_root.compute_state_root_hash();
 
         // retrieve local state root hash
-        let local = match self.witnesses.root_hashes_of(epoch) {
+        let expected = match self.witnesses.root_hashes_of(epoch) {
             Some((state_root, _, _)) => state_root,
-            None => {
-                warn!(
-                    "State root hash not found, epoch={}, state_root={:?}",
-                    epoch, state_root
-                );
-                return Err(ErrorKind::InternalError.into());
-            }
+            None => bail!(ErrorKind::WitnessUnavailable { epoch }),
         };
 
         // check
-        if received != local {
-            warn!(
-                "State root validation failed, received={:?}, local={:?}",
-                received, local
-            );
-            return Err(ErrorKind::InvalidStateRoot.into());
+        if received != expected {
+            bail!(ErrorKind::InvalidStateRoot {
+                epoch,
+                expected,
+                received,
+            });
         }
 
         Ok(())
@@ -224,25 +241,38 @@ impl StateRoots {
     pub fn validate_prev_snapshot_state_root(
         &self, current_epoch: u64,
         maybe_prev_snapshot_state_root: &Option<StateRoot>,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
+        let snapshot_epoch_count = self.snapshot_epoch_count;
+
         match maybe_prev_snapshot_state_root {
             Some(ref root) => {
                 // root provided for non-existent epoch
-                if current_epoch <= self.snapshot_epoch_count {
-                    return Err(ErrorKind::InvalidStateRoot.into());
+                if current_epoch <= snapshot_epoch_count {
+                    // previous root should not have been provided
+                    // for the first snapshot period
+                    bail!(ErrorKind::InvalidPreviousStateRoot {
+                        current_epoch,
+                        snapshot_epoch_count,
+                        root: maybe_prev_snapshot_state_root.clone()
+                    });
                 }
 
                 // root provided for previous snapshot
                 self.validate_state_root(
-                    current_epoch - self.snapshot_epoch_count,
+                    current_epoch - snapshot_epoch_count,
                     &root,
                 )?;
             }
             None => {
-                // root not provided even though previous snapshot exists
-                if current_epoch > self.snapshot_epoch_count {
-                    return Err(ErrorKind::InvalidStateRoot.into());
+                if current_epoch > snapshot_epoch_count {
+                    // previous root should have been provided
+                    // for subsequent snapshot periods
+                    bail!(ErrorKind::InvalidPreviousStateRoot {
+                        current_epoch,
+                        snapshot_epoch_count,
+                        root: maybe_prev_snapshot_state_root.clone()
+                    });
                 }
             }
         }

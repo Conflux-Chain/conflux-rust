@@ -13,8 +13,8 @@ use crate::{
     hash::keccak,
     light_protocol::{
         common::{FullPeerState, Peers},
+        error::*,
         message::{msgid, BloomWithEpoch, GetBlooms},
-        Error, ErrorKind,
     },
     message::{Message, RequestId},
     network::NetworkContext,
@@ -29,6 +29,7 @@ use super::{
     common::{FutureItem, KeyOrdered, PendingItem, SyncManager},
     witnesses::Witnesses,
 };
+use futures::future::FutureExt;
 use network::node_table::NodeId;
 
 #[derive(Debug)]
@@ -41,6 +42,8 @@ struct Statistics {
 // prioritize higher epochs
 type MissingBloom = KeyOrdered<u64>;
 
+type PendingBloom = PendingItem<Bloom, ClonableError>;
+
 pub struct Blooms {
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
@@ -49,7 +52,7 @@ pub struct Blooms {
     sync_manager: SyncManager<u64, MissingBloom>,
 
     // bloom filters received from full node
-    verified: Arc<RwLock<LruCache<u64, PendingItem<Bloom>>>>,
+    verified: Arc<RwLock<LruCache<u64, PendingBloom>>>,
 
     // witness sync manager
     witnesses: Arc<Witnesses>,
@@ -84,26 +87,32 @@ impl Blooms {
     }
 
     #[inline]
-    pub fn request(&self, epoch: u64) -> impl Future<Output = Bloom> {
+    pub fn request(&self, epoch: u64) -> impl Future<Output = Result<Bloom>> {
+        let mut verified = self.verified.write();
+
         if epoch == 0 {
-            self.verified
-                .write()
-                .insert(0, PendingItem::ready(Bloom::zero()));
+            verified.insert(0, PendingItem::ready(Bloom::zero()));
         }
 
-        if !self.verified.read().contains_key(&epoch) {
+        if !verified.contains_key(&epoch) {
             let missing = MissingBloom::new(epoch);
             self.sync_manager.insert_waiting(std::iter::once(missing));
         }
 
+        verified
+            .entry(epoch)
+            .or_insert(PendingItem::pending())
+            .clear_error();
+
         FutureItem::new(epoch, self.verified.clone())
+            .map(|res| res.map_err(|e| e.into()))
     }
 
     #[inline]
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         blooms: impl Iterator<Item = BloomWithEpoch>,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         for BloomWithEpoch { epoch, bloom } in blooms {
             debug!("Validating bloom {:?} with epoch {}", bloom, epoch);
@@ -118,11 +127,21 @@ impl Blooms {
     }
 
     #[inline]
-    pub fn validate_and_store(
-        &self, epoch: u64, bloom: Bloom,
-    ) -> Result<(), Error> {
+    pub fn validate_and_store(&self, epoch: u64, bloom: Bloom) -> Result<()> {
         // validate bloom
-        self.validate_bloom(epoch, bloom)?;
+        if let Err(e) = self.validate_bloom(epoch, bloom) {
+            // forward error to both rpc caller(s) and sync handler
+            // so we need to make it clonable
+            let e = ClonableError::from(e);
+
+            self.verified
+                .write()
+                .entry(epoch)
+                .or_insert(PendingItem::pending())
+                .set_error(e.clone());
+
+            bail!(e);
+        }
 
         // store bloom by epoch
         self.verified
@@ -149,7 +168,7 @@ impl Blooms {
     #[inline]
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, epochs: Vec<u64>,
-    ) -> Result<Option<RequestId>, Error> {
+    ) -> Result<Option<RequestId>> {
         debug!("send_request peer={:?} epochs={:?}", peer, epochs);
 
         if epochs.is_empty() {
@@ -175,29 +194,23 @@ impl Blooms {
     }
 
     #[inline]
-    fn validate_bloom(&self, epoch: u64, bloom: Bloom) -> Result<(), Error> {
+    fn validate_bloom(&self, epoch: u64, bloom: Bloom) -> Result<()> {
         // calculate received bloom hash
         let received = keccak(bloom);
 
         // retrieve local bloom hash
-        let local = match self.witnesses.root_hashes_of(epoch) {
+        let expected = match self.witnesses.root_hashes_of(epoch) {
             Some((_, _, bloom_hash)) => bloom_hash,
-            None => {
-                warn!(
-                    "Bloom hash not found, epoch={}, bloom={:?}",
-                    epoch, bloom
-                );
-                return Err(ErrorKind::InternalError.into());
-            }
+            None => bail!(ErrorKind::WitnessUnavailable { epoch }),
         };
 
         // check
-        if received != local {
-            warn!(
-                "Bloom validation failed, received={:?}, local={:?}",
-                received, local
-            );
-            return Err(ErrorKind::InvalidBloom.into());
+        if received != expected {
+            bail!(ErrorKind::InvalidBloom {
+                epoch,
+                expected,
+                received,
+            });
         }
 
         Ok(())

@@ -305,17 +305,24 @@ impl FromStr for Node {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (id, endpoint) = if s.len() > 138
-            && &s[0..10] == "cfxnode://"
-            && &s[138..139] == "@"
-        {
-            (
-                s[10..138].parse().map_err(|_| ErrorKind::InvalidNodeId)?,
-                NodeEndpoint::from_str(&s[139..])?,
-            )
-        } else {
-            (NodeId::default(), NodeEndpoint::from_str(s)?)
-        };
+        let (id, endpoint) =
+            if let Some(id_and_address_str) = s.strip_prefix("cfxnode://") {
+                // A node url with format "cfxnode://ID@IP:PORT"
+                let delimiter_index = id_and_address_str
+                    .find("@")
+                    .ok_or(ErrorKind::AddressParse)?;
+                (
+                    id_and_address_str[..delimiter_index]
+                        .parse()
+                        .map_err(|_| ErrorKind::InvalidNodeId)?,
+                    NodeEndpoint::from_str(
+                        &id_and_address_str[delimiter_index + 1..],
+                    )?,
+                )
+            } else {
+                // A simple address without node id.
+                (NodeId::default(), NodeEndpoint::from_str(s)?)
+            };
 
         Ok(Node {
             id,

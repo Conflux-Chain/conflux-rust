@@ -1043,7 +1043,7 @@ impl NetworkServiceInner {
             // communications from any dropped peers
             let mut session_node_id = session.read().id().map(|id| *id);
             if let Some(node_id) = session_node_id {
-                let to_drop = { self.dropped_nodes.read().contains(&node_id) };
+                let to_drop = self.dropped_nodes.read().contains(&node_id);
                 self.drop_peers(io);
                 if to_drop {
                     return;
@@ -1169,10 +1169,10 @@ impl NetworkServiceInner {
                 // communications from any dropped peers
                 let sess_id = session.read().id().map(|id| *id);
                 if let Some(node_id) = sess_id {
-                    let to_drop =
-                        { self.dropped_nodes.read().contains(&node_id) };
+                    let to_drop = self.dropped_nodes.read().contains(&node_id);
+                    self.drop_peers(io);
                     if to_drop {
-                        self.drop_peers(io);
+                        return;
                     }
                 }
             }

@@ -42,8 +42,10 @@ impl LedgerInfo {
             .get_data_manager()
             .block_by_hash(&hash, false /* update_cache */)
             .map(|b| (*b).clone())
-            // FIXME: what's this internal error?
-            .ok_or(ErrorKind::InternalError.into())
+            .ok_or_else(|| {
+                ErrorKind::InternalError(format!("Block {:?} not found", hash))
+                    .into()
+            })
     }
 
     /// Get header `hash`, if it exists.
@@ -53,12 +55,15 @@ impl LedgerInfo {
             .get_data_manager()
             .block_header_by_hash(&hash)
             .map(|h| (*h).clone())
-            .ok_or(ErrorKind::InternalError.into())
+            .ok_or_else(|| {
+                ErrorKind::InternalError(format!("Header {:?} not found", hash))
+                    .into()
+            })
     }
 
     /// Get hash of block at `height` on the pivot chain, if it exists.
     #[inline]
-    pub fn pivot_hash_of(&self, height: u64) -> Result<H256, Error> {
+    fn pivot_hash_of(&self, height: u64) -> Result<H256, Error> {
         let epoch = EpochNumber::Number(height);
         Ok(self.consensus.get_hash_from_epoch_number(epoch)?)
     }
@@ -81,7 +86,7 @@ impl LedgerInfo {
     /// Get the correct deferred state root of the block at `height` on the
     /// pivot chain based on local execution information.
     #[inline]
-    pub fn correct_deferred_state_root_hash_of(
+    fn correct_deferred_state_root_hash_of(
         &self, height: u64,
     ) -> Result<H256, Error> {
         let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
@@ -92,7 +97,7 @@ impl LedgerInfo {
     /// Get the correct deferred receipts root of the block at `height` on the
     /// pivot chain based on local execution information.
     #[inline]
-    pub fn correct_deferred_receipts_root_hash_of(
+    fn correct_deferred_receipts_root_hash_of(
         &self, height: u64,
     ) -> Result<H256, Error> {
         let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
@@ -102,13 +107,19 @@ impl LedgerInfo {
             .get_data_manager()
             .get_epoch_execution_commitment(&pivot)
             .map(|c| c.receipts_root)
-            .ok_or(ErrorKind::InternalError.into())
+            .ok_or_else(|| {
+                ErrorKind::InternalError(format!(
+                    "Execution commitments for {:?} not found",
+                    pivot
+                ))
+                .into()
+            })
     }
 
     /// Get the correct deferred logs bloom root of the block at `height` on the
     /// pivot chain based on local execution information.
     #[inline]
-    pub fn correct_deferred_logs_root_hash_of(
+    fn correct_deferred_logs_root_hash_of(
         &self, height: u64,
     ) -> Result<H256, Error> {
         let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
@@ -118,7 +129,13 @@ impl LedgerInfo {
             .get_data_manager()
             .get_epoch_execution_commitment(&pivot)
             .map(|c| c.logs_bloom_hash)
-            .ok_or(ErrorKind::InternalError.into())
+            .ok_or_else(|| {
+                ErrorKind::InternalError(format!(
+                    "Execution commitments for {:?} not found",
+                    pivot
+                ))
+                .into()
+            })
     }
 
     /// Get the number of epochs per snapshot period.
@@ -129,7 +146,7 @@ impl LedgerInfo {
 
     /// Get the state trie corresponding to the execution of `epoch`.
     #[inline]
-    pub fn state_of(&self, epoch: u64) -> Result<State, Error> {
+    fn state_of(&self, epoch: u64) -> Result<State, Error> {
         let pivot = self.pivot_hash_of(epoch)?;
 
         let maybe_state_index = self
@@ -145,7 +162,12 @@ impl LedgerInfo {
 
         match state {
             Some(Ok(Some(state))) => Ok(state),
-            _ => Err(ErrorKind::InternalError.into()),
+            _ => {
+                bail!(ErrorKind::InternalError(format!(
+                    "State of epoch {} not found",
+                    epoch
+                )));
+            }
         }
     }
 
@@ -156,7 +178,12 @@ impl LedgerInfo {
     ) -> Result<StateRootWithAuxInfo, Error> {
         match self.state_of(epoch)?.get_state_root() {
             Ok(root) => Ok(root),
-            _ => Err(ErrorKind::InternalError.into()),
+            Err(e) => {
+                bail!(ErrorKind::InternalError(format!(
+                    "State root of epoch {} not found: {:?}",
+                    epoch, e
+                )));
+            }
         }
     }
 
@@ -207,7 +234,13 @@ impl LedgerInfo {
                         false, /* update_cache */
                     )
                     .map(|res| (*res.block_receipts).clone())
-                    .ok_or(ErrorKind::InternalError.into())
+                    .ok_or_else(|| {
+                        ErrorKind::InternalError(format!(
+                            "Receipts of epoch {} not found",
+                            epoch
+                        ))
+                        .into()
+                    })
             })
             .collect()
     }
@@ -232,7 +265,13 @@ impl LedgerInfo {
                         false, /* update_cache */
                     )
                     .map(|res| res.bloom)
-                    .ok_or(ErrorKind::InternalError.into())
+                    .ok_or_else(|| {
+                        ErrorKind::InternalError(format!(
+                            "Logs bloom of epoch {} not found",
+                            epoch
+                        ))
+                        .into()
+                    })
             })
             .collect::<Result<Vec<Bloom>, Error>>()?;
 

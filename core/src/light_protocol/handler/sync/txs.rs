@@ -13,8 +13,8 @@ use std::{future::Future, sync::Arc};
 use crate::{
     light_protocol::{
         common::{FullPeerState, Peers},
+        error::*,
         message::{msgid, GetTxs},
-        Error, ErrorKind,
     },
     message::{Message, RequestId},
     network::NetworkContext,
@@ -26,6 +26,7 @@ use crate::{
 };
 
 use super::common::{FutureItem, PendingItem, SyncManager, TimeOrdered};
+use futures::future::FutureExt;
 use network::node_table::NodeId;
 
 #[derive(Debug)]
@@ -38,6 +39,8 @@ struct Statistics {
 // prioritize earlier requests
 type MissingTx = TimeOrdered<H256>;
 
+type PendingTx = PendingItem<SignedTransaction, ClonableError>;
+
 pub struct Txs {
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
@@ -46,7 +49,7 @@ pub struct Txs {
     sync_manager: SyncManager<H256, MissingTx>,
 
     // txs received from full node
-    verified: Arc<RwLock<LruCache<H256, PendingItem<SignedTransaction>>>>,
+    verified: Arc<RwLock<LruCache<H256, PendingTx>>>,
 }
 
 impl Txs {
@@ -77,8 +80,10 @@ impl Txs {
     #[inline]
     pub fn request_now(
         &self, io: &dyn NetworkContext, hash: H256,
-    ) -> impl Future<Output = SignedTransaction> {
-        if !self.verified.read().contains_key(&hash) {
+    ) -> impl Future<Output = Result<SignedTransaction>> {
+        let mut verified = self.verified.write();
+
+        if !verified.contains_key(&hash) {
             let missing = std::iter::once(MissingTx::new(hash));
 
             self.sync_manager.request_now(missing, |peer, hashes| {
@@ -86,14 +91,20 @@ impl Txs {
             });
         }
 
+        verified
+            .entry(hash)
+            .or_insert(PendingItem::pending())
+            .clear_error();
+
         FutureItem::new(hash, self.verified.clone())
+            .map(|res| res.map_err(|e| e.into()))
     }
 
     #[inline]
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         txs: impl Iterator<Item = SignedTransaction>,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         for tx in txs {
             let hash = tx.hash();
@@ -109,11 +120,23 @@ impl Txs {
     }
 
     #[inline]
-    pub fn validate_and_store(
-        &self, tx: SignedTransaction,
-    ) -> Result<(), Error> {
+    fn validate_and_store(&self, tx: SignedTransaction) -> Result<()> {
         let hash = tx.hash();
-        self.validate_tx(&tx)?;
+
+        // validate tx
+        if let Err(e) = self.validate_tx(&tx) {
+            // forward error to both rpc caller(s) and sync handler
+            // so we need to make it clonable
+            let e = ClonableError::from(e);
+
+            self.verified
+                .write()
+                .entry(hash)
+                .or_insert(PendingItem::pending())
+                .set_error(e.clone());
+
+            bail!(e);
+        }
 
         self.verified
             .write()
@@ -139,7 +162,7 @@ impl Txs {
     #[inline]
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, hashes: Vec<H256>,
-    ) -> Result<Option<RequestId>, Error> {
+    ) -> Result<Option<RequestId>> {
         debug!("send_request peer={:?} hashes={:?}", peer, hashes);
 
         if hashes.is_empty() {
@@ -165,12 +188,12 @@ impl Txs {
     }
 
     #[inline]
-    fn validate_tx(&self, tx: &SignedTransaction) -> Result<(), Error> {
+    pub fn validate_tx(&self, tx: &SignedTransaction) -> Result<()> {
         match tx.verify_public(false /* skip */) {
             Ok(true) => {}
             _ => {
                 warn!("Tx signature verification failed for {:?}", tx);
-                return Err(ErrorKind::InvalidTxSignature.into());
+                bail!(ErrorKind::InvalidTxSignature { hash: tx.hash() });
             }
         }
 

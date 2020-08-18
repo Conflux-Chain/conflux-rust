@@ -17,6 +17,7 @@ use crate::{
             partition_results, validate_chain_id, LedgerInfo, LightPeerState,
             Peers,
         },
+        error::*,
         handle_error,
         message::{
             msgid, BlockHashes as GetBlockHashesResponse,
@@ -36,9 +37,8 @@ use crate::{
             TxInfos as GetTxInfosResponse, Txs as GetTxsResponse,
             WitnessInfo as GetWitnessInfoResponse,
         },
-        Error, ErrorKind, LIGHT_PROTOCOL_ID,
-        LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT, LIGHT_PROTOCOL_VERSION,
-        LIGHT_PROTO_V1,
+        LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT,
+        LIGHT_PROTOCOL_VERSION, LIGHT_PROTO_V1,
     },
     message::{decode_msg, decode_rlp_and_check_deprecation, Message, MsgId},
     network::{
@@ -121,7 +121,7 @@ impl Provider {
 
     pub fn register(
         self: &Arc<Self>, network: Arc<NetworkService>,
-    ) -> Result<(), String> {
+    ) -> std::result::Result<(), String> {
         network
             .register_protocol(
                 self.clone(),
@@ -136,27 +136,27 @@ impl Provider {
     #[inline]
     fn get_existing_peer_state(
         &self, peer: &NodeId,
-    ) -> Result<Arc<RwLock<LightPeerState>>, Error> {
+    ) -> Result<Arc<RwLock<LightPeerState>>> {
         match self.peers.get(peer) {
             Some(state) => Ok(state),
             None => {
                 // NOTE: this should not happen as we register
                 // all peers in `on_peer_connected`
-                error!("Received message from unknown peer={:?}", peer);
-                bail!(ErrorKind::InternalError)
+                bail!(ErrorKind::InternalError(format!(
+                    "Received message from unknown peer={:?}",
+                    peer
+                )))
             }
         }
     }
 
     #[inline]
-    fn peer_version(&self, peer: &NodeId) -> Result<ProtocolVersion, Error> {
+    fn peer_version(&self, peer: &NodeId) -> Result<ProtocolVersion> {
         Ok(self.get_existing_peer_state(peer)?.read().protocol_version)
     }
 
     #[inline]
-    fn validate_peer_state(
-        &self, peer: &NodeId, msg_id: MsgId,
-    ) -> Result<(), Error> {
+    fn validate_peer_state(&self, peer: &NodeId, msg_id: MsgId) -> Result<()> {
         let state = self.get_existing_peer_state(&peer)?;
 
         if msg_id != msgid::STATUS_PING_DEPRECATED
@@ -164,7 +164,13 @@ impl Provider {
             && !state.read().handshake_completed
         {
             warn!("Received msg={:?} from handshaking peer={:?}", msg_id, peer);
-            bail!(ErrorKind::UnexpectedMessage);
+            bail!(ErrorKind::UnexpectedMessage {
+                expected: vec![
+                    msgid::STATUS_PING_DEPRECATED,
+                    msgid::STATUS_PING_V2
+                ],
+                received: msg_id,
+            });
         }
 
         Ok(())
@@ -173,7 +179,7 @@ impl Provider {
     #[rustfmt::skip]
     fn dispatch_message(
         &self, io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, rlp: Rlp,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
         self.validate_peer_state(peer, msg_id)?;
         let min_supported_ver = self.minimum_supported_version();
@@ -194,7 +200,7 @@ impl Provider {
             msgid::GET_BLOCK_TXS => self.on_get_block_txs(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::GET_TX_INFOS => self.on_get_tx_infos(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::GET_STORAGE_ROOTS => self.on_get_storage_roots(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
-            _ => bail!(ErrorKind::UnknownMessage),
+            _ => bail!(ErrorKind::UnknownMessage{id: msg_id}),
         }
     }
 
@@ -218,20 +224,18 @@ impl Provider {
     }
 
     #[inline]
-    fn tx_info_by_hash(&self, hash: H256) -> Result<TxInfo, Error> {
+    fn tx_info_by_hash(&self, hash: H256) -> Result<TxInfo> {
         let (tx, tx_index, receipt) =
             match self.consensus.get_transaction_info_by_hash(&hash) {
                 None => {
-                    bail!(ErrorKind::UnableToProduceTxInfo(format!(
-                        "Unable to get tx info for {:?}",
-                        hash
-                    )));
+                    bail!(ErrorKind::UnableToProduceTxInfo {
+                        reason: format!("Unable to get tx info for {:?}", hash)
+                    });
                 }
                 Some((_, _, None)) => {
-                    bail!(ErrorKind::UnableToProduceTxInfo(format!(
-                        "Unable to get receipt for {:?}",
-                        hash
-                    )));
+                    bail!(ErrorKind::UnableToProduceTxInfo {
+                        reason: format!("Unable to get receipt for {:?}", hash)
+                    });
                 }
                 Some((tx, tx_index, Some((receipt, _)))) => {
                     assert_eq!(tx.hash(), hash); // sanity check
@@ -240,17 +244,7 @@ impl Provider {
             };
 
         let block_hash = tx_index.block_hash;
-
-        let block = match self.ledger.block(block_hash) {
-            Ok(b) => b,
-            Err(e) => {
-                bail!(ErrorKind::UnableToProduceTxInfo(format!(
-                    "Unable to retrieve block {:?}: {}",
-                    block_hash, e
-                )));
-            }
-        };
-
+        let block = self.ledger.block(block_hash)?;
         let tx_index_in_block = tx_index.index;
         let num_txs_in_block = block.transactions.len();
 
@@ -260,20 +254,24 @@ impl Provider {
         let epoch = match self.consensus.get_block_epoch_number(&block_hash) {
             Some(epoch) => epoch,
             None => {
-                bail!(ErrorKind::UnableToProduceTxInfo(format!(
-                    "Unable to get epoch number for block {:?}",
-                    block_hash
-                )));
+                bail!(ErrorKind::UnableToProduceTxInfo {
+                    reason: format!(
+                        "Unable to get epoch number for block {:?}",
+                        block_hash
+                    )
+                });
             }
         };
 
         let epoch_hashes = match self.ledger.block_hashes_in(epoch) {
             Ok(hs) => hs,
             Err(e) => {
-                bail!(ErrorKind::UnableToProduceTxInfo(format!(
-                    "Unable to find epoch hashes for {}: {}",
-                    epoch, e
-                )));
+                bail!(ErrorKind::UnableToProduceTxInfo {
+                    reason: format!(
+                        "Unable to find epoch hashes for {}: {}",
+                        epoch, e
+                    )
+                });
             }
         };
 
@@ -283,22 +281,22 @@ impl Provider {
             match epoch_hashes.iter().position(|h| *h == block_hash) {
                 Some(id) => id,
                 None => {
-                    bail!(ErrorKind::UnableToProduceTxInfo(format!(
-                        "Unable to find {:?} in epoch {}",
-                        block_hash, epoch
-                    )));
+                    bail!(ErrorKind::UnableToProduceTxInfo {
+                        reason: format!(
+                            "Unable to find {:?} in epoch {}",
+                            block_hash, epoch
+                        )
+                    });
                 }
             };
 
-        let epoch_receipts = match self.ledger.receipts_of(epoch) {
-            Ok(rs) => rs.iter().cloned().map(Arc::new).collect::<Vec<_>>(),
-            Err(e) => {
-                bail!(ErrorKind::UnableToProduceTxInfo(format!(
-                    "Unable to retrieve receipts for {}: {}",
-                    epoch, e
-                )));
-            }
-        };
+        let epoch_receipts = self
+            .ledger
+            .receipts_of(epoch)?
+            .iter()
+            .cloned()
+            .map(Arc::new)
+            .collect::<Vec<_>>();
 
         let epoch_receipt_proof = compute_epoch_receipt_proof(
             &epoch_receipts,
@@ -348,7 +346,7 @@ impl Provider {
 
     fn send_status(
         &self, io: &dyn NetworkContext, peer: &NodeId,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let best_info = self.consensus.best_info();
         let genesis_hash = self.graph.data_man.true_genesis.hash();
 
@@ -378,44 +376,40 @@ impl Provider {
     }
 
     #[inline]
-    fn validate_peer_type(&self, node_type: &NodeType) -> Result<(), Error> {
+    fn validate_peer_type(&self, node_type: NodeType) -> Result<()> {
         match node_type {
             NodeType::Light => Ok(()),
-            _ => bail!(ErrorKind::UnexpectedPeerType),
+            _ => bail!(ErrorKind::UnexpectedPeerType { node_type }),
         }
     }
 
     #[inline]
-    fn validate_genesis_hash(&self, genesis: H256) -> Result<(), Error> {
-        match self.graph.data_man.true_genesis.hash() {
-            h if h == genesis => Ok(()),
-            h => {
-                debug!(
-                    "Genesis mismatch (ours: {:?}, theirs: {:?})",
-                    h, genesis
-                );
-                bail!(ErrorKind::GenesisMismatch)
-            }
+    fn validate_genesis_hash(&self, genesis: H256) -> Result<()> {
+        let ours = self.graph.data_man.true_genesis.hash();
+        let theirs = genesis;
+
+        if ours != theirs {
+            bail!(ErrorKind::GenesisMismatch { ours, theirs });
         }
+
+        Ok(())
     }
 
     fn on_status_v2(
         &self, io: &dyn NetworkContext, peer: &NodeId, status: StatusPingV2,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         info!("on_status peer={:?} status={:?}", peer, status);
         self.throttle(peer, &status)?;
 
-        self.validate_peer_type(&status.node_type)?;
+        self.validate_peer_type(status.node_type)?;
         self.validate_genesis_hash(status.genesis_hash)?;
         validate_chain_id(
             &self.consensus.get_config().chain_id,
             &status.chain_id,
         )?;
 
-        if let Err(e) = self.send_status(io, peer) {
-            warn!("Failed to send status to peer={:?}: {:?}", peer, e);
-            bail!(ErrorKind::SendStatusFailed);
-        };
+        self.send_status(io, peer)
+            .chain_err(|| ErrorKind::SendStatusFailed { peer: *peer })?;
 
         let state = self.get_existing_peer_state(peer)?;
         let mut state = state.write();
@@ -426,7 +420,7 @@ impl Provider {
     fn on_status_deprecated(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         status: StatusPingDeprecatedV1,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         self.on_status_v2(
             io,
@@ -441,7 +435,7 @@ impl Provider {
 
     fn on_get_state_roots(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetStateRoots,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         debug!("on_get_state_roots req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
@@ -450,7 +444,7 @@ impl Provider {
             .epochs
             .into_iter()
             .take(MAX_ITEMS_TO_SEND)
-            .map::<Result<_, Error>, _>(|epoch| {
+            .map::<Result<_>, _>(|epoch| {
                 let state_root = self.ledger.state_root_of(epoch)?.state_root;
                 Ok(StateRootWithEpoch { epoch, state_root })
             });
@@ -470,7 +464,7 @@ impl Provider {
         Ok(())
     }
 
-    fn state_entry(&self, key: StateKey) -> Result<StateEntryWithKey, Error> {
+    fn state_entry(&self, key: StateKey) -> Result<StateEntryWithKey> {
         let snapshot_epoch_count = self.ledger.snapshot_epoch_count() as u64;
 
         // state root in current snapshot period
@@ -501,7 +495,7 @@ impl Provider {
 
     fn on_get_state_entries(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetStateEntries,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         debug!("on_get_state_entries req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
@@ -533,7 +527,7 @@ impl Provider {
     fn on_get_block_hashes_by_epoch(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         req: GetBlockHashesByEpoch,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         debug!("on_get_block_hashes_by_epoch req={:?}", req);
         self.throttle(peer, &req)?;
@@ -565,7 +559,7 @@ impl Provider {
 
     fn on_get_block_headers(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetBlockHeaders,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         debug!("on_get_block_headers req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
@@ -574,7 +568,7 @@ impl Provider {
             .hashes
             .iter()
             .take(MAX_HEADERS_TO_SEND)
-            .map::<Result<_, Error>, _>(|h| {
+            .map::<Result<_>, _>(|h| {
                 self.graph
                     .data_man
                     .block_header_by_hash(&h)
@@ -605,7 +599,7 @@ impl Provider {
 
     fn on_send_raw_tx(
         &self, _io: &dyn NetworkContext, peer: &NodeId, req: SendRawTx,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         debug!("on_send_raw_tx req={:?}", req);
         self.throttle(peer, &req)?;
         let tx: TransactionWithSignature = rlp::decode(&req.raw)?;
@@ -629,18 +623,17 @@ impl Provider {
             }
             _ => {
                 // NOTE: this should not happen
-                error!(
+                bail!(ErrorKind::InternalError(format!(
                     "insert_new_transactions failed: {:?}, {:?}",
                     passed, failed
-                );
-                bail!(ErrorKind::InternalError)
+                )))
             }
         }
     }
 
     fn on_get_receipts(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetReceipts,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         debug!("on_get_receipts req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
@@ -671,7 +664,7 @@ impl Provider {
 
     fn on_get_txs(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetTxs,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         debug!("on_get_txs req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
@@ -680,7 +673,7 @@ impl Provider {
             .hashes
             .into_iter()
             .take(MAX_TXS_TO_SEND)
-            .map::<Result<_, Error>, _>(|h| {
+            .map::<Result<_>, _>(|h| {
                 self.tx_by_hash(h).ok_or_else(|| {
                     ErrorKind::Msg(format!("Tx {:?} not found", h)).into()
                 })
@@ -701,7 +694,7 @@ impl Provider {
 
     fn on_get_witness_info(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetWitnessInfo,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         debug!("on_get_witness_info req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
@@ -727,7 +720,7 @@ impl Provider {
 
     fn on_get_blooms(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetBlooms,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         debug!("on_get_blooms req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
@@ -753,7 +746,7 @@ impl Provider {
 
     fn on_get_block_txs(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetBlockTxs,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         debug!("on_get_block_txs req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
@@ -762,7 +755,7 @@ impl Provider {
             .hashes
             .into_iter()
             .take(MAX_ITEMS_TO_SEND)
-            .map::<Result<_, Error>, _>(|h| {
+            .map::<Result<_>, _>(|h| {
                 let block = self.ledger.block(h)?;
 
                 let block_txs = block
@@ -795,7 +788,7 @@ impl Provider {
 
     fn on_get_tx_infos(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetTxInfos,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         debug!("on_get_tx_infos req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
@@ -819,9 +812,7 @@ impl Provider {
         Ok(())
     }
 
-    fn storage_root(
-        &self, key: StorageRootKey,
-    ) -> Result<StorageRootWithKey, Error> {
+    fn storage_root(&self, key: StorageRootKey) -> Result<StorageRootWithKey> {
         let snapshot_epoch_count = self.ledger.snapshot_epoch_count() as u64;
 
         // state root in current snapshot period
@@ -852,7 +843,7 @@ impl Provider {
 
     fn on_get_storage_roots(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetStorageRoots,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         debug!("on_get_storage_roots req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
@@ -882,7 +873,7 @@ impl Provider {
     fn broadcast(
         &self, io: &dyn NetworkContext, mut peers: Vec<NodeId>,
         msg: &dyn Message,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         debug!("broadcast peers={:?}", peers);
 
@@ -906,9 +897,7 @@ impl Provider {
         Ok(())
     }
 
-    pub fn relay_hashes(
-        self: &Arc<Self>, hashes: Vec<H256>,
-    ) -> Result<(), Error> {
+    pub fn relay_hashes(self: &Arc<Self>, hashes: Vec<H256>) -> Result<()> {
         debug!("relay_hashes hashes={:?}", hashes);
 
         if hashes.is_empty() {
@@ -919,8 +908,9 @@ impl Provider {
         let network = match self.network.upgrade() {
             Some(network) => network,
             None => {
-                error!("Network unavailable, not relaying hashes");
-                bail!(ErrorKind::InternalError);
+                bail!(ErrorKind::InternalError(
+                    "Network unavailable, not relaying hashes".to_owned()
+                ));
             }
         };
 
@@ -937,9 +927,7 @@ impl Provider {
         Ok(())
     }
 
-    fn throttle<T: Message>(
-        &self, peer: &NodeId, msg: &T,
-    ) -> Result<(), Error> {
+    fn throttle<T: Message>(&self, peer: &NodeId, msg: &T) -> Result<()> {
         let peer = self.get_existing_peer_state(peer)?;
 
         let bucket_name = msg.msg_name().to_string();
@@ -990,7 +978,7 @@ impl NetworkProtocolHandler for Provider {
                     io,
                     peer,
                     msgid::INVALID,
-                    ErrorKind::InvalidMessageFormat.into(),
+                    &ErrorKind::InvalidMessageFormat.into(),
                 )
             }
         };
@@ -998,7 +986,7 @@ impl NetworkProtocolHandler for Provider {
         debug!("on_message: peer={:?}, msgid={:?}", peer, msg_id);
 
         if let Err(e) = self.dispatch_message(io, peer, msg_id.into(), rlp) {
-            handle_error(io, peer, msg_id.into(), e);
+            handle_error(io, peer, msg_id.into(), &e);
         }
     }
 
