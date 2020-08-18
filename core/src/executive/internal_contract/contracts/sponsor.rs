@@ -24,12 +24,7 @@ lazy_static! {
         SetSponsorForGas,
         SetSponsorForCollateral,
         AddPrivilege,
-        RemovePrivilege,
-        GetSponsorForGas,
-        GetGasFeeUpperBound,
-        GetSponsorForCollateral,
-        IsWhitelisted,
-        IsAllWhitelisted
+        RemovePrivilege
     );
 }
 
