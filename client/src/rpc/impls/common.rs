@@ -8,10 +8,11 @@ use crate::rpc::types::{
     TxWithPoolInfo,
 };
 use bigdecimal::BigDecimal;
+use cfx_parameters::consensus::ONE_CFX_IN_DRIP;
 use cfx_types::{Address, H160, H256, H520, U128, U256, U64};
 use cfxcore::{
-    parameters::consensus::ONE_CFX_IN_DRIP, BlockDataManager, ConsensusGraph,
-    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
+    BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
+    SharedConsensusGraph, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;

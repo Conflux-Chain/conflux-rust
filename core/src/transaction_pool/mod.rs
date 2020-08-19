@@ -19,12 +19,12 @@ use crate::{
     block_data_manager::BlockDataManager,
     consensus::BestInformation,
     machine::Machine,
-    parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT,
     statedb::{Result as StateDbResult, StateDb},
-    storage::{Result as StorageResult, StateIndex, StorageManagerTrait},
     verification::VerificationConfig,
 };
 use account_cache::AccountCache;
+use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
+use cfx_storage::{Result as StorageResult, StateIndex, StorageManagerTrait};
 use cfx_types::{Address, H256, U256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{
@@ -595,8 +595,7 @@ impl TransactionPool {
         // We do not need to hold the lock because it is fine for us to generate
         // blocks that are slightly behind the best state.
         // We do not want to stall the consensus thread.
-        let consensus_best_info_clone =
-            { self.consensus_best_info.lock().clone() };
+        let consensus_best_info_clone = self.consensus_best_info.lock().clone();
 
         let parent_block_gas_limit = self
             .data_man

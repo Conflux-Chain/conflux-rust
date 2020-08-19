@@ -15,7 +15,6 @@ use crate::{
     },
     hash::keccak,
     machine::Machine,
-    parameters::staking::*,
     state::{
         CallStackInfo, CleanupMode, CollateralCheckResult, State, Substate,
     },
@@ -28,6 +27,7 @@ use crate::{
     },
     vm_factory::VmFactory,
 };
+use cfx_parameters::staking::*;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256, U512};
 use primitives::{
     receipt::StorageChange, storage::STORAGE_LAYOUT_REGULAR_V0,

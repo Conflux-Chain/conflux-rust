@@ -4,10 +4,10 @@
 
 extern crate lru_time_cache;
 
-use lru_time_cache::LruCache;
-use parking_lot::RwLock;
-use std::{future::Future, sync::Arc};
-
+use super::{
+    common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
+    state_roots::StateRoots,
+};
 use crate::{
     light_protocol::{
         common::{FullPeerState, Peers},
@@ -18,21 +18,18 @@ use crate::{
         },
     },
     message::{Message, RequestId},
-    network::NetworkContext,
-    parameters::light::{
-        CACHE_TIMEOUT, MAX_STATE_ENTRIES_IN_FLIGHT,
-        STATE_ENTRY_REQUEST_BATCH_SIZE, STATE_ENTRY_REQUEST_TIMEOUT,
-    },
     UniqueId,
 };
-
-use super::{
-    common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
-    state_roots::StateRoots,
+use cfx_parameters::light::{
+    CACHE_TIMEOUT, MAX_STATE_ENTRIES_IN_FLIGHT, STATE_ENTRY_REQUEST_BATCH_SIZE,
+    STATE_ENTRY_REQUEST_TIMEOUT,
 };
 use futures::future::FutureExt;
-use network::node_table::NodeId;
+use lru_time_cache::LruCache;
+use network::{node_table::NodeId, NetworkContext};
+use parking_lot::RwLock;
 use primitives::StorageKey;
+use std::{future::Future, sync::Arc};
 
 pub type StateEntry = Option<Vec<u8>>;
 

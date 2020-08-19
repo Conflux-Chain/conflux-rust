@@ -4,7 +4,6 @@
 
 use crate::{
     message::RequestId,
-    parameters::sync::{MAX_BLOCKS_TO_SEND, MAX_HEADERS_TO_SEND},
     sync::{
         message::{
             msgid, Context, GetBlocks, GetCompactBlocksResponse, Handleable,
@@ -14,6 +13,7 @@ use crate::{
         Error, ProtocolConfiguration,
     },
 };
+use cfx_parameters::sync::{MAX_BLOCKS_TO_SEND, MAX_HEADERS_TO_SEND};
 use cfx_types::H256;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use rlp_derive::{RlpDecodable, RlpEncodable};

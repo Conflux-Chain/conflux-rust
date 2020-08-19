@@ -6,6 +6,10 @@ use crate::rpc::{
     impls::RpcImplConfiguration, HttpConfiguration, TcpConfiguration,
     WsConfiguration,
 };
+use cfx_storage::{
+    defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
+    ConsensusParam, StorageConfiguration,
+};
 use cfx_types::H256;
 use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
@@ -21,10 +25,6 @@ use cfxcore::{
     },
     consensus_internal_parameters::*,
     consensus_parameters::*,
-    storage::{
-        self, defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
-        ConsensusParam, StorageConfiguration,
-    },
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
     transaction_pool::{TxPoolConfig, DEFAULT_MAX_TRANSACTION_GAS_LIMIT},
@@ -217,12 +217,12 @@ build_config! {
         (target_difficulties_cache_size_in_count, (usize), DEFAULT_TARGET_DIFFICULTIES_CACHE_SIZE_IN_COUNT)
         (rocksdb_cache_size, (Option<usize>), Some(128))
         (rocksdb_compaction_profile, (Option<String>), None)
-        (storage_delta_mpts_cache_recent_lfu_factor, (f64), storage::defaults::DEFAULT_DELTA_MPTS_CACHE_RECENT_LFU_FACTOR)
-        (storage_delta_mpts_cache_size, (u32), storage::defaults::DEFAULT_DELTA_MPTS_CACHE_SIZE)
-        (storage_delta_mpts_cache_start_size, (u32), storage::defaults::DEFAULT_DELTA_MPTS_CACHE_START_SIZE)
-        (storage_delta_mpts_node_map_vec_size, (u32), storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
-        (storage_delta_mpts_slab_idle_size, (u32), storage::defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE)
-        (storage_max_open_snapshots, (u16), storage::defaults::DEFAULT_MAX_OPEN_SNAPSHOTS)
+        (storage_delta_mpts_cache_recent_lfu_factor, (f64), cfx_storage::defaults::DEFAULT_DELTA_MPTS_CACHE_RECENT_LFU_FACTOR)
+        (storage_delta_mpts_cache_size, (u32), cfx_storage::defaults::DEFAULT_DELTA_MPTS_CACHE_SIZE)
+        (storage_delta_mpts_cache_start_size, (u32), cfx_storage::defaults::DEFAULT_DELTA_MPTS_CACHE_START_SIZE)
+        (storage_delta_mpts_node_map_vec_size, (u32), cfx_storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
+        (storage_delta_mpts_slab_idle_size, (u32), cfx_storage::defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE)
+        (storage_max_open_snapshots, (u16), cfx_storage::defaults::DEFAULT_MAX_OPEN_SNAPSHOTS)
 
         // General/Unclassified section.
         (account_provider_refresh_time_ms, (u64), 1000)
