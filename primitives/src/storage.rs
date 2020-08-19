@@ -7,10 +7,12 @@ use cfx_types::{Address, H256, U256};
 use rlp::*;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum StorageLayout {
     Regular(u8), // type: 0, fields: version
 }
+
+pub const STORAGE_LAYOUT_REGULAR_V0: StorageLayout = StorageLayout::Regular(0);
 
 impl StorageLayout {
     pub fn to_bytes(&self) -> Vec<u8> {

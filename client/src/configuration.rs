@@ -6,6 +6,10 @@ use crate::rpc::{
     impls::RpcImplConfiguration, HttpConfiguration, TcpConfiguration,
     WsConfiguration,
 };
+use cfx_storage::{
+    defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
+    ConsensusParam, StorageConfiguration,
+};
 use cfx_types::H256;
 use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
@@ -21,10 +25,6 @@ use cfxcore::{
     },
     consensus_internal_parameters::*,
     consensus_parameters::*,
-    storage::{
-        self, defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
-        ConsensusParam, StorageConfiguration,
-    },
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
     transaction_pool::{TxPoolConfig, DEFAULT_MAX_TRANSACTION_GAS_LIMIT},
@@ -76,7 +76,7 @@ build_config! {
         //     * Open port 12535 for ws rpc if `jsonrpc_ws_port` is not provided.
         //     * Open port 12536 for tcp rpc if `jsonrpc_tcp_port` is not provided.
         //     * Open port 12537 for http rpc if `jsonrpc_http_port` is not provided.
-        //     * generate blocks automatically without PoW if `start_mining` is false
+        //     * generate blocks automatically without PoW.
         //     * Skip catch-up mode even there is no peer
         //
         (mode, (Option<String>), None)
@@ -85,7 +85,7 @@ build_config! {
         (debug_invalid_state_root_epoch, (Option<String>), None)
         (debug_dump_dir_invalid_state_root, (String), "./storage_db/debug_dump_invalid_state_root/".to_string())
         // Controls block generation speed.
-        // Only effective in `dev` mode and `start_mining` is false
+        // Only effective in `dev` mode
         (dev_block_interval_ms, (u64), 250)
         (enable_state_expose, (bool), false)
         (generate_tx, (bool), false)
@@ -124,11 +124,10 @@ build_config! {
 
         // Mining section.
         (mining_author, (Option<String>), None)
-        (start_mining, (bool), false)
+        (mining_type, (Option<String>), None)
         (stratum_listen_address, (String), "127.0.0.1".into())
         (stratum_port, (u16), 32525)
         (stratum_secret, (Option<String>), None)
-        (use_stratum, (bool), false)
         (use_octopus_in_test_mode, (bool), false)
 
         // Network section.
@@ -218,18 +217,19 @@ build_config! {
         (target_difficulties_cache_size_in_count, (usize), DEFAULT_TARGET_DIFFICULTIES_CACHE_SIZE_IN_COUNT)
         (rocksdb_cache_size, (Option<usize>), Some(128))
         (rocksdb_compaction_profile, (Option<String>), None)
-        (storage_delta_mpts_cache_recent_lfu_factor, (f64), storage::defaults::DEFAULT_DELTA_MPTS_CACHE_RECENT_LFU_FACTOR)
-        (storage_delta_mpts_cache_size, (u32), storage::defaults::DEFAULT_DELTA_MPTS_CACHE_SIZE)
-        (storage_delta_mpts_cache_start_size, (u32), storage::defaults::DEFAULT_DELTA_MPTS_CACHE_START_SIZE)
-        (storage_delta_mpts_node_map_vec_size, (u32), storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
-        (storage_delta_mpts_slab_idle_size, (u32), storage::defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE)
-        (storage_max_open_snapshots, (u16), storage::defaults::DEFAULT_MAX_OPEN_SNAPSHOTS)
+        (storage_delta_mpts_cache_recent_lfu_factor, (f64), cfx_storage::defaults::DEFAULT_DELTA_MPTS_CACHE_RECENT_LFU_FACTOR)
+        (storage_delta_mpts_cache_size, (u32), cfx_storage::defaults::DEFAULT_DELTA_MPTS_CACHE_SIZE)
+        (storage_delta_mpts_cache_start_size, (u32), cfx_storage::defaults::DEFAULT_DELTA_MPTS_CACHE_START_SIZE)
+        (storage_delta_mpts_node_map_vec_size, (u32), cfx_storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
+        (storage_delta_mpts_slab_idle_size, (u32), cfx_storage::defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE)
+        (storage_max_open_snapshots, (u16), cfx_storage::defaults::DEFAULT_MAX_OPEN_SNAPSHOTS)
 
         // General/Unclassified section.
         (account_provider_refresh_time_ms, (u64), 1000)
         (enable_optimistic_execution, (bool), true)
         (future_block_buffer_capacity, (usize), 32768)
         (get_logs_filter_max_limit, (Option<usize>), None)
+        (get_logs_filter_max_epoch_range, (Option<u64>), None)
         (get_logs_epoch_batch_size, (usize), 32)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (persist_tx_index, (bool), false)
@@ -313,9 +313,8 @@ impl Configuration {
             network_config.config_path = self.raw_conf.netconf_dir.clone();
         }
         network_config.use_secret =
-            self.raw_conf.net_key.clone().map(|sec_str| {
-                sec_str
-                    .parse()
+            self.raw_conf.net_key.as_ref().map(|sec_str| {
+                parse_hex_string(sec_str)
                     .expect("net_key is not a valid secret string")
             });
         if let Some(addr) = self.raw_conf.public_address.clone() {
@@ -445,21 +444,31 @@ impl Configuration {
             transaction_epoch_bound: self.raw_conf.transaction_epoch_bound,
             referee_bound: self.raw_conf.referee_bound,
             get_logs_epoch_batch_size: self.raw_conf.get_logs_epoch_batch_size,
+            get_logs_filter_max_epoch_range: self.raw_conf.get_logs_filter_max_epoch_range
         }
     }
 
     pub fn pow_config(&self) -> ProofOfWorkConfig {
         let stratum_secret =
-            self.raw_conf
-                .stratum_secret
-                .clone()
-                .map(|hex_str| H256::from_str(hex_str.as_str())
-                    .expect("Stratum secret should be 64-digit hex string without 0x prefix"));
+            self.raw_conf.stratum_secret.as_ref().map(|hex_str| {
+                parse_hex_string(hex_str)
+                    .expect("Stratum secret should be 64-digit hex string")
+            });
 
         ProofOfWorkConfig::new(
             self.is_test_or_dev_mode(),
             self.raw_conf.use_octopus_in_test_mode,
-            self.raw_conf.use_stratum,
+            self.raw_conf.mining_type.as_ref().map_or_else(
+                || {
+                    // Enable stratum implicitly if `mining_author` is set.
+                    if self.raw_conf.mining_author.is_some() {
+                        "stratum"
+                    } else {
+                        "disable"
+                    }
+                },
+                |s| s.as_str(),
+            ),
             self.raw_conf.initial_difficulty,
             self.raw_conf.stratum_listen_address.clone(),
             self.raw_conf.stratum_port,
@@ -752,6 +761,8 @@ pub fn to_bootnodes(bootnodes: &Option<String>) -> Result<Vec<String>, String> {
     match *bootnodes {
         Some(ref x) if !x.is_empty() => x
             .split(',')
+            // ignore empty strings
+            .filter(|s| !s.is_empty())
             .map(|s| match validate_node_url(s).map(Into::into) {
                 None => Ok(s.to_owned()),
                 Some(ErrorKind::AddressResolve(_)) => Err(format!(
@@ -767,4 +778,8 @@ pub fn to_bootnodes(bootnodes: &Option<String>) -> Result<Vec<String>, String> {
         Some(_) => Ok(vec![]),
         None => Ok(vec![]),
     }
+}
+
+pub fn parse_hex_string<F: FromStr>(hex_str: &str) -> Result<F, F::Err> {
+    hex_str.strip_prefix("0x").unwrap_or(hex_str).parse()
 }

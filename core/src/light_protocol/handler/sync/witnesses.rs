@@ -2,10 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::H256;
-use parking_lot::RwLock;
-use std::{collections::HashSet, sync::Arc};
-
+use super::common::{KeyReverseOrdered, LedgerProof, SyncManager};
 use crate::{
     block_data_manager::{
         block_data_types::BlamedHeaderVerifiedRoots, BlockDataManager,
@@ -17,19 +14,19 @@ use crate::{
         Error,
     },
     message::{Message, RequestId},
-    network::NetworkContext,
-    parameters::{
-        consensus::DEFERRED_STATE_EPOCH_COUNT,
-        light::{
-            MAX_WITNESSES_IN_FLIGHT, WITNESS_REQUEST_BATCH_SIZE,
-            WITNESS_REQUEST_TIMEOUT,
-        },
-    },
     UniqueId,
 };
-
-use super::common::{KeyReverseOrdered, LedgerProof, SyncManager};
-use network::node_table::NodeId;
+use cfx_parameters::{
+    consensus::DEFERRED_STATE_EPOCH_COUNT,
+    light::{
+        MAX_WITNESSES_IN_FLIGHT, WITNESS_REQUEST_BATCH_SIZE,
+        WITNESS_REQUEST_TIMEOUT,
+    },
+};
+use cfx_types::H256;
+use network::{node_table::NodeId, NetworkContext};
+use parking_lot::RwLock;
+use std::{collections::HashSet, sync::Arc};
 
 #[derive(Debug)]
 struct Statistics {

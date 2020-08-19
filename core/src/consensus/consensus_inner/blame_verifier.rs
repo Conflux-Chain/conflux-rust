@@ -3,12 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    block_data_manager::BlockDataManager,
-    channel::Channel,
-    consensus::consensus_inner::ConsensusGraphInner,
-    parameters::{consensus::*, light::BLAME_CHECK_OFFSET},
-    Notifications,
+    block_data_manager::BlockDataManager, channel::Channel,
+    consensus::consensus_inner::ConsensusGraphInner, Notifications,
 };
+use cfx_parameters::{consensus::*, light::BLAME_CHECK_OFFSET};
 use parking_lot::Mutex;
 use primitives::BlockHeader;
 use std::{collections::VecDeque, sync::Arc};

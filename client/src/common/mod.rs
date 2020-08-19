@@ -422,10 +422,9 @@ pub fn initialize_not_light_node_modules(
     );
 
     let maybe_author: Option<Address> =
-        conf.raw_conf.mining_author.clone().map(|hex_str| {
-            Address::from_str(hex_str.as_str()).expect(
-                "mining-author should be 40-digit hex string without 0x prefix",
-            )
+        conf.raw_conf.mining_author.as_ref().map(|hex_str| {
+            parse_hex_string(hex_str)
+                .expect("mining-author should be 40-digit hex string")
         });
     let blockgen = Arc::new(BlockGenerator::new(
         sync_graph,
@@ -446,21 +445,19 @@ pub fn initialize_not_light_node_modules(
                 bg.auto_block_generation(interval_ms);
             })
             .expect("Mining thread spawn error");
-    } else if conf.raw_conf.start_mining {
-        if let Some(author) = maybe_author {
-            if !author.is_valid_address() || author.is_builtin_address() {
-                panic!("mining-author must start with 0x1 (user address) or 0x8 (contract address), otherwise you will not get mining rewards!!!");
-            }
-        } else {
-            panic!("mining-author is not set correctly, so you will not get mining rewards!!!");
+    } else if let Some(author) = maybe_author {
+        if !author.is_valid_address() || author.is_builtin_address() {
+            panic!("mining-author must start with 0x1 (user address) or 0x8 (contract address), otherwise you will not get mining rewards!!!");
         }
-        let bg = blockgen.clone();
-        thread::Builder::new()
-            .name("mining".into())
-            .spawn(move || {
-                BlockGenerator::start_mining(bg, 0);
-            })
-            .expect("Mining thread spawn error");
+        if blockgen.pow_config.enable_mining() {
+            let bg = blockgen.clone();
+            thread::Builder::new()
+                .name("mining".into())
+                .spawn(move || {
+                    BlockGenerator::start_mining(bg, 0);
+                })
+                .expect("Mining thread spawn error");
+        }
     }
 
     let rpc_impl = Arc::new(RpcImpl::new(
@@ -714,6 +711,7 @@ pub mod delegate_convert {
 pub use crate::configuration::Configuration;
 use crate::{
     accounts::{account_provider, keys_path},
+    configuration::parse_hex_string,
     rpc::{
         extractor::RpcExtractor,
         impls::{
@@ -725,6 +723,7 @@ use crate::{
     GENESIS_VERSION,
 };
 use blockgen::BlockGenerator;
+use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use cfxcore::{
     block_data_manager::BlockDataManager,
@@ -732,7 +731,6 @@ use cfxcore::{
     machine::{new_machine_with_builtin, Machine},
     pow::PowComputer,
     statistics::Statistics,
-    storage::StorageManager,
     sync::SyncPhaseType,
     vm_factory::VmFactory,
     ConsensusGraph, LightProvider, NodeType, Notifications, Stopable,

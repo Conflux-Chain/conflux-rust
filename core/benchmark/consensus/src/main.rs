@@ -2,33 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-#![allow(unused)]
-use cfx_types::{Address, H256, U256};
+use cfx_types::H256;
 use cfxcore::{
-    block_data_manager::{BlockDataManager, DataManagerConfiguration, DbType},
-    cache_config::CacheConfig,
-    cache_manager::CacheManager,
-    consensus::{
-        ConsensusConfig, ConsensusGraph, ConsensusGraphTrait,
-        ConsensusInnerConfig,
+    block_data_manager::DbType,
+    consensus::{ConsensusGraph, ConsensusGraphTrait},
+    pow::PowComputer,
+    sync::utils::{
+        create_simple_block, initialize_synchronization_graph,
+        initialize_synchronization_graph_with_data_manager,
     },
-    consensus_parameters::*,
-    db::NUM_COLUMNS,
-    pow::{PowComputer, ProofOfWorkConfig},
-    statistics::Statistics,
-    storage::{StorageConfiguration, StorageManager},
-    sync::{
-        request_manager::tx_handler::ReceivedTransactionContainer,
-        utils::{
-            create_simple_block, create_simple_block_impl,
-            initialize_synchronization_graph,
-            initialize_synchronization_graph_with_data_manager,
-        },
-        SynchronizationGraph,
-    },
-    verification::VerificationConfig,
-    vm_factory::VmFactory,
-    TransactionPool, WORKER_COMPUTATION_PARALLELISM,
 };
 use log::LevelFilter;
 use log4rs::{
@@ -36,21 +18,13 @@ use log4rs::{
     config::{Appender, Config as LogConfig, Logger, Root},
     encode::pattern::PatternEncoder,
 };
-use parking_lot::{Mutex, RwLock};
-use primitives::{Block, BlockHeader, BlockHeaderBuilder};
 use std::{
-    collections::{HashMap, HashSet},
-    env, fs,
-    path::Path,
-    str::FromStr,
-    sync::Arc,
-    thread, time,
+    collections::HashMap, env, fs, str::FromStr, sync::Arc, thread, time,
 };
-use threadpool::ThreadPool;
 
 pub const CHECKER_SLEEP_PERIOD: u64 = 50;
 
-fn initialize_logger(log_file: &str, log_level: LevelFilter) {
+fn initialize_logger(_log_file: &str, log_level: LevelFilter) {
     let log_config = {
         let mut conf_builder = LogConfig::builder().appender(
             Appender::builder()
@@ -122,14 +96,14 @@ fn check_results(
         }
         let partial_invalid = partial_invalid_opt.unwrap();
         let valid = *valid_indices.get(&i).unwrap();
-        let invalid = (valid == 0);
+        let invalid = valid == 0;
         if valid != -1 {
             assert!(partial_invalid == invalid, "Block {} {} partial invalid status: Consensus graph {} != actual {}", i, hashes[i], partial_invalid, invalid);
         }
         let timer0 = consensus_read.is_timer_block(&hashes[i]).unwrap();
         let timer_v = *timer_indices.get(&i).unwrap();
         if !invalid && timer_v != -1 {
-            let timer1 = (timer_v == 1);
+            let timer1 = timer_v == 1;
             assert!(
                 timer0 == timer1,
                 "Block {} {} timer status: Consensus graph {} != actual {}",
@@ -142,7 +116,7 @@ fn check_results(
         let adaptive0 = consensus_read.is_adaptive(&hashes[i]).unwrap();
         let adaptive_v = *adaptive_indices.get(&i).unwrap();
         if !invalid && adaptive_v != -1 {
-            let adaptive1 = (adaptive_v == 1);
+            let adaptive1 = adaptive_v == 1;
             assert!(
                 adaptive0 == adaptive1,
                 "Block {} {} adaptive status: Consensus graph {} != actual {}",
@@ -218,7 +192,7 @@ fn main() {
     block_heights.push(0);
     let mut blocks = Vec::new();
     blocks.push((*genesis_block).clone());
-    let mut check_batch_size = era_epoch_count as usize;
+    let check_batch_size = era_epoch_count as usize;
     let mut last_checked = 1;
 
     for s in lines {
@@ -310,12 +284,9 @@ fn main() {
         }
 
         let n = hashes.len();
-        let mut last_checked_count = 0;
         if (n != 0) && (n % check_batch_size == 0) {
-            let last_hash = hashes[n - 1];
             let checked_count = consensus.get_processed_block_count();
-            if checked_count != n - 1 && last_checked_count != checked_count {
-                last_checked_count = checked_count;
+            if checked_count != n - 1 {
                 thread::sleep(time::Duration::from_millis(
                     CHECKER_SLEEP_PERIOD,
                 ));
@@ -334,7 +305,6 @@ fn main() {
     }
 
     let n = hashes.len();
-    let last_hash = hashes[n - 1];
     while sync.is_consensus_worker_busy() {
         if last_check_time.elapsed().unwrap().as_secs() >= 5 {
             let last_time_elapsed =
@@ -383,7 +353,7 @@ fn main() {
     data_man.initialize_instance_id();
 
     let pow = Arc::new(PowComputer::new(true));
-    let (sync_n, consensus_n) =
+    let (_sync_n, consensus_n) =
         initialize_synchronization_graph_with_data_manager(
             data_man,
             beta,
@@ -410,8 +380,7 @@ fn main() {
             continue;
         }
         if genesis_idx != i {
-            let mut b = blocks[i].clone();
-            let h = b.hash();
+            let h = blocks[i].hash();
             consensus_n.on_new_block(&h, true, false);
         }
     }

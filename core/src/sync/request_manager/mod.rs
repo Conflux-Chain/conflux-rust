@@ -7,7 +7,6 @@ use super::{
     synchronization_state::SynchronizationState,
 };
 use crate::{
-    parameters::sync::REQUEST_START_WAITING_TIME,
     sync::{
         message::{
             msgid, GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn,
@@ -21,6 +20,7 @@ use crate::{
     },
     NodeType,
 };
+use cfx_parameters::sync::REQUEST_START_WAITING_TIME;
 use cfx_types::H256;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;

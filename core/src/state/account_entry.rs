@@ -6,9 +6,10 @@ use crate::{
     bytes::Bytes,
     consensus::debug::ComputeEpochDebugRecord,
     hash::{keccak, KECCAK_EMPTY},
-    state::{AccountEntryProtectedMethods, State},
-    statedb::{Result as DbResult, StateDb},
+    state::{AccountEntryProtectedMethods, State, Substate},
+    statedb::{Result as DbResult, StateDb, StateDbExt},
 };
+use cfx_parameters::staking::BYTES_PER_STORAGE_KEY;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use parking_lot::RwLock;
 use primitives::{
@@ -46,6 +47,9 @@ pub struct OverlayAccount {
 
     // This is the sponsor information of the contract.
     sponsor_info: SponsorInfo,
+
+    // FIXME: there are changes, so no need to have cache for both storage and
+    // ownership
 
     // This is a cache for storage change.
     storage_cache: RwLock<HashMap<Vec<u8>, U256>>,
@@ -124,7 +128,11 @@ impl OverlayAccount {
 
     /// Create an OverlayAccount of basic account when the account doesn't exist
     /// before.
-    pub fn new_basic(address: &Address, balance: U256, nonce: U256) -> Self {
+    pub fn new_basic(
+        address: &Address, balance: U256, nonce: U256,
+        storage_layout: Option<StorageLayout>,
+    ) -> Self
+    {
         OverlayAccount {
             address: address.clone(),
             balance,
@@ -135,7 +143,11 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: Default::default(),
             ownership_changes: HashMap::new(),
-            storage_layout_change: None,
+            storage_layout_change: if address.is_builtin_address() {
+                storage_layout
+            } else {
+                None
+            },
             staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
             accumulated_interest_return: 0.into(),
@@ -147,18 +159,29 @@ impl OverlayAccount {
         }
     }
 
-    #[cfg(test)]
     /// Create an OverlayAccount of contract account when the account doesn't
     /// exist before.
-    pub fn new_contract(address: &Address, balance: U256, nonce: U256) -> Self {
-        Self::new_contract_with_admin(address, balance, nonce, &Address::zero())
+    pub fn new_contract(
+        address: &Address, balance: U256, nonce: U256,
+        storage_layout: Option<StorageLayout>,
+    ) -> Self
+    {
+        Self::new_contract_with_admin(
+            address,
+            balance,
+            nonce,
+            &Address::zero(),
+            storage_layout,
+        )
     }
 
     /// Create an OverlayAccount of contract account when the account doesn't
     /// exist before.
     pub fn new_contract_with_admin(
         address: &Address, balance: U256, nonce: U256, admin: &Address,
-    ) -> Self {
+        storage_layout: Option<StorageLayout>,
+    ) -> Self
+    {
         OverlayAccount {
             address: address.clone(),
             balance,
@@ -169,7 +192,7 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: Default::default(),
             ownership_changes: HashMap::new(),
-            storage_layout_change: None,
+            storage_layout_change: storage_layout,
             staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
             accumulated_interest_return: 0.into(),
@@ -585,6 +608,11 @@ impl OverlayAccount {
         self.ownership_changes.insert(key, owner);
     }
 
+    #[cfg(test)]
+    pub fn storage_layout_change(&self) -> Option<&StorageLayout> {
+        self.storage_layout_change.as_ref()
+    }
+
     pub fn set_storage_layout(&mut self, layout: StorageLayout) {
         self.storage_layout_change = Some(layout);
     }
@@ -705,9 +733,8 @@ impl OverlayAccount {
     /// execution. The second value means the number of keys released by this
     /// account in current execution.
     pub fn commit_ownership_change(
-        &mut self, db: &StateDb,
-    ) -> DbResult<HashMap<Address, (u64, u64)>> {
-        let mut storage_delta = HashMap::new();
+        &mut self, db: &StateDb, substate: &mut Substate,
+    ) -> DbResult<()> {
         let ownership_changes: Vec<_> =
             self.ownership_changes.drain().collect();
         for (k, v) in ownership_changes {
@@ -728,16 +755,16 @@ impl OverlayAccount {
                 // If the current value is zero or the owner has changed for the
                 // key, it means the key has released from previous owner.
                 if cur_value_is_zero || ownership_changed {
-                    storage_delta
-                        .entry(original_ownership)
-                        .or_insert((0, 0))
-                        .1 += 1;
+                    substate.record_storage_release(
+                        &original_ownership,
+                        BYTES_PER_STORAGE_KEY,
+                    );
                 }
             }
             // If the current value is not zero and the owner has changed, it
             // means the owner has occupied a new key.
             if !cur_value_is_zero && ownership_changed {
-                storage_delta.entry(v).or_insert((0, 0)).0 += 1;
+                substate.record_storage_occupy(&v, BYTES_PER_STORAGE_KEY);
             }
             // Commit ownership change to `ownership_cache`.
             if cur_value_is_zero {
@@ -747,37 +774,17 @@ impl OverlayAccount {
             }
         }
         assert!(self.ownership_changes.is_empty());
-        Ok(storage_delta)
+        Ok(())
     }
 
     pub fn commit(
-        &mut self, state: &mut State,
+        &mut self, state: &mut State, address: &Address,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()>
     {
         if self.is_newly_created_contract {
             state.recycle_storage(
                 vec![self.address],
-                debug_record.as_deref_mut(),
-            )?;
-        }
-
-        // reinsert storage_layout to delta trie if storage is updated
-        // FIXME: load storage layout on first storage access instead
-        if !self.storage_changes.is_empty()
-            && self.storage_layout_change.is_none()
-        {
-            // try to get from delta tries or snapshot
-            let layout = state
-                .db
-                .get_storage_layout(&self.address)?
-                // layout must exist for existing accounts
-                // storage_layout_change cannot be None for new accounts
-                .expect("storage layout should exist");
-
-            state.db.set_storage_layout(
-                &self.address,
-                &layout,
                 debug_record.as_deref_mut(),
             )?;
         }
@@ -863,11 +870,19 @@ impl OverlayAccount {
             }
         }
 
-        if let Some(ref layout) = self.storage_layout_change {
-            state
-                .db
-                .set_storage_layout(&self.address, layout, debug_record)?;
+        if let Some(layout) = self.storage_layout_change.clone() {
+            state.db.set_storage_layout(
+                &self.address,
+                layout,
+                debug_record.as_deref_mut(),
+            )?;
         }
+
+        state.db.set::<Account>(
+            StorageKey::new_account_key(address),
+            &self.as_account()?,
+            debug_record,
+        )?;
 
         Ok(())
     }
@@ -900,11 +915,13 @@ pub struct AccountEntry {
     pub account: Option<OverlayAccount>,
     /// Unmodified account balance.
     pub old_balance: Option<U256>,
+    // FIXME: remove it.
     /// Entry state.
     pub state: AccountState,
 }
 
 impl AccountEntry {
+    // FIXME: remove it.
     pub fn is_dirty(&self) -> bool { self.state == AccountState::Dirty }
 
     pub fn overwrite_with(&mut self, other: AccountEntry) {
@@ -989,9 +1006,9 @@ mod tests {
     use super::*;
     use crate::{
         evm::{Factory, VMType},
-        storage::tests::new_state_manager_for_unit_test,
         test_helpers::get_state_for_genesis_write_with_factory,
     };
+    use cfx_storage::tests::new_state_manager_for_unit_test;
     use primitives::is_default::IsDefault;
     use std::str::FromStr;
 
@@ -1024,16 +1041,19 @@ mod tests {
             &normal_addr,
             U256::zero(),
             U256::zero(),
+            /* storage_layout = */ None,
         ));
         test_account_is_default(&mut OverlayAccount::new_contract(
             &contract_addr,
             U256::zero(),
             U256::zero(),
+            /* storage_layout = */ None,
         ));
         test_account_is_default(&mut OverlayAccount::new_basic(
             &builtin_addr,
             U256::zero(),
             U256::zero(),
+            /* storage_layout = */ None,
         ));
     }
 }

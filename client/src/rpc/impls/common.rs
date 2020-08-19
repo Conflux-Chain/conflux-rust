@@ -567,7 +567,7 @@ impl RpcImpl {
             };
 
             format!(
-                "{}: {:?} wei + {:?} gas * {:?} wei",
+                "{}: {:?} drip + {:?} gas * {:?} drip",
                 to, tx.value, tx.gas, tx.gas_price
             )
         };

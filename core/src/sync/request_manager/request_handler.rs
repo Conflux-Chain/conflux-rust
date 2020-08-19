@@ -4,7 +4,6 @@
 
 use crate::{
     message::{Message, SetRequestId},
-    parameters::sync::FAILED_REQUEST_RESEND_WAIT,
     sync::{
         message::{DynamicCapability, KeyContainer},
         request_manager::RequestManager,
@@ -13,6 +12,7 @@ use crate::{
     },
     NodeType,
 };
+use cfx_parameters::sync::FAILED_REQUEST_RESEND_WAIT;
 use malloc_size_of::MallocSizeOf;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{

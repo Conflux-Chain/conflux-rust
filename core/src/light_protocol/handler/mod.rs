@@ -9,6 +9,7 @@ use crate::{
     consensus::SharedConsensusGraph,
     light_protocol::{
         common::{validate_chain_id, FullPeerState, Peers},
+        error::*,
         handle_error,
         message::{
             msgid, BlockHashes as GetBlockHashesResponse,
@@ -22,20 +23,22 @@ use crate::{
             TxInfos as GetTxInfosResponse, Txs as GetTxsResponse,
             WitnessInfo as GetWitnessInfoResponse,
         },
-        Error, ErrorKind, LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT,
-        LIGHT_PROTOCOL_VERSION, LIGHT_PROTO_V1,
+        LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT, LIGHT_PROTOCOL_VERSION,
+        LIGHT_PROTO_V1,
     },
     message::{decode_msg, decode_rlp_and_check_deprecation, Message, MsgId},
-    network::{NetworkContext, NetworkProtocolHandler},
-    parameters::light::{
-        CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, SYNC_PERIOD,
-    },
     sync::{message::Throttled, SynchronizationGraph},
     Notifications, UniqueId,
 };
+use cfx_parameters::light::{
+    CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, SYNC_PERIOD,
+};
 use cfx_types::H256;
 use io::TimerToken;
-use network::{node_table::NodeId, service::ProtocolVersion};
+use network::{
+    node_table::NodeId, service::ProtocolVersion, NetworkContext,
+    NetworkProtocolHandler,
+};
 use parking_lot::RwLock;
 use rlp::Rlp;
 use std::{
@@ -306,28 +309,28 @@ impl Handler {
     #[inline]
     fn get_existing_peer_state(
         &self, peer: &NodeId,
-    ) -> Result<Arc<RwLock<FullPeerState>>, Error> {
+    ) -> Result<Arc<RwLock<FullPeerState>>> {
         match self.peers.get(&peer) {
             Some(state) => Ok(state),
             None => {
                 // NOTE: this should not happen as we register
                 // all peers in `on_peer_connected`
-                error!("Received message from unknown peer={:?}", peer);
-                Err(ErrorKind::InternalError.into())
+                bail!(ErrorKind::InternalError(format!(
+                    "Received message from unknown peer={:?}",
+                    peer
+                )));
             }
         }
     }
 
     #[allow(unused)]
     #[inline]
-    fn peer_version(&self, peer: &NodeId) -> Result<ProtocolVersion, Error> {
+    fn peer_version(&self, peer: &NodeId) -> Result<ProtocolVersion> {
         Ok(self.get_existing_peer_state(peer)?.read().protocol_version)
     }
 
     #[inline]
-    fn validate_peer_state(
-        &self, peer: &NodeId, msg_id: MsgId,
-    ) -> Result<(), Error> {
+    fn validate_peer_state(&self, peer: &NodeId, msg_id: MsgId) -> Result<()> {
         let state = self.get_existing_peer_state(&peer)?;
 
         if msg_id != msgid::STATUS_PONG_DEPRECATED
@@ -335,39 +338,43 @@ impl Handler {
             && !state.read().handshake_completed
         {
             warn!("Received msg={:?} from handshaking peer={:?}", msg_id, peer);
-            return Err(ErrorKind::UnexpectedMessage.into());
+            bail!(ErrorKind::UnexpectedMessage {
+                expected: vec![
+                    msgid::STATUS_PING_DEPRECATED,
+                    msgid::STATUS_PING_V2
+                ],
+                received: msg_id,
+            });
         }
 
         Ok(())
     }
 
     #[inline]
-    fn validate_peer_type(&self, node_type: &NodeType) -> Result<(), Error> {
+    fn validate_peer_type(&self, node_type: NodeType) -> Result<()> {
         match node_type {
             NodeType::Archive => Ok(()),
             NodeType::Full => Ok(()),
-            _ => Err(ErrorKind::UnexpectedPeerType.into()),
+            _ => bail!(ErrorKind::UnexpectedPeerType { node_type }),
         }
     }
 
     #[inline]
-    fn validate_genesis_hash(&self, genesis: H256) -> Result<(), Error> {
-        match self.consensus.get_data_manager().true_genesis.hash() {
-            h if h == genesis => Ok(()),
-            h => {
-                debug!(
-                    "Genesis mismatch (ours: {:?}, theirs: {:?})",
-                    h, genesis
-                );
-                Err(ErrorKind::GenesisMismatch.into())
-            }
+    fn validate_genesis_hash(&self, genesis: H256) -> Result<()> {
+        let ours = self.consensus.get_data_manager().true_genesis.hash();
+        let theirs = genesis;
+
+        if ours != theirs {
+            bail!(ErrorKind::GenesisMismatch { ours, theirs });
         }
+
+        Ok(())
     }
 
     #[rustfmt::skip]
     fn dispatch_message(
         &self, io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, rlp: Rlp,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
         self.validate_peer_state(peer, msg_id)?;
         let min_supported_ver = self.minimum_supported_version();
@@ -395,7 +402,7 @@ impl Handler {
             // request was throttled by service provider
             msgid::THROTTLED => self.on_throttled(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
 
-            _ => Err(ErrorKind::UnknownMessage.into()),
+            _ => bail!(ErrorKind::UnknownMessage{id: msg_id}),
         }
     }
 
@@ -451,7 +458,7 @@ impl Handler {
     fn send_status(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         peer_protocol_version: ProtocolVersion,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         let msg: Box<dyn Message>;
 
@@ -484,7 +491,7 @@ impl Handler {
     #[inline]
     pub fn send_raw_tx(
         &self, io: &dyn NetworkContext, peer: &NodeId, raw: Vec<u8>,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let msg: Box<dyn Message> = Box::new(SendRawTx { raw });
         msg.send(io, peer)?;
         Ok(())
@@ -492,10 +499,10 @@ impl Handler {
 
     fn on_status_v2(
         &self, io: &dyn NetworkContext, peer: &NodeId, status: StatusPongV2,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         info!("on_status peer={:?} status={:?}", peer, status);
 
-        self.validate_peer_type(&status.node_type)?;
+        self.validate_peer_type(status.node_type)?;
         self.validate_genesis_hash(status.genesis_hash)?;
         validate_chain_id(
             &self.consensus.get_config().chain_id,
@@ -519,7 +526,7 @@ impl Handler {
     fn on_status_deprecated(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         status: StatusPongDeprecatedV1,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         info!("on_status peer={:?} status={:?}", peer, status);
 
@@ -539,7 +546,7 @@ impl Handler {
     fn on_block_hashes(
         &self, io: &dyn NetworkContext, _peer: &NodeId,
         resp: GetBlockHashesResponse,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         debug!("on_block_hashes resp={:?}", resp);
 
@@ -555,7 +562,7 @@ impl Handler {
     fn on_block_headers(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         resp: GetBlockHeadersResponse,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         debug!("on_block_headers resp={:?}", resp);
 
@@ -572,7 +579,7 @@ impl Handler {
     fn on_block_txs(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         resp: GetBlockTxsResponse,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         debug!("on_block_txs resp={:?}", resp);
 
@@ -588,7 +595,7 @@ impl Handler {
 
     fn on_blooms(
         &self, io: &dyn NetworkContext, peer: &NodeId, resp: GetBloomsResponse,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         debug!("on_blooms resp={:?}", resp);
 
         self.blooms
@@ -600,7 +607,7 @@ impl Handler {
 
     fn on_new_block_hashes(
         &self, io: &dyn NetworkContext, peer: &NodeId, msg: NewBlockHashes,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         debug!("on_new_block_hashes msg={:?}", msg);
 
         if self.catch_up_mode() {
@@ -625,7 +632,7 @@ impl Handler {
     fn on_receipts(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         resp: GetReceiptsResponse,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         debug!("on_receipts resp={:?}", resp);
 
@@ -642,7 +649,7 @@ impl Handler {
     fn on_state_entries(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         resp: GetStateEntriesResponse,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         debug!("on_state_entries resp={:?}", resp);
 
@@ -659,7 +666,7 @@ impl Handler {
     fn on_state_roots(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         resp: GetStateRootsResponse,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         debug!("on_state_roots resp={:?}", resp);
 
@@ -676,7 +683,7 @@ impl Handler {
     fn on_storage_roots(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         resp: GetStorageRootsResponse,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         debug!("on_storage_roots resp={:?}", resp);
 
@@ -692,7 +699,7 @@ impl Handler {
 
     fn on_txs(
         &self, io: &dyn NetworkContext, peer: &NodeId, resp: GetTxsResponse,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         debug!("on_txs resp={:?}", resp);
 
         self.txs
@@ -704,7 +711,7 @@ impl Handler {
 
     fn on_tx_infos(
         &self, io: &dyn NetworkContext, peer: &NodeId, resp: GetTxInfosResponse,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         debug!("on_tx_infos resp={:?}", resp);
 
         self.tx_infos
@@ -717,7 +724,7 @@ impl Handler {
     fn on_witness_info(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         resp: GetWitnessInfoResponse,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         debug!("on_witness_info resp={:?}", resp);
 
@@ -773,7 +780,7 @@ impl Handler {
 
     fn on_throttled(
         &self, _io: &dyn NetworkContext, peer: &NodeId, resp: Throttled,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         debug!("on_throttled resp={:?}", resp);
 
         let peer = self.get_existing_peer_state(peer)?;
@@ -828,7 +835,7 @@ impl NetworkProtocolHandler for Handler {
                     io,
                     peer,
                     msgid::INVALID,
-                    ErrorKind::InvalidMessageFormat.into(),
+                    &ErrorKind::InvalidMessageFormat.into(),
                 )
             }
         };
@@ -836,7 +843,7 @@ impl NetworkProtocolHandler for Handler {
         debug!("on_message: peer={:?}, msgid={:?}", peer, msg_id);
 
         if let Err(e) = self.dispatch_message(io, peer, msg_id.into(), rlp) {
-            handle_error(io, peer, msg_id.into(), e);
+            handle_error(io, peer, msg_id.into(), &e);
         }
     }
 
@@ -869,7 +876,7 @@ impl NetworkProtocolHandler for Handler {
                     io,
                     peer,
                     msgid::INVALID,
-                    ErrorKind::SendStatusFailed.into(),
+                    &ErrorKind::SendStatusFailed { peer: *peer }.into(),
                 );
             }
         }

@@ -15,7 +15,6 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::Error;
-use cfx_types::address_util::AddressUtil;
 use rustc_hex::{FromHex, ToHex};
 use serde::{
     de::{Error as SerdeError, Visitor},
@@ -145,12 +144,4 @@ impl Eq for H160 {}
 
 impl Ord for H160 {
     fn cmp(&self, other: &Self) -> Ordering { self.0.cmp(&other.0) }
-}
-
-impl AddressUtil for H160 {
-    #[inline]
-    fn type_byte(&self) -> &u8 { &self.0[0] }
-
-    #[inline]
-    fn type_byte_mut(&mut self) -> &mut u8 { &mut self.0[0] }
 }

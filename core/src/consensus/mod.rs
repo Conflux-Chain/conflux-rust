@@ -8,14 +8,15 @@ mod consensus_trait;
 pub mod debug;
 mod pastset_cache;
 
+pub use crate::consensus::{
+    consensus_inner::{ConsensusGraphInner, ConsensusInnerConfig},
+    consensus_trait::{ConsensusGraphTrait, SharedConsensusGraph},
+};
+
 use super::consensus::consensus_inner::{
     confirmation_meter::ConfirmationMeter,
     consensus_executor::ConsensusExecutor,
     consensus_new_block_handler::ConsensusNewBlockHandler,
-};
-pub use crate::consensus::{
-    consensus_inner::{ConsensusGraphInner, ConsensusInnerConfig},
-    consensus_trait::{ConsensusGraphTrait, SharedConsensusGraph},
 };
 use crate::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
@@ -25,20 +26,20 @@ use crate::{
     },
     evm::Spec,
     executive::ExecutionOutcome,
-    parameters::{
-        consensus::*, consensus_internal::*, staking::COLLATERAL_PER_BYTE,
-    },
     pow::{PowComputer, ProofOfWorkConfig},
     rpc_errors::Result as RpcResult,
     state::State,
-    statedb::StateDb,
+    statedb::{StateDb, StateDbExt, StateDbGetOriginalMethods},
     statistics::SharedStatistics,
-    storage::state_manager::StateManagerTrait,
     transaction_pool::SharedTransactionPool,
     verification::VerificationConfig,
     vm_factory::VmFactory,
     NodeType, Notifications,
 };
+use cfx_parameters::{
+    consensus::*, consensus_internal::*, staking::COLLATERAL_PER_BYTE,
+};
+use cfx_storage::state_manager::StateManagerTrait;
 use cfx_types::{BigEndianHash, Bloom, H160, H256, U256, U512};
 use either::Either;
 use itertools::Itertools;
@@ -95,6 +96,7 @@ pub struct ConsensusConfig {
     /// Larger batch sizes may improve performance but might also prevent
     /// consensus from making progress under high RPC load.
     pub get_logs_epoch_batch_size: usize,
+    pub get_logs_filter_max_epoch_range: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -553,7 +555,7 @@ impl ConsensusGraph {
     ) -> Result<Option<StorageRoot>, String> {
         let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
 
-        match state_db.get_storage_root(&address) {
+        match state_db.get_original_storage_root(&address) {
             Ok(maybe_storage_root) => Ok(maybe_storage_root),
             Err(e) => {
                 error!("db error occurred: {:?}", e);
@@ -979,6 +981,17 @@ impl ConsensusGraph {
                 epoch: from_epoch,
                 min: self.earliest_epoch_available(),
             });
+        }
+
+        if let Some(max_gap) = self.config.get_logs_filter_max_epoch_range {
+            // The range includes both ends.
+            if to_epoch - from_epoch + 1 > max_gap {
+                return Err(FilterError::EpochNumberGapTooLarge {
+                    from_epoch,
+                    to_epoch,
+                    max_gap,
+                });
+            }
         }
 
         return Ok((from_epoch..=to_epoch).rev());

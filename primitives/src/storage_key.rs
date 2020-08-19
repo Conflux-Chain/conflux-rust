@@ -240,14 +240,19 @@ impl<'a> StorageKey<'a> {
                 } else {
                     StorageKey::CodeRootKey(address_bytes)
                 }
+            } else if bytes.starts_with(Self::DEPOSIT_LIST_PREFIX) {
+                StorageKey::DepositListKey(address_bytes)
+            } else if bytes.starts_with(Self::VOTE_LIST_PREFIX) {
+                StorageKey::VoteListKey(address_bytes)
             } else {
-                unsafe { unreachable_unchecked() }
-                /*
-                unreachable!(
-                    "Invalid key format. Unrecognized: {:?}, account: {:?}",
-                    bytes, address_bytes
-                );
-                */
+                if cfg!(debug_assertions) {
+                    unreachable!(
+                        "Invalid key format. Unrecognized: {:?}, account: {:?}",
+                        bytes, address_bytes
+                    );
+                } else {
+                    unsafe { unreachable_unchecked() }
+                }
             }
         }
     }
@@ -491,13 +496,14 @@ mod delta_mpt_storage_key {
                     // length, it's passed to DeltaMPT directly.
                     return StorageKey::AccountKey(remaining_bytes);
                 } else {
-                    unsafe { unreachable_unchecked() }
-                    /*
-                    unreachable!(
-                        "Invalid delta mpt key format. Unrecognized: {:?}",
-                        remaining_bytes
-                    );
-                    */
+                    if cfg!(debug_assertions) {
+                        unreachable!(
+                            "Invalid delta mpt key format. Unrecognized: {:?}",
+                            remaining_bytes
+                        );
+                    } else {
+                        unsafe { unreachable_unchecked() }
+                    }
                 }
             } else {
                 let address_bytes = &remaining_bytes
@@ -531,7 +537,14 @@ mod delta_mpt_storage_key {
                 } else if remaining_bytes.starts_with(Self::VOTE_LIST_PREFIX) {
                     StorageKey::VoteListKey(address_bytes)
                 } else {
-                    unsafe { unreachable_unchecked() }
+                    if cfg!(debug_assertions) {
+                        unreachable!(
+                            "Invalid delta mpt key format. Address {:?}, Unrecognized: {:?}",
+                            address_bytes, remaining_bytes
+                        );
+                    } else {
+                        unsafe { unreachable_unchecked() }
+                    }
                 }
             }
         }

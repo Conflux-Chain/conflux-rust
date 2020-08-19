@@ -10,16 +10,18 @@ use crate::{
     consensus::debug::ComputeEpochDebugRecord,
     executive::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
     hash::KECCAK_EMPTY,
-    parameters::staking::*,
     statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb},
-    storage::{utils::access_mode, StateRootWithAuxInfo},
     transaction_pool::SharedTransactionPool,
     vm::Error as vmError,
     vm_factory::VmFactory,
 };
+use cfx_parameters::staking::*;
+use cfx_storage::utils::access_mode;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+#[cfg(test)]
+use primitives::storage::STORAGE_LAYOUT_REGULAR_V0;
 use primitives::{
-    Account, DepositList, EpochId, StorageKey, StorageLayout, StorageValue,
+    DepositList, EpochId, StorageKey, StorageLayout, StorageValue,
     VoteStakeList,
 };
 use std::{
@@ -39,7 +41,8 @@ pub use self::{
     account_entry::OverlayAccount,
     substate::{CallStackInfo, Substate},
 };
-use crate::evm::Spec;
+use crate::{evm::Spec, statedb::StateDbExt};
+use cfx_internal_common::StateRootWithAuxInfo;
 use parking_lot::{
     MappedRwLockWriteGuard, RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
@@ -104,13 +107,21 @@ struct StakingState {
 pub struct State {
     db: StateDb,
 
+    // Only used once at commitment.
     dirty_accounts_to_commit: Vec<(Address, AccountEntry)>,
+
+    // Contains the changes to the states and some unchanged state entries.
     cache: RwLock<HashMap<Address, AccountEntry>>,
+    // TODO: try not to make it special?
+    staking_state: StakingState,
+
+    // Checkpoint to the changes.
     staking_state_checkpoints: RwLock<Vec<StakingState>>,
     checkpoints: RwLock<Vec<HashMap<Address, Option<AccountEntry>>>>,
+
+    // Environment variables.
     account_start_nonce: U256,
     contract_start_nonce: U256,
-    staking_state: StakingState,
     // This is the total number of blocks executed so far. It is the same as
     // the `number` entry in EVM Environment.
     block_number: u64,
@@ -215,27 +226,14 @@ impl State {
     }
 
     /// Charges or refund storage collateral and update `total_storage_tokens`.
-    fn settle_collateral_for_address(
+    pub fn settle_collateral_for_address(
         &mut self, addr: &Address, substate: &Substate,
     ) -> DbResult<CollateralCheckResult> {
-        let inc_bytes = substate
-            .storage_collateralized
-            .get(addr)
-            .cloned()
-            .unwrap_or(0);
-        let sub_bytes =
-            substate.storage_released.get(addr).cloned().unwrap_or(0);
-        let (inc, sub) = if inc_bytes > sub_bytes {
-            (
-                *COLLATERAL_PER_BYTE * (inc_bytes - sub_bytes),
-                U256::from(0),
-            )
-        } else {
-            (
-                U256::from(0),
-                *COLLATERAL_PER_BYTE * (sub_bytes - inc_bytes),
-            )
-        };
+        let (inc_bytes, sub_bytes) = substate.get_collateral_change(addr);
+        let (inc, sub) = (
+            *COLLATERAL_PER_BYTE * inc_bytes,
+            *COLLATERAL_PER_BYTE * sub_bytes,
+        );
 
         if !sub.is_zero() {
             assert!(self.exists(addr)?);
@@ -265,8 +263,6 @@ impl State {
     pub fn collect_ownership_changed(
         &mut self, substate: &mut Substate,
     ) -> DbResult<()> {
-        let mut collateral_for_storage_sub = HashMap::new();
-        let mut collateral_for_storage_inc = HashMap::new();
         if let Some(checkpoint) = self.checkpoints.get_mut().last() {
             for address in checkpoint.keys() {
                 if let Some(ref mut maybe_acc) = self
@@ -276,33 +272,12 @@ impl State {
                     .filter(|x| x.is_dirty())
                 {
                     if let Some(ref mut acc) = maybe_acc.account.as_mut() {
-                        let ownership_delta =
-                            acc.commit_ownership_change(&self.db)?;
-                        for (addr, (inc, sub)) in ownership_delta {
-                            if inc > 0 {
-                                *collateral_for_storage_inc
-                                    .entry(addr)
-                                    .or_insert(0) += inc;
-                            }
-                            if sub > 0 {
-                                *collateral_for_storage_sub
-                                    .entry(addr)
-                                    .or_insert(0) += sub;
-                            }
-                        }
+                        acc.commit_ownership_change(&self.db, substate)?;
                     }
                 }
             }
         }
-        for (addr, sub) in &collateral_for_storage_sub {
-            *substate.storage_released.entry(*addr).or_insert(0) +=
-                sub * BYTES_PER_STORAGE_KEY;
-        }
-        for (addr, inc) in &collateral_for_storage_inc {
-            *substate.storage_collateralized.entry(*addr).or_insert(0) +=
-                inc * BYTES_PER_STORAGE_KEY;
-        }
-        return Ok(());
+        Ok(())
     }
 
     /// Charge and refund all the storage collaterals.
@@ -408,7 +383,7 @@ impl State {
 
     pub fn new_contract_with_admin(
         &mut self, contract: &Address, admin: &Address, balance: U256,
-        nonce: U256,
+        nonce: U256, storage_layout: Option<StorageLayout>,
     ) -> DbResult<()>
     {
         Self::update_cache(
@@ -417,7 +392,11 @@ impl State {
             contract,
             AccountEntry::new_dirty(Some(
                 OverlayAccount::new_contract_with_admin(
-                    contract, balance, nonce, admin,
+                    contract,
+                    balance,
+                    nonce,
+                    admin,
+                    storage_layout,
                 ),
             )),
         );
@@ -433,14 +412,17 @@ impl State {
             self.checkpoints.get_mut(),
             contract,
             AccountEntry::new_dirty(Some(OverlayAccount::new_contract(
-                contract, balance, nonce,
+                contract,
+                balance,
+                nonce,
+                Some(STORAGE_LAYOUT_REGULAR_V0),
             ))),
         );
         Ok(())
     }
 
     pub fn balance(&self, address: &Address) -> DbResult<U256> {
-        self.ensure_cached(address, RequireCache::None, |acc| {
+        self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |account| *account.balance())
         })
     }
@@ -449,7 +431,7 @@ impl State {
         if !address.is_contract_address() {
             return false;
         }
-        self.ensure_cached(address, RequireCache::None, |acc| {
+        self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(false, |acc| acc.code_hash() != KECCAK_EMPTY)
         })
         .unwrap_or(false)
@@ -466,7 +448,7 @@ impl State {
     pub fn sponsor_for_gas(
         &self, address: &Address,
     ) -> DbResult<Option<Address>> {
-        self.ensure_cached(address, RequireCache::None, |acc| {
+        self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(None, |acc| {
                 Self::maybe_address(&acc.sponsor_info().sponsor_for_gas)
             })
@@ -476,7 +458,7 @@ impl State {
     pub fn sponsor_for_collateral(
         &self, address: &Address,
     ) -> DbResult<Option<Address>> {
-        self.ensure_cached(address, RequireCache::None, |acc| {
+        self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(None, |acc| {
                 Self::maybe_address(&acc.sponsor_info().sponsor_for_collateral)
             })
@@ -515,13 +497,13 @@ impl State {
     }
 
     pub fn sponsor_gas_bound(&self, address: &Address) -> DbResult<U256> {
-        self.ensure_cached(address, RequireCache::None, |acc| {
+        self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |acc| acc.sponsor_info().sponsor_gas_bound)
         })
     }
 
     pub fn sponsor_balance_for_gas(&self, address: &Address) -> DbResult<U256> {
-        self.ensure_cached(address, RequireCache::None, |acc| {
+        self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |acc| {
                 acc.sponsor_info().sponsor_balance_for_gas
             })
@@ -531,7 +513,7 @@ impl State {
     pub fn sponsor_balance_for_collateral(
         &self, address: &Address,
     ) -> DbResult<U256> {
-        self.ensure_cached(address, RequireCache::None, |acc| {
+        self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |acc| {
                 acc.sponsor_info().sponsor_balance_for_collateral
             })
@@ -543,13 +525,17 @@ impl State {
         admin: &Address,
     ) -> DbResult<()>
     {
-        if self.ensure_cached(contract_address, RequireCache::None, |acc| {
-            acc.map_or(false, |acc| {
-                acc.is_contract()
-                    && acc.admin() == requester
-                    && acc.admin() != admin
-            })
-        })? {
+        if self.ensure_account_loaded(
+            contract_address,
+            RequireCache::None,
+            |acc| {
+                acc.map_or(false, |acc| {
+                    acc.is_contract()
+                        && acc.admin() == requester
+                        && acc.admin() != admin
+                })
+            },
+        )? {
             self.require_exists(&contract_address, false)?
                 .set_admin(requester, admin);
         }
@@ -599,7 +585,7 @@ impl State {
     pub fn check_commission_privilege(
         &self, contract_address: &Address, user: &Address,
     ) -> DbResult<bool> {
-        match self.ensure_cached(
+        match self.ensure_account_loaded(
             &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
             RequireCache::None,
             |acc| {
@@ -653,43 +639,43 @@ impl State {
     }
 
     pub fn nonce(&self, address: &Address) -> DbResult<U256> {
-        self.ensure_cached(address, RequireCache::None, |acc| {
+        self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |account| *account.nonce())
         })
     }
 
     pub fn code_hash(&self, address: &Address) -> DbResult<Option<H256>> {
-        self.ensure_cached(address, RequireCache::None, |acc| {
+        self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.and_then(|acc| Some(acc.code_hash()))
         })
     }
 
     pub fn code_size(&self, address: &Address) -> DbResult<Option<usize>> {
-        self.ensure_cached(address, RequireCache::Code, |acc| {
+        self.ensure_account_loaded(address, RequireCache::Code, |acc| {
             acc.and_then(|acc| acc.code_size())
         })
     }
 
     pub fn code_owner(&self, address: &Address) -> DbResult<Option<Address>> {
-        self.ensure_cached(address, RequireCache::Code, |acc| {
+        self.ensure_account_loaded(address, RequireCache::Code, |acc| {
             acc.as_ref().map_or(None, |acc| acc.code_owner())
         })
     }
 
     pub fn code(&self, address: &Address) -> DbResult<Option<Arc<Bytes>>> {
-        self.ensure_cached(address, RequireCache::Code, |acc| {
+        self.ensure_account_loaded(address, RequireCache::Code, |acc| {
             acc.as_ref().map_or(None, |acc| acc.code())
         })
     }
 
     pub fn staking_balance(&self, address: &Address) -> DbResult<U256> {
-        self.ensure_cached(address, RequireCache::None, |acc| {
+        self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |account| *account.staking_balance())
         })
     }
 
     pub fn collateral_for_storage(&self, address: &Address) -> DbResult<U256> {
-        self.ensure_cached(address, RequireCache::None, |acc| {
+        self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |account| {
                 *account.collateral_for_storage()
             })
@@ -697,7 +683,7 @@ impl State {
     }
 
     pub fn admin(&self, address: &Address) -> DbResult<Address> {
-        self.ensure_cached(address, RequireCache::None, |acc| {
+        self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(Address::zero(), |acc| *acc.admin())
         })
     }
@@ -705,23 +691,33 @@ impl State {
     pub fn withdrawable_staking_balance(
         &self, address: &Address,
     ) -> DbResult<U256> {
-        self.ensure_cached(address, RequireCache::VoteStakeList, |acc| {
-            acc.map_or(U256::zero(), |acc| {
-                acc.withdrawable_staking_balance(self.block_number)
-            })
-        })
+        self.ensure_account_loaded(
+            address,
+            RequireCache::VoteStakeList,
+            |acc| {
+                acc.map_or(U256::zero(), |acc| {
+                    acc.withdrawable_staking_balance(self.block_number)
+                })
+            },
+        )
     }
 
     pub fn deposit_list_length(&self, address: &Address) -> DbResult<usize> {
-        self.ensure_cached(address, RequireCache::DepositList, |acc| {
+        self.ensure_account_loaded(address, RequireCache::DepositList, |acc| {
             acc.map_or(0, |acc| acc.deposit_list().map_or(0, |l| l.len()))
         })
     }
 
     pub fn vote_stake_list_length(&self, address: &Address) -> DbResult<usize> {
-        self.ensure_cached(address, RequireCache::VoteStakeList, |acc| {
-            acc.map_or(0, |acc| acc.vote_stake_list().map_or(0, |l| l.len()))
-        })
+        self.ensure_account_loaded(
+            address,
+            RequireCache::VoteStakeList,
+            |acc| {
+                acc.map_or(0, |acc| {
+                    acc.vote_stake_list().map_or(0, |l| l.len())
+                })
+            },
+        )
     }
 
     pub fn inc_nonce(&mut self, address: &Address) -> DbResult<()> {
@@ -1013,34 +1009,22 @@ impl State {
 
     fn precommit_make_dirty_accounts_list(&mut self) {
         if self.dirty_accounts_to_commit.is_empty() {
-            let mut sorted_dirty_accounts = self
-                .cache
-                .get_mut()
-                .drain()
-                .filter_map(|(address, entry)| {
-                    if entry.is_dirty() {
-                        Some((address, entry))
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
+            let mut sorted_dirty_accounts =
+                self.cache.get_mut().drain().collect::<Vec<_>>();
             sorted_dirty_accounts.sort_by(|a, b| a.0.cmp(&b.0));
             self.dirty_accounts_to_commit = sorted_dirty_accounts;
         }
     }
 
-    pub fn commit(
-        &mut self, epoch_id: EpochId,
-        mut debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> DbResult<StateRootWithAuxInfo>
-    {
-        debug!("Commit epoch[{}]", epoch_id);
+    pub fn compute_state_root(
+        &mut self, mut debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> DbResult<StateRootWithAuxInfo> {
+        debug!("state.compute_state_root");
+
         assert!(self.checkpoints.get_mut().is_empty());
         assert!(self.staking_state_checkpoints.get_mut().is_empty());
 
         self.precommit_make_dirty_accounts_list();
-        self.commit_staking_state(debug_record.as_deref_mut())?;
 
         let mut killed_addresses = Vec::new();
         for (address, entry) in
@@ -1050,17 +1034,27 @@ impl State {
             match &mut entry.account {
                 None => killed_addresses.push(*address),
                 Some(account) => {
-                    account.commit(self, debug_record.as_deref_mut())?;
-                    self.db.set::<Account>(
-                        StorageKey::new_account_key(address),
-                        &account.as_account()?,
+                    account.commit(
+                        self,
+                        address,
                         debug_record.as_deref_mut(),
                     )?;
                 }
             }
         }
-        self.recycle_storage(killed_addresses, debug_record)?;
-        Ok(self.db.commit(epoch_id)?)
+        self.recycle_storage(killed_addresses, debug_record.as_deref_mut())?;
+        self.commit_staking_state(debug_record.as_deref_mut())?;
+        self.db.compute_state_root(debug_record)
+    }
+
+    pub fn commit(
+        &mut self, epoch_id: EpochId,
+        mut debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> DbResult<StateRootWithAuxInfo>
+    {
+        debug!("Commit epoch[{}]", epoch_id);
+        self.compute_state_root(debug_record.as_deref_mut())?;
+        Ok(self.db.commit(epoch_id, debug_record)?)
     }
 
     pub fn commit_and_notify(
@@ -1109,61 +1103,62 @@ impl State {
         Ok(())
     }
 
-    pub fn kill_account(&mut self, address: &Address) -> DbResult<()> {
+    pub fn record_storage_entries_release(
+        &mut self, address: &Address, substate: &mut Substate,
+    ) -> DbResult<()> {
         let account_cache_read_guard = self.cache.read();
         let maybe_account = account_cache_read_guard
             .get(address)
             .and_then(|acc| acc.account.as_ref());
 
-        let mut storage_refund_list = vec![];
         // Process collateral for removed storage.
         // TODO: try to do it in a better way, e.g. first log the deletion
         //  somewhere then apply the collateral change.
-        if let Some(storage_key_value) =
-            self.db.delete_all::<access_mode::Read>(
-                StorageKey::new_storage_root_key(address),
-                None,
-            )?
-        {
-            for (key, value) in storage_key_value {
-                if let StorageKey::StorageKey { storage_key, .. } =
-                    StorageKey::from_key_bytes(&key[..])
-                {
-                    // Check if the key has been touched. We use the local
-                    // information to find out if collateral refund is necessary
-                    // for touched keys.
-                    if maybe_account.map_or(true, |acc| {
-                        acc.storage_changes().get(storage_key).is_none()
-                    }) {
-                        let storage_value =
-                            rlp::decode::<StorageValue>(value.as_ref())?;
-                        let storage_owner =
-                            storage_value.owner.as_ref().unwrap_or(address);
-                        storage_refund_list.push(*storage_owner);
-                    }
+
+        let storage_key_value = self.db.delete_all::<access_mode::Read>(
+            StorageKey::new_storage_root_key(address),
+            None,
+        )?;
+
+        for (key, value) in storage_key_value {
+            if let StorageKey::StorageKey { storage_key, .. } =
+                StorageKey::from_key_bytes(&key[..])
+            {
+                // Check if the key has been touched. We use the local
+                // information to find out if collateral refund is necessary
+                // for touched keys.
+                if maybe_account.map_or(true, |acc| {
+                    acc.storage_changes().get(storage_key).is_none()
+                }) {
+                    let storage_value =
+                        rlp::decode::<StorageValue>(value.as_ref())?;
+                    let storage_owner =
+                        storage_value.owner.as_ref().unwrap_or(address);
+                    substate.record_storage_release(
+                        storage_owner,
+                        BYTES_PER_STORAGE_KEY,
+                    );
                 }
             }
         }
+
         if let Some(acc) = maybe_account {
             // The current value isn't important because it will be deleted.
             for (key, _value) in acc.storage_changes() {
                 if let Some(storage_owner) =
                     acc.original_ownership_at(&self.db, key)?
                 {
-                    storage_refund_list.push(storage_owner)
+                    substate.record_storage_release(
+                        &storage_owner,
+                        BYTES_PER_STORAGE_KEY,
+                    );
                 }
             }
         }
-        drop(account_cache_read_guard);
-        for storage_owner in &storage_refund_list {
-            self.sub_collateral_for_storage(
-                storage_owner,
-                &COLLATERAL_PER_STORAGE_KEY,
-            )?;
-        }
+        Ok(())
+    }
 
-        // TODO: examine where to do the code collateral refund.
-
+    pub fn remove_contract(&mut self, address: &Address) -> DbResult<()> {
         Self::update_cache(
             self.cache.get_mut(),
             self.checkpoints.get_mut(),
@@ -1177,12 +1172,13 @@ impl State {
     /// Return whether or not the address exists.
     pub fn try_load(&self, address: &Address) -> bool {
         if let Ok(true) =
-            self.ensure_cached(address, RequireCache::None, |maybe| {
+            self.ensure_account_loaded(address, RequireCache::None, |maybe| {
                 maybe.is_some()
             })
         {
             // Try to load the code, but don't fail if there is no code.
-            self.ensure_cached(address, RequireCache::Code, |_| ()).ok();
+            self.ensure_account_loaded(address, RequireCache::Code, |_| ())
+                .ok();
             true
         } else {
             false
@@ -1190,11 +1186,13 @@ impl State {
     }
 
     pub fn exists(&self, address: &Address) -> DbResult<bool> {
-        self.ensure_cached(address, RequireCache::None, |acc| acc.is_some())
+        self.ensure_account_loaded(address, RequireCache::None, |acc| {
+            acc.is_some()
+        })
     }
 
     pub fn exists_and_not_null(&self, address: &Address) -> DbResult<bool> {
-        self.ensure_cached(address, RequireCache::None, |acc| {
+        self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(false, |acc| !acc.is_null())
         })
     }
@@ -1203,7 +1201,7 @@ impl State {
     pub fn exists_and_has_code_or_nonce(
         &self, address: &Address,
     ) -> DbResult<bool> {
-        self.ensure_cached(address, RequireCache::Code, |acc| {
+        self.ensure_account_loaded(address, RequireCache::Code, |acc| {
             acc.map_or(false, |acc| {
                 acc.code_hash() != KECCAK_EMPTY
                     || *acc.nonce() != self.account_start_nonce
@@ -1249,7 +1247,11 @@ impl State {
                 .collect()
         };
         for address in to_kill {
-            self.kill_account(&address);
+            // TODO: The kill_garbage relies on the info in contract kill
+            // process. So it is processed later than contract kill. But we do
+            // not want to kill some contract again here. We must discuss it
+            // before enable kill_garbage.
+            unimplemented!()
         }
 
         Ok(())
@@ -1258,7 +1260,7 @@ impl State {
     pub fn storage_at(
         &self, address: &Address, key: &Vec<u8>,
     ) -> DbResult<U256> {
-        self.ensure_cached(address, RequireCache::None, |acc| {
+        self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |account| {
                 account.storage_at(&self.db, key).unwrap_or(U256::zero())
             })
@@ -1376,7 +1378,7 @@ impl State {
         }
     }
 
-    fn ensure_cached<F, U>(
+    fn ensure_account_loaded<F, U>(
         &self, address: &Address, require: RequireCache, f: F,
     ) -> DbResult<U>
     where F: Fn(Option<&OverlayAccount>) -> U {
@@ -1459,6 +1461,7 @@ impl State {
                     address,
                     U256::zero(),
                     self.account_start_nonce.into(),
+                    None,
                 ))
             } else {
                 unreachable!(

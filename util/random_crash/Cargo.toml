@@ -1,0 +1,17 @@
+[package]
+description = "Conflux random crash library"
+homepage = "http://www.conflux-chain.org"
+license = "GPL-3.0"
+name = "random-crash"
+version = "1.0.0"
+edition = "2018"
+
+[dependencies]
+lazy_static = { version = "1.4" }
+log = "0.4"
+parking_lot = "0.10"
+rand = "0.7"
+
+[features]
+random_crash = []
+default = ["random_crash"]

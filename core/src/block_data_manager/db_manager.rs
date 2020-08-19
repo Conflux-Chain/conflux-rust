@@ -2,7 +2,6 @@ use crate::{
     block_data_manager::{
         db_decode_list, db_encode_list, BlamedHeaderVerifiedRoots,
         BlockExecutionResultWithEpoch, BlockRewardResult, CheckpointHashes,
-        DatabaseDecodable, DatabaseEncodable, EpochExecutionCommitment,
         EpochExecutionContext, LocalBlockInfo,
     },
     db::{
@@ -10,13 +9,15 @@ use crate::{
         COL_MISC, COL_TX_INDEX,
     },
     pow::PowComputer,
-    storage::{
-        storage_db::KeyValueDbTrait, KvdbRocksdb, KvdbSqlite,
-        KvdbSqliteStatements,
-    },
     verification::VerificationConfig,
 };
 use byteorder::{ByteOrder, LittleEndian};
+use cfx_internal_common::{
+    DatabaseDecodable, DatabaseEncodable, EpochExecutionCommitment,
+};
+use cfx_storage::{
+    storage_db::KeyValueDbTrait, KvdbRocksdb, KvdbSqlite, KvdbSqliteStatements,
+};
 use cfx_types::H256;
 use db::SystemDB;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};

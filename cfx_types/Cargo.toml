@@ -6,4 +6,3 @@ description = "Conflux types"
 
 [dependencies]
 ethereum-types = "0.9"
-
