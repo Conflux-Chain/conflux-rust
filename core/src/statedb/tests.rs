@@ -3,10 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 use super::StateDbGeneric;
-use crate::storage::{
+use cfx_internal_common::StateRootWithAuxInfo;
+use cfx_storage::{
     utils::{access_mode, StaticBool},
     ErrorKind, MptKeyValue, NodeMerkleProof, Result, StateProof,
-    StateRootWithAuxInfo, StorageStateTrait,
+    StorageStateTrait,
 };
 use primitives::{EpochId, NodeMerkleTriplet, StorageKey, MERKLE_NULL_NODE};
 use std::{cell::RefCell, collections::HashMap};
