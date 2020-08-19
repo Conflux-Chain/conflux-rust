@@ -4,9 +4,11 @@
 
 use crate::rpc::types::{
     Block as RpcBlock, BlockHashOrEpochNumber, Bytes, EpochNumber,
-    Status as RpcStatus, Transaction as RpcTransaction,
+    Status as RpcStatus, Transaction as RpcTransaction, TxPoolPendingInfo,
+    TxWithPoolInfo,
 };
 use bigdecimal::BigDecimal;
+use cfx_parameters::consensus::ONE_CFX_IN_DRIP;
 use cfx_types::{Address, H160, H256, H520, U128, U256, U64};
 use cfxcore::{
     BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
@@ -474,17 +476,13 @@ impl RpcImpl {
         Ok(THROTTLING_SERVICE.read().clone())
     }
 
-    pub fn tx_inspect(
-        &self, hash: H256,
-    ) -> RpcResult<BTreeMap<String, String>> {
-        let mut ret: BTreeMap<String, String> = BTreeMap::new();
+    pub fn tx_inspect(&self, hash: H256) -> RpcResult<TxWithPoolInfo> {
+        let mut ret = TxWithPoolInfo::default();
         let hash: H256 = hash.into();
         if let Some(tx) = self.tx_pool.get_transaction(&hash) {
-            ret.insert("exist".into(), "true".into());
+            ret.exist = true;
             if self.tx_pool.check_tx_packed_in_deferred_pool(&hash) {
-                ret.insert("packed".into(), "true".into());
-            } else {
-                ret.insert("packed".into(), "false".into());
+                ret.packed = true;
             }
             let (local_nonce, local_balance) =
                 self.tx_pool.get_local_account_info(&tx.sender());
@@ -496,30 +494,23 @@ impl RpcImpl {
                     rpc_error.data = Some(RpcValue::String(format!("{}", e)));
                     rpc_error
                 })?;
-            ret.insert(
-                "local nonce".into(),
-                serde_json::to_string(&local_nonce).unwrap(),
-            );
-            ret.insert(
-                "local balance".into(),
-                serde_json::to_string(&local_balance).unwrap(),
-            );
-            ret.insert(
-                "state nonce".into(),
-                serde_json::to_string(&state_nonce).unwrap(),
-            );
-            ret.insert(
-                "state balance".into(),
-                serde_json::to_string(&state_balance).unwrap(),
-            );
-        } else {
-            ret.insert("exist".into(), "false".into());
+            let required_balance = tx.value
+                + tx.gas * tx.gas_price
+                + tx.storage_limit * ONE_CFX_IN_DRIP / 1024;
+            ret.local_balance_enough = local_balance > required_balance;
+            ret.state_balance_enough = state_balance > required_balance;
+            ret.local_balance = local_balance;
+            ret.local_nonce = local_nonce;
+            ret.state_balance = state_balance;
+            ret.state_nonce = state_nonce;
         }
         Ok(ret)
     }
 
-    pub fn txs_from_pool(&self) -> RpcResult<Vec<RpcTransaction>> {
-        let (ready_txs, deferred_txs) = self.tx_pool.content();
+    pub fn txs_from_pool(
+        &self, address: Option<H160>,
+    ) -> RpcResult<Vec<RpcTransaction>> {
+        let (ready_txs, deferred_txs) = self.tx_pool.content(address);
         let converter = |tx: &Arc<SignedTransaction>| -> RpcTransaction {
             RpcTransaction::from_signed(&tx, None)
         };
@@ -532,14 +523,14 @@ impl RpcImpl {
     }
 
     pub fn txpool_content(
-        &self,
+        &self, address: Option<H160>,
     ) -> RpcResult<
         BTreeMap<
             String,
             BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
         >,
     > {
-        let (ready_txs, deferred_txs) = self.tx_pool.content();
+        let (ready_txs, deferred_txs) = self.tx_pool.content(address);
         let converter = |tx: Arc<SignedTransaction>| -> RpcTransaction {
             RpcTransaction::from_signed(&tx, None)
         };
@@ -555,11 +546,11 @@ impl RpcImpl {
     }
 
     pub fn txpool_inspect(
-        &self,
+        &self, address: Option<H160>,
     ) -> RpcResult<
         BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
     > {
-        let (ready_txs, deferred_txs) = self.tx_pool.content();
+        let (ready_txs, deferred_txs) = self.tx_pool.content(address);
         let converter = |tx: Arc<SignedTransaction>| -> String {
             let to = match tx.action {
                 Action::Create => "<Create contract>".into(),
@@ -692,6 +683,27 @@ impl RpcImpl {
 
     pub fn get_client_version(&self) -> RpcResult<String> {
         Ok(format!("conflux-rust-{}", crate_version!()).into())
+    }
+
+    pub fn tx_inspect_pending(
+        &self, address: H160,
+    ) -> RpcResult<TxPoolPendingInfo> {
+        let mut ret = TxPoolPendingInfo::default();
+        let (deferred_txs, _) = self.tx_pool.content(Some(address));
+        let mut max_nonce: U256 = U256::from(0);
+        let mut min_nonce: U256 = U256::max_value();
+        for tx in deferred_txs.iter() {
+            if tx.nonce > max_nonce {
+                max_nonce = tx.nonce;
+            }
+            if tx.nonce < min_nonce {
+                min_nonce = tx.nonce;
+            }
+        }
+        ret.pending_count = deferred_txs.len();
+        ret.min_nonce = min_nonce;
+        ret.max_nonce = max_nonce;
+        Ok(ret)
     }
 }
 

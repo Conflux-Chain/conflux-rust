@@ -3,6 +3,8 @@
 ## Improvement
 - Start stratum services automatically if `mining_author` is set. 
 Use `mining_type` to allow start CPU mining or disable mining manually.
+- Add rpc method `tx_inspect_pending` to help developer get their pending info.
+- Debug rpc `txpool_inspect` `txpool_content` `getTransactionsFromPool` add an optional parameter `address` to enable filter by account  
 
 # 0.6.0
 
