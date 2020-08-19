@@ -11,7 +11,8 @@ mod shared;
 pub use self::{cache::CacheBuilder, shared::POW_STAGE_LENGTH};
 use crate::hash::keccak as keccak_hash;
 
-use crate::{block_data_manager::BlockDataManager, parameters::pow::*};
+use crate::block_data_manager::BlockDataManager;
+use cfx_parameters::pow::*;
 use cfx_types::{BigEndianHash, H256, U256, U512};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;

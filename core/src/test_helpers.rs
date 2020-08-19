@@ -3,11 +3,14 @@ use crate::{
     genesis::initialize_internal_contract_accounts,
     state::State,
     statedb::StateDb,
-    storage::{StateIndex, StorageManager, StorageManagerTrait},
 };
+use cfx_storage::{StateIndex, StorageManager, StorageManagerTrait};
 use primitives::EpochId;
+use std::sync::Arc;
 
-pub fn get_state_for_genesis_write(storage_manager: &StorageManager) -> State {
+pub fn get_state_for_genesis_write(
+    storage_manager: &Arc<StorageManager>,
+) -> State {
     get_state_for_genesis_write_with_factory(
         storage_manager,
         Factory::default(),
@@ -15,7 +18,7 @@ pub fn get_state_for_genesis_write(storage_manager: &StorageManager) -> State {
 }
 
 pub fn get_state_for_genesis_write_with_factory(
-    storage_manager: &StorageManager, factory: Factory,
+    storage_manager: &Arc<StorageManager>, factory: Factory,
 ) -> State {
     let mut state = State::new(
         StateDb::new(storage_manager.get_state_for_genesis_write()),

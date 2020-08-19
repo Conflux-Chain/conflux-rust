@@ -2,18 +2,18 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_internal_common::state_root_with_aux_info::{
+    StateRootAuxInfo, StateRootWithAuxInfo,
+};
+use cfx_storage::{
+    state::StateTrait,
+    state_manager::{StateManager, StateManagerTrait},
+    storage_db::{KeyValueDbTraitRead, SnapshotDbManagerTrait, SnapshotInfo},
+    DeltaMptIterator, Error as StorageError, StateIndex, StorageConfiguration,
+};
 use cfx_types::{Address, H256};
 use cfxcore::{
     statedb::{StateDb, StateDbExt},
-    storage::{
-        state::StateTrait,
-        state_manager::{StateManager, StateManagerTrait},
-        storage_db::{
-            KeyValueDbTraitRead, SnapshotDbManagerTrait, SnapshotInfo,
-        },
-        DeltaMptIterator, Error as StorageError, StateIndex, StateRootAuxInfo,
-        StateRootWithAuxInfo, StorageConfiguration,
-    },
     sync::Error,
 };
 use clap::{App, Arg, ArgMatches};
@@ -288,14 +288,16 @@ where
 fn new_state_manager(
     conflux_data_dir: &str,
 ) -> Result<Arc<StateManager>, Error> {
-    let mut storage_conf =
-        StorageConfiguration::new_default(conflux_data_dir.to_string());
+    let mut storage_conf = StorageConfiguration::new_default(
+        conflux_data_dir.to_string(),
+        cfx_parameters::consensus::SNAPSHOT_EPOCHS_CAPACITY,
+    );
     storage_conf.consensus_param.snapshot_epoch_count = 10000000;
     Ok(Arc::new(StateManager::new(storage_conf).unwrap()))
 }
 
 fn initialize_genesis(
-    manager: &StateManager,
+    manager: &Arc<StateManager>,
 ) -> Result<(H256, MerkleHash), Error> {
     let mut state = manager.get_state_for_genesis_write();
 
@@ -321,8 +323,9 @@ fn initialize_genesis(
 }
 
 fn prepare_state(
-    manager: &StateManager, parent: H256, height: &mut u64, accounts: usize,
-    accounts_per_epoch: usize, account_map: &mut HashMap<Address, Account>,
+    manager: &Arc<StateManager>, parent: H256, height: &mut u64,
+    accounts: usize, accounts_per_epoch: usize,
+    account_map: &mut HashMap<Address, Account>,
     old_state_root: &StateRootWithAuxInfo, state_root: &StateRootWithAuxInfo,
 ) -> Result<(H256, MerkleHash), StorageError>
 {
@@ -347,7 +350,7 @@ fn prepare_state(
 }
 
 fn add_accounts(
-    manager: &StateManager, parent: H256, height: &mut u64,
+    manager: &Arc<StateManager>, parent: H256, height: &mut u64,
     accounts_per_epoch: usize, new_account_map: &HashMap<Address, Account>,
     old_state_root: &StateRootWithAuxInfo, state_root: &StateRootWithAuxInfo,
 ) -> Result<(H256, MerkleHash), StorageError>
@@ -407,7 +410,7 @@ fn add_accounts(
 }
 
 fn add_accounts_and_commit<'a, Iter>(
-    manager: &StateManager, accounts: usize, account_map: &mut Iter,
+    manager: &Arc<StateManager>, accounts: usize, account_map: &mut Iter,
     state_index: StateIndex,
 ) -> H256
 where

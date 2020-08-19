@@ -91,12 +91,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34fde25430d87a9388dadbe6e34d7f72a462c8b43ac8d309b42b0a8505d7e2a5"
 
 [[package]]
-name = "anyhow"
-version = "1.0.32"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b602bfe940d21c130f3895acd65221e8a61270debe89d628b9cb4e3ccb8569b"
-
-[[package]]
 name = "app_dirs"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -137,17 +131,6 @@ name = "arrayvec"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cff77d8686867eceff3105329d4698d96c2391c176d5d03adc90c7389162b5b8"
-
-[[package]]
-name = "async-trait"
-version = "0.1.36"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a265e3abeffdce30b2e26b7a11b222fe37c6067404001b434101457d0385eb92"
-dependencies = [
- "proc-macro2 1.0.19",
- "quote 1.0.7",
- "syn 1.0.38",
-]
 
 [[package]]
 name = "atom"
@@ -326,6 +309,7 @@ dependencies = [
 name = "blockgen"
 version = "0.1.0"
 dependencies = [
+ "cfx-parameters",
  "cfx-stratum",
  "cfx-types",
  "cfxcore",
@@ -472,6 +456,73 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfx-internal-common"
+version = "1.0.0"
+dependencies = [
+ "cfx-bytes",
+ "cfx-parameters",
+ "cfx-types",
+ "derivative",
+ "lazy_static",
+ "log 0.4.11",
+ "malloc_size_of",
+ "malloc_size_of_derive",
+ "primitives",
+ "rlp",
+ "rlp_derive",
+ "serde",
+ "serde_derive",
+]
+
+[[package]]
+name = "cfx-parameters"
+version = "1.0.0"
+dependencies = [
+ "cfx-types",
+ "lazy_static",
+]
+
+[[package]]
+name = "cfx-storage"
+version = "1.0.0"
+dependencies = [
+ "cfx-bytes",
+ "cfx-internal-common",
+ "cfx-types",
+ "cfxkey",
+ "derivative",
+ "error-chain",
+ "fallible-iterator",
+ "fs_extra",
+ "futures 0.3.5",
+ "hashbrown 0.7.2",
+ "keccak-hash",
+ "kvdb",
+ "kvdb-rocksdb",
+ "lazy_static",
+ "log 0.4.11",
+ "log4rs",
+ "malloc_size_of",
+ "malloc_size_of_derive",
+ "memoffset",
+ "parity-util-mem",
+ "parking_lot 0.10.2",
+ "primitives",
+ "rand 0.7.3",
+ "rand_chacha",
+ "random-crash",
+ "rlp",
+ "rlp_derive",
+ "rustc-hex 1.0.0",
+ "serde",
+ "serde_derive",
+ "sqlite",
+ "sqlite3-sys",
+ "strfmt",
+ "tokio 0.2.22",
+]
+
+[[package]]
 name = "cfx-stratum"
 version = "1.12.0"
 dependencies = [
@@ -505,12 +556,13 @@ dependencies = [
 name = "cfxcore"
 version = "1.0.0"
 dependencies = [
- "anyhow",
- "async-trait",
  "bit-set",
  "bn",
  "byteorder",
  "cfx-bytes",
+ "cfx-internal-common",
+ "cfx-parameters",
+ "cfx-storage",
  "cfx-types",
  "cfx-utils",
  "cfxkey",
@@ -524,7 +576,6 @@ dependencies = [
  "fs_extra",
  "futures 0.3.5",
  "hashbrown 0.7.2",
- "heapsize",
  "hibitset",
  "io",
  "itertools 0.9.0",
@@ -535,9 +586,7 @@ dependencies = [
  "lazy_static",
  "link-cut-tree",
  "log 0.4.11",
- "log-device",
  "log4rs",
- "lru",
  "lru_time_cache",
  "malloc_size_of",
  "malloc_size_of_derive",
@@ -545,10 +594,8 @@ dependencies = [
  "memoffset",
  "memory-cache",
  "metrics",
- "mirai-annotations",
  "network",
  "num",
- "num-derive",
  "num-traits",
  "parity-bytes",
  "parity-crypto 0.3.1",
@@ -561,6 +608,7 @@ dependencies = [
  "rand 0.7.3",
  "rand_chacha",
  "rand_xorshift",
+ "random-crash",
  "rayon",
  "rlp",
  "rlp_derive",
@@ -576,7 +624,6 @@ dependencies = [
  "static_assertions",
  "strfmt",
  "tempdir",
- "thiserror",
  "threadpool",
  "throttling",
  "tokio 0.2.22",
@@ -692,6 +739,8 @@ dependencies = [
  "bigdecimal",
  "blockgen",
  "cfx-bytes",
+ "cfx-parameters",
+ "cfx-storage",
  "cfx-types",
  "cfxcore",
  "cfxcore-accounts",
@@ -725,11 +774,11 @@ dependencies = [
  "network",
  "num-bigint",
  "order-stat",
- "panic_hook",
  "parking_lot 0.10.2",
  "primitives",
  "rand 0.7.3",
  "rand_xorshift",
+ "random-crash",
  "rayon",
  "rlp",
  "runtime",
@@ -740,7 +789,6 @@ dependencies = [
  "serde_json",
  "slab",
  "tempdir",
- "term_size",
  "textwrap 0.9.0",
  "threadpool",
  "throttling",
@@ -814,7 +862,6 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "slab",
- "term_size",
  "textwrap 0.9.0",
  "threadpool",
  "toml 0.4.10",
@@ -1560,12 +1607,6 @@ checksum = "65043da274378d68241eb9a8f8f8aa54e349136f7b8e12f63e3ef44043cc30e1"
 
 [[package]]
 name = "hashbrown"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1de41fb8dba9714efd92241565cdff73f78508c95697dd56787d3cba27e2353"
-
-[[package]]
-name = "hashbrown"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96282e96bfcd3da0d3aa9938bedf1e50df3269b6db08b4876d2da0bb1a0841cf"
@@ -1581,15 +1622,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34f595585f103464d8d2f6e9864682d74c1601fed5e07d62b1c9058dba8246fb"
 dependencies = [
  "autocfg",
-]
-
-[[package]]
-name = "heapsize"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1679e6ea370dee694f91f1dc469bf94cf8f52051d147aec3e1f9497c6fc22461"
-dependencies = [
- "winapi 0.3.9",
 ]
 
 [[package]]
@@ -1880,12 +1912,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "interleaved-ordered"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "141340095b15ed7491bd3d4ced9d20cebfb826174b6bb03386381f62b01e3d77"
-
-[[package]]
 name = "io"
 version = "0.1.0"
 dependencies = [
@@ -2110,13 +2136,11 @@ version = "0.1.6"
 dependencies = [
  "cfx-types",
  "fs-swap",
- "interleaved-ordered",
  "kvdb",
  "log 0.4.11",
  "malloc_size_of",
  "malloc_size_of_derive",
  "num_cpus",
- "owning_ref",
  "parity-util-mem",
  "parking_lot 0.10.2",
  "regex",
@@ -2252,19 +2276,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "log-device"
-version = "0.1.0"
-dependencies = [
- "byteorder",
- "db",
- "kvdb",
- "parking_lot 0.10.2",
- "rand 0.7.3",
- "rlp",
- "rlp_derive",
-]
-
-[[package]]
 name = "log-mdc"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2293,15 +2304,6 @@ dependencies = [
  "thread-id",
  "typemap",
  "winapi 0.3.9",
-]
-
-[[package]]
-name = "lru"
-version = "0.1.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d8f669d42c72d18514dfca8115689c5f6370a17d980cb5bd777a67f404594c8"
-dependencies = [
- "hashbrown 0.5.0",
 ]
 
 [[package]]
@@ -2504,12 +2506,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mirai-annotations"
-version = "1.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "258c143ddb5105becc4834f66d0b0ad3d3205d07cb3efc3236f33f623dd07b16"
-
-[[package]]
 name = "native-tls"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2628,17 +2624,6 @@ checksum = "b6b19411a9719e753aff12e5187b74d60d3dc449ec3f4dc21e3989c3f554bc95"
 dependencies = [
  "autocfg",
  "num-traits",
-]
-
-[[package]]
-name = "num-derive"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eafd0b45c5537c3ba526f79d3e75120036502bebacbb3f3220914067ce39dbf2"
-dependencies = [
- "proc-macro2 0.4.30",
- "quote 0.6.13",
- "syn 0.15.44",
 ]
 
 [[package]]
@@ -2767,15 +2752,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3741934be594d77de1c8461ebcbbe866f585ea616a9753aa78f2bdc69f0e4579"
 dependencies = [
  "num-traits",
-]
-
-[[package]]
-name = "owning_ref"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ff55baddef9e4ad00f88b6c743a2a8062d4c6ade126c2a528644b8e444d52ce"
-dependencies = [
- "stable_deref_trait",
 ]
 
 [[package]]
@@ -3141,7 +3117,6 @@ dependencies = [
  "keccak-hash",
  "lazy_static",
  "log 0.4.11",
- "lru",
  "malloc_size_of",
  "rand 0.7.3",
  "rlp",
@@ -3351,6 +3326,16 @@ checksum = "03b418169fb9c46533f326efd6eed2576699c44ca92d3052a066214a8d828929"
 dependencies = [
  "byteorder",
  "rand_core 0.3.1",
+]
+
+[[package]]
+name = "random-crash"
+version = "1.0.0"
+dependencies = [
+ "lazy_static",
+ "log 0.4.11",
+ "parking_lot 0.10.2",
+ "rand 0.7.3",
 ]
 
 [[package]]
@@ -3617,7 +3602,6 @@ dependencies = [
  "malloc_size_of",
  "malloc_size_of_derive",
  "parking_lot 0.10.2",
- "primitives",
  "rand 0.7.3",
  "rlp",
 ]
@@ -3860,12 +3844,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "stable_deref_trait"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
-
-[[package]]
 name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4008,16 +3986,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "term_size"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e4129646ca0ed8f45d09b929036bafad5377103edd06e50bf574b353d2b08d9"
-dependencies = [
- "libc",
- "winapi 0.3.9",
-]
-
-[[package]]
 name = "termcolor"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4042,26 +4010,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d326610f408c7a4eb6f51c37c330e496b08506c9457c9d34287ecc38809fb060"
 dependencies = [
  "unicode-width",
-]
-
-[[package]]
-name = "thiserror"
-version = "1.0.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dfdd070ccd8ccb78f4ad66bf1982dc37f620ef696c6b5028fe2ed83dd3d0d08"
-dependencies = [
- "thiserror-impl",
-]
-
-[[package]]
-name = "thiserror-impl"
-version = "1.0.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd80fc12f73063ac132ac92aceea36734f04a1d93c1240c6944e23a3b8841793"
-dependencies = [
- "proc-macro2 1.0.19",
- "quote 1.0.7",
- "syn 1.0.38",
 ]
 
 [[package]]

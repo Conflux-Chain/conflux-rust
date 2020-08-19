@@ -7,7 +7,6 @@ use super::{executive::*, suicide as suicide_impl, InternalContractMap};
 use crate::{
     bytes::Bytes,
     machine::Machine,
-    parameters::staking::*,
     state::{State, Substate},
     statedb,
     vm::{
@@ -16,6 +15,7 @@ use crate::{
         ReturnData, Spec, TrapKind,
     },
 };
+use cfx_parameters::staking::COLLATERAL_PER_BYTE;
 use cfx_types::{Address, H256, U256};
 use primitives::transaction::UNSIGNED_SENDER;
 use std::sync::Arc;
@@ -422,17 +422,16 @@ mod tests {
     use super::{Context, InternalContractMap, OriginInfo, OutputPolicy};
     use crate::{
         machine::{new_machine_with_builtin, Machine},
-        parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
         state::{State, Substate},
-        storage::{
-            new_storage_manager_for_testing, tests::FakeStateManager,
-            StorageManager,
-        },
         test_helpers::get_state_for_genesis_write,
         vm::{
             CallType, Context as ContextTrait, ContractCreateResult,
             CreateContractAddress, Env, Spec,
         },
+    };
+    use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
+    use cfx_storage::{
+        new_storage_manager_for_testing, tests::FakeStateManager,
     };
     use cfx_types::{address_util::AddressUtil, Address, H256, U256};
     use std::str::FromStr;
@@ -464,9 +463,12 @@ mod tests {
         }
     }
 
+    // storage_manager is apparently unused but it must be held to keep the
+    // database directory.
+    #[allow(unused)]
     struct TestSetup {
-        storage_manager: Option<Box<FakeStateManager>>,
-        state: Option<State>,
+        storage_manager: FakeStateManager,
+        state: State,
         machine: Machine,
         internal_contract_map: InternalContractMap,
         spec: Spec,
@@ -475,36 +477,25 @@ mod tests {
     }
 
     impl TestSetup {
-        fn init_state(&mut self, storage_manager: &'static StorageManager) {
-            self.state = Some(get_state_for_genesis_write(storage_manager));
-        }
-
         fn new() -> Self {
-            let storage_manager = Box::new(new_storage_manager_for_testing());
+            let storage_manager = new_storage_manager_for_testing();
+            let state = get_state_for_genesis_write(&*storage_manager);
             let machine = new_machine_with_builtin(Default::default());
             let env = get_test_env();
             let spec = machine.spec(env.number);
             let internal_contract_map = InternalContractMap::new();
 
             let mut setup = Self {
-                storage_manager: None,
-                state: None,
+                storage_manager,
+                state,
                 machine,
                 internal_contract_map,
                 spec,
                 substate: Substate::new(),
                 env,
             };
-            setup.storage_manager = Some(storage_manager);
-            setup.init_state(unsafe {
-                &*(&**setup.storage_manager.as_ref().unwrap().as_ref()
-                    as *const StorageManager)
-            });
-
             setup
                 .state
-                .as_mut()
-                .unwrap()
                 .init_code(&Address::zero(), vec![], Address::zero())
                 .ok();
 
@@ -515,7 +506,7 @@ mod tests {
     #[test]
     fn can_be_created() {
         let mut setup = TestSetup::new();
-        let state = &mut setup.state.unwrap();
+        let state = &mut setup.state;
         let origin = get_test_origin();
 
         let ctx = Context::new(
@@ -538,7 +529,7 @@ mod tests {
     #[test]
     fn can_return_block_hash_no_env() {
         let mut setup = TestSetup::new();
-        let state = &mut setup.state.unwrap();
+        let state = &mut setup.state;
         let origin = get_test_origin();
 
         let mut ctx = Context::new(
@@ -580,7 +571,7 @@ mod tests {
     //            last_hashes.push(test_hash.clone());
     //            env.last_hashes = Arc::new(last_hashes);
     //        }
-    //        let state = &mut setup.state.unwrap();
+    //        let state = &mut setup.state;
     //        let origin = get_test_origin();
     //
     //        let mut ctx = Context::new(
@@ -610,7 +601,7 @@ mod tests {
     #[should_panic]
     fn can_call_fail_empty() {
         let mut setup = TestSetup::new();
-        let state = &mut setup.state.unwrap();
+        let state = &mut setup.state;
         let origin = get_test_origin();
 
         let mut ctx = Context::new(
@@ -658,7 +649,7 @@ mod tests {
         .unwrap()];
 
         let mut setup = TestSetup::new();
-        let state = &mut setup.state.unwrap();
+        let state = &mut setup.state;
         let origin = get_test_origin();
 
         {
@@ -687,7 +678,7 @@ mod tests {
         refund_account.set_user_account_type_bits();
 
         let mut setup = TestSetup::new();
-        let state = &mut setup.state.unwrap();
+        let state = &mut setup.state;
         let mut origin = get_test_origin();
 
         let mut contract_address = Address::zero();
@@ -731,7 +722,7 @@ mod tests {
         use std::str::FromStr;
 
         let mut setup = TestSetup::new();
-        let state = &mut setup.state.unwrap();
+        let state = &mut setup.state;
         let origin = get_test_origin();
 
         let address = {
@@ -777,7 +768,7 @@ mod tests {
         use std::str::FromStr;
 
         let mut setup = TestSetup::new();
-        let state = &mut setup.state.unwrap();
+        let state = &mut setup.state;
         let origin = get_test_origin();
 
         let address = {

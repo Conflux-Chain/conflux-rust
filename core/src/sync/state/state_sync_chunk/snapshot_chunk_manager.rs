@@ -1,16 +1,14 @@
-use crate::{
-    storage::{
-        storage_db::SnapshotInfo, FullSyncVerifier, Result as StorageResult,
-        TrieProof,
+use crate::sync::{
+    message::{msgid, Context, SnapshotChunkRequest},
+    state::{
+        state_sync_chunk::restore::Restorer,
+        storage::{Chunk, ChunkKey, RangedManifest, SnapshotSyncCandidate},
     },
-    sync::{
-        message::{msgid, Context, SnapshotChunkRequest},
-        state::{
-            state_sync_chunk::restore::Restorer,
-            storage::{Chunk, ChunkKey, RangedManifest, SnapshotSyncCandidate},
-        },
-        synchronization_state::PeerFilter,
-    },
+    synchronization_state::PeerFilter,
+};
+use cfx_storage::{
+    storage_db::SnapshotInfo, FullSyncVerifier, Result as StorageResult,
+    TrieProof,
 };
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::node_table::NodeId;

@@ -242,8 +242,8 @@ use super::{Result, StateDb};
 use crate::{
     consensus::debug::ComputeEpochDebugRecord,
     executive::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-    parameters::staking::*,
 };
+use cfx_parameters::staking::*;
 use cfx_types::{Address, H256, U256};
 use primitives::{Account, CodeInfo, DepositList, StorageKey, VoteStakeList};
 use rlp::Rlp;

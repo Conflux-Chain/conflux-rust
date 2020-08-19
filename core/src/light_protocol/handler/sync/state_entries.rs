@@ -4,10 +4,10 @@
 
 extern crate lru_time_cache;
 
-use lru_time_cache::LruCache;
-use parking_lot::RwLock;
-use std::{future::Future, sync::Arc};
-
+use super::{
+    common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
+    state_roots::StateRoots,
+};
 use crate::{
     light_protocol::{
         common::{FullPeerState, Peers},
@@ -18,20 +18,18 @@ use crate::{
         },
     },
     message::{Message, RequestId},
-    network::NetworkContext,
-    parameters::light::{
-        CACHE_TIMEOUT, MAX_STATE_ENTRIES_IN_FLIGHT,
-        STATE_ENTRY_REQUEST_BATCH_SIZE, STATE_ENTRY_REQUEST_TIMEOUT,
-    },
     UniqueId,
 };
-
-use super::{
-    common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
-    state_roots::StateRoots,
+use cfx_parameters::light::{
+    CACHE_TIMEOUT, MAX_STATE_ENTRIES_IN_FLIGHT, STATE_ENTRY_REQUEST_BATCH_SIZE,
+    STATE_ENTRY_REQUEST_TIMEOUT,
 };
-use network::node_table::NodeId;
+use futures::future::FutureExt;
+use lru_time_cache::LruCache;
+use network::{node_table::NodeId, NetworkContext};
+use parking_lot::RwLock;
 use primitives::StorageKey;
+use std::{future::Future, sync::Arc};
 
 pub type StateEntry = Option<Vec<u8>>;
 
@@ -44,6 +42,8 @@ struct Statistics {
 
 type MissingStateEntry = TimeOrdered<StateKey>;
 
+type PendingStateEntry = PendingItem<StateEntry, ClonableError>;
+
 pub struct StateEntries {
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
@@ -55,7 +55,7 @@ pub struct StateEntries {
     sync_manager: SyncManager<StateKey, MissingStateEntry>,
 
     // state entries received from full node
-    verified: Arc<RwLock<LruCache<StateKey, PendingItem<StateEntry>>>>,
+    verified: Arc<RwLock<LruCache<StateKey, PendingStateEntry>>>,
 }
 
 impl StateEntries {
@@ -90,10 +90,11 @@ impl StateEntries {
     #[inline]
     pub fn request_now(
         &self, io: &dyn NetworkContext, epoch: u64, key: Vec<u8>,
-    ) -> impl Future<Output = StateEntry> {
+    ) -> impl Future<Output = Result<StateEntry>> {
+        let mut verified = self.verified.write();
         let key = StateKey { epoch, key };
 
-        if !self.verified.read().contains_key(&key) {
+        if !verified.contains_key(&key) {
             let missing = std::iter::once(MissingStateEntry::new(key.clone()));
 
             self.sync_manager.request_now(missing, |peer, keys| {
@@ -101,7 +102,13 @@ impl StateEntries {
             });
         }
 
+        verified
+            .entry(key.clone())
+            .or_insert(PendingItem::pending())
+            .clear_error();
+
         FutureItem::new(key, self.verified.clone())
+            .map(|res| res.map_err(|e| e.into()))
     }
 
     #[inline]
@@ -111,7 +118,10 @@ impl StateEntries {
     ) -> Result<()>
     {
         for StateEntryWithKey { key, entry, proof } in entries {
-            debug!("Validating state entry {:?} with key {:?}", entry, key);
+            debug!(
+                "Validating state entry {:?} with key {:?} and proof {:?}",
+                entry, key, proof
+            );
 
             match self.sync_manager.check_if_requested(peer, id, &key)? {
                 None => continue,
@@ -127,7 +137,21 @@ impl StateEntries {
         &self, key: StateKey, entry: Option<Vec<u8>>, proof: StateEntryProof,
     ) -> Result<()> {
         // validate state entry
-        self.validate_state_entry(key.epoch, &key.key, &entry, proof)?;
+        if let Err(e) =
+            self.validate_state_entry(key.epoch, &key.key, &entry, proof)
+        {
+            // forward error to both rpc caller(s) and sync handler
+            // so we need to make it clonable
+            let e = ClonableError::from(e);
+
+            self.verified
+                .write()
+                .entry(key.clone())
+                .or_insert(PendingItem::pending())
+                .set_error(e.clone());
+
+            bail!(e);
+        }
 
         // store state entry by state key
         self.verified
@@ -192,10 +216,11 @@ impl StateEntries {
 
         self.state_roots
             .validate_state_root(epoch, &state_root)
-            .chain_err(|| {
-                ErrorKind::InvalidStateProof(
-                    "Validation of current state root failed",
-                )
+            .chain_err(|| ErrorKind::InvalidStateProof {
+                epoch,
+                key: key.clone(),
+                value: value.clone(),
+                reason: "Validation of current state root failed",
             })?;
 
         // validate previous state root
@@ -203,10 +228,11 @@ impl StateEntries {
 
         self.state_roots
             .validate_prev_snapshot_state_root(epoch, &maybe_prev_root)
-            .chain_err(|| {
-                ErrorKind::InvalidStateProof(
-                    "Validation of previous state root failed",
-                )
+            .chain_err(|| ErrorKind::InvalidStateProof {
+                epoch,
+                key: key.clone(),
+                value: value.clone(),
+                reason: "Validation of previous state root failed",
             })?;
 
         // construct padding
@@ -224,11 +250,12 @@ impl StateEntries {
             state_root,
             maybe_intermediate_padding,
         ) {
-            warn!("Invalid state proof for {:?} under key {:?}", value, key);
-            return Err(ErrorKind::InvalidStateProof(
-                "State proof validation failed",
-            )
-            .into());
+            bail!(ErrorKind::InvalidStateProof {
+                epoch,
+                key: key.clone(),
+                value: value.clone(),
+                reason: "Validation of merkle proof failed",
+            });
         }
 
         Ok(())

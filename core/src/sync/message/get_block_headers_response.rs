@@ -4,9 +4,6 @@
 
 use crate::{
     message::{Message, RequestId},
-    parameters::{
-        block::ACCEPTABLE_TIME_DRIFT, sync::LOCAL_BLOCK_INFO_QUERY_THRESHOLD,
-    },
     sync::{
         message::{
             metrics::BLOCK_HEADER_HANDLE_TIMER, Context, GetBlockHeaders,
@@ -15,6 +12,9 @@ use crate::{
         synchronization_state::PeerFilter,
         Error, ErrorKind,
     },
+};
+use cfx_parameters::{
+    block::ACCEPTABLE_TIME_DRIFT, sync::LOCAL_BLOCK_INFO_QUERY_THRESHOLD,
 };
 use cfx_types::H256;
 use metrics::MeterTimer;

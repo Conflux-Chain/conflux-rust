@@ -1611,13 +1611,12 @@ impl TxReplayer {
 
         let mut storage_configuration = StorageConfiguration::new_default(
             conflux_data_dir.to_string() + "/",
+            Self::SNAPSHOT_EPOCHS_CAPACITY,
         );
         // Check data-integrity for snapshot mpt with 4 threads.
         if debug_snapshot_integrity {
             storage_configuration.debug_snapshot_checker_threads = 4;
         }
-        storage_configuration.consensus_param.snapshot_epoch_count =
-            Self::SNAPSHOT_EPOCHS_CAPACITY;
         let storage_manager =
             Arc::new(StorageManager::new(storage_configuration)?);
 
@@ -2152,18 +2151,18 @@ fn main() -> errors::Result<()> {
     }
 }
 
-use cfx_types::hexstr_to_h256;
-use cfxcore::{
-    block_data_manager::StateAvailabilityBoundary,
-    statedb::{StateDb, StateDbExt},
-    storage::{
-        state::StateTrait,
-        storage_db::key_value_db::{KeyValueDbTrait, KeyValueDbTraitRead},
-        KvdbSqlite, KvdbSqliteStatements, StateIndex, StateRootWithAuxInfo,
-        StateRootWithAuxInfoToFromRlpBytes, StorageConfiguration,
-        StorageManager, StorageManagerTrait,
-    },
+use cfx_internal_common::{
+    state_root_with_aux_info::StateRootWithAuxInfo, StateAvailabilityBoundary,
 };
+use cfx_storage::{
+    state::StateTrait,
+    storage_db::key_value_db::{KeyValueDbTrait, KeyValueDbTraitRead},
+    utils::StateRootWithAuxInfoToFromRlpBytes,
+    KvdbSqlite, KvdbSqliteStatements, StateIndex, StorageConfiguration,
+    StorageManager, StorageManagerTrait,
+};
+use cfx_types::hexstr_to_h256;
+use cfxcore::statedb::{StateDb, StateDbExt};
 use clap::{App, Arg, ArgMatches};
 use env_logger;
 use error_chain::*;

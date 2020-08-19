@@ -8,18 +8,17 @@ bigdecimal = "0.1.0"
 num-bigint = "0.2.6"
 mio = "0.6.8"
 clap = "2"
-term_size = "0.3"
 textwrap = "0.9"
 toml = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_derive = "1.0"
 parking_lot = "0.10"
-panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 io = { path = "../util/io" }
 cfxkey = { path = "../accounts/cfxkey" }
-cfxstore = { path = "../accounts/cfxstore" }
 cfxcore-accounts = { path = "../accounts" }
+cfxstore = { path = "../accounts/cfxstore" }
+cfx-storage = { path = "../core/storage" }
 app_dirs = "1.2.1"
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev="b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
@@ -63,9 +62,11 @@ rayon = "1.2.0"
 throttling = { path = "../util/throttling" }
 tokio-timer = "0.2.13"
 malloc_size_of = {path = "../util/malloc_size_of"}
+random-crash = { path = "../util/random_crash" }
 
 [dev-dependencies]
 criterion = "0.2"
+cfx-parameters = { path = "../core/parameters" }
 
 [[bench]]
 name = "benchmark"

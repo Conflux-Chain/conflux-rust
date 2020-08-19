@@ -14,20 +14,25 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
-pub enum PendingItem<T> {
-    Ready(T),
+pub enum PendingItem<Item, Err> {
+    Ready(Item),
     Pending(Vec<Waker>),
+    Error(Err),
 }
 
-impl<T> PendingItem<T> {
-    pub fn pending() -> PendingItem<T> { Self::Pending(vec![]) }
+impl<Item, Err> PendingItem<Item, Err> {
+    pub fn pending() -> Self { Self::Pending(vec![]) }
 
-    pub fn ready(item: T) -> PendingItem<T> { Self::Ready(item) }
-}
+    pub fn ready(item: Item) -> Self { Self::Ready(item) }
 
-impl<T> PendingItem<T> {
+    pub fn clear_error(&mut self) {
+        if let Self::Error(_) = self {
+            *self = Self::pending();
+        }
+    }
+
     // NOTE: `set` has to be called in a thread-safe environment
-    pub fn set(&mut self, item: T) {
+    pub fn set(&mut self, item: Item) {
         match self {
             Self::Ready(_old) => {
                 // FIXME: we might want to check if old == item and raise an
@@ -46,43 +51,77 @@ impl<T> PendingItem<T> {
                     w.wake();
                 }
             }
+            Self::Error(_) => {
+                // if we managed to verify the item, we do not care about the
+                // error anymore. wakers must have been notified when `self` was
+                // set to `Error`, so they either received an error or haven't
+                // polled yet.
+                *self = Self::Ready(item);
+            }
         }
     }
-}
 
-impl<T: Clone> PendingItem<T> {
-    // NOTE: `poll` has to be called in a thread-safe environment
-    fn poll(&mut self, ctx: &mut Context) -> Poll<T> {
+    // NOTE: `set_error` has to be called in a thread-safe environment
+    pub fn set_error(&mut self, err: Err) {
         match self {
-            Self::Ready(item) => Poll::Ready(item.clone()),
+            Self::Ready(_) => {
+                // if we already have a verified value, we do not care about
+                // errors anymore
+            }
             Self::Pending(ws) => {
-                // FIXME: is it safe to keep old wakers?
-                ws.push(ctx.waker().clone());
-                Poll::Pending
+                // move `ws` out
+                let ws = std::mem::replace(ws, Vec::<Waker>::new());
+
+                // transform `self`
+                *self = Self::Error(err);
+
+                // notify waiting futures
+                for w in ws {
+                    w.wake();
+                }
+            }
+            Self::Error(_) => {
+                *self = Self::Error(err);
             }
         }
     }
 }
 
-pub struct FutureItem<K, V> {
-    key: K,
-    verified: Arc<RwLock<LruCache<K, PendingItem<V>>>>,
+impl<Item: Clone, Err: Clone> PendingItem<Item, Err> {
+    // NOTE: `poll` has to be called in a thread-safe environment
+    fn poll(&mut self, ctx: &mut Context) -> Poll<Result<Item, Err>> {
+        match self {
+            Self::Ready(item) => Poll::Ready(Ok(item.clone())),
+            Self::Pending(ws) => {
+                // FIXME: is it safe to keep old wakers?
+                ws.push(ctx.waker().clone());
+                Poll::Pending
+            }
+            Self::Error(e) => Poll::Ready(Err(e.clone())),
+        }
+    }
 }
 
-impl<K, V> FutureItem<K, V> {
+pub struct FutureItem<K, V, E> {
+    key: K,
+    verified: Arc<RwLock<LruCache<K, PendingItem<V, E>>>>,
+}
+
+impl<K, V, E> FutureItem<K, V, E> {
     pub fn new(
-        key: K, verified: Arc<RwLock<LruCache<K, PendingItem<V>>>>,
-    ) -> FutureItem<K, V> {
+        key: K, verified: Arc<RwLock<LruCache<K, PendingItem<V, E>>>>,
+    ) -> FutureItem<K, V, E> {
         FutureItem { key, verified }
     }
 }
 
-impl<K, V> Future for FutureItem<K, V>
+impl<K, V, E> Future for FutureItem<K, V, E>
 where
     K: Clone + Eq + Hash + Ord,
     V: Clone,
+    E: Clone,
 {
-    type Output = V;
+    type Output = Result<V, E>;
 
     fn poll(self: Pin<&mut Self>, ctx: &mut Context) -> Poll<Self::Output> {
         self.verified
@@ -103,12 +142,57 @@ mod tests {
     use tokio::{runtime::Runtime, time::delay_for};
 
     #[test]
+    fn test_set() {
+        const KEY: u64 = 1;
+        const VALUE: u64 = 2;
+        const ERROR: u64 = 3;
+
+        let cache = LruCache::<u64, PendingItem<u64, u64>>::with_capacity(1);
+        let verified = Arc::new(RwLock::new(cache));
+
+        let mut runtime = Runtime::new().expect("Unable to create a runtime");
+
+        // set error
+        verified
+            .write()
+            .entry(KEY)
+            .or_insert(PendingItem::pending())
+            .set_error(ERROR);
+
+        // caller should get the error
+        let res = runtime.block_on(FutureItem::new(KEY, verified.clone()));
+        assert_eq!(res, Err(ERROR));
+
+        // set value
+        verified
+            .write()
+            .entry(KEY)
+            .or_insert(PendingItem::pending())
+            .set(VALUE);
+
+        // caller should get the value
+        let res = runtime.block_on(FutureItem::new(KEY, verified.clone()));
+        assert_eq!(res, Ok(VALUE));
+
+        // set error again
+        verified
+            .write()
+            .entry(KEY)
+            .or_insert(PendingItem::pending())
+            .set_error(ERROR);
+
+        // result is not overwritten by error
+        let res = runtime.block_on(FutureItem::new(KEY, verified.clone()));
+        assert_eq!(res, Ok(VALUE));
+    }
+
+    #[test]
     fn test_concurrent_access() {
         const KEY: u64 = 1;
         const VALUE: u64 = 2;
         const DELAY: u64 = 10;
 
-        let cache = LruCache::<u64, PendingItem<u64>>::with_capacity(1);
+        let cache = LruCache::<u64, PendingItem<u64, ()>>::with_capacity(1);
         let verified = Arc::new(RwLock::new(cache));
 
         // we will simulate 3 concurrent accesses to the same item
@@ -141,8 +225,8 @@ mod tests {
         let mut runtime = Runtime::new().expect("Unable to create a runtime");
         let (res1, (res2, res3), _) = runtime.block_on(join3(fut1, fut2, fut3));
 
-        assert_eq!(res1, VALUE);
-        assert_eq!(res2, VALUE);
-        assert_eq!(res3, VALUE);
+        assert_eq!(res1, Ok(VALUE));
+        assert_eq!(res2, Ok(VALUE));
+        assert_eq!(res3, Ok(VALUE));
     }
 }

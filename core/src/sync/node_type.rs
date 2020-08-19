@@ -5,7 +5,7 @@
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
-#[derive(Clone, Debug, PartialEq, DeriveMallocSizeOf)]
+#[derive(Clone, Copy, Debug, PartialEq, DeriveMallocSizeOf)]
 #[repr(u8)]
 pub enum NodeType {
     Archive,
