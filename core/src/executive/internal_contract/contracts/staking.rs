@@ -21,7 +21,7 @@ lazy_static! {
     pub static ref STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS: Address =
         Address::from_str("0888000000000000000000000000000000000002").unwrap();
     static ref CONTRACT_TABLE: SolFnTable =
-        make_function_table!(Deposit, Withdraw, VoteLock, BalanceOf);
+        make_function_table!(Deposit, Withdraw, VoteLock);
 }
 
 make_solidity_contract! {
