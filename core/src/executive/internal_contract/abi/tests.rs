@@ -1,4 +1,8 @@
-use super::*;
+// Copyright 2020 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
+use super::{ABIDecodable, ABIDecodeError, ABIEncodable};
 use cfx_types::{Address, U256};
 use hex;
 use parity_bytes::ToPretty;
@@ -122,7 +126,21 @@ fn test_vector_in_tuple() {
     );
     assert_eq!(
         <(U256, Vec<Address>)>::abi_decode(encoded.as_slice()).unwrap(),
-        (amt, addresses)
+        (amt, addresses.clone())
+    );
+
+    let encoded = (addresses.clone(), amt).abi_encode();
+    assert_eq!(
+        encoded.to_hex(),
+        "0000000000000000000000000000000000000000000000000000000000000040\
+         0000000000000000000000000000000000000000000000000000000000000021\
+         0000000000000000000000000000000000000000000000000000000000000002\
+         000000000000000000000000176c45928d7c26b0175dec8bf6051108563c62c5\
+         00000000000000000000000019c742cec42b9e4eff3b84cdedcde2f58a36f44f"
+    );
+    assert_eq!(
+        <(Vec<Address>, U256)>::abi_decode(encoded.as_slice()).unwrap(),
+        (addresses, amt)
     );
 }
 
