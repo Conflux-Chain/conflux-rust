@@ -25,6 +25,21 @@ lazy_static! {
         AddPrivilege,
         RemovePrivilege
     );
+    static ref CONTRACT_TABLE_V2: SolFnTable = make_function_table!(
+        SetSponsorForGas,
+        SetSponsorForCollateral,
+        AddPrivilege,
+        RemovePrivilege,
+        GetSponsorForGas,
+        GetSponsorBalanceForGas,
+        GetGasFeeUpperBound,
+        GetSponsorForCollateral,
+        GetSponsorBalanceForCollateral,
+        IsWhitelisted,
+        IsAllWhitelisted,
+        AddPrivilegeByAdmin,
+        RemovePrivilegeByAdmin
+    );
 }
 
 make_solidity_contract! {
@@ -76,11 +91,16 @@ impl UpfrontPaymentTrait for AddPrivilege {
 
 impl ExecutionTrait for AddPrivilege {
     fn execute_inner(
-        &self, inputs: Vec<Address>, params: &ActionParams, _: &Spec,
+        &self, addresses: Vec<Address>, params: &ActionParams, _: &Spec,
         state: &mut State, _: &mut Substate,
     ) -> vm::Result<()>
     {
-        add_privilege(inputs, params, state)
+        if !params.sender.is_contract_address() {
+            return Err(vm::Error::InternalContract(
+                "normal account is not allowed to set commission_privilege",
+            ));
+        }
+        add_privilege(params.sender, addresses, params, state)
     }
 }
 
@@ -99,16 +119,22 @@ impl UpfrontPaymentTrait for RemovePrivilege {
 
 impl ExecutionTrait for RemovePrivilege {
     fn execute_inner(
-        &self, inputs: Vec<Address>, params: &ActionParams, _: &Spec,
+        &self, addresses: Vec<Address>, params: &ActionParams, _: &Spec,
         state: &mut State, _: &mut Substate,
     ) -> vm::Result<()>
     {
-        remove_privilege(inputs, params, state)
+        if !params.sender.is_contract_address() {
+            return Err(vm::Error::InternalContract(
+                "normal account is not allowed to set commission_privilege",
+            ));
+        }
+
+        remove_privilege(params.sender, addresses, params, state)
     }
 }
 
 make_solidity_function! {
-    struct GetSponsorForGas(Address, "get_sponsor_for_gas(address)", Address);
+    struct GetSponsorForGas(Address, "getSponsorforGas(address)", Address);
 }
 impl_function_type!(GetSponsorForGas, "query_with_default_gas");
 
@@ -123,7 +149,22 @@ impl ExecutionTrait for GetSponsorForGas {
 }
 
 make_solidity_function! {
-    struct GetGasFeeUpperBound(Address, "get_gas_fee_upper_bound(address)", U256);
+    struct GetSponsorBalanceForGas(Address, "getSponsoredBalanceforGas(address)", U256);
+}
+impl_function_type!(GetSponsorBalanceForGas, "query_with_default_gas");
+
+impl ExecutionTrait for GetSponsorBalanceForGas {
+    fn execute_inner(
+        &self, input: Address, _: &ActionParams, _: &Spec, state: &mut State,
+        _: &mut Substate,
+    ) -> vm::Result<U256>
+    {
+        Ok(state.sponsor_balance_for_gas(&input)?)
+    }
+}
+
+make_solidity_function! {
+    struct GetGasFeeUpperBound(Address, "getSponsoredGasFeeUpperbound(address)", U256);
 }
 impl_function_type!(GetGasFeeUpperBound, "query_with_default_gas");
 
@@ -138,7 +179,7 @@ impl ExecutionTrait for GetGasFeeUpperBound {
 }
 
 make_solidity_function! {
-    struct GetSponsorForCollateral(Address, "get_sponsor_for_collateral(address)",Address);
+    struct GetSponsorForCollateral(Address, "getSponsorforCollateral(address)",Address);
 }
 impl_function_type!(GetSponsorForCollateral, "query_with_default_gas");
 
@@ -153,18 +194,33 @@ impl ExecutionTrait for GetSponsorForCollateral {
 }
 
 make_solidity_function! {
-    struct IsWhitelisted(Address, "is_whitelisted(address)", bool);
+    struct GetSponsorBalanceForCollateral(Address, "getSponsoredBalanceforCollateral(address)",U256);
 }
-impl_function_type!(IsWhitelisted, "query_with_default_gas");
+impl_function_type!(GetSponsorBalanceForCollateral, "query_with_default_gas");
+
+impl ExecutionTrait for GetSponsorBalanceForCollateral {
+    fn execute_inner(
+        &self, input: Address, _: &ActionParams, _: &Spec, state: &mut State,
+        _: &mut Substate,
+    ) -> vm::Result<U256>
+    {
+        Ok(state.sponsor_balance_for_collateral(&input)?)
+    }
+}
+
+make_solidity_function! {
+    struct IsWhitelisted((Address,Address), "isWhitelisted(address,address)", bool);
+}
+impl_function_type!(IsWhitelisted, "query", gas: SPEC.sload_gas);
 
 impl ExecutionTrait for IsWhitelisted {
     fn execute_inner(
-        &self, input: Address, params: &ActionParams, _: &Spec,
-        state: &mut State, _: &mut Substate,
+        &self, (contract, user): (Address, Address), _: &ActionParams,
+        _: &Spec, state: &mut State, _: &mut Substate,
     ) -> vm::Result<bool>
     {
-        if params.sender.is_contract_address() {
-            Ok(state.check_commission_privilege(&params.sender, &input)?)
+        if contract.is_contract_address() {
+            Ok(state.check_commission_privilege(&contract, &user)?)
         } else {
             Ok(false)
         }
@@ -172,22 +228,84 @@ impl ExecutionTrait for IsWhitelisted {
 }
 
 make_solidity_function! {
-    struct IsAllWhitelisted((), "is_all_whitelisted()", bool);
+    struct IsAllWhitelisted(Address, "isAllWhitelisted(address)", bool);
 }
-impl_function_type!(IsAllWhitelisted, "query_with_default_gas");
+impl_function_type!(IsAllWhitelisted, "query", gas: SPEC.sload_gas);
 
 impl ExecutionTrait for IsAllWhitelisted {
     fn execute_inner(
-        &self, _: (), params: &ActionParams, _: &Spec, state: &mut State,
-        _: &mut Substate,
+        &self, contract: Address, _: &ActionParams, _: &Spec,
+        state: &mut State, _: &mut Substate,
     ) -> vm::Result<bool>
     {
-        if params.sender.is_contract_address() {
-            Ok(state
-                .check_commission_privilege(&params.sender, &Address::zero())?)
+        if contract.is_contract_address() {
+            Ok(
+                state
+                    .check_commission_privilege(&contract, &Address::zero())?,
+            )
         } else {
             Ok(false)
         }
+    }
+}
+
+make_solidity_function! {
+    struct AddPrivilegeByAdmin((Address,Vec<Address>), "addPrivilegebyAdmin(address,address[])");
+}
+impl_function_type!(AddPrivilegeByAdmin, "query");
+
+impl UpfrontPaymentTrait for AddPrivilegeByAdmin {
+    fn upfront_gas_payment(
+        &self, (_contract, addresses): &(Address, Vec<Address>),
+        _: &ActionParams, spec: &Spec, _: &State,
+    ) -> U256
+    {
+        U256::from(spec.sstore_reset_gas) * addresses.len()
+    }
+}
+
+impl ExecutionTrait for AddPrivilegeByAdmin {
+    fn execute_inner(
+        &self, (contract, addresses): (Address, Vec<Address>),
+        params: &ActionParams, _: &Spec, state: &mut State, _: &mut Substate,
+    ) -> vm::Result<()>
+    {
+        if contract.is_contract_address()
+            && &params.sender == &state.admin(&contract)?
+        {
+            add_privilege(contract, addresses, params, state)?
+        }
+        Ok(())
+    }
+}
+
+make_solidity_function! {
+    struct RemovePrivilegeByAdmin((Address,Vec<Address>), "removePrivilegeByAdmin(address,address[])");
+}
+impl_function_type!(RemovePrivilegeByAdmin, "query");
+
+impl UpfrontPaymentTrait for RemovePrivilegeByAdmin {
+    fn upfront_gas_payment(
+        &self, (_contract, addresses): &(Address, Vec<Address>),
+        _: &ActionParams, spec: &Spec, _: &State,
+    ) -> U256
+    {
+        U256::from(spec.sstore_reset_gas) * addresses.len()
+    }
+}
+
+impl ExecutionTrait for RemovePrivilegeByAdmin {
+    fn execute_inner(
+        &self, (contract, addresses): (Address, Vec<Address>),
+        params: &ActionParams, _: &Spec, state: &mut State, _: &mut Substate,
+    ) -> vm::Result<()>
+    {
+        if contract.is_contract_address()
+            && &params.sender == &state.admin(&contract)?
+        {
+            remove_privilege(contract, addresses, params, state)?
+        }
+        Ok(())
     }
 }
 

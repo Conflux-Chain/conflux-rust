@@ -21,6 +21,8 @@ use cfx_types::{Address, U256};
 lazy_static! {
     static ref CONTRACT_TABLE: SolFnTable =
         make_function_table!(SetAdmin, Destroy);
+    static ref CONTRACT_TABLE_V2: SolFnTable =
+        make_function_table!(SetAdmin, Destroy, GetAdmin);
 }
 make_solidity_contract! {
     pub struct AdminControl(ADMIN_CONTROL_CONTRACT_ADDRESS, CONTRACT_TABLE);
@@ -57,7 +59,7 @@ impl ExecutionTrait for Destroy {
 }
 
 make_solidity_function! {
-    struct GetAdmin(Address, "get_admin(address)", Address);
+    struct GetAdmin(Address, "getAdmin(address)", Address);
 }
 impl_function_type!(GetAdmin, "query_with_default_gas");
 

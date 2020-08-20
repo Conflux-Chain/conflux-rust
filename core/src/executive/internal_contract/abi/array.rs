@@ -9,7 +9,6 @@ use super::{
     },
     ABIDecodeError, ABIVariable,
 };
-
 use cfx_types::U256;
 
 impl<T: ABIVariable> ABIVariable for Vec<T> {

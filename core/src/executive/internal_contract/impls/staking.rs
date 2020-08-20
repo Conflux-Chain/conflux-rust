@@ -7,10 +7,9 @@ use crate::{
     vm::{self, ActionParams},
 };
 use cfx_parameters::consensus::ONE_CFX_IN_DRIP;
-use cfx_types::U256;
+use cfx_types::{Address, U256};
 
 /// Implementation of `deposit(uint256)`.
-/// The input should consist of 32 bytes `amount`.
 pub fn deposit(
     amount: U256, params: &ActionParams, state: &mut State,
 ) -> vm::Result<()> {
@@ -25,7 +24,6 @@ pub fn deposit(
 }
 
 /// Implementation of `withdraw(uint256)`.
-/// The input should consist of 32 bytes `amount`.
 pub fn withdraw(
     amount: U256, params: &ActionParams, state: &mut State,
 ) -> vm::Result<()> {
@@ -40,9 +38,7 @@ pub fn withdraw(
     }
 }
 
-/// Implementation of `lock(uint256,uint256)`.
-/// The input should consist of 32 bytes `amount` + 32 bytes
-/// `unlock_block_number`.
+/// Implementation of `getVoteLocked(address,uint)`.
 pub fn vote_lock(
     amount: U256, unlock_block_number: U256, params: &ActionParams,
     state: &mut State,
@@ -60,4 +56,16 @@ pub fn vote_lock(
         state.vote_lock(&params.sender, &amount, unlock_block_number)?;
         Ok(())
     }
+}
+
+/// Implementation of `getVoteLocked(address,uint)`.
+pub fn get_vote_lock(
+    address: Address, block_number: U256, state: &mut State,
+) -> vm::Result<U256> {
+    let mut block_number = block_number.low_u64();
+    if block_number < state.block_number() {
+        block_number = state.block_number();
+    }
+    Ok(state
+        .withdrawable_staking_balance_at_block_number(&address, block_number)?)
 }

@@ -21,6 +21,13 @@ use cfx_types::{Address, U256};
 lazy_static! {
     static ref CONTRACT_TABLE: SolFnTable =
         make_function_table!(Deposit, Withdraw, VoteLock);
+    static ref CONTRACT_TABLE_V2: SolFnTable = make_function_table!(
+        Deposit,
+        Withdraw,
+        VoteLock,
+        GetStakingBalance,
+        GetVoteLocked
+    );
 }
 
 make_solidity_contract! {
@@ -106,17 +113,43 @@ impl ExecutionTrait for VoteLock {
 }
 
 make_solidity_function! {
-    struct BalanceOf(Address, "balance_of(address)", U256);
+    struct GetStakingBalance(Address, "getStakingBalance(address)", U256);
 }
-impl_function_type!(BalanceOf, "query_with_default_gas");
+impl_function_type!(GetStakingBalance, "query_with_default_gas");
 
-impl ExecutionTrait for BalanceOf {
+impl ExecutionTrait for GetStakingBalance {
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _spec: &Spec,
         state: &mut State, _substate: &mut Substate,
     ) -> vm::Result<U256>
     {
         Ok(state.collateral_for_storage(&input)?)
+    }
+}
+
+make_solidity_function! {
+    struct GetVoteLocked((Address,U256), "getVoteLocked(address,uint)", U256);
+}
+impl_function_type!(GetVoteLocked, "query");
+
+impl UpfrontPaymentTrait for GetVoteLocked {
+    fn upfront_gas_payment(
+        &self, (address, _): &(Address, U256), _: &ActionParams, spec: &Spec,
+        state: &State,
+    ) -> U256
+    {
+        let length = state.vote_stake_list_length(address).unwrap_or(0);
+        U256::from(spec.sload_gas) * U256::from(length + 1)
+    }
+}
+
+impl ExecutionTrait for GetVoteLocked {
+    fn execute_inner(
+        &self, (address, block_number): (Address, U256), _: &ActionParams,
+        _spec: &Spec, state: &mut State, _substate: &mut Substate,
+    ) -> vm::Result<U256>
+    {
+        Ok(get_vote_lock(address, block_number, state)?)
     }
 }
 
