@@ -6,7 +6,6 @@ use super::{
     utils::{pull_slice, read_abi_list, ABIListWriter, LinkedBytes},
     ABIDecodeError, ABIVariable,
 };
-
 use cfx_types::U256;
 
 impl<T: ABIVariable> ABIVariable for Vec<T> {
