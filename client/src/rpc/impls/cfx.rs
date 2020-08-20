@@ -48,7 +48,7 @@ use crate::{
             RewardInfo as RpcRewardInfo, SendTxRequest,
             SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
             StorageRoot as RpcStorageRoot, SyncGraphStates,
-            Transaction as RpcTransaction,
+            Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
         },
         RpcResult,
     },
@@ -1106,11 +1106,11 @@ impl LocalRpc for LocalRpcImpl {
                 -> JsonRpcResult<bool>;
             fn net_sessions(&self, node_id: Option<NodeId>) -> JsonRpcResult<Vec<SessionDetails>>;
             fn net_throttling(&self) -> JsonRpcResult<throttling::Service>;
-            fn tx_inspect(&self, hash: H256) -> JsonRpcResult<BTreeMap<String, String>>;
-            fn txpool_content(&self) -> JsonRpcResult<
+            fn tx_inspect(&self, hash: H256) -> JsonRpcResult<TxWithPoolInfo>;
+            fn txpool_content(&self, address: Option<H160>) -> JsonRpcResult<
                 BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
-            fn txs_from_pool(&self) -> JsonRpcResult<Vec<RpcTransaction>>;
-            fn txpool_inspect(&self) -> JsonRpcResult<
+            fn txs_from_pool(&self, address: Option<H160>) -> JsonRpcResult<Vec<RpcTransaction>>;
+            fn txpool_inspect(&self, address: Option<H160>) -> JsonRpcResult<
                 BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
             fn txpool_status(&self) -> JsonRpcResult<BTreeMap<String, usize>>;
             fn accounts(&self) -> JsonRpcResult<Vec<H160>>;
@@ -1121,6 +1121,8 @@ impl LocalRpc for LocalRpcImpl {
             fn lock_account(&self, address: H160) -> JsonRpcResult<bool>;
             fn sign(&self, data: Bytes, address: H160, password: Option<String>)
                 -> JsonRpcResult<H520>;
+            fn tx_inspect_pending(&self, address: H160) -> JsonRpcResult<TxPoolPendingInfo>;
+
         }
 
         to self.rpc_impl {

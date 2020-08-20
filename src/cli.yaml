@@ -710,12 +710,32 @@ subcommands:
                                     - rpc-method:
                                         default_value: txpool_inspect
                                         hidden: true
+                                    - rpc-args:
+                                          multiple: true
+                                          use_delimiter: true
+                                          default_value: address
+                                          hidden: true
+                                    - address:
+                                          help: Account address
+                                          long: address
+                                          required: false
+                                          takes_value: true
                             - content:
                                 about: List exact details of all transactions
                                 args:
                                     - rpc-method:
                                         default_value: txpool_content
                                         hidden: true
+                                    - rpc-args:
+                                          multiple: true
+                                          use_delimiter: true
+                                          default_value: address
+                                          hidden: true
+                                    - address:
+                                          help: Account address
+                                          long: address
+                                          required: false
+                                          takes_value: true
                             - clear:
                                 about: Remove all transactions
                                 args:

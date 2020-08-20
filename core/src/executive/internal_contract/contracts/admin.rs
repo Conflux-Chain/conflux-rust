@@ -22,7 +22,7 @@ lazy_static! {
     pub static ref ADMIN_CONTROL_CONTRACT_ADDRESS: Address =
         Address::from_str("0888000000000000000000000000000000000000").unwrap();
     static ref CONTRACT_TABLE: SolFnTable =
-        make_function_table!(SetAdmin, Destroy, GetAdmin);
+        make_function_table!(SetAdmin, Destroy);
 }
 make_solidity_contract! {
     pub struct AdminControl(ADMIN_CONTROL_CONTRACT_ADDRESS, CONTRACT_TABLE);

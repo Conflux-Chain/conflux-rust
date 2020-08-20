@@ -63,6 +63,7 @@ throttling = { path = "../util/throttling" }
 tokio-timer = "0.2.13"
 malloc_size_of = {path = "../util/malloc_size_of"}
 random-crash = { path = "../util/random_crash" }
+cfx-parameters = { path = "../core/parameters" }
 
 [dev-dependencies]
 criterion = "0.2"
