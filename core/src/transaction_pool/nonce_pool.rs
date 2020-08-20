@@ -221,8 +221,8 @@ impl NoncePoolNode {
         }
     }
 
-    /// find a transaction `tx` where `tx.nonce >= nonce` and `tx.last_packed_ts
-    /// <= ts` and `tx.nonce` is minimum
+    /// find a transaction `tx` where `tx.nonce >= nonce`
+    /// and `tx.nonce` is minimum
     pub fn query(
         node: &Option<Box<NoncePoolNode>>, nonce: &U256,
     ) -> Option<Arc<SignedTransaction>> {
@@ -269,7 +269,7 @@ impl NoncePoolNode {
         }
     }
 
-    /// update subtree info: last_packed_ts and cost_sum
+    /// update subtree info: cost_sum, size, unpacked
     fn update(&mut self) {
         self.subtree_unpacked = 1 - self.tx.packed as u32;
         self.subtree_cost = self.tx.value
@@ -347,8 +347,8 @@ impl NoncePool {
     }
 
     /// find a transaction `tx` such that
-    ///   1. all nonce in `[nouce, tx.nonce]` exists
-    ///   2. tx.packed is false and tx.nouce is minimum
+    ///   1. all nonce in `[nonce, tx.nonce]` exists
+    ///   2. tx.packed is false and tx.nonce is minimum
     pub fn recalculate_readiness_with_local_info(
         &self, nonce: U256, balance: U256,
     ) -> Option<Arc<SignedTransaction>> {
@@ -359,11 +359,11 @@ impl NoncePool {
                 NoncePoolNode::rank(&self.root, &(nonce - 1))
             };
             let b = NoncePoolNode::rank(&self.root, &x.nonce);
-            // 1. b.1 - a.1 means the sum of cost of transactions in `[nouce,
-            // tx.nouce]`
-            // 2, b.0 - a.0 means number of transactions in `[nouce, tx.nouce]`
+            // 1. b.1 - a.1 means the sum of cost of transactions in `[nonce,
+            // tx.nonce]`
+            // 2. b.0 - a.0 means number of transactions in `[nonce, tx.nonce]`
             // 3. x.nonce - nonce + 1 means expected number of transactions in
-            // `[nouce, tx.nouce]`
+            // `[nonce, tx.nonce]`
             U256::from(b.0 - a.0 - 1) == x.nonce - nonce && b.1 - a.1 <= balance
         })
     }

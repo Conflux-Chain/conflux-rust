@@ -161,6 +161,14 @@ impl BlockGenerator {
         }
     }
 
+    fn consensus_graph(&self) -> &ConsensusGraph {
+        self.graph
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed")
+    }
+
     /// Stop mining
     pub fn stop(&self) {
         {
@@ -201,13 +209,7 @@ impl BlockGenerator {
             self.graph.block_timestamp_by_hash(&parent_hash).unwrap();
 
         trace!("{} txs packed", transactions.len());
-        let consensus_graph = self
-            .graph
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
-
+        let consensus_graph = self.consensus_graph();
         let mut consensus_inner = consensus_graph.inner.write();
         // referees are retrieved before locking inner, so we need to
         // filter out the blocks that should be removed by possible
@@ -268,12 +270,7 @@ impl BlockGenerator {
         difficulty: u64, adaptive: bool, block_gas_limit: u64,
     ) -> Result<Block, String>
     {
-        let consensus_graph = self
-            .graph
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let state_blame_info = consensus_graph
             .force_compute_blame_and_deferred_state_for_generation(
                 &parent_hash,
@@ -307,12 +304,7 @@ impl BlockGenerator {
         additional_transactions: Vec<Arc<SignedTransaction>>,
     ) -> Block
     {
-        let consensus_graph = self
-            .graph
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
 
         let (best_info, block_gas_limit, transactions) =
             self.txpool.get_best_info_with_packed_transactions(
@@ -363,12 +355,7 @@ impl BlockGenerator {
         logs_bloom_hash_override: Option<H256>,
     ) -> Block
     {
-        let consensus_graph = self
-            .graph
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
 
         let (best_info, block_gas_limit, transactions) =
             self.txpool.get_best_info_with_packed_transactions(
@@ -502,12 +489,7 @@ impl BlockGenerator {
         adaptive: Option<bool>,
     ) -> H256
     {
-        let consensus_graph = self
-            .graph
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         // get the best block
         let (best_info, block_gas_limit, _) = self
             .txpool
@@ -540,12 +522,7 @@ impl BlockGenerator {
         transactions: Vec<Arc<SignedTransaction>>, adaptive: bool,
     ) -> Result<H256, String>
     {
-        let consensus_graph = self
-            .graph
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let state_blame_info = consensus_graph
             .force_compute_blame_and_deferred_state_for_generation(
                 &parent_hash,
@@ -570,12 +547,7 @@ impl BlockGenerator {
         adaptive: bool,
     ) -> Result<H256, String>
     {
-        let consensus_graph = self
-            .graph
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let state_blame_info = consensus_graph
             .force_compute_blame_and_deferred_state_for_generation(
                 &parent_hash,
@@ -607,12 +579,7 @@ impl BlockGenerator {
     }
 
     fn generate_block_impl(&self, block_init: Block) -> H256 {
-        let consensus_graph = self
-            .graph
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let mut block = block_init;
         let difficulty = block.block_header.difficulty();
         let problem = ProofOfWorkProblem::new(

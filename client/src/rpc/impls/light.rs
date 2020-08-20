@@ -34,7 +34,7 @@ use crate::{
             Log as RpcLog, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
             SendTxRequest, SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
             StorageRoot as RpcStorageRoot, SyncGraphStates,
-            Transaction as RpcTransaction,
+            Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
         },
         RpcBoxFuture,
     },
@@ -639,16 +639,17 @@ impl LocalRpc for DebugRpcImpl {
             fn net_disconnect_node(&self, id: NodeId, op: Option<UpdateNodeOperation>) -> RpcResult<bool>;
             fn net_sessions(&self, node_id: Option<NodeId>) -> RpcResult<Vec<SessionDetails>>;
             fn net_throttling(&self) -> RpcResult<throttling::Service>;
-            fn tx_inspect(&self, hash: H256) -> RpcResult<BTreeMap<String, String>>;
-            fn txpool_content(&self) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
-            fn txs_from_pool(&self) -> RpcResult<Vec<RpcTransaction>>;
-            fn txpool_inspect(&self) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
+            fn tx_inspect(&self, hash: H256) -> RpcResult<TxWithPoolInfo>;
+            fn txpool_content(&self, address: Option<H160>) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
+            fn txs_from_pool(&self, address: Option<H160>) -> RpcResult<Vec<RpcTransaction>>;
+            fn txpool_inspect(&self, address: Option<H160>) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
             fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>>;
             fn accounts(&self) -> RpcResult<Vec<H160>>;
             fn new_account(&self, password: String) -> RpcResult<H160>;
             fn unlock_account(&self, address: H160, password: String, duration: Option<U128>) -> RpcResult<bool>;
             fn lock_account(&self, address: H160) -> RpcResult<bool>;
             fn sign(&self, data: Bytes, address: H160, password: Option<String>) -> RpcResult<H520>;
+            fn tx_inspect_pending(&self, address: H160) -> RpcResult<TxPoolPendingInfo>;
         }
 
         to self.rpc_impl {
