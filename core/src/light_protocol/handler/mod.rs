@@ -256,7 +256,7 @@ impl Handler {
                             Ok(Some(val)) => val,
                         };
 
-                    debug!(
+                    trace!(
                         "Witness worker received: height = {:?}, maybe_witness = {:?}",
                         height, maybe_witness
                     );
@@ -276,9 +276,9 @@ impl Handler {
                     //              ^
                     //          height = X
                     //
-                    // we receive A, B, C, ..., A, D (chain reorg)
-                    // we stored the verified roots of B on disk
-                    // after chain reorg, height X's blame status changes
+                    // we receive A, B, C, ..., A, D (chain reorg),
+                    // we stored the verified roots of B on disk,
+                    // after chain reorg, height X is not blamed anymore
                     // --> need to make sure to serve correct roots directly from
                     //     header D instead of the stale roots retrieved for B
                     data_man.remove_blamed_header_verified_roots(height);

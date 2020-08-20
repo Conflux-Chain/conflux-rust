@@ -38,7 +38,6 @@ struct Statistics {
 // prioritize lower epochs
 type MissingWitness = KeyReverseOrdered<u64>;
 
-// TODO(thegaram): consider adding a cache for recent blamed headers
 pub struct Witnesses {
     // block data manager
     data_man: Arc<BlockDataManager>,
@@ -77,9 +76,9 @@ impl Witnesses {
 
         Witnesses {
             data_man,
+            in_flight,
             latest_verified_header,
             ledger,
-            in_flight,
             request_id_allocator,
             sync_manager,
         }
@@ -170,7 +169,7 @@ impl Witnesses {
         // if we only get one root, that means that the witness is not blaming
         // any previous headers.
         if state_roots.len() == 1 {
-            error!("Received witness info of length 1");
+            error!("Received witness info of length 1 for height {}", witness);
             return Ok(());
         }
 

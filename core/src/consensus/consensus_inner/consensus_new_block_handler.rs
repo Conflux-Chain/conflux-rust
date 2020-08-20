@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use super::blame_verifier::BlameVerifier;
 use crate::{
     block_data_manager::{BlockDataManager, BlockStatus, LocalBlockInfo},
     channel::Channel,
@@ -21,6 +22,7 @@ use cfx_parameters::{consensus::*, consensus_internal::*};
 use cfx_storage::{state_manager::StateManagerTrait, StateIndex};
 use cfx_types::H256;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
+use parking_lot::Mutex;
 use primitives::{BlockHeader, SignedTransaction};
 use std::{
     cmp::{max, min},
@@ -28,8 +30,6 @@ use std::{
     slice::Iter,
     sync::Arc,
 };
-
-use super::blame_verifier::BlameVerifier;
 
 pub struct ConsensusNewBlockHandler {
     conf: ConsensusConfig,
@@ -43,7 +43,7 @@ pub struct ConsensusNewBlockHandler {
     epochs_sender: Arc<Channel<(u64, Vec<H256>)>>,
 
     /// API used for verifying blaming on light nodes.
-    blame_verifier: BlameVerifier,
+    blame_verifier: Mutex<BlameVerifier>,
 
     /// The type of this node: Archive, Full, or Light.
     node_type: NodeType,
@@ -62,7 +62,7 @@ impl ConsensusNewBlockHandler {
     {
         let epochs_sender = notifications.epochs_ordered.clone();
         let blame_verifier =
-            BlameVerifier::new(data_man.clone(), notifications);
+            Mutex::new(BlameVerifier::new(data_man.clone(), notifications));
 
         Self {
             conf,
@@ -1585,7 +1585,9 @@ impl ConsensusNewBlockHandler {
 
             // send epoch to blame verifier
             if let NodeType::Light = self.node_type {
-                self.blame_verifier.process(inner, epoch_number);
+                // ConsensusNewBlockHandler is single-threaded,
+                // lock should always succeed.
+                self.blame_verifier.lock().process(inner, epoch_number);
             }
         }
 

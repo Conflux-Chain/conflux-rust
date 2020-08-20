@@ -1,4 +1,4 @@
-// Copyright 2019 Conflux Foundation. All rights reserved.
+// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -7,7 +7,6 @@ use crate::{
     consensus::consensus_inner::ConsensusGraphInner, Notifications,
 };
 use cfx_parameters::{consensus::*, light::BLAME_CHECK_OFFSET};
-use parking_lot::Mutex;
 use primitives::BlockHeader;
 use std::{collections::VecDeque, sync::Arc};
 
@@ -20,16 +19,13 @@ pub struct BlameVerifier {
     data_man: Arc<BlockDataManager>,
 
     /// Last epoch received from ConsensusNewBlockHandler.
-    // We use Mutex to allow for interior mutability.
-    last_epoch_received: Mutex<u64>,
+    last_epoch_received: u64,
 
     /// Next epoch we plan to process.
-    // We use Mutex to allow for interior mutability.
-    next_epoch_to_process: Mutex<u64>,
+    next_epoch_to_process: u64,
 
     /// Queue of epochs that need to be re-processed.
-    // We use Mutex to allow for interior mutability.
-    queue: Mutex<VecDeque<u64>>,
+    queue: VecDeque<u64>,
 }
 
 impl BlameVerifier {
@@ -49,9 +45,9 @@ impl BlameVerifier {
 
         debug!("Starting Blame Verifier from height {}", start_height);
 
-        let last_epoch_received = Mutex::new(start_height);
-        let next_epoch_to_process = Mutex::new(start_height + 1);
-        let queue = Mutex::new(VecDeque::new());
+        let last_epoch_received = start_height;
+        let next_epoch_to_process = start_height + 1;
+        let queue = VecDeque::new();
 
         Self {
             blame_sender,
@@ -64,14 +60,11 @@ impl BlameVerifier {
 
     fn header_from_height(
         &self, inner: &ConsensusGraphInner, height: u64,
-    ) -> Option<BlockHeader> {
+    ) -> Option<Arc<BlockHeader>> {
         let pivot_index = inner.height_to_pivot_index(height);
         let pivot_arena_index = inner.pivot_chain[pivot_index];
         let pivot_hash = inner.arena[pivot_arena_index].hash;
-
-        self.data_man
-            .block_header_by_hash(&pivot_hash)
-            .map(|h| (*h).clone())
+        self.data_man.block_header_by_hash(&pivot_hash)
     }
 
     fn first_trusted_header_starting_from(
@@ -93,10 +86,7 @@ impl BlameVerifier {
     }
 
     /// Add `epoch` to the queue and start processing it.
-    pub fn process(&self, inner: &ConsensusGraphInner, epoch: u64) {
-        // TODO(thegaram): is there a better way to achieve interior mutability?
-        let mut queue = self.queue.lock();
-
+    pub fn process(&mut self, inner: &ConsensusGraphInner, epoch: u64) {
         // we need to keep an offset so that we have
         // enough headers to calculate the blame ratio
         // TODO(thegaram): choose better value for `BLAME_CHECK_OFFSET`
@@ -106,18 +96,18 @@ impl BlameVerifier {
         };
 
         trace!("Blame verification received epoch {:?}", epoch);
-        queue.push_back(epoch);
+        self.queue.push_back(epoch);
 
         loop {
             // process while there are unprocessed epochs
-            let epoch = match queue.pop_front() {
+            let epoch = match self.queue.pop_front() {
                 Some(e) => e,
                 None => break,
             };
 
             // process until we encounter an epoch for which
             // there is no blame information available
-            if !self.check(inner, epoch, &mut queue) {
+            if !self.check(inner, epoch) {
                 break;
             }
         }
@@ -127,18 +117,10 @@ impl BlameVerifier {
     /// results to the light node sync layer.
     /// Returns false if the epoch cannot be processed, true otherwise.
     #[rustfmt::skip]
-    pub fn check(
-        &self, inner: &ConsensusGraphInner, epoch: u64,
-        queue: &mut VecDeque<u64>,
-    ) -> bool
-    {
-        // TODO(thegaram): is there a better way to achieve interior mutability?
-        let mut last_epoch_received = self.last_epoch_received.lock();
-        let mut next_epoch_to_process = self.next_epoch_to_process.lock();
-
-        debug!(
+    pub fn check(&mut self, inner: &ConsensusGraphInner, epoch: u64) -> bool {
+        trace!(
             "Blame verification is processing epoch {:?} (last_epoch_received = {}, next_epoch_to_process = {})",
-            epoch, *last_epoch_received, *next_epoch_to_process
+            epoch, self.last_epoch_received, self.next_epoch_to_process
         );
 
         match epoch {
@@ -158,22 +140,20 @@ impl BlameVerifier {
             //
             // TODO(thegaram): can a fork change the blame status of a header?
 
-            e if e <= *last_epoch_received => {
+            e if e <= self.last_epoch_received => {
                 // re-process from fork point
-                debug!("Chain reorg ({} --> {}), re-executing", *last_epoch_received, e);
-                *last_epoch_received = e;
-                *next_epoch_to_process = e;
+                debug!("Chain reorg ({} --> {}), re-executing", self.last_epoch_received, e);
+                self.last_epoch_received = e;
+                self.next_epoch_to_process = e;
             }
 
             // sanity check: epochs are sent in order, one-by-one
-            e if e > *last_epoch_received + 1 => {
+            e if e > self.last_epoch_received + 1 => {
                 error!(
                     "Unexpected epoch number: e = {}, last_epoch_received = {}",
-                    e, *last_epoch_received
+                    e, self.last_epoch_received
                 );
 
-                // FIXME(thegaram): double-check assumption
-                //   --> this is failing in ghast_consensus_test.py
                 assert!(false);
             }
 
@@ -190,15 +170,15 @@ impl BlameVerifier {
             // set last-epoch-received to B and next-epoch-to-process to D;
             // we will skip C in the next iteration (it is covered already).
 
-            e if e < *next_epoch_to_process => {
-                debug!("Epoch already covered, skipping (e = {}, next_epoch_to_process = {})", e, *next_epoch_to_process);
-                *last_epoch_received = e;
+            e if e < self.next_epoch_to_process => {
+                debug!("Epoch already covered, skipping (e = {}, next_epoch_to_process = {})", e, self.next_epoch_to_process);
+                self.last_epoch_received = e;
                 return true;
             }
 
             // sanity check: no epochs are skipped
-            e if e > *next_epoch_to_process => {
-                error!("Unexpected epoch number: e = {}, next_epoch_to_process = {}", e, *next_epoch_to_process);
+            e if e > self.next_epoch_to_process => {
+                error!("Unexpected epoch number: e = {}, next_epoch_to_process = {}", e, self.next_epoch_to_process);
                 assert!(false);
             }
 
@@ -215,7 +195,7 @@ impl BlameVerifier {
             // e == last_epoch_received + 1
             // e == next_epoch_to_process
             e => {
-                *last_epoch_received = e;
+                self.last_epoch_received = e;
             }
         }
 
@@ -223,7 +203,10 @@ impl BlameVerifier {
         let height = epoch + DEFERRED_STATE_EPOCH_COUNT;
 
         // check blame
-        debug!("Finding witness for header at height {} (epoch {})...", height, epoch);
+        debug!(
+            "Finding witness for header at height {} (epoch {})...",
+            height, epoch
+        );
 
         match self.first_trusted_header_starting_from(inner, height) {
             // no witness found
@@ -266,7 +249,7 @@ impl BlameVerifier {
                 // normalize and we will be able to find the witness later.
 
                 // save for further processing and terminate
-                queue.push_front(epoch);
+                self.queue.push_front(epoch);
                 return false;
             }
 
@@ -309,12 +292,15 @@ impl BlameVerifier {
                 }
 
                 // continue from the next header on the pivot chain
-                *next_epoch_to_process = epoch + 1;
+                self.next_epoch_to_process = epoch + 1;
             }
 
             // header is blamed
             Some(w) => {
-                debug!("Epoch {} (height {}) is blamed, requesting witness {}", epoch, height, w);
+                debug!(
+                    "Epoch {} (height {}) is blamed, requesting witness {}",
+                    epoch, height, w
+                );
 
                 // this request covers all blamed headers:
                 // [height, height + 1, ..., w]
@@ -323,7 +309,7 @@ impl BlameVerifier {
                 // skip all subsequent headers requested
                 assert!(w > DEFERRED_STATE_EPOCH_COUNT);
                 let witness_epoch = w - DEFERRED_STATE_EPOCH_COUNT;
-                *next_epoch_to_process = witness_epoch + 1;
+                self.next_epoch_to_process = witness_epoch + 1;
             }
         }
 
