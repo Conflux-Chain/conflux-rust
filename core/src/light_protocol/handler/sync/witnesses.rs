@@ -10,8 +10,8 @@ use crate::{
     consensus::SharedConsensusGraph,
     light_protocol::{
         common::{FullPeerState, LedgerInfo, Peers},
+        error::*,
         message::{msgid, GetWitnessInfo, WitnessInfoWithHeight},
-        Error,
     },
     message::{Message, RequestId},
     UniqueId,
@@ -23,7 +23,6 @@ use cfx_parameters::{
         WITNESS_REQUEST_TIMEOUT,
     },
 };
-use cfx_types::H256;
 use network::{node_table::NodeId, NetworkContext};
 use parking_lot::RwLock;
 use std::{collections::HashSet, sync::Arc};
@@ -97,23 +96,23 @@ impl Witnesses {
 
     /// Get root hashes for `epoch` from local cache.
     #[inline]
-    pub fn root_hashes_of(&self, epoch: u64) -> Option<(H256, H256, H256)> {
+    pub fn root_hashes_of(
+        &self, epoch: u64,
+    ) -> Result<BlamedHeaderVerifiedRoots> {
         let height = epoch + DEFERRED_STATE_EPOCH_COUNT;
 
         if height > *self.latest_verified_header.read() {
-            return None;
+            bail!(ErrorKind::WitnessUnavailable { epoch });
         }
 
         match self.data_man.verified_blamed_roots_by_height(height) {
-            Some(roots) => Some(roots.into_tuple()),
+            Some(roots) => Ok(roots),
             None => {
                 // we set `latest_verified_header` before receiving the
                 // response for blamed headers. thus, in some cases, `None`
                 // might mean *haven't received yet* instead of *not blamed*.
                 if self.in_flight.read().contains(&height) {
-                    // TODO(thegaram): recover from this
-                    error!("Witness {} still in flight!", height);
-                    panic!("Witness requested still in flight!");
+                    bail!(ErrorKind::WitnessUnavailable { epoch });
                 }
 
                 let header = self
@@ -121,11 +120,12 @@ impl Witnesses {
                     .pivot_header_of(height)
                     .expect("pivot header should exist");
 
-                Some((
-                    *header.deferred_state_root(),
-                    *header.deferred_receipts_root(),
-                    *header.deferred_logs_bloom_hash(),
-                ))
+                Ok(BlamedHeaderVerifiedRoots {
+                    deferred_state_root: *header.deferred_state_root(),
+                    deferred_receipts_root: *header.deferred_receipts_root(),
+                    deferred_logs_bloom_hash: *header
+                        .deferred_logs_bloom_hash(),
+                })
             }
         }
     }
@@ -148,9 +148,7 @@ impl Witnesses {
         self.sync_manager.insert_waiting(std::iter::once(missing));
     }
 
-    fn handle_witness_info(
-        &self, item: WitnessInfoWithHeight,
-    ) -> Result<(), Error> {
+    fn handle_witness_info(&self, item: WitnessInfoWithHeight) -> Result<()> {
         let witness = item.height;
         let state_roots = item.state_root_hashes;
         let receipts = item.receipt_hashes;
@@ -199,7 +197,7 @@ impl Witnesses {
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         witnesses: impl Iterator<Item = WitnessInfoWithHeight>,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         for item in witnesses {
             debug!("Validating witness info {:?}", item);
@@ -220,7 +218,7 @@ impl Witnesses {
     #[inline]
     pub fn validate_and_store(
         &self, item: WitnessInfoWithHeight,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let witness = item.height;
 
         // validate and store
@@ -242,7 +240,7 @@ impl Witnesses {
     #[inline]
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, witnesses: Vec<u64>,
-    ) -> Result<Option<RequestId>, Error> {
+    ) -> Result<Option<RequestId>> {
         debug!("send_request peer={:?} witnesses={:?}", peer, witnesses);
 
         if witnesses.is_empty() {

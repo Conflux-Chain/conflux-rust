@@ -330,8 +330,8 @@ impl QueryService {
         let epoch = self.consensus.get_block_epoch_number(&hash);
 
         let root = epoch
-            .and_then(|e| self.handler.witnesses.root_hashes_of(e))
-            .map(|(state_root, _, _)| state_root);
+            .and_then(|e| self.handler.witnesses.root_hashes_of(e).ok())
+            .map(|roots| roots.deferred_state_root);
 
         Ok((tx, receipt, address, epoch, root, prior_gas_used))
     }

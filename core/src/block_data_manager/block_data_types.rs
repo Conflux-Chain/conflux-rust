@@ -244,16 +244,6 @@ pub struct BlamedHeaderVerifiedRoots {
     pub deferred_logs_bloom_hash: H256,
 }
 
-impl BlamedHeaderVerifiedRoots {
-    pub fn into_tuple(&self) -> (H256, H256, H256) {
-        (
-            self.deferred_state_root,
-            self.deferred_receipts_root,
-            self.deferred_logs_bloom_hash,
-        )
-    }
-}
-
 impl MallocSizeOf for BlamedHeaderVerifiedRoots {
     fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }

@@ -218,10 +218,8 @@ impl Receipts {
         let received = compute_receipts_root(&rs);
 
         // retrieve local receipts root
-        let expected = match self.witnesses.root_hashes_of(epoch) {
-            Some((_, receipts_root, _)) => receipts_root,
-            None => bail!(ErrorKind::WitnessUnavailable { epoch }),
-        };
+        let expected =
+            self.witnesses.root_hashes_of(epoch)?.deferred_receipts_root;
 
         // check
         if received != expected {

@@ -217,10 +217,8 @@ impl StateRoots {
         let received = state_root.compute_state_root_hash();
 
         // retrieve local state root hash
-        let expected = match self.witnesses.root_hashes_of(epoch) {
-            Some((state_root, _, _)) => state_root,
-            None => bail!(ErrorKind::WitnessUnavailable { epoch }),
-        };
+        let expected =
+            self.witnesses.root_hashes_of(epoch)?.deferred_state_root;
 
         // check
         if received != expected {
