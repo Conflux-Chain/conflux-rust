@@ -1,3 +1,7 @@
+// Copyright 2020 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 use super::{ABIDecodeError, ABIVariable};
 use cfx_types::U256;
 use std::{collections::LinkedList, slice::Iter};
