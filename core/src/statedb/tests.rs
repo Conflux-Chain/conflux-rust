@@ -55,7 +55,7 @@ impl StorageStateTrait for MockStorage {
     }
 
     fn delete(&mut self, access_key: StorageKey) -> Result<()> {
-        *self.num_writes.borrow_mut() += 1;
+        *self.num_writes.get_mut() += 1;
         let key = access_key.to_key_bytes();
         self.contents.remove(&key);
         Ok(())
@@ -76,12 +76,12 @@ impl StorageStateTrait for MockStorage {
         let mut deleted_kvs = vec![];
 
         for k in keys_to_delete {
-            *self.num_reads.borrow_mut() += 1;
+            *self.num_reads.get_mut() += 1;
             let v = self.contents.get(&k).unwrap();
             deleted_kvs.push((k.clone(), v.clone()));
 
             if !AM::is_read_only() {
-                *self.num_writes.borrow_mut() += 1;
+                *self.num_writes.get_mut() += 1;
                 self.contents.remove(&k);
             }
         }
@@ -120,7 +120,7 @@ impl StorageStateTrait for MockStorage {
     fn revert(&mut self) { unimplemented!() }
 
     fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()> {
-        *self.num_writes.borrow_mut() += 1;
+        *self.num_writes.get_mut() += 1;
         let key = access_key.to_key_bytes();
         self.contents.insert(key, value);
         Ok(())
@@ -185,11 +185,11 @@ fn test_basic() {
     let storage = state_db.get_storage_mut();
     let contents = &storage.contents;
 
-    assert_eq!(contents.get(&key(b"00")), None);
-    assert_eq!(contents.get(&key(b"01")), None);
-    assert_eq!(contents.get(&key(b"11")), Some(&value(b"v1")));
-    assert_eq!(contents.get(&key(b"22")), None);
-    assert_eq!(contents.len(), 1);
+    // we expect only one value after commit
+    let expected: HashMap<_, _> =
+        [(key(b"11"), value(b"v1"))].iter().cloned().collect();
+
+    assert_eq!(*contents, expected);
 
     // we need to read all values touched
     assert_eq!(storage.get_num_reads(), 4);
@@ -238,11 +238,18 @@ fn test_checkpoint() {
     let storage = state_db.get_storage_mut();
     let contents = &storage.contents;
 
-    assert_eq!(contents.get(&key(b"00")), Some(&value(b"v0")));
-    assert_eq!(contents.get(&key(b"01")), Some(&value(b"v0")));
-    assert_eq!(contents.get(&key(b"11")), Some(&value(b"v1")));
-    assert_eq!(contents.get(&key(b"22")), Some(&value(b"v0")));
-    assert_eq!(contents.len(), 4);
+    // only the initial `set` was committed
+    let expected: HashMap<_, _> = [
+        (key(b"00"), value(b"v0")),
+        (key(b"01"), value(b"v0")),
+        (key(b"11"), value(b"v1")),
+        (key(b"22"), value(b"v0")),
+    ]
+    .iter()
+    .cloned()
+    .collect();
+
+    assert_eq!(*contents, expected);
 
     // we need to read all values touched
     assert_eq!(storage.get_num_reads(), 5);
@@ -258,7 +265,7 @@ fn test_checkpoint_evict_memory() {
     let mut state_db = init_state_db();
 
     // value is not read yet
-    assert!(!state_db.contains(&key(b"00")));
+    assert_eq!(state_db.get_from_cache(&key(b"00")), None);
 
     // create checkpoint #0
     state_db.checkpoint();
@@ -269,7 +276,10 @@ fn test_checkpoint_evict_memory() {
         .unwrap();
 
     // value has been read
-    assert!(state_db.contains(&key(b"00")));
+    assert_eq!(
+        state_db.get_from_cache(&key(b"00")),
+        Some(value(b"v1").into())
+    );
 
     // create checkpoint #1
     state_db.checkpoint();
@@ -280,19 +290,25 @@ fn test_checkpoint_evict_memory() {
         .unwrap();
 
     // value stays in state-db
-    assert!(state_db.contains(&key(b"00")));
+    assert_eq!(
+        state_db.get_from_cache(&key(b"00")),
+        Some(value(b"v0").into())
+    );
 
     // revert to checkpoint #1
     // (00, v0) --> (00, v1)
     state_db.revert_to_checkpoint();
 
     // value stays in state-db
-    assert!(state_db.contains(&key(b"00")));
+    assert_eq!(
+        state_db.get_from_cache(&key(b"00")),
+        Some(value(b"v1").into())
+    );
 
     // revert to checkpoint #0
     // (00, v0) --> None
     state_db.revert_to_checkpoint();
 
     // value is removed from state-db
-    assert!(!state_db.contains(&key(b"00")));
+    assert_eq!(state_db.get_from_cache(&key(b"00")), None);
 }

@@ -98,8 +98,11 @@ mod impls {
         pub fn get_storage_mut(&mut self) -> &mut Storage { &mut self.storage }
 
         #[cfg(test)]
-        pub fn contains(&self, key: &Vec<u8>) -> bool {
-            self.accessed_entries.read().contains_key(key)
+        pub fn get_from_cache(&self, key: &Vec<u8>) -> Value {
+            self.accessed_entries
+                .read()
+                .get(key)
+                .and_then(|v| v.current_value.clone())
         }
 
         /// Update the accessed_entries while getting the value.
@@ -369,14 +372,14 @@ mod impls {
                     if let StorageKey::StorageKey { address_bytes, .. } =
                         &storage_key
                     {
-                        if v.current_value.is_some() {
-                            Self::load_storage_layout(
-                                &mut storage_layouts_to_commit,
-                                address_bytes,
-                                &self.storage,
-                                &accessed_entries,
-                            )?;
-                        }
+                        // whether we update or delete a storage key,
+                        // we re-insert storage layout into the delta trie
+                        Self::load_storage_layout(
+                            &mut storage_layouts_to_commit,
+                            address_bytes,
+                            &self.storage,
+                            &accessed_entries,
+                        )?;
                     } else if let StorageKey::AccountKey(address_bytes) =
                         &storage_key
                     {
