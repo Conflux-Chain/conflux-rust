@@ -372,14 +372,17 @@ mod impls {
                     if let StorageKey::StorageKey { address_bytes, .. } =
                         &storage_key
                     {
-                        // whether we update or delete a storage key,
-                        // we re-insert storage layout into the delta trie
-                        Self::load_storage_layout(
-                            &mut storage_layouts_to_commit,
-                            address_bytes,
-                            &self.storage,
-                            &accessed_entries,
-                        )?;
+                        // TODO(thegaram): re-insert storage layout when
+                        // deleting storage entries, otherwise the change
+                        // will not be reflected in the storage root
+                        if v.current_value.is_some() {
+                            Self::load_storage_layout(
+                                &mut storage_layouts_to_commit,
+                                address_bytes,
+                                &self.storage,
+                                &accessed_entries,
+                            )?;
+                        }
                     } else if let StorageKey::AccountKey(address_bytes) =
                         &storage_key
                     {
