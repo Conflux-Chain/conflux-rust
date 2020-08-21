@@ -38,7 +38,8 @@ use crate::{
     TransactionPool,
 };
 use cfx_parameters::light::{
-    MAX_EPOCHS_TO_SEND, MAX_HEADERS_TO_SEND, MAX_ITEMS_TO_SEND, MAX_TXS_TO_SEND,
+    MAX_EPOCHS_TO_SEND, MAX_HEADERS_TO_SEND, MAX_ITEMS_TO_SEND,
+    MAX_TXS_TO_SEND, MAX_WITNESSES_TO_SEND,
 };
 use cfx_types::H256;
 use io::TimerToken;
@@ -691,7 +692,7 @@ impl Provider {
         let it = req
             .witnesses
             .into_iter()
-            .take(MAX_ITEMS_TO_SEND)
+            .take(MAX_WITNESSES_TO_SEND)
             .map(|w| self.ledger.witness_info(w));
 
         let (infos, errors) = partition_results(it);

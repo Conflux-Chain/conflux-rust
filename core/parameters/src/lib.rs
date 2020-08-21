@@ -279,7 +279,7 @@ pub mod light {
     pub const EPOCH_REQUEST_BATCH_SIZE: usize = 30;
     pub const HEADER_REQUEST_BATCH_SIZE: usize = 30;
     pub const BLOOM_REQUEST_BATCH_SIZE: usize = 30;
-    pub const WITNESS_REQUEST_BATCH_SIZE: usize = 10;
+    pub const WITNESS_REQUEST_BATCH_SIZE: usize = 50;
     pub const RECEIPT_REQUEST_BATCH_SIZE: usize = 30;
     pub const BLOCK_TX_REQUEST_BATCH_SIZE: usize = 30;
     pub const STATE_ROOT_REQUEST_BATCH_SIZE: usize = 30;
@@ -318,6 +318,7 @@ pub mod light {
     pub const MAX_EPOCHS_TO_SEND: usize = 128;
     pub const MAX_HEADERS_TO_SEND: usize = 512;
     pub const MAX_TXS_TO_SEND: usize = 1024;
+    pub const MAX_WITNESSES_TO_SEND: usize = 100;
     pub const MAX_ITEMS_TO_SEND: usize = 50;
 
     /// During syncing, we might transiently have enough malicious blaming
