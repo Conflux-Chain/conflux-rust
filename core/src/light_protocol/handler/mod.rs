@@ -46,6 +46,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
+    thread,
     time::{Duration, Instant},
 };
 use sync::{
@@ -83,6 +84,9 @@ pub struct Handler {
 
     // header sync manager
     headers: Arc<Headers>,
+
+    // join handle for witness worker thread
+    join_handle: Option<thread::JoinHandle<()>>,
 
     // collection of all peers available
     pub peers: Arc<Peers<FullPeerState>>,
@@ -197,31 +201,32 @@ impl Handler {
 
         let stopped = Arc::new(AtomicBool::new(false));
 
-        Self::start_witness_worker(
+        let join_handle = Some(Self::start_witness_worker(
             notifications,
             witnesses.clone(),
             stopped.clone(),
             consensus.get_data_manager().clone(),
-        );
+        ));
 
         graph.recover_graph_from_db(true /* header_only */);
 
         Handler {
-            protocol_version: LIGHT_PROTOCOL_VERSION,
             block_txs,
             blooms,
             consensus,
             epochs,
             headers,
+            join_handle,
             peers,
+            protocol_version: LIGHT_PROTOCOL_VERSION,
             receipts,
             state_entries,
             state_roots,
             stopped,
             storage_roots,
-            txs,
-            tx_infos,
             throttling_config_file,
+            tx_infos,
+            txs,
             witnesses,
         }
     }
@@ -231,10 +236,10 @@ impl Handler {
     fn start_witness_worker(
         notifications: Arc<Notifications>, witnesses: Arc<Witnesses>,
         stopped: Arc<AtomicBool>, data_man: Arc<BlockDataManager>,
-    )
+    ) -> thread::JoinHandle<()>
     {
         // detach thread as we do not need to join it
-        let _handle = std::thread::Builder::new()
+        thread::Builder::new()
             .name("Witness Worker".into())
             .spawn(move || {
                 let mut receiver =
@@ -242,7 +247,7 @@ impl Handler {
 
                 loop {
                     // `stopped` is set during Drop
-                    if stopped.load(Ordering::Relaxed) {
+                    if stopped.load(Ordering::SeqCst) {
                         break;
                     }
 
@@ -303,7 +308,7 @@ impl Handler {
                     *witnesses.latest_verified_header.write() = height;
                 }
             })
-            .expect("Starting the Witness Worker should succeed");
+            .expect("Starting the Witness Worker should succeed")
     }
 
     #[inline]
@@ -789,7 +794,7 @@ impl Handler {
             Instant::now() + Duration::from_nanos(resp.wait_time_nanos),
         );
 
-        // todo (boqiu): update when throttled
+        // TODO(boqiu): update when throttled
         // In case of throttled for a RPC call:
         // 1. Just return error to client;
         // 2. Select another peer to try again (e.g. 3 times at most).
@@ -804,7 +809,29 @@ impl Handler {
 }
 
 impl Drop for Handler {
-    fn drop(&mut self) { self.stopped.store(true, Ordering::Relaxed); }
+    fn drop(&mut self) {
+        // signal stop to worker thread
+        self.stopped.store(true, Ordering::SeqCst);
+
+        if let Some(thread) = self.join_handle.take() {
+            // joining a thread from itself is not a good idea; this should not
+            // happen in this case as the thread has no references to `Handler`
+            assert!(
+                thread.thread().id() != thread::current().id(),
+                "Attempting to join Witness Worker thread from itself (id = {:?})", thread::current().id(),
+            );
+
+            // `stopped` is set and `recv` in the worker will timeout,
+            // so the thread should stop eventually.
+            thread.join().expect("Witness Worker should not panic");
+
+            // for more info about these issues,
+            // see https://stackoverflow.com/a/42791007
+
+            // for a discussion about why we want to join the thread,
+            // see https://github.com/rust-lang/rust/issues/48820#issue-303146976
+        }
+    }
 }
 
 impl NetworkProtocolHandler for Handler {
