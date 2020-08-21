@@ -4,9 +4,16 @@
 
 mod error;
 mod statedb_ext;
+
+#[cfg(test)]
+mod tests;
+
 pub use self::{
     error::{Error, ErrorKind, Result},
-    impls::{StateDb as StateDbGeneric, StateDbGetOriginalMethods},
+    impls::{
+        StateDb as StateDbGeneric, StateDbCheckpointMethods,
+        StateDbGetOriginalMethods,
+    },
     statedb_ext::StateDbExt,
 };
 pub type StateDb = StateDbGeneric<StorageState>;
@@ -14,16 +21,29 @@ pub type StateDb = StateDbGeneric<StorageState>;
 // Put StateDb in mod to make sure that methods from statedb_ext don't access
 // its fields directly.
 mod impls {
-    type AccessedEntries = BTreeMap<Vec<u8>, EntryValue>;
+    type Key = Vec<u8>;
+    type Value = Option<Arc<[u8]>>;
+
+    // Use BTreeMap so that we can delete ranges efficiently
+    // see `delete_all`
+    type AccessedEntries = BTreeMap<Key, EntryValue>;
+
+    // A checkpoint contains the previous values for all keys
+    // modified or deleted since the last checkpoint.
+    type Checkpoint = BTreeMap<Key, Option<Value>>;
 
     // Use generic type for better test-ability.
     pub struct StateDb<Storage: StorageStateTrait> {
         /// Contains the original storage key values for all loaded and
         /// modified key values.
         accessed_entries: RwLock<AccessedEntries>,
+
         /// The underlying storage, The storage is updated only upon fn
         /// commit().
         storage: Storage,
+
+        /// Checkpoints allow callers to revert un-committed changes.
+        checkpoints: Vec<Checkpoint>,
     }
 
     // We skip the accessed_entries for getting original value.
@@ -41,17 +61,49 @@ mod impls {
         ) -> Result<(Option<StorageRoot>, NodeMerkleProof)>;
     }
 
+    pub trait StateDbCheckpointMethods {
+        /// Create a new checkpoint.
+        fn checkpoint(&mut self);
+
+        /// Discard checkpoint.
+        /// This means giving up the ability to revert to the latest checkpoint.
+        /// Older checkpoints remain valid.
+        fn discard_checkpoint(&mut self);
+
+        /// Revert to checkpoint.
+        /// Revert all values in `accessed_entries` to their value before
+        /// creating the latest checkpoint.
+        fn revert_to_checkpoint(&mut self);
+    }
+
     impl<Storage: StorageStateTrait> StateDb<Storage> {
         pub fn new(storage: Storage) -> Self {
             StateDb {
                 accessed_entries: Default::default(),
                 storage,
+                checkpoints: Default::default(),
+            }
+        }
+
+        /// Set `key` to `value` in latest checkpoint if not set previously.
+        fn update_checkpoint(&mut self, key: &Key, value: Option<Value>) {
+            if let Some(checkpoint) = self.checkpoints.last_mut() {
+                // only insert if key not in checkpoint already
+                checkpoint.entry(key.clone()).or_insert(value);
             }
         }
 
         // Used in storage benchmark.
         #[allow(unused)]
         pub fn get_storage_mut(&mut self) -> &mut Storage { &mut self.storage }
+
+        #[cfg(test)]
+        pub fn get_from_cache(&self, key: &Vec<u8>) -> Value {
+            self.accessed_entries
+                .read()
+                .get(key)
+                .and_then(|v| v.current_value.clone())
+        }
 
         /// Update the accessed_entries while getting the value.
         pub fn get_raw(&self, key: StorageKey) -> Result<Option<Arc<[u8]>>> {
@@ -79,6 +131,45 @@ mod impls {
             Ok(r)
         }
 
+        /// Set the value under `key` to `value` in `accessed_entries`.
+        /// This method will read from db if `key` is not present.
+        /// This method will also update the latest checkpoint if necessary.
+        fn modify_single_value(
+            &mut self, key: StorageKey, value: Option<Box<[u8]>>,
+        ) -> Result<()> {
+            let key_bytes = key.to_key_bytes();
+            let mut entry =
+                self.accessed_entries.get_mut().entry(key_bytes.clone());
+            let value = value.map(Into::into);
+
+            let old_value = match &mut entry {
+                Occupied(o) => {
+                    // set `current_value` to `value` and keep the old value
+                    Some(std::mem::replace(
+                        &mut o.get_mut().current_value,
+                        value,
+                    ))
+                }
+
+                // Vacant
+                _ => {
+                    let original_value = self.storage.get(key)?.map(Into::into);
+
+                    entry.or_insert(EntryValue::new_modified(
+                        original_value,
+                        value,
+                    ));
+
+                    None
+                }
+            };
+
+            // store old value in latest checkpoint if not stored yet
+            self.update_checkpoint(&key_bytes, old_value);
+
+            Ok(())
+        }
+
         pub fn set_raw(
             &mut self, key: StorageKey, value: Box<[u8]>,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
@@ -91,26 +182,8 @@ mod impls {
                     maybe_value: Some(value.clone().into()),
                 })
             }
-            let key_bytes = key.to_key_bytes();
-            let mut entry = self.accessed_entries.get_mut().entry(key_bytes);
-            let mut value_arc = Some(value.into());
-            let was_vacant = if let Occupied(o) = &mut entry {
-                // Have to use take because rust compiler can't know the
-                // value_arc is consumed only once.
-                o.get_mut().current_value = value_arc.take();
-                false
-            } else {
-                true
-            };
-            if was_vacant {
-                let original_key = self.storage.get(key)?;
-                entry.or_insert(EntryValue::new_modified(
-                    original_key.map(Into::into),
-                    value_arc.take(),
-                ));
-            }
 
-            Ok(())
+            self.modify_single_value(key, Some(value))
         }
 
         pub fn delete(
@@ -126,20 +199,7 @@ mod impls {
                 })
             }
 
-            let key_bytes = key.to_key_bytes();
-            let mut entry = self.accessed_entries.get_mut().entry(key_bytes);
-            let was_vacant = if let Occupied(o) = &mut entry {
-                o.get_mut().current_value = None;
-                false
-            } else {
-                true
-            };
-            if was_vacant {
-                let r = self.storage.get(key)?.map(Into::into);
-                entry.or_insert(EntryValue::new_modified(r, None));
-            }
-
-            Ok(())
+            self.modify_single_value(key, None)
         }
 
         pub fn delete_all<AM: access_mode::AccessMode>(
@@ -215,11 +275,19 @@ mod impls {
                 }
             }
 
+            // update latest checkpoint if necessary
+            if !AM::is_read_only() {
+                for (k, v) in &deleted_kvs {
+                    let v: Value = Some(v.clone().into());
+                    self.update_checkpoint(k, Some(v));
+                }
+            }
+
             Ok(deleted_kvs)
         }
 
         /// Load the storage layout for state commits.
-        /// Modification to storage layout is indifferent from modification of
+        /// Modification to storage layout is the same as modification of
         /// any other key-values. But as required by MPT structure we
         /// must commit storage layout for any storage changes under the
         /// same account. To load the storage layout, we first load from
@@ -304,6 +372,9 @@ mod impls {
                     if let StorageKey::StorageKey { address_bytes, .. } =
                         &storage_key
                     {
+                        // TODO(thegaram): re-insert storage layout when
+                        // deleting storage entries, otherwise the change
+                        // will not be reflected in the storage root
                         if v.current_value.is_some() {
                             Self::load_storage_layout(
                                 &mut storage_layouts_to_commit,
@@ -381,10 +452,15 @@ mod impls {
             debug_record: Option<&mut ComputeEpochDebugRecord>,
         ) -> Result<StateRootWithAuxInfo>
         {
+            if !self.checkpoints.is_empty() {
+                panic!("Active checkpoints during state-db commit");
+            }
+
             let result = match self.storage.get_state_root() {
                 Ok(r) => r,
                 Err(_) => self.compute_state_root(debug_record)?,
             };
+
             self.storage.commit(epoch_id)?;
 
             Ok(result)
@@ -427,13 +503,84 @@ mod impls {
         }
     }
 
+    impl<Storage: StorageStateTrait> StateDbCheckpointMethods for StateDb<Storage> {
+        fn checkpoint(&mut self) {
+            trace!("Creating checkpoint #{}", self.checkpoints.len());
+            self.checkpoints.push(BTreeMap::new()); // no values are modified yet
+        }
+
+        fn discard_checkpoint(&mut self) {
+            // checkpoint `n` (to be discarded)
+            let latest = match self.checkpoints.pop() {
+                Some(checkpoint) => checkpoint,
+                None => {
+                    // TODO: panic?
+                    warn!("Attempt to discard non-existent checkpoint");
+                    return;
+                }
+            };
+
+            trace!("Discarding checkpoint #{}", self.checkpoints.len());
+
+            // checkpoint `n - 1`
+            let previous = match self.checkpoints.last_mut() {
+                Some(checkpoint) => checkpoint,
+                None => return,
+            };
+
+            // insert all keys that have been updated in `n` but not in `n - 1`
+            if previous.is_empty() {
+                *previous = latest;
+            } else {
+                for (k, v) in latest {
+                    previous.entry(k).or_insert(v);
+                }
+            }
+        }
+
+        fn revert_to_checkpoint(&mut self) {
+            let checkpoint = match self.checkpoints.pop() {
+                Some(checkpoint) => checkpoint,
+                None => {
+                    // TODO: panic?
+                    warn!("Attempt to revert to non-existent checkpoint");
+                    return;
+                }
+            };
+
+            trace!("Reverting to checkpoint #{}", self.checkpoints.len());
+
+            // revert all modified keys to their old version
+            for (k, v) in checkpoint {
+                let entry = self.accessed_entries.get_mut().entry(k);
+
+                match (entry, v) {
+                    // prior to the checkpoint `k` was not present
+                    (Occupied(o), None) => {
+                        o.remove();
+                    }
+                    // the value under `k` has been modified after checkpoint
+                    (Occupied(mut o), Some(original_value)) => {
+                        o.get_mut().current_value = original_value;
+                    }
+                    (_, _) => {
+                        // keys are not removed from `accessed_entries` other
+                        // than during revert and commit, so this should not
+                        // happen
+                        panic!("Enountered non-existent key while reverting to checkpoint");
+                    }
+                }
+            }
+        }
+    }
+
     struct EntryValue {
-        original_value: Option<Arc<[u8]>>,
-        current_value: Option<Arc<[u8]>>,
+        original_value: Value,
+        current_value: Value,
     }
 
     impl EntryValue {
-        fn new(value: Option<Arc<[u8]>>) -> Self {
+        fn new(value: Value) -> Self {
             let value_clone = value.clone();
             Self {
                 original_value: value,
@@ -441,9 +588,7 @@ mod impls {
             }
         }
 
-        fn new_modified(
-            original_value: Option<Arc<[u8]>>, current_value: Option<Arc<[u8]>>,
-        ) -> Self {
+        fn new_modified(original_value: Value, current_value: Value) -> Self {
             Self {
                 original_value,
                 current_value,
