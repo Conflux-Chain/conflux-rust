@@ -232,13 +232,12 @@ impl Handler {
     }
 
     // start a standalone thread for requesting witnesses.
-    // this thread will be stopped once `Handler` is dropped.
+    // this thread will be joined when `Handler` is dropped.
     fn start_witness_worker(
         notifications: Arc<Notifications>, witnesses: Arc<Witnesses>,
         stopped: Arc<AtomicBool>, data_man: Arc<BlockDataManager>,
     ) -> thread::JoinHandle<()>
     {
-        // detach thread as we do not need to join it
         thread::Builder::new()
             .name("Witness Worker".into())
             .spawn(move || {
