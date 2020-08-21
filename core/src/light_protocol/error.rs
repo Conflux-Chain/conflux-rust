@@ -179,7 +179,10 @@ pub fn handle(
     match &e.0 {
         // for wrapped errors, handle based on the inner error
         ErrorKind::ClonableErrorWrapper(e) => {
-            handle(io, peer, msg_id, &*e.0.lock())
+            handle(io, peer, msg_id, &*e.0.lock());
+
+            // if we need to disconnect, we will do it in the call above
+            disconnect = false
         }
 
         ErrorKind::Filter(_)
