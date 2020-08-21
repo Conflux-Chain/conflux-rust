@@ -375,6 +375,8 @@ impl Handleable for GetTransactions {
             .get_sent_transactions(self.window_index, &self.tx_hashes_indices);
         let tx_hashes =
             tx_hashes_indices.into_iter().map(|tx| tx.hash()).collect();
+        let full_tx_hashes: Vec<_> = transactions.iter().map(|tx| tx.hash()).collect();
+        debug!("GetTransaction::handle:: return full_tx_hashes: {:?}, tx_hashes: {:?}", full_tx_hashes, tx_hashes);
         let response = GetTransactionsResponse {
             request_id: self.request_id,
             transactions,
@@ -597,7 +599,7 @@ impl Handleable for GetTransactionsResponse {
                     failure.len()
                 );
                 for (tx, e) in failure {
-                    trace!("Transaction {} is rejected by the transaction pool: error = {}", tx, e);
+                    debug!("Transaction {:?} is rejected by the transaction pool: error = {:?}", tx, e);
                 }
             }
             ctx.manager

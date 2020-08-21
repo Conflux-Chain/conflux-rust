@@ -1344,8 +1344,10 @@ impl SynchronizationProtocolHandler {
                     break;
                 }
                 if received_pool.group_overflow_from_tx_hash(&tx.hash()) {
+                    debug!("propagate_transactions_to_peers: tx_hashes {:?}", tx.hash());
                     tx_hashes_transactions.push(tx.clone());
                 } else {
+                    debug!("propagate_transactions_to_peers: short_ids {:?}", tx.hash());
                     short_ids_transactions.push(tx.clone());
                 }
             }

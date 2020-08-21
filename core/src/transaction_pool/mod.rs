@@ -212,14 +212,22 @@ impl TransactionPool {
             .read()
             .get_nonce_and_balance_from_storage(address, &mut account_cache)
     }
-
+    pub fn insert_new_transactions(
+        &self, transactions: Vec<TransactionWithSignature>,
+    ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>) {
+        let tx_hashes:Vec<_> = transactions.iter().map(|tx| tx.hash()).collect();
+        let (success, failure) = self.insert_new_transactions_inner(transactions);
+        let success_hashes:Vec<_> = success.iter().map(|tx| tx.hash()).collect();
+        debug!("insert_new_transactions: insert: {:?}, success: {:?}, failure: {:?}", tx_hashes, success_hashes, failure);
+        (success, failure)
+    }
     /// Try to insert `transactions` into transaction pool.
     ///
     /// If some tx is already in our tx_cache, it will be ignored and will not
     /// be added to returned `passed_transactions`. If some tx invalid or
     /// cannot be inserted to the tx pool, it will be included in the returned
     /// `failure` and will not be propagated.
-    pub fn insert_new_transactions(
+    pub fn insert_new_transactions_inner(
         &self, mut transactions: Vec<TransactionWithSignature>,
     ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>) {
         INSERT_TPS.mark(1);

@@ -692,7 +692,6 @@ fn kill_account_with_checkpoints() {
     a.set_contract_type_bits();
     let k = u256_to_vec(&U256::from(0));
     state.checkpoint();
-        .unwrap();
     state.new_contract(&a, U256::zero(), U256::one()).unwrap();
     state.set_storage(&a, k.clone(), U256::one(), a).unwrap();
     state.checkpoint();
