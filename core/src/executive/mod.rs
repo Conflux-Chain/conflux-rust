@@ -14,7 +14,7 @@ pub use self::{
     executed::*,
     executive::{contract_address, Executive},
     internal_contract::{
-        sol_func, suicide, ABIDecodeError, InternalContractMap,
+        function, suicide, ABIDecodeError, InternalContractMap,
         InternalContractTrait, SolidityFunctionTrait,
         SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
         STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
