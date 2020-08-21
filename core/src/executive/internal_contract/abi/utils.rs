@@ -32,9 +32,10 @@ impl LinkedBytes {
         Self::from_bytes(bytes.to_vec())
     }
 
-    pub fn append(&mut self, other: &mut Self) {
+    pub fn append(&mut self, mut other: Self) {
         self.length += other.length;
         self.data.append(&mut other.data);
+        drop(other);
     }
 
     pub fn to_vec(&self) -> Vec<u8> {
@@ -81,21 +82,21 @@ impl ABIListWriter {
     }
 
     pub(super) fn write_down<T: ABIVariable>(&mut self, input: &T) {
-        let mut encoded = input.to_abi();
+        let encoded = input.to_abi();
         if let Some(len) = T::STATIC_LENGTH {
             assert_eq!(encoded.len(), len);
-            self.heads.append(&mut encoded);
+            self.heads.append(encoded);
         } else {
-            let mut location =
+            let location =
                 LinkedBytes::from_length(self.tails.len() + self.heads_length);
-            self.heads.append(&mut location);
-            self.tails.append(&mut encoded);
+            self.heads.append(location);
+            self.tails.append(encoded);
         }
     }
 
     pub(super) fn into_linked_bytes(mut self) -> LinkedBytes {
         assert_eq!(self.heads.len(), self.heads_length);
-        self.heads.append(&mut self.tails);
+        self.heads.append(self.tails);
         self.heads
     }
 }

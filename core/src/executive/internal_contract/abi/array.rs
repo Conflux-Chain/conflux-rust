@@ -16,10 +16,11 @@ impl<T: ABIVariable> ABIVariable for Vec<T> {
         let pointer = &mut data.iter();
 
         let expected_length = U256::from_big_endian(pull_slice(pointer, 32)?);
+        let data_without_length = pointer.as_slice();
         let mut i = U256::zero();
         let mut results = Vec::new();
         while i < expected_length {
-            results.push(read_abi_list::<T>(data, pointer)?);
+            results.push(read_abi_list::<T>(data_without_length, pointer)?);
             i = i + 1;
         }
         Ok(results)
@@ -35,7 +36,7 @@ impl<T: ABIVariable> ABIVariable for Vec<T> {
             recorder.write_down(item);
         }
         let mut answer = length;
-        answer.append(&mut recorder.into_linked_bytes());
+        answer.append(recorder.into_linked_bytes());
         answer
     }
 }

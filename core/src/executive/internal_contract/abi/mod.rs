@@ -14,10 +14,16 @@ use self::utils::{read_abi_list, ABIListWriter, LinkedBytes};
 #[derive(Debug, PartialEq)]
 pub struct ABIDecodeError(pub &'static str);
 
+/// A type implements `ABIDecodable` must be a tuple of types implement
+/// `ABIVariable`. For convenient, for the tuple with only one element like
+/// `(U256,)`, we implement `ABIDecodable` for `U256` instead.
 pub trait ABIDecodable: Sized {
     fn abi_decode(data: &[u8]) -> Result<Self, ABIDecodeError>;
 }
 
+/// A type implements `ABIEncodable` must be a tuple of types implement
+/// `ABIVariable`. For convenient, for the tuple with only one element like
+/// `(U256,)`, we implement `ABIDecodable` for `U256` instead.
 pub trait ABIEncodable: Sized {
     fn abi_encode(&self) -> Vec<u8>;
 }
