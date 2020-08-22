@@ -2,22 +2,33 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub mod prefetcher;
+pub use self::{
+    account_entry::OverlayAccount,
+    substate::{CallStackInfo, Substate},
+};
 
 use self::account_entry::{AccountEntry, AccountState};
 use crate::{
     bytes::Bytes,
     consensus::debug::ComputeEpochDebugRecord,
+    evm::Spec,
     executive::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
     hash::KECCAK_EMPTY,
-    statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb},
+    statedb::{
+        ErrorKind as DbErrorKind, Result as DbResult, StateDbExt,
+        StateDbGeneric as StateDb,
+    },
     transaction_pool::SharedTransactionPool,
     vm::Error as vmError,
     vm_factory::VmFactory,
 };
+use cfx_internal_common::StateRootWithAuxInfo;
 use cfx_parameters::staking::*;
-use cfx_storage::utils::access_mode;
+use cfx_storage::{utils::access_mode, StorageState, StorageStateTrait};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use parking_lot::{
+    MappedRwLockWriteGuard, RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard,
+};
 #[cfg(test)]
 use primitives::storage::STORAGE_LAYOUT_REGULAR_V0;
 use primitives::{
@@ -29,23 +40,13 @@ use std::{
     sync::Arc,
 };
 
+mod account_entry;
 #[cfg(test)]
 mod account_entry_tests;
+pub mod prefetcher;
 #[cfg(test)]
 mod state_tests;
-
-mod account_entry;
 mod substate;
-
-pub use self::{
-    account_entry::OverlayAccount,
-    substate::{CallStackInfo, Substate},
-};
-use crate::{evm::Spec, statedb::StateDbExt};
-use cfx_internal_common::StateRootWithAuxInfo;
-use parking_lot::{
-    MappedRwLockWriteGuard, RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard,
-};
 
 #[derive(Copy, Clone)]
 enum RequireCache {
@@ -104,8 +105,10 @@ struct StakingState {
     accumulate_interest_rate: U256,
 }
 
-pub struct State {
-    db: StateDb,
+pub type State = StateGeneric<StorageState>;
+
+pub struct StateGeneric<StateDbStorage: StorageStateTrait> {
+    db: StateDb<StateDbStorage>,
 
     // Only used once at commitment.
     dirty_accounts_to_commit: Vec<(Address, AccountEntry)>,
@@ -128,10 +131,12 @@ pub struct State {
     vm: VmFactory,
 }
 
-impl State {
+impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     pub fn new(
-        db: StateDb, vm: VmFactory, spec: &Spec, block_number: u64,
-    ) -> Self {
+        db: StateDb<StateDbStorage>, vm: VmFactory, spec: &Spec,
+        block_number: u64,
+    ) -> Self
+    {
         let annual_interest_rate =
             db.get_annual_interest_rate().expect("no db error");
         let accumulate_interest_rate =
@@ -153,7 +158,7 @@ impl State {
         } else {
             U256::zero()
         };
-        State {
+        StateGeneric {
             db,
             cache: Default::default(),
             staking_state_checkpoints: Default::default(),
@@ -929,8 +934,10 @@ impl State {
     /// Load required account data from the databases. Returns whether the
     /// cache succeeds.
     fn update_account_cache(
-        require: RequireCache, account: &mut OverlayAccount, db: &StateDb,
-    ) -> DbResult<bool> {
+        require: RequireCache, account: &mut OverlayAccount,
+        db: &StateDb<StateDbStorage>,
+    ) -> DbResult<bool>
+    {
         match require {
             RequireCache::None => Ok(true),
             RequireCache::Code => account.cache_code(db),
