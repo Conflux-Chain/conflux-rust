@@ -134,8 +134,9 @@ impl Handleable for TransactionDigests {
                 .notified_capabilities
                 .contains(DynamicCapability::NormalPhase(false))
             {
-                peer_info.received_transaction_count +=
-                    self.short_ids.len() + self.tx_hashes.len();
+                peer_info.received_transaction_count += self.short_ids.len()
+                    / Self::SHORT_ID_SIZE_IN_BYTES
+                    + self.tx_hashes.len();
                 if peer_info.received_transaction_count
                     > ctx
                         .manager
