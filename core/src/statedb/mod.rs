@@ -294,28 +294,46 @@ mod impls {
         /// the local changes (i.e. accessed_entries), then from the
         /// storage if it's untouched.
         fn load_storage_layout(
-            storage_layouts_to_commit: &mut HashMap<Vec<u8>, StorageLayout>,
-            address: &[u8], storage: &Storage,
+            storage_layouts_to_rewrite: &mut HashMap<Vec<u8>, StorageLayout>,
+            accept_account_deletion: bool, address: &[u8], storage: &Storage,
             accessed_entries: &AccessedEntries,
         ) -> Result<()>
         {
-            if !storage_layouts_to_commit.contains_key(address) {
+            if !storage_layouts_to_rewrite.contains_key(address) {
                 let storage_layout_key = StorageKey::StorageRootKey(address);
                 let current_storage_layout = match accessed_entries
                     .get(&storage_layout_key.to_key_bytes())
                 {
-                    Some(entry) => entry.current_value.clone(),
-                    None => storage.get(storage_layout_key)?.map(Into::into),
-                };
-                storage_layouts_to_commit.insert(
-                    address.into(),
-                    match current_storage_layout {
+                    Some(entry) => match &entry.current_value {
+                        // We don't rewrite storage layout for account to
+                        // delete.
+                        None => {
+                            if accept_account_deletion {
+                                return Ok(());
+                            } else {
+                                // This is defensive checking, against certain
+                                // cases when we are not deleting the account
+                                // for sure.
+                                bail!(ErrorKind::IncompleteDatabase(
+                                    Address::from_slice(address)
+                                ));
+                            }
+                        }
+                        Some(value_ref) => {
+                            StorageLayout::from_bytes(&*value_ref)?
+                        }
+                    },
+                    None => match storage.get(storage_layout_key)? {
+                        // A new account must set StorageLayout before accessing
+                        // the storage.
                         None => bail!(ErrorKind::IncompleteDatabase(
                             Address::from_slice(address)
                         )),
                         Some(raw) => StorageLayout::from_bytes(raw.as_ref())?,
                     },
-                );
+                };
+                storage_layouts_to_rewrite
+                    .insert(address.into(), current_storage_layout);
             }
             Ok(())
         }
@@ -354,7 +372,7 @@ mod impls {
         fn apply_changes_to_storage(
             &mut self, mut debug_record: Option<&mut ComputeEpochDebugRecord>,
         ) -> Result<()> {
-            let mut storage_layouts_to_commit = Default::default();
+            let mut storage_layouts_to_rewrite = Default::default();
             let accessed_entries = &*self.accessed_entries.get_mut();
             // First of all, apply all changes to the underlying storage.
             for (k, v) in accessed_entries {
@@ -372,17 +390,14 @@ mod impls {
                     if let StorageKey::StorageKey { address_bytes, .. } =
                         &storage_key
                     {
-                        // TODO(thegaram): re-insert storage layout when
-                        // deleting storage entries, otherwise the change
-                        // will not be reflected in the storage root
-                        if v.current_value.is_some() {
-                            Self::load_storage_layout(
-                                &mut storage_layouts_to_commit,
-                                address_bytes,
-                                &self.storage,
-                                &accessed_entries,
-                            )?;
-                        }
+                        Self::load_storage_layout(
+                            &mut storage_layouts_to_rewrite,
+                            /* accept_account_deletion = */
+                            v.current_value.is_none(),
+                            address_bytes,
+                            &self.storage,
+                            &accessed_entries,
+                        )?;
                     } else if let StorageKey::AccountKey(address_bytes) =
                         &storage_key
                     {
@@ -392,7 +407,8 @@ mod impls {
                             && v.original_value.is_none()
                         {
                             let result = Self::load_storage_layout(
-                                &mut storage_layouts_to_commit,
+                                &mut storage_layouts_to_rewrite,
+                                /* accept_account_deletion = */ false,
                                 address_bytes,
                                 &self.storage,
                                 &accessed_entries,
@@ -415,7 +431,8 @@ mod impls {
                         {
                             // To assert that we have already set StorageLayout.
                             Self::load_storage_layout(
-                                &mut storage_layouts_to_commit,
+                                &mut storage_layouts_to_rewrite,
+                                /* accept_account_deletion = */ false,
                                 address_bytes,
                                 &self.storage,
                                 &accessed_entries,
@@ -426,9 +443,7 @@ mod impls {
             }
             // Set storage layout for contracts with storage modification or
             // contracts with storage_layout initialization or modification.
-            let mut storage_layouts =
-                std::mem::take(&mut storage_layouts_to_commit);
-            for (k, v) in &mut storage_layouts {
+            for (k, v) in &mut storage_layouts_to_rewrite {
                 self.commit_storage_layout(k, v, debug_record.as_deref_mut())?;
             }
             // Mark all modification applied.
