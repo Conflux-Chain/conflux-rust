@@ -41,7 +41,6 @@ pub mod pow;
 pub mod rpc_errors;
 pub mod state;
 pub mod state_exposer;
-pub mod statedb;
 pub mod statistics;
 pub mod sync;
 pub mod transaction_pool;

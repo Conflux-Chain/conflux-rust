@@ -4,7 +4,7 @@ use super::{
     impls::TreapMap,
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
 };
-use crate::statedb::Result as StateDbResult;
+use cfx_statedb::Result as StateDbResult;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{

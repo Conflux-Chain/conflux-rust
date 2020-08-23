@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+pub use cfx_parameters::internal_contract_addresses::ADMIN_CONTROL_CONTRACT_ADDRESS;
+
 use super::{
     super::impls::admin::*, ExecutionTrait, InterfaceTrait,
     InternalContractTrait, PreExecCheckConfTrait, SolFnTable,
@@ -16,11 +18,7 @@ use crate::{
 };
 use cfx_types::{Address, U256};
 
-use std::str::FromStr;
-
 lazy_static! {
-    pub static ref ADMIN_CONTROL_CONTRACT_ADDRESS: Address =
-        Address::from_str("0888000000000000000000000000000000000000").unwrap();
     static ref CONTRACT_TABLE: SolFnTable =
         make_function_table!(SetAdmin, Destroy);
 }
