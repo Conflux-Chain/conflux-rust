@@ -5,7 +5,7 @@
 mod anticone_cache;
 pub mod consensus_inner;
 mod consensus_trait;
-pub mod debug;
+pub mod debug_recompute;
 mod pastset_cache;
 
 pub use crate::consensus::{
@@ -29,7 +29,6 @@ use crate::{
     pow::{PowComputer, ProofOfWorkConfig},
     rpc_errors::Result as RpcResult,
     state::State,
-    statedb::{StateDb, StateDbExt, StateDbGetOriginalMethods},
     statistics::SharedStatistics,
     transaction_pool::SharedTransactionPool,
     verification::VerificationConfig,
@@ -39,6 +38,7 @@ use crate::{
 use cfx_parameters::{
     consensus::*, consensus_internal::*, staking::COLLATERAL_PER_BYTE,
 };
+use cfx_statedb::{StateDb, StateDbExt, StateDbGetOriginalMethods};
 use cfx_storage::state_manager::StateManagerTrait;
 use cfx_types::{BigEndianHash, Bloom, H160, H256, U256, U512};
 use either::Either;

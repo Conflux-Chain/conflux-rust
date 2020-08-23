@@ -5,6 +5,7 @@
 use cfx_internal_common::state_root_with_aux_info::{
     StateRootAuxInfo, StateRootWithAuxInfo,
 };
+use cfx_statedb::{StateDb, StateDbExt};
 use cfx_storage::{
     state::StateTrait,
     state_manager::{StateManager, StateManagerTrait},
@@ -12,10 +13,7 @@ use cfx_storage::{
     DeltaMptIterator, Error as StorageError, StateIndex, StorageConfiguration,
 };
 use cfx_types::{Address, H256};
-use cfxcore::{
-    statedb::{StateDb, StateDbExt},
-    sync::Error,
-};
+use cfxcore::sync::Error;
 use clap::{App, Arg, ArgMatches};
 use log::LevelFilter;
 use log4rs::{

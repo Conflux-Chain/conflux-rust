@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub mod debug_recompute;
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BlockHashAuthorValue<ValueType>(
     pub H256,
@@ -98,7 +96,7 @@ impl Default for ComputeEpochDebugRecord {
     }
 }
 
-use cfx_internal_common::StateRootWithAuxInfo;
+use crate::StateRootWithAuxInfo;
 use cfx_types::{Address, H256, U256};
 use primitives::SignedTransaction;
 use serde_derive::{Deserialize, Serialize};

@@ -2,6 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+#[macro_use]
+extern crate error_chain;
+#[macro_use]
+extern crate log;
+
 mod error;
 mod statedb_ext;
 
@@ -616,8 +621,10 @@ mod impls {
     }
 
     use super::*;
-    use crate::consensus::debug::{ComputeEpochDebugRecord, StateOp};
-    use cfx_internal_common::StateRootWithAuxInfo;
+    use cfx_internal_common::{
+        debug::{ComputeEpochDebugRecord, StateOp},
+        StateRootWithAuxInfo,
+    };
     use cfx_storage::{
         state::{NoProof, WithProof},
         utils::{access_mode, to_key_prefix_iter_upper_bound},

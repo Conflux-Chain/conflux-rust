@@ -2,8 +2,8 @@ use crate::{
     evm::{Factory, Spec},
     genesis::initialize_internal_contract_accounts,
     state::State,
-    statedb::StateDb,
 };
+use cfx_statedb::StateDb;
 use cfx_storage::{StateIndex, StorageManager, StorageManagerTrait};
 use primitives::EpochId;
 use std::sync::Arc;

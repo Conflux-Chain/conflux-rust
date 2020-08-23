@@ -18,18 +18,18 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
-
 use super::{
     error::TrapKind, CallType, Context, ContractCreateResult,
     CreateContractAddress, Env, Error, GasLeft, MessageCallResult, Result,
     ReturnData, Spec,
 };
-use crate::{bytes::Bytes, hash::keccak, statedb};
+use cfx_bytes::Bytes;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use hash::keccak;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 pub struct MockLogEntry {
     pub topics: Vec<H256>,
@@ -147,7 +147,9 @@ impl Context for MockContext {
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
         address: CreateContractAddress, _trap: bool,
-    ) -> statedb::Result<::std::result::Result<ContractCreateResult, TrapKind>>
+    ) -> cfx_statedb::Result<
+        ::std::result::Result<ContractCreateResult, TrapKind>,
+    >
     {
         self.calls.insert(MockCall {
             call_type: MockCallType::Create,
@@ -167,7 +169,7 @@ impl Context for MockContext {
         &mut self, gas: &U256, sender_address: &Address,
         receive_address: &Address, value: Option<U256>, data: &[u8],
         code_address: &Address, _call_type: CallType, _trap: bool,
-    ) -> statedb::Result<::std::result::Result<MessageCallResult, TrapKind>>
+    ) -> cfx_statedb::Result<::std::result::Result<MessageCallResult, TrapKind>>
     {
         self.calls.insert(MockCall {
             call_type: MockCallType::Call,

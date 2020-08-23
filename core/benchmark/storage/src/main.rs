@@ -2154,6 +2154,7 @@ fn main() -> errors::Result<()> {
 use cfx_internal_common::{
     state_root_with_aux_info::StateRootWithAuxInfo, StateAvailabilityBoundary,
 };
+use cfx_statedb::{StateDb, StateDbExt};
 use cfx_storage::{
     state::StateTrait,
     storage_db::key_value_db::{KeyValueDbTrait, KeyValueDbTraitRead},
@@ -2162,7 +2163,6 @@ use cfx_storage::{
     StorageManager, StorageManagerTrait,
 };
 use cfx_types::hexstr_to_h256;
-use cfxcore::statedb::{StateDb, StateDbExt};
 use clap::{App, Arg, ArgMatches};
 use env_logger;
 use error_chain::*;

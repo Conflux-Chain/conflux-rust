@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 cfxcore = { path = "../../../core" }
 cfx-types = { path = "../../../cfx_types" }
+cfx-statedb = { path = "../../../core/statedb" }
 cfx-storage = { path = "../../../core/storage" }
 cfx-internal-common = { path = "../../../core/internal_common" }
 clap = "2.32"

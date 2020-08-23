@@ -9,21 +9,19 @@ pub use self::{
 
 use self::account_entry::{AccountEntry, AccountState};
 use crate::{
-    bytes::Bytes,
-    consensus::debug::ComputeEpochDebugRecord,
-    evm::Spec,
-    executive::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-    hash::KECCAK_EMPTY,
-    statedb::{
-        ErrorKind as DbErrorKind, Result as DbResult, StateDbExt,
-        StateDbGeneric as StateDb,
-    },
-    transaction_pool::SharedTransactionPool,
-    vm::Error as vmError,
-    vm_factory::VmFactory,
+    evm::Spec, executive::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+    hash::KECCAK_EMPTY, transaction_pool::SharedTransactionPool,
+    vm::Error as vmError, vm_factory::VmFactory,
 };
-use cfx_internal_common::StateRootWithAuxInfo;
+use cfx_bytes::Bytes;
+use cfx_internal_common::{
+    debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
+};
 use cfx_parameters::staking::*;
+use cfx_statedb::{
+    ErrorKind as DbErrorKind, Result as DbResult, StateDbExt,
+    StateDbGeneric as StateDb,
+};
 use cfx_storage::{utils::access_mode, StorageState, StorageStateTrait};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use parking_lot::{

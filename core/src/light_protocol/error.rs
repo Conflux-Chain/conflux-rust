@@ -4,7 +4,6 @@
 
 use crate::{
     message::{Message, MsgId, RequestId},
-    statedb,
     sync::{message::Throttled, node_type::NodeType},
 };
 use cfx_types::{H160, H256};
@@ -18,7 +17,7 @@ use std::sync::Arc;
 error_chain! {
     links {
         Network(network::Error, network::ErrorKind);
-        StateDb(statedb::Error, statedb::ErrorKind);
+        StateDb(cfx_statedb::Error, cfx_statedb::ErrorKind);
     }
 
     foreign_links {

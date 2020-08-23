@@ -14,6 +14,7 @@ cfxkey = { path = "../accounts/cfxkey" }
 cfx-bytes = { path = "../cfx_bytes" }
 cfx-internal-common = { path = "internal_common" }
 cfx-parameters = { path = "parameters" }
+cfx-statedb = { path = "statedb" }
 cfx-storage = { path = "storage", optional = true }
 cfx-types = { path = "../cfx_types" }
 cfx-utils = { path = "../cfx_utils" }

@@ -8,6 +8,7 @@ extern crate log;
 #[macro_use]
 pub mod block_data_db_encoding;
 pub mod consensus_api;
+pub mod debug;
 pub mod epoch_execution_commitment;
 pub mod state_availability_boundary;
 pub mod state_root_with_aux_info;

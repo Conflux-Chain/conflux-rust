@@ -3,14 +3,14 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    consensus::debug::ComputeEpochDebugRecord,
     evm::Spec,
     executive::InternalContractMap,
     state::{CleanupMode, State},
-    statedb::{Result as DbResult, StateDb},
     verification::{compute_receipts_root, compute_transaction_root},
 };
+use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::consensus::GENESIS_GAS_LIMIT;
+use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{StorageManager, StorageManagerTrait};
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use keylib::KeyPair;

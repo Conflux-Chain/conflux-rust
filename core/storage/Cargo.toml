@@ -11,7 +11,6 @@ cfx-bytes = { path = "../../cfx_bytes" }
 cfx-internal-common = { path = "../internal_common" }
 cfx-types = { path = "../../cfx_types" }
 derivative = "2.0.2"
-cfxkey = { path = "../../accounts/cfxkey" }
 error-chain = { version = "0.12", default-features = false }
 fallible-iterator = "0.2"
 fs_extra = "1.1.0"

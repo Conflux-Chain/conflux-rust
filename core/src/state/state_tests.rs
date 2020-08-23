@@ -5,10 +5,11 @@
 use super::{CleanupMode, CollateralCheckResult, State, Substate};
 
 use crate::{
-    genesis::DEV_GENESIS_KEY_PAIR, statedb::StateDb,
-    test_helpers::get_state_for_genesis_write, vm::Spec, vm_factory::VmFactory,
+    genesis::DEV_GENESIS_KEY_PAIR, test_helpers::get_state_for_genesis_write,
+    vm::Spec, vm_factory::VmFactory,
 };
 use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
+use cfx_statedb::StateDb;
 use cfx_storage::{
     tests::new_state_manager_for_unit_test, StateIndex, StorageManager,
     StorageManagerTrait,

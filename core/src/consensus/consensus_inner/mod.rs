@@ -13,8 +13,7 @@ use crate::{
     consensus::{
         anticone_cache::AnticoneCache,
         consensus_inner::consensus_executor::ConsensusExecutor,
-        debug::debug_recompute::log_invalid_state_root,
-        pastset_cache::PastSetCache,
+        debug_recompute::log_invalid_state_root, pastset_cache::PastSetCache,
     },
     pow::{target_difficulty, PowComputer, ProofOfWorkConfig},
     state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
