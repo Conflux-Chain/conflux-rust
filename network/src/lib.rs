@@ -78,7 +78,7 @@ use std::{
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     str::{self, FromStr},
     sync::Arc,
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 pub const NODE_TAG_NODE_TYPE: &str = "node_type";
@@ -136,10 +136,12 @@ pub struct NetworkConfiguration {
     /// Maximum number of P2P nodes for subnet B (ip/16).
     pub subnet_quota: usize,
     pub session_ip_limit_config: SessionIpLimitConfig,
+
+    pub discovery_config: DiscoveryConfiguration,
 }
 
 impl NetworkConfiguration {
-    pub fn new(id: u64) -> Self {
+    pub fn new(id: u64, discovery_config: DiscoveryConfiguration) -> Self {
         NetworkConfiguration {
             is_consortium: false,
             id,
@@ -168,25 +170,40 @@ impl NetworkConfiguration {
             test_mode: false,
             subnet_quota: 32,
             session_ip_limit_config: SessionIpLimitConfig::default(),
+            discovery_config,
         }
     }
 
-    pub fn new_with_port(id: u64, port: u16) -> NetworkConfiguration {
-        let mut config = NetworkConfiguration::new(id);
+    pub fn new_with_port(
+        id: u64, port: u16, discovery_config: DiscoveryConfiguration,
+    ) -> NetworkConfiguration {
+        let mut config = NetworkConfiguration::new(id, discovery_config);
         config.listen_address = Some(SocketAddr::V4(SocketAddrV4::new(
             Ipv4Addr::new(0, 0, 0, 0),
             port,
         )));
         config
     }
+}
 
-    pub fn new_local(id: u64) -> NetworkConfiguration {
-        let mut config = NetworkConfiguration::new(id);
-        config.listen_address = Some(SocketAddr::V4(SocketAddrV4::new(
-            Ipv4Addr::new(127, 0, 0, 1),
-            0,
-        )));
-        config
+#[derive(Clone, Debug, PartialEq)]
+pub struct DiscoveryConfiguration {
+    pub discover_node_count: u32,
+    pub expire_time: Duration,
+    pub find_node_timeout: Duration,
+    pub max_nodes_ping: usize,
+    pub ping_timeout: Duration,
+    pub throttling_interval: Duration,
+    pub throttling_limit_ping: usize,
+    pub throttling_limit_find_nodes: usize,
+}
+
+impl DiscoveryConfiguration {
+    fn expire_timestamp(&self) -> u64 {
+        (SystemTime::now() + self.expire_time)
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
     }
 }
 

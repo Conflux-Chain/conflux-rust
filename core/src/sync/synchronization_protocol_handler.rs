@@ -1284,34 +1284,14 @@ impl SynchronizationProtocolHandler {
             .min(self.protocol_config.max_peers_tx_propagation);
 
         PeerFilter::new(msgid::TRANSACTION_DIGESTS)
+            .with_cap(DynamicCapability::NormalPhase(true))
             .select_n(num_peers, &self.syn)
     }
 
     fn propagate_transactions_to_peers(
-        &self, io: &dyn NetworkContext, peers: Vec<NodeId>,
+        &self, io: &dyn NetworkContext, lucky_peers: Vec<NodeId>,
     ) {
         let _timer = MeterTimer::time_func(PROPAGATE_TX_TIMER.as_ref());
-        let lucky_peers = {
-            peers
-                .into_iter()
-                .filter_map(|peer_id| {
-                    let peer_info = match self.syn.get_peer_info(&peer_id) {
-                        Ok(peer_info) => peer_info,
-                        Err(_) => {
-                            return None;
-                        }
-                    };
-                    if !peer_info
-                        .read()
-                        .capabilities
-                        .contains(DynamicCapability::NormalPhase(true))
-                    {
-                        return None;
-                    }
-                    Some(peer_id)
-                })
-                .collect::<Vec<_>>()
-        };
         if lucky_peers.is_empty() {
             return;
         }

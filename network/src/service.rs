@@ -4,7 +4,7 @@
 
 use super::DisconnectReason;
 use crate::{
-    discovery::{Discovery, DISCOVER_NODES_COUNT},
+    discovery::Discovery,
     handshake::BYPASS_CRYPTOGRAPHY,
     io::*,
     ip_utils::{map_external_address, select_public_address},
@@ -585,7 +585,12 @@ impl NetworkServiceInner {
         let allow_ips = config.ip_filter.clone();
         let discovery = {
             if config.discovery_enabled {
-                Some(Discovery::new(&keys, public_endpoint.clone(), allow_ips))
+                Some(Discovery::new(
+                    &keys,
+                    public_endpoint.clone(),
+                    allow_ips,
+                    config.discovery_config.clone(),
+                ))
             } else {
                 None
             }
@@ -702,10 +707,10 @@ impl NetworkServiceInner {
         // Initialize discovery
         if let Some(discovery) = self.discovery.lock().as_mut() {
             let allow_ips = self.config.ip_filter.clone();
-            let nodes = self
-                .node_db
-                .read()
-                .sample_trusted_nodes(DISCOVER_NODES_COUNT, &allow_ips);
+            let nodes = self.node_db.read().sample_trusted_nodes(
+                self.config.discovery_config.discover_node_count,
+                &allow_ips,
+            );
             discovery.try_ping_nodes(
                 &UdpIoContext::new(&self.udp_channel, &self.node_db),
                 nodes,
