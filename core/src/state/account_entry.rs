@@ -6,10 +6,11 @@ use crate::{
     bytes::Bytes,
     consensus::debug::ComputeEpochDebugRecord,
     hash::{keccak, KECCAK_EMPTY},
-    state::{AccountEntryProtectedMethods, State, Substate},
-    statedb::{Result as DbResult, StateDb, StateDbExt},
+    state::{AccountEntryProtectedMethods, StateGeneric, Substate},
+    statedb::{Result as DbResult, StateDbExt, StateDbGeneric},
 };
 use cfx_parameters::staking::BYTES_PER_STORAGE_KEY;
+use cfx_storage::StorageStateTrait;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use parking_lot::RwLock;
 use primitives::{
@@ -271,9 +272,11 @@ impl OverlayAccount {
         }
     }
 
-    pub fn check_commission_privilege(
-        &self, db: &StateDb, contract_address: &Address, user: &Address,
-    ) -> DbResult<bool> {
+    pub fn check_commission_privilege<StateDbStorage: StorageStateTrait>(
+        &self, db: &StateDbGeneric<StateDbStorage>, contract_address: &Address,
+        user: &Address,
+    ) -> DbResult<bool>
+    {
         let mut special_key = Vec::with_capacity(Address::len_bytes() * 2);
         special_key.extend_from_slice(contract_address.as_bytes());
         special_key
@@ -523,7 +526,9 @@ impl OverlayAccount {
         self.collateral_for_storage -= *by;
     }
 
-    pub fn cache_code(&mut self, db: &StateDb) -> DbResult<bool> {
+    pub fn cache_code<StateDbStorage: StorageStateTrait>(
+        &mut self, db: &StateDbGeneric<StateDbStorage>,
+    ) -> DbResult<bool> {
         trace!(
             "OverlayAccount::cache_code: ic={}; self.code_hash={:?}, self.code_cache={:?}",
                self.is_code_loaded(), self.code_hash, self.code);
@@ -545,9 +550,9 @@ impl OverlayAccount {
         }
     }
 
-    pub fn cache_staking_info(
+    pub fn cache_staking_info<StateDbStorage: StorageStateTrait>(
         &mut self, cache_deposit_list: bool, cache_vote_list: bool,
-        db: &StateDb,
+        db: &StateDbGeneric<StateDbStorage>,
     ) -> DbResult<bool>
     {
         if cache_deposit_list && self.deposit_list.is_none() {
@@ -627,7 +632,9 @@ impl OverlayAccount {
         None
     }
 
-    pub fn storage_at(&self, db: &StateDb, key: &Vec<u8>) -> DbResult<U256> {
+    pub fn storage_at<StateDbStorage: StorageStateTrait>(
+        &self, db: &StateDbGeneric<StateDbStorage>, key: &Vec<u8>,
+    ) -> DbResult<U256> {
         if let Some(value) = self.cached_storage_at(key) {
             return Ok(value);
         }
@@ -645,10 +652,11 @@ impl OverlayAccount {
         }
     }
 
-    fn get_and_cache_storage(
+    fn get_and_cache_storage<StateDbStorage: StorageStateTrait>(
         storage_cache: &mut HashMap<Vec<u8>, U256>,
-        ownership_cache: &mut HashMap<Vec<u8>, Option<Address>>, db: &StateDb,
-        address: &Address, key: &Vec<u8>, cache_ownership: bool,
+        ownership_cache: &mut HashMap<Vec<u8>, Option<Address>>,
+        db: &StateDbGeneric<StateDbStorage>, address: &Address, key: &Vec<u8>,
+        cache_ownership: bool,
     ) -> DbResult<U256>
     {
         assert!(!ownership_cache.contains_key(key));
@@ -706,8 +714,8 @@ impl OverlayAccount {
     /// Return the owner of `key` before this execution. If it is `None`, it
     /// means the value of the key is zero before this execution. Otherwise, the
     /// value of the key is nonzero.
-    pub fn original_ownership_at(
-        &self, db: &StateDb, key: &Vec<u8>,
+    pub fn original_ownership_at<StateDbStorage: StorageStateTrait>(
+        &self, db: &StateDbGeneric<StateDbStorage>, key: &Vec<u8>,
     ) -> DbResult<Option<Address>> {
         if let Some(value) = self.ownership_cache.read().get(key) {
             return Ok(value.clone());
@@ -732,8 +740,8 @@ impl OverlayAccount {
     /// value means the number of keys occupied by this account in current
     /// execution. The second value means the number of keys released by this
     /// account in current execution.
-    pub fn commit_ownership_change(
-        &mut self, db: &StateDb, substate: &mut Substate,
+    pub fn commit_ownership_change<StateDbStorage: StorageStateTrait>(
+        &mut self, db: &StateDbGeneric<StateDbStorage>, substate: &mut Substate,
     ) -> DbResult<()> {
         let ownership_changes: Vec<_> =
             self.ownership_changes.drain().collect();
@@ -777,8 +785,8 @@ impl OverlayAccount {
         Ok(())
     }
 
-    pub fn commit(
-        &mut self, state: &mut State, address: &Address,
+    pub fn commit<StateDbStorage: StorageStateTrait>(
+        &mut self, state: &mut StateGeneric<StateDbStorage>, address: &Address,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()>
     {

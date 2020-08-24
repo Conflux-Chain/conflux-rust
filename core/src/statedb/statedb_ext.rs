@@ -63,7 +63,9 @@ const TOTAL_BANK_TOKENS_KEY: &'static [u8] = b"total_staking_tokens";
 const TOTAL_STORAGE_TOKENS_KEY: &'static [u8] = b"total_storage_tokens";
 const TOTAL_TOKENS_KEY: &'static [u8] = b"total_issued_tokens";
 
-impl StateDbExt for StateDb {
+impl<StateDbStorage: StorageStateTrait> StateDbExt
+    for StateDbGeneric<StateDbStorage>
+{
     fn get<T>(&self, key: StorageKey) -> Result<Option<T>>
     where T: ::rlp::Decodable {
         match self.get_raw(key) {
@@ -238,12 +240,13 @@ impl StateDbExt for StateDb {
     }
 }
 
-use super::{Result, StateDb};
+use super::{Result, StateDbGeneric};
 use crate::{
     consensus::debug::ComputeEpochDebugRecord,
     executive::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
 };
 use cfx_parameters::staking::*;
+use cfx_storage::StorageStateTrait;
 use cfx_types::{Address, H256, U256};
 use primitives::{Account, CodeInfo, DepositList, StorageKey, VoteStakeList};
 use rlp::Rlp;
