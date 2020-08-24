@@ -3,10 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use super::account_entry::OverlayAccount;
-use crate::{
-    hash::KECCAK_EMPTY, state::AccountEntryProtectedMethods, statedb::StateDb,
-};
+use crate::{hash::KECCAK_EMPTY, state::AccountEntryProtectedMethods};
 use cfx_parameters::staking::*;
+use cfx_statedb::StateDb;
 use cfx_storage::{
     tests::new_state_manager_for_unit_test, StorageManagerTrait,
 };

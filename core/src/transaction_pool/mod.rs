@@ -16,14 +16,12 @@ extern crate rand;
 
 pub use self::impls::TreapMap;
 use crate::{
-    block_data_manager::BlockDataManager,
-    consensus::BestInformation,
-    machine::Machine,
-    statedb::{Result as StateDbResult, StateDb},
-    verification::VerificationConfig,
+    block_data_manager::BlockDataManager, consensus::BestInformation,
+    machine::Machine, verification::VerificationConfig,
 };
 use account_cache::AccountCache;
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
+use cfx_statedb::{Result as StateDbResult, StateDb};
 use cfx_storage::{Result as StorageResult, StateIndex, StorageManagerTrait};
 use cfx_types::{Address, H256, U256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};

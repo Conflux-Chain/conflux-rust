@@ -2,7 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::super::debug::*;
 use crate::{
     block_data_manager::{BlockDataManager, BlockRewardResult},
     consensus::{
@@ -21,14 +20,16 @@ use crate::{
         },
         CleanupMode, State,
     },
-    statedb::{Result as DbResult, StateDb},
     verification::{compute_receipts_root, VerificationConfig},
     vm::{Env, Spec},
     vm_factory::VmFactory,
     SharedTransactionPool,
 };
-use cfx_internal_common::{EpochExecutionCommitment, StateRootWithAuxInfo};
+use cfx_internal_common::{
+    debug::*, EpochExecutionCommitment, StateRootWithAuxInfo,
+};
 use cfx_parameters::{consensus::*, consensus_internal::*};
+use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{
     defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
     StorageManagerTrait,

@@ -4,13 +4,13 @@
 
 use cfx_bytes::Bytes;
 use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
+use cfx_statedb::StateDb;
 use cfx_storage::{state_manager::StateIndex, StorageManagerTrait};
 use cfx_types::{H256, U256};
 use cfxcore::{
     executive::{Executive, InternalContractMap},
     machine::new_machine_with_builtin,
     state::State,
-    statedb::StateDb,
     vm::{Env, Spec},
     vm_factory::VmFactory,
 };

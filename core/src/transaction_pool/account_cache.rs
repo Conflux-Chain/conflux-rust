@@ -1,8 +1,8 @@
 use crate::{
     executive::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
     state::OverlayAccount,
-    statedb::{Result as StateDbResult, StateDb, StateDbExt},
 };
+use cfx_statedb::{Result as StateDbResult, StateDb, StateDbExt};
 use cfx_types::{Address, U256};
 use primitives::{storage::STORAGE_LAYOUT_REGULAR_V0, Account};
 use std::{collections::hash_map::HashMap, sync::Arc};
