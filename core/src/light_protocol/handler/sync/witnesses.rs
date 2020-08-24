@@ -59,14 +59,14 @@ pub struct Witnesses {
     // block data manager
     data_man: Arc<BlockDataManager>,
 
+    // height of the latest header for which we have trusted information
+    pub height_of_latest_verified_header: RwLock<u64>,
+
     // collection used to track the heights for which we have requested
     // witnesses. e.g. if header 3 is blamed by header 4, we will request
     // witness 4 and insert both 3 and 4 into `in_flight` (as opposed to
     // `sync_manager.in_flight` that will only contain 4).
     pub in_flight: RwLock<HashSet<u64>>,
-
-    // latest header for which we have trusted information
-    pub latest_verified_header: RwLock<u64>,
 
     // helper API for retrieving ledger information
     ledger: LedgerInfo,
@@ -85,16 +85,16 @@ impl Witnesses {
     ) -> Self
     {
         let data_man = consensus.get_data_manager().clone();
+        let height_of_latest_verified_header = RwLock::new(0);
         let in_flight = RwLock::new(HashSet::new());
-        let latest_verified_header = RwLock::new(0);
         let ledger = LedgerInfo::new(consensus.clone());
         let sync_manager =
             SyncManager::new(peers.clone(), msgid::GET_WITNESS_INFO);
 
         Witnesses {
             data_man,
+            height_of_latest_verified_header,
             in_flight,
-            latest_verified_header,
             ledger,
             request_id_allocator,
             sync_manager,
@@ -102,7 +102,9 @@ impl Witnesses {
     }
 
     #[inline]
-    pub fn latest_verified(&self) -> u64 { *self.latest_verified_header.read() }
+    pub fn latest_verified(&self) -> u64 {
+        *self.height_of_latest_verified_header.read()
+    }
 
     fn get_statistics(&self) -> Statistics {
         Statistics {
@@ -117,15 +119,15 @@ impl Witnesses {
     pub fn root_hashes_of(&self, epoch: u64) -> Result<VerifiedRoots> {
         let height = epoch + DEFERRED_STATE_EPOCH_COUNT;
 
-        if height > *self.latest_verified_header.read() {
+        if height > *self.height_of_latest_verified_header.read() {
             bail!(ErrorKind::WitnessUnavailable { epoch });
         }
 
         match self.data_man.verified_blamed_roots_by_height(height) {
             Some(roots) => Ok(roots.into()),
             None => {
-                // we set `latest_verified_header` before receiving the
-                // response for blamed headers. thus, in some cases, `None`
+                // we set `height_of_latest_verified_header` before receiving
+                // the response for blamed headers. thus, in some cases, `None`
                 // might mean *haven't received yet* instead of *not blamed*.
                 if self.in_flight.read().contains(&height) {
                     bail!(ErrorKind::WitnessUnavailable { epoch });

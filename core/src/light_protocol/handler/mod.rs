@@ -304,7 +304,7 @@ impl Handler {
                         }
                     }
 
-                    *witnesses.latest_verified_header.write() = height;
+                    *witnesses.height_of_latest_verified_header.write() = height;
                 }
             })
             .expect("Starting the Witness Worker should succeed")
