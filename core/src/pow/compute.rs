@@ -174,9 +174,9 @@ fn hash_compute(
 
     fn gcd(a: u32, b: u32) -> u32 {
         if b == 0 {
-          return a;
+            return a;
         } else {
-          return gcd(b, a % b);
+            return gcd(b, a % b);
         }
     }
 
@@ -185,11 +185,11 @@ fn hash_compute(
     let c = v2 % POW_MOD64;
     let mut e = (v3 % (POW_MOD64 - 2) + 1) as u32;
     loop {
-       let g = gcd(e, POW_MOD - 1);
-       if g == 1 {
-         break
-       }
-       e /= g
+        let g = gcd(e, POW_MOD - 1);
+        if g == 1 {
+            break;
+        }
+        e /= g
     }
     let w = power_mod(POW_MOD_B, e);
 
