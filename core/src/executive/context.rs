@@ -104,8 +104,8 @@ impl<'a> Context<'a> {
 
 impl<'a> ContextTrait for Context<'a> {
     fn storage_at(&self, key: &Vec<u8>) -> vm::Result<U256> {
-        self.state
-            .storage_at(&self.origin.address, key)
+        self.substate
+            .storage_at(self.state, &self.origin.address, key)
             .map_err(Into::into)
     }
 
@@ -113,8 +113,9 @@ impl<'a> ContextTrait for Context<'a> {
         if self.static_flag {
             Err(vm::Error::MutableCallInStaticContext)
         } else {
-            self.state
+            self.substate
                 .set_storage(
+                    self.state,
                     &self.origin.address,
                     key,
                     value,
