@@ -2,7 +2,7 @@
 
 # allow imports from parent directory
 # source: https://stackoverflow.com/a/11158224
-import os, sys, random
+import os, sys, random, time
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 from conflux.config import default_config
@@ -87,6 +87,9 @@ class LightSyncTest(ConfluxTestFramework):
         self.log.info(f"Restarting light node without db reset...")
         self.stop_node(LIGHTNODE, clean=False)
         self.start_node(LIGHTNODE, phase_to_wait=None)
+
+        # make sure witness sync completes
+        time.sleep(5)
 
         self.check_headers_synced()
         self.check_witnesses_synced()
