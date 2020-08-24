@@ -30,6 +30,7 @@ use cfxcore::{
     transaction_pool::{TxPoolConfig, DEFAULT_MAX_TRANSACTION_GAS_LIMIT},
 };
 use metrics::MetricsConfiguration;
+use network::DiscoveryConfiguration;
 use primitives::ChainIdParams;
 use rand::Rng;
 use std::convert::TryInto;
@@ -186,9 +187,17 @@ build_config! {
 
         // Peer management section.
         (bootnodes, (Option<String>), None)
+        (discovery_discover_node_count, (u32), 16)
+        (discovery_expire_time_s, (u64), 20)
         (discovery_fast_refresh_timeout_ms, (u64), 10_000)
+        (discovery_find_node_timeout_ms, (u64), 2_000)
         (discovery_housekeeping_timeout_ms, (u64), 1_000)
+        (discovery_max_nodes_ping, (usize), 32)
+        (discovery_ping_timeout_ms, (u64), 2_000)
         (discovery_round_timeout_ms, (u64), 500)
+        (discovery_throttling_interval_ms, (u64), 1_000)
+        (discovery_throttling_limit_ping, (usize), 20)
+        (discovery_throttling_limit_find_nodes, (usize), 10)
         (enable_discovery, (bool), true)
         (netconf_dir, (Option<String>), Some("./net_config".to_string()))
         (net_key, (Option<String>), None)
@@ -303,6 +312,7 @@ impl Configuration {
         let mut network_config = NetworkConfiguration::new_with_port(
             self.network_id(),
             self.raw_conf.tcp_port,
+            self.discovery_protocol(),
         );
 
         network_config.is_consortium = self.raw_conf.is_consortium;
@@ -729,6 +739,31 @@ impl Configuration {
         ConsensusExecutionConfiguration {
             anticone_penalty_ratio: self.raw_conf.anticone_penalty_ratio,
             base_reward_table_in_ucfx: MINING_REWARD_TABLE_IN_UCFX.to_vec(),
+        }
+    }
+
+    pub fn discovery_protocol(&self) -> DiscoveryConfiguration {
+        DiscoveryConfiguration {
+            discover_node_count: self.raw_conf.discovery_discover_node_count,
+            expire_time: Duration::from_secs(
+                self.raw_conf.discovery_expire_time_s,
+            ),
+            find_node_timeout: Duration::from_millis(
+                self.raw_conf.discovery_find_node_timeout_ms,
+            ),
+            max_nodes_ping: self.raw_conf.discovery_max_nodes_ping,
+            ping_timeout: Duration::from_millis(
+                self.raw_conf.discovery_ping_timeout_ms,
+            ),
+            throttling_interval: Duration::from_millis(
+                self.raw_conf.discovery_throttling_interval_ms,
+            ),
+            throttling_limit_ping: self
+                .raw_conf
+                .discovery_throttling_limit_ping,
+            throttling_limit_find_nodes: self
+                .raw_conf
+                .discovery_throttling_limit_find_nodes,
         }
     }
 
