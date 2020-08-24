@@ -7,8 +7,8 @@ use crate::{
     node_database::NodeDatabase,
     node_table::{NodeId, *},
     service::{UdpIoContext, MAX_DATAGRAM_SIZE, UDP_PROTOCOL_DISCOVERY},
-    Error, ErrorKind, IpFilter, ThrottlingReason, NODE_TAG_ARCHIVE,
-    NODE_TAG_NODE_TYPE,
+    DiscoveryConfiguration, Error, ErrorKind, IpFilter, ThrottlingReason,
+    NODE_TAG_ARCHIVE, NODE_TAG_NODE_TYPE,
 };
 use cfx_bytes::Bytes;
 use cfx_types::{H256, H520};
@@ -18,7 +18,7 @@ use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     net::{IpAddr, SocketAddr},
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 use throttling::time_window_bucket::TimeWindowBucket;
 
@@ -30,17 +30,6 @@ const PACKET_PING: u8 = 1;
 const PACKET_PONG: u8 = 2;
 const PACKET_FIND_NODE: u8 = 3;
 const PACKET_NEIGHBOURS: u8 = 4;
-
-const PING_TIMEOUT: Duration = Duration::from_millis(500);
-const FIND_NODE_TIMEOUT: Duration = Duration::from_secs(2);
-const EXPIRY_TIME: Duration = Duration::from_secs(20);
-
-pub const DISCOVER_NODES_COUNT: u32 = 16;
-const MAX_NODES_PING: usize = 32; // Max nodes to add/ping at once
-
-const DEFAULT_THROTTLING_INTERVAL: Duration = Duration::from_secs(1);
-const DEFAULT_THROTTLING_LIMIT_PING: usize = 20;
-const DEFAULT_THROTTLING_LIMIT_FIND_NODES: usize = 10;
 
 struct PingRequest {
     // Time when the request was sent
@@ -95,12 +84,16 @@ pub struct Discovery {
     // Limits the response for PING/FIND_NODE packets
     ping_throttling: TimeWindowBucket<IpAddr>,
     find_nodes_throttling: TimeWindowBucket<IpAddr>,
+
+    config: DiscoveryConfiguration,
 }
 
 impl Discovery {
     pub fn new(
         key: &KeyPair, public: NodeEndpoint, ip_filter: IpFilter,
-    ) -> Discovery {
+        config: DiscoveryConfiguration,
+    ) -> Discovery
+    {
         Discovery {
             id: key.public().clone(),
             id_hash: keccak(key.public()),
@@ -119,13 +112,14 @@ impl Discovery {
                 archive: false,
             },
             ping_throttling: TimeWindowBucket::new(
-                DEFAULT_THROTTLING_INTERVAL,
-                DEFAULT_THROTTLING_LIMIT_PING,
+                config.throttling_interval,
+                config.throttling_limit_ping,
             ),
             find_nodes_throttling: TimeWindowBucket::new(
-                DEFAULT_THROTTLING_INTERVAL,
-                DEFAULT_THROTTLING_LIMIT_FIND_NODES,
+                config.throttling_interval,
+                config.throttling_limit_find_nodes,
             ),
+            config,
         }
     }
 
@@ -157,7 +151,7 @@ impl Discovery {
             return;
         }
 
-        if self.in_flight_pings.len() < MAX_NODES_PING {
+        if self.in_flight_pings.len() < self.config.max_nodes_ping {
             self.ping(uio, &node).unwrap_or_else(|e| {
                 warn!("Error sending Ping packet: {:?}", e);
             });
@@ -173,7 +167,7 @@ impl Discovery {
         rlp.append(&DISCOVER_PROTOCOL_VERSION);
         self.public_endpoint.to_rlp_list(&mut rlp);
         node.endpoint.to_rlp_list(&mut rlp);
-        rlp.append(&expire_timestamp());
+        rlp.append(&self.config.expire_timestamp());
         let hash = self.send_packet(
             uio,
             PACKET_PING,
@@ -292,7 +286,7 @@ impl Discovery {
         // pong_to.to_rlp_list(&mut response);
 
         response.append(&echo_hash);
-        response.append(&expire_timestamp());
+        response.append(&self.config.expire_timestamp());
         self.send_packet(uio, PACKET_PONG, from, &response.drain())?;
 
         let entry = NodeEntry {
@@ -368,7 +362,11 @@ impl Discovery {
 
         let msg: FindNodeMessage = rlp.as_val()?;
         self.check_timestamp(msg.expire_timestamp)?;
-        let neighbors = msg.sample(&*uio.node_db.read(), &self.ip_filter)?;
+        let neighbors = msg.sample(
+            &*uio.node_db.read(),
+            &self.ip_filter,
+            self.config.discover_node_count,
+        )?;
 
         trace!("Sample {} Neighbours for {:?}", neighbors.len(), &from);
 
@@ -443,8 +441,9 @@ impl Discovery {
 
     fn check_expired(&mut self, uio: &UdpIoContext, time: Instant) {
         let mut nodes_to_expire = Vec::new();
+        let ping_timeout = &self.config.ping_timeout;
         self.in_flight_pings.retain(|node_id, ping_request| {
-            if time.duration_since(ping_request.sent_at) > PING_TIMEOUT {
+            if time.duration_since(ping_request.sent_at) > *ping_timeout {
                 debug!(
                     "Removing expired PING request for node_id={:#x}",
                     node_id
@@ -455,8 +454,9 @@ impl Discovery {
                 true
             }
         });
+        let find_node_timeout = &self.config.find_node_timeout;
         self.in_flight_find_nodes.retain(|node_id, find_node_request| {
-            if time.duration_since(find_node_request.sent_at) > FIND_NODE_TIMEOUT {
+            if time.duration_since(find_node_request.sent_at) > *find_node_timeout {
                 if !find_node_request.is_completed() {
                     debug!("Removing expired FIND NODE request for node_id={:#x}", node_id);
                     nodes_to_expire.push(*node_id);
@@ -479,7 +479,7 @@ impl Discovery {
     }
 
     fn update_new_nodes(&mut self, uio: &UdpIoContext) {
-        while self.in_flight_pings.len() < MAX_NODES_PING {
+        while self.in_flight_pings.len() < self.config.max_nodes_ping {
             match self.adding_nodes.pop() {
                 Some(next) => self.try_ping(uio, next),
                 None => break,
@@ -523,7 +523,11 @@ impl Discovery {
         tag_key: Option<String>, tag_value: Option<String>,
     ) -> Result<(), Error>
     {
-        let msg = FindNodeMessage::new(tag_key, tag_value);
+        let msg = FindNodeMessage::new(
+            tag_key,
+            tag_value,
+            self.config.expire_timestamp(),
+        );
 
         self.send_packet(
             uio,
@@ -563,7 +567,10 @@ impl Discovery {
         let sampled: Vec<NodeEntry> = uio
             .node_db
             .read()
-            .sample_trusted_nodes(DISCOVER_NODES_COUNT, &self.ip_filter)
+            .sample_trusted_nodes(
+                self.config.discover_node_count,
+                &self.ip_filter,
+            )
             .into_iter()
             .filter(|n| !self.discovery_nodes.contains(&n.id))
             .collect();
@@ -605,12 +612,12 @@ impl Discovery {
         &mut self, uio: &UdpIoContext, key: &String, value: &String,
     ) -> usize {
         let tagged_nodes = uio.node_db.read().sample_trusted_node_ids_with_tag(
-            DISCOVER_NODES_COUNT / 2,
+            self.config.discover_node_count / 2,
             key,
             value,
         );
 
-        let count = DISCOVER_NODES_COUNT - tagged_nodes.len() as u32;
+        let count = self.config.discover_node_count - tagged_nodes.len() as u32;
         let random_nodes = uio
             .node_db
             .read()
@@ -634,13 +641,6 @@ impl Discovery {
             Some(value.clone()),
         )
     }
-}
-
-fn expire_timestamp() -> u64 {
-    (SystemTime::now() + EXPIRY_TIME)
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
 }
 
 fn assemble_packet(
@@ -681,22 +681,28 @@ struct FindNodeMessage {
 }
 
 impl FindNodeMessage {
-    fn new(tag_key: Option<String>, tag_value: Option<String>) -> Self {
+    fn new(
+        tag_key: Option<String>, tag_value: Option<String>,
+        expire_timestamp: u64,
+    ) -> Self
+    {
         FindNodeMessage {
             tag_key,
             tag_value,
-            expire_timestamp: expire_timestamp(),
+            expire_timestamp,
         }
     }
 
     fn sample(
         &self, node_db: &NodeDatabase, ip_filter: &IpFilter,
-    ) -> Result<Vec<NodeEntry>, Error> {
+        discover_node_count: u32,
+    ) -> Result<Vec<NodeEntry>, Error>
+    {
         let key = match self.tag_key {
             Some(ref key) => key,
             None => {
                 return Ok(node_db
-                    .sample_trusted_nodes(DISCOVER_NODES_COUNT, ip_filter))
+                    .sample_trusted_nodes(discover_node_count, ip_filter))
             }
         };
 
@@ -706,7 +712,7 @@ impl FindNodeMessage {
         };
 
         let ids = node_db.sample_trusted_node_ids_with_tag(
-            DISCOVER_NODES_COUNT,
+            discover_node_count,
             key,
             value,
         );
