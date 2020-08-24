@@ -163,12 +163,15 @@ error_chain! {
 pub fn handle(
     io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: &Error,
 ) {
-    warn!(
-        "Error while handling message, peer={}, msg_id={:?}, error={}",
-        peer,
-        msg_id,
-        e.display_chain().to_string(),
-    );
+    // for clonable errors, we will print the error in the recursive call
+    if !matches!(e.0, ErrorKind::ClonableErrorWrapper(_)) {
+        warn!(
+            "Error while handling message, peer={}, msg_id={:?}, error={}",
+            peer,
+            msg_id,
+            e.display_chain().to_string(),
+        );
+    }
 
     let mut disconnect = true;
     let reason = format!("{}", e.0);
