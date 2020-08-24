@@ -11,6 +11,7 @@ pub const POW_MIX_BYTES: usize = 128;
 pub const POW_ACCESSES: usize = 64;
 pub const POW_DATASET_PARENTS: u32 = 256;
 pub const POW_MOD: u32 = 1032193;
+pub const POW_MOD_B: u32 = 11;
 
 pub const POW_NK: u64 = 10;
 pub const POW_N: u64 = 1 << POW_NK;
