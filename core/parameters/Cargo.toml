@@ -1,0 +1,11 @@
+[package]
+description = "Conflux core parameters library"
+homepage = "http://www.conflux-chain.org"
+license = "GPL-3.0"
+name = "cfx-parameters"
+version = "1.0.0"
+edition = "2018"
+
+[dependencies]
+cfx-types = { path = "../../cfx_types" }
+lazy_static = "1.4"

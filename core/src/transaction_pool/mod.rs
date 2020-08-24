@@ -19,12 +19,12 @@ use crate::{
     block_data_manager::BlockDataManager,
     consensus::BestInformation,
     machine::Machine,
-    parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT,
     statedb::{Result as StateDbResult, StateDb},
-    storage::{Result as StorageResult, StateIndex, StorageManagerTrait},
     verification::VerificationConfig,
 };
 use account_cache::AccountCache;
+use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
+use cfx_storage::{Result as StorageResult, StateIndex, StorageManagerTrait};
 use cfx_types::{Address, H256, U256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{
@@ -156,28 +156,29 @@ impl TransactionPool {
             config.tx_weight_scaling,
             config.tx_weight_exp,
         );
+        let best_executed_state = Mutex::new(Arc::new(StateDb::new(
+            data_man
+                .storage_manager
+                .get_state_no_commit(
+                    StateIndex::new_for_readonly(
+                        &genesis_hash,
+                        &data_man.true_genesis_state_root(),
+                    ),
+                    /* try_open = */ false,
+                )
+                // Safe because we don't expect any error at program start.
+                .expect(&concat!(file!(), ":", line!(), ":", column!()))
+                // Safe because true genesis state is available at program
+                // start.
+                .expect(&concat!(file!(), ":", line!(), ":", column!())),
+        )));
         TransactionPool {
             config,
             verification_config,
             inner: RwLock::new(inner),
             to_propagate_trans: Arc::new(RwLock::new(HashMap::new())),
             data_man: data_man.clone(),
-            best_executed_state: Mutex::new(Arc::new(StateDb::new(
-                data_man
-                    .storage_manager
-                    .get_state_no_commit(
-                        StateIndex::new_for_readonly(
-                            &genesis_hash,
-                            &data_man.true_genesis_state_root(),
-                        ),
-                        /* try_open = */ false,
-                    )
-                    // Safe because we don't expect any error at program start.
-                    .expect(&concat!(file!(), ":", line!(), ":", column!()))
-                    // Safe because true genesis state is available at program
-                    // start.
-                    .expect(&concat!(file!(), ":", line!(), ":", column!())),
-            ))),
+            best_executed_state,
             consensus_best_info: Mutex::new(Arc::new(Default::default())),
             set_tx_requests: Mutex::new(Default::default()),
             recycle_tx_requests: Mutex::new(Default::default()),
@@ -228,8 +229,7 @@ impl TransactionPool {
 
         let mut passed_transactions = Vec::new();
         let mut failure = HashMap::new();
-        let consensus_best_info_clone =
-            { self.consensus_best_info.lock().clone() };
+        let consensus_best_info_clone = self.consensus_best_info.lock().clone();
 
         // filter out invalid transactions.
         let mut index = 0;
@@ -526,10 +526,10 @@ impl TransactionPool {
 
     /// content retrieves the ready and deferred transactions.
     pub fn content(
-        &self,
+        &self, address: Option<Address>,
     ) -> (Vec<Arc<SignedTransaction>>, Vec<Arc<SignedTransaction>>) {
         let inner = self.inner.read();
-        inner.content()
+        inner.content(address)
     }
 
     pub fn notify_new_best_info(
@@ -595,8 +595,7 @@ impl TransactionPool {
         // We do not need to hold the lock because it is fine for us to generate
         // blocks that are slightly behind the best state.
         // We do not want to stall the consensus thread.
-        let consensus_best_info_clone =
-            { self.consensus_best_info.lock().clone() };
+        let consensus_best_info_clone = self.consensus_best_info.lock().clone();
 
         let parent_block_gas_limit = self
             .data_man

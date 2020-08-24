@@ -118,11 +118,8 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
 
         file_dir = os.path.dirname(os.path.realpath(__file__))
 
-        control_contract_file_path = os.path.dirname(os.path.realpath(__file__)).split("/")
-        control_contract_file_path.pop(-1)
-        control_contract_file_path.extend(["internal_contract", "metadata", "SponsorWhitelistControl.json"])
-        control_contract_file_path = "/".join(control_contract_file_path)
-        control_contract_dict = json.loads(open(os.path.join(control_contract_file_path), "r").read())
+        control_contract_file_path =os.path.join(file_dir, "..", "internal_contract", "metadata", "SponsorWhitelistControl.json")
+        control_contract_dict = json.loads(open(control_contract_file_path, "r").read())
 
         control_contract = get_contract_instance(contract_dict=control_contract_dict)
 

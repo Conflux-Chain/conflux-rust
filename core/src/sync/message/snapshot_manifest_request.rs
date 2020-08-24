@@ -8,10 +8,6 @@ use crate::{
         GetMaybeRequestId, Message, MessageProtocolVersionBound, MsgId,
         RequestId, SetRequestId,
     },
-    parameters::{
-        consensus::DEFERRED_STATE_EPOCH_COUNT,
-        consensus_internal::REWARD_EPOCH_COUNT,
-    },
     sync::{
         message::{
             msgid, Context, DynamicCapability, Handleable, KeyContainer,
@@ -19,8 +15,12 @@ use crate::{
         },
         request_manager::{AsAny, Request},
         state::storage::{RangedManifest, SnapshotSyncCandidate},
-        Error, ProtocolConfiguration, SYNC_PROTO_V1, SYNC_PROTO_V2,
+        Error, ProtocolConfiguration, SYNC_PROTO_V1, SYNC_PROTO_V3,
     },
+};
+use cfx_parameters::{
+    consensus::DEFERRED_STATE_EPOCH_COUNT,
+    consensus_internal::REWARD_EPOCH_COUNT,
 };
 use cfx_types::H256;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -39,7 +39,7 @@ pub struct SnapshotManifestRequest {
 
 build_msg_with_request_id_impl! {
     SnapshotManifestRequest, msgid::GET_SNAPSHOT_MANIFEST,
-    "SnapshotManifestRequest", SYNC_PROTO_V1, SYNC_PROTO_V2
+    "SnapshotManifestRequest", SYNC_PROTO_V1, SYNC_PROTO_V3
 }
 
 impl Handleable for SnapshotManifestRequest {

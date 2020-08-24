@@ -11,20 +11,19 @@ use crate::{
         Error, ErrorKind, Handler as LightHandler, LIGHT_PROTOCOL_ID,
         LIGHT_PROTOCOL_VERSION,
     },
-    network::{NetworkContext, NetworkService},
-    parameters::{
-        consensus::DEFERRED_STATE_EPOCH_COUNT,
-        light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME},
-    },
     rpc_errors::{account_result_to_rpc_result, Error as RpcError},
     sync::SynchronizationGraph,
+};
+use cfx_parameters::{
+    consensus::DEFERRED_STATE_EPOCH_COUNT,
+    light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME},
 };
 use cfx_types::{BigEndianHash, Bloom, H160, H256, KECCAK_EMPTY_BLOOM, U256};
 use futures::{
     future::{self, Either},
     stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
 };
-use network::service::ProtocolVersion;
+use network::{service::ProtocolVersion, NetworkContext, NetworkService};
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
@@ -48,8 +47,10 @@ type TxInfo = (
 // Because of this, our RPC runtime cannot handle tokio@0.2 timing primitives.
 // As a temporary workaround, we use the old `tokio_timer::Timeout` instead.
 async fn with_timeout<T>(
-    d: Duration, msg: String, fut: impl Future<Output = T> + Send + Sync,
-) -> Result<T, Error> {
+    d: Duration, msg: String,
+    fut: impl Future<Output = Result<T, Error>> + Send + Sync,
+) -> Result<T, Error>
+{
     // convert `fut` into futures@0.1
     let fut = fut.unit_error().boxed().compat();
 
@@ -63,7 +64,7 @@ async fn with_timeout<T>(
     // set error message
     with_timeout
         .await
-        .map_err(|_| ErrorKind::Timeout(msg).into())
+        .map_err(|_| Error::from(ErrorKind::Timeout(msg)))?
 }
 
 pub struct QueryService {
@@ -282,7 +283,7 @@ impl QueryService {
                 error!("Account {:?} found but code {:?} does not exist (epoch={:?})",  address, code_hash, epoch);
                 bail!(format!("Unable to retrieve code: internal error"));
             }
-            Some(info) => Ok(Some(info.code)),
+            Some(info) => Ok(Some((*info.code).clone())),
         }
     }
 

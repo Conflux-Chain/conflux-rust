@@ -4,7 +4,7 @@
 
 use super::DisconnectReason;
 use crate::{
-    discovery::{Discovery, DISCOVER_NODES_COUNT},
+    discovery::Discovery,
     handshake::BYPASS_CRYPTOGRAPHY,
     io::*,
     ip_utils::{map_external_address, select_public_address},
@@ -585,7 +585,12 @@ impl NetworkServiceInner {
         let allow_ips = config.ip_filter.clone();
         let discovery = {
             if config.discovery_enabled {
-                Some(Discovery::new(&keys, public_endpoint.clone(), allow_ips))
+                Some(Discovery::new(
+                    &keys,
+                    public_endpoint.clone(),
+                    allow_ips,
+                    config.discovery_config.clone(),
+                ))
             } else {
                 None
             }
@@ -702,10 +707,10 @@ impl NetworkServiceInner {
         // Initialize discovery
         if let Some(discovery) = self.discovery.lock().as_mut() {
             let allow_ips = self.config.ip_filter.clone();
-            let nodes = self
-                .node_db
-                .read()
-                .sample_trusted_nodes(DISCOVER_NODES_COUNT, &allow_ips);
+            let nodes = self.node_db.read().sample_trusted_nodes(
+                self.config.discovery_config.discover_node_count,
+                &allow_ips,
+            );
             discovery.try_ping_nodes(
                 &UdpIoContext::new(&self.udp_channel, &self.node_db),
                 nodes,
@@ -832,7 +837,7 @@ impl NetworkServiceInner {
             .filter(|id| !self.sessions.contains_node(id) && *id != self_id)
             .take(min(
                 max_handshakes_per_round,
-                self.config.max_handshakes - handshake_count,
+                self.config.max_handshakes.saturating_sub(handshake_count),
             ))
         {
             self.connect_peer(&id, io);
@@ -1043,7 +1048,7 @@ impl NetworkServiceInner {
             // communications from any dropped peers
             let mut session_node_id = session.read().id().map(|id| *id);
             if let Some(node_id) = session_node_id {
-                let to_drop = { self.dropped_nodes.read().contains(&node_id) };
+                let to_drop = self.dropped_nodes.read().contains(&node_id);
                 self.drop_peers(io);
                 if to_drop {
                     return;
@@ -1169,10 +1174,10 @@ impl NetworkServiceInner {
                 // communications from any dropped peers
                 let sess_id = session.read().id().map(|id| *id);
                 if let Some(node_id) = sess_id {
-                    let to_drop =
-                        { self.dropped_nodes.read().contains(&node_id) };
+                    let to_drop = self.dropped_nodes.read().contains(&node_id);
+                    self.drop_peers(io);
                     if to_drop {
-                        self.drop_peers(io);
+                        return;
                     }
                 }
             }

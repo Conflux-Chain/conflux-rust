@@ -4,10 +4,7 @@
 
 use super::super::debug::*;
 use crate::{
-    block_data_manager::{
-        block_data_types::EpochExecutionCommitment, BlockDataManager,
-        BlockRewardResult,
-    },
+    block_data_manager::{BlockDataManager, BlockRewardResult},
     consensus::{
         consensus_inner::{
             consensus_new_block_handler::ConsensusNewBlockHandler,
@@ -17,7 +14,6 @@ use crate::{
     },
     executive::{ExecutionOutcome, Executive, InternalContractMap},
     machine::Machine,
-    parameters::{consensus::*, consensus_internal::*},
     rpc_errors::{invalid_params_check, Result as RpcResult},
     state::{
         prefetcher::{
@@ -26,14 +22,16 @@ use crate::{
         CleanupMode, State,
     },
     statedb::{Result as DbResult, StateDb},
-    storage::{
-        defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
-        StateRootWithAuxInfo, StorageManagerTrait,
-    },
     verification::{compute_receipts_root, VerificationConfig},
     vm::{Env, Spec},
     vm_factory::VmFactory,
     SharedTransactionPool,
+};
+use cfx_internal_common::{EpochExecutionCommitment, StateRootWithAuxInfo};
+use cfx_parameters::{consensus::*, consensus_internal::*};
+use cfx_storage::{
+    defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
+    StorageManagerTrait,
 };
 use cfx_types::{BigEndianHash, H256, KECCAK_EMPTY_BLOOM, U256, U512};
 use core::convert::TryFrom;
@@ -1264,8 +1262,12 @@ impl ConsensusExecutionHandler {
     }
 
     fn compute_block_base_reward(&self, past_block_count: u64) -> U512 {
-        let reward_table_index =
-            (past_block_count / MINED_BLOCK_COUNT_PER_QUARTER) as usize;
+        let reward_table_index = if past_block_count < INITIAL_NO_DECAY_PERIOD {
+            0
+        } else {
+            ((past_block_count - INITIAL_NO_DECAY_PERIOD)
+                / MINED_BLOCK_COUNT_PER_QUARTER) as usize
+        };
         let reward_in_ucfx = if reward_table_index
             < self.config.base_reward_table_in_ucfx.len()
         {

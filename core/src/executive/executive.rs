@@ -15,7 +15,6 @@ use crate::{
     },
     hash::keccak,
     machine::Machine,
-    parameters::staking::*,
     state::{
         CallStackInfo, CleanupMode, CollateralCheckResult, State, Substate,
     },
@@ -23,13 +22,16 @@ use crate::{
     verification::VerificationConfig,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
-        ResumeCall, ResumeCreate, ReturnData, Spec, TrapError,
+        ExecTrapResult, GasLeft, ResumeCall, ResumeCreate, ReturnData, Spec,
+        TrapError,
     },
     vm_factory::VmFactory,
 };
+use cfx_parameters::staking::*;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256, U512};
 use primitives::{
-    receipt::StorageChange, transaction::Action, SignedTransaction,
+    receipt::StorageChange, storage::STORAGE_LAYOUT_REGULAR_V0,
+    transaction::Action, SignedTransaction, StorageLayout,
 };
 use std::{
     cell::RefCell,
@@ -130,6 +132,9 @@ enum CallCreateExecutiveKind {
     ExecCreate(ActionParams, Substate),
     ResumeCall(OriginInfo, Box<dyn ResumeCall>, Substate),
     ResumeCreate(OriginInfo, Box<dyn ResumeCreate>, Substate),
+    // A temporally status to handle the ownership check in rust.
+    // It should only appear in function `enact_output`.
+    Moved,
 }
 
 pub struct CallCreateExecutive<'a> {
@@ -273,6 +278,9 @@ impl<'a> CallCreateExecutive<'a> {
             }
             CallCreateExecutiveKind::Transfer(..)
             | CallCreateExecutiveKind::CallBuiltin(..) => None,
+            CallCreateExecutiveKind::Moved => {
+                panic!("A temporally status in function `enact_output`, should not appear during execution.");
+            }
         }
     }
 
@@ -286,6 +294,9 @@ impl<'a> CallCreateExecutive<'a> {
             CallCreateExecutiveKind::ResumeCreate(origin, ..)
             | CallCreateExecutiveKind::ResumeCall(origin, ..) => {
                 origin.recipient()
+            }
+            CallCreateExecutiveKind::Moved => {
+                panic!("A temporally status in function `enact_output`, should not appear during execution.");
             }
         }
     }
@@ -313,7 +324,7 @@ impl<'a> CallCreateExecutive<'a> {
     fn transfer_exec_balance(
         params: &ActionParams, spec: &Spec, state: &mut State,
         substate: &mut Substate,
-    ) -> vm::Result<()>
+    ) -> DbResult<()>
     {
         if let ActionValue::Transfer(val) = params.value {
             state.transfer_balance(
@@ -329,7 +340,7 @@ impl<'a> CallCreateExecutive<'a> {
 
     fn transfer_exec_balance_and_init_contract(
         params: &ActionParams, spec: &Spec, state: &mut State,
-        substate: &mut Substate,
+        substate: &mut Substate, storage_layout: Option<StorageLayout>,
     ) -> vm::Result<()>
     {
         if let ActionValue::Transfer(val) = params.value {
@@ -346,84 +357,88 @@ impl<'a> CallCreateExecutive<'a> {
                 &params.original_sender,
                 val.saturating_add(prev_balance),
                 state.contract_start_nonce(),
+                storage_layout,
             )?;
         } else {
-            state.new_contract_with_admin(
-                &params.address,
-                &params.original_sender,
-                U256::zero(),
-                state.contract_start_nonce(),
-            )?;
+            // In contract creation, the `params.value` should never be
+            // `Apparent`.
+            unreachable!();
         }
 
         Ok(())
     }
 
-    fn enact_result(
-        result: vm::Result<FinalizationResult>, state: &mut State,
-        substate: &mut Substate, mut unconfirmed_substate: Substate,
-        sender: &Address, storage_limit: &U256, is_bottom_ex: bool,
-    ) -> vm::Result<FinalizationResult>
+    fn enact_output(
+        mut self, output: ExecTrapResult<FinalizationResult>,
+        origin: OriginInfo, state: &mut State, substate: &mut Substate,
+        mut unconfirmed_substate: Substate,
+    ) -> ExecutiveTrapResult<'a, FinalizationResult>
     {
-        match result {
-            Err(vm::Error::OutOfGas)
-            | Err(vm::Error::BadJumpDestination { .. })
-            | Err(vm::Error::BadInstruction { .. })
-            | Err(vm::Error::StackUnderflow { .. })
-            | Err(vm::Error::BuiltIn { .. })
-            | Err(vm::Error::InternalContract { .. })
-            | Err(vm::Error::Wasm { .. })
-            | Err(vm::Error::OutOfStack { .. })
-            | Err(vm::Error::InvalidSubEntry)
-            | Err(vm::Error::SubStackUnderflow { .. })
-            | Err(vm::Error::OutOfSubStack { .. })
-            | Err(vm::Error::ExceedStorageLimit)
-            | Err(vm::Error::NotEnoughBalanceForStorage { .. })
-            | Err(vm::Error::MutableCallInStaticContext)
-            | Err(vm::Error::OutOfBounds)
-            | Err(vm::Error::Reverted)
-            | Err(vm::Error::InvalidAddress(..))
-            | Ok(FinalizationResult {
-                apply_state: false, ..
-            }) => {
-                state.revert_to_checkpoint();
-                result
-            }
-            // The whole epoch execution fails. No need to revert state.
-            Err(vm::Error::StateDbError(_)) => result,
-            Ok(_) => {
-                let check_result = if is_bottom_ex {
-                    state.collect_ownership_changed_and_settle(
-                        sender,
-                        storage_limit,
-                        &mut unconfirmed_substate,
-                    )
-                } else {
-                    state.collect_ownership_changed(&mut unconfirmed_substate)
-                }?;
-                match check_result {
-                    CollateralCheckResult::ExceedStorageLimit { .. } => {
-                        state.revert_to_checkpoint();
-                        Err(vm::Error::ExceedStorageLimit)
-                    }
-                    CollateralCheckResult::NotEnoughBalance {
-                        required,
-                        got,
-                    } => {
-                        state.revert_to_checkpoint();
-                        Err(vm::Error::NotEnoughBalanceForStorage {
-                            required,
-                            got,
-                        })
-                    }
-                    CollateralCheckResult::Valid => {
-                        state.discard_checkpoint();
-                        substate.accrue(unconfirmed_substate);
+        // You should avoid calling functions for self here, since `self.kind`
+        // is moved temporally.
 
-                        result
-                    }
-                }
+        // TODO: `ExecTrapResult` is a nested `Result`. It is ambiguous to deal
+        // with result like `Ok(Err(e))`. I plan to rename it in a separated PR.
+
+        // In case the execution is done and the state will be reverted, there
+        // will be no need be collect ownership.
+
+        // We check it here only for performance. Even if we regard all the case
+        // as ``need_collect_ownership'', the result should be same. But we
+        // don't want to execute heavy function collect_ownership_changed if it
+        // is unnecessary.
+        let need_collect_ownership = match &output {
+            Ok(Err(_))
+            | Ok(Ok(FinalizationResult {
+                apply_state: false, ..
+            })) => false,
+            _ => true,
+        };
+        let output = if need_collect_ownership {
+            match state.collect_ownership_changed(&mut unconfirmed_substate) {
+                Ok(_) => output,
+                Err(db_err) => Ok(Err(db_err.into())),
             }
+        } else {
+            output
+        };
+
+        match output {
+            Ok(result) => match result {
+                // The whole epoch execution fails. No need to revert state.
+                Err(vm::Error::StateDbError(_)) => Ok(result),
+                Err(_)
+                | Ok(FinalizationResult {
+                    apply_state: false, ..
+                }) => {
+                    state.revert_to_checkpoint();
+                    Ok(result)
+                }
+                Ok(_) => {
+                    state.discard_checkpoint();
+                    substate.accrue(unconfirmed_substate);
+
+                    Ok(result)
+                }
+            },
+            Err(trap_err) => match trap_err {
+                TrapError::Call(subparams, resume) => {
+                    self.kind = CallCreateExecutiveKind::ResumeCall(
+                        origin,
+                        resume,
+                        unconfirmed_substate,
+                    );
+                    Err(TrapError::Call(subparams, self))
+                }
+                TrapError::Create(subparams, address, resume) => {
+                    self.kind = CallCreateExecutiveKind::ResumeCreate(
+                        origin,
+                        resume,
+                        unconfirmed_substate,
+                    );
+                    Err(TrapError::Create(subparams, address, self))
+                }
+            },
         }
     }
 
@@ -549,94 +564,66 @@ impl<'a> CallCreateExecutive<'a> {
                 let spec = self.spec;
                 let internal_contract_map = self.internal_contract_map;
 
-                let inner = |depth| {
-                    if params.call_type != CallType::Call {
-                        return Err(vm::Error::InternalContract(
-                            "Incorrect call type.",
-                        ));
-                    }
-
-                    Self::check_static_flag(&params, static_flag, is_create)?;
+                let mut pre_inner = || {
+                    Self::check_static_flag(
+                        &params,
+                        static_flag,
+                        is_create,
+                    )?;
                     state.checkpoint();
                     Self::transfer_exec_balance(
                         &params, spec, state, substate,
                     )?;
-
-                    let mut gas_cost = U256::zero();
-                    let result = if let Some(contract) =
-                        internal_contract_map.contract(&params.code_address)
-                    {
-                        gas_cost = contract.cost(&params, state);
-                        if gas_cost > params.gas {
-                            Err(vm::Error::OutOfGas)
-                        } else {
-                            contract.execute(
-                                &params,
-                                &spec,
-                                state,
-                                &mut unconfirmed_substate,
-                            )
-                        }
-                    } else {
-                        Ok(())
-                    };
-                    debug!("Internal Call Result: {:?}", result);
-                    if let Err(e) = result {
-                        state.revert_to_checkpoint();
-                        Err(e.into())
-                    } else {
-                        let cres = if depth == 0 {
-                            state.collect_ownership_changed_and_settle(
-                                &params.original_sender,
-                                &params.storage_limit_in_drip,
-                                &mut unconfirmed_substate,
-                            )
-                        } else {
-                            state.collect_ownership_changed(
-                                &mut unconfirmed_substate,
-                            )
-                        };
-                        match cres {
-                            Ok(CollateralCheckResult::ExceedStorageLimit {
-                                ..
-                            }) => {
-                                state.revert_to_checkpoint();
-                                Err(vm::Error::ExceedStorageLimit)
-                            }
-                            Ok(CollateralCheckResult::NotEnoughBalance {
-                                required,
-                                got,
-                            }) => {
-                                state.revert_to_checkpoint();
-                                Err(vm::Error::NotEnoughBalanceForStorage {
-                                    required,
-                                    got,
-                                })
-                            }
-                            Ok(CollateralCheckResult::Valid) => {
-                                state.discard_checkpoint();
-                                substate.accrue(unconfirmed_substate);
-                                let internal_contract_out_buffer = Vec::new();
-                                let out_len =
-                                    internal_contract_out_buffer.len();
-                                Ok(FinalizationResult {
-                                    gas_left: params.gas - gas_cost,
-                                    return_data: ReturnData::new(
-                                        internal_contract_out_buffer,
-                                        0,
-                                        out_len,
-                                    ),
-                                    apply_state: true,
-                                })
-                            }
-                            Err(_) => {
-                                panic!("db error occurred during execution");
-                            }
-                        }
-                    }
+                    Ok(())
                 };
 
-                Ok(inner(self.depth))
+                match pre_inner() {
+                    Ok(()) => (),
+                    Err(err) => return Ok(Err(err)),
+                }
+
+                let origin = OriginInfo::from(&params);
+
+                let result = if params.call_type != CallType::Call {
+                    Err(vm::Error::InternalContract(
+                        "Incorrect call type.",
+                    ))
+                } else if let Some(contract) =
+                    internal_contract_map.contract(&params.code_address)
+                {
+                    contract.execute(
+                        &params,
+                        &spec,
+                        state,
+                        &mut unconfirmed_substate,
+                    )
+                } else {
+                    Ok(GasLeft::Known(params.gas))
+                };
+                debug!("Internal Call Result: {:?}", result);
+
+                let context = Self::as_context(
+                    state,
+                    self.env,
+                    self.machine,
+                    self.spec,
+                    self.depth,
+                    self.stack_depth,
+                    self.static_flag,
+                    &origin,
+                    &mut unconfirmed_substate,
+                    OutputPolicy::Return,
+                    self.internal_contract_map,
+                );
+                let out = Ok(result.finalize(context));
+                self.kind = CallCreateExecutiveKind::Moved;
+                self.enact_output(
+                    out,
+                    origin,
+                    state,
+                    substate,
+                    unconfirmed_substate,
+                )
             }
 
             CallCreateExecutiveKind::ExecCall(
@@ -671,8 +658,6 @@ impl<'a> CallCreateExecutive<'a> {
 
                 let origin = OriginInfo::from(&params);
                 let exec = self.factory.create(params, self.spec, self.depth);
-                let sender = *origin.original_sender();
-                let storage_limit = *origin.storage_limit();
 
                 let out = {
                     let mut context = Self::as_context(
@@ -694,37 +679,14 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                let res = match out {
-                    Ok(val) => val,
-                    Err(TrapError::Call(subparams, resume)) => {
-                        self.kind = CallCreateExecutiveKind::ResumeCall(
-                            origin,
-                            resume,
-                            unconfirmed_substate,
-                        );
-                        return Err(TrapError::Call(subparams, self));
-                    }
-                    Err(TrapError::Create(subparams, address, resume)) => {
-                        self.kind = CallCreateExecutiveKind::ResumeCreate(
-                            origin,
-                            resume,
-                            unconfirmed_substate,
-                        );
-                        return Err(TrapError::Create(
-                            subparams, address, self,
-                        ));
-                    }
-                };
-
-                Ok(Self::enact_result(
-                    res,
+                self.kind = CallCreateExecutiveKind::Moved;
+                self.enact_output(
+                    out,
+                    origin,
                     state,
                     substate,
                     unconfirmed_substate,
-                    &sender,
-                    &storage_limit,
-                    self.depth == 0,
-                ))
+                )
             }
 
             CallCreateExecutiveKind::ExecCreate(
@@ -750,7 +712,11 @@ impl<'a> CallCreateExecutive<'a> {
                         )?;
                         state.checkpoint();
                         Self::transfer_exec_balance_and_init_contract(
-                            &params, spec, state, substate,
+                            &params,
+                            spec,
+                            state,
+                            substate,
+                            Some(STORAGE_LAYOUT_REGULAR_V0),
                         )?;
                         Ok(())
                     };
@@ -763,8 +729,6 @@ impl<'a> CallCreateExecutive<'a> {
 
                 let origin = OriginInfo::from(&params);
                 let exec = self.factory.create(params, self.spec, self.depth);
-                let sender = *origin.original_sender();
-                let storage_limit = *origin.storage_limit();
 
                 let out = {
                     let mut context = Self::as_context(
@@ -786,42 +750,23 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                let res = match out {
-                    Ok(val) => val,
-                    Err(TrapError::Call(subparams, resume)) => {
-                        self.kind = CallCreateExecutiveKind::ResumeCall(
-                            origin,
-                            resume,
-                            unconfirmed_substate,
-                        );
-                        return Err(TrapError::Call(subparams, self));
-                    }
-                    Err(TrapError::Create(subparams, address, resume)) => {
-                        self.kind = CallCreateExecutiveKind::ResumeCreate(
-                            origin,
-                            resume,
-                            unconfirmed_substate,
-                        );
-                        return Err(TrapError::Create(
-                            subparams, address, self,
-                        ));
-                    }
-                };
-
-                Ok(Self::enact_result(
-                    res,
+                self.kind = CallCreateExecutiveKind::Moved;
+                self.enact_output(
+                    out,
+                    origin,
                     state,
                     substate,
                     unconfirmed_substate,
-                    &sender,
-                    &storage_limit,
-                    self.depth == 0,
-                ))
+                )
             }
 
             CallCreateExecutiveKind::ResumeCall(..)
             | CallCreateExecutiveKind::ResumeCreate(..) => {
                 panic!("This executive has already been executed once.")
+            }
+
+            CallCreateExecutiveKind::Moved => {
+                panic!("A temporally status in function `enact_output`, should not appear during execution.")
             }
         }
     }
@@ -864,40 +809,14 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                let sender = *origin.original_sender();
-                let storage_limit = *origin.storage_limit();
-
-                let res = match out {
-                    Ok(val) => val,
-                    Err(TrapError::Call(subparams, resume)) => {
-                        self.kind = CallCreateExecutiveKind::ResumeCall(
-                            origin,
-                            resume,
-                            unconfirmed_substate,
-                        );
-                        return Err(TrapError::Call(subparams, self));
-                    }
-                    Err(TrapError::Create(subparams, address, resume)) => {
-                        self.kind = CallCreateExecutiveKind::ResumeCreate(
-                            origin,
-                            resume,
-                            unconfirmed_substate,
-                        );
-                        return Err(TrapError::Create(
-                            subparams, address, self,
-                        ));
-                    }
-                };
-
-                Ok(Self::enact_result(
-                    res,
+                self.kind = CallCreateExecutiveKind::Moved;
+                self.enact_output(
+                    out,
+                    origin,
                     state,
                     substate,
                     unconfirmed_substate,
-                    &sender,
-                    &storage_limit,
-                    self.depth == 0,
-                ))
+                )
             }
             CallCreateExecutiveKind::ResumeCreate(..) => {
                 panic!("Resumable as create, but called resume_call")
@@ -908,6 +827,9 @@ impl<'a> CallCreateExecutive<'a> {
             | CallCreateExecutiveKind::ExecCall(..)
             | CallCreateExecutiveKind::ExecCreate(..) => {
                 panic!("Not resumable")
+            }
+            CallCreateExecutiveKind::Moved => {
+                panic!("A temporally status in function `enact_output`, should not appear during execution.")
             }
         }
     }
@@ -924,9 +846,6 @@ impl<'a> CallCreateExecutive<'a> {
                 resume,
                 mut unconfirmed_substate,
             ) => {
-                let sender = *origin.original_sender();
-                let storage_limit = *origin.storage_limit();
-
                 let out = {
                     let exec = resume.resume_create(result);
 
@@ -953,37 +872,14 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                let res = match out {
-                    Ok(val) => val,
-                    Err(TrapError::Call(subparams, resume)) => {
-                        self.kind = CallCreateExecutiveKind::ResumeCall(
-                            origin,
-                            resume,
-                            unconfirmed_substate,
-                        );
-                        return Err(TrapError::Call(subparams, self));
-                    }
-                    Err(TrapError::Create(subparams, address, resume)) => {
-                        self.kind = CallCreateExecutiveKind::ResumeCreate(
-                            origin,
-                            resume,
-                            unconfirmed_substate,
-                        );
-                        return Err(TrapError::Create(
-                            subparams, address, self,
-                        ));
-                    }
-                };
-
-                Ok(Self::enact_result(
-                    res,
+                self.kind = CallCreateExecutiveKind::Moved;
+                self.enact_output(
+                    out,
+                    origin,
                     state,
                     substate,
                     unconfirmed_substate,
-                    &sender,
-                    &storage_limit,
-                    self.depth == 0,
-                ))
+                )
             }
             CallCreateExecutiveKind::ResumeCall(..) => {
                 panic!("Resumable as call, but called resume_create")
@@ -994,6 +890,9 @@ impl<'a> CallCreateExecutive<'a> {
             | CallCreateExecutiveKind::ExecCall(..)
             | CallCreateExecutiveKind::ExecCreate(..) => {
                 panic!("Not resumable")
+            }
+            CallCreateExecutiveKind::Moved => {
+                panic!("A temporally status in function `enact_output`, should not appear during execution.")
             }
         }
     }
@@ -1428,9 +1327,9 @@ impl<'a> Executive<'a> {
             ));
         }
 
-        let mut substate = Substate::new();
-        // Sender is responsible for the insufficient balance.
+        let mut tx_substate = Substate::new();
         if balance512 < sender_intended_cost {
+            // Sender is responsible for the insufficient balance.
             // Sub tx fee if not enough cash, and substitute all remaining
             // balance if balance is not enough to pay the tx fee
             let actual_gas_cost: U256;
@@ -1443,7 +1342,8 @@ impl<'a> Executive<'a> {
             .try_into()
             .unwrap();
             // We don't want to bump nonce for non-existent account when we
-            // can't charge gas fee.
+            // can't charge gas fee. In this case, the sender account will
+            // not be created if it does not exist.
             if !self.state.exists(&sender)? {
                 return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
                     ToRepackError::SenderDoesNotExist,
@@ -1453,7 +1353,7 @@ impl<'a> Executive<'a> {
             self.state.sub_balance(
                 &sender,
                 &actual_gas_cost,
-                &mut substate.to_cleanup_mode(&spec),
+                &mut tx_substate.to_cleanup_mode(&spec),
             )?;
 
             return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
@@ -1466,8 +1366,10 @@ impl<'a> Executive<'a> {
                 Executed::not_enough_balance_fee_charged(tx, &actual_gas_cost),
             ));
         } else {
-            // From now on sender balance >= total_cost, transaction execution
-            // is guaranteed.
+            // From now on sender balance >= total_cost, even if the sender
+            // account does not exist (since she may be sponsored). Transaction
+            // execution is guaranteed. Note that inc_nonce() will create a
+            // new account if the account does not exist.
             self.state.inc_nonce(&sender)?;
         }
 
@@ -1476,7 +1378,7 @@ impl<'a> Executive<'a> {
             self.state.sub_balance(
                 &sender,
                 &U256::try_from(gas_cost).unwrap(),
-                &mut substate.to_cleanup_mode(&spec),
+                &mut tx_substate.to_cleanup_mode(&spec),
             )?;
         } else {
             self.state.sub_sponsor_balance_for_gas(
@@ -1485,7 +1387,10 @@ impl<'a> Executive<'a> {
             )?;
         }
 
-        let (result, output) = match tx.action {
+        self.state.checkpoint();
+        let mut substate = Substate::new();
+
+        let res = match tx.action {
             Action::Create => {
                 let (new_address, _code_hash) = contract_address(
                     CreateContractAddress::FromSenderNonceAndCodeHash,
@@ -1500,6 +1405,7 @@ impl<'a> Executive<'a> {
                 // future. We add this check just in case it
                 // helps in future.
                 if self.state.is_contract_with_code(&new_address) {
+                    self.state.revert_to_checkpoint();
                     return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                         ExecutionError::ContractAddressConflict,
                         Executed::execution_error_fully_charged(tx),
@@ -1522,12 +1428,7 @@ impl<'a> Executive<'a> {
                     params_type: vm::ParamsType::Embedded,
                     storage_limit_in_drip: total_storage_limit,
                 };
-                let res = self.create(params, &mut substate);
-                let out = match &res {
-                    Ok(res) => res.return_data.to_vec(),
-                    _ => Vec::new(),
-                };
-                (res, out)
+                self.create(params, &mut substate)
             }
             Action::Call(ref address) => {
                 let params = ActionParams {
@@ -1546,14 +1447,40 @@ impl<'a> Executive<'a> {
                     params_type: vm::ParamsType::Separate,
                     storage_limit_in_drip: total_storage_limit,
                 };
-
-                let res = self.call(params, &mut substate);
-                let out = match &res {
-                    Ok(res) => res.return_data.to_vec(),
-                    _ => Vec::new(),
-                };
-                (res, out)
+                self.call(params, &mut substate)
             }
+        };
+
+        let (result, output) = {
+            let res = res.and_then(|finalize_res| {
+                // TODO: in fact, we don't need collect again here. But this is
+                // only the performance optimization and we put it in the later
+                // PR.
+                self.state
+                    .collect_and_settle_collateral(
+                        &sender,
+                        &total_storage_limit,
+                        &mut substate,
+                    )?
+                    .into_vm_result()
+                    .and(Ok(finalize_res))
+            });
+            let out = match &res {
+                Ok(res) => {
+                    self.state.discard_checkpoint();
+                    tx_substate.accrue(substate);
+                    res.return_data.to_vec()
+                }
+                Err(vm::Error::StateDbError(_)) => {
+                    // The whole epoch execution fails. No need to revert state.
+                    Vec::new()
+                }
+                Err(_) => {
+                    self.state.revert_to_checkpoint();
+                    Vec::new()
+                }
+            };
+            (res, out)
         };
 
         let refund_receiver = if gas_free_of_charge {
@@ -1564,12 +1491,79 @@ impl<'a> Executive<'a> {
 
         Ok(self.finalize(
             tx,
-            substate,
+            tx_substate,
             result,
             output,
             refund_receiver,
             storage_sponsored,
         )?)
+    }
+
+    fn kill_process(
+        &mut self, suicides: &HashSet<Address>,
+    ) -> DbResult<Substate> {
+        let mut substate = Substate::new();
+        for address in suicides {
+            if let Some(code_size) = self.state.code_size(address)? {
+                // Only refund the code collateral when code exists.
+                // If a contract suicides during creation, the code will be
+                // empty.
+                let code_owner =
+                    self.state.code_owner(address)?.expect("code owner exists");
+                substate.record_storage_release(&code_owner, code_size as u64);
+            }
+
+            self.state
+                .record_storage_entries_release(address, &mut substate)?;
+        }
+
+        let res = self.state.settle_collateral_for_all(&substate)?;
+        // The storage recycling process should never occupy new collateral.
+        assert_eq!(res, CollateralCheckResult::Valid);
+
+        for contract_address in suicides {
+            let sponsor_for_gas =
+                self.state.sponsor_for_gas(contract_address)?;
+            let sponsor_for_collateral =
+                self.state.sponsor_for_collateral(contract_address)?;
+            let sponsor_balance_for_gas =
+                self.state.sponsor_balance_for_gas(contract_address)?;
+            let sponsor_balance_for_collateral = self
+                .state
+                .sponsor_balance_for_collateral(contract_address)?;
+
+            if sponsor_for_gas.is_some() {
+                self.state.add_balance(
+                    sponsor_for_gas.as_ref().unwrap(),
+                    &sponsor_balance_for_gas,
+                    substate.to_cleanup_mode(self.spec),
+                )?;
+                self.state.sub_sponsor_balance_for_gas(
+                    contract_address,
+                    &sponsor_balance_for_gas,
+                )?;
+            }
+            if sponsor_for_collateral.is_some() {
+                self.state.add_balance(
+                    sponsor_for_collateral.as_ref().unwrap(),
+                    &sponsor_balance_for_collateral,
+                    substate.to_cleanup_mode(self.spec),
+                )?;
+                self.state.sub_sponsor_balance_for_collateral(
+                    contract_address,
+                    &sponsor_balance_for_collateral,
+                )?;
+            }
+        }
+
+        for contract_address in suicides {
+            let burnt_balance = self.state.balance(contract_address)?
+                + self.state.staking_balance(contract_address)?;
+            self.state.remove_contract(contract_address)?;
+            self.state.subtract_total_issued(burnt_balance);
+        }
+
+        Ok(substate)
     }
 
     /// Finalizes the transaction (does refunds and suicides).
@@ -1612,9 +1606,9 @@ impl<'a> Executive<'a> {
         };
 
         // perform suicides
-        for address in &substate.suicides {
-            self.state.kill_account(address);
-        }
+
+        let subsubstate = self.kill_process(&substate.suicides)?;
+        substate.accrue(subsubstate);
 
         // TODO should be added back after enabling dust collection
         // Should be executed once per block, instead of per transaction?
@@ -1648,36 +1642,24 @@ impl<'a> Executive<'a> {
                 let mut storage_released = Vec::new();
 
                 if r.apply_state {
-                    let affected_address1: HashSet<_> = substate
-                        .storage_collateralized
-                        .keys()
+                    let mut affected_address: Vec<_> = substate
+                        .keys_for_collateral_changed()
+                        .iter()
                         .cloned()
                         .collect();
-                    let affected_address2: HashSet<_> =
-                        substate.storage_released.keys().cloned().collect();
-                    let mut affected_address: Vec<_> =
-                        affected_address1.union(&affected_address2).collect();
                     affected_address.sort();
                     for address in affected_address {
-                        let inc = substate
-                            .storage_collateralized
-                            .get(address)
-                            .cloned()
-                            .unwrap_or(0);
-                        let sub = substate
-                            .storage_released
-                            .get(address)
-                            .cloned()
-                            .unwrap_or(0);
-                        if inc > sub {
+                        let (inc, sub) =
+                            substate.get_collateral_change(address);
+                        if inc > 0 {
                             storage_collateralized.push(StorageChange {
                                 address: *address,
-                                amount: inc - sub,
+                                amount: inc,
                             });
-                        } else if inc < sub {
+                        } else if sub > 0 {
                             storage_released.push(StorageChange {
                                 address: *address,
-                                amount: sub - inc,
+                                amount: sub,
                             });
                         }
                     }

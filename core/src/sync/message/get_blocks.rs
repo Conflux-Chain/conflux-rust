@@ -4,7 +4,6 @@
 
 use crate::{
     message::{Message, RequestId},
-    parameters::sync::MAX_PACKET_SIZE,
     sync::{
         message::{
             msgid, Context, GetBlocksResponse, GetBlocksWithPublicResponse,
@@ -15,6 +14,7 @@ use crate::{
         Error, ErrorKind, ProtocolConfiguration,
     },
 };
+use cfx_parameters::sync::MAX_PACKET_SIZE;
 use cfx_types::H256;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::Block;

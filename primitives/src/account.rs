@@ -10,6 +10,7 @@ use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{
     fmt,
     ops::{Deref, DerefMut},
+    sync::Arc,
 };
 
 #[derive(Debug, PartialEq, Clone)]
@@ -100,12 +101,30 @@ impl DerefMut for VoteStakeList {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
-#[derive(
-    Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
-)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub struct CodeInfo {
-    pub code: Bytes,
+    pub code: Arc<Bytes>,
     pub owner: Address,
+}
+
+impl CodeInfo {
+    #[inline]
+    pub fn code_size(&self) -> usize { self.code.len() }
+}
+
+impl Encodable for CodeInfo {
+    fn rlp_append(&self, stream: &mut RlpStream) {
+        stream.begin_list(2).append(&*self.code).append(&self.owner);
+    }
+}
+
+impl Decodable for CodeInfo {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        Ok(Self {
+            code: Arc::new(rlp.val_at(0)?),
+            owner: rlp.val_at(1)?,
+        })
+    }
 }
 
 #[derive(
@@ -198,10 +217,7 @@ impl Account {
     }
 
     pub fn check_address_space(address: &Address) -> Result<(), AccountError> {
-        if address.is_user_account_address()
-            || address.is_builtin_address()
-            || address.is_contract_address()
-        {
+        if address.is_valid_address() {
             Ok(())
         } else {
             Err(AccountError::ReservedAddressSpace(*address))
@@ -288,13 +304,13 @@ impl Account {
     pub fn new_from_rlp(
         address: Address, rlp: &Rlp,
     ) -> Result<Self, AccountError> {
-        if address.is_user_account_address() || address.is_builtin_address() {
+        if address.is_contract_address() {
+            Self::from_contract_account(address, ContractAccount::decode(rlp)?)
+        } else if address.is_valid_address() {
             Ok(Self::from_basic_account(
                 address,
                 BasicAccount::decode(rlp)?,
             ))
-        } else if address.is_contract_address() {
-            Self::from_contract_account(address, ContractAccount::decode(rlp)?)
         } else {
             Err(AccountError::ReservedAddressSpace(address))
         }
@@ -303,23 +319,21 @@ impl Account {
 
 impl Encodable for Account {
     fn rlp_append(&self, stream: &mut RlpStream) {
-        if self.address_local_info.is_user_account_address()
-            || self.address_local_info.is_builtin_address()
-        {
-            stream.append_internal(&self.to_basic_account());
-        } else if self.address_local_info.is_contract_address() {
+        if self.address_local_info.is_contract_address() {
             // A contract address can hold balance before its initialization
             // as a recipient of a simple transaction.
             // So we always determine how to serialize by the address type bits.
             stream.append_internal(&self.to_contract_account());
+        } else if self.address_local_info.is_valid_address() {
+            stream.append_internal(&self.to_basic_account());
         } else {
             unreachable!("other types of address are not supported yet.");
         }
     }
 }
 
-impl From<rlp::DecoderError> for AccountError {
-    fn from(err: rlp::DecoderError) -> Self { AccountError::InvalidRlp(err) }
+impl From<DecoderError> for AccountError {
+    fn from(err: DecoderError) -> Self { AccountError::InvalidRlp(err) }
 }
 
 impl fmt::Display for AccountError {

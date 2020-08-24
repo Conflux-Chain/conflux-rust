@@ -13,11 +13,12 @@ use crate::{
         },
         ConsensusConfig,
     },
-    parameters::{consensus::*, consensus_internal::*},
     state_exposer::{ConsensusGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,
     Notifications, SharedTransactionPool,
 };
+use cfx_parameters::{consensus::*, consensus_internal::*};
+use cfx_storage::{state_manager::StateManagerTrait, StateIndex};
 use cfx_types::H256;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use primitives::{BlockHeader, SignedTransaction};
@@ -1974,6 +1975,26 @@ impl ConsensusNewBlockHandler {
                             compute_epoch = true;
                         }
                     }
+
+                    if self
+                        .data_man
+                        .storage_manager
+                        .get_state_no_commit(
+                            StateIndex::new_for_readonly(
+                                &pivot_hash,
+                                &commitment.state_root_with_aux_info,
+                            ),
+                            false, /* try_open */
+                        )
+                        .expect("DB Error")
+                        .is_none()
+                    {
+                        // The commitment exists but the state is missing.
+                        // This is possible after a crash because commitments
+                        // and states are stored in different databases.
+                        compute_epoch = true;
+                    }
+
                     self.data_man
                         .state_availability_boundary
                         .write()

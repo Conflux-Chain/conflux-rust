@@ -4,9 +4,11 @@
 
 use crate::rpc::types::{
     Block as RpcBlock, BlockHashOrEpochNumber, Bytes, EpochNumber,
-    Status as RpcStatus, Transaction as RpcTransaction,
+    Status as RpcStatus, Transaction as RpcTransaction, TxPoolPendingInfo,
+    TxWithPoolInfo,
 };
 use bigdecimal::BigDecimal;
+use cfx_parameters::consensus::ONE_CFX_IN_DRIP;
 use cfx_types::{Address, H160, H256, H520, U128, U256, U64};
 use cfxcore::{
     BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
@@ -81,6 +83,13 @@ impl RpcImpl {
             accounts,
         }
     }
+
+    fn consensus_graph(&self) -> &ConsensusGraph {
+        self.consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed")
+    }
 }
 
 // Cfx RPC implementation
@@ -91,11 +100,7 @@ impl RpcImpl {
     }
 
     pub fn gas_price(&self) -> RpcResult<U256> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         info!("RPC Request: cfx_gasPrice()");
         Ok(consensus_graph
             .gas_price()
@@ -106,11 +111,7 @@ impl RpcImpl {
     pub fn epoch_number(
         &self, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<U256> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestMined);
         info!("RPC Request: cfx_epochNumber({:?})", epoch_num);
         match consensus_graph.get_height_from_epoch_number(epoch_num.into()) {
@@ -122,11 +123,7 @@ impl RpcImpl {
     pub fn block_by_epoch_number(
         &self, epoch_num: EpochNumber, include_txs: bool,
     ) -> RpcResult<Option<RpcBlock>> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
         info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
 
@@ -149,11 +146,7 @@ impl RpcImpl {
     pub fn confirmation_risk_by_hash(
         &self, block_hash: H256,
     ) -> RpcResult<Option<U256>> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
         let result = consensus_graph
             .confirmation_meter
@@ -179,11 +172,7 @@ impl RpcImpl {
     pub fn block_by_hash(
         &self, hash: H256, include_txs: bool,
     ) -> RpcResult<Option<RpcBlock>> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let hash: H256 = hash.into();
         info!(
             "RPC Request: cfx_getBlockByHash hash={:?} include_txs={:?}",
@@ -203,11 +192,7 @@ impl RpcImpl {
     pub fn block_by_hash_with_pivot_assumption(
         &self, block_hash: H256, pivot_hash: H256, epoch_number: U64,
     ) -> RpcResult<RpcBlock> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
         let block_hash: H256 = block_hash.into();
         let pivot_hash: H256 = pivot_hash.into();
@@ -257,11 +242,7 @@ impl RpcImpl {
     pub fn next_nonce(
         &self, address: H160, num: Option<BlockHashOrEpochNumber>,
     ) -> RpcResult<U256> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let num = num.unwrap_or(BlockHashOrEpochNumber::EpochNumber(
             EpochNumber::LatestState,
         ));
@@ -305,11 +286,7 @@ impl RpcImpl {
 
     pub fn chain(&self) -> RpcResult<Vec<RpcBlock>> {
         info!("RPC Request: cfx_getChain");
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
 
         let construct_block = |hash| {
@@ -353,11 +330,7 @@ impl RpcImpl {
     }
 
     pub fn get_goodput(&self) -> RpcResult<String> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
+        let consensus_graph = self.consensus_graph();
         info!("RPC Request: get_goodput");
         let mut all_block_set = HashSet::new();
         for epoch_number in 1..consensus_graph.best_epoch_number() {
@@ -503,17 +476,13 @@ impl RpcImpl {
         Ok(THROTTLING_SERVICE.read().clone())
     }
 
-    pub fn tx_inspect(
-        &self, hash: H256,
-    ) -> RpcResult<BTreeMap<String, String>> {
-        let mut ret: BTreeMap<String, String> = BTreeMap::new();
+    pub fn tx_inspect(&self, hash: H256) -> RpcResult<TxWithPoolInfo> {
+        let mut ret = TxWithPoolInfo::default();
         let hash: H256 = hash.into();
         if let Some(tx) = self.tx_pool.get_transaction(&hash) {
-            ret.insert("exist".into(), "true".into());
+            ret.exist = true;
             if self.tx_pool.check_tx_packed_in_deferred_pool(&hash) {
-                ret.insert("packed".into(), "true".into());
-            } else {
-                ret.insert("packed".into(), "false".into());
+                ret.packed = true;
             }
             let (local_nonce, local_balance) =
                 self.tx_pool.get_local_account_info(&tx.sender());
@@ -525,30 +494,23 @@ impl RpcImpl {
                     rpc_error.data = Some(RpcValue::String(format!("{}", e)));
                     rpc_error
                 })?;
-            ret.insert(
-                "local nonce".into(),
-                serde_json::to_string(&local_nonce).unwrap(),
-            );
-            ret.insert(
-                "local balance".into(),
-                serde_json::to_string(&local_balance).unwrap(),
-            );
-            ret.insert(
-                "state nonce".into(),
-                serde_json::to_string(&state_nonce).unwrap(),
-            );
-            ret.insert(
-                "state balance".into(),
-                serde_json::to_string(&state_balance).unwrap(),
-            );
-        } else {
-            ret.insert("exist".into(), "false".into());
+            let required_balance = tx.value
+                + tx.gas * tx.gas_price
+                + tx.storage_limit * ONE_CFX_IN_DRIP / 1024;
+            ret.local_balance_enough = local_balance > required_balance;
+            ret.state_balance_enough = state_balance > required_balance;
+            ret.local_balance = local_balance;
+            ret.local_nonce = local_nonce;
+            ret.state_balance = state_balance;
+            ret.state_nonce = state_nonce;
         }
         Ok(ret)
     }
 
-    pub fn txs_from_pool(&self) -> RpcResult<Vec<RpcTransaction>> {
-        let (ready_txs, deferred_txs) = self.tx_pool.content();
+    pub fn txs_from_pool(
+        &self, address: Option<H160>,
+    ) -> RpcResult<Vec<RpcTransaction>> {
+        let (ready_txs, deferred_txs) = self.tx_pool.content(address);
         let converter = |tx: &Arc<SignedTransaction>| -> RpcTransaction {
             RpcTransaction::from_signed(&tx, None)
         };
@@ -561,14 +523,14 @@ impl RpcImpl {
     }
 
     pub fn txpool_content(
-        &self,
+        &self, address: Option<H160>,
     ) -> RpcResult<
         BTreeMap<
             String,
             BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
         >,
     > {
-        let (ready_txs, deferred_txs) = self.tx_pool.content();
+        let (ready_txs, deferred_txs) = self.tx_pool.content(address);
         let converter = |tx: Arc<SignedTransaction>| -> RpcTransaction {
             RpcTransaction::from_signed(&tx, None)
         };
@@ -584,11 +546,11 @@ impl RpcImpl {
     }
 
     pub fn txpool_inspect(
-        &self,
+        &self, address: Option<H160>,
     ) -> RpcResult<
         BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
     > {
-        let (ready_txs, deferred_txs) = self.tx_pool.content();
+        let (ready_txs, deferred_txs) = self.tx_pool.content(address);
         let converter = |tx: Arc<SignedTransaction>| -> String {
             let to = match tx.action {
                 Action::Create => "<Create contract>".into(),
@@ -596,7 +558,7 @@ impl RpcImpl {
             };
 
             format!(
-                "{}: {:?} wei + {:?} gas * {:?} wei",
+                "{}: {:?} drip + {:?} gas * {:?} drip",
                 to, tx.value, tx.gas, tx.gas_price
             )
         };
@@ -721,6 +683,27 @@ impl RpcImpl {
 
     pub fn get_client_version(&self) -> RpcResult<String> {
         Ok(format!("conflux-rust-{}", crate_version!()).into())
+    }
+
+    pub fn tx_inspect_pending(
+        &self, address: H160,
+    ) -> RpcResult<TxPoolPendingInfo> {
+        let mut ret = TxPoolPendingInfo::default();
+        let (deferred_txs, _) = self.tx_pool.content(Some(address));
+        let mut max_nonce: U256 = U256::from(0);
+        let mut min_nonce: U256 = U256::max_value();
+        for tx in deferred_txs.iter() {
+            if tx.nonce > max_nonce {
+                max_nonce = tx.nonce;
+            }
+            if tx.nonce < min_nonce {
+                min_nonce = tx.nonce;
+            }
+        }
+        ret.pending_count = deferred_txs.len();
+        ret.min_nonce = min_nonce;
+        ret.max_nonce = max_nonce;
+        Ok(ret)
     }
 }
 

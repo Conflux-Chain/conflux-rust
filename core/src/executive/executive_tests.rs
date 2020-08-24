@@ -7,9 +7,7 @@ use crate::{
     evm::{Factory, FinalizationResult, VMType},
     executive::ExecutionOutcome,
     machine::Machine,
-    parameters::staking::*,
     state::{CleanupMode, CollateralCheckResult, Substate},
-    storage::tests::new_state_manager_for_unit_test,
     test_helpers::{
         get_state_for_genesis_write, get_state_for_genesis_write_with_factory,
     },
@@ -17,11 +15,15 @@ use crate::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
     },
 };
+use cfx_parameters::staking::*;
+use cfx_storage::tests::new_state_manager_for_unit_test;
 use cfx_types::{
     address_util::AddressUtil, Address, BigEndianHash, U256, U512,
 };
 use keylib::{Generator, Random};
-use primitives::{transaction::Action, Transaction};
+use primitives::{
+    storage::STORAGE_LAYOUT_REGULAR_V0, transaction::Action, Transaction,
+};
 use rustc_hex::FromHex;
 use std::{
     cmp::{self, min},
@@ -95,6 +97,7 @@ fn test_sender_balance() {
     let mut substate = Substate::new();
 
     let FinalizationResult { gas_left, .. } = {
+        state.checkpoint();
         let mut ex = Executive::new(
             &mut state,
             &env,
@@ -102,7 +105,18 @@ fn test_sender_balance() {
             &spec,
             &internal_contract_map,
         );
-        ex.create(params, &mut substate).unwrap()
+        let res = ex.create(params.clone(), &mut substate).unwrap();
+        state
+            .collect_and_settle_collateral(
+                &params.storage_owner,
+                &params.storage_limit_in_drip,
+                &mut substate,
+            )
+            .unwrap()
+            .into_vm_result()
+            .unwrap();
+        state.discard_checkpoint();
+        res
     };
 
     assert_eq!(gas_left, U256::from(94_595));
@@ -306,6 +320,7 @@ fn test_call_to_create() {
     params.code = Some(Arc::new(code));
     params.value = ActionValue::Transfer(U256::from(100));
     params.call_type = CallType::Call;
+    params.storage_limit_in_drip = U256::from(78_125_000_000_000_000u64);
 
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
@@ -339,6 +354,7 @@ fn test_call_to_create() {
     let mut substate = Substate::new();
 
     let FinalizationResult { gas_left, .. } = {
+        state.checkpoint();
         let mut ex = Executive::new(
             &mut state,
             &env,
@@ -346,7 +362,18 @@ fn test_call_to_create() {
             &spec,
             &internal_contract_map,
         );
-        ex.call(params, &mut substate).unwrap()
+        let res = ex.call(params.clone(), &mut substate).unwrap();
+        state
+            .collect_and_settle_collateral(
+                &params.storage_owner,
+                &params.storage_limit_in_drip,
+                &mut substate,
+            )
+            .unwrap()
+            .into_vm_result()
+            .unwrap();
+        state.discard_checkpoint();
+        res
     };
     assert_eq!(state.balance(&sender).unwrap(), U256::from(0));
     assert_eq!(
@@ -586,7 +613,6 @@ fn test_deposit_withdraw_lock() {
         *state.total_issued_tokens(),
         U256::from(2_000_000_000_000_000_000u64)
     );
-    assert_eq!(state.block_number(), 0);
 
     let mut params = ActionParams::default();
     params.code_address = STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS.clone();
@@ -621,7 +647,6 @@ fn test_deposit_withdraw_lock() {
         U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(*state.total_staking_tokens(), U256::zero());
-    assert_eq!(state.block_number(), 0);
 
     // deposit 10^18 - 1, not enough
     params.call_type = CallType::Call;
@@ -667,7 +692,6 @@ fn test_deposit_withdraw_lock() {
         *state.total_staking_tokens(),
         U256::from(1_000_000_000_000_000_000u64)
     );
-    assert_eq!(state.block_number(), 0);
 
     // empty data
     params.data = None;
@@ -682,7 +706,7 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("invalid data")
+        vm::Error::InternalContract("Unable to parse input")
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -700,7 +724,6 @@ fn test_deposit_withdraw_lock() {
         *state.total_staking_tokens(),
         U256::from(1_000_000_000_000_000_000u64)
     );
-    assert_eq!(state.block_number(), 0);
 
     // less data
     params.data = Some("b6b55f25000000000000000000000000000000000000000000000000000000174876e8".from_hex().unwrap());
@@ -715,7 +738,7 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("invalid data")
+        vm::Error::InternalContract("Unable to parse input")
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -733,7 +756,6 @@ fn test_deposit_withdraw_lock() {
         *state.total_staking_tokens(),
         U256::from(1_000_000_000_000_000_000u64)
     );
-    assert_eq!(state.block_number(), 0);
 
     // more data
     params.data = Some("b6b55f25000000000000000000000000000000000000000000000000000000174876e80000".from_hex().unwrap());
@@ -748,7 +770,7 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("invalid data")
+        vm::Error::InternalContract("Unable to parse input")
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -766,7 +788,6 @@ fn test_deposit_withdraw_lock() {
         *state.total_staking_tokens(),
         U256::from(1_000_000_000_000_000_000u64)
     );
-    assert_eq!(state.block_number(), 0);
 
     // withdraw
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000000000ba43b7400".from_hex().unwrap());
@@ -795,7 +816,6 @@ fn test_deposit_withdraw_lock() {
         *state.total_staking_tokens(),
         U256::from(999_999_950_000_000_000u64)
     );
-    assert_eq!(state.block_number(), 0);
     // withdraw more than staking balance
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000de0b6a803288c01".from_hex().unwrap());
     let result = Executive::new(
@@ -829,7 +849,6 @@ fn test_deposit_withdraw_lock() {
         *state.total_staking_tokens(),
         U256::from(999_999_950_000_000_000u64)
     );
-    assert_eq!(state.block_number(), 0);
 
     // lock until block_number = 0
     params.data = Some("5547dedb00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap());
@@ -1037,6 +1056,7 @@ fn test_commission_privilege() {
             &sender.address(),
             U256::zero(),
             U256::one(),
+            Some(STORAGE_LAYOUT_REGULAR_V0),
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state.init_code(&address, code, sender.address()).unwrap();
@@ -1404,6 +1424,7 @@ fn test_storage_commission_privilege() {
             &sender.address(),
             U256::zero(),
             U256::one(),
+            Some(STORAGE_LAYOUT_REGULAR_V0),
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state.init_code(&address, code, sender.address()).unwrap();
@@ -1510,7 +1531,7 @@ fn test_storage_commission_privilege() {
         .unwrap();
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(
+            .collect_and_settle_collateral(
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate,
@@ -1810,7 +1831,7 @@ fn test_storage_commission_privilege() {
     let mut substate = Substate::new();
     assert_eq!(
         state
-            .collect_ownership_changed_and_settle(
+            .collect_and_settle_collateral(
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate,

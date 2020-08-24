@@ -33,10 +33,10 @@ class TestGetBlockRewardInfo(RpcClient):
         assert(len(res) == 2)
         for reward_info in res:
             if reward_info['blockHash'] == b:
-                assert(reward_info['baseReward'] == '0x9cd1aa2149ea0000')
-                assert(reward_info['totalReward'] == '0x9cd1aa2149ea0000')
+                assert(reward_info['baseReward'] == '0x6124fee993bc0000')
+                assert(reward_info['totalReward'] == '0x6124fee993bc0000')
                 assert(reward_info['txFee'] == '0x0')
             else:
-                assert(reward_info['baseReward'] == '0x9ccda666a9516000')
-                assert(reward_info['totalReward'] == '0x9ccda666a9516000')
+                assert(reward_info['baseReward'] == '0x6122824420644000')
+                assert(reward_info['totalReward'] == '0x6122824420644000')
                 assert(reward_info['txFee'] == '0x0')

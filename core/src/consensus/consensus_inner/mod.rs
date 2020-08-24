@@ -16,17 +16,21 @@ use crate::{
         debug::debug_recompute::log_invalid_state_root,
         pastset_cache::PastSetCache,
     },
-    parameters::{consensus::*, consensus_internal::*},
     pow::{target_difficulty, PowComputer, ProofOfWorkConfig},
     state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
     verification::VerificationConfig,
 };
+use cfx_internal_common::{
+    consensus_api::StateMaintenanceTrait, EpochExecutionCommitment,
+};
+use cfx_parameters::{consensus::*, consensus_internal::*};
 use cfx_types::{H256, U256, U512};
 use hashbrown::HashMap as FastHashMap;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use link_cut_tree::{CaterpillarMinLinkCutTree, SizeMinLinkCutTree};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
+use metrics::{Counter, CounterUsize};
 use parking_lot::Mutex;
 use primitives::{
     receipt::Receipt, Block, BlockHeader, BlockHeaderBuilder, EpochId,
@@ -40,6 +44,13 @@ use std::{
     mem,
     sync::Arc,
 };
+lazy_static! {
+    static ref INVALID_BLAME_OR_STATE_ROOT_COUNTER: Arc<dyn Counter<usize>> =
+        CounterUsize::register_with_group(
+            "system_metrics",
+            "invalid_blame_or_state_root_count"
+        );
+}
 
 #[derive(Clone)]
 pub struct ConsensusInnerConfig {
@@ -2111,7 +2122,7 @@ impl ConsensusGraphInner {
     /// out of the current era.
     pub fn get_pivot_hash_from_epoch_number(
         &self, epoch_number: u64,
-    ) -> Result<H256, String> {
+    ) -> Result<EpochId, String> {
         let height = epoch_number;
         if height >= self.cur_era_genesis_height {
             let pivot_index = (height - self.cur_era_genesis_height) as usize;
@@ -2683,6 +2694,7 @@ impl ConsensusGraphInner {
                 block_header.deferred_receipts_root(), state_blame_info.receipts_vec_root,
                 block_header.deferred_logs_bloom_hash(), state_blame_info.logs_bloom_vec_root,
             );
+            INVALID_BLAME_OR_STATE_ROOT_COUNTER.inc(1);
 
             if self.inner_conf.debug_dump_dir_invalid_state_root.is_some() {
                 debug_recompute = true;
@@ -2974,6 +2986,13 @@ impl ConsensusGraphInner {
 
     fn get_timer_chain_index(&self, me: usize) -> usize {
         if !self.arena[me].is_timer || self.arena[me].data.partial_invalid {
+            return NULL;
+        }
+        if self.arena[me].data.ledger_view_timer_chain_height
+            < self.cur_era_genesis_timer_chain_height
+        {
+            // This is only possible if `me` is in the anticone of
+            // `cur_era_genesis`.
             return NULL;
         }
         let timer_chain_index =
@@ -3815,5 +3834,28 @@ impl ConsensusGraphInner {
             ));
         }
         Ok(chain)
+    }
+}
+
+impl StateMaintenanceTrait for ConsensusGraphInner {
+    fn get_pivot_hash_from_epoch_number(
+        &self, epoch_number: u64,
+    ) -> Result<EpochId, String> {
+        ConsensusGraphInner::get_pivot_hash_from_epoch_number(
+            self,
+            epoch_number,
+        )
+    }
+
+    fn get_epoch_execution_commitment_with_db(
+        &self, block_hash: &EpochId,
+    ) -> Option<EpochExecutionCommitment> {
+        self.data_man
+            .get_epoch_execution_commitment_with_db(block_hash)
+    }
+
+    fn remove_epoch_execution_commitment_from_db(&self, block_hash: &EpochId) {
+        self.data_man
+            .remove_epoch_execution_commitment_from_db(block_hash)
     }
 }

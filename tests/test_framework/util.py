@@ -15,6 +15,7 @@ import threading
 import jsonrpcclient.exceptions
 import solcx
 import web3
+from sys import platform
 
 from test_framework.simple_rpc_proxy import SimpleRpcProxy
 from . import coverage
@@ -654,6 +655,8 @@ def get_contract_instance(contract_dict=None,
     contract = None
     if source and contract_name:
         output = solcx.compile_files([source])
+        if platform == "win32":
+            source = os.path.abspath(source).replace("\\","/")
         contract_dict = output[f"{source}:{contract_name}"]
         if "bin" in contract_dict:
             contract_dict["bytecode"] = contract_dict.pop("bin")
