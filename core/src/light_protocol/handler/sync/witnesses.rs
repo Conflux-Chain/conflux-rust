@@ -23,6 +23,7 @@ use cfx_parameters::{
         WITNESS_REQUEST_TIMEOUT,
     },
 };
+use cfx_types::H256;
 use network::{node_table::NodeId, NetworkContext};
 use parking_lot::RwLock;
 use std::{collections::HashSet, sync::Arc};
@@ -32,6 +33,23 @@ struct Statistics {
     in_flight: usize,
     verified: u64,
     waiting: usize,
+}
+
+#[derive(Debug)]
+pub struct VerifiedRoots {
+    pub state_root_hash: H256,
+    pub receipts_root_hash: H256,
+    pub logs_bloom_hash: H256,
+}
+
+impl From<BlamedHeaderVerifiedRoots> for VerifiedRoots {
+    fn from(roots: BlamedHeaderVerifiedRoots) -> Self {
+        Self {
+            state_root_hash: roots.deferred_state_root,
+            receipts_root_hash: roots.deferred_receipts_root,
+            logs_bloom_hash: roots.deferred_logs_bloom_hash,
+        }
+    }
 }
 
 // prioritize lower epochs
@@ -96,9 +114,7 @@ impl Witnesses {
 
     /// Get root hashes for `epoch` from local cache.
     #[inline]
-    pub fn root_hashes_of(
-        &self, epoch: u64,
-    ) -> Result<BlamedHeaderVerifiedRoots> {
+    pub fn root_hashes_of(&self, epoch: u64) -> Result<VerifiedRoots> {
         let height = epoch + DEFERRED_STATE_EPOCH_COUNT;
 
         if height > *self.latest_verified_header.read() {
@@ -106,7 +122,7 @@ impl Witnesses {
         }
 
         match self.data_man.verified_blamed_roots_by_height(height) {
-            Some(roots) => Ok(roots),
+            Some(roots) => Ok(roots.into()),
             None => {
                 // we set `latest_verified_header` before receiving the
                 // response for blamed headers. thus, in some cases, `None`
@@ -120,11 +136,10 @@ impl Witnesses {
                     .pivot_header_of(height)
                     .expect("pivot header should exist");
 
-                Ok(BlamedHeaderVerifiedRoots {
-                    deferred_state_root: *header.deferred_state_root(),
-                    deferred_receipts_root: *header.deferred_receipts_root(),
-                    deferred_logs_bloom_hash: *header
-                        .deferred_logs_bloom_hash(),
+                Ok(VerifiedRoots {
+                    state_root_hash: *header.deferred_state_root(),
+                    receipts_root_hash: *header.deferred_receipts_root(),
+                    logs_bloom_hash: *header.deferred_logs_bloom_hash(),
                 })
             }
         }

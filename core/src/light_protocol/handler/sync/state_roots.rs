@@ -217,8 +217,7 @@ impl StateRoots {
         let received = state_root.compute_state_root_hash();
 
         // retrieve local state root hash
-        let expected =
-            self.witnesses.root_hashes_of(epoch)?.deferred_state_root;
+        let expected = self.witnesses.root_hashes_of(epoch)?.state_root_hash;
 
         // check
         if received != expected {

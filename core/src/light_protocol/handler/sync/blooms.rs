@@ -197,10 +197,7 @@ impl Blooms {
         let received = keccak(bloom);
 
         // retrieve local bloom hash
-        let expected = self
-            .witnesses
-            .root_hashes_of(epoch)?
-            .deferred_logs_bloom_hash;
+        let expected = self.witnesses.root_hashes_of(epoch)?.logs_bloom_hash;
 
         // check
         if received != expected {

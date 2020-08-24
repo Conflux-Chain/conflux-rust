@@ -218,8 +218,7 @@ impl Receipts {
         let received = compute_receipts_root(&rs);
 
         // retrieve local receipts root
-        let expected =
-            self.witnesses.root_hashes_of(epoch)?.deferred_receipts_root;
+        let expected = self.witnesses.root_hashes_of(epoch)?.receipts_root_hash;
 
         // check
         if received != expected {

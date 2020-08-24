@@ -331,7 +331,7 @@ impl QueryService {
 
         let root = epoch
             .and_then(|e| self.handler.witnesses.root_hashes_of(e).ok())
-            .map(|roots| roots.deferred_state_root);
+            .map(|roots| roots.state_root_hash);
 
         Ok((tx, receipt, address, epoch, root, prior_gas_used))
     }
