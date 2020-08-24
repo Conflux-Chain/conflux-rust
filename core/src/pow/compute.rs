@@ -158,18 +158,47 @@ fn hash_compute(
     let v3 = as_u64_le(&header_hash[24..32]);
     let mut d: [u32; POW_N as usize] = [0; POW_N as usize];
 
+    fn power_mod(aa: u32, nn: u32) -> u32 {
+        let mut a = aa as u64;
+        let mut n = nn;
+        let mut result: u32 = 1;
+        while n > 0 {
+            if n % 2 == 1 {
+                result = ((result as u64) * a % POW_MOD64) as u32;
+            }
+            a = a * a % POW_MOD64;
+            n >>= 1;
+        }
+        return result;
+    }
+
+    fn gcd(a: u32, b: u32) -> u32 {
+        if b == 0 {
+            return a;
+        } else {
+            return gcd(b, a % b);
+        }
+    }
+
     let a = v0 % (POW_MOD64 - 1) + 1;
     let b = v1 % POW_MOD64;
     let c = v2 % POW_MOD64;
-    let w = v3 % POW_MOD64;
+    let mut e = (v3 % (POW_MOD64 - 2) + 1) as u32;
+    loop {
+        let g = gcd(e, POW_MOD - 1);
+        if g == 1 {
+            break;
+        }
+        e /= g
+    }
+    let w = power_mod(POW_MOD_B, e);
 
     let warp_id = nonce / POW_WARP_SIZE;
     for i in 0..POW_WARP_SIZE {
         let mut hasher = SipHasher::new(v0, v1, v2, v3);
+        hasher.hash24(warp_id * POW_WARP_SIZE + i as u64);
         for j in 0..POW_DATA_PER_THREAD {
-            hasher.hash24(
-                (warp_id * POW_WARP_SIZE + i) * POW_DATA_PER_THREAD + j as u64,
-            );
+            hasher.sip_round();
             d[(j * POW_WARP_SIZE + i) as usize] =
                 ((hasher.xor_lanes() & (u32::MAX as u64)) % POW_MOD64) as u32;
         }
