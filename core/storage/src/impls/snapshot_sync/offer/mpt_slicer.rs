@@ -122,3 +122,4 @@ use super::super::super::{
     errors::*,
     merkle_patricia_trie::{mpt_cursor::*, *},
 };
+use primitives::MptValue;

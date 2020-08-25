@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_types::H256;
-use primitives::StorageRoot as PrimitiveStorageRoot;
+use primitives::{StorageRoot as PrimitiveStorageRoot, MERKLE_NULL_NODE};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,9 +16,12 @@ pub struct StorageRoot {
 impl StorageRoot {
     pub fn from_primitive(p: PrimitiveStorageRoot) -> StorageRoot {
         StorageRoot {
-            delta: p.delta.into(),
-            intermediate: p.intermediate.into(),
-            snapshot: p.snapshot.into(),
+            delta: p.delta.into_option().unwrap_or(MERKLE_NULL_NODE),
+            intermediate: p
+                .intermediate
+                .into_option()
+                .unwrap_or(MERKLE_NULL_NODE),
+            snapshot: p.snapshot.unwrap_or(MERKLE_NULL_NODE),
         }
     }
 }

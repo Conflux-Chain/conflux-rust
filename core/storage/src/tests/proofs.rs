@@ -231,8 +231,13 @@ fn get_invalid_merkle_triplet(
     rng: &mut ChaChaRng, triplet: &NodeMerkleTriplet,
 ) -> NodeMerkleTriplet {
     NodeMerkleTriplet {
-        delta: get_invalid_maybe_hash(rng, triplet.delta),
-        intermediate: get_invalid_maybe_hash(rng, triplet.intermediate),
+        delta: get_invalid_maybe_hash(rng, triplet.delta.clone().into_option())
+            .into(),
+        intermediate: get_invalid_maybe_hash(
+            rng,
+            triplet.intermediate.clone().into_option(),
+        )
+        .into(),
         snapshot: get_invalid_maybe_hash(rng, triplet.snapshot),
     }
 }
@@ -400,9 +405,9 @@ fn test_valid_node_merkle_proof_for_existing_key() {
         // validation of valid proof should succeed
         let key = &key.to_vec();
 
-        assert!(proof.is_valid_triplet(
+        assert!(proof.is_valid(
             key,
-            triplet.clone(),
+            &triplet,
             root.clone(),
             Some(padding.clone()),
         ));
@@ -428,16 +433,16 @@ fn test_valid_node_merkle_proof_for_nonexistent_key() {
             ))
             .expect("node merkle lookup should succeed");
 
-        assert_eq!(triplet.delta, None);
-        assert_eq!(triplet.intermediate, None);
+        assert_eq!(triplet.delta, MptValue::None);
+        assert_eq!(triplet.intermediate, MptValue::None);
         assert_eq!(triplet.snapshot, None);
 
         // validation of valid proof should succeed
         let key = &key.to_vec();
 
-        assert!(proof.is_valid_triplet(
+        assert!(proof.is_valid(
             key,
-            triplet.clone(),
+            &triplet,
             root.clone(),
             Some(padding.clone()),
         ));
@@ -479,9 +484,9 @@ fn test_invalid_node_merkle_proof() {
         // checking proof with invalid state root should fail
         let invalid_root = get_invalid_state_root(&mut rng, root.clone(), 3);
 
-        assert!(!proof.is_valid_triplet(
+        assert!(!proof.is_valid(
             key,
-            triplet.clone(),
+            &triplet,
             invalid_root,
             Some(padding.clone()),
         ));
@@ -489,9 +494,9 @@ fn test_invalid_node_merkle_proof() {
         // checking proof with invalid triplet should fail
         let invalid_triplet = get_invalid_merkle_triplet(&mut rng, &triplet);
 
-        assert!(!proof.is_valid_triplet(
+        assert!(!proof.is_valid(
             key,
-            invalid_triplet,
+            &invalid_triplet,
             root.clone(),
             Some(padding.clone()),
         ));
@@ -500,31 +505,26 @@ fn test_invalid_node_merkle_proof() {
         if triplet.intermediate.is_some() {
             let invalid_padding = get_invalid_delta_padding(&padding);
 
-            assert!(!proof.is_valid_triplet(
+            assert!(!proof.is_valid(
                 key,
-                triplet.clone(),
+                &triplet,
                 root.clone(),
                 Some(invalid_padding),
             ));
 
-            assert!(!proof.is_valid_triplet(
-                key,
-                triplet.clone(),
-                root.clone(),
-                None,
-            ));
+            assert!(!proof.is_valid(key, &triplet, root.clone(), None,));
         }
 
         // checking valid existence proof as non-existence proof should fail
         let empty_triplet = NodeMerkleTriplet {
-            delta: None,
-            intermediate: None,
+            delta: MptValue::None,
+            intermediate: MptValue::None,
             snapshot: None,
         };
 
-        assert!(!proof.is_valid_triplet(
+        assert!(!proof.is_valid(
             key,
-            empty_triplet,
+            &empty_triplet,
             root.clone(),
             Some(padding.clone()),
         ));
@@ -542,7 +542,7 @@ use crate::{
 };
 use cfx_types::H256;
 use primitives::{
-    DeltaMptKeyPadding, NodeMerkleTriplet, StateRoot, StorageKey,
+    DeltaMptKeyPadding, MptValue, NodeMerkleTriplet, StateRoot, StorageKey,
 };
 use rand::{seq::SliceRandom, Rng};
 use rand_chacha::ChaChaRng;

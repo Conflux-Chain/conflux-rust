@@ -420,7 +420,7 @@ impl RpcImpl {
                 light.get_storage_root(epoch_num.into(), address).await,
             )?;
 
-            Ok(root.map(RpcStorageRoot::from_primitive))
+            Ok(Some(RpcStorageRoot::from_primitive(root)))
         };
 
         Box::new(fut.boxed().compat())

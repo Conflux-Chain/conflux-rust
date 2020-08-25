@@ -48,7 +48,9 @@ class StorageRootTest(ConfluxTestFramework):
 
         # check storage root of non-existent contract
         root = self.rpc[FULLNODE0].get_storage_root("0x0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6")
-        assert_equal(root, None)
+        assert(root["delta"]        == NULL_NODE)
+        assert(root["intermediate"] == NULL_NODE)
+        assert(root["snapshot"]     == NULL_NODE)
 
         # deploy storage test contract
         bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), CONTRACT_PATH)

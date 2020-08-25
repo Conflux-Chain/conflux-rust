@@ -380,9 +380,10 @@ impl RpcImpl {
 
         let consensus_graph = self.consensus_graph();
 
-        Ok(consensus_graph
-            .get_storage_root(address, epoch_num.into())?
-            .map(RpcStorageRoot::from_primitive))
+        let root =
+            consensus_graph.get_storage_root(address, epoch_num.into())?;
+
+        Ok(Some(RpcStorageRoot::from_primitive(root)))
     }
 
     fn send_usable_genesis_accounts(

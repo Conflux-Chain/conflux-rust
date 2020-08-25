@@ -18,9 +18,6 @@ pub const MERKLE_NULL_NODE: MerkleHash = KECCAK_EMPTY;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StateRoot {
-    // FIXME: Add a field here for intermediate MPT KeyPadding or validate it
-    // FIXME: from snapshot_root? The intermediate MPT KeyPadding is necessary
-    // FIXME: for light proof.
     pub snapshot_root: MerkleHash,
     pub intermediate_delta_root: MerkleHash,
     pub delta_root: MerkleHash,

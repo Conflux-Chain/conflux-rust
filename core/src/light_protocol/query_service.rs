@@ -155,7 +155,7 @@ impl QueryService {
 
     async fn retrieve_storage_root(
         &self, epoch: u64, address: H160,
-    ) -> Result<Option<StorageRoot>, Error> {
+    ) -> Result<StorageRoot, Error> {
         trace!(
             "retrieve_storage_root epoch = {}, address = {}",
             epoch,
@@ -307,7 +307,7 @@ impl QueryService {
 
     pub async fn get_storage_root(
         &self, epoch: EpochNumber, address: H160,
-    ) -> Result<Option<StorageRoot>, Error> {
+    ) -> Result<StorageRoot, Error> {
         debug!("get_storage_root epoch={:?} address={:?}", epoch, address,);
 
         let epoch = self.get_height_from_epoch_number(epoch)?;

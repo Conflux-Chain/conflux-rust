@@ -1563,7 +1563,6 @@ use crate::{
         merkle_patricia_trie::{
             children_table::*,
             compressed_path::CompressedPathTrait,
-            mpt_value::MptValue,
             trie_node::{TrieNodeTrait, VanillaTrieNode},
             trie_proof::*,
             walk::*,
@@ -1573,7 +1572,7 @@ use crate::{
     storage_db::snapshot_mpt::*,
     utils::access_mode,
 };
-use primitives::{MerkleHash, MERKLE_NULL_NODE};
+use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
 use std::{
     cell::Cell,
     hint::unreachable_unchecked,

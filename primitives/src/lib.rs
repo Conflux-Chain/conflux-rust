@@ -39,7 +39,9 @@ pub use crate::{
     log_entry::LogEntry,
     receipt::{BlockReceipts, Receipt},
     state_root::*,
-    storage::{NodeMerkleTriplet, StorageLayout, StorageRoot, StorageValue},
+    storage::{
+        MptValue, NodeMerkleTriplet, StorageLayout, StorageRoot, StorageValue,
+    },
     storage_key::*,
     transaction::{
         Action, ChainIdParams, SignedTransaction, Transaction,

@@ -276,9 +276,8 @@ use super::{
     children_table::*,
     compressed_path::*,
     merkle::{compute_merkle, compute_node_merkle, MaybeMerkleTableRef},
-    mpt_value::MptValue,
     walk::*,
 };
-use primitives::{MerkleHash, MERKLE_NULL_NODE};
+use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
 use rlp::*;
 use std::vec::Vec;
