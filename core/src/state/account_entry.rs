@@ -4,12 +4,12 @@
 
 use crate::{
     bytes::Bytes,
-    consensus::debug::ComputeEpochDebugRecord,
     hash::{keccak, KECCAK_EMPTY},
     state::{AccountEntryProtectedMethods, StateGeneric, Substate},
-    statedb::{Result as DbResult, StateDbExt, StateDbGeneric},
 };
+use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::staking::BYTES_PER_STORAGE_KEY;
+use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
 use cfx_storage::StorageStateTrait;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use parking_lot::RwLock;

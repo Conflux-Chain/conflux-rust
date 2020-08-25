@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+pub use cfx_parameters::internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS;
+
 use super::{
     super::impls::staking::*, ExecutionTrait, InterfaceTrait,
     InternalContractTrait, PreExecCheckConfTrait, SolFnTable,
@@ -15,11 +17,8 @@ use crate::{
     vm,
 };
 use cfx_types::{Address, U256};
-use std::str::FromStr;
 
 lazy_static! {
-    pub static ref STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS: Address =
-        Address::from_str("0888000000000000000000000000000000000002").unwrap();
     static ref CONTRACT_TABLE: SolFnTable =
         make_function_table!(Deposit, Withdraw, VoteLock);
 }

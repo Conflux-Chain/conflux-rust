@@ -5,6 +5,8 @@
 #[macro_use]
 extern crate lazy_static;
 
+pub mod internal_contract_addresses;
+
 pub mod consensus {
     pub const DEFERRED_STATE_EPOCH_COUNT: u64 = 5;
     pub const EPOCH_SET_PERSISTENCE_DELAY: u64 = 100;

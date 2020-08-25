@@ -483,13 +483,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfx-statedb"
+version = "1.0.0"
+dependencies = [
+ "cfx-internal-common",
+ "cfx-parameters",
+ "cfx-storage",
+ "cfx-types",
+ "error-chain",
+ "hashbrown 0.7.2",
+ "log 0.4.11",
+ "parity-util-mem",
+ "parking_lot 0.10.2",
+ "primitives",
+ "rlp",
+]
+
+[[package]]
 name = "cfx-storage"
 version = "1.0.0"
 dependencies = [
  "cfx-bytes",
  "cfx-internal-common",
  "cfx-types",
- "cfxkey",
  "derivative",
  "error-chain",
  "fallible-iterator",
@@ -562,6 +578,7 @@ dependencies = [
  "cfx-bytes",
  "cfx-internal-common",
  "cfx-parameters",
+ "cfx-statedb",
  "cfx-storage",
  "cfx-types",
  "cfx-utils",
@@ -740,6 +757,7 @@ dependencies = [
  "blockgen",
  "cfx-bytes",
  "cfx-parameters",
+ "cfx-statedb",
  "cfx-storage",
  "cfx-types",
  "cfxcore",

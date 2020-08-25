@@ -149,10 +149,11 @@ use crate::consensus::{
     consensus_inner::consensus_executor::{
         ConsensusExecutor, EpochExecutionTask,
     },
-    debug::ComputeEpochDebugRecord,
     ConsensusGraphInner,
 };
-use cfx_internal_common::StateRootWithAuxInfo;
+use cfx_internal_common::{
+    debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
+};
 use cfx_types::H256;
 use serde_json;
 use std::{fs::File, io::Write, path::Path};
