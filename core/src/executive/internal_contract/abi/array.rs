@@ -3,7 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use super::{
-    utils::{pull_slice, read_abi_list, ABIListWriter, LinkedBytes},
+    utils::{
+        padded_big_endian, pull_slice, read_abi_list, ABIListWriter,
+        LinkedBytes,
+    },
     ABIDecodeError, ABIVariable,
 };
 
@@ -27,7 +30,7 @@ impl<T: ABIVariable> ABIVariable for Vec<T> {
     }
 
     fn to_abi(&self) -> LinkedBytes {
-        let length = LinkedBytes::from_length(self.len());
+        let length = LinkedBytes::from_bytes(padded_big_endian(self.len()));
         let mut recorder = ABIListWriter::with_heads_length(
             T::STATIC_LENGTH.unwrap_or(32) * self.len(),
         );
@@ -36,7 +39,7 @@ impl<T: ABIVariable> ABIVariable for Vec<T> {
             recorder.write_down(item);
         }
         let mut answer = length;
-        answer.append(recorder.into_linked_bytes());
+        answer.append(&mut recorder.into_linked_bytes());
         answer
     }
 }

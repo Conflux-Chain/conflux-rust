@@ -11,6 +11,12 @@ pub struct LinkedBytes {
     data: LinkedList<Vec<u8>>,
 }
 
+pub fn padded_big_endian(length: usize) -> Vec<u8> {
+    let mut bytes = [0u8; 32];
+    U256::from(length).to_big_endian(&mut bytes);
+    bytes.to_vec()
+}
+
 impl LinkedBytes {
     pub fn new() -> Self {
         Self {
@@ -26,16 +32,10 @@ impl LinkedBytes {
         answer
     }
 
-    pub fn from_length(length: usize) -> Self {
-        let mut bytes = [0u8; 32];
-        U256::from(length).to_big_endian(&mut bytes);
-        Self::from_bytes(bytes.to_vec())
-    }
-
-    pub fn append(&mut self, mut other: Self) {
+    pub fn append(&mut self, other: &mut Self) {
         self.length += other.length;
         self.data.append(&mut other.data);
-        drop(other);
+        other.length = 0;
     }
 
     pub fn to_vec(&self) -> Vec<u8> {
@@ -82,21 +82,22 @@ impl ABIListWriter {
     }
 
     pub(super) fn write_down<T: ABIVariable>(&mut self, input: &T) {
-        let encoded = input.to_abi();
+        let mut encoded = input.to_abi();
         if let Some(len) = T::STATIC_LENGTH {
             assert_eq!(encoded.len(), len);
-            self.heads.append(encoded);
+            self.heads.append(&mut encoded);
         } else {
-            let location =
-                LinkedBytes::from_length(self.tails.len() + self.heads_length);
-            self.heads.append(location);
-            self.tails.append(encoded);
+            let mut location = LinkedBytes::from_bytes(padded_big_endian(
+                self.tails.len() + self.heads_length,
+            ));
+            self.heads.append(&mut location);
+            self.tails.append(&mut encoded);
         }
     }
 
     pub(super) fn into_linked_bytes(mut self) -> LinkedBytes {
         assert_eq!(self.heads.len(), self.heads_length);
-        self.heads.append(self.tails);
+        self.heads.append(&mut self.tails);
         self.heads
     }
 }
