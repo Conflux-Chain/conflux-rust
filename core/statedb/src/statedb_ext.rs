@@ -248,9 +248,7 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
 
 use super::{Result, StateDbGeneric};
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
-use cfx_parameters::{
-    internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-};
+use cfx_parameters::internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS;
 use cfx_storage::StorageStateTrait;
 use cfx_types::{Address, H256, U256};
 use primitives::{
