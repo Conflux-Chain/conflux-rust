@@ -130,7 +130,7 @@ class TxRelayTest(ConfluxTestFramework):
         # generate some incorrect blocks
         # NOTE: we avoid 51% attacks as it could cause some inconsistency during syncing
         for _ in range(num_blocks):
-            if random.random() < 0.66:
+            if random.random() < 0.80:
                 self.generate_correct_block(FULLNODE0)
             else:
                 self.generate_incorrect_block(FULLNODE0)

@@ -90,8 +90,23 @@ impl LedgerInfo {
         &self, height: u64,
     ) -> Result<H256, Error> {
         let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
-        let root = self.state_root_of(epoch)?;
-        Ok(root.aux_info.state_root_hash)
+        let pivot = self.pivot_hash_of(epoch)?;
+
+        let commitments = self
+            .consensus
+            .get_data_manager()
+            .get_epoch_execution_commitment_with_db(&pivot)
+            .ok_or_else(|| {
+                Error::from(ErrorKind::InternalError(format!(
+                    "Execution commitments for {:?} not found",
+                    pivot
+                )))
+            })?;
+
+        Ok(commitments
+            .state_root_with_aux_info
+            .state_root
+            .compute_state_root_hash())
     }
 
     /// Get the correct deferred receipts root of the block at `height` on the
@@ -103,17 +118,18 @@ impl LedgerInfo {
         let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
         let pivot = self.pivot_hash_of(epoch)?;
 
-        self.consensus
+        let commitments = self
+            .consensus
             .get_data_manager()
-            .get_epoch_execution_commitment(&pivot)
-            .map(|c| c.receipts_root)
+            .get_epoch_execution_commitment_with_db(&pivot)
             .ok_or_else(|| {
-                ErrorKind::InternalError(format!(
+                Error::from(ErrorKind::InternalError(format!(
                     "Execution commitments for {:?} not found",
                     pivot
-                ))
-                .into()
-            })
+                )))
+            })?;
+
+        Ok(commitments.receipts_root)
     }
 
     /// Get the correct deferred logs bloom root of the block at `height` on the
@@ -125,17 +141,18 @@ impl LedgerInfo {
         let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
         let pivot = self.pivot_hash_of(epoch)?;
 
-        self.consensus
+        let commitments = self
+            .consensus
             .get_data_manager()
-            .get_epoch_execution_commitment(&pivot)
-            .map(|c| c.logs_bloom_hash)
+            .get_epoch_execution_commitment_with_db(&pivot)
             .ok_or_else(|| {
-                ErrorKind::InternalError(format!(
+                Error::from(ErrorKind::InternalError(format!(
                     "Execution commitments for {:?} not found",
                     pivot
-                ))
-                .into()
-            })
+                )))
+            })?;
+
+        Ok(commitments.logs_bloom_hash)
     }
 
     /// Get the number of epochs per snapshot period.
@@ -276,15 +293,6 @@ impl LedgerInfo {
             .collect::<Result<Vec<Bloom>, Error>>()?;
 
         Ok(BlockHeaderBuilder::compute_aggregated_bloom(blooms))
-    }
-
-    /// Get the witness height that can be used to retrieve the correct header
-    /// information of the pivot block at `height`.
-    #[inline]
-    pub fn witness_of_header_at(&self, height: u64) -> Option<u64> {
-        self.consensus.first_trusted_header_starting_from(
-            height, None, /* blame_bound */
-        )
     }
 
     /// Get a list of all headers for which the block at height `witness` on the

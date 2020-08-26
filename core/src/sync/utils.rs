@@ -14,7 +14,7 @@ use crate::{
     transaction_pool::TxPoolConfig,
     verification::VerificationConfig,
     vm_factory::VmFactory,
-    ConsensusGraph, Notifications, TransactionPool,
+    ConsensusGraph, NodeType, Notifications, TransactionPool,
 };
 use cfx_parameters::{
     block::{MAX_BLOCK_SIZE_IN_BYTES, REFEREE_DEFAULT_BOUND},
@@ -222,7 +222,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
             base_reward_table_in_ucfx: vec![INITIAL_BASE_MINING_REWARD_IN_UCFX],
         },
         verification_config.clone(),
-        false, /* is_full_node */
+        NodeType::Archive,
     ));
 
     let sync = Arc::new(SynchronizationGraph::new(
@@ -232,7 +232,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         pow.clone(),
         sync_config,
         notifications,
-        false, /* is_full_node */
+        NodeType::Archive,
         machine,
     ));
 

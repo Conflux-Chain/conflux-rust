@@ -9,7 +9,6 @@ mod state;
 #[cfg(test)]
 pub mod tests;
 
-pub mod node_type;
 mod synchronization_graph;
 mod synchronization_phases;
 mod synchronization_protocol_handler;

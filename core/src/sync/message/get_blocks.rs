@@ -9,10 +9,10 @@ use crate::{
             msgid, Context, GetBlocksResponse, GetBlocksWithPublicResponse,
             Handleable, Key, KeyContainer,
         },
-        node_type::NodeType,
         request_manager::{AsAny, Request},
         Error, ErrorKind, ProtocolConfiguration,
     },
+    NodeType,
 };
 use cfx_parameters::sync::MAX_PACKET_SIZE;
 use cfx_types::H256;

@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::address_util::AddressUtil;
-
 /// Hold all top-level components for a type of client.
 /// This struct implement ClientShutdownTrait.
 pub struct ClientComponents<BlockGenT, Rest> {
@@ -120,7 +118,8 @@ pub mod client_methods {
 }
 
 pub fn initialize_common_modules(
-    conf: &Configuration, exit: Arc<(Mutex<bool>, Condvar)>, is_full_node: bool,
+    conf: &Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
+    node_type: NodeType,
 ) -> Result<
     (
         Arc<Machine>,
@@ -133,11 +132,13 @@ pub fn initialize_common_modules(
         Arc<NetworkService>,
         Arc<CommonRpcImpl>,
         Arc<AccountProvider>,
+        Arc<Notifications>,
         PubSubClient,
         Runtime,
     ),
     String,
-> {
+>
+{
     info!("Working directory: {:?}", std::env::current_dir());
 
     metrics::initialize(conf.metrics_config());
@@ -242,7 +243,7 @@ pub fn initialize_common_modules(
         notifications.clone(),
         conf.execution_config(),
         conf.verification_config(),
-        is_full_node,
+        node_type,
     ));
 
     let verification_config = conf.verification_config();
@@ -255,7 +256,7 @@ pub fn initialize_common_modules(
         pow.clone(),
         sync_config,
         notifications.clone(),
-        is_full_node,
+        node_type,
         machine.clone(),
     ));
 
@@ -287,8 +288,11 @@ pub fn initialize_common_modules(
     ));
 
     let runtime = Runtime::with_default_thread_count();
-    let pubsub =
-        PubSubClient::new(runtime.executor(), consensus.clone(), notifications);
+    let pubsub = PubSubClient::new(
+        runtime.executor(),
+        consensus.clone(),
+        notifications.clone(),
+    );
     Ok((
         machine,
         secret_store,
@@ -300,13 +304,15 @@ pub fn initialize_common_modules(
         network,
         common_impl,
         accounts,
+        notifications,
         pubsub,
         runtime,
     ))
 }
 
 pub fn initialize_not_light_node_modules(
-    conf: &Configuration, exit: Arc<(Mutex<bool>, Condvar)>, is_full_node: bool,
+    conf: &Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
+    node_type: NodeType,
 ) -> Result<
     (
         Arc<BlockDataManager>,
@@ -322,7 +328,8 @@ pub fn initialize_not_light_node_modules(
         Runtime,
     ),
     String,
-> {
+>
+{
     let (
         _machine,
         secret_store,
@@ -334,9 +341,10 @@ pub fn initialize_not_light_node_modules(
         network,
         common_impl,
         accounts,
+        _notifications,
         pubsub,
         runtime,
-    ) = initialize_common_modules(&conf, exit.clone(), is_full_node)?;
+    ) = initialize_common_modules(&conf, exit.clone(), node_type)?;
 
     let light_provider = Arc::new(LightProvider::new(
         consensus.clone(),
@@ -344,17 +352,17 @@ pub fn initialize_not_light_node_modules(
         Arc::downgrade(&network),
         txpool.clone(),
         conf.raw_conf.throttling_conf.clone(),
-        is_full_node,
+        node_type,
     ));
     light_provider.register(network.clone()).unwrap();
 
-    let initial_sync_phase = if is_full_node {
-        SyncPhaseType::CatchUpRecoverBlockHeaderFromDB
-    } else {
-        SyncPhaseType::CatchUpRecoverBlockFromDB
+    let initial_sync_phase = match node_type {
+        NodeType::Archive => SyncPhaseType::CatchUpRecoverBlockFromDB,
+        _ => SyncPhaseType::CatchUpRecoverBlockHeaderFromDB,
     };
+
     let sync = Arc::new(SynchronizationService::new(
-        is_full_node,
+        node_type,
         network.clone(),
         sync_graph.clone(),
         conf.protocol_config(),
@@ -716,7 +724,7 @@ use crate::{
 };
 use blockgen::BlockGenerator;
 use cfx_storage::StorageManager;
-use cfx_types::{Address, U256};
+use cfx_types::{address_util::AddressUtil, Address, U256};
 use cfxcore::{
     block_data_manager::BlockDataManager,
     genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
@@ -725,7 +733,7 @@ use cfxcore::{
     statistics::Statistics,
     sync::SyncPhaseType,
     vm_factory::VmFactory,
-    ConsensusGraph, LightProvider, Notifications, Stopable,
+    ConsensusGraph, LightProvider, NodeType, Notifications, Stopable,
     SynchronizationGraph, SynchronizationService, TransactionPool,
     WORKER_COMPUTATION_PARALLELISM,
 };

@@ -236,6 +236,18 @@ impl CheckpointHashes {
     }
 }
 
+/// Verified roots of blamed headers stored on disk on light nodes.
+#[derive(Clone, Debug, RlpEncodable, RlpDecodable)]
+pub struct BlamedHeaderVerifiedRoots {
+    pub deferred_state_root: H256,
+    pub deferred_receipts_root: H256,
+    pub deferred_logs_bloom_hash: H256,
+}
+
+impl MallocSizeOf for BlamedHeaderVerifiedRoots {
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
+}
+
 pub fn db_encode_list<T>(list: &[T]) -> Bytes
 where T: DatabaseEncodable {
     let mut rlp_stream = RlpStream::new();
@@ -262,3 +274,4 @@ impl_db_encoding_as_rlp!(CheckpointHashes);
 impl_db_encoding_as_rlp!(EpochExecutionContext);
 impl_db_encoding_as_rlp!(BlockRewardResult);
 impl_db_encoding_as_rlp!(BlockExecutionResultWithEpoch);
+impl_db_encoding_as_rlp!(BlamedHeaderVerifiedRoots);

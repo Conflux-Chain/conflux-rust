@@ -1,7 +1,9 @@
-use crate::sync::{
-    message::{GetBlockHashesByEpoch, GetBlockHeaders, GetBlocks},
-    node_type::NodeType,
-    request_manager::Request,
+use crate::{
+    sync::{
+        message::{GetBlockHashesByEpoch, GetBlockHeaders, GetBlocks},
+        request_manager::Request,
+    },
+    NodeType,
 };
 use cfx_types::H256;
 use std::{cmp::min, time::Duration};

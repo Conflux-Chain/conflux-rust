@@ -5,6 +5,7 @@
 pub mod sync;
 
 use crate::{
+    block_data_manager::BlockDataManager,
     consensus::SharedConsensusGraph,
     light_protocol::{
         common::{validate_chain_id, FullPeerState, Peers},
@@ -27,7 +28,7 @@ use crate::{
     },
     message::{decode_msg, decode_rlp_and_check_deprecation, Message, MsgId},
     sync::{message::Throttled, SynchronizationGraph},
-    UniqueId,
+    Notifications, UniqueId,
 };
 use cfx_parameters::light::{
     CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, SYNC_PERIOD,
@@ -41,7 +42,11 @@ use network::{
 use parking_lot::RwLock;
 use rlp::Rlp;
 use std::{
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread,
     time::{Duration, Instant},
 };
 use sync::{
@@ -80,6 +85,9 @@ pub struct Handler {
     // header sync manager
     headers: Arc<Headers>,
 
+    // join handle for witness worker thread
+    join_handle: Option<thread::JoinHandle<()>>,
+
     // collection of all peers available
     pub peers: Arc<Peers<FullPeerState>>,
 
@@ -91,6 +99,9 @@ pub struct Handler {
 
     // state root sync manager
     pub state_roots: Arc<StateRoots>,
+
+    // whether the witness worker thread should be stopped
+    stopped: Arc<AtomicBool>,
 
     // storage root sync manager
     pub storage_roots: StorageRoots,
@@ -112,15 +123,11 @@ impl Handler {
     pub fn new(
         consensus: SharedConsensusGraph, graph: Arc<SynchronizationGraph>,
         throttling_config_file: Option<String>,
+        notifications: Arc<Notifications>,
     ) -> Self
     {
         let peers = Arc::new(Peers::new());
         let request_id_allocator = Arc::new(UniqueId::new());
-
-        // TODO(thegaram): At this point the light node does not persist
-        // anything. Need to make sure we persist the checkpoint hashes,
-        // along with a Merkle-root for headers in each era.
-        graph.recover_graph_from_db(true /* header_only */);
 
         let headers = Arc::new(Headers::new(
             graph.clone(),
@@ -192,23 +199,115 @@ impl Handler {
             witnesses.clone(),
         );
 
+        let stopped = Arc::new(AtomicBool::new(false));
+
+        let join_handle = Some(Self::start_witness_worker(
+            notifications,
+            witnesses.clone(),
+            stopped.clone(),
+            consensus.get_data_manager().clone(),
+        ));
+
+        graph.recover_graph_from_db(true /* header_only */);
+
         Handler {
-            protocol_version: LIGHT_PROTOCOL_VERSION,
             block_txs,
             blooms,
             consensus,
             epochs,
             headers,
+            join_handle,
             peers,
+            protocol_version: LIGHT_PROTOCOL_VERSION,
             receipts,
             state_entries,
             state_roots,
+            stopped,
             storage_roots,
-            txs,
-            tx_infos,
             throttling_config_file,
+            tx_infos,
+            txs,
             witnesses,
         }
+    }
+
+    // start a standalone thread for requesting witnesses.
+    // this thread will be joined when `Handler` is dropped.
+    fn start_witness_worker(
+        notifications: Arc<Notifications>, witnesses: Arc<Witnesses>,
+        stopped: Arc<AtomicBool>, data_man: Arc<BlockDataManager>,
+    ) -> thread::JoinHandle<()>
+    {
+        thread::Builder::new()
+            .name("Witness Worker".into())
+            .spawn(move || {
+                let mut receiver =
+                    notifications.blame_verification_results.subscribe();
+
+                loop {
+                    // `stopped` is set during Drop
+                    if stopped.load(Ordering::SeqCst) {
+                        break;
+                    }
+
+                    // receive next item from channel
+                    let wait_for = Duration::from_secs(1);
+
+                    let (height, maybe_witness) =
+                        match receiver.recv_with_timeout(wait_for) {
+                            Err(_) => continue, // channel empty, try again
+                            Ok(None) => return, // sender dropped, terminate
+                            Ok(Some(val)) => val,
+                        };
+
+                    trace!(
+                        "Witness worker received: height = {:?}, maybe_witness = {:?}",
+                        height, maybe_witness
+                    );
+
+                    // avoid serving stale roots from db
+                    //
+                    //                 blame
+                    //              ............
+                    //              v          |
+                    //             ---        ---
+                    //         .- | B | <--- | C | <--- ...
+                    //  ---    |   ---        ---
+                    // | A | <-*
+                    //  ---    |   ---
+                    //         .- | D | <--- ...
+                    //             ---
+                    //              ^
+                    //          height = X
+                    //
+                    // we receive A, B, C, ..., A, D (chain reorg),
+                    // we stored the verified roots of B on disk,
+                    // after chain reorg, height X is not blamed anymore
+                    // --> need to make sure to serve correct roots directly from
+                    //     header D instead of the stale roots retrieved for B
+                    data_man.remove_blamed_header_verified_roots(height);
+
+                    // handle witness
+                    match maybe_witness {
+                        // request witness for blamed headers
+                        Some(w) => {
+                            // this request covers all blamed headers:
+                            // [w - w.blame, w - w.blame + 1, ..., w]
+                            debug!("Requesting witness at height {}", w);
+                            witnesses.request(w);
+                        }
+
+                        // for non-blamed headers, we will serve roots from disk
+                        None => {
+                            // `height` might have been blamed before a chain reorg
+                            witnesses.in_flight.write().remove(&height);
+                        }
+                    }
+
+                    *witnesses.height_of_latest_verified_header.write() = height;
+                }
+            })
+            .expect("Starting the Witness Worker should succeed")
     }
 
     #[inline]
@@ -694,7 +793,7 @@ impl Handler {
             Instant::now() + Duration::from_nanos(resp.wait_time_nanos),
         );
 
-        // todo (boqiu): update when throttled
+        // TODO(boqiu): update when throttled
         // In case of throttled for a RPC call:
         // 1. Just return error to client;
         // 2. Select another peer to try again (e.g. 3 times at most).
@@ -705,6 +804,32 @@ impl Handler {
         // timeout.
 
         Ok(())
+    }
+}
+
+impl Drop for Handler {
+    fn drop(&mut self) {
+        // signal stop to worker thread
+        self.stopped.store(true, Ordering::SeqCst);
+
+        if let Some(thread) = self.join_handle.take() {
+            // joining a thread from itself is not a good idea; this should not
+            // happen in this case as the thread has no references to `Handler`
+            assert!(
+                thread.thread().id() != thread::current().id(),
+                "Attempting to join Witness Worker thread from itself (id = {:?})", thread::current().id(),
+            );
+
+            // `stopped` is set and `recv` in the worker will timeout,
+            // so the thread should stop eventually.
+            thread.join().expect("Witness Worker should not panic");
+
+            // for more info about these issues,
+            // see https://stackoverflow.com/a/42791007
+
+            // for a discussion about why we want to join the thread,
+            // see https://github.com/rust-lang/rust/issues/48820#issue-303146976
+        }
     }
 }
 
