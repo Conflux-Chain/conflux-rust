@@ -313,6 +313,98 @@ impl TransactionPool {
         (passed_transactions, failure)
     }
 
+    /// Try to insert `signed_transaction` into transaction pool.
+    ///
+    /// If some tx is already in our tx_cache, it will be ignored and will not
+    /// be added to returned `passed_transactions`. If some tx invalid or
+    /// cannot be inserted to the tx pool, it will be included in the returned
+    /// `failure` and will not be propagated.
+    pub fn insert_new_signed_transactions(
+        &self, mut signed_transactions: Vec<Arc<SignedTransaction>>,
+    ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>) {
+        INSERT_TPS.mark(1);
+        INSERT_TXS_TPS.mark(signed_transactions.len());
+        let _timer = MeterTimer::time_func(TX_POOL_INSERT_TIMER.as_ref());
+
+        let mut passed_transactions = Vec::new();
+        let mut failure = HashMap::new();
+        let consensus_best_info_clone =
+            { self.consensus_best_info.lock().clone() };
+
+        // filter out invalid transactions.
+        let mut index = 0;
+        while let Some(tx) = signed_transactions.get(index) {
+            match self.verify_transaction_tx_pool(
+                &tx.transaction,
+                /* basic_check = */ true,
+                consensus_best_info_clone.clone(),
+            ) {
+                Ok(_) => index += 1,
+                Err(e) => {
+                    let removed = signed_transactions.swap_remove(index);
+                    debug!("failed to insert tx into pool (validation failed), hash = {:?}, error = {:?}", removed.hash, e);
+                    failure.insert(removed.hash, e);
+                }
+            }
+        }
+
+        // ensure the pool has enough quota to insert new signed transactions.
+        let quota = self
+            .inner
+            .write_with_metric(&INSERT_TXS_QUOTA_LOCK)
+            .remaining_quota();
+        if quota < signed_transactions.len() {
+            for tx in signed_transactions.split_off(quota) {
+                trace!("failed to insert tx into pool (quota not enough), hash = {:?}", tx.hash);
+                failure.insert(tx.hash, "txpool is full".into());
+            }
+        }
+
+        if signed_transactions.is_empty() {
+            INSERT_TXS_SUCCESS_TPS.mark(passed_transactions.len());
+            INSERT_TXS_FAILURE_TPS.mark(failure.len());
+            return (passed_transactions, failure);
+        }
+
+        // Insert into pool with readiness check.
+        // Notice it does not recover the public as the input transactions are
+        // already signed.
+
+        let mut account_cache = self.get_best_state_account_cache();
+        let mut inner = self.inner.write_with_metric(&INSERT_TXS_ENQUEUE_LOCK);
+        let mut to_prop = self.to_propagate_trans.write();
+
+        for tx in signed_transactions {
+            if let Err(e) = self.add_transaction_with_readiness_check(
+                &mut *inner,
+                &mut account_cache,
+                tx.clone(),
+                false,
+                false,
+            ) {
+                debug!(
+                    "tx {:?} fails to be inserted to pool, err={:?}",
+                    &tx.hash, e
+                );
+                failure.insert(tx.hash(), e);
+                continue;
+            }
+            passed_transactions.push(tx.clone());
+            if !to_prop.contains_key(&tx.hash) {
+                to_prop.insert(tx.hash, tx);
+            }
+        }
+
+        TX_POOL_DEFERRED_GAUGE.update(self.total_deferred());
+        TX_POOL_UNPACKED_GAUGE.update(self.total_unpacked());
+        TX_POOL_READY_GAUGE.update(self.total_ready_accounts());
+
+        INSERT_TXS_SUCCESS_TPS.mark(passed_transactions.len());
+        INSERT_TXS_FAILURE_TPS.mark(failure.len());
+
+        (passed_transactions, failure)
+    }
+
     /// verify transactions based on the rules that have nothing to do with
     /// readiness
     fn verify_transaction_tx_pool(
