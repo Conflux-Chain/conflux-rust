@@ -95,13 +95,13 @@ impl Handleable for GetBlockTxnResponse {
                         received_blocks.insert(resp_hash);
                     }
                     if insert_result.is_valid() {
-                        //insert transaction to tx pool
+                        //insert signed transaction to tx pool
                         let (signed_txns, _) = ctx
                             .manager
                             .graph
                             .consensus
                             .get_tx_pool()
-                            .insert_new_transactions(self.block_txn);
+                            .insert_new_signed_transactions(signed_txns);
                         // a transaction from compact block should be
                         // added to received pool
                         ctx.manager
