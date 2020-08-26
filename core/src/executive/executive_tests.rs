@@ -706,7 +706,7 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("Unable to parse input")
+        vm::Error::InternalContract("None call data")
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -738,39 +738,7 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("Unable to parse input")
-    );
-    assert_eq!(
-        state.balance(&sender).unwrap(),
-        U256::from(1_000_000_000_000_000_000u64)
-    );
-    assert_eq!(
-        state.staking_balance(&sender).unwrap(),
-        U256::from(1_000_000_000_000_000_000u64)
-    );
-    assert_eq!(
-        *state.total_issued_tokens(),
-        U256::from(2_000_000_000_000_000_000u64)
-    );
-    assert_eq!(
-        *state.total_staking_tokens(),
-        U256::from(1_000_000_000_000_000_000u64)
-    );
-
-    // more data
-    params.data = Some("b6b55f25000000000000000000000000000000000000000000000000000000174876e80000".from_hex().unwrap());
-    let result = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .call(params.clone(), &mut substate);
-    assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err(),
-        vm::Error::InternalContract("Unable to parse input")
+        vm::Error::InternalContract("Invalid call data length")
     );
     assert_eq!(
         state.balance(&sender).unwrap(),

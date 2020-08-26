@@ -134,9 +134,7 @@ impl From<DbError> for Error {
 }
 
 impl From<ABIDecodeError> for Error {
-    fn from(_err: ABIDecodeError) -> Self {
-        Error::InternalContract("Unable to parse input")
-    }
+    fn from(err: ABIDecodeError) -> Self { Error::InternalContract(err.0) }
 }
 
 impl fmt::Display for Error {
