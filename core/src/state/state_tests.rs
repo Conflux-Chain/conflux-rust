@@ -19,6 +19,7 @@ use keccak_hash::{keccak, KECCAK_EMPTY};
 use primitives::{EpochId, StorageKey, StorageLayout};
 use std::sync::Arc;
 
+#[cfg(test)]
 fn get_state(
     storage_manager: &Arc<StorageManager>, epoch_id: &EpochId,
 ) -> State {
@@ -33,7 +34,7 @@ fn get_state(
         ),
         VmFactory::default(),
         &Spec::new_spec(),
-        0, /* block_number */
+        if epoch_id.is_zero() { 0 } else { 1 }, /* block_number */
     )
 }
 

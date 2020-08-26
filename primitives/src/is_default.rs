@@ -48,5 +48,5 @@ impl IsDefault for StorageValue {
 }
 
 impl IsDefault for U256 {
-    fn is_default(&self) -> bool { *self == U256::zero() }
+    fn is_default(&self) -> bool { self.is_zero() }
 }
