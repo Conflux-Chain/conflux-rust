@@ -227,15 +227,24 @@ impl TransactionPool {
 
         let mut passed_transactions = Vec::new();
         let mut failure = HashMap::new();
-        let consensus_best_info_clone = self.consensus_best_info.lock().clone();
+        let current_best_info = self.consensus_best_info.lock().clone();
 
         // filter out invalid transactions.
         let mut index = 0;
+
+        let (chain_id, best_height) = {
+            (
+                current_best_info.best_chain_id(),
+                current_best_info.best_epoch_number,
+            )
+        };
+
         while let Some(tx) = transactions.get(index) {
             match self.verify_transaction_tx_pool(
                 tx,
                 /* basic_check = */ true,
-                consensus_best_info_clone.clone(),
+                chain_id,
+                best_height,
             ) {
                 Ok(_) => index += 1,
                 Err(e) => {
@@ -328,16 +337,24 @@ impl TransactionPool {
 
         let mut passed_transactions = Vec::new();
         let mut failure = HashMap::new();
-        let consensus_best_info_clone =
-            { self.consensus_best_info.lock().clone() };
+        let current_best_info = { self.consensus_best_info.lock().clone() };
 
         // filter out invalid transactions.
         let mut index = 0;
+
+        let (chain_id, best_height) = {
+            (
+                current_best_info.best_chain_id(),
+                current_best_info.best_epoch_number,
+            )
+        };
+
         while let Some(tx) = signed_transactions.get(index) {
             match self.verify_transaction_tx_pool(
                 &tx.transaction,
-                /* basic_check = */ true,
-                consensus_best_info_clone.clone(),
+                true, /* basic_check = */
+                chain_id,
+                best_height,
             ) {
                 Ok(_) => index += 1,
                 Err(e) => {
@@ -372,7 +389,8 @@ impl TransactionPool {
 
         {
             let mut account_cache = self.get_best_state_account_cache();
-            let mut inner = self.inner.write_with_metric(&INSERT_TXS_ENQUEUE_LOCK);
+            let mut inner =
+                self.inner.write_with_metric(&INSERT_TXS_ENQUEUE_LOCK);
             let mut to_prop = self.to_propagate_trans.write();
 
             for tx in signed_transactions {
@@ -412,16 +430,10 @@ impl TransactionPool {
     /// readiness
     fn verify_transaction_tx_pool(
         &self, transaction: &TransactionWithSignature, basic_check: bool,
-        current_best_info: Arc<BestInformation>,
+        chain_id: u32, best_height: u64,
     ) -> Result<(), String>
     {
         let _timer = MeterTimer::time_func(TX_POOL_VERIFY_TIMER.as_ref());
-        let (chain_id, best_height) = {
-            (
-                current_best_info.best_chain_id(),
-                current_best_info.best_epoch_number,
-            )
-        };
 
         if basic_check {
             if let Err(e) = self
@@ -650,6 +662,9 @@ impl TransactionPool {
             .ok();
         }
 
+        let (chain_id, best_height) =
+            { (best_info.best_chain_id(), best_info.best_epoch_number) };
+
         while let Some(tx) = recycle_tx_buffer.pop() {
             debug!(
                 "should not trigger recycle transaction, nonce = {}, sender = {:?}, \
@@ -657,10 +672,12 @@ impl TransactionPool {
                 &tx.nonce, &tx.sender,
                 &account_cache.get_account_mut(&tx.sender)?
                     .map_or(0.into(), |x| x.nonce), tx.hash);
+
             if let Err(e) = self.verify_transaction_tx_pool(
                 &tx,
                 /* basic_check = */ false,
-                best_info.clone(),
+                chain_id,
+                best_height,
             ) {
                 warn!(
                     "Recycled transaction {:?} discarded due to not passing verification {}.",
