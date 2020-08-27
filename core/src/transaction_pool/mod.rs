@@ -370,29 +370,32 @@ impl TransactionPool {
         // Notice it does not recover the public as the input transactions are
         // already signed.
 
-        let mut account_cache = self.get_best_state_account_cache();
-        let mut inner = self.inner.write_with_metric(&INSERT_TXS_ENQUEUE_LOCK);
-        let mut to_prop = self.to_propagate_trans.write();
+        {
+            let mut account_cache = self.get_best_state_account_cache();
+            let mut inner = self.inner.write_with_metric(&INSERT_TXS_ENQUEUE_LOCK);
+            let mut to_prop = self.to_propagate_trans.write();
 
-        for tx in signed_transactions {
-            if let Err(e) = self.add_transaction_with_readiness_check(
-                &mut *inner,
-                &mut account_cache,
-                tx.clone(),
-                false,
-                false,
-            ) {
-                debug!(
-                    "tx {:?} fails to be inserted to pool, err={:?}",
-                    &tx.hash, e
-                );
-                failure.insert(tx.hash(), e);
-                continue;
+            for tx in signed_transactions {
+                if let Err(e) = self.add_transaction_with_readiness_check(
+                    &mut *inner,
+                    &mut account_cache,
+                    tx.clone(),
+                    false,
+                    false,
+                ) {
+                    debug!(
+                        "tx {:?} fails to be inserted to pool, err={:?}",
+                        &tx.hash, e
+                    );
+                    failure.insert(tx.hash(), e);
+                    continue;
+                }
+                passed_transactions.push(tx.clone());
+                if !to_prop.contains_key(&tx.hash) {
+                    to_prop.insert(tx.hash, tx);
+                }
             }
-            passed_transactions.push(tx.clone());
-            if !to_prop.contains_key(&tx.hash) {
-                to_prop.insert(tx.hash, tx);
-            }
+            //RwLock is dropped here
         }
 
         TX_POOL_DEFERRED_GAUGE.update(self.total_deferred());
