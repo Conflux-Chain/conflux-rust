@@ -705,7 +705,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         )
     }
 
-    pub fn withdrawable_staking_balance_at_block_number(
+    pub fn locked_staking_balance_at_block_number(
         &self, address: &Address, block_number: u64,
     ) -> DbResult<U256> {
         self.ensure_account_loaded(
@@ -713,7 +713,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             RequireCache::VoteStakeList,
             |acc| {
                 acc.map_or(U256::zero(), |acc| {
-                    acc.withdrawable_staking_balance(block_number)
+                    acc.staking_balance() - acc.withdrawable_staking_balance(block_number)
                 })
             },
         )
