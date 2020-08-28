@@ -514,11 +514,9 @@ mod impls {
         ) -> Result<(StorageRoot, StorageRootProof)> {
             let key = StorageKey::new_storage_root_key(address);
 
-            let (root, proof) = self
-                .storage
-                .get_node_merkle_all_versions::<WithProof>(key)?;
-
-            Ok((root, proof))
+            self.storage
+                .get_node_merkle_all_versions::<WithProof>(key)
+                .map_err(Into::into)
         }
     }
 
