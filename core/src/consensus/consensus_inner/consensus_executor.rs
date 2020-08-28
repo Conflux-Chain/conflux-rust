@@ -1351,8 +1351,15 @@ impl ConsensusExecutionHandler {
                         / U512::from(self.config.anticone_penalty_ratio);
                     // Lint.ThenChange(consensus/mod.rs#ANTICONE_PENALTY_1)
 
-                    debug_assert!(reward > anticone_penalty);
-                    reward -= anticone_penalty;
+                    if reward <= anticone_penalty {
+                        warn!(
+                            "In epoch hash {:?}, penalty {:?} > reward {:?}",
+                            reward_epoch_hash, anticone_penalty, reward
+                        );
+                        reward = U512::zero();
+                    } else {
+                        reward -= anticone_penalty;
+                    }
 
                     if debug_record.is_some() {
                         let debug_out = debug_record.as_mut().unwrap();
