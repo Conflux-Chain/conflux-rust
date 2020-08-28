@@ -43,7 +43,7 @@ impl InfluxdbReporter {
 }
 
 impl Reporter for InfluxdbReporter {
-    fn report(&self) -> Result<(), String> {
+    fn report(&self) -> Result<bool, String> {
         let mut points = Points::create_new(Vec::new());
 
         for (name, metric) in DEFAULT_REGISTRY.read().get_all() {
@@ -78,9 +78,10 @@ impl Reporter for InfluxdbReporter {
             None,
         ) {
             debug!("failed to write points to influxdb, {:?}", e);
+            Ok(false)
+        } else {
+            Ok(true)
         }
-
-        Ok(())
     }
 }
 
