@@ -266,7 +266,7 @@ impl ExecutionTrait for IsAllWhitelisted {
 make_solidity_function! {
     struct AddPrivilegeByAdmin((Address,Vec<Address>), "addPrivilegebyAdmin(address,address[])");
 }
-impl_function_type!(AddPrivilegeByAdmin, "query");
+impl_function_type!(AddPrivilegeByAdmin, "non_payable_write");
 
 impl UpfrontPaymentTrait for AddPrivilegeByAdmin {
     fn upfront_gas_payment(
@@ -296,7 +296,7 @@ impl ExecutionTrait for AddPrivilegeByAdmin {
 make_solidity_function! {
     struct RemovePrivilegeByAdmin((Address,Vec<Address>), "removePrivilegeByAdmin(address,address[])");
 }
-impl_function_type!(RemovePrivilegeByAdmin, "query");
+impl_function_type!(RemovePrivilegeByAdmin, "non_payable_write");
 
 impl UpfrontPaymentTrait for RemovePrivilegeByAdmin {
     fn upfront_gas_payment(
