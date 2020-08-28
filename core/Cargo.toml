@@ -28,6 +28,7 @@ fs_extra = "1.1.0"
 futures = {version="0.3.3", features = ["compat"]}
 hashbrown = "0.7.1"
 hibitset = { path = "../util/hibitset" }
+hex = "0.3"
 itertools = "0.9"
 io = { path = "../util/io" }
 jsonrpc-core = "14.0.0"

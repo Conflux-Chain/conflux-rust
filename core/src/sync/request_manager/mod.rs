@@ -6,17 +6,19 @@ use super::{
     synchronization_protocol_handler::ProtocolConfiguration,
     synchronization_state::SynchronizationState,
 };
-use crate::sync::{
-    message::{
-        msgid, GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn, GetBlocks,
-        GetCompactBlocks, GetTransactions, GetTransactionsFromTxHashes, Key,
-        KeyContainer, TransactionDigests,
+use crate::{
+    sync::{
+        message::{
+            msgid, GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn,
+            GetBlocks, GetCompactBlocks, GetTransactions,
+            GetTransactionsFromTxHashes, Key, KeyContainer, TransactionDigests,
+        },
+        request_manager::request_batcher::RequestBatcher,
+        synchronization_protocol_handler::{AsyncTaskQueue, RecoverPublicTask},
+        synchronization_state::PeerFilter,
+        Error,
     },
-    node_type::NodeType,
-    request_manager::request_batcher::RequestBatcher,
-    synchronization_protocol_handler::{AsyncTaskQueue, RecoverPublicTask},
-    synchronization_state::PeerFilter,
-    Error,
+    NodeType,
 };
 use cfx_parameters::sync::REQUEST_START_WAITING_TIME;
 use cfx_types::H256;

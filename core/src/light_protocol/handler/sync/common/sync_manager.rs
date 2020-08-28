@@ -79,8 +79,16 @@ where
     pub fn num_in_flight(&self) -> usize { self.in_flight.read().len() }
 
     #[inline]
-    pub fn insert_in_flight<I>(&self, missing: I, request_id: RequestId)
+    #[allow(dead_code)]
+    pub fn contains(&self, key: &Key) -> bool {
+        self.in_flight.read().contains_key(key)
+            || self.waiting.read().contains(&key)
+    }
+
+    #[inline]
+    fn insert_in_flight<I>(&self, missing: I, request_id: RequestId)
     where I: Iterator<Item = Item> {
+        // TODO: check if in waiting already
         let new = missing
             .map(|item| (item.key(), InFlightRequest::new(item, request_id)));
         self.in_flight.write().extend(new);
@@ -185,7 +193,7 @@ where
         }
 
         // choose set of hashes to request
-        let num_to_request = max_in_flight - self.num_in_flight();
+        let num_to_request = max_in_flight.saturating_sub(self.num_in_flight());
 
         let items = match self.collect_to_request(num_to_request) {
             ref hs if hs.is_empty() => return,

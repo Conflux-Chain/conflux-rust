@@ -593,6 +593,7 @@ dependencies = [
  "fs_extra",
  "futures 0.3.5",
  "hashbrown 0.7.2",
+ "hex 0.3.2",
  "hibitset",
  "io",
  "itertools 0.9.0",
@@ -1665,6 +1666,12 @@ name = "hex"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6a22814455d41612f41161581c2883c0c6a1c41852729b17d5ed88f01e153aa"
+
+[[package]]
+name = "hex"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "805026a5d0141ffc30abb3be3173848ad46a1b1664fe632428479619a3644d77"
 
 [[package]]
 name = "hibitset"
@@ -4405,7 +4412,7 @@ dependencies = [
  "cfxkey",
  "clap",
  "db",
- "hex",
+ "hex 0.2.0",
  "io",
  "lazy_static",
  "log 0.4.11",

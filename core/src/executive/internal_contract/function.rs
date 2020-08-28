@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::{
-    abi::{ABIDecodable, ABIEncodable, ABIReader},
+    abi::{ABIDecodable, ABIEncodable},
     SolidityFunctionTrait,
 };
 use crate::{
@@ -32,13 +32,12 @@ where T: InterfaceTrait
         + ExecutionTrait
 {
     fn execute(
-        &self, input: ABIReader, params: &ActionParams, spec: &Spec,
+        &self, input: &[u8], params: &ActionParams, spec: &Spec,
         state: &mut State, substate: &mut Substate,
     ) -> vm::Result<GasLeft>
     {
         self.pre_execution_check(params)?;
-        let solidity_params =
-            input.pull_parameters::<<Self as InterfaceTrait>::Input>()?;
+        let solidity_params = <T::Input as ABIDecodable>::abi_decode(&input)?;
 
         let cost =
             self.upfront_gas_payment(&solidity_params, params, spec, state);
@@ -48,7 +47,7 @@ where T: InterfaceTrait
 
         self.execute_inner(solidity_params, params, spec, state, substate)
             .and_then(|output| {
-                let output = output.write_to_bytes();
+                let output = output.abi_encode();
                 let length = output.len();
                 let return_cost = (length + 31) / 32 * spec.memory_gas;
                 if params.gas < cost + return_cost {
@@ -116,6 +115,18 @@ impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
 /// 2. The string to compute interface signature.
 /// 3. The type of output parameters.
 ///
+/// For example, in order to make a function with interface
+/// get_whitelist(address user, address contract) public returns bool, you
+/// should use
+/// ```
+/// use cfxcore::make_solidity_function;
+/// use cfx_types::{Address,U256};
+/// use cfxcore::executive::function::InterfaceTrait;
+///
+/// make_solidity_function!{
+///     struct WhateverStructName((Address, Address), "get_whitelist(address,address)", bool);
+/// }
+/// ```
 /// If the function has no return value, the third parameter can be omitted.
 macro_rules! make_solidity_function {
     ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($input:ty, $interface:expr ); ) => {

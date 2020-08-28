@@ -2,13 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{
-        handleable::{Context, Handleable},
-        DynamicCapability,
+use crate::{
+    sync::{
+        message::{
+            handleable::{Context, Handleable},
+            DynamicCapability,
+        },
+        Error, ErrorKind, SynchronizationPeerState,
     },
-    node_type::NodeType,
-    Error, ErrorKind, SynchronizationPeerState,
+    NodeType,
 };
 use cfx_types::H256;
 use network::{NODE_TAG_ARCHIVE, NODE_TAG_FULL, NODE_TAG_NODE_TYPE};

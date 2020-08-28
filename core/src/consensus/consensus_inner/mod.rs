@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+mod blame_verifier;
 pub mod confirmation_meter;
 pub mod consensus_executor;
 pub mod consensus_new_block_handler;
@@ -1042,20 +1043,25 @@ impl ConsensusGraphInner {
 
     pub fn find_first_index_with_correct_state_of(
         &self, pivot_index: usize, blame_bound: Option<u32>,
-    ) -> Option<usize> {
+        min_vote_count: usize,
+    ) -> Option<usize>
+    {
         // this is the earliest block we need to consider; blocks before `from`
         // cannot have any information about the state root of `pivot_index`
         let from = pivot_index + DEFERRED_STATE_EPOCH_COUNT as usize;
 
-        self.find_first_trusted_starting_from(from, blame_bound)
+        self.find_first_trusted_starting_from(from, blame_bound, min_vote_count)
     }
 
     pub fn find_first_trusted_starting_from(
-        &self, from: usize, blame_bound: Option<u32>,
+        &self, from: usize, blame_bound: Option<u32>, min_vote_count: usize,
     ) -> Option<usize> {
         let mut trusted_index = match self
-            .find_first_with_trusted_blame_starting_from(from, blame_bound)
-        {
+            .find_first_with_trusted_blame_starting_from(
+                from,
+                blame_bound,
+                min_vote_count,
+            ) {
             None => return None,
             Some(index) => index,
         };
@@ -1078,7 +1084,9 @@ impl ConsensusGraphInner {
 
     fn find_first_with_trusted_blame_starting_from(
         &self, pivot_index: usize, blame_bound: Option<u32>,
-    ) -> Option<usize> {
+        min_vote_count: usize,
+    ) -> Option<usize>
+    {
         trace!(
             "find_first_with_trusted_blame_starting_from pivot_index={:?}",
             pivot_index
@@ -1086,8 +1094,11 @@ impl ConsensusGraphInner {
         let mut cur_pivot_index = pivot_index;
         while cur_pivot_index < self.pivot_chain.len() {
             let arena_index = self.pivot_chain[cur_pivot_index];
-            let blame_ratio =
-                self.compute_blame_ratio(arena_index, blame_bound);
+            let blame_ratio = self.compute_blame_ratio(
+                arena_index,
+                blame_bound,
+                min_vote_count,
+            );
             trace!(
                 "blame_ratio for {:?} is {}",
                 self.arena[arena_index].hash,
@@ -1105,7 +1116,9 @@ impl ConsensusGraphInner {
     // Compute the ratio of blames that the block gets
     fn compute_blame_ratio(
         &self, arena_index: usize, blame_bound: Option<u32>,
-    ) -> f64 {
+        min_vote_count: usize,
+    ) -> f64
+    {
         let blame_bound = if let Some(bound) = blame_bound {
             bound
         } else {
@@ -1151,6 +1164,13 @@ impl ConsensusGraphInner {
 
         let total_vote_count = votes.len();
 
+        if total_vote_count < min_vote_count {
+            // if we do not have enough votes, we will signal 100% blame
+            return 1.0;
+        }
+
+        // TODO(thegaram): compute `total_vote_count` on non-past set,
+        // not on future
         total_blame_count as f64 / total_vote_count as f64
     }
 
@@ -3429,6 +3449,7 @@ impl ConsensusGraphInner {
         self.find_first_index_with_correct_state_of(
             pivot_index + plus_depth,
             None, /* blame_bound */
+            0,    /* min_vote_count */
         )
         .and_then(|index| Some(self.arena[self.pivot_chain[index]].hash))
     }

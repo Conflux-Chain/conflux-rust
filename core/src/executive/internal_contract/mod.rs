@@ -4,8 +4,8 @@
 
 mod abi;
 mod contracts;
+pub mod function;
 mod impls;
-pub mod sol_func;
 
 use crate::{
     bytes::Bytes,
@@ -14,13 +14,14 @@ use crate::{
     vm::{self, ActionParams, GasLeft, Spec},
 };
 use cfx_types::{Address, H256};
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 
-use contracts::{internal_contract_factory, SolFnTable};
+use self::contracts::SolFnTable;
 
 pub use self::{
+    abi::utils::pull_slice,
     contracts::{
-        ADMIN_CONTROL_CONTRACT_ADDRESS,
+        InternalContractMap, ADMIN_CONTROL_CONTRACT_ADDRESS,
         SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
         STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
     },
@@ -28,7 +29,6 @@ pub use self::{
 };
 
 pub use self::abi::ABIDecodeError;
-use self::abi::ABIReader;
 
 lazy_static! {
     static ref INTERNAL_CONTRACT_CODE: Arc<Bytes> =
@@ -50,10 +50,15 @@ pub trait InternalContractTrait: Send + Sync {
         substate: &mut Substate,
     ) -> vm::Result<GasLeft>
     {
-        let mut input =
-            ABIReader::new(params.data.as_ref().ok_or(ABIDecodeError)?.iter());
+        let call_data = params
+            .data
+            .as_ref()
+            .ok_or(ABIDecodeError("None call data"))?;
+        let mut pointer = call_data.iter();
 
-        let fn_sig = input.pull_sig()?;
+        let mut fn_sig = [0u8; 4];
+        fn_sig.clone_from_slice(pull_slice(&mut pointer, 4)?);
+        let input = pointer.as_slice();
 
         let solidity_fn = self
             .get_func_table()
@@ -73,7 +78,7 @@ pub trait InternalContractTrait: Send + Sync {
 /// Native implementation of a solidity-interface function.
 pub trait SolidityFunctionTrait: Send + Sync {
     fn execute(
-        &self, input: ABIReader, params: &ActionParams, spec: &Spec,
+        &self, input: &[u8], params: &ActionParams, spec: &Spec,
         state: &mut State, substate: &mut Substate,
     ) -> vm::Result<GasLeft>;
 
@@ -85,36 +90,5 @@ pub trait SolidityFunctionTrait: Send + Sync {
         let mut answer = [0u8; 4];
         answer.clone_from_slice(&keccak(self.name()).as_ref()[0..4]);
         answer
-    }
-}
-
-pub struct InternalContractMap {
-    builtin: Arc<BTreeMap<Address, Box<dyn InternalContractTrait>>>,
-}
-
-impl std::ops::Deref for InternalContractMap {
-    type Target = Arc<BTreeMap<Address, Box<dyn InternalContractTrait>>>;
-
-    fn deref(&self) -> &Self::Target { &self.builtin }
-}
-
-impl InternalContractMap {
-    pub fn new() -> Self {
-        let mut builtin = BTreeMap::new();
-        let admin = internal_contract_factory("admin");
-        let sponsor = internal_contract_factory("sponsor");
-        let staking = internal_contract_factory("staking");
-        builtin.insert(*admin.address(), admin);
-        builtin.insert(*sponsor.address(), sponsor);
-        builtin.insert(*staking.address(), staking);
-        Self {
-            builtin: Arc::new(builtin),
-        }
-    }
-
-    pub fn contract(
-        &self, address: &Address,
-    ) -> Option<&Box<dyn InternalContractTrait>> {
-        self.builtin.get(address)
     }
 }

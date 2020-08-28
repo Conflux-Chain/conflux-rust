@@ -57,6 +57,10 @@ where
             }
         }
     }
+
+    #[inline]
+    #[allow(dead_code)]
+    pub fn contains(&self, key: &K) -> bool { self.keys.contains(key) }
 }
 
 impl<K, V> Extend<V> for PriorityQueue<K, V>
@@ -111,7 +115,7 @@ mod tests {
         queue.push(Item::new(3, 3));
         queue.push(Item::new(4, 2));
 
-        // push items with dubplicate keys
+        // push items with duplicate keys
         queue.push(Item::new(0, 5));
         queue.push(Item::new(1, 9));
         queue.push(Item::new(2, 6));

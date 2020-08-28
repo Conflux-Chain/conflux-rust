@@ -197,10 +197,7 @@ impl Blooms {
         let received = keccak(bloom);
 
         // retrieve local bloom hash
-        let expected = match self.witnesses.root_hashes_of(epoch) {
-            Some((_, _, bloom_hash)) => bloom_hash,
-            None => bail!(ErrorKind::WitnessUnavailable { epoch }),
-        };
+        let expected = self.witnesses.root_hashes_of(epoch)?.logs_bloom_hash;
 
         // check
         if received != expected {

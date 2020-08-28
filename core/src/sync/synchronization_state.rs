@@ -8,9 +8,9 @@ use crate::{
     message::MsgId,
     sync::{
         message::{DynamicCapability, DynamicCapabilitySet},
-        node_type::NodeType,
         random, Error, ErrorKind,
     },
+    NodeType,
 };
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{
@@ -92,7 +92,7 @@ pub type SynchronizationPeers =
 #[derive(DeriveMallocSizeOf)]
 pub struct SynchronizationState {
     is_consortium: bool,
-    is_full_node: bool,
+    node_type: NodeType,
     is_dev_or_test_mode: bool,
     pub peers: RwLock<SynchronizationPeers>,
     pub handshaking_peers: RwLock<HashMap<NodeId, (ProtocolVersion, Instant)>>,
@@ -101,11 +101,11 @@ pub struct SynchronizationState {
 
 impl SynchronizationState {
     pub fn new(
-        is_consortium: bool, is_full_node: bool, is_dev_or_test_mode: bool,
+        is_consortium: bool, node_type: NodeType, is_dev_or_test_mode: bool,
     ) -> Self {
         SynchronizationState {
             is_consortium,
-            is_full_node,
+            node_type,
             is_dev_or_test_mode,
             peers: Default::default(),
             handshaking_peers: Default::default(),
@@ -193,7 +193,7 @@ impl SynchronizationState {
         timeout_peers
     }
 
-    pub fn is_full_node(&self) -> bool { self.is_full_node }
+    pub fn is_full_node(&self) -> bool { self.node_type == NodeType::Full }
 
     pub fn is_dev_or_test_mode(&self) -> bool { self.is_dev_or_test_mode }
 

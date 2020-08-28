@@ -3,12 +3,12 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    block_data_manager::BlockDataManager, consensus::BestInformation,
-    state::State, statistics::SharedStatistics,
+    block_data_manager::BlockDataManager,
+    consensus::{BestInformation, ConsensusConfig},
+    state::State,
+    statistics::SharedStatistics,
     transaction_pool::SharedTransactionPool,
 };
-
-use crate::consensus::ConsensusConfig;
 use cfx_types::{H256, U256};
 use primitives::{
     receipt::Receipt, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
@@ -85,10 +85,6 @@ pub trait ConsensusGraphTrait: Send + Sync {
     fn get_to_sync_epoch_id(&self) -> EpochId;
 
     fn get_trusted_blame_block(&self, stable_hash: &H256) -> Option<H256>;
-
-    fn first_trusted_header_starting_from(
-        &self, height: u64, blame_bound: Option<u32>,
-    ) -> Option<u64>;
 
     fn set_initial_sequence_number(&self, initial_sn: u64);
 
