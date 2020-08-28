@@ -37,9 +37,18 @@ use std::{
     cell::RefCell,
     collections::HashSet,
     convert::{TryFrom, TryInto},
+    ops::Deref,
     rc::Rc,
     sync::Arc,
 };
+
+pub fn is_reentrancy(
+    caller: &Address, callee: &Address, callstack: &CallStackInfo,
+) -> bool {
+    let is_recursive_call = *caller == *callee;
+    let contract_in_callstack = callstack.contains_key(callee);
+    return !is_recursive_call && contract_in_callstack;
+}
 
 /// Returns new address created from address, nonce, and code hash
 pub fn contract_address(
@@ -145,6 +154,7 @@ pub struct CallCreateExecutive<'a> {
     depth: usize,
     stack_depth: usize,
     static_flag: bool,
+    reentrancy_flag: bool,
     is_create: bool,
     gas: U256,
     kind: CallCreateExecutiveKind,
@@ -157,6 +167,7 @@ impl<'a> CallCreateExecutive<'a> {
         params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
         stack_depth: usize, parent_static_flag: bool,
+        parent_reentrancy_flag: bool,
         internal_contract_map: &'a InternalContractMap,
         contracts_in_callstack: Rc<RefCell<CallStackInfo>>,
     ) -> Self
@@ -171,6 +182,20 @@ impl<'a> CallCreateExecutive<'a> {
         let gas = params.gas;
         let static_flag =
             parent_static_flag || params.call_type == CallType::StaticCall;
+
+        let caller = match params.call_type {
+            CallType::DelegateCall | CallType::CallCode => &params.address,
+            CallType::Call | CallType::StaticCall => &params.sender,
+            CallType::None => unreachable!(),
+        };
+        let callee = &params.address;
+
+        let reentrancy_flag = parent_reentrancy_flag
+            || is_reentrancy(
+                caller,
+                callee,
+                contracts_in_callstack.borrow().deref(),
+            );
 
         // if destination is builtin, try to execute it
         let kind = if let Some(builtin) =
@@ -214,6 +239,7 @@ impl<'a> CallCreateExecutive<'a> {
             depth,
             stack_depth,
             static_flag,
+            reentrancy_flag,
             kind,
             gas,
             is_create: false,
@@ -225,7 +251,7 @@ impl<'a> CallCreateExecutive<'a> {
     pub fn new_create_raw(
         params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
-        stack_depth: usize, static_flag: bool,
+        stack_depth: usize, static_flag: bool, parent_reentrancy_flag: bool,
         internal_contract_map: &'a InternalContractMap,
         contracts_in_callstack: Rc<RefCell<CallStackInfo>>,
     ) -> Self
@@ -252,6 +278,7 @@ impl<'a> CallCreateExecutive<'a> {
             depth,
             stack_depth,
             static_flag,
+            reentrancy_flag: parent_reentrancy_flag,
             kind,
             gas,
             is_create: true,
@@ -301,15 +328,17 @@ impl<'a> CallCreateExecutive<'a> {
         }
     }
 
-    fn check_static_flag(
-        params: &ActionParams, static_flag: bool, is_create: bool,
-    ) -> vm::Result<()> {
+    fn check_static_reentrancy_flag(
+        params: &ActionParams, static_flag: bool, reentrancy_flag: bool,
+        is_create: bool,
+    ) -> vm::Result<()>
+    {
         if is_create {
-            if static_flag {
+            if static_flag || reentrancy_flag {
                 return Err(vm::Error::MutableCallInStaticContext);
             }
         } else {
-            if static_flag
+            if (static_flag || reentrancy_flag)
                 && (params.call_type == CallType::StaticCall
                     || params.call_type == CallType::Call)
                 && params.value.value() > U256::zero()
@@ -446,8 +475,9 @@ impl<'a> CallCreateExecutive<'a> {
     fn as_context<'any>(
         state: &'any mut State, env: &'any Env, machine: &'any Machine,
         spec: &'any Spec, depth: usize, stack_depth: usize, static_flag: bool,
-        origin: &'any OriginInfo, substate: &'any mut Substate,
-        output: OutputPolicy, internal_contract_map: &'any InternalContractMap,
+        reentrancy_flag: bool, origin: &'any OriginInfo,
+        substate: &'any mut Substate, output: OutputPolicy,
+        internal_contract_map: &'any InternalContractMap,
     ) -> Context<'any>
     {
         Context::new(
@@ -461,6 +491,7 @@ impl<'a> CallCreateExecutive<'a> {
             substate,
             output,
             static_flag,
+            reentrancy_flag,
             internal_contract_map,
         )
     }
@@ -476,9 +507,10 @@ impl<'a> CallCreateExecutive<'a> {
                 assert!(!self.is_create);
 
                 let mut inner = || {
-                    Self::check_static_flag(
+                    Self::check_static_reentrancy_flag(
                         params,
                         self.static_flag,
+                        self.reentrancy_flag,
                         self.is_create,
                     )?;
                     Self::transfer_exec_balance(
@@ -501,9 +533,10 @@ impl<'a> CallCreateExecutive<'a> {
                 let mut inner = || {
                     let builtin = self.machine.builtin(&params.code_address, self.env.number).expect("Builtin is_some is checked when creating this kind in new_call_raw; qed");
 
-                    Self::check_static_flag(
+                    Self::check_static_reentrancy_flag(
                         &params,
                         self.static_flag,
+                        self.reentrancy_flag,
                         self.is_create,
                     )?;
                     state.checkpoint();
@@ -560,14 +593,16 @@ impl<'a> CallCreateExecutive<'a> {
                 assert!(!self.is_create);
 
                 let static_flag = self.static_flag;
+                let reentrancy_flag = self.reentrancy_flag;
                 let is_create = self.is_create;
                 let spec = self.spec;
                 let internal_contract_map = self.internal_contract_map;
 
                 let mut pre_inner = || {
-                    Self::check_static_flag(
+                    Self::check_static_reentrancy_flag(
                         &params,
                         static_flag,
+                        reentrancy_flag,
                         is_create,
                     )?;
                     state.checkpoint();
@@ -610,6 +645,7 @@ impl<'a> CallCreateExecutive<'a> {
                     self.depth,
                     self.stack_depth,
                     self.static_flag,
+                    self.reentrancy_flag,
                     &origin,
                     &mut unconfirmed_substate,
                     OutputPolicy::Return,
@@ -634,13 +670,15 @@ impl<'a> CallCreateExecutive<'a> {
 
                 {
                     let static_flag = self.static_flag;
+                    let reentrancy_flag = self.reentrancy_flag;
                     let is_create = self.is_create;
                     let spec = self.spec;
 
                     let mut pre_inner = || {
-                        Self::check_static_flag(
+                        Self::check_static_reentrancy_flag(
                             &params,
                             static_flag,
+                            reentrancy_flag,
                             is_create,
                         )?;
                         state.checkpoint();
@@ -668,6 +706,7 @@ impl<'a> CallCreateExecutive<'a> {
                         self.depth,
                         self.stack_depth,
                         self.static_flag,
+                        self.reentrancy_flag,
                         &origin,
                         &mut unconfirmed_substate,
                         OutputPolicy::Return,
@@ -702,12 +741,14 @@ impl<'a> CallCreateExecutive<'a> {
                 {
                     let static_flag = self.static_flag;
                     let is_create = self.is_create;
+                    let reentrancy_flag = self.reentrancy_flag;
                     let spec = self.spec;
 
                     let mut pre_inner = || {
-                        Self::check_static_flag(
+                        Self::check_static_reentrancy_flag(
                             &params,
                             static_flag,
+                            reentrancy_flag,
                             is_create,
                         )?;
                         state.checkpoint();
@@ -739,6 +780,7 @@ impl<'a> CallCreateExecutive<'a> {
                         self.depth,
                         self.stack_depth,
                         self.static_flag,
+                        self.reentrancy_flag,
                         &origin,
                         &mut unconfirmed_substate,
                         OutputPolicy::InitContract,
@@ -794,6 +836,7 @@ impl<'a> CallCreateExecutive<'a> {
                         self.depth,
                         self.stack_depth,
                         self.static_flag,
+                        self.reentrancy_flag,
                         &origin,
                         &mut unconfirmed_substate,
                         if self.is_create {
@@ -857,6 +900,7 @@ impl<'a> CallCreateExecutive<'a> {
                         self.depth,
                         self.stack_depth,
                         self.static_flag,
+                        self.reentrancy_flag,
                         &origin,
                         &mut unconfirmed_substate,
                         if self.is_create {
@@ -983,6 +1027,7 @@ impl<'a> CallCreateExecutive<'a> {
                         resume.depth + 1,
                         resume.stack_depth,
                         resume.static_flag,
+                        resume.reentrancy_flag,
                         resume.internal_contract_map,
                         top_substate.contracts_in_callstack.clone(),
                     );
@@ -1007,6 +1052,7 @@ impl<'a> CallCreateExecutive<'a> {
                         resume.factory,
                         resume.depth + 1,
                         resume.stack_depth,
+                        resume.static_flag,
                         resume.static_flag,
                         resume.internal_contract_map,
                         top_substate.contracts_in_callstack.clone(),
@@ -1100,6 +1146,9 @@ impl<'a> Executive<'a> {
         stack_depth: usize,
     ) -> vm::Result<FinalizationResult>
     {
+        if cfg!(not(test)) {
+            unreachable!()
+        }
         let _address = params.address;
         let _gas = params.gas;
 
@@ -1113,6 +1162,32 @@ impl<'a> Executive<'a> {
             self.depth,
             stack_depth,
             self.static_flag,
+            false, /* parent reentrancy flag */
+            self.internal_contract_map,
+            substate.contracts_in_callstack.clone(),
+        )
+        .consume(self.state, substate);
+
+        result
+    }
+
+    pub fn create_at_stack_bottom(
+        &mut self, params: ActionParams, substate: &mut Substate,
+    ) -> vm::Result<FinalizationResult> {
+        let _address = params.address;
+        let _gas = params.gas;
+
+        let vm_factory = self.state.vm_factory();
+        let result = CallCreateExecutive::new_create_raw(
+            params,
+            self.env,
+            self.machine,
+            self.spec,
+            &vm_factory,
+            self.depth,
+            0, /* stack depth */
+            self.static_flag,
+            false, /* parent reentrancy flag */
             self.internal_contract_map,
             substate.contracts_in_callstack.clone(),
         )
@@ -1124,14 +1199,12 @@ impl<'a> Executive<'a> {
     pub fn create(
         &mut self, params: ActionParams, substate: &mut Substate,
     ) -> vm::Result<FinalizationResult> {
-        self.create_with_stack_depth(params, substate, 0)
+        self.create_at_stack_bottom(params, substate)
     }
 
-    pub fn call_with_stack_depth(
+    pub fn call_at_stack_bottom(
         &mut self, params: ActionParams, substate: &mut Substate,
-        stack_depth: usize,
-    ) -> vm::Result<FinalizationResult>
-    {
+    ) -> vm::Result<FinalizationResult> {
         let vm_factory = self.state.vm_factory();
 
         let result = CallCreateExecutive::new_call_raw(
@@ -1141,8 +1214,9 @@ impl<'a> Executive<'a> {
             self.spec,
             &vm_factory,
             self.depth,
-            stack_depth,
+            0, /* stack depth */
             self.static_flag,
+            false, /* reentrancy flag */
             self.internal_contract_map,
             substate.contracts_in_callstack.clone(),
         )
@@ -1154,7 +1228,7 @@ impl<'a> Executive<'a> {
     pub fn call(
         &mut self, params: ActionParams, substate: &mut Substate,
     ) -> vm::Result<FinalizationResult> {
-        self.call_with_stack_depth(params, substate, 0)
+        self.call_at_stack_bottom(params, substate)
     }
 
     pub fn transact_virtual(

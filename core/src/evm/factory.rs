@@ -20,6 +20,8 @@
 
 //! Evm factory.
 use super::{interpreter::SharedCache, vmtype::VMType};
+#[cfg(test)]
+use crate::evm::CallType;
 use crate::vm::{ActionParams, Exec, Spec};
 use cfx_types::U256;
 use std::sync::Arc;
@@ -90,6 +92,7 @@ fn test_create_vm() {
     };
 
     let mut params = ActionParams::default();
+    params.call_type = CallType::None;
     params.code = Some(Arc::new(Bytes::default()));
     let context = MockContext::new();
     let _vm =

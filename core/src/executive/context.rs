@@ -17,7 +17,7 @@ use crate::{
 use cfx_parameters::staking::COLLATERAL_PER_BYTE;
 use cfx_types::{Address, H256, U256};
 use primitives::transaction::UNSIGNED_SENDER;
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 
 /// Policy for handling output data on `RETURN` opcode.
 pub enum OutputPolicy {
@@ -62,10 +62,12 @@ impl OriginInfo {
 }
 
 /// Implementation of evm context.
+#[allow(dead_code)]
 pub struct Context<'a> {
     state: &'a mut State,
     env: &'a Env,
     depth: usize,
+    // The stack_depth is never read in context, even before this commit.
     stack_depth: usize,
     origin: &'a OriginInfo,
     substate: &'a mut Substate,
@@ -73,6 +75,7 @@ pub struct Context<'a> {
     spec: &'a Spec,
     output: OutputPolicy,
     static_flag: bool,
+    reentrancy_flag: bool,
     internal_contract_map: &'a InternalContractMap,
 }
 
@@ -82,7 +85,7 @@ impl<'a> Context<'a> {
         state: &'a mut State, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, depth: usize, stack_depth: usize,
         origin: &'a OriginInfo, substate: &'a mut Substate,
-        output: OutputPolicy, static_flag: bool,
+        output: OutputPolicy, static_flag: bool, reentrancy_flag: bool,
         internal_contract_map: &'a InternalContractMap,
     ) -> Self
     {
@@ -97,6 +100,7 @@ impl<'a> Context<'a> {
             spec,
             output,
             static_flag,
+            reentrancy_flag,
             internal_contract_map,
         }
     }
@@ -110,7 +114,7 @@ impl<'a> ContextTrait for Context<'a> {
     }
 
     fn set_storage(&mut self, key: Vec<u8>, value: U256) -> vm::Result<()> {
-        if self.static_flag {
+        if self.is_static_or_reentrancy() {
             Err(vm::Error::MutableCallInStaticContext)
         } else {
             self.state
@@ -124,7 +128,11 @@ impl<'a> ContextTrait for Context<'a> {
         }
     }
 
-    fn is_static(&self) -> bool { return self.static_flag; }
+    fn is_static_or_reentrancy(&self) -> bool {
+        self.static_flag || self.reentrancy_flag
+    }
+
+    fn is_static(&self) -> bool { self.static_flag }
 
     fn exists(&self, address: &Address) -> vm::Result<bool> {
         self.state.exists(address).map_err(Into::into)
@@ -194,7 +202,7 @@ impl<'a> ContextTrait for Context<'a> {
             params_type: vm::ParamsType::Embedded,
         };
 
-        if !self.static_flag {
+        if !self.is_static_or_reentrancy() {
             if !self.spec.keep_unsigned_nonce
                 || params.sender != UNSIGNED_SENDER
             {
@@ -206,25 +214,30 @@ impl<'a> ContextTrait for Context<'a> {
             return Ok(Err(TrapKind::Create(params, address)));
         }
 
-        let mut ex = Executive::from_parent(
-            self.state,
-            self.env,
-            self.machine,
-            self.spec,
-            self.depth,
-            self.static_flag,
-            self.internal_contract_map,
-        );
-        let out = ex.create_with_stack_depth(
-            params,
-            self.substate,
-            self.stack_depth + 1,
-        );
-        Ok(Ok(into_contract_create_result(
-            out,
-            &address,
-            self.substate,
-        )))
+        if cfg!(test) {
+            // The following code is only reachable in test mode
+            let mut ex = Executive::from_parent(
+                self.state,
+                self.env,
+                self.machine,
+                self.spec,
+                self.depth,
+                self.static_flag,
+                self.internal_contract_map,
+            );
+            let out = ex.create_with_stack_depth(
+                params,
+                self.substate,
+                self.stack_depth + 1,
+            );
+            return Ok(Ok(into_contract_create_result(
+                out,
+                &address,
+                self.substate,
+            )));
+        } else {
+            unreachable!()
+        }
     }
 
     fn call(
@@ -336,7 +349,7 @@ impl<'a> ContextTrait for Context<'a> {
     fn log(&mut self, topics: Vec<H256>, data: &[u8]) -> vm::Result<()> {
         use primitives::log_entry::LogEntry;
 
-        if self.static_flag {
+        if self.is_static_or_reentrancy() {
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
@@ -351,7 +364,7 @@ impl<'a> ContextTrait for Context<'a> {
     }
 
     fn suicide(&mut self, refund_address: &Address) -> vm::Result<()> {
-        if self.static_flag {
+        if self.is_static_or_reentrancy() {
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
@@ -408,13 +421,11 @@ impl<'a> ContextTrait for Context<'a> {
     }
 
     fn is_reentrancy(&self, caller: &Address, callee: &Address) -> bool {
-        let is_recursive_call = *caller == *callee;
-        let contract_in_callstack = self
-            .substate
-            .contracts_in_callstack
-            .borrow()
-            .contains_key(callee);
-        return !is_recursive_call && contract_in_callstack;
+        is_reentrancy(
+            caller,
+            callee,
+            self.substate.contracts_in_callstack.borrow().deref(),
+        )
     }
 }
 
@@ -521,6 +532,7 @@ mod tests {
             &mut setup.substate,
             OutputPolicy::InitContract,
             false,
+            false,
             &setup.internal_contract_map,
         );
 
@@ -543,6 +555,7 @@ mod tests {
             &origin,
             &mut setup.substate,
             OutputPolicy::InitContract,
+            false,
             false,
             &setup.internal_contract_map,
         );
@@ -616,6 +629,7 @@ mod tests {
             &mut setup.substate,
             OutputPolicy::InitContract,
             false,
+            false,
             &setup.internal_contract_map,
         );
 
@@ -665,6 +679,7 @@ mod tests {
                 &mut setup.substate,
                 OutputPolicy::InitContract,
                 false,
+                false,
                 &setup.internal_contract_map,
             );
             ctx.log(log_topics, &log_data).unwrap();
@@ -710,6 +725,7 @@ mod tests {
                 &mut setup.substate,
                 OutputPolicy::InitContract,
                 false,
+                false,
                 &setup.internal_contract_map,
             );
             ctx.suicide(&refund_account).unwrap();
@@ -737,6 +753,7 @@ mod tests {
                 &origin,
                 &mut setup.substate,
                 OutputPolicy::InitContract,
+                false,
                 false,
                 &setup.internal_contract_map,
             );
@@ -783,6 +800,7 @@ mod tests {
                 &origin,
                 &mut setup.substate,
                 OutputPolicy::InitContract,
+                false,
                 false,
                 &setup.internal_contract_map,
             );

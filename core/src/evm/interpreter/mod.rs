@@ -755,7 +755,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 
                 let create_gas = provided.expect("`provided` comes through Self::exec from `Gasometer::get_gas_cost_mem`; `gas_gas_mem_cost` guarantees `Some` when instruction is `CALL`/`CALLCODE`/`DELEGATECALL`/`CREATE`; this is `CREATE`; qed");
 
-                if context.is_static() {
+                if context.is_static_or_reentrancy() {
                     return Err(vm::Error::MutableCallInStaticContext);
                 }
 
