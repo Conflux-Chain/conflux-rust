@@ -158,40 +158,55 @@ fn hash_compute(
     let v3 = as_u64_le(&header_hash[24..32]);
     let mut d: [u32; POW_N as usize] = [0; POW_N as usize];
 
-    fn power_mod(aa: u32, nn: u32) -> u32 {
-        let mut a = aa as u64;
-        let mut n = nn;
-        let mut result: u32 = 1;
-        while n > 0 {
-            if n % 2 == 1 {
-                result = ((result as u64) * a % POW_MOD64) as u32;
+    fn remap(h: u64) -> u64 {
+        fn power_mod(a1: u32, n0: u64) -> u64 {
+            let mut a = a1 as u64;
+            let mut n = n0;
+            let mut result = 1u64;
+            while n > 0 {
+                if n % 2 == 1 {
+                    result = result * a % POW_MOD64;
+                }
+                a = a * a % POW_MOD64;
+                n >>= 1;
             }
-            a = a * a % POW_MOD64;
-            n >>= 1;
+            return result;
         }
-        return result;
+
+        fn gcd(a: u64, b: u64) -> u64 {
+            if b == 0 {
+                return a;
+            } else {
+                return gcd(b, a % b);
+            }
+        }
+
+        let mut e = h % (POW_MOD64 - 2) + 1;
+        loop {
+            let g = gcd(e, POW_MOD64 - 1);
+            if g == 1 {
+                break;
+            }
+            e /= g
+        }
+        return power_mod(POW_MOD_B, e) as u64;
     }
 
-    fn gcd(a: u32, b: u32) -> u32 {
-        if b == 0 {
-            return a;
-        } else {
-            return gcd(b, a % b);
+    fn compute_c(a: u64, b: u64, h0: u64) -> u64 {
+        let mut h = h0;
+        loop {
+            let c = remap(h);
+            if b * b % POW_MOD64 != 4u64 * a * c % POW_MOD64 {
+                return c;
+            }
+            h = h.wrapping_add(1);
         }
     }
 
-    let a = v0 % (POW_MOD64 - 1) + 1;
-    let b = v1 % POW_MOD64;
-    let c = v2 % POW_MOD64;
-    let mut e = (v3 % (POW_MOD64 - 2) + 1) as u32;
-    loop {
-        let g = gcd(e, POW_MOD - 1);
-        if g == 1 {
-            break;
-        }
-        e /= g
-    }
-    let w = power_mod(POW_MOD_B, e);
+    let a = remap(v0);
+    let b = remap(v1);
+    let c = compute_c(a, b, v2);
+    let w = remap(v3);
 
     let warp_id = nonce / POW_WARP_SIZE;
     for i in 0..POW_WARP_SIZE {
