@@ -12,7 +12,7 @@ use super::{
 use crate::{
     evm::{ActionParams, Spec},
     impl_function_type, make_function_table, make_solidity_contract,
-    make_solidity_function,
+    make_solidity_function, rename_interface,
     state::{State, Substate},
     vm,
 };
@@ -20,10 +20,10 @@ use cfx_types::{address_util::AddressUtil, Address, U256};
 
 lazy_static! {
     static ref CONTRACT_TABLE: SolFnTable = make_function_table!(
-        SetSponsorForGas,
-        SetSponsorForCollateral,
-        AddPrivilege,
-        RemovePrivilege
+        SetSponsorForGasSnake,
+        SetSponsorForCollateralSnake,
+        AddPrivilegeSnake,
+        RemovePrivilegeSnake
     );
     static ref CONTRACT_TABLE_V2: SolFnTable = make_function_table!(
         SetSponsorForGas,
@@ -47,9 +47,13 @@ make_solidity_contract! {
 }
 
 make_solidity_function! {
-    struct SetSponsorForGas((Address, U256), "set_sponsor_for_gas(address,uint256)");
+    struct SetSponsorForGas((Address, U256), "setSponsorforGas(address,uint256)");
 }
 impl_function_type!(SetSponsorForGas, "payable_write", gas: 2 * SPEC.sstore_reset_gas);
+
+rename_interface! {
+    struct SetSponsorForGasSnake(SetSponsorForGas, "set_sponsor_for_gas(address,uint256)");
+}
 
 impl ExecutionTrait for SetSponsorForGas {
     fn execute_inner(
@@ -62,9 +66,13 @@ impl ExecutionTrait for SetSponsorForGas {
 }
 
 make_solidity_function! {
-    struct SetSponsorForCollateral(Address, "set_sponsor_for_collateral(address)");
+    struct SetSponsorForCollateral(Address, "setSponsorforCollateral(address)");
 }
 impl_function_type!(SetSponsorForCollateral, "payable_write", gas: 2 * SPEC.sstore_reset_gas);
+
+rename_interface! {
+    struct SetSponsorForCollateralSnake(SetSponsorForCollateral, "set_sponsor_for_collateral(address)");
+}
 
 impl ExecutionTrait for SetSponsorForCollateral {
     fn execute_inner(
@@ -77,9 +85,12 @@ impl ExecutionTrait for SetSponsorForCollateral {
 }
 
 make_solidity_function! {
-    struct AddPrivilege(Vec<Address>, "add_privilege(address[])");
+    struct AddPrivilege(Vec<Address>, "addPrivilege(address[])");
 }
 impl_function_type!(AddPrivilege, "non_payable_write");
+rename_interface! {
+    struct AddPrivilegeSnake(AddPrivilege, "add_privilege(address[])");
+}
 
 impl UpfrontPaymentTrait for AddPrivilege {
     fn upfront_gas_payment(
@@ -105,9 +116,12 @@ impl ExecutionTrait for AddPrivilege {
 }
 
 make_solidity_function! {
-    struct RemovePrivilege(Vec<Address>, "remove_privilege(address[])");
+    struct RemovePrivilege(Vec<Address>, "removePrivilege(address[])");
 }
 impl_function_type!(RemovePrivilege, "non_payable_write");
+rename_interface! {
+    struct RemovePrivilegeSnake(RemovePrivilege, "remove_privilege(address[])");
+}
 
 impl UpfrontPaymentTrait for RemovePrivilege {
     fn upfront_gas_payment(
@@ -325,19 +339,19 @@ fn test_sponsor_contract_sig() {
     static REMOVE_PRIVILEGE_SIG: &'static [u8] = &[0x44, 0xc0, 0xbd, 0x21];
 
     assert_eq!(
-        SetSponsorForGas {}.function_sig().to_vec(),
+        SetSponsorForGasSnake {}.function_sig().to_vec(),
         SET_SPONSOR_FOR_GAS_SIG.to_vec()
     );
     assert_eq!(
-        SetSponsorForCollateral {}.function_sig().to_vec(),
+        SetSponsorForCollateralSnake {}.function_sig().to_vec(),
         SET_SPONSOR_FOR_COLLATERAL_SIG.to_vec()
     );
     assert_eq!(
-        AddPrivilege {}.function_sig().to_vec(),
+        AddPrivilegeSnake {}.function_sig().to_vec(),
         ADD_PRIVILEGE_SIG.to_vec()
     );
     assert_eq!(
-        RemovePrivilege {}.function_sig().to_vec(),
+        RemovePrivilegeSnake {}.function_sig().to_vec(),
         REMOVE_PRIVILEGE_SIG.to_vec()
     );
 }

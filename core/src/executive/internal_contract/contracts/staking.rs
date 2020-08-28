@@ -12,7 +12,7 @@ use super::{
 use crate::{
     evm::{ActionParams, Spec},
     impl_function_type, make_function_table, make_solidity_contract,
-    make_solidity_function,
+    make_solidity_function, rename_interface,
     state::{State, Substate},
     vm,
 };
@@ -20,7 +20,7 @@ use cfx_types::{Address, U256};
 
 lazy_static! {
     static ref CONTRACT_TABLE: SolFnTable =
-        make_function_table!(Deposit, Withdraw, VoteLock);
+        make_function_table!(Deposit, Withdraw, VoteLockSnake);
     static ref CONTRACT_TABLE_V2: SolFnTable = make_function_table!(
         Deposit,
         Withdraw,
@@ -87,9 +87,12 @@ impl ExecutionTrait for Withdraw {
 }
 
 make_solidity_function! {
-    struct VoteLock((U256, U256), "vote_lock(uint256,uint256)");
+    struct VoteLock((U256, U256), "voteLock(uint256,uint256)");
 }
 impl_function_type!(VoteLock, "non_payable_write");
+rename_interface! {
+    struct VoteLockSnake(VoteLock, "vote_lock(uint256,uint256)");
+}
 
 impl UpfrontPaymentTrait for VoteLock {
     fn upfront_gas_payment(
@@ -165,5 +168,8 @@ fn test_staking_contract_sig() {
 
     assert_eq!(Deposit {}.function_sig().to_vec(), DEPOSIT_SIG.to_vec());
     assert_eq!(Withdraw {}.function_sig().to_vec(), WITHDRAW_SIG.to_vec());
-    assert_eq!(VoteLock {}.function_sig().to_vec(), VOTE_LOCK_SIG.to_vec());
+    assert_eq!(
+        VoteLockSnake {}.function_sig().to_vec(),
+        VOTE_LOCK_SIG.to_vec()
+    );
 }
