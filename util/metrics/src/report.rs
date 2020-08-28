@@ -11,6 +11,7 @@ use crate::{
     registry::{DEFAULT_GROUPING_REGISTRY, DEFAULT_REGISTRY},
 };
 use lazy_static::lazy_static;
+use rand::Rng;
 use std::{
     fs::OpenOptions,
     io::Write,
@@ -22,10 +23,12 @@ use std::{
 lazy_static! {
     static ref REPORT_TIME: Arc<dyn Gauge<usize>> =
         GaugeUsize::register("metrics_report_time");
+    static ref REPORT_FAILURE_COUNTER: Arc<dyn Counter<usize>> =
+        CounterUsize::register("metrics_report_failures");
 }
 
 pub trait Reporter: Send {
-    fn report(&self) -> Result<(), String>;
+    fn report(&self) -> Result<bool, String>;
 }
 
 pub fn report_async<R: 'static + Reporter>(reporter: R, interval: Duration) {
@@ -34,14 +37,21 @@ pub fn report_async<R: 'static + Reporter>(reporter: R, interval: Duration) {
     }
 
     thread::spawn(move || loop {
-        thread::sleep(interval);
+        // sleep random time on different nodes to reduce competition.
+        thread::sleep(
+            interval.mul_f64(0.5 + rand::thread_rng().gen_range(0.0, 1.0)),
+        );
 
         let start = Instant::now();
-        if let Err(e) = reporter.report() {
-            eprintln!("Exit metrics reporting due to error: {}", e);
-            break;
+
+        match reporter.report() {
+            Ok(true) => REPORT_TIME.update(start.elapsed().as_nanos() as usize),
+            Ok(false) => REPORT_FAILURE_COUNTER.inc(1),
+            Err(e) => {
+                eprintln!("Exit metrics reporting due to error: {}", e);
+                return;
+            }
         }
-        REPORT_TIME.update(start.elapsed().as_nanos() as usize);
     });
 }
 
@@ -54,7 +64,7 @@ impl FileReporter {
 }
 
 impl Reporter for FileReporter {
-    fn report(&self) -> Result<(), String> {
+    fn report(&self) -> Result<bool, String> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|e| format!("invalid system time {:?}", e))?;
@@ -97,7 +107,7 @@ impl Reporter for FileReporter {
             .map_err(|e| format!("failed to write file, {:?}", e))?;
         }
 
-        Ok(())
+        Ok(true)
     }
 }
 
