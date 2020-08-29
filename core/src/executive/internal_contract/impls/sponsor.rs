@@ -186,20 +186,16 @@ pub fn set_sponsor_for_collateral(
     Ok(())
 }
 
-/// Implementation of `add_privilege(address[])`.
+/// Implementation of `addPrivilege(address[])` and
+/// `addPrivilegebyAdmin(address,address[])`.
 pub fn add_privilege(
-    addresses: Vec<Address>, params: &ActionParams, state: &mut State,
-) -> vm::Result<()> {
-    if !params.sender.is_contract_address() {
-        return Err(vm::Error::InternalContract(
-            "normal account is not allowed to set commission_privilege",
-        ));
-    }
-
-    let contract_address = params.sender;
+    contract: Address, addresses: Vec<Address>, params: &ActionParams,
+    state: &mut State,
+) -> vm::Result<()>
+{
     for user_addr in addresses {
         state.add_commission_privilege(
-            contract_address,
+            contract,
             params.storage_owner,
             user_addr,
         )?;
@@ -208,20 +204,16 @@ pub fn add_privilege(
     Ok(())
 }
 
-/// Implementation of `remove_privilege(address[])`.
+/// Implementation of `removePrivilege(address[])` and
+/// `removePrivilegebyAdmin(address,address[])`.
 pub fn remove_privilege(
-    addresses: Vec<Address>, params: &ActionParams, state: &mut State,
-) -> vm::Result<()> {
-    if !params.sender.is_contract_address() {
-        return Err(vm::Error::InternalContract(
-            "normal account is not allowed to set commission_privilege",
-        ));
-    }
-
-    let contract_address = params.sender;
+    contract: Address, addresses: Vec<Address>, params: &ActionParams,
+    state: &mut State,
+) -> vm::Result<()>
+{
     for user_addr in addresses {
         state.remove_commission_privilege(
-            contract_address,
+            contract,
             params.storage_owner,
             user_addr,
         )?;

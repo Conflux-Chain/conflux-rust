@@ -3,14 +3,14 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    consensus_internal_parameters::MINED_BLOCK_COUNT_PER_QUARTER,
     state::State,
     vm::{self, ActionParams},
 };
 use cfx_parameters::consensus::ONE_CFX_IN_DRIP;
-use cfx_types::U256;
+use cfx_types::{Address, U256};
 
 /// Implementation of `deposit(uint256)`.
-/// The input should consist of 32 bytes `amount`.
 pub fn deposit(
     amount: U256, params: &ActionParams, state: &mut State,
 ) -> vm::Result<()> {
@@ -25,7 +25,6 @@ pub fn deposit(
 }
 
 /// Implementation of `withdraw(uint256)`.
-/// The input should consist of 32 bytes `amount`.
 pub fn withdraw(
     amount: U256, params: &ActionParams, state: &mut State,
 ) -> vm::Result<()> {
@@ -40,9 +39,7 @@ pub fn withdraw(
     }
 }
 
-/// Implementation of `lock(uint256,uint256)`.
-/// The input should consist of 32 bytes `amount` + 32 bytes
-/// `unlock_block_number`.
+/// Implementation of `getVoteLocked(address,uint)`.
 pub fn vote_lock(
     amount: U256, unlock_block_number: U256, params: &ActionParams,
     state: &mut State,
@@ -60,4 +57,50 @@ pub fn vote_lock(
         state.vote_lock(&params.sender, &amount, unlock_block_number)?;
         Ok(())
     }
+}
+
+/// Implementation of `getLockedStakingBalance(address,uint)`.
+pub fn get_locked_staking(
+    address: Address, block_number: U256, state: &mut State,
+) -> vm::Result<U256> {
+    let mut block_number = block_number.low_u64();
+    if block_number < state.block_number() {
+        block_number = state.block_number();
+    }
+    Ok(state.locked_staking_balance_at_block_number(&address, block_number)?)
+}
+
+/// Implementation of `getVotePower(address,uint)`.
+pub fn get_vote_power(
+    address: Address, block_number: U256, state: &mut State,
+) -> vm::Result<U256> {
+    let mut block_number = block_number.low_u64();
+    if block_number < state.block_number() {
+        block_number = state.block_number();
+    }
+
+    let three_months_locked = state.locked_staking_balance_at_block_number(
+        &address,
+        block_number + MINED_BLOCK_COUNT_PER_QUARTER,
+    )?;
+    let six_months_locked = state.locked_staking_balance_at_block_number(
+        &address,
+        block_number + 2 * MINED_BLOCK_COUNT_PER_QUARTER,
+    )?;
+    let one_year_locked = state.locked_staking_balance_at_block_number(
+        &address,
+        block_number + 4 * MINED_BLOCK_COUNT_PER_QUARTER,
+    )?;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━
+    //              Remaining Committed Staking Time             ┃  Voting Power
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╋━━━━━━━━━━━━━━━━━
+    // One year or more (i.e. ≥ 63072000 blocks)                 ┃    1
+    // Six months to one year (≥ 31536000 but < 63072000 blocks) ┃    0.5
+    // Three to six months (≥ 15768000 but < 31536000 blocks)    ┃    0.25
+    // Less than three month (i.e. < 15768000 blocks)            ┃    0
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━
+    let vote_power =
+        (three_months_locked + six_months_locked + one_year_locked * 2) / 4;
+    Ok(vote_power)
 }

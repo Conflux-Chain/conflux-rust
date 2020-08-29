@@ -705,6 +705,21 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         )
     }
 
+    pub fn locked_staking_balance_at_block_number(
+        &self, address: &Address, block_number: u64,
+    ) -> DbResult<U256> {
+        self.ensure_account_loaded(
+            address,
+            RequireCache::VoteStakeList,
+            |acc| {
+                acc.map_or(U256::zero(), |acc| {
+                    acc.staking_balance()
+                        - acc.withdrawable_staking_balance(block_number)
+                })
+            },
+        )
+    }
+
     pub fn deposit_list_length(&self, address: &Address) -> DbResult<usize> {
         self.ensure_account_loaded(address, RequireCache::DepositList, |acc| {
             acc.map_or(0, |acc| acc.deposit_list().map_or(0, |l| l.len()))
