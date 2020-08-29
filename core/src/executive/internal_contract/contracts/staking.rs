@@ -26,7 +26,8 @@ lazy_static! {
         Withdraw,
         VoteLock,
         GetStakingBalance,
-        GetVoteLocked
+        GetLockedStakingBalance,
+        GetVotePower
     );
 }
 
@@ -131,11 +132,11 @@ impl ExecutionTrait for GetStakingBalance {
 }
 
 make_solidity_function! {
-    struct GetVoteLocked((Address,U256), "getVoteLocked(address,uint)", U256);
+    struct GetLockedStakingBalance((Address,U256), "getLockedStakingBalance(address,uint)", U256);
 }
-impl_function_type!(GetVoteLocked, "query");
+impl_function_type!(GetLockedStakingBalance, "query");
 
-impl UpfrontPaymentTrait for GetVoteLocked {
+impl UpfrontPaymentTrait for GetLockedStakingBalance {
     fn upfront_gas_payment(
         &self, (address, _): &(Address, U256), _: &ActionParams, spec: &Spec,
         state: &State,
@@ -146,13 +147,39 @@ impl UpfrontPaymentTrait for GetVoteLocked {
     }
 }
 
-impl ExecutionTrait for GetVoteLocked {
+impl ExecutionTrait for GetLockedStakingBalance {
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
         _spec: &Spec, state: &mut State, _substate: &mut Substate,
     ) -> vm::Result<U256>
     {
-        Ok(get_vote_lock(address, block_number, state)?)
+        Ok(get_locked_staking(address, block_number, state)?)
+    }
+}
+
+make_solidity_function! {
+    struct GetVotePower((Address,U256), "getVotePower(address,uint)", U256);
+}
+impl_function_type!(GetVotePower, "query");
+
+impl UpfrontPaymentTrait for GetVotePower {
+    fn upfront_gas_payment(
+        &self, (address, _): &(Address, U256), _: &ActionParams, spec: &Spec,
+        state: &State,
+    ) -> U256
+    {
+        let length = state.vote_stake_list_length(address).unwrap_or(0);
+        U256::from(spec.sload_gas) * U256::from(length + 1)
+    }
+}
+
+impl ExecutionTrait for GetVotePower {
+    fn execute_inner(
+        &self, (address, block_number): (Address, U256), _: &ActionParams,
+        _spec: &Spec, state: &mut State, _substate: &mut Substate,
+    ) -> vm::Result<U256>
+    {
+        Ok(get_vote_power(address, block_number, state)?)
     }
 }
 
