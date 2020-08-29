@@ -1053,7 +1053,7 @@ impl<'a> CallCreateExecutive<'a> {
                         resume.depth + 1,
                         resume.stack_depth,
                         resume.static_flag,
-                        resume.static_flag,
+                        resume.reentrancy_flag,
                         resume.internal_contract_map,
                         top_substate.contracts_in_callstack.clone(),
                     );

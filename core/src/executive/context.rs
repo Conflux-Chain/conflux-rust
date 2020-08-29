@@ -526,13 +526,13 @@ mod tests {
             &setup.env,
             &setup.machine,
             &setup.spec,
-            0,
-            0,
+            0, /* depth */
+            0, /* stack_depth */
             &origin,
             &mut setup.substate,
             OutputPolicy::InitContract,
-            false,
-            false,
+            false, /* static_flag */
+            false, /* reentrancy_flag */
             &setup.internal_contract_map,
         );
 
@@ -550,13 +550,13 @@ mod tests {
             &setup.env,
             &setup.machine,
             &setup.spec,
-            0,
-            0,
+            0, /* depth */
+            0, /* stack_depth */
             &origin,
             &mut setup.substate,
             OutputPolicy::InitContract,
-            false,
-            false,
+            false, /* static_flag */
+            false, /* reentrancy_flag */
             &setup.internal_contract_map,
         );
 
@@ -623,13 +623,13 @@ mod tests {
             &setup.env,
             &setup.machine,
             &setup.spec,
-            0,
-            0,
+            0, /* depth */
+            0, /* stack_depth */
             &origin,
             &mut setup.substate,
             OutputPolicy::InitContract,
-            false,
-            false,
+            false, /* static_flag */
+            false, /* reentrancy_flag */
             &setup.internal_contract_map,
         );
 
@@ -673,13 +673,13 @@ mod tests {
                 &setup.env,
                 &setup.machine,
                 &setup.spec,
-                0,
-                0,
+                0, /* depth */
+                0, /* stack_depth */
                 &origin,
                 &mut setup.substate,
                 OutputPolicy::InitContract,
-                false,
-                false,
+                false, /* static_flag */
+                false, /* reentrancy_flag */
                 &setup.internal_contract_map,
             );
             ctx.log(log_topics, &log_data).unwrap();
@@ -719,13 +719,13 @@ mod tests {
                 &setup.env,
                 &setup.machine,
                 &setup.spec,
-                0,
-                0,
+                0, /* depth */
+                0, /* stack_depth */
                 &origin,
                 &mut setup.substate,
                 OutputPolicy::InitContract,
-                false,
-                false,
+                false, /* static_flag */
+                false, /* reentrancy_flag */
                 &setup.internal_contract_map,
             );
             ctx.suicide(&refund_account).unwrap();
@@ -748,13 +748,13 @@ mod tests {
                 &setup.env,
                 &setup.machine,
                 &setup.spec,
-                0,
-                0,
+                0, /* depth */
+                0, /* stack_depth */
                 &origin,
                 &mut setup.substate,
                 OutputPolicy::InitContract,
-                false,
-                false,
+                false, /* static_flag */
+                false, /* reentrancy_flag */
                 &setup.internal_contract_map,
             );
             match ctx
@@ -795,13 +795,13 @@ mod tests {
                 &setup.env,
                 &setup.machine,
                 &setup.spec,
-                0,
-                0,
+                0, /* depth */
+                0, /* stack_depth */
                 &origin,
                 &mut setup.substate,
                 OutputPolicy::InitContract,
-                false,
-                false,
+                false, /* static_flag */
+                false, /* reentrancy_flag */
                 &setup.internal_contract_map,
             );
 
