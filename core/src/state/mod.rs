@@ -713,7 +713,8 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             RequireCache::VoteStakeList,
             |acc| {
                 acc.map_or(U256::zero(), |acc| {
-                    acc.staking_balance() - acc.withdrawable_staking_balance(block_number)
+                    acc.staking_balance()
+                        - acc.withdrawable_staking_balance(block_number)
                 })
             },
         )

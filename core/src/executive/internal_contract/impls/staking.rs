@@ -66,6 +66,5 @@ pub fn get_vote_lock(
     if block_number < state.block_number() {
         block_number = state.block_number();
     }
-    Ok(state
-        .locked_staking_balance_at_block_number(&address, block_number)?)
+    Ok(state.locked_staking_balance_at_block_number(&address, block_number)?)
 }
