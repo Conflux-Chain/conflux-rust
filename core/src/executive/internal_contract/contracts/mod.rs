@@ -59,6 +59,23 @@ macro_rules! make_function_table {
     } }
 }
 
+#[macro_export]
+macro_rules! rename_interface {
+    ( $(#[$attr:meta])* $visibility:vis struct $new_name:ident ($old_name:ident, $interface:expr ); ) => {
+        $(#[$attr])* $visibility struct $new_name;
+
+        impl SolidityFunctionTrait for $new_name {
+            fn name(&self) -> &'static str { $interface }
+            fn execute(
+                &self, input: &[u8], params: &ActionParams, spec: &Spec,
+                state: &mut State, substate: &mut Substate,
+            ) -> vm::Result<vm::GasLeft> {
+                $old_name.execute(input, params, spec, state, substate)
+            }
+        }
+     };
+}
+
 pub struct InternalContractMap {
     builtin: Arc<BTreeMap<Address, Box<dyn InternalContractTrait>>>,
 }
