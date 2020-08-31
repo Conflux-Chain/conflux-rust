@@ -5,6 +5,7 @@
 use super::{ABIDecodable, ABIDecodeError, ABIEncodable};
 use cfx_types::{Address, U256};
 use hex;
+use lazy_static;
 use parity_bytes::ToPretty;
 use std::str::FromStr;
 

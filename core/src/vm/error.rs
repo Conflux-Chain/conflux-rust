@@ -21,9 +21,9 @@
 //! VM errors module
 
 use super::{action_params::ActionParams, ResumeCall, ResumeCreate};
-use crate::executive::ABIDecodeError;
 use cfx_statedb::Error as DbError;
 use cfx_types::{Address, U256};
+use solidity_abi::ABIDecodeError;
 use std::fmt;
 
 #[derive(Debug)]

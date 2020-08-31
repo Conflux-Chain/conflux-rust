@@ -2,7 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-mod abi;
 mod contracts;
 pub mod function;
 mod impls;
@@ -19,7 +18,6 @@ use std::sync::Arc;
 use self::contracts::SolFnTable;
 
 pub use self::{
-    abi::utils::pull_slice,
     contracts::{
         InternalContractMap, ADMIN_CONTROL_CONTRACT_ADDRESS,
         SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
@@ -28,7 +26,7 @@ pub use self::{
     impls::suicide,
 };
 
-pub use self::abi::ABIDecodeError;
+pub use solidity_abi::ABIDecodeError;
 
 lazy_static! {
     static ref INTERNAL_CONTRACT_CODE: Arc<Bytes> =
@@ -54,18 +52,21 @@ pub trait InternalContractTrait: Send + Sync {
             .data
             .as_ref()
             .ok_or(ABIDecodeError("None call data"))?;
-        let mut pointer = call_data.iter();
+        let (fn_sig_slice, call_params) = if call_data.len() < 4 {
+            return Err(ABIDecodeError("Incomplete function signature").into());
+        } else {
+            call_data.split_at(4)
+        };
 
         let mut fn_sig = [0u8; 4];
-        fn_sig.clone_from_slice(pull_slice(&mut pointer, 4)?);
-        let input = pointer.as_slice();
+        fn_sig.clone_from_slice(fn_sig_slice);
 
         let solidity_fn = self
             .get_func_table()
             .get(&fn_sig)
             .ok_or(vm::Error::InternalContract("unsupported function"))?;
 
-        solidity_fn.execute(input, params, spec, state, substate)
+        solidity_fn.execute(call_params, params, spec, state, substate)
     }
 
     fn code(&self) -> Arc<Bytes> { INTERNAL_CONTRACT_CODE.clone() }

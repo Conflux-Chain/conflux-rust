@@ -2,15 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{
-    abi::{ABIDecodable, ABIEncodable},
-    SolidityFunctionTrait,
-};
+use super::SolidityFunctionTrait;
 use crate::{
     state::{State, Substate},
     vm::{self, ActionParams, CallType, GasLeft, ReturnData, Spec},
 };
 use cfx_types::U256;
+use solidity_abi::{ABIDecodable, ABIEncodable};
 
 /// The standard implementation of the solidity function trait. The developer of
 /// new functions should implement the following traits.

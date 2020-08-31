@@ -1,0 +1,13 @@
+[package]
+name = "solidity-abi"
+version = "0.1.0"
+edition = "2018"
+
+
+[dependencies]
+cfx-types = {path = "../../cfx_types"}
+
+[dev-dependencies]
+hex = "0.3"
+parity-bytes = "0.1"
+lazy_static = "1.4"
