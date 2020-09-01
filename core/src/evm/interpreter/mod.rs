@@ -755,7 +755,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 
                 let create_gas = provided.expect("`provided` comes through Self::exec from `Gasometer::get_gas_cost_mem`; `gas_gas_mem_cost` guarantees `Some` when instruction is `CALL`/`CALLCODE`/`DELEGATECALL`/`CREATE`; this is `CREATE`; qed");
 
-                if context.is_static() {
+                if context.is_static_or_reentrancy() {
                     return Err(vm::Error::MutableCallInStaticContext);
                 }
 
@@ -846,8 +846,9 @@ impl<Cost: CostType> Interpreter<Cost> {
                 // Get sender & receive addresses, check if we have balance
                 let (sender_address, receive_address, has_balance, call_type) =
                     match instruction {
+                        // TAG: Forbid value transfer in static context.
                         instructions::CALL => {
-                            if context.is_static()
+                            if context.is_static_or_reentrancy()
                                 && value.map_or(false, |v| !v.is_zero())
                             {
                                 return Err(
@@ -902,35 +903,9 @@ impl<Cost: CostType> Interpreter<Cost> {
 
                 let valid_code_address = code_address.is_valid_address();
 
-                let recipient_address = match instruction {
-                    instructions::CALL | instructions::STATICCALL => {
-                        &code_address
-                    }
-                    instructions::CALLCODE | instructions::DELEGATECALL => {
-                        &self.params.address
-                    }
-                    _ => unreachable!(),
-                };
-                let not_reentrancy_attack =
-                    // If this message call is not recursive call and reentering another contract,
-                    // we regard it as reentrancy.
-                    if context.is_reentrancy(&self.params.address, recipient_address) {
-                        // If this message call is invoked by `transfer()` or `send()`,
-                        // formally, the call data is empty and available gas is no more than 2300,
-                        // the reentrancy protection will not be triggered.
-                        if in_size.is_zero() {
-                            call_gas <= Cost::from(context.spec().call_stipend)
-                        } else {
-                            false
-                        }
-                    } else {
-                        true
-                    };
-
                 let can_call = has_balance
                     && context.depth() < context.spec().max_depth
-                    && valid_code_address
-                    && not_reentrancy_attack;
+                    && valid_code_address;
                 if !can_call {
                     self.stack.push(U256::zero());
                     return Ok(InstructionResult::UnusedGas(call_gas));
