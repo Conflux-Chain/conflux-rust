@@ -217,7 +217,7 @@ impl<'a> ContextTrait for Context<'a> {
             return Ok(Err(TrapKind::Create(params, address)));
         }
 
-        // The following code is only reachable in test mode. 
+        // The following code is only reachable in test mode.
         let mut ex = Executive::from_parent(
             self.state,
             self.env,
