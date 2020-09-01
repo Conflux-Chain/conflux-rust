@@ -3,8 +3,12 @@
 // See http://www.gnu.org/licenses/
 
 use super::CleanupMode;
-use crate::evm::{CleanDustMode, Spec};
-use cfx_types::Address;
+use crate::{
+    evm::{CleanDustMode, Spec},
+    state::State,
+};
+use cfx_statedb::Result as DbResult;
+use cfx_types::{Address, U256};
 use primitives::LogEntry;
 use std::{
     cell::RefCell,
@@ -116,6 +120,24 @@ impl Substate {
         for (address, amount) in s.storage_released {
             *self.storage_released.entry(address).or_insert(0) += amount;
         }
+    }
+
+    // Let VM access storage from substate so that storage ownership can be
+    // maintained without help from state.
+    pub fn storage_at(
+        &self, state: &State, address: &Address, key: &[u8],
+    ) -> DbResult<U256> {
+        state.storage_at(address, key)
+    }
+
+    // Let VM access storage from substate so that storage ownership can be
+    // maintained without help from state.
+    pub fn set_storage(
+        &mut self, state: &mut State, address: &Address, key: Vec<u8>,
+        value: U256, owner: Address,
+    ) -> DbResult<()>
+    {
+        state.set_storage(address, key, value, owner)
     }
 
     pub fn record_storage_occupy(&mut self, address: &Address, amount: u64) {

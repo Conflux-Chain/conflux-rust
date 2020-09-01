@@ -633,7 +633,7 @@ impl OverlayAccount {
     }
 
     pub fn storage_at<StateDbStorage: StorageStateTrait>(
-        &self, db: &StateDbGeneric<StateDbStorage>, key: &Vec<u8>,
+        &self, db: &StateDbGeneric<StateDbStorage>, key: &[u8],
     ) -> DbResult<U256> {
         if let Some(value) = self.cached_storage_at(key) {
             return Ok(value);
@@ -655,7 +655,7 @@ impl OverlayAccount {
     fn get_and_cache_storage<StateDbStorage: StorageStateTrait>(
         storage_cache: &mut HashMap<Vec<u8>, U256>,
         ownership_cache: &mut HashMap<Vec<u8>, Option<Address>>,
-        db: &StateDbGeneric<StateDbStorage>, address: &Address, key: &Vec<u8>,
+        db: &StateDbGeneric<StateDbStorage>, address: &Address, key: &[u8],
         cache_ownership: bool,
     ) -> DbResult<U256>
     {
@@ -663,10 +663,10 @@ impl OverlayAccount {
         if let Some(value) = db.get::<StorageValue>(
             StorageKey::new_storage_key(address, key.as_ref()),
         )? {
-            storage_cache.insert(key.clone(), value.value);
+            storage_cache.insert(key.to_vec(), value.value);
             if cache_ownership {
                 ownership_cache.insert(
-                    key.clone(),
+                    key.to_vec(),
                     Some(match value.owner {
                         Some(owner) => owner,
                         None => *address,
@@ -675,9 +675,9 @@ impl OverlayAccount {
             }
             Ok(value.value)
         } else {
-            storage_cache.insert(key.clone(), U256::zero());
+            storage_cache.insert(key.to_vec(), U256::zero());
             if cache_ownership {
-                ownership_cache.insert(key.clone(), None);
+                ownership_cache.insert(key.to_vec(), None);
             }
             Ok(U256::zero())
         }

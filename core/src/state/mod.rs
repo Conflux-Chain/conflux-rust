@@ -1311,9 +1311,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         Ok(())
     }
 
-    pub fn storage_at(
-        &self, address: &Address, key: &Vec<u8>,
-    ) -> DbResult<U256> {
+    pub fn storage_at(&self, address: &Address, key: &[u8]) -> DbResult<U256> {
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |account| {
                 account.storage_at(&self.db, key).unwrap_or(U256::zero())
