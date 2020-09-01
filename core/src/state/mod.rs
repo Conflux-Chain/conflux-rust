@@ -82,7 +82,11 @@ struct StakingState {
 pub struct State {
     db: StateDb,
 
-    dirty_accounts_to_commit: Vec<(Address, AccountEntry)>,
+    // Only created once for txpool notification.
+    // Each element is an Ok(Account) for updated account, or Err(Address)
+    // for deleted account.
+    accounts_to_notify: Vec<Result<Account, Address>>,
+
     cache: RwLock<HashMap<Address, AccountEntry>>,
     staking_state_checkpoints: RwLock<Vec<StakingState>>,
     checkpoints: RwLock<Vec<HashMap<Address, Option<AccountEntry>>>>,
@@ -137,7 +141,7 @@ impl State {
             },
             block_number,
             vm,
-            dirty_accounts_to_commit: Default::default(),
+            accounts_to_notify: Default::default(),
         }
     }
 
@@ -986,25 +990,6 @@ impl State {
         Ok(())
     }
 
-    fn precommit_make_dirty_accounts_list(&mut self) {
-        if self.dirty_accounts_to_commit.is_empty() {
-            let mut sorted_dirty_accounts = self
-                .cache
-                .get_mut()
-                .drain()
-                .filter_map(|(address, entry)| {
-                    if entry.is_dirty() {
-                        Some((address, entry))
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-            sorted_dirty_accounts.sort_by(|a, b| a.0.cmp(&b.0));
-            self.dirty_accounts_to_commit = sorted_dirty_accounts;
-        }
-    }
-
     pub fn commit(
         &mut self, epoch_id: EpochId,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
@@ -1014,26 +999,43 @@ impl State {
         assert!(self.checkpoints.get_mut().is_empty());
         assert!(self.staking_state_checkpoints.get_mut().is_empty());
 
-        self.precommit_make_dirty_accounts_list();
-        self.commit_staking_state(debug_record.as_deref_mut())?;
+        let mut sorted_dirty_accounts = self
+            .cache
+            .get_mut()
+            .drain()
+            .filter_map(|(address, entry)| {
+                if entry.is_dirty() {
+                    Some((address, entry))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        sorted_dirty_accounts.sort_by(|a, b| a.0.cmp(&b.0));
 
         let mut killed_addresses = Vec::new();
-        for (address, entry) in self.dirty_accounts_to_commit.iter_mut() {
+        for (address, entry) in sorted_dirty_accounts.iter_mut() {
             entry.state = AccountState::Committed;
             match &mut entry.account {
-                None => killed_addresses.push(*address),
+                None => {
+                    killed_addresses.push(*address);
+                    self.accounts_to_notify.push(Err(*address));
+                }
                 Some(account) => {
                     account
                         .commit(&mut self.db, debug_record.as_deref_mut())?;
+                    let raw_account = account.as_account();
                     self.db.set::<Account>(
                         StorageKey::new_account_key(address),
-                        &account.as_account(),
+                        &raw_account,
                         debug_record.as_deref_mut(),
                     )?;
+                    self.accounts_to_notify.push(Ok(raw_account));
                 }
             }
         }
-        self.recycle_storage(killed_addresses, debug_record)?;
+        self.recycle_storage(killed_addresses, debug_record.as_deref_mut())?;
+        self.commit_staking_state(debug_record)?;
         Ok(self.db.commit(epoch_id)?)
     }
 
@@ -1047,9 +1049,10 @@ impl State {
         debug!("Notify epoch[{}]", epoch_id);
 
         let mut accounts_for_txpool = vec![];
-        for (_address, entry) in &self.dirty_accounts_to_commit {
-            if let Some(account) = &entry.account {
-                accounts_for_txpool.push(account.as_account());
+        for updated_or_deleted in &self.accounts_to_notify {
+            // if the account is updated.
+            if let Ok(account) = updated_or_deleted {
+                accounts_for_txpool.push(account.clone());
             }
         }
         {
