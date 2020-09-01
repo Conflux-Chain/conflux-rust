@@ -135,18 +135,18 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         block_number: u64,
     ) -> Self
     {
-        let staking_state = if block_number != 0 {
-            let annual_interest_rate =
-                db.get_annual_interest_rate().expect("no db error");
-            let accumulate_interest_rate =
-                db.get_accumulate_interest_rate().expect("no db error");
-            let total_issued_tokens =
-                db.get_total_issued_tokens().expect("No db error");
-            let total_staking_tokens =
-                db.get_total_staking_tokens().expect("No db error");
-            let total_storage_tokens =
-                db.get_total_storage_tokens().expect("No db error");
+        let annual_interest_rate =
+            db.get_annual_interest_rate().expect("no db error");
+        let accumulate_interest_rate =
+            db.get_accumulate_interest_rate().expect("no db error");
+        let total_issued_tokens =
+            db.get_total_issued_tokens().expect("No db error");
+        let total_staking_tokens =
+            db.get_total_staking_tokens().expect("No db error");
+        let total_storage_tokens =
+            db.get_total_storage_tokens().expect("No db error");
 
+        let staking_state = if db.is_initialized().expect("no db error") {
             StakingState {
                 total_issued_tokens,
                 total_staking_tokens,
@@ -156,6 +156,27 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 accumulate_interest_rate,
             }
         } else {
+            // If db is not initialized, all the loaded value should be zero.
+            assert!(
+                annual_interest_rate.is_zero(),
+                "annual_interest_rate is non-zero when db is un-init"
+            );
+            assert!(
+                accumulate_interest_rate.is_zero(),
+                "accumulate_interest_rate is non-zero when db is un-init"
+            );
+            assert!(
+                total_issued_tokens.is_zero(),
+                "total_issued_tokens is non-zero when db is un-init"
+            );
+            assert!(
+                total_staking_tokens.is_zero(),
+                "total_staking_tokens is non-zero when db is un-init"
+            );
+            assert!(
+                total_storage_tokens.is_zero(),
+                "total_storage_tokens is non-zero when db is un-init"
+            );
             StakingState {
                 total_issued_tokens: U256::default(),
                 total_staking_tokens: U256::default(),
