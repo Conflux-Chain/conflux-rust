@@ -145,6 +145,47 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             db.get_total_staking_tokens().expect("No db error");
         let total_storage_tokens =
             db.get_total_storage_tokens().expect("No db error");
+
+        let staking_state = if db.is_initialized().expect("no db error") {
+            StakingState {
+                total_issued_tokens,
+                total_staking_tokens,
+                total_storage_tokens,
+                interest_rate_per_block: annual_interest_rate
+                    / U256::from(BLOCKS_PER_YEAR),
+                accumulate_interest_rate,
+            }
+        } else {
+            // If db is not initialized, all the loaded value should be zero.
+            assert!(
+                annual_interest_rate.is_zero(),
+                "annual_interest_rate is non-zero when db is un-init"
+            );
+            assert!(
+                accumulate_interest_rate.is_zero(),
+                "accumulate_interest_rate is non-zero when db is un-init"
+            );
+            assert!(
+                total_issued_tokens.is_zero(),
+                "total_issued_tokens is non-zero when db is un-init"
+            );
+            assert!(
+                total_staking_tokens.is_zero(),
+                "total_staking_tokens is non-zero when db is un-init"
+            );
+            assert!(
+                total_storage_tokens.is_zero(),
+                "total_storage_tokens is non-zero when db is un-init"
+            );
+            StakingState {
+                total_issued_tokens: U256::default(),
+                total_staking_tokens: U256::default(),
+                total_storage_tokens: U256::default(),
+                interest_rate_per_block: *INITIAL_INTEREST_RATE_PER_BLOCK,
+                accumulate_interest_rate: *ACCUMULATED_INTEREST_RATE_SCALE,
+            }
+        };
+
         /*
         let account_start_nonce = (block_number
             * ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT as u64)
@@ -163,14 +204,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             checkpoints: Default::default(),
             account_start_nonce,
             contract_start_nonce,
-            staking_state: StakingState {
-                total_issued_tokens,
-                total_staking_tokens,
-                total_storage_tokens,
-                interest_rate_per_block: annual_interest_rate
-                    / U256::from(BLOCKS_PER_YEAR),
-                accumulate_interest_rate,
-            },
+            staking_state,
             block_number,
             vm,
             dirty_accounts_to_commit: Default::default(),

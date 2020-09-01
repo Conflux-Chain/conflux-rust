@@ -1,6 +1,5 @@
 use crate::{
     account::{Account, CodeInfo},
-    bytes::Bytes,
     hash::KECCAK_EMPTY,
     DepositList, SponsorInfo, StorageValue, VoteStakeList,
 };
@@ -29,16 +28,16 @@ impl IsDefault for Account {
 
 impl IsDefault for CodeInfo {
     fn is_default(&self) -> bool {
-        *self.code == Bytes::new() && self.owner == Address::default()
+        self.code.len() == 0 && self.owner == Address::default()
     }
 }
 
 impl IsDefault for DepositList {
-    fn is_default(&self) -> bool { *self == Self::default() }
+    fn is_default(&self) -> bool { self.0.is_empty() }
 }
 
 impl IsDefault for VoteStakeList {
-    fn is_default(&self) -> bool { *self == Self::default() }
+    fn is_default(&self) -> bool { self.0.is_empty() }
 }
 
 impl IsDefault for StorageValue {
@@ -46,4 +45,8 @@ impl IsDefault for StorageValue {
         self.value == U256::zero()
             && (self.owner == Some(Address::default()) || self.owner == None)
     }
+}
+
+impl IsDefault for U256 {
+    fn is_default(&self) -> bool { self.is_zero() }
 }

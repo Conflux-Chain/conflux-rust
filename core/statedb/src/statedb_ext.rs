@@ -11,7 +11,7 @@ pub trait StateDbExt {
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>
     where
-        T: ::rlp::Encodable;
+        T: ::rlp::Encodable + IsDefault;
 
     fn get_account(&self, address: &Address) -> Result<Option<Account>>;
 
@@ -55,6 +55,11 @@ pub trait StateDbExt {
         &mut self, total_storage_tokens: &U256,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>;
+
+    // This function is used to check whether the db has been initialized when
+    // create a state. So we can know the loaded `None` represents "not
+    // initialized" or "zero value".
+    fn is_initialized(&self) -> Result<bool>;
 }
 
 const ACCUMULATE_INTEREST_RATE_KEY: &'static [u8] = b"accumulate_interest_rate";
@@ -80,9 +85,17 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>
     where
-        T: ::rlp::Encodable,
+        T: ::rlp::Encodable + IsDefault,
     {
-        self.set_raw(key, ::rlp::encode(value).into_boxed_slice(), debug_record)
+        if value.is_default() {
+            self.delete(key, debug_record)
+        } else {
+            self.set_raw(
+                key,
+                ::rlp::encode(value).into_boxed_slice(),
+                debug_record,
+            )
+        }
     }
 
     fn get_account(&self, address: &Address) -> Result<Option<Account>> {
@@ -119,9 +132,7 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
             INTEREST_RATE_KEY,
         );
         let interest_rate_opt = self.get::<U256>(interest_rate_key)?;
-        Ok(interest_rate_opt.unwrap_or(
-            *INITIAL_INTEREST_RATE_PER_BLOCK * U256::from(BLOCKS_PER_YEAR),
-        ))
+        Ok(interest_rate_opt.unwrap_or_default())
     }
 
     fn set_annual_interest_rate(
@@ -142,7 +153,7 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
             ACCUMULATE_INTEREST_RATE_KEY,
         );
         let acc_interest_rate_opt = self.get::<U256>(acc_interest_rate_key)?;
-        Ok(acc_interest_rate_opt.unwrap_or(*ACCUMULATED_INTEREST_RATE_SCALE))
+        Ok(acc_interest_rate_opt.unwrap_or_default())
     }
 
     fn set_accumulate_interest_rate(
@@ -168,7 +179,7 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         );
         let total_issued_tokens_opt =
             self.get::<U256>(total_issued_tokens_key)?;
-        Ok(total_issued_tokens_opt.unwrap_or(U256::zero()))
+        Ok(total_issued_tokens_opt.unwrap_or_default())
     }
 
     fn set_total_issued_tokens(
@@ -194,7 +205,7 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         );
         let total_staking_tokens_opt =
             self.get::<U256>(total_staking_tokens_key)?;
-        Ok(total_staking_tokens_opt.unwrap_or(U256::zero()))
+        Ok(total_staking_tokens_opt.unwrap_or_default())
     }
 
     fn set_total_staking_tokens(
@@ -220,7 +231,7 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         );
         let total_storage_tokens_opt =
             self.get::<U256>(total_storage_tokens_key)?;
-        Ok(total_storage_tokens_opt.unwrap_or(U256::zero()))
+        Ok(total_storage_tokens_opt.unwrap_or_default())
     }
 
     fn set_total_storage_tokens(
@@ -238,15 +249,24 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
             debug_record,
         )
     }
+
+    fn is_initialized(&self) -> Result<bool> {
+        let interest_rate_key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            INTEREST_RATE_KEY,
+        );
+        let interest_rate_opt = self.get::<U256>(interest_rate_key)?;
+        Ok(interest_rate_opt.is_some())
+    }
 }
 
 use super::{Result, StateDbGeneric};
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
-use cfx_parameters::{
-    internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-    staking::*,
-};
+use cfx_parameters::internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS;
 use cfx_storage::StorageStateTrait;
 use cfx_types::{Address, H256, U256};
-use primitives::{Account, CodeInfo, DepositList, StorageKey, VoteStakeList};
+use primitives::{
+    is_default::IsDefault, Account, CodeInfo, DepositList, StorageKey,
+    VoteStakeList,
+};
 use rlp::Rlp;

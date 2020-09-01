@@ -19,6 +19,7 @@ use keccak_hash::{keccak, KECCAK_EMPTY};
 use primitives::{EpochId, StorageKey, StorageLayout};
 use std::sync::Arc;
 
+#[cfg(test)]
 fn get_state(
     storage_manager: &Arc<StorageManager>, epoch_id: &EpochId,
 ) -> State {
@@ -33,7 +34,7 @@ fn get_state(
         ),
         VmFactory::default(),
         &Spec::new_spec(),
-        0, /* block_number */
+        if epoch_id.is_zero() { 0 } else { 1 }, /* block_number */
     )
 }
 
@@ -424,6 +425,7 @@ fn checkpoint_get_storage_at() {
     state
         .set_storage(&contract_a, k.clone(), U256::from(0xffff), a)
         .unwrap();
+    state.inc_nonce(&contract_a).unwrap();
     assert_eq!(
         state
             .collect_and_settle_collateral(
@@ -936,7 +938,7 @@ fn create_contract_fail_previous_storage() {
     assert_eq!(state.balance(&a).unwrap(), *COLLATERAL_PER_STORAGE_KEY);
 
     state
-        .new_contract(&contract_addr, U256::zero(), U256::zero())
+        .new_contract(&contract_addr, U256::zero(), U256::one())
         .unwrap();
     state
         .set_storage(&contract_addr, k.clone(), U256::from(0xffff), a)
