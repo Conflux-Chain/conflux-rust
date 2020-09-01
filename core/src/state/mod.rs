@@ -30,7 +30,7 @@ use parking_lot::{
 #[cfg(test)]
 use primitives::storage::STORAGE_LAYOUT_REGULAR_V0;
 use primitives::{
-    DepositList, EpochId, StorageKey, StorageLayout, StorageValue,
+    Account, DepositList, EpochId, StorageKey, StorageLayout, StorageValue,
     VoteStakeList,
 };
 use std::{
@@ -108,8 +108,10 @@ pub type State = StateGeneric<StorageState>;
 pub struct StateGeneric<StateDbStorage: StorageStateTrait> {
     db: StateDb<StateDbStorage>,
 
-    // Only used once at commitment.
-    dirty_accounts_to_commit: Vec<(Address, AccountEntry)>,
+    // Only created once for txpool notification.
+    // Each element is an Ok(Account) for updated account, or Err(Address)
+    // for deleted account.
+    accounts_to_notify: Vec<Result<Account, Address>>,
 
     // Contains the changes to the states and some unchanged state entries.
     cache: RwLock<HashMap<Address, AccountEntry>>,
@@ -207,7 +209,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             staking_state,
             block_number,
             vm,
-            dirty_accounts_to_commit: Default::default(),
+            accounts_to_notify: Default::default(),
         }
     }
 
@@ -1061,15 +1063,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         Ok(())
     }
 
-    fn precommit_make_dirty_accounts_list(&mut self) {
-        if self.dirty_accounts_to_commit.is_empty() {
-            let mut sorted_dirty_accounts =
-                self.cache.get_mut().drain().collect::<Vec<_>>();
-            sorted_dirty_accounts.sort_by(|a, b| a.0.cmp(&b.0));
-            self.dirty_accounts_to_commit = sorted_dirty_accounts;
-        }
-    }
-
+    // It's guaranteed that the second call of this method is a no-op.
     pub fn compute_state_root(
         &mut self, mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<StateRootWithAuxInfo> {
@@ -1078,21 +1072,25 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         assert!(self.checkpoints.get_mut().is_empty());
         assert!(self.staking_state_checkpoints.get_mut().is_empty());
 
-        self.precommit_make_dirty_accounts_list();
+        let mut sorted_dirty_accounts =
+            self.cache.get_mut().drain().collect::<Vec<_>>();
+        sorted_dirty_accounts.sort_by(|a, b| a.0.cmp(&b.0));
 
         let mut killed_addresses = Vec::new();
-        for (address, entry) in
-            std::mem::take(&mut self.dirty_accounts_to_commit).iter_mut()
-        {
+        for (address, entry) in sorted_dirty_accounts.iter_mut() {
             entry.state = AccountState::Committed;
             match &mut entry.account {
-                None => killed_addresses.push(*address),
+                None => {
+                    killed_addresses.push(*address);
+                    self.accounts_to_notify.push(Err(*address));
+                }
                 Some(account) => {
                     account.commit(
                         self,
                         address,
                         debug_record.as_deref_mut(),
                     )?;
+                    self.accounts_to_notify.push(Ok(account.as_account()?));
                 }
             }
         }
@@ -1121,9 +1119,10 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         debug!("Notify epoch[{}]", epoch_id);
 
         let mut accounts_for_txpool = vec![];
-        for (_address, entry) in &self.dirty_accounts_to_commit {
-            if let Some(account) = &entry.account {
-                accounts_for_txpool.push(account.as_account()?);
+        for updated_or_deleted in &self.accounts_to_notify {
+            // if the account is updated.
+            if let Ok(account) = updated_or_deleted {
+                accounts_for_txpool.push(account.clone());
             }
         }
         {
