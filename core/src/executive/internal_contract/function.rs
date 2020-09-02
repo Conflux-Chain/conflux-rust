@@ -92,8 +92,10 @@ pub trait UpfrontPaymentTrait: Send + Sync + InterfaceTrait {
 }
 
 pub trait PreExecCheckConfTrait: Send + Sync {
+    /// Whether such internal function is payable.
     const PAYABLE: bool;
-    const FORBID_STATIC: bool;
+    /// Whether such internal function has write operation.
+    const HAS_WRITE_OP: bool;
 }
 
 impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
@@ -105,7 +107,8 @@ impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
                 "should not transfer balance to Staking contract",
             ));
         }
-        if Self::FORBID_STATIC
+
+        if Self::HAS_WRITE_OP
             && (substate.contracts_in_callstack.borrow().in_reentrancy()
                 || params.call_type == CallType::StaticCall)
         {
@@ -165,10 +168,10 @@ macro_rules! impl_function_type {
     ( $name:ident, "query" $(, gas: $gas:expr)? ) => {
         $crate::impl_function_type!(@inner, $name, false, false $(, $gas)?);
     };
-    ( @inner, $name:ident, $payable:expr, $forbid_static:expr $(, $gas:expr)? ) => {
+    ( @inner, $name:ident, $payable:expr, $has_write_op:expr $(, $gas:expr)? ) => {
         impl PreExecCheckConfTrait for $name {
             const PAYABLE: bool = $payable;
-            const FORBID_STATIC: bool = $forbid_static;
+            const HAS_WRITE_OP: bool = $has_write_op;
         }
         $(
             impl UpfrontPaymentTrait for $name {
@@ -183,7 +186,7 @@ macro_rules! impl_function_type {
     ( $name:ident, "query_with_default_gas" ) => {
         impl PreExecCheckConfTrait for $name {
             const PAYABLE: bool = false ;
-            const FORBID_STATIC: bool = false;
+            const HAS_WRITE_OP: bool = false;
         }
 
         impl UpfrontPaymentTrait for $name {
