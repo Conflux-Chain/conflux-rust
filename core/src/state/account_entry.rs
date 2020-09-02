@@ -9,7 +9,9 @@ use crate::{
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::staking::BYTES_PER_STORAGE_KEY;
-use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
+use cfx_statedb::{
+    ErrorKind as DbErrorKind, Result as DbResult, StateDbExt, StateDbGeneric,
+};
 use cfx_storage::StorageStateTrait;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use parking_lot::RwLock;
@@ -201,6 +203,7 @@ impl OverlayAccount {
 
     /// Create an OverlayAccount of contract account. It should be not called in
     /// contract creation.
+    #[cfg(test)]
     pub fn new_contract_with_admin(
         address: &Address, balance: U256, nonce: U256, admin: &Address,
         storage_layout: Option<StorageLayout>,
@@ -555,10 +558,17 @@ impl OverlayAccount {
             return Ok(true);
         }
 
-        self.code = Some(
+        self.code = if let Some(code) =
             db.get_code(&self.address, &self.code_hash)?
-                .unwrap_or_default(),
-        );
+        {
+            Some(code)
+        } else if self.code_hash == KECCAK_EMPTY {
+            Some(CodeInfo::default())
+        } else {
+            return Err(
+                DbErrorKind::IncompleteDatabase(self.address.clone()).into()
+            );
+        };
         Ok(true)
     }
 
