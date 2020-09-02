@@ -9,9 +9,7 @@ use crate::{
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::staking::BYTES_PER_STORAGE_KEY;
-use cfx_statedb::{
-    ErrorKind as DbErrorKind, Result as DbResult, StateDbExt, StateDbGeneric,
-};
+use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
 use cfx_storage::StorageStateTrait;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use parking_lot::RwLock;
@@ -420,7 +418,9 @@ impl OverlayAccount {
 
     pub fn code_hash(&self) -> H256 { self.code_hash.clone() }
 
-    pub fn is_code_loaded(&self) -> bool { self.code.is_some() }
+    pub fn is_code_loaded(&self) -> bool {
+        self.code.is_some() || self.code_hash == KECCAK_EMPTY
+    }
 
     pub fn is_null(&self) -> bool {
         // TODO: check admin field for contract
@@ -566,18 +566,17 @@ impl OverlayAccount {
             return Ok(true);
         }
 
-        self.code = if let Some(code) =
-            db.get_code(&self.address, &self.code_hash)?
-        {
-            Some(code)
-        } else if self.code_hash == KECCAK_EMPTY {
-            None
-        } else {
-            return Err(
-                DbErrorKind::IncompleteDatabase(self.address.clone()).into()
-            );
-        };
-        Ok(true)
+        self.code = db.get_code(&self.address, &self.code_hash)?;
+        match &self.code {
+            Some(_) => Ok(true),
+            _ => {
+                warn!(
+                    "Failed to get code {:?} for address {:?}",
+                    self.code_hash, self.address
+                );
+                Ok(false)
+            }
+        }
     }
 
     pub fn cache_staking_info<StateDbStorage: StorageStateTrait>(
