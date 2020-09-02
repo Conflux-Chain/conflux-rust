@@ -3,7 +3,7 @@ use crate::{
     state::OverlayAccount,
 };
 use cfx_statedb::{Result as StateDbResult, StateDb, StateDbExt};
-use cfx_types::Address;
+use cfx_types::{Address, U256};
 use primitives::Account;
 use std::{collections::hash_map::HashMap, sync::Arc};
 
@@ -36,8 +36,10 @@ impl AccountCache {
         &mut self, contract_address: &Address, user: &Address,
     ) -> bool {
         // Generate an ephemeral overlay account for query.
-        OverlayAccount::new_account_basic(
+        OverlayAccount::new_basic(
             &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+            U256::zero(),
+            U256::zero(),
         )
         .check_commission_privilege(
             self.storage.as_ref(),

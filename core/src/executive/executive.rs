@@ -351,7 +351,7 @@ impl<'a> CallCreateExecutive<'a> {
                 &val,
                 &mut substate.to_cleanup_mode(&spec),
             )?;
-            state.deploy_new_contract(
+            state.new_contract_with_admin(
                 &params.address,
                 &params.original_sender,
                 val,

@@ -90,14 +90,16 @@ pub struct OverlayAccount {
     // field always None.
     code: Option<CodeInfo>,
 
-    // This flag indicates whether its storage component in db is deprecated.
+    // This flag indicates whether it is a newly created contract. For such
+    // account, we will skip looking data from the disk. This flag will stay
+    // true until the contract being committed and cleared from the memory.
     //
-    // In case vm storage entries are not fount in cache, they will be loaded
-    // from db, otherwise they will be set to zero.
-    //
-    // When writing account state to db, if this flag is set, the current
-    // entries in db will be removed.
-    vm_storage_deprecated: bool,
+    // If the contract account at the same address is killed, then the same
+    // account is re-created, this flag is also true, to indicate that any
+    // pending cleanups must be done. The re-creation of the account can
+    // also be caused by a simple payment transaction, which result into a new
+    // basic account at the same address.
+    is_newly_created_contract: bool,
 }
 
 impl OverlayAccount {
@@ -121,7 +123,7 @@ impl OverlayAccount {
             vote_stake_list: None,
             code_hash: account.code_hash,
             code: None,
-            vm_storage_deprecated: false,
+            is_newly_created_contract: false,
         };
 
         overlay_account
@@ -147,21 +149,17 @@ impl OverlayAccount {
             deposit_list: Some(Default::default()),
             vote_stake_list: Some(Default::default()),
             code_hash: KECCAK_EMPTY,
-            code: Some(Default::default()),
-            vm_storage_deprecated: true,
+            code: Some(CodeInfo {
+                code: Default::default(),
+                owner: Default::default(),
+            }),
+            is_newly_created_contract: true,
         }
     }
 
-    /// Create an OverlayAccount, only the basic components are set to
-    /// initialization value or passed in parameter. Other components are
-    /// set to "have not loaded from db" and will be load in need.
-    pub fn new_account_basic(address: &Address) -> Self {
-        Self::new_account_basic_with_param(address, U256::zero(), U256::zero())
-    }
-
-    pub fn new_account_basic_with_param(
-        address: &Address, balance: U256, nonce: U256,
-    ) -> Self {
+    /// Create an OverlayAccount of basic account when the account doesn't exist
+    /// before.
+    pub fn new_basic(address: &Address, balance: U256, nonce: U256) -> Self {
         OverlayAccount {
             address: address.clone(),
             balance,
@@ -180,7 +178,7 @@ impl OverlayAccount {
             vote_stake_list: None,
             code_hash: KECCAK_EMPTY,
             code: None,
-            vm_storage_deprecated: false,
+            is_newly_created_contract: false,
         }
     }
 
@@ -212,6 +210,14 @@ impl OverlayAccount {
         let mut account = OverlayAccount::new_account_full(address);
         account.deploy_new_contract(balance, admin, nonce, storage_layout);
         account
+    }
+
+    /// Create an OverlayAccount, only the basic components are set to
+    /// initialization value or passed in parameter. Other components are
+    /// set to "have not loaded from db" and will be load in need.
+    #[cfg(test)]
+    pub fn test_only_wtf_new_basic(address: &Address) -> Self {
+        Self::new_basic(address, U256::zero(), U256::zero())
     }
 
     pub fn as_account(&self) -> Result<Account, AccountError> {
@@ -406,7 +412,9 @@ impl OverlayAccount {
     }
 
     #[cfg(test)]
-    pub fn vm_storage_deprecated(&self) -> bool { self.vm_storage_deprecated }
+    pub fn is_newly_created_contract(&self) -> bool {
+        self.is_newly_created_contract
+    }
 
     pub fn nonce(&self) -> &U256 { &self.nonce }
 
@@ -563,7 +571,7 @@ impl OverlayAccount {
         {
             Some(code)
         } else if self.code_hash == KECCAK_EMPTY {
-            Some(CodeInfo::default())
+            None
         } else {
             return Err(
                 DbErrorKind::IncompleteDatabase(self.address.clone()).into()
@@ -607,7 +615,7 @@ impl OverlayAccount {
             vote_stake_list: self.vote_stake_list.clone(),
             code_hash: self.code_hash,
             code: self.code.clone(),
-            vm_storage_deprecated: self.vm_storage_deprecated,
+            is_newly_created_contract: self.is_newly_created_contract,
         }
     }
 
@@ -652,7 +660,7 @@ impl OverlayAccount {
         if let Some(value) = self.cached_storage_at(key) {
             return Ok(value);
         }
-        if self.vm_storage_deprecated {
+        if self.is_newly_created_contract {
             Ok(U256::zero())
         } else {
             Self::get_and_cache_storage(
@@ -722,7 +730,7 @@ impl OverlayAccount {
         self.accumulated_interest_return = other.accumulated_interest_return;
         self.deposit_list = other.deposit_list;
         self.vote_stake_list = other.vote_stake_list;
-        self.vm_storage_deprecated = other.vm_storage_deprecated;
+        self.is_newly_created_contract = other.is_newly_created_contract;
     }
 
     /// Return the owner of `key` before this execution. If it is `None`, it
@@ -734,7 +742,7 @@ impl OverlayAccount {
         if let Some(value) = self.ownership_cache.read().get(key) {
             return Ok(value.clone());
         }
-        if self.vm_storage_deprecated {
+        if self.is_newly_created_contract {
             return Ok(None);
         }
         let ownership_cache = &mut *self.ownership_cache.write();
@@ -804,7 +812,7 @@ impl OverlayAccount {
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()>
     {
-        if self.vm_storage_deprecated {
+        if self.is_newly_created_contract {
             state.recycle_storage(self.address, debug_record.as_deref_mut())?;
         }
 
@@ -1035,7 +1043,7 @@ mod tests {
             Address::from_str("0000000000000000000000000000000000000000")
                 .unwrap();
 
-        test_account_is_default(&mut OverlayAccount::new_account_basic(
+        test_account_is_default(&mut OverlayAccount::test_only_wtf_new_basic(
             &normal_addr,
         ));
         test_account_is_default(&mut OverlayAccount::new_contract(
@@ -1044,7 +1052,7 @@ mod tests {
             U256::zero(),
             /* storage_layout = */ None,
         ));
-        test_account_is_default(&mut OverlayAccount::new_account_basic(
+        test_account_is_default(&mut OverlayAccount::test_only_wtf_new_basic(
             &builtin_addr,
         ));
     }

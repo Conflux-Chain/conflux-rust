@@ -419,17 +419,13 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         }
     }
 
-    pub fn deploy_new_contract(
+    pub fn new_contract_with_admin(
         &mut self, contract: &Address, admin: &Address, balance: U256,
         nonce: U256, storage_layout: Option<StorageLayout>,
     ) -> DbResult<()>
     {
-        self.require_or_default(contract)?.deploy_new_contract(
-            balance,
-            admin,
-            nonce,
-            storage_layout,
-        );
+        self.require_or_new_basic_account(contract)?
+            .deploy_new_contract(balance, admin, nonce, storage_layout);
         Ok(())
     }
 
@@ -438,7 +434,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         &mut self, contract: &Address, balance: U256, nonce: U256,
     ) -> DbResult<()> {
         self.remove_contract(contract)?;
-        self.deploy_new_contract(
+        self.new_contract_with_admin(
             contract,
             &Address::zero(),
             balance,
@@ -763,13 +759,14 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     pub fn inc_nonce(&mut self, address: &Address) -> DbResult<()> {
-        self.require_or_default(address).map(|mut x| x.inc_nonce())
+        self.require_or_new_basic_account(address)
+            .map(|mut x| x.inc_nonce())
     }
 
     pub fn set_nonce(
         &mut self, address: &Address, nonce: &U256,
     ) -> DbResult<()> {
-        self.require_or_default(address)
+        self.require_or_new_basic_account(address)
             .map(|mut x| x.set_nonce(nonce))
     }
 
@@ -810,7 +807,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         if !by.is_zero()
             || (cleanup_mode == CleanupMode::ForceCreate && !exists)
         {
-            self.require_or_default(address)?.add_balance(by);
+            self.require_or_new_basic_account(address)?.add_balance(by);
         }
 
         if let CleanupMode::TrackTouched(set) = cleanup_mode {
@@ -841,7 +838,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         let refundable = if by > &collateral { &collateral } else { by };
         let burnt = *by - *refundable;
         if !refundable.is_zero() {
-            self.require_or_default(address)?
+            self.require_or_new_basic_account(address)?
                 .sub_collateral_for_storage(refundable);
         }
         self.staking_state.total_storage_tokens -= *by;
@@ -1318,7 +1315,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                     })) => {
                         if let Some(value) = account.cached_storage_at(key) {
                             return Ok(Some(value));
-                        } else if account.vm_storage_deprecated() {
+                        } else if account.is_newly_created_contract() {
                             return Ok(Some(U256::zero()));
                         } else {
                             kind = Some(ReturnKind::OriginalAt);
@@ -1477,7 +1474,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         self.require_or_set(address, require_code, no_account_is_an_error)
     }
 
-    fn require_or_default(
+    fn require_or_new_basic_account(
         &self, address: &Address,
     ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>> {
         self.require_or_set(address, false, |address| {
@@ -1496,9 +1493,9 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 // Currently, it seems when the basic component is empty, all the other components
                 // are always empty. But it is impossible to make all the code and CIP contributors
                 // remember this rule. So we need to handle it here.
-                Ok(OverlayAccount::new_account_basic_with_param(address,
-                                                                U256::zero(),
-                                                                self.account_start_nonce.into(),
+                Ok(OverlayAccount::new_basic(address,
+                                             U256::zero(),
+                                             self.account_start_nonce.into(),
                 ))
             } else {
                 unreachable!(

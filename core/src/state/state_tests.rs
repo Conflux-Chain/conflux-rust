@@ -826,7 +826,7 @@ fn check_result_of_simple_payment_to_killed_account() {
     let mut state_0 = get_state_for_genesis_write(&storage_manager);
     let sender_addr = DEV_GENESIS_KEY_PAIR.address();
     state_0
-        .require_or_default(&sender_addr)
+        .require_or_new_basic_account(&sender_addr)
         .unwrap()
         .add_balance(&ONE_CFX_IN_DRIP.into());
     let mut a = Address::zero();
@@ -994,7 +994,7 @@ fn create_contract_fail_previous_storage() {
     state.remove_contract(&a).unwrap();
     // parking_lot::lock_api::MappedRwLockWriteGuard must be used, so we drop()
     // it.
-    drop(state.require_or_default(&a).unwrap());
+    drop(state.require_or_new_basic_account(&a).unwrap());
     state
         .new_contract(&contract_addr, U256::zero(), U256::zero())
         .unwrap();

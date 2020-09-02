@@ -81,7 +81,7 @@ pub fn initialize_internal_contract_accounts(state: &mut State) {
     || -> DbResult<()> {
         {
             for address in InternalContractMap::new().keys() {
-                state.deploy_new_contract(
+                state.new_contract_with_admin(
                     address,
                     /* No admin; admin = */ &Address::zero(),
                     /* balance = */ U256::zero(),
