@@ -165,7 +165,7 @@ fn test_snapshot_random_read_performance() {
     let mut epoch_keys = Vec::with_capacity(EPOCHS as usize * 2);
     for _epoch in 0..EPOCHS * 2 {
         let mut e_keys = Vec::with_capacity(TXS as usize * 2);
-        for _key_idx in (-(TXS as i32) * 2)..0 {
+        for _key_idx in 0..((TXS as i32) * 2) {
             e_keys.push(keys[range.sample(&mut rng)].as_slice());
         }
         epoch_keys.push(e_keys);
@@ -195,7 +195,7 @@ fn test_snapshot_random_read_performance() {
     let mut state_root = state_0.compute_state_root().unwrap();
     state_0.commit(epoch_id_0).unwrap();
 
-    println!("Commiting initial {} epochs.", EPOCHS);
+    println!("Committing initial {} epochs.", EPOCHS);
 
     for epoch in 0..EPOCHS {
         state_root = simulate_transactions(
