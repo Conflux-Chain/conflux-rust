@@ -111,6 +111,8 @@ pub struct Block {
     pub epoch_number: Option<U256>,
     /// Gas limit
     pub gas_limit: U256,
+    /// Gas used
+    pub gas_used: Option<U256>,
     /// Timestamp
     pub timestamp: U256,
     /// Difficulty
@@ -205,6 +207,29 @@ impl Block {
             .or_else(|| data_man.block_epoch_number(&block_hash))
             .map(Into::into);
 
+        // get the block.gas_used
+        let tx_len = b.transactions.len();
+        let gas_used = if tx_len == 0 {
+            Some(U256::from(0))
+        } else {
+            let maybe_results = consensus_inner
+                .block_execution_results_by_hash(
+                    &b.hash(),
+                    false, /* update_cache */
+                );
+            match maybe_results {
+                Some(BlockExecutionResultWithEpoch(_, execution_result)) => {
+                    let receipt = execution_result
+                        .block_receipts
+                        .receipts
+                        .get(tx_len - 1)
+                        .unwrap();
+                    Some(receipt.accumulated_gas_used)
+                }
+                None => None,
+            }
+        };
+
         Block {
             hash: H256::from(block_hash),
             parent_hash: H256::from(b.block_header.parent_hash().clone()),
@@ -226,6 +251,7 @@ impl Block {
             // PrimitiveBlock does not contain this information
             epoch_number,
             // fee system
+            gas_used,
             gas_limit: b.block_header.gas_limit().into(),
             timestamp: b.block_header.timestamp().into(),
             difficulty: b.block_header.difficulty().clone().into(),
