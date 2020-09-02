@@ -1,51 +1,42 @@
 use crate::{
-    executive::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-    state::OverlayAccount,
+    state::State,
+    transaction_pool::transaction_pool_inner::TX_POOL_GET_STATE_TIMER,
 };
-use cfx_statedb::{Result as StateDbResult, StateDb, StateDbExt};
+use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, U256};
-use primitives::{storage::STORAGE_LAYOUT_REGULAR_V0, Account};
-use std::{collections::hash_map::HashMap, sync::Arc};
+use metrics::MeterTimer;
+use primitives::SponsorInfo;
+use std::sync::Arc;
 
+// TODO: perhaps rename to StateWrapper.
 pub struct AccountCache {
-    pub accounts: HashMap<Address, Account>,
-    pub storage: Arc<StateDb>,
+    state: Arc<State>,
 }
 
 impl AccountCache {
-    pub fn new(storage: Arc<StateDb>) -> Self {
-        AccountCache {
-            accounts: HashMap::new(),
-            storage,
-        }
+    pub fn new(state: Arc<State>) -> Self { AccountCache { state } }
+
+    pub fn get_nonce_and_balance(
+        &self, address: &Address,
+    ) -> DbResult<(U256, U256)> {
+        let _timer = MeterTimer::time_func(TX_POOL_GET_STATE_TIMER.as_ref());
+        Ok((self.state.nonce(address)?, self.state.balance(address)?))
     }
 
-    pub fn get_account_mut(
-        &mut self, address: &Address,
-    ) -> StateDbResult<Option<&mut Account>> {
-        if !self.accounts.contains_key(&address) {
-            let account = self.storage.get_account(&address)?;
-            if let Some(account) = account {
-                self.accounts.insert((*address).clone(), account);
-            }
-        }
-        Ok(self.accounts.get_mut(&address))
+    pub fn get_nonce(&self, address: &Address) -> DbResult<U256> {
+        self.state.nonce(address)
+    }
+
+    pub fn get_sponsor_info(
+        &self, contract_address: &Address,
+    ) -> DbResult<Option<SponsorInfo>> {
+        self.state.sponsor_info(contract_address)
     }
 
     pub fn check_commission_privilege(
-        &mut self, contract_address: &Address, user: &Address,
-    ) -> bool {
-        OverlayAccount::new_basic(
-            &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-            U256::from(0),
-            U256::from(0),
-            Some(STORAGE_LAYOUT_REGULAR_V0),
-        )
-        .check_commission_privilege(
-            self.storage.as_ref(),
-            contract_address,
-            user,
-        )
-        .unwrap_or(false)
+        &self, contract_address: &Address, user: &Address,
+    ) -> DbResult<bool> {
+        self.state
+            .check_commission_privilege(contract_address, user)
     }
 }
