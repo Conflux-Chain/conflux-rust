@@ -5,12 +5,24 @@
 use cfx_types::{Address, H256, U256};
 use rlp::*;
 use rlp_derive::{RlpDecodable, RlpEncodable};
+use serde::{Serialize, Serializer};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum MptValue<ValueType> {
     None,
     TombStone,
     Some(ValueType),
+}
+
+impl<ValueType: Serialize> Serialize for MptValue<ValueType> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        match self {
+            MptValue::None => serializer.serialize_none(),
+            MptValue::Some(h) => serializer.serialize_some(h),
+            MptValue::TombStone => serializer.serialize_str("TOMBSTONE"),
+        }
+    }
 }
 
 impl<ValueType: Default> MptValue<ValueType> {
@@ -83,7 +95,7 @@ impl Decodable for MptValue<H256> {
     }
 }
 
-#[derive(Clone, Debug, RlpEncodable, RlpDecodable)]
+#[derive(Clone, Debug, RlpEncodable, RlpDecodable, Serialize)]
 pub struct NodeMerkleTriplet {
     pub delta: MptValue<H256>,
     pub intermediate: MptValue<H256>,
@@ -155,7 +167,8 @@ impl Encodable for StorageValue {
 #[cfg(test)]
 mod tests {
     use super::MptValue;
-    use crate::MERKLE_NULL_NODE;
+    use crate::{MerkleHash, MERKLE_NULL_NODE};
+    use serde_json;
 
     #[test]
     fn test_mpt_value_rlp() {
@@ -180,5 +193,20 @@ mod tests {
                 .concat()
         );
         assert_eq!(val, rlp::decode(&rlp::encode(&val)).unwrap());
+    }
+
+    #[test]
+    fn test_mpt_value_json() {
+        let val = MptValue::<MerkleHash>::None;
+        let serialized = serde_json::to_string(&val).unwrap();
+        assert_eq!(&serialized, "null");
+
+        let val = MptValue::<MerkleHash>::TombStone;
+        let serialized = serde_json::to_string(&val).unwrap();
+        assert_eq!(&serialized, "\"TOMBSTONE\"");
+
+        let val = MptValue::<MerkleHash>::Some(MERKLE_NULL_NODE);
+        let serialized = serde_json::to_string(&val).unwrap();
+        assert_eq!(serialized, format!("\"{:?}\"", MERKLE_NULL_NODE));
     }
 }

@@ -12,6 +12,8 @@ extern crate log;
 extern crate unexpected;
 #[macro_use]
 extern crate lazy_static;
+#[cfg(test)]
+extern crate serde_json;
 
 pub mod account;
 pub mod block;

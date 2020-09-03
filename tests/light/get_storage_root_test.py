@@ -64,6 +64,8 @@ class StorageRootTest(ConfluxTestFramework):
         self.rpc[FULLNODE0].generate_blocks(SNAPSHOT_EPOCH_COUNT)
         self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"increment()")))
         self.rpc[FULLNODE0].generate_blocks(SNAPSHOT_EPOCH_COUNT)
+        self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"destroy()")))
+        self.rpc[FULLNODE0].generate_blocks(SNAPSHOT_EPOCH_COUNT)
 
         # check storage root of non-existent contract
         root_full = self.rpc[FULLNODE0].get_storage_root("0x0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6", epoch=hex(1))

@@ -22,7 +22,7 @@ use network::{
 use parking_lot::Mutex;
 use primitives::{
     filter::Filter, transaction::Action::Call, Account, SignedTransaction,
-    TransactionWithSignature,
+    StorageRoot, TransactionWithSignature,
 };
 use random_crash::*;
 use rlp::Rlp;
@@ -47,8 +47,8 @@ use crate::{
             Log as RpcLog, PackedOrExecuted, Receipt as RpcReceipt,
             RewardInfo as RpcRewardInfo, SendTxRequest,
             SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
-            StorageRoot as RpcStorageRoot, SyncGraphStates,
-            Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
+            SyncGraphStates, Transaction as RpcTransaction, TxPoolPendingInfo,
+            TxWithPoolInfo,
         },
         RpcResult,
     },
@@ -369,7 +369,7 @@ impl RpcImpl {
 
     fn storage_root(
         &self, address: H160, epoch_num: Option<EpochNumber>,
-    ) -> RpcResult<Option<RpcStorageRoot>> {
+    ) -> RpcResult<Option<StorageRoot>> {
         let address: H160 = address.into();
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
 
@@ -383,7 +383,7 @@ impl RpcImpl {
         let root =
             consensus_graph.get_storage_root(address, epoch_num.into())?;
 
-        Ok(Some(RpcStorageRoot::from_primitive(root)))
+        Ok(Some(root))
     }
 
     fn send_usable_genesis_accounts(
@@ -1024,7 +1024,7 @@ impl Cfx for CfxHandler {
                 -> BoxFuture<Option<H256>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
-            fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<RpcStorageRoot>>;
+            fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
         }
     }
 }
