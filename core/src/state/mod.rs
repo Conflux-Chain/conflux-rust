@@ -30,8 +30,8 @@ use parking_lot::{
 #[cfg(test)]
 use primitives::storage::STORAGE_LAYOUT_REGULAR_V0;
 use primitives::{
-    DepositList, EpochId, StorageKey, StorageLayout, StorageValue,
-    VoteStakeList,
+    is_default::IsDefault, DepositList, EpochId, StorageKey, StorageLayout,
+    StorageValue, VoteStakeList,
 };
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
@@ -274,7 +274,6 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         );
 
         if !sub.is_zero() {
-            assert!(self.exists(addr)?);
             self.sub_collateral_for_storage(addr, &sub)?;
         }
         if !inc.is_zero() {
@@ -1211,8 +1210,11 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     pub fn exists(&self, address: &Address) -> DbResult<bool> {
-        self.ensure_account_loaded(address, RequireCache::None, |acc| {
-            acc.is_some()
+        self.ensure_account_loaded(address, RequireCache::None, |maybe_acc| {
+            maybe_acc
+                .and_then(|acc| acc.as_account().ok())
+                .and_then(|acc| Some(acc.is_default()))
+                .unwrap_or(false)
         })
     }
 
