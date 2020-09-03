@@ -71,7 +71,7 @@ where T: DeserializeOwned
 }
 
 #[derive(PartialEq, Debug, Serialize, Deserialize, Eq, Hash, Clone)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Filter {
     /// Search will be applied from this epoch number.
     pub from_epoch: Option<EpochNumber>,
