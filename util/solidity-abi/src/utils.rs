@@ -53,9 +53,13 @@ pub fn read_abi_list<T: ABIVariable>(
     data: &[u8], pointer: &mut Iter<u8>,
 ) -> Result<T, ABIDecodeError> {
     let res = if let Some(len) = T::STATIC_LENGTH {
-        pull_slice(pointer, len)?
+        pull_slice(pointer, len, "Incomplete static input parameter")?
     } else {
-        let location = U256::from_big_endian(pull_slice(pointer, 32)?);
+        let location = U256::from_big_endian(pull_slice(
+            pointer,
+            32,
+            "Incomplete location for dynamic input parameter",
+        )?);
         abi_require(
             location < U256::from(data.len()),
             "Location out of bounds",
@@ -115,9 +119,9 @@ pub fn abi_require(
 
 #[inline]
 pub fn pull_slice<'a>(
-    iter: &mut Iter<'a, u8>, n: usize,
+    iter: &mut Iter<'a, u8>, n: usize, err_desc: &'static str,
 ) -> Result<&'a [u8], ABIDecodeError> {
-    abi_require(iter.len() >= n, "Invalid call data length")?;
+    abi_require(iter.len() >= n, err_desc)?;
 
     let slice = iter.as_slice();
     let result = &slice[0..n];

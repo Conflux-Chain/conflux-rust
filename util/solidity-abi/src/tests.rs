@@ -39,7 +39,7 @@ fn test_address() {
 
     assert_eq!(
         Address::abi_decode(encoded.as_slice()).unwrap_err(),
-        ABIDecodeError("Invalid call data length")
+        ABIDecodeError("Incomplete static input parameter")
     );
 }
 
@@ -61,7 +61,7 @@ fn test_u256() {
 
     assert_eq!(
         Address::abi_decode(encoded.as_slice()).unwrap_err(),
-        ABIDecodeError("Invalid call data length")
+        ABIDecodeError("Incomplete static input parameter")
     );
 }
 

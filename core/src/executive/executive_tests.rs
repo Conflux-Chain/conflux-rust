@@ -739,7 +739,7 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("Invalid call data length")
+        vm::Error::InternalContract("Incomplete static input parameter")
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
