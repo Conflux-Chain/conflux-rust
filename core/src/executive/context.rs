@@ -62,10 +62,12 @@ impl OriginInfo {
 }
 
 /// Implementation of evm context.
+#[allow(dead_code)]
 pub struct Context<'a> {
     state: &'a mut State,
     env: &'a Env,
     depth: usize,
+    // The stack_depth is never read in context, even before this commit.
     stack_depth: usize,
     origin: &'a OriginInfo,
     substate: &'a mut Substate,
@@ -110,7 +112,7 @@ impl<'a> ContextTrait for Context<'a> {
     }
 
     fn set_storage(&mut self, key: Vec<u8>, value: U256) -> vm::Result<()> {
-        if self.static_flag {
+        if self.is_static_or_reentrancy() {
             Err(vm::Error::MutableCallInStaticContext)
         } else {
             self.substate
@@ -125,7 +127,16 @@ impl<'a> ContextTrait for Context<'a> {
         }
     }
 
-    fn is_static(&self) -> bool { return self.static_flag; }
+    fn is_static_or_reentrancy(&self) -> bool {
+        self.static_flag
+            || self
+                .substate
+                .contracts_in_callstack
+                .borrow()
+                .in_reentrancy()
+    }
+
+    fn is_static(&self) -> bool { self.static_flag }
 
     fn exists(&self, address: &Address) -> vm::Result<bool> {
         self.state.exists(address).map_err(Into::into)
@@ -195,7 +206,7 @@ impl<'a> ContextTrait for Context<'a> {
             params_type: vm::ParamsType::Embedded,
         };
 
-        if !self.static_flag {
+        if !self.is_static_or_reentrancy() {
             if !self.spec.keep_unsigned_nonce
                 || params.sender != UNSIGNED_SENDER
             {
@@ -207,6 +218,7 @@ impl<'a> ContextTrait for Context<'a> {
             return Ok(Err(TrapKind::Create(params, address)));
         }
 
+        // The following code is only reachable in test mode.
         let mut ex = Executive::from_parent(
             self.state,
             self.env,
@@ -337,7 +349,7 @@ impl<'a> ContextTrait for Context<'a> {
     fn log(&mut self, topics: Vec<H256>, data: &[u8]) -> vm::Result<()> {
         use primitives::log_entry::LogEntry;
 
-        if self.static_flag {
+        if self.is_static_or_reentrancy() {
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
@@ -352,7 +364,7 @@ impl<'a> ContextTrait for Context<'a> {
     }
 
     fn suicide(&mut self, refund_address: &Address) -> vm::Result<()> {
-        if self.static_flag {
+        if self.is_static_or_reentrancy() {
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
@@ -408,14 +420,11 @@ impl<'a> ContextTrait for Context<'a> {
         // TODO
     }
 
-    fn is_reentrancy(&self, caller: &Address, callee: &Address) -> bool {
-        let is_recursive_call = *caller == *callee;
-        let contract_in_callstack = self
-            .substate
+    fn is_reentrancy(&self, _caller: &Address, callee: &Address) -> bool {
+        self.substate
             .contracts_in_callstack
             .borrow()
-            .contains_key(callee);
-        return !is_recursive_call && contract_in_callstack;
+            .reentrancy_happens_when_push(callee)
     }
 }
 
@@ -516,12 +525,12 @@ mod tests {
             &setup.env,
             &setup.machine,
             &setup.spec,
-            0,
-            0,
+            0, /* depth */
+            0, /* stack_depth */
             &origin,
             &mut setup.substate,
             OutputPolicy::InitContract,
-            false,
+            false, /* static_flag */
             &setup.internal_contract_map,
         );
 
@@ -539,12 +548,12 @@ mod tests {
             &setup.env,
             &setup.machine,
             &setup.spec,
-            0,
-            0,
+            0, /* depth */
+            0, /* stack_depth */
             &origin,
             &mut setup.substate,
             OutputPolicy::InitContract,
-            false,
+            false, /* static_flag */
             &setup.internal_contract_map,
         );
 
@@ -611,12 +620,12 @@ mod tests {
             &setup.env,
             &setup.machine,
             &setup.spec,
-            0,
-            0,
+            0, /* depth */
+            0, /* stack_depth */
             &origin,
             &mut setup.substate,
             OutputPolicy::InitContract,
-            false,
+            false, /* static_flag */
             &setup.internal_contract_map,
         );
 
@@ -660,12 +669,12 @@ mod tests {
                 &setup.env,
                 &setup.machine,
                 &setup.spec,
-                0,
-                0,
+                0, /* depth */
+                0, /* stack_depth */
                 &origin,
                 &mut setup.substate,
                 OutputPolicy::InitContract,
-                false,
+                false, /* static_flag */
                 &setup.internal_contract_map,
             );
             ctx.log(log_topics, &log_data).unwrap();
@@ -705,12 +714,12 @@ mod tests {
                 &setup.env,
                 &setup.machine,
                 &setup.spec,
-                0,
-                0,
+                0, /* depth */
+                0, /* stack_depth */
                 &origin,
                 &mut setup.substate,
                 OutputPolicy::InitContract,
-                false,
+                false, /* static_flag */
                 &setup.internal_contract_map,
             );
             ctx.suicide(&refund_account).unwrap();
@@ -733,12 +742,12 @@ mod tests {
                 &setup.env,
                 &setup.machine,
                 &setup.spec,
-                0,
-                0,
+                0, /* depth */
+                0, /* stack_depth */
                 &origin,
                 &mut setup.substate,
                 OutputPolicy::InitContract,
-                false,
+                false, /* static_flag */
                 &setup.internal_contract_map,
             );
             match ctx
@@ -779,12 +788,12 @@ mod tests {
                 &setup.env,
                 &setup.machine,
                 &setup.spec,
-                0,
-                0,
+                0, /* depth */
+                0, /* stack_depth */
                 &origin,
                 &mut setup.substate,
                 OutputPolicy::InitContract,
-                false,
+                false, /* static_flag */
                 &setup.internal_contract_map,
             );
 

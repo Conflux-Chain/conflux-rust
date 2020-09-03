@@ -304,6 +304,13 @@ impl<'a> CallCreateExecutive<'a> {
     fn check_static_flag(
         params: &ActionParams, static_flag: bool, is_create: bool,
     ) -> vm::Result<()> {
+        // This is the function check whether contract creation or value
+        // transferring happens in static context at callee executive. However,
+        // it is meaningless because the caller has checked this constraint
+        // before message call. Currently, if we panic when this
+        // function returns error, all the tests can still pass.
+        // So we no longer check the logic for reentrancy here,
+        // TODO: and later we will check if we can safely remove this function.
         if is_create {
             if static_flag {
                 return Err(vm::Error::MutableCallInStaticContext);

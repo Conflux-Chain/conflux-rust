@@ -231,6 +231,10 @@ impl Context for MockContext {
 
     fn is_static(&self) -> bool { self.is_static }
 
+    // The Mock Context doesn't consider the message call and do not have
+    // reentrancy check.
+    fn is_static_or_reentrancy(&self) -> bool { self.is_static }
+
     fn add_sstore_refund(&mut self, value: usize) {
         self.sstore_clears += value as i128;
     }

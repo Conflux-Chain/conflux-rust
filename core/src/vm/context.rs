@@ -184,7 +184,10 @@ pub trait Context {
     /// Check if running in static context.
     fn is_static(&self) -> bool;
 
-    /// Check if reentrancy happens
+    /// Check if running in static context or reentrancy context
+    fn is_static_or_reentrancy(&self) -> bool;
+
+    /// Check if reentrancy happens in the next call
     /// The call stack doesn't have the current executive, so the caller address
     /// should be passed.
     fn is_reentrancy(&self, caller: &Address, callee: &Address) -> bool;

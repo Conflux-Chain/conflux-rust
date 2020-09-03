@@ -20,9 +20,12 @@
 
 //! Evm input params.
 use super::call_type::CallType;
-use crate::{bytes::Bytes, hash::KECCAK_EMPTY};
+use crate::bytes::Bytes;
 use cfx_types::{Address, H256, U256};
 use std::sync::Arc;
+
+#[cfg(test)]
+use crate::hash::KECCAK_EMPTY;
 
 /// Transaction value
 #[derive(Clone, Debug)]
@@ -99,6 +102,7 @@ pub struct ActionParams {
     pub storage_limit_in_drip: U256,
 }
 
+#[cfg(test)]
 impl Default for ActionParams {
     /// Returns default ActionParams initialized with zeros
     fn default() -> ActionParams {
@@ -114,7 +118,7 @@ impl Default for ActionParams {
             value: ActionValue::Transfer(U256::zero()),
             code: None,
             data: None,
-            call_type: CallType::None,
+            call_type: CallType::Call,
             params_type: ParamsType::Separate,
             storage_limit_in_drip: U256::MAX,
         }

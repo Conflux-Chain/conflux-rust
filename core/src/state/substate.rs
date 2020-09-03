@@ -20,10 +20,16 @@ use std::{
 pub struct CallStackInfo {
     call_stack_recipient_addresses: Vec<Address>,
     address_counter: HashMap<Address, u32>,
+    first_reentrancy_depth: Option<usize>,
 }
 
 impl CallStackInfo {
     fn push(&mut self, address: Address) {
+        if self.reentrancy_happens_when_push(&address) {
+            self.first_reentrancy_depth
+                .get_or_insert(self.call_stack_recipient_addresses.len());
+        }
+
         self.call_stack_recipient_addresses.push(address.clone());
         *self.address_counter.entry(address).or_insert(0) += 1;
     }
@@ -39,8 +45,17 @@ impl CallStackInfo {
             if *poped_address_cnt == 0 {
                 self.address_counter.remove(address);
             }
+            if self.first_reentrancy_depth
+                == Some(self.call_stack_recipient_addresses.len())
+            {
+                self.first_reentrancy_depth = None
+            }
         }
         maybe_address
+    }
+
+    pub fn reentrancy_happens_when_push(&self, address: &Address) -> bool {
+        self.last() != Some(address) && self.contains_key(address)
     }
 
     pub fn last(&self) -> Option<&Address> {
@@ -49,6 +64,10 @@ impl CallStackInfo {
 
     pub fn contains_key(&self, key: &Address) -> bool {
         self.address_counter.contains_key(key)
+    }
+
+    pub fn in_reentrancy(&self) -> bool {
+        self.first_reentrancy_depth.is_some()
     }
 }
 
