@@ -926,13 +926,10 @@ impl ConsensusExecutionHandler {
                     .check_availability(pivot_block_header.height(), epoch_hash)
                 {
                     self.tx_pool
-                        .set_best_executed_epoch(
-                            StateIndex::new_for_readonly(
-                                epoch_hash,
-                                &state_root,
-                            ),
-                            /* block_number = */ None,
-                        )
+                        .set_best_executed_epoch(StateIndex::new_for_readonly(
+                            epoch_hash,
+                            &state_root,
+                        ))
                         // FIXME: propogate error.
                         .expect(&concat!(
                             file!(),
@@ -1021,7 +1018,6 @@ impl ConsensusExecutionHandler {
         // FIXME: We may want to propagate the error up.
         let state_root;
         if on_local_pivot {
-            let block_number = state.block_number();
             state_root = state
                 .commit_and_notify(
                     *epoch_hash,
@@ -1030,10 +1026,10 @@ impl ConsensusExecutionHandler {
                 )
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
             self.tx_pool
-                .set_best_executed_epoch(
-                    StateIndex::new_for_readonly(epoch_hash, &state_root),
-                    Some(block_number),
-                )
+                .set_best_executed_epoch(StateIndex::new_for_readonly(
+                    epoch_hash,
+                    &state_root,
+                ))
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
         } else {
             state_root = state

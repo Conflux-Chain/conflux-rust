@@ -160,8 +160,7 @@ impl TransactionPool {
                 StateIndex::new_for_readonly(
                     &genesis_hash,
                     &data_man.true_genesis_state_root(),
-                ), /* block_number = */
-                0,
+                ),
             )
             .expect("The genesis state is guaranteed to exist."),
         );
@@ -743,9 +742,7 @@ impl TransactionPool {
 
     fn best_executed_state(
         data_man: &BlockDataManager, best_executed_epoch: StateIndex,
-        block_number: u64,
-    ) -> StorageResult<Arc<State>>
-    {
+    ) -> StorageResult<Arc<State>> {
         Ok(Arc::new(State::new(
             StateDb::new(
                 data_man
@@ -759,20 +756,18 @@ impl TransactionPool {
             ),
             Default::default(),
             &Spec::new_spec(),
-            block_number,
+            // So far block_number is unused in txpool's state, it's fine to
+            // specify a fake number. block_number 1 corresponds to the state
+            // of genesis block.
+            1, /* block_number */
         )))
     }
 
     pub fn set_best_executed_epoch(
-        &self, best_executed_epoch: StateIndex, block_number: Option<u64>,
+        &self, best_executed_epoch: StateIndex,
     ) -> StorageResult<()> {
-        *self.best_executed_state.lock() = Self::best_executed_state(
-            &self.data_man,
-            best_executed_epoch,
-            // So far block_number is unused in txpool's state, it's fine to
-            // specify 0.
-            block_number.unwrap_or(0),
-        )?;
+        *self.best_executed_state.lock() =
+            Self::best_executed_state(&self.data_man, best_executed_epoch)?;
 
         Ok(())
     }
