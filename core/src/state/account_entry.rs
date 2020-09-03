@@ -633,7 +633,7 @@ impl OverlayAccount {
     }
 
     pub fn storage_at<StateDbStorage: StorageStateTrait>(
-        &self, db: &StateDbGeneric<StateDbStorage>, key: &Vec<u8>,
+        &self, db: &StateDbGeneric<StateDbStorage>, key: &[u8],
     ) -> DbResult<U256> {
         if let Some(value) = self.cached_storage_at(key) {
             return Ok(value);
@@ -655,7 +655,7 @@ impl OverlayAccount {
     fn get_and_cache_storage<StateDbStorage: StorageStateTrait>(
         storage_cache: &mut HashMap<Vec<u8>, U256>,
         ownership_cache: &mut HashMap<Vec<u8>, Option<Address>>,
-        db: &StateDbGeneric<StateDbStorage>, address: &Address, key: &Vec<u8>,
+        db: &StateDbGeneric<StateDbStorage>, address: &Address, key: &[u8],
         cache_ownership: bool,
     ) -> DbResult<U256>
     {
@@ -663,10 +663,10 @@ impl OverlayAccount {
         if let Some(value) = db.get::<StorageValue>(
             StorageKey::new_storage_key(address, key.as_ref()),
         )? {
-            storage_cache.insert(key.clone(), value.value);
+            storage_cache.insert(key.to_vec(), value.value);
             if cache_ownership {
                 ownership_cache.insert(
-                    key.clone(),
+                    key.to_vec(),
                     Some(match value.owner {
                         Some(owner) => owner,
                         None => *address,
@@ -675,9 +675,9 @@ impl OverlayAccount {
             }
             Ok(value.value)
         } else {
-            storage_cache.insert(key.clone(), U256::zero());
+            storage_cache.insert(key.to_vec(), U256::zero());
             if cache_ownership {
-                ownership_cache.insert(key.clone(), None);
+                ownership_cache.insert(key.to_vec(), None);
             }
             Ok(U256::zero())
         }
@@ -828,54 +828,32 @@ impl OverlayAccount {
             }
         }
 
-        match &self.code {
-            None => {}
-            Some(code_info) => {
-                let storage_key =
-                    StorageKey::new_code_key(&self.address, &self.code_hash);
-                state.db.set::<CodeInfo>(
-                    storage_key,
-                    code_info,
-                    debug_record.as_deref_mut(),
-                )?;
-            }
+        if let Some(code_info) = self.code.as_ref() {
+            let storage_key =
+                StorageKey::new_code_key(&self.address, &self.code_hash);
+            state.db.set::<CodeInfo>(
+                storage_key,
+                code_info,
+                debug_record.as_deref_mut(),
+            )?;
         }
 
-        match self.deposit_list.as_ref() {
-            None => {}
-            Some(deposit_list) => {
-                let storage_key =
-                    StorageKey::new_deposit_list_key(&self.address);
-                if deposit_list.is_empty() {
-                    state
-                        .db
-                        .delete(storage_key, debug_record.as_deref_mut())?;
-                } else {
-                    state.db.set::<DepositList>(
-                        storage_key,
-                        deposit_list,
-                        debug_record.as_deref_mut(),
-                    )?;
-                }
-            }
+        if let Some(deposit_list) = self.deposit_list.as_ref() {
+            let storage_key = StorageKey::new_deposit_list_key(&self.address);
+            state.db.set::<DepositList>(
+                storage_key,
+                deposit_list,
+                debug_record.as_deref_mut(),
+            )?;
         }
 
-        match self.vote_stake_list.as_ref() {
-            None => {}
-            Some(vote_stake_list) => {
-                let storage_key = StorageKey::new_vote_list_key(&self.address);
-                if vote_stake_list.is_empty() {
-                    state
-                        .db
-                        .delete(storage_key, debug_record.as_deref_mut())?;
-                } else {
-                    state.db.set::<VoteStakeList>(
-                        storage_key,
-                        vote_stake_list,
-                        debug_record.as_deref_mut(),
-                    )?;
-                }
-            }
+        if let Some(vote_stake_list) = self.vote_stake_list.as_ref() {
+            let storage_key = StorageKey::new_vote_list_key(&self.address);
+            state.db.set::<VoteStakeList>(
+                storage_key,
+                vote_stake_list,
+                debug_record.as_deref_mut(),
+            )?;
         }
 
         if let Some(layout) = self.storage_layout_change.clone() {

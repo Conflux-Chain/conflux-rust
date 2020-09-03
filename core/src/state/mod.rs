@@ -30,8 +30,8 @@ use parking_lot::{
 #[cfg(test)]
 use primitives::storage::STORAGE_LAYOUT_REGULAR_V0;
 use primitives::{
-    DepositList, EpochId, StorageKey, StorageLayout, StorageValue,
-    VoteStakeList,
+    Account, DepositList, EpochId, SponsorInfo, StorageKey, StorageLayout,
+    StorageValue, VoteStakeList,
 };
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
@@ -108,8 +108,10 @@ pub type State = StateGeneric<StorageState>;
 pub struct StateGeneric<StateDbStorage: StorageStateTrait> {
     db: StateDb<StateDbStorage>,
 
-    // Only used once at commitment.
-    dirty_accounts_to_commit: Vec<(Address, AccountEntry)>,
+    // Only created once for txpool notification.
+    // Each element is an Ok(Account) for updated account, or Err(Address)
+    // for deleted account.
+    accounts_to_notify: Vec<Result<Account, Address>>,
 
     // Contains the changes to the states and some unchanged state entries.
     cache: RwLock<HashMap<Address, AccountEntry>>,
@@ -145,6 +147,47 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             db.get_total_staking_tokens().expect("No db error");
         let total_storage_tokens =
             db.get_total_storage_tokens().expect("No db error");
+
+        let staking_state = if db.is_initialized().expect("no db error") {
+            StakingState {
+                total_issued_tokens,
+                total_staking_tokens,
+                total_storage_tokens,
+                interest_rate_per_block: annual_interest_rate
+                    / U256::from(BLOCKS_PER_YEAR),
+                accumulate_interest_rate,
+            }
+        } else {
+            // If db is not initialized, all the loaded value should be zero.
+            assert!(
+                annual_interest_rate.is_zero(),
+                "annual_interest_rate is non-zero when db is un-init"
+            );
+            assert!(
+                accumulate_interest_rate.is_zero(),
+                "accumulate_interest_rate is non-zero when db is un-init"
+            );
+            assert!(
+                total_issued_tokens.is_zero(),
+                "total_issued_tokens is non-zero when db is un-init"
+            );
+            assert!(
+                total_staking_tokens.is_zero(),
+                "total_staking_tokens is non-zero when db is un-init"
+            );
+            assert!(
+                total_storage_tokens.is_zero(),
+                "total_storage_tokens is non-zero when db is un-init"
+            );
+            StakingState {
+                total_issued_tokens: U256::default(),
+                total_staking_tokens: U256::default(),
+                total_storage_tokens: U256::default(),
+                interest_rate_per_block: *INITIAL_INTEREST_RATE_PER_BLOCK,
+                accumulate_interest_rate: *ACCUMULATED_INTEREST_RATE_SCALE,
+            }
+        };
+
         /*
         let account_start_nonce = (block_number
             * ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT as u64)
@@ -163,17 +206,10 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             checkpoints: Default::default(),
             account_start_nonce,
             contract_start_nonce,
-            staking_state: StakingState {
-                total_issued_tokens,
-                total_staking_tokens,
-                total_storage_tokens,
-                interest_rate_per_block: annual_interest_rate
-                    / U256::from(BLOCKS_PER_YEAR),
-                accumulate_interest_rate,
-            },
+            staking_state,
             block_number,
             vm,
-            dirty_accounts_to_commit: Default::default(),
+            accounts_to_notify: Default::default(),
         }
     }
 
@@ -499,6 +535,14 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         }
     }
 
+    pub fn sponsor_info(
+        &self, address: &Address,
+    ) -> DbResult<Option<SponsorInfo>> {
+        self.ensure_account_loaded(address, RequireCache::None, |maybe_acc| {
+            maybe_acc.map(|acc| acc.sponsor_info().clone())
+        })
+    }
+
     pub fn sponsor_gas_bound(&self, address: &Address) -> DbResult<U256> {
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |acc| acc.sponsor_info().sponsor_gas_bound)
@@ -700,6 +744,21 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             |acc| {
                 acc.map_or(U256::zero(), |acc| {
                     acc.withdrawable_staking_balance(self.block_number)
+                })
+            },
+        )
+    }
+
+    pub fn locked_staking_balance_at_block_number(
+        &self, address: &Address, block_number: u64,
+    ) -> DbResult<U256> {
+        self.ensure_account_loaded(
+            address,
+            RequireCache::VoteStakeList,
+            |acc| {
+                acc.map_or(U256::zero(), |acc| {
+                    acc.staking_balance()
+                        - acc.withdrawable_staking_balance(block_number)
                 })
             },
         )
@@ -1012,15 +1071,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         Ok(())
     }
 
-    fn precommit_make_dirty_accounts_list(&mut self) {
-        if self.dirty_accounts_to_commit.is_empty() {
-            let mut sorted_dirty_accounts =
-                self.cache.get_mut().drain().collect::<Vec<_>>();
-            sorted_dirty_accounts.sort_by(|a, b| a.0.cmp(&b.0));
-            self.dirty_accounts_to_commit = sorted_dirty_accounts;
-        }
-    }
-
+    // It's guaranteed that the second call of this method is a no-op.
     pub fn compute_state_root(
         &mut self, mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<StateRootWithAuxInfo> {
@@ -1029,21 +1080,25 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         assert!(self.checkpoints.get_mut().is_empty());
         assert!(self.staking_state_checkpoints.get_mut().is_empty());
 
-        self.precommit_make_dirty_accounts_list();
+        let mut sorted_dirty_accounts =
+            self.cache.get_mut().drain().collect::<Vec<_>>();
+        sorted_dirty_accounts.sort_by(|a, b| a.0.cmp(&b.0));
 
         let mut killed_addresses = Vec::new();
-        for (address, entry) in
-            std::mem::take(&mut self.dirty_accounts_to_commit).iter_mut()
-        {
+        for (address, entry) in sorted_dirty_accounts.iter_mut() {
             entry.state = AccountState::Committed;
             match &mut entry.account {
-                None => killed_addresses.push(*address),
+                None => {
+                    killed_addresses.push(*address);
+                    self.accounts_to_notify.push(Err(*address));
+                }
                 Some(account) => {
                     account.commit(
                         self,
                         address,
                         debug_record.as_deref_mut(),
                     )?;
+                    self.accounts_to_notify.push(Ok(account.as_account()?));
                 }
             }
         }
@@ -1072,9 +1127,10 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         debug!("Notify epoch[{}]", epoch_id);
 
         let mut accounts_for_txpool = vec![];
-        for (_address, entry) in &self.dirty_accounts_to_commit {
-            if let Some(account) = &entry.account {
-                accounts_for_txpool.push(account.as_account()?);
+        for updated_or_deleted in &self.accounts_to_notify {
+            // if the account is updated.
+            if let Ok(account) = updated_or_deleted {
+                accounts_for_txpool.push(account.clone());
             }
         }
         {
@@ -1262,9 +1318,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         Ok(())
     }
 
-    pub fn storage_at(
-        &self, address: &Address, key: &Vec<u8>,
-    ) -> DbResult<U256> {
+    pub fn storage_at(&self, address: &Address, key: &[u8]) -> DbResult<U256> {
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |account| {
                 account.storage_at(&self.db, key).unwrap_or(U256::zero())

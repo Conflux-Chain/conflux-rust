@@ -622,6 +622,7 @@ fn test_deposit_withdraw_lock() {
     params.storage_owner = params.code_address;
     params.gas = U256::from(1000000);
     params.data = Some("b6b55f250000000000000000000000000000000000000000000000000de0b6b3a7640000".from_hex().unwrap());
+    params.call_type = CallType::CallCode;
 
     // wrong call type
     let result = Executive::new(

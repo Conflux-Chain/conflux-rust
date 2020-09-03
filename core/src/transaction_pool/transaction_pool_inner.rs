@@ -11,7 +11,7 @@ use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
 };
 use primitives::{
-    Account, Action, SignedTransaction, SponsorInfo, TransactionWithSignature,
+    Account, Action, SignedTransaction, TransactionWithSignature,
 };
 use rlp::*;
 use std::{
@@ -19,6 +19,7 @@ use std::{
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
+
 type WeightType = u128;
 lazy_static! {
     pub static ref MAX_WEIGHT: U256 = u128::max_value().into();
@@ -36,7 +37,7 @@ lazy_static! {
         register_meter_with_group("timer", "tx_pool::inner_insert");
     static ref DEFERRED_POOL_INNER_INSERT: Arc<dyn Meter> =
         register_meter_with_group("timer", "deferred_pool::inner_insert");
-    static ref TX_POOL_GET_STATE_TIMER: Arc<dyn Meter> =
+    pub static ref TX_POOL_GET_STATE_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::get_nonce_and_storage");
     static ref TX_POOL_INNER_WITHOUTCHECK_INSERT_TIMER: Arc<dyn Meter> =
         register_meter_with_group(
@@ -494,43 +495,21 @@ impl TransactionPoolInner {
             .insert((*address).clone(), (nonce, balance));
     }
 
-    pub fn get_nonce_and_balance_from_storage(
-        &self, address: &Address, account_cache: &mut AccountCache,
-    ) -> StateDbResult<(U256, U256)> {
-        let _timer = MeterTimer::time_func(TX_POOL_GET_STATE_TIMER.as_ref());
-        match account_cache.get_account_mut(address)? {
-            Some(account) => {
-                Ok((account.nonce.clone(), account.balance.clone()))
-            }
-            None => Ok((0.into(), 0.into())),
-        }
-    }
-
-    pub fn get_sponsor_info_from_storage(
-        &self, address: &Address, account_cache: &mut AccountCache,
-    ) -> StateDbResult<Option<SponsorInfo>> {
-        Ok(account_cache
-            .get_account_mut(address)?
-            .map(|x| x.sponsor_info.clone()))
-    }
-
     fn get_and_update_nonce_and_balance_from_storage(
-        &mut self, address: &Address, account_cache: &mut AccountCache,
+        &mut self, address: &Address, state: &AccountCache,
     ) -> StateDbResult<(U256, U256)> {
-        let ret = match account_cache.get_account_mut(address)? {
-            Some(account) => (account.nonce.clone(), account.balance.clone()),
-            None => (0.into(), 0.into()),
-        };
-        let count = self.deferred_pool.count_less(address, &ret.0);
+        let nonce_and_balance = state.get_nonce_and_balance(address)?;
+        let count =
+            self.deferred_pool.count_less(address, &nonce_and_balance.0);
         let timestamp = self
             .garbage_collector
             .get_timestamp(address)
             .unwrap_or(self.get_current_timestamp());
         self.garbage_collector.insert(address, count, timestamp);
         self.ready_nonces_and_balances
-            .insert((*address).clone(), ret);
+            .insert((*address).clone(), nonce_and_balance);
 
-        Ok(ret)
+        Ok(nonce_and_balance)
     }
 
     pub fn get_lowest_nonce(&self, addr: &Address) -> U256 {
@@ -567,7 +546,7 @@ impl TransactionPoolInner {
     }
 
     fn recalculate_readiness_with_state(
-        &mut self, addr: &Address, account_cache: &mut AccountCache,
+        &mut self, addr: &Address, account_cache: &AccountCache,
     ) -> StateDbResult<()> {
         let _timer = MeterTimer::time_func(TX_POOL_RECALCULATE.as_ref());
         let (nonce, balance) = self
@@ -729,7 +708,7 @@ impl TransactionPoolInner {
     // the packed tag provided
     // if force tag is true, the replacement in nonce pool must be happened
     pub fn insert_transaction_with_readiness_check(
-        &mut self, account_cache: &mut AccountCache,
+        &mut self, account_cache: &AccountCache,
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
     ) -> Result<(), String>
     {
@@ -737,16 +716,29 @@ impl TransactionPoolInner {
         let mut sponsored_gas = U256::from(0);
 
         // Compute sponsored_gas for `transaction`
-        if let Action::Call(callee) = transaction.action {
+        if let Action::Call(callee) = &transaction.action {
             // FIXME: This is a quick fix for performance issue.
             if callee.is_contract_address() {
-                if let Ok(Some(sponsor_info)) =
-                    self.get_sponsor_info_from_storage(&callee, account_cache)
+                if let Some(sponsor_info) =
+                    account_cache.get_sponsor_info(callee).map_err(|e| {
+                        format!(
+                            "Failed to read account_cache from storage: {}",
+                            e
+                        )
+                    })?
                 {
-                    if account_cache.check_commission_privilege(
-                        &callee,
-                        &transaction.sender(),
-                    ) {
+                    if account_cache
+                        .check_commission_privilege(
+                            &callee,
+                            &transaction.sender(),
+                        )
+                        .map_err(|e| {
+                            format!(
+                                "Failed to read account_cache from storage: {}",
+                                e
+                            )
+                        })?
+                    {
                         let estimated_gas =
                             transaction.gas * transaction.gas_price;
                         if estimated_gas <= sponsor_info.sponsor_gas_bound
@@ -760,11 +752,8 @@ impl TransactionPoolInner {
             }
         }
 
-        let (state_nonce, state_balance) = self
-            .get_nonce_and_balance_from_storage(
-                &transaction.sender,
-                account_cache,
-            )
+        let (state_nonce, state_balance) = account_cache
+            .get_nonce_and_balance(&transaction.sender)
             .map_err(|e| {
                 format!("Failed to read account_cache from storage: {}", e)
             })?;
