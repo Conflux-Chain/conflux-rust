@@ -17,7 +17,7 @@ extern crate rand;
 pub use self::impls::TreapMap;
 use crate::{
     block_data_manager::BlockDataManager, consensus::BestInformation,
-    machine::Machine, verification::VerificationConfig,
+    machine::Machine, state::State, verification::VerificationConfig, vm::Spec,
 };
 use account_cache::AccountCache;
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
@@ -112,7 +112,7 @@ pub struct TransactionPool {
     inner: RwLock<TransactionPoolInner>,
     to_propagate_trans: Arc<RwLock<HashMap<H256, Arc<SignedTransaction>>>>,
     pub data_man: Arc<BlockDataManager>,
-    best_executed_state: Mutex<Arc<StateDb>>,
+    best_executed_state: Mutex<Arc<State>>,
     consensus_best_info: Mutex<Arc<BestInformation>>,
     set_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
     recycle_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
@@ -154,22 +154,16 @@ impl TransactionPool {
             config.tx_weight_scaling,
             config.tx_weight_exp,
         );
-        let best_executed_state = Mutex::new(Arc::new(StateDb::new(
-            data_man
-                .storage_manager
-                .get_state_no_commit(
-                    StateIndex::new_for_readonly(
-                        &genesis_hash,
-                        &data_man.true_genesis_state_root(),
-                    ),
-                    /* try_open = */ false,
-                )
-                // Safe because we don't expect any error at program start.
-                .expect(&concat!(file!(), ":", line!(), ":", column!()))
-                // Safe because true genesis state is available at program
-                // start.
-                .expect(&concat!(file!(), ":", line!(), ":", column!())),
-        )));
+        let best_executed_state = Mutex::new(
+            Self::best_executed_state(
+                &data_man,
+                StateIndex::new_for_readonly(
+                    &genesis_hash,
+                    &data_man.true_genesis_state_root(),
+                ),
+            )
+            .expect("The genesis state is guaranteed to exist."),
+        );
         TransactionPool {
             config,
             verification_config,
@@ -206,10 +200,8 @@ impl TransactionPool {
     pub fn get_state_account_info(
         &self, address: &Address,
     ) -> StateDbResult<(U256, U256)> {
-        let mut account_cache = self.get_best_state_account_cache();
-        self.inner
-            .read()
-            .get_nonce_and_balance_from_storage(address, &mut account_cache)
+        let account_cache = self.get_best_state_account_cache();
+        account_cache.get_nonce_and_balance(address)
     }
 
     /// Try to insert `transactions` into transaction pool.
@@ -279,7 +271,7 @@ impl TransactionPool {
         // key after basic verification.
         match self.data_man.recover_unsigned_tx(&transactions) {
             Ok(signed_trans) => {
-                let mut account_cache = self.get_best_state_account_cache();
+                let account_cache = self.get_best_state_account_cache();
                 let mut inner =
                     self.inner.write_with_metric(&INSERT_TXS_ENQUEUE_LOCK);
                 let mut to_prop = self.to_propagate_trans.write();
@@ -287,7 +279,7 @@ impl TransactionPool {
                 for tx in signed_trans {
                     if let Err(e) = self.add_transaction_with_readiness_check(
                         &mut *inner,
-                        &mut account_cache,
+                        &account_cache,
                         tx.clone(),
                         false,
                         false,
@@ -388,7 +380,7 @@ impl TransactionPool {
         // already signed.
 
         {
-            let mut account_cache = self.get_best_state_account_cache();
+            let account_cache = self.get_best_state_account_cache();
             let mut inner =
                 self.inner.write_with_metric(&INSERT_TXS_ENQUEUE_LOCK);
             let mut to_prop = self.to_propagate_trans.write();
@@ -396,7 +388,7 @@ impl TransactionPool {
             for tx in signed_transactions {
                 if let Err(e) = self.add_transaction_with_readiness_check(
                     &mut *inner,
-                    &mut account_cache,
+                    &account_cache,
                     tx.clone(),
                     false,
                     false,
@@ -500,9 +492,8 @@ impl TransactionPool {
     // the packed tag provided
     // if force tag is true, the replacement in nonce pool must be happened
     pub fn add_transaction_with_readiness_check(
-        &self, inner: &mut TransactionPoolInner,
-        account_cache: &mut AccountCache, transaction: Arc<SignedTransaction>,
-        packed: bool, force: bool,
+        &self, inner: &mut TransactionPoolInner, account_cache: &AccountCache,
+        transaction: Arc<SignedTransaction>, packed: bool, force: bool,
     ) -> Result<(), String>
     {
         inner.insert_transaction_with_readiness_check(
@@ -647,14 +638,14 @@ impl TransactionPool {
             *consensus_best_info = best_info.clone();
         }
 
-        let mut account_cache = self.get_best_state_account_cache();
+        let account_cache = self.get_best_state_account_cache();
         let mut inner = self.inner.write_with_metric(&NOTIFY_BEST_INFO_LOCK);
         let inner = inner.deref_mut();
 
         while let Some(tx) = set_tx_buffer.pop() {
             self.add_transaction_with_readiness_check(
                 inner,
-                &mut account_cache,
+                &account_cache,
                 tx,
                 true,
                 false,
@@ -670,8 +661,7 @@ impl TransactionPool {
                 "should not trigger recycle transaction, nonce = {}, sender = {:?}, \
                 account nonce = {}, hash = {:?} .",
                 &tx.nonce, &tx.sender,
-                &account_cache.get_account_mut(&tx.sender)?
-                    .map_or(0.into(), |x| x.nonce), tx.hash);
+                account_cache.get_nonce(&tx.sender)?, tx.hash);
 
             if let Err(e) = self.verify_transaction_tx_pool(
                 &tx,
@@ -686,7 +676,7 @@ impl TransactionPool {
             }
             self.add_transaction_with_readiness_check(
                 inner,
-                &mut account_cache,
+                &account_cache,
                 tx,
                 false,
                 true,
@@ -750,20 +740,34 @@ impl TransactionPool {
         (consensus_best_info_clone, self_gas_limit, transactions)
     }
 
+    fn best_executed_state(
+        data_man: &BlockDataManager, best_executed_epoch: StateIndex,
+    ) -> StorageResult<Arc<State>> {
+        Ok(Arc::new(State::new(
+            StateDb::new(
+                data_man
+                    .storage_manager
+                    .get_state_no_commit(
+                        best_executed_epoch,
+                        /* try_open = */ false,
+                    )?
+                    // Safe because the state is guaranteed to be available
+                    .unwrap(),
+            ),
+            Default::default(),
+            &Spec::new_spec(),
+            // So far block_number is unused in txpool's state, it's fine to
+            // specify a fake number. block_number 1 corresponds to the state
+            // of genesis block.
+            1, /* block_number */
+        )))
+    }
+
     pub fn set_best_executed_epoch(
         &self, best_executed_epoch: StateIndex,
     ) -> StorageResult<()> {
-        let best_executed_state = Arc::new(StateDb::new(
-            self.data_man
-                .storage_manager
-                .get_state_no_commit(
-                    best_executed_epoch,
-                    /* try_open = */ false,
-                )?
-                // Safe because the state is guaranteed to be available.
-                .unwrap(),
-        ));
-        *self.best_executed_state.lock() = best_executed_state;
+        *self.best_executed_state.lock() =
+            Self::best_executed_state(&self.data_man, best_executed_epoch)?;
 
         Ok(())
     }

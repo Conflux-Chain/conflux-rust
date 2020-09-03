@@ -30,8 +30,8 @@ use parking_lot::{
 #[cfg(test)]
 use primitives::storage::STORAGE_LAYOUT_REGULAR_V0;
 use primitives::{
-    Account, DepositList, EpochId, StorageKey, StorageLayout, StorageValue,
-    VoteStakeList,
+    Account, DepositList, EpochId, SponsorInfo, StorageKey, StorageLayout,
+    StorageValue, VoteStakeList,
 };
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
@@ -533,6 +533,14 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         } else {
             Ok(())
         }
+    }
+
+    pub fn sponsor_info(
+        &self, address: &Address,
+    ) -> DbResult<Option<SponsorInfo>> {
+        self.ensure_account_loaded(address, RequireCache::None, |maybe_acc| {
+            maybe_acc.map(|acc| acc.sponsor_info().clone())
+        })
     }
 
     pub fn sponsor_gas_bound(&self, address: &Address) -> DbResult<U256> {
