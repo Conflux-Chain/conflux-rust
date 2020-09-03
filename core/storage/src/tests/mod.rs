@@ -173,7 +173,7 @@ pub fn new_state_manager_for_unit_test_with_snapshot_epoch_count(
 
 #[cfg(any(test, feature = "testonly_code"))]
 pub fn new_state_manager_for_unit_test() -> FakeStateManager {
-    let snapshot_epoch_count = 10_000_000;
+    let snapshot_epoch_count = 10;
     new_state_manager_for_unit_test_with_snapshot_epoch_count(
         snapshot_epoch_count,
     )
