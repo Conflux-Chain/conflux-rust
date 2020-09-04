@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+pub use cfx_parameters::internal_contract_addresses::ADMIN_CONTROL_CONTRACT_ADDRESS;
+
 use super::{
     super::impls::admin::*, ExecutionTrait, InterfaceTrait,
     InternalContractTrait, PreExecCheckConfTrait, SolFnTable,
@@ -10,28 +12,30 @@ use super::{
 use crate::{
     evm::{ActionParams, Spec},
     impl_function_type, make_function_table, make_solidity_contract,
-    make_solidity_function,
+    make_solidity_function, rename_interface,
     state::{State, Substate},
     vm,
 };
 use cfx_types::{Address, U256};
 
-use std::str::FromStr;
-
 lazy_static! {
-    pub static ref ADMIN_CONTROL_CONTRACT_ADDRESS: Address =
-        Address::from_str("0888000000000000000000000000000000000000").unwrap();
     static ref CONTRACT_TABLE: SolFnTable =
-        make_function_table!(SetAdmin, Destroy);
+        make_function_table!(SetAdminSnake, Destroy);
+    static ref CONTRACT_TABLE_V2: SolFnTable =
+        make_function_table!(SetAdmin, Destroy, GetAdmin);
 }
 make_solidity_contract! {
     pub struct AdminControl(ADMIN_CONTROL_CONTRACT_ADDRESS, CONTRACT_TABLE);
 }
 
 make_solidity_function! {
-    struct SetAdmin((Address, Address), "set_admin(address,address)");
+    struct SetAdmin((Address, Address), "setAdmin(address,address)");
 }
 impl_function_type!(SetAdmin, "non_payable_write", gas: SPEC.sstore_reset_gas);
+
+rename_interface! {
+    struct SetAdminSnake(SetAdmin, "set_admin(address,address)");
+}
 
 impl ExecutionTrait for SetAdmin {
     fn execute_inner(
@@ -59,7 +63,7 @@ impl ExecutionTrait for Destroy {
 }
 
 make_solidity_function! {
-    struct GetAdmin(Address, "get_admin(address)", Address);
+    struct GetAdmin(Address, "getAdmin(address)", Address);
 }
 impl_function_type!(GetAdmin, "query_with_default_gas");
 
@@ -80,6 +84,9 @@ fn test_admin_contract_sig() {
     /// The first 4 bytes of keccak('destroy(address)') is 0x00f55d9d.
     static DESTROY_SIG: &'static [u8] = &[0x00, 0xf5, 0x5d, 0x9d];
 
-    assert_eq!(SetAdmin {}.function_sig().to_vec(), SET_ADMIN_SIG.to_vec());
+    assert_eq!(
+        SetAdminSnake {}.function_sig().to_vec(),
+        SET_ADMIN_SIG.to_vec()
+    );
     assert_eq!(Destroy {}.function_sig().to_vec(), DESTROY_SIG.to_vec());
 }

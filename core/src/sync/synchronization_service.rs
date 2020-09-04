@@ -12,6 +12,7 @@ use crate::{
         synchronization_protocol_handler::ProtocolConfiguration,
         StateSyncConfiguration, SynchronizationPhaseTrait,
     },
+    NodeType,
 };
 use cfx_types::H256;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -30,7 +31,7 @@ pub struct SynchronizationService {
 
 impl SynchronizationService {
     pub fn new(
-        is_full_node: bool, network: Arc<NetworkService>,
+        node_type: NodeType, network: Arc<NetworkService>,
         sync_graph: SharedSynchronizationGraph,
         protocol_config: ProtocolConfiguration,
         state_sync_config: StateSyncConfiguration,
@@ -38,7 +39,7 @@ impl SynchronizationService {
     ) -> Self
     {
         let sync_handler = Arc::new(SynchronizationProtocolHandler::new(
-            is_full_node,
+            node_type,
             protocol_config,
             state_sync_config,
             initial_sync_phase,

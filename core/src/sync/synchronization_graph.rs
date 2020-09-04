@@ -13,7 +13,7 @@ use crate::{
     statistics::SharedStatistics,
     sync::synchronization_protocol_handler::FutureBlockContainer,
     verification::*,
-    ConsensusGraph, Notifications,
+    ConsensusGraph, NodeType, Notifications,
 };
 use cfx_parameters::sync::OLD_ERA_BLOCK_GC_BATCH_SIZE;
 use cfx_types::{H256, U256};
@@ -1047,7 +1047,7 @@ pub struct SynchronizationGraph {
     pub future_blocks: FutureBlockContainer,
 
     /// whether it is a archive node or full node
-    is_full_node: bool,
+    node_type: NodeType,
     machine: Arc<Machine>,
 }
 
@@ -1082,7 +1082,7 @@ impl SynchronizationGraph {
         consensus: SharedConsensusGraph,
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
         pow: Arc<PowComputer>, sync_config: SyncGraphConfig,
-        notifications: Arc<Notifications>, is_full_node: bool,
+        notifications: Arc<Notifications>, node_type: NodeType,
         machine: Arc<Machine>,
     ) -> Self
     {
@@ -1120,7 +1120,7 @@ impl SynchronizationGraph {
             statistics: consensus.get_statistics().clone(),
             consensus_unprocessed_count: consensus_unprocessed_count.clone(),
             new_block_hashes: notifications.new_block_hashes.clone(),
-            is_full_node,
+            node_type,
             machine,
         };
 
@@ -1249,7 +1249,7 @@ impl SynchronizationGraph {
         let mut num_of_blocks_to_remove = OLD_ERA_BLOCK_GC_BATCH_SIZE;
         while let Some(hash) = self.consensus.retrieve_old_era_blocks() {
             // only full node should remove blocks and receipts in old eras
-            if self.is_full_node {
+            if let NodeType::Full = self.node_type {
                 // remove block body in memory cache and db
                 self.data_man
                     .remove_block_body(&hash, true /* remove_db */);

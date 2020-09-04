@@ -27,7 +27,7 @@ use super::{
     return_data::ReturnData,
     spec::Spec,
 };
-use crate::{bytes::Bytes, statedb};
+use cfx_bytes::Bytes;
 use cfx_types::{Address, H256, U256};
 use std::sync::Arc;
 
@@ -100,7 +100,9 @@ pub trait Context {
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
         address: CreateContractAddress, trap: bool,
-    ) -> statedb::Result<::std::result::Result<ContractCreateResult, TrapKind>>;
+    ) -> cfx_statedb::Result<
+        ::std::result::Result<ContractCreateResult, TrapKind>,
+    >;
 
     /// Message call.
     ///
@@ -111,7 +113,7 @@ pub trait Context {
         &mut self, gas: &U256, sender_address: &Address,
         receive_address: &Address, value: Option<U256>, data: &[u8],
         code_address: &Address, call_type: CallType, trap: bool,
-    ) -> statedb::Result<::std::result::Result<MessageCallResult, TrapKind>>;
+    ) -> cfx_statedb::Result<::std::result::Result<MessageCallResult, TrapKind>>;
 
     /// Returns code at given address
     fn extcode(&self, address: &Address) -> Result<Option<Arc<Bytes>>>;
@@ -182,7 +184,10 @@ pub trait Context {
     /// Check if running in static context.
     fn is_static(&self) -> bool;
 
-    /// Check if reentrancy happens
+    /// Check if running in static context or reentrancy context
+    fn is_static_or_reentrancy(&self) -> bool;
+
+    /// Check if reentrancy happens in the next call
     /// The call stack doesn't have the current executive, so the caller address
     /// should be passed.
     fn is_reentrancy(&self, caller: &Address, callee: &Address) -> bool;

@@ -16,7 +16,6 @@ use crate::{
             GetBlockHeadersResponse, Heartbeat, NewBlockHashes, StatusV2,
             StatusV3, TransactionDigests,
         },
-        node_type::NodeType,
         request_manager::{try_get_block_hashes, Request},
         state::SnapshotChunkSync,
         synchronization_phases::{SyncPhaseType, SynchronizationPhaseManager},
@@ -25,6 +24,7 @@ use crate::{
         SYNCHRONIZATION_PROTOCOL_OLD_VERSIONS_TO_SUPPORT,
         SYNCHRONIZATION_PROTOCOL_VERSION, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
+    NodeType,
 };
 use cfx_parameters::{block::MAX_BLOCK_SIZE_IN_BYTES, sync::*};
 use cfx_types::H256;
@@ -413,7 +413,7 @@ pub struct ProtocolConfiguration {
 
 impl SynchronizationProtocolHandler {
     pub fn new(
-        is_full_node: bool, protocol_config: ProtocolConfiguration,
+        node_type: NodeType, protocol_config: ProtocolConfiguration,
         state_sync_config: StateSyncConfiguration,
         initial_sync_phase: SyncPhaseType,
         sync_graph: SharedSynchronizationGraph,
@@ -422,7 +422,7 @@ impl SynchronizationProtocolHandler {
     {
         let sync_state = Arc::new(SynchronizationState::new(
             protocol_config.is_consortium,
-            is_full_node,
+            node_type,
             protocol_config.dev_mode || protocol_config.test_mode,
         ));
         let recover_public_queue = Arc::new(AsyncTaskQueue::new(

@@ -259,10 +259,7 @@ impl TxInfos {
 
         // verify receipt proof
         let verified_epoch_receipts_root =
-            match self.witnesses.root_hashes_of(epoch) {
-                Some((_, receipts_root, _)) => receipts_root,
-                None => bail!(ErrorKind::WitnessUnavailable { epoch }),
-            };
+            self.witnesses.root_hashes_of(epoch)?.receipts_root_hash;
 
         trace!(
             "verifying receipt proof with\n

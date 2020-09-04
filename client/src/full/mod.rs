@@ -12,7 +12,8 @@ use crate::{
 };
 use blockgen::BlockGenerator;
 use cfxcore::{
-    pow::PowComputer, ConsensusGraph, SynchronizationService, TransactionPool,
+    pow::PowComputer, ConsensusGraph, NodeType, SynchronizationService,
+    TransactionPool,
 };
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Condvar, Mutex};
@@ -57,9 +58,7 @@ impl FullClient {
             rpc_tcp_server,
             rpc_ws_server,
             runtime,
-        ) = initialize_not_light_node_modules(
-            &conf, exit, true, /* is_full_node */
-        )?;
+        ) = initialize_not_light_node_modules(&conf, exit, NodeType::Full)?;
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
             blockgen: Some(blockgen),

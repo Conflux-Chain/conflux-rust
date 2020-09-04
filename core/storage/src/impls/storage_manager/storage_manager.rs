@@ -764,7 +764,7 @@ impl StorageManager {
             None => return Ok(()),
         };
 
-        let snapshot_info_removed = self
+        let _snapshot_info_removed = self
             .maintain_snapshots_pivot_chain_confirmed(
                 maintained_state_height_lower_bound,
                 &maintained_epoch_id,
@@ -772,18 +772,6 @@ impl StorageManager {
                 state_availability_boundary,
             )?;
 
-        let mut states_to_remove = HashSet::new();
-        for snapshot_info in snapshot_info_removed {
-            for hash in snapshot_info.pivot_chain_parts {
-                states_to_remove.insert(hash);
-            }
-        }
-        // FIXME: we don't need these since there is StateAvailabilityBoundary.
-        for hash in states_to_remove {
-            // FIXME Commitments of non-pivot states are not removed.
-            // Need to check if this will take too much time.
-            consensus_inner.remove_epoch_execution_commitment_from_db(&hash);
-        }
         Ok(())
     }
 

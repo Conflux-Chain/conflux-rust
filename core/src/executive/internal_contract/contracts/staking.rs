@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+pub use cfx_parameters::internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS;
+
 use super::{
     super::impls::staking::*, ExecutionTrait, InterfaceTrait,
     InternalContractTrait, PreExecCheckConfTrait, SolFnTable,
@@ -10,18 +12,23 @@ use super::{
 use crate::{
     evm::{ActionParams, Spec},
     impl_function_type, make_function_table, make_solidity_contract,
-    make_solidity_function,
+    make_solidity_function, rename_interface,
     state::{State, Substate},
     vm,
 };
 use cfx_types::{Address, U256};
-use std::str::FromStr;
 
 lazy_static! {
-    pub static ref STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS: Address =
-        Address::from_str("0888000000000000000000000000000000000002").unwrap();
     static ref CONTRACT_TABLE: SolFnTable =
-        make_function_table!(Deposit, Withdraw, VoteLock);
+        make_function_table!(Deposit, Withdraw, VoteLockSnake);
+    static ref CONTRACT_TABLE_V2: SolFnTable = make_function_table!(
+        Deposit,
+        Withdraw,
+        VoteLock,
+        GetStakingBalance,
+        GetLockedStakingBalance,
+        GetVotePower
+    );
 }
 
 make_solidity_contract! {
@@ -81,9 +88,12 @@ impl ExecutionTrait for Withdraw {
 }
 
 make_solidity_function! {
-    struct VoteLock((U256, U256), "vote_lock(uint256,uint256)");
+    struct VoteLock((U256, U256), "voteLock(uint256,uint256)");
 }
 impl_function_type!(VoteLock, "non_payable_write");
+rename_interface! {
+    struct VoteLockSnake(VoteLock, "vote_lock(uint256,uint256)");
+}
 
 impl UpfrontPaymentTrait for VoteLock {
     fn upfront_gas_payment(
@@ -107,17 +117,69 @@ impl ExecutionTrait for VoteLock {
 }
 
 make_solidity_function! {
-    struct BalanceOf(Address, "balance_of(address)", U256);
+    struct GetStakingBalance(Address, "getStakingBalance(address)", U256);
 }
-impl_function_type!(BalanceOf, "query_with_default_gas");
+impl_function_type!(GetStakingBalance, "query_with_default_gas");
 
-impl ExecutionTrait for BalanceOf {
+impl ExecutionTrait for GetStakingBalance {
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _spec: &Spec,
         state: &mut State, _substate: &mut Substate,
     ) -> vm::Result<U256>
     {
         Ok(state.collateral_for_storage(&input)?)
+    }
+}
+
+make_solidity_function! {
+    struct GetLockedStakingBalance((Address,U256), "getLockedStakingBalance(address,uint)", U256);
+}
+impl_function_type!(GetLockedStakingBalance, "query");
+
+impl UpfrontPaymentTrait for GetLockedStakingBalance {
+    fn upfront_gas_payment(
+        &self, (address, _): &(Address, U256), _: &ActionParams, spec: &Spec,
+        state: &State,
+    ) -> U256
+    {
+        let length = state.vote_stake_list_length(address).unwrap_or(0);
+        U256::from(spec.sload_gas) * U256::from(length + 1)
+    }
+}
+
+impl ExecutionTrait for GetLockedStakingBalance {
+    fn execute_inner(
+        &self, (address, block_number): (Address, U256), _: &ActionParams,
+        _spec: &Spec, state: &mut State, _substate: &mut Substate,
+    ) -> vm::Result<U256>
+    {
+        Ok(get_locked_staking(address, block_number, state)?)
+    }
+}
+
+make_solidity_function! {
+    struct GetVotePower((Address,U256), "getVotePower(address,uint)", U256);
+}
+impl_function_type!(GetVotePower, "query");
+
+impl UpfrontPaymentTrait for GetVotePower {
+    fn upfront_gas_payment(
+        &self, (address, _): &(Address, U256), _: &ActionParams, spec: &Spec,
+        state: &State,
+    ) -> U256
+    {
+        let length = state.vote_stake_list_length(address).unwrap_or(0);
+        U256::from(spec.sload_gas) * U256::from(length + 1)
+    }
+}
+
+impl ExecutionTrait for GetVotePower {
+    fn execute_inner(
+        &self, (address, block_number): (Address, U256), _: &ActionParams,
+        _spec: &Spec, state: &mut State, _substate: &mut Substate,
+    ) -> vm::Result<U256>
+    {
+        Ok(get_vote_power(address, block_number, state)?)
     }
 }
 
@@ -133,5 +195,8 @@ fn test_staking_contract_sig() {
 
     assert_eq!(Deposit {}.function_sig().to_vec(), DEPOSIT_SIG.to_vec());
     assert_eq!(Withdraw {}.function_sig().to_vec(), WITHDRAW_SIG.to_vec());
-    assert_eq!(VoteLock {}.function_sig().to_vec(), VOTE_LOCK_SIG.to_vec());
+    assert_eq!(
+        VoteLockSnake {}.function_sig().to_vec(),
+        VOTE_LOCK_SIG.to_vec()
+    );
 }

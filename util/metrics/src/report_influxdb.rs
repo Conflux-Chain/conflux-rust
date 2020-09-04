@@ -14,6 +14,8 @@ use influx_db_client::{Client, Point, Points, Precision, Value};
 use log::debug;
 use std::collections::HashMap;
 
+const REPORT_TIMEOUT_SECONDS: u64 = 30;
+
 pub struct InfluxdbReporter {
     client: Client,
     tags: HashMap<String, String>, // e.g. node=Node_0, region=east_asia
@@ -21,8 +23,11 @@ pub struct InfluxdbReporter {
 
 impl InfluxdbReporter {
     pub fn new<T: ToString>(host: T, db: T) -> Self {
+        let mut client = Client::new(host, db);
+        client.set_read_timeout(REPORT_TIMEOUT_SECONDS);
+        client.set_write_timeout(REPORT_TIMEOUT_SECONDS);
         InfluxdbReporter {
-            client: Client::new(host, db),
+            client,
             tags: HashMap::new(),
         }
     }
@@ -43,7 +48,7 @@ impl InfluxdbReporter {
 }
 
 impl Reporter for InfluxdbReporter {
-    fn report(&self) -> Result<(), String> {
+    fn report(&self) -> Result<bool, String> {
         let mut points = Points::create_new(Vec::new());
 
         for (name, metric) in DEFAULT_REGISTRY.read().get_all() {
@@ -78,9 +83,10 @@ impl Reporter for InfluxdbReporter {
             None,
         ) {
             debug!("failed to write points to influxdb, {:?}", e);
+            Ok(false)
+        } else {
+            Ok(true)
         }
-
-        Ok(())
     }
 }
 

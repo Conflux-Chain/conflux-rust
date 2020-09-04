@@ -4,8 +4,8 @@
 
 use crate::{
     message::{Message, MsgId, RequestId},
-    statedb,
-    sync::{message::Throttled, node_type::NodeType},
+    sync::message::Throttled,
+    NodeType,
 };
 use cfx_types::{H160, H256};
 use error_chain::ChainedError;
@@ -18,7 +18,7 @@ use std::sync::Arc;
 error_chain! {
     links {
         Network(network::Error, network::ErrorKind);
-        StateDb(statedb::Error, statedb::ErrorKind);
+        StateDb(cfx_statedb::Error, cfx_statedb::ErrorKind);
     }
 
     foreign_links {
@@ -162,12 +162,15 @@ error_chain! {
 pub fn handle(
     io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: &Error,
 ) {
-    warn!(
-        "Error while handling message, peer={}, msg_id={:?}, error={}",
-        peer,
-        msg_id,
-        e.display_chain().to_string(),
-    );
+    // for clonable errors, we will print the error in the recursive call
+    if !matches!(e.0, ErrorKind::ClonableErrorWrapper(_)) {
+        warn!(
+            "Error while handling message, peer={}, msg_id={:?}, error={}",
+            peer,
+            msg_id,
+            e.display_chain().to_string(),
+        );
+    }
 
     let mut disconnect = true;
     let reason = format!("{}", e.0);
@@ -178,7 +181,10 @@ pub fn handle(
     match &e.0 {
         // for wrapped errors, handle based on the inner error
         ErrorKind::ClonableErrorWrapper(e) => {
-            handle(io, peer, msg_id, &*e.0.lock())
+            handle(io, peer, msg_id, &*e.0.lock());
+
+            // if we need to disconnect, we will do it in the call above
+            disconnect = false
         }
 
         ErrorKind::Filter(_)

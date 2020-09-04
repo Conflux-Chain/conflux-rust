@@ -63,6 +63,11 @@ class TestGetLogs(RpcClient):
         filter = Filter(limit=1)
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
+        # invalid filter fields
+        filter = Filter()
+        filter.fromBlock = "0x0"
+        assert_raises_rpc_error(None, None, self.get_logs, filter)
+
     def test_valid_filter(self):
         # epoch fields inclusive
         filter = Filter(from_epoch="0x1", to_epoch="0x1")

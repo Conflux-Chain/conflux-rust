@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::{
-    abi::{ABIDecodable, ABIEncodable, ABIReader},
+    abi::{ABIDecodable, ABIEncodable},
     SolidityFunctionTrait,
 };
 use crate::{
@@ -32,13 +32,12 @@ where T: InterfaceTrait
         + ExecutionTrait
 {
     fn execute(
-        &self, input: ABIReader, params: &ActionParams, spec: &Spec,
+        &self, input: &[u8], params: &ActionParams, spec: &Spec,
         state: &mut State, substate: &mut Substate,
     ) -> vm::Result<GasLeft>
     {
-        self.pre_execution_check(params)?;
-        let solidity_params =
-            input.pull_parameters::<<Self as InterfaceTrait>::Input>()?;
+        self.pre_execution_check(params, substate)?;
+        let solidity_params = <T::Input as ABIDecodable>::abi_decode(&input)?;
 
         let cost =
             self.upfront_gas_payment(&solidity_params, params, spec, state);
@@ -48,7 +47,7 @@ where T: InterfaceTrait
 
         self.execute_inner(solidity_params, params, spec, state, substate)
             .and_then(|output| {
-                let output = output.write_to_bytes();
+                let output = output.abi_encode();
                 let length = output.len();
                 let return_cost = (length + 31) / 32 * spec.memory_gas;
                 if params.gas < cost + return_cost {
@@ -73,7 +72,9 @@ pub trait InterfaceTrait: Send + Sync {
 }
 
 pub trait PreExecCheckTrait: Send + Sync {
-    fn pre_execution_check(&self, params: &ActionParams) -> vm::Result<()>;
+    fn pre_execution_check(
+        &self, params: &ActionParams, substate: &Substate,
+    ) -> vm::Result<()>;
 }
 
 pub trait ExecutionTrait: Send + Sync + InterfaceTrait {
@@ -91,18 +92,26 @@ pub trait UpfrontPaymentTrait: Send + Sync + InterfaceTrait {
 }
 
 pub trait PreExecCheckConfTrait: Send + Sync {
+    /// Whether such internal function is payable.
     const PAYABLE: bool;
-    const FORBID_STATIC: bool;
+    /// Whether such internal function has write operation.
+    const HAS_WRITE_OP: bool;
 }
 
 impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
-    fn pre_execution_check(&self, params: &ActionParams) -> vm::Result<()> {
+    fn pre_execution_check(
+        &self, params: &ActionParams, substate: &Substate,
+    ) -> vm::Result<()> {
         if !Self::PAYABLE && !params.value.value().is_zero() {
             return Err(vm::Error::InternalContract(
                 "should not transfer balance to Staking contract",
             ));
         }
-        if Self::FORBID_STATIC && params.call_type == CallType::StaticCall {
+
+        if Self::HAS_WRITE_OP
+            && (substate.contracts_in_callstack.borrow().in_reentrancy()
+                || params.call_type == CallType::StaticCall)
+        {
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
@@ -116,6 +125,18 @@ impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
 /// 2. The string to compute interface signature.
 /// 3. The type of output parameters.
 ///
+/// For example, in order to make a function with interface
+/// get_whitelist(address user, address contract) public returns bool, you
+/// should use
+/// ```
+/// use cfxcore::make_solidity_function;
+/// use cfx_types::{Address,U256};
+/// use cfxcore::executive::function::InterfaceTrait;
+///
+/// make_solidity_function!{
+///     struct WhateverStructName((Address, Address), "get_whitelist(address,address)", bool);
+/// }
+/// ```
 /// If the function has no return value, the third parameter can be omitted.
 macro_rules! make_solidity_function {
     ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($input:ty, $interface:expr ); ) => {
@@ -147,10 +168,10 @@ macro_rules! impl_function_type {
     ( $name:ident, "query" $(, gas: $gas:expr)? ) => {
         $crate::impl_function_type!(@inner, $name, false, false $(, $gas)?);
     };
-    ( @inner, $name:ident, $payable:expr, $forbid_static:expr $(, $gas:expr)? ) => {
+    ( @inner, $name:ident, $payable:expr, $has_write_op:expr $(, $gas:expr)? ) => {
         impl PreExecCheckConfTrait for $name {
             const PAYABLE: bool = $payable;
-            const FORBID_STATIC: bool = $forbid_static;
+            const HAS_WRITE_OP: bool = $has_write_op;
         }
         $(
             impl UpfrontPaymentTrait for $name {
@@ -165,7 +186,7 @@ macro_rules! impl_function_type {
     ( $name:ident, "query_with_default_gas" ) => {
         impl PreExecCheckConfTrait for $name {
             const PAYABLE: bool = false ;
-            const FORBID_STATIC: bool = false;
+            const HAS_WRITE_OP: bool = false;
         }
 
         impl UpfrontPaymentTrait for $name {

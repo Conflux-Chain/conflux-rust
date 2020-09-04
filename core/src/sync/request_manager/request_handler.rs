@@ -6,11 +6,11 @@ use crate::{
     message::{Message, SetRequestId},
     sync::{
         message::{DynamicCapability, KeyContainer},
-        node_type::NodeType,
         request_manager::RequestManager,
         synchronization_protocol_handler::ProtocolConfiguration,
         Error, ErrorKind,
     },
+    NodeType,
 };
 use cfx_parameters::sync::FAILED_REQUEST_RESEND_WAIT;
 use malloc_size_of::MallocSizeOf;

@@ -3,8 +3,12 @@
 // See http://www.gnu.org/licenses/
 
 use super::CleanupMode;
-use crate::evm::{CleanDustMode, Spec};
-use cfx_types::Address;
+use crate::{
+    evm::{CleanDustMode, Spec},
+    state::State,
+};
+use cfx_statedb::Result as DbResult;
+use cfx_types::{Address, U256};
 use primitives::LogEntry;
 use std::{
     cell::RefCell,
@@ -16,10 +20,16 @@ use std::{
 pub struct CallStackInfo {
     call_stack_recipient_addresses: Vec<Address>,
     address_counter: HashMap<Address, u32>,
+    first_reentrancy_depth: Option<usize>,
 }
 
 impl CallStackInfo {
     fn push(&mut self, address: Address) {
+        if self.reentrancy_happens_when_push(&address) {
+            self.first_reentrancy_depth
+                .get_or_insert(self.call_stack_recipient_addresses.len());
+        }
+
         self.call_stack_recipient_addresses.push(address.clone());
         *self.address_counter.entry(address).or_insert(0) += 1;
     }
@@ -35,8 +45,17 @@ impl CallStackInfo {
             if *poped_address_cnt == 0 {
                 self.address_counter.remove(address);
             }
+            if self.first_reentrancy_depth
+                == Some(self.call_stack_recipient_addresses.len())
+            {
+                self.first_reentrancy_depth = None
+            }
         }
         maybe_address
+    }
+
+    pub fn reentrancy_happens_when_push(&self, address: &Address) -> bool {
+        self.last() != Some(address) && self.contains_key(address)
     }
 
     pub fn last(&self) -> Option<&Address> {
@@ -45,6 +64,10 @@ impl CallStackInfo {
 
     pub fn contains_key(&self, key: &Address) -> bool {
         self.address_counter.contains_key(key)
+    }
+
+    pub fn in_reentrancy(&self) -> bool {
+        self.first_reentrancy_depth.is_some()
     }
 }
 
@@ -116,6 +139,24 @@ impl Substate {
         for (address, amount) in s.storage_released {
             *self.storage_released.entry(address).or_insert(0) += amount;
         }
+    }
+
+    // Let VM access storage from substate so that storage ownership can be
+    // maintained without help from state.
+    pub fn storage_at(
+        &self, state: &State, address: &Address, key: &[u8],
+    ) -> DbResult<U256> {
+        state.storage_at(address, key)
+    }
+
+    // Let VM access storage from substate so that storage ownership can be
+    // maintained without help from state.
+    pub fn set_storage(
+        &mut self, state: &mut State, address: &Address, key: Vec<u8>,
+        value: U256, owner: Address,
+    ) -> DbResult<()>
+    {
+        state.set_storage(address, key, value, owner)
     }
 
     pub fn record_storage_occupy(&mut self, address: &Address, amount: u64) {

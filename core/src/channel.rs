@@ -5,8 +5,10 @@
 use crate::UniqueId;
 use cfx_types::H256;
 use parking_lot::RwLock;
-use std::{collections::BTreeMap, sync::Arc};
-use tokio::sync::mpsc::{self, error::TryRecvError};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use tokio::{runtime, sync::mpsc, time::timeout};
+
+pub use tokio::{sync::mpsc::error::TryRecvError, time::Elapsed};
 
 pub struct Receiver<T> {
     pub id: u64,
@@ -22,6 +24,21 @@ impl<T> Receiver<T> {
 
     pub fn recv_blocking(&mut self) -> Option<T> {
         futures::executor::block_on(self.receiver.recv())
+    }
+
+    pub fn recv_with_timeout(
+        &mut self, wait_for: Duration,
+    ) -> Result<Option<T>, Elapsed> {
+        runtime::Builder::new()
+            .basic_scheduler()
+            .enable_time()
+            .build()
+            .expect("Runtime can be created")
+            // this only works in an async block, see:
+            // https://users.rust-lang.org/t/tokio-interval-not-working-in-runtime/41260/2
+            .block_on(
+                async move { timeout(wait_for, self.receiver.recv()).await },
+            )
     }
 
     // NOTE: do not capture anything in `f` that might have references to
@@ -95,6 +112,7 @@ impl<T: Clone> Channel<T> {
 pub struct Notifications {
     pub new_block_hashes: Arc<Channel<(H256, bool)>>,
     pub epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
+    pub blame_verification_results: Arc<Channel<(u64, Option<u64>)>>, /* <height, witness> */
 }
 
 impl Notifications {
@@ -102,6 +120,9 @@ impl Notifications {
         Arc::new(Notifications {
             new_block_hashes: Arc::new(Channel::new("new-block-hashes")),
             epochs_ordered: Arc::new(Channel::new("epochs-executed")),
+            blame_verification_results: Arc::new(Channel::new(
+                "blame-verification-results",
+            )),
         })
     }
 }
@@ -257,7 +278,7 @@ mod tests {
         // create channels and add subscriptions
         let send_a = Channel::<u64>::new("test-chan-ab");
         let send_b = Channel::<u64>::new("test-chan-bc");
-        let send_c = Channel::<u64>::new("test-chan-cd");
+        let send_c = Channel::<u64>::new("test-chan-ca");
 
         let mut rec_b = send_a.subscribe();
         let mut rec_c = send_b.subscribe();

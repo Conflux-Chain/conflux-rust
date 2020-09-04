@@ -37,6 +37,7 @@ pub enum CacheId {
     BlockRewards(H256),
     TransactionAddress(H256),
     LocalBlockInfo(H256),
+    BlamedHeaderVerifiedRoots(u64),
 }
 
 pub struct CacheManager<T> {

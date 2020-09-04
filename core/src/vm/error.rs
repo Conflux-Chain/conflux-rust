@@ -21,7 +21,8 @@
 //! VM errors module
 
 use super::{action_params::ActionParams, ResumeCall, ResumeCreate};
-use crate::{executive::ABIDecodeError, statedb::Error as DbError};
+use crate::executive::ABIDecodeError;
+use cfx_statedb::Error as DbError;
 use cfx_types::{Address, U256};
 use std::fmt;
 
@@ -133,9 +134,7 @@ impl From<DbError> for Error {
 }
 
 impl From<ABIDecodeError> for Error {
-    fn from(_err: ABIDecodeError) -> Self {
-        Error::InternalContract("Unable to parse input")
-    }
+    fn from(err: ABIDecodeError) -> Self { Error::InternalContract(err.0) }
 }
 
 impl fmt::Display for Error {

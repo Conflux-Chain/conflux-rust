@@ -13,6 +13,7 @@ use crate::{
     },
     rpc_errors::{account_result_to_rpc_result, Error as RpcError},
     sync::SynchronizationGraph,
+    Notifications,
 };
 use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
@@ -87,12 +88,14 @@ impl QueryService {
     pub fn new(
         consensus: SharedConsensusGraph, graph: Arc<SynchronizationGraph>,
         network: Arc<NetworkService>, throttling_config_file: Option<String>,
+        notifications: Arc<Notifications>,
     ) -> Self
     {
         let handler = Arc::new(LightHandler::new(
             consensus.clone(),
             graph,
             throttling_config_file,
+            notifications,
         ));
         let ledger = LedgerInfo::new(consensus.clone());
 
@@ -327,8 +330,8 @@ impl QueryService {
         let epoch = self.consensus.get_block_epoch_number(&hash);
 
         let root = epoch
-            .and_then(|e| self.handler.witnesses.root_hashes_of(e))
-            .map(|(state_root, _, _)| state_root);
+            .and_then(|e| self.handler.witnesses.root_hashes_of(e).ok())
+            .map(|roots| roots.state_root_hash);
 
         Ok((tx, receipt, address, epoch, root, prior_gas_used))
     }

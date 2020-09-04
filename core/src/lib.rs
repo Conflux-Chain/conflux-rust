@@ -37,11 +37,11 @@ pub mod executive;
 pub mod genesis;
 pub mod light_protocol;
 pub mod machine;
+pub mod node_type;
 pub mod pow;
 pub mod rpc_errors;
 pub mod state;
 pub mod state_exposer;
-pub mod statedb;
 pub mod statistics;
 pub mod sync;
 pub mod transaction_pool;
@@ -62,6 +62,7 @@ pub use crate::{
     light_protocol::{
         Provider as LightProvider, QueryService as LightQueryService,
     },
+    node_type::NodeType,
     sync::{
         SharedSynchronizationGraph, SharedSynchronizationService,
         SynchronizationGraph, SynchronizationService,

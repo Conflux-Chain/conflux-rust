@@ -95,6 +95,8 @@ pub struct BlockDataManager {
     block_rewards: RwLock<HashMap<H256, BlockRewardResult>>,
     transaction_indices: RwLock<HashMap<H256, TransactionIndex>>,
     local_block_info: RwLock<HashMap<H256, LocalBlockInfo>>,
+    blamed_header_verified_roots:
+        RwLock<HashMap<u64, BlamedHeaderVerifiedRoots>>,
     /// Caching for receipts_root and logs_bloom for epochs after
     /// cur_era_genesis. It is not deferred, i.e., indexed by the hash of
     /// the pivot block that produces the result when executed.
@@ -190,6 +192,7 @@ impl BlockDataManager {
             block_rewards: Default::default(),
             transaction_indices: Default::default(),
             local_block_info: Default::default(),
+            blamed_header_verified_roots: Default::default(),
             epoch_execution_commitments: Default::default(),
             epoch_execution_contexts: Default::default(),
             invalid_block_set: RwLock::new(InvalidBlockSet::new(
@@ -725,6 +728,41 @@ impl BlockDataManager {
         )
     }
 
+    pub fn insert_blamed_header_verified_roots(
+        &self, height: u64, roots: BlamedHeaderVerifiedRoots,
+    ) {
+        self.insert(
+            height,
+            roots,
+            &self.blamed_header_verified_roots,
+            |key, value| {
+                self.db_manager
+                    .insert_blamed_header_verified_roots_to_db(*key, value)
+            },
+            Some(CacheId::BlamedHeaderVerifiedRoots(height)),
+            true,
+        )
+    }
+
+    /// Get correct roots of blamed headers from db.
+    /// These are maintained on light nodes only.
+    pub fn verified_blamed_roots_by_height(
+        &self, height: u64,
+    ) -> Option<BlamedHeaderVerifiedRoots> {
+        self.get(
+            &height,
+            &self.blamed_header_verified_roots,
+            |key| self.db_manager.blamed_header_verified_roots_from_db(*key),
+            Some(CacheId::BlamedHeaderVerifiedRoots(height)),
+        )
+    }
+
+    pub fn remove_blamed_header_verified_roots(&self, height: u64) {
+        self.blamed_header_verified_roots.write().remove(&height);
+        self.db_manager
+            .remove_blamed_header_verified_roots_from_db(height);
+    }
+
     fn insert<K, V, InsertF>(
         &self, key: K, value: V, in_mem: &RwLock<HashMap<K, V>>,
         insert_f: InsertF, maybe_cache_id: Option<CacheId>, persistent: bool,
@@ -1089,9 +1127,12 @@ impl BlockDataManager {
         let mut reward_results = self.block_rewards.write();
         let mut tx_indices = self.transaction_indices.write();
         let mut local_block_info = self.local_block_info.write();
+        let mut blamed_header_verified_roots =
+            self.blamed_header_verified_roots.write();
         let mut cache_man = self.cache_man.lock();
+
         debug!(
-            "Before gc cache_size={} {} {} {} {} {} {} {}",
+            "Before gc cache_size={} {} {} {} {} {} {} {} {}",
             current_size,
             block_headers.len(),
             blocks.len(),
@@ -1100,6 +1141,7 @@ impl BlockDataManager {
             reward_results.len(),
             tx_indices.len(),
             local_block_info.len(),
+            blamed_header_verified_roots.len(),
         );
 
         cache_man.collect_garbage(current_size, |ids| {
@@ -1125,6 +1167,9 @@ impl BlockDataManager {
                     }
                     CacheId::LocalBlockInfo(h) => {
                         local_block_info.remove(h);
+                    }
+                    CacheId::BlamedHeaderVerifiedRoots(h) => {
+                        blamed_header_verified_roots.remove(h);
                     }
                 }
             }

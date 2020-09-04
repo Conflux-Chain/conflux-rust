@@ -18,7 +18,6 @@ use crate::{
     state::{
         CallStackInfo, CleanupMode, CollateralCheckResult, State, Substate,
     },
-    statedb::Result as DbResult,
     verification::VerificationConfig,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
@@ -28,6 +27,7 @@ use crate::{
     vm_factory::VmFactory,
 };
 use cfx_parameters::staking::*;
+use cfx_statedb::Result as DbResult;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256, U512};
 use primitives::{
     receipt::StorageChange, storage::STORAGE_LAYOUT_REGULAR_V0,
@@ -304,6 +304,13 @@ impl<'a> CallCreateExecutive<'a> {
     fn check_static_flag(
         params: &ActionParams, static_flag: bool, is_create: bool,
     ) -> vm::Result<()> {
+        // This is the function check whether contract creation or value
+        // transferring happens in static context at callee executive. However,
+        // it is meaningless because the caller has checked this constraint
+        // before message call. Currently, if we panic when this
+        // function returns error, all the tests can still pass.
+        // So we no longer check the logic for reentrancy here,
+        // TODO: and later we will check if we can safely remove this function.
         if is_create {
             if static_flag {
                 return Err(vm::Error::MutableCallInStaticContext);
