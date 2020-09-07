@@ -16,7 +16,5 @@ pub use self::{
     internal_contract::{
         function, suicide, ABIDecodeError, InternalContractMap,
         InternalContractTrait, SolidityFunctionTrait,
-        SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-        STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
     },
 };

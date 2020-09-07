@@ -15,7 +15,13 @@ use crate::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
     },
 };
-use cfx_parameters::staking::*;
+use cfx_parameters::{
+    internal_contract_addresses::{
+        SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+        STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+    },
+    staking::*,
+};
 use cfx_storage::tests::new_state_manager_for_unit_test;
 use cfx_types::{
     address_util::AddressUtil, Address, BigEndianHash, U256, U512,

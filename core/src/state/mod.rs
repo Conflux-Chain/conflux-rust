@@ -9,15 +9,18 @@ pub use self::{
 
 use self::account_entry::{AccountEntry, AccountState};
 use crate::{
-    evm::Spec, executive::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-    hash::KECCAK_EMPTY, transaction_pool::SharedTransactionPool,
+    evm::Spec, hash::KECCAK_EMPTY, transaction_pool::SharedTransactionPool,
     vm::Error as vmError, vm_factory::VmFactory,
 };
+
 use cfx_bytes::Bytes;
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };
-use cfx_parameters::staking::*;
+use cfx_parameters::{
+    internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+    staking::*,
+};
 use cfx_statedb::{
     ErrorKind as DbErrorKind, Result as DbResult, StateDbExt,
     StateDbGeneric as StateDb,
