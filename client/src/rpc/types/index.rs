@@ -59,11 +59,20 @@ impl<'a> Visitor<'a> for IndexVisitor {
 mod tests {
     use super::*;
     use serde_json;
-
+    #[test]
+    fn test_index_value() {
+        let index = Index(0);
+        let value = Index::value(&index);
+        assert_eq!(0,value);
+    }
     #[test]
     fn block_number_deserialization() {
         let s = r#"["0xa", "10"]"#;
         let deserialized: Vec<Index> = serde_json::from_str(s).unwrap();
         assert_eq!(deserialized, vec![Index(10), Index(10)]);
+    }
+    #[test]
+    fn test_index_visitor() {
+        //let index_visitor = IndexVisitor::Index(0);
     }
 }

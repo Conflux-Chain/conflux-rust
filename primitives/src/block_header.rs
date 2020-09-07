@@ -331,7 +331,8 @@ impl BlockHeader {
         0
     }
 }
-
+#[derive(Debug)]
+#[derive(Clone, PartialEq)]
 pub struct BlockHeaderBuilder {
     parent_hash: H256,
     height: u64,
@@ -575,12 +576,12 @@ impl Decodable for BlockHeader {
 #[cfg(test)]
 mod tests {
     use super::BlockHeaderBuilder;
-    use crate::{
-        hash::keccak,
-        receipt::{BlockReceipts, Receipt},
-    };
-    use cfx_types::{Bloom, KECCAK_EMPTY_BLOOM, U256};
+    use crate::{hash::keccak, receipt::{BlockReceipts, Receipt}, BlockHeader, NULL_EPOCH, MERKLE_NULL_NODE};
+    use cfx_types::{Bloom, KECCAK_EMPTY_BLOOM, U256, H256, H160, Address};
     use std::{str::FromStr, sync::Arc};
+    use criterion::Throughput::Bytes;
+    use siphasher::sip128::Hash128;
+    use malloc_size_of::new_malloc_size_ops;
 
     #[test]
     fn test_logs_bloom_hash_no_receipts() {
@@ -750,5 +751,68 @@ mod tests {
         let receipts = vec![Arc::new(block1), Arc::new(block2)];
         let hash = BlockHeaderBuilder::compute_block_logs_bloom_hash(&receipts);
         assert_eq!(hash, expected);
+    }
+    #[test]
+    fn test_block_header() {
+        let block_header = BlockHeaderBuilder::new().build();
+        assert_eq!(block_header.parent_hash(),&block_header.parent_hash);
+        assert_eq!(block_header.height(),0);
+        assert_eq!(block_header.timestamp(),0);
+        assert_eq!(block_header.author(),&H160([0x00;20]));
+        assert_eq!(block_header.transactions_root(),&block_header.transactions_root);
+        assert_eq!(block_header.deferred_state_root(),&block_header.deferred_state_root);
+        assert_eq!(block_header.deferred_logs_bloom_hash(),&block_header.deferred_logs_bloom_hash);
+        assert_eq!(block_header.blame(),block_header.blame);
+        assert_eq!(block_header.difficulty(),&block_header.difficulty);
+        assert_eq!(block_header.adaptive(),block_header.adaptive);
+        assert_eq!(block_header.gas_limit(),&block_header.gas_limit);
+        assert_eq!(block_header.referee_hashes(),&block_header.referee_hashes);
+        assert_eq!(block_header.custom(),&block_header.custom);
+        assert_eq!(block_header.nonce(),block_header.nonce);
+        let mut block_header1 = BlockHeaderBuilder::new().build();
+        assert_eq!(block_header1.compute_hash(),H256::from_str("5818a36cae357f1921c4674ff748e9ca8fe9f5b30ea0a781e938e3931819ffaa").unwrap());
+        block_header1.set_nonce(U256::one());
+        assert_eq!(block_header1.nonce(),U256::one());
+        assert_eq!(block_header1.problem_hash(),H256::from_str("f6e3c2ee0a090359632204adcdb8e83dd89c85fe7152125770b649028c064c29").unwrap());
+        assert_eq!(block_header.deferred_receipts_root(),&block_header.deferred_receipts_root);
+        //assert_eq!(BlockHeader::decode_with_pow_hash(&[0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0]),Err(RlpExpectedToBeList));
+        assert_eq!(block_header.size(),0);
+    }
+    #[test]
+    fn test_block_header_builder() {
+        let mut block_header_builder = BlockHeaderBuilder::new();
+        let mut block_header_builder1 = BlockHeaderBuilder::new();
+        assert_ne!(block_header_builder.with_parent_hash(H256([0xff;32])),&mut block_header_builder1);
+        assert_eq!(block_header_builder.with_parent_hash(NULL_EPOCH),&mut block_header_builder1);
+        assert_ne!(block_header_builder.with_height(1),&mut block_header_builder1);
+        assert_eq!(block_header_builder.with_height(0),&mut block_header_builder1);
+        assert_ne!(block_header_builder.with_timestamp(1),&mut block_header_builder1);
+        assert_eq!(block_header_builder.with_timestamp(0),&mut block_header_builder1);
+        assert_ne!(block_header_builder.with_author(H160([0xff;20])),&mut block_header_builder1);
+        assert_eq!(block_header_builder.with_author(Address::default()),&mut block_header_builder1);
+        assert_ne!(block_header_builder.with_transactions_root(H256([0xff;32])),&mut block_header_builder1);
+        assert_eq!(block_header_builder.with_transactions_root(MERKLE_NULL_NODE),&mut block_header_builder1);
+        assert_ne!(block_header_builder.with_deferred_state_root(H256([0xff;32])),&mut block_header_builder1);
+        assert_eq!(block_header_builder.with_deferred_state_root(Default::default()),&mut block_header_builder1);
+        assert_ne!(block_header_builder.with_deferred_receipts_root(H256([0xff;32])),&mut block_header_builder1);
+        assert_eq!(block_header_builder.with_deferred_receipts_root(Default::default()),&mut block_header_builder1);
+        assert_ne!(block_header_builder.with_deferred_logs_bloom_hash(H256([0xff;32])),&mut block_header_builder1);
+        assert_eq!(block_header_builder.with_deferred_logs_bloom_hash(KECCAK_EMPTY_BLOOM),&mut block_header_builder1);
+        assert_ne!(block_header_builder.with_blame(1),&mut block_header_builder1);
+        assert_eq!(block_header_builder.with_blame(0),&mut block_header_builder1);
+        assert_ne!(block_header_builder.with_difficulty(U256::one()),&mut block_header_builder1);
+        assert_eq!(block_header_builder.with_difficulty(U256::default()),&mut block_header_builder1);
+        assert_ne!(block_header_builder.with_adaptive(true),&mut block_header_builder1);
+        assert_eq!(block_header_builder.with_adaptive(false),&mut block_header_builder1);
+        assert_ne!(block_header_builder.with_gas_limit(U256::one()),&mut block_header_builder1);
+        assert_eq!(block_header_builder.with_gas_limit(U256::zero()),&mut block_header_builder1);
+        assert_ne!(block_header_builder.with_referee_hashes(vec![H256([0xff;32])]),&mut block_header_builder1);
+        assert_eq!(block_header_builder.with_referee_hashes(vec![]),&mut block_header_builder1);
+        assert_ne!(block_header_builder.with_gas_limit(U256::one()),&mut block_header_builder1);
+        assert_eq!(block_header_builder.with_gas_limit(U256::zero()),&mut block_header_builder1);
+        assert_ne!(block_header_builder.with_nonce(U256::one()),&mut block_header_builder1);
+        assert_eq!(block_header_builder.with_nonce(U256::zero()),&mut block_header_builder1);
+        assert_ne!(block_header_builder.with_custom(vec![vec![8]]),&mut block_header_builder1);
+        assert_eq!(block_header_builder.with_custom(vec![]),&mut block_header_builder1);
     }
 }

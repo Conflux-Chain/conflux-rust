@@ -20,3 +20,17 @@ pub struct TransactionIndex {
 impl MallocSizeOf for TransactionIndex {
     fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
+mod tests{
+    use crate::TransactionIndex;
+    use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
+
+    #[test]
+    fn test_transaction_index() {
+        let trans_index = TransactionIndex{
+            block_hash: Default::default(),
+            index: 0
+        };
+        let mut malloc_size_of = new_malloc_size_ops();
+        assert_eq!(trans_index.size_of(&mut malloc_size_of),0);
+    }
+}

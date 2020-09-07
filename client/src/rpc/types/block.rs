@@ -293,7 +293,8 @@ impl Block {
 }
 
 /// Block header representation.
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, Deserialize)]
+
 #[serde(rename_all = "camelCase")]
 pub struct Header {
     /// Hash of the block

@@ -216,6 +216,7 @@ impl ChainIdParams {
     Serialize,
     Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 pub struct Transaction {
     /// Nonce.
     pub nonce: U256,
@@ -329,6 +330,7 @@ impl Deref for TransactionWithSignatureSerializePart {
 
 /// Signed transaction information without verified signature.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TransactionWithSignature {
     /// Serialize part.
     pub transaction: TransactionWithSignatureSerializePart,
@@ -537,5 +539,215 @@ impl SignedTransaction {
 impl MallocSizeOf for SignedTransaction {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         self.transaction.size_of(ops)
+    }
+}
+
+mod tests{
+    use super::*;
+    use core::str::FromStr;
+    use cfx_types::H512;
+
+    #[test]
+    fn test_action() {
+        let action_create = Action::Create;
+        assert_eq!(Action::default(),action_create);
+    }
+    #[test]
+    fn test_chain_id_params() {
+        let chain_id = ChainIdParams{
+            chain_id: 0
+        };
+        assert_eq!(chain_id.get_chain_id(1),chain_id.chain_id)
+    }
+    #[test]
+    fn test_transaction() {
+        let transaction = Transaction{
+            nonce: Default::default(),
+            gas_price: Default::default(),
+            gas: Default::default(),
+            action: Default::default(),
+            value: Default::default(),
+            storage_limit: 0,
+            epoch_height: 0,
+            chain_id: 0,
+            data: vec![]
+        };
+        let secret = Secret::from_str(
+            "a100df7a048e50ed308ea696dc600215098141cb391e9527329df289f9383f65",
+        ).unwrap();
+
+        let address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6"
+            .parse::<Address>()
+            .unwrap();
+
+        assert_eq!(transaction.hash(),H256::from_str("c5b2c658f5fa236c598a6e7fbf7f21413dc42e2a41dd982eb772b30707cba2eb").unwrap());
+        let signed_trans = SignedTransaction {
+            transaction: TransactionWithSignature {
+                transaction: TransactionWithSignatureSerializePart {
+                    unsigned: transaction.clone(),
+                    r: U256::one(),
+                    s: U256::one(),
+                    v: 0,
+                },
+                hash: H256::zero(),
+                rlp_size: None,
+            }
+                .compute_hash(),
+            sender: address.clone(),
+            public: None,
+        };
+        assert_eq!(transaction.clone().fake_sign(address.clone()),signed_trans.clone());
+        let sig = Signature::from([0;65]);
+        let trans_with_sig = TransactionWithSignature {
+            transaction: TransactionWithSignatureSerializePart {
+                unsigned: transaction.clone(),
+                r: U256::zero(),
+                s: U256::zero(),
+                v: 0,
+            },
+            hash: H256::from_str("6afedf2d3f8fe6e19c0e9318a9af5c2034b0987f9990b1012e314286dcb51655").unwrap(),
+            rlp_size: None,
+        };
+        assert_eq!(transaction.with_signature(sig),trans_with_sig);
+    }
+    #[test]
+    fn test_transaction_with_sig () {
+        let transaction = Transaction{
+            nonce: Default::default(),
+            gas_price: Default::default(),
+            gas: Default::default(),
+            action: Default::default(),
+            value: Default::default(),
+            storage_limit: 0,
+            epoch_height: 0,
+            chain_id: 0,
+            data: vec![]
+        };
+        let trans_with_sig = TransactionWithSignature {
+            transaction: TransactionWithSignatureSerializePart {
+                unsigned: transaction.clone(),
+                r: U256::zero(),
+                s: U256::zero(),
+                v: 0,
+            },
+            hash: H256::zero(),
+            rlp_size: None,
+        };
+        let mut mut_trans_with_sig = TransactionWithSignature {
+            transaction: TransactionWithSignatureSerializePart {
+                unsigned: transaction.clone(),
+                r: U256::zero(),
+                s: U256::zero(),
+                v: 0,
+            },
+            hash: H256::zero(),
+            rlp_size: None,
+        };
+        assert_eq!(TransactionWithSignature::new_unsigned(transaction.clone()),trans_with_sig.clone());
+        assert_eq!(trans_with_sig.hash(),trans_with_sig.hash);
+        assert_eq!(trans_with_sig.rlp_size(),14);
+        assert_eq!(trans_with_sig.is_unsigned(),true);
+        let res = TransactionWithSignature{
+            transaction: TransactionWithSignatureSerializePart {
+                unsigned: Default::default(),
+                v: 0,
+                r: Default::default(),
+                s: Default::default()
+            },
+            hash: H256::from_str("6afedf2d3f8fe6e19c0e9318a9af5c2034b0987f9990b1012e314286dcb51655").unwrap(),
+            rlp_size: None
+        };
+        assert_eq!(mut_trans_with_sig.compute_hash(),res.clone());
+        let sig = Signature::from([0;65]);
+        assert_eq!(trans_with_sig.signature(),sig);
+        assert_eq!(trans_with_sig.check_low_s().is_ok(),true);
+    }
+    #[test]
+    fn test_signed_trans() {
+        let unsigned_trans = SignedTransaction {
+            transaction: TransactionWithSignature {
+                transaction: TransactionWithSignatureSerializePart {
+                    unsigned: Default::default(),
+                    v: 0,
+                    r: Default::default(),
+                    s: Default::default()
+                },
+                hash: Default::default(),
+                rlp_size: None
+            },
+            sender: UNSIGNED_SENDER,
+            public: None
+        };
+        let sender = public_to_address(&H512::zero());
+        let signed_trans = SignedTransaction {
+            transaction: TransactionWithSignature {
+                transaction: TransactionWithSignatureSerializePart {
+                    unsigned: Default::default(),
+                    v: 0,
+                    r: U256::one(),
+                    s: U256::one()
+                },
+                hash: Default::default(),
+                rlp_size: None
+            },
+            sender,
+            public: Some(H512::zero())
+        };
+        let trans_with_sig = TransactionWithSignature {
+            transaction: TransactionWithSignatureSerializePart {
+                unsigned: Default::default(),
+                v: 0,
+                r: Default::default(),
+                s: Default::default()
+            },
+            hash: Default::default(),
+            rlp_size: None
+        };
+        let trans_with_sig1 = TransactionWithSignature {
+            transaction: TransactionWithSignatureSerializePart {
+                unsigned: Default::default(),
+                v: 0,
+                r: U256::one(),
+                s: U256::one()
+            },
+            hash: Default::default(),
+            rlp_size: None
+        };
+        assert_eq!(SignedTransaction::new(H512::zero(),trans_with_sig.clone()),unsigned_trans);
+        assert_eq!(SignedTransaction::new(H512::zero(),trans_with_sig1.clone()),signed_trans);
+        assert_eq!(SignedTransaction::new_unsigned(trans_with_sig.clone()),unsigned_trans);
+        assert_eq!(unsigned_trans.sender(),H160([0xff; 20]));
+        assert_eq!(unsigned_trans.nonce(),U256::zero());
+        assert_eq!(unsigned_trans.hash(),H256::zero());
+        assert_eq!(unsigned_trans.gas(),&U256::zero());
+        assert_eq!(unsigned_trans.gas_price(),&U256::zero());
+        assert_eq!(unsigned_trans.gas_limit(),&U256::zero());
+        assert_eq!(unsigned_trans.rlp_size(),14);
+        assert_eq!(unsigned_trans.public(),&Option::None);
+        assert_eq!(signed_trans.public(),&Option::Some(H512::zero()));
+        let mut unsigned_trans_copy = unsigned_trans.clone();
+        unsigned_trans_copy.set_public(H512::zero());
+        assert_eq!(unsigned_trans_copy.public(),&Option::Some(H512::zero()));
+        assert_eq!(signed_trans.is_unsigned(),false);
+        assert_eq!(unsigned_trans.is_unsigned(),true);
+        assert_eq!(signed_trans.verify_public(true).unwrap(),true);
+        assert_eq!(signed_trans.verify_public(false).is_err(),true);
+        assert_eq!(unsigned_trans_copy.verify_public(false).is_err(),true);
+        let unsigned_trans1 = SignedTransaction {
+            transaction: TransactionWithSignature {
+                transaction: TransactionWithSignatureSerializePart {
+                    unsigned: Default::default(),
+                    v: 0,
+                    r: Default::default(),
+                    s: Default::default()
+                },
+                hash: Default::default(),
+                rlp_size: None
+            },
+            sender: UNSIGNED_SENDER,
+            public: None
+        };
+        assert_eq!(unsigned_trans1.verify_public(false).unwrap(),false);
+
     }
 }

@@ -12,3 +12,26 @@ pub struct BlameInfo {
     pub deferred_receipts_root: Option<H256>,
     pub deferred_logs_bloom_hash: Option<H256>,
 }
+
+mod tests {
+    use super::*;
+    #[test]
+    fn test_blame_info () {
+        let blame_info = BlameInfo{
+            blame: None,
+            deferred_state_root: None,
+            deferred_receipts_root: None,
+            deferred_logs_bloom_hash: None
+        };
+        let info = serde_json::to_string(&blame_info).unwrap();
+        assert_eq!(info,"{\"blame\":null,\"deferredStateRoot\":null,\"deferredReceiptsRoot\":null,\"deferredLogsBloomHash\":null}");
+        let blame_info1 = BlameInfo{
+            blame: None,
+            deferred_state_root: Some(H256::zero()),
+            deferred_receipts_root: Some(H256::zero()),
+            deferred_logs_bloom_hash: Some(H256::zero())
+        };
+        let info1 = serde_json::to_string(&blame_info1).unwrap();
+        assert_eq!(info1,"{\"blame\":null,\"deferredStateRoot\":\"0x0000000000000000000000000000000000000000000000000000000000000000\",\"deferredReceiptsRoot\":\"0x0000000000000000000000000000000000000000000000000000000000000000\",\"deferredLogsBloomHash\":\"0x0000000000000000000000000000000000000000000000000000000000000000\"}");
+    }
+}

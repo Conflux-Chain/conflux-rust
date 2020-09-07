@@ -29,14 +29,14 @@ impl StorageLayout {
     }
 }
 
-#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable, PartialEq)]
 pub struct NodeMerkleTriplet {
     pub delta: Option<H256>,
     pub intermediate: Option<H256>,
     pub snapshot: Option<H256>,
 }
 
-#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable, PartialEq)]
 pub struct StorageRoot {
     pub delta: H256,
     pub intermediate: H256,
@@ -66,7 +66,7 @@ impl StorageRoot {
     }
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, PartialEq)]
 pub struct StorageValue {
     pub value: U256,
     pub owner: Option<Address>,
@@ -101,5 +101,33 @@ impl Encodable for StorageValue {
                 s.append_internal(&self.value);
             }
         }
+    }
+}
+
+mod tests{
+    use super::*;
+    #[test]
+    fn test_storage_basic() {
+        let lay_out = StorageLayout::Regular(1);
+        assert_eq!(lay_out.to_bytes(),vec![0,1]);
+        assert_eq!(StorageLayout::from_bytes(&[0,1]).unwrap(),lay_out);
+        assert_eq!(StorageLayout::from_bytes(&[1,1]).is_err(),true);
+        let node1 = NodeMerkleTriplet{
+            delta: None,
+            intermediate: None,
+            snapshot: None
+        };
+        let storage_root = StorageRoot{
+            delta: H256([0xff;32]),
+            intermediate: H256([0xff;32]),
+            snapshot: H256([0xff;32])
+        };
+        assert_eq!(StorageRoot::from_node_merkle_triplet(node1),None);
+        let node2 = NodeMerkleTriplet{
+            delta: Some(H256([0xff;32])),
+            intermediate: Some(H256([0xff;32])),
+            snapshot: Some(H256([0xff;32]))
+        };
+        assert_eq!(StorageRoot::from_node_merkle_triplet(node2).unwrap(),storage_root);
     }
 }

@@ -11,7 +11,7 @@ use primitives::{
 };
 use serde_derive::Serialize;
 
-#[derive(Debug, Serialize, Clone, Deserialize)]
+#[derive(Debug, Serialize, Clone, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Receipt {
     /// Transaction hash.
@@ -79,5 +79,144 @@ impl Receipt {
                 .map_or_else(Default::default, Into::into),
             epoch_number: epoch_number.map(U64::from),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests{
+    use super::*;
+    use cfx_types::H160;
+    use primitives::{TransactionWithSignature, TransactionWithSignatureSerializePart};
+
+    #[test]
+    fn test_receipt_serialize() {
+        let bloom: [u8; 256] = [0;256];
+        let receipt = Receipt{
+            transaction_hash: H256([0xff;32]),
+            index: U64::one(),
+            block_hash: H256([0xff;32]),
+            epoch_number: None,
+            from: H160([0xff;20]),
+            to: None,
+            gas_used: U256::one(),
+            gas_fee: U256::one(),
+            contract_created: None,
+            logs: vec![],
+            logs_bloom: Bloom(bloom),
+            state_root: H256([0xff;32]),
+            outcome_status: U64::one()
+        };
+        let serialize = serde_json::to_string(&receipt).unwrap();
+        assert_eq!(serialize,"{\"transactionHash\":\"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"index\":\"0x1\",\"blockHash\":\"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"epochNumber\":null,\"from\":\"0xffffffffffffffffffffffffffffffffffffffff\",\"to\":null,\"gasUsed\":\"0x1\",\"gasFee\":\"0x1\",\"contractCreated\":null,\"logs\":[],\"logsBloom\":\"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\",\"stateRoot\":\"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"outcomeStatus\":\"0x1\"}");
+    }
+    #[test]
+    fn test_receipt_deserialize(){
+        let serialize = "{\"transactionHash\":\"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"index\":\"0x1\",\"blockHash\":\"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"epochNumber\":null,\"from\":\"0xffffffffffffffffffffffffffffffffffffffff\",\"to\":null,\"gasUsed\":\"0x1\",\"gasFee\":\"0x1\",\"contractCreated\":null,\"logs\":[],\"logsBloom\":\"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\",\"stateRoot\":\"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"outcomeStatus\":\"0x1\"}";
+        let deserialize: Receipt = serde_json::from_str(serialize).unwrap();
+        let bloom: [u8; 256] = [0;256];
+        let receipt = Receipt{
+            transaction_hash: H256([0xff;32]),
+            index: U64::one(),
+            block_hash: H256([0xff;32]),
+            epoch_number: None,
+            from: H160([0xff;20]),
+            to: None,
+            gas_used: U256::one(),
+            gas_fee: U256::one(),
+            contract_created: None,
+            logs: vec![],
+            logs_bloom: Bloom(bloom),
+            state_root: H256([0xff;32]),
+            outcome_status: U64::one()
+        };
+        assert_eq!(deserialize,receipt);
+    }
+    #[test]
+    fn test_receipt_new(){
+        let transaction = PrimitiveTransaction{
+            transaction: TransactionWithSignature {
+                transaction: TransactionWithSignatureSerializePart {
+                    unsigned: Default::default(),
+                    v: 0,
+                    r: U256::one(),
+                    s: U256::one()
+                },
+                hash: H256([0xff;32]),
+                rlp_size: None
+            },
+            sender: H160([0xff;20]),
+            public: None
+        };
+        let bloom: [u8; 256] = [0;256];
+        let pri_receipt = PrimitiveReceipt{
+            accumulated_gas_used: U256::one(),
+            gas_fee: U256::one(),
+            gas_sponsor_paid: false,
+            log_bloom: Bloom(bloom),
+            logs: vec![],
+            outcome_status: 0,
+            storage_sponsor_paid: false,
+            storage_collateralized: vec![],
+            storage_released: vec![]
+        };
+        let transaction_index = TransactionIndex {
+            block_hash: H256([0xff;32]),
+            index: 0
+        };
+        let receipt = Receipt::new(
+            transaction,
+            pri_receipt,
+            transaction_index,
+            U256::one(),
+            None,
+            None
+        );
+        let receipt_info =  serde_json::to_string(&receipt).unwrap();
+        assert_eq!(receipt_info,
+        r#"{"transactionHash":"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","index":"0x0","blockHash":"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","epochNumber":null,"from":"0xffffffffffffffffffffffffffffffffffffffff","to":null,"gasUsed":"0x0","gasFee":"0x1","contractCreated":"0x8c2152e51c66962b151a4262b950c1a14bbcdee5","logs":[],"logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","outcomeStatus":"0x0"}"#);
+    }
+    #[test]
+    fn test_receipt_new_one(){
+        let transaction = PrimitiveTransaction{
+            transaction: TransactionWithSignature {
+                transaction: TransactionWithSignatureSerializePart {
+                    unsigned: Default::default(),
+                    v: 0,
+                    r: U256::one(),
+                    s: U256::one()
+                },
+                hash: H256([0xff;32]),
+                rlp_size: None
+            },
+            sender: H160([0xff;20]),
+            public: None
+        };
+        let bloom: [u8; 256] = [0;256];
+        let pri_receipt = PrimitiveReceipt{
+            accumulated_gas_used: U256::one(),
+            gas_fee: U256::one(),
+            gas_sponsor_paid: false,
+            log_bloom: Bloom(bloom),
+            logs: vec![],
+            outcome_status: 1,
+            storage_sponsor_paid: false,
+            storage_collateralized: vec![],
+            storage_released: vec![]
+        };
+        let transaction_index = TransactionIndex {
+            block_hash: H256([0xff;32]),
+            index: 0
+        };
+        let receipt = Receipt::new(
+            transaction,
+            pri_receipt,
+            transaction_index,
+            U256::one(),
+            None,
+            None
+        );
+        let receipt_info =  serde_json::to_string(&receipt).unwrap();
+        assert_eq!(receipt_info,
+                   "{\"transactionHash\":\"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"index\":\"0x0\",\"blockHash\":\"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"epochNumber\":null,\"from\":\"0xffffffffffffffffffffffffffffffffffffffff\",\"to\":null,\"gasUsed\":\"0x0\",\"gasFee\":\"0x1\",\"contractCreated\":null,\"logs\":[],\"logsBloom\":\"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\",\"stateRoot\":\"0x0000000000000000000000000000000000000000000000000000000000000000\",\"outcomeStatus\":\"0x1\"}");
     }
 }
