@@ -94,23 +94,22 @@ impl MallocSizeOf for BlockReceipts {
     }
 }
 
-mod tests{
-    use crate::receipt::StorageChange;
+mod tests {
+    use crate::{receipt::StorageChange, Receipt};
     use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
-    use crate::Receipt;
 
     #[test]
     fn test_storage_change() {
-        let storage_change = StorageChange{
+        let storage_change = StorageChange {
             address: Default::default(),
-            amount: 0
+            amount: 0,
         };
         let mut malloc_size_of = new_malloc_size_ops();
-        assert_eq!(storage_change.size_of(&mut malloc_size_of),0);
+        assert_eq!(storage_change.size_of(&mut malloc_size_of), 0);
     }
     #[test]
     fn test_receipt() {
-        let receipt = Receipt{
+        let receipt = Receipt {
             accumulated_gas_used: Default::default(),
             gas_fee: Default::default(),
             gas_sponsor_paid: false,
@@ -119,18 +118,23 @@ mod tests{
             outcome_status: 0,
             storage_sponsor_paid: false,
             storage_collateralized: vec![],
-            storage_released: vec![]
+            storage_released: vec![],
         };
-        assert_eq!(receipt,Receipt::new(0,
-                                        Default::default(),
-                                        Default::default(),
-        false,
-        vec![],
-        false,
-        vec![],
-        vec![]));
+        assert_eq!(
+            receipt,
+            Receipt::new(
+                0,
+                Default::default(),
+                Default::default(),
+                false,
+                vec![],
+                false,
+                vec![],
+                vec![]
+            )
+        );
         let mut malloc_size_of = new_malloc_size_ops();
-        assert_eq!(receipt.size_of(&mut malloc_size_of),0);
+        assert_eq!(receipt.size_of(&mut malloc_size_of), 0);
     }
 
 }

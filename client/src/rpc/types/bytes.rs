@@ -103,10 +103,10 @@ mod tests {
         let bytes = Bytes("0123456789abcdef".from_hex().unwrap());
         let serialized = serde_json::to_string(&bytes.clone()).unwrap();
         assert_eq!(serialized, r#""0x0123456789abcdef""#);
-        assert_eq!(Bytes::new(vec![]),Bytes(vec![]));
-        assert_eq!(bytes.clone().into_vec(),bytes.clone().0);
+        assert_eq!(Bytes::new(vec![]), Bytes(vec![]));
+        assert_eq!(bytes.clone().into_vec(), bytes.clone().0);
         //assert_eq!(bytes.into(),bytes.0);
-        assert_eq!(Bytes::from(vec![]),Bytes(vec![]));
+        assert_eq!(Bytes::from(vec![]), Bytes(vec![]));
     }
 
     #[test]

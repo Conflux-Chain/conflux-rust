@@ -74,7 +74,8 @@ mod tests {
 
     #[test]
     fn test_origin_serialize() {
-        let socket: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+        let socket: SocketAddr =
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
         let o1 = Origin::default();
         let o2 = Origin::Rpc("test service".into());
         let o3 = Origin::Tcp(socket);
@@ -95,15 +96,13 @@ mod tests {
         let res7 = serde_json::to_string(&o7).unwrap();
         assert_eq!(res1, r#""unknown""#);
         assert_eq!(res2, r#"{"rpc":"test service"}"#);
-        assert_eq!(res3,
-        r#"{"tcp":"127.0.0.1:8080"}"#);
+        assert_eq!(res3, r#"{"tcp":"127.0.0.1:8080"}"#);
         assert_eq!(res4,
         r#"{"signer":{"session":"0x000000000000000000000000000000000000000000000000000000000000000a"}}"#);
         assert_eq!(res5, r#""unknown""#);
         assert_eq!(res6,
         r#"{"ws":{"session":"0x0000000000000000000000000000000000000000000000000000000000000005"}}"#);
-        assert_eq!(res7,
-                   r#""c-api""#);
+        assert_eq!(res7, r#""c-api""#);
     }
     #[test]
     fn test_origin_deserialize() {
@@ -113,24 +112,31 @@ mod tests {
         let se4 = r#"{"signer":{"session":"0x000000000000000000000000000000000000000000000000000000000000000a"}}"#;
         let se5 = r#"{"ws":{"session":"0x0000000000000000000000000000000000000000000000000000000000000005"}}"#;
         let se6 = r#""c-api""#;
-        let de1:Origin = serde_json::from_str(se1).unwrap();
-        let de2:Origin = serde_json::from_str(se2).unwrap();
-        let de3:Origin = serde_json::from_str(se3).unwrap();
-        let de4:Origin = serde_json::from_str(se4).unwrap();
-        let de5:Origin = serde_json::from_str(se5).unwrap();
-        let de6:Origin = serde_json::from_str(se6).unwrap();
-        let socket: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-        assert_eq!(de1,Origin::Unknown);
-        assert_eq!(de1,Origin::default());
-        assert_eq!(de2,Origin::Rpc("test service".into()));
-        assert_eq!(de3,Origin::Tcp(socket));
-        assert_eq!(de4,Origin::Signer {
-            session: H256::from_low_u64_be(10),
-        });
-        assert_eq!(de5,Origin::Ws {
-            session: H256::from_low_u64_be(5),
-        });
-        assert_eq!(de6,Origin::CApi);
+        let de1: Origin = serde_json::from_str(se1).unwrap();
+        let de2: Origin = serde_json::from_str(se2).unwrap();
+        let de3: Origin = serde_json::from_str(se3).unwrap();
+        let de4: Origin = serde_json::from_str(se4).unwrap();
+        let de5: Origin = serde_json::from_str(se5).unwrap();
+        let de6: Origin = serde_json::from_str(se6).unwrap();
+        let socket: SocketAddr =
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+        assert_eq!(de1, Origin::Unknown);
+        assert_eq!(de1, Origin::default());
+        assert_eq!(de2, Origin::Rpc("test service".into()));
+        assert_eq!(de3, Origin::Tcp(socket));
+        assert_eq!(
+            de4,
+            Origin::Signer {
+                session: H256::from_low_u64_be(10),
+            }
+        );
+        assert_eq!(
+            de5,
+            Origin::Ws {
+                session: H256::from_low_u64_be(5),
+            }
+        );
+        assert_eq!(de6, Origin::CApi);
     }
     //    fn should_serialize_origin() {
     //        // given

@@ -50,75 +50,78 @@ mod tests {
     use super::*;
     use cfxcore::state_exposer::SyncGraphBlockState as PrimitiveSyncGraphBlockState;
     #[test]
-    fn test_sync_graph_states_new(){
-        let block_state = PrimitiveSyncGraphBlockState{
-            block_hash: H256([0xff;32]),
-            parent: H256([0xff;32]),
+    fn test_sync_graph_states_new() {
+        let block_state = PrimitiveSyncGraphBlockState {
+            block_hash: H256([0xff; 32]),
+            parent: H256([0xff; 32]),
             referees: vec![],
             nonce: U256::one(),
             timestamp: U256::one().as_u64(),
-            adaptive: false
+            adaptive: false,
         };
         let mut vec = Vec::new();
         vec.push(block_state);
-        let pri_graph_state = PrimitiveSyncGraphStates{
-            ready_block_vec: vec
+        let pri_graph_state = PrimitiveSyncGraphStates {
+            ready_block_vec: vec,
         };
         let graph_state = SyncGraphStates::new(pri_graph_state);
         let graph_state_info = graph_state.ready_block_vec;
-        let graph_block_info = serde_json::to_string(&graph_state_info[0]).unwrap();
+        let graph_block_info =
+            serde_json::to_string(&graph_state_info[0]).unwrap();
         assert_eq!(graph_block_info,
         r#"{"blockHash":"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","parent":"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","referees":[],"nonce":"0x1","timestamp":"0x1","adaptive":false}"#);
     }
     #[test]
     fn test_sync_graph_state_serialize() {
-        let block_state = SyncGraphBlockState{
-            block_hash: H256([0xff;32]),
-            parent: H256([0xff;32]),
+        let block_state = SyncGraphBlockState {
+            block_hash: H256([0xff; 32]),
+            parent: H256([0xff; 32]),
             referees: vec![],
             nonce: U256::one(),
             timestamp: U64::one(),
-            adaptive: false
+            adaptive: false,
         };
         let mut vec = Vec::new();
         vec.push(block_state);
-        let graph_state = SyncGraphStates{
-            ready_block_vec: vec
+        let graph_state = SyncGraphStates {
+            ready_block_vec: vec,
         };
         let serialize = serde_json::to_string(&graph_state).unwrap();
         assert_eq!(serialize,"{\"readyBlockVec\":[{\"blockHash\":\"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"parent\":\"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"referees\":[],\"nonce\":\"0x1\",\"timestamp\":\"0x1\",\"adaptive\":false}]}");
-        let empty_graph_state = SyncGraphStates{
-            ready_block_vec: vec![]
+        let empty_graph_state = SyncGraphStates {
+            ready_block_vec: vec![],
         };
-        let serialize_empty = serde_json::to_string(&empty_graph_state).unwrap();
-        assert_eq!(serialize_empty,"{\"readyBlockVec\":[]}");
+        let serialize_empty =
+            serde_json::to_string(&empty_graph_state).unwrap();
+        assert_eq!(serialize_empty, "{\"readyBlockVec\":[]}");
     }
     #[test]
     fn test_sync_graph_states_deserialize() {
         let serialize = r#"{"blockHash":"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","parent":"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","referees":[],"nonce":"0x1","timestamp":"0x1","adaptive":false}"#;
-        let deserialize: SyncGraphBlockState = serde_json::from_str(serialize).unwrap();
-        let block_state = SyncGraphBlockState{
-            block_hash: H256([0xff;32]),
-            parent: H256([0xff;32]),
+        let deserialize: SyncGraphBlockState =
+            serde_json::from_str(serialize).unwrap();
+        let block_state = SyncGraphBlockState {
+            block_hash: H256([0xff; 32]),
+            parent: H256([0xff; 32]),
             referees: vec![],
             nonce: U256::one(),
             timestamp: U64::one(),
-            adaptive: false
+            adaptive: false,
         };
-        assert_eq!(deserialize,block_state);
+        assert_eq!(deserialize, block_state);
         let mut vec = Vec::new();
         vec.push(block_state);
-        let graph_state = SyncGraphStates{
-            ready_block_vec: vec
+        let graph_state = SyncGraphStates {
+            ready_block_vec: vec,
         };
         let s = "{\"readyBlockVec\":[{\"blockHash\":\"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"parent\":\"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"referees\":[],\"nonce\":\"0x1\",\"timestamp\":\"0x1\",\"adaptive\":false}]}";
         let de: SyncGraphStates = serde_json::from_str(s).unwrap();
-        assert_eq!(de,graph_state);
+        assert_eq!(de, graph_state);
         let empty_s = "{\"readyBlockVec\":[]}";
         let empty_de: SyncGraphStates = serde_json::from_str(empty_s).unwrap();
-        let empty_graph_state = SyncGraphStates{
-            ready_block_vec: vec![]
+        let empty_graph_state = SyncGraphStates {
+            ready_block_vec: vec![],
         };
-        assert_eq!(empty_de,empty_graph_state);
+        assert_eq!(empty_de, empty_graph_state);
     }
 }

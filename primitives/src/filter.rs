@@ -259,33 +259,33 @@ impl From<String> for FilterError {
     fn from(s: String) -> Self { FilterError::Custom(s) }
 }
 
-mod tests{
+mod tests {
     use super::*;
     use cfx_types::H160;
     use core::str::FromStr;
 
     #[test]
     fn test_filter_basic() {
-        let my_filter = Filter{
+        let my_filter = Filter {
             from_epoch: EpochNumber::Earliest,
             to_epoch: EpochNumber::LatestMined,
             block_hashes: None,
             address: None,
             topics: vec![None, None, None, None],
-            limit: None
+            limit: None,
         };
-        assert_eq!(my_filter,Filter::default());
+        assert_eq!(my_filter, Filter::default());
         let filter = Filter::default();
-        assert_eq!(filter.bloom_possibilities(),vec![Bloom::default()]);
+        assert_eq!(filter.bloom_possibilities(), vec![Bloom::default()]);
         let mut vec_add = Vec::new();
-        vec_add.push(H160([0x11;20]));
-        let filter1 = Filter{
+        vec_add.push(H160([0x11; 20]));
+        let filter1 = Filter {
             from_epoch: EpochNumber::Earliest,
             to_epoch: EpochNumber::Earliest,
             block_hashes: None,
             address: Some(vec_add.clone()),
             topics: vec![],
-            limit: None
+            limit: None,
         };
         let bloom = Bloom::from_str(
             "000000000000000000000000000000\
@@ -304,21 +304,22 @@ mod tests{
              00000000000000000000000000000000\
              00000000000000000200000000000000\
              0000000000000000000000000000000000",
-        ).unwrap();
+        )
+        .unwrap();
         let mut vec_bloom = Vec::new();
         vec_bloom.push(bloom);
-        assert_eq!(filter1.bloom_possibilities(),vec_bloom);
+        assert_eq!(filter1.bloom_possibilities(), vec_bloom);
 
-        let vec1 = vec![H256([0xff;32])];
+        let vec1 = vec![H256([0xff; 32])];
         let mut vec_topic = Vec::new();
         vec_topic.push(Some(vec1));
-        let filter2 = Filter{
+        let filter2 = Filter {
             from_epoch: EpochNumber::Earliest,
             to_epoch: EpochNumber::Earliest,
             block_hashes: None,
             address: Some(vec_add.clone()),
             topics: vec_topic,
-            limit: None
+            limit: None,
         };
         let bloom1 = Bloom::from_str(
             "000000000000000000000000000000\
@@ -337,9 +338,10 @@ mod tests{
              00000000000000000000000000000000\
              00000000000000000200000000000000\
              0000000000000000000000000000000000",
-        ).unwrap();
+        )
+        .unwrap();
         let mut vec_bloom1 = Vec::new();
         vec_bloom1.push(bloom1);
-        assert_eq!(filter1.bloom_possibilities(),vec_bloom1);
+        assert_eq!(filter1.bloom_possibilities(), vec_bloom1);
     }
 }

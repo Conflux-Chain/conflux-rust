@@ -28,7 +28,7 @@ pub enum AccountError {
 }
 
 #[derive(
-Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
+    Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
 )]
 pub struct DepositInfo {
     /// This is the number of tokens in this deposit.
@@ -42,7 +42,7 @@ pub struct DepositInfo {
 }
 
 #[derive(
-Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
+    Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
 )]
 pub struct VoteStakeInfo {
     /// This is the number of tokens should be locked before
@@ -128,15 +128,15 @@ impl Decodable for CodeInfo {
 }
 
 #[derive(
-Clone,
-Debug,
-RlpDecodable,
-RlpEncodable,
-Ord,
-PartialOrd,
-Eq,
-PartialEq,
-Default,
+    Clone,
+    Debug,
+    RlpDecodable,
+    RlpEncodable,
+    Ord,
+    PartialOrd,
+    Eq,
+    PartialEq,
+    Default,
 )]
 pub struct SponsorInfo {
     /// This is the address of the sponsor for gas cost of the contract.
@@ -173,8 +173,7 @@ pub struct Account {
 }
 
 /// Defined for Rlp serialization/deserialization.
-#[derive(RlpEncodable, RlpDecodable, Clone, PartialEq)]
-#[derive(Debug)]
+#[derive(RlpEncodable, RlpDecodable, Clone, PartialEq, Debug)]
 pub struct BasicAccount {
     pub balance: U256,
     pub nonce: U256,
@@ -364,35 +363,48 @@ impl std::error::Error for AccountError {
 
 mod tests {
     use super::*;
-    use core::str::FromStr;
     use cfx_types::H160;
+    use core::str::FromStr;
     #[test]
-    fn test_vote_info () {
-        let vote_info = VoteStakeInfo{
+    fn test_vote_info() {
+        let vote_info = VoteStakeInfo {
             amount: Default::default(),
-            unlock_block_number: 0
+            unlock_block_number: 0,
         };
-        let vote_state_list = VoteStakeList{ 0: vec![vote_info.clone()] };
-        let mut vote_state_list_mut = VoteStakeList{ 0: vec![vote_info.clone()] };
-        assert_eq!(vote_state_list.deref(),&vote_state_list.0);
-        assert_eq!(vote_state_list_mut.clone().deref_mut(),&mut vote_state_list_mut.clone().0);
+        let vote_state_list = VoteStakeList {
+            0: vec![vote_info.clone()],
+        };
+        let mut vote_state_list_mut = VoteStakeList {
+            0: vec![vote_info.clone()],
+        };
+        assert_eq!(vote_state_list.deref(), &vote_state_list.0);
+        assert_eq!(
+            vote_state_list_mut.clone().deref_mut(),
+            &mut vote_state_list_mut.clone().0
+        );
     }
     #[test]
     fn test_deposit_info() {
-        let deposit_info = DepositInfo{
+        let deposit_info = DepositInfo {
             amount: Default::default(),
             deposit_time: 0,
-            accumulated_interest_rate: Default::default()
+            accumulated_interest_rate: Default::default(),
         };
-        let deposit_list = DepositList{ 0: vec![deposit_info.clone()] };
-        let mut deposit_list_mut = DepositList{ 0: vec![deposit_info.clone()] };
-        assert_eq!(deposit_list.deref(),&deposit_list.0);
-        assert_eq!(deposit_list_mut.clone().deref_mut(),&mut deposit_list_mut.clone().0);
-
+        let deposit_list = DepositList {
+            0: vec![deposit_info.clone()],
+        };
+        let mut deposit_list_mut = DepositList {
+            0: vec![deposit_info.clone()],
+        };
+        assert_eq!(deposit_list.deref(), &deposit_list.0);
+        assert_eq!(
+            deposit_list_mut.clone().deref_mut(),
+            &mut deposit_list_mut.clone().0
+        );
     }
     #[test]
     fn test_account_basic() {
-        let account = Account{
+        let account = Account {
             address_local_info: "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6"
                 .parse::<Address>()
                 .unwrap(),
@@ -402,11 +414,11 @@ mod tests {
             staking_balance: U256::zero(),
             collateral_for_storage: U256::zero(),
             accumulated_interest_return: U256::zero(),
-            admin: H160([0x00;20]),
-            sponsor_info: Default::default()
+            admin: H160([0x00; 20]),
+            sponsor_info: Default::default(),
         };
-        assert_eq!(account.address(),&account.address_local_info);
-        let mut account1 = Account{
+        assert_eq!(account.address(), &account.address_local_info);
+        let mut account1 = Account {
             address_local_info: "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6"
                 .parse::<Address>()
                 .unwrap(),
@@ -419,44 +431,71 @@ mod tests {
             admin: "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6"
                 .parse::<Address>()
                 .unwrap(),
-            sponsor_info: Default::default()
+            sponsor_info: Default::default(),
         };
         let address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6"
             .parse::<Address>()
             .unwrap();
-        assert_eq!(account1.set_address(address.clone()),Ok(()));
-        assert_eq!(Account::new_empty_with_balance(&address.clone(),&U256::zero(),&U256::zero()).unwrap(),account.clone());
-        let basic_account = BasicAccount{
+        assert_eq!(account1.set_address(address.clone()), Ok(()));
+        assert_eq!(
+            Account::new_empty_with_balance(
+                &address.clone(),
+                &U256::zero(),
+                &U256::zero()
+            )
+            .unwrap(),
+            account.clone()
+        );
+        let basic_account = BasicAccount {
             balance: U256::zero(),
             nonce: U256::zero(),
             staking_balance: U256::zero(),
             collateral_for_storage: U256::zero(),
-            accumulated_interest_return: U256::zero()
+            accumulated_interest_return: U256::zero(),
         };
-        assert_eq!(Account::from_basic_account(address.clone(),basic_account.clone()),account.clone());
-        assert_eq!(account.clone().to_basic_account(),basic_account.clone());
-        let contract_account = ContractAccount{
+        assert_eq!(
+            Account::from_basic_account(address.clone(), basic_account.clone()),
+            account.clone()
+        );
+        assert_eq!(account.clone().to_basic_account(), basic_account.clone());
+        let contract_account = ContractAccount {
             balance: U256::zero(),
             nonce: U256::zero(),
             code_hash: KECCAK_EMPTY,
             staking_balance: U256::zero(),
             collateral_for_storage: U256::zero(),
             accumulated_interest_return: U256::zero(),
-            admin: H160([0x00;20]),
-            sponsor_info: Default::default()
+            admin: H160([0x00; 20]),
+            sponsor_info: Default::default(),
         };
-        assert_eq!(Account::from_contract_account(address.clone(),contract_account.clone()),Err(AccountError::AddressSpaceMismatch(address.clone(), AddressSpace::Contract)));
-        let account2 = Account{
-            address_local_info: H160([0x80;20]),
+        assert_eq!(
+            Account::from_contract_account(
+                address.clone(),
+                contract_account.clone()
+            ),
+            Err(AccountError::AddressSpaceMismatch(
+                address.clone(),
+                AddressSpace::Contract
+            ))
+        );
+        let account2 = Account {
+            address_local_info: H160([0x80; 20]),
             balance: U256::zero(),
             nonce: U256::zero(),
             code_hash: KECCAK_EMPTY,
             staking_balance: U256::zero(),
             collateral_for_storage: U256::zero(),
             accumulated_interest_return: U256::zero(),
-            admin: H160([0x00;20]),
-            sponsor_info: Default::default()
+            admin: H160([0x00; 20]),
+            sponsor_info: Default::default(),
         };
-        assert_eq!(Account::from_contract_account(H160([0x80;20]),contract_account.clone()).unwrap(),account2.clone());
+        assert_eq!(
+            Account::from_contract_account(
+                H160([0x80; 20]),
+                contract_account.clone()
+            )
+            .unwrap(),
+            account2.clone()
+        );
     }
 }

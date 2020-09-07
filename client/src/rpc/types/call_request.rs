@@ -90,7 +90,10 @@ mod tests {
     use cfx_types::{H160, U256, U64};
 
     use super::CallRequest;
-    use crate::rpc::types::{EstimateGasAndCollateralResponse, CheckBalanceAgainstTransactionResponse, sign_call};
+    use crate::rpc::types::{
+        sign_call, CheckBalanceAgainstTransactionResponse,
+        EstimateGasAndCollateralResponse,
+    };
     use bigdecimal::Zero;
 
     #[test]
@@ -178,25 +181,28 @@ mod tests {
             storage_limit: Some(U64::from_str("7b").unwrap()),
             nonce: Some(U256::from(4)),
         };
-        let signed_trans = sign_call(u64::zero(), u32::zero(),call_request);
+        let signed_trans = sign_call(u64::zero(), u32::zero(), call_request);
         let info = serde_json::to_string(&signed_trans).unwrap();
         assert_eq!(info,"{\"transaction\":{\"transaction\":{\"unsigned\":{\"nonce\":\"0x4\",\"gasPrice\":\"0x1\",\"gas\":\"0x2\",\"action\":{\"Call\":\"0x0000000000000000000000000000000000000002\"},\"value\":\"0x3\",\"storageLimit\":123,\"epochHeight\":0,\"chainId\":0,\"data\":[18,52,86]},\"v\":0,\"r\":\"0x1\",\"s\":\"0x1\"}},\"sender\":\"0x0000000000000000000000000000000000000001\",\"public\":null}");
     }
     #[test]
     fn test_estimate_gas_and_collateral_response() {
-        let estimate_gas = EstimateGasAndCollateralResponse{
+        let estimate_gas = EstimateGasAndCollateralResponse {
             gas_used: U256::zero(),
-            storage_collateralized: U256::zero()
+            storage_collateralized: U256::zero(),
         };
         let info = serde_json::to_string(&estimate_gas).unwrap();
-        assert_eq!(info,"{\"gasUsed\":\"0x0\",\"storageCollateralized\":\"0x0\"}");
+        assert_eq!(
+            info,
+            "{\"gasUsed\":\"0x0\",\"storageCollateralized\":\"0x0\"}"
+        );
     }
     #[test]
-    fn test_check_balance_against_transaction_response () {
-        let check_balance = CheckBalanceAgainstTransactionResponse{
+    fn test_check_balance_against_transaction_response() {
+        let check_balance = CheckBalanceAgainstTransactionResponse {
             will_pay_tx_fee: false,
             will_pay_collateral: false,
-            is_balance_enough: false
+            is_balance_enough: false,
         };
         let info = serde_json::to_string(&check_balance).unwrap();
         assert_eq!(info,"{\"willPayTxFee\":false,\"willPayCollateral\":false,\"isBalanceEnough\":false}");

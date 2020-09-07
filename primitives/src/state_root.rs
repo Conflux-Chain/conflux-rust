@@ -80,13 +80,13 @@ mod tests {
     #[test]
     fn test_state_root_basic() {
         let state_root = StateRoot::default();
-        let my_state_root = StateRoot{
+        let my_state_root = StateRoot {
             snapshot_root: MERKLE_NULL_NODE,
             intermediate_delta_root: MERKLE_NULL_NODE,
             delta_root: MERKLE_NULL_NODE,
         };
         assert_eq!(state_root, my_state_root);
         assert_eq!(state_root.compute_state_root_hash(),H256::from_str("89e3413612cb421e7d4adf9137b67f6c2d240e04823caa80e8b0a0f3d3f6f576").unwrap());
-        assert_eq!(StateRoot::genesis(&MERKLE_NULL_NODE),my_state_root);
+        assert_eq!(StateRoot::genesis(&MERKLE_NULL_NODE), my_state_root);
     }
 }

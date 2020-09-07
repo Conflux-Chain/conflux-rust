@@ -35,10 +35,10 @@ impl<T> Into<Option<Vec<T>>> for VariadicValue<T> {
 }
 
 impl<T> Serialize for VariadicValue<T>
-    where T: Serialize
+where T: Serialize
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer {
+    where S: Serializer {
         match &self {
             &VariadicValue::Null => serializer.serialize_none(),
             &VariadicValue::Single(x) => x.serialize(serializer),
@@ -48,10 +48,10 @@ impl<T> Serialize for VariadicValue<T>
 }
 
 impl<'a, T> Deserialize<'a> for VariadicValue<T>
-    where T: DeserializeOwned
+where T: DeserializeOwned
 {
     fn deserialize<D>(deserializer: D) -> Result<VariadicValue<T>, D::Error>
-        where D: Deserializer<'a> {
+    where D: Deserializer<'a> {
         let v: Value = Deserialize::deserialize(deserializer)?;
 
         if v.is_null() {
@@ -107,7 +107,7 @@ pub struct Filter {
 
 // helper implementing automatic Option<Vec<A>> -> Option<Vec<B>> conversion
 fn maybe_vec_into<A, B>(src: &Option<Vec<A>>) -> Option<Vec<B>>
-    where A: Clone + Into<B> {
+where A: Clone + Into<B> {
     src.clone().map(|x| x.into_iter().map(Into::into).collect())
 }
 
@@ -483,18 +483,30 @@ mod tests {
 //             from_epoch: Some(1000.into()),
 //             to_epoch: Some(EpochNumber::LatestState),
 //             block_hashes: Some(vec![
-//                 H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
-//                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
+//                 
+// H256::from_str("
+// c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
+//                 
+// H256::from_str("
+// 1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
 //             ]),
 //             address: Some(VariadicValue::Multiple(vec![
-//                 Address::from_str("0000000000000000000000000000000000000000").unwrap(),
-//                 Address::from_str("0000000000000000000000000000000000000001").unwrap()
+//                 
+// Address::from_str("0000000000000000000000000000000000000000").unwrap(),
+//                 
+// Address::from_str("0000000000000000000000000000000000000001").unwrap()
 //             ])),
 //             topics: Some(vec![
-//                 VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
+//                 
+// VariadicValue::Single(H256::from_str("
+// d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
 //                 VariadicValue::Multiple(vec![
-//                     H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
-//                     H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+//                     
+// H256::from_str("
+// d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+//                     
+// H256::from_str("
+// d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
 //                 ]),
 //             ]),
 //             limit: Some(U64::from(2)),
@@ -507,11 +519,18 @@ mod tests {
 //             "{\
 //              \"fromEpoch\":\"0x3e8\",\
 //              \"toEpoch\":\"latest_state\",\
-//              \"blockHashes\":[\"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
-//              \"address\":[\"0x0000000000000000000000000000000000000000\",\"0x0000000000000000000000000000000000000001\"],\
-//              \"topics\":[\
-//                 \"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\
-//                 [\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\"]\
+//              
+// \"blockHashes\":[\"
+// 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"
+// 0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
+//              
+// \"address\":[\"0x0000000000000000000000000000000000000000\",\"
+// 0x0000000000000000000000000000000000000001\"],\              \"topics\":[\
+//                 
+// \"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\
+//                 
+// [\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\"
+// 0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\"]\
 //              ],\
 //              \"limit\":\"0x2\"\
 //              }"
@@ -538,11 +557,18 @@ mod tests {
 //         let serialized = "{\
 //              \"fromEpoch\":\"0x3e8\",\
 //              \"toEpoch\":\"latest_state\",\
-//              \"blockHashes\":[\"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
-//              \"address\":[\"0x0000000000000000000000000000000000000000\",\"0x0000000000000000000000000000000000000001\"],\
-//              \"topics\":[\
-//                 \"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\
-//                 [\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\"]\
+//              
+// \"blockHashes\":[\"
+// 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"
+// 0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
+//              
+// \"address\":[\"0x0000000000000000000000000000000000000000\",\"
+// 0x0000000000000000000000000000000000000001\"],\              \"topics\":[\
+//                 
+// \"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\
+//                 
+// [\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\"
+// 0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\"]\
 //              ],\
 //              \"limit\":\"0x2\"\
 //         }";
@@ -551,18 +577,30 @@ mod tests {
 //             from_epoch: Some(1000.into()),
 //             to_epoch: Some(EpochNumber::LatestState),
 //             block_hashes: Some(vec![
-//                 H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
-//                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
+//                 
+// H256::from_str("
+// c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
+//                 
+// H256::from_str("
+// 1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
 //             ]),
 //             address: Some(VariadicValue::Multiple(vec![
-//                 H160::from_str("0000000000000000000000000000000000000000").unwrap(),
-//                 H160::from_str("0000000000000000000000000000000000000001").unwrap()
+//                 
+// H160::from_str("0000000000000000000000000000000000000000").unwrap(),
+//                 
+// H160::from_str("0000000000000000000000000000000000000001").unwrap()
 //             ])),
 //             topics: Some(vec![
-//                 VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
+//                 
+// VariadicValue::Single(H256::from_str("
+// d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
 //                 VariadicValue::Multiple(vec![
-//                     H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
-//                     H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+//                     
+// H256::from_str("
+// d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+//                     
+// H256::from_str("
+// d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
 //                 ]),
 //             ]),
 //             limit: Some(U64::from(2)),
@@ -579,18 +617,30 @@ mod tests {
 //             from_epoch: None,
 //             to_epoch: None,
 //             block_hashes: Some(vec![
-//                 H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
-//                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
+//                 
+// H256::from_str("
+// c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
+//                 
+// H256::from_str("
+// 1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
 //             ]),
 //             address: Some(VariadicValue::Multiple(vec![
-//                 H160::from_str("0000000000000000000000000000000000000000").unwrap(),
-//                 H160::from_str("0000000000000000000000000000000000000001").unwrap()
+//                 
+// H160::from_str("0000000000000000000000000000000000000000").unwrap(),
+//                 
+// H160::from_str("0000000000000000000000000000000000000001").unwrap()
 //             ])),
 //             topics: Some(vec![
-//                 VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
+//                 
+// VariadicValue::Single(H256::from_str("
+// d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
 //                 VariadicValue::Multiple(vec![
-//                     H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
-//                     H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+//                     
+// H256::from_str("
+// d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+//                     
+// H256::from_str("
+// d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
 //                 ]),
 //             ]),
 //             limit: Some(U64::from(2)),
@@ -600,18 +650,30 @@ mod tests {
 //             from_epoch: PrimitiveEpochNumber::LatestCheckpoint,
 //             to_epoch: PrimitiveEpochNumber::LatestState,
 //             block_hashes: Some(vec![
-//                 H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
-//                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
+//                 
+// H256::from_str("
+// c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
+//                 
+// H256::from_str("
+// 1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
 //             ]),
 //             address: Some(vec![
-//                 H160::from_str("0000000000000000000000000000000000000000").unwrap(),
-//                 H160::from_str("0000000000000000000000000000000000000001").unwrap()
+//                 
+// H160::from_str("0000000000000000000000000000000000000000").unwrap(),
+//                 
+// H160::from_str("0000000000000000000000000000000000000001").unwrap()
 //             ]),
 //             topics: vec![
-//                 Some(vec![H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()]),
-//                 Some(vec![
-//                     H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
-//                     H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+//                 
+// Some(vec![H256::from_str("
+// d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").
+// unwrap()]),                 Some(vec![
+//                     
+// H256::from_str("
+// d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+//                     
+// H256::from_str("
+// d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
 //                 ]),
 //                 None,
 //                 None,

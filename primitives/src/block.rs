@@ -356,8 +356,8 @@ impl Decodable for CompactBlock {
 
 mod tests {
     use super::*;
+    use crate::{BlockHeaderBuilder, TransactionWithSignatureSerializePart};
     use cfx_types::H160;
-    use crate::{TransactionWithSignatureSerializePart, BlockHeaderBuilder};
     use malloc_size_of::new_malloc_size_ops;
 
     #[test]
@@ -366,77 +366,93 @@ mod tests {
         let block_header_builder = BlockHeaderBuilder::new();
         let block_header = block_header_builder.build();
         let mut vec_sign_trans = Vec::new();
-        let transaction = SignedTransaction{
+        let transaction = SignedTransaction {
             transaction: TransactionWithSignature {
                 transaction: TransactionWithSignatureSerializePart {
                     unsigned: Default::default(),
                     v: 0,
                     r: Default::default(),
-                    s: Default::default()
+                    s: Default::default(),
                 },
                 hash: Default::default(),
-                rlp_size: None
+                rlp_size: None,
             },
             sender: Default::default(),
-            public: None
+            public: None,
         };
         vec_sign_trans.push(Arc::new(transaction.clone()));
-        let block = Block::new(block_header.clone(),vec_sign_trans.clone());
+        let block = Block::new(block_header.clone(), vec_sign_trans.clone());
         assert_eq!(block.size_of(&mut malloc_size_of), 424);
-        let my_block = Block{
+        let my_block = Block {
             block_header: block_header.clone(),
             transactions: vec_sign_trans.clone(),
             approximated_rlp_size: 366,
-            approximated_rlp_size_with_public: 450
+            approximated_rlp_size_with_public: 450,
         };
         let mut vec_hash = Vec::new();
         vec_hash.push(transaction.clone().hash);
-        let compact_block = CompactBlock{
+        let compact_block = CompactBlock {
             block_header: block_header.clone(),
             nonce: 0,
             tx_short_ids: vec![],
-            reconstructed_txns: vec![]
+            reconstructed_txns: vec![],
         };
-        assert_ne!(block.to_compact(),compact_block);
+        assert_ne!(block.to_compact(), compact_block);
         assert_eq!(block, my_block);
-        assert_eq!(block.hash(),block_header.hash());
-        assert_eq!(block.approximated_rlp_size(),block.approximated_rlp_size);
-        assert_eq!(block.approximated_rlp_size_with_public(),block.approximated_rlp_size_with_public);
-        assert_eq!(block.total_gas(),transaction.clone().gas);
-        assert_eq!(block.transaction_hashes(),vec_hash);
-        assert_eq!(block.size(),14);
-        assert_eq!(block.encode_body_with_tx_public(),vec![229, 228, 205, 201, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 192]);
+        assert_eq!(block.hash(), block_header.hash());
+        assert_eq!(block.approximated_rlp_size(), block.approximated_rlp_size);
+        assert_eq!(
+            block.approximated_rlp_size_with_public(),
+            block.approximated_rlp_size_with_public
+        );
+        assert_eq!(block.total_gas(), transaction.clone().gas);
+        assert_eq!(block.transaction_hashes(), vec_hash);
+        assert_eq!(block.size(), 14);
+        assert_eq!(
+            block.encode_body_with_tx_public(),
+            vec![
+                229, 228, 205, 201, 128, 128, 128, 128, 128, 128, 128, 128,
+                128, 128, 128, 128, 148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 192
+            ]
+        );
     }
     #[test]
     fn test_compact_block_basic() {
         let block_header_builder = BlockHeaderBuilder::new();
         let block_header = block_header_builder.build();
-        let compact_block = CompactBlock{
+        let compact_block = CompactBlock {
             block_header: block_header.clone(),
             nonce: 0,
             tx_short_ids: vec![],
-            reconstructed_txns: vec![]
+            reconstructed_txns: vec![],
         };
-        assert_eq!(compact_block.len(),0);
-        assert_eq!(compact_block.hash(),block_header.clone().hash());
-        assert_eq!(compact_block.get_decomposed_short_ids(),(vec![],vec![]));
-        assert_eq!(CompactBlock::get_shortid_key(&block_header.clone(),&0),(11455490244519960730,1331665784510178882));
-        assert_eq!(CompactBlock::to_u16(0,0),0);
-        assert_eq!(CompactBlock::to_u32(0,0,0,0),0);
+        assert_eq!(compact_block.len(), 0);
+        assert_eq!(compact_block.hash(), block_header.clone().hash());
+        assert_eq!(compact_block.get_decomposed_short_ids(), (vec![], vec![]));
+        assert_eq!(
+            CompactBlock::get_shortid_key(&block_header.clone(), &0),
+            (11455490244519960730, 1331665784510178882)
+        );
+        assert_eq!(CompactBlock::to_u16(0, 0), 0);
+        assert_eq!(CompactBlock::to_u32(0, 0, 0, 0), 0);
         let signed_trans = SignedTransaction {
             transaction: TransactionWithSignature {
                 transaction: TransactionWithSignatureSerializePart {
                     unsigned: Default::default(),
                     v: 0,
                     r: Default::default(),
-                    s: Default::default()
+                    s: Default::default(),
                 },
                 hash: Default::default(),
-                rlp_size: None
+                rlp_size: None,
             },
-            sender: H160([0xff;20]),
-            public: None
+            sender: H160([0xff; 20]),
+            public: None,
         };
-        assert_eq!(CompactBlock::create_shortids(&vec![Arc::new(signed_trans)], 0,0),vec![130, 125, 0, 0, 0, 0]);
+        assert_eq!(
+            CompactBlock::create_shortids(&vec![Arc::new(signed_trans)], 0, 0),
+            vec![130, 125, 0, 0, 0, 0]
+        );
     }
 }

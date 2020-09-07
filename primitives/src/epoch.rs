@@ -36,11 +36,11 @@ pub enum BlockHashOrEpochNumber {
     EpochNumber(EpochNumber),
 }
 
-mod tests{
+mod tests {
     use super::*;
     #[test]
     fn test_epoch_basic() {
         let epoch_number: EpochNumber = 0.into();
-        assert_eq!(epoch_number,EpochNumber::Number(0));
+        assert_eq!(epoch_number, EpochNumber::Number(0));
     }
 }

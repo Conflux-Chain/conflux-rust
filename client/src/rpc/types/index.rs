@@ -63,7 +63,7 @@ mod tests {
     fn test_index_value() {
         let index = Index(0);
         let value = Index::value(&index);
-        assert_eq!(0,value);
+        assert_eq!(0, value);
     }
     #[test]
     fn block_number_deserialization() {

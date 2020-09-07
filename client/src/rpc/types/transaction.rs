@@ -195,27 +195,26 @@ pub struct TxPoolPendingInfo {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
     use super::*;
+    use crate::rpc::types::{PackedOrExecuted, Transaction};
+    use cfx_types::{Bloom, H160, H256, U256};
     use cfxkey::Secret;
-    use cfx_types::{H160, H256, U256, Bloom};
-    use crate::rpc::types::{Transaction, PackedOrExecuted};
+    use primitives::{
+        transaction::Action, SignedTransaction,
+        Transaction as PrimitiveTransaction, TransactionIndex,
+        TransactionWithSignature, TransactionWithSignatureSerializePart,
+    };
     use serde_json;
-    use primitives::{transaction::Action,
-                     SignedTransaction,
-                     Transaction as PrimitiveTransaction,
-                     TransactionWithSignature,
-                     TransactionWithSignatureSerializePart,
-                     TransactionIndex};
+    use std::str::FromStr;
 
     #[test]
     fn test_transaction_serialize() {
-        let transaction = Transaction{
-            hash: H256([0xff;32]),
+        let transaction = Transaction {
+            hash: H256([0xff; 32]),
             nonce: U256::one(),
             block_hash: None,
             transaction_index: None,
-            from: H160([0xff;20]),
+            from: H160([0xff; 20]),
             to: None,
             value: U256::one(),
             gas_price: U256::one(),
@@ -228,7 +227,7 @@ mod tests {
             status: None,
             v: U256::one(),
             r: U256::one(),
-            s: U256::one()
+            s: U256::one(),
         };
         let serialize = serde_json::to_string(&transaction).unwrap();
         assert_eq!(serialize,
@@ -238,12 +237,12 @@ mod tests {
     fn test_transaction_deserialize() {
         let serialize = "{\"hash\":\"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"nonce\":\"0x1\",\"blockHash\":null,\"transactionIndex\":null,\"from\":\"0xffffffffffffffffffffffffffffffffffffffff\",\"to\":null,\"value\":\"0x1\",\"gasPrice\":\"0x1\",\"gas\":\"0x1\",\"contractCreated\":null,\"data\":\"0x\",\"storageLimit\":\"0x1\",\"epochHeight\":\"0x1\",\"chainId\":\"0x1\",\"status\":null,\"v\":\"0x1\",\"r\":\"0x1\",\"s\":\"0x1\"}";
         let deserialize: Transaction = serde_json::from_str(serialize).unwrap();
-        let transaction = Transaction{
-            hash: H256([0xff;32]),
+        let transaction = Transaction {
+            hash: H256([0xff; 32]),
             nonce: U256::one(),
             block_hash: None,
             transaction_index: None,
-            from: H160([0xff;20]),
+            from: H160([0xff; 20]),
             to: None,
             value: U256::one(),
             gas_price: U256::one(),
@@ -256,9 +255,9 @@ mod tests {
             status: None,
             v: U256::one(),
             r: U256::one(),
-            s: U256::one()
+            s: U256::one(),
         };
-        assert_eq!(deserialize,transaction);
+        assert_eq!(deserialize, transaction);
     }
     #[test]
     fn test_transaction_from_signed_default() {
@@ -290,8 +289,7 @@ mod tests {
             sender: H160([0xff; 20]),
             public: None,
         };
-        let t:Transaction =
-            Transaction::from_signed(&sign_transaction,None);
+        let t: Transaction = Transaction::from_signed(&sign_transaction, None);
         let transaction_from_signed = serde_json::to_string(&t).unwrap();
         assert_eq!(transaction_from_signed,
                    r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"transactionIndex":null,"from":"0xffffffffffffffffffffffffffffffffffffffff","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","contractCreated":null,"data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x0","status":null,"v":"0x0","r":"0x1","s":"0x1"}"#);
@@ -327,8 +325,8 @@ mod tests {
             sender: H160([0xff; 20]),
             public: None,
         };
-        let bloom: [u8; 256] = [0;256];
-        let receipt = Some(PackedOrExecuted::Executed(Receipt{
+        let bloom: [u8; 256] = [0; 256];
+        let receipt = Some(PackedOrExecuted::Executed(Receipt {
             transaction_hash: H256::default(),
             block_hash: H256::default(),
             epoch_number: None,
@@ -339,12 +337,12 @@ mod tests {
             outcome_status: U64::default(),
             contract_created: None,
             logs: vec![],
-            logs_bloom: Bloom(bloom),  // to be fixed, [U8;256] expected
+            logs_bloom: Bloom(bloom), // to be fixed, [U8;256] expected
             gas_fee: U256::default(),
-            state_root: H256::default()
+            state_root: H256::default(),
         }));
-        let t:Transaction =
-            Transaction::from_signed(&sign_transaction,receipt);
+        let t: Transaction =
+            Transaction::from_signed(&sign_transaction, receipt);
         let transaction_from_signed = serde_json::to_string(&t).unwrap();
         assert_eq!(transaction_from_signed,
                    r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionIndex":"0x0","from":"0xffffffffffffffffffffffffffffffffffffffff","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","contractCreated":null,"data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x0","status":"0x0","v":"0x0","r":"0x1","s":"0x1"}"#);
@@ -380,12 +378,13 @@ mod tests {
             sender: H160([0xff; 20]),
             public: None,
         };
-        let transaction_index = Some(PackedOrExecuted::Packed(TransactionIndex{
-            block_hash: H256::default(),
-            index: 0,
-        }));
-        let t:Transaction =
-            Transaction::from_signed(&sign_transaction,transaction_index);
+        let transaction_index =
+            Some(PackedOrExecuted::Packed(TransactionIndex {
+                block_hash: H256::default(),
+                index: 0,
+            }));
+        let t: Transaction =
+            Transaction::from_signed(&sign_transaction, transaction_index);
         let transaction_from_signed = serde_json::to_string(&t).unwrap();
         assert_eq!(transaction_from_signed,
                    r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionIndex":"0x0","from":"0xffffffffffffffffffffffffffffffffffffffff","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","contractCreated":null,"data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x0","status":null,"v":"0x0","r":"0x1","s":"0x1"}"#);
@@ -394,8 +393,8 @@ mod tests {
     #[test]
     fn test_transaction_into_signed() {
         let x = Transaction::into_signed(Transaction::default());
-        let my_transaction = Transaction{
-            hash:H256([0xff;32]),
+        let my_transaction = Transaction {
+            hash: H256([0xff; 32]),
             nonce: U256::one(),
             block_hash: None,
             transaction_index: None,
@@ -416,7 +415,7 @@ mod tests {
         };
         let y = Transaction::into_signed(my_transaction);
         assert_eq!(y.is_ok(), true);
-        let sign_transaction_info =  serde_json::to_string(&y.unwrap()).unwrap();
+        let sign_transaction_info = serde_json::to_string(&y.unwrap()).unwrap();
         assert_eq!(x.is_err(), true);
         assert_eq!(sign_transaction_info,
                    "{\"transaction\":{\"transaction\":{\"unsigned\":{\"nonce\":\"0x1\",\"gasPrice\":\"0x1\",\"gas\":\"0x1\",\"action\":{\"Call\":\"0xffffffffffffffffffffffffffffffffffffffff\"},\"value\":\"0x1\",\"storageLimit\":1,\"epochHeight\":1,\"chainId\":1,\"data\":[]},\"v\":1,\"r\":\"0x1\",\"s\":\"0x1\"}},\"sender\":\"0x1096d41a4a90d96f4123c713d1a9435c8ea27e41\",\"public\":\"0x8327f80b1ecf0048e093d1a9ff452cf1a4fa647fbb2069c59617d4b0a01ddfd5caedfbd5a4945913a2d31f4b41aeab3d25f88588ee8df9e58e859c473c766ca3\"}");
@@ -424,8 +423,8 @@ mod tests {
 
     #[test]
     fn test_send_tx_request_sign_with_error() {
-        let request = SendTxRequest{
-            from: H160([0xff;20]),
+        let request = SendTxRequest {
+            from: H160([0xff; 20]),
             to: None,
             gas: U256::one(),
             gas_price: U256::one(),
@@ -434,7 +433,7 @@ mod tests {
             nonce: None,
             storage_limit: None,
             chain_id: None,
-            epoch_height: None
+            epoch_height: None,
         };
         let ap = AccountProvider::transient_provider();
         let x = SendTxRequest::sign_with(
@@ -442,11 +441,11 @@ mod tests {
             U256::one().as_u64(),
             U256::one().as_u32(),
             None,
-            Arc::new(ap)
+            Arc::new(ap),
         );
         assert_eq!(x.is_err(), true);
-        let request2 = SendTxRequest{
-            from: H160([0xff;20]),
+        let request2 = SendTxRequest {
+            from: H160([0xff; 20]),
             to: None,
             gas: U256::one(),
             gas_price: U256::one(),
@@ -455,7 +454,7 @@ mod tests {
             nonce: None,
             storage_limit: None,
             chain_id: None,
-            epoch_height: None
+            epoch_height: None,
         };
         let ap2 = AccountProvider::transient_provider();
         let y = SendTxRequest::sign_with(
@@ -463,7 +462,7 @@ mod tests {
             U256::one().as_u64(),
             U256::one().as_u32(),
             Some(String::from("this is the password")),
-            Arc::new(ap2)
+            Arc::new(ap2),
         );
         assert_eq!(y.is_ok(), false);
     }
@@ -472,9 +471,12 @@ mod tests {
         let ap3 = AccountProvider::transient_provider();
         let secret = Secret::from_str(
             "a100df7a048e50ed308ea696dc600215098141cb391e9527329df289f9383f65",
-        ).unwrap();
-        let address = AccountProvider::insert_account(&ap3,secret,&"password".into()).unwrap();
-        let request3 = SendTxRequest{
+        )
+        .unwrap();
+        let address =
+            AccountProvider::insert_account(&ap3, secret, &"password".into())
+                .unwrap();
+        let request3 = SendTxRequest {
             from: address,
             to: None,
             gas: U256::one(),
@@ -484,14 +486,14 @@ mod tests {
             nonce: Some(U256::one()),
             storage_limit: Some(U256::one()),
             chain_id: Some(U256::one()),
-            epoch_height: Some(U256::one())
+            epoch_height: Some(U256::one()),
         };
         let z = SendTxRequest::sign_with(
             request3,
             U256::one().as_u64(),
             U256::one().as_u32(),
-            Some("password".into()),//Some("this is the password".into()),
-            Arc::new(ap3)
+            Some("password".into()), //Some("this is the password".into()),
+            Arc::new(ap3),
         );
         assert_eq!(z.is_err(), false);
         let info = serde_json::to_string(&z).unwrap();
@@ -500,7 +502,7 @@ mod tests {
     }
     #[test]
     fn test_tx_pool_info() {
-        let tx_pool_info = TxWithPoolInfo{
+        let tx_pool_info = TxWithPoolInfo {
             exist: false,
             packed: false,
             local_nonce: Default::default(),
@@ -508,19 +510,22 @@ mod tests {
             state_nonce: Default::default(),
             state_balance: Default::default(),
             local_balance_enough: false,
-            state_balance_enough: false
+            state_balance_enough: false,
         };
         let info = serde_json::to_string(&tx_pool_info).unwrap();
         assert_eq!(info,"{\"exist\":false,\"packed\":false,\"local_nonce\":\"0x0\",\"local_balance\":\"0x0\",\"state_nonce\":\"0x0\",\"state_balance\":\"0x0\",\"local_balance_enough\":false,\"state_balance_enough\":false}");
     }
     #[test]
-    fn test_tx_pool_pending_info () {
-        let pending_info = TxPoolPendingInfo{
+    fn test_tx_pool_pending_info() {
+        let pending_info = TxPoolPendingInfo {
             pending_count: 0,
             min_nonce: Default::default(),
-            max_nonce: Default::default()
+            max_nonce: Default::default(),
         };
         let info = serde_json::to_string(&pending_info).unwrap();
-        assert_eq!(info,"{\"pending_count\":0,\"min_nonce\":\"0x0\",\"max_nonce\":\"0x0\"}");
+        assert_eq!(
+            info,
+            "{\"pending_count\":0,\"min_nonce\":\"0x0\",\"max_nonce\":\"0x0\"}"
+        );
     }
 }

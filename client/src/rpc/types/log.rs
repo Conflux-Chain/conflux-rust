@@ -122,6 +122,6 @@ mod tests {
             log_index: Some(U256::from(1)),
         };
         let deserialize: Log = serde_json::from_str(serialized).unwrap();
-        assert_eq!(deserialize,log);
+        assert_eq!(deserialize, log);
     }
 }

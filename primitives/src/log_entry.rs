@@ -79,9 +79,9 @@ impl Deref for LocalizedLogEntry {
 #[cfg(test)]
 mod tests {
     use super::LogEntry;
+    use crate::log_entry::LocalizedLogEntry;
     use cfx_types::{Address, Bloom};
     use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
-    use crate::log_entry::LocalizedLogEntry;
 
     #[test]
     fn test_empty_log_bloom() {
@@ -98,21 +98,21 @@ mod tests {
     }
     #[test]
     fn test_log_entry() {
-        let log_entry = LogEntry{
+        let log_entry = LogEntry {
             address: Default::default(),
             topics: vec![],
-            data: vec![]
+            data: vec![],
         };
         let mut malloc_size_of = new_malloc_size_ops();
         assert_eq!(log_entry.size_of(&mut malloc_size_of), 0);
-        let local_log_entry = LocalizedLogEntry{
+        let local_log_entry = LocalizedLogEntry {
             entry: Default::default(),
             block_hash: Default::default(),
             epoch_number: 0,
             transaction_hash: Default::default(),
             transaction_index: 0,
             log_index: 0,
-            transaction_log_index: 0
+            transaction_log_index: 0,
         };
         //assert_eq!(local_log_entry.deref(),&local_log_entry.entry);
     }
