@@ -9,6 +9,7 @@ mod internal_contract;
 
 #[cfg(test)]
 mod executive_tests;
+mod solidity_events;
 
 pub use self::{
     executed::*,

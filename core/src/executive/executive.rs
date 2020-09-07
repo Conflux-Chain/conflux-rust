@@ -11,6 +11,7 @@ use crate::{
     evm::{FinalizationResult, Finalize},
     executive::{
         executed::{ExecutionOutcome, ToRepackError},
+        solidity_events::log_message_call_transfer,
         TxDropError,
     },
     hash::keccak,
@@ -340,6 +341,16 @@ impl<'a> CallCreateExecutive<'a> {
                 &val,
                 substate.to_cleanup_mode(&spec),
             )?;
+            if substate.contracts_in_callstack.borrow().len() > 1
+                && !val.is_zero()
+                && params.sender != params.address
+            {
+                substate.logs.push(log_message_call_transfer(
+                    &params.sender,
+                    &params.address,
+                    &val,
+                ));
+            }
         }
 
         Ok(())

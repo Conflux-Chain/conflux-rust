@@ -54,6 +54,8 @@ impl CallStackInfo {
         maybe_address
     }
 
+    pub fn len(&self) -> usize { self.call_stack_recipient_addresses.len() }
+
     pub fn reentrancy_happens_when_push(&self, address: &Address) -> bool {
         self.last() != Some(address) && self.contains_key(address)
     }

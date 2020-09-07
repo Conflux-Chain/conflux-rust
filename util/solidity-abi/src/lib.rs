@@ -6,8 +6,11 @@ mod array;
 mod basic;
 mod utils;
 
+mod event;
 #[cfg(test)]
 mod tests;
+
+pub use event::{IndexedArg, NonIndexedArgs};
 
 #[cfg(test)]
 #[macro_use]
