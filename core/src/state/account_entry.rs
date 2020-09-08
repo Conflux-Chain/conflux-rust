@@ -58,7 +58,9 @@ pub struct OverlayAccount {
 
     // This is a cache for storage ownership change.
     ownership_cache: RwLock<HashMap<Vec<u8>, Option<Address>>>,
-    ownership_changes: HashMap<Vec<u8>, Address>,
+    // This maintains the current owner of a specific key. If the owner is
+    // `None`, the value of current key is zero.
+    ownership_changes: HashMap<Vec<u8>, Option<Address>>,
 
     // Storage layout change.
     storage_layout_change: Option<StorageLayout>,
@@ -379,7 +381,7 @@ impl OverlayAccount {
     }
 
     #[cfg(test)]
-    pub fn ownership_changes(&self) -> &HashMap<Vec<u8>, Address> {
+    pub fn ownership_changes(&self) -> &HashMap<Vec<u8>, Option<Address>> {
         &self.ownership_changes
     }
 
@@ -610,7 +612,11 @@ impl OverlayAccount {
 
     pub fn set_storage(&mut self, key: Vec<u8>, value: U256, owner: Address) {
         self.storage_changes.insert(key.clone(), value);
-        self.ownership_changes.insert(key, owner);
+        if value.is_zero() {
+            self.ownership_changes.insert(key, None);
+        } else {
+            self.ownership_changes.insert(key, Some(owner));
+        }
     }
 
     #[cfg(test)]
@@ -745,41 +751,29 @@ impl OverlayAccount {
     ) -> DbResult<()> {
         let ownership_changes: Vec<_> =
             self.ownership_changes.drain().collect();
-        for (k, v) in ownership_changes {
-            let cur_value_is_zero = self
-                .storage_changes
-                .get(&k)
-                .expect("key must exists")
-                .is_zero();
-            let mut ownership_changed = true;
+        for (k, current_owner_opt) in ownership_changes {
             // Get the owner of `k` before execution. If it is `None`, it means
             // the value of the key is zero before execution. Otherwise, the
             // value of the key is nonzero.
             let original_ownership_opt = self.original_ownership_at(db, &k)?;
-            if let Some(original_ownership) = original_ownership_opt {
-                if v == original_ownership {
-                    ownership_changed = false;
-                }
-                // If the current value is zero or the owner has changed for the
-                // key, it means the key has released from previous owner.
-                if cur_value_is_zero || ownership_changed {
+            if original_ownership_opt != current_owner_opt {
+                if let Some(original_owner) = original_ownership_opt.as_ref() {
+                    // The key has released from previous owner.
                     substate.record_storage_release(
-                        &original_ownership,
+                        original_owner,
+                        BYTES_PER_STORAGE_KEY,
+                    );
+                }
+                if let Some(current_owner) = current_owner_opt.as_ref() {
+                    // The owner has occupied a new key.
+                    substate.record_storage_occupy(
+                        current_owner,
                         BYTES_PER_STORAGE_KEY,
                     );
                 }
             }
-            // If the current value is not zero and the owner has changed, it
-            // means the owner has occupied a new key.
-            if !cur_value_is_zero && ownership_changed {
-                substate.record_storage_occupy(&v, BYTES_PER_STORAGE_KEY);
-            }
             // Commit ownership change to `ownership_cache`.
-            if cur_value_is_zero {
-                self.ownership_cache.get_mut().insert(k, None);
-            } else if ownership_changed {
-                self.ownership_cache.get_mut().insert(k, Some(v));
-            }
+            self.ownership_cache.get_mut().insert(k, current_owner_opt);
         }
         assert!(self.ownership_changes.is_empty());
         Ok(())
