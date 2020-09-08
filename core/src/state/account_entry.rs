@@ -751,29 +751,29 @@ impl OverlayAccount {
     ) -> DbResult<()> {
         let ownership_changes: Vec<_> =
             self.ownership_changes.drain().collect();
-        for (k, owner_opt) in ownership_changes {
+        for (k, current_owner_opt) in ownership_changes {
             // Get the owner of `k` before execution. If it is `None`, it means
             // the value of the key is zero before execution. Otherwise, the
             // value of the key is nonzero.
             let original_ownership_opt = self.original_ownership_at(db, &k)?;
-            if original_ownership_opt != owner_opt {
-                if original_ownership_opt.is_some() {
+            if original_ownership_opt != current_owner_opt {
+                if let Some(original_owner) = original_ownership_opt.as_ref() {
                     // The key has released from previous owner.
                     substate.record_storage_release(
-                        original_ownership_opt.as_ref().unwrap(),
+                        original_owner,
                         BYTES_PER_STORAGE_KEY,
                     );
                 }
-                if owner_opt.is_some() {
+                if let Some(current_owner) = current_owner_opt.as_ref() {
                     // The owner has occupied a new key.
                     substate.record_storage_occupy(
-                        owner_opt.as_ref().unwrap(),
+                        current_owner,
                         BYTES_PER_STORAGE_KEY,
                     );
                 }
             }
             // Commit ownership change to `ownership_cache`.
-            self.ownership_cache.get_mut().insert(k, owner_opt);
+            self.ownership_cache.get_mut().insert(k, current_owner_opt);
         }
         assert!(self.ownership_changes.is_empty());
         Ok(())
