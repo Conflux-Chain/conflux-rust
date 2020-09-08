@@ -3,6 +3,7 @@
 ## Improvement
 - Start stratum services automatically if `mining_author` is set. 
 Use `mining_type` to allow start CPU mining or disable mining manually.
+- block info returned by rpc methods `cfx_getBlockByEpochNumber`, `cfx_getBlockByHash`, `cfx_getBlockByHashWithPivotAssumption` add one new field `gasUsed` (backward compatible)
 
 ## Bug Fixes
 

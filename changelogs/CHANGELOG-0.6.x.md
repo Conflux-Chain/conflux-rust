@@ -1,3 +1,9 @@
+# 0.6.3
+
+## Improvement
+
+- block info returned by rpc methods `cfx_getBlockByEpochNumber`, `cfx_getBlockByHash`, `cfx_getBlockByHashWithPivotAssumption` add one new field 'gasUsed' (backward compatible) 
+
 # 0.6.2
 
 ## Improvement
