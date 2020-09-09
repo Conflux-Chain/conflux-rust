@@ -370,7 +370,7 @@ jsonrpc_local_http_port=12539
 
 # The directory to store block-related data.
 #
-# db_dir = "./blockchain_db"
+# block_db_dir = "./blockchain_db"
 
 # Maximum size of cached ledger data (block, receipts, e.t.c.)
 # The unit is MB.
