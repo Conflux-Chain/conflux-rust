@@ -848,5 +848,5 @@ subcommands:
                                 about: Get the current status of Conflux
                                 args:
                                     - rpc-method:
-                                        default_value: getstatus
+                                        default_value: cfx_getStatus
                                         hidden: true
