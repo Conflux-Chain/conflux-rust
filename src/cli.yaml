@@ -133,9 +133,9 @@ args:
         long: db-compact-profile
         value_name: ENUM
         takes_value: true
-    - db-dir:
+    - block-db-dir:
         help: Sets the root path of db.
-        long: db-dir
+        long: block-db-dir
         value_name: DIR
         takes_value: true
     - load-test-chain:
@@ -848,5 +848,5 @@ subcommands:
                                 about: Get the current status of Conflux
                                 args:
                                     - rpc-method:
-                                        default_value: getstatus
+                                        default_value: cfx_getStatus
                                         hidden: true
