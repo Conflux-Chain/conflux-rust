@@ -1204,10 +1204,12 @@ impl ConsensusGraphInner {
             }
             my_past.add(index as u32);
             let idx_parent = self.arena[index].parent;
-            if anticone.contains(idx_parent as u32)
-                || self.arena[idx_parent].era_block == NULL
-            {
-                queue.push_back(idx_parent);
+            if idx_parent != NULL {
+                if anticone.contains(idx_parent as u32)
+                    || self.arena[idx_parent].era_block == NULL
+                {
+                    queue.push_back(idx_parent);
+                }
             }
             for referee in &self.arena[index].referees {
                 if anticone.contains(*referee as u32)
