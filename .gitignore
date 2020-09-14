@@ -12,5 +12,4 @@ build/
 **/sqlite_db/
 **/net_config/
 **/*.log
-**/testnet.toml
 *~
