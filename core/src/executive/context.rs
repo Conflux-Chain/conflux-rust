@@ -684,7 +684,7 @@ mod tests {
     }
 
     #[test]
-    fn can_suiside() {
+    fn can_suicide() {
         let mut refund_account = Address::zero();
         refund_account.set_user_account_type_bits();
 

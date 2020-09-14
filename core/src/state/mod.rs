@@ -275,7 +275,6 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         );
 
         if !sub.is_zero() {
-            assert!(self.exists(addr)?);
             self.sub_collateral_for_storage(addr, &sub)?;
         }
         if !inc.is_zero() {
@@ -320,7 +319,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     /// Charge and refund all the storage collaterals.
-    /// The suisided addresses are skimmed because their collateral have been
+    /// The suicided addresses are skimmed because their collateral have been
     /// checked out. This function should only be called in post-processing
     /// of a transaction.
     pub fn settle_collateral_for_all(
