@@ -699,13 +699,9 @@ impl TransactionPool {
 
         let parent_block_gas_limit = self
             .data_man
-            .block_by_hash(
-                &consensus_best_info_clone.best_block_hash,
-                /* update_cache = */ true,
-            )
+            .block_header_by_hash(&consensus_best_info_clone.best_block_hash)
             // The parent block must exists.
             .expect(&concat!(file!(), ":", line!(), ":", column!()))
-            .block_header
             .gas_limit()
             .clone();
 
