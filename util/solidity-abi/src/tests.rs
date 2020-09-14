@@ -5,6 +5,7 @@
 use super::{ABIDecodable, ABIDecodeError, ABIEncodable};
 use cfx_types::{Address, U256};
 use hex;
+use lazy_static;
 use parity_bytes::ToPretty;
 use std::str::FromStr;
 
@@ -38,7 +39,7 @@ fn test_address() {
 
     assert_eq!(
         Address::abi_decode(encoded.as_slice()).unwrap_err(),
-        ABIDecodeError("Invalid call data length")
+        ABIDecodeError("Incomplete static input parameter")
     );
 }
 
@@ -60,7 +61,7 @@ fn test_u256() {
 
     assert_eq!(
         Address::abi_decode(encoded.as_slice()).unwrap_err(),
-        ABIDecodeError("Invalid call data length")
+        ABIDecodeError("Incomplete static input parameter")
     );
 }
 

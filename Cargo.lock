@@ -593,7 +593,6 @@ dependencies = [
  "fs_extra",
  "futures 0.3.5",
  "hashbrown 0.7.2",
- "hex 0.3.2",
  "hibitset",
  "io",
  "itertools 0.9.0",
@@ -637,6 +636,7 @@ dependencies = [
  "serde_json",
  "siphasher",
  "slab",
+ "solidity-abi",
  "sqlite",
  "sqlite3-sys",
  "static_assertions",
@@ -3831,6 +3831,16 @@ dependencies = [
  "libc",
  "redox_syscall",
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "solidity-abi"
+version = "0.1.0"
+dependencies = [
+ "cfx-types",
+ "hex 0.3.2",
+ "lazy_static",
+ "parity-bytes",
 ]
 
 [[package]]
