@@ -20,7 +20,6 @@ use super::consensus::consensus_inner::{
 };
 use crate::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
-    bytes::Bytes,
     consensus::consensus_inner::{
         consensus_executor::ConsensusExecutionConfiguration, StateBlameInfo,
     },
@@ -35,12 +34,10 @@ use crate::{
     vm_factory::VmFactory,
     NodeType, Notifications,
 };
-use cfx_parameters::{
-    consensus::*, consensus_internal::*, staking::COLLATERAL_PER_BYTE,
-};
-use cfx_statedb::{StateDb, StateDbExt, StateDbGetOriginalMethods};
+use cfx_parameters::{consensus::*, consensus_internal::*};
+use cfx_statedb::StateDb;
 use cfx_storage::state_manager::StateManagerTrait;
-use cfx_types::{BigEndianHash, Bloom, H160, H256, U256, U512};
+use cfx_types::{Bloom, H160, H256, U256};
 use either::Either;
 use itertools::Itertools;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
@@ -54,8 +51,7 @@ use primitives::{
     filter::{Filter, FilterError},
     log_entry::LocalizedLogEntry,
     receipt::Receipt,
-    Account, ChainIdParams, EpochId, EpochNumber, SignedTransaction,
-    SponsorInfo, StorageKey, StorageRoot, StorageValue, TransactionIndex,
+    ChainIdParams, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
 };
 use rayon::prelude::*;
 use std::{
@@ -427,155 +423,6 @@ impl ConsensusGraph {
         Ok(())
     }
 
-    /// Get the code of an address
-    pub fn get_code(
-        &self, address: H160, epoch_number: EpochNumber,
-    ) -> Result<Bytes, String> {
-        let state_db =
-            self.get_state_db_by_epoch_number(epoch_number.clone())?;
-        let acc = match state_db.get_account(&address) {
-            Ok(Some(acc)) => acc,
-            _ => {
-                return Err(format!(
-                    "Account {:?} epoch_number={:?} does not exist",
-                    address, epoch_number,
-                )
-                .into())
-            }
-        };
-
-        match state_db.get_code(&address, &acc.code_hash) {
-            Ok(Some(code)) => Ok((*code.code).clone()),
-            _ => Ok(vec![]),
-        }
-    }
-
-    /// Get the interest rate at an epoch
-    pub fn get_annual_interest_rate(
-        &self, epoch_number: EpochNumber,
-    ) -> Result<U256, String> {
-        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-        if let Ok(interest_rate) = state_db.get_annual_interest_rate() {
-            Ok(interest_rate)
-        } else {
-            Err("db error occurred".into())
-        }
-    }
-
-    /// Get the accumulative interest rate at an epoch
-    pub fn get_accumulate_interest_rate(
-        &self, epoch_number: EpochNumber,
-    ) -> Result<U256, String> {
-        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-        if let Ok(accumulate_interest_rate) =
-            state_db.get_accumulate_interest_rate()
-        {
-            Ok(accumulate_interest_rate)
-        } else {
-            Err("db error occurred".into())
-        }
-    }
-
-    pub fn get_account(
-        &self, address: H160, epoch_number: EpochNumber,
-    ) -> Result<Option<Account>, String> {
-        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-        state_db
-            .get_account(&address)
-            .or_else(|_| Err("db error occurred".into()))
-    }
-
-    /// Get the current balance of an address
-    pub fn get_balance(
-        &self, address: H160, epoch_number: EpochNumber,
-    ) -> Result<U256, String> {
-        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-        Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
-            maybe_acc.map_or(U256::zero(), |acc| acc.balance).into()
-        } else {
-            0.into()
-        })
-    }
-
-    /// Get storage root of a contract
-    pub fn get_storage_root(
-        &self, address: H160, epoch_number: EpochNumber,
-    ) -> Result<Option<StorageRoot>, String> {
-        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-
-        match state_db.get_original_storage_root(&address) {
-            Ok(maybe_storage_root) => Ok(maybe_storage_root),
-            Err(e) => {
-                error!("db error occurred: {:?}", e);
-                Err("db error occurred".into())
-            }
-        }
-    }
-
-    /// Get storage entry of a contract
-    pub fn get_storage(
-        &self, address: H160, position: H256, epoch_number: EpochNumber,
-    ) -> Result<Option<H256>, String> {
-        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-        let key = StorageKey::new_storage_key(&address, position.as_ref());
-
-        match state_db.get::<StorageValue>(key) {
-            Ok(Some(entry)) => Ok(Some(H256::from_uint(&entry.value))),
-            Ok(None) => Ok(None),
-            Err(e) => {
-                warn!("Unexpected error while retrieving storage entry: {}", e);
-                Err("db error occurred".into())
-            }
-        }
-    }
-
-    /// Get the current admin of a contract.
-    pub fn get_admin(
-        &self, address: H160, epoch_number: EpochNumber,
-    ) -> Result<Option<H160>, String> {
-        Ok(self
-            .get_account(address, epoch_number)?
-            .map(|account| account.admin))
-    }
-
-    /// Get the current sponsor of a contract
-    pub fn get_sponsor_info(
-        &self, address: H160, epoch_number: EpochNumber,
-    ) -> Result<SponsorInfo, String> {
-        Ok(self
-            .get_account(address, epoch_number)?
-            .map(|account| account.sponsor_info.clone())
-            .unwrap_or_default())
-    }
-
-    /// Get the current bank balance of an address
-    pub fn get_staking_balance(
-        &self, address: H160, epoch_number: EpochNumber,
-    ) -> Result<U256, String> {
-        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-        Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
-            maybe_acc
-                .map_or(U256::zero(), |acc| acc.staking_balance)
-                .into()
-        } else {
-            0.into()
-        })
-    }
-
-    /// Get the current storage balance of an address
-    pub fn get_collateral_for_storage(
-        &self, address: H160, epoch_number: EpochNumber,
-    ) -> Result<U256, String> {
-        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-        Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
-            maybe_acc
-                .map_or(U256::zero(), |acc| acc.collateral_for_storage)
-                .into()
-        } else {
-            0.into()
-        })
-    }
-
     /// Force the engine to recompute the deferred state root for a particular
     /// block given a delay.
     pub fn force_compute_blame_and_deferred_state_for_generation(
@@ -694,15 +541,8 @@ impl ConsensusGraph {
             ),
             BlockHashOrEpochNumber::EpochNumber(epoch_number) => epoch_number,
         };
-        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-        // `block_number` is not used in the follow up call. It is fine to pass
-        // 0.
-        let state = State::new(
-            state_db,
-            Default::default(), /* vm */
-            &Spec::new_spec(),
-            0, /* block_number */
-        );
+        let state = self.get_state_by_epoch_number(epoch_number)?;
+
         state
             .nonce(&address)
             .map_err(|err| format!("Get transaction count error: {:?}", err))
@@ -1105,60 +945,6 @@ impl ConsensusGraph {
             bail!("cannot get block hashes in the specified epoch, maybe it does not exist?");
         };
         self.executor.call_virtual(tx, &epoch_id, epoch_size)
-    }
-
-    pub fn check_balance_against_transaction(
-        &self, account_addr: H160, contract_addr: H160, gas_limit: U256,
-        gas_price: U256, storage_limit: U256, epoch: EpochNumber,
-    ) -> RpcResult<(bool, bool, bool)>
-    {
-        self.validate_stated_epoch(&epoch)?;
-        let state_db = self.get_state_db_by_epoch_number(epoch)?;
-        // `block_number` is not used in the follow up calls. It is fine to pass
-        // zero here.
-        let state = State::new(
-            state_db,
-            Default::default(), /* vm */
-            &Spec::new_spec(),
-            0, /* block_number */
-        );
-        let gas_cost = gas_limit.full_mul(gas_price);
-        let mut gas_sponsored = false;
-        let mut storage_sponsored = false;
-        if state.check_commission_privilege(&contract_addr, &account_addr)? {
-            // No need to check for gas sponsor account existence.
-            gas_sponsored = gas_cost
-                <= U512::from(state.sponsor_gas_bound(&contract_addr)?);
-            storage_sponsored =
-                state.sponsor_for_collateral(&contract_addr)?.is_some();
-        }
-        let gas_sponsor_balance = if gas_sponsored {
-            U512::from(state.sponsor_balance_for_gas(&contract_addr)?)
-        } else {
-            0.into()
-        };
-        let will_pay_tx_fee = !gas_sponsored || gas_sponsor_balance < gas_cost;
-
-        let storage_limit_in_drip =
-            if storage_limit >= U256::from(std::u64::MAX) {
-                U256::from(std::u64::MAX) * *COLLATERAL_PER_BYTE
-            } else {
-                storage_limit * *COLLATERAL_PER_BYTE
-            };
-        let storage_sponsor_balance = if storage_sponsored {
-            state.sponsor_balance_for_collateral(&contract_addr)?
-        } else {
-            0.into()
-        };
-
-        let will_pay_collateral = !storage_sponsored
-            || storage_limit_in_drip > storage_sponsor_balance;
-
-        let balance = state.balance(&account_addr)?;
-        let minimum_balance = if will_pay_tx_fee { gas_cost } else { 0.into() };
-        let is_balance_enough = U512::from(balance) >= minimum_balance;
-
-        Ok((will_pay_tx_fee, will_pay_collateral, is_balance_enough))
     }
 
     /// Get the number of processed blocks (i.e., the number of calls to
