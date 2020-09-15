@@ -53,6 +53,15 @@ use crate::{
         RpcResult,
     },
 };
+use lazy_static::lazy_static;
+use metrics::{register_meter_with_group, Meter, MeterTimer};
+
+lazy_static! {
+    static ref SEND_RAW_TX_TIMER: Arc<dyn Meter> =
+        register_meter_with_group("timer", "rpc:sendRawTransaction");
+    static ref GET_LOGS_TIMER: Arc<dyn Meter> =
+        register_meter_with_group("timer", "rpc:getLogs");
+}
 
 pub struct RpcImpl {
     config: RpcImplConfiguration,
@@ -244,6 +253,7 @@ impl RpcImpl {
     }
 
     fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256> {
+        let _timer = MeterTimer::time_func(SEND_RAW_TX_TIMER.as_ref());
         info!("RPC Request: cfx_sendRawTransaction len={:?}", raw.0.len());
         debug!("RawTransaction bytes={:?}", raw);
 
@@ -687,6 +697,7 @@ impl RpcImpl {
     }
 
     fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
+        let _timer = MeterTimer::time_func(GET_LOGS_TIMER.as_ref());
         let consensus_graph = self.consensus_graph();
 
         info!("RPC Request: cfx_getLogs({:?})", filter);
