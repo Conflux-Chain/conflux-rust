@@ -57,6 +57,7 @@ impl LightClient {
         let (
             _machine,
             secret_store,
+            _genesis_accounts,
             data_man,
             pow,
             txpool,

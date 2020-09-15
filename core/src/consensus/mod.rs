@@ -427,58 +427,6 @@ impl ConsensusGraph {
         Ok(())
     }
 
-    fn get_state_db_by_epoch_number(
-        &self, epoch_number: EpochNumber,
-    ) -> Result<StateDb, String> {
-        self.validate_stated_epoch(&epoch_number)?;
-        let height = self.get_height_from_epoch_number(epoch_number)?;
-        debug!("Get pivot height={:?}", height);
-        let hash =
-            self.inner.read().get_pivot_hash_from_epoch_number(height)?;
-        debug!("Get pivot hash={:?}", hash);
-        // Keep the lock until we get the desired State, otherwise the State may
-        // expire.
-        let state_availability_boundary =
-            self.data_man.state_availability_boundary.read();
-        if !state_availability_boundary.check_availability(height, &hash) {
-            debug!(
-                "State for epoch (number={:?} hash={:?}) does not exist: out-of-bound {:?}",
-                height, hash, state_availability_boundary
-            );
-            return Err(format!(
-                "State for epoch (number={:?} hash={:?}) does not exist: out-of-bound {:?}",
-                height, hash, state_availability_boundary
-            )
-            .into());
-        }
-        let maybe_state_readonly_index =
-            self.data_man.get_state_readonly_index(&hash).into();
-        let maybe_state = match maybe_state_readonly_index {
-            Some(state_readonly_index) => self
-                .data_man
-                .storage_manager
-                .get_state_no_commit(
-                    state_readonly_index,
-                    /* try_open = */ true,
-                )
-                .map_err(|e| format!("Error to get state, err={:?}", e))?,
-            None => None,
-        };
-
-        let state = match maybe_state {
-            Some(state) => state,
-            None => {
-                return Err(format!(
-                    "State for epoch (number={:?} hash={:?}) does not exist",
-                    height, hash
-                )
-                .into())
-            }
-        };
-
-        Ok(StateDb::new(state))
-    }
-
     /// Get the code of an address
     pub fn get_code(
         &self, address: H160, epoch_number: EpochNumber,
@@ -1218,6 +1166,52 @@ impl ConsensusGraph {
     pub fn get_processed_block_count(&self) -> usize {
         self.statistics.get_consensus_graph_processed_block_count()
     }
+
+    fn get_state_db_by_height_and_hash(
+        &self, height: u64, hash: &H256,
+    ) -> Result<StateDb, String> {
+        // Keep the lock until we get the desired State, otherwise the State may
+        // expire.
+        let state_availability_boundary =
+            self.data_man.state_availability_boundary.read();
+        if !state_availability_boundary.check_availability(height, &hash) {
+            debug!(
+                "State for epoch (number={:?} hash={:?}) does not exist: out-of-bound {:?}",
+                height, hash, state_availability_boundary
+            );
+            return Err(format!(
+                "State for epoch (number={:?} hash={:?}) does not exist: out-of-bound {:?}",
+                height, hash, state_availability_boundary
+            )
+            .into());
+        }
+        let maybe_state_readonly_index =
+            self.data_man.get_state_readonly_index(&hash).into();
+        let maybe_state = match maybe_state_readonly_index {
+            Some(state_readonly_index) => self
+                .data_man
+                .storage_manager
+                .get_state_no_commit(
+                    state_readonly_index,
+                    /* try_open = */ true,
+                )
+                .map_err(|e| format!("Error to get state, err={:?}", e))?,
+            None => None,
+        };
+
+        let state = match maybe_state {
+            Some(state) => state,
+            None => {
+                return Err(format!(
+                    "State for epoch (number={:?} hash={:?}) does not exist",
+                    height, hash
+                )
+                .into())
+            }
+        };
+
+        Ok(StateDb::new(state))
+    }
 }
 
 impl Drop for ConsensusGraph {
@@ -1453,53 +1447,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
         self.inner.read_recursive().get_block_epoch_number(hash)
     }
 
-    /// Wait until the best state has been executed, and return the state.
-    ///
-    /// Do not use this function to answer queries from peers. This function is
-    /// mainly used for transaction pool.
-    fn get_best_state(&self) -> State {
-        // To handle the extremely rare case that the large chain
-        // reorganization/checkpoint happens in this call (because we do
-        // not hold the inner lock). We are going to use a loop to retry
-        // here if wait_for_result() fails.
-        loop {
-            let (best_state_hash, past_num_blocks) = {
-                let inner = self.inner.read();
-                let best_state_hash = inner.best_state_block_hash();
-                let arena_index = inner.hash_to_arena_indices[&best_state_hash];
-                let past_num_blocks =
-                    inner.arena[arena_index].past_num_blocks();
-                (best_state_hash, past_num_blocks)
-            };
-            if self.executor.wait_for_result(best_state_hash).is_ok() {
-                let best_state_index =
-                    self.data_man.get_state_readonly_index(&best_state_hash);
-                if let Ok(state) =
-                    self.data_man.storage_manager.get_state_no_commit(
-                        best_state_index.unwrap(),
-                        /* try_open = */ false,
-                    )
-                {
-                    return state
-                        .map(|db| {
-                            State::new(
-                                StateDb::new(db),
-                                Default::default(), /* vm */
-                                &Spec::new_spec(),
-                                past_num_blocks + 1, /* block_numer */
-                            )
-                        })
-                        .expect("Best state has been executed");
-                } else {
-                    panic!(
-                        "get_best_state: Error for hash {}",
-                        best_state_hash
-                    );
-                }
-            }
-        }
-    }
-
     /// Find a trusted blame block for snapshot full sync
     fn get_trusted_blame_block_for_snapshot(
         &self, snapshot_epoch_id: &EpochId,
@@ -1554,5 +1501,43 @@ impl ConsensusGraphTrait for ConsensusGraph {
             current_difficulty: inner.current_difficulty,
             bounded_terminal_block_hashes,
         });
+    }
+
+    fn get_state_by_epoch_number(
+        &self, epoch_number: EpochNumber,
+    ) -> Result<State, String> {
+        self.validate_stated_epoch(&epoch_number)?;
+        let height = self.get_height_from_epoch_number(epoch_number)?;
+        let (epoch_id, epoch_size) = if let Ok(v) =
+            self.inner.read_recursive().block_hashes_by_epoch(height)
+        {
+            (v.last().expect("pivot block always exist").clone(), v.len())
+        } else {
+            bail!("cannot get block hashes in the specified epoch, maybe it does not exist?");
+        };
+        let state_db =
+            self.get_state_db_by_height_and_hash(height, &epoch_id)?;
+
+        let start_block_number = match self.data_man.get_epoch_execution_context(&epoch_id) {
+            Some(v) => v.start_block_number + epoch_size as u64,
+            None => bail!("cannot obtain the execution context. Database is potentially corrupted!"),
+        };
+
+        Ok(State::new(
+            state_db,
+            Default::default(), /* vm */
+            &Spec::new_spec(),
+            start_block_number,
+        ))
+    }
+
+    fn get_state_db_by_epoch_number(
+        &self, epoch_number: EpochNumber,
+    ) -> Result<StateDb, String> {
+        self.validate_stated_epoch(&epoch_number)?;
+        let height = self.get_height_from_epoch_number(epoch_number)?;
+        let hash =
+            self.inner.read().get_pivot_hash_from_epoch_number(height)?;
+        self.get_state_db_by_height_and_hash(height, &hash)
     }
 }
