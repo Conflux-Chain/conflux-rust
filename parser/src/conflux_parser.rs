@@ -87,7 +87,7 @@ pub fn block_to_json(b : &Block) -> String {
 }
 
 fn main() {
-  let flags_conflux_home = "/home/luxu/data/docker-conflux";
+  let flags_conflux_home = "/data/docker-conflux";
 
   let mut blockchain_dir = String::from("");
   blockchain_dir.push_str(flags_conflux_home);
