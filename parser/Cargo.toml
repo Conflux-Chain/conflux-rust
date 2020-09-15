@@ -1,0 +1,20 @@
+[workspace]
+
+[package]
+name = "workspace-rust"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+log = "0.4.0"
+rlp = "0.4.0"
+rocksdb = { git = "https://github.com/tikv/rust-rocksdb.git" }
+cfx-types  = { path = "../cfx_types" }
+primitives = { path = "../primitives" }
+
+[[bin]]
+name = "conflux_parser"
+path = "src/conflux_parser.rs"
+
