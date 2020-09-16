@@ -12,7 +12,7 @@ use cfx_types::{
 use cfxcore::{
     block_data_manager::BlockExecutionResultWithEpoch,
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
-    rpc_errors::account_result_to_rpc_result,
+    rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     state_exposer::STATE_EXPOSER,
     vm, ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
@@ -110,10 +110,13 @@ impl RpcImpl {
         let state_db = self
             .consensus
             .get_state_db_by_epoch_number(epoch_num.clone().into())?;
-        let acc = state_db.get_account(&address)?.ok_or(format!(
-            "Account[{:?}] epoch_number[{:?}] does not exist",
-            address, epoch_num,
-        ))?;
+        let acc = invalid_params_check(
+            "address",
+            state_db.get_account(&address)?.ok_or(format!(
+                "Account[{:?}] epoch_number[{:?}] does not exist",
+                address, epoch_num,
+            )),
+        )?;
 
         Ok(Bytes::new(
             match state_db.get_code(&address, &acc.code_hash) {
@@ -1043,7 +1046,7 @@ impl Cfx for CfxHandler {
                 -> JsonRpcResult<EstimateGasAndCollateralResponse>;
             fn check_balance_against_transaction(
                 &self, account_addr: H160, contract_addr: H160, gas_limit: U256, gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>,
-            ) -> BoxFuture<CheckBalanceAgainstTransactionResponse>;
+            ) -> JsonRpcResult<CheckBalanceAgainstTransactionResponse>;
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
             fn send_raw_transaction(&self, raw: Bytes) -> JsonRpcResult<H256>;

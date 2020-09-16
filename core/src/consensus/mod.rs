@@ -26,7 +26,7 @@ use crate::{
     evm::Spec,
     executive::ExecutionOutcome,
     pow::{PowComputer, ProofOfWorkConfig},
-    rpc_errors::Result as RpcResult,
+    rpc_errors::{invalid_params_check, Result as RpcResult},
     state::State,
     statistics::SharedStatistics,
     transaction_pool::SharedTransactionPool,
@@ -530,7 +530,7 @@ impl ConsensusGraph {
     pub fn next_nonce(
         &self, address: H160,
         block_hash_or_epoch_number: BlockHashOrEpochNumber,
-    ) -> Result<U256, String>
+    ) -> RpcResult<U256>
     {
         let epoch_number = match block_hash_or_epoch_number {
             BlockHashOrEpochNumber::BlockHash(hash) => EpochNumber::Number(
@@ -543,9 +543,7 @@ impl ConsensusGraph {
         };
         let state = self.get_state_by_epoch_number(epoch_number)?;
 
-        state
-            .nonce(&address)
-            .map_err(|err| format!("Get transaction count error: {:?}", err))
+        invalid_params_check("address", state.nonce(&address))
     }
 
     fn earliest_epoch_available(&self) -> u64 {
@@ -955,7 +953,7 @@ impl ConsensusGraph {
 
     fn get_state_db_by_height_and_hash(
         &self, height: u64, hash: &H256,
-    ) -> Result<StateDb, String> {
+    ) -> RpcResult<StateDb> {
         // Keep the lock until we get the desired State, otherwise the State may
         // expire.
         let state_availability_boundary =
@@ -965,11 +963,10 @@ impl ConsensusGraph {
                 "State for epoch (number={:?} hash={:?}) does not exist: out-of-bound {:?}",
                 height, hash, state_availability_boundary
             );
-            return Err(format!(
+            bail!(format!(
                 "State for epoch (number={:?} hash={:?}) does not exist: out-of-bound {:?}",
                 height, hash, state_availability_boundary
-            )
-            .into());
+            ));
         }
         let maybe_state_readonly_index =
             self.data_man.get_state_readonly_index(&hash).into();
@@ -988,11 +985,10 @@ impl ConsensusGraph {
         let state = match maybe_state {
             Some(state) => state,
             None => {
-                return Err(format!(
+                bail!(format!(
                     "State for epoch (number={:?} hash={:?}) does not exist",
                     height, hash
-                )
-                .into())
+                ));
             }
         };
 
@@ -1291,7 +1287,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn get_state_by_epoch_number(
         &self, epoch_number: EpochNumber,
-    ) -> Result<State, String> {
+    ) -> RpcResult<State> {
         self.validate_stated_epoch(&epoch_number)?;
         let height = self.get_height_from_epoch_number(epoch_number)?;
         let (epoch_id, epoch_size) = if let Ok(v) =
@@ -1319,9 +1315,15 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn get_state_db_by_epoch_number(
         &self, epoch_number: EpochNumber,
-    ) -> Result<StateDb, String> {
-        self.validate_stated_epoch(&epoch_number)?;
-        let height = self.get_height_from_epoch_number(epoch_number)?;
+    ) -> RpcResult<StateDb> {
+        invalid_params_check(
+            "epoch_number",
+            self.validate_stated_epoch(&epoch_number),
+        )?;
+        let height = invalid_params_check(
+            "epoch_number",
+            self.get_height_from_epoch_number(epoch_number),
+        )?;
         let hash =
             self.inner.read().get_pivot_hash_from_epoch_number(height)?;
         self.get_state_db_by_height_and_hash(height, &hash)
