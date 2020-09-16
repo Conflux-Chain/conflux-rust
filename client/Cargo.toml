@@ -31,6 +31,7 @@ jsonrpc-core-client = "14.0.0"
 jsonrpc-pubsub = "14.0.0"
 jsonrpc-ws-server = "14.0.0"
 error-chain = { version = "0.12" }
+lazy_static = "1.4"
 log = "0.4"
 cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
