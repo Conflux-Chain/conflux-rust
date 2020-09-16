@@ -116,8 +116,11 @@ impl TransactionGenerator {
     }
 
     pub fn generate_transactions_with_multiple_genesis_accounts(
-        txgen: Arc<TransactionGenerator>, tx_config: TransactionGeneratorConfig,
-    ) {
+        txgen: Arc<TransactionGenerator>,
+        tx_config: TransactionGeneratorConfig,
+        genesis_accounts: HashMap<Address, U256>,
+    )
+    {
         loop {
             let account_start = txgen.account_start_index.read();
             if account_start.is_some() {
@@ -149,7 +152,6 @@ impl TransactionGenerator {
         }
 
         debug!("Setup Usable Genesis Accounts");
-        let state = txgen.consensus.get_best_state();
         for i in 0..tx_config.account_count {
             let key_pair =
                 txgen.secret_store.get_keypair(account_start_index + i);
@@ -158,13 +160,12 @@ impl TransactionGenerator {
             addresses.push(address);
             nonce_map.insert(address.clone(), 0.into());
 
-            let balance = state.balance(&address).ok();
+            let balance = genesis_accounts.get(&address).cloned();
 
-            balance_map.insert(address.clone(), balance.unwrap());
+            balance_map
+                .insert(address.clone(), balance.unwrap_or(U256::zero()));
             address_secret_pair.insert(address, secret);
         }
-        // State cache can be large
-        drop(state);
 
         info!("Start Generating Workload");
         let start_time = Instant::now();
