@@ -785,6 +785,7 @@ dependencies = [
  "jsonrpc-ws-server",
  "keccak-hash",
  "kvdb-rocksdb",
+ "lazy_static",
  "log 0.4.11",
  "log4rs",
  "malloc_size_of",
