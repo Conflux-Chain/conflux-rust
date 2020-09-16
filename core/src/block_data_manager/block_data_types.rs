@@ -287,9 +287,11 @@ impl DatabaseEncodable for BlockExecutionResult {
 impl DatabaseDecodable for BlockExecutionResult {
     fn db_decode(bytes: &[u8]) -> Result<Self, DecoderError> {
         let rlp = Rlp::new(bytes);
+
         let mut block_receipts: BlockReceipts = rlp.at(0)?.val_at(0)?;
         let bloom = rlp.at(0)?.val_at(1)?;
         let error_messages: Vec<String> = rlp.list_at(1)?;
+
         block_receipts.set_error_messages(error_messages);
         Ok(BlockExecutionResult {
             block_receipts: Arc::new(block_receipts),
@@ -299,15 +301,12 @@ impl DatabaseDecodable for BlockExecutionResult {
 }
 
 impl DatabaseEncodable for BlockExecutionResultWithEpoch {
-    // For `BlockExecutionResultWithEpoch`, the underlying data is (epoch,
-    // (result, error_messages))
     fn db_encode(&self) -> Bytes {
         let error_messages = self.1.block_receipts.get_error_messages();
         let mut stream = RlpStream::new();
         stream
-            .begin_list(2)
+            .begin_list(3)
             .append(&self.0)
-            .begin_list(2)
             .append(&self.1)
             .append_list::<String, &String>(error_messages.as_slice());
         stream.drain()
@@ -317,9 +316,20 @@ impl DatabaseEncodable for BlockExecutionResultWithEpoch {
 impl DatabaseDecodable for BlockExecutionResultWithEpoch {
     fn db_decode(bytes: &[u8]) -> Result<Self, DecoderError> {
         let rlp = Rlp::new(bytes);
+
         let epoch = rlp.val_at(0)?;
-        let result = BlockExecutionResult::db_decode(rlp.at(1)?.as_raw())?;
-        Ok(BlockExecutionResultWithEpoch(epoch, result))
+        let mut block_receipts: BlockReceipts = rlp.at(1)?.val_at(0)?;
+        let bloom = rlp.at(1)?.val_at(1)?;
+        let error_messages: Vec<String> = rlp.list_at(2)?;
+
+        block_receipts.set_error_messages(error_messages);
+        Ok(BlockExecutionResultWithEpoch(
+            epoch,
+            BlockExecutionResult {
+                block_receipts: Arc::new(block_receipts),
+                bloom,
+            },
+        ))
     }
 }
 
