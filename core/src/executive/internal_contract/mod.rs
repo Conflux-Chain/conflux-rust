@@ -17,14 +17,7 @@ use std::sync::Arc;
 
 use self::contracts::SolFnTable;
 
-pub use self::{
-    contracts::{
-        InternalContractMap, ADMIN_CONTROL_CONTRACT_ADDRESS,
-        SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-        STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-    },
-    impls::suicide,
-};
+pub use self::{contracts::InternalContractMap, impls::suicide};
 
 pub use solidity_abi::ABIDecodeError;
 
