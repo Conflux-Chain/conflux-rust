@@ -187,7 +187,7 @@ impl fmt::Display for Error {
             }
             Wasm(ref msg) => write!(f, "Internal error: {}", msg),
             OutOfBounds => write!(f, "Out of bounds"),
-            Reverted => write!(f, "Reverted"),
+            Reverted => write!(f, "Reverted by bytecode"),
             InvalidAddress(ref addr) => write!(f, "InvalidAddress: {}", addr),
         }
     }

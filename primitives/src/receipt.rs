@@ -5,6 +5,10 @@
 use crate::log_entry::LogEntry;
 use cfx_types::{Address, Bloom, U256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use rlp::{
+    Decodable as RlpDecodable, DecoderError, Encodable as RlpEncodable, Rlp,
+    RlpStream,
+};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 pub const TRANSACTION_OUTCOME_SUCCESS: u8 = 0;
@@ -19,7 +23,7 @@ pub struct StorageChange {
 }
 
 /// Information describing execution of a transaction.
-#[derive(Debug, Clone, PartialEq, Eq, RlpDecodable, RlpEncodable)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Receipt {
     /// The total gas used (not gas charged) in the block following execution
     /// of the transaction.
@@ -38,6 +42,10 @@ pub struct Receipt {
     pub storage_sponsor_paid: bool,
     pub storage_collateralized: Vec<StorageChange>,
     pub storage_released: Vec<StorageChange>,
+
+    /// Error message (Non-authenticated field & not compiled in RLP)
+    /// Note: it is no guarantee that the `error_message` is always available.
+    pub error_message: String,
 }
 
 impl Receipt {
@@ -45,7 +53,7 @@ impl Receipt {
         outcome: u8, accumulated_gas_used: U256, gas_fee: U256,
         gas_sponsor_paid: bool, logs: Vec<LogEntry>,
         storage_sponsor_paid: bool, storage_collateralized: Vec<StorageChange>,
-        storage_released: Vec<StorageChange>,
+        storage_released: Vec<StorageChange>, error_message: String,
     ) -> Self
     {
         Self {
@@ -61,6 +69,7 @@ impl Receipt {
             storage_sponsor_paid,
             storage_collateralized,
             storage_released,
+            error_message,
         }
     }
 }
@@ -88,8 +97,59 @@ pub struct BlockReceipts {
     pub secondary_reward: U256,
 }
 
+impl BlockReceipts {
+    #[inline]
+    pub fn get_error_messages<'a>(&'a self) -> Vec<&'a String> {
+        self.receipts
+            .iter()
+            .map(|x| &x.error_message)
+            .collect::<Vec<&'a String>>()
+    }
+
+    #[inline]
+    // The passed in messages must have the same length as block_receipts
+    pub fn set_error_messages(&mut self, messages: Vec<String>) {
+        self.receipts
+            .iter_mut()
+            .zip(messages)
+            .for_each(|(x, msg)| x.error_message = msg);
+    }
+}
+
 impl MallocSizeOf for BlockReceipts {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         self.receipts.size_of(ops)
+    }
+}
+
+impl RlpEncodable for Receipt {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_list(9)
+            .append(&self.accumulated_gas_used)
+            .append(&self.gas_fee)
+            .append(&self.gas_sponsor_paid)
+            .append(&self.log_bloom)
+            .append_list(&self.logs)
+            .append(&self.outcome_status)
+            .append(&self.storage_sponsor_paid)
+            .append_list(&self.storage_collateralized)
+            .append_list(&self.storage_released);
+    }
+}
+
+impl RlpDecodable for Receipt {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        Ok(Receipt {
+            accumulated_gas_used: rlp.val_at(0)?,
+            gas_fee: rlp.val_at(1)?,
+            gas_sponsor_paid: rlp.val_at(2)?,
+            log_bloom: rlp.val_at(3)?,
+            logs: rlp.list_at(4)?,
+            outcome_status: rlp.val_at(5)?,
+            storage_sponsor_paid: rlp.val_at(6)?,
+            storage_collateralized: rlp.list_at(7)?,
+            storage_released: rlp.list_at(8)?,
+            error_message: "".to_string(),
+        })
     }
 }

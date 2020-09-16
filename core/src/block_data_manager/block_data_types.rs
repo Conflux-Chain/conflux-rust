@@ -24,6 +24,7 @@ pub struct BlockExecutionResult {
     pub block_receipts: Arc<BlockReceipts>,
     pub bloom: Bloom,
 }
+
 impl MallocSizeOf for BlockExecutionResult {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         self.block_receipts.size_of(ops)
@@ -268,10 +269,62 @@ where T: DatabaseDecodable {
     Ok(list)
 }
 
-impl_db_encoding_as_rlp!(BlockExecutionResult);
+// Since the receipt does not encode error_message in rlp, we need to encode it
+// manually in database encodable.
+
+impl DatabaseEncodable for BlockExecutionResult {
+    fn db_encode(&self) -> Bytes {
+        let error_messages = self.block_receipts.get_error_messages();
+        let mut steam = RlpStream::new();
+        steam
+            .begin_list(2)
+            .append(self)
+            .append_list::<String, &String>(error_messages.as_slice());
+        steam.drain()
+    }
+}
+
+impl DatabaseDecodable for BlockExecutionResult {
+    fn db_decode(bytes: &[u8]) -> Result<Self, DecoderError> {
+        let rlp = Rlp::new(bytes);
+        let mut block_receipts: BlockReceipts = rlp.at(0)?.val_at(0)?;
+        let bloom = rlp.at(0)?.val_at(1)?;
+        let error_messages: Vec<String> = rlp.list_at(1)?;
+        block_receipts.set_error_messages(error_messages);
+        Ok(BlockExecutionResult {
+            block_receipts: Arc::new(block_receipts),
+            bloom,
+        })
+    }
+}
+
+impl DatabaseEncodable for BlockExecutionResultWithEpoch {
+    // For `BlockExecutionResultWithEpoch`, the underlying data is (epoch,
+    // (result, error_messages))
+    fn db_encode(&self) -> Bytes {
+        let error_messages = self.1.block_receipts.get_error_messages();
+        let mut stream = RlpStream::new();
+        stream
+            .begin_list(2)
+            .append(&self.0)
+            .begin_list(2)
+            .append(&self.1)
+            .append_list::<String, &String>(error_messages.as_slice());
+        stream.drain()
+    }
+}
+
+impl DatabaseDecodable for BlockExecutionResultWithEpoch {
+    fn db_decode(bytes: &[u8]) -> Result<Self, DecoderError> {
+        let rlp = Rlp::new(bytes);
+        let epoch = rlp.val_at(0)?;
+        let result = BlockExecutionResult::db_decode(rlp.at(1)?.as_raw())?;
+        Ok(BlockExecutionResultWithEpoch(epoch, result))
+    }
+}
+
 impl_db_encoding_as_rlp!(LocalBlockInfo);
 impl_db_encoding_as_rlp!(CheckpointHashes);
 impl_db_encoding_as_rlp!(EpochExecutionContext);
 impl_db_encoding_as_rlp!(BlockRewardResult);
-impl_db_encoding_as_rlp!(BlockExecutionResultWithEpoch);
 impl_db_encoding_as_rlp!(BlamedHeaderVerifiedRoots);

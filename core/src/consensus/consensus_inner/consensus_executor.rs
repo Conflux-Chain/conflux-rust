@@ -1150,6 +1150,7 @@ impl ConsensusExecutionHandler {
                 let gas_fee;
                 let mut gas_sponsor_paid = false;
                 let mut storage_sponsor_paid = false;
+                let mut error_message = "".to_string();
                 match r {
                     ExecutionOutcome::NotExecutedDrop(e) => {
                         tx_outcome_status =
@@ -1194,6 +1195,7 @@ impl ConsensusExecutionHandler {
                             "tx execution error: err={:?}, transaction={:?}",
                             error, transaction
                         );
+                        error_message = format!("{:?}", error);
                     }
                     ExecutionOutcome::Finished(executed) => {
                         tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
@@ -1222,6 +1224,7 @@ impl ConsensusExecutionHandler {
                     storage_sponsor_paid,
                     storage_collateralized,
                     storage_released,
+                    error_message,
                 );
                 receipts.push(receipt);
 
