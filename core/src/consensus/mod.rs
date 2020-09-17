@@ -4,7 +4,7 @@
 
 mod anticone_cache;
 pub mod consensus_inner;
-mod consensus_trait;
+pub mod consensus_trait;
 pub mod debug_recompute;
 mod pastset_cache;
 
@@ -68,6 +68,17 @@ lazy_static! {
         register_meter_with_group("timer", "consensus_on_new_block_timer");
     static ref BEST_EPOCH_NUMBER: Arc<dyn Gauge<usize>> =
         GaugeUsize::register_with_group("graph_statistic", "best_epoch_number");
+}
+
+pub struct MaybeExecutedTxExtraInfo {
+    pub receipt: Receipt,
+    pub prior_gas_used: U256,
+    pub tx_exec_error_msg: Option<String>,
+}
+
+pub struct TransactionInfo {
+    pub tx_index: TransactionIndex,
+    pub maybe_executed_extra_info: Option<MaybeExecutedTxExtraInfo>,
 }
 
 #[derive(Clone)]
@@ -1206,20 +1217,18 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn get_transaction_info_by_hash(
         &self, hash: &H256,
-    ) -> Option<(SignedTransaction, TransactionIndex, Option<(Receipt, U256)>)>
-    {
+    ) -> Option<(SignedTransaction, TransactionInfo)> {
         // We need to hold the inner lock to ensure that tx_index and receipts
         // are consistent
         let inner = self.inner.read();
-        if let Some((tx_index, maybe_executed)) =
-            inner.get_transaction_receipt_with_address(hash)
-        {
+        if let Some(tx_info) = inner.get_transaction_info(hash) {
             let block = self.data_man.block_by_hash(
-                &tx_index.block_hash,
+                &tx_info.tx_index.block_hash,
                 false, /* update_cache */
             )?;
-            let transaction = (*block.transactions[tx_index.index]).clone();
-            Some((transaction, tx_index, maybe_executed))
+            let transaction =
+                (*block.transactions[tx_info.tx_index.index]).clone();
+            Some((transaction, tx_info))
         } else {
             None
         }

@@ -7,7 +7,7 @@ mod error;
 mod handler;
 mod message;
 mod provider;
-mod query_service;
+pub mod query_service;
 
 use network::{service::ProtocolVersion, ProtocolId};
 

@@ -15,6 +15,7 @@ use crate::{
         anticone_cache::AnticoneCache,
         consensus_inner::consensus_executor::ConsensusExecutor,
         debug_recompute::log_invalid_state_root, pastset_cache::PastSetCache,
+        MaybeExecutedTxExtraInfo, TransactionInfo,
     },
     pow::{target_difficulty, PowComputer, ProofOfWorkConfig},
     state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
@@ -33,8 +34,7 @@ use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{Counter, CounterUsize};
 use parking_lot::Mutex;
 use primitives::{
-    receipt::Receipt, Block, BlockHeader, BlockHeaderBuilder, EpochId,
-    SignedTransaction, TransactionIndex,
+    Block, BlockHeader, BlockHeaderBuilder, EpochId, SignedTransaction,
 };
 use slab::Slab;
 use std::{
@@ -2357,15 +2357,15 @@ impl ConsensusGraphInner {
             .and_then(|index| Some(self.arena[*index].data.pending))
     }
 
-    pub fn get_transaction_receipt_with_address(
+    pub fn get_transaction_info(
         &self, tx_hash: &H256,
-    ) -> Option<(TransactionIndex, Option<(Receipt, U256)>)> {
+    ) -> Option<TransactionInfo> {
         trace!("Get receipt with tx_hash {}", tx_hash);
         let tx_index = self.data_man.transaction_index_by_hash(
             tx_hash, false, /* update_cache */
         )?;
         // receipts should never be None if transaction index isn't none.
-        let maybe_executed = self
+        let maybe_executed_extra_info = self
             .block_execution_results_by_hash(
                 &tx_index.block_hash,
                 false, /* update_cache */
@@ -2379,17 +2379,29 @@ impl ConsensusGraphInner {
                     block_receipts.receipts[tx_index.index - 1]
                         .accumulated_gas_used
                 };
-                (
-                    block_receipts
+                let tx_exec_error_msg = block_receipts
+                    .tx_execution_error_messages[tx_index.index]
+                    .clone();
+
+                MaybeExecutedTxExtraInfo {
+                    receipt: block_receipts
                         .receipts
                         .get(tx_index.index)
                         .expect("Error: can't get receipt by tx_index ")
                         .clone(),
                     prior_gas_used,
-                )
+                    tx_exec_error_msg: if tx_exec_error_msg.is_empty() {
+                        None
+                    } else {
+                        Some(tx_exec_error_msg.clone())
+                    },
+                }
             });
 
-        Some((tx_index, maybe_executed))
+        Some(TransactionInfo {
+            tx_index,
+            maybe_executed_extra_info,
+        })
     }
 
     pub fn check_block_pivot_assumption(

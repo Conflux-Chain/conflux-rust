@@ -158,7 +158,7 @@ impl Block {
                             let prior_gas_used = if idx == 0 {
                                  U256::zero()
                             } else {
-                                execution_result.block_receipts.receipts.get(idx - 1).unwrap().accumulated_gas_used
+                                execution_result.block_receipts.receipts[idx - 1].accumulated_gas_used
                             };
                             match receipt.outcome_status {
                                 TRANSACTION_OUTCOME_SUCCESS
@@ -167,6 +167,7 @@ impl Block {
                                         block_hash: b.hash(),
                                         index: idx,
                                     };
+                                    let tx_exec_error_msg = &execution_result.block_receipts.tx_execution_error_messages[idx];
                                     Transaction::from_signed(
                                         tx,
                                         Some(PackedOrExecuted::Executed(Receipt::new(
@@ -178,7 +179,11 @@ impl Block {
                                             /* maybe_epoch_number = */
                                             None,
                                             /* maybe_state_root = */ None,
-                                        ))),
+                                           if tx_exec_error_msg.is_empty() {
+                                                None
+                                            } else {
+                                                Some(tx_exec_error_msg.clone())
+                                            }))),
                                     )
                                 }
                                 TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING => {
