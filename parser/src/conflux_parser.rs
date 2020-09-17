@@ -5,84 +5,105 @@ use rlp::Rlp;
 
 pub fn block_header_to_json(bh : &BlockHeader) -> String {
   let mut res = String::new();
-  res.push_str(&format!("block_header: {}\n", '{'));
-  res.push_str(&format!("hash: {:#x},\n", bh.hash()));
-  res.push_str(&format!("pow_hash: {:#x},\n", bh.pow_hash.unwrap()));
-  res.push_str(&format!("approximated_rlp_size: {},\n", bh.approximated_rlp_size()));
-  res.push_str(&format!("rlp_part: {}\n", '{'));
-  res.push_str(&format!("parent_hash: {:#x},\n", bh.parent_hash()));
-  res.push_str(&format!("height: {},\n", bh.height()));
-  res.push_str(&format!("timestamp: {},\n", bh.timestamp()));
-  res.push_str(&format!("author: {:#x},\n", bh.author()));
-  res.push_str(&format!("transactions_root: {:#x},\n", bh.transactions_root()));
-  res.push_str(&format!("deferred_state_root: {:#x},\n", bh.deferred_state_root()));
-  res.push_str(&format!("deferred_receipts_root: {:#x},\n", bh.deferred_receipts_root()));
-  res.push_str(&format!("deferred_logs_bloom_hash: {:#x},\n", bh.deferred_logs_bloom_hash()));
-  res.push_str(&format!("blame: {},\n", bh.blame()));
-  res.push_str(&format!("difficulty: {:#x},\n", bh.difficulty()));
-  res.push_str(&format!("adaptive: {},\n", bh.adaptive()));
-  res.push_str(&format!("gas_limit: {:#x},\n", bh.gas_limit()));
-  res.push_str(&format!("referee_hashes: {}\n", '['));
+  res.push_str(&format!("\"block_header\":{}", '{'));
+  res.push_str(&format!("\"hash\":\"{:#x}\",", bh.hash()));
+  res.push_str(&format!("\"pow_hash\":\"{:#x}\",", bh.pow_hash.unwrap()));
+  res.push_str(&format!("\"approximated_rlp_size\":\"{}\",", bh.approximated_rlp_size()));
+  res.push_str(&format!("\"rlp_part\":{}", '{'));
+  res.push_str(&format!("\"parent_hash\":\"{:#x}\",", bh.parent_hash()));
+  res.push_str(&format!("\"height\":\"{}\",", bh.height()));
+  res.push_str(&format!("\"timestamp\":\"{}\",", bh.timestamp()));
+  res.push_str(&format!("\"author\":\"{:#x}\",", bh.author()));
+  res.push_str(&format!("\"transactions_root\":\"{:#x}\",", bh.transactions_root()));
+  res.push_str(&format!("\"deferred_state_root\":\"{:#x}\",", bh.deferred_state_root()));
+  res.push_str(&format!("\"deferred_receipts_root\":\"{:#x}\",", bh.deferred_receipts_root()));
+  res.push_str(&format!("\"deferred_logs_bloom_hash\":\"{:#x}\",", bh.deferred_logs_bloom_hash()));
+  res.push_str(&format!("\"blame\":\"{}\",", bh.blame()));
+  res.push_str(&format!("\"difficulty\":\"{:#x}\",", bh.difficulty()));
+  res.push_str(&format!("\"adaptive\":\"{}\",", bh.adaptive()));
+  res.push_str(&format!("\"gas_limit\":\"{:#x}\",", bh.gas_limit()));
+  res.push_str(&format!("\"referee_hashes\":{}", '['));
   let referee_iter = bh.referee_hashes().iter();
+  let mut commer = false;
   for val in referee_iter {
-    res.push_str(&format!("{:#x},\n", val));
+    if commer {
+      res.push_str(",");
+    } else {
+      commer = true;
+    }
+    res.push_str(&format!("\"{:#x}\"", val));
   }
-  res.push_str(&format!("{},\n", ']'));
-  res.push_str(&format!("custom: {}\n", '['));
+  res.push_str(&format!("{},", ']'));
+  res.push_str(&format!("\"custom\":{}", '['));
   let custom_iter = bh.custom().iter();
+  commer = false;
   for val in custom_iter {
+    if commer {
+      res.push_str(",");
+    } else {
+      commer = true;
+    }
     res.push_str(&format!("\"{:?}\"", val));
   }
-  res.push_str(&format!("{},\n", ']'));
-  res.push_str(&format!("nonce: {:#x},\n", bh.nonce()));
-  res.push_str(&format!("{}\n", '}'));
-  res.push_str(&format!("{}\n", '}'));
+  res.push_str(&format!("{},", ']'));
+  res.push_str(&format!("\"nonce\":\"{:#x}\"", bh.nonce()));
+  res.push_str(&format!("{}", '}'));
+  res.push_str(&format!("{}", '}'));
 
   res
 }
 
 pub fn transaction_to_json(tx : &SignedTransaction) -> String {
   let mut res = String::new();
-  res.push_str(&format!("transaction: {}\n", "{"));
-  res.push_str(&format!("sender: {:#x}\n", tx.sender()));
-  res.push_str(&format!("is_unsigned: {}\n", tx.is_unsigned()));
-  res.push_str(&format!("nonce: {:#x}\n", tx.nonce()));
-  res.push_str(&format!("hash: {:#x}\n", tx.hash()));
-  res.push_str(&format!("gas: {:#x}\n", tx.gas()));
-  res.push_str(&format!("gas_limit: {:#x}\n", tx.gas_limit()));
-  res.push_str(&format!("gas_price: {:#x}\n", tx.gas_price()));
-  res.push_str(&format!("rlp_size: {}\n", tx.rlp_size()));
+  res.push_str(&format!("{}", '{'));
+  res.push_str(&format!("\"sender\":\"{:#x}\",", tx.sender()));
+  res.push_str(&format!("\"is_unsigned\":\"{}\",", tx.is_unsigned()));
+  res.push_str(&format!("\"nonce\":\"{:#x}\",", tx.nonce()));
+  res.push_str(&format!("\"hash\":\"{:#x}\",", tx.hash()));
+  res.push_str(&format!("\"gas\":\"{:#x}\",", tx.gas()));
+  res.push_str(&format!("\"gas_limit\":\"{:#x}\",", tx.gas_limit()));
+  res.push_str(&format!("\"gas_price\":\"{:#x}\",", tx.gas_price()));
+  res.push_str(&format!("\"rlp_size\":\"{}\",", tx.rlp_size()));
   if tx.public().is_some() {
-    res.push_str(&format!("public: {:#x}\n", tx.public().unwrap()));
+    res.push_str(&format!("\"public\":\"{:#x}\",", tx.public().unwrap()));
+  } else {
+    res.push_str(&format!("\"public\":\"\","));
   }
-  res.push_str(&format!("action: {:?}\n", tx.transaction.action));
-  res.push_str(&format!("value: {:#x}\n", tx.transaction.value));
-  res.push_str(&format!("storage_limit: {:#x}\n", tx.transaction.storage_limit));
-  res.push_str(&format!("epoch_height: {}\n", tx.transaction.epoch_height));
-  res.push_str(&format!("chain_id: {}\n", tx.transaction.chain_id));
-  res.push_str(&format!("data: {:?}\n", tx.transaction.data));
-  res.push_str(&format!("{}\n", "}"));
+  res.push_str(&format!("\"action\":\"{:?}\",", tx.transaction.action));
+  res.push_str(&format!("\"value\":\"{:#x}\",", tx.transaction.value));
+  res.push_str(&format!("\"storage_limit\":\"{:#x}\",", tx.transaction.storage_limit));
+  res.push_str(&format!("\"epoch_height\":\"{}\",", tx.transaction.epoch_height));
+  res.push_str(&format!("\"chain_id\":\"{}\",", tx.transaction.chain_id));
+  res.push_str(&format!("\"data\":{:?}", tx.transaction.data));
+  res.push_str(&format!("{}", '}'));
   res
 }
 
 pub fn block_to_json(b : &Block) -> String {
   let mut res = String::new();
-  res.push_str(&format!("block: {}\n", '{'));
+  res.push_str(&format!("\"block\":{}", '{'));
   res.push_str(&block_header_to_json(&(b.block_header)));
+  res.push_str(",");
   let transaction_iter = b.transactions.iter();
-  res.push_str(&format!("transactions: {}\n", '['));
+  res.push_str(&format!("\"transactions\":{}", '['));
+  let mut commer = false;
   for val in transaction_iter {
     let transaction = Arc::clone(&val);
+    if commer {
+      res.push_str(",");
+    } else {
+      commer = true;
+    }
     res.push_str(&transaction_to_json(&transaction));
   }
-  res.push_str(&format!("{}\n", ']'));
+  res.push_str(&format!("{},", ']'));
   res.push_str(
-    &format!("approximated_rlp_size: {}\n", b.approximated_rlp_size_with_public)
+    &format!("\"approximated_rlp_size\":\"{}\",", b.approximated_rlp_size_with_public)
   );
   res.push_str(
-    &format!("approximated_rlp_size_with_public: {}\n", b.approximated_rlp_size_with_public)
+    &format!("\"approximated_rlp_size_with_public\":\"{}\"", b.approximated_rlp_size_with_public)
   );
-  res.push_str(&format!("{}\n", '}'));
+  res.push_str(&format!("{}", '}'));
   res
 }
 
@@ -145,15 +166,12 @@ fn main() {
     for (key, value) in &mut iter {
       let result = BlockHeader::decode_with_pow_hash(&(value.clone()));
       if result.is_ok() {
-        print!("{}\n", '{');
-        print!("key: {:#x}\n", H256::from_slice(&key));
-        print!("value: {}\n", '{');
+        print!("{:#x}\t", H256::from_slice(&key));
         let block_header = result.unwrap();
         let mut body_key = Vec::with_capacity(H256::len_bytes() + 1);
         let suffix: u8 = 2;
         body_key.extend_from_slice(&key);
         body_key.push(suffix);
-        // let encoded = db.get_cf(&(cf_handles[2]), &key).unwrap().expect("get block");
         let body_value = db.get_cf(&(cf_handles[2]), &body_key);
         if body_value.is_ok() {
           let body_option = body_value.unwrap();
@@ -163,14 +181,14 @@ fn main() {
             let block_body = Block::decode_body_with_tx_public(&rlp)
                              .expect("Wrong block rlp format!");
             let block = Block::new(block_header, block_body);
-            print!("{}", block_to_json(&block));
+            print!("{}{}{}", '{', block_to_json(&block), '}');
           } else {
-            print!("{}", block_header_to_json(&block_header));
+            print!("{}block:{}{}{}{}", '{', '{', block_header_to_json(&block_header), '}', '}');
           }
         } else {
-          print!("{}", block_header_to_json(&block_header));
+          print!("{}block:{}{}{}{}", '{', '{', block_header_to_json(&block_header), '}', '}');
         }
-        print!("{}\n", '}');
+        print!("\n");
 
         count += 1;
       }
