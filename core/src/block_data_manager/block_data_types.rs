@@ -275,12 +275,12 @@ where T: DatabaseDecodable {
 impl DatabaseEncodable for BlockExecutionResult {
     fn db_encode(&self) -> Bytes {
         let error_messages = self.block_receipts.get_error_messages();
-        let mut steam = RlpStream::new();
-        steam
+        let mut stream = RlpStream::new();
+        stream
             .begin_list(2)
             .append(self)
             .append_list::<String, &String>(error_messages.as_slice());
-        steam.drain()
+        stream.drain()
     }
 }
 
