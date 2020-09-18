@@ -21,9 +21,9 @@
 //! VM errors module
 
 use super::{action_params::ActionParams, ResumeCall, ResumeCreate};
-use crate::executive::ABIDecodeError;
 use cfx_statedb::Error as DbError;
 use cfx_types::{Address, U256};
+use solidity_abi::ABIDecodeError;
 use std::fmt;
 
 #[derive(Debug)]
@@ -187,7 +187,7 @@ impl fmt::Display for Error {
             }
             Wasm(ref msg) => write!(f, "Internal error: {}", msg),
             OutOfBounds => write!(f, "Out of bounds"),
-            Reverted => write!(f, "Reverted"),
+            Reverted => write!(f, "Reverted by bytecode"),
             InvalidAddress(ref addr) => write!(f, "InvalidAddress: {}", addr),
         }
     }

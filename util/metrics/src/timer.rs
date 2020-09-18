@@ -58,3 +58,24 @@ impl Timer for StandardTimer {
         self.histogram.update(d.as_nanos() as u64);
     }
 }
+
+pub struct ScopeTimer {
+    timer: &'static dyn Timer,
+    start: Instant,
+}
+
+impl ScopeTimer {
+    /// Call this to measure the time to run to the end of the current scope.
+    /// It will update the time from the function called till the returned
+    /// instance is dropped to `timer`.
+    pub fn time_scope(timer: &'static dyn Timer) -> Self {
+        Self {
+            timer,
+            start: Instant::now(),
+        }
+    }
+}
+
+impl Drop for ScopeTimer {
+    fn drop(&mut self) { self.timer.update_since(self.start) }
+}
