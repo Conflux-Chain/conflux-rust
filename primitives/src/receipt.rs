@@ -83,9 +83,12 @@ pub struct BlockReceipts {
     /// This is the receipts of transaction execution in this block.
     pub receipts: Vec<Receipt>,
     // FIXME:
-    //   This field doesn't belong to receipts root calculation.
+    //   These fields below do not belong to receipts root calculation.
     /// This is the amount of secondary reward this block.
     pub secondary_reward: U256,
+    /// The error messages for each transaction. A successful transaction has
+    /// empty error_messages.
+    pub tx_execution_error_messages: Vec<String>,
 }
 
 impl MallocSizeOf for BlockReceipts {

@@ -593,6 +593,7 @@ mod tests {
                 Arc::new(BlockReceipts {
                     receipts: vec![],
                     secondary_reward: U256::zero(),
+                    tx_execution_error_messages: vec![],
                 })
             })
             .collect(); // Vec<Arc<Vec<_>>>
@@ -620,6 +621,7 @@ mod tests {
                 Arc::new(BlockReceipts {
                     receipts: (1..11).map(|_| receipt.clone()).collect(),
                     secondary_reward: U256::zero(),
+                    tx_execution_error_messages: vec!["".into(); 10],
                 })
             })
             .collect();
@@ -691,6 +693,7 @@ mod tests {
                 },
             ],
             secondary_reward: U256::zero(),
+            tx_execution_error_messages: vec!["".into(); 2],
         };
 
         let block2 = BlockReceipts {
@@ -724,6 +727,7 @@ mod tests {
                 storage_released: vec![],
             }],
             secondary_reward: U256::zero(),
+            tx_execution_error_messages: vec!["".into()],
         };
 
         let expected = keccak(
