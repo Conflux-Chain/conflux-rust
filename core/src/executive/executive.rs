@@ -1520,8 +1520,10 @@ impl<'a> Executive<'a> {
                 substate.record_storage_release(&code_owner, code_size as u64);
             }
 
-            self.state
-                .record_storage_entries_release(address, &mut substate)?;
+            self.state.record_storage_and_whitelist_entries_release(
+                address,
+                &mut substate,
+            )?;
         }
 
         let res = self.state.settle_collateral_for_all(&substate)?;
