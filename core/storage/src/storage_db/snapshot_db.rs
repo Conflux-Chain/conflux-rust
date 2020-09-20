@@ -69,17 +69,10 @@ pub trait OpenSnapshotMptTrait<'db> {
     ) -> Result<Self::SnapshotDbBorrowSharedType>;
 }
 
-pub trait SnapshotKvIterTrait<'db> {
-    type SnapshotKvIterType: 'db;
-
-    fn snapshot_kv_iterator(&'db self) -> Result<Self::SnapshotKvIterType>;
-}
-
 pub trait SnapshotDbTrait:
     KeyValueDbTraitOwnedRead
     + KeyValueDbTraitRead
     + KeyValueDbTraitSingleWriter
-    + for<'db> SnapshotKvIterTrait<'db>
     + for<'db> OpenSnapshotMptTrait<'db>
     + Sized
 {
@@ -121,7 +114,7 @@ pub trait SnapshotDbTrait:
 
     fn commit_transaction(&mut self) -> Result<()>;
 
-    fn snapshot_kv_iterator_n(
+    fn snapshot_kv_iterator(
         &self,
     ) -> Result<
         Wrap<

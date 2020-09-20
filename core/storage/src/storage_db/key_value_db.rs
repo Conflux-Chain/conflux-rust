@@ -37,76 +37,11 @@ pub trait KeyValueDbTraitOwnedRead: KeyValueDbTypes {
     }
 }
 
-pub trait KvdbIterImplKind<ItemKey, ValueType> {
-    type ImplKind: ?Sized;
-}
-
-pub trait KvdbIterImpl<'db, ImplKind: ?Sized> {
-    type KeyType: ?Sized;
-    type Iterator: 'db;
-
-    fn iter_range_impl(
-        &'db mut self, lower_bound_incl: &Self::KeyType,
-        upper_bound_excl: Option<&Self::KeyType>,
-    ) -> Result<Self::Iterator>;
-    fn iter_range_excl_impl(
-        &'db mut self, lower_bound_excl: &Self::KeyType,
-        upper_bound_excl: &Self::KeyType,
-    ) -> Result<Self::Iterator>;
-}
-
-// Auto impl transmute for ElementSatisfy<trait obj>.
-// Macro parser doesn't allow 'path' followed by '+',
-// use '|' in generic part instead, e.g. 'generic A, B: traitA | traitB, C;'.
-// FIXME: lifetime support for generic part
-macro_rules! enable_impl_transmute_for_element_satisfy {
-    (
-        generic $( $N:ident $(: $b0:path $(|$b:path)* )? ),*;
-        trait $lifetime:lifetime + $trait:path;
-        for $generic_type:ident;
-    ) => {
-        impl<$( $N $(: $b0 $(+$b)* )? ),*> ElementSatisfy<dyn $trait + $lifetime> for $generic_type
-        {
-            fn to_constrain_object(
-                &self,
-            ) -> &(dyn $lifetime + $trait) {
-                unsafe {
-                    std::mem::transmute(
-                        self as &(dyn '_ + $trait),
-                    )
-                }
-            }
-
-            fn to_constrain_object_mut(
-                &mut self,
-            ) -> &mut (dyn $lifetime + $trait) {
-                unsafe {
-                    std::mem::transmute(
-                        self as &mut (dyn '_ + $trait),
-                    )
-                }
-            }
-        }
-    };
-
-    (
-        generic $( $N:ident $(: $b0:path $(|$b:path)* )? ),*;
-        trait $lifetime:lifetime + $trait:path;
-    ) => {
-        enable_impl_transmute_for_element_satisfy! {
-            generic $( $N $(: $b0 $(|$b)* )? ),* , TempGeneric:$trait;
-            trait $lifetime + $trait;
-            for TempGeneric;
-        }
-    }
-}
-
 enable_impl_transmute_for_element_satisfy! {
     generic Item;
     trait 'static + FallibleIterator<Item = Item, Error = Error>;
 }
 
-// FIXME: this is temporary
 pub struct KvdbIterIterator<Item, KeyType: ?Sized, T: ?Sized> {
     __i_m: std::marker::PhantomData<Item>,
     __k_m: std::marker::PhantomData<KeyType>,
