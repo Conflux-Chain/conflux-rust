@@ -177,15 +177,27 @@ impl TrieProof {
         })
     }
 
-    /// Verify that the trie `root` has a node with `hash` under `key`.
-    /// Use `MERKLE_NULL_NODE` for exclusion proofs (i.e. `key` does not exist
-    /// or leads to another hash).
+    /// Verify that the trie `root` has a node with `node_merkle` under `key`.
+    /// If `node_merkle` is `None`, then it must prove that the trie does not
+    /// contain `key`.
+    /// If `node_merkle` is `Tombstone`, then it must prove that the trie
+    /// contains a tombstone value under `key`.
+    /// If `node_merkle` is `Some(hash)`, then it must prove that the trie
+    /// contains a node under `key` whose node merkle equals `hash`.
     pub fn is_valid_node_merkle(
-        &self, key: &[u8], hash: &MerkleHash, root: &MerkleHash,
-    ) -> bool {
+        &self, key: &[u8], node_merkle: &MptValue<MerkleHash>,
+        root: &MerkleHash,
+    ) -> bool
+    {
         self.is_valid(key, root, |node| match node {
-            None => hash.eq(&MERKLE_NULL_NODE),
-            Some(node) => hash == &node.get_merkle_hash_wo_compressed_path(),
+            None => node_merkle == &MptValue::None,
+            Some(node) if node.value_as_slice().is_tombstone() => {
+                node_merkle == &MptValue::TombStone
+            }
+            Some(node) => {
+                let h = node.get_merkle_hash_wo_compressed_path();
+                node_merkle == &MptValue::Some(h)
+            }
         })
     }
 
@@ -384,7 +396,7 @@ use crate::{
     utils::access_mode,
 };
 use cfx_types::H256;
-use primitives::{MerkleHash, MERKLE_NULL_NODE};
+use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
 use rlp::*;
 use std::{
     collections::{hash_map::RandomState, HashMap},

@@ -1,8 +1,10 @@
 # 0.6.3
 
-## Improvement
+## Improvements
 
-- block info returned by rpc methods `cfx_getBlockByEpochNumber`, `cfx_getBlockByHash`, `cfx_getBlockByHashWithPivotAssumption` add one new field 'gasUsed' (backward compatible) 
+- Block info returned by rpc methods `cfx_getBlockByEpochNumber`, `cfx_getBlockByHash`, `cfx_getBlockByHashWithPivotAssumption` add one new field `gasUsed` (backward compatible)
+
+- Revise `cfx_getStorageRoot` output. Now it always returns a JSON objects with three fields `"delta"`, `"intermediate"`, and `"snapshot"`. These fields are either `null`, `"TOMBSTONE"`, or a hash string (e.g. `"0x0240a5a3486ac1cee71db22b8e12f1bb6ac9f207ecd81b06031c407663c20a94"`).
 
 # 0.6.2
 

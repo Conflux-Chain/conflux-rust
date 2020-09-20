@@ -27,7 +27,7 @@ use network::{
 use parking_lot::Mutex;
 use primitives::{
     filter::Filter, transaction::Action::Call, Account, SignedTransaction,
-    StorageKey, StorageValue, TransactionWithSignature,
+    StorageKey, StorageRoot, StorageValue, TransactionWithSignature,
 };
 use random_crash::*;
 use rlp::Rlp;
@@ -52,8 +52,8 @@ use crate::{
             Log as RpcLog, PackedOrExecuted, Receipt as RpcReceipt,
             RewardInfo as RpcRewardInfo, SendTxRequest,
             SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
-            StorageRoot as RpcStorageRoot, SyncGraphStates,
-            Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
+            SyncGraphStates, Transaction as RpcTransaction, TxPoolPendingInfo,
+            TxWithPoolInfo,
         },
         RpcResult,
     },
@@ -394,7 +394,7 @@ impl RpcImpl {
 
     fn storage_root(
         &self, address: H160, epoch_num: Option<EpochNumber>,
-    ) -> RpcResult<Option<RpcStorageRoot>> {
+    ) -> RpcResult<Option<StorageRoot>> {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -402,15 +402,12 @@ impl RpcImpl {
             address, epoch_num
         );
 
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let root = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num)?
+            .get_original_storage_root(&address)?;
 
-        Ok(match state_db.get_original_storage_root(&address)? {
-            Some(storage_root) => {
-                Some(RpcStorageRoot::from_primitive(storage_root))
-            }
-            None => None,
-        })
+        Ok(Some(root))
     }
 
     fn send_usable_genesis_accounts(
@@ -1065,7 +1062,7 @@ impl Cfx for CfxHandler {
                 -> BoxFuture<Option<H256>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
-            fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<RpcStorageRoot>>;
+            fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
         }
     }
 }

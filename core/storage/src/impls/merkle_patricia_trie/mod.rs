@@ -11,7 +11,6 @@ pub(super) mod maybe_in_place_byte_array;
 pub mod merkle;
 pub mod mpt_cursor;
 pub mod mpt_merger;
-pub mod mpt_value;
 pub mod simple_mpt;
 pub mod trie_node;
 pub mod trie_proof;
@@ -26,7 +25,6 @@ pub use self::{
         CompressedPathRaw, CompressedPathRef, CompressedPathTrait,
     },
     mpt_merger::MptMerger,
-    mpt_value::MptValue,
     trie_node::{TrieNodeTrait, VanillaTrieNode},
     trie_proof::TrieProof,
 };

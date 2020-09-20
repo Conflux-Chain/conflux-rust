@@ -849,5 +849,5 @@ use super::{
     ChildrenTableDeltaMpt, DeltaMpt, *,
 };
 use parking_lot::MutexGuard;
-use primitives::{MerkleHash, MERKLE_NULL_NODE};
+use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
 use std::hint::unreachable_unchecked;

@@ -14,4 +14,8 @@ contract Storage {
     function increment() public {
         pos0 += 1;
     }
+
+    function destroy() public {
+        selfdestruct(msg.sender);
+    }
 }

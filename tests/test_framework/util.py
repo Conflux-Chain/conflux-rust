@@ -50,6 +50,11 @@ def assert_equal(thing1, thing2, *args):
             str(arg) for arg in (thing1, thing2) + args))
 
 
+def assert_ne(thing1, thing2):
+    if thing1 == thing2:
+        raise AssertionError("not(%s)" % " != ".join([thing1, thing2]))
+
+
 def assert_greater_than(thing1, thing2):
     if thing1 <= thing2:
         raise AssertionError("%s <= %s" % (str(thing1), str(thing2)))

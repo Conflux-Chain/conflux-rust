@@ -3149,6 +3149,7 @@ dependencies = [
  "rlp_derive",
  "serde",
  "serde_derive",
+ "serde_json",
  "siphasher",
  "unexpected",
 ]

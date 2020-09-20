@@ -12,7 +12,7 @@ use cfx_statedb::{StateDb, StateDbGetOriginalMethods};
 use cfx_storage::{
     state::{State, StateTrait},
     state_manager::StateManagerTrait,
-    NodeMerkleProof, StateProof,
+    StateProof, StorageRootProof,
 };
 use cfx_types::{Address, Bloom, H256};
 use primitives::{
@@ -222,7 +222,7 @@ impl LedgerInfo {
     #[inline]
     pub fn storage_root_of(
         &self, epoch: u64, address: &Address,
-    ) -> Result<(Option<StorageRoot>, NodeMerkleProof), Error> {
+    ) -> Result<(StorageRoot, StorageRootProof), Error> {
         let state = self.state_of(epoch)?;
         Ok(
             StateDb::new(state)
