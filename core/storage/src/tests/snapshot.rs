@@ -18,6 +18,9 @@ pub struct FakeSnapshotMptDb {
 }
 
 impl FakeSnapshotMptDb {
+    /// With discard_write, it tests if the MptMerger does not rely on the value
+    /// to write to work correctly. In other words, MptMerger works correctly
+    /// only reading the data to merge.
     pub fn new_discard_write() -> Self {
         Self {
             discard_write: true,
