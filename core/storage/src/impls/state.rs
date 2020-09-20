@@ -487,7 +487,7 @@ impl StateTrait for State {
         };
 
         // Retrieve key/value pairs from snapshot
-        let mut kv_iterator = self.snapshot_db.snapshot_kv_iterator()?;
+        let mut kv_iterator = self.snapshot_db.snapshot_kv_iterator()?.take();
         let lower_bound_incl = access_key_prefix.to_key_bytes();
         let upper_bound_excl =
             to_key_prefix_iter_upper_bound(&lower_bound_incl);

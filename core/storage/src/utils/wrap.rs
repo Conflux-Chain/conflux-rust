@@ -85,16 +85,3 @@ impl<'a, Wrapped: ?Sized + WrappedTrait<Constrain>, Constrain: ?Sized>
         self.0
     }
 }
-
-/*
-// FIXME: to explore
-pub trait LaterLifetime<'a, 'b, Wrapped: ?Sized> {
-    type Longest: 'b;
-}
-
-impl<'a, 'b: 'a, Wrapped: ?Sized + WrappedTrait> LaterLifetime<'a, 'b, Wrapped>
-    for Wrapped
-{
-    type Longest = <Wrapped as WrappedLifetimeFamily<'b>>::Out;
-}
-*/

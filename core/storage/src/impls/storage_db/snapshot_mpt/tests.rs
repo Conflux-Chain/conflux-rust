@@ -12,7 +12,7 @@ fn check_snapshot_mpt_integrity() {
     let db_path = Path::new(DB_PATH);
     let snapshot_db =
         open_snapshot_db_for_testing(db_path, /* readonly = */ true).unwrap();
-    let mut key_value_iter = snapshot_db.snapshot_kv_iterator().unwrap();
+    let mut key_value_iter = snapshot_db.snapshot_kv_iterator().unwrap().take();
     let total_kvs = check_key_value_load(
         &snapshot_db,
         key_value_iter.iter_range(&[], None).unwrap().take(),
@@ -30,7 +30,7 @@ fn check_snapshot_mpt_root() {
     let db_path = Path::new(DB_PATH);
     let snapshot_db =
         open_snapshot_db_for_testing(db_path, /* readonly = */ true).unwrap();
-    let mut key_value_iter = snapshot_db.snapshot_kv_iterator().unwrap();
+    let mut key_value_iter = snapshot_db.snapshot_kv_iterator().unwrap().take();
     let mut kv_iter = key_value_iter.iter_range(&[], None).unwrap().take();
 
     let merkle_root =
@@ -133,13 +133,11 @@ pub fn verify_snapshot_db<
     snapshot_db: &SnapshotDbType,
 )
 /*
-// snapshot_db: &'db
+The ugly impl if we don't use Wrap:
+We must have snapshot_db: &'db ... in the argument, then the where clause.
+
 where <SnapshotDbType as SnapshotKvIterTrait<'db>>::SnapshotKvIterType:
-for<'a> KeyValueDbIterableTrait<'a, (Vec<u8>, Box<[u8]>), Error, [u8]>
- */
-/*
-where <SnapshotDbType::SnapshotKvdbIterType as WrappedLifetimeFamily<'db>>::Out:
-        for<'a> KeyValueDbIterableTrait<'a, MptKeyValue, Error, [u8]>
+for<'a> KeyValueDbIterableTrait<'a, MptKeyValue, Error, [u8]>
  */
 // Rust compiler should improve so that we don't have to write this completely
 // redundant where clause.
@@ -149,8 +147,7 @@ where KvdbIterIterator<
         SnapshotDbType::SnapshotKvdbIterTraitTag,
     >: WrappedTrait<dyn FallibleIterator<Item = MptKeyValue, Error = Error>> {
     let mut mpt_kvs: Vec<MptKeyValue> = vec![];
-    let mut key_value_iter =
-        snapshot_db.snapshot_kv_iterator_n().unwrap().take();
+    let mut key_value_iter = snapshot_db.snapshot_kv_iterator().unwrap().take();
     let mut kv_iter = key_value_iter
         .to_constrain_object_mut()
         .iter_range(&[], None)
@@ -214,7 +211,6 @@ use crate::{
     },
     storage_db::{
         key_value_db::KeyValueDbIterableTrait,
-        snapshot_db::SnapshotKvIterTrait,
         snapshot_mpt::{SnapshotMptTraitRead, SubtreeMerkleWithSize},
         KvdbIterIterator, OpenSnapshotMptTrait, SnapshotDbTrait,
     },

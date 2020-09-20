@@ -5,8 +5,8 @@
 use crate::sync::{Error, ErrorKind};
 use cfx_storage::{
     storage_db::{
-        key_value_db::KeyValueDbIterableTrait,
-        snapshot_db::SnapshotKvIterTrait, OpenSnapshotMptTrait,
+        key_value_db::KeyValueDbIterableTrait, snapshot_db::SnapshotDbTrait,
+        OpenSnapshotMptTrait,
     },
     MptSlicer, StorageManager, TrieProof,
 };
@@ -388,7 +388,7 @@ impl Chunk {
             }
         };
 
-        let mut kv_iterator = snapshot_db.snapshot_kv_iterator()?;
+        let mut kv_iterator = snapshot_db.snapshot_kv_iterator()?.take();
         let lower_bound_incl =
             chunk_key.lower_bound_incl.clone().unwrap_or_default();
         let upper_bound_excl =

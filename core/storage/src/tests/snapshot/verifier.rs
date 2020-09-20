@@ -358,72 +358,12 @@ impl KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>
     }
 }
 
-impl KvdbIterImplKind<Vec<u8>, Box<[u8]>> for ArcMutexFakeSnapshotDbRef<'_> {
-    type ImplKind = FakeSnapshotDb;
-}
-
-// FIXME:
-//  direct the KvdbIterImpl to KvdbIterTrait
-//  It's a bit more effort to implement KvdbIterTrait than
-// KeyValueDbIterableTrait  because we don't have an automated implementation
-// from KvdbIterImpl, also  we are lack of automated implementation of
-// KvdbIterIterator.
-impl<'a, 'db> KvdbIterImpl<'db, FakeSnapshotDb>
-    for ArcMutexFakeSnapshotDbRef<'a>
-{
-    type Iterator = DumpedMptKvFallibleIterator;
-    type KeyType = [u8];
-
-    fn iter_range_impl(
-        &'db mut self, lower_bound_incl: &[u8], upper_bound_excl: Option<&[u8]>,
-    ) -> Result<Self::Iterator> {
-        let db = &*self.r.lock();
-        Ok(DumpedMptKvFallibleIterator {
-            kv: db
-                .kv
-                .range((
-                    Included(Vec::from(lower_bound_incl)),
-                    upper_bound_excl
-                        .map_or(Unbounded, |v| Excluded(Vec::from(v))),
-                ))
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect(),
-            index: 0,
-        })
-    }
-
-    fn iter_range_excl_impl(
-        &'db mut self, lower_bound_excl: &[u8], upper_bound_excl: &[u8],
-    ) -> Result<Self::Iterator> {
-        let db = &*self.r.lock();
-        Ok(DumpedMptKvFallibleIterator {
-            kv: db
-                .kv
-                .range((
-                    Excluded(Vec::from(lower_bound_excl)),
-                    Excluded(Vec::from(upper_bound_excl)),
-                ))
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect(),
-            index: 0,
-        })
-    }
-}
-
 pub struct ArcMutexFakeSnapshotDbRef<'a> {
     // To work around an annoying rust compilation error because Arc is an
     // upstream type. Rust is afraid that DerefMut is implemented for Arc
     // so that which implementation for KvdbIterImplKind to apply can become
     // ambigiuous.
     r: &'a Arc<Mutex<FakeSnapshotDb>>,
-}
-
-impl<'db> SnapshotKvIterTrait<'db> for Arc<Mutex<FakeSnapshotDb>> {
-    type SnapshotKvIterType = ArcMutexFakeSnapshotDbRef<'db>;
-
-    fn snapshot_kv_iterator(&'db self) -> Result<Self::SnapshotKvIterType> {
-        Ok(ArcMutexFakeSnapshotDbRef { r: self })
-    }
 }
 
 impl<'db> OpenSnapshotMptTrait<'db> for Arc<Mutex<FakeSnapshotDb>> {
@@ -450,46 +390,10 @@ impl<'db> OpenSnapshotMptTrait<'db> for Arc<Mutex<FakeSnapshotDb>> {
     }
 }
 
-// FIXME: create a marker ImplESByTransmute<Trait> and then auto impl transmute.
-impl
-    ElementSatisfy<
-        dyn KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>,
-    > for ArcMutexFakeSnapshotDbRef<'_>
-{
-    fn to_constrain_object(
-        &self,
-    ) -> &(dyn KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>
-                   + 'static) {
-        unsafe {
-            std::mem::transmute(
-                self as &(dyn '_
-                      + KeyValueDbIterableTrait<
-                    MptKeyValue,
-                    [u8],
-                    FakeSnapshotDb,
-                >),
-            )
-        }
-    }
-
-    fn to_constrain_object_mut(
-        &mut self,
-    ) -> &mut (dyn KeyValueDbIterableTrait<
-        MptKeyValue,
-        [u8],
-        FakeSnapshotDb,
-    > + 'static) {
-        unsafe {
-            std::mem::transmute(
-                self as &mut (dyn '_
-                          + KeyValueDbIterableTrait<
-                    MptKeyValue,
-                    [u8],
-                    FakeSnapshotDb,
-                >),
-            )
-        }
-    }
+enable_impl_transmute_for_element_satisfy! {
+    generic ;
+    trait 'static + KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>;
+    for ArcMutexFakeSnapshotDbRef<'_>;
 }
 
 impl
@@ -543,7 +447,7 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
 
     fn commit_transaction(&mut self) -> Result<()> { Ok(()) }
 
-    fn snapshot_kv_iterator_n(
+    fn snapshot_kv_iterator(
         &self,
     ) -> Result<
         Wrap<
@@ -802,10 +706,9 @@ use crate::{
     storage_db::{
         DbValueType, KeyValueDbIterableTrait, KeyValueDbTraitOwnedRead,
         KeyValueDbTraitRead, KeyValueDbTraitSingleWriter, KeyValueDbTypes,
-        KvdbIterImpl, KvdbIterImplKind, KvdbIterIterator, OpenSnapshotMptTrait,
-        SnapshotDbManagerTrait, SnapshotDbTrait, SnapshotInfo,
-        SnapshotKvIterTrait, SnapshotMptIteraterTrait, SnapshotMptNode,
-        SnapshotMptTraitRead, SnapshotMptTraitReadAndIterate,
+        KvdbIterIterator, OpenSnapshotMptTrait, SnapshotDbManagerTrait,
+        SnapshotDbTrait, SnapshotInfo, SnapshotMptIteraterTrait,
+        SnapshotMptNode, SnapshotMptTraitRead, SnapshotMptTraitReadAndIterate,
         SnapshotMptTraitRw,
     },
     tests::{

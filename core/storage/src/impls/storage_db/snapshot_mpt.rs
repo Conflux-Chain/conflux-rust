@@ -125,8 +125,11 @@ impl<DbType: SnapshotMptLoadNode + ?Sized, BorrowType: BorrowMut<DbType>>
 
 impl<
         DbType: SnapshotMptLoadNode
-            + KeyValueDbIterableTrait<MptKeyValue, [u8], SnapshotDbSqlite>
-            + ?Sized,
+            + KeyValueDbIterableTrait<
+                MptKeyValue,
+                [u8],
+                KvdbSqliteShardedIteratorTag,
+            > + ?Sized,
         BorrowType: BorrowMut<DbType>,
     > SnapshotMptTraitReadAndIterate for SnapshotMpt<DbType, BorrowType>
 {
@@ -157,8 +160,11 @@ impl<
 impl<
         DbType: SnapshotMptLoadNode
             + KeyValueDbTraitSingleWriter<ValueType = SnapshotMptDbValue>
-            + KeyValueDbIterableTrait<MptKeyValue, [u8], SnapshotDbSqlite>
-            + ?Sized,
+            + KeyValueDbIterableTrait<
+                MptKeyValue,
+                [u8],
+                KvdbSqliteShardedIteratorTag,
+            > + ?Sized,
         BorrowType: BorrowMut<DbType>,
     > SnapshotMptTraitRw for SnapshotMpt<DbType, BorrowType>
 {
@@ -183,7 +189,7 @@ use crate::{
     impls::{
         errors::*,
         merkle_patricia_trie::{CompressedPathRaw, CompressedPathTrait},
-        storage_db::snapshot_db_sqlite::SnapshotDbSqlite,
+        storage_db::kvdb_sqlite_sharded::KvdbSqliteShardedIteratorTag,
     },
     storage_db::{
         key_value_db::{KeyValueDbIterableTrait, KeyValueDbTraitSingleWriter},
