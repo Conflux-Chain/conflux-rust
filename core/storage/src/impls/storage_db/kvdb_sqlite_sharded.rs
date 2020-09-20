@@ -653,79 +653,6 @@ pub fn kvdb_sqlite_sharded_iter_range_excl_impl<
     shards_iter_merger_result
 }
 
-// TODO: this blanket implementation for
-//  KvdbSqliteShardedDestructureTraitWithValueType prevents other potential
-//  implementation. Try to find a better solution.
-impl<
-        ValueType: ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
-        T: DerefMutPlusImplOrBorrowMutSelf<
-            dyn KvdbSqliteShardedDestructureTraitWithValueType<
-                ValueType = ValueType,
-            >,
-        >,
-    > KvdbIterImplKind<Vec<u8>, ValueType> for T
-{
-    type ImplKind = KvdbSqliteSharded<ValueType>;
-}
-
-impl<
-        'db,
-        ValueType: 'db + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
-        T: DerefMutPlusImplOrBorrowMutSelf<
-            dyn 'db
-                + KvdbSqliteShardedDestructureTraitWithValueType<
-                    ValueType = ValueType,
-                >,
-        >,
-    > KvdbIterImpl<'db, KvdbSqliteSharded<ValueType>> for T
-{
-    type Iterator = ShardedIterMerger<
-        Vec<u8>,
-        ValueType,
-        MappedRows<
-            'db,
-            for<'r, 's> fn(&'r Statement<'s>) -> Result<(Vec<u8>, ValueType)>,
-        >,
-    >;
-    type KeyType = [u8];
-
-    fn iter_range_impl(
-        &'db mut self, lower_bound_incl: &[u8], upper_bound_excl: Option<&[u8]>,
-    ) -> Result<Self::Iterator> {
-        let (maybe_shards_connections, statements) =
-            self.borrow_mut().destructure_mut();
-        kvdb_sqlite_sharded_iter_range_impl(
-            maybe_shards_connections,
-            statements,
-            lower_bound_incl,
-            upper_bound_excl,
-            KvdbSqlite::<ValueType>::kv_from_iter_row::<Vec<u8>>
-                as for<'r, 's> fn(
-                    &'r Statement<'s>,
-                )
-                    -> Result<(Vec<u8>, ValueType)>,
-        )
-    }
-
-    fn iter_range_excl_impl(
-        &'db mut self, lower_bound_excl: &[u8], upper_bound_excl: &[u8],
-    ) -> Result<Self::Iterator> {
-        let (maybe_shards_connections, statements) =
-            self.borrow_mut().destructure_mut();
-        kvdb_sqlite_sharded_iter_range_excl_impl(
-            maybe_shards_connections,
-            statements,
-            lower_bound_excl,
-            upper_bound_excl,
-            KvdbSqlite::<ValueType>::kv_from_iter_row::<Vec<u8>>
-                as for<'r, 's> fn(
-                    &'r Statement<'s>,
-                )
-                    -> Result<(Vec<u8>, ValueType)>,
-        )
-    }
-}
-
 // 'static because Any is static.
 impl<
         ValueType: 'static
@@ -1047,9 +974,9 @@ use crate::{
     storage_db::{
         DbValueType, DeltaDbTrait, KeyValueDbTraitMultiReader,
         KeyValueDbTraitTransactional, KeyValueDbTransactionTrait,
-        KeyValueDbTypes, KvdbIterImpl, KvdbIterImplKind, OwnedReadImplByFamily,
-        OwnedReadImplFamily, ReadImplByFamily, ReadImplFamily,
-        SingleWriterImplByFamily, SingleWriterImplFamily,
+        KeyValueDbTypes, OwnedReadImplByFamily, OwnedReadImplFamily,
+        ReadImplByFamily, ReadImplFamily, SingleWriterImplByFamily,
+        SingleWriterImplFamily,
     },
     utils::deref_plus_impl_or_borrow_self::*,
     KvdbSqlite, KvdbSqliteStatements, SqliteConnection,

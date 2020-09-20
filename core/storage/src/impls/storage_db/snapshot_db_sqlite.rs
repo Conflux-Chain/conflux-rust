@@ -232,20 +232,8 @@ impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
     }
 }
 
-impl<'db> SnapshotKvIterTrait<'db> for SnapshotDbSqlite {
-    type SnapshotKvIterType =
-        KvdbSqliteSharded<<Self as KeyValueDbTypes>::ValueType>;
-
-    fn snapshot_kv_iterator(&'db self) -> Result<Self::SnapshotKvIterType> {
-        Ok(KvdbSqliteSharded::new(
-            self.try_clone_connections()?,
-            SNAPSHOT_DB_STATEMENTS.kvdb_statements.clone(),
-        ))
-    }
-}
-
-macro_rules! make_wrap_from_KvdbIterIterator_to_FallibleIterator {
-    ($ItemKeyType:ty, $ItemValueType:ty, $KeyType:ty, $TagType:ty) => {
+macro_rules! enable_KvdbIterIterator_for_snapshot_db_sqlite {
+    ($ItemKeyType:ty, $ItemValueType:ty, $KeyType:ty) => {
         impl
             WrappedTrait<
                 dyn FallibleIterator<
@@ -256,7 +244,7 @@ macro_rules! make_wrap_from_KvdbIterIterator_to_FallibleIterator {
             for KvdbIterIterator<
                 ($ItemKeyType, $ItemValueType),
                 $KeyType,
-                $TagType,
+                SnapshotDbSqlite,
             >
         {
         }
@@ -271,7 +259,7 @@ macro_rules! make_wrap_from_KvdbIterIterator_to_FallibleIterator {
             for KvdbIterIterator<
                 ($ItemKeyType, $ItemValueType),
                 $KeyType,
-                $TagType,
+                SnapshotDbSqlite,
             >
         {
             type Out = ShardedIterMerger<
@@ -289,18 +277,8 @@ macro_rules! make_wrap_from_KvdbIterIterator_to_FallibleIterator {
     };
 }
 
-make_wrap_from_KvdbIterIterator_to_FallibleIterator!(
-    Vec<u8>,
-    Box<[u8]>,
-    [u8],
-    SnapshotDbSqlite
-);
-make_wrap_from_KvdbIterIterator_to_FallibleIterator!(
-    Vec<u8>,
-    (),
-    [u8],
-    SnapshotDbSqlite
-);
+enable_KvdbIterIterator_for_snapshot_db_sqlite!(Vec<u8>, Box<[u8]>, [u8]);
+enable_KvdbIterIterator_for_snapshot_db_sqlite!(Vec<u8>, (), [u8]);
 
 // FIXME: implement for more general types
 // (DerefOr...<KvdbSqliteShardedBorrow...>)
@@ -596,7 +574,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         &mut self, old_snapshot_db: &SnapshotDbSqlite,
     ) -> Result<MerkleHash> {
         debug!("copy_and_merge begins.");
-        let mut kv_iter = old_snapshot_db.snapshot_kv_iterator()?;
+        let mut kv_iter = old_snapshot_db.snapshot_kv_iterator()?.take();
         let mut iter = kv_iter.iter_range(&[], None)?.take();
         while let Ok(kv_item) = iter.next() {
             match kv_item {
@@ -646,7 +624,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         Ok(())
     }
 
-    fn snapshot_kv_iterator_n(
+    fn snapshot_kv_iterator(
         &self,
     ) -> Result<
         Wrap<
@@ -876,8 +854,7 @@ use crate::{
         KvdbIterIterator, OpenSnapshotMptTrait, OwnedReadImplByFamily,
         OwnedReadImplFamily, ReadImplByFamily, ReadImplFamily,
         SingleWriterImplByFamily, SingleWriterImplFamily, SnapshotDbTrait,
-        SnapshotKvIterTrait, SnapshotMptDbValue,
-        SnapshotMptTraitReadAndIterate, SnapshotMptTraitRw,
+        SnapshotMptDbValue, SnapshotMptTraitReadAndIterate, SnapshotMptTraitRw,
     },
     utils::{
         tuple::ElementSatisfy,
