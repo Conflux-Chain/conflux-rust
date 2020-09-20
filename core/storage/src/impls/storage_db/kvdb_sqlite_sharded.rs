@@ -653,9 +653,59 @@ pub fn kvdb_sqlite_sharded_iter_range_excl_impl<
     shards_iter_merger_result
 }
 
-// TODO: this blanket implementation for
-//  KvdbSqliteShardedDestructureTraitWithValueType prevents other potential
-//  implementation. Try to find a better solution.
+macro_rules! enable_KvdbIterIterator_for_snapshot_db_sqlite {
+    ($ItemKeyType:ty, $ItemValueType:ty, $KeyType:ty) => {
+        impl
+            WrappedTrait<
+                dyn FallibleIterator<
+                    Item = ($ItemKeyType, $ItemValueType),
+                    Error = Error,
+                >,
+            >
+            for KvdbIterIterator<
+                ($ItemKeyType, $ItemValueType),
+                $KeyType,
+                SnapshotDbSqlite,
+            >
+        {
+        }
+        impl<'a>
+            WrappedLifetimeFamily<
+                'a,
+                dyn FallibleIterator<
+                    Item = ($ItemKeyType, $ItemValueType),
+                    Error = Error,
+                >,
+            >
+            for KvdbIterIterator<
+                ($ItemKeyType, $ItemValueType),
+                $KeyType,
+                SnapshotDbSqlite,
+            >
+        {
+            type Out = ShardedIterMerger<
+                $ItemKeyType,
+                $ItemValueType,
+                MappedRows<
+                    'a,
+                    for<'r, 's> fn(
+                        &'r Statement<'s>,
+                    )
+                        -> Result<($ItemKeyType, $ItemValueType)>,
+                >,
+            >;
+        }
+    };
+}
+
+// FIXME:
+//  consider a better Tag type rather than SnapshotDbSqlite, because here we are
+//  implementing for KvdbSqliteSharded, which is a level below SnapshotDbSqlite.
+enable_KvdbIterIterator_for_snapshot_db_sqlite!(Vec<u8>, Box<[u8]>, [u8]);
+enable_KvdbIterIterator_for_snapshot_db_sqlite!(Vec<u8>, (), [u8]);
+
+// FIXME: implement for more general types
+// (DerefOr...<KvdbSqliteShardedBorrow...>)
 impl<
         ValueType: ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
         T: DerefMutPlusImplOrBorrowMutSelf<
@@ -663,38 +713,44 @@ impl<
                 ValueType = ValueType,
             >,
         >,
-    > KvdbIterImplKind<Vec<u8>, ValueType> for T
-{
-    type ImplKind = KvdbSqliteSharded<ValueType>;
-}
-
-impl<
-        'db,
-        ValueType: 'db + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
-        T: DerefMutPlusImplOrBorrowMutSelf<
-            dyn 'db
-                + KvdbSqliteShardedDestructureTraitWithValueType<
-                    ValueType = ValueType,
+    > KeyValueDbIterableTrait<(Vec<u8>, ValueType), [u8], SnapshotDbSqlite>
+    for T
+where KvdbIterIterator<(Vec<u8>, ValueType), [u8], SnapshotDbSqlite>:
+        WrappedTrait<
+                dyn FallibleIterator<
+                    Item = (Vec<u8>, ValueType),
+                    Error = Error,
                 >,
-        >,
-    > KvdbIterImpl<'db, KvdbSqliteSharded<ValueType>> for T
+            > + for<'a> WrappedLifetimeFamily<
+                'a,
+                dyn FallibleIterator<
+                    Item = (Vec<u8>, ValueType),
+                    Error = Error,
+                >,
+                Out = ShardedIterMerger<
+                    Vec<u8>,
+                    ValueType,
+                    MappedRows<
+                        'a,
+                        for<'r, 's> fn(
+                            &'r Statement<'s>,
+                        )
+                            -> Result<(Vec<u8>, ValueType)>,
+                    >,
+                >,
+            >
 {
-    type Iterator = ShardedIterMerger<
-        Vec<u8>,
-        ValueType,
-        MappedRows<
-            'db,
-            for<'r, 's> fn(&'r Statement<'s>) -> Result<(Vec<u8>, ValueType)>,
+    fn iter_range(
+        &mut self, lower_bound_incl: &[u8], upper_bound_excl: Option<&[u8]>,
+    ) -> Result<
+        Wrap<
+            KvdbIterIterator<(Vec<u8>, ValueType), [u8], SnapshotDbSqlite>,
+            dyn FallibleIterator<Item = (Vec<u8>, ValueType), Error = Error>,
         >,
-    >;
-    type KeyType = [u8];
-
-    fn iter_range_impl(
-        &'db mut self, lower_bound_incl: &[u8], upper_bound_excl: Option<&[u8]>,
-    ) -> Result<Self::Iterator> {
+    > {
         let (maybe_shards_connections, statements) =
             self.borrow_mut().destructure_mut();
-        kvdb_sqlite_sharded_iter_range_impl(
+        Ok(Wrap(kvdb_sqlite_sharded_iter_range_impl(
             maybe_shards_connections,
             statements,
             lower_bound_incl,
@@ -704,15 +760,20 @@ impl<
                     &'r Statement<'s>,
                 )
                     -> Result<(Vec<u8>, ValueType)>,
-        )
+        )?))
     }
 
-    fn iter_range_excl_impl(
-        &'db mut self, lower_bound_excl: &[u8], upper_bound_excl: &[u8],
-    ) -> Result<Self::Iterator> {
+    fn iter_range_excl(
+        &mut self, lower_bound_excl: &[u8], upper_bound_excl: &[u8],
+    ) -> Result<
+        Wrap<
+            KvdbIterIterator<(Vec<u8>, ValueType), [u8], SnapshotDbSqlite>,
+            dyn FallibleIterator<Item = (Vec<u8>, ValueType), Error = Error>,
+        >,
+    > {
         let (maybe_shards_connections, statements) =
             self.borrow_mut().destructure_mut();
-        kvdb_sqlite_sharded_iter_range_excl_impl(
+        Ok(Wrap(kvdb_sqlite_sharded_iter_range_excl_impl(
             maybe_shards_connections,
             statements,
             lower_bound_excl,
@@ -722,7 +783,7 @@ impl<
                     &'r Statement<'s>,
                 )
                     -> Result<(Vec<u8>, ValueType)>,
-        )
+        )?))
     }
 }
 
@@ -1038,6 +1099,7 @@ use crate::{
                 KvdbSqliteBorrowMut, KvdbSqliteBorrowShared,
                 KvdbSqliteTransaction,
             },
+            snapshot_db_sqlite::SnapshotDbSqlite,
             sqlite::{
                 BindValueAppendImpl, MappedRows, SqlBindableValue, ValueRead,
                 ValueReadImpl,
@@ -1045,13 +1107,16 @@ use crate::{
         },
     },
     storage_db::{
-        DbValueType, DeltaDbTrait, KeyValueDbTraitMultiReader,
-        KeyValueDbTraitTransactional, KeyValueDbTransactionTrait,
-        KeyValueDbTypes, KvdbIterImpl, KvdbIterImplKind, OwnedReadImplByFamily,
-        OwnedReadImplFamily, ReadImplByFamily, ReadImplFamily,
-        SingleWriterImplByFamily, SingleWriterImplFamily,
+        DbValueType, DeltaDbTrait, KeyValueDbIterableTrait,
+        KeyValueDbTraitMultiReader, KeyValueDbTraitTransactional,
+        KeyValueDbTransactionTrait, KeyValueDbTypes, KvdbIterIterator,
+        OwnedReadImplByFamily, OwnedReadImplFamily, ReadImplByFamily,
+        ReadImplFamily, SingleWriterImplByFamily, SingleWriterImplFamily,
     },
-    utils::deref_plus_impl_or_borrow_self::*,
+    utils::{
+        deref_plus_impl_or_borrow_self::*,
+        wrap::{Wrap, WrappedLifetimeFamily, WrappedTrait},
+    },
     KvdbSqlite, KvdbSqliteStatements, SqliteConnection,
 };
 use fallible_iterator::FallibleIterator;
