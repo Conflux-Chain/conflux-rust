@@ -133,13 +133,11 @@ pub fn verify_snapshot_db<
     snapshot_db: &SnapshotDbType,
 )
 /*
-// snapshot_db: &'db
+The ugly impl if we don't use Wrap:
+We must have snapshot_db: &'db ... in the argument, then the where clause.
+
 where <SnapshotDbType as SnapshotKvIterTrait<'db>>::SnapshotKvIterType:
-for<'a> KeyValueDbIterableTrait<'a, (Vec<u8>, Box<[u8]>), Error, [u8]>
- */
-/*
-where <SnapshotDbType::SnapshotKvdbIterType as WrappedLifetimeFamily<'db>>::Out:
-        for<'a> KeyValueDbIterableTrait<'a, MptKeyValue, Error, [u8]>
+for<'a> KeyValueDbIterableTrait<'a, MptKeyValue, Error, [u8]>
  */
 // Rust compiler should improve so that we don't have to write this completely
 // redundant where clause.
