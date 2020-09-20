@@ -37,24 +37,6 @@ pub trait KeyValueDbTraitOwnedRead: KeyValueDbTypes {
     }
 }
 
-pub trait KvdbIterImplKind<ItemKey, ValueType> {
-    type ImplKind: ?Sized;
-}
-
-pub trait KvdbIterImpl<'db, ImplKind: ?Sized> {
-    type KeyType: ?Sized;
-    type Iterator: 'db;
-
-    fn iter_range_impl(
-        &'db mut self, lower_bound_incl: &Self::KeyType,
-        upper_bound_excl: Option<&Self::KeyType>,
-    ) -> Result<Self::Iterator>;
-    fn iter_range_excl_impl(
-        &'db mut self, lower_bound_excl: &Self::KeyType,
-        upper_bound_excl: &Self::KeyType,
-    ) -> Result<Self::Iterator>;
-}
-
 // Auto impl transmute for ElementSatisfy<trait obj>.
 // Macro parser doesn't allow 'path' followed by '+',
 // use '|' in generic part instead, e.g. 'generic A, B: traitA | traitB, C;'.
@@ -106,7 +88,6 @@ enable_impl_transmute_for_element_satisfy! {
     trait 'static + FallibleIterator<Item = Item, Error = Error>;
 }
 
-// FIXME: this is temporary
 pub struct KvdbIterIterator<Item, KeyType: ?Sized, T: ?Sized> {
     __i_m: std::marker::PhantomData<Item>,
     __k_m: std::marker::PhantomData<KeyType>,

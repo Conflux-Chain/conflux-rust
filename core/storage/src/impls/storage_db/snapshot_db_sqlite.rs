@@ -244,8 +244,8 @@ impl<'db> SnapshotKvIterTrait<'db> for SnapshotDbSqlite {
     }
 }
 
-macro_rules! make_wrap_from_KvdbIterIterator_to_FallibleIterator {
-    ($ItemKeyType:ty, $ItemValueType:ty, $KeyType:ty, $TagType:ty) => {
+macro_rules! enable_KvdbIterIterator_for_snapshot_db_sqlite {
+    ($ItemKeyType:ty, $ItemValueType:ty, $KeyType:ty) => {
         impl
             WrappedTrait<
                 dyn FallibleIterator<
@@ -256,7 +256,7 @@ macro_rules! make_wrap_from_KvdbIterIterator_to_FallibleIterator {
             for KvdbIterIterator<
                 ($ItemKeyType, $ItemValueType),
                 $KeyType,
-                $TagType,
+                SnapshotDbSqlite,
             >
         {
         }
@@ -271,7 +271,7 @@ macro_rules! make_wrap_from_KvdbIterIterator_to_FallibleIterator {
             for KvdbIterIterator<
                 ($ItemKeyType, $ItemValueType),
                 $KeyType,
-                $TagType,
+                SnapshotDbSqlite,
             >
         {
             type Out = ShardedIterMerger<
@@ -289,18 +289,8 @@ macro_rules! make_wrap_from_KvdbIterIterator_to_FallibleIterator {
     };
 }
 
-make_wrap_from_KvdbIterIterator_to_FallibleIterator!(
-    Vec<u8>,
-    Box<[u8]>,
-    [u8],
-    SnapshotDbSqlite
-);
-make_wrap_from_KvdbIterIterator_to_FallibleIterator!(
-    Vec<u8>,
-    (),
-    [u8],
-    SnapshotDbSqlite
-);
+enable_KvdbIterIterator_for_snapshot_db_sqlite!(Vec<u8>, Box<[u8]>, [u8]);
+enable_KvdbIterIterator_for_snapshot_db_sqlite!(Vec<u8>, (), [u8]);
 
 // FIXME: implement for more general types
 // (DerefOr...<KvdbSqliteShardedBorrow...>)
