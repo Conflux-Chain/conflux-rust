@@ -578,12 +578,9 @@ mod tests {
     use crate::{
         hash::keccak,
         receipt::{BlockReceipts, Receipt},
-        BlockHeader, MERKLE_NULL_NODE, NULL_EPOCH,
+        MERKLE_NULL_NODE, NULL_EPOCH,
     };
     use cfx_types::{Address, Bloom, H160, H256, KECCAK_EMPTY_BLOOM, U256};
-    use criterion::Throughput::Bytes;
-    use malloc_size_of::new_malloc_size_ops;
-    use siphasher::sip128::Hash128;
     use std::{str::FromStr, sync::Arc};
 
     #[test]
@@ -597,6 +594,7 @@ mod tests {
                 Arc::new(BlockReceipts {
                     receipts: vec![],
                     secondary_reward: U256::zero(),
+                    tx_execution_error_messages: vec![],
                 })
             })
             .collect(); // Vec<Arc<Vec<_>>>
@@ -624,6 +622,7 @@ mod tests {
                 Arc::new(BlockReceipts {
                     receipts: (1..11).map(|_| receipt.clone()).collect(),
                     secondary_reward: U256::zero(),
+                    tx_execution_error_messages: vec!["".into(); 10],
                 })
             })
             .collect();
@@ -695,6 +694,7 @@ mod tests {
                 },
             ],
             secondary_reward: U256::zero(),
+            tx_execution_error_messages: vec!["".into(); 2],
         };
 
         let block2 = BlockReceipts {
@@ -728,6 +728,7 @@ mod tests {
                 storage_released: vec![],
             }],
             secondary_reward: U256::zero(),
+            tx_execution_error_messages: vec!["".into()],
         };
 
         let expected = keccak(

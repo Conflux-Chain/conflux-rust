@@ -20,6 +20,8 @@ pub struct TransactionIndex {
 impl MallocSizeOf for TransactionIndex {
     fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
+
+#[cfg(test)]
 mod tests {
     use crate::TransactionIndex;
     use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};

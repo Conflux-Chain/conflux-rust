@@ -9,6 +9,8 @@ pub struct NodeMerkleProof {
     pub snapshot_proof: Option<TrieProof>,
 }
 
+pub type StorageRootProof = NodeMerkleProof;
+
 impl NodeMerkleProof {
     pub fn with_delta(
         &mut self, maybe_delta_proof: Option<TrieProof>,
@@ -31,23 +33,8 @@ impl NodeMerkleProof {
         self
     }
 
-    #[cfg(test)]
-    pub fn is_valid_triplet(
-        &self, key: &Vec<u8>, triplet: NodeMerkleTriplet,
-        state_root: StateRoot,
-        maybe_intermediate_padding: Option<DeltaMptKeyPadding>,
-    ) -> bool
-    {
-        self.is_valid(
-            key,
-            &StorageRoot::from_node_merkle_triplet(triplet),
-            state_root,
-            maybe_intermediate_padding,
-        )
-    }
-
     pub fn is_valid(
-        &self, key: &Vec<u8>, storage_root: &Option<StorageRoot>,
+        &self, key: &Vec<u8>, storage_root: &StorageRoot,
         state_root: StateRoot,
         maybe_intermediate_padding: Option<DeltaMptKeyPadding>,
     ) -> bool
@@ -56,15 +43,7 @@ impl NodeMerkleProof {
         let intermediate_root = &state_root.intermediate_delta_root;
         let snapshot_root = &state_root.snapshot_root;
 
-        // convert key as necessary
-        let delta_mpt_padding =
-            StorageKey::delta_mpt_padding(&snapshot_root, &intermediate_root);
         let storage_key = StorageKey::from_key_bytes(&key);
-        let delta_mpt_key =
-            storage_key.to_delta_mpt_key_bytes(&delta_mpt_padding);
-        let maybe_intermediate_mpt_key = maybe_intermediate_padding
-            .as_ref()
-            .map(|p| storage_key.to_delta_mpt_key_bytes(p));
 
         match self.delta_proof {
             None => {
@@ -74,24 +53,26 @@ impl NodeMerkleProof {
                 }
 
                 // empty proof for non-empty storage root is invalid
-                match storage_root {
-                    Some(StorageRoot { delta, .. })
-                        if delta.ne(&MERKLE_NULL_NODE) =>
-                    {
-                        return false
-                    }
-                    _ => {}
+                if storage_root.delta != MptValue::None {
+                    return false;
                 }
             }
 
             Some(ref proof) => {
-                let key = delta_mpt_key;
-                let delta = storage_root
-                    .as_ref()
-                    .map(|r| r.delta)
-                    .unwrap_or(MERKLE_NULL_NODE);
+                // convert storage key into delta mpt key
+                let padding = StorageKey::delta_mpt_padding(
+                    &snapshot_root,
+                    &intermediate_root,
+                );
 
-                if !proof.is_valid_node_merkle(&key, &delta, delta_root) {
+                let key = storage_key.to_delta_mpt_key_bytes(&padding);
+
+                // check if delta proof is valid
+                if !proof.is_valid_node_merkle(
+                    &key,
+                    &storage_root.delta,
+                    delta_root,
+                ) {
                     return false;
                 }
             }
@@ -105,30 +86,22 @@ impl NodeMerkleProof {
                 }
 
                 // empty proof for non-empty storage root is invalid
-                match storage_root {
-                    Some(StorageRoot { intermediate, .. })
-                        if intermediate.ne(&MERKLE_NULL_NODE) =>
-                    {
-                        return false
-                    }
-                    _ => {}
+                if storage_root.intermediate != MptValue::None {
+                    return false;
                 }
             }
 
             Some(ref proof) => {
-                let key = match maybe_intermediate_mpt_key {
+                // convert storage key into delta mpt key
+                let key = match maybe_intermediate_padding {
                     None => return false,
-                    Some(k) => k,
+                    Some(p) => storage_key.to_delta_mpt_key_bytes(&p),
                 };
 
-                let intermediate = storage_root
-                    .as_ref()
-                    .map(|r| r.intermediate)
-                    .unwrap_or(MERKLE_NULL_NODE);
-
+                // check if intermediate proof is valid
                 if !proof.is_valid_node_merkle(
                     &key,
-                    &intermediate,
+                    &storage_root.intermediate,
                     intermediate_root,
                 ) {
                     return false;
@@ -144,23 +117,18 @@ impl NodeMerkleProof {
                 }
 
                 // empty proof for non-empty storage root is invalid
-                match storage_root {
-                    Some(StorageRoot { snapshot, .. })
-                        if snapshot.ne(&MERKLE_NULL_NODE) =>
-                    {
-                        return false
-                    }
-                    _ => {}
+                if storage_root.snapshot != None {
+                    return false;
                 }
             }
 
             Some(ref proof) => {
-                let snapshot = storage_root
-                    .as_ref()
-                    .map(|r| r.snapshot)
-                    .unwrap_or(MERKLE_NULL_NODE);
-
-                if !proof.is_valid_node_merkle(&key, &snapshot, snapshot_root) {
+                // check if snapshot proof is valid
+                if !proof.is_valid_node_merkle(
+                    &key,
+                    &storage_root.snapshot.into(),
+                    snapshot_root,
+                ) {
                     return false;
                 }
             }
@@ -172,9 +140,7 @@ impl NodeMerkleProof {
 
 use super::merkle_patricia_trie::TrieProof;
 use primitives::{
-    DeltaMptKeyPadding, StateRoot, StorageKey, StorageRoot, MERKLE_NULL_NODE,
+    DeltaMptKeyPadding, MptValue, StateRoot, StorageKey, StorageRoot,
+    MERKLE_NULL_NODE,
 };
 use rlp_derive::{RlpDecodable, RlpEncodable};
-
-#[cfg(test)]
-use primitives::NodeMerkleTriplet;

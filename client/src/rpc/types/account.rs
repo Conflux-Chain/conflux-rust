@@ -63,24 +63,24 @@ impl SponsorInfo {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use primitives::account::BasicAccount;
+    use crate::rpc::types::{Account, SponsorInfo};
+    use cfx_types::{H160, H256, U256};
+    use primitives::{
+        Account as PrimitiveAccount, SponsorInfo as PrimitiveSponsorInfo,
+    };
 
     #[test]
     fn test_account_new() {
-        let ba = BasicAccount {
-            balance: U256::one(),
-            nonce: U256::one(),
-            staking_balance: U256::one(),
-            collateral_for_storage: U256::one(),
-            accumulated_interest_return: U256::one(),
-        };
-        let pri_account =
-            PrimitiveAccount::from_basic_account(H160([0xff; 20]), ba);
+        let pri_account = PrimitiveAccount::new_empty_with_balance(
+            &H160([0x00; 20]),
+            &U256::zero(),
+            &U256::zero(),
+        )
+        .unwrap();
         let account = Account::new(pri_account);
         let account_info = serde_json::to_string(&account).unwrap();
         assert_eq!(account_info,
-        r#"{"balance":"0x1","nonce":"0x1","codeHash":"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470","stakingBalance":"0x1","collateralForStorage":"0x1","accumulatedInterestReturn":"0x1","admin":"0x0000000000000000000000000000000000000000"}"#);
+                   "{\"balance\":\"0x0\",\"nonce\":\"0x0\",\"codeHash\":\"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"stakingBalance\":\"0x0\",\"collateralForStorage\":\"0x0\",\"accumulatedInterestReturn\":\"0x0\",\"admin\":\"0x0000000000000000000000000000000000000000\"}");
     }
     #[test]
     fn test_account_serialize() {

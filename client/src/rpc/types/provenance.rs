@@ -67,10 +67,10 @@ impl fmt::Display for Origin {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::rpc::Origin;
     use cfx_types::H256;
     use serde_json;
-    use std::net::{IpAddr, Ipv4Addr};
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     #[test]
     fn test_origin_serialize() {
@@ -138,36 +138,4 @@ mod tests {
         );
         assert_eq!(de6, Origin::CApi);
     }
-    //    fn should_serialize_origin() {
-    //        // given
-    //        let o1 = Origin::Rpc("test service".into());
-    //        let o3 = Origin::Ipc(H256::from_low_u64_be(5));
-    //        let o4 = Origin::Signer {
-    //            session: H256::from_low_u64_be(10),
-    //        };
-    //        let o5 = Origin::Unknown;
-    //        let o6 = Origin::Ws {
-    //            session: H256::from_low_u64_be(5),
-    //        };
-    //
-    //        // when
-    //        let res1 = serde_json::to_string(&o1).unwrap();
-    //        let res3 = serde_json::to_string(&o3).unwrap();
-    //        let res4 = serde_json::to_string(&o4).unwrap();
-    //        let res5 = serde_json::to_string(&o5).unwrap();
-    //        let res6 = serde_json::to_string(&o6).unwrap();
-    //
-    //        // then
-    //        assert_eq!(res1, r#"{"rpc":"test service"}"#);
-    //        assert_eq!(res3,
-    // r#"{"ipc":"
-    // 0x0000000000000000000000000000000000000000000000000000000000000005"}"#);
-    //        assert_eq!(res4,
-    // r#"{"signer":{"session":"
-    // 0x000000000000000000000000000000000000000000000000000000000000000a"}}"#);
-    //        assert_eq!(res5, r#""unknown""#);
-    //        assert_eq!(res6,
-    // r#"{"ws":{"session":"
-    // 0x0000000000000000000000000000000000000000000000000000000000000005"}}"#);
-    //    }
 }

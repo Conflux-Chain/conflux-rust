@@ -483,28 +483,28 @@ mod tests {
 //             from_epoch: Some(1000.into()),
 //             to_epoch: Some(EpochNumber::LatestState),
 //             block_hashes: Some(vec![
-//                 
+//
 // H256::from_str("
 // c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
-//                 
+//
 // H256::from_str("
 // 1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
 //             ]),
 //             address: Some(VariadicValue::Multiple(vec![
-//                 
+//
 // Address::from_str("0000000000000000000000000000000000000000").unwrap(),
-//                 
+//
 // Address::from_str("0000000000000000000000000000000000000001").unwrap()
 //             ])),
 //             topics: Some(vec![
-//                 
+//
 // VariadicValue::Single(H256::from_str("
 // d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
 //                 VariadicValue::Multiple(vec![
-//                     
+//
 // H256::from_str("
 // d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
-//                     
+//
 // H256::from_str("
 // d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
 //                 ]),
@@ -519,16 +519,16 @@ mod tests {
 //             "{\
 //              \"fromEpoch\":\"0x3e8\",\
 //              \"toEpoch\":\"latest_state\",\
-//              
+//
 // \"blockHashes\":[\"
 // 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"
 // 0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
-//              
+//
 // \"address\":[\"0x0000000000000000000000000000000000000000\",\"
 // 0x0000000000000000000000000000000000000001\"],\              \"topics\":[\
-//                 
+//
 // \"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\
-//                 
+//
 // [\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\"
 // 0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\"]\
 //              ],\
@@ -557,16 +557,16 @@ mod tests {
 //         let serialized = "{\
 //              \"fromEpoch\":\"0x3e8\",\
 //              \"toEpoch\":\"latest_state\",\
-//              
+//
 // \"blockHashes\":[\"
 // 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"
 // 0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
-//              
+//
 // \"address\":[\"0x0000000000000000000000000000000000000000\",\"
 // 0x0000000000000000000000000000000000000001\"],\              \"topics\":[\
-//                 
+//
 // \"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\
-//                 
+//
 // [\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\"
 // 0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\"]\
 //              ],\
@@ -577,28 +577,28 @@ mod tests {
 //             from_epoch: Some(1000.into()),
 //             to_epoch: Some(EpochNumber::LatestState),
 //             block_hashes: Some(vec![
-//                 
+//
 // H256::from_str("
 // c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
-//                 
+//
 // H256::from_str("
 // 1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
 //             ]),
 //             address: Some(VariadicValue::Multiple(vec![
-//                 
+//
 // H160::from_str("0000000000000000000000000000000000000000").unwrap(),
-//                 
+//
 // H160::from_str("0000000000000000000000000000000000000001").unwrap()
 //             ])),
 //             topics: Some(vec![
-//                 
+//
 // VariadicValue::Single(H256::from_str("
 // d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
 //                 VariadicValue::Multiple(vec![
-//                     
+//
 // H256::from_str("
 // d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
-//                     
+//
 // H256::from_str("
 // d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
 //                 ]),
@@ -617,28 +617,28 @@ mod tests {
 //             from_epoch: None,
 //             to_epoch: None,
 //             block_hashes: Some(vec![
-//                 
+//
 // H256::from_str("
 // c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
-//                 
+//
 // H256::from_str("
 // 1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
 //             ]),
 //             address: Some(VariadicValue::Multiple(vec![
-//                 
+//
 // H160::from_str("0000000000000000000000000000000000000000").unwrap(),
-//                 
+//
 // H160::from_str("0000000000000000000000000000000000000001").unwrap()
 //             ])),
 //             topics: Some(vec![
-//                 
+//
 // VariadicValue::Single(H256::from_str("
 // d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
 //                 VariadicValue::Multiple(vec![
-//                     
+//
 // H256::from_str("
 // d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
-//                     
+//
 // H256::from_str("
 // d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
 //                 ]),
@@ -650,28 +650,28 @@ mod tests {
 //             from_epoch: PrimitiveEpochNumber::LatestCheckpoint,
 //             to_epoch: PrimitiveEpochNumber::LatestState,
 //             block_hashes: Some(vec![
-//                 
+//
 // H256::from_str("
 // c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
-//                 
+//
 // H256::from_str("
 // 1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
 //             ]),
 //             address: Some(vec![
-//                 
+//
 // H160::from_str("0000000000000000000000000000000000000000").unwrap(),
-//                 
+//
 // H160::from_str("0000000000000000000000000000000000000001").unwrap()
 //             ]),
 //             topics: vec![
-//                 
+//
 // Some(vec![H256::from_str("
 // d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").
 // unwrap()]),                 Some(vec![
-//                     
+//
 // H256::from_str("
 // d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
-//                     
+//
 // H256::from_str("
 // d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
 //                 ]),

@@ -301,10 +301,10 @@ pub struct StorageRootProof {
     pub prev_snapshot_state_root: Option<StateRoot>,
 }
 
-#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+#[derive(Clone, Debug, RlpEncodable, RlpDecodable)]
 pub struct StorageRootWithKey {
     pub key: StorageRootKey,
-    pub root: Option<StorageRoot>,
+    pub root: StorageRoot,
     pub proof: StorageRootProof,
 }
 

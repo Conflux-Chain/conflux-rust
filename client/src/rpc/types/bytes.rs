@@ -93,10 +93,9 @@ impl<'a> Visitor<'a> for BytesVisitor {
 
 #[cfg(test)]
 mod tests {
+    use crate::rpc::types::Bytes;
     use rustc_hex::FromHex;
     use serde_json;
-
-    use super::*;
 
     #[test]
     fn test_bytes_serialize() {

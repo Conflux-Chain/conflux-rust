@@ -12,9 +12,11 @@ pub struct BlameInfo {
     pub deferred_receipts_root: Option<H256>,
     pub deferred_logs_bloom_hash: Option<H256>,
 }
-
+#[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::rpc::types::BlameInfo;
+    use cfx_types::H256;
+
     #[test]
     fn test_blame_info() {
         let blame_info = BlameInfo {

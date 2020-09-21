@@ -214,7 +214,14 @@ impl<'a> Visitor<'a> for BlockHashOrEpochNumberVisitor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::rpc::types::{BlockHashOrEpochNumber, EpochNumber};
+    use cfx_types::{H256, U64};
+    use primitives::{
+        BlockHashOrEpochNumber as PrimitiveBlockHashOrEpochNumber,
+        EpochNumber as PrimitiveEpochNumber,
+    };
+    use std::str::FromStr;
+
     #[test]
     fn test_epoch_number_serialize() {
         let e1 = EpochNumber::Num(U64::one());

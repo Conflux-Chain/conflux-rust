@@ -17,7 +17,11 @@ impl<T: ABIVariable> ABIVariable for Vec<T> {
     fn from_abi(data: &[u8]) -> Result<Self, ABIDecodeError> {
         let pointer = &mut data.iter();
 
-        let expected_length = U256::from_big_endian(pull_slice(pointer, 32)?);
+        let expected_length = U256::from_big_endian(pull_slice(
+            pointer,
+            32,
+            "Incomplete length for dynamic input parameter",
+        )?);
         let data_without_length = pointer.as_slice();
         let mut i = U256::zero();
         let mut results = Vec::new();

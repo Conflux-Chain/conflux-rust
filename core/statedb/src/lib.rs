@@ -59,11 +59,11 @@ mod impls {
 
         fn get_original_storage_root(
             &self, address: &Address,
-        ) -> Result<Option<StorageRoot>>;
+        ) -> Result<StorageRoot>;
 
         fn get_original_storage_root_with_proof(
             &self, address: &Address,
-        ) -> Result<(Option<StorageRoot>, NodeMerkleProof)>;
+        ) -> Result<(StorageRoot, StorageRootProof)>;
     }
 
     pub trait StateDbCheckpointMethods {
@@ -500,26 +500,23 @@ mod impls {
 
         fn get_original_storage_root(
             &self, address: &Address,
-        ) -> Result<Option<StorageRoot>> {
+        ) -> Result<StorageRoot> {
             let key = StorageKey::new_storage_root_key(address);
 
-            let (triplet, _) =
+            let (root, _) =
                 self.storage.get_node_merkle_all_versions::<NoProof>(key)?;
 
-            Ok(StorageRoot::from_node_merkle_triplet(triplet))
+            Ok(root)
         }
 
         fn get_original_storage_root_with_proof(
             &self, address: &Address,
-        ) -> Result<(Option<StorageRoot>, NodeMerkleProof)> {
+        ) -> Result<(StorageRoot, StorageRootProof)> {
             let key = StorageKey::new_storage_root_key(address);
 
-            let (triplet, proof) = self
-                .storage
-                .get_node_merkle_all_versions::<WithProof>(key)?;
-
-            let root = StorageRoot::from_node_merkle_triplet(triplet);
-            Ok((root, proof))
+            self.storage
+                .get_node_merkle_all_versions::<WithProof>(key)
+                .map_err(Into::into)
         }
     }
 
@@ -628,7 +625,7 @@ mod impls {
     use cfx_storage::{
         state::{NoProof, WithProof},
         utils::{access_mode, to_key_prefix_iter_upper_bound},
-        MptKeyValue, NodeMerkleProof, StateProof, StorageStateTrait,
+        MptKeyValue, StateProof, StorageRootProof, StorageStateTrait,
     };
     use cfx_types::{address_util::AddressUtil, Address};
     use hashbrown::HashMap;

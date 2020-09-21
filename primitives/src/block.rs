@@ -353,12 +353,15 @@ impl Decodable for CompactBlock {
         })
     }
 }
-
+#[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{BlockHeaderBuilder, TransactionWithSignatureSerializePart};
+    use crate::{
+        block::CompactBlock, Block, BlockHeaderBuilder, SignedTransaction,
+        TransactionWithSignature, TransactionWithSignatureSerializePart,
+    };
     use cfx_types::H160;
-    use malloc_size_of::new_malloc_size_ops;
+    use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
+    use std::sync::Arc;
 
     #[test]
     fn test_block_basic() {

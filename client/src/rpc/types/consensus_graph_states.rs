@@ -68,7 +68,13 @@ impl ConsensusGraphStates {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::rpc::types::{
+        consensus_graph_states::{
+            ConsensusGraphBlockExecutionState, ConsensusGraphBlockState,
+        },
+        ConsensusGraphStates,
+    };
+    use cfx_types::{H256, U64};
     use cfxcore::{
         block_data_manager::BlockStatus,
         state_exposer::{
@@ -77,6 +83,7 @@ mod tests {
             ConsensusGraphStates as PrimitiveConsensusGraphStates,
         },
     };
+
     #[test]
     fn test_consensus_graph_states_serialize() {
         let block_state = ConsensusGraphBlockState {

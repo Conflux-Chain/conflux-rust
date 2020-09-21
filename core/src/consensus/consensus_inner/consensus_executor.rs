@@ -1106,6 +1106,8 @@ impl ConsensusExecutionHandler {
         let mut last_block_hash =
             pivot_block.block_header.parent_hash().clone();
         for block in epoch_blocks.iter() {
+            let mut tx_exec_error_messages =
+                Vec::with_capacity(block.transactions.len());
             let mut receipts = Vec::new();
             debug!(
                 "process txs in block: hash={:?}, tx count={:?}",
@@ -1150,10 +1152,12 @@ impl ConsensusExecutionHandler {
                 let gas_fee;
                 let mut gas_sponsor_paid = false;
                 let mut storage_sponsor_paid = false;
+                let tx_exec_error_msg;
                 match r {
                     ExecutionOutcome::NotExecutedDrop(e) => {
                         tx_outcome_status =
                             TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING;
+                        tx_exec_error_msg = "tx not executed".into();
                         trace!(
                             "tx not executed, not to reconsider packing: \
                              transaction={:?},err={:?}",
@@ -1165,6 +1169,7 @@ impl ConsensusExecutionHandler {
                     ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                         tx_outcome_status =
                             TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING;
+                        tx_exec_error_msg = "tx not executed".into();
                         trace!(
                             "tx not executed, to reconsider packing: \
                              transaction={:?}, err={:?}",
@@ -1187,6 +1192,7 @@ impl ConsensusExecutionHandler {
                     ) => {
                         tx_outcome_status =
                             TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING;
+                        tx_exec_error_msg = format!("{:?}", error);
 
                         env.accumulated_gas_used += executed.gas_used;
                         gas_fee = executed.fee;
@@ -1197,6 +1203,7 @@ impl ConsensusExecutionHandler {
                     }
                     ExecutionOutcome::Finished(executed) => {
                         tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
+                        tx_exec_error_msg = String::default();
                         GOOD_TPS_METER.mark(1);
 
                         env.accumulated_gas_used += executed.gas_used;
@@ -1224,6 +1231,7 @@ impl ConsensusExecutionHandler {
                     storage_released,
                 );
                 receipts.push(receipt);
+                tx_exec_error_messages.push(tx_exec_error_msg);
 
                 if on_local_pivot {
                     let hash = transaction.hash();
@@ -1243,6 +1251,7 @@ impl ConsensusExecutionHandler {
             let block_receipts = Arc::new(BlockReceipts {
                 receipts,
                 secondary_reward,
+                tx_execution_error_messages: tx_exec_error_messages,
             });
             self.data_man.insert_block_execution_result(
                 block.hash(),

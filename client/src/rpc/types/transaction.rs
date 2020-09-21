@@ -195,9 +195,12 @@ pub struct TxPoolPendingInfo {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::rpc::types::{PackedOrExecuted, Transaction};
-    use cfx_types::{Bloom, H160, H256, U256};
+    use crate::rpc::types::{
+        Bytes, PackedOrExecuted, Receipt, SendTxRequest, Transaction,
+        TxPoolPendingInfo, TxWithPoolInfo,
+    };
+    use cfx_types::{Bloom, H160, H256, U256, U64};
+    use cfxcore_accounts::AccountProvider;
     use cfxkey::Secret;
     use primitives::{
         transaction::Action, SignedTransaction,
@@ -205,7 +208,7 @@ mod tests {
         TransactionWithSignature, TransactionWithSignatureSerializePart,
     };
     use serde_json;
-    use std::str::FromStr;
+    use std::{str::FromStr, sync::Arc};
 
     #[test]
     fn test_transaction_serialize() {

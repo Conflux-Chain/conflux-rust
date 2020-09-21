@@ -27,7 +27,10 @@ impl RewardInfo {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::rpc::types::RewardInfo;
+    use cfx_types::{H160, H256, U256};
+    use cfxcore::block_data_manager::BlockRewardResult;
+
     #[test]
     fn test_reward_info_serialize() {
         let reward_info = RewardInfo {

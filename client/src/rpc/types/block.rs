@@ -111,6 +111,8 @@ pub struct Block {
     pub epoch_number: Option<U256>,
     /// Gas limit
     pub gas_limit: U256,
+    /// Gas used
+    pub gas_used: Option<U256>,
     /// Timestamp
     pub timestamp: U256,
     /// Difficulty
@@ -205,6 +207,29 @@ impl Block {
             .or_else(|| data_man.block_epoch_number(&block_hash))
             .map(Into::into);
 
+        // get the block.gas_used
+        let tx_len = b.transactions.len();
+        let gas_used = if tx_len == 0 {
+            Some(U256::from(0))
+        } else {
+            let maybe_results = consensus_inner
+                .block_execution_results_by_hash(
+                    &b.hash(),
+                    false, /* update_cache */
+                );
+            match maybe_results {
+                Some(BlockExecutionResultWithEpoch(_, execution_result)) => {
+                    let receipt = execution_result
+                        .block_receipts
+                        .receipts
+                        .get(tx_len - 1)
+                        .unwrap();
+                    Some(receipt.accumulated_gas_used)
+                }
+                None => None,
+            }
+        };
+
         Block {
             hash: H256::from(block_hash),
             parent_hash: H256::from(b.block_header.parent_hash().clone()),
@@ -226,6 +251,7 @@ impl Block {
             // PrimitiveBlock does not contain this information
             epoch_number,
             // fee system
+            gas_used,
             gas_limit: b.block_header.gas_limit().into(),
             timestamp: b.block_header.timestamp().into(),
             difficulty: b.block_header.difficulty().clone().into(),
@@ -425,6 +451,7 @@ mod tests {
             transactions_root: KECCAK_EMPTY_LIST_RLP.into(),
             epoch_number: None,
             gas_limit: U256::default(),
+            gas_used: None,
             timestamp: 0.into(),
             difficulty: U256::default(),
             pow_quality: None,
@@ -436,7 +463,7 @@ mod tests {
         };
         let serialized_block = serde_json::to_string(&block).unwrap();
 
-        assert_eq!(serialized_block, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45"}"#);
+        assert_eq!(serialized_block, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","gasUsed":null,"timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45"}"#);
     }
 
     #[test]
@@ -454,6 +481,7 @@ mod tests {
             transactions_root: KECCAK_EMPTY_LIST_RLP.into(),
             epoch_number: Some(0.into()),
             gas_limit: U256::default(),
+            gas_used: None,
             timestamp: 0.into(),
             difficulty: U256::default(),
             pow_quality: None,

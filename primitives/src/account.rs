@@ -360,48 +360,14 @@ impl fmt::Display for AccountError {
 impl std::error::Error for AccountError {
     fn description(&self) -> &str { "Account error" }
 }
-
+#[cfg(test)]
 mod tests {
-    use super::*;
-    use cfx_types::H160;
-    use core::str::FromStr;
-    #[test]
-    fn test_vote_info() {
-        let vote_info = VoteStakeInfo {
-            amount: Default::default(),
-            unlock_block_number: 0,
-        };
-        let vote_state_list = VoteStakeList {
-            0: vec![vote_info.clone()],
-        };
-        let mut vote_state_list_mut = VoteStakeList {
-            0: vec![vote_info.clone()],
-        };
-        assert_eq!(vote_state_list.deref(), &vote_state_list.0);
-        assert_eq!(
-            vote_state_list_mut.clone().deref_mut(),
-            &mut vote_state_list_mut.clone().0
-        );
-    }
-    #[test]
-    fn test_deposit_info() {
-        let deposit_info = DepositInfo {
-            amount: Default::default(),
-            deposit_time: 0,
-            accumulated_interest_rate: Default::default(),
-        };
-        let deposit_list = DepositList {
-            0: vec![deposit_info.clone()],
-        };
-        let mut deposit_list_mut = DepositList {
-            0: vec![deposit_info.clone()],
-        };
-        assert_eq!(deposit_list.deref(), &deposit_list.0);
-        assert_eq!(
-            deposit_list_mut.clone().deref_mut(),
-            &mut deposit_list_mut.clone().0
-        );
-    }
+    use crate::{
+        account::{AccountError, AddressSpace, BasicAccount, ContractAccount},
+        hash::KECCAK_EMPTY,
+        Account,
+    };
+    use cfx_types::{Address, H160, U256};
     #[test]
     fn test_account_basic() {
         let account = Account {

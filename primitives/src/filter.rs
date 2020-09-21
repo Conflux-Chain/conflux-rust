@@ -258,10 +258,10 @@ impl Filter {
 impl From<String> for FilterError {
     fn from(s: String) -> Self { FilterError::Custom(s) }
 }
-
+#[cfg(test)]
 mod tests {
-    use super::*;
-    use cfx_types::H160;
+    use crate::{filter::Filter, EpochNumber};
+    use cfx_types::{Bloom, H160, H256};
     use core::str::FromStr;
 
     #[test]
@@ -313,14 +313,6 @@ mod tests {
         let vec1 = vec![H256([0xff; 32])];
         let mut vec_topic = Vec::new();
         vec_topic.push(Some(vec1));
-        let filter2 = Filter {
-            from_epoch: EpochNumber::Earliest,
-            to_epoch: EpochNumber::Earliest,
-            block_hashes: None,
-            address: Some(vec_add.clone()),
-            topics: vec_topic,
-            limit: None,
-        };
         let bloom1 = Bloom::from_str(
             "000000000000000000000000000000\
              00000000000000000000000000000000\

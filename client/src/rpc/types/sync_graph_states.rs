@@ -47,8 +47,15 @@ impl SyncGraphStates {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use cfxcore::state_exposer::SyncGraphBlockState as PrimitiveSyncGraphBlockState;
+    use crate::rpc::types::{
+        sync_graph_states::SyncGraphBlockState, SyncGraphStates,
+    };
+    use cfx_types::{H256, U256, U64};
+    use cfxcore::state_exposer::{
+        SyncGraphBlockState as PrimitiveSyncGraphBlockState,
+        SyncGraphStates as PrimitiveSyncGraphStates,
+    };
+
     #[test]
     fn test_sync_graph_states_new() {
         let block_state = PrimitiveSyncGraphBlockState {

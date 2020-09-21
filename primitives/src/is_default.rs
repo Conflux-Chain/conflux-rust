@@ -50,7 +50,7 @@ impl IsDefault for StorageValue {
 impl IsDefault for U256 {
     fn is_default(&self) -> bool { self.is_zero() }
 }
-
+#[cfg(test)]
 mod tests {
     use crate::{
         is_default::IsDefault, Account, CodeInfo, DepositList, StorageValue,

@@ -102,8 +102,9 @@ impl<'a> Deserialize<'a> for Params {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use cfx_types::H160;
+    use super::Result;
+    use crate::rpc::types::{pubsub::Params, Header, Log};
+    use cfx_types::{H160, H256, U256};
 
     #[test]
     fn test_result_serialize() {
@@ -221,10 +222,6 @@ mod tests {
         let default = Params::default();
         assert_eq!(default, Params::None);
     }
-    // #[test]
-    // fn test_params_deserialize(){
-    //
-    // }
 }
 
 //#[cfg(test)]

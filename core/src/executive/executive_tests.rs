@@ -15,7 +15,13 @@ use crate::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
     },
 };
-use cfx_parameters::staking::*;
+use cfx_parameters::{
+    internal_contract_addresses::{
+        SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+        STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+    },
+    staking::*,
+};
 use cfx_storage::tests::new_state_manager_for_unit_test;
 use cfx_types::{
     address_util::AddressUtil, Address, BigEndianHash, U256, U512,
@@ -739,7 +745,7 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("Invalid call data length")
+        vm::Error::InternalContract("Incomplete static input parameter")
     );
     assert_eq!(
         state.balance(&sender).unwrap(),

@@ -16,11 +16,7 @@ use super::{
 use std::collections::{BTreeMap, HashMap};
 
 pub use self::{
-    admin::{AdminControl, ADMIN_CONTROL_CONTRACT_ADDRESS},
-    sponsor::{
-        SponsorWhitelistControl, SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-    },
-    staking::{Staking, STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS},
+    admin::AdminControl, sponsor::SponsorWhitelistControl, staking::Staking,
 };
 
 use crate::evm::Spec;

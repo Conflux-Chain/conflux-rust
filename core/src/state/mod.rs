@@ -9,15 +9,18 @@ pub use self::{
 
 use self::account_entry::{AccountEntry, AccountState};
 use crate::{
-    evm::Spec, executive::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-    hash::KECCAK_EMPTY, transaction_pool::SharedTransactionPool,
+    evm::Spec, hash::KECCAK_EMPTY, transaction_pool::SharedTransactionPool,
     vm::Error as vmError, vm_factory::VmFactory,
 };
+
 use cfx_bytes::Bytes;
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };
-use cfx_parameters::staking::*;
+use cfx_parameters::{
+    internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+    staking::*,
+};
 use cfx_statedb::{
     ErrorKind as DbErrorKind, Result as DbResult, StateDbExt,
     StateDbGeneric as StateDb,
@@ -275,7 +278,6 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         );
 
         if !sub.is_zero() {
-            assert!(self.exists(addr)?);
             self.sub_collateral_for_storage(addr, &sub)?;
         }
         if !inc.is_zero() {
@@ -320,7 +322,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     /// Charge and refund all the storage collaterals.
-    /// The suisided addresses are skimmed because their collateral have been
+    /// The suicided addresses are skimmed because their collateral have been
     /// checked out. This function should only be called in post-processing
     /// of a transaction.
     pub fn settle_collateral_for_all(

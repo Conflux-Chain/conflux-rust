@@ -84,9 +84,11 @@ impl Receipt {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use cfx_types::H160;
+    use crate::rpc::types::Receipt;
+    use cfx_types::{Bloom, H160, H256, U256, U64};
     use primitives::{
+        receipt::Receipt as PrimitiveReceipt,
+        SignedTransaction as PrimitiveTransaction, TransactionIndex,
         TransactionWithSignature, TransactionWithSignatureSerializePart,
     };
 

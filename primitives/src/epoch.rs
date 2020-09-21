@@ -35,9 +35,10 @@ pub enum BlockHashOrEpochNumber {
     BlockHash(H256),
     EpochNumber(EpochNumber),
 }
-
+#[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::EpochNumber;
+
     #[test]
     fn test_epoch_basic() {
         let epoch_number: EpochNumber = 0.into();

@@ -541,12 +541,16 @@ impl MallocSizeOf for SignedTransaction {
         self.transaction.size_of(ops)
     }
 }
-
+#[cfg(test)]
 mod tests {
-    use super::*;
-    use cfx_types::H512;
+    use crate::{
+        transaction::UNSIGNED_SENDER, Action, ChainIdParams, SignedTransaction,
+        Transaction, TransactionWithSignature,
+        TransactionWithSignatureSerializePart,
+    };
+    use cfx_types::{Address, H160, H256, H512, U256};
     use core::str::FromStr;
-
+    use keylib::{public_to_address, Signature};
     #[test]
     fn test_action() {
         let action_create = Action::Create;
@@ -570,10 +574,6 @@ mod tests {
             chain_id: 0,
             data: vec![],
         };
-        let secret = Secret::from_str(
-            "a100df7a048e50ed308ea696dc600215098141cb391e9527329df289f9383f65",
-        )
-        .unwrap();
 
         let address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6"
             .parse::<Address>()
@@ -635,7 +635,7 @@ mod tests {
             hash: H256::zero(),
             rlp_size: None,
         };
-        let mut mut_trans_with_sig = TransactionWithSignature {
+        let trans_with_sig_mut = TransactionWithSignature {
             transaction: TransactionWithSignatureSerializePart {
                 unsigned: transaction.clone(),
                 r: U256::zero(),
@@ -662,7 +662,7 @@ mod tests {
             hash: H256::from_str("6afedf2d3f8fe6e19c0e9318a9af5c2034b0987f9990b1012e314286dcb51655").unwrap(),
             rlp_size: None
         };
-        assert_eq!(mut_trans_with_sig.compute_hash(), res.clone());
+        assert_eq!(trans_with_sig_mut.compute_hash(), res.clone());
         let sig = Signature::from([0; 65]);
         assert_eq!(trans_with_sig.signature(), sig);
         assert_eq!(trans_with_sig.check_low_s().is_ok(), true);

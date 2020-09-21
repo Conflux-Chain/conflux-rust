@@ -16,7 +16,6 @@ mod provenance;
 mod receipt;
 mod reward_info;
 mod status;
-mod storage_root;
 mod sync_graph_states;
 mod transaction;
 
@@ -40,7 +39,6 @@ pub use self::{
     receipt::Receipt,
     reward_info::RewardInfo,
     status::Status,
-    storage_root::StorageRoot,
     sync_graph_states::SyncGraphStates,
     transaction::{
         PackedOrExecuted, SendTxRequest, Transaction, TxPoolPendingInfo,
