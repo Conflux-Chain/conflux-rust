@@ -27,7 +27,7 @@ use cfxcore::{
     consensus_parameters::*,
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
-    transaction_pool::{TxPoolConfig, DEFAULT_MAX_TRANSACTION_GAS_LIMIT},
+    transaction_pool::{TxPoolConfig},
 };
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
@@ -696,7 +696,6 @@ impl Configuration {
         TxPoolConfig {
             capacity: self.raw_conf.tx_pool_size,
             min_tx_price: self.raw_conf.tx_pool_min_tx_gas_price,
-            max_tx_gas: DEFAULT_MAX_TRANSACTION_GAS_LIMIT,
             tx_weight_scaling: self.raw_conf.tx_weight_scaling,
             tx_weight_exp: self.raw_conf.tx_weight_exp,
             target_block_gas_limit: self.raw_conf.target_block_gas_limit,

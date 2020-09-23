@@ -73,15 +73,10 @@ lazy_static! {
         Lock::register("txpool_notify_modified_info");
 }
 
-// FIXME: obviously the max tx gas limit follows the max block gas limit.
-// FIXME: and we can scale it by some factor which matches the expiry condition
-// FIXME: (according to the formular).
-pub const DEFAULT_MAX_TRANSACTION_GAS_LIMIT: u64 = 100_000_000;
 
 pub struct TxPoolConfig {
     pub capacity: usize,
     pub min_tx_price: u64,
-    pub max_tx_gas: u64,
     pub tx_weight_scaling: u64,
     pub tx_weight_exp: u8,
     pub target_block_gas_limit: u64,
@@ -96,7 +91,6 @@ impl Default for TxPoolConfig {
         TxPoolConfig {
             capacity: 500_000,
             min_tx_price: 1,
-            max_tx_gas: DEFAULT_MAX_TRANSACTION_GAS_LIMIT,
             // TODO: Set a proper default scaling since tx pool uses u128 as
             // weight.
             tx_weight_scaling: 1,
@@ -202,6 +196,17 @@ impl TransactionPool {
     ) -> StateDbResult<(U256, U256)> {
         let account_cache = self.get_best_state_account_cache();
         account_cache.get_nonce_and_balance(address)
+    }
+
+    pub fn get_max_tx_gas(&self) -> U256 {
+        let current_best_info = self.consensus_best_info.lock().clone();
+        let pivot_block = self.data_man
+            .block_from_db(&current_best_info.best_block_hash)
+            .unwrap();
+        let gas_limit = pivot_block
+            .block_header
+            .gas_limit();
+        gas_limit/2
     }
 
     /// Try to insert `transactions` into transaction pool.
@@ -465,14 +470,16 @@ impl TransactionPool {
         }
 
         // check transaction gas limit
-        if transaction.gas > self.config.max_tx_gas.into() {
+        // if transaction.gas > self.config.max_tx_gas.into() {
+        let max_tx_gas = self.get_max_tx_gas();
+        if transaction.gas > max_tx_gas {
             warn!(
                 "Transaction discarded due to above gas limit: {} > {}",
-                transaction.gas, self.config.max_tx_gas
+                transaction.gas, max_tx_gas
             );
             return Err(format!(
                 "transaction gas {} exceeds the maximum value {}",
-                transaction.gas, self.config.max_tx_gas
+                transaction.gas, max_tx_gas
             ));
         }
 
