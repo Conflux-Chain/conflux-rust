@@ -58,6 +58,7 @@ use crate::{
         RpcResult,
     },
 };
+use cfxcore::consensus::{MaybeExecutedTxExtraInfo, TransactionInfo};
 use lazy_static::lazy_static;
 use metrics::{register_timer_with_group, ScopeTimer, Timer};
 
@@ -437,18 +438,33 @@ impl RpcImpl {
         let hash: H256 = hash.into();
         info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
 
-        if let Some(info) = self.consensus.get_transaction_info_by_hash(&hash) {
-            let (tx, tx_index, maybe_executed) = info;
-            let packed_or_executed = match maybe_executed {
+        if let Some((
+            tx,
+            TransactionInfo {
+                tx_index,
+                maybe_executed_extra_info,
+            },
+        )) = self.consensus.get_transaction_info_by_hash(&hash)
+        {
+            let packed_or_executed = match maybe_executed_extra_info {
                 None => PackedOrExecuted::Packed(tx_index),
-                Some((receipt, prior_gas_used)) => {
+                Some(MaybeExecutedTxExtraInfo {
+                    receipt,
+                    prior_gas_used,
+                    tx_exec_error_msg,
+                }) => {
+                    let epoch_number = self
+                        .consensus
+                        .get_block_epoch_number(&tx_index.block_hash);
                     PackedOrExecuted::Executed(RpcReceipt::new(
                         tx.clone(),
                         receipt,
                         tx_index,
                         prior_gas_used,
+                        epoch_number,
+                        // FIXME: why is this field not set?
                         None,
-                        None,
+                        tx_exec_error_msg,
                     ))
                 }
             };
@@ -473,7 +489,7 @@ impl RpcImpl {
             consensus_graph.get_transaction_receipt_and_block_info(&hash);
         let (
             BlockExecutionResultWithEpoch(epoch_hash, execution_result),
-            address,
+            tx_index,
             maybe_state_root,
         ) = match maybe_results {
             None => return Ok(None),
@@ -496,12 +512,12 @@ impl RpcImpl {
         let block = self
             .consensus
             .get_data_manager()
-            .block_by_hash(&address.block_hash, true)
+            .block_by_hash(&tx_index.block_hash, true)
             // FIXME: server error, client should request another server.
             .ok_or("Inconsistent state")?;
         let transaction = block
             .transactions
-            .get(address.index)
+            .get(tx_index.index)
             // FIXME: server error, client should request another server.
             .ok_or("Inconsistent state")?
             .as_ref()
@@ -509,29 +525,37 @@ impl RpcImpl {
         let receipt = execution_result
             .block_receipts
             .receipts
-            .get(address.index)
+            .get(tx_index.index)
             // FIXME: server error, client should request another server.
             .ok_or("Inconsistent state")?
             .clone();
-        let prior_gas_used = if address.index == 0 {
+        let prior_gas_used = if tx_index.index == 0 {
             U256::zero()
         } else {
             let prior_receipt = execution_result
                 .block_receipts
                 .receipts
-                .get(address.index - 1)
+                .get(tx_index.index - 1)
                 // FIXME: server error, client should request another server.
                 .ok_or("Inconsistent state")?
                 .clone();
             prior_receipt.accumulated_gas_used
         };
+        let tx_exec_error_msg = &execution_result
+            .block_receipts
+            .tx_execution_error_messages[tx_index.index];
         let rpc_receipt = RpcReceipt::new(
             transaction,
             receipt,
-            address,
+            tx_index,
             prior_gas_used,
             Some(epoch_number),
             maybe_state_root,
+            if tx_exec_error_msg.is_empty() {
+                None
+            } else {
+                Some(tx_exec_error_msg.clone())
+            },
         );
         Ok(Some(rpc_receipt))
     }

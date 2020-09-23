@@ -3,7 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    consensus::SharedConsensusGraph,
+    consensus::{
+        MaybeExecutedTxExtraInfo, SharedConsensusGraph, TransactionInfo,
+    },
     light_protocol::{
         common::{
             partition_results, validate_chain_id, LedgerInfo, LightPeerState,
@@ -222,12 +224,25 @@ impl Provider {
                         reason: format!("Unable to get tx info for {:?}", hash)
                     });
                 }
-                Some((_, _, None)) => {
+                Some((
+                    _,
+                    TransactionInfo {
+                        maybe_executed_extra_info: None,
+                        ..
+                    },
+                )) => {
                     bail!(ErrorKind::UnableToProduceTxInfo {
                         reason: format!("Unable to get receipt for {:?}", hash)
                     });
                 }
-                Some((tx, tx_index, Some((receipt, _)))) => {
+                Some((
+                    tx,
+                    TransactionInfo {
+                        tx_index,
+                        maybe_executed_extra_info:
+                            Some(MaybeExecutedTxExtraInfo { receipt, .. }),
+                    },
+                )) => {
                     assert_eq!(tx.hash(), hash); // sanity check
                     (tx, tx_index, receipt)
                 }

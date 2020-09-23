@@ -43,8 +43,13 @@ struct Statistics {
 // prioritize earlier requests
 type MissingTxInfo = TimeOrdered<H256>;
 
-// FIXME: struct
-pub type TxInfoValidated = (SignedTransaction, Receipt, TransactionIndex, U256);
+#[derive(Clone)]
+pub struct TxInfoValidated {
+    pub tx: SignedTransaction,
+    pub receipt: Receipt,
+    pub tx_index: TransactionIndex,
+    pub prior_gas_used: U256,
+}
 
 type PendingTxInfo = PendingItem<TxInfoValidated, ClonableError>;
 
@@ -345,7 +350,7 @@ impl TxInfos {
         };
 
         // store
-        let address = TransactionIndex {
+        let tx_index = TransactionIndex {
             block_hash,
             index: tx_index_in_block,
         };
@@ -354,7 +359,12 @@ impl TxInfos {
             .write()
             .entry(tx_hash)
             .or_insert(PendingItem::pending())
-            .set((tx, receipt, address, prior_gas_used));
+            .set(TxInfoValidated {
+                tx,
+                receipt,
+                tx_index,
+                prior_gas_used,
+            });
 
         Ok(())
     }

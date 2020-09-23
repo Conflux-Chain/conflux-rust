@@ -4,7 +4,7 @@
 
 use crate::{
     block_data_manager::BlockDataManager,
-    consensus::{BestInformation, ConsensusConfig},
+    consensus::{BestInformation, ConsensusConfig, TransactionInfo},
     rpc_errors::Result as RpcResult,
     state::State,
     statistics::SharedStatistics,
@@ -12,9 +12,7 @@ use crate::{
 };
 use cfx_statedb::StateDb;
 use cfx_types::{H256, U256};
-use primitives::{
-    receipt::Receipt, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
-};
+use primitives::{EpochId, EpochNumber, SignedTransaction};
 use std::{any::Any, sync::Arc};
 
 /// FIXME: redesign this trait
@@ -71,10 +69,9 @@ pub trait ConsensusGraphTrait: Send + Sync {
         &self, epoch_number: EpochNumber,
     ) -> Result<Vec<H256>, String>;
 
-    // FIXME: return type.
     fn get_transaction_info_by_hash(
         &self, hash: &H256,
-    ) -> Option<(SignedTransaction, TransactionIndex, Option<(Receipt, U256)>)>;
+    ) -> Option<(SignedTransaction, TransactionInfo)>;
 
     fn get_block_epoch_number(&self, hash: &H256) -> Option<u64>;
 

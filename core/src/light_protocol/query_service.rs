@@ -34,15 +34,14 @@ use primitives::{
 use rlp::Rlp;
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 
-// FIXME: struct
-type TxInfo = (
-    SignedTransaction,
-    Receipt,
-    TransactionIndex,
-    Option<u64>,  /* maybe_epoch */
-    Option<H256>, /* maybe_state_root */
-    U256,         /* prior_gas_used */
-);
+pub struct TxInfo {
+    pub tx: SignedTransaction,
+    pub receipt: Receipt,
+    pub tx_index: TransactionIndex,
+    pub maybe_epoch: Option<u64>,
+    pub maybe_state_root: Option<H256>,
+    pub prior_gas_used: U256,
+}
 
 // As of now, the jsonrpc crate uses legacy futures (futures@0.1 and tokio@0.1).
 // Because of this, our RPC runtime cannot handle tokio@0.2 timing primitives.
@@ -323,17 +322,28 @@ impl QueryService {
         // Note: if a transaction does not exist, we fail with timeout, as
         //       peers cannot provide non-existence proofs for transactions.
         // FIXME: is there a better way?
-        let (tx, receipt, address, prior_gas_used) =
-            self.retrieve_tx_info(hash).await?;
+        let TxInfoValidated {
+            tx,
+            receipt,
+            tx_index,
+            prior_gas_used,
+        } = self.retrieve_tx_info(hash).await?;
 
-        let hash = address.block_hash;
-        let epoch = self.consensus.get_block_epoch_number(&hash);
+        let hash = tx_index.block_hash;
+        let maybe_epoch = self.consensus.get_block_epoch_number(&hash);
 
-        let root = epoch
+        let maybe_state_root = maybe_epoch
             .and_then(|e| self.handler.witnesses.root_hashes_of(e).ok())
             .map(|roots| roots.state_root_hash);
 
-        Ok((tx, receipt, address, epoch, root, prior_gas_used))
+        Ok(TxInfo {
+            tx,
+            receipt,
+            tx_index,
+            maybe_epoch,
+            maybe_state_root,
+            prior_gas_used,
+        })
     }
 
     /// Relay raw transaction to all peers.
