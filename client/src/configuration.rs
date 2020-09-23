@@ -27,7 +27,7 @@ use cfxcore::{
     consensus_parameters::*,
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
-    transaction_pool::{TxPoolConfig},
+    transaction_pool::TxPoolConfig,
 };
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;

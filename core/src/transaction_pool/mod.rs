@@ -73,7 +73,6 @@ lazy_static! {
         Lock::register("txpool_notify_modified_info");
 }
 
-
 pub struct TxPoolConfig {
     pub capacity: usize,
     pub min_tx_price: u64,
@@ -200,13 +199,12 @@ impl TransactionPool {
 
     pub fn get_max_tx_gas(&self) -> U256 {
         let current_best_info = self.consensus_best_info.lock().clone();
-        let pivot_block = self.data_man
+        let pivot_block = self
+            .data_man
             .block_from_db(&current_best_info.best_block_hash)
             .unwrap();
-        let gas_limit = pivot_block
-            .block_header
-            .gas_limit();
-        gas_limit/2
+        let gas_limit = pivot_block.block_header.gas_limit();
+        gas_limit / 2
     }
 
     /// Try to insert `transactions` into transaction pool.
