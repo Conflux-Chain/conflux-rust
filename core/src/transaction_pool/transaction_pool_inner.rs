@@ -503,7 +503,7 @@ impl TransactionPoolInner {
     ) -> StateDbResult<(U256, U256)> {
         let nonce_and_balance = state.get_nonce_and_balance(address)?;
         if !self.deferred_pool.contain_address(address) {
-            return Ok(nonce_and_balance)
+            return Ok(nonce_and_balance);
         }
         let count =
             self.deferred_pool.count_less(address, &nonce_and_balance.0);
