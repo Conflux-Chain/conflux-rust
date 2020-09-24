@@ -20,3 +20,4 @@ Use `mining_type` to allow start CPU mining or disable mining manually.
 - CIP-12 Allow non-zero collateral contract to be killed.
 - CIP-13 Use Big-Endian MPT Keys.
 - CIP-16 Collect suicide logic at the end of transaction processing
+- CIP-27 Remove sponsor whitelist keys at contract deletion.
