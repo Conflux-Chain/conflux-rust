@@ -454,13 +454,13 @@ impl RpcImpl {
                     tx_exec_error_msg,
                 }) => {
                     let epoch_number = self
-                    .consensus
-                    .get_block_epoch_number(&tx_index.block_hash);
+                        .consensus
+                        .get_block_epoch_number(&tx_index.block_hash);
 
                     let maybe_state_root = self
-                    .consensus
-                    .get_data_manager()
-                    .get_executed_state_root(&tx_index.block_hash);
+                        .consensus
+                        .get_data_manager()
+                        .get_executed_state_root(&tx_index.block_hash);
 
                     PackedOrExecuted::Executed(RpcReceipt::new(
                         tx.clone(),
