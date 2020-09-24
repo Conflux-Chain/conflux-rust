@@ -6,7 +6,7 @@ license = "MIT/Apache-2.0"
 
 [dependencies]
 cfx-types = { path = "../../cfx_types" }
-cfg-if = "0.1.9"
+cfg-if = "0.1"
 hashbrown = "0.7.1"
 winapi = "0.3.7"
 slab = "0.4"

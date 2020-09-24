@@ -220,9 +220,18 @@ fn test_slice_verifier() {
 }
 
 #[derive(Default)]
-struct FakeSnapshotDb {
-    kv: HashMap<Vec<u8>, Box<[u8]>>,
+pub struct FakeSnapshotDb {
+    kv: BTreeMap<Vec<u8>, Box<[u8]>>,
     mpt_db: Arc<Mutex<FakeSnapshotMptDb>>,
+}
+
+impl FakeSnapshotDb {
+    pub fn new(kv: &[(Vec<u8>, Box<[u8]>)], mpt: &FakeSnapshotMptDb) -> Self {
+        Self {
+            kv: kv.iter().cloned().collect(),
+            mpt_db: Arc::new(Mutex::new(mpt.clone())),
+        }
+    }
 }
 
 impl KeyValueDbTypes for Arc<Mutex<FakeSnapshotDb>> {
@@ -287,6 +296,76 @@ impl SnapshotMptTraitRw for Arc<Mutex<FakeSnapshotMptDb>> {
     }
 }
 
+impl WrappedTrait<dyn FallibleIterator<Item = MptKeyValue, Error = Error>>
+    for KvdbIterIterator<MptKeyValue, [u8], FakeSnapshotDb>
+{
+}
+impl<'a>
+    WrappedLifetimeFamily<
+        'a,
+        dyn FallibleIterator<Item = MptKeyValue, Error = Error>,
+    > for KvdbIterIterator<MptKeyValue, [u8], FakeSnapshotDb>
+{
+    type Out = DumpedMptKvFallibleIterator;
+}
+
+impl KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>
+    for ArcMutexFakeSnapshotDbRef<'_>
+{
+    fn iter_range(
+        &mut self, lower_bound_incl: &[u8], upper_bound_excl: Option<&[u8]>,
+    ) -> Result<
+        Wrap<
+            KvdbIterIterator<(Vec<u8>, Box<[u8]>), [u8], FakeSnapshotDb>,
+            dyn FallibleIterator<Item = (Vec<u8>, Box<[u8]>), Error = Error>,
+        >,
+    > {
+        let db = &*self.r.lock();
+        Ok(Wrap(DumpedMptKvFallibleIterator {
+            kv: db
+                .kv
+                .range((
+                    Included(Vec::from(lower_bound_incl)),
+                    upper_bound_excl
+                        .map_or(Unbounded, |v| Excluded(Vec::from(v))),
+                ))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+            index: 0,
+        }))
+    }
+
+    fn iter_range_excl(
+        &mut self, lower_bound_excl: &[u8], upper_bound_excl: &[u8],
+    ) -> Result<
+        Wrap<
+            KvdbIterIterator<(Vec<u8>, Box<[u8]>), [u8], FakeSnapshotDb>,
+            dyn FallibleIterator<Item = (Vec<u8>, Box<[u8]>), Error = Error>,
+        >,
+    > {
+        let db = &*self.r.lock();
+        Ok(Wrap(DumpedMptKvFallibleIterator {
+            kv: db
+                .kv
+                .range((
+                    Excluded(Vec::from(lower_bound_excl)),
+                    Excluded(Vec::from(upper_bound_excl)),
+                ))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+            index: 0,
+        }))
+    }
+}
+
+pub struct ArcMutexFakeSnapshotDbRef<'a> {
+    // To work around an annoying rust compilation error because Arc is an
+    // upstream type. Rust is afraid that DerefMut is implemented for Arc
+    // so that which implementation for KvdbIterImplKind to apply can become
+    // ambigiuous.
+    r: &'a Arc<Mutex<FakeSnapshotDb>>,
+}
+
 impl<'db> OpenSnapshotMptTrait<'db> for Arc<Mutex<FakeSnapshotDb>> {
     type SnapshotDbAsOwnedType = Arc<Mutex<FakeSnapshotMptDb>>;
     type SnapshotDbBorrowMutType = Arc<Mutex<FakeSnapshotMptDb>>;
@@ -311,7 +390,31 @@ impl<'db> OpenSnapshotMptTrait<'db> for Arc<Mutex<FakeSnapshotDb>> {
     }
 }
 
+enable_impl_transmute_for_element_satisfy! {
+    generic ;
+    trait 'static + KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>;
+    for ArcMutexFakeSnapshotDbRef<'_>;
+}
+
+impl
+    WrappedTrait<dyn KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>>
+    for Arc<Mutex<FakeSnapshotDb>>
+{
+}
+
+impl<'a>
+    WrappedLifetimeFamily<
+        'a,
+        dyn KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>,
+    > for Arc<Mutex<FakeSnapshotDb>>
+{
+    type Out = ArcMutexFakeSnapshotDbRef<'a>;
+}
+
 impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
+    type SnapshotKvdbIterTraitTag = FakeSnapshotDb;
+    type SnapshotKvdbIterType = Self;
+
     fn get_null_snapshot() -> Self { unreachable!() }
 
     fn open(
@@ -343,6 +446,17 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
     fn start_transaction(&mut self) -> Result<()> { Ok(()) }
 
     fn commit_transaction(&mut self) -> Result<()> { Ok(()) }
+
+    fn snapshot_kv_iterator(
+        &self,
+    ) -> Result<
+        Wrap<
+            Self::SnapshotKvdbIterType,
+            dyn KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>,
+        >,
+    > {
+        Ok(Wrap(ArcMutexFakeSnapshotDbRef { r: self }))
+    }
 }
 
 #[derive(Default)]
@@ -590,24 +704,31 @@ use crate::{
         storage_db::snapshot_db_manager_sqlite::AlreadyOpenSnapshots,
     },
     storage_db::{
-        DbValueType, KeyValueDbTraitOwnedRead, KeyValueDbTraitRead,
-        KeyValueDbTraitSingleWriter, KeyValueDbTypes, OpenSnapshotMptTrait,
-        SnapshotDbManagerTrait, SnapshotDbTrait, SnapshotInfo,
-        SnapshotMptIteraterTrait, SnapshotMptNode, SnapshotMptTraitRead,
-        SnapshotMptTraitReadAndIterate, SnapshotMptTraitRw,
+        DbValueType, KeyValueDbIterableTrait, KeyValueDbTraitOwnedRead,
+        KeyValueDbTraitRead, KeyValueDbTraitSingleWriter, KeyValueDbTypes,
+        KvdbIterIterator, OpenSnapshotMptTrait, SnapshotDbManagerTrait,
+        SnapshotDbTrait, SnapshotInfo, SnapshotMptIteraterTrait,
+        SnapshotMptNode, SnapshotMptTraitRead, SnapshotMptTraitReadAndIterate,
+        SnapshotMptTraitRw,
     },
     tests::{
         generate_keys, get_rng_for_test, snapshot::FakeSnapshotMptDb,
-        DumpedMptKvIterator, TEST_NUMBER_OF_KEYS,
+        DumpedMptKvFallibleIterator, DumpedMptKvIterator, TEST_NUMBER_OF_KEYS,
     },
-    DeltaMptIterator, MptSlicer,
+    utils::{
+        tuple::ElementSatisfy,
+        wrap::{Wrap, WrappedLifetimeFamily, WrappedTrait},
+    },
+    DeltaMptIterator, MptKeyValue, MptSlicer,
 };
+use fallible_iterator::FallibleIterator;
 use parking_lot::{Mutex, RwLock, RwLockWriteGuard};
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
 use rand::Rng;
 use std::{
     cmp::{max, min},
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
+    ops::Bound::{Excluded, Included, Unbounded},
     path::{Path, PathBuf},
     sync::Arc,
 };

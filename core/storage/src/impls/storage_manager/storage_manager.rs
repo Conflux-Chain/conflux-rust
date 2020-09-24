@@ -559,7 +559,6 @@ impl StorageManager {
                                         &snapshot_epoch_id,
                                         /* try_open = */ false,
                                     )?.unwrap();
-                                let mut mpt = snapshot_db.open_snapshot_mpt_shared()?;
                                 let mut set_keys_iter =
                                     snapshot_db.dumped_delta_kv_set_keys_iterator()?;
                                 let mut delete_keys_iter =
@@ -577,63 +576,26 @@ impl StorageManager {
 
                                 let mut checker_count = 0;
 
-                                let mut set_iter = set_keys_iter.iter_range(
+                                let set_iter = set_keys_iter.iter_range(
                                     &[begin_range],
-                                    end_range_excl.as_ref().map(|v| &**v))?;
-                                let mut cursor = MptCursor::<
-                                    &mut dyn SnapshotMptTraitRead,
-                                    BasicPathNode<&mut dyn SnapshotMptTraitRead>,
-                                >::new(&mut mpt);
-                                cursor.load_root()?;
-                                while let Some((access_key, _)) = set_iter.next()? {
-                                    cursor.open_path_for_key::<access_mode::Read>(&access_key)?;
-                                    checker_count += 1;
-                                }
-                                //debug!("Snapshot checker: a sample snapshot proof {:?}", cursor.to_proof());
-                                cursor.finish()?;
-                                drop(cursor);
+                                    end_range_excl.as_ref().map(|v| &**v))?
+                                    .take();
+                                checker_count += check_key_value_load(&snapshot_db, set_iter, /* check_value = */ true)?;
 
-                                let mut set_iter = previous_set_keys_iter.iter_range(
-                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?;
-                                let mut cursor = MptCursor::<
-                                    &mut dyn SnapshotMptTraitRead,
-                                    BasicPathNode<&mut dyn SnapshotMptTraitRead>,
-                                >::new(&mut mpt);
-                                cursor.load_root()?;
-                                while let Some((access_key, _)) = set_iter.next()? {
-                                    cursor.open_path_for_key::<access_mode::Read>(&access_key)?;
-                                    checker_count += 1;
-                                }
-                                cursor.finish()?;
-                                drop(cursor);
+                                let set_iter = previous_set_keys_iter.iter_range(
+                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?
+                                    .take();
+                                checker_count += check_key_value_load(&snapshot_db, set_iter, /* check_value = */ false)?;
 
-                                let mut delete_iter = delete_keys_iter.iter_range(
-                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?;
-                                let mut cursor = MptCursor::<
-                                    &mut dyn SnapshotMptTraitRead,
-                                    BasicPathNode<&mut dyn SnapshotMptTraitRead>,
-                                >::new(&mut mpt);
-                                cursor.load_root()?;
-                                while let Some((access_key, _)) = delete_iter.next()? {
-                                    cursor.open_path_for_key::<access_mode::Read>(&access_key)?;
-                                    checker_count += 1;
-                                }
-                                cursor.finish()?;
-                                drop(cursor);
+                                let delete_iter = delete_keys_iter.iter_range(
+                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?
+                                    .take();
+                                checker_count += check_key_value_load(&snapshot_db, delete_iter, /* check_value = */ false)?;
 
-                                let mut delete_iter = previous_delete_keys_iter.iter_range(
-                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?;
-                                let mut cursor = MptCursor::<
-                                    &mut dyn SnapshotMptTraitRead,
-                                    BasicPathNode<&mut dyn SnapshotMptTraitRead>,
-                                >::new(&mut mpt);
-                                cursor.load_root()?;
-                                while let Some((access_key, _)) = delete_iter.next()? {
-                                    cursor.open_path_for_key::<access_mode::Read>(&access_key)?;
-                                    checker_count += 1;
-                                }
-                                cursor.finish()?;
-                                drop(cursor);
+                                let delete_iter = previous_delete_keys_iter.iter_range(
+                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?
+                                    .take();
+                                checker_count += check_key_value_load(&snapshot_db, delete_iter, /* check_value = */ false)?;
 
                                 debug!(
                                     "Finished: snapshot checker {} of {}, {} keys",
@@ -1326,22 +1288,23 @@ use crate::{
             node_ref_map::DeltaMptId,
         },
         errors::*,
-        merkle_patricia_trie::mpt_cursor::{BasicPathNode, MptCursor},
         state_manager::{DeltaDbManager, SnapshotDb, SnapshotDbManager},
-        storage_db::kvdb_sqlite::{
-            kvdb_sqlite_iter_range_impl, KvdbSqliteDestructureTrait,
-            KvdbSqliteStatements,
+        storage_db::{
+            kvdb_sqlite::{
+                kvdb_sqlite_iter_range_impl, KvdbSqliteDestructureTrait,
+                KvdbSqliteStatements,
+            },
+            snapshot_db_sqlite::test_lib::check_key_value_load,
         },
         storage_manager::snapshot_manager::SnapshotManager,
     },
     snapshot_manager::SnapshotManagerTrait,
     storage_db::{
-        key_value_db::KeyValueDbIterableTrait,
-        snapshot_db::OpenSnapshotMptTrait, DeltaDbManagerTrait,
-        SnapshotDbManagerTrait, SnapshotInfo, SnapshotMptTraitRead,
+        DeltaDbManagerTrait, KeyValueDbIterableTrait, SnapshotDbManagerTrait,
+        SnapshotInfo,
     },
     storage_dir,
-    utils::{access_mode, arc_ext::*, guarded_value::GuardedValue},
+    utils::{arc_ext::*, guarded_value::GuardedValue},
     DeltaMpt, DeltaMptIdGen, DeltaMptIterator, KeyValueDbTrait, KvdbSqlite,
     StateIndex, StateRootWithAuxInfo, StorageConfiguration,
 };

@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+pub mod test_lib;
+
 pub struct SnapshotDbSqlite {
     // Option because we need an empty snapshot db for empty snapshot.
     maybe_db_connections: Option<Box<[SqliteConnection]>>,
@@ -231,6 +233,10 @@ impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
 }
 
 impl SnapshotDbTrait for SnapshotDbSqlite {
+    type SnapshotKvdbIterTraitTag = KvdbSqliteShardedIteratorTag;
+    type SnapshotKvdbIterType =
+        KvdbSqliteSharded<<Self as KeyValueDbTypes>::ValueType>;
+
     fn get_null_snapshot() -> Self {
         Self {
             maybe_db_connections: None,
@@ -322,8 +328,8 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             &mut mpt_to_modify as &mut dyn SnapshotMptTraitRw,
         );
         let snapshot_root = mpt_merger.merge_insertion_deletion_separated(
-            delete_keys_iter.iter_range(&[], None)?,
-            set_keys_iter.iter_range(&[], None)?,
+            delete_keys_iter.iter_range(&[], None)?.take(),
+            set_keys_iter.iter_range(&[], None)?.take(),
         )?;
         self.commit_transaction()?;
 
@@ -334,8 +340,8 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         &mut self, old_snapshot_db: &SnapshotDbSqlite,
     ) -> Result<MerkleHash> {
         debug!("copy_and_merge begins.");
-        let mut kv_iter = old_snapshot_db.snapshot_kv_iterator()?;
-        let mut iter = kv_iter.iter_range(&[], None)?;
+        let mut kv_iter = old_snapshot_db.snapshot_kv_iterator()?.take();
+        let mut iter = kv_iter.iter_range(&[], None)?.take();
         while let Ok(kv_item) = iter.next() {
             match kv_item {
                 Some((k, v)) => {
@@ -358,8 +364,8 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             &mut save_as_mpt as &mut dyn SnapshotMptTraitRw,
         );
         let snapshot_root = mpt_merger.merge_insertion_deletion_separated(
-            delete_keys_iter.iter_range(&[], None)?,
-            set_keys_iter.iter_range(&[], None)?,
+            delete_keys_iter.iter_range(&[], None)?.take(),
+            set_keys_iter.iter_range(&[], None)?.take(),
         )?;
         self.commit_transaction()?;
 
@@ -382,6 +388,24 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             }
         }
         Ok(())
+    }
+
+    fn snapshot_kv_iterator(
+        &self,
+    ) -> Result<
+        Wrap<
+            Self::SnapshotKvdbIterType,
+            dyn KeyValueDbIterableTrait<
+                MptKeyValue,
+                [u8],
+                KvdbSqliteShardedIteratorTag,
+            >,
+        >,
+    > {
+        Ok(Wrap(KvdbSqliteSharded::new(
+            self.try_clone_connections()?,
+            SNAPSHOT_DB_STATEMENTS.kvdb_statements.clone(),
+        )))
     }
 }
 
@@ -406,15 +430,6 @@ impl SnapshotDbSqlite {
 
     pub fn set_remove_on_last_close(&self) {
         self.remove_on_close.store(true, Ordering::Relaxed);
-    }
-
-    pub fn snapshot_kv_iterator(
-        &self,
-    ) -> Result<KvdbSqliteSharded<<Self as KeyValueDbTypes>::ValueType>> {
-        Ok(KvdbSqliteSharded::new(
-            self.try_clone_connections()?,
-            SNAPSHOT_DB_STATEMENTS.kvdb_statements.clone(),
-        ))
     }
 
     pub fn dumped_delta_kv_set_keys_iterator(
@@ -596,6 +611,7 @@ use crate::{
                 KvdbSqliteSharded, KvdbSqliteShardedBorrowMut,
                 KvdbSqliteShardedBorrowShared,
                 KvdbSqliteShardedDestructureTrait,
+                KvdbSqliteShardedIteratorTag,
                 KvdbSqliteShardedRefDestructureTrait,
             },
             snapshot_db_manager_sqlite::AlreadyOpenSnapshots,
@@ -610,6 +626,7 @@ use crate::{
         SingleWriterImplFamily, SnapshotDbTrait, SnapshotMptDbValue,
         SnapshotMptTraitReadAndIterate, SnapshotMptTraitRw,
     },
+    utils::wrap::Wrap,
     KVInserter, SnapshotDbManagerSqlite, SqliteConnection,
 };
 use fallible_iterator::FallibleIterator;

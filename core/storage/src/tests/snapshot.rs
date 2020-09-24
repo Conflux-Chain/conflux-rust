@@ -9,14 +9,25 @@ mod slicer;
 #[cfg(test)]
 mod verifier;
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default)]
 pub struct FakeSnapshotMptDb {
     db: BTreeMap<Vec<u8>, SnapshotMptNode>,
     in_place_mode: bool,
     already_written: HashSet<Vec<u8>>,
+    discard_write: bool,
 }
 
 impl FakeSnapshotMptDb {
+    /// With discard_write, it tests if the MptMerger does not rely on the value
+    /// to write to work correctly. In other words, MptMerger works correctly
+    /// only reading the data to merge.
+    pub fn new_discard_write() -> Self {
+        Self {
+            discard_write: true,
+            ..Default::default()
+        }
+    }
+
     #[cfg(test)]
     fn reset(&mut self, in_place_mode: bool) {
         self.in_place_mode = in_place_mode;
@@ -72,7 +83,13 @@ impl SnapshotMptTraitRead for FakeSnapshotMptDb {
     fn load_node(
         &mut self, path: &dyn CompressedPathTrait,
     ) -> Result<Option<SnapshotMptNode>> {
-        Ok(self.db.get(&mpt_node_path_to_db_key(path)).cloned())
+        let result = Ok(self.db.get(&mpt_node_path_to_db_key(path)).cloned());
+        if CHECK_LOADED_SNAPSHOT_MPT_NODE {
+            if let Ok(Some(node)) = &result {
+                node.is_valid(path);
+            }
+        }
+        result
     }
 }
 
@@ -95,6 +112,9 @@ impl SnapshotMptTraitReadAndIterate for FakeSnapshotMptDb {
 
 impl SnapshotMptTraitRw for FakeSnapshotMptDb {
     fn delete_node(&mut self, path: &dyn CompressedPathTrait) -> Result<()> {
+        if self.discard_write {
+            return Ok(());
+        }
         let key = mpt_node_path_to_db_key(path);
         let old_value = self.db.remove(&key);
         if self.in_place_mode {
@@ -115,6 +135,9 @@ impl SnapshotMptTraitRw for FakeSnapshotMptDb {
     fn write_node(
         &mut self, path: &dyn CompressedPathTrait, trie_node: &SnapshotMptNode,
     ) -> Result<()> {
+        if self.discard_write {
+            return Ok(());
+        }
         let key = mpt_node_path_to_db_key(path);
         self.db.insert(key.clone(), trie_node.clone());
         if !self.already_written.insert(key.clone()) {
@@ -343,9 +366,18 @@ fn test_inserts_deletes_and_subtree_size() {
     };
 
     let mut in_place_mod_mpt = FakeSnapshotMptDb::default();
-    MptMerger::new(None, &mut in_place_mod_mpt)
+    in_place_mod_mpt.reset(/* in_place_mode = */ true);
+    let init_merkle_root = MptMerger::new(None, &mut in_place_mod_mpt)
         .merge(&mpt_kv_iter)
         .unwrap();
+
+    let mut in_place_mod_mpt_discard_write =
+        FakeSnapshotMptDb::new_discard_write();
+    in_place_mod_mpt_discard_write.reset(/* in_place_mode = */ true);
+    let merkle_root = MptMerger::new(None, &mut in_place_mod_mpt_discard_write)
+        .merge(&mpt_kv_iter)
+        .unwrap();
+    assert_eq!(init_merkle_root, merkle_root);
 
     let mpt_kv_iter = DumpedMptKvIterator {
         kv: keys_new
@@ -354,6 +386,7 @@ fn test_inserts_deletes_and_subtree_size() {
             .collect(),
     };
     let mut new_snapshot_mpt = FakeSnapshotMptDb::default();
+    new_snapshot_mpt.reset(/* in_place_mode = */ true);
     let supposed_merkle_root = MptMerger::new(None, &mut new_snapshot_mpt)
         .merge(&mpt_kv_iter)
         .unwrap();
@@ -408,6 +441,7 @@ fn test_inserts_deletes_and_subtree_size() {
     };
 
     let mut in_place_mod_mpt = FakeSnapshotMptDb::default();
+    in_place_mod_mpt.reset(/* in_place_mode = */ true);
     MptMerger::new(None, &mut in_place_mod_mpt)
         .merge(&mpt_kv_iter)
         .unwrap();
@@ -430,9 +464,15 @@ fn test_inserts_deletes_and_subtree_size() {
         .concat(),
     };
     let mut new_snapshot_mpt = FakeSnapshotMptDb::default();
+    new_snapshot_mpt.reset(/* in_place_mode = */ true);
     let supposed_merkle_root = MptMerger::new(None, &mut new_snapshot_mpt)
         .merge(&mpt_kv_iter)
         .unwrap();
+    let new_snapshot_db = Arc::new(Mutex::new(FakeSnapshotDb::new(
+        &mpt_kv_iter.kv,
+        &new_snapshot_mpt,
+    )));
+    verify_snapshot_db(&new_snapshot_db);
 
     let delta_mpt_iter = DumpedMptKvIterator {
         kv: [
@@ -456,6 +496,15 @@ fn test_inserts_deletes_and_subtree_size() {
         MptMerger::new(Some(&mut in_place_mod_mpt), &mut save_as_mode_mpt)
             .merge(&delta_mpt_iter)
             .unwrap();
+    // Verify the mpt node structure.
+    // FIXME: uncomment when the known bug is fixed.
+    /*
+    let save_as_mode_snapshot_db = Arc::new(Mutex::new(FakeSnapshotDb::new(
+        &mpt_kv_iter.kv,
+        &save_as_mode_mpt,
+    )));
+    verify_snapshot_db(&save_as_mode_snapshot_db);
+    */
     assert_eq!(new_merkle_root, supposed_merkle_root);
     new_snapshot_mpt.assert_eq(&save_as_mode_mpt);
 
@@ -463,6 +512,11 @@ fn test_inserts_deletes_and_subtree_size() {
     let new_merkle_root = MptMerger::new(None, &mut in_place_mod_mpt)
         .merge(&delta_mpt_iter)
         .unwrap();
+    let in_place_mode_snapshot_db = Arc::new(Mutex::new(FakeSnapshotDb::new(
+        &mpt_kv_iter.kv,
+        &in_place_mod_mpt,
+    )));
+    verify_snapshot_db(&in_place_mode_snapshot_db);
     assert_eq!(new_merkle_root, supposed_merkle_root);
     in_place_mod_mpt.assert_eq(&new_snapshot_mpt);
 }
@@ -498,6 +552,7 @@ fn test_two_way_merge() {
     };
 
     let mut in_place_mod_mpt = FakeSnapshotMptDb::default();
+    in_place_mod_mpt.reset(/* in_place_mode = */ true);
     MptMerger::new(None, &mut in_place_mod_mpt)
         .merge(&mpt_kv_iter)
         .unwrap();
@@ -568,8 +623,8 @@ use crate::{
         },
     },
     storage_db::{
-        SnapshotMptIteraterTrait, SnapshotMptNode, SnapshotMptTraitRead,
-        SnapshotMptTraitRw,
+        snapshot_mpt::CHECK_LOADED_SNAPSHOT_MPT_NODE, SnapshotMptIteraterTrait,
+        SnapshotMptNode, SnapshotMptTraitRead, SnapshotMptTraitRw,
     },
 };
 use fallible_iterator::FallibleIterator;
@@ -582,17 +637,21 @@ use std::{
 #[cfg(test)]
 use crate::{
     impls::merkle_patricia_trie::{MptMerger, TrieNodeTrait},
+    impls::storage_db::snapshot_mpt::tests::verify_snapshot_db,
     state::StateTrait,
     state_manager::StateManagerTrait,
     tests::{
         generate_keys, get_rng_for_test, new_state_manager_for_unit_test,
-        DumpedMptKvIterator, TEST_NUMBER_OF_KEYS,
+        snapshot::verifier::FakeSnapshotDb, DumpedMptKvIterator,
+        TEST_NUMBER_OF_KEYS,
     },
     StateIndex,
 };
+#[cfg(test)]
+use parking_lot::Mutex;
 #[cfg(test)]
 use primitives::{EpochId, StorageKey, MERKLE_NULL_NODE};
 #[cfg(test)]
 use rand::Rng;
 #[cfg(test)]
-use std::sync::atomic::Ordering;
+use std::sync::{atomic::Ordering, Arc};

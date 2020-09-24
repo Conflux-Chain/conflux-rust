@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::utils::tuple::ElementSatisfy;
+
 /// This trait is designed for associated type in trait, such as iterator,
 /// where the type could be a borrow of self, or an independent type.
 ///
@@ -58,6 +60,28 @@
 /// In some other cases, with &'x F, rust requires F: 'x in generic type
 /// constrain, which may be harder to workaround for HRTB.
 
-// TODO: Implement, to have a proper iterator. Otherwise delete this file at
-// clean up.
-trait WrapTrait {}
+pub trait WrappedLifetimeFamily<'a, Constrain: ?Sized> {
+    type Out: 'a + Sized + ElementSatisfy<Constrain>;
+}
+
+pub trait WrappedTrait<Constrain: ?Sized>:
+    for<'a> WrappedLifetimeFamily<'a, Constrain>
+where for<'a> <Self as WrappedLifetimeFamily<'a, Constrain>>::Out: Sized
+{
+}
+
+pub struct Wrap<
+    'a,
+    Wrapped: ?Sized + WrappedTrait<Constrain>,
+    Constrain: ?Sized,
+>(pub <Wrapped as WrappedLifetimeFamily<'a, Constrain>>::Out);
+
+impl<'a, Wrapped: ?Sized + WrappedTrait<Constrain>, Constrain: ?Sized>
+    Wrap<'a, Wrapped, Constrain>
+{
+    pub fn take(
+        self,
+    ) -> <Wrapped as WrappedLifetimeFamily<'a, Constrain>>::Out {
+        self.0
+    }
+}

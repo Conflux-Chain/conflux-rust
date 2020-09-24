@@ -4,7 +4,10 @@
 
 use crate::sync::{Error, ErrorKind};
 use cfx_storage::{
-    storage_db::{key_value_db::KeyValueDbIterableTrait, OpenSnapshotMptTrait},
+    storage_db::{
+        key_value_db::KeyValueDbIterableTrait, snapshot_db::SnapshotDbTrait,
+        OpenSnapshotMptTrait,
+    },
     MptSlicer, StorageManager, TrieProof,
 };
 use cfx_types::H256;
@@ -385,13 +388,14 @@ impl Chunk {
             }
         };
 
-        let mut kv_iterator = snapshot_db.snapshot_kv_iterator()?;
+        let mut kv_iterator = snapshot_db.snapshot_kv_iterator()?.take();
         let lower_bound_incl =
             chunk_key.lower_bound_incl.clone().unwrap_or_default();
         let upper_bound_excl =
             chunk_key.upper_bound_excl.as_ref().map(|k| k.as_slice());
         let mut kvs = kv_iterator
-            .iter_range(lower_bound_incl.as_slice(), upper_bound_excl)?;
+            .iter_range(lower_bound_incl.as_slice(), upper_bound_excl)?
+            .take();
 
         let mut keys = Vec::new();
         let mut values = Vec::new();
