@@ -9,6 +9,8 @@ use super::{
     InternalContractTrait, PreExecCheckConfTrait, SolFnTable,
     SolidityFunctionTrait, UpfrontPaymentTrait, SPEC,
 };
+#[cfg(test)]
+use crate::check_signature;
 use crate::{
     evm::{ActionParams, Spec},
     impl_function_type, make_function_table, make_solidity_contract,
@@ -19,8 +21,6 @@ use crate::{
 use cfx_types::{Address, U256};
 #[cfg(test)]
 use rustc_hex::FromHex;
-#[cfg(test)]
-use crate::check_signature;
 
 lazy_static! {
     static ref CONTRACT_TABLE: SolFnTable =
