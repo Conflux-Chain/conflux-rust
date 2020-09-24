@@ -442,13 +442,24 @@ impl RpcImpl {
             let packed_or_executed = match maybe_executed {
                 None => PackedOrExecuted::Packed(tx_index),
                 Some((receipt, prior_gas_used)) => {
+                    let epoch_number = self
+                    .consensus
+                    .get_block_epoch_number(&tx_index.block_hash);
+
+                    let maybe_state_root = self
+                    .consensus
+                    .get_data_manager()
+                    .get_executed_state_root(&tx_index.block_hash);
+
+                    info!("get_tx_by_hash: epoch_number {:?}, maybe_state_root {:?}",epoch_number, maybe_state_root);
+
                     PackedOrExecuted::Executed(RpcReceipt::new(
                         tx.clone(),
                         receipt,
                         tx_index,
                         prior_gas_used,
-                        None,
-                        None,
+                        epoch_number,
+                        maybe_state_root,
                     ))
                 }
             };

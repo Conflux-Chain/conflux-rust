@@ -149,8 +149,16 @@ impl Block {
                 let tx_vec = match consensus_inner
                     .block_execution_results_by_hash(&b.hash(), false /* update_cache */)
                 {
-                    Some(BlockExecutionResultWithEpoch(_, execution_result)) => b
-                        .transactions
+                    Some(BlockExecutionResultWithEpoch(_, execution_result)) => {
+
+                        let epoch_number = consensus_inner
+                        .get_block_epoch_number(&b.hash());
+
+                        let maybe_state_root = data_man
+                        .get_executed_state_root(&b.hash());
+
+
+                         b.transactions
                         .iter()
                         .enumerate()
                         .map(|(idx, tx)| {
@@ -174,10 +182,8 @@ impl Block {
                                             receipt.clone(),
                                             tx_index,
                                             prior_gas_used,
-                                            // TODO: set these fields below.
-                                            /* maybe_epoch_number = */
-                                            None,
-                                            /* maybe_state_root = */ None,
+                                            epoch_number,
+                                            maybe_state_root,
                                         ))),
                                     )
                                 }
@@ -189,7 +195,8 @@ impl Block {
                                 }
                             }
                         })
-                        .collect(),
+                        .collect()
+                    },
                     None => b
                         .transactions
                         .iter()
