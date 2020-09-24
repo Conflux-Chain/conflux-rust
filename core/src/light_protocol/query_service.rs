@@ -36,6 +36,7 @@ use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 
 pub struct TxInfo {
     pub tx: SignedTransaction,
+    pub maybe_block_number: Option<u64>,
     pub receipt: Receipt,
     pub tx_index: TransactionIndex,
     pub maybe_epoch: Option<u64>,
@@ -329,15 +330,17 @@ impl QueryService {
             prior_gas_used,
         } = self.retrieve_tx_info(hash).await?;
 
-        let hash = tx_index.block_hash;
-        let maybe_epoch = self.consensus.get_block_epoch_number(&hash);
-
+        let block_hash = tx_index.block_hash;
+        let maybe_epoch = self.consensus.get_block_epoch_number(&block_hash);
+        let maybe_block_number =
+            self.consensus.get_block_number(&block_hash)?;
         let maybe_state_root = maybe_epoch
             .and_then(|e| self.handler.witnesses.root_hashes_of(e).ok())
             .map(|roots| roots.state_root_hash);
 
         Ok(TxInfo {
             tx,
+            maybe_block_number,
             receipt,
             tx_index,
             maybe_epoch,

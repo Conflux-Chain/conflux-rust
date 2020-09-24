@@ -187,6 +187,7 @@ impl Block {
                                             tx_index,
                                             prior_gas_used,
                                             epoch_number,
+                                            execution_result.block_receipts.block_number,
                                             maybe_state_root,
                                             if tx_exec_error_msg.is_empty() {
                                                 None

@@ -592,6 +592,7 @@ mod tests {
             .map(|_| {
                 Arc::new(BlockReceipts {
                     receipts: vec![],
+                    block_number: 0,
                     secondary_reward: U256::zero(),
                     tx_execution_error_messages: vec![],
                 })
@@ -620,6 +621,7 @@ mod tests {
             .map(|_| {
                 Arc::new(BlockReceipts {
                     receipts: (1..11).map(|_| receipt.clone()).collect(),
+                    block_number: 0,
                     secondary_reward: U256::zero(),
                     tx_execution_error_messages: vec!["".into(); 10],
                 })
@@ -692,6 +694,7 @@ mod tests {
                     storage_released: vec![],
                 },
             ],
+            block_number: 0,
             secondary_reward: U256::zero(),
             tx_execution_error_messages: vec!["".into(); 2],
         };
@@ -726,6 +729,7 @@ mod tests {
                 storage_collateralized: vec![],
                 storage_released: vec![],
             }],
+            block_number: 0,
             secondary_reward: U256::zero(),
             tx_execution_error_messages: vec!["".into()],
         };

@@ -2164,7 +2164,7 @@ impl ConsensusGraphInner {
 
     /// This function differs from `get_pivot_hash_from_epoch_number` in that it
     /// only returns the hash if it is in the current consensus graph.
-    fn epoch_hash(&self, epoch_number: u64) -> Option<H256> {
+    pub fn epoch_hash(&self, epoch_number: u64) -> Option<H256> {
         let pivot_index = self.height_to_pivot_index(epoch_number);
         self.pivot_chain
             .get(pivot_index)
@@ -2389,6 +2389,7 @@ impl ConsensusGraphInner {
                         .get(tx_index.index)
                         .expect("Error: can't get receipt by tx_index ")
                         .clone(),
+                    block_number: block_receipts.block_number,
                     prior_gas_used,
                     tx_exec_error_msg: if tx_exec_error_msg.is_empty() {
                         None

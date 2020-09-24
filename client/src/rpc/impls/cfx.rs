@@ -450,6 +450,7 @@ impl RpcImpl {
                 None => PackedOrExecuted::Packed(tx_index),
                 Some(MaybeExecutedTxExtraInfo {
                     receipt,
+                    block_number,
                     prior_gas_used,
                     tx_exec_error_msg,
                 }) => {
@@ -468,6 +469,7 @@ impl RpcImpl {
                         tx_index,
                         prior_gas_used,
                         epoch_number,
+                        block_number,
                         maybe_state_root,
                         tx_exec_error_msg,
                     ))
@@ -555,6 +557,7 @@ impl RpcImpl {
             tx_index,
             prior_gas_used,
             Some(epoch_number),
+            execution_result.block_receipts.block_number,
             maybe_state_root,
             if tx_exec_error_msg.is_empty() {
                 None

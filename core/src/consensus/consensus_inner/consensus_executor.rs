@@ -1250,6 +1250,7 @@ impl ConsensusExecutionHandler {
 
             let block_receipts = Arc::new(BlockReceipts {
                 receipts,
+                block_number,
                 secondary_reward,
                 tx_execution_error_messages: tx_exec_error_messages,
             });

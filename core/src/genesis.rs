@@ -129,6 +129,7 @@ pub fn genesis_block(
         .unwrap();
     let receipt_root = compute_receipts_root(&vec![Arc::new(BlockReceipts {
         receipts: vec![],
+        block_number: 0,
         secondary_reward: U256::zero(),
         tx_execution_error_messages: vec![],
     })]);

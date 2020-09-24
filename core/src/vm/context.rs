@@ -64,6 +64,9 @@ pub enum CreateContractAddress {
     /// Address is calculated from sender, nonce, and code hash. Conflux
     /// `create` scheme.
     FromSenderNonceAndCodeHash,
+    /// Address is calculated from block_hash, sender, nonce and code_hash.
+    /// Potential new Conflux `create` scheme when kill_dust is enabled.
+    FromBlockNumberSenderNonceAndCodeHash,
     /// Address is calculated from sender, salt and code hash. pWASM `create2`
     /// scheme.
     FromSenderSaltAndCodeHash(H256),
