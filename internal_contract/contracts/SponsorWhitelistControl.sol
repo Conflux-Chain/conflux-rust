@@ -64,7 +64,7 @@ contract SponsorWhitelistControl {
     // Someone will sponsor the gas cost for contract `contractAddr` with an
     // `upper_bound` for a single transaction.
     // ------------------------------------------------------------------------
-    function setSponsorForGas(address contractAddr, uint upper_bound) public payable {}
+    function setSponsorForGas(address contractAddr, uint upperBound) public payable {}
 
     // ------------------------------------------------------------------------
     // Someone will sponsor the storage collateral for contract `contractAddr`.
