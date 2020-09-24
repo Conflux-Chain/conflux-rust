@@ -11,6 +11,10 @@ use std::cmp::min;
 
 // use serde_json::de::ParserNumber::U64;
 
+/// The MAX_GAS_CALL_REQUEST is one magnitude higher than block gas limit and
+/// not too high that a call_virtual consumes too much resource.
+pub const MAX_GAS_CALL_REQUEST: u64 = 500_000_000;
+
 #[derive(Debug, Default, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CallRequest {
@@ -55,7 +59,7 @@ pub struct CheckBalanceAgainstTransactionResponse {
 pub fn sign_call(
     epoch_height: u64, chain_id: u32, request: CallRequest,
 ) -> SignedTransaction {
-    let max_gas = U256::from(500_000_000);
+    let max_gas = U256::from(MAX_GAS_CALL_REQUEST);
     let gas = min(request.gas.unwrap_or(max_gas), max_gas);
     let from = request.from.unwrap_or_else(|| {
         let mut address = Address::random();
