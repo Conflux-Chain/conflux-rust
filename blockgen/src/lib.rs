@@ -730,7 +730,7 @@ impl BlockGenerator {
                 ));
 
                 if recent_mining_blocks.len()
-                    == bg.pow_config.pow_problem_window_size as usize
+                    == bg.pow_config.pow_problem_window_size
                 {
                     recent_mining_blocks.remove(0);
                     recent_mining_problems.remove(0);
