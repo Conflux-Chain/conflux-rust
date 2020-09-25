@@ -119,8 +119,8 @@ fn test_mining_10_epochs_with_larger_pow_problem_window() {
             .into_string()
             .unwrap(),
     );
-    conf.raw_conf.tcp_port = 13001;
-    conf.raw_conf.jsonrpc_http_port = Some(18001);
+    conf.raw_conf.tcp_port = 13002;
+    conf.raw_conf.jsonrpc_http_port = Some(18002);
     conf.raw_conf.mining_author =
         Some("1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into());
     conf.raw_conf.mining_type = Some("cpu".into());
