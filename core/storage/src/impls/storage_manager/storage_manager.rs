@@ -487,6 +487,7 @@ impl StorageManager {
             };
 
             let in_progress_snapshot_info = SnapshotInfo {
+                snapshot_info_kept_to_provide_sync: false,
                 serve_one_step_sync: true,
                 height: height as u64,
                 parent_snapshot_height: height

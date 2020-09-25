@@ -2,9 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-#[derive(Clone, Default, Derivative, DeriveMallocSizeOf)]
+#[derive(
+    Clone, Default, Derivative, DeriveMallocSizeOf, RlpEncodable, RlpDecodable,
+)]
 #[derivative(Debug)]
 pub struct SnapshotInfo {
+    /// This field is true when the snapshot info is kept but the snapshot
+    /// itself is removed, or when
+    pub snapshot_info_kept_to_provide_sync: bool,
     // FIXME: update serve_one_step_sync at maintenance.
     pub serve_one_step_sync: bool,
 
@@ -21,6 +26,7 @@ pub struct SnapshotInfo {
 impl SnapshotInfo {
     pub fn genesis_snapshot_info() -> Self {
         Self {
+            snapshot_info_kept_to_provide_sync: false,
             serve_one_step_sync: false,
             merkle_root: MERKLE_NULL_NODE,
             parent_snapshot_height: 0,
@@ -58,15 +64,15 @@ pub trait OpenSnapshotMptTrait<'db> {
 
     fn open_snapshot_mpt_owned(
         &'db mut self,
-    ) -> Result<Self::SnapshotDbBorrowMutType>;
+    ) -> StorageResult<Self::SnapshotDbBorrowMutType>;
 
     fn open_snapshot_mpt_as_owned(
         &'db self,
-    ) -> Result<Self::SnapshotDbAsOwnedType>;
+    ) -> StorageResult<Self::SnapshotDbAsOwnedType>;
 
     fn open_snapshot_mpt_shared(
         &'db self,
-    ) -> Result<Self::SnapshotDbBorrowSharedType>;
+    ) -> StorageResult<Self::SnapshotDbBorrowSharedType>;
 }
 
 pub trait SnapshotDbTrait:
@@ -95,7 +101,7 @@ pub trait SnapshotDbTrait:
         snapshot_path: &Path, readonly: bool,
         already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         open_semaphore: &Arc<Semaphore>,
-    ) -> Result<Self>;
+    ) -> StorageResult<Self>;
 
     /// Store already_open_snapshots and open_semaphore to update
     /// SnapshotDbManager on destructor. SnapshotDb itself does not take
@@ -104,19 +110,21 @@ pub trait SnapshotDbTrait:
         snapshot_path: &Path,
         already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         open_semaphore: &Arc<Semaphore>,
-    ) -> Result<Self>;
+    ) -> StorageResult<Self>;
 
-    fn direct_merge(&mut self) -> Result<MerkleHash>;
+    fn direct_merge(&mut self) -> StorageResult<MerkleHash>;
 
-    fn copy_and_merge(&mut self, old_snapshot_db: &Self) -> Result<MerkleHash>;
+    fn copy_and_merge(
+        &mut self, old_snapshot_db: &Self,
+    ) -> StorageResult<MerkleHash>;
 
-    fn start_transaction(&mut self) -> Result<()>;
+    fn start_transaction(&mut self) -> StorageResult<()>;
 
-    fn commit_transaction(&mut self) -> Result<()>;
+    fn commit_transaction(&mut self) -> StorageResult<()>;
 
     fn snapshot_kv_iterator(
         &self,
-    ) -> Result<
+    ) -> StorageResult<
         Wrap<
             Self::SnapshotKvdbIterType,
             dyn KeyValueDbIterableTrait<
@@ -128,34 +136,10 @@ pub trait SnapshotDbTrait:
     >;
 }
 
-impl Encodable for SnapshotInfo {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(6)
-            .append(&self.merkle_root)
-            .append(&self.height)
-            .append(&self.serve_one_step_sync)
-            .append(&self.parent_snapshot_epoch_id)
-            .append(&self.parent_snapshot_height)
-            .append_list(&self.pivot_chain_parts);
-    }
-}
-
-impl Decodable for SnapshotInfo {
-    fn decode(rlp: &Rlp) -> std::result::Result<Self, DecoderError> {
-        Ok(Self {
-            merkle_root: rlp.val_at(0)?,
-            height: rlp.val_at(1)?,
-            serve_one_step_sync: rlp.val_at(2)?,
-            parent_snapshot_epoch_id: rlp.val_at(3)?,
-            parent_snapshot_height: rlp.val_at(4)?,
-            pivot_chain_parts: rlp.list_at(5)?,
-        })
-    }
-}
-
 use crate::{
     impls::{
-        errors::*, storage_db::snapshot_db_manager_sqlite::AlreadyOpenSnapshots,
+        errors::Result as StorageResult,
+        storage_db::snapshot_db_manager_sqlite::AlreadyOpenSnapshots,
     },
     storage_db::{
         KeyValueDbIterableTrait, KeyValueDbTraitOwnedRead, KeyValueDbTraitRead,
@@ -167,6 +151,6 @@ use crate::{
 use derivative::Derivative;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{path::Path, sync::Arc};
 use tokio::sync::Semaphore;

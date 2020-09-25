@@ -456,6 +456,7 @@ impl SnapshotManifestManager {
                 },
             },
             SnapshotInfo {
+                snapshot_info_kept_to_provide_sync: false,
                 serve_one_step_sync: false,
                 // We need the extra -1 to get a state root that points to the
                 // snapshot we want.

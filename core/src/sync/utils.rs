@@ -115,7 +115,7 @@ pub fn initialize_data_manager(
 
     let storage_manager = Arc::new(
         StorageManager::new(StorageConfiguration::new_default(
-            db_dir.to_string(),
+            db_dir,
             cfx_parameters::consensus::SNAPSHOT_EPOCHS_CAPACITY,
         ))
         .expect("Failed to initialize storage."),
