@@ -4,10 +4,12 @@
 
 mod array;
 mod basic;
-mod utils;
+mod bytes;
+mod string;
 
 #[cfg(test)]
 mod tests;
+mod utils;
 
 #[cfg(test)]
 #[macro_use]
