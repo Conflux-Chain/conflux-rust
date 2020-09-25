@@ -11,6 +11,9 @@
 //! A reduced fork of Firefox's malloc_size_of crate, for bundling with
 //! WebRender.
 
+#[cfg(all(not(target_env = "msvc"), feature = "jemalloc-global"))]
+use jemallocator;
+
 use cfg_if::cfg_if;
 use cfx_types::{H160, H256, H512, U256, U512};
 use hashbrown::HashMap as FastHashMap;
@@ -24,7 +27,6 @@ use std::{
     os::raw::c_void,
     sync::Arc,
 };
-
 /// A C function that takes a pointer to a heap allocation and returns its size.
 type VoidPtrToSizeFn = unsafe extern "C" fn(ptr: *const c_void) -> usize;
 

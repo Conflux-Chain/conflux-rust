@@ -12,3 +12,10 @@ winapi = "0.3.7"
 slab = "0.4"
 parking_lot = "0.10"
 smallvec = "1.4"
+
+[features]
+jemalloc-global = ["jemallocator"]
+
+[target.'cfg(not(target_env = "msvc"))'.dependencies.jemallocator]
+version = "0.3.2"
+optional = true

@@ -51,7 +51,11 @@ cfxkey = { path = "accounts/cfxkey" }
 parity-wordlist = "1.3.0"
 rustc-hex = "2.0.1"
 env_logger = "0.5"
+malloc_size_of = {path="util/malloc_size_of"}
 
+[target.'cfg(not(target_env = "msvc"))'.dependencies.jemallocator]
+version = "0.3.2"
+optional = true
 
 [[bin]]
 name = "consensus_bench"
@@ -73,7 +77,8 @@ path = "tools/tg_config_gen/main.rs"
 [workspace]
 
 [features]
-deadlock_detection = ["parking_lot/deadlock_detection"]
+deadlock-detection = ["parking_lot/deadlock_detection"]
+jemalloc-global = ["jemallocator", "malloc_size_of/jemalloc-global"]
 
 [patch.crates-io]
 sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = "1de8e5998f7c2d919336660b8ef4e8f52ac43844" }
