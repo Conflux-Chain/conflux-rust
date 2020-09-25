@@ -79,33 +79,18 @@ impl FakeStateManager {
         if unit_test_data_dir == "" {
             Err(ErrorKind::FailedToCreateUnitTestDataDir.into())
         } else {
-            let unit_test_data_path = Path::new(&unit_test_data_dir);
+            let mut storage_conf = StorageConfiguration::new_default(
+                &unit_test_data_dir,
+                snapshot_epoch_count,
+            );
+            storage_conf.delta_mpts_cache_size = 20_000_000;
+            storage_conf.delta_mpts_cache_start_size = 1_000_000;
+            storage_conf.delta_mpts_node_map_vec_size = 20_000_000;
+            storage_conf.delta_mpts_slab_idle_size = 200_000;
+
             Ok(FakeStateManager {
-                data_dir: unit_test_data_dir.clone(),
-                state_manager: Some(Arc::new(StateManager::new(
-                    StorageConfiguration {
-                        additional_maintained_snapshot_count: 0,
-                        consensus_param: ConsensusParam {
-                            snapshot_epoch_count,
-                        },
-                        debug_snapshot_checker_threads: 0,
-                        delta_mpts_cache_recent_lfu_factor: 4.0,
-                        delta_mpts_cache_size: 20_000_000,
-                        delta_mpts_cache_start_size: 1_000_000,
-                        delta_mpts_node_map_vec_size: 20_000_000,
-                        delta_mpts_slab_idle_size: 200_000,
-                        max_open_snapshots:
-                            defaults::DEFAULT_MAX_OPEN_SNAPSHOTS,
-                        path_delta_mpts_dir: unit_test_data_path
-                            .join(&*storage_dir::DELTA_MPTS_DIR),
-                        path_snapshot_dir: unit_test_data_path
-                            .join(&*storage_dir::SNAPSHOT_DIR),
-                        path_snapshot_info_db: unit_test_data_path
-                            .join(&*storage_dir::SNAPSHOT_INFO_DB_PATH),
-                        path_storage_dir: unit_test_data_path
-                            .join(&*storage_dir::STORAGE_DIR),
-                    },
-                )?)),
+                data_dir: unit_test_data_dir,
+                state_manager: Some(Arc::new(StateManager::new(storage_conf)?)),
             })
         }
     }
@@ -277,10 +262,7 @@ pub fn print_mpt_key(key: &[u8]) {
 }
 
 #[cfg(any(test, feature = "testonly_code"))]
-use crate::{
-    defaults, impls::state_manager::StateManager, storage_dir, ConsensusParam,
-    StorageConfiguration,
-};
+use crate::{impls::state_manager::StateManager, StorageConfiguration};
 use crate::{
     impls::{
         errors::*,
