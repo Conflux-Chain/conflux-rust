@@ -456,14 +456,19 @@ impl RpcImpl {
                     let epoch_number = self
                         .consensus
                         .get_block_epoch_number(&tx_index.block_hash);
+
+                    let maybe_state_root = self
+                        .consensus
+                        .get_data_manager()
+                        .get_executed_state_root(&tx_index.block_hash);
+
                     PackedOrExecuted::Executed(RpcReceipt::new(
                         tx.clone(),
                         receipt,
                         tx_index,
                         prior_gas_used,
                         epoch_number,
-                        // FIXME: why is this field not set?
-                        None,
+                        maybe_state_root,
                         tx_exec_error_msg,
                     ))
                 }

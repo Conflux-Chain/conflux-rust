@@ -147,10 +147,21 @@ impl Block {
             ),
             true => {
                 let tx_vec = match consensus_inner
-                    .block_execution_results_by_hash(&b.hash(), false /* update_cache */)
-                {
-                    Some(BlockExecutionResultWithEpoch(_, execution_result)) => b
-                        .transactions
+                    .block_execution_results_by_hash(
+                        &b.hash(),
+                        false, /* update_cache */
+                    ) {
+                    Some(BlockExecutionResultWithEpoch(
+                        _,
+                        execution_result,
+                    )) => {
+                        let epoch_number =
+                            consensus_inner.get_block_epoch_number(&b.hash());
+
+                        let maybe_state_root =
+                            data_man.get_executed_state_root(&b.hash());
+
+                        b.transactions
                         .iter()
                         .enumerate()
                         .map(|(idx, tx)| {
@@ -175,11 +186,9 @@ impl Block {
                                             receipt.clone(),
                                             tx_index,
                                             prior_gas_used,
-                                            // TODO: set these fields below.
-                                            /* maybe_epoch_number = */
-                                            None,
-                                            /* maybe_state_root = */ None,
-                                           if tx_exec_error_msg.is_empty() {
+                                            epoch_number,
+                                            maybe_state_root,
+                                            if tx_exec_error_msg.is_empty() {
                                                 None
                                             } else {
                                                 Some(tx_exec_error_msg.clone())
@@ -194,7 +203,8 @@ impl Block {
                                 }
                             }
                         })
-                        .collect(),
+                        .collect()
+                    }
                     None => b
                         .transactions
                         .iter()
