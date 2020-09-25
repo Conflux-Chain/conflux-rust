@@ -130,6 +130,7 @@ build_config! {
         (stratum_port, (u16), 32525)
         (stratum_secret, (Option<String>), None)
         (use_octopus_in_test_mode, (bool), false)
+        (pow_problem_window_size, (usize), 1)
 
         // Network section.
         (jsonrpc_local_tcp_port, (Option<u16>), None)
@@ -483,6 +484,7 @@ impl Configuration {
             self.raw_conf.stratum_listen_address.clone(),
             self.raw_conf.stratum_port,
             stratum_secret,
+            self.raw_conf.pow_problem_window_size,
         )
     }
 

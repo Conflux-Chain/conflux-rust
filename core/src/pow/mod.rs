@@ -94,6 +94,7 @@ pub struct ProofOfWorkConfig {
     pub stratum_listen_addr: String,
     pub stratum_port: u16,
     pub stratum_secret: Option<H256>,
+    pub pow_problem_window_size: usize,
 }
 
 impl ProofOfWorkConfig {
@@ -101,6 +102,7 @@ impl ProofOfWorkConfig {
         test_mode: bool, use_octopus_in_test_mode: bool, mining_type: &str,
         initial_difficulty: Option<u64>, stratum_listen_addr: String,
         stratum_port: u16, stratum_secret: Option<H256>,
+        pow_problem_window_size: usize,
     ) -> Self
     {
         if test_mode {
@@ -114,6 +116,7 @@ impl ProofOfWorkConfig {
                 stratum_listen_addr,
                 stratum_port,
                 stratum_secret,
+                pow_problem_window_size,
             }
         } else {
             ProofOfWorkConfig {
@@ -127,6 +130,7 @@ impl ProofOfWorkConfig {
                 stratum_listen_addr,
                 stratum_port,
                 stratum_secret,
+                pow_problem_window_size,
             }
         }
     }

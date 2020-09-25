@@ -182,6 +182,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         String::from(""), /* stratum_listen_addr */
         0,                /* stratum_port */
         None,             /* stratum_secret */
+        1,                /* pow_problem_window_size */
     );
     let sync_config = SyncGraphConfig {
         future_block_buffer_capacity: 1,
