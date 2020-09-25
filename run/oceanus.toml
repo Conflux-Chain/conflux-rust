@@ -64,6 +64,10 @@ bootnodes="cfxnode://25265e1aa470d9d8667947820c4830a64e9f9678d6cb23ecde91e044752
 #
 # stratum_port = 32525
 
+# Window size for PoW manager
+#
+# pow_problem_window_size = 1
+
 # Secret key for stratum.
 # The value is 64-digit hex string.
 # If not set, the RPC subscription will not check the authorization.
