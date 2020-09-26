@@ -28,7 +28,8 @@ pub struct StorageManager {
     in_progress_snapshot_finish_signaler: Arc<Mutex<Sender<Option<EpochId>>>>,
     in_progress_snapshotting_joiner: Mutex<Option<JoinHandle<()>>>,
 
-    // Db to persist snapshot_info.
+    // FIXME: create a new type, to wrap the snapshot_info_db into
+    // snapshot_info_map_by_epoch. Db to persist snapshot_info.
     snapshot_info_db: KvdbSqlite<Box<[u8]>>,
 
     // The order doesn't matter as long as parent snapshot comes before
@@ -1137,13 +1138,7 @@ impl StorageManager {
                 if snapshot_epoch_id == NULL_EPOCH {
                     continue;
                 }
-                let snapshot_info =
-                    snapshot_info_map.remove(&snapshot_epoch_id);
-                error!(
-                    "Missing snapshot db: {:?} {:?}",
-                    snapshot_epoch_id, snapshot_info
-                );
-                self.snapshot_info_db.delete(snapshot_epoch_id.as_ref())?;
+                // Remove the delta mpt if the snapshot is missing.
                 self.delta_db_manager
                     .destroy_delta_db(
                         &self
@@ -1157,6 +1152,30 @@ impl StorageManager {
                         },
                         _ => Err(e),
                     })?;
+                // If the snapshot info is kept to provide sync, we allow the
+                // snapshot itself to be missing, because a snapshot of
+                // snapshot_epoch_id's ancestor is kept to provide sync. We need
+                // to keep this snapshot info to know the parental relationship.
+                let snapshot_info_kept_to_provide_sync =
+                    match snapshot_info_map.get(&snapshot_epoch_id) {
+                        None => false,
+                        Some(info) => {
+                            error!(
+                                "Missing snapshot db: {:?}, \
+                                 snapshot_info_kept_to_provide_sync {}, {:?}, ",
+                                snapshot_epoch_id,
+                                info.snapshot_info_kept_to_provide_sync,
+                                info
+                            );
+
+                            info.snapshot_info_kept_to_provide_sync
+                        }
+                    };
+                if snapshot_info_kept_to_provide_sync {
+                    continue;
+                }
+                snapshot_info_map.remove(&snapshot_epoch_id);
+                self.snapshot_info_db.delete(snapshot_epoch_id.as_ref())?;
             }
 
             let (missing_delta_db_snapshots, delta_dbs) = self
@@ -1191,6 +1210,10 @@ impl StorageManager {
                     if delta_mpts
                         .contains_key(&snapshot_info.parent_snapshot_epoch_id)
                     {
+                        continue;
+                    }
+                    // See comment above.
+                    if snapshot_info.snapshot_info_kept_to_provide_sync {
                         continue;
                     }
                 }
