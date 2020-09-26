@@ -363,11 +363,8 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         &self, old_snapshot_epoch_id: &EpochId, snapshot_epoch_id: EpochId,
         delta_mpt: DeltaMptIterator,
         mut in_progress_snapshot_info: SnapshotInfo,
-        snapshot_info_map_rwlock: &'m RwLock<HashMap<EpochId, SnapshotInfo>>,
-    ) -> Result<(
-        RwLockWriteGuard<'m, HashMap<EpochId, SnapshotInfo>>,
-        SnapshotInfo,
-    )>
+        snapshot_info_map_rwlock: &'m RwLock<PersistedSnapshotInfoMap>,
+    ) -> Result<(RwLockWriteGuard<'m, PersistedSnapshotInfoMap>, SnapshotInfo)>
     {
         debug!(
             "new_snapshot_by_merging: old={:?} new={:?}",
@@ -516,8 +513,8 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
 
     fn finalize_full_sync_snapshot<'m>(
         &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
-        snapshot_info_map_rwlock: &'m RwLock<HashMap<EpochId, SnapshotInfo>>,
-    ) -> Result<RwLockWriteGuard<'m, HashMap<EpochId, SnapshotInfo>>>
+        snapshot_info_map_rwlock: &'m RwLock<PersistedSnapshotInfoMap>,
+    ) -> Result<RwLockWriteGuard<'m, PersistedSnapshotInfoMap>>
     {
         let temp_db_path = self.get_full_sync_temp_snapshot_db_path(
             snapshot_epoch_id,
@@ -534,6 +531,7 @@ use crate::{
     impls::{
         delta_mpt::DeltaMptIterator, errors::*,
         storage_db::snapshot_db_sqlite::*,
+        storage_manager::PersistedSnapshotInfoMap,
     },
     storage_db::{SnapshotDbManagerTrait, SnapshotDbTrait, SnapshotInfo},
 };

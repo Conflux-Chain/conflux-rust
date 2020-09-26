@@ -69,7 +69,6 @@ impl Restorer {
         // `self.verifier` is never unwrapped, so it's safe to set it to None,
         self.verifier = None;
 
-        // FIMXE: rename with current_snapshots lock acquired.
         let storage_manager = state_manager.get_storage_manager();
         let mut snapshot_info_map_locked = storage_manager
             .get_snapshot_manager()
@@ -78,8 +77,7 @@ impl Restorer {
                 &self.snapshot_epoch_id,
                 &self.snapshot_merkle_root,
                 &storage_manager.snapshot_info_map_by_epoch,
-            )
-            .expect("Fail to finalize full sync");
+            )?;
         storage_manager.register_new_snapshot(
             snapshot_info,
             &mut snapshot_info_map_locked,

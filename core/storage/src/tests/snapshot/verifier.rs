@@ -486,11 +486,8 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
     fn new_snapshot_by_merging<'m>(
         &self, _old_snapshot_epoch_id: &EpochId, _snapshot_epoch_id: EpochId,
         _delta_mpt: DeltaMptIterator, _in_progress_snapshot_info: SnapshotInfo,
-        _snapshot_info_map: &'m RwLock<HashMap<EpochId, SnapshotInfo>>,
-    ) -> Result<(
-        RwLockWriteGuard<'m, HashMap<EpochId, SnapshotInfo>>,
-        SnapshotInfo,
-    )>
+        _snapshot_info_map: &'m RwLock<PersistedSnapshotInfoMap>,
+    ) -> Result<(RwLockWriteGuard<'m, PersistedSnapshotInfoMap>, SnapshotInfo)>
     {
         unreachable!()
     }
@@ -513,8 +510,8 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
 
     fn finalize_full_sync_snapshot<'m>(
         &self, _snapshot_epoch_id: &MerkleHash, _merkle_root: &MerkleHash,
-        _snapshot_info_map_rwlock: &'m RwLock<HashMap<EpochId, SnapshotInfo>>,
-    ) -> Result<RwLockWriteGuard<'m, HashMap<EpochId, SnapshotInfo>>>
+        _snapshot_info_map_rwlock: &'m RwLock<PersistedSnapshotInfoMap>,
+    ) -> Result<RwLockWriteGuard<'m, PersistedSnapshotInfoMap>>
     {
         unreachable!()
     }
@@ -702,6 +699,7 @@ use crate::{
             mpt_slice_verifier::MptSliceVerifier,
         },
         storage_db::snapshot_db_manager_sqlite::AlreadyOpenSnapshots,
+        storage_manager::PersistedSnapshotInfoMap,
     },
     storage_db::{
         DbValueType, KeyValueDbIterableTrait, KeyValueDbTraitOwnedRead,
