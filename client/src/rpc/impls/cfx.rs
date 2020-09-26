@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::rpc::types::MAX_GAS_CALL_REQUEST;
 use blockgen::BlockGenerator;
 use cfx_parameters::staking::COLLATERAL_PER_BYTE;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
@@ -58,7 +59,10 @@ use crate::{
         RpcResult,
     },
 };
-use cfxcore::consensus::{MaybeExecutedTxExtraInfo, TransactionInfo};
+use cfxcore::{
+    consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
+    executive::revert_reason_decode,
+};
 use lazy_static::lazy_static;
 use metrics::{register_timer_with_group, ScopeTimer, Timer};
 
@@ -859,7 +863,13 @@ impl RpcImpl {
             ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(vm::Error::Reverted),
                 executed,
-            ) => executed,
+            ) => {
+                bail!(call_execution_error(
+                    format!("Estimation isn't accurate: transaction is reverted. Execution output {}",
+                        revert_reason_decode(&executed.output)),
+                    [b"Reverted. Execution output: ", &*executed.output].concat(),
+                ))
+            },
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
                 bail!(call_execution_error(
                     format! {"Can not estimate: transaction execution failed, \
@@ -872,6 +882,24 @@ impl RpcImpl {
         let mut storage_collateralized = 0;
         for storage_change in &executed.storage_collateralized {
             storage_collateralized += storage_change.amount;
+        }
+        // In case of unlimited full gas charge at some VM call, or if there are
+        // infinite loops, the total estimated gas used is very close to
+        // MAX_GAS_CALL_REQUEST, 0.8 is chosen to check if it's close.
+        const TOO_MUCH_GAS_USED: u64 =
+            (0.8 * (MAX_GAS_CALL_REQUEST as f32)) as u64;
+        if executed.gas_used >= U256::from(TOO_MUCH_GAS_USED) {
+            bail!(call_execution_error(
+                format!(
+                    "Gas too high. Most likely there are problems within the contract code. \
+                    gas {}, storage_limit {}",
+                    executed.gas_used, storage_collateralized
+                ),
+                format!(
+                    "gas {}, storage_limit {}", executed.gas_used, storage_collateralized
+                )
+                .into_bytes(),
+            ));
         }
         let response = EstimateGasAndCollateralResponse {
             gas_used: executed.gas_used.into(),

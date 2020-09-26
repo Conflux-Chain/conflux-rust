@@ -28,7 +28,7 @@ pub use self::{
     bytes::Bytes,
     call_request::{
         sign_call, CallRequest, CheckBalanceAgainstTransactionResponse,
-        EstimateGasAndCollateralResponse,
+        EstimateGasAndCollateralResponse, MAX_GAS_CALL_REQUEST,
     },
     consensus_graph_states::ConsensusGraphStates,
     epoch_number::{BlockHashOrEpochNumber, EpochNumber},
