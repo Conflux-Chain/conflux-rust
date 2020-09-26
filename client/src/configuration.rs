@@ -8,7 +8,7 @@ use crate::rpc::{
 };
 use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
-    ConsensusParam, StorageConfiguration,
+    ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
 };
 use cfx_types::H256;
 use cfxcore::{
@@ -215,16 +215,15 @@ build_config! {
         (tx_weight_exp, (u8), 1)
 
         // Storage Section.
+        (additional_maintained_snapshot_count, (u32), 0)
         (block_cache_gc_period_ms, (u64), 5_000)
+        // FIXME: use a fixed sub-dir of conflux_data_dir instead.
+        (block_db_dir, (String), "./blockchain_db".to_string())
         (block_db_type, (String), "rocksdb".to_string())
         // The conflux data dir, if unspecified, is the workdir where conflux is started.
         (conflux_data_dir, (String), "./".to_string())
-        // FIXME: use a fixed sub-dir of conflux_data_dir instead.
-        (block_db_dir, (String), "./blockchain_db".to_string())
-        (additional_maintained_snapshot_count, (u32), 0)
         (ledger_cache_size, (usize), DEFAULT_LEDGER_CACHE_SIZE)
         (invalid_block_hash_cache_size_in_count, (usize), DEFAULT_INVALID_BLOCK_HASH_CACHE_SIZE_IN_COUNT)
-        (target_difficulties_cache_size_in_count, (usize), DEFAULT_TARGET_DIFFICULTIES_CACHE_SIZE_IN_COUNT)
         (rocksdb_cache_size, (Option<usize>), Some(128))
         (rocksdb_compaction_profile, (Option<String>), None)
         (storage_delta_mpts_cache_recent_lfu_factor, (f64), cfx_storage::defaults::DEFAULT_DELTA_MPTS_CACHE_RECENT_LFU_FACTOR)
@@ -233,6 +232,7 @@ build_config! {
         (storage_delta_mpts_node_map_vec_size, (u32), cfx_storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
         (storage_delta_mpts_slab_idle_size, (u32), cfx_storage::defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE)
         (storage_max_open_snapshots, (u16), cfx_storage::defaults::DEFAULT_MAX_OPEN_SNAPSHOTS)
+        (target_difficulties_cache_size_in_count, (usize), DEFAULT_TARGET_DIFFICULTIES_CACHE_SIZE_IN_COUNT)
 
         // General/Unclassified section.
         (account_provider_refresh_time_ms, (u64), 1000)
@@ -252,6 +252,7 @@ build_config! {
         (tg_config_path, (Option<String>), Some("./tg_config/tg_config.toml".to_string()))
     }
     {
+        // Development related section.
         (
             log_level, (LevelFilter), LevelFilter::Info, |l| {
                 match l {
@@ -265,6 +266,12 @@ build_config! {
                 }
             }
         )
+
+        // Storage section.
+        (provide_more_snapshot_for_sync,
+            (Vec<ProvideExtraSnapshotSyncConfig>),
+            vec![ProvideExtraSnapshotSyncConfig::StableCheckpoint],
+            ProvideExtraSnapshotSyncConfig::parse_config_list)
     }
 }
 
@@ -549,6 +556,10 @@ impl Configuration {
                 .join(&*storage_dir::SNAPSHOT_INFO_DB_PATH),
             path_storage_dir: conflux_data_path
                 .join(&*storage_dir::STORAGE_DIR),
+            provide_more_snapshot_for_sync: self
+                .raw_conf
+                .provide_more_snapshot_for_sync
+                .clone(),
         }
     }
 

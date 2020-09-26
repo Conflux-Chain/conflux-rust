@@ -56,6 +56,50 @@ pub struct ConsensusParam {
     pub snapshot_epoch_count: u32,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum ProvideExtraSnapshotSyncConfig {
+    /// Keep the snapshot at the same epoch as the checkpoint.
+    /// TODO:
+    ///  This config will be removed when there is a more reasonable
+    ///  snapshot sync point.
+    StableCheckpoint,
+    EpochNearestMultipleOf(u32),
+}
+
+impl ProvideExtraSnapshotSyncConfig {
+    pub fn from_str(config: &str) -> Option<Self> {
+        const MULTIPLE_OF_PREFIX: &'static str = "multiple_of_";
+        if config == "checkpoint" {
+            Some(Self::StableCheckpoint)
+        } else if config.starts_with(MULTIPLE_OF_PREFIX) {
+            let number_str = &config[MULTIPLE_OF_PREFIX.len()..];
+            match number_str.parse::<u32>() {
+                Err(_) => None,
+                Ok(num) => Some(Self::EpochNearestMultipleOf(num)),
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn parse_config_list(
+        config: &str,
+    ) -> std::result::Result<Vec<Self>, String> {
+        let mut list = vec![];
+        for item in config.split(",") {
+            if item.len() > 0 {
+                list.push(Self::from_str(item).ok_or_else(|| {
+                    format!(
+                        "{} is not a valid ProvideExtraSnapshotSyncConfig",
+                        item
+                    )
+                })?);
+            }
+        }
+        Ok(list)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct StorageConfiguration {
     pub additional_maintained_snapshot_count: u32,
@@ -71,13 +115,14 @@ pub struct StorageConfiguration {
     pub path_storage_dir: PathBuf,
     pub path_snapshot_dir: PathBuf,
     pub path_snapshot_info_db: PathBuf,
+    pub provide_more_snapshot_for_sync: Vec<ProvideExtraSnapshotSyncConfig>,
 }
 
 impl StorageConfiguration {
     pub fn new_default(
-        conflux_data_dir: String, snapshot_epoch_count: u32,
+        conflux_data_dir: &str, snapshot_epoch_count: u32,
     ) -> Self {
-        let conflux_data_path = Path::new(&conflux_data_dir);
+        let conflux_data_path = Path::new(conflux_data_dir);
         StorageConfiguration {
             additional_maintained_snapshot_count: 0,
             consensus_param: ConsensusParam {
@@ -90,8 +135,7 @@ impl StorageConfiguration {
             delta_mpts_cache_size: defaults::DEFAULT_DELTA_MPTS_CACHE_SIZE,
             delta_mpts_cache_start_size:
                 defaults::DEFAULT_DELTA_MPTS_CACHE_START_SIZE,
-            delta_mpts_node_map_vec_size:
-                defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER,
+            delta_mpts_node_map_vec_size: defaults::DEFAULT_NODE_MAP_SIZE,
             delta_mpts_slab_idle_size:
                 defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE,
             max_open_snapshots: defaults::DEFAULT_MAX_OPEN_SNAPSHOTS,
@@ -103,6 +147,9 @@ impl StorageConfiguration {
                 .join(&*storage_dir::SNAPSHOT_INFO_DB_PATH),
             path_storage_dir: conflux_data_path
                 .join(&*storage_dir::STORAGE_DIR),
+            provide_more_snapshot_for_sync: vec![
+                ProvideExtraSnapshotSyncConfig::StableCheckpoint,
+            ],
         }
     }
 }

@@ -90,6 +90,7 @@ fn main() -> Result<(), Error> {
         parent_snapshot_epoch_id: NULL_EPOCH,
         pivot_chain_parts: vec![snapshot1_epoch],
         serve_one_step_sync: false,
+        snapshot_info_kept_to_provide_sync: false,
     };
     let (mut snapshot_info_map_locked, snapshot_info1) = snapshot_db_manager
         .new_snapshot_by_merging(
@@ -158,6 +159,7 @@ fn main() -> Result<(), Error> {
         parent_snapshot_epoch_id: snapshot1_epoch,
         pivot_chain_parts: vec![snapshot2_epoch],
         serve_one_step_sync: false,
+        snapshot_info_kept_to_provide_sync: false,
     };
     let (mut snapshot_info_map_locked, snapshot_info2) = snapshot_db_manager
         .new_snapshot_by_merging(
@@ -220,6 +222,7 @@ fn main() -> Result<(), Error> {
         parent_snapshot_epoch_id: NULL_EPOCH,
         pivot_chain_parts: vec![snapshot3_epoch],
         serve_one_step_sync: false,
+        snapshot_info_kept_to_provide_sync: false,
     };
     let (mut snapshot_info_map_locked, snapshot_info3) = snapshot_db_manager
         .new_snapshot_by_merging(
@@ -287,7 +290,7 @@ fn new_state_manager(
     conflux_data_dir: &str,
 ) -> Result<Arc<StateManager>, Error> {
     let mut storage_conf = StorageConfiguration::new_default(
-        conflux_data_dir.to_string(),
+        conflux_data_dir,
         cfx_parameters::consensus::SNAPSHOT_EPOCHS_CAPACITY,
     );
     storage_conf.consensus_param.snapshot_epoch_count = 10000000;
