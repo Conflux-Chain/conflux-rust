@@ -650,8 +650,13 @@ impl BlockGenerator {
             port: bg.pow_config.stratum_port,
             secret: bg.pow_config.stratum_secret,
         };
-        let stratum = Stratum::start(&cfg, bg.pow.clone(), solution_sender)
-            .expect("Failed to start Stratum service.");
+        let stratum = Stratum::start(
+            &cfg,
+            bg.pow.clone(),
+            bg.pow_config.pow_problem_window_size,
+            solution_sender,
+        )
+        .expect("Failed to start Stratum service.");
         let mut bg_stratum = bg.stratum.write();
         *bg_stratum = Some(stratum);
         solution_receiver

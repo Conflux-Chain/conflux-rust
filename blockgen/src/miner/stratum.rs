@@ -36,6 +36,7 @@ use cfxcore::pow::{
 use log::{info, trace, warn};
 use parking_lot::Mutex;
 use std::{
+    collections::HashSet,
     fmt,
     net::{AddrParseError, SocketAddr},
     sync::{mpsc, Arc},
@@ -113,9 +114,10 @@ impl fmt::Display for PayloadError {
 
 /// Job dispatcher for stratum service
 pub struct StratumJobDispatcher {
-    current_problem: Mutex<Option<ProofOfWorkProblem>>,
+    recent_problems: Mutex<Vec<(ProofOfWorkProblem, HashSet<U256>)>>,
     solution_sender: Mutex<mpsc::Sender<ProofOfWorkSolution>>,
     pow: Arc<PowComputer>,
+    window_size: usize,
 }
 
 impl JobDispatcher for StratumJobDispatcher {
@@ -135,32 +137,39 @@ impl JobDispatcher for StratumJobDispatcher {
             nonce: payload.nonce,
         };
         {
-            let mut current_problem = self.current_problem.lock();
-            if let Some(prob) = *current_problem {
-                if prob.block_hash != payload.pow_hash {
-                    return Err(StratumServiceError::InvalidSolution(
-                        format!(
-                            "Solution for a stale job! worker_id = {}",
+            let mut probs = self.recent_problems.lock();
+            let mut found = false;
+            for (pow_prob, solved_nonce) in probs.iter_mut() {
+                if pow_prob.block_hash == payload.pow_hash {
+                    if solved_nonce.contains(&sol.nonce) {
+                        return Err(StratumServiceError::InvalidSolution(
+                            format!(
+                                "Problem already solved with nonce = {}! worker_id = {}",
+                                sol.nonce, payload.worker_id
+                            ).into(),
+                        ));
+                    } else if validate(self.pow.clone(), pow_prob, &sol) {
+                        solved_nonce.insert(sol.nonce);
+                        info!(
+                            "Stratum worker {} mined a block!",
                             payload.worker_id
-                        )
-                        .into(),
-                    ));
+                        );
+                        found = true;
+                    } else {
+                        return Err(StratumServiceError::InvalidSolution(
+                            format!(
+                                "Incorrect Nonce! worker_id = {}!",
+                                payload.worker_id
+                            )
+                            .into(),
+                        ));
+                    }
                 }
-                if !validate(self.pow.clone(), &prob, &sol) {
-                    return Err(StratumServiceError::InvalidSolution(
-                        format!(
-                            "Incorrect Nonce! worker_id = {}!",
-                            payload.worker_id
-                        )
-                        .into(),
-                    ));
-                }
-                info!("Stratum worker {} mined a block!", payload.worker_id);
-                *current_problem = None;
-            } else {
+            }
+            if !found {
                 return Err(StratumServiceError::InvalidSolution(
                     format!(
-                        "Problem already solved! worker_id = {}",
+                        "Solution for a stale job! worker_id = {}",
                         payload.worker_id
                     )
                     .into(),
@@ -183,18 +192,23 @@ impl StratumJobDispatcher {
     /// New stratum job dispatcher given the miner and client
     fn new(
         solution_sender: mpsc::Sender<ProofOfWorkSolution>,
-        pow: Arc<PowComputer>,
+        pow: Arc<PowComputer>, pow_window_size: usize,
     ) -> StratumJobDispatcher
     {
         StratumJobDispatcher {
-            current_problem: Mutex::new(None),
+            recent_problems: Mutex::new(vec![]),
             solution_sender: Mutex::new(solution_sender),
             pow,
+            window_size: pow_window_size,
         }
     }
 
-    fn set_current_problem(&self, current_problem: &ProofOfWorkProblem) {
-        *self.current_problem.lock() = Some(current_problem.clone());
+    fn notify_new_problem(&self, current_problem: &ProofOfWorkProblem) {
+        let mut probs = self.recent_problems.lock();
+        if probs.len() == self.window_size {
+            probs.remove(0);
+        }
+        probs.push((current_problem.clone(), HashSet::new()));
     }
 
     /// Serializes payload for stratum service
@@ -239,7 +253,7 @@ impl NotifyWork for Stratum {
     fn notify(&self, prob: ProofOfWorkProblem) {
         trace!(target: "stratum", "Notify work");
 
-        self.dispatcher.set_current_problem(&prob);
+        self.dispatcher.notify_new_problem(&prob);
         self.service.push_work_all(
             self.dispatcher.payload(prob.block_height, prob.block_hash, prob.boundary)
         ).unwrap_or_else(
@@ -252,14 +266,17 @@ impl Stratum {
     /// New stratum job dispatcher, given the miner, client and dedicated
     /// stratum service
     pub fn start(
-        options: &Options, pow: Arc<PowComputer>,
+        options: &Options, pow: Arc<PowComputer>, pow_window_size: usize,
         solution_sender: mpsc::Sender<ProofOfWorkSolution>,
     ) -> Result<Stratum, Error>
     {
         use std::net::IpAddr;
 
-        let dispatcher =
-            Arc::new(StratumJobDispatcher::new(solution_sender, pow));
+        let dispatcher = Arc::new(StratumJobDispatcher::new(
+            solution_sender,
+            pow,
+            pow_window_size,
+        ));
 
         let stratum_svc = StratumService::start(
             &SocketAddr::new(
