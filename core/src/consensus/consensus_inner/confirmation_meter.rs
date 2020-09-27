@@ -9,11 +9,7 @@ use crate::consensus::{
 use cfx_parameters::consensus_internal::*;
 use cfx_types::H256;
 use parking_lot::RwLock;
-use std::{
-    cmp::{max, min},
-    collections::VecDeque,
-    convert::TryFrom,
-};
+use std::{cmp::max, collections::VecDeque, convert::TryFrom};
 
 pub struct TotalWeightInPastMovingDelta {
     pub old: i128,
@@ -109,12 +105,10 @@ impl ConfirmationMeter {
         }
     }
 
-    // FIXME: For now we sync at checkpoint rather than the latest snapshot,
-    // FIXME: therefore we fake the confirmed epoch_num by passing it.
-    pub fn get_confirmed_epoch_num(&self, bound_height: u64) -> u64 {
+    pub fn get_confirmed_epoch_num(&self) -> u64 {
         let x = self.inner.read().finality_manager.lowest_epoch_num;
         if x > 0 {
-            min(x - 1, bound_height)
+            x - 1
         } else {
             0
         }
