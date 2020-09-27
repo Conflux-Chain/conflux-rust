@@ -1533,15 +1533,7 @@ impl ConsensusNewBlockHandler {
         // FIXME: we need a function to compute the deferred epoch
         // FIXME: number. the current codebase may not be
         // FIXME: consistent at all places.
-        // The bound_height ensures that the snapshot before stable_genesis will
-        // not be removed, so that the execution of the epochs following
-        // stable_genesis can go through a normal path where both
-        // snapshot and intermediate delta mpt exist.
-        let mut confirmed_height = meter.get_confirmed_epoch_num(
-            inner.cur_era_stable_height
-                + self.data_man.get_snapshot_epoch_count() as u64
-                + DEFERRED_STATE_EPOCH_COUNT,
-        );
+        let mut confirmed_height = meter.get_confirmed_epoch_num();
         if confirmed_height < DEFERRED_STATE_EPOCH_COUNT {
             confirmed_height = 0;
         } else {
@@ -1554,6 +1546,7 @@ impl ConsensusNewBlockHandler {
             .get_storage_manager()
             .maintain_state_confirmed(
                 inner,
+                inner.cur_era_stable_height,
                 confirmed_height,
                 &self.data_man.state_availability_boundary,
             )
