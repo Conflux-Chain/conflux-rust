@@ -9,6 +9,8 @@ use super::{
     InternalContractTrait, PreExecCheckConfTrait, SolFnTable,
     SolidityFunctionTrait, UpfrontPaymentTrait, SPEC,
 };
+#[cfg(test)]
+use crate::check_signature;
 use crate::{
     evm::{ActionParams, Spec},
     impl_function_type, make_function_table, make_solidity_contract,
@@ -17,6 +19,8 @@ use crate::{
     vm,
 };
 use cfx_types::{address_util::AddressUtil, Address, U256};
+#[cfg(test)]
+use rustc_hex::FromHex;
 
 lazy_static! {
     static ref CONTRACT_TABLE: SolFnTable = make_function_table!(
@@ -31,10 +35,10 @@ lazy_static! {
         AddPrivilege,
         RemovePrivilege,
         GetSponsorForGas,
-        GetSponsorBalanceForGas,
-        GetGasFeeUpperBound,
+        GetSponsoredBalanceForGas,
+        GetSponsoredGasFeeUpperBound,
         GetSponsorForCollateral,
-        GetSponsorBalanceForCollateral,
+        GetSponsoredBalanceForCollateral,
         IsWhitelisted,
         IsAllWhitelisted,
         AddPrivilegeByAdmin,
@@ -43,11 +47,11 @@ lazy_static! {
 }
 
 make_solidity_contract! {
-    pub struct SponsorWhitelistControl(SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, CONTRACT_TABLE);
+    pub struct SponsorWhitelistControl(SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, CONTRACT_TABLE_V2);
 }
 
 make_solidity_function! {
-    struct SetSponsorForGas((Address, U256), "setSponsorforGas(address,uint256)");
+    struct SetSponsorForGas((Address, U256), "setSponsorForGas(address,uint256)");
 }
 impl_function_type!(SetSponsorForGas, "payable_write", gas: 2 * SPEC.sstore_reset_gas);
 
@@ -66,7 +70,7 @@ impl ExecutionTrait for SetSponsorForGas {
 }
 
 make_solidity_function! {
-    struct SetSponsorForCollateral(Address, "setSponsorforCollateral(address)");
+    struct SetSponsorForCollateral(Address, "setSponsorForCollateral(address)");
 }
 impl_function_type!(SetSponsorForCollateral, "payable_write", gas: 2 * SPEC.sstore_reset_gas);
 
@@ -148,7 +152,7 @@ impl ExecutionTrait for RemovePrivilege {
 }
 
 make_solidity_function! {
-    struct GetSponsorForGas(Address, "getSponsorforGas(address)", Address);
+    struct GetSponsorForGas(Address, "getSponsorForGas(address)", Address);
 }
 impl_function_type!(GetSponsorForGas, "query_with_default_gas");
 
@@ -163,11 +167,11 @@ impl ExecutionTrait for GetSponsorForGas {
 }
 
 make_solidity_function! {
-    struct GetSponsorBalanceForGas(Address, "getSponsoredBalanceforGas(address)", U256);
+    struct GetSponsoredBalanceForGas(Address, "getSponsoredBalanceForGas(address)", U256);
 }
-impl_function_type!(GetSponsorBalanceForGas, "query_with_default_gas");
+impl_function_type!(GetSponsoredBalanceForGas, "query_with_default_gas");
 
-impl ExecutionTrait for GetSponsorBalanceForGas {
+impl ExecutionTrait for GetSponsoredBalanceForGas {
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _: &Spec, state: &mut State,
         _: &mut Substate,
@@ -178,11 +182,11 @@ impl ExecutionTrait for GetSponsorBalanceForGas {
 }
 
 make_solidity_function! {
-    struct GetGasFeeUpperBound(Address, "getSponsoredGasFeeUpperbound(address)", U256);
+    struct GetSponsoredGasFeeUpperBound(Address, "getSponsoredGasFeeUpperBound(address)", U256);
 }
-impl_function_type!(GetGasFeeUpperBound, "query_with_default_gas");
+impl_function_type!(GetSponsoredGasFeeUpperBound, "query_with_default_gas");
 
-impl ExecutionTrait for GetGasFeeUpperBound {
+impl ExecutionTrait for GetSponsoredGasFeeUpperBound {
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _: &Spec, state: &mut State,
         _: &mut Substate,
@@ -193,7 +197,7 @@ impl ExecutionTrait for GetGasFeeUpperBound {
 }
 
 make_solidity_function! {
-    struct GetSponsorForCollateral(Address, "getSponsorforCollateral(address)",Address);
+    struct GetSponsorForCollateral(Address, "getSponsorForCollateral(address)",Address);
 }
 impl_function_type!(GetSponsorForCollateral, "query_with_default_gas");
 
@@ -208,11 +212,11 @@ impl ExecutionTrait for GetSponsorForCollateral {
 }
 
 make_solidity_function! {
-    struct GetSponsorBalanceForCollateral(Address, "getSponsoredBalanceforCollateral(address)",U256);
+    struct GetSponsoredBalanceForCollateral(Address, "getSponsoredBalanceForCollateral(address)",U256);
 }
-impl_function_type!(GetSponsorBalanceForCollateral, "query_with_default_gas");
+impl_function_type!(GetSponsoredBalanceForCollateral, "query_with_default_gas");
 
-impl ExecutionTrait for GetSponsorBalanceForCollateral {
+impl ExecutionTrait for GetSponsoredBalanceForCollateral {
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _: &Spec, state: &mut State,
         _: &mut Substate,
@@ -264,7 +268,7 @@ impl ExecutionTrait for IsAllWhitelisted {
 }
 
 make_solidity_function! {
-    struct AddPrivilegeByAdmin((Address,Vec<Address>), "addPrivilegebyAdmin(address,address[])");
+    struct AddPrivilegeByAdmin((Address,Vec<Address>), "addPrivilegeByAdmin(address,address[])");
 }
 impl_function_type!(AddPrivilegeByAdmin, "non_payable_write");
 
@@ -354,4 +358,23 @@ fn test_sponsor_contract_sig() {
         RemovePrivilegeSnake {}.function_sig().to_vec(),
         REMOVE_PRIVILEGE_SIG.to_vec()
     );
+}
+
+#[test]
+fn test_sponsor_contract_sig_v2() {
+    // Check the consistency between signature generated by rust code and java
+    // sdk.
+    check_signature!(GetSponsorForGas, "33a1af31");
+    check_signature!(GetSponsoredBalanceForGas, "b3b28fac");
+    check_signature!(GetSponsoredGasFeeUpperBound, "d665f9dd");
+    check_signature!(GetSponsorForCollateral, "8382c3a7");
+    check_signature!(GetSponsoredBalanceForCollateral, "d47e9a57");
+    check_signature!(IsWhitelisted, "b6b35272");
+    check_signature!(IsAllWhitelisted, "79b47faa");
+    check_signature!(AddPrivilegeByAdmin, "22effe84");
+    check_signature!(RemovePrivilegeByAdmin, "217e055b");
+    check_signature!(SetSponsorForGas, "3e3e6428");
+    check_signature!(SetSponsorForCollateral, "e66c1bea");
+    check_signature!(AddPrivilege, "10128d3e");
+    check_signature!(RemovePrivilege, "d2932db6");
 }

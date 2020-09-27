@@ -72,6 +72,18 @@ macro_rules! rename_interface {
      };
 }
 
+#[macro_export]
+macro_rules! check_signature {
+    ($interface:ident, $signature:expr) => {
+        assert_eq!(
+            $interface {}.function_sig().to_vec(),
+            $signature.from_hex().unwrap(),
+            "Test solidity signature for {}",
+            $interface {}.name()
+        );
+    };
+}
+
 pub struct InternalContractMap {
     builtin: Arc<BTreeMap<Address, Box<dyn InternalContractTrait>>>,
 }

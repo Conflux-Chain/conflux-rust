@@ -112,10 +112,10 @@ class AdminControlTest(ConfluxTestFramework):
             bytecode_file=os.path.join(file_dir, "contracts/pay_bytecode.dat"),
         )
 
-        admin_control_contract = get_contract_instance(
-            abi_file=os.path.join(file_dir, "contracts/admin_control_abi.json"),
-            bytecode_file=os.path.join(file_dir, "contracts/admin_control_bytecode.dat"),
-        )
+        control_contract_file_path =os.path.join(file_dir, "../internal_contract/metadata/AdminControl.json")
+        control_contract_dict = json.loads(open(control_contract_file_path, "r").read())
+
+        admin_control_contract = get_contract_instance(contract_dict=control_contract_dict)
 
         start_p2p_connection(self.nodes)
 
@@ -175,7 +175,7 @@ class AdminControlTest(ConfluxTestFramework):
         # transfer admin (fail)
         tx = self.call_contract_function(
             contract=admin_control_contract,
-            name="set_admin",
+            name="setAdmin",
             args=[Web3.toChecksumAddress(contract_addr), Web3.toChecksumAddress(addr2)],
             sender_key=priv_key2,
             contract_addr=Web3.toChecksumAddress("0x0888000000000000000000000000000000000000"),
@@ -187,7 +187,7 @@ class AdminControlTest(ConfluxTestFramework):
         # transfer admin (success)
         tx = self.call_contract_function(
             contract=admin_control_contract,
-            name="set_admin",
+            name="setAdmin",
             args=[Web3.toChecksumAddress(contract_addr), Web3.toChecksumAddress(addr2)],
             sender_key=priv_key,
             contract_addr=Web3.toChecksumAddress("0x0888000000000000000000000000000000000000"),
