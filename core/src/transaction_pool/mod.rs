@@ -31,7 +31,7 @@ use metrics::{
     RwLockExtensions,
 };
 use parking_lot::{Mutex, RwLock};
-use primitives::{Account, SignedTransaction, TransactionWithSignature, };
+use primitives::{Account, SignedTransaction, TransactionWithSignature};
 use std::{
     cmp::{max, min},
     collections::hash_map::HashMap,
@@ -92,7 +92,9 @@ impl Default for TxPoolConfig {
         TxPoolConfig {
             capacity: 500_000,
             min_tx_price: 1,
-            max_tx_gas: RwLock::new(U256::from(DEFAULT_TARGET_BLOCK_GAS_LIMIT/2)),
+            max_tx_gas: RwLock::new(U256::from(
+                DEFAULT_TARGET_BLOCK_GAS_LIMIT / 2,
+            )),
             // TODO: Set a proper default scaling since tx pool uses u128 as
             // weight.
             tx_weight_scaling: 1,
@@ -158,7 +160,7 @@ impl TransactionPool {
                     &data_man.true_genesis_state_root(),
                 ),
             )
-                .expect("The genesis state is guaranteed to exist."),
+            .expect("The genesis state is guaranteed to exist."),
         );
         TransactionPool {
             config,
@@ -658,7 +660,7 @@ impl TransactionPool {
                 true,
                 false,
             )
-                .ok();
+            .ok();
         }
 
         let (chain_id, best_height) =
@@ -689,7 +691,7 @@ impl TransactionPool {
                 false,
                 true,
             )
-                .ok();
+            .ok();
         }
 
         Ok(())
@@ -739,7 +741,7 @@ impl TransactionPool {
             additional_transactions.as_slice(),
             transactions_from_pool.as_slice(),
         ]
-            .concat();
+        .concat();
 
         (consensus_best_info_clone, self_gas_limit, transactions)
     }
