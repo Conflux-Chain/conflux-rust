@@ -159,12 +159,17 @@ impl Substate {
         state.set_storage(address, key, value, owner)
     }
 
-    pub fn record_storage_occupy(&mut self, address: &Address, amount: u64) {
-        *self.storage_collateralized.entry(*address).or_insert(0) += amount;
+    pub fn record_storage_occupy(
+        &mut self, address: &Address, collaterals: u64,
+    ) {
+        *self.storage_collateralized.entry(*address).or_insert(0) +=
+            collaterals;
     }
 
-    pub fn record_storage_release(&mut self, address: &Address, amount: u64) {
-        *self.storage_released.entry(*address).or_insert(0) += amount;
+    pub fn record_storage_release(
+        &mut self, address: &Address, collaterals: u64,
+    ) {
+        *self.storage_released.entry(*address).or_insert(0) += collaterals;
     }
 
     pub fn get_collateral_change(&self, address: &Address) -> (u64, u64) {

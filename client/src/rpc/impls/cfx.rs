@@ -4,7 +4,7 @@
 
 use crate::rpc::types::MAX_GAS_CALL_REQUEST;
 use blockgen::BlockGenerator;
-use cfx_parameters::staking::COLLATERAL_PER_BYTE;
+use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
 use cfx_types::{
     address_util::AddressUtil, BigEndianHash, H160, H256, H520, U128, U256,
@@ -881,7 +881,7 @@ impl RpcImpl {
         };
         let mut storage_collateralized = 0;
         for storage_change in &executed.storage_collateralized {
-            storage_collateralized += storage_change.amount;
+            storage_collateralized += storage_change.collaterals;
         }
         // In case of unlimited full gas charge at some VM call, or if there are
         // infinite loops, the total estimated gas used is very close to
@@ -936,7 +936,8 @@ impl RpcImpl {
         };
         let will_pay_tx_fee = !gas_sponsored || gas_sponsor_balance < gas_cost;
 
-        let storage_limit_in_drip = storage_limit * *COLLATERAL_PER_BYTE;
+        let storage_limit_in_drip =
+            storage_limit * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
         let storage_sponsor_balance = if storage_sponsored {
             state.sponsor_balance_for_collateral(&contract_addr)?
         } else {
