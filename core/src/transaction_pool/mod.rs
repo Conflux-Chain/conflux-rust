@@ -204,12 +204,13 @@ impl TransactionPool {
 
     pub fn calc_max_tx_gas(&self) -> U256 {
         let current_best_info = self.consensus_best_info.lock().clone();
-        let pivot_block = self
+        match self
             .data_man
             .block_from_db(&current_best_info.best_block_hash)
-            .unwrap();
-        let gas_limit = pivot_block.block_header.gas_limit();
-        gas_limit / 2
+        {
+            Some(pivot_block) => pivot_block.block_header.gas_limit() / 2,
+            None => *self.config.max_tx_gas.read(),
+        }
     }
 
     /// Try to insert `transactions` into transaction pool.
