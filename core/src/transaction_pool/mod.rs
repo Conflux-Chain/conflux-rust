@@ -19,6 +19,7 @@ use crate::{
     block_data_manager::BlockDataManager, consensus::BestInformation,
     machine::Machine, state::State, verification::VerificationConfig, vm::Spec,
 };
+
 use account_cache::AccountCache;
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_statedb::{Result as StateDbResult, StateDb};
@@ -30,7 +31,7 @@ use metrics::{
     RwLockExtensions,
 };
 use parking_lot::{Mutex, RwLock};
-use primitives::{Account, SignedTransaction, TransactionWithSignature};
+use primitives::{Account, SignedTransaction, TransactionWithSignature, };
 use std::{
     cmp::{max, min},
     collections::hash_map::HashMap,
@@ -76,6 +77,7 @@ lazy_static! {
 pub struct TxPoolConfig {
     pub capacity: usize,
     pub min_tx_price: u64,
+    pub max_tx_gas: RwLock<U256>,
     pub tx_weight_scaling: u64,
     pub tx_weight_exp: u8,
     pub target_block_gas_limit: u64,
@@ -90,6 +92,7 @@ impl Default for TxPoolConfig {
         TxPoolConfig {
             capacity: 500_000,
             min_tx_price: 1,
+            max_tx_gas: RwLock::new(U256::from(DEFAULT_TARGET_BLOCK_GAS_LIMIT/2)),
             // TODO: Set a proper default scaling since tx pool uses u128 as
             // weight.
             tx_weight_scaling: 1,
@@ -155,7 +158,7 @@ impl TransactionPool {
                     &data_man.true_genesis_state_root(),
                 ),
             )
-            .expect("The genesis state is guaranteed to exist."),
+                .expect("The genesis state is guaranteed to exist."),
         );
         TransactionPool {
             config,
@@ -197,7 +200,7 @@ impl TransactionPool {
         account_cache.get_nonce_and_balance(address)
     }
 
-    pub fn get_max_tx_gas(&self) -> U256 {
+    pub fn calc_max_tx_gas(&self) -> U256 {
         let current_best_info = self.consensus_best_info.lock().clone();
         let pivot_block = self
             .data_man
@@ -468,15 +471,14 @@ impl TransactionPool {
         }
 
         // check transaction gas limit
-        // if transaction.gas > self.config.max_tx_gas.into() {
-        let max_tx_gas = self.get_max_tx_gas();
+        let max_tx_gas = *self.config.max_tx_gas.read();
         if transaction.gas > max_tx_gas {
             warn!(
-                "Transaction discarded due to above gas limit: {} > {}",
+                "Transaction discarded due to above gas limit: {} > {:?}",
                 transaction.gas, max_tx_gas
             );
             return Err(format!(
-                "transaction gas {} exceeds the maximum value {}",
+                "transaction gas {} exceeds the maximum value {:?}, the half of pivot block gas limit",
                 transaction.gas, max_tx_gas
             ));
         }
@@ -642,6 +644,7 @@ impl TransactionPool {
             let mut consensus_best_info = self.consensus_best_info.lock();
             *consensus_best_info = best_info.clone();
         }
+        *self.config.max_tx_gas.write() = self.calc_max_tx_gas();
 
         let account_cache = self.get_best_state_account_cache();
         let mut inner = self.inner.write_with_metric(&NOTIFY_BEST_INFO_LOCK);
@@ -655,7 +658,7 @@ impl TransactionPool {
                 true,
                 false,
             )
-            .ok();
+                .ok();
         }
 
         let (chain_id, best_height) =
@@ -686,7 +689,7 @@ impl TransactionPool {
                 false,
                 true,
             )
-            .ok();
+                .ok();
         }
 
         Ok(())
@@ -736,7 +739,7 @@ impl TransactionPool {
             additional_transactions.as_slice(),
             transactions_from_pool.as_slice(),
         ]
-        .concat();
+            .concat();
 
         (consensus_best_info_clone, self_gas_limit, transactions)
     }
