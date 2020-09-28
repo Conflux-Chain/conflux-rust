@@ -8,7 +8,7 @@ use crate::{
     state::{AccountEntryProtectedMethods, StateGeneric, Substate},
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
-use cfx_parameters::staking::BYTES_PER_STORAGE_KEY;
+use cfx_parameters::staking::COLLATERAL_UNITS_PER_STORAGE_KEY;
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
 use cfx_storage::StorageStateTrait;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
@@ -761,14 +761,14 @@ impl OverlayAccount {
                     // The key has released from previous owner.
                     substate.record_storage_release(
                         original_owner,
-                        BYTES_PER_STORAGE_KEY,
+                        COLLATERAL_UNITS_PER_STORAGE_KEY,
                     );
                 }
                 if let Some(current_owner) = current_owner_opt.as_ref() {
                     // The owner has occupied a new key.
                     substate.record_storage_occupy(
                         current_owner,
-                        BYTES_PER_STORAGE_KEY,
+                        COLLATERAL_UNITS_PER_STORAGE_KEY,
                     );
                 }
             }

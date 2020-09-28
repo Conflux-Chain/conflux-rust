@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use blockgen::BlockGenerator;
-use cfx_parameters::staking::COLLATERAL_PER_BYTE;
+use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
 use cfx_types::{
     address_util::AddressUtil, BigEndianHash, H160, H256, H520, U128, U256,
@@ -871,7 +871,7 @@ impl RpcImpl {
         };
         let mut storage_collateralized = 0;
         for storage_change in &executed.storage_collateralized {
-            storage_collateralized += storage_change.amount;
+            storage_collateralized += storage_change.collaterals;
         }
         let response = EstimateGasAndCollateralResponse {
             gas_used: executed.gas_used.into(),
@@ -908,7 +908,8 @@ impl RpcImpl {
         };
         let will_pay_tx_fee = !gas_sponsored || gas_sponsor_balance < gas_cost;
 
-        let storage_limit_in_drip = storage_limit * *COLLATERAL_PER_BYTE;
+        let storage_limit_in_drip =
+            storage_limit * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
         let storage_sponsor_balance = if storage_sponsored {
             state.sponsor_balance_for_collateral(&contract_addr)?
         } else {
