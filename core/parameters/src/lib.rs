@@ -20,7 +20,10 @@ pub mod consensus {
     // relative to the era start blocks.
     pub const ERA_DEFAULT_EPOCH_COUNT: u64 = 20000;
 
-    pub const SNAPSHOT_EPOCHS_CAPACITY: u32 = 10000;
+    // At Conflux MainNet Launch there are approximately 2 blocks per epoch,
+    // with 1k TPS, and 2 blocks per second, a DeltaMPT contains data for
+    // around 2 million transaction.
+    pub const SNAPSHOT_EPOCHS_CAPACITY: u32 = 2000;
 
     pub const NULL: usize = !0;
     pub const NULLU64: u64 = !0;
