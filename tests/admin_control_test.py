@@ -151,10 +151,10 @@ class AdminControlTest(ConfluxTestFramework):
             name="constructor",
             args=[],
             sender_key=priv_key,
-            storage_limit=517)
+            storage_limit=512)
         contract_addr = self.wait_for_tx([tx], True)[0]['contractCreated']
         self.log.info("contract_addr={}".format(contract_addr))
-        assert_equal(client.get_collateral_for_storage(addr), 517 * 976562500000000)
+        assert_equal(client.get_collateral_for_storage(addr), 512 * 976562500000000)
         assert_equal(client.get_balance(contract_addr), 0)
 
         # deposit 10**18
@@ -208,7 +208,7 @@ class AdminControlTest(ConfluxTestFramework):
         assert_equal(client.get_balance(contract_addr), 0)
         assert_equal(client.get_balance(addr2), 6 * 10 ** 18 - charged_of_huge_gas(gas) * 2)
         assert_equal(client.get_collateral_for_storage(addr), 0)
-        assert_equal(client.get_balance(addr), b0 + 517 * 976562500000000)
+        assert_equal(client.get_balance(addr), b0 + 512 * 976562500000000)
 
         self.log.info("Pass")
 
