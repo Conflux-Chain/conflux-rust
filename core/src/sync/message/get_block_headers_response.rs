@@ -59,8 +59,8 @@ impl Handleable for GetBlockHeadersResponse {
         }
 
         // We may receive some messages from peer during recover from db
-        // phase. We should ignore it, since it may cause some
-        // inconsistency.
+        // phase. We should ignore it, since it may cause some inconsistency.
+        // This will be double checked later with `phase_manager_lock` locked.
         if ctx.manager.in_recover_from_db_phase() {
             return Ok(());
         }
@@ -186,9 +186,7 @@ impl GetBlockHeadersResponse {
                 // If we insert headers in CatchUpRecoverBlockFromDB,
                 // the bodies may never be requested.
                 // See issue https://github.com/Conflux-Chain/conflux-rust/issues/1869.
-                if ctx.manager.phase_manager.get_current_phase().phase_type()
-                    == SyncPhaseType::CatchUpRecoverBlockFromDB
-                {
+                if ctx.manager.in_recover_from_db_phase() {
                     return;
                 }
                 ctx.manager.graph.insert_block_header(
