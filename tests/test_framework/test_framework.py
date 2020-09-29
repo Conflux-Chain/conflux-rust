@@ -392,7 +392,7 @@ class ConfluxTestFramework:
             self.log.info("stop %s", i)
             clean_data = True if random.random() <= clean_probability else False
             self.stop_node(i, clean=clean_data)
-            self.start_node(i, wait_time=120, phase_to_wait=("NormalSyncPhase"))
+            self.start_node(i, wait_time=240, phase_to_wait=("NormalSyncPhase"))
 
     # Private helper methods. These should not be accessed by the subclass test scripts.
 
