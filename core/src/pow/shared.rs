@@ -1,8 +1,8 @@
 use primal::is_prime;
 
-pub const DATASET_BYTES_INIT: u64 = 3 * (1 << 31);
+pub const DATASET_BYTES_INIT: u64 = 2 * (1 << 31);
 pub const DATASET_BYTES_GROWTH: u64 = 1 << 24;
-pub const CACHE_BYTES_INIT: u64 = 3 * (1 << 23);
+pub const CACHE_BYTES_INIT: u64 = 2 * (1 << 23);
 pub const CACHE_BYTES_GROWTH: u64 = 1 << 16;
 
 pub const POW_STAGE_LENGTH: u64 = 1 << 19;
