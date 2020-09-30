@@ -614,8 +614,7 @@ impl BlockGenerator {
         // Ensure that when `generate**` function returns, the block has been
         // handled by Consensus This order is assumed by some tests, and
         // this function is also only used in tests.
-        // FIXME: There seems to be deadlock.
-        //self.consensus_graph().wait_for_generation(&hash);
+        self.consensus_graph().wait_for_generation(&hash);
         debug!("generate_block finished wait_for_generation()");
 
         hash
