@@ -176,6 +176,7 @@ impl<'a> ContextTrait for Context<'a> {
         // create new contract address
         let (address, code_hash) = self::contract_address(
             address_scheme,
+            self.env.number.into(),
             &self.origin.address,
             &self.state.nonce(&self.origin.address)?,
             &code,

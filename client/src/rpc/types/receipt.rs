@@ -51,14 +51,15 @@ impl Receipt {
     pub fn new(
         transaction: PrimitiveTransaction, receipt: PrimitiveReceipt,
         transaction_index: TransactionIndex, prior_gas_used: U256,
-        epoch_number: Option<u64>, maybe_state_root: Option<H256>,
-        tx_exec_error_msg: Option<String>,
+        epoch_number: Option<u64>, block_number: u64,
+        maybe_state_root: Option<H256>, tx_exec_error_msg: Option<String>,
     ) -> Receipt
     {
         let mut address = None;
         if Action::Create == transaction.action && receipt.outcome_status == 0 {
             let (created_address, _) = contract_address(
                 CreateContractAddress::FromSenderNonceAndCodeHash,
+                block_number.into(),
                 &transaction.sender,
                 &transaction.nonce,
                 &transaction.data,
@@ -72,9 +73,9 @@ impl Receipt {
             gas_used: (receipt.accumulated_gas_used - prior_gas_used).into(),
             gas_fee: receipt.gas_fee.into(),
             from: transaction.sender,
-            to: match transaction.action {
+            to: match &transaction.action {
                 Action::Create => None,
-                Action::Call(ref address) => Some(address.clone()),
+                Action::Call(address) => Some(address.clone()),
             },
             outcome_status: U64::from(receipt.outcome_status),
             contract_created: address,

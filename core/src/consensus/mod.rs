@@ -72,6 +72,7 @@ lazy_static! {
 
 pub struct MaybeExecutedTxExtraInfo {
     pub receipt: Receipt,
+    pub block_number: u64,
     pub prior_gas_used: U256,
     pub tx_exec_error_msg: Option<String>,
 }
@@ -1236,6 +1237,32 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
         self.inner.read_recursive().get_block_epoch_number(hash)
+    }
+
+    fn get_block_number(
+        &self, block_hash: &H256,
+    ) -> Result<Option<u64>, String> {
+        let inner = self.inner.read_recursive();
+        let epoch_number = match inner.get_block_epoch_number(block_hash) {
+            None => return Ok(None),
+            Some(epoch_number) => epoch_number,
+        };
+        let epoch_hash = match inner.epoch_hash(epoch_number) {
+            None => return Ok(None),
+            Some(hash) => hash,
+        };
+        let blocks =
+            self.get_block_hashes_by_epoch(EpochNumber::Number(epoch_number))?;
+        let start_block_number =
+            match self.data_man.get_epoch_execution_context(&epoch_hash) {
+                None => return Ok(None),
+                Some(ctx) => ctx.start_block_number,
+            };
+        let index_of_block = match blocks.iter().position(|x| x == block_hash) {
+            None => return Ok(None),
+            Some(index) => index as u64,
+        };
+        return Ok(Some(start_block_number + index_of_block));
     }
 
     /// Find a trusted blame block for snapshot full sync

@@ -21,6 +21,7 @@ pub struct EpochExecutionContext {
 /// block's view.
 #[derive(Clone, Debug)]
 pub struct BlockExecutionResult {
+    // FIXME: why it's an Arc.
     pub block_receipts: Arc<BlockReceipts>,
     pub bloom: Bloom,
 }
@@ -30,6 +31,7 @@ impl MallocSizeOf for BlockExecutionResult {
     }
 }
 
+// FIXME: RlpEncodable.
 impl Encodable for BlockExecutionResult {
     fn rlp_append(&self, s: &mut RlpStream) {
         s.begin_list(2)

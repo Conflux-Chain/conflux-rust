@@ -85,6 +85,7 @@ pub struct BlockReceipts {
     pub receipts: Vec<Receipt>,
     // FIXME:
     //   These fields below do not belong to receipts root calculation.
+    pub block_number: u64,
     /// This is the amount of secondary reward this block.
     pub secondary_reward: U256,
     /// The error messages for each transaction. A successful transaction has

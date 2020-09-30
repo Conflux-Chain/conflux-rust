@@ -75,6 +75,10 @@ pub trait ConsensusGraphTrait: Send + Sync {
 
     fn get_block_epoch_number(&self, hash: &H256) -> Option<u64>;
 
+    fn get_block_number(
+        &self, block_hash: &H256,
+    ) -> Result<Option<u64>, String>;
+
     fn get_trusted_blame_block_for_snapshot(
         &self, snapshot_epoch_id: &EpochId,
     ) -> Option<H256>;

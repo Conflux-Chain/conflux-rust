@@ -488,9 +488,13 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            // FIXME: why not return an RpcReceipt directly?
+            // TODO:
+            //  return an RpcReceipt directly after splitting cfxcore into
+            //  smaller crates. It's impossible now because of circular
+            //  dependency.
             let TxInfo {
                 tx,
+                maybe_block_number,
                 receipt,
                 tx_index,
                 maybe_epoch,
@@ -502,12 +506,17 @@ impl RpcImpl {
                 .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
                 .map_err(RpcError::invalid_params)?;
 
+            if maybe_block_number.is_none() {
+                return Ok(None);
+            }
+
             let receipt = RpcReceipt::new(
                 tx,
                 receipt,
                 tx_index,
                 prior_gas_used,
                 maybe_epoch,
+                maybe_block_number.unwrap(),
                 maybe_state_root,
                 // Can not offer error_message from light node.
                 None,

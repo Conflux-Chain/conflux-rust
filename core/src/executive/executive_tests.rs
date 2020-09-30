@@ -55,6 +55,7 @@ fn test_contract_address() {
         expected_address,
         contract_address(
             CreateContractAddress::FromSenderNonceAndCodeHash,
+            /* block_number = */ 0.into(),
             &address,
             &U256::from(88),
             &[],
@@ -70,6 +71,7 @@ fn test_sender_balance() {
         Address::from_str("1f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
     let address = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
+        /* block_number = */ 0.into(),
         &sender,
         &U256::zero(),
         &[],
@@ -179,6 +181,7 @@ fn test_create_contract_out_of_depth() {
         Address::from_str("1d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
     let address = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
+        /* block_number = */ 0.into(),
         &sender,
         &U256::zero(),
         &[],
@@ -236,6 +239,7 @@ fn test_suicide_when_creation() {
         Address::from_str("1d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
     let contract_addr = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
+        /* block_number = */ 0.into(),
         &sender_addr,
         &U256::zero(),
         &[],
@@ -318,6 +322,7 @@ fn test_call_to_create() {
         Address::from_str("1d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
     let address = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
+        /* block_number = */ 0.into(),
         &sender,
         &U256::zero(),
         &[],
@@ -474,6 +479,7 @@ fn test_keccak() {
         Address::from_str("1f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
     let address = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
+        /* block_number = */ 0.into(),
         &sender,
         &U256::zero(),
         &[],
@@ -1018,6 +1024,7 @@ fn test_commission_privilege() {
     let caller3 = Random.generate().unwrap();
     let address = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
+        /* block_number = */ 0.into(),
         &sender.address(),
         &U256::zero(),
         &[],
@@ -1386,6 +1393,7 @@ fn test_storage_commission_privilege() {
     let caller3 = Random.generate().unwrap();
     let address = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
+        /* block_number = */ 0.into(),
         &sender.address(),
         &U256::zero(),
         &[],
