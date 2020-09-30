@@ -12,7 +12,6 @@ use crate::{
     evm::Spec, hash::KECCAK_EMPTY, transaction_pool::SharedTransactionPool,
     vm::Error as vmError, vm_factory::VmFactory,
 };
-
 use cfx_bytes::Bytes;
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
@@ -272,10 +271,11 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     pub fn settle_collateral_for_address(
         &mut self, addr: &Address, substate: &Substate,
     ) -> DbResult<CollateralCheckResult> {
-        let (inc_bytes, sub_bytes) = substate.get_collateral_change(addr);
+        let (inc_collaterals, sub_collaterals) =
+            substate.get_collateral_change(addr);
         let (inc, sub) = (
-            *COLLATERAL_PER_BYTE * inc_bytes,
-            *COLLATERAL_PER_BYTE * sub_bytes,
+            *DRIPS_PER_STORAGE_COLLATERAL_UNIT * inc_collaterals,
+            *DRIPS_PER_STORAGE_COLLATERAL_UNIT * sub_collaterals,
         );
 
         if !sub.is_zero() {
@@ -1217,7 +1217,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                         storage_value.owner.as_ref().unwrap_or(address);
                     substate.record_storage_release(
                         storage_owner,
-                        BYTES_PER_STORAGE_KEY,
+                        COLLATERAL_UNITS_PER_STORAGE_KEY,
                     );
                 }
             }
@@ -1231,7 +1231,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 {
                     substate.record_storage_release(
                         &storage_owner,
-                        BYTES_PER_STORAGE_KEY,
+                        COLLATERAL_UNITS_PER_STORAGE_KEY,
                     );
                 }
             }

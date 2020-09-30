@@ -38,7 +38,7 @@ class ContractBenchTest(SmartContractBenchBase):
         bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), CONTRACT_PATH)
         assert(os.path.isfile(bytecode_file))
         bytecode = open(bytecode_file).read().strip()
-        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, bytecode, storage_limit=1047)
+        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, bytecode, storage_limit=1024)
         contractAddr = Web3.toChecksumAddress(contractAddr)
         logs = self.rpc.get_logs(self.filter)
         assert_equal(len(logs), l + 1)
@@ -103,7 +103,7 @@ class ContractBenchTest(SmartContractBenchBase):
 
         # deploy contract
         data = contract.constructor(10).buildTransaction(self.tx_conf)["data"]
-        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=2127)
+        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=(1024 + 64 * 3))
         contractAddr = Web3.toChecksumAddress(contractAddr)
         self.tx_conf["to"] = contractAddr
 
@@ -133,7 +133,7 @@ class ContractBenchTest(SmartContractBenchBase):
 
         # deploy contract
         data = contract.constructor().buildTransaction(self.tx_conf)["data"]
-        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=4785)
+        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=2560)
         tx_hash = receipt['transactionHash']
         contractAddr = Web3.toChecksumAddress(contractAddr)
         self.tx_conf["to"] = contractAddr
@@ -216,7 +216,7 @@ class ContractBenchTest(SmartContractBenchBase):
 
         # deploy contract
         data = contract.constructor().buildTransaction(self.tx_conf)["data"]
-        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=517)
+        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=512)
         contractAddr = Web3.toChecksumAddress(contractAddr)
         self.tx_conf["to"] = contractAddr
         logs = self.rpc.get_logs(self.filter)
@@ -253,7 +253,7 @@ class ContractBenchTest(SmartContractBenchBase):
 
         # deploy contract
         data = contract.constructor(1).buildTransaction(self.tx_conf)["data"]
-        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=2287)
+        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=(1536 + 64))
         tx_hash = receipt['transactionHash']
         contractAddr = Web3.toChecksumAddress(contractAddr)
         self.tx_conf["to"] = contractAddr
@@ -303,7 +303,7 @@ class ContractBenchTest(SmartContractBenchBase):
 
         # deploy contract
         data = contract.constructor(1).buildTransaction(self.tx_conf)["data"]
-        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=8239)
+        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=(4096 + 64 * 2))
         tx_hash = receipt['transactionHash']
         contractAddr = Web3.toChecksumAddress(contractAddr)
         self.tx_conf["to"] = contractAddr
@@ -410,7 +410,7 @@ class ContractBenchTest(SmartContractBenchBase):
             bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
         )
         data = dai.constructor(1).buildTransaction(self.tx_conf)["data"]
-        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=8239)
+        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=(4096 + 64 * 2))
         dai_addr = Web3.toChecksumAddress(contractAddr)
 
         CONTRACT_PATH = "contracts/Vat_bytecode.dat"
@@ -420,7 +420,7 @@ class ContractBenchTest(SmartContractBenchBase):
             bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
         )
         data = vat.constructor().buildTransaction(self.tx_conf)["data"]
-        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=10395)
+        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=(5632 + 64 * 2))
         vat_addr = Web3.toChecksumAddress(contractAddr)
 
         CONTRACT_PATH = "contracts/DaiJoin_bytecode.dat"
@@ -430,7 +430,7 @@ class ContractBenchTest(SmartContractBenchBase):
             bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
         )
         data = dai_join.constructor(vat_addr, dai_addr).buildTransaction(self.tx_conf)["data"]
-        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=2079)
+        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=(1024 + 64 * 2))
         dai_join_addr = Web3.toChecksumAddress(contractAddr)
 
         # mint dai tokens & give approval

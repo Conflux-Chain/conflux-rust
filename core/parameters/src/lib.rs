@@ -204,6 +204,7 @@ pub mod block {
 
 pub mod staking {
     use super::pow::TARGET_AVERAGE_BLOCK_GENERATION_PERIOD;
+    use crate::consensus::ONE_CFX_IN_DRIP;
     use cfx_types::U256;
 
     /// This is the number of blocks per second.
@@ -214,29 +215,48 @@ pub mod staking {
     /// This is the number of blocks per year.
     pub const BLOCKS_PER_YEAR: u64 = BLOCKS_PER_DAY * 365;
 
-    /// This is the storage cost for one key/value pair.
-    /// 64 = mem::size_of::<H256>() + mem::size_of::<H256>()
-    pub const BYTES_PER_STORAGE_KEY: u64 = 64;
+    /// This is the storage collateral units for each KiB of code, amount in
+    /// COLLATERAL_UNITs. Code collateral is calculated by each whole KiB
+    /// rounding upwards.
+    pub const CODE_COLLATERAL_UNITS_PER_KI_BYTES: u64 = 512;
+    /// This is the storage collateral units to deposit for one key/value pair
+    /// in storage. 1 CFX for 16 key value entries.
+    pub const COLLATERAL_UNITS_PER_STORAGE_KEY: u64 = 64;
 
     lazy_static! {
-        /// This is the renting fee for one byte in storage. 1 CFX for 1024 Bytes, which is `10 ^ 18 / 1024` drip for 1 Byte.
-        pub static ref COLLATERAL_PER_BYTE: U256 = U256::from(976_562_500_000_000u64);
-        /// This is the renting fee for one key/value pair in storage.
-        /// 1 CFX for 1 KB, the storage for one key/value pair is 64 B = 1/16 CFX.
-        pub static ref COLLATERAL_PER_STORAGE_KEY: U256 = *COLLATERAL_PER_BYTE * U256::from(BYTES_PER_STORAGE_KEY);
-        /// This is the scale factor for accumulated interest rate: `BLOCKS_PER_YEAR * 2 ^ 80`.
-        /// The actual accumulate interest rate stored will be `accumulate_interest_rate / INTEREST_RATE_SCALE`.
-        pub static ref ACCUMULATED_INTEREST_RATE_SCALE: U256 = U256::from(BLOCKS_PER_YEAR) << 80;
-        /// The initial annual interest is 4%, which means the initial interest rate per block will be
-        /// `4% / BLOCKS_PER_YEAR`. We will multiply it with scale factor and store it as an integer.
+        /// This is the unit of storage collateral to deposit
+        pub static ref DRIPS_PER_STORAGE_COLLATERAL_UNIT: U256 =
+            (ONE_CFX_IN_DRIP / 1024).into();
+        /// The collaterals in drips for one key/value pair in storage.
+        pub static ref COLLATERAL_DRIPS_PER_STORAGE_KEY: U256 =
+            *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+            * COLLATERAL_UNITS_PER_STORAGE_KEY;
+        /// This is the scale factor for accumulated interest rate:
+        /// `BLOCKS_PER_YEAR * 2 ^ 80`.
+        /// The actual accumulate interest rate stored will be
+        /// `accumulate_interest_rate / INTEREST_RATE_SCALE`.
+        pub static ref ACCUMULATED_INTEREST_RATE_SCALE: U256 =
+            U256::from(BLOCKS_PER_YEAR) << 80;
+        /// The initial annual interest is 4%, which means the initial interest
+        /// rate per block will be
+        /// `4% / BLOCKS_PER_YEAR`. We will multiply it with scale factor and
+        /// store it as an integer.
         /// This is the scale factor of initial interest rate per block.
-        pub static ref INTEREST_RATE_PER_BLOCK_SCALE: U256 = U256::from(BLOCKS_PER_YEAR * 1000000);
-        /// This is the initial interest rate per block with scale: `4% / BLOCKS_PER_YEAR * INTEREST_RATE_PER_BLOCK_SCALE`.
-        pub static ref INITIAL_INTEREST_RATE_PER_BLOCK: U256 = U256::from(40000);
-        /// This is the service charge rate for withdraw, `SERVICE_CHARGE_RATE /
+        pub static ref INTEREST_RATE_PER_BLOCK_SCALE: U256 =
+            U256::from(BLOCKS_PER_YEAR * 1000000);
+        /// This is the initial interest rate per block with scale:
+        /// `4% / BLOCKS_PER_YEAR * INTEREST_RATE_PER_BLOCK_SCALE`.
+        pub static ref INITIAL_INTEREST_RATE_PER_BLOCK: U256 =
+            U256::from(40000);
+        /// This is the service charge rate for withdraw,
+        /// `SERVICE_CHARGE_RATE /
         /// SERVICE_CHARGE_RATE_SCALE = 0.05%`
         pub static ref SERVICE_CHARGE_RATE: U256 = U256::from(5);
         pub static ref SERVICE_CHARGE_RATE_SCALE: U256 = U256::from(10000);
+    }
+
+    pub fn code_collateral_units(len: usize) -> u64 {
+        (len as u64 + 1023) / 1024 * CODE_COLLATERAL_UNITS_PER_KI_BYTES
     }
 }
 

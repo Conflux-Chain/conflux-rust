@@ -14,7 +14,9 @@ use crate::{
         ReturnData, Spec, TrapKind,
     },
 };
-use cfx_parameters::staking::COLLATERAL_PER_BYTE;
+use cfx_parameters::staking::{
+    code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
+};
 use cfx_types::{Address, H256, U256};
 use primitives::transaction::UNSIGNED_SENDER;
 use std::sync::Arc;
@@ -326,12 +328,14 @@ impl<'a> ContextTrait for Context<'a> {
                         false => Ok(*gas),
                     };
                 }
-                let collateral_for_code =
-                    U256::from(data.len()) * *COLLATERAL_PER_BYTE;
-                debug!("ret()  collateral_for_code={:?}", collateral_for_code);
+                let collateral_units_for_code =
+                    code_collateral_units(data.len());
+                let collateral_in_drips = U256::from(collateral_units_for_code)
+                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+                debug!("ret()  collateral_for_code={:?}", collateral_in_drips);
                 self.substate.record_storage_occupy(
                     &self.origin.storage_owner,
-                    data.len() as u64,
+                    collateral_units_for_code,
                 );
 
                 self.state.init_code(

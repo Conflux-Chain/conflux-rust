@@ -1285,7 +1285,7 @@ impl<'a> Executive<'a> {
         }
 
         let tx_storage_limit_in_drip =
-            U256::from(tx.storage_limit) * *COLLATERAL_PER_BYTE;
+            U256::from(tx.storage_limit) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
         let storage_sponsor_balance = if storage_sponsored {
             self.state.sponsor_balance_for_collateral(&code_address)?
         } else {
@@ -1517,7 +1517,10 @@ impl<'a> Executive<'a> {
                 // empty.
                 let code_owner =
                     self.state.code_owner(address)?.expect("code owner exists");
-                substate.record_storage_release(&code_owner, code_size as u64);
+                substate.record_storage_release(
+                    &code_owner,
+                    code_collateral_units(code_size),
+                );
             }
 
             self.state.record_storage_and_whitelist_entries_release(
@@ -1663,12 +1666,12 @@ impl<'a> Executive<'a> {
                         if inc > 0 {
                             storage_collateralized.push(StorageChange {
                                 address: *address,
-                                amount: inc,
+                                collaterals: inc,
                             });
                         } else if sub > 0 {
                             storage_released.push(StorageChange {
                                 address: *address,
-                                amount: sub,
+                                collaterals: sub,
                             });
                         }
                     }
