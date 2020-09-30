@@ -122,7 +122,8 @@ pub struct StorageManager {
     // Note that for archive node the list here is just a subset of what's
     // available.
     //
-    // Lock order: while this is locked, in load_persist_state,
+    // Lock order: while this is locked, in load_persist_state and
+    // state_manager.rs:get_state_trees_for_next_epoch
     // snapshot_associated_mpts_by_epoch is locked later.
     current_snapshots: RwLock<Vec<SnapshotInfo>>,
     // Lock order: while this is locked, in register_new_snapshot and
@@ -293,6 +294,15 @@ impl StorageManager {
             .load_persist_state()?;
 
         new_storage_manager_result
+    }
+
+    pub fn find_merkle_root(
+        current_snapshots: &Vec<SnapshotInfo>, epoch_id: &EpochId,
+    ) -> Option<MerkleHash> {
+        current_snapshots
+            .iter()
+            .find(|i| i.get_snapshot_epoch_id() == epoch_id)
+            .map(|i| i.merkle_root.clone())
     }
 
     pub fn wait_for_snapshot(
@@ -1389,7 +1399,7 @@ use cfx_internal_common::{
 use fallible_iterator::FallibleIterator;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Mutex, RwLock, RwLockReadGuard};
-use primitives::{EpochId, MERKLE_NULL_NODE, NULL_EPOCH};
+use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
 use rlp::{Decodable, DecoderError, Encodable, Rlp};
 use sqlite::Statement;
 use std::{

@@ -309,27 +309,29 @@ impl StateManager {
                     }
                 }
                 Some(guarded_snapshot) => {
-                    snapshot_merkle_root = match self
-                        .storage_manager
-                        .get_snapshot_info_at_epoch(snapshot_epoch_id)
-                    {
-                        None => {
-                            warn!(
+                    let (guard, snapshot) = guarded_snapshot.into();
+                    snapshot_merkle_root =
+                        match StorageManager::find_merkle_root(
+                            &guard,
+                            snapshot_epoch_id,
+                        ) {
+                            None => {
+                                warn!(
                                 "get_state_trees_for_next_epoch, shift snapshot, normal case, \
                                 snapshot info not found for snapshot {:?}. StateIndex: {:?}.",
                                 snapshot_epoch_id,
                                 parent_state_index,
                             );
-                            return Ok(None);
-                        }
-                        Some(snapshot_info) => snapshot_info.merkle_root,
-                    };
+                                return Ok(None);
+                            }
+                            Some(merkle_root) => merkle_root,
+                        };
                     let temp_maybe_intermediate_mpt = self
                         .storage_manager
                         .get_intermediate_mpt(snapshot_epoch_id)?;
                     match temp_maybe_intermediate_mpt {
                         None => {
-                            snapshot = guarded_snapshot;
+                            snapshot = GuardedValue::new(guard, snapshot);
                             maybe_intermediate_mpt_key_padding =
                                 Some(&parent_state_index.delta_mpt_key_padding);
                             delta_mpt = self
@@ -625,6 +627,7 @@ use crate::{
     state::*,
     state_manager::*,
     storage_db::*,
+    utils::guarded_value::GuardedValue,
     StorageConfiguration,
 };
 use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
