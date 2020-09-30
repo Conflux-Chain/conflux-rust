@@ -1519,7 +1519,7 @@ impl<'a> Executive<'a> {
                     self.state.code_owner(address)?.expect("code owner exists");
                 substate.record_storage_release(
                     &code_owner,
-                    code_collateral(code_size),
+                    code_collateral_units(code_size),
                 );
             }
 

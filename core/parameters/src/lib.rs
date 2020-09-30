@@ -255,7 +255,7 @@ pub mod staking {
         pub static ref SERVICE_CHARGE_RATE_SCALE: U256 = U256::from(10000);
     }
 
-    pub fn code_collateral(len: usize) -> u64 {
+    pub fn code_collateral_units(len: usize) -> u64 {
         (len as u64 + 1023) / 1024 * CODE_COLLATERAL_UNITS_PER_KI_BYTES
     }
 }

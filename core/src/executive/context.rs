@@ -15,7 +15,7 @@ use crate::{
     },
 };
 use cfx_parameters::staking::{
-    code_collateral, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
+    code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
 use cfx_types::{Address, H256, U256};
 use primitives::transaction::UNSIGNED_SENDER;
@@ -328,7 +328,8 @@ impl<'a> ContextTrait for Context<'a> {
                         false => Ok(*gas),
                     };
                 }
-                let collateral_units_for_code = code_collateral(data.len());
+                let collateral_units_for_code =
+                    code_collateral_units(data.len());
                 let collateral_in_drips = U256::from(collateral_units_for_code)
                     * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
                 debug!("ret()  collateral_for_code={:?}", collateral_in_drips);

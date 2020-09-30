@@ -335,7 +335,7 @@ fn test_call_to_create() {
     params.value = ActionValue::Transfer(U256::from(100));
     params.call_type = CallType::Call;
     params.storage_limit_in_drip = *DRIPS_PER_STORAGE_COLLATERAL_UNIT
-        * code_collateral(code_len)
+        * code_collateral_units(code_len)
         + *COLLATERAL_DRIPS_PER_STORAGE_KEY;
 
     let storage_manager = new_state_manager_for_unit_test();
