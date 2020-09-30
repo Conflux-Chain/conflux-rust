@@ -305,12 +305,16 @@ impl ConsensusGraph {
         {
             sleep(Duration::from_millis(1));
         }
+        debug!("wait_for_generation, block already in graph");
+        // FIXME: this seems to cause deadlock in p2p_era_test.py
+        /*
         let best_state_block =
             self.inner.read_recursive().best_state_block_hash();
         match self.executor.wait_for_result(best_state_block) {
             Ok(_) => (),
             Err(msg) => warn!("wait_for_generation() gets the following error from the ConsensusExecutor: {}", msg)
         }
+        */
     }
 
     /// Determine whether the next mined block should have adaptive weight or
