@@ -10,7 +10,7 @@ use crate::{
             Handleable,
         },
         synchronization_state::PeerFilter,
-        Error, ErrorKind, SyncPhaseType,
+        Error, ErrorKind,
     },
 };
 use cfx_parameters::{
