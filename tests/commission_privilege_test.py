@@ -62,8 +62,6 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
                 except AssertionError as _:
                     self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=[tx]))
                 if i == 2:
-                    client = RpcClient(self.nodes[0])
-                    self.log.info("Txhash:{}".format(tx.hash_hex()) + ", Tx detail: {}".format(client.get_tx(tx.hash_hex())))       
                     raise AssertionError("Tx {} not confirmed after 30 seconds".format(tx.hash_hex()))
         # After having optimistic execution, get_receipts may get receipts with not deferred block, these extra blocks
         # ensure that later get_balance can get correct executed balance for all transactions
