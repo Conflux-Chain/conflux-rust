@@ -115,7 +115,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         collateral_per_storage_key = 10 ** 18 // 16
         # change upper tx gas limit to (GENESIS_GAS_LIMIT/2 - 1); -1 because below gas is set to upper_bound + 1
         tx_gas_upper_bound = int(default_config["GENESIS_GAS_LIMIT"]/2 - 1)
-        
+
         file_dir = os.path.dirname(os.path.realpath(__file__))
 
         control_contract_file_path =os.path.join(file_dir, "..", "internal_contract", "metadata", "SponsorWhitelistControl.json")
