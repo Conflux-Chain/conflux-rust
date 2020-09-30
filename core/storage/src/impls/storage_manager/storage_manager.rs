@@ -832,23 +832,20 @@ impl StorageManager {
             None => return Ok(()),
         };
 
-        let _snapshot_info_removed = self
-            .maintain_snapshots_pivot_chain_confirmed(
-                maintained_state_height_lower_bound,
-                &maintained_epoch_id,
-                maintained_state_root,
-                state_availability_boundary,
-                &|height, find_nearest_snapshot_multiple_of| {
-                    extra_snapshots_to_keep_predicate(
-                        &self.storage_conf,
-                        stable_checkpoint_height,
-                        height,
-                        find_nearest_snapshot_multiple_of,
-                    )
-                },
-            )?;
-
-        Ok(())
+        self.maintain_snapshots_pivot_chain_confirmed(
+            maintained_state_height_lower_bound,
+            &maintained_epoch_id,
+            maintained_state_root,
+            state_availability_boundary,
+            &|height, find_nearest_snapshot_multiple_of| {
+                extra_snapshots_to_keep_predicate(
+                    &self.storage_conf,
+                    stable_checkpoint_height,
+                    height,
+                    find_nearest_snapshot_multiple_of,
+                )
+            },
+        )
     }
 
     /// The algorithm figure out which snapshot to remove by simply going
@@ -1169,8 +1166,6 @@ impl StorageManager {
                     .cloned()
                     .collect(),
             )?;
-
-            debug!("maintain_snapshots_pivot_chain_confirmed: finished");
         }
 
         // TODO: implement in_progress_snapshot cancellation.
@@ -1184,6 +1179,7 @@ impl StorageManager {
         }
         */
 
+        info!("maintain_snapshots_pivot_chain_confirmed: finished");
         Ok(())
     }
 
@@ -1197,7 +1193,7 @@ impl StorageManager {
         current_snapshots_locked.retain(|x| {
             !snapshot_infos_to_remove.contains(x.get_snapshot_epoch_id())
         });
-        debug!(
+        info!(
             "maintain_snapshots_pivot_chain_confirmed: remove the following snapshot infos {:?}",
             snapshot_infos_to_remove,
         );
