@@ -476,6 +476,7 @@ dependencies = [
 name = "cfx-storage"
 version = "1.0.0"
 dependencies = [
+ "cfg-if",
  "cfx-bytes",
  "cfx-internal-common",
  "cfx-types",
@@ -593,6 +594,7 @@ dependencies = [
  "serde_json",
  "siphasher 0.3.3",
  "slab",
+ "solidity-abi",
  "sqlite",
  "sqlite3-sys",
  "static_assertions",
@@ -3935,6 +3937,13 @@ dependencies = [
  "libc",
  "redox_syscall",
  "winapi 0.3.8",
+]
+
+[[package]]
+name = "solidity-abi"
+version = "0.1.0"
+dependencies = [
+ "cfx-types",
 ]
 
 [[package]]

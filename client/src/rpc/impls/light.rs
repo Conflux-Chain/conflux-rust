@@ -4,6 +4,7 @@
 
 use cfx_types::{H160, H256, H520, U128, U256, U64};
 use cfxcore::{
+    light_protocol::query_service::TxInfo,
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     LightQueryService, PeerInfo,
 };
@@ -488,14 +489,14 @@ impl RpcImpl {
 
         let fut = async move {
             // FIXME: why not return an RpcReceipt directly?
-            let (
+            let TxInfo {
                 tx,
                 receipt,
-                address,
+                tx_index,
                 maybe_epoch,
                 maybe_state_root,
                 prior_gas_used,
-            ) = light
+            } = light
                 .get_tx_info(hash)
                 .await
                 .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
@@ -504,10 +505,12 @@ impl RpcImpl {
             let receipt = RpcReceipt::new(
                 tx,
                 receipt,
-                address,
+                tx_index,
                 prior_gas_used,
                 maybe_epoch,
                 maybe_state_root,
+                // Can not offer error_message from light node.
+                None,
             );
 
             Ok(Some(receipt))

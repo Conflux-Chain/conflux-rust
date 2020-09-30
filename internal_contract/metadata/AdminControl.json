@@ -1,7 +1,6 @@
 {
     "abi": [
         {
-            "constant": false,
             "inputs": [
                 {
                     "internalType": "address",
@@ -11,12 +10,29 @@
             ],
             "name": "destroy",
             "outputs": [],
-            "payable": false,
             "stateMutability": "nonpayable",
             "type": "function"
         },
         {
-            "constant": false,
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "contractAddr",
+                    "type": "address"
+                }
+            ],
+            "name": "getAdmin",
+            "outputs": [
+                {
+                    "internalType": "address",
+                    "name": "",
+                    "type": "address"
+                }
+            ],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
             "inputs": [
                 {
                     "internalType": "address",
@@ -29,12 +45,11 @@
                     "type": "address"
                 }
             ],
-            "name": "set_admin",
+            "name": "setAdmin",
             "outputs": [],
-            "payable": false,
             "stateMutability": "nonpayable",
             "type": "function"
         }
     ],
-    "bytecode": "608060405234801561001057600080fd5b50610114806100206000396000f3fe6080604052348015600f57600080fd5b506004361060315760003560e01c8062f55d9d14603657806373e80cba146077575b600080fd5b607560048036036020811015604a57600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff16906020019092919050505060d8565b005b60d660048036036040811015608b57600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190803573ffffffffffffffffffffffffffffffffffffffff16906020019092919050505060db565b005b50565b505056fea265627a7a723158202b974493b69b170252b7cb8446c8190ba807c62f6b1948682b6c3f14e6543fe464736f6c63430005100032"
+    "bytecode": "608060405234801561001057600080fd5b506101b5806100206000396000f3fe608060405234801561001057600080fd5b50600436106100405760003560e01c8062f55d9d1461004557806364efb22b14610089578063c55b6bb71461010d575b600080fd5b6100876004803603602081101561005b57600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190505050610171565b005b6100cb6004803603602081101561009f57600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190505050610174565b604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390f35b61016f6004803603604081101561012357600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190803573ffffffffffffffffffffffffffffffffffffffff16906020019092919050505061017b565b005b50565b6000919050565b505056fea2646970667358221220f5a3494ee3a092c0454bf1dea4c6efde7afba97892d9b8ba50a88ca83560156764736f6c63430006060033"
 }

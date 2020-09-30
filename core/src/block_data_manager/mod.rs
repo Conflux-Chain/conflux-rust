@@ -1292,6 +1292,16 @@ impl BlockDataManager {
             .get_snapshot_epoch_count() as usize
             + 1
     }
+
+    pub fn get_executed_state_root(&self, block_hash: &H256) -> Option<H256> {
+        let maybe_commitment =
+            self.get_epoch_execution_commitment(block_hash).take();
+        if let Some(commitment) = maybe_commitment {
+            Some(commitment.state_root_with_aux_info.aux_info.state_root_hash)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Copy, Clone)]

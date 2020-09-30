@@ -9,14 +9,14 @@ contract CommissionPrivilegeTest {
         SponsorWhitelistControl cpc = SponsorWhitelistControl(0x0888000000000000000000000000000000000001);
         address[] memory a = new address[](1);
         a[0] = account;
-        cpc.add_privilege(a);
+        cpc.addPrivilege(a);
     }
 
     function remove(address account) public payable {
         SponsorWhitelistControl cpc = SponsorWhitelistControl(0x0888000000000000000000000000000000000001);
         address[] memory a = new address[](1);
         a[0] = account;
-        cpc.remove_privilege(a);
+        cpc.removePrivilege(a);
     }
 
     function foo() public payable {

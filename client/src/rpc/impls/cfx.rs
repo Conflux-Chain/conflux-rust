@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::rpc::types::MAX_GAS_CALL_REQUEST;
 use blockgen::BlockGenerator;
 use cfx_parameters::staking::COLLATERAL_PER_BYTE;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
@@ -57,6 +58,10 @@ use crate::{
         },
         RpcResult,
     },
+};
+use cfxcore::{
+    consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
+    executive::revert_reason_decode,
 };
 use lazy_static::lazy_static;
 use metrics::{register_timer_with_group, ScopeTimer, Timer};
@@ -437,18 +442,38 @@ impl RpcImpl {
         let hash: H256 = hash.into();
         info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
 
-        if let Some(info) = self.consensus.get_transaction_info_by_hash(&hash) {
-            let (tx, tx_index, maybe_executed) = info;
-            let packed_or_executed = match maybe_executed {
+        if let Some((
+            tx,
+            TransactionInfo {
+                tx_index,
+                maybe_executed_extra_info,
+            },
+        )) = self.consensus.get_transaction_info_by_hash(&hash)
+        {
+            let packed_or_executed = match maybe_executed_extra_info {
                 None => PackedOrExecuted::Packed(tx_index),
-                Some((receipt, prior_gas_used)) => {
+                Some(MaybeExecutedTxExtraInfo {
+                    receipt,
+                    prior_gas_used,
+                    tx_exec_error_msg,
+                }) => {
+                    let epoch_number = self
+                        .consensus
+                        .get_block_epoch_number(&tx_index.block_hash);
+
+                    let maybe_state_root = self
+                        .consensus
+                        .get_data_manager()
+                        .get_executed_state_root(&tx_index.block_hash);
+
                     PackedOrExecuted::Executed(RpcReceipt::new(
                         tx.clone(),
                         receipt,
                         tx_index,
                         prior_gas_used,
-                        None,
-                        None,
+                        epoch_number,
+                        maybe_state_root,
+                        tx_exec_error_msg,
                     ))
                 }
             };
@@ -473,7 +498,7 @@ impl RpcImpl {
             consensus_graph.get_transaction_receipt_and_block_info(&hash);
         let (
             BlockExecutionResultWithEpoch(epoch_hash, execution_result),
-            address,
+            tx_index,
             maybe_state_root,
         ) = match maybe_results {
             None => return Ok(None),
@@ -496,12 +521,12 @@ impl RpcImpl {
         let block = self
             .consensus
             .get_data_manager()
-            .block_by_hash(&address.block_hash, true)
+            .block_by_hash(&tx_index.block_hash, true)
             // FIXME: server error, client should request another server.
             .ok_or("Inconsistent state")?;
         let transaction = block
             .transactions
-            .get(address.index)
+            .get(tx_index.index)
             // FIXME: server error, client should request another server.
             .ok_or("Inconsistent state")?
             .as_ref()
@@ -509,29 +534,37 @@ impl RpcImpl {
         let receipt = execution_result
             .block_receipts
             .receipts
-            .get(address.index)
+            .get(tx_index.index)
             // FIXME: server error, client should request another server.
             .ok_or("Inconsistent state")?
             .clone();
-        let prior_gas_used = if address.index == 0 {
+        let prior_gas_used = if tx_index.index == 0 {
             U256::zero()
         } else {
             let prior_receipt = execution_result
                 .block_receipts
                 .receipts
-                .get(address.index - 1)
+                .get(tx_index.index - 1)
                 // FIXME: server error, client should request another server.
                 .ok_or("Inconsistent state")?
                 .clone();
             prior_receipt.accumulated_gas_used
         };
+        let tx_exec_error_msg = &execution_result
+            .block_receipts
+            .tx_execution_error_messages[tx_index.index];
         let rpc_receipt = RpcReceipt::new(
             transaction,
             receipt,
-            address,
+            tx_index,
             prior_gas_used,
             Some(epoch_number),
             maybe_state_root,
+            if tx_exec_error_msg.is_empty() {
+                None
+            } else {
+                Some(tx_exec_error_msg.clone())
+            },
         );
         Ok(Some(rpc_receipt))
     }
@@ -830,7 +863,13 @@ impl RpcImpl {
             ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(vm::Error::Reverted),
                 executed,
-            ) => executed,
+            ) => {
+                bail!(call_execution_error(
+                    format!("Estimation isn't accurate: transaction is reverted. Execution output {}",
+                        revert_reason_decode(&executed.output)),
+                    [b"Reverted. Execution output: ", &*executed.output].concat(),
+                ))
+            },
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
                 bail!(call_execution_error(
                     format! {"Can not estimate: transaction execution failed, \
@@ -843,6 +882,24 @@ impl RpcImpl {
         let mut storage_collateralized = 0;
         for storage_change in &executed.storage_collateralized {
             storage_collateralized += storage_change.amount;
+        }
+        // In case of unlimited full gas charge at some VM call, or if there are
+        // infinite loops, the total estimated gas used is very close to
+        // MAX_GAS_CALL_REQUEST, 0.8 is chosen to check if it's close.
+        const TOO_MUCH_GAS_USED: u64 =
+            (0.8 * (MAX_GAS_CALL_REQUEST as f32)) as u64;
+        if executed.gas_used >= U256::from(TOO_MUCH_GAS_USED) {
+            bail!(call_execution_error(
+                format!(
+                    "Gas too high. Most likely there are problems within the contract code. \
+                    gas {}, storage_limit {}",
+                    executed.gas_used, storage_collateralized
+                ),
+                format!(
+                    "gas {}, storage_limit {}", executed.gas_used, storage_collateralized
+                )
+                .into_bytes(),
+            ));
         }
         let response = EstimateGasAndCollateralResponse {
             gas_used: executed.gas_used.into(),

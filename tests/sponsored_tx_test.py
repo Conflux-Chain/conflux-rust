@@ -172,7 +172,7 @@ class SponsoredTxTest(ConfluxTestFramework):
         b0 = client.get_balance(genesis_addr)
         self.call_contract_function(
             contract=control_contract,
-            name="set_sponsor_for_gas",
+            name="setSponsorForGas",
             args=[Web3.toChecksumAddress(contract_addr), upper_bound],
             value=10 ** 18,
             sender_key=self.genesis_priv_key,

@@ -76,15 +76,14 @@ impl<
     /// 12B*4x LRU) * number of nodes + 200M * 4B NodeRef. 5GB + extra 800M
     /// ~ 20_000_000 nodes.
     // TODO(yz): Need to calculate a factor in LRU (currently made up to 4).
-    pub const MAX_CACHED_TRIE_NODES_DISK_HYBRID: u32 = 5_000_000;
+    pub const MAX_CACHED_TRIE_NODES_DISK_HYBRID: u32 = 10_000_000;
     pub const MAX_CACHED_TRIE_NODES_R_LFU_COUNTER: u32 = (Self::R_LFU_FACTOR
         * Self::MAX_CACHED_TRIE_NODES_DISK_HYBRID as f64)
         as u32;
     /// Splitting out dirty trie nodes may remove the hard limit, however it
     /// introduces copies for committing.
-    // TODO(yz): log the dirty size to monitor if other component produces too
-    // many.
-    pub const MAX_DIRTY_AND_TEMPORARY_TRIE_NODES: u32 = 1_000_000;
+    // TODO(yz): delete nodes in cache when dirty nodes becomes too many.
+    pub const MAX_DIRTY_AND_TEMPORARY_TRIE_NODES: u32 = 5_000_000;
     /// If we do not swap out any node onto disk, the maximum tolerable nodes is
     /// about 27.6M, where there is about 4.6M leaf nodes. The total memory
     /// consumption is about (27.6 * 192 - 4.6 * 64) MB ~= 5GB. It can hold new

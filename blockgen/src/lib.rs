@@ -650,8 +650,13 @@ impl BlockGenerator {
             port: bg.pow_config.stratum_port,
             secret: bg.pow_config.stratum_secret,
         };
-        let stratum = Stratum::start(&cfg, bg.pow.clone(), solution_sender)
-            .expect("Failed to start Stratum service.");
+        let stratum = Stratum::start(
+            &cfg,
+            bg.pow.clone(),
+            bg.pow_config.pow_problem_window_size,
+            solution_sender,
+        )
+        .expect("Failed to start Stratum service.");
         let mut bg_stratum = bg.stratum.write();
         *bg_stratum = Some(stratum);
         solution_receiver
@@ -659,6 +664,8 @@ impl BlockGenerator {
 
     pub fn start_mining(bg: Arc<BlockGenerator>, _payload_len: u32) {
         let mut current_mining_block = None;
+        let mut recent_mining_blocks = vec![];
+        let mut recent_mining_problems = vec![];
         let mut current_problem: Option<ProofOfWorkProblem> = None;
         let sleep_duration =
             time::Duration::from_millis(BLOCKGEN_LOOP_SLEEP_IN_MILISECS);
@@ -694,6 +701,13 @@ impl BlockGenerator {
                     vec![],
                 ));
 
+                if recent_mining_blocks.len()
+                    == bg.pow_config.pow_problem_window_size
+                {
+                    recent_mining_blocks.remove(0);
+                    recent_mining_problems.remove(0);
+                }
+
                 // set a mining problem
                 let current_difficulty = current_mining_block
                     .as_ref()
@@ -718,41 +732,51 @@ impl BlockGenerator {
                 BlockGenerator::send_problem(bg.clone(), problem);
                 last_notify = SystemTime::now();
                 current_problem = Some(problem);
+
+                recent_mining_blocks
+                    .push(current_mining_block.clone().unwrap());
+                recent_mining_problems.push(problem);
             } else {
                 // check if the problem solved
                 let mut new_solution = receiver.try_recv();
+                let mut maybe_mined_block = None;
+
                 loop {
                     trace!("new solution: {:?}", new_solution);
                     // check if the block received valid
-                    if new_solution.is_ok()
-                        && !validate(
+                    if !new_solution.is_ok() {
+                        break;
+                    }
+
+                    for index in 0..recent_mining_problems.len() {
+                        if validate(
                             bg.pow.clone(),
-                            &current_problem.unwrap(),
+                            &recent_mining_problems[index],
                             &new_solution.unwrap(),
-                        )
-                    {
+                        ) {
+                            maybe_mined_block =
+                                Some(recent_mining_blocks[index].clone());
+                            break;
+                        }
+                    }
+
+                    if maybe_mined_block.is_none() {
                         warn!(
                             "Received invalid solution from miner: nonce = {}!",
                             &new_solution.unwrap().nonce
                         );
                         new_solution = receiver.try_recv();
-                    } else {
-                        break;
+                        continue;
                     }
+                    break;
                 }
+
                 if new_solution.is_ok() {
                     let solution = new_solution.unwrap();
-                    current_mining_block
-                        .as_mut()
-                        .unwrap()
-                        .block_header
-                        .set_nonce(solution.nonce);
-                    current_mining_block
-                        .as_mut()
-                        .unwrap()
-                        .block_header
-                        .compute_hash();
-                    bg.on_mined_block(current_mining_block.unwrap());
+                    let mut mined_block = maybe_mined_block.unwrap();
+                    mined_block.block_header.set_nonce(solution.nonce);
+                    mined_block.block_header.compute_hash();
+                    bg.on_mined_block(mined_block);
                     current_mining_block = None;
                     current_problem = None;
                 } else {

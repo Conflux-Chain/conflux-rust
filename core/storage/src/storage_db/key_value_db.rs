@@ -37,26 +37,38 @@ pub trait KeyValueDbTraitOwnedRead: KeyValueDbTypes {
     }
 }
 
-pub trait KeyValueDbIterableTrait<'db, Item, Error, KeyType: ?Sized> {
-    /// Initially we'd like to use FallibleStreamingIterator however it's only
-    /// possible to return a borrow from the iteration, but we want to be
-    /// able to extract value with static lifetime out from the iterator, so
-    /// we are using FallibleIterator. But then with FallibleIterator it's
-    /// not possible to just return borrow of the db row in iteration.
-    // TODO(yz): is it possible to write an iterator like what I did with 'self
-    // TODO(yz): lifetime? Then create a HRTB for it?
-    // TODO(yz): Maybe Lukas who wrote http://lukaskalbertodt.github.io/2018/08/03/solving-the-generalized-streaming-iterator-problem-without-gats.html#workaround-b-hrtbs--the-family-trait-pattern
-    // TODO(yz): has a library?
-    type Iterator: 'db + FallibleIterator<Item = Item, Error = Error>;
+enable_impl_transmute_for_element_satisfy! {
+    generic Item;
+    trait 'static + FallibleIterator<Item = Item, Error = Error>;
+}
 
+pub struct KvdbIterIterator<Item, KeyType: ?Sized, T: ?Sized> {
+    __i_m: std::marker::PhantomData<Item>,
+    __k_m: std::marker::PhantomData<KeyType>,
+    __t_m: std::marker::PhantomData<T>,
+}
+
+pub trait KeyValueDbIterableTrait<Item, KeyType: ?Sized, Tag: ?Sized>
+where KvdbIterIterator<Item, KeyType, Tag>:
+        WrappedTrait<dyn FallibleIterator<Item = Item, Error = Error>>
+{
     fn iter_range(
-        &'db mut self, lower_bound_incl: &KeyType,
+        &mut self, lower_bound_incl: &KeyType,
         upper_bound_excl: Option<&KeyType>,
-    ) -> Result<Self::Iterator>;
-
+    ) -> Result<
+        Wrap<
+            KvdbIterIterator<Item, KeyType, Tag>,
+            dyn FallibleIterator<Item = Item, Error = Error>,
+        >,
+    >;
     fn iter_range_excl(
-        &'db mut self, lower_bound_excl: &KeyType, upper_bound_excl: &KeyType,
-    ) -> Result<Self::Iterator>;
+        &mut self, lower_bound_excl: &KeyType, upper_bound_excl: &KeyType,
+    ) -> Result<
+        Wrap<
+            KvdbIterIterator<Item, KeyType, Tag>,
+            dyn FallibleIterator<Item = Item, Error = Error>,
+        >,
+    >;
 }
 
 pub trait KeyValueDbTraitSingleWriter: KeyValueDbTraitOwnedRead {
@@ -419,7 +431,13 @@ impl<
     }
 }
 
-use super::super::impls::errors::*;
+use crate::{
+    impls::errors::*,
+    utils::{
+        tuple::ElementSatisfy,
+        wrap::{Wrap, WrappedTrait},
+    },
+};
 use fallible_iterator::FallibleIterator;
 use malloc_size_of::MallocSizeOf;
 use std::any::Any;

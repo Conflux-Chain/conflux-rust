@@ -27,6 +27,7 @@ use cfx_statedb::{
 };
 use cfx_storage::{utils::access_mode, StorageState, StorageStateTrait};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use itertools::chain;
 use parking_lot::{
     MappedRwLockWriteGuard, RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
@@ -1050,6 +1051,13 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         // TODO: Think about kill_dust and collateral refund.
         for address in &killed_addresses {
             self.db.delete_all::<access_mode::Write>(
+                StorageKey::new_storage_key(
+                    &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+                    address.as_ref(),
+                ),
+                debug_record.as_deref_mut(),
+            )?;
+            self.db.delete_all::<access_mode::Write>(
                 StorageKey::new_storage_root_key(address),
                 debug_record.as_deref_mut(),
             )?;
@@ -1166,7 +1174,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         Ok(())
     }
 
-    pub fn record_storage_entries_release(
+    pub fn record_storage_and_whitelist_entries_release(
         &mut self, address: &Address, substate: &mut Substate,
     ) -> DbResult<()> {
         let account_cache_read_guard = self.cache.read();
@@ -1182,8 +1190,18 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             StorageKey::new_storage_root_key(address),
             None,
         )?;
+        let sponsor_whitelist_key_values =
+            self.db.delete_all::<access_mode::Read>(
+                StorageKey::new_storage_key(
+                    &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+                    address.as_ref(),
+                ),
+                None,
+            )?;
 
-        for (key, value) in storage_key_value {
+        for (key, value) in
+            chain(&storage_key_value, &sponsor_whitelist_key_values)
+        {
             if let StorageKey::StorageKey { storage_key, .. } =
                 StorageKey::from_key_bytes(&key[..])
             {

@@ -2,6 +2,95 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+/// The in mem snapshot_info map and the on disk snapshot_info_db is always in
+/// sync.
+pub struct PersistedSnapshotInfoMap {
+    // Db to persist snapshot_info.
+    snapshot_info_db: KvdbSqlite<Box<[u8]>>,
+    // In memory snapshot_info_map_by_epoch.
+    snapshot_info_map_by_epoch: HashMap<EpochId, SnapshotInfo>,
+}
+
+impl PersistedSnapshotInfoMap {
+    fn new(snapshot_info_db: KvdbSqlite<Box<[u8]>>) -> Result<Self> {
+        let mut result = Self {
+            // The map is loaded later
+            snapshot_info_map_by_epoch: Default::default(),
+            snapshot_info_db,
+        };
+        result.load_persist_state()?;
+        Ok(result)
+    }
+
+    fn insert(
+        &mut self, epoch: &EpochId, snapshot_info: SnapshotInfo,
+    ) -> Result<()> {
+        let rlp_bytes = snapshot_info.rlp_bytes();
+        self.snapshot_info_map_by_epoch
+            .insert(epoch.clone(), snapshot_info);
+        self.snapshot_info_db.put(epoch.as_ref(), &rlp_bytes)?;
+        Ok(())
+    }
+
+    fn get_map(&self) -> &HashMap<EpochId, SnapshotInfo> {
+        &self.snapshot_info_map_by_epoch
+    }
+
+    fn get(&self, epoch: &EpochId) -> Option<&SnapshotInfo> {
+        self.snapshot_info_map_by_epoch.get(epoch)
+    }
+
+    fn contains_key(&self, epoch: &EpochId) -> bool {
+        self.snapshot_info_map_by_epoch.contains_key(epoch)
+    }
+
+    fn remove(&mut self, epoch: &EpochId) -> Result<()> {
+        self.snapshot_info_map_by_epoch.remove(epoch);
+        self.snapshot_info_db.delete(epoch.as_ref())?;
+        Ok(())
+    }
+
+    // Unsafe because the in mem map isn't in sync with the db.
+    unsafe fn remove_in_mem_only(
+        &mut self, epoch: &EpochId,
+    ) -> Option<SnapshotInfo> {
+        self.snapshot_info_map_by_epoch.remove(epoch)
+    }
+
+    fn load_persist_state(&mut self) -> Result<()> {
+        // Load snapshot info from db.
+        let (maybe_info_db_connection, statements) =
+            self.snapshot_info_db.destructure_mut();
+
+        let mut snapshot_info_iter = kvdb_sqlite_iter_range_impl(
+            maybe_info_db_connection,
+            statements,
+            &[],
+            None,
+            |row: &Statement<'_>| {
+                let key = row.read::<Vec<u8>>(0)?;
+                let value = row.read::<Vec<u8>>(1)?;
+
+                if key.len() != EpochId::len_bytes() {
+                    Err(DecoderError::RlpInvalidLength.into())
+                } else {
+                    Ok((
+                        EpochId::from_slice(&key),
+                        SnapshotInfo::decode(&Rlp::new(&value))?,
+                    ))
+                }
+            },
+        )?;
+        while let Some((snapshot_epoch, snapshot_info)) =
+            snapshot_info_iter.next()?
+        {
+            self.snapshot_info_map_by_epoch
+                .insert(snapshot_epoch, snapshot_info);
+        }
+        Ok(())
+    }
+}
+
 // FIXME: correctly order code blocks.
 pub struct StorageManager {
     delta_db_manager: DeltaDbManager,
@@ -28,9 +117,6 @@ pub struct StorageManager {
     in_progress_snapshot_finish_signaler: Arc<Mutex<Sender<Option<EpochId>>>>,
     in_progress_snapshotting_joiner: Mutex<Option<JoinHandle<()>>>,
 
-    // Db to persist snapshot_info.
-    snapshot_info_db: KvdbSqlite<Box<[u8]>>,
-
     // The order doesn't matter as long as parent snapshot comes before
     // children snapshots.
     // Note that for archive node the list here is just a subset of what's
@@ -42,7 +128,7 @@ pub struct StorageManager {
     // Lock order: while this is locked, in register_new_snapshot and
     // load_persist_state, current_snapshots and
     // snapshot_associated_mpts_by_epoch are locked later.
-    pub snapshot_info_map_by_epoch: RwLock<HashMap<EpochId, SnapshotInfo>>,
+    pub snapshot_info_map_by_epoch: RwLock<PersistedSnapshotInfoMap>,
 
     last_confirmed_snapshottable_epoch_id: Mutex<Option<EpochId>>,
 
@@ -130,6 +216,8 @@ impl StorageManager {
             SNAPSHOT_KVDB_STATEMENTS.clone(),
             false, /* unsafe_mode */
         )?;
+        let snapshot_info_map =
+            PersistedSnapshotInfoMap::new(snapshot_info_db)?;
 
         let (
             in_progress_snapshot_finish_signaler,
@@ -165,9 +253,8 @@ impl StorageManager {
                 in_progress_snapshot_finish_signaler,
             )),
             in_progress_snapshotting_joiner: Default::default(),
-            snapshot_info_db,
             current_snapshots: Default::default(),
-            snapshot_info_map_by_epoch: Default::default(),
+            snapshot_info_map_by_epoch: RwLock::new(snapshot_info_map),
             last_confirmed_snapshottable_epoch_id: Default::default(),
             storage_conf,
         }));
@@ -487,6 +574,7 @@ impl StorageManager {
             };
 
             let in_progress_snapshot_info = SnapshotInfo {
+                snapshot_info_kept_to_provide_sync: false,
                 serve_one_step_sync: true,
                 height: height as u64,
                 parent_snapshot_height: height
@@ -559,7 +647,6 @@ impl StorageManager {
                                         &snapshot_epoch_id,
                                         /* try_open = */ false,
                                     )?.unwrap();
-                                let mut mpt = snapshot_db.open_snapshot_mpt_shared()?;
                                 let mut set_keys_iter =
                                     snapshot_db.dumped_delta_kv_set_keys_iterator()?;
                                 let mut delete_keys_iter =
@@ -577,63 +664,26 @@ impl StorageManager {
 
                                 let mut checker_count = 0;
 
-                                let mut set_iter = set_keys_iter.iter_range(
+                                let set_iter = set_keys_iter.iter_range(
                                     &[begin_range],
-                                    end_range_excl.as_ref().map(|v| &**v))?;
-                                let mut cursor = MptCursor::<
-                                    &mut dyn SnapshotMptTraitRead,
-                                    BasicPathNode<&mut dyn SnapshotMptTraitRead>,
-                                >::new(&mut mpt);
-                                cursor.load_root()?;
-                                while let Some((access_key, _)) = set_iter.next()? {
-                                    cursor.open_path_for_key::<access_mode::Read>(&access_key)?;
-                                    checker_count += 1;
-                                }
-                                //debug!("Snapshot checker: a sample snapshot proof {:?}", cursor.to_proof());
-                                cursor.finish()?;
-                                drop(cursor);
+                                    end_range_excl.as_ref().map(|v| &**v))?
+                                    .take();
+                                checker_count += check_key_value_load(&snapshot_db, set_iter, /* check_value = */ true)?;
 
-                                let mut set_iter = previous_set_keys_iter.iter_range(
-                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?;
-                                let mut cursor = MptCursor::<
-                                    &mut dyn SnapshotMptTraitRead,
-                                    BasicPathNode<&mut dyn SnapshotMptTraitRead>,
-                                >::new(&mut mpt);
-                                cursor.load_root()?;
-                                while let Some((access_key, _)) = set_iter.next()? {
-                                    cursor.open_path_for_key::<access_mode::Read>(&access_key)?;
-                                    checker_count += 1;
-                                }
-                                cursor.finish()?;
-                                drop(cursor);
+                                let set_iter = previous_set_keys_iter.iter_range(
+                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?
+                                    .take();
+                                checker_count += check_key_value_load(&snapshot_db, set_iter, /* check_value = */ false)?;
 
-                                let mut delete_iter = delete_keys_iter.iter_range(
-                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?;
-                                let mut cursor = MptCursor::<
-                                    &mut dyn SnapshotMptTraitRead,
-                                    BasicPathNode<&mut dyn SnapshotMptTraitRead>,
-                                >::new(&mut mpt);
-                                cursor.load_root()?;
-                                while let Some((access_key, _)) = delete_iter.next()? {
-                                    cursor.open_path_for_key::<access_mode::Read>(&access_key)?;
-                                    checker_count += 1;
-                                }
-                                cursor.finish()?;
-                                drop(cursor);
+                                let delete_iter = delete_keys_iter.iter_range(
+                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?
+                                    .take();
+                                checker_count += check_key_value_load(&snapshot_db, delete_iter, /* check_value = */ false)?;
 
-                                let mut delete_iter = previous_delete_keys_iter.iter_range(
-                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?;
-                                let mut cursor = MptCursor::<
-                                    &mut dyn SnapshotMptTraitRead,
-                                    BasicPathNode<&mut dyn SnapshotMptTraitRead>,
-                                >::new(&mut mpt);
-                                cursor.load_root()?;
-                                while let Some((access_key, _)) = delete_iter.next()? {
-                                    cursor.open_path_for_key::<access_mode::Read>(&access_key)?;
-                                    checker_count += 1;
-                                }
-                                cursor.finish()?;
-                                drop(cursor);
+                                let delete_iter = previous_delete_keys_iter.iter_range(
+                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?
+                                    .take();
+                                checker_count += check_key_value_load(&snapshot_db, delete_iter, /* check_value = */ false)?;
 
                                 debug!(
                                     "Finished: snapshot checker {} of {}, {} keys",
@@ -671,7 +721,7 @@ impl StorageManager {
     /// This function is made public only for testing.
     pub fn register_new_snapshot(
         &self, new_snapshot_info: SnapshotInfo,
-        snapshot_info_map_locked: &mut HashMap<EpochId, SnapshotInfo>,
+        snapshot_info_map_locked: &mut PersistedSnapshotInfoMap,
     ) -> Result<()>
     {
         debug!("register_new_snapshot: info={:?}", new_snapshot_info);
@@ -724,9 +774,7 @@ impl StorageManager {
 
         drop(snapshot_associated_mpts_locked);
         snapshot_info_map_locked
-            .insert(snapshot_epoch_id.clone(), new_snapshot_info.clone());
-        self.snapshot_info_db
-            .put(snapshot_epoch_id.as_ref(), &new_snapshot_info.rlp_bytes())?;
+            .insert(snapshot_epoch_id, new_snapshot_info.clone())?;
         self.current_snapshots.write().push(new_snapshot_info);
 
         Ok(())
@@ -1042,12 +1090,12 @@ impl StorageManager {
                 !snapshots_to_remove.contains(x.get_snapshot_epoch_id())
             });
             drop(current_snapshots_locked);
-            {
+            unsafe {
                 let mut snapshot_info_map =
                     self.snapshot_info_map_by_epoch.write();
                 for snapshot_epoch_id in &snapshots_to_remove {
                     if let Some(snapshot_info) =
-                        snapshot_info_map.remove(snapshot_epoch_id)
+                        snapshot_info_map.remove_in_mem_only(snapshot_epoch_id)
                     {
                         snapshot_info_removed.push(snapshot_info);
                     }
@@ -1064,8 +1112,14 @@ impl StorageManager {
                     )?
                 }
             }
-            for snapshot_epoch_id in snapshots_to_remove {
-                self.snapshot_info_db.delete(snapshot_epoch_id.as_ref())?;
+            {
+                // Only remove snapshot_info from db when no exception have
+                // happened.
+                let mut snapshot_info_map_by_epoch =
+                    self.snapshot_info_map_by_epoch.write();
+                for snapshot_epoch_id in snapshots_to_remove {
+                    snapshot_info_map_by_epoch.remove(&snapshot_epoch_id)?;
+                }
             }
             debug!("maintain_snapshots_pivot_chain_confirmed: finished");
         }
@@ -1116,157 +1170,140 @@ impl StorageManager {
 
     pub fn load_persist_state(&self) -> Result<()> {
         let snapshot_info_map = &mut *self.snapshot_info_map_by_epoch.write();
-        // Load snapshot info from db.
-        {
-            let mut new_db = self.snapshot_info_db.try_clone()?;
-            let (maybe_info_db_connection, statements) =
-                new_db.destructure_mut();
-
-            let mut snapshot_info_iter = kvdb_sqlite_iter_range_impl(
-                maybe_info_db_connection,
-                statements,
-                &[],
-                None,
-                |row: &Statement<'_>| {
-                    let key = row.read::<Vec<u8>>(0)?;
-                    let value = row.read::<Vec<u8>>(1)?;
-
-                    if key.len() != EpochId::len_bytes() {
-                        Err(DecoderError::RlpInvalidLength.into())
-                    } else {
-                        Ok((
-                            EpochId::from_slice(&key),
-                            SnapshotInfo::decode(&Rlp::new(&value))?,
-                        ))
-                    }
-                },
-            )?;
-            while let Some((snapshot_epoch, snapshot_info)) =
-                snapshot_info_iter.next()?
-            {
-                snapshot_info_map.insert(snapshot_epoch, snapshot_info);
-            }
-        }
 
         // Always keep the information for genesis snapshot.
         self.snapshot_associated_mpts_by_epoch
             .write()
             .insert(NULL_EPOCH, (None, None));
         snapshot_info_map
-            .insert(NULL_EPOCH, SnapshotInfo::genesis_snapshot_info());
-        self.snapshot_info_db.put(
-            NULL_EPOCH.as_ref(),
-            &SnapshotInfo::genesis_snapshot_info().rlp_bytes(),
-        )?;
+            .insert(&NULL_EPOCH, SnapshotInfo::genesis_snapshot_info())?;
         self.current_snapshots
             .write()
             .push(SnapshotInfo::genesis_snapshot_info());
 
-        if snapshot_info_map.len() > 0 {
-            // Persist state loaded.
-            let missing_snapshots = self
-                .snapshot_manager
-                .get_snapshot_db_manager()
-                .scan_persist_state(snapshot_info_map)?;
+        // Persist state loaded.
+        let missing_snapshots = self
+            .snapshot_manager
+            .get_snapshot_db_manager()
+            .scan_persist_state(snapshot_info_map.get_map())?;
 
-            // Remove missing snapshots.
-            for snapshot_epoch_id in missing_snapshots {
-                if snapshot_epoch_id == NULL_EPOCH {
-                    continue;
-                }
-                let snapshot_info =
-                    snapshot_info_map.remove(&snapshot_epoch_id);
-                error!(
-                    "Missing snapshot db: {:?} {:?}",
-                    snapshot_epoch_id, snapshot_info
-                );
-                self.snapshot_info_db.delete(snapshot_epoch_id.as_ref())?;
-                self.delta_db_manager
-                    .destroy_delta_db(
-                        &self
-                            .delta_db_manager
-                            .get_delta_db_name(&snapshot_epoch_id),
-                    )
-                    .or_else(|e| match e.kind() {
-                        ErrorKind::Io(io_err) => match io_err.kind() {
-                            std::io::ErrorKind::NotFound => Ok(()),
-                            _ => Err(e),
-                        },
+        // Remove missing snapshots.
+        for snapshot_epoch_id in missing_snapshots {
+            if snapshot_epoch_id == NULL_EPOCH {
+                continue;
+            }
+            // Remove the delta mpt if the snapshot is missing.
+            self.delta_db_manager
+                .destroy_delta_db(
+                    &self
+                        .delta_db_manager
+                        .get_delta_db_name(&snapshot_epoch_id),
+                )
+                .or_else(|e| match e.kind() {
+                    ErrorKind::Io(io_err) => match io_err.kind() {
+                        std::io::ErrorKind::NotFound => Ok(()),
                         _ => Err(e),
-                    })?;
+                    },
+                    _ => Err(e),
+                })?;
+            // If the snapshot info is kept to provide sync, we allow the
+            // snapshot itself to be missing, because a snapshot of
+            // snapshot_epoch_id's ancestor is kept to provide sync. We need to
+            // keep this snapshot info to know the parental relationship.
+            let snapshot_info_kept_to_provide_sync =
+                match snapshot_info_map.get(&snapshot_epoch_id) {
+                    None => false,
+                    Some(info) => {
+                        info!(
+                            "Missing snapshot db: {:?}, \
+                             snapshot_info_kept_to_provide_sync {}, {:?}, ",
+                            snapshot_epoch_id,
+                            info.snapshot_info_kept_to_provide_sync,
+                            info
+                        );
+
+                        info.snapshot_info_kept_to_provide_sync
+                    }
+                };
+            if snapshot_info_kept_to_provide_sync {
+                continue;
             }
+            snapshot_info_map.remove(&snapshot_epoch_id)?;
+        }
 
-            let (missing_delta_db_snapshots, delta_dbs) = self
-                .delta_db_manager
-                .scan_persist_state(snapshot_info_map)?;
+        let (missing_delta_db_snapshots, delta_dbs) = self
+            .delta_db_manager
+            .scan_persist_state(snapshot_info_map.get_map())?;
 
-            let mut delta_mpts = HashMap::new();
-            for (snapshot_epoch_id, delta_db) in delta_dbs {
-                delta_mpts.insert(
+        let mut delta_mpts = HashMap::new();
+        for (snapshot_epoch_id, delta_db) in delta_dbs {
+            delta_mpts.insert(
+                snapshot_epoch_id.clone(),
+                Arc::new(DeltaMpt::new(
+                    Arc::new(delta_db),
                     snapshot_epoch_id.clone(),
-                    Arc::new(DeltaMpt::new(
-                        Arc::new(delta_db),
-                        snapshot_epoch_id.clone(),
-                        unsafe { shared_from_this(self) },
-                        &mut *self.delta_mpts_id_gen.lock(),
-                        self.delta_mpts_node_memory_manager.clone(),
-                    )?),
-                );
-            }
+                    unsafe { shared_from_this(self) },
+                    &mut *self.delta_mpts_id_gen.lock(),
+                    self.delta_mpts_node_memory_manager.clone(),
+                )?),
+            );
+        }
 
-            for snapshot_epoch_id in missing_delta_db_snapshots {
-                if snapshot_epoch_id == NULL_EPOCH {
+        for snapshot_epoch_id in missing_delta_db_snapshots {
+            if snapshot_epoch_id == NULL_EPOCH {
+                continue;
+            }
+            // Do not remove a snapshot which has intermediate delta mpt,
+            // because it could be a freshly made snapshot before the previous
+            // shutdown. A freshly made snapshot does not have delta db yet.
+            if let Some(snapshot_info) =
+                snapshot_info_map.get(&snapshot_epoch_id)
+            {
+                if delta_mpts
+                    .contains_key(&snapshot_info.parent_snapshot_epoch_id)
+                {
                     continue;
                 }
-                // Do not remove a snapshot which has intermediate delta mpt,
-                // because it could be a freshly made snapshot
-                // before the previous shutdown. A freshly made
-                // snapshot does not have delta db yet.
-                if let Some(snapshot_info) =
-                    snapshot_info_map.get(&snapshot_epoch_id)
-                {
-                    if delta_mpts
-                        .contains_key(&snapshot_info.parent_snapshot_epoch_id)
-                    {
-                        continue;
-                    }
+                // See comment above.
+                if snapshot_info.snapshot_info_kept_to_provide_sync {
+                    continue;
                 }
-                error!(
-                    "Missing intermediate mpt and delta mpt for snapshot {:?}",
-                    snapshot_epoch_id
-                );
-                snapshot_info_map.remove(&snapshot_epoch_id);
-                self.snapshot_info_db.delete(snapshot_epoch_id.as_ref())?;
-                self.snapshot_manager
-                    .get_snapshot_db_manager()
-                    .destroy_snapshot(&snapshot_epoch_id)?;
             }
+            error!(
+                "Missing intermediate mpt and delta mpt for snapshot {:?}",
+                snapshot_epoch_id
+            );
+            snapshot_info_map.remove(&snapshot_epoch_id)?;
+            self.snapshot_manager
+                .get_snapshot_db_manager()
+                .destroy_snapshot(&snapshot_epoch_id)?;
+        }
 
-            // Restore current_snapshots.
-            let mut snapshots = snapshot_info_map
-                .iter()
-                .map(|(_, snapshot_info)| snapshot_info.clone())
-                .collect::<Vec<_>>();
-            snapshots.sort_by(|x, y| x.height.partial_cmp(&y.height).unwrap());
+        // Restore current_snapshots.
+        let mut snapshots = snapshot_info_map
+            .get_map()
+            .iter()
+            .map(|(_, snapshot_info)| snapshot_info.clone())
+            .collect::<Vec<_>>();
+        snapshots.sort_by(|x, y| x.height.partial_cmp(&y.height).unwrap());
 
-            let current_snapshots = &mut *self.current_snapshots.write();
-            *current_snapshots = snapshots;
+        let current_snapshots = &mut *self.current_snapshots.write();
+        *current_snapshots = snapshots;
 
-            let snapshot_associated_mpts =
-                &mut *self.snapshot_associated_mpts_by_epoch.write();
-            for snapshot_info in current_snapshots {
-                snapshot_associated_mpts.insert(
-                    snapshot_info.get_snapshot_epoch_id().clone(),
-                    (
-                        delta_mpts
-                            .get(&snapshot_info.parent_snapshot_epoch_id)
-                            .map(|x| x.clone()),
-                        delta_mpts
-                            .get(snapshot_info.get_snapshot_epoch_id())
-                            .map(|x| x.clone()),
-                    ),
-                );
-            }
+        let snapshot_associated_mpts =
+            &mut *self.snapshot_associated_mpts_by_epoch.write();
+        for snapshot_info in current_snapshots {
+            snapshot_associated_mpts.insert(
+                snapshot_info.get_snapshot_epoch_id().clone(),
+                (
+                    delta_mpts
+                        .get(&snapshot_info.parent_snapshot_epoch_id)
+                        .map(|x| x.clone()),
+                    delta_mpts
+                        .get(snapshot_info.get_snapshot_epoch_id())
+                        .map(|x| x.clone()),
+                ),
+            );
         }
 
         Ok(())
@@ -1326,22 +1363,23 @@ use crate::{
             node_ref_map::DeltaMptId,
         },
         errors::*,
-        merkle_patricia_trie::mpt_cursor::{BasicPathNode, MptCursor},
         state_manager::{DeltaDbManager, SnapshotDb, SnapshotDbManager},
-        storage_db::kvdb_sqlite::{
-            kvdb_sqlite_iter_range_impl, KvdbSqliteDestructureTrait,
-            KvdbSqliteStatements,
+        storage_db::{
+            kvdb_sqlite::{
+                kvdb_sqlite_iter_range_impl, KvdbSqliteDestructureTrait,
+                KvdbSqliteStatements,
+            },
+            snapshot_db_sqlite::test_lib::check_key_value_load,
         },
         storage_manager::snapshot_manager::SnapshotManager,
     },
     snapshot_manager::SnapshotManagerTrait,
     storage_db::{
-        key_value_db::KeyValueDbIterableTrait,
-        snapshot_db::OpenSnapshotMptTrait, DeltaDbManagerTrait,
-        SnapshotDbManagerTrait, SnapshotInfo, SnapshotMptTraitRead,
+        DeltaDbManagerTrait, KeyValueDbIterableTrait, SnapshotDbManagerTrait,
+        SnapshotInfo,
     },
     storage_dir,
-    utils::{access_mode, arc_ext::*, guarded_value::GuardedValue},
+    utils::{arc_ext::*, guarded_value::GuardedValue},
     DeltaMpt, DeltaMptIdGen, DeltaMptIterator, KeyValueDbTrait, KvdbSqlite,
     StateIndex, StateRootWithAuxInfo, StorageConfiguration,
 };

@@ -2,6 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+#[cfg(test)]
+pub mod tests;
+
 pub struct SnapshotMpt<DbType: ?Sized, BorrowType: BorrowMut<DbType>> {
     pub db: BorrowType,
     pub merkle_root: MerkleHash,
@@ -86,11 +89,15 @@ impl<DbType: SnapshotMptLoadNode + ?Sized, BorrowType: BorrowMut<DbType>>
             merkle_root: MERKLE_NULL_NODE,
             _marker_db_type: Default::default(),
         };
-        if let Some(rlp) = mpt.db.borrow_mut().load_node_rlp(
-            &mpt_node_path_to_db_key(&CompressedPathRaw::default()),
-        )? {
+        let path_to_root_node = CompressedPathRaw::default();
+        if let Some(rlp) = mpt
+            .db
+            .borrow_mut()
+            .load_node_rlp(&mpt_node_path_to_db_key(&path_to_root_node))?
+        {
             mpt.merkle_root =
-                *SnapshotMptNode(Rlp::new(&rlp).as_val()?).get_merkle();
+                *SnapshotMptNode::load_rlp_and_check(&rlp, &path_to_root_node)?
+                    .get_merkle();
         }
         Ok(mpt)
     }
@@ -109,15 +116,20 @@ impl<DbType: SnapshotMptLoadNode + ?Sized, BorrowType: BorrowMut<DbType>>
         let key = mpt_node_path_to_db_key(path);
         match self.db.borrow_mut().load_node_rlp(&key)? {
             None => Ok(None),
-            Some(rlp) => Ok(Some(SnapshotMptNode(Rlp::new(&rlp).as_val()?))),
+            Some(rlp) => {
+                Ok(Some(SnapshotMptNode::load_rlp_and_check(&rlp, path)?))
+            }
         }
     }
 }
 
 impl<
         DbType: SnapshotMptLoadNode
-            + for<'db> KeyValueDbIterableTrait<'db, MptKeyValue, Error, [u8]>
-            + ?Sized,
+            + KeyValueDbIterableTrait<
+                MptKeyValue,
+                [u8],
+                KvdbSqliteShardedIteratorTag,
+            > + ?Sized,
         BorrowType: BorrowMut<DbType>,
     > SnapshotMptTraitReadAndIterate for SnapshotMpt<DbType, BorrowType>
 {
@@ -134,6 +146,7 @@ impl<
             self.db
                 .borrow_mut()
                 .iter_range_excl(&begin_key_excl, &end_key_excl)?
+                .take()
                 .map(|(key, value)| {
                     Ok((
                         mpt_node_path_from_db_key(&key)?,
@@ -147,8 +160,11 @@ impl<
 impl<
         DbType: SnapshotMptLoadNode
             + KeyValueDbTraitSingleWriter<ValueType = SnapshotMptDbValue>
-            + for<'db> KeyValueDbIterableTrait<'db, MptKeyValue, Error, [u8]>
-            + ?Sized,
+            + KeyValueDbIterableTrait<
+                MptKeyValue,
+                [u8],
+                KvdbSqliteShardedIteratorTag,
+            > + ?Sized,
         BorrowType: BorrowMut<DbType>,
     > SnapshotMptTraitRw for SnapshotMpt<DbType, BorrowType>
 {
@@ -173,6 +189,7 @@ use crate::{
     impls::{
         errors::*,
         merkle_patricia_trie::{CompressedPathRaw, CompressedPathTrait},
+        storage_db::kvdb_sqlite_sharded::KvdbSqliteShardedIteratorTag,
     },
     storage_db::{
         key_value_db::{KeyValueDbIterableTrait, KeyValueDbTraitSingleWriter},

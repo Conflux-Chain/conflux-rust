@@ -41,6 +41,10 @@ pub struct Receipt {
     pub state_root: H256,
     /// Transaction outcome.
     pub outcome_status: U64,
+    /// Detailed error message if tx execution is unsuccessful. Error message
+    /// is None if tx execution is successful or it can not be offered.
+    /// Error message can not be offered by light client.
+    pub tx_exec_error_msg: Option<String>,
 }
 
 impl Receipt {
@@ -48,6 +52,7 @@ impl Receipt {
         transaction: PrimitiveTransaction, receipt: PrimitiveReceipt,
         transaction_index: TransactionIndex, prior_gas_used: U256,
         epoch_number: Option<u64>, maybe_state_root: Option<H256>,
+        tx_exec_error_msg: Option<String>,
     ) -> Receipt
     {
         let mut address = None;
@@ -78,6 +83,7 @@ impl Receipt {
             state_root: maybe_state_root
                 .map_or_else(Default::default, Into::into),
             epoch_number: epoch_number.map(U64::from),
+            tx_exec_error_msg,
         }
     }
 }

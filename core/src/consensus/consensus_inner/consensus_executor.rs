@@ -11,7 +11,10 @@ use crate::{
         },
         ConsensusGraphInner,
     },
-    executive::{ExecutionOutcome, Executive, InternalContractMap},
+    executive::{
+        revert_reason_decode, ExecutionError, ExecutionOutcome, Executive,
+        InternalContractMap,
+    },
     machine::Machine,
     rpc_errors::{invalid_params_check, Result as RpcResult},
     state::{
@@ -21,7 +24,7 @@ use crate::{
         CleanupMode, State,
     },
     verification::{compute_receipts_root, VerificationConfig},
-    vm::{Env, Spec},
+    vm::{Env, Error as VmErr, Spec},
     vm_factory::VmFactory,
     SharedTransactionPool,
 };
@@ -1152,7 +1155,7 @@ impl ConsensusExecutionHandler {
                 let gas_fee;
                 let mut gas_sponsor_paid = false;
                 let mut storage_sponsor_paid = false;
-                let tx_exec_error_msg;
+                let tx_exec_error_msg: String;
                 match r {
                     ExecutionOutcome::NotExecutedDrop(e) => {
                         tx_outcome_status =
@@ -1192,8 +1195,16 @@ impl ConsensusExecutionHandler {
                     ) => {
                         tx_outcome_status =
                             TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING;
-                        tx_exec_error_msg = format!("{:?}", error);
-
+                        tx_exec_error_msg = if error
+                            == ExecutionError::VmError(VmErr::Reverted)
+                        {
+                            format!(
+                                "Vm reverted, {}",
+                                revert_reason_decode(&executed.output)
+                            )
+                        } else {
+                            format!("{:?}", error)
+                        };
                         env.accumulated_gas_used += executed.gas_used;
                         gas_fee = executed.fee;
                         debug!(

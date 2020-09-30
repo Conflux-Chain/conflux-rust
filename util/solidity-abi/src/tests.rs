@@ -196,3 +196,53 @@ fn test_strange_input() {
         output
     );
 }
+
+#[test]
+fn test_string() {
+    let msg: String = "abi test".to_string();
+    let encoded = msg.abi_encode();
+    assert_eq!(
+        encoded.to_hex(),
+        "0000000000000000000000000000000000000000000000000000000000000020\
+         0000000000000000000000000000000000000000000000000000000000000008\
+         6162692074657374000000000000000000000000000000000000000000000000"
+    );
+    assert_eq!(String::abi_decode(encoded.as_slice()).unwrap(), msg);
+}
+
+#[test]
+fn test_string_utf8() {
+    let msg: String = "中文测试".to_string();
+    let encoded = msg.abi_encode();
+    assert_eq!(
+        encoded.to_hex(),
+        "0000000000000000000000000000000000000000000000000000000000000020\
+         000000000000000000000000000000000000000000000000000000000000000c\
+         e4b8ade69687e6b58be8af950000000000000000000000000000000000000000"
+    );
+    assert_eq!(String::abi_decode(encoded.as_slice()).unwrap(), msg);
+}
+
+#[test]
+fn test_long_string() {
+    let msg: String = "0123456789abcdef0123456789abcdef".to_string();
+    let encoded = msg.abi_encode();
+    assert_eq!(
+        encoded.to_hex(),
+        "0000000000000000000000000000000000000000000000000000000000000020\
+         0000000000000000000000000000000000000000000000000000000000000020\
+         3031323334353637383961626364656630313233343536373839616263646566"
+    );
+    assert_eq!(String::abi_decode(encoded.as_slice()).unwrap(), msg);
+
+    let msg: String = "0123456789abcdef0123456789abcdef0".to_string();
+    let encoded = msg.abi_encode();
+    assert_eq!(
+        encoded.to_hex(),
+        "0000000000000000000000000000000000000000000000000000000000000020\
+         0000000000000000000000000000000000000000000000000000000000000021\
+         3031323334353637383961626364656630313233343536373839616263646566\
+         3000000000000000000000000000000000000000000000000000000000000000"
+    );
+    assert_eq!(String::abi_decode(encoded.as_slice()).unwrap(), msg);
+}

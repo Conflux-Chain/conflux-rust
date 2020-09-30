@@ -485,6 +485,9 @@ impl TransactionPoolInner {
     fn update_nonce_and_balance(
         &mut self, address: &Address, nonce: U256, balance: U256,
     ) {
+        if !self.deferred_pool.contain_address(address) {
+            return;
+        }
         let count = self.deferred_pool.count_less(address, &nonce);
         let timestamp = self
             .garbage_collector
@@ -499,6 +502,9 @@ impl TransactionPoolInner {
         &mut self, address: &Address, state: &AccountCache,
     ) -> StateDbResult<(U256, U256)> {
         let nonce_and_balance = state.get_nonce_and_balance(address)?;
+        if !self.deferred_pool.contain_address(address) {
+            return Ok(nonce_and_balance);
+        }
         let count =
             self.deferred_pool.count_less(address, &nonce_and_balance.0);
         let timestamp = self

@@ -115,7 +115,7 @@ pub fn initialize_data_manager(
 
     let storage_manager = Arc::new(
         StorageManager::new(StorageConfiguration::new_default(
-            db_dir.to_string(),
+            db_dir,
             cfx_parameters::consensus::SNAPSHOT_EPOCHS_CAPACITY,
         ))
         .expect("Failed to initialize storage."),
@@ -182,6 +182,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         String::from(""), /* stratum_listen_addr */
         0,                /* stratum_port */
         None,             /* stratum_secret */
+        1,                /* pow_problem_window_size */
     );
     let sync_config = SyncGraphConfig {
         future_block_buffer_capacity: 1,
