@@ -41,7 +41,7 @@ struct Statistics {
 
 type MissingStorageRoot = TimeOrdered<StorageRootKey>;
 
-type PendingStorageRoot = PendingItem<Option<StorageRoot>, ClonableError>;
+type PendingStorageRoot = PendingItem<StorageRoot, ClonableError>;
 
 pub struct StorageRoots {
     // series of unique request ids
@@ -89,7 +89,7 @@ impl StorageRoots {
     #[inline]
     pub fn request_now(
         &self, io: &dyn NetworkContext, epoch: u64, address: H160,
-    ) -> impl Future<Output = Result<Option<StorageRoot>>> {
+    ) -> impl Future<Output = Result<StorageRoot>> {
         let mut verified = self.verified.write();
         let key = StorageRootKey { epoch, address };
 
@@ -130,10 +130,8 @@ impl StorageRoots {
 
     #[inline]
     pub fn validate_and_store(
-        &self, key: StorageRootKey, root: Option<StorageRoot>,
-        proof: StorageRootProof,
-    ) -> Result<()>
-    {
+        &self, key: StorageRootKey, root: StorageRoot, proof: StorageRootProof,
+    ) -> Result<()> {
         // validate storage root
         if let Err(e) =
             self.validate_storage_root(key.epoch, key.address, &root, proof)
@@ -207,7 +205,7 @@ impl StorageRoots {
 
     #[inline]
     fn validate_storage_root(
-        &self, epoch: u64, address: H160, storage_root: &Option<StorageRoot>,
+        &self, epoch: u64, address: H160, storage_root: &StorageRoot,
         proof: StorageRootProof,
     ) -> Result<()>
     {

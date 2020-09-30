@@ -130,6 +130,7 @@ pub fn genesis_block(
     let receipt_root = compute_receipts_root(&vec![Arc::new(BlockReceipts {
         receipts: vec![],
         secondary_reward: U256::zero(),
+        tx_execution_error_messages: vec![],
     })]);
     let mut genesis_transaction = Transaction::default();
     genesis_transaction.data = GENESIS_TRANSACTION_DATA_STR.as_bytes().into();

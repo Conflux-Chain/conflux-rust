@@ -3,6 +3,7 @@
 ## Improvement
 - Start stratum services automatically if `mining_author` is set. 
 Use `mining_type` to allow start CPU mining or disable mining manually.
+- block info returned by rpc methods `cfx_getBlockByEpochNumber`, `cfx_getBlockByHash`, `cfx_getBlockByHashWithPivotAssumption` add one new field `gasUsed` (backward compatible)
 
 ## Bug Fixes
 
@@ -19,3 +20,5 @@ Use `mining_type` to allow start CPU mining or disable mining manually.
 - CIP-12 Allow non-zero collateral contract to be killed.
 - CIP-13 Use Big-Endian MPT Keys.
 - CIP-16 Collect suicide logic at the end of transaction processing
+- CIP-27 Remove sponsor whitelist keys at contract deletion.
+- Set snapshot epoch count to 2000.

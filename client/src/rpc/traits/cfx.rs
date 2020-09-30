@@ -7,13 +7,13 @@ use super::super::types::{
     CheckBalanceAgainstTransactionResponse, EpochNumber,
     EstimateGasAndCollateralResponse, Filter as RpcFilter, Log as RpcLog,
     Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
-    SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
-    StorageRoot as RpcStorageRoot, Transaction,
+    SponsorInfo as RpcSponsorInfo, Status as RpcStatus, Transaction,
 };
 use crate::rpc::types::BlockHashOrEpochNumber;
 use cfx_types::{H160, H256, U256, U64};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
 use jsonrpc_derive::rpc;
+use primitives::StorageRoot;
 
 /// Cfx rpc interface.
 #[rpc(server)]
@@ -89,7 +89,7 @@ pub trait Cfx {
     #[rpc(name = "cfx_getStorageRoot")]
     fn storage_root(
         &self, address: H160, epoch_num: Option<EpochNumber>,
-    ) -> BoxFuture<Option<RpcStorageRoot>>;
+    ) -> BoxFuture<Option<StorageRoot>>;
 
     /// Returns block with given hash.
     #[rpc(name = "cfx_getBlockByHash")]

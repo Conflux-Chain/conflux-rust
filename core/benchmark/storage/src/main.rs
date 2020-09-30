@@ -1610,7 +1610,7 @@ impl TxReplayer {
         }
 
         let mut storage_configuration = StorageConfiguration::new_default(
-            conflux_data_dir.to_string() + "/",
+            &(conflux_data_dir.to_string() + "/"),
             Self::SNAPSHOT_EPOCHS_CAPACITY,
         );
         // Check data-integrity for snapshot mpt with 4 threads.

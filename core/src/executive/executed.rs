@@ -5,6 +5,7 @@
 use crate::{bytes::Bytes, vm};
 use cfx_types::{Address, U256, U512};
 use primitives::{receipt::StorageChange, LogEntry, TransactionWithSignature};
+use solidity_abi::{ABIDecodable, ABIDecodeError};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Executed {
@@ -90,7 +91,7 @@ pub enum TxDropError {
     InvalidRecipientAddress(Address),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ExecutionError {
     /// Returned when cost of transaction (value + gas_price * gas) exceeds
     /// current sender balance.
@@ -161,4 +162,51 @@ impl Executed {
             output: Default::default(),
         }
     }
+}
+
+pub fn revert_reason_decode(output: &Bytes) -> String {
+    const MAX_LENGTH: usize = 50;
+    let decode_result = if output.len() < 4 {
+        Err(ABIDecodeError("Uncompleted Signature"))
+    } else {
+        let (sig, data) = output.split_at(4);
+        if sig != [8, 195, 121, 160] {
+            Err(ABIDecodeError("Unrecognized Signature"))
+        } else {
+            String::abi_decode(data)
+        }
+    };
+    match decode_result {
+        Ok(str) => {
+            if str.len() < MAX_LENGTH {
+                format!("Reason provided by the contract: '{}'", str)
+            } else {
+                // FIXME: do we need a more efficient way for string
+                // concatenation.
+                format!(
+                    "Reason provided by the contract: '{}...'",
+                    str[..MAX_LENGTH].to_string()
+                )
+            }
+            .to_string()
+        }
+        Err(_) if output.len() == 0 => "".to_string(),
+        Err(_) => "Unrecognized error message".to_string(),
+    }
+}
+
+#[cfg(test)]
+use rustc_hex::FromHex;
+#[test]
+fn test_decode_result() {
+    let input_hex =
+        "08c379a0\
+         0000000000000000000000000000000000000000000000000000000000000020\
+         0000000000000000000000000000000000000000000000000000000000000018\
+         e699bae59586e4b88de8b6b3efbc8ce8afb7e58585e580bc0000000000000000";
+    assert_eq!(
+        "Reason provided by the contract: '智商不足，请充值'"
+            .to_string(),
+        revert_reason_decode(&input_hex.from_hex().unwrap())
+    );
 }

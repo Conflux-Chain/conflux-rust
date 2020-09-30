@@ -4,15 +4,15 @@
 
 use crate::{
     block_data_manager::BlockDataManager,
-    consensus::{BestInformation, ConsensusConfig},
+    consensus::{BestInformation, ConsensusConfig, TransactionInfo},
+    rpc_errors::Result as RpcResult,
     state::State,
     statistics::SharedStatistics,
     transaction_pool::SharedTransactionPool,
 };
+use cfx_statedb::StateDb;
 use cfx_types::{H256, U256};
-use primitives::{
-    receipt::Receipt, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
-};
+use primitives::{EpochId, EpochNumber, SignedTransaction};
 use std::{any::Any, sync::Arc};
 
 /// FIXME: redesign this trait
@@ -69,14 +69,11 @@ pub trait ConsensusGraphTrait: Send + Sync {
         &self, epoch_number: EpochNumber,
     ) -> Result<Vec<H256>, String>;
 
-    // FIXME: return type.
     fn get_transaction_info_by_hash(
         &self, hash: &H256,
-    ) -> Option<(SignedTransaction, TransactionIndex, Option<(Receipt, U256)>)>;
+    ) -> Option<(SignedTransaction, TransactionInfo)>;
 
     fn get_block_epoch_number(&self, hash: &H256) -> Option<u64>;
-
-    fn get_best_state(&self) -> State;
 
     fn get_trusted_blame_block_for_snapshot(
         &self, snapshot_epoch_id: &EpochId,
@@ -89,6 +86,14 @@ pub trait ConsensusGraphTrait: Send + Sync {
     fn set_initial_sequence_number(&self, initial_sn: u64);
 
     fn update_best_info(&self);
+
+    fn get_state_by_epoch_number(
+        &self, epoch_number: EpochNumber,
+    ) -> RpcResult<State>;
+
+    fn get_state_db_by_epoch_number(
+        &self, epoch_number: EpochNumber,
+    ) -> RpcResult<StateDb>;
 }
 
 pub type SharedConsensusGraph =

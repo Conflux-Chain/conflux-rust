@@ -256,13 +256,16 @@ impl StateTrait for State {
                 let key = access_key
                     .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
 
-                let delta = SubTrieVisitor::new(
+                let mut owned_node_set = Some(Default::default());
+
+                let mut visitor = SubTrieVisitor::new(
                     &self.delta_trie,
                     root_node.clone(),
                     // won't create any new nodes
-                    &mut Some(Default::default()),
-                )?
-                .get_merkle_hash_wo_compressed_path(&key)?;
+                    &mut owned_node_set,
+                )?;
+
+                let delta = visitor.get_merkle_hash_wo_compressed_path(&key)?;
 
                 let maybe_proof = match WithProof::value() {
                     false => None,
@@ -279,9 +282,14 @@ impl StateTrait for State {
 
                 proof.with_delta(maybe_proof);
 
-                delta
+                // for tombstones, we ignore the node merkle
+                if visitor.get(&key)?.is_tombstone() {
+                    MptValue::TombStone
+                } else {
+                    MptValue::from(delta)
+                }
             }
-            None => None,
+            None => MptValue::None,
         };
 
         // ----------- get from intermediate -----------
@@ -298,13 +306,17 @@ impl StateTrait for State {
                 let key = access_key
                     .to_delta_mpt_key_bytes(&intermediate_trie_key_padding);
 
-                let intermediate = SubTrieVisitor::new(
+                let mut owned_node_set = Some(Default::default());
+
+                let mut visitor = SubTrieVisitor::new(
                     &intermediate_trie,
                     root_node.clone(),
                     // won't create any new nodes
-                    &mut Some(Default::default()),
-                )?
-                .get_merkle_hash_wo_compressed_path(&key)?;
+                    &mut owned_node_set,
+                )?;
+
+                let intermediate =
+                    visitor.get_merkle_hash_wo_compressed_path(&key)?;
 
                 let maybe_proof = match WithProof::value() {
                     false => None,
@@ -321,9 +333,14 @@ impl StateTrait for State {
 
                 proof.with_intermediate(maybe_proof);
 
-                intermediate
+                // for tombstones, we ignore the node merkle
+                if visitor.get(&key)?.is_tombstone() {
+                    MptValue::TombStone
+                } else {
+                    MptValue::from(intermediate)
+                }
             }
-            _ => None,
+            _ => MptValue::None,
         };
 
         // ----------- get from snapshot -----------
@@ -487,14 +504,16 @@ impl StateTrait for State {
         };
 
         // Retrieve key/value pairs from snapshot
-        let mut kv_iterator = self.snapshot_db.snapshot_kv_iterator()?;
+        let mut kv_iterator = self.snapshot_db.snapshot_kv_iterator()?.take();
         let lower_bound_incl = access_key_prefix.to_key_bytes();
         let upper_bound_excl =
             to_key_prefix_iter_upper_bound(&lower_bound_incl);
-        let mut kvs = kv_iterator.iter_range(
-            lower_bound_incl.as_slice(),
-            upper_bound_excl.as_ref().map(|v| &**v),
-        )?;
+        let mut kvs = kv_iterator
+            .iter_range(
+                lower_bound_incl.as_slice(),
+                upper_bound_excl.as_ref().map(|v| &**v),
+            )?
+            .take();
 
         let mut snapshot_kvs = Vec::new();
         while let Some((key, value)) = kvs.next()? {
@@ -874,7 +893,7 @@ use crate::{
         errors::*,
         merkle_patricia_trie::{
             mpt_cursor::{BasicPathNode, CursorOpenPathTerminal, MptCursor},
-            KVInserter, MptKeyValue, MptValue, TrieProof, VanillaChildrenTable,
+            KVInserter, MptKeyValue, TrieProof, VanillaChildrenTable,
         },
         node_merkle_proof::NodeMerkleProof,
         state_manager::*,
@@ -887,8 +906,8 @@ use crate::{
 use cfx_internal_common::{StateRootAuxInfo, StateRootWithAuxInfo};
 use fallible_iterator::FallibleIterator;
 use primitives::{
-    DeltaMptKeyPadding, EpochId, MerkleHash, NodeMerkleTriplet, StateRoot,
-    StorageKey, MERKLE_NULL_NODE, NULL_EPOCH,
+    DeltaMptKeyPadding, EpochId, MerkleHash, MptValue, NodeMerkleTriplet,
+    StateRoot, StorageKey, MERKLE_NULL_NODE, NULL_EPOCH,
 };
 use rustc_hex::ToHex;
 use std::{

@@ -2,12 +2,18 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::rpc::types::MAX_GAS_CALL_REQUEST;
 use blockgen::BlockGenerator;
-use cfx_types::{address_util::AddressUtil, H160, H256, H520, U128, U256, U64};
+use cfx_parameters::staking::COLLATERAL_PER_BYTE;
+use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
+use cfx_types::{
+    address_util::AddressUtil, BigEndianHash, H160, H256, H520, U128, U256,
+    U512, U64,
+};
 use cfxcore::{
     block_data_manager::BlockExecutionResultWithEpoch,
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
-    rpc_errors::account_result_to_rpc_result,
+    rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     state_exposer::STATE_EXPOSER,
     vm, ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
@@ -22,7 +28,7 @@ use network::{
 use parking_lot::Mutex;
 use primitives::{
     filter::Filter, transaction::Action::Call, Account, SignedTransaction,
-    TransactionWithSignature,
+    StorageKey, StorageRoot, StorageValue, TransactionWithSignature,
 };
 use random_crash::*;
 use rlp::Rlp;
@@ -47,12 +53,25 @@ use crate::{
             Log as RpcLog, PackedOrExecuted, Receipt as RpcReceipt,
             RewardInfo as RpcRewardInfo, SendTxRequest,
             SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
-            StorageRoot as RpcStorageRoot, SyncGraphStates,
-            Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
+            SyncGraphStates, Transaction as RpcTransaction, TxPoolPendingInfo,
+            TxWithPoolInfo,
         },
         RpcResult,
     },
 };
+use cfxcore::{
+    consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
+    executive::revert_reason_decode,
+};
+use lazy_static::lazy_static;
+use metrics::{register_timer_with_group, ScopeTimer, Timer};
+
+lazy_static! {
+    static ref SEND_RAW_TX_TIMER: Arc<dyn Timer> =
+        register_timer_with_group("rpc", "rpc:sendRawTransaction");
+    static ref GET_LOGS_TIMER: Arc<dyn Timer> =
+        register_timer_with_group("rpc", "rpc:getLogs");
+}
 
 pub struct RpcImpl {
     config: RpcImplConfiguration,
@@ -94,101 +113,114 @@ impl RpcImpl {
     }
 
     fn code(
-        &self, addr: H160, epoch_number: Option<EpochNumber>,
+        &self, address: H160, num: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
-        let epoch_number = epoch_number.unwrap_or(EpochNumber::LatestState);
-        let address: H160 = addr.into();
+        let epoch_num = num.unwrap_or(EpochNumber::LatestState);
         info!(
             "RPC Request: cfx_getCode address={:?} epoch_num={:?}",
-            address, epoch_number
+            address, epoch_num
         );
-        let consensus_graph = self.consensus_graph();
+
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num.clone().into())?;
+        let acc = invalid_params_check(
+            "address",
+            state_db.get_account(&address)?.ok_or(format!(
+                "Account[{:?}] epoch_number[{:?}] does not exist",
+                address, epoch_num,
+            )),
+        )?;
 
         Ok(Bytes::new(
-            consensus_graph.get_code(address, epoch_number.into())?,
+            match state_db.get_code(&address, &acc.code_hash) {
+                Ok(Some(code)) => (*code.code).clone(),
+                _ => vec![],
+            },
         ))
     }
 
     fn balance(
         &self, address: H160, num: Option<EpochNumber>,
     ) -> RpcResult<U256> {
-        let num = num.unwrap_or(EpochNumber::LatestState);
-        let address: H160 = address.into();
+        let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
         info!(
             "RPC Request: cfx_getBalance address={:?} epoch_num={:?}",
-            address, num
+            address, epoch_num
         );
 
-        let consensus_graph = self.consensus_graph();
+        let state_db =
+            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let acc = state_db.get_account(&address)?;
 
-        Ok(consensus_graph.get_balance(address, num.into())?.into())
+        Ok(acc.map_or(U256::zero(), |acc| acc.balance).into())
     }
 
     fn admin(
         &self, address: H160, num: Option<EpochNumber>,
     ) -> RpcResult<Option<H160>> {
-        let num = num.unwrap_or(EpochNumber::LatestState);
-        let address: H160 = address.into();
+        let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
         info!(
             "RPC Request: cfx_getAdmin address={:?} epoch_num={:?}",
-            address, num
+            address, epoch_num
         );
 
-        let cg = self.consensus_graph();
+        let state_db =
+            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let acc = state_db.get_account(&address)?;
 
-        Ok(cg
-            .get_admin(address, num.into())?
-            .map(|address| address.into()))
+        Ok(acc.map(|acc| acc.admin.into()))
     }
 
     fn sponsor_info(
         &self, address: H160, num: Option<EpochNumber>,
     ) -> RpcResult<RpcSponsorInfo> {
-        let num = num.unwrap_or(EpochNumber::LatestState);
-        let address: H160 = address.into();
+        let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
         info!(
             "RPC Request: cfx_getSponsorInfo address={:?} epoch_num={:?}",
-            address, num
+            address, epoch_num
         );
 
-        let cg = self.consensus_graph();
+        let state_db =
+            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let acc = state_db.get_account(&address)?;
 
         Ok(RpcSponsorInfo::new(
-            cg.get_sponsor_info(address, num.into())?,
+            acc.map(|acc| acc.sponsor_info.clone()).unwrap_or_default(),
         ))
     }
 
     fn staking_balance(
         &self, address: H160, num: Option<EpochNumber>,
     ) -> RpcResult<U256> {
-        let num = num.unwrap_or(EpochNumber::LatestState);
-        let address: H160 = address.into();
+        let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
         info!(
             "RPC Request: cfx_getStakingBalance address={:?} epoch_num={:?}",
-            address, num
+            address, epoch_num
         );
 
-        let consensus_graph = self.consensus_graph();
+        let state_db =
+            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let acc = state_db.get_account(&address)?;
 
-        Ok(consensus_graph
-            .get_staking_balance(address, num.into())?
-            .into())
+        Ok(acc.map_or(U256::zero(), |acc| acc.staking_balance).into())
     }
 
     fn collateral_for_storage(
         &self, address: H160, num: Option<EpochNumber>,
     ) -> RpcResult<U256> {
-        let num = num.unwrap_or(EpochNumber::LatestState);
-        let address: H160 = address.into();
+        let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
         info!(
             "RPC Request: cfx_getCollateralForStorage address={:?} epoch_num={:?}",
-            address, num
+            address, epoch_num
         );
 
-        let consensus_graph = self.consensus_graph();
+        let state_db =
+            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let acc = state_db.get_account(&address)?;
 
-        Ok(consensus_graph
-            .get_collateral_for_storage(address, num.into())?
+        Ok(acc
+            .map_or(U256::zero(), |acc| acc.collateral_for_storage)
             .into())
     }
 
@@ -196,54 +228,51 @@ impl RpcImpl {
     fn account(
         &self, address: H160, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<RpcAccount> {
-        let address: H160 = address.into();
-        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
+        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
             "RPC Request: cfx_getAccount address={:?} epoch_num={:?}",
             address, epoch_num
         );
 
-        let consensus_graph = self.consensus_graph();
+        let state_db =
+            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
 
-        Ok(RpcAccount::new(
-            match consensus_graph.get_account(address, epoch_num.into())? {
-                Some(t) => t,
-                None => account_result_to_rpc_result(
-                    "address",
-                    Account::new_empty_with_balance(
-                        &address,
-                        &U256::zero(), /* balance */
-                        &U256::zero(), /* nonce */
-                    ),
-                )?,
-            },
-        ))
+        Ok(RpcAccount::new(match state_db.get_account(&address)? {
+            Some(t) => t,
+            None => account_result_to_rpc_result(
+                "address",
+                Account::new_empty_with_balance(
+                    &address,
+                    &U256::zero(), /* balance */
+                    &U256::zero(), /* nonce */
+                ),
+            )?,
+        }))
     }
 
     /// Returns interest rate of the given epoch
     fn interest_rate(&self, epoch_num: Option<EpochNumber>) -> RpcResult<U256> {
-        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
-        let consensus_graph = self.consensus_graph();
+        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
+        let state_db =
+            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
 
-        Ok(consensus_graph
-            .get_annual_interest_rate(epoch_num.into())?
-            .into())
+        Ok(state_db.get_annual_interest_rate()?.into())
     }
 
     /// Returns accumulate interest rate of the given epoch
     fn accumulate_interest_rate(
         &self, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<U256> {
-        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
-        let consensus_graph = self.consensus_graph();
+        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
+        let state_db =
+            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
 
-        Ok(consensus_graph
-            .get_accumulate_interest_rate(epoch_num.into())?
-            .into())
+        Ok(state_db.get_accumulate_interest_rate()?.into())
     }
 
     fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256> {
+        let _timer = ScopeTimer::time_scope(SEND_RAW_TX_TIMER.as_ref());
         info!("RPC Request: cfx_sendRawTransaction len={:?}", raw.0.len());
         debug!("RawTransaction bytes={:?}", raw);
 
@@ -258,20 +287,21 @@ impl RpcImpl {
     fn storage_at(
         &self, address: H160, position: H256, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<Option<H256>> {
-        let address: H160 = address.into();
-        let position: H256 = position.into();
-        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
+        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
             "RPC Request: cfx_getStorageAt address={:?}, position={:?}, epoch_num={:?})",
             address, position, epoch_num
         );
 
-        let consensus_graph = self.consensus_graph();
+        let state_db =
+            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let key = StorageKey::new_storage_key(&address, position.as_ref());
 
-        Ok(consensus_graph
-            .get_storage(address, position, epoch_num.into())?
-            .map(Into::into))
+        Ok(match state_db.get::<StorageValue>(key)? {
+            Some(entry) => Some(H256::from_uint(&entry.value).into()),
+            None => None,
+        })
     }
 
     fn send_transaction_with_signature(
@@ -369,20 +399,20 @@ impl RpcImpl {
 
     fn storage_root(
         &self, address: H160, epoch_num: Option<EpochNumber>,
-    ) -> RpcResult<Option<RpcStorageRoot>> {
-        let address: H160 = address.into();
-        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
+    ) -> RpcResult<Option<StorageRoot>> {
+        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
             "RPC Request: cfx_getStorageRoot address={:?} epoch={:?}",
             address, epoch_num
         );
 
-        let consensus_graph = self.consensus_graph();
+        let root = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num)?
+            .get_original_storage_root(&address)?;
 
-        Ok(consensus_graph
-            .get_storage_root(address, epoch_num.into())?
-            .map(RpcStorageRoot::from_primitive))
+        Ok(Some(root))
     }
 
     fn send_usable_genesis_accounts(
@@ -412,18 +442,38 @@ impl RpcImpl {
         let hash: H256 = hash.into();
         info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
 
-        if let Some(info) = self.consensus.get_transaction_info_by_hash(&hash) {
-            let (tx, tx_index, maybe_executed) = info;
-            let packed_or_executed = match maybe_executed {
+        if let Some((
+            tx,
+            TransactionInfo {
+                tx_index,
+                maybe_executed_extra_info,
+            },
+        )) = self.consensus.get_transaction_info_by_hash(&hash)
+        {
+            let packed_or_executed = match maybe_executed_extra_info {
                 None => PackedOrExecuted::Packed(tx_index),
-                Some((receipt, prior_gas_used)) => {
+                Some(MaybeExecutedTxExtraInfo {
+                    receipt,
+                    prior_gas_used,
+                    tx_exec_error_msg,
+                }) => {
+                    let epoch_number = self
+                        .consensus
+                        .get_block_epoch_number(&tx_index.block_hash);
+
+                    let maybe_state_root = self
+                        .consensus
+                        .get_data_manager()
+                        .get_executed_state_root(&tx_index.block_hash);
+
                     PackedOrExecuted::Executed(RpcReceipt::new(
                         tx.clone(),
                         receipt,
                         tx_index,
                         prior_gas_used,
-                        None,
-                        None,
+                        epoch_number,
+                        maybe_state_root,
+                        tx_exec_error_msg,
                     ))
                 }
             };
@@ -448,7 +498,7 @@ impl RpcImpl {
             consensus_graph.get_transaction_receipt_and_block_info(&hash);
         let (
             BlockExecutionResultWithEpoch(epoch_hash, execution_result),
-            address,
+            tx_index,
             maybe_state_root,
         ) = match maybe_results {
             None => return Ok(None),
@@ -471,12 +521,12 @@ impl RpcImpl {
         let block = self
             .consensus
             .get_data_manager()
-            .block_by_hash(&address.block_hash, true)
+            .block_by_hash(&tx_index.block_hash, true)
             // FIXME: server error, client should request another server.
             .ok_or("Inconsistent state")?;
         let transaction = block
             .transactions
-            .get(address.index)
+            .get(tx_index.index)
             // FIXME: server error, client should request another server.
             .ok_or("Inconsistent state")?
             .as_ref()
@@ -484,29 +534,37 @@ impl RpcImpl {
         let receipt = execution_result
             .block_receipts
             .receipts
-            .get(address.index)
+            .get(tx_index.index)
             // FIXME: server error, client should request another server.
             .ok_or("Inconsistent state")?
             .clone();
-        let prior_gas_used = if address.index == 0 {
+        let prior_gas_used = if tx_index.index == 0 {
             U256::zero()
         } else {
             let prior_receipt = execution_result
                 .block_receipts
                 .receipts
-                .get(address.index - 1)
+                .get(tx_index.index - 1)
                 // FIXME: server error, client should request another server.
                 .ok_or("Inconsistent state")?
                 .clone();
             prior_receipt.accumulated_gas_used
         };
+        let tx_exec_error_msg = &execution_result
+            .block_receipts
+            .tx_execution_error_messages[tx_index.index];
         let rpc_receipt = RpcReceipt::new(
             transaction,
             receipt,
-            address,
+            tx_index,
             prior_gas_used,
             Some(epoch_number),
             maybe_state_root,
+            if tx_exec_error_msg.is_empty() {
+                None
+            } else {
+                Some(tx_exec_error_msg.clone())
+            },
         );
         Ok(Some(rpc_receipt))
     }
@@ -687,6 +745,7 @@ impl RpcImpl {
     }
 
     fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
+        let _timer = ScopeTimer::time_scope(GET_LOGS_TIMER.as_ref());
         let consensus_graph = self.consensus_graph();
 
         info!("RPC Request: cfx_getLogs({:?})", filter);
@@ -804,7 +863,13 @@ impl RpcImpl {
             ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(vm::Error::Reverted),
                 executed,
-            ) => executed,
+            ) => {
+                bail!(call_execution_error(
+                    format!("Estimation isn't accurate: transaction is reverted. Execution output {}",
+                        revert_reason_decode(&executed.output)),
+                    [b"Reverted. Execution output: ", &*executed.output].concat(),
+                ))
+            },
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
                 bail!(call_execution_error(
                     format! {"Can not estimate: transaction execution failed, \
@@ -818,6 +883,24 @@ impl RpcImpl {
         for storage_change in &executed.storage_collateralized {
             storage_collateralized += storage_change.amount;
         }
+        // In case of unlimited full gas charge at some VM call, or if there are
+        // infinite loops, the total estimated gas used is very close to
+        // MAX_GAS_CALL_REQUEST, 0.8 is chosen to check if it's close.
+        const TOO_MUCH_GAS_USED: u64 =
+            (0.8 * (MAX_GAS_CALL_REQUEST as f32)) as u64;
+        if executed.gas_used >= U256::from(TOO_MUCH_GAS_USED) {
+            bail!(call_execution_error(
+                format!(
+                    "Gas too high. Most likely there are problems within the contract code. \
+                    gas {}, storage_limit {}",
+                    executed.gas_used, storage_collateralized
+                ),
+                format!(
+                    "gas {}, storage_limit {}", executed.gas_used, storage_collateralized
+                )
+                .into_bytes(),
+            ));
+        }
         let response = EstimateGasAndCollateralResponse {
             gas_used: executed.gas_used.into(),
             storage_collateralized: storage_collateralized.into(),
@@ -828,37 +911,50 @@ impl RpcImpl {
     fn check_balance_against_transaction(
         &self, account_addr: H160, contract_addr: H160, gas_limit: U256,
         gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>,
-    ) -> JsonRpcResult<CheckBalanceAgainstTransactionResponse>
+    ) -> RpcResult<CheckBalanceAgainstTransactionResponse>
     {
-        let consensus_graph = self.consensus_graph();
-        let epoch = epoch.unwrap_or(EpochNumber::LatestState);
-        let storage_limit_u256: U256 = storage_limit.into();
-        if storage_limit_u256 > U256::from(std::u64::MAX) {
+        let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
+        if storage_limit > U256::from(std::u64::MAX) {
             bail!(JsonRpcError::invalid_params(format!("storage_limit has to be within the range of u64 but {} supplied!", storage_limit)));
         }
 
-        match consensus_graph.check_balance_against_transaction(
-            account_addr.into(),
-            contract_addr.into(),
-            gas_limit.into(),
-            gas_price.into(),
-            storage_limit.into(),
-            epoch.into(),
-        ) {
-            Ok((will_pay_tx_fee, will_pay_collateral, is_balance_enough)) => {
-                let response = CheckBalanceAgainstTransactionResponse {
-                    will_pay_tx_fee,
-                    will_pay_collateral,
-                    is_balance_enough,
-                };
-                Ok(response)
-            }
-            Err(e) => {
-                let mut rpc_error = JsonRpcError::internal_error();
-                rpc_error.message = format!("{:?}", e).into();
-                bail!(rpc_error)
-            }
+        let state = self.consensus.get_state_by_epoch_number(epoch)?;
+        let gas_cost = gas_limit.full_mul(gas_price);
+        let mut gas_sponsored = false;
+        let mut storage_sponsored = false;
+        if state.check_commission_privilege(&contract_addr, &account_addr)? {
+            // No need to check for gas sponsor account existence.
+            gas_sponsored = gas_cost
+                <= U512::from(state.sponsor_gas_bound(&contract_addr)?);
+            storage_sponsored =
+                state.sponsor_for_collateral(&contract_addr)?.is_some();
         }
+        let gas_sponsor_balance = if gas_sponsored {
+            U512::from(state.sponsor_balance_for_gas(&contract_addr)?)
+        } else {
+            0.into()
+        };
+        let will_pay_tx_fee = !gas_sponsored || gas_sponsor_balance < gas_cost;
+
+        let storage_limit_in_drip = storage_limit * *COLLATERAL_PER_BYTE;
+        let storage_sponsor_balance = if storage_sponsored {
+            state.sponsor_balance_for_collateral(&contract_addr)?
+        } else {
+            0.into()
+        };
+
+        let will_pay_collateral = !storage_sponsored
+            || storage_limit_in_drip > storage_sponsor_balance;
+
+        let balance = state.balance(&account_addr)?;
+        let minimum_balance = if will_pay_tx_fee { gas_cost } else { 0.into() };
+        let is_balance_enough = U512::from(balance) >= minimum_balance;
+
+        Ok(CheckBalanceAgainstTransactionResponse {
+            will_pay_tx_fee,
+            will_pay_collateral,
+            is_balance_enough,
+        })
     }
 
     fn exec_transaction(
@@ -1023,7 +1119,7 @@ impl Cfx for CfxHandler {
                 -> BoxFuture<Option<H256>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
-            fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<RpcStorageRoot>>;
+            fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
         }
     }
 }

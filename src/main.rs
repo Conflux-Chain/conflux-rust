@@ -5,6 +5,12 @@
 #[cfg(test)]
 mod test;
 
+#[cfg(all(not(target_env = "msvc"), feature = "jemalloc-global"))]
+use jemallocator::Jemalloc;
+#[cfg(all(not(target_env = "msvc"), feature = "jemalloc-global"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
 mod command;
 
 use crate::command::rpc::RpcCommand;
@@ -28,7 +34,7 @@ use parking_lot::{Condvar, Mutex};
 use std::sync::Arc;
 
 fn main() -> Result<(), String> {
-    #[cfg(feature = "deadlock_detection")]
+    #[cfg(feature = "deadlock-detection")]
     {
         // only for #[cfg]
         use parking_lot::deadlock;

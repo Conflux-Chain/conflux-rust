@@ -195,7 +195,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         b0 = client.get_balance(genesis_addr)
         self.call_contract_function(
             contract=control_contract,
-            name="set_sponsor_for_gas",
+            name="setSponsorForGas",
             args=[Web3.toChecksumAddress(contract_addr), upper_bound],
             value=upper_bound * 1000 - 1,
             sender_key=self.genesis_priv_key,
@@ -210,7 +210,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         b0 = client.get_balance(genesis_addr)
         self.call_contract_function(
             contract=control_contract,
-            name="set_sponsor_for_gas",
+            name="setSponsorForGas",
             args=[Web3.toChecksumAddress(contract_addr), upper_bound],
             value=10 ** 18,
             sender_key=self.genesis_priv_key,
@@ -385,7 +385,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         sb = client.get_sponsor_balance_for_gas(contract_addr)
         self.call_contract_function(
             contract=control_contract,
-            name="set_sponsor_for_gas",
+            name="setSponsorForGas",
             args=[Web3.toChecksumAddress(contract_addr), upper_bound + 1],
             value=5 * 10 ** 17,
             sender_key=priv_key3,
@@ -400,7 +400,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         sb = client.get_sponsor_balance_for_gas(contract_addr)
         self.call_contract_function(
             contract=control_contract,
-            name="set_sponsor_for_gas",
+            name="setSponsorForGas",
             args=[Web3.toChecksumAddress(contract_addr), upper_bound],
             value=10 ** 18,
             sender_key=priv_key3,
@@ -416,7 +416,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         sb = client.get_sponsor_balance_for_gas(contract_addr)
         self.call_contract_function(
             contract=control_contract,
-            name="set_sponsor_for_gas",
+            name="setSponsorForGas",
             args=[Web3.toChecksumAddress(contract_addr), upper_bound + 1],
             value=10 ** 18,
             sender_key=priv_key3,
@@ -432,7 +432,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         b3 = client.get_balance(addr3)
         self.call_contract_function(
             contract=control_contract,
-            name="set_sponsor_for_collateral",
+            name="setSponsorForCollateral",
             args=[Web3.toChecksumAddress(contract_addr)],
             value=0,
             sender_key=priv_key3,
@@ -446,7 +446,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         b3 = client.get_balance(addr3)
         self.call_contract_function(
             contract=control_contract,
-            name="set_sponsor_for_collateral",
+            name="setSponsorForCollateral",
             args=[Web3.toChecksumAddress(contract_addr)],
             value=10 ** 18 - 1,
             sender_key=priv_key3,
@@ -616,7 +616,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         sb = client.get_sponsor_balance_for_collateral(contract_addr)
         self.call_contract_function(
             contract=control_contract,
-            name="set_sponsor_for_collateral",
+            name="setSponsorForCollateral",
             args=[Web3.toChecksumAddress(contract_addr)],
             value=sb,
             sender_key=priv_key3,
@@ -631,7 +631,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         sb = client.get_sponsor_balance_for_collateral(contract_addr)
         self.call_contract_function(
             contract=control_contract,
-            name="set_sponsor_for_collateral",
+            name="setSponsorForCollateral",
             args=[Web3.toChecksumAddress(contract_addr)],
             value=sb + 1,
             sender_key=self.genesis_priv_key,
@@ -648,7 +648,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         sb = client.get_sponsor_balance_for_collateral(contract_addr)
         self.call_contract_function(
             contract=control_contract,
-            name="set_sponsor_for_collateral",
+            name="setSponsorForCollateral",
             args=[Web3.toChecksumAddress(contract_addr)],
             value=sb + cfs + 1,
             sender_key=self.genesis_priv_key,

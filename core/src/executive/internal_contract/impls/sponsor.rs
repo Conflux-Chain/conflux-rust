@@ -187,7 +187,7 @@ pub fn set_sponsor_for_collateral(
 }
 
 /// Implementation of `addPrivilege(address[])` and
-/// `addPrivilegebyAdmin(address,address[])`.
+/// `addPrivilegeByAdmin(address,address[])`.
 pub fn add_privilege(
     contract: Address, addresses: Vec<Address>, params: &ActionParams,
     state: &mut State,
@@ -205,7 +205,7 @@ pub fn add_privilege(
 }
 
 /// Implementation of `removePrivilege(address[])` and
-/// `removePrivilegebyAdmin(address,address[])`.
+/// `removePrivilegeByAdmin(address,address[])`.
 pub fn remove_privilege(
     contract: Address, addresses: Vec<Address>, params: &ActionParams,
     state: &mut State,

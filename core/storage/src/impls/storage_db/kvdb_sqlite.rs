@@ -604,45 +604,6 @@ pub fn kvdb_sqlite_iter_range_excl_impl<
 }
 
 impl<
-        'db,
-        'any: 'db,
-        Item: 'db,
-        T: DerefMutPlusImplOrBorrowMutSelf<dyn 'any + KvdbSqliteDestructureTrait>,
-        F: 'db + FnMut(&Statement<'db>) -> Result<Item>,
-    > KeyValueDbIterableTrait<'db, Item, Error, [u8]>
-    for ConnectionWithRowParser<T, F>
-{
-    type Iterator = MappedRows<'db, &'db mut F>;
-
-    fn iter_range(
-        &'db mut self, lower_bound_incl: &[u8], upper_bound_excl: Option<&[u8]>,
-    ) -> Result<Self::Iterator> {
-        let (connection, statements) = self.0.borrow_mut().destructure_mut();
-        kvdb_sqlite_iter_range_impl(
-            connection,
-            statements,
-            lower_bound_incl,
-            upper_bound_excl,
-            &mut self.1,
-        )
-    }
-
-    fn iter_range_excl(
-        &'db mut self, lower_bound_excl: &[u8], upper_bound_excl: &[u8],
-    ) -> Result<Self::Iterator> {
-        let (connection, statements) = self.0.borrow_mut().destructure_mut();
-        kvdb_sqlite_iter_range_excl_impl(
-            connection,
-            statements,
-            lower_bound_excl,
-            upper_bound_excl,
-            &mut self.1,
-        )
-    }
-}
-
-/// TODO: Check if these are correct
-impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KeyValueDbTraitMultiReader for KvdbSqlite<ValueType>
 {

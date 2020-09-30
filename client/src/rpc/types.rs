@@ -16,7 +16,6 @@ mod provenance;
 mod receipt;
 mod reward_info;
 mod status;
-mod storage_root;
 mod sync_graph_states;
 mod transaction;
 
@@ -29,7 +28,7 @@ pub use self::{
     bytes::Bytes,
     call_request::{
         sign_call, CallRequest, CheckBalanceAgainstTransactionResponse,
-        EstimateGasAndCollateralResponse,
+        EstimateGasAndCollateralResponse, MAX_GAS_CALL_REQUEST,
     },
     consensus_graph_states::ConsensusGraphStates,
     epoch_number::{BlockHashOrEpochNumber, EpochNumber},
@@ -40,7 +39,6 @@ pub use self::{
     receipt::Receipt,
     reward_info::RewardInfo,
     status::Status,
-    storage_root::StorageRoot,
     sync_graph_states::SyncGraphStates,
     transaction::{
         PackedOrExecuted, SendTxRequest, Transaction, TxPoolPendingInfo,

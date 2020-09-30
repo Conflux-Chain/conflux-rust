@@ -2,6 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfg_if::cfg_if;
+cfg_if! {
+    if #[cfg(test)] {
+        pub const CHECK_LOADED_SNAPSHOT_MPT_NODE: bool = true;
+    } else {
+        pub const CHECK_LOADED_SNAPSHOT_MPT_NODE: bool = false;
+    }
+}
+
 pub type SnapshotMptDbValue = Box<[u8]>;
 /// We use VanillaTrieNode<(MerkleHash, i64)> instead of
 /// (VanillaTrieNode<MerkleHash>, i64) to make seeking by rlp size position
@@ -75,6 +84,60 @@ impl SnapshotMptNode {
         subtree_size: 0,
         delta_subtree_size: 0,
     };
+
+    pub fn is_valid(&self, path_to_node: &dyn CompressedPathTrait) -> bool {
+        let mut valid = true;
+
+        let children_merkles = self.get_children_merkles();
+        let merkle_hash = self.compute_merkle(
+            children_merkles.as_ref(),
+            CompressedPathRaw::second_nibble(
+                self.compressed_path_ref().path_mask(),
+            ) != CompressedPathRaw::NO_MISSING_NIBBLE,
+        );
+        if self.get_merkle().ne(&merkle_hash) {
+            println!(
+                "merkle hash mismatch, expected {:?}, got {:?}, path_to_node {:?}",
+                merkle_hash, self.get_merkle(), path_to_node,
+            );
+            valid = false;
+        }
+        let actual_children_count = children_merkles.as_ref().map_or(0, |v| {
+            v.iter().filter(|&x| x.ne(&MERKLE_NULL_NODE)).count()
+        });
+        if self.get_children_count() as usize != actual_children_count {
+            println!(
+                "children count is wrong: expected {} got {}",
+                actual_children_count,
+                self.get_children_count(),
+            );
+            valid = false;
+        }
+        if path_to_node.path_size() > 0
+            && !self.has_value()
+            && self.get_children_count() <= 1
+        {
+            println!(
+                "node should not exists due to path compressing rule, path_to_node {:?}, {:?}",
+                path_to_node, self
+            );
+            valid = false
+        }
+
+        valid
+    }
+
+    pub fn load_rlp_and_check(
+        rlp_bytes: &[u8], path_to_node: &dyn CompressedPathTrait,
+    ) -> Result<Self> {
+        println!("load_rlp_and_check");
+        let node = Self(Rlp::new(rlp_bytes).as_val()?);
+
+        if CHECK_LOADED_SNAPSHOT_MPT_NODE {
+            node.is_valid(path_to_node);
+        }
+        Ok(node)
+    }
 
     pub fn subtree_size(&self, full_path: &dyn CompressedPathTrait) -> u64 {
         Self::initial_subtree_size(&self.0, full_path)

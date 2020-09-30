@@ -124,6 +124,7 @@ pub fn initialize_common_modules(
     (
         Arc<Machine>,
         Arc<SecretStore>,
+        HashMap<Address, U256>,
         Arc<BlockDataManager>,
         Arc<PowComputer>,
         Arc<TransactionPool>,
@@ -198,7 +199,7 @@ pub fn initialize_common_modules(
 
     let genesis_block = genesis_block(
         &storage_manager,
-        genesis_accounts,
+        genesis_accounts.clone(),
         Address::from_str(GENESIS_VERSION).unwrap(),
         U256::zero(),
     );
@@ -296,6 +297,7 @@ pub fn initialize_common_modules(
     Ok((
         machine,
         secret_store,
+        genesis_accounts,
         data_man,
         pow,
         txpool,
@@ -333,6 +335,7 @@ pub fn initialize_not_light_node_modules(
     let (
         _machine,
         secret_store,
+        genesis_accounts,
         data_man,
         pow,
         txpool,
@@ -417,6 +420,7 @@ pub fn initialize_not_light_node_modules(
         txpool.clone(),
         sync.clone(),
         secret_store.clone(),
+        genesis_accounts,
         &conf,
         network.net_key_pair().unwrap(),
     );
@@ -547,7 +551,8 @@ pub fn initialize_not_light_node_modules(
 pub fn initialize_txgens(
     consensus: Arc<ConsensusGraph>, txpool: Arc<TransactionPool>,
     sync: Arc<SynchronizationService>, secret_store: SharedSecretStore,
-    conf: &Configuration, network_key_pair: KeyPair,
+    genesis_accounts: HashMap<Address, U256>, conf: &Configuration,
+    network_key_pair: KeyPair,
 ) -> (
     Option<Arc<TransactionGenerator>>,
     Option<Arc<Mutex<DirectTransactionGenerator>>>,
@@ -586,6 +591,7 @@ pub fn initialize_txgens(
                         TransactionGenerator::generate_transactions_with_multiple_genesis_accounts(
                             txgen_clone,
                             txgen_conf,
+                            genesis_accounts,
                         );
                     })
                     .expect("should succeed");
@@ -749,6 +755,7 @@ use parking_lot::{Condvar, Mutex};
 use runtime::Runtime;
 use secret_store::{SecretStore, SharedSecretStore};
 use std::{
+    collections::HashMap,
     str::FromStr,
     sync::{Arc, Weak},
     thread,

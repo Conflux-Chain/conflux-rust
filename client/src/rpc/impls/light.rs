@@ -4,6 +4,7 @@
 
 use cfx_types::{H160, H256, H520, U128, U256, U64};
 use cfxcore::{
+    light_protocol::query_service::TxInfo,
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     LightQueryService, PeerInfo,
 };
@@ -16,7 +17,7 @@ use network::{
     node_table::{Node, NodeId},
     throttling, SessionDetails, UpdateNodeOperation,
 };
-use primitives::{Account, TransactionWithSignature};
+use primitives::{Account, StorageRoot, TransactionWithSignature};
 use rlp::Encodable;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
@@ -33,8 +34,8 @@ use crate::{
             EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
             Log as RpcLog, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
             SendTxRequest, SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
-            StorageRoot as RpcStorageRoot, SyncGraphStates,
-            Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
+            SyncGraphStates, Transaction as RpcTransaction, TxPoolPendingInfo,
+            TxWithPoolInfo,
         },
         RpcBoxFuture,
     },
@@ -403,7 +404,7 @@ impl RpcImpl {
 
     fn storage_root(
         &self, address: H160, epoch_num: Option<EpochNumber>,
-    ) -> RpcBoxFuture<Option<RpcStorageRoot>> {
+    ) -> RpcBoxFuture<Option<StorageRoot>> {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
 
         info!(
@@ -420,7 +421,7 @@ impl RpcImpl {
                 light.get_storage_root(epoch_num.into(), address).await,
             )?;
 
-            Ok(root.map(RpcStorageRoot::from_primitive))
+            Ok(Some(root))
         };
 
         Box::new(fut.boxed().compat())
@@ -488,14 +489,14 @@ impl RpcImpl {
 
         let fut = async move {
             // FIXME: why not return an RpcReceipt directly?
-            let (
+            let TxInfo {
                 tx,
                 receipt,
-                address,
+                tx_index,
                 maybe_epoch,
                 maybe_state_root,
                 prior_gas_used,
-            ) = light
+            } = light
                 .get_tx_info(hash)
                 .await
                 .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
@@ -504,10 +505,12 @@ impl RpcImpl {
             let receipt = RpcReceipt::new(
                 tx,
                 receipt,
-                address,
+                tx_index,
                 prior_gas_used,
                 maybe_epoch,
                 maybe_state_root,
+                // Can not offer error_message from light node.
+                None,
             );
 
             Ok(Some(receipt))
@@ -558,7 +561,7 @@ impl Cfx for CfxHandler {
             fn sponsor_info(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<RpcSponsorInfo>;
             fn staking_balance(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn storage_at(&self, addr: H160, pos: H256, epoch_number: Option<EpochNumber>) -> BoxFuture<Option<H256>>;
-            fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<RpcStorageRoot>>;
+            fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
         }

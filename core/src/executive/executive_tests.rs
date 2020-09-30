@@ -15,7 +15,13 @@ use crate::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
     },
 };
-use cfx_parameters::staking::*;
+use cfx_parameters::{
+    internal_contract_addresses::{
+        SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+        STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+    },
+    staking::*,
+};
 use cfx_storage::tests::new_state_manager_for_unit_test;
 use cfx_types::{
     address_util::AddressUtil, Address, BigEndianHash, U256, U512,
@@ -739,7 +745,7 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("Invalid call data length")
+        vm::Error::InternalContract("Incomplete static input parameter")
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -820,7 +826,7 @@ fn test_deposit_withdraw_lock() {
     );
 
     // lock until block_number = 0
-    params.data = Some("5547dedb00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap());
+    params.data = Some("44a51d6d00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap());
     let result = Executive::new(
         &mut state,
         &env,
@@ -855,7 +861,7 @@ fn test_deposit_withdraw_lock() {
         U256::from(999_999_950_000_000_000u64)
     );
     // lock 1 until 106751991167301 blocks, should succeed
-    params.data = Some("5547dedb00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000611722833944".from_hex().unwrap());
+    params.data = Some("44a51d6d00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000611722833944".from_hex().unwrap());
     let result = Executive::new(
         &mut state,
         &env,
@@ -886,7 +892,7 @@ fn test_deposit_withdraw_lock() {
         U256::from(999_999_949_999_999_999u64)
     );
     // lock 2 until block_number=2
-    params.data = Some("5547dedb00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002".from_hex().unwrap());
+    params.data = Some("44a51d6d00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002".from_hex().unwrap());
     let result = Executive::new(
         &mut state,
         &env,

@@ -16,11 +16,7 @@ use super::{
 use std::collections::{BTreeMap, HashMap};
 
 pub use self::{
-    admin::{AdminControl, ADMIN_CONTROL_CONTRACT_ADDRESS},
-    sponsor::{
-        SponsorWhitelistControl, SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-    },
-    staking::{Staking, STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS},
+    admin::AdminControl, sponsor::SponsorWhitelistControl, staking::Staking,
 };
 
 use crate::evm::Spec;
@@ -74,6 +70,18 @@ macro_rules! rename_interface {
             }
         }
      };
+}
+
+#[macro_export]
+macro_rules! check_signature {
+    ($interface:ident, $signature:expr) => {
+        assert_eq!(
+            $interface {}.function_sig().to_vec(),
+            $signature.from_hex().unwrap(),
+            "Test solidity signature for {}",
+            $interface {}.name()
+        );
+    };
 }
 
 pub struct InternalContractMap {

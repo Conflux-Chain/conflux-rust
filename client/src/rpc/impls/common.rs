@@ -2,10 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{
-    Block as RpcBlock, BlockHashOrEpochNumber, Bytes, EpochNumber,
-    Status as RpcStatus, Transaction as RpcTransaction, TxPoolPendingInfo,
-    TxWithPoolInfo,
+use crate::rpc::{
+    types::{
+        Block as RpcBlock, BlockHashOrEpochNumber, Bytes, EpochNumber,
+        Status as RpcStatus, Transaction as RpcTransaction, TxPoolPendingInfo,
+        TxWithPoolInfo,
+    },
+    RpcResult,
 };
 use bigdecimal::BigDecimal;
 use cfx_parameters::consensus::ONE_CFX_IN_DRIP;
@@ -17,7 +20,9 @@ use cfxcore::{
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
 use clap::crate_version;
-use jsonrpc_core::{Error as RpcError, Result as RpcResult, Value as RpcValue};
+use jsonrpc_core::{
+    Error as RpcError, Result as JsonRpcResult, Value as RpcValue,
+};
 use keccak_hash::keccak;
 use network::{
     node_table::{Node, NodeEndpoint, NodeEntry, NodeId},
@@ -94,12 +99,12 @@ impl RpcImpl {
 
 // Cfx RPC implementation
 impl RpcImpl {
-    pub fn best_block_hash(&self) -> RpcResult<H256> {
+    pub fn best_block_hash(&self) -> JsonRpcResult<H256> {
         info!("RPC Request: cfx_getBestBlockHash()");
         Ok(self.consensus.best_block_hash().into())
     }
 
-    pub fn gas_price(&self) -> RpcResult<U256> {
+    pub fn gas_price(&self) -> JsonRpcResult<U256> {
         let consensus_graph = self.consensus_graph();
         info!("RPC Request: cfx_gasPrice()");
         Ok(consensus_graph
@@ -110,7 +115,7 @@ impl RpcImpl {
 
     pub fn epoch_number(
         &self, epoch_num: Option<EpochNumber>,
-    ) -> RpcResult<U256> {
+    ) -> JsonRpcResult<U256> {
         let consensus_graph = self.consensus_graph();
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestMined);
         info!("RPC Request: cfx_epochNumber({:?})", epoch_num);
@@ -122,7 +127,7 @@ impl RpcImpl {
 
     pub fn block_by_epoch_number(
         &self, epoch_num: EpochNumber, include_txs: bool,
-    ) -> RpcResult<Option<RpcBlock>> {
+    ) -> JsonRpcResult<Option<RpcBlock>> {
         let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
         info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
@@ -145,7 +150,7 @@ impl RpcImpl {
 
     pub fn confirmation_risk_by_hash(
         &self, block_hash: H256,
-    ) -> RpcResult<Option<U256>> {
+    ) -> JsonRpcResult<Option<U256>> {
         let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
         let result = consensus_graph
@@ -171,7 +176,7 @@ impl RpcImpl {
 
     pub fn block_by_hash(
         &self, hash: H256, include_txs: bool,
-    ) -> RpcResult<Option<RpcBlock>> {
+    ) -> JsonRpcResult<Option<RpcBlock>> {
         let consensus_graph = self.consensus_graph();
         let hash: H256 = hash.into();
         info!(
@@ -191,7 +196,7 @@ impl RpcImpl {
 
     pub fn block_by_hash_with_pivot_assumption(
         &self, block_hash: H256, pivot_hash: H256, epoch_number: U64,
-    ) -> RpcResult<RpcBlock> {
+    ) -> JsonRpcResult<RpcBlock> {
         let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
         let block_hash: H256 = block_hash.into();
@@ -216,7 +221,9 @@ impl RpcImpl {
             })
     }
 
-    pub fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<H256>> {
+    pub fn blocks_by_epoch(
+        &self, num: EpochNumber,
+    ) -> JsonRpcResult<Vec<H256>> {
         info!("RPC Request: cfx_getBlocksByEpoch epoch_number={:?}", num);
 
         self.consensus
@@ -227,7 +234,7 @@ impl RpcImpl {
 
     pub fn skipped_blocks_by_epoch(
         &self, num: EpochNumber,
-    ) -> RpcResult<Vec<H256>> {
+    ) -> JsonRpcResult<Vec<H256>> {
         info!(
             "RPC Request: cfx_getSkippedBlocksByEpoch epoch_number={:?}",
             num
@@ -251,16 +258,15 @@ impl RpcImpl {
             address, num
         );
 
-        consensus_graph
-            .next_nonce(address.into(), num.into())
-            .map_err(RpcError::invalid_params)
-            .map(|x| x.into())
+        consensus_graph.next_nonce(address.into(), num.into())
     }
 }
 
 // Test RPC implementation
 impl RpcImpl {
-    pub fn add_latency(&self, id: NodeId, latency_ms: f64) -> RpcResult<()> {
+    pub fn add_latency(
+        &self, id: NodeId, latency_ms: f64,
+    ) -> JsonRpcResult<()> {
         match self.network.add_latency(id, latency_ms) {
             Ok(_) => Ok(()),
             Err(_) => Err(RpcError::internal_error()),
@@ -269,7 +275,7 @@ impl RpcImpl {
 
     pub fn add_peer(
         &self, node_id: NodeId, address: SocketAddr,
-    ) -> RpcResult<()> {
+    ) -> JsonRpcResult<()> {
         let node = NodeEntry {
             id: node_id,
             endpoint: NodeEndpoint {
@@ -284,7 +290,7 @@ impl RpcImpl {
         }
     }
 
-    pub fn chain(&self) -> RpcResult<Vec<RpcBlock>> {
+    pub fn chain(&self) -> JsonRpcResult<Vec<RpcBlock>> {
         info!("RPC Request: cfx_getChain");
         let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
@@ -307,7 +313,7 @@ impl RpcImpl {
 
     pub fn drop_peer(
         &self, node_id: NodeId, address: SocketAddr,
-    ) -> RpcResult<()> {
+    ) -> JsonRpcResult<()> {
         let node = NodeEntry {
             id: node_id,
             endpoint: NodeEndpoint {
@@ -322,14 +328,14 @@ impl RpcImpl {
         }
     }
 
-    pub fn get_block_count(&self) -> RpcResult<u64> {
+    pub fn get_block_count(&self) -> JsonRpcResult<u64> {
         info!("RPC Request: get_block_count()");
         let count = self.consensus.block_count();
         info!("RPC Response: get_block_count={}", count);
         Ok(count)
     }
 
-    pub fn get_goodput(&self) -> RpcResult<String> {
+    pub fn get_goodput(&self) -> JsonRpcResult<String> {
         let consensus_graph = self.consensus_graph();
         info!("RPC Request: get_goodput");
         let mut all_block_set = HashSet::new();
@@ -396,14 +402,14 @@ impl RpcImpl {
         }
     }
 
-    pub fn get_nodeid(&self, challenge: Vec<u8>) -> RpcResult<Vec<u8>> {
+    pub fn get_nodeid(&self, challenge: Vec<u8>) -> JsonRpcResult<Vec<u8>> {
         match self.network.sign_challenge(challenge) {
             Ok(r) => Ok(r),
             Err(_) => Err(RpcError::internal_error()),
         }
     }
 
-    pub fn get_peer_info(&self) -> RpcResult<Vec<PeerInfo>> {
+    pub fn get_peer_info(&self) -> JsonRpcResult<Vec<PeerInfo>> {
         info!("RPC Request: get_peer_info");
         match self.network.get_peer_info() {
             None => Ok(Vec::new()),
@@ -411,7 +417,7 @@ impl RpcImpl {
         }
     }
 
-    pub fn get_status(&self) -> RpcResult<RpcStatus> {
+    pub fn get_status(&self) -> JsonRpcResult<RpcStatus> {
         let best_info = self.consensus.best_info();
         let best_hash = best_info.best_block_hash;
         let epoch_number = best_info.best_epoch_number;
@@ -427,9 +433,11 @@ impl RpcImpl {
         })
     }
 
-    pub fn say_hello(&self) -> RpcResult<String> { Ok("Hello, world".into()) }
+    pub fn say_hello(&self) -> JsonRpcResult<String> {
+        Ok("Hello, world".into())
+    }
 
-    pub fn stop(&self) -> RpcResult<()> {
+    pub fn stop(&self) -> JsonRpcResult<()> {
         *self.exit.0.lock() = true;
         self.exit.1.notify_all();
 
@@ -439,12 +447,14 @@ impl RpcImpl {
 
 // Debug RPC implementation
 impl RpcImpl {
-    pub fn clear_tx_pool(&self) -> RpcResult<()> {
+    pub fn clear_tx_pool(&self) -> JsonRpcResult<()> {
         self.tx_pool.clear_tx_pool();
         Ok(())
     }
 
-    pub fn net_node(&self, id: NodeId) -> RpcResult<Option<(String, Node)>> {
+    pub fn net_node(
+        &self, id: NodeId,
+    ) -> JsonRpcResult<Option<(String, Node)>> {
         match self.network.get_node(&id) {
             None => Ok(None),
             Some((trusted, node)) => {
@@ -459,24 +469,24 @@ impl RpcImpl {
 
     pub fn net_disconnect_node(
         &self, id: NodeId, op: Option<UpdateNodeOperation>,
-    ) -> RpcResult<bool> {
+    ) -> JsonRpcResult<bool> {
         Ok(self.network.disconnect_node(&id, op))
     }
 
     pub fn net_sessions(
         &self, node_id: Option<NodeId>,
-    ) -> RpcResult<Vec<SessionDetails>> {
+    ) -> JsonRpcResult<Vec<SessionDetails>> {
         match self.network.get_detailed_sessions(node_id) {
             None => Ok(Vec::new()),
             Some(sessions) => Ok(sessions),
         }
     }
 
-    pub fn net_throttling(&self) -> RpcResult<throttling::Service> {
+    pub fn net_throttling(&self) -> JsonRpcResult<throttling::Service> {
         Ok(THROTTLING_SERVICE.read().clone())
     }
 
-    pub fn tx_inspect(&self, hash: H256) -> RpcResult<TxWithPoolInfo> {
+    pub fn tx_inspect(&self, hash: H256) -> JsonRpcResult<TxWithPoolInfo> {
         let mut ret = TxWithPoolInfo::default();
         let hash: H256 = hash.into();
         if let Some(tx) = self.tx_pool.get_transaction(&hash) {
@@ -509,7 +519,7 @@ impl RpcImpl {
 
     pub fn txs_from_pool(
         &self, address: Option<H160>,
-    ) -> RpcResult<Vec<RpcTransaction>> {
+    ) -> JsonRpcResult<Vec<RpcTransaction>> {
         let (ready_txs, deferred_txs) = self.tx_pool.content(address);
         let converter = |tx: &Arc<SignedTransaction>| -> RpcTransaction {
             RpcTransaction::from_signed(&tx, None)
@@ -524,7 +534,7 @@ impl RpcImpl {
 
     pub fn txpool_content(
         &self, address: Option<H160>,
-    ) -> RpcResult<
+    ) -> JsonRpcResult<
         BTreeMap<
             String,
             BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
@@ -547,7 +557,7 @@ impl RpcImpl {
 
     pub fn txpool_inspect(
         &self, address: Option<H160>,
-    ) -> RpcResult<
+    ) -> JsonRpcResult<
         BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
     > {
         let (ready_txs, deferred_txs) = self.tx_pool.content(address);
@@ -573,7 +583,7 @@ impl RpcImpl {
         Ok(ret)
     }
 
-    pub fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>> {
+    pub fn txpool_status(&self) -> JsonRpcResult<BTreeMap<String, usize>> {
         let (ready_len, deferred_len, received_len, unexecuted_len) =
             self.tx_pool.stats();
 
@@ -586,7 +596,7 @@ impl RpcImpl {
         Ok(ret)
     }
 
-    pub fn accounts(&self) -> RpcResult<Vec<H160>> {
+    pub fn accounts(&self) -> JsonRpcResult<Vec<H160>> {
         let accounts: Vec<Address> = self.accounts.accounts().map_err(|e| {
             warn!("Could not fetch accounts. With error {:?}", e);
             RpcError::internal_error()
@@ -594,7 +604,7 @@ impl RpcImpl {
         Ok(accounts.into_iter().map(Into::into).collect::<Vec<H160>>())
     }
 
-    pub fn new_account(&self, password: String) -> RpcResult<H160> {
+    pub fn new_account(&self, password: String) -> JsonRpcResult<H160> {
         let address: Address = self
             .accounts
             .new_account(&password.into())
@@ -608,7 +618,7 @@ impl RpcImpl {
 
     pub fn unlock_account(
         &self, address: H160, password: String, duration: Option<U128>,
-    ) -> RpcResult<bool> {
+    ) -> JsonRpcResult<bool> {
         let account: Address = address.into();
         let store = self.accounts.clone();
         let duration = match duration {
@@ -650,7 +660,7 @@ impl RpcImpl {
         }
     }
 
-    pub fn lock_account(&self, address: H160) -> RpcResult<bool> {
+    pub fn lock_account(&self, address: H160) -> JsonRpcResult<bool> {
         match self.accounts.lock_account(address.into()) {
             Ok(_) => Ok(true),
             Err(err) => {
@@ -662,7 +672,7 @@ impl RpcImpl {
 
     pub fn sign(
         &self, data: Bytes, address: H160, password: Option<String>,
-    ) -> RpcResult<H520> {
+    ) -> JsonRpcResult<H520> {
         let message = eth_data_hash(data.0);
         let password = password.map(Password::from);
         let signature =
@@ -676,18 +686,18 @@ impl RpcImpl {
         Ok(H520(signature.into()))
     }
 
-    pub fn save_node_db(&self) -> RpcResult<()> {
+    pub fn save_node_db(&self) -> JsonRpcResult<()> {
         self.network.save_node_db();
         Ok(())
     }
 
-    pub fn get_client_version(&self) -> RpcResult<String> {
+    pub fn get_client_version(&self) -> JsonRpcResult<String> {
         Ok(format!("conflux-rust-{}", crate_version!()).into())
     }
 
     pub fn tx_inspect_pending(
         &self, address: H160,
-    ) -> RpcResult<TxPoolPendingInfo> {
+    ) -> JsonRpcResult<TxPoolPendingInfo> {
         let mut ret = TxPoolPendingInfo::default();
         let (deferred_txs, _) = self.tx_pool.content(Some(address));
         let mut max_nonce: U256 = U256::from(0);

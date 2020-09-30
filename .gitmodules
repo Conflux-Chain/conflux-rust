@@ -1,3 +1,3 @@
 [submodule "tests/extra-test-toolkits"]
 	path = tests/extra-test-toolkits
-	url = git@github.com:Conflux-Chain/conflux-rust-test-toolkits.git
+	url = https://github.com/Conflux-Chain/conflux-rust-test-toolkits.git

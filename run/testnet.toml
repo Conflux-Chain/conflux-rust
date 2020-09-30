@@ -64,6 +64,10 @@ bootnodes="cfxnode://604deed272ec2a6f75538f0852e9cd71c616b35655ea8331b5987b3cc68
 #
 # stratum_port = 32525
 
+# Window size for PoW manager
+#
+# pow_problem_window_size = 1
+
 # Secret key for stratum.
 # The value is 64-digit hex string.
 # If not set, the RPC subscription will not check the authorization.
@@ -370,7 +374,7 @@ jsonrpc_local_http_port=12539
 
 # The directory to store block-related data.
 #
-# db_dir = "./blockchain_db"
+# block_db_dir = "./blockchain_db"
 
 # Maximum size of cached ledger data (block, receipts, e.t.c.)
 # The unit is MB.

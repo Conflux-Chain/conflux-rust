@@ -4,10 +4,16 @@
 
 mod array;
 mod basic;
-pub mod utils;
+mod bytes;
+mod string;
 
 #[cfg(test)]
 mod tests;
+mod utils;
+
+#[cfg(test)]
+#[macro_use]
+extern crate lazy_static;
 
 use self::utils::{read_abi_list, ABIListWriter, LinkedBytes};
 

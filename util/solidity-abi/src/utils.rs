@@ -49,13 +49,17 @@ impl LinkedBytes {
     pub fn len(&self) -> usize { self.length }
 }
 
-pub(crate) fn read_abi_list<T: ABIVariable>(
+pub fn read_abi_list<T: ABIVariable>(
     data: &[u8], pointer: &mut Iter<u8>,
 ) -> Result<T, ABIDecodeError> {
     let res = if let Some(len) = T::STATIC_LENGTH {
-        pull_slice(pointer, len)?
+        pull_slice(pointer, len, "Incomplete static input parameter")?
     } else {
-        let location = U256::from_big_endian(pull_slice(pointer, 32)?);
+        let location = U256::from_big_endian(pull_slice(
+            pointer,
+            32,
+            "Incomplete location for dynamic input parameter",
+        )?);
         abi_require(
             location < U256::from(data.len()),
             "Location out of bounds",
@@ -66,14 +70,14 @@ pub(crate) fn read_abi_list<T: ABIVariable>(
     T::from_abi(res)
 }
 
-pub(super) struct ABIListWriter {
+pub struct ABIListWriter {
     heads_length: usize,
     heads: LinkedBytes,
     tails: LinkedBytes,
 }
 
 impl ABIListWriter {
-    pub(super) fn with_heads_length(heads_length: usize) -> Self {
+    pub fn with_heads_length(heads_length: usize) -> Self {
         Self {
             heads_length,
             heads: LinkedBytes::new(),
@@ -81,7 +85,7 @@ impl ABIListWriter {
         }
     }
 
-    pub(super) fn write_down<T: ABIVariable>(&mut self, input: &T) {
+    pub fn write_down<T: ABIVariable>(&mut self, input: &T) {
         let mut encoded = input.to_abi();
         if let Some(len) = T::STATIC_LENGTH {
             assert_eq!(encoded.len(), len);
@@ -95,7 +99,7 @@ impl ABIListWriter {
         }
     }
 
-    pub(super) fn into_linked_bytes(mut self) -> LinkedBytes {
+    pub fn into_linked_bytes(mut self) -> LinkedBytes {
         assert_eq!(self.heads.len(), self.heads_length);
         self.heads.append(&mut self.tails);
         self.heads
@@ -115,9 +119,9 @@ pub fn abi_require(
 
 #[inline]
 pub fn pull_slice<'a>(
-    iter: &mut Iter<'a, u8>, n: usize,
+    iter: &mut Iter<'a, u8>, n: usize, err_desc: &'static str,
 ) -> Result<&'a [u8], ABIDecodeError> {
-    abi_require(iter.len() >= n, "Invalid call data length")?;
+    abi_require(iter.len() >= n, err_desc)?;
 
     let slice = iter.as_slice();
     let result = &slice[0..n];
