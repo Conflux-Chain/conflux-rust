@@ -388,6 +388,15 @@ impl StorageManager {
         self.storage_conf.consensus_param.snapshot_epoch_count
     }
 
+    pub fn get_snapshot_info_at_epoch(
+        &self, snapshot_epoch_id: &EpochId,
+    ) -> Option<SnapshotInfo> {
+        self.snapshot_info_map_by_epoch
+            .read()
+            .get(snapshot_epoch_id)
+            .map(Clone::clone)
+    }
+
     pub fn get_delta_mpt(
         &self, snapshot_epoch_id: &EpochId,
     ) -> Result<Arc<DeltaMpt>> {
@@ -791,7 +800,8 @@ impl StorageManager {
     }
 
     pub fn maintain_state_confirmed<ConsensusInner: StateMaintenanceTrait>(
-        &self, consensus_inner: &ConsensusInner, confirmed_height: u64,
+        &self, consensus_inner: &ConsensusInner, stable_checkpoint_height: u64,
+        confirmed_height: u64,
         state_availability_boundary: &RwLock<StateAvailabilityBoundary>,
     ) -> Result<()>
     {
@@ -822,15 +832,20 @@ impl StorageManager {
             None => return Ok(()),
         };
 
-        let _snapshot_info_removed = self
-            .maintain_snapshots_pivot_chain_confirmed(
-                maintained_state_height_lower_bound,
-                &maintained_epoch_id,
-                maintained_state_root,
-                state_availability_boundary,
-            )?;
-
-        Ok(())
+        self.maintain_snapshots_pivot_chain_confirmed(
+            maintained_state_height_lower_bound,
+            &maintained_epoch_id,
+            maintained_state_root,
+            state_availability_boundary,
+            &|height, find_nearest_snapshot_multiple_of| {
+                extra_snapshots_to_keep_predicate(
+                    &self.storage_conf,
+                    stable_checkpoint_height,
+                    height,
+                    find_nearest_snapshot_multiple_of,
+                )
+            },
+        )
     }
 
     /// The algorithm figure out which snapshot to remove by simply going
@@ -846,17 +861,16 @@ impl StorageManager {
     ///
     /// The behavior of old pivot snapshot deletion can be different between
     /// Archive Node and Full Node.
-    ///
-    /// Returns the first available state height after the maintenance.
     pub fn maintain_snapshots_pivot_chain_confirmed(
         &self, maintained_state_height_lower_bound: u64,
         maintained_epoch_id: &EpochId,
         maintained_state_root: &StateRootWithAuxInfo,
         state_availability_boundary: &RwLock<StateAvailabilityBoundary>,
-    ) -> Result<Vec<SnapshotInfo>>
+        extra_snapshots_to_keep: &dyn Fn(u64, &mut bool) -> bool,
+    ) -> Result<()>
     {
         // Update the confirmed epoch id. Skip remaining actions when the
-        // confirmed snapshottable epoch id doesn't change
+        // confirmed snapshot-able epoch id doesn't change
         {
             let mut last_confirmed_snapshottable_id_locked =
                 self.last_confirmed_snapshottable_epoch_id.lock();
@@ -864,7 +878,7 @@ impl StorageManager {
                 if maintained_state_root.aux_info.intermediate_epoch_id.eq(
                     last_confirmed_snapshottable_id_locked.as_ref().unwrap(),
                 ) {
-                    return Ok(vec![]);
+                    return Ok(());
                 }
             }
             *last_confirmed_snapshottable_id_locked = Some(
@@ -905,8 +919,15 @@ impl StorageManager {
             confirmed_snapshot_height,
             first_available_state_height,
         );
-        let mut non_pivot_snapshots_to_remove = HashSet::new();
+        let mut extra_snapshot_infos_kept_for_sync = vec![];
+        let mut non_pivot_snapshots_to_remove = vec![];
         let mut old_pivot_snapshots_to_remove = vec![];
+        // We will keep some extra snapshots to provide sync. For any snapshot
+        // to keep, we must keep all snapshot_info from the pivot tip to
+        // the snapshot, so that in the next run the snapshot is still
+        // recognized as "old pivot".
+        let mut old_pivot_snapshot_infos_to_remove = vec![];
+        let mut find_nearest_multiple_of = false;
         let mut in_progress_snapshot_to_cancel = vec![];
 
         {
@@ -927,19 +948,36 @@ impl StorageManager {
                             &snapshot_info.parent_snapshot_epoch_id;
                     } else {
                         non_pivot_snapshots_to_remove
-                            .insert(snapshot_epoch_id.clone());
+                            .push(snapshot_epoch_id.clone());
                     }
                 } else if snapshot_info.height < confirmed_snapshot_height {
                     // We remove for older pivot snapshot one after another.
                     if snapshot_epoch_id.eq(prev_snapshot_epoch_id) {
-                        old_pivot_snapshots_to_remove
-                            .push(snapshot_epoch_id.clone());
+                        if extra_snapshots_to_keep(
+                            snapshot_info.height,
+                            &mut find_nearest_multiple_of,
+                        ) {
+                            // For any snapshot to keep, we keep all snapshot
+                            // infos from pivot tip to it.
+                            extra_snapshot_infos_kept_for_sync.extend(
+                                std::mem::take(
+                                    &mut old_pivot_snapshot_infos_to_remove,
+                                ),
+                            );
+                            extra_snapshot_infos_kept_for_sync
+                                .push(snapshot_epoch_id.clone());
+                        } else {
+                            old_pivot_snapshot_infos_to_remove
+                                .push(snapshot_epoch_id.clone());
+                            old_pivot_snapshots_to_remove
+                                .push(snapshot_epoch_id.clone());
+                        }
                         prev_snapshot_epoch_id =
                             &snapshot_info.parent_snapshot_epoch_id;
                     } else {
                         // Any other snapshot with higher height is non-pivot.
                         non_pivot_snapshots_to_remove
-                            .insert(snapshot_epoch_id.clone());
+                            .push(snapshot_epoch_id.clone());
                     }
                 } else if snapshot_info.height
                     < maintained_state_height_lower_bound
@@ -965,7 +1003,7 @@ impl StorageManager {
                             )
                         );
                         non_pivot_snapshots_to_remove
-                            .insert(snapshot_epoch_id.clone());
+                            .push(snapshot_epoch_id.clone());
                     }
                 }
             }
@@ -973,8 +1011,11 @@ impl StorageManager {
             debug!(
                 "finished scanning for lower snapshots: \
                  old_pivot_snapshots_to_remove {:?}, \
+                 old_pivot_snapshot_infos_to_remove {:?}, \
                  non_pivot_snapshots_to_remove {:?}",
-                old_pivot_snapshots_to_remove, non_pivot_snapshots_to_remove
+                old_pivot_snapshots_to_remove,
+                old_pivot_snapshot_infos_to_remove,
+                non_pivot_snapshots_to_remove
             );
 
             // Check snapshots which has height >= confirmed_height
@@ -993,7 +1034,7 @@ impl StorageManager {
                                 snapshot_info.get_snapshot_epoch_id(),
                                 path_epoch_id, maintained_epoch_id,
                             );
-                            non_pivot_snapshots_to_remove.insert(
+                            non_pivot_snapshots_to_remove.push(
                                 snapshot_info.get_snapshot_epoch_id().clone(),
                             );
                         }
@@ -1010,7 +1051,7 @@ impl StorageManager {
                                 snapshot_info.get_snapshot_epoch_id(),
                                 snapshot_info.parent_snapshot_epoch_id
                             );
-                            non_pivot_snapshots_to_remove.insert(
+                            non_pivot_snapshots_to_remove.push(
                                 snapshot_info.get_snapshot_epoch_id().clone(),
                             );
                         }
@@ -1066,7 +1107,44 @@ impl StorageManager {
             }
         }
 
-        let mut snapshot_info_removed = Vec::new();
+        // Update snapshot_infos and filter out already removed snapshots from
+        // the removal lists.
+        {
+            let mut info_maps = self.snapshot_info_map_by_epoch.write();
+            let mut updated_snapshot_info_epochs =
+                HashSet::<EpochId>::default();
+            for epoch in &extra_snapshot_infos_kept_for_sync {
+                if let Some(info) = info_maps.get(epoch) {
+                    if !info.snapshot_info_kept_to_provide_sync {
+                        let mut new_snapshot_info = info.clone();
+                        new_snapshot_info.snapshot_info_kept_to_provide_sync =
+                            true;
+                        info_maps.insert(epoch, new_snapshot_info)?;
+                        updated_snapshot_info_epochs.insert(*epoch);
+                    }
+                }
+            }
+            if updated_snapshot_info_epochs.len() > 0 {
+                let mut current_snapshots = self.current_snapshots.write();
+                for snapshot_info in current_snapshots.iter_mut() {
+                    if updated_snapshot_info_epochs
+                        .contains(&snapshot_info.get_snapshot_epoch_id())
+                    {
+                        snapshot_info.snapshot_info_kept_to_provide_sync = true;
+                    }
+                }
+            }
+
+            let removal_filter = |vec: &mut Vec<EpochId>| {
+                vec.retain(|epoch| {
+                    info_maps.get(epoch).map_or(true, |info| {
+                        !info.snapshot_info_kept_to_provide_sync
+                    })
+                })
+            };
+            removal_filter(&mut non_pivot_snapshots_to_remove);
+            removal_filter(&mut old_pivot_snapshots_to_remove);
+        }
         if !non_pivot_snapshots_to_remove.is_empty()
             || !old_pivot_snapshots_to_remove.is_empty()
         {
@@ -1079,59 +1157,15 @@ impl StorageManager {
                 }
             }
 
-            let mut snapshots_to_remove = non_pivot_snapshots_to_remove.clone();
-
-            let mut current_snapshots_locked = self.current_snapshots.write();
-            for snapshot_epoch_id in old_pivot_snapshots_to_remove {
-                self.snapshot_manager
-                    .remove_old_pivot_snapshot(&snapshot_epoch_id)?;
-                snapshots_to_remove.insert(snapshot_epoch_id);
-            }
-            for snapshot_epoch_id in non_pivot_snapshots_to_remove {
-                self.snapshot_manager
-                    .remove_non_pivot_snapshot(&snapshot_epoch_id)?;
-            }
-
-            debug!(
-                "maintain_snapshots_pivot_chain_confirmed: remove the following snapshots {:?}",
-                snapshots_to_remove,
-            );
-            current_snapshots_locked.retain(|x| {
-                !snapshots_to_remove.contains(x.get_snapshot_epoch_id())
-            });
-            drop(current_snapshots_locked);
-            unsafe {
-                let mut snapshot_info_map =
-                    self.snapshot_info_map_by_epoch.write();
-                for snapshot_epoch_id in &snapshots_to_remove {
-                    if let Some(snapshot_info) =
-                        snapshot_info_map.remove_in_mem_only(snapshot_epoch_id)
-                    {
-                        snapshot_info_removed.push(snapshot_info);
-                    }
-                }
-            }
-            {
-                let snapshot_associated_mpts_by_epoch_locked =
-                    &mut *self.snapshot_associated_mpts_by_epoch.write();
-
-                for snapshot_epoch_id in &snapshots_to_remove {
-                    self.release_delta_mpts_from_snapshot(
-                        snapshot_associated_mpts_by_epoch_locked,
-                        snapshot_epoch_id,
-                    )?
-                }
-            }
-            {
-                // Only remove snapshot_info from db when no exception have
-                // happened.
-                let mut snapshot_info_map_by_epoch =
-                    self.snapshot_info_map_by_epoch.write();
-                for snapshot_epoch_id in snapshots_to_remove {
-                    snapshot_info_map_by_epoch.remove(&snapshot_epoch_id)?;
-                }
-            }
-            debug!("maintain_snapshots_pivot_chain_confirmed: finished");
+            self.remove_snapshots(
+                &old_pivot_snapshots_to_remove,
+                &non_pivot_snapshots_to_remove,
+                &old_pivot_snapshot_infos_to_remove
+                    .iter()
+                    .chain(non_pivot_snapshots_to_remove.iter())
+                    .cloned()
+                    .collect(),
+            )?;
         }
 
         // TODO: implement in_progress_snapshot cancellation.
@@ -1145,16 +1179,65 @@ impl StorageManager {
         }
         */
 
-        Ok(snapshot_info_removed)
+        info!("maintain_snapshots_pivot_chain_confirmed: finished");
+        Ok(())
     }
 
-    pub fn get_snapshot_info_at_epoch(
-        &self, snapshot_epoch_id: &EpochId,
-    ) -> Option<SnapshotInfo> {
-        self.snapshot_info_map_by_epoch
-            .read()
-            .get(snapshot_epoch_id)
-            .map(Clone::clone)
+    fn remove_snapshots(
+        &self, old_pivot_snapshots_to_remove: &[EpochId],
+        non_pivot_snapshots_to_remove: &[EpochId],
+        snapshot_infos_to_remove: &HashSet<EpochId>,
+    ) -> Result<()>
+    {
+        let mut current_snapshots_locked = self.current_snapshots.write();
+        current_snapshots_locked.retain(|x| {
+            !snapshot_infos_to_remove.contains(x.get_snapshot_epoch_id())
+        });
+        info!(
+            "maintain_snapshots_pivot_chain_confirmed: remove the following snapshot infos {:?}",
+            snapshot_infos_to_remove,
+        );
+        for snapshot_epoch_id in old_pivot_snapshots_to_remove {
+            self.snapshot_manager
+                .remove_old_pivot_snapshot(&snapshot_epoch_id)?;
+        }
+        for snapshot_epoch_id in non_pivot_snapshots_to_remove {
+            self.snapshot_manager
+                .remove_non_pivot_snapshot(&snapshot_epoch_id)?;
+        }
+
+        drop(current_snapshots_locked);
+        unsafe {
+            let mut snapshot_info_map = self.snapshot_info_map_by_epoch.write();
+            for snapshot_epoch_id in snapshot_infos_to_remove {
+                snapshot_info_map.remove_in_mem_only(snapshot_epoch_id);
+            }
+        }
+        {
+            let snapshot_associated_mpts_by_epoch_locked =
+                &mut *self.snapshot_associated_mpts_by_epoch.write();
+
+            for snapshot_epoch_id in old_pivot_snapshots_to_remove
+                .iter()
+                .chain(non_pivot_snapshots_to_remove.iter())
+            {
+                self.release_delta_mpts_from_snapshot(
+                    snapshot_associated_mpts_by_epoch_locked,
+                    snapshot_epoch_id,
+                )?
+            }
+        }
+        {
+            // Only remove snapshot_info from db when no exception have
+            // happened.
+            let mut snapshot_info_map_by_epoch =
+                self.snapshot_info_map_by_epoch.write();
+            for snapshot_epoch_id in snapshot_infos_to_remove {
+                snapshot_info_map_by_epoch.remove(&snapshot_epoch_id)?;
+            }
+        }
+
+        Ok(())
     }
 
     pub fn log_usage(&self) {
@@ -1320,6 +1403,48 @@ impl StorageManager {
     }
 }
 
+fn extra_snapshots_to_keep_predicate(
+    storage_conf: &StorageConfiguration, stable_checkpoint_height: u64,
+    height: u64, find_epoch_nearest_multiple_of: &mut bool,
+) -> bool
+{
+    for conf in &storage_conf.provide_more_snapshot_for_sync {
+        match conf {
+            ProvideExtraSnapshotSyncConfig::StableCheckpoint => {
+                if stable_checkpoint_height == height {
+                    return true;
+                }
+                // The bound_height ensures that the snapshot before
+                // stable_genesis will not be removed, so that
+                // the execution of the epochs following
+                // stable_genesis can go through a normal path where both
+                // snapshot and intermediate delta mpt exist.
+                // TODO:
+                //  this is a corner case which should be addressed, so that we
+                //  can don't really need the snapshot prior to the checkpoint.
+                if stable_checkpoint_height
+                    == height
+                        + (storage_conf.consensus_param.snapshot_epoch_count
+                            as u64)
+                {
+                    return true;
+                }
+            }
+            ProvideExtraSnapshotSyncConfig::EpochNearestMultipleOf(
+                multiple,
+            ) => {
+                if *find_epoch_nearest_multiple_of
+                    && height % (*multiple as u64) == 0
+                {
+                    *find_epoch_nearest_multiple_of = false;
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 struct MaybeDeltaTrieDestroyErrors {
     delta_trie_destroy_error_1: Cell<Option<Error>>,
     delta_trie_destroy_error_2: Cell<Option<Error>>,
@@ -1391,7 +1516,8 @@ use crate::{
     storage_dir,
     utils::{arc_ext::*, guarded_value::GuardedValue},
     DeltaMpt, DeltaMptIdGen, DeltaMptIterator, KeyValueDbTrait, KvdbSqlite,
-    StateIndex, StateRootWithAuxInfo, StorageConfiguration,
+    ProvideExtraSnapshotSyncConfig, StateIndex, StateRootWithAuxInfo,
+    StorageConfiguration,
 };
 use cfx_internal_common::{
     consensus_api::StateMaintenanceTrait, StateAvailabilityBoundary,

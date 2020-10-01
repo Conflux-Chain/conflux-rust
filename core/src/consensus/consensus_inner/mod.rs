@@ -3536,15 +3536,17 @@ impl ConsensusGraphInner {
         let mut cur = me;
         // FIXME: Same here. Be explicit about whether a checkpoint or a synced
         // FIXME: snapshot is requested, and distinguish two cases.
-        let state_boundary_height =
-            self.data_man.state_availability_boundary.read().lower_bound;
+        //let state_boundary_height =
+        //    self.data_man.state_availability_boundary.read().lower_bound;
         loop {
             if self.arena[cur].data.state_valid.is_some() {
                 break;
             }
+            // FIXME: the assersion isn't on state boundary,
+            // FIXME: correct the assersion.
             // See comments on compute_blame_and_state_with_execution_result()
             // for explanation of this assumption.
-            assert!(self.arena[cur].height >= state_boundary_height);
+            //assert!(self.arena[cur].height >= state_boundary_height);
             blocks_to_compute.push(cur);
             cur = self.arena[cur].parent;
         }

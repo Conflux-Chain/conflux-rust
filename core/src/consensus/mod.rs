@@ -1147,8 +1147,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
     }
 
     fn latest_confirmed_epoch_number(&self) -> u64 {
-        self.confirmation_meter
-            .get_confirmed_epoch_num(std::u64::MAX)
+        self.confirmation_meter.get_confirmed_epoch_num()
     }
 
     fn best_chain_id(&self) -> u32 {
