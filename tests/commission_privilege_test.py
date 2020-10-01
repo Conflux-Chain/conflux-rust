@@ -54,7 +54,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
                     retry = True
                     while retry:
                         try:
-                            wait_until(lambda: checktx(self.nodes[0], tx.hash_hex()), timeout=20)
+                            wait_until(lambda: checktx(self.nodes[0], tx.hash_hex()), timeout=5)
                             retry = False
                         except CannotSendRequest:
                             time.sleep(0.01)
@@ -113,8 +113,8 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         bytes_per_key = 64
         collateral_per_byte = 10 ** 18 // 1024
         collateral_per_storage_key = 10 ** 18 // 16
-        # block gas limit (GENESIS_GAS_LIMIT); -1 because below gas is set to upper_bound + 1
-        upper_bound = default_config["GENESIS_GAS_LIMIT"] - 1
+        # change upper tx gas limit to (GENESIS_GAS_LIMIT/2 - 1); -1 because below gas is set to upper_bound + 1
+        tx_gas_upper_bound = int(default_config["GENESIS_GAS_LIMIT"]/2 - 1)
 
         file_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -196,8 +196,8 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         self.call_contract_function(
             contract=control_contract,
             name="setSponsorForGas",
-            args=[Web3.toChecksumAddress(contract_addr), upper_bound],
-            value=upper_bound * 1000 - 1,
+            args=[Web3.toChecksumAddress(contract_addr), tx_gas_upper_bound],
+            value=tx_gas_upper_bound * 1000 - 1,
             sender_key=self.genesis_priv_key,
             contract_addr=sponsor_whitelist_contract_addr,
             wait=True)
@@ -211,14 +211,14 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         self.call_contract_function(
             contract=control_contract,
             name="setSponsorForGas",
-            args=[Web3.toChecksumAddress(contract_addr), upper_bound],
+            args=[Web3.toChecksumAddress(contract_addr), tx_gas_upper_bound],
             value=10 ** 18,
             sender_key=self.genesis_priv_key,
             contract_addr=sponsor_whitelist_contract_addr,
             wait=True)
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), 10 ** 18)
         assert_equal(client.get_sponsor_for_gas(contract_addr), genesis_addr)
-        assert_equal(client.get_sponsor_gas_bound(contract_addr), upper_bound)
+        assert_equal(client.get_sponsor_gas_bound(contract_addr), tx_gas_upper_bound)
         assert_equal(client.get_balance(genesis_addr), b0 - 10 ** 18 - charged_of_huge_gas(gas))
 
         check_info = client.check_balance_against_transaction(addr1, contract_addr, gas, gas_price, storage_limit=0)
@@ -305,9 +305,9 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             contract_addr=contract_addr,
             wait=True,
             check_status=True,
-            gas=upper_bound + 1)
+            gas=tx_gas_upper_bound + 1)
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sb)
-        assert_equal(client.get_balance(addr1), b1 - charged_of_huge_gas(upper_bound + 1))
+        assert_equal(client.get_balance(addr1), b1 - charged_of_huge_gas(tx_gas_upper_bound + 1))
 
         # addr2 call contract without privilege
         b2 = client.get_balance(addr2)
@@ -386,7 +386,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         self.call_contract_function(
             contract=control_contract,
             name="setSponsorForGas",
-            args=[Web3.toChecksumAddress(contract_addr), upper_bound + 1],
+            args=[Web3.toChecksumAddress(contract_addr), tx_gas_upper_bound + 1],
             value=5 * 10 ** 17,
             sender_key=priv_key3,
             contract_addr=sponsor_whitelist_contract_addr,
@@ -401,7 +401,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         self.call_contract_function(
             contract=control_contract,
             name="setSponsorForGas",
-            args=[Web3.toChecksumAddress(contract_addr), upper_bound],
+            args=[Web3.toChecksumAddress(contract_addr), tx_gas_upper_bound],
             value=10 ** 18,
             sender_key=priv_key3,
             contract_addr=sponsor_whitelist_contract_addr,
@@ -417,13 +417,13 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         self.call_contract_function(
             contract=control_contract,
             name="setSponsorForGas",
-            args=[Web3.toChecksumAddress(contract_addr), upper_bound + 1],
+            args=[Web3.toChecksumAddress(contract_addr), tx_gas_upper_bound + 1],
             value=10 ** 18,
             sender_key=priv_key3,
             contract_addr=sponsor_whitelist_contract_addr,
             wait=True)
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), 10 ** 18)
-        assert_equal(client.get_sponsor_gas_bound(contract_addr), upper_bound + 1)
+        assert_equal(client.get_sponsor_gas_bound(contract_addr), tx_gas_upper_bound + 1)
         assert_equal(client.get_sponsor_for_gas(contract_addr), addr3)
         assert_equal(client.get_balance(addr3), b3 - 10 ** 18 - charged_of_huge_gas(gas))
         assert_equal(client.get_balance(genesis_addr), b0 + sb)

@@ -6,11 +6,12 @@ use crate::rpc::{
     impls::RpcImplConfiguration, HttpConfiguration, TcpConfiguration,
     WsConfiguration,
 };
+use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
 };
-use cfx_types::H256;
+use cfx_types::{H256, U256};
 use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
     block_parameters::*,
@@ -27,10 +28,11 @@ use cfxcore::{
     consensus_parameters::*,
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
-    transaction_pool::{TxPoolConfig, DEFAULT_MAX_TRANSACTION_GAS_LIMIT},
+    transaction_pool::TxPoolConfig,
 };
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
+use parking_lot::lock_api::RwLock;
 use primitives::ChainIdParams;
 use rand::Rng;
 use std::convert::TryInto;
@@ -462,7 +464,7 @@ impl Configuration {
             transaction_epoch_bound: self.raw_conf.transaction_epoch_bound,
             referee_bound: self.raw_conf.referee_bound,
             get_logs_epoch_batch_size: self.raw_conf.get_logs_epoch_batch_size,
-            get_logs_filter_max_epoch_range: self.raw_conf.get_logs_filter_max_epoch_range
+            get_logs_filter_max_epoch_range: self.raw_conf.get_logs_filter_max_epoch_range,
         }
     }
 
@@ -708,8 +710,10 @@ impl Configuration {
     pub fn txpool_config(&self) -> TxPoolConfig {
         TxPoolConfig {
             capacity: self.raw_conf.tx_pool_size,
+            max_tx_gas: RwLock::new(U256::from(
+                DEFAULT_TARGET_BLOCK_GAS_LIMIT / 2,
+            )),
             min_tx_price: self.raw_conf.tx_pool_min_tx_gas_price,
-            max_tx_gas: DEFAULT_MAX_TRANSACTION_GAS_LIMIT,
             tx_weight_scaling: self.raw_conf.tx_weight_scaling,
             tx_weight_exp: self.raw_conf.tx_weight_exp,
             target_block_gas_limit: self.raw_conf.target_block_gas_limit,
