@@ -950,8 +950,17 @@ impl RpcImpl {
         let will_pay_collateral = !storage_sponsored
             || storage_limit_in_drip > storage_sponsor_balance;
 
+        let mut minimum_balance = U512::from(0);
+
+        if will_pay_tx_fee {
+            minimum_balance += gas_cost;
+        }
+
+        if will_pay_collateral {
+            minimum_balance += storage_limit_in_drip.into();
+        }
+
         let balance = state.balance(&account_addr)?;
-        let minimum_balance = if will_pay_tx_fee { gas_cost } else { 0.into() };
         let is_balance_enough = U512::from(balance) >= minimum_balance;
 
         Ok(CheckBalanceAgainstTransactionResponse {
