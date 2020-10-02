@@ -234,7 +234,7 @@ fn hash_compute(
         full_w2pow = full_w2pow * w2 % POW_MOD64;
     }
 
-    let mut res_buf = [0 as u32;POW_DATA_PER_THREAD as usize];
+    let mut res_buf = [0 as u32; POW_DATA_PER_THREAD as usize];
     let mut result = 0;
     for i in 0..POW_DATA_PER_THREAD {
         let x = (a * w2pow + b * wpow + c) % POW_MOD64;
@@ -335,8 +335,10 @@ fn hash_compute(
             let mix_words: &mut [u32; MIX_WORDS] =
                 unsafe { make_const_array!(MIX_WORDS, &mut mix) };
 
-            fnv_hash(first_val ^ i ^ res_buf[i as usize], mix_words[i as usize % MIX_WORDS])
-                % num_full_pages
+            fnv_hash(
+                first_val ^ i ^ res_buf[i as usize],
+                mix_words[i as usize % MIX_WORDS],
+            ) % num_full_pages
         };
 
         // MIX_NODES
