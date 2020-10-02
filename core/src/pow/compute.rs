@@ -234,13 +234,15 @@ fn hash_compute(
         full_w2pow = full_w2pow * w2 % POW_MOD64;
     }
 
-    let mut result = 0u64;
+    let mut res_buf:[u64;POW_DATA_PER_THREAD as usize] = [0];
+    let mut result = 0;
     for i in 0..POW_DATA_PER_THREAD {
         let x = (a * w2pow + b * wpow + c) % POW_MOD64;
         let mut pv = 0;
         for j in 0..POW_N {
             pv = (pv * x + d[(POW_N - j - 1) as usize] as u64) % POW_MOD64;
         }
+        res_buf[i as usize] = pv;
         result = fnv_hash64(result, pv);
         if i + 1 < POW_DATA_PER_THREAD {
             wpow = wpow * full_wpow % POW_MOD64;
@@ -333,7 +335,7 @@ fn hash_compute(
             let mix_words: &mut [u32; MIX_WORDS] =
                 unsafe { make_const_array!(MIX_WORDS, &mut mix) };
 
-            fnv_hash(first_val ^ i, mix_words[i as usize % MIX_WORDS])
+            fnv_hash(first_val ^ i ^ res_buf[i], mix_words[i as usize % MIX_WORDS])
                 % num_full_pages
         };
 
