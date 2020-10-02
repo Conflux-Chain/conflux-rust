@@ -1,0 +1,9 @@
+[
+	{
+		"inputs": [],
+		"name": "foo",
+		"outputs": [],
+		"stateMutability": "pure",
+		"type": "function"
+	}
+]

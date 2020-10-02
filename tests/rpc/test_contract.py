@@ -3,11 +3,13 @@ import sys
 import os
 sys.path.append("..")
 
-from conflux.config import default_config
 from conflux.rpc import RpcClient
-from conflux.utils import priv_to_addr, int_to_hex, encode_hex, parse_as_int
-from test_framework.util import assert_equal, assert_is_hash_string
-from web3 import Web3
+from conflux.utils import sha3 as keccak, parse_as_int
+from jsonrpcclient.exceptions import ReceivedErrorResponseError
+from test_framework.blocktools import encode_hex_0x
+from test_framework.util import assert_equal
+
+REVERT_MESSAGE_CONTRACT_PATH = "../contracts/revert_message.dat"
 
 class TestContract(RpcClient):
 
@@ -34,7 +36,7 @@ class TestContract(RpcClient):
         nonce = self.get_nonce(self.GENESIS_ADDR)
         gas2 = self.estimate_gas(contract_addr, "0x6d4ce63c", nonce=nonce - 2) # get storage
         assert_equal(gas0, gas2)
-    
+
     def test_estimate_collateral(self):
         contract_addr = self.test_contract_deploy()
         (addr, priv_key) = self.rand_account()
@@ -108,7 +110,7 @@ class TestContract(RpcClient):
 
     def test_call_result(self):
         contract_addr = self.test_contract_deploy()
-        
+
         # get storage, default is 5
         result = self.call(contract_addr, "0x6d4ce63c")
         assert_equal(int(result, 0), 5)
@@ -135,3 +137,32 @@ class TestContract(RpcClient):
 
         # verify the history storage value with specified nonce and epoch
         assert_equal(int(self.call(contract_addr, "0x6d4ce63c", nonce=old_nonce, epoch=self.EPOCH_NUM(old_epoch)), 0), 6)
+
+    def test_contract_revert_with_error_string(self):
+        # deploy contract
+        bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), REVERT_MESSAGE_CONTRACT_PATH)
+        assert(os.path.isfile(bytecode_file))
+        bytecode = open(bytecode_file).read()
+
+        tx = self.new_contract_tx("", bytecode, storage_limit=200000)
+        assert_equal(self.send_tx(tx, True), tx.hash_hex())
+
+        contract_addr = self.get_tx(tx.hash_hex())["contractCreated"]
+        assert_equal(len(contract_addr), 42)
+
+        # call contract.foo()
+        try:
+            self.call(contract_addr, encode_hex_0x(keccak(b"foo()")))
+            assert(False) # should throw before this line
+        except ReceivedErrorResponseError as e:
+            assert_equal(e.response.message, "Transaction reverted")
+
+            # error string encoding details: https://ethereum.stackexchange.com/a/66404/18295
+            assert_equal(e.response.data, (
+                "0x08c379a0"                                                       # ~ function selector
+                "0000000000000000000000000000000000000000000000000000000000000020" # ~ offset of string return value
+                "0000000000000000000000000000000000000000000000000000000000000001" # ~ length of the string: 1
+                "4100000000000000000000000000000000000000000000000000000000000000" # 'A' (0x41) + padding
+            ))
+        except Exception as e:
+            assert(False) # no other exception should be thrown
