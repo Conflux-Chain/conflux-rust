@@ -513,7 +513,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         check_info = client.check_balance_against_transaction(addr2, contract_addr, gas, gas_price, storage_limit=10 ** 18)
         assert_equal(check_info['willPayTxFee'], False)
         assert_equal(check_info['willPayCollateral'], True)
-        assert_equal(check_info['isBalanceEnough'], True)
+        assert_equal(check_info['isBalanceEnough'], False)
 
         # addr2 create 2 keys with privilege, and storage limit is 1, should succeed
         sbc = client.get_sponsor_balance_for_collateral(contract_addr)
