@@ -64,6 +64,9 @@ impl FakeStateManager {
     fn new(
         conflux_data_dir: String, snapshot_epoch_count: u32,
     ) -> Result<Self> {
+        // Use a random directory to prevent conflicts in concurrently running
+        // tests.
+        let conflux_data_dir = conflux_data_dir + &random::<u64>().to_string();
         fs::create_dir_all(conflux_data_dir.as_str())?;
         let mut unit_test_data_dir = "".to_string();
         for i in 0..100 {
@@ -274,6 +277,8 @@ use fallible_iterator::FallibleIterator;
 use kvdb::{DBTransaction, DBValue, KeyValueDB};
 use parity_util_mem::{MallocSizeOf, MallocSizeOfOps};
 use primitives::StorageKey;
+#[cfg(any(test, feature = "testonly_code"))]
+use rand::random;
 #[cfg(test)]
 use rand::{seq::SliceRandom, Rng, SeedableRng};
 #[cfg(test)]

@@ -130,7 +130,6 @@ impl SnapshotMptNode {
     pub fn load_rlp_and_check(
         rlp_bytes: &[u8], path_to_node: &dyn CompressedPathTrait,
     ) -> Result<Self> {
-        println!("load_rlp_and_check");
         let node = Self(Rlp::new(rlp_bytes).as_val()?);
 
         if CHECK_LOADED_SNAPSHOT_MPT_NODE {
