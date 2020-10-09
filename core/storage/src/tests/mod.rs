@@ -66,36 +66,22 @@ impl FakeStateManager {
     ) -> Result<Self> {
         // Use a random directory to prevent conflicts in concurrently running
         // tests.
-        let conflux_data_dir = conflux_data_dir + &random::<u64>().to_string();
-        fs::create_dir_all(conflux_data_dir.as_str())?;
-        let mut unit_test_data_dir = "".to_string();
-        for i in 0..100 {
-            let try_unit_test_data_dir =
-                conflux_data_dir.clone() + &i.to_string() + "/";
-            if !Path::new(try_unit_test_data_dir.as_str()).exists() {
-                if fs::create_dir(try_unit_test_data_dir.as_str()).is_ok() {
-                    unit_test_data_dir = try_unit_test_data_dir;
-                    break;
-                }
-            }
-        }
-        if unit_test_data_dir == "" {
-            Err(ErrorKind::FailedToCreateUnitTestDataDir.into())
-        } else {
-            let mut storage_conf = StorageConfiguration::new_default(
-                &unit_test_data_dir,
-                snapshot_epoch_count,
-            );
-            storage_conf.delta_mpts_cache_size = 20_000_000;
-            storage_conf.delta_mpts_cache_start_size = 1_000_000;
-            storage_conf.delta_mpts_node_map_vec_size = 20_000_000;
-            storage_conf.delta_mpts_slab_idle_size = 200_000;
+        let unit_test_data_dir =
+            conflux_data_dir + &random::<u64>().to_string();
+        fs::create_dir_all(unit_test_data_dir.as_str())?;
+        let mut storage_conf = StorageConfiguration::new_default(
+            &unit_test_data_dir,
+            snapshot_epoch_count,
+        );
+        storage_conf.delta_mpts_cache_size = 20_000_000;
+        storage_conf.delta_mpts_cache_start_size = 1_000_000;
+        storage_conf.delta_mpts_node_map_vec_size = 20_000_000;
+        storage_conf.delta_mpts_slab_idle_size = 200_000;
 
-            Ok(FakeStateManager {
-                data_dir: unit_test_data_dir,
-                state_manager: Some(Arc::new(StateManager::new(storage_conf)?)),
-            })
-        }
+        Ok(FakeStateManager {
+            data_dir: unit_test_data_dir,
+            state_manager: Some(Arc::new(StateManager::new(storage_conf)?)),
+        })
     }
 }
 
@@ -153,7 +139,7 @@ pub fn new_state_manager_for_unit_test_with_snapshot_epoch_count(
     }
 
     FakeStateManager::new(
-        "./conflux_unit_test_data_dir/".to_string(),
+        "./conflux_unit_test_data_dir".to_string(),
         snapshot_epoch_count,
     )
     .unwrap()
