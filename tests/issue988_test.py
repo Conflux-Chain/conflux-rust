@@ -157,15 +157,17 @@ class Issue988Test(ConfluxTestFramework):
 
         # deploy test contract
         c0 = client.get_collateral_for_storage(addr)
+        # code collateral + key value
+        storage_limit = 512 * 11 + 64
         tx = self.call_contract_function(
             contract=test_contract,
             name="constructor",
             args=[],
             sender_key=priv_key,
-            storage_limit=10604)
+            storage_limit=storage_limit)
         contract_addr = self.wait_for_tx([tx], True)[0]['contractCreated']
         c1 = client.get_collateral_for_storage(addr)
-        assert_equal(c1 - c0, 10604 * 10 ** 18 // 1024)
+        assert_equal(c1 - c0, storage_limit * 10 ** 18 // 1024)
         self.log.info("contract_addr={}".format(contract_addr))
         assert_equal(node.cfx_getBalance(contract_addr), hex(0))
 

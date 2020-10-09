@@ -28,7 +28,7 @@ use crate::{
 };
 use cfx_parameters::staking::*;
 use cfx_statedb::Result as DbResult;
-use cfx_types::{address_util::AddressUtil, Address, H256, U256, U512};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256, U512, U64};
 use primitives::{
     receipt::StorageChange, storage::STORAGE_LAYOUT_REGULAR_V0,
     transaction::Action, SignedTransaction, StorageLayout,
@@ -41,19 +41,41 @@ use std::{
     sync::Arc,
 };
 
-/// Returns new address created from address, nonce, and code hash
+/// Calculate new contract address.
 pub fn contract_address(
-    address_scheme: CreateContractAddress, sender: &Address, nonce: &U256,
-    code: &[u8],
+    address_scheme: CreateContractAddress, block_number: U64, sender: &Address,
+    nonce: &U256, code: &[u8],
 ) -> (Address, Option<H256>)
 {
+    let code_hash = keccak(code);
     match address_scheme {
+        CreateContractAddress::FromBlockNumberSenderNonceAndCodeHash => {
+            let mut buffer = [0u8; 1 + 8 + 20 + 32 + 32];
+            let (lead_bytes, rest) = buffer.split_at_mut(1);
+            let (block_number_bytes, rest) = rest.split_at_mut(8);
+            let (sender_bytes, rest) = rest.split_at_mut(Address::len_bytes());
+            let (nonce_bytes, code_hash_bytes) =
+                rest.split_at_mut(H256::len_bytes());
+            // In Conflux, we take block_number and CodeHash into address
+            // calculation. This is required to enable us to clean
+            // up unused user account in future.
+            lead_bytes[0] = 0x0;
+            block_number.to_little_endian(block_number_bytes);
+            sender_bytes.copy_from_slice(&sender[..]);
+            nonce.to_little_endian(nonce_bytes);
+            code_hash_bytes.copy_from_slice(&code_hash[..]);
+            // In Conflux, we use the first four bits to indicate the type of
+            // the address. For contract address, the bits will be
+            // set to 0x8.
+            let mut h = Address::from(keccak(&buffer[..]));
+            h.set_contract_type_bits();
+            (h, Some(code_hash))
+        }
         CreateContractAddress::FromSenderNonceAndCodeHash => {
             let mut buffer = [0u8; 1 + 20 + 32 + 32];
             // In Conflux, we append CodeHash to determine the address as well.
             // This is required to enable us to clean up unused user account in
             // future.
-            let code_hash = keccak(code);
             buffer[0] = 0x0;
             &mut buffer[1..(1 + 20)].copy_from_slice(&sender[..]);
             nonce.to_little_endian(&mut buffer[(1 + 20)..(1 + 20 + 32)]);
@@ -66,7 +88,6 @@ pub fn contract_address(
             (h, Some(code_hash))
         }
         CreateContractAddress::FromSenderSaltAndCodeHash(salt) => {
-            let code_hash = keccak(code);
             let mut buffer = [0u8; 1 + 20 + 32 + 32];
             buffer[0] = 0xff;
             &mut buffer[1..(1 + 20)].copy_from_slice(&sender[..]);
@@ -1285,7 +1306,7 @@ impl<'a> Executive<'a> {
         }
 
         let tx_storage_limit_in_drip =
-            U256::from(tx.storage_limit) * *COLLATERAL_PER_BYTE;
+            U256::from(tx.storage_limit) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
         let storage_sponsor_balance = if storage_sponsored {
             self.state.sponsor_balance_for_collateral(&code_address)?
         } else {
@@ -1401,6 +1422,7 @@ impl<'a> Executive<'a> {
             Action::Create => {
                 let (new_address, _code_hash) = contract_address(
                     CreateContractAddress::FromSenderNonceAndCodeHash,
+                    self.env.number.into(),
                     &sender,
                     &nonce,
                     &tx.data,
@@ -1517,7 +1539,10 @@ impl<'a> Executive<'a> {
                 // empty.
                 let code_owner =
                     self.state.code_owner(address)?.expect("code owner exists");
-                substate.record_storage_release(&code_owner, code_size as u64);
+                substate.record_storage_release(
+                    &code_owner,
+                    code_collateral_units(code_size),
+                );
             }
 
             self.state.record_storage_and_whitelist_entries_release(
@@ -1663,12 +1688,12 @@ impl<'a> Executive<'a> {
                         if inc > 0 {
                             storage_collateralized.push(StorageChange {
                                 address: *address,
-                                amount: inc,
+                                collaterals: inc,
                             });
                         } else if sub > 0 {
                             storage_released.push(StorageChange {
                                 address: *address,
-                                amount: sub,
+                                collaterals: sub,
                             });
                         }
                     }

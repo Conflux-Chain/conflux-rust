@@ -13,6 +13,11 @@
 
 #[cfg(all(not(target_env = "msvc"), feature = "jemalloc-global"))]
 use jemallocator;
+#[cfg(all(not(target_env = "msvc"), feature = "jemalloc-global"))]
+use jemallocator::Jemalloc;
+#[cfg(all(not(target_env = "msvc"), feature = "jemalloc-global"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
 
 use cfg_if::cfg_if;
 use cfx_types::{H160, H256, H512, U256, U512};

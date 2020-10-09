@@ -186,7 +186,7 @@ fn checkpoint_from_empty_get_storage_at() {
         .set_sponsor_for_collateral(
             &a,
             &sponsor,
-            &(*COLLATERAL_PER_STORAGE_KEY * U256::from(2)),
+            &(*COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)),
         )
         .unwrap();
     assert_eq!(
@@ -199,7 +199,7 @@ fn checkpoint_from_empty_get_storage_at() {
     assert_eq!(state.balance(&a).unwrap(), U256::zero());
     assert_eq!(
         state.sponsor_balance_for_collateral(&a).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2),
     );
     let c1 = state.checkpoint();
     substates.push(Substate::new());
@@ -262,7 +262,7 @@ fn checkpoint_from_empty_get_storage_at() {
     assert_eq!(state.balance(&a).unwrap(), U256::zero());
     assert_eq!(
         state.sponsor_balance_for_collateral(&a).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2),
     );
     assert_eq!(
         state.checkpoint_storage_at(c0, &a, &k).unwrap(),
@@ -325,11 +325,11 @@ fn checkpoint_from_empty_get_storage_at() {
     substates.last_mut().unwrap().accrue(substate);
     assert_eq!(
         *state.total_storage_tokens(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
     assert_eq!(
         state.collateral_for_storage(&a).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
     assert_eq!(
         state.checkpoint_storage_at(c0, &a, &k).unwrap(),
@@ -373,15 +373,18 @@ fn checkpoint_from_empty_get_storage_at() {
     state.discard_checkpoint(); // Commit/discard c1.
     let substate = substates.pop().unwrap();
     substates.last_mut().unwrap().accrue(substate);
-    assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        *state.total_storage_tokens(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
+    );
     assert_eq!(
         state.collateral_for_storage(&a).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(state.balance(&a).unwrap(), U256::zero());
     assert_eq!(
         state.sponsor_balance_for_collateral(&a).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
         state.checkpoint_storage_at(c0, &a, &k).unwrap(),
@@ -409,13 +412,13 @@ fn checkpoint_get_storage_at() {
     state
         .add_balance(
             &a,
-            &(*COLLATERAL_PER_STORAGE_KEY * U256::from(2)),
+            &(*COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)),
             CleanupMode::NoEmpty,
         )
         .unwrap();
     assert_eq!(
         state.balance(&a).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2),
     );
 
     state
@@ -442,11 +445,17 @@ fn checkpoint_get_storage_at() {
     state.discard_checkpoint();
     let substate = substates.pop().unwrap();
     substates.last_mut().unwrap().accrue(substate);
-    assert_eq!(state.balance(&a).unwrap(), *COLLATERAL_PER_STORAGE_KEY,);
-    assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        state.balance(&a).unwrap(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY,
+    );
+    assert_eq!(
+        *state.total_storage_tokens(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
+    );
     assert_eq!(
         state.collateral_for_storage(&a).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     state
         .commit(BigEndianHash::from_uint(&U256::from(1u64)), None)
@@ -465,12 +474,15 @@ fn checkpoint_get_storage_at() {
     );
     assert_eq!(
         state.balance(&a).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(1),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(1),
     );
-    assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        *state.total_storage_tokens(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
+    );
     assert_eq!(
         state.collateral_for_storage(&a).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     state.clear();
     substates.clear();
@@ -486,7 +498,7 @@ fn checkpoint_get_storage_at() {
         .set_sponsor_for_collateral(
             &contract_a,
             &sponsor,
-            &(*COLLATERAL_PER_STORAGE_KEY * U256::from(2)),
+            &(*COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)),
         )
         .unwrap();
     assert_eq!(
@@ -499,9 +511,12 @@ fn checkpoint_get_storage_at() {
     assert_eq!(state.balance(&contract_a).unwrap(), U256::zero());
     assert_eq!(
         state.sponsor_balance_for_collateral(&contract_a).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2),
     );
-    assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        *state.total_storage_tokens(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
+    );
     assert_eq!(
         state.collateral_for_storage(&contract_a).unwrap(),
         U256::zero(),
@@ -577,9 +592,12 @@ fn checkpoint_get_storage_at() {
     assert_eq!(state.balance(&contract_a).unwrap(), U256::zero());
     assert_eq!(
         state.sponsor_balance_for_collateral(&contract_a).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2),
     );
-    assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        *state.total_storage_tokens(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
+    );
     assert_eq!(
         state.collateral_for_storage(&contract_a).unwrap(),
         U256::zero()
@@ -614,9 +632,12 @@ fn checkpoint_get_storage_at() {
     assert_eq!(state.balance(&contract_a).unwrap(), U256::zero());
     assert_eq!(
         state.sponsor_balance_for_collateral(&contract_a).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2),
     );
-    assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        *state.total_storage_tokens(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
+    );
     assert_eq!(
         state.collateral_for_storage(&contract_a).unwrap(),
         U256::zero()
@@ -666,11 +687,11 @@ fn checkpoint_get_storage_at() {
     );
     assert_eq!(
         *state.total_storage_tokens(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(3)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(3)
     );
     assert_eq!(
         state.collateral_for_storage(&contract_a).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
     assert_eq!(
         state.checkpoint_storage_at(cm1, &contract_a, &k).unwrap(),
@@ -694,9 +715,12 @@ fn checkpoint_get_storage_at() {
     assert_eq!(state.balance(&contract_a).unwrap(), U256::zero());
     assert_eq!(
         state.sponsor_balance_for_collateral(&contract_a).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
-    assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        *state.total_storage_tokens(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
+    );
     assert_eq!(
         state.collateral_for_storage(&contract_a).unwrap(),
         U256::zero()
@@ -733,15 +757,15 @@ fn checkpoint_get_storage_at() {
     assert_eq!(state.balance(&contract_a).unwrap(), U256::zero());
     assert_eq!(
         state.sponsor_balance_for_collateral(&contract_a).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
         *state.total_storage_tokens(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
     assert_eq!(
         state.collateral_for_storage(&contract_a).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
         state.checkpoint_storage_at(cm1, &contract_a, &k).unwrap(),
@@ -763,7 +787,7 @@ fn kill_account_with_checkpoints() {
     // Need the checkpoint for ownership commitment.
     state_0.checkpoint();
     state_0
-        .new_contract(&a, *COLLATERAL_PER_STORAGE_KEY, U256::one())
+        .new_contract(&a, *COLLATERAL_DRIPS_PER_STORAGE_KEY, U256::one())
         .unwrap();
     state_0.set_storage(&a, k.clone(), U256::one(), a).unwrap();
     state_0
@@ -776,10 +800,13 @@ fn kill_account_with_checkpoints() {
         .commit_ownership_change(&state_0.db, &mut Substate::new())
         .unwrap();
     state_0
-        .add_sponsor_balance_for_collateral(&a, &COLLATERAL_PER_STORAGE_KEY)
+        .add_sponsor_balance_for_collateral(
+            &a,
+            &COLLATERAL_DRIPS_PER_STORAGE_KEY,
+        )
         .unwrap();
     state_0
-        .add_collateral_for_storage(&a, &COLLATERAL_PER_STORAGE_KEY)
+        .add_collateral_for_storage(&a, &COLLATERAL_DRIPS_PER_STORAGE_KEY)
         .unwrap();
     state_0.discard_checkpoint();
     let epoch_id_1 = EpochId::from_uint(&U256::from(1));
@@ -852,7 +879,10 @@ fn check_result_of_simple_payment_to_killed_account() {
         .commit_ownership_change(&state_0.db, &mut Substate::new())
         .unwrap();
     state_0
-        .add_collateral_for_storage(&sender_addr, &COLLATERAL_PER_STORAGE_KEY)
+        .add_collateral_for_storage(
+            &sender_addr,
+            &COLLATERAL_DRIPS_PER_STORAGE_KEY,
+        )
         .unwrap();
     state_0.discard_checkpoint();
     let epoch_id_1 = EpochId::from_uint(&U256::from(1));
@@ -931,11 +961,18 @@ fn create_contract_fail_previous_storage() {
     substates.push(Substate::new());
 
     state
-        .add_balance(&a, &COLLATERAL_PER_STORAGE_KEY, CleanupMode::NoEmpty)
+        .add_balance(
+            &a,
+            &COLLATERAL_DRIPS_PER_STORAGE_KEY,
+            CleanupMode::NoEmpty,
+        )
         .unwrap();
     assert_eq!(*state.total_storage_tokens(), U256::from(0));
     assert_eq!(state.collateral_for_storage(&a).unwrap(), U256::from(0));
-    assert_eq!(state.balance(&a).unwrap(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        state.balance(&a).unwrap(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
+    );
 
     state
         .new_contract(&contract_addr, U256::zero(), U256::one())
@@ -960,10 +997,13 @@ fn create_contract_fail_previous_storage() {
     state.discard_checkpoint();
     let substate = substates.pop().unwrap();
     substates.last_mut().unwrap().accrue(substate);
-    assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        *state.total_storage_tokens(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
+    );
     assert_eq!(
         state.collateral_for_storage(&a).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(state.balance(&a).unwrap(), U256::zero());
     state
@@ -982,10 +1022,13 @@ fn create_contract_fail_previous_storage() {
     substates.push(Substate::new());
     state =
         get_state(&storage_manager, &BigEndianHash::from_uint(&U256::from(1)));
-    assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        *state.total_storage_tokens(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
+    );
     assert_eq!(
         state.collateral_for_storage(&a).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(state.balance(&a).unwrap(), U256::from(0));
 
@@ -1005,7 +1048,10 @@ fn create_contract_fail_previous_storage() {
         .unwrap();
     state.revert_to_checkpoint();
     substates.pop(); // revert to c2
-    assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        *state.total_storage_tokens(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
+    );
     assert_eq!(state.collateral_for_storage(&a).unwrap(), U256::from(0));
     assert_eq!(state.balance(&a).unwrap(), U256::from(0));
     assert_eq!(state.storage_at(&contract_addr, &k).unwrap(), U256::zero());
@@ -1015,10 +1061,13 @@ fn create_contract_fail_previous_storage() {
         state.storage_at(&contract_addr, &k).unwrap(),
         U256::from(0xffff)
     );
-    assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        *state.total_storage_tokens(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
+    );
     assert_eq!(
         state.collateral_for_storage(&a).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(state.balance(&a).unwrap(), U256::from(0));
 
@@ -1045,14 +1094,14 @@ fn test_automatic_collateral_normal_account() {
     state
         .add_balance(
             &normal_account,
-            &(*COLLATERAL_PER_STORAGE_KEY * U256::from(2)),
+            &(*COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)),
             CleanupMode::NoEmpty,
         )
         .unwrap();
     state
         .new_contract(
             &contract_account,
-            *COLLATERAL_PER_STORAGE_KEY * U256::from(2),
+            *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2),
             U256::zero(),
         )
         .unwrap();
@@ -1068,11 +1117,11 @@ fn test_automatic_collateral_normal_account() {
     );
     assert_eq!(
         state.balance(&normal_account).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
     assert_eq!(
         state.balance(&contract_account).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
 
     // simple set one key with zero value for normal account
@@ -1114,11 +1163,11 @@ fn test_automatic_collateral_normal_account() {
     );
     assert_eq!(
         state.balance(&normal_account).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
     assert_eq!(
         state.balance(&contract_account).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
 
     // simple set one key with nonzero value for normal account
@@ -1143,10 +1192,13 @@ fn test_automatic_collateral_normal_account() {
     state.discard_checkpoint();
     let substate = substates.pop().unwrap();
     substates.last_mut().unwrap().accrue(substate);
-    assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        *state.total_storage_tokens(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
+    );
     assert_eq!(
         state.collateral_for_storage(&normal_account).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
         state.collateral_for_storage(&contract_account).unwrap(),
@@ -1154,7 +1206,7 @@ fn test_automatic_collateral_normal_account() {
     );
     assert_eq!(
         state.balance(&normal_account).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
 
     // test not sufficient balance
@@ -1178,10 +1230,13 @@ fn test_automatic_collateral_normal_account() {
         CollateralCheckResult::Valid
     );
     state.revert_to_checkpoint();
-    assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        *state.total_storage_tokens(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
+    );
     assert_eq!(
         state.collateral_for_storage(&normal_account).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
         state.collateral_for_storage(&contract_account).unwrap(),
@@ -1189,7 +1244,7 @@ fn test_automatic_collateral_normal_account() {
     );
     assert_eq!(
         state.balance(&normal_account).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
 
     // use all balance
@@ -1217,11 +1272,11 @@ fn test_automatic_collateral_normal_account() {
     substates.last_mut().unwrap().accrue(substate);
     assert_eq!(
         *state.total_storage_tokens(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
     assert_eq!(
         state.collateral_for_storage(&normal_account).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
     assert_eq!(
         state.collateral_for_storage(&contract_account).unwrap(),
@@ -1256,10 +1311,13 @@ fn test_automatic_collateral_normal_account() {
     state.discard_checkpoint();
     let substate = substates.pop().unwrap();
     substates.last_mut().unwrap().accrue(substate);
-    assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        *state.total_storage_tokens(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
+    );
     assert_eq!(
         state.collateral_for_storage(&normal_account).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
         state.collateral_for_storage(&contract_account).unwrap(),
@@ -1267,7 +1325,7 @@ fn test_automatic_collateral_normal_account() {
     );
     assert_eq!(
         state.balance(&normal_account).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     // set another key to zero
     state.checkpoint();
@@ -1307,7 +1365,7 @@ fn test_automatic_collateral_normal_account() {
     );
     assert_eq!(
         state.balance(&normal_account).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
 }
 
@@ -1332,7 +1390,7 @@ fn test_automatic_collateral_contract_account() {
         .set_sponsor_for_collateral(
             &contract_account,
             &sponsor,
-            &(*COLLATERAL_PER_STORAGE_KEY * U256::from(2)),
+            &(*COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)),
         )
         .unwrap();
     assert_eq!(
@@ -1352,7 +1410,7 @@ fn test_automatic_collateral_contract_account() {
         state
             .sponsor_balance_for_collateral(&contract_account)
             .unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
 
     // simple set one key with zero value for contract account
@@ -1388,7 +1446,7 @@ fn test_automatic_collateral_contract_account() {
         state
             .sponsor_balance_for_collateral(&contract_account)
             .unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
 
     // simple set one key with nonzero value for contract account
@@ -1424,13 +1482,16 @@ fn test_automatic_collateral_contract_account() {
         state
             .sponsor_balance_for_collateral(&contract_account)
             .unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
         state.collateral_for_storage(&contract_account).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
-    assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        *state.total_storage_tokens(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
+    );
 
     // test not sufficient balance
     state.checkpoint();
@@ -1460,8 +1521,8 @@ fn test_automatic_collateral_contract_account() {
             )
             .unwrap(),
         CollateralCheckResult::NotEnoughBalance {
-            required: *COLLATERAL_PER_STORAGE_KEY * U256::from(2),
-            got: *COLLATERAL_PER_STORAGE_KEY,
+            required: *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2),
+            got: *COLLATERAL_DRIPS_PER_STORAGE_KEY,
         }
     );
 
@@ -1473,13 +1534,16 @@ fn test_automatic_collateral_contract_account() {
         state
             .sponsor_balance_for_collateral(&contract_account)
             .unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
         state.collateral_for_storage(&contract_account).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
-    assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        *state.total_storage_tokens(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
+    );
 
     // use all balance
     state.checkpoint();
@@ -1518,11 +1582,11 @@ fn test_automatic_collateral_contract_account() {
     );
     assert_eq!(
         state.collateral_for_storage(&contract_account).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
     assert_eq!(
         *state.total_storage_tokens(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
 
     // set one key to zero
@@ -1557,13 +1621,16 @@ fn test_automatic_collateral_contract_account() {
         state
             .sponsor_balance_for_collateral(&contract_account)
             .unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
         state.collateral_for_storage(&contract_account).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
-    assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        *state.total_storage_tokens(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
+    );
     assert_eq!(state.increase_block_number(), U256::from(39637239));
 
     // set another key to zero
@@ -1598,7 +1665,7 @@ fn test_automatic_collateral_contract_account() {
         state
             .sponsor_balance_for_collateral(&contract_account)
             .unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
     assert_eq!(
         state.collateral_for_storage(&contract_account).unwrap(),

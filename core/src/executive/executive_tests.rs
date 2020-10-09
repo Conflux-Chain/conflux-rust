@@ -55,6 +55,7 @@ fn test_contract_address() {
         expected_address,
         contract_address(
             CreateContractAddress::FromSenderNonceAndCodeHash,
+            /* block_number = */ 0.into(),
             &address,
             &U256::from(88),
             &[],
@@ -70,6 +71,7 @@ fn test_sender_balance() {
         Address::from_str("1f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
     let address = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
+        /* block_number = */ 0.into(),
         &sender,
         &U256::zero(),
         &[],
@@ -87,14 +89,18 @@ fn test_sender_balance() {
     let mut state =
         get_state_for_genesis_write_with_factory(&storage_manager, factory);
     state
-        .add_balance(&sender, &COLLATERAL_PER_STORAGE_KEY, CleanupMode::NoEmpty)
+        .add_balance(
+            &sender,
+            &COLLATERAL_DRIPS_PER_STORAGE_KEY,
+            CleanupMode::NoEmpty,
+        )
         .unwrap();
     state
         .add_balance(&sender, &U256::from(0x100u64), CleanupMode::NoEmpty)
         .unwrap();
     assert_eq!(
         state.balance(&sender).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY + U256::from(0x100)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(0x100)
     );
     let env = Env::default();
     let machine = make_byzantium_machine(0);
@@ -128,14 +134,17 @@ fn test_sender_balance() {
     assert_eq!(gas_left, U256::from(94_595));
     assert_eq!(
         state.storage_at(&address, &vec![0; 32]).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY + U256::from(0xf9)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(0xf9)
     );
     assert_eq!(state.balance(&sender).unwrap(), U256::from(0xf9));
     assert_eq!(
         state.collateral_for_storage(&sender).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
-    assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        *state.total_storage_tokens(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
+    );
     assert_eq!(state.balance(&address).unwrap(), U256::from(0x7));
     assert_eq!(substate.contracts_created.len(), 0);
 }
@@ -172,6 +181,7 @@ fn test_create_contract_out_of_depth() {
         Address::from_str("1d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
     let address = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
+        /* block_number = */ 0.into(),
         &sender,
         &U256::zero(),
         &[],
@@ -229,6 +239,7 @@ fn test_suicide_when_creation() {
         Address::from_str("1d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
     let contract_addr = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
+        /* block_number = */ 0.into(),
         &sender_addr,
         &U256::zero(),
         &[],
@@ -305,11 +316,13 @@ fn test_call_to_create() {
     // f3 - return
 
     let code = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
+    let code_len = code.len();
 
     let sender =
         Address::from_str("1d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
     let address = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
+        /* block_number = */ 0.into(),
         &sender,
         &U256::zero(),
         &[],
@@ -326,7 +339,9 @@ fn test_call_to_create() {
     params.code = Some(Arc::new(code));
     params.value = ActionValue::Transfer(U256::from(100));
     params.call_type = CallType::Call;
-    params.storage_limit_in_drip = U256::from(78_125_000_000_000_000u64);
+    params.storage_limit_in_drip = *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+        * code_collateral_units(code_len)
+        + *COLLATERAL_DRIPS_PER_STORAGE_KEY;
 
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
@@ -336,18 +351,10 @@ fn test_call_to_create() {
     state
         .add_balance(
             &sender,
-            &(U256::from(100)
-                + *COLLATERAL_PER_STORAGE_KEY
-                + U256::from(15_625_000_000_000_000u64)),
+            &(U256::from(100) + params.storage_limit_in_drip),
             CleanupMode::NoEmpty,
         )
         .unwrap();
-    assert_eq!(
-        state.balance(&sender).unwrap(),
-        U256::from(100)
-            + *COLLATERAL_PER_STORAGE_KEY
-            + U256::from(15_625_000_000_000_000u64)
-    );
     assert_eq!(
         state.collateral_for_storage(&sender).unwrap(),
         U256::from(0)
@@ -384,12 +391,9 @@ fn test_call_to_create() {
     assert_eq!(state.balance(&sender).unwrap(), U256::from(0));
     assert_eq!(
         state.collateral_for_storage(&sender).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY + U256::from(15_625_000_000_000_000u64)
+        params.storage_limit_in_drip
     );
-    assert_eq!(
-        *state.total_storage_tokens(),
-        *COLLATERAL_PER_STORAGE_KEY + U256::from(15_625_000_000_000_000u64)
-    );
+    assert_eq!(*state.total_storage_tokens(), params.storage_limit_in_drip);
 
     assert_eq!(gas_left, U256::from(59_746));
 }
@@ -475,6 +479,7 @@ fn test_keccak() {
         Address::from_str("1f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
     let address = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
+        /* block_number = */ 0.into(),
         &sender,
         &U256::zero(),
         &[],
@@ -1019,6 +1024,7 @@ fn test_commission_privilege() {
     let caller3 = Random.generate().unwrap();
     let address = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
+        /* block_number = */ 0.into(),
         &sender.address(),
         &U256::zero(),
         &[],
@@ -1387,6 +1393,7 @@ fn test_storage_commission_privilege() {
     let caller3 = Random.generate().unwrap();
     let address = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
+        /* block_number = */ 0.into(),
         &sender.address(),
         &U256::zero(),
         &[],
@@ -1417,9 +1424,9 @@ fn test_storage_commission_privilege() {
         nonce: 0.into(),
         gas_price: U256::from(1),
         gas: U256::from(100_000),
-        value: *COLLATERAL_PER_STORAGE_KEY,
+        value: *COLLATERAL_DRIPS_PER_STORAGE_KEY,
         action: Action::Call(address),
-        storage_limit: BYTES_PER_STORAGE_KEY,
+        storage_limit: COLLATERAL_UNITS_PER_STORAGE_KEY,
         epoch_height: 0,
         chain_id: 0,
         data: vec![],
@@ -1444,24 +1451,27 @@ fn test_storage_commission_privilege() {
     .unwrap();
     assert_eq!(storage_collateralized.len(), 1);
     assert_eq!(storage_collateralized[0].address, sender.address());
-    assert_eq!(storage_collateralized[0].amount, BYTES_PER_STORAGE_KEY);
+    assert_eq!(
+        storage_collateralized[0].collaterals,
+        COLLATERAL_UNITS_PER_STORAGE_KEY
+    );
     assert_eq!(storage_released.len(), 0);
 
     state
         .set_sponsor_for_collateral(
             &address,
             &sender.address(),
-            &COLLATERAL_PER_STORAGE_KEY,
+            &COLLATERAL_DRIPS_PER_STORAGE_KEY,
         )
         .unwrap();
     assert_eq!(
         state.sponsor_balance_for_collateral(&address).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY,
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
     assert_eq!(gas_used, U256::from(26_017));
     assert_eq!(
         state.balance(&address).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY,
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
     assert_eq!(
         state.balance(&sender.address()).unwrap(),
@@ -1469,28 +1479,31 @@ fn test_storage_commission_privilege() {
     );
     assert_eq!(
         state.collateral_for_storage(&sender.address()).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY,
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
-    assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        *state.total_storage_tokens(),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
+    );
 
     state
         .add_balance(
             &caller1.address(),
-            &(*COLLATERAL_PER_STORAGE_KEY + U256::from(1000_000)),
+            &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
             CleanupMode::NoEmpty,
         )
         .unwrap();
     state
         .add_balance(
             &caller2.address(),
-            &(*COLLATERAL_PER_STORAGE_KEY + U256::from(1000_000)),
+            &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
             CleanupMode::NoEmpty,
         )
         .unwrap();
     state
         .add_balance(
             &caller3.address(),
-            &(*COLLATERAL_PER_STORAGE_KEY + U256::from(1000_000)),
+            &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
             CleanupMode::NoEmpty,
         )
         .unwrap();
@@ -1518,11 +1531,11 @@ fn test_storage_commission_privilege() {
     assert_eq!(substate.storage_collateralized.len(), 1);
     assert_eq!(
         substate.storage_collateralized[&sender.address()],
-        2 * BYTES_PER_STORAGE_KEY
+        2 * COLLATERAL_UNITS_PER_STORAGE_KEY
     );
     assert_eq!(
         *state.total_storage_tokens(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(3)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(3)
     );
     assert_eq!(
         state.balance(&sender.address()).unwrap(),
@@ -1530,7 +1543,7 @@ fn test_storage_commission_privilege() {
     );
     assert_eq!(
         state.collateral_for_storage(&sender.address()).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(3),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(3),
     );
     assert!(state
         .check_commission_privilege(&address, &caller1.address())
@@ -1545,11 +1558,11 @@ fn test_storage_commission_privilege() {
     // caller3 call with no privilege
     assert_eq!(
         state.balance(&caller3.address()).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY + U256::from(1000_000),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000),
     );
     assert_eq!(
         state.sponsor_balance_for_collateral(&address).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY,
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
     let tx = Transaction {
         nonce: 0.into(),
@@ -1557,7 +1570,7 @@ fn test_storage_commission_privilege() {
         gas: U256::from(100_000),
         value: U256::from(0),
         action: Action::Call(address),
-        storage_limit: BYTES_PER_STORAGE_KEY,
+        storage_limit: COLLATERAL_UNITS_PER_STORAGE_KEY,
         epoch_height: 0,
         chain_id: 0,
         data: vec![],
@@ -1583,14 +1596,20 @@ fn test_storage_commission_privilege() {
 
     assert_eq!(storage_collateralized.len(), 1);
     assert_eq!(storage_collateralized[0].address, caller3.address());
-    assert_eq!(storage_collateralized[0].amount, BYTES_PER_STORAGE_KEY);
+    assert_eq!(
+        storage_collateralized[0].collaterals,
+        COLLATERAL_UNITS_PER_STORAGE_KEY
+    );
     assert_eq!(storage_released.len(), 1);
     assert_eq!(storage_released[0].address, sender.address());
-    assert_eq!(storage_released[0].amount, BYTES_PER_STORAGE_KEY);
+    assert_eq!(
+        storage_released[0].collaterals,
+        COLLATERAL_UNITS_PER_STORAGE_KEY
+    );
     assert_eq!(gas_used, U256::from(26_017));
     assert_eq!(
         state.sponsor_balance_for_collateral(&address).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY,
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
     assert_eq!(
         state.balance(&caller3.address()).unwrap(),
@@ -1602,11 +1621,11 @@ fn test_storage_commission_privilege() {
     );
     assert_eq!(
         state.collateral_for_storage(&caller3.address()).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY,
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
     assert_eq!(
         *state.total_storage_tokens(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(3)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(3)
     );
     assert_eq!(
         state.balance(&sender.address()).unwrap(),
@@ -1614,17 +1633,17 @@ fn test_storage_commission_privilege() {
     );
     assert_eq!(
         state.collateral_for_storage(&sender.address()).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2),
     );
 
     // caller1 call with privilege
     assert_eq!(
         state.balance(&caller1.address()).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY + U256::from(1000_000),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000),
     );
     assert_eq!(
         state.sponsor_balance_for_collateral(&address).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY,
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
     let tx = Transaction {
         nonce: 0.into(),
@@ -1632,7 +1651,7 @@ fn test_storage_commission_privilege() {
         gas: U256::from(100_000),
         value: U256::from(0),
         action: Action::Call(address),
-        storage_limit: BYTES_PER_STORAGE_KEY,
+        storage_limit: COLLATERAL_UNITS_PER_STORAGE_KEY,
         epoch_height: 0,
         chain_id: 0,
         data: vec![],
@@ -1658,14 +1677,20 @@ fn test_storage_commission_privilege() {
 
     assert_eq!(storage_collateralized.len(), 1);
     assert_eq!(storage_collateralized[0].address, address);
-    assert_eq!(storage_collateralized[0].amount, BYTES_PER_STORAGE_KEY);
+    assert_eq!(
+        storage_collateralized[0].collaterals,
+        COLLATERAL_UNITS_PER_STORAGE_KEY
+    );
     assert_eq!(storage_released.len(), 1);
     assert_eq!(storage_released[0].address, caller3.address());
-    assert_eq!(storage_released[0].amount, BYTES_PER_STORAGE_KEY);
+    assert_eq!(
+        storage_released[0].collaterals,
+        COLLATERAL_UNITS_PER_STORAGE_KEY
+    );
     assert_eq!(gas_used, U256::from(26_017));
     assert_eq!(
         state.balance(&caller1.address()).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY + U256::from(925_000),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(925_000),
     );
     assert_eq!(
         state.staking_balance(&caller1.address()).unwrap(),
@@ -1677,7 +1702,7 @@ fn test_storage_commission_privilege() {
     );
     assert_eq!(
         state.balance(&address).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
         state.sponsor_balance_for_collateral(&address).unwrap(),
@@ -1686,11 +1711,11 @@ fn test_storage_commission_privilege() {
     assert_eq!(state.staking_balance(&address).unwrap(), U256::zero());
     assert_eq!(
         state.collateral_for_storage(&address).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY,
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
     assert_eq!(
         state.balance(&caller3.address()).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY + U256::from(925_000)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(925_000)
     );
     assert_eq!(
         state.staking_balance(&caller3.address()).unwrap(),
@@ -1702,7 +1727,7 @@ fn test_storage_commission_privilege() {
     );
     assert_eq!(
         *state.total_storage_tokens(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(3)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(3)
     );
     assert_eq!(
         state.balance(&sender.address()).unwrap(),
@@ -1710,14 +1735,14 @@ fn test_storage_commission_privilege() {
     );
     assert_eq!(
         state.collateral_for_storage(&sender.address()).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2),
     );
 
     // caller2 call with commission privilege and not enough sponsor
     // balance, the owner will transfer to caller2.
     assert_eq!(
         state.balance(&caller2.address()).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY + U256::from(1000_000),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000),
     );
     let tx = Transaction {
         nonce: 0.into(),
@@ -1725,7 +1750,7 @@ fn test_storage_commission_privilege() {
         gas: U256::from(100_000),
         value: U256::from(0),
         action: Action::Call(address),
-        storage_limit: BYTES_PER_STORAGE_KEY,
+        storage_limit: COLLATERAL_UNITS_PER_STORAGE_KEY,
         epoch_height: 0,
         chain_id: 0,
         data: vec![],
@@ -1751,10 +1776,16 @@ fn test_storage_commission_privilege() {
 
     assert_eq!(storage_collateralized.len(), 1);
     assert_eq!(storage_collateralized[0].address, caller2.address());
-    assert_eq!(storage_collateralized[0].amount, BYTES_PER_STORAGE_KEY);
+    assert_eq!(
+        storage_collateralized[0].collaterals,
+        COLLATERAL_UNITS_PER_STORAGE_KEY
+    );
     assert_eq!(storage_released.len(), 1);
     assert_eq!(storage_released[0].address, address);
-    assert_eq!(storage_released[0].amount, BYTES_PER_STORAGE_KEY);
+    assert_eq!(
+        storage_released[0].collaterals,
+        COLLATERAL_UNITS_PER_STORAGE_KEY
+    );
     assert_eq!(gas_used, U256::from(26_017));
     assert_eq!(
         state.balance(&caller2.address()).unwrap(),
@@ -1766,15 +1797,15 @@ fn test_storage_commission_privilege() {
     );
     assert_eq!(
         state.collateral_for_storage(&caller2.address()).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY,
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
     assert_eq!(
         state.balance(&address).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
         state.sponsor_balance_for_collateral(&address).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(state.staking_balance(&address).unwrap(), U256::zero());
     assert_eq!(
@@ -1783,7 +1814,7 @@ fn test_storage_commission_privilege() {
     );
     assert_eq!(
         *state.total_storage_tokens(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(3)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(3)
     );
     assert_eq!(
         state.balance(&sender.address()).unwrap(),
@@ -1791,7 +1822,7 @@ fn test_storage_commission_privilege() {
     );
     assert_eq!(
         state.collateral_for_storage(&sender.address()).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2),
     );
 
     // remove privilege from caller1
@@ -1821,16 +1852,16 @@ fn test_storage_commission_privilege() {
     state.discard_checkpoint();
     assert_eq!(
         state.collateral_for_storage(&sender.address()).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(1),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(1),
     );
     assert_eq!(substate.storage_released.len(), 1);
     assert_eq!(
         substate.storage_released[&sender.address()],
-        BYTES_PER_STORAGE_KEY
+        COLLATERAL_UNITS_PER_STORAGE_KEY
     );
     assert_eq!(
         *state.total_storage_tokens(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
     assert_eq!(
         state.balance(&sender.address()).unwrap(),
@@ -1843,7 +1874,7 @@ fn test_storage_commission_privilege() {
 
     assert_eq!(
         state.balance(&caller1.address()).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY + U256::from(925_000),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(925_000),
     );
     let tx = Transaction {
         nonce: 1.into(),
@@ -1851,7 +1882,7 @@ fn test_storage_commission_privilege() {
         gas: U256::from(100_000),
         value: U256::from(0),
         action: Action::Call(address),
-        storage_limit: BYTES_PER_STORAGE_KEY,
+        storage_limit: COLLATERAL_UNITS_PER_STORAGE_KEY,
         epoch_height: 0,
         chain_id: 0,
         data: vec![],
@@ -1877,10 +1908,16 @@ fn test_storage_commission_privilege() {
 
     assert_eq!(storage_collateralized.len(), 1);
     assert_eq!(storage_collateralized[0].address, caller1.address());
-    assert_eq!(storage_collateralized[0].amount, BYTES_PER_STORAGE_KEY);
+    assert_eq!(
+        storage_collateralized[0].collaterals,
+        COLLATERAL_UNITS_PER_STORAGE_KEY
+    );
     assert_eq!(storage_released.len(), 1);
     assert_eq!(storage_released[0].address, caller2.address());
-    assert_eq!(storage_released[0].amount, BYTES_PER_STORAGE_KEY);
+    assert_eq!(
+        storage_released[0].collaterals,
+        COLLATERAL_UNITS_PER_STORAGE_KEY
+    );
     assert_eq!(gas_used, U256::from(26_017));
     assert_eq!(
         state.balance(&caller1.address()).unwrap(),
@@ -1892,7 +1929,7 @@ fn test_storage_commission_privilege() {
     );
     assert_eq!(
         state.collateral_for_storage(&caller1.address()).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY,
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
     assert_eq!(
         state.collateral_for_storage(&caller2.address()).unwrap(),
@@ -1900,11 +1937,11 @@ fn test_storage_commission_privilege() {
     );
     assert_eq!(
         state.balance(&caller2.address()).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY + U256::from(925_000),
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(925_000),
     );
     assert_eq!(
         state.sponsor_balance_for_collateral(&address).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY,
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
     assert_eq!(state.staking_balance(&address).unwrap(), U256::zero());
     assert_eq!(
@@ -1913,6 +1950,6 @@ fn test_storage_commission_privilege() {
     );
     assert_eq!(
         *state.total_storage_tokens(),
-        *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
+        *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
 }

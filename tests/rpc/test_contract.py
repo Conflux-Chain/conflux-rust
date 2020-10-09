@@ -3,11 +3,13 @@ import sys
 import os
 sys.path.append("..")
 
-from conflux.config import default_config
 from conflux.rpc import RpcClient
-from conflux.utils import priv_to_addr, int_to_hex, encode_hex, parse_as_int
-from test_framework.util import assert_equal, assert_is_hash_string
-from web3 import Web3
+from conflux.utils import sha3 as keccak, parse_as_int
+from jsonrpcclient.exceptions import ReceivedErrorResponseError
+from test_framework.blocktools import encode_hex_0x
+from test_framework.util import assert_equal
+
+REVERT_MESSAGE_CONTRACT_PATH = "../contracts/revert_message.dat"
 
 class TestContract(RpcClient):
 
@@ -34,7 +36,7 @@ class TestContract(RpcClient):
         nonce = self.get_nonce(self.GENESIS_ADDR)
         gas2 = self.estimate_gas(contract_addr, "0x6d4ce63c", nonce=nonce - 2) # get storage
         assert_equal(gas0, gas2)
-    
+
     def test_estimate_collateral(self):
         contract_addr = self.test_contract_deploy()
         (addr, priv_key) = self.rand_account()
@@ -44,7 +46,7 @@ class TestContract(RpcClient):
             contract_addr="0x",
             data_hex="0x60806040526000805534801561001457600080fd5b506040516101b73803806101b78339818101604052602081101561003757600080fd5b810190808051906020019092919050505080600081905550506101588061005f6000396000f3fe608060405234801561001057600080fd5b50600436106100415760003560e01c80636d4ce63c146100465780637b0cb83914610064578063812600df1461006e575b600080fd5b61004e6100b0565b6040518082815260200191505060405180910390f35b61006c6100b9565b005b61009a6004803603602081101561008457600080fd5b810190808035906020019092919050505061010b565b6040518082815260200191505060405180910390f35b60008054905090565b3373ffffffffffffffffffffffffffffffffffffffff167ffceb437c298f40d64702ac26411b2316e79f3c28ffa60edfc891ad4fc8ab82ca6000546040518082815260200191505060405180910390a2565b60008160008082825401925050819055905091905056fea264697066735822122032510ec4ba70a57be7ecbd80920213f49c97b68e3264707e93d653ff2e37064a64736f6c63430006010033000000000000000000000000000000000000000000000000000000000000000a",
             sender=addr)
-        assert_equal(parse_as_int(collateral), 408)
+        assert_equal(parse_as_int(collateral), 576)
         # estimate with larger nonce
         nonce = self.get_nonce(self.GENESIS_ADDR)
         collateral = self.estimate_collateral(
@@ -52,7 +54,7 @@ class TestContract(RpcClient):
             data_hex="0x60806040526000805534801561001457600080fd5b506040516101b73803806101b78339818101604052602081101561003757600080fd5b810190808051906020019092919050505080600081905550506101588061005f6000396000f3fe608060405234801561001057600080fd5b50600436106100415760003560e01c80636d4ce63c146100465780637b0cb83914610064578063812600df1461006e575b600080fd5b61004e6100b0565b6040518082815260200191505060405180910390f35b61006c6100b9565b005b61009a6004803603602081101561008457600080fd5b810190808035906020019092919050505061010b565b6040518082815260200191505060405180910390f35b60008054905090565b3373ffffffffffffffffffffffffffffffffffffffff167ffceb437c298f40d64702ac26411b2316e79f3c28ffa60edfc891ad4fc8ab82ca6000546040518082815260200191505060405180910390a2565b60008160008082825401925050819055905091905056fea264697066735822122032510ec4ba70a57be7ecbd80920213f49c97b68e3264707e93d653ff2e37064a64736f6c63430006010033000000000000000000000000000000000000000000000000000000000000000a",
             sender=addr,
             nonce=nonce + 2)
-        assert_equal(parse_as_int(collateral), 408)
+        assert_equal(parse_as_int(collateral), 576)
         # estimate with smaller nonce
         nonce = self.get_nonce(self.GENESIS_ADDR)
         collateral = self.estimate_collateral(
@@ -60,7 +62,7 @@ class TestContract(RpcClient):
             data_hex="0x60806040526000805534801561001457600080fd5b506040516101b73803806101b78339818101604052602081101561003757600080fd5b810190808051906020019092919050505080600081905550506101588061005f6000396000f3fe608060405234801561001057600080fd5b50600436106100415760003560e01c80636d4ce63c146100465780637b0cb83914610064578063812600df1461006e575b600080fd5b61004e6100b0565b6040518082815260200191505060405180910390f35b61006c6100b9565b005b61009a6004803603602081101561008457600080fd5b810190808035906020019092919050505061010b565b6040518082815260200191505060405180910390f35b60008054905090565b3373ffffffffffffffffffffffffffffffffffffffff167ffceb437c298f40d64702ac26411b2316e79f3c28ffa60edfc891ad4fc8ab82ca6000546040518082815260200191505060405180910390a2565b60008160008082825401925050819055905091905056fea264697066735822122032510ec4ba70a57be7ecbd80920213f49c97b68e3264707e93d653ff2e37064a64736f6c63430006010033000000000000000000000000000000000000000000000000000000000000000a",
             sender=addr,
             nonce=nonce - 2)
-        assert_equal(parse_as_int(collateral), 408)
+        assert_equal(parse_as_int(collateral), 576)
         # estimate without sender
         nonce = self.get_nonce(self.GENESIS_ADDR)
         collateral = self.estimate_collateral(
@@ -68,7 +70,7 @@ class TestContract(RpcClient):
             data_hex="0x60806040526000805534801561001457600080fd5b506040516101b73803806101b78339818101604052602081101561003757600080fd5b810190808051906020019092919050505080600081905550506101588061005f6000396000f3fe608060405234801561001057600080fd5b50600436106100415760003560e01c80636d4ce63c146100465780637b0cb83914610064578063812600df1461006e575b600080fd5b61004e6100b0565b6040518082815260200191505060405180910390f35b61006c6100b9565b005b61009a6004803603602081101561008457600080fd5b810190808035906020019092919050505061010b565b6040518082815260200191505060405180910390f35b60008054905090565b3373ffffffffffffffffffffffffffffffffffffffff167ffceb437c298f40d64702ac26411b2316e79f3c28ffa60edfc891ad4fc8ab82ca6000546040518082815260200191505060405180910390a2565b60008160008082825401925050819055905091905056fea264697066735822122032510ec4ba70a57be7ecbd80920213f49c97b68e3264707e93d653ff2e37064a64736f6c63430006010033000000000000000000000000000000000000000000000000000000000000000a",
             sender=None,
             nonce=nonce - 2)
-        assert_equal(parse_as_int(collateral), 408)
+        assert_equal(parse_as_int(collateral), 576)
 
         tx = self.new_tx(
             sender=self.GENESIS_ADDR,
@@ -108,7 +110,7 @@ class TestContract(RpcClient):
 
     def test_call_result(self):
         contract_addr = self.test_contract_deploy()
-        
+
         # get storage, default is 5
         result = self.call(contract_addr, "0x6d4ce63c")
         assert_equal(int(result, 0), 5)
@@ -135,3 +137,32 @@ class TestContract(RpcClient):
 
         # verify the history storage value with specified nonce and epoch
         assert_equal(int(self.call(contract_addr, "0x6d4ce63c", nonce=old_nonce, epoch=self.EPOCH_NUM(old_epoch)), 0), 6)
+
+    def test_contract_revert_with_error_string(self):
+        # deploy contract
+        bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), REVERT_MESSAGE_CONTRACT_PATH)
+        assert(os.path.isfile(bytecode_file))
+        bytecode = open(bytecode_file).read()
+
+        tx = self.new_contract_tx("", bytecode, storage_limit=200000)
+        assert_equal(self.send_tx(tx, True), tx.hash_hex())
+
+        contract_addr = self.get_tx(tx.hash_hex())["contractCreated"]
+        assert_equal(len(contract_addr), 42)
+
+        # call contract.foo()
+        try:
+            self.call(contract_addr, encode_hex_0x(keccak(b"foo()")))
+            assert(False) # should throw before this line
+        except ReceivedErrorResponseError as e:
+            assert_equal(e.response.message, "Transaction reverted")
+
+            # error string encoding details: https://ethereum.stackexchange.com/a/66404/18295
+            assert_equal(e.response.data, (
+                "0x08c379a0"                                                       # ~ function selector
+                "0000000000000000000000000000000000000000000000000000000000000020" # ~ offset of string return value
+                "0000000000000000000000000000000000000000000000000000000000000001" # ~ length of the string: 1
+                "4100000000000000000000000000000000000000000000000000000000000000" # 'A' (0x41) + padding
+            ))
+        except Exception as e:
+            assert(False) # no other exception should be thrown

@@ -1703,7 +1703,9 @@ impl TxReplayer {
                     confirmed_epoch_hash,
                     confirmed_epoch_state_root,
                     &self.state_availability_boundary,
-                )?;
+                    &|height, find_nearest_snapshot_multiple_of| {
+false },
+                        )?;
         }
         self.block_height.set(block_height + 1);
         self.commit_log.put_with_number_key(

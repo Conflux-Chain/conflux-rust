@@ -1,14 +1,14 @@
 use primal::is_prime;
 
-pub const DATASET_BYTES_INIT: u64 = 3 * (1 << 31);
+pub const DATASET_BYTES_INIT: u64 = 2 * (1 << 31);
 pub const DATASET_BYTES_GROWTH: u64 = 1 << 24;
-pub const CACHE_BYTES_INIT: u64 = 3 * (1 << 23);
+pub const CACHE_BYTES_INIT: u64 = 2 * (1 << 23);
 pub const CACHE_BYTES_GROWTH: u64 = 1 << 16;
 
 pub const POW_STAGE_LENGTH: u64 = 1 << 19;
 pub const POW_CACHE_ROUNDS: usize = 3;
-pub const POW_MIX_BYTES: usize = 128;
-pub const POW_ACCESSES: usize = 64;
+pub const POW_MIX_BYTES: usize = 256;
+pub const POW_ACCESSES: usize = 32;
 pub const POW_DATASET_PARENTS: u32 = 256;
 pub const POW_MOD: u32 = 1032193;
 pub const POW_MOD_B: u32 = 11;

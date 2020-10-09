@@ -234,13 +234,15 @@ fn hash_compute(
         full_w2pow = full_w2pow * w2 % POW_MOD64;
     }
 
-    let mut result = 0u64;
+    let mut res_buf = [0 as u32; POW_DATA_PER_THREAD as usize];
+    let mut result = 0;
     for i in 0..POW_DATA_PER_THREAD {
         let x = (a * w2pow + b * wpow + c) % POW_MOD64;
         let mut pv = 0;
         for j in 0..POW_N {
             pv = (pv * x + d[(POW_N - j - 1) as usize] as u64) % POW_MOD64;
         }
+        res_buf[i as usize] = pv as u32;
         result = fnv_hash64(result, pv);
         if i + 1 < POW_DATA_PER_THREAD {
             wpow = wpow * full_wpow % POW_MOD64;
@@ -269,7 +271,7 @@ fn hash_compute(
     #[repr(C)]
     struct MixBuf {
         half_mix: Node,
-        compress_bytes: [u8; MIX_WORDS],
+        compress_bytes: [u8; 32],
     };
 
     if full_size % MIX_WORDS != 0 {
@@ -306,10 +308,15 @@ fn hash_compute(
 
             Node { bytes: out }
         },
-        compress_bytes: [0u8; MIX_WORDS],
+        compress_bytes: [0u8; 32],
     };
 
-    let mut mix: [_; MIX_NODES] = [buf.half_mix.clone(), buf.half_mix.clone()];
+    let mut mix: [_; MIX_NODES] = [
+        buf.half_mix.clone(),
+        buf.half_mix.clone(),
+        buf.half_mix.clone(),
+        buf.half_mix.clone(),
+    ];
 
     let page_size = 4 * MIX_WORDS;
     let num_full_pages = (full_size / page_size) as u32;
@@ -317,7 +324,7 @@ fn hash_compute(
     let cache: &[Node] = light.cache.as_ref();
     let first_val = buf.half_mix.as_words()[0];
 
-    debug_assert_eq!(MIX_NODES, 2);
+    debug_assert_eq!(MIX_NODES, 4);
     debug_assert_eq!(NODE_WORDS, 16);
 
     for i in 0..POW_ACCESSES as u32 {
@@ -328,12 +335,14 @@ fn hash_compute(
             let mix_words: &mut [u32; MIX_WORDS] =
                 unsafe { make_const_array!(MIX_WORDS, &mut mix) };
 
-            fnv_hash(first_val ^ i, mix_words[i as usize % MIX_WORDS])
-                % num_full_pages
+            fnv_hash(
+                first_val ^ i ^ res_buf[i as usize],
+                mix_words[i as usize % MIX_WORDS],
+            ) % num_full_pages
         };
 
         // MIX_NODES
-        for n in 0..2 {
+        for n in 0..MIX_NODES {
             let tmp_node =
                 calculate_dag_item(index * MIX_NODES as u32 + n as u32, cache);
 
@@ -353,20 +362,25 @@ fn hash_compute(
         // leaving the array fully initialized. THIS ONLY WORKS ON LITTLE-ENDIAN
         // MACHINES. See a future PR to make this and the rest of the
         // code work correctly on big-endian arches like mips.
-        let compress: &mut [u32; MIX_WORDS / 4] = unsafe {
-            make_const_array!(MIX_WORDS / 4, &mut buf.compress_bytes)
-        };
+        let compress: &mut [u32; 8] =
+            unsafe { make_const_array!(8, &mut buf.compress_bytes) };
 
         // Compress mix
-        debug_assert_eq!(MIX_WORDS / 4, 8);
         for i in 0..8 {
             let w = i * 4;
+            let w2 = (8 + i) * 4;
 
             let mut reduction = mix_words[w + 0];
             reduction = reduction.wrapping_mul(FNV_PRIME) ^ mix_words[w + 1];
             reduction = reduction.wrapping_mul(FNV_PRIME) ^ mix_words[w + 2];
             reduction = reduction.wrapping_mul(FNV_PRIME) ^ mix_words[w + 3];
-            compress[i] = reduction;
+
+            let mut reduction2 = mix_words[w2 + 0];
+            reduction2 = reduction2.wrapping_mul(FNV_PRIME) ^ mix_words[w2 + 1];
+            reduction2 = reduction2.wrapping_mul(FNV_PRIME) ^ mix_words[w2 + 2];
+            reduction2 = reduction2.wrapping_mul(FNV_PRIME) ^ mix_words[w2 + 3];
+
+            compress[i] = reduction.wrapping_mul(FNV_PRIME) ^ reduction2;
         }
     }
 

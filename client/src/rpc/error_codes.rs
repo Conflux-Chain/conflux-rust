@@ -18,8 +18,8 @@
 
 //! RPC Error codes and error objects
 
-use crate::rpc::types::Bytes;
 use jsonrpc_core::{Error, ErrorCode, Value};
+use rustc_hex::ToHex;
 use std::fmt;
 
 pub mod codes {
@@ -150,14 +150,10 @@ pub fn invalid_params<T: fmt::Debug>(param: &str, details: T) -> Error {
 }
 
 pub fn call_execution_error(message: String, output: Vec<u8>) -> Error {
-    let output_bytes = Bytes::new(output);
     Error {
         code: ErrorCode::ServerError(codes::CALL_EXECUTION_ERROR),
         message,
-        data: Some(Value::String(
-            serde_json::to_string(&output_bytes)
-                .expect("Bytes serialization cannot fail"),
-        )),
+        data: Some(Value::String(format!("0x{}", output.to_hex()))),
     }
 }
 

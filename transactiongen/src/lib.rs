@@ -284,7 +284,6 @@ pub struct DirectTransactionGenerator {
     erc20_address: Address,
 }
 
-// Allow use of hex() in H256, etc.
 #[allow(deprecated)]
 impl DirectTransactionGenerator {
     const MAX_TOTAL_ACCOUNTS: usize = 100_000;
@@ -311,8 +310,12 @@ impl DirectTransactionGenerator {
 
         let erc20_address = contract_address(
             CreateContractAddress::FromSenderNonceAndCodeHash,
+            // A fake block_number. There field is unnecessary in Ethereum
+            // replay test.
+            0.into(),
             &contract_creator,
             &0.into(),
+            // A fake code. There field is unnecessary in Ethereum replay test.
             &[],
         )
         .0;

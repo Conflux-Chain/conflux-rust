@@ -1438,14 +1438,15 @@ impl ConsensusNewBlockHandler {
                 // Ensure all blocks on the pivot chain before
                 // the new stable block to have state_valid computed
                 if has_body && !self.conf.bench_mode {
-                    assert!(
-                        new_stable_height
-                            >= inner
-                                .data_man
-                                .state_availability_boundary
-                                .read()
-                                .lower_bound
-                    );
+                    // FIXME: this asserion doesn't hold any more
+                    // assert!(
+                    //     new_stable_height
+                    //         >= inner
+                    //             .data_man
+                    //             .state_availability_boundary
+                    //             .read()
+                    //             .lower_bound
+                    // );
                     // If new_era_genesis should have available state,
                     // make sure state execution is finished before setting
                     // lower_bound
@@ -1533,15 +1534,7 @@ impl ConsensusNewBlockHandler {
         // FIXME: we need a function to compute the deferred epoch
         // FIXME: number. the current codebase may not be
         // FIXME: consistent at all places.
-        // The bound_height ensures that the snapshot before stable_genesis will
-        // not be removed, so that the execution of the epochs following
-        // stable_genesis can go through a normal path where both
-        // snapshot and intermediate delta mpt exist.
-        let mut confirmed_height = meter.get_confirmed_epoch_num(
-            inner.cur_era_stable_height
-                + self.data_man.get_snapshot_epoch_count() as u64
-                + DEFERRED_STATE_EPOCH_COUNT,
-        );
+        let mut confirmed_height = meter.get_confirmed_epoch_num();
         if confirmed_height < DEFERRED_STATE_EPOCH_COUNT {
             confirmed_height = 0;
         } else {
@@ -1549,16 +1542,19 @@ impl ConsensusNewBlockHandler {
         }
         // We can not assume that confirmed epoch are already executed,
         // but we can assume that the deferred block are executed.
-        self.data_man
-            .storage_manager
-            .get_storage_manager()
-            .maintain_state_confirmed(
-                inner,
-                confirmed_height,
-                &self.data_man.state_availability_boundary,
-            )
-            // FIXME: propogate error.
-            .expect(&concat!(file!(), ":", line!(), ":", column!()));
+        if block_body_opt.is_some() {
+            self.data_man
+                .storage_manager
+                .get_storage_manager()
+                .maintain_state_confirmed(
+                    inner,
+                    inner.cur_era_stable_height,
+                    confirmed_height,
+                    &self.data_man.state_availability_boundary,
+                )
+                // FIXME: propogate error.
+                .expect(&concat!(file!(), ":", line!(), ":", column!()));
+        }
 
         let era_genesis_height =
             inner.get_era_genesis_height(inner.arena[parent].height);

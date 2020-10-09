@@ -77,6 +77,7 @@ path = "tools/tg_config_gen/main.rs"
 [workspace]
 
 [features]
+default = ["jemalloc-global"]
 deadlock-detection = ["parking_lot/deadlock_detection"]
 jemalloc-global = ["jemallocator", "malloc_size_of/jemalloc-global"]
 

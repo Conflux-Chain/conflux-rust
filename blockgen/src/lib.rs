@@ -579,7 +579,6 @@ impl BlockGenerator {
     }
 
     fn generate_block_impl(&self, block_init: Block) -> H256 {
-        let consensus_graph = self.consensus_graph();
         let mut block = block_init;
         let difficulty = block.block_header.difficulty();
         let problem = ProofOfWorkProblem::new(
@@ -610,11 +609,13 @@ impl BlockGenerator {
         );
         self.on_mined_block(block);
 
+        debug!("generate_block finished one_mined_block()");
         // FIXME: We should add a flag to enable/disable this wait
         // Ensure that when `generate**` function returns, the block has been
         // handled by Consensus This order is assumed by some tests, and
         // this function is also only used in tests.
-        consensus_graph.wait_for_generation(&hash);
+        self.consensus_graph().wait_for_generation(&hash);
+        debug!("generate_block finished wait_for_generation()");
 
         hash
     }

@@ -2164,7 +2164,7 @@ impl ConsensusGraphInner {
 
     /// This function differs from `get_pivot_hash_from_epoch_number` in that it
     /// only returns the hash if it is in the current consensus graph.
-    fn epoch_hash(&self, epoch_number: u64) -> Option<H256> {
+    pub fn epoch_hash(&self, epoch_number: u64) -> Option<H256> {
         let pivot_index = self.height_to_pivot_index(epoch_number);
         self.pivot_chain
             .get(pivot_index)
@@ -2389,6 +2389,7 @@ impl ConsensusGraphInner {
                         .get(tx_index.index)
                         .expect("Error: can't get receipt by tx_index ")
                         .clone(),
+                    block_number: block_receipts.block_number,
                     prior_gas_used,
                     tx_exec_error_msg: if tx_exec_error_msg.is_empty() {
                         None
@@ -3535,15 +3536,17 @@ impl ConsensusGraphInner {
         let mut cur = me;
         // FIXME: Same here. Be explicit about whether a checkpoint or a synced
         // FIXME: snapshot is requested, and distinguish two cases.
-        let state_boundary_height =
-            self.data_man.state_availability_boundary.read().lower_bound;
+        //let state_boundary_height =
+        //    self.data_man.state_availability_boundary.read().lower_bound;
         loop {
             if self.arena[cur].data.state_valid.is_some() {
                 break;
             }
+            // FIXME: the assersion isn't on state boundary,
+            // FIXME: correct the assersion.
             // See comments on compute_blame_and_state_with_execution_result()
             // for explanation of this assumption.
-            assert!(self.arena[cur].height >= state_boundary_height);
+            //assert!(self.arena[cur].height >= state_boundary_height);
             blocks_to_compute.push(cur);
             cur = self.arena[cur].parent;
         }
