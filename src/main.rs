@@ -5,12 +5,6 @@
 #[cfg(test)]
 mod test;
 
-#[cfg(all(not(target_env = "msvc"), feature = "jemalloc-global"))]
-use jemallocator::Jemalloc;
-#[cfg(all(not(target_env = "msvc"), feature = "jemalloc-global"))]
-#[global_allocator]
-static GLOBAL: Jemalloc = Jemalloc;
-
 mod command;
 
 use crate::command::rpc::RpcCommand;
