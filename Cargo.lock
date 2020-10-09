@@ -563,7 +563,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-utils"
-version = "0.6.0"
+version = "1.0.0"
 dependencies = [
  "log 0.4.11",
  "parking_lot 0.10.2",
@@ -571,7 +571,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "0.6.4-alpha-1"
+version = "1.0.0-alpha-1"
 dependencies = [
  "bit-set",
  "bn",
@@ -752,7 +752,7 @@ dependencies = [
 
 [[package]]
 name = "client"
-version = "0.6.4-alpha-1"
+version = "1.0.0-alpha-1"
 dependencies = [
  "app_dirs",
  "bigdecimal",
@@ -839,7 +839,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "0.6.4-alpha-1"
+version = "1.0.0-alpha-1"
 dependencies = [
  "app_dirs",
  "blockgen",

@@ -3,7 +3,7 @@ description = "Conflux utilities library"
 homepage = "http://www.conflux-chain.org"
 license = "GPL-3.0"
 name = "cfx-utils"
-version = "0.6.0"
+version = "1.0.0"
 edition = "2018"
 
 [dependencies]
