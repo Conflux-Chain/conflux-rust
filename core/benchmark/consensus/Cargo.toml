@@ -13,7 +13,7 @@ cfx-storage = { path = "../../../core/storage" }
 primitives = { path = "../../../primitives" }
 db = { path = "../../../db" }
 threadpool = "1.0"
-parking_lot = "0.10"
+parking_lot = "0.11"
 log4rs = "0.8.1"
 log = "0.4"
 

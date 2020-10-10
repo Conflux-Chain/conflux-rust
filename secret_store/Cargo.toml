@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 cfx-types = { path = "../cfx_types" }
-parking_lot = "0.10"
+parking_lot = "0.11"
 rlp = "0.4.0"
 rand = "0.7"
 cfxkey = { path = "../accounts/cfxkey" }
