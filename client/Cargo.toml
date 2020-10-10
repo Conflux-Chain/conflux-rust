@@ -23,13 +23,13 @@ cfx-storage = { path = "../core/storage" }
 app_dirs = "1.2.1"
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev="b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
-jsonrpc-core = "14.0.0"
-jsonrpc-tcp-server = "14.0.0"
-jsonrpc-http-server = "14.0.0"
-jsonrpc-derive = "14.0.0"
-jsonrpc-core-client = "14.0.0"
-jsonrpc-pubsub = "14.0.0"
-jsonrpc-ws-server = "14.0.0"
+jsonrpc-core = "15.1.0"
+jsonrpc-tcp-server = "15.1.0"
+jsonrpc-http-server = "15.1.0"
+jsonrpc-derive = "15.1.0"
+jsonrpc-core-client = "15.1.0"
+jsonrpc-pubsub = "15.1.0"
+jsonrpc-ws-server = "15.1.0"
 error-chain = { version = "0.12" }
 lazy_static = "1.4"
 log = "0.4"
