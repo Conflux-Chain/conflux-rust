@@ -320,7 +320,7 @@ dependencies = [
  "log 0.4.11",
  "metrics",
  "network",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "primitives",
  "rand 0.7.3",
  "rlp",
@@ -494,7 +494,7 @@ dependencies = [
  "hashbrown 0.7.2",
  "log 0.4.11",
  "parity-util-mem",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "primitives",
  "rlp",
 ]
@@ -523,7 +523,7 @@ dependencies = [
  "malloc_size_of_derive",
  "memoffset",
  "parity-util-mem",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "primitives",
  "rand 0.7.3",
  "rand_chacha",
@@ -549,7 +549,7 @@ dependencies = [
  "jsonrpc-tcp-server",
  "keccak-hash",
  "log 0.4.11",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "tokio 0.1.22",
  "tokio-io",
 ]
@@ -566,7 +566,7 @@ name = "cfx-utils"
 version = "0.6.0"
 dependencies = [
  "log 0.4.11",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
 ]
 
 [[package]]
@@ -618,7 +618,7 @@ dependencies = [
  "parity-bytes",
  "parity-crypto 0.3.1",
  "parity-util-mem",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "primal",
  "primitives",
  "priority-send-queue",
@@ -659,7 +659,7 @@ dependencies = [
  "cfxkey",
  "cfxstore",
  "log 0.4.11",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "serde",
  "serde_derive",
  "serde_json",
@@ -700,7 +700,7 @@ dependencies = [
  "matches",
  "parity-crypto 0.4.2",
  "parity-wordlist",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "rand 0.7.3",
  "rustc-hex 1.0.0",
  "serde",
@@ -795,7 +795,7 @@ dependencies = [
  "network",
  "num-bigint",
  "order-stat",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "primitives",
  "rand 0.7.3",
  "rand_xorshift",
@@ -824,6 +824,15 @@ name = "cloudabi"
 version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ddfc5b9aa5d4507acaf872de71051dfd0e309860e88966e1051e462a077aac4f"
+dependencies = [
+ "bitflags",
+]
+
+[[package]]
+name = "cloudabi"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4344512281c643ae7638bbabc3af17a11307803ec8f0fcad9fae512a8bf36467"
 dependencies = [
  "bitflags",
 ]
@@ -873,7 +882,7 @@ dependencies = [
  "network",
  "panic_hook",
  "parity-wordlist",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "primitives",
  "rand 0.7.3",
  "rlp",
@@ -1941,6 +1950,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "instant"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63312a18f7ea8760cdd0a7c5aac1a619752a246b833545e3e36d1f81f7cd9e66"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
 name = "io"
 version = "0.1.0"
 dependencies = [
@@ -1952,7 +1970,7 @@ dependencies = [
  "metrics",
  "mio",
  "num_cpus",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "slab",
  "time",
  "timer",
@@ -2192,7 +2210,7 @@ dependencies = [
  "malloc_size_of_derive",
  "num_cpus",
  "parity-util-mem",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "regex",
  "rocksdb",
  "tempdir",
@@ -2287,7 +2305,7 @@ dependencies = [
  "cfx-types",
  "malloc_size_of",
  "malloc_size_of_derive",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "rand 0.7.3",
 ]
 
@@ -2302,6 +2320,15 @@ name = "lock_api"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4da24a77a3d8a6d4862d95f72e6fdb9c09a643ecdb402d754004a557f2bec75"
+dependencies = [
+ "scopeguard 1.1.0",
+]
+
+[[package]]
+name = "lock_api"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28247cc5a5be2f05fbcd76dd0cf2c7d3b5400cb978a28042abcd4fa0b3f8261c"
 dependencies = [
  "scopeguard 1.1.0",
 ]
@@ -2388,7 +2415,7 @@ dependencies = [
  "cfx-types",
  "hashbrown 0.7.2",
  "jemallocator",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "slab",
  "smallvec 1.4.1",
  "winapi 0.3.9",
@@ -2456,7 +2483,7 @@ dependencies = [
  "influx_db_client",
  "lazy_static",
  "log 0.4.11",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "rand 0.7.3",
  "time",
  "timer",
@@ -2618,7 +2645,7 @@ dependencies = [
  "mio",
  "natpmp",
  "parity-path",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "priority-send-queue",
  "rand 0.7.3",
  "rlp",
@@ -2931,7 +2958,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f842b1982eb6c2fe34036a4fbfb06dd185a3f5c8edfaacdf7d1ea10b07de6252"
 dependencies = [
- "lock_api",
+ "lock_api 0.3.4",
  "parking_lot_core 0.6.2",
  "rustc_version",
 ]
@@ -2942,8 +2969,19 @@ version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3a704eb390aafdc107b0e392f56a82b668e3a71366993b5340f5833fd62505e"
 dependencies = [
- "lock_api",
+ "lock_api 0.3.4",
  "parking_lot_core 0.7.2",
+]
+
+[[package]]
+name = "parking_lot"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4893845fa2ca272e647da5d0e46660a314ead9c2fdd9a883aabc32e481a8733"
+dependencies = [
+ "instant",
+ "lock_api 0.4.1",
+ "parking_lot_core 0.8.0",
 ]
 
 [[package]]
@@ -2953,7 +2991,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b876b1b9e7ac6e1a74a6da34d25c42e17e8862aa409cbbbdcfc8d86c6f3bc62b"
 dependencies = [
  "cfg-if",
- "cloudabi",
+ "cloudabi 0.0.3",
  "libc",
  "redox_syscall",
  "rustc_version",
@@ -2967,9 +3005,24 @@ version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d58c7c768d4ba344e3e8d72518ac13e259d7c7ade24167003b8488e10b6740a3"
 dependencies = [
+ "cfg-if",
+ "cloudabi 0.0.3",
+ "libc",
+ "redox_syscall",
+ "smallvec 1.4.1",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "parking_lot_core"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c361aa727dd08437f2f1447be8b59a33b0edd15e0fcee698f935613d9efbca9b"
+dependencies = [
  "backtrace",
  "cfg-if",
- "cloudabi",
+ "cloudabi 0.1.0",
+ "instant",
  "libc",
  "petgraph",
  "redox_syscall",
@@ -3284,7 +3337,7 @@ version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c618c47cd3ebd209790115ab837de41425723956ad3ce2e6a7f09890947cacb9"
 dependencies = [
- "cloudabi",
+ "cloudabi 0.0.3",
  "fuchsia-cprng",
  "libc",
  "rand_core 0.3.1",
@@ -3353,7 +3406,7 @@ version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b75f676a1e053fc562eafbb47838d67c84801e38fc1ba459e8f180deabd5071"
 dependencies = [
- "cloudabi",
+ "cloudabi 0.0.3",
  "fuchsia-cprng",
  "libc",
  "rand_core 0.4.2",
@@ -3386,7 +3439,7 @@ version = "1.0.0"
 dependencies = [
  "lazy_static",
  "log 0.4.11",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "rand 0.7.3",
 ]
 
@@ -3653,7 +3706,7 @@ dependencies = [
  "cfxkey",
  "malloc_size_of",
  "malloc_size_of_derive",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "rand 0.7.3",
  "rlp",
 ]
@@ -4109,7 +4162,7 @@ version = "0.1.0"
 dependencies = [
  "malloc_size_of",
  "malloc_size_of_derive",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "toml 0.4.10",
 ]
 
@@ -4456,7 +4509,7 @@ dependencies = [
  "metrics",
  "network",
  "parity-bytes",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "primitives",
  "priority-send-queue",
  "rand 0.7.3",

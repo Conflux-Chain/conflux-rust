@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 lazy_static = { version = "1.4" }
 log = "0.4"
-parking_lot = "0.10"
+parking_lot = "0.11"
 rand = "0.7"
 
 [features]

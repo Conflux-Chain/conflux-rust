@@ -13,7 +13,7 @@ cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
 hex = "0.2"
 primitives = { path = "../primitives" }
-parking_lot = "0.10"
+parking_lot = "0.11"
 rlp = "0.4.0"
 rand = "0.7"
 secret-store = { path = "../secret_store" }
