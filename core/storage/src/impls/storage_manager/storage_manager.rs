@@ -1114,6 +1114,18 @@ impl StorageManager {
         // the removal lists.
         {
             let mut info_maps = self.snapshot_info_map_by_epoch.write();
+            let removal_filter = |vec: &mut Vec<EpochId>| {
+                vec.retain(|epoch| {
+                    info_maps.get(epoch).map_or(true, |info| {
+                        // The snapshot itself is already removed.
+                        info.snapshot_info_kept_to_provide_sync
+                            != SnapshotKeptToProvideSyncStatus::InfoOnly
+                    })
+                })
+            };
+            removal_filter(&mut non_pivot_snapshots_to_remove);
+            removal_filter(&mut old_pivot_snapshots_to_remove);
+
             let mut updated_snapshot_info_epochs =
                 HashMap::<EpochId, SnapshotKeptToProvideSyncStatus>::default();
             for (epoch, new_status) in &extra_snapshot_infos_kept_for_sync {
@@ -1139,18 +1151,6 @@ impl StorageManager {
                     }
                 }
             }
-
-            let removal_filter = |vec: &mut Vec<EpochId>| {
-                vec.retain(|epoch| {
-                    info_maps.get(epoch).map_or(true, |info| {
-                        // The snapshot itself is already removed.
-                        info.snapshot_info_kept_to_provide_sync
-                            != SnapshotKeptToProvideSyncStatus::InfoOnly
-                    })
-                })
-            };
-            removal_filter(&mut non_pivot_snapshots_to_remove);
-            removal_filter(&mut old_pivot_snapshots_to_remove);
         }
         if !non_pivot_snapshots_to_remove.is_empty()
             || !old_pivot_snapshots_to_remove.is_empty()
