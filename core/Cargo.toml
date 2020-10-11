@@ -30,7 +30,7 @@ hashbrown = "0.7.1"
 hibitset = { path = "../util/hibitset" }
 itertools = "0.9"
 io = { path = "../util/io" }
-jsonrpc-core = "14.0.0"
+jsonrpc-core = "15.1.0"
 keccak-hash = "0.5"
 kvdb = "0.4"
 kvdb-rocksdb = {path="../db/src/kvdb-rocksdb"}
