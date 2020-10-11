@@ -51,6 +51,11 @@ pub mod address_util {
             *type_byte |= type_bits;
         }
 
+        #[cfg(feature = "storage_benchmark_no_account_space_check")]
+        #[inline]
+        fn is_valid_address(&self) -> bool { true }
+
+        #[cfg(not(feature = "storage_benchmark_no_account_space_check"))]
         #[inline]
         fn is_valid_address(&self) -> bool {
             self.is_contract_address()
