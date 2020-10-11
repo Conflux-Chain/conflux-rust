@@ -2,6 +2,30 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+#[derive(Clone, Copy, Debug, DeriveMallocSizeOf, PartialEq)]
+#[repr(u8)]
+pub enum SnapshotKeptToProvideSyncStatus {
+    No = 0,
+    InfoOnly = 1,
+    InfoAndSnapshot = 2,
+}
+
+impl Default for SnapshotKeptToProvideSyncStatus {
+    fn default() -> Self { SnapshotKeptToProvideSyncStatus::No }
+}
+
+impl Encodable for SnapshotKeptToProvideSyncStatus {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.append_internal(&(*self as u8));
+    }
+}
+
+impl Decodable for SnapshotKeptToProvideSyncStatus {
+    fn decode(rlp: &Rlp) -> std::result::Result<Self, DecoderError> {
+        Ok(unsafe { std::mem::transmute(rlp.as_val::<u8>()?) })
+    }
+}
+
 #[derive(
     Clone, Default, Derivative, DeriveMallocSizeOf, RlpEncodable, RlpDecodable,
 )]
@@ -9,7 +33,7 @@
 pub struct SnapshotInfo {
     /// This field is true when the snapshot info is kept but the snapshot
     /// itself is removed, or when
-    pub snapshot_info_kept_to_provide_sync: bool,
+    pub snapshot_info_kept_to_provide_sync: SnapshotKeptToProvideSyncStatus,
     // FIXME: update serve_one_step_sync at maintenance.
     pub serve_one_step_sync: bool,
 
@@ -26,7 +50,7 @@ pub struct SnapshotInfo {
 impl SnapshotInfo {
     pub fn genesis_snapshot_info() -> Self {
         Self {
-            snapshot_info_kept_to_provide_sync: false,
+            snapshot_info_kept_to_provide_sync: Default::default(),
             serve_one_step_sync: false,
             merkle_root: MERKLE_NULL_NODE,
             parent_snapshot_height: 0,
@@ -151,6 +175,7 @@ use crate::{
 use derivative::Derivative;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{path::Path, sync::Arc};
 use tokio::sync::Semaphore;

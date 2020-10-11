@@ -1703,7 +1703,7 @@ impl TxReplayer {
                     confirmed_epoch_hash,
                     confirmed_epoch_state_root,
                     &self.state_availability_boundary,
-                    &|height, find_nearest_snapshot_multiple_of| {
+                    &|_height, _find_nearest_snapshot_multiple_of| {
 false },
                         )?;
         }

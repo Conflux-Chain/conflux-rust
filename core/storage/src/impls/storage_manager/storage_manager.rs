@@ -593,7 +593,7 @@ impl StorageManager {
             };
 
             let in_progress_snapshot_info = SnapshotInfo {
-                snapshot_info_kept_to_provide_sync: false,
+                snapshot_info_kept_to_provide_sync: Default::default(),
                 serve_one_step_sync: true,
                 height: height as u64,
                 parent_snapshot_height: height
@@ -959,13 +959,16 @@ impl StorageManager {
                         ) {
                             // For any snapshot to keep, we keep all snapshot
                             // infos from pivot tip to it.
-                            extra_snapshot_infos_kept_for_sync.extend(
-                                std::mem::take(
-                                    &mut old_pivot_snapshot_infos_to_remove,
-                                ),
-                            );
+                            for snapshot_epoch_id_to_keep_info in std::mem::take(
+                                &mut old_pivot_snapshot_infos_to_remove,
+                            ) {
+                                extra_snapshot_infos_kept_for_sync.push((
+                                    snapshot_epoch_id_to_keep_info,
+                                    SnapshotKeptToProvideSyncStatus::InfoOnly,
+                                ));
+                            }
                             extra_snapshot_infos_kept_for_sync
-                                .push(snapshot_epoch_id.clone());
+                                .push((snapshot_epoch_id.clone(), SnapshotKeptToProvideSyncStatus::InfoAndSnapshot));
                         } else {
                             old_pivot_snapshot_infos_to_remove
                                 .push(snapshot_epoch_id.clone());
@@ -1112,25 +1115,27 @@ impl StorageManager {
         {
             let mut info_maps = self.snapshot_info_map_by_epoch.write();
             let mut updated_snapshot_info_epochs =
-                HashSet::<EpochId>::default();
-            for epoch in &extra_snapshot_infos_kept_for_sync {
+                HashMap::<EpochId, SnapshotKeptToProvideSyncStatus>::default();
+            for (epoch, new_status) in &extra_snapshot_infos_kept_for_sync {
                 if let Some(info) = info_maps.get(epoch) {
-                    if !info.snapshot_info_kept_to_provide_sync {
+                    if info.snapshot_info_kept_to_provide_sync != *new_status {
                         let mut new_snapshot_info = info.clone();
                         new_snapshot_info.snapshot_info_kept_to_provide_sync =
-                            true;
+                            *new_status;
                         info_maps.insert(epoch, new_snapshot_info)?;
-                        updated_snapshot_info_epochs.insert(*epoch);
+                        updated_snapshot_info_epochs
+                            .insert(*epoch, *new_status);
                     }
                 }
             }
             if updated_snapshot_info_epochs.len() > 0 {
                 let mut current_snapshots = self.current_snapshots.write();
                 for snapshot_info in current_snapshots.iter_mut() {
-                    if updated_snapshot_info_epochs
-                        .contains(&snapshot_info.get_snapshot_epoch_id())
+                    if let Some(new_status) = updated_snapshot_info_epochs
+                        .get(&snapshot_info.get_snapshot_epoch_id())
                     {
-                        snapshot_info.snapshot_info_kept_to_provide_sync = true;
+                        snapshot_info.snapshot_info_kept_to_provide_sync =
+                            *new_status;
                     }
                 }
             }
@@ -1138,7 +1143,9 @@ impl StorageManager {
             let removal_filter = |vec: &mut Vec<EpochId>| {
                 vec.retain(|epoch| {
                     info_maps.get(epoch).map_or(true, |info| {
-                        !info.snapshot_info_kept_to_provide_sync
+                        // The snapshot itself is already removed.
+                        info.snapshot_info_kept_to_provide_sync
+                            != SnapshotKeptToProvideSyncStatus::InfoOnly
                     })
                 })
             };
@@ -1309,13 +1316,14 @@ impl StorageManager {
                     Some(info) => {
                         info!(
                             "Missing snapshot db: {:?}, \
-                             snapshot_info_kept_to_provide_sync {}, {:?}, ",
+                             snapshot_info_kept_to_provide_sync {:?}, {:?}, ",
                             snapshot_epoch_id,
                             info.snapshot_info_kept_to_provide_sync,
                             info
                         );
 
                         info.snapshot_info_kept_to_provide_sync
+                            == SnapshotKeptToProvideSyncStatus::InfoOnly
                     }
                 };
             if snapshot_info_kept_to_provide_sync {
@@ -1358,7 +1366,9 @@ impl StorageManager {
                     continue;
                 }
                 // See comment above.
-                if snapshot_info.snapshot_info_kept_to_provide_sync {
+                if snapshot_info.snapshot_info_kept_to_provide_sync
+                    == SnapshotKeptToProvideSyncStatus::InfoOnly
+                {
                     continue;
                 }
             }
@@ -1511,7 +1521,7 @@ use crate::{
     snapshot_manager::SnapshotManagerTrait,
     storage_db::{
         DeltaDbManagerTrait, KeyValueDbIterableTrait, SnapshotDbManagerTrait,
-        SnapshotInfo,
+        SnapshotInfo, SnapshotKeptToProvideSyncStatus,
     },
     storage_dir,
     utils::{arc_ext::*, guarded_value::GuardedValue},
