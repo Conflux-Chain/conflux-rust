@@ -98,8 +98,7 @@ mod impls {
             }
         }
 
-        // Used in storage benchmark.
-        #[allow(unused)]
+        #[cfg(test)]
         pub fn get_storage_mut(&mut self) -> &mut Storage { &mut self.storage }
 
         #[cfg(test)]

@@ -1549,6 +1549,7 @@ impl ConsensusNewBlockHandler {
                 .maintain_state_confirmed(
                     inner,
                     inner.cur_era_stable_height,
+                    self.conf.inner_conf.era_epoch_count,
                     confirmed_height,
                     &self.data_man.state_availability_boundary,
                 )

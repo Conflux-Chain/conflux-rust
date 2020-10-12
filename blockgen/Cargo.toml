@@ -19,7 +19,7 @@ log = "0.4"
 metrics = { path = "../util/metrics" }
 network = { path = "../network" }
 primitives = { path = "../primitives" }
-parking_lot = "0.10"
+parking_lot = "0.11"
 rlp = "0.4.0"
 rand = "0.7"
 secret-store = { path = "../secret_store" }

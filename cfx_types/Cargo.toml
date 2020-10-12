@@ -6,3 +6,6 @@ description = "Conflux types"
 
 [dependencies]
 ethereum-types = "0.9"
+
+[features]
+storage_benchmark_no_account_space_check = []

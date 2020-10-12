@@ -8,4 +8,4 @@ edition = "2018"
 
 [dependencies]
 log = "0.4"
-parking_lot = "0.10"
+parking_lot = "0.11"
