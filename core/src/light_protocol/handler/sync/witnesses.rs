@@ -25,7 +25,7 @@ use cfx_parameters::{
 };
 use cfx_types::H256;
 use network::{node_table::NodeId, NetworkContext};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use std::{collections::HashSet, sync::Arc};
 
 #[derive(Debug)]
@@ -74,6 +74,9 @@ pub struct Witnesses {
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
 
+    // mutex used to make sure at most one thread drives sync at any given time
+    syn: Mutex<()>,
+
     // sync and request manager
     sync_manager: SyncManager<u64, MissingWitness>,
 }
@@ -88,6 +91,7 @@ impl Witnesses {
         let height_of_latest_verified_header = RwLock::new(0);
         let in_flight = RwLock::new(HashSet::new());
         let ledger = LedgerInfo::new(consensus.clone());
+        let syn = Mutex::new(());
         let sync_manager =
             SyncManager::new(peers.clone(), msgid::GET_WITNESS_INFO);
 
@@ -97,6 +101,7 @@ impl Witnesses {
             in_flight,
             ledger,
             request_id_allocator,
+            syn,
             sync_manager,
         }
     }
@@ -106,12 +111,15 @@ impl Witnesses {
         *self.height_of_latest_verified_header.read()
     }
 
-    fn get_statistics(&self) -> Statistics {
-        Statistics {
-            in_flight: self.sync_manager.num_in_flight(),
-            verified: self.latest_verified(),
-            waiting: self.sync_manager.num_waiting(),
-        }
+    pub fn print_stats(&self) {
+        trace!(
+            "witness sync statistics: {:?}",
+            Statistics {
+                in_flight: self.sync_manager.num_in_flight(),
+                verified: self.latest_verified(),
+                waiting: self.sync_manager.num_waiting(),
+            }
+        );
     }
 
     /// Get root hashes for `epoch` from local cache.
@@ -217,7 +225,7 @@ impl Witnesses {
     ) -> Result<()>
     {
         for item in witnesses {
-            debug!("Validating witness info {:?}", item);
+            trace!("Validating witness info {:?}", item);
 
             match self.sync_manager.check_if_requested(
                 peer,
@@ -251,6 +259,7 @@ impl Witnesses {
     pub fn clean_up(&self) {
         let timeout = *WITNESS_REQUEST_TIMEOUT;
         let witnesses = self.sync_manager.remove_timeout_requests(timeout);
+        trace!("Timeout witnesses ({}): {:?}", witnesses.len(), witnesses);
         self.sync_manager.insert_waiting(witnesses.into_iter());
     }
 
@@ -258,13 +267,18 @@ impl Witnesses {
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, witnesses: Vec<u64>,
     ) -> Result<Option<RequestId>> {
-        debug!("send_request peer={:?} witnesses={:?}", peer, witnesses);
-
         if witnesses.is_empty() {
             return Ok(None);
         }
 
         let request_id = self.request_id_allocator.next();
+
+        trace!(
+            "send_request GetWitnessInfo peer={:?} id={:?} witnesses={:?}",
+            peer,
+            request_id,
+            witnesses
+        );
 
         let msg: Box<dyn Message> = Box::new(GetWitnessInfo {
             request_id,
@@ -277,7 +291,10 @@ impl Witnesses {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        debug!("witness sync statistics: {:?}", self.get_statistics());
+        let _guard = match self.syn.try_lock() {
+            None => return,
+            Some(g) => g,
+        };
 
         self.sync_manager.sync(
             MAX_WITNESSES_IN_FLIGHT,

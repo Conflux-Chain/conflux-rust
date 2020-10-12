@@ -301,8 +301,8 @@ pub mod light {
     pub const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 3;
 
     /// (Maximum) number of items requested in a single request.
-    pub const EPOCH_REQUEST_BATCH_SIZE: usize = 30;
-    pub const HEADER_REQUEST_BATCH_SIZE: usize = 30;
+    pub const EPOCH_REQUEST_BATCH_SIZE: usize = 100;
+    pub const HEADER_REQUEST_BATCH_SIZE: usize = 10;
     pub const BLOOM_REQUEST_BATCH_SIZE: usize = 30;
     pub const WITNESS_REQUEST_BATCH_SIZE: usize = 50;
     pub const RECEIPT_REQUEST_BATCH_SIZE: usize = 30;
@@ -315,7 +315,7 @@ pub mod light {
 
     /// Maximum number of in-flight items at any given time.
     /// If we reach this limit, we will not request any more.
-    pub const MAX_HEADERS_IN_FLIGHT: usize = 500;
+    pub const MAX_HEADERS_IN_FLIGHT: usize = 1000;
     pub const MAX_WITNESSES_IN_FLIGHT: usize = 500;
     pub const MAX_BLOOMS_IN_FLIGHT: usize = 500;
     pub const MAX_RECEIPTS_IN_FLIGHT: usize = 100;
@@ -332,7 +332,7 @@ pub mod light {
     pub const MAX_PARALLEL_EPOCH_REQUESTS: usize = 10;
 
     /// Number of epochs to request in one round (in possibly multiple batches).
-    pub const NUM_EPOCHS_TO_REQUEST: usize = 200;
+    pub const NUM_EPOCHS_TO_REQUEST: usize = 1000;
 
     /// Minimum number of missing items in the sync pipeline.
     /// If we have fewer, we will try to request some more.

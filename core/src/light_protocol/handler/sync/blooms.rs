@@ -6,7 +6,7 @@ extern crate lru_time_cache;
 
 use cfx_types::Bloom;
 use lru_time_cache::LruCache;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use std::{future::Future, sync::Arc};
 
 use super::{
@@ -46,6 +46,9 @@ pub struct Blooms {
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
 
+    // mutex used to make sure at most one thread drives sync at any given time
+    syn: Mutex<()>,
+
     // sync and request manager
     sync_manager: SyncManager<u64, MissingBloom>,
 
@@ -62,6 +65,7 @@ impl Blooms {
         witnesses: Arc<Witnesses>,
     ) -> Self
     {
+        let syn = Mutex::new(());
         let sync_manager = SyncManager::new(peers.clone(), msgid::GET_BLOOMS);
 
         let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
@@ -69,6 +73,7 @@ impl Blooms {
 
         Blooms {
             request_id_allocator,
+            syn,
             sync_manager,
             verified,
             witnesses,
@@ -76,12 +81,15 @@ impl Blooms {
     }
 
     #[inline]
-    fn get_statistics(&self) -> Statistics {
-        Statistics {
-            cached: self.verified.read().len(),
-            in_flight: self.sync_manager.num_in_flight(),
-            waiting: self.sync_manager.num_waiting(),
-        }
+    pub fn print_stats(&self) {
+        debug!(
+            "bloom sync statistics: {:?}",
+            Statistics {
+                cached: self.verified.read().len(),
+                in_flight: self.sync_manager.num_in_flight(),
+                waiting: self.sync_manager.num_waiting(),
+            }
+        );
     }
 
     #[inline]
@@ -113,7 +121,7 @@ impl Blooms {
     ) -> Result<()>
     {
         for BloomWithEpoch { epoch, bloom } in blooms {
-            debug!("Validating bloom {:?} with epoch {}", bloom, epoch);
+            trace!("Validating bloom {:?} with epoch {}", bloom, epoch);
 
             match self.sync_manager.check_if_requested(peer, id, &epoch)? {
                 None => continue,
@@ -157,6 +165,7 @@ impl Blooms {
         // remove timeout in-flight requests
         let timeout = *BLOOM_REQUEST_TIMEOUT;
         let blooms = self.sync_manager.remove_timeout_requests(timeout);
+        trace!("Timeout blooms ({}): {:?}", blooms.len(), blooms);
         self.sync_manager.insert_waiting(blooms.into_iter());
 
         // trigger cache cleanup
@@ -167,13 +176,19 @@ impl Blooms {
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, epochs: Vec<u64>,
     ) -> Result<Option<RequestId>> {
-        debug!("send_request peer={:?} epochs={:?}", peer, epochs);
-
         if epochs.is_empty() {
             return Ok(None);
         }
 
         let request_id = self.request_id_allocator.next();
+
+        trace!(
+            "send_request GetBlooms peer={:?} id={:?} epochs={:?}",
+            peer,
+            request_id,
+            epochs
+        );
+
         let msg: Box<dyn Message> = Box::new(GetBlooms { request_id, epochs });
 
         msg.send(io, peer)?;
@@ -182,7 +197,10 @@ impl Blooms {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        debug!("bloom sync statistics: {:?}", self.get_statistics());
+        let _guard = match self.syn.try_lock() {
+            None => return,
+            Some(g) => g,
+        };
 
         self.sync_manager.sync(
             MAX_BLOOMS_IN_FLIGHT,

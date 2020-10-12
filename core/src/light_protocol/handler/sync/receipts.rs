@@ -25,7 +25,7 @@ use cfx_parameters::light::{
 use futures::future::FutureExt;
 use lru_time_cache::LruCache;
 use network::{node_table::NodeId, NetworkContext};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use primitives::BlockReceipts;
 use std::{future::Future, sync::Arc};
 
@@ -44,6 +44,9 @@ type PendingReceipts = PendingItem<Vec<BlockReceipts>, ClonableError>;
 pub struct Receipts {
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
+
+    // mutex used to make sure at most one thread drives sync at any given time
+    syn: Mutex<()>,
 
     // sync and request manager
     sync_manager: SyncManager<u64, MissingReceipts>,
@@ -64,10 +67,12 @@ impl Receipts {
         let sync_manager = SyncManager::new(peers.clone(), msgid::GET_RECEIPTS);
 
         let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
+        let syn = Mutex::new(());
         let verified = Arc::new(RwLock::new(cache));
 
         Receipts {
             request_id_allocator,
+            syn,
             sync_manager,
             verified,
             witnesses,
@@ -75,12 +80,15 @@ impl Receipts {
     }
 
     #[inline]
-    fn get_statistics(&self) -> Statistics {
-        Statistics {
-            cached: self.verified.read().len(),
-            in_flight: self.sync_manager.num_in_flight(),
-            waiting: self.sync_manager.num_waiting(),
-        }
+    pub fn print_stats(&self) {
+        debug!(
+            "receipt sync statistics: {:?}",
+            Statistics {
+                cached: self.verified.read().len(),
+                in_flight: self.sync_manager.num_in_flight(),
+                waiting: self.sync_manager.num_waiting(),
+            }
+        );
     }
 
     #[inline]
@@ -118,9 +126,10 @@ impl Receipts {
             epoch_receipts,
         } in receipts
         {
-            debug!(
+            trace!(
                 "Validating receipts {:?} with epoch {}",
-                epoch_receipts, epoch
+                epoch_receipts,
+                epoch
             );
 
             match self.sync_manager.check_if_requested(peer, id, &epoch)? {
@@ -166,8 +175,9 @@ impl Receipts {
     pub fn clean_up(&self) {
         // remove timeout in-flight requests
         let timeout = *RECEIPT_REQUEST_TIMEOUT;
-        let receiptss = self.sync_manager.remove_timeout_requests(timeout);
-        self.sync_manager.insert_waiting(receiptss.into_iter());
+        let receipts = self.sync_manager.remove_timeout_requests(timeout);
+        trace!("Timeout receipts ({}): {:?}", receipts.len(), receipts);
+        self.sync_manager.insert_waiting(receipts.into_iter());
 
         // trigger cache cleanup
         self.verified.write().get(&Default::default());
@@ -177,13 +187,19 @@ impl Receipts {
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, epochs: Vec<u64>,
     ) -> Result<Option<RequestId>> {
-        debug!("send_request peer={:?} epochs={:?}", peer, epochs);
-
         if epochs.is_empty() {
             return Ok(None);
         }
 
         let request_id = self.request_id_allocator.next();
+
+        trace!(
+            "send_request GetReceipts peer={:?} id={:?} epochs={:?}",
+            peer,
+            request_id,
+            epochs
+        );
+
         let msg: Box<dyn Message> =
             Box::new(GetReceipts { request_id, epochs });
 
@@ -193,7 +209,10 @@ impl Receipts {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        debug!("receipt sync statistics: {:?}", self.get_statistics());
+        let _guard = match self.syn.try_lock() {
+            None => return,
+            Some(g) => g,
+        };
 
         self.sync_manager.sync(
             MAX_RECEIPTS_IN_FLIGHT,

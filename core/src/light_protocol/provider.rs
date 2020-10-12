@@ -403,7 +403,7 @@ impl Provider {
     fn on_status_v2(
         &self, io: &dyn NetworkContext, peer: &NodeId, status: StatusPingV2,
     ) -> Result<()> {
-        info!("on_status peer={:?} status={:?}", peer, status);
+        debug!("on_status peer={:?} status={:?}", peer, status);
         self.throttle(peer, &status)?;
 
         self.validate_peer_type(status.node_type)?;

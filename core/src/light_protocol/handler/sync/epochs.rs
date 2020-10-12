@@ -19,7 +19,7 @@ use cfx_parameters::light::{
     NUM_WAITING_HEADERS_THRESHOLD,
 };
 use network::{node_table::NodeId, NetworkContext};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use std::{
     cmp,
     collections::HashMap,
@@ -33,6 +33,7 @@ use std::{
 #[derive(Debug)]
 struct Statistics {
     in_flight: usize,
+    received_count: u64,
 }
 
 #[derive(Debug)]
@@ -66,8 +67,14 @@ pub struct Epochs {
     // collection of all peers available
     peers: Arc<Peers<FullPeerState>>,
 
+    // number of epochs received
+    received_count: AtomicU64,
+
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
+
+    // mutex used to make sure at most one thread drives sync at any given time
+    syn: Mutex<()>,
 }
 
 impl Epochs {
@@ -78,6 +85,8 @@ impl Epochs {
     {
         let in_flight = RwLock::new(HashMap::new());
         let latest = AtomicU64::new(0);
+        let received_count = AtomicU64::new(0);
+        let syn = Mutex::new(());
 
         Epochs {
             consensus,
@@ -85,13 +94,27 @@ impl Epochs {
             in_flight,
             latest,
             peers,
+            received_count,
             request_id_allocator,
+            syn,
         }
     }
 
     #[inline]
     pub fn receive(&self, id: &RequestId) {
-        self.in_flight.write().remove(&id);
+        match self.in_flight.write().remove(&id) {
+            Some(hashes) => {
+                self.received_count
+                    .fetch_add(hashes.epochs.len() as u64, Ordering::Relaxed);
+            }
+            None => {
+                warn!(
+                    "Received unsolicited GetBlockHashesResponse, id = {:?}",
+                    id
+                );
+                // TODO(thegaram): add throttling
+            }
+        }
     }
 
     #[inline]
@@ -103,10 +126,14 @@ impl Epochs {
     }
 
     #[inline]
-    fn get_statistics(&self) -> Statistics {
-        Statistics {
-            in_flight: self.in_flight.read().len(),
-        }
+    pub fn print_stats(&self) {
+        debug!(
+            "epoch sync statistics: {:?}",
+            Statistics {
+                in_flight: self.in_flight.read().len(),
+                received_count: self.received_count.load(Ordering::Relaxed),
+            }
+        );
     }
 
     fn insert_in_flight(&self, id: RequestId, epochs: Vec<u64>) {
@@ -152,6 +179,8 @@ impl Epochs {
             })
             .collect();
 
+        trace!("Timeout epochs ({}): {:?}", ids.len(), ids);
+
         // remove requests from `in_flight`
         for id in &ids {
             in_flight.remove(&id);
@@ -162,13 +191,18 @@ impl Epochs {
     fn request_epochs(
         &self, io: &dyn NetworkContext, peer: &NodeId, epochs: Vec<u64>,
     ) -> Result<Option<RequestId>, Error> {
-        debug!("request_epochs peer={:?} epochs={:?}", peer, epochs);
-
         if epochs.is_empty() {
             return Ok(None);
         }
 
         let request_id = self.request_id_allocator.next();
+
+        trace!(
+            "send_request GetBlockHashesByEpoch peer={:?} id={:?} epochs={:?}",
+            peer,
+            request_id,
+            epochs
+        );
 
         let msg: Box<dyn Message> =
             Box::new(GetBlockHashesByEpoch { request_id, epochs });
@@ -178,7 +212,10 @@ impl Epochs {
     }
 
     pub fn sync(&self, io: &dyn NetworkContext) {
-        debug!("epoch sync statistics: {:?}", self.get_statistics());
+        let _guard = match self.syn.try_lock() {
+            None => return,
+            Some(g) => g,
+        };
 
         if self.headers.num_waiting() >= NUM_WAITING_HEADERS_THRESHOLD {
             return;

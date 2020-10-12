@@ -18,6 +18,7 @@ use cfx_parameters::light::{
 };
 use cfx_types::H256;
 use network::{node_table::NodeId, NetworkContext};
+use parking_lot::Mutex;
 use primitives::BlockHeader;
 use std::{
     cmp,
@@ -31,9 +32,10 @@ use std::{
 
 #[derive(Debug)]
 struct Statistics {
-    duplicate_count: u64,
     in_flight: usize,
     waiting: usize,
+    received_count: u64,
+    duplicate_count: u64,
 }
 
 // NOTE: order defines priority: Epoch < Reference < NewHash
@@ -88,8 +90,14 @@ pub struct Headers {
     // shared synchronization graph
     graph: Arc<SynchronizationGraph>,
 
+    // number of headers received
+    received_count: AtomicU64,
+
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
+
+    // mutex used to make sure at most one thread drives sync at any given time
+    syn: Mutex<()>,
 
     // sync and request manager
     sync_manager: SyncManager<H256, MissingHeader>,
@@ -102,14 +110,18 @@ impl Headers {
     ) -> Self
     {
         let duplicate_count = AtomicU64::new(0);
+        let received_count = AtomicU64::new(0);
+        let syn = Mutex::new(());
         let sync_manager =
             SyncManager::new(peers.clone(), msgid::GET_BLOCK_HEADERS);
 
         Headers {
             duplicate_count,
             graph,
-            sync_manager,
+            received_count,
             request_id_allocator,
+            syn,
+            sync_manager,
         }
     }
 
@@ -117,12 +129,16 @@ impl Headers {
     pub fn num_waiting(&self) -> usize { self.sync_manager.num_waiting() }
 
     #[inline]
-    fn get_statistics(&self) -> Statistics {
-        Statistics {
-            duplicate_count: self.duplicate_count.load(Ordering::Relaxed),
-            in_flight: self.sync_manager.num_in_flight(),
-            waiting: self.sync_manager.num_waiting(),
-        }
+    pub fn print_stats(&self) {
+        debug!(
+            "header sync statistics: {:?}",
+            Statistics {
+                in_flight: self.sync_manager.num_in_flight(),
+                waiting: self.sync_manager.num_waiting(),
+                received_count: self.received_count.load(Ordering::Relaxed),
+                duplicate_count: self.duplicate_count.load(Ordering::Relaxed),
+            }
+        );
     }
 
     #[inline]
@@ -167,6 +183,8 @@ impl Headers {
 
         // TODO(thegaram): validate header timestamps
         for header in headers {
+            self.received_count.fetch_add(1, Ordering::Relaxed);
+
             let hash = header.hash();
 
             // check request id
@@ -218,6 +236,7 @@ impl Headers {
     pub fn clean_up(&self) {
         let timeout = *HEADER_REQUEST_TIMEOUT;
         let headers = self.sync_manager.remove_timeout_requests(timeout);
+        trace!("Timeout headers ({}): {:?}", headers.len(), headers);
         self.sync_manager.insert_waiting(headers.into_iter());
     }
 
@@ -225,13 +244,19 @@ impl Headers {
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, hashes: Vec<H256>,
     ) -> Result<Option<RequestId>, Error> {
-        debug!("send_request peer={:?} hashes={:?}", peer, hashes);
-
         if hashes.is_empty() {
             return Ok(None);
         }
 
         let request_id = self.request_id_allocator.next();
+
+        trace!(
+            "send_request GetBlockHeaders peer={:?} id={:?} hashes={:?}",
+            peer,
+            request_id,
+            hashes
+        );
+
         let msg: Box<dyn Message> =
             Box::new(GetBlockHeaders { request_id, hashes });
 
@@ -241,7 +266,10 @@ impl Headers {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        debug!("header sync statistics: {:?}", self.get_statistics());
+        let _guard = match self.syn.try_lock() {
+            None => return,
+            Some(g) => g,
+        };
 
         self.sync_manager.sync(
             MAX_HEADERS_IN_FLIGHT,
