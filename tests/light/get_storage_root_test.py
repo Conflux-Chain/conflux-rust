@@ -78,7 +78,13 @@ class StorageRootTest(ConfluxTestFramework):
         sync_blocks(self.nodes)
 
         # check storage roots
-        for epoch in range(latest_epoch):
+        first_available_epoch = (latest_epoch - 1) // SNAPSHOT_EPOCH_COUNT \
+                                * SNAPSHOT_EPOCH_COUNT - SNAPSHOT_EPOCH_COUNT * 2 + 1
+        # After latest_epoch is obtained the test generated SNAPSHOT_EPOCH_COUNT more blocks.
+        first_available_epoch += SNAPSHOT_EPOCH_COUNT
+        # The proof is only available since the second available snapshot.
+        first_available_epoch += SNAPSHOT_EPOCH_COUNT
+        for epoch in range(first_available_epoch, latest_epoch):
             root_full = self.rpc[FULLNODE0].get_storage_root(contractAddr, epoch=hex(epoch))
             root_light = self.rpc[LIGHTNODE].get_storage_root(contractAddr, epoch=hex(epoch))
             assert_equal(root_full, root_light)
