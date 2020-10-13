@@ -137,6 +137,7 @@ pub fn initialize_data_manager(
         U256::from(10),
         machine.clone(),
         false, /* need_to_execute */
+        None,
     ));
 
     let data_man = Arc::new(BlockDataManager::new(

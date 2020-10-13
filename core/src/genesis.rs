@@ -109,6 +109,7 @@ pub fn genesis_block(
     storage_manager: &Arc<StorageManager>,
     genesis_accounts: HashMap<Address, U256>, test_net_version: Address,
     initial_difficulty: U256, machine: Arc<Machine>, need_to_execute: bool,
+    genesis_chain_id: Option<u32>,
 ) -> Block
 {
     let mut state = State::new(
@@ -142,7 +143,7 @@ pub fn genesis_block(
         tx_execution_error_messages: vec![],
     })]);
 
-    let genesis_chain_id = 2;
+    let genesis_chain_id = genesis_chain_id.unwrap_or(0);
 
     let mut genesis_transaction = Transaction::default();
     genesis_transaction.data = GENESIS_TRANSACTION_DATA_STR.as_bytes().into();

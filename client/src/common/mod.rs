@@ -208,6 +208,7 @@ pub fn initialize_common_modules(
         U256::zero(),
         machine.clone(),
         true, /* need_to_execute */
+        conf.raw_conf.chain_id,
     );
     debug!("Initialize genesis_block={:?}", genesis_block);
 
