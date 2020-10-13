@@ -141,16 +141,19 @@ pub fn genesis_block(
         secondary_reward: U256::zero(),
         tx_execution_error_messages: vec![],
     })]);
+
+    let genesis_chain_id = 2;
+
     let mut genesis_transaction = Transaction::default();
     genesis_transaction.data = GENESIS_TRANSACTION_DATA_STR.as_bytes().into();
     genesis_transaction.action = Action::Call(Default::default());
-    genesis_transaction.chain_id = 2; // Genesis transaction for Oceanus.
+    genesis_transaction.chain_id = genesis_chain_id; // Genesis transaction for Oceanus.
 
     let mut create_create2factory_transaction = Transaction::default();
     create_create2factory_transaction.data =
         Bytes::from_hex(GENESIS_TRANSACTION_CREATE_CREATE2FACTORY).unwrap();
     create_create2factory_transaction.action = Action::Create;
-    create_create2factory_transaction.chain_id = 2;
+    create_create2factory_transaction.chain_id = genesis_chain_id;
     create_create2factory_transaction.gas = 300000.into();
 
     let genesis_transactions = vec![
