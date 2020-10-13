@@ -129,7 +129,7 @@ pub fn genesis_block(
         total_balance += balance;
     }
 
-    let genesis_account_address = "0x1949000000000000000000000000000000001001"
+    let genesis_account_address = "1949000000000000000000000000000000001001"
         .parse::<Address>()
         .unwrap();
 
@@ -159,6 +159,8 @@ pub fn genesis_block(
     create_create2factory_transaction.action = Action::Create;
     create_create2factory_transaction.chain_id = genesis_chain_id;
     create_create2factory_transaction.gas = 300000.into();
+    create_create2factory_transaction.gas_price = 1.into();
+    create_create2factory_transaction.storage_limit = 512;
 
     let genesis_transactions = vec![
         Arc::new(genesis_transaction.fake_sign(Default::default())),
