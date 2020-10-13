@@ -575,20 +575,8 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         admin: &Address,
     ) -> DbResult<()>
     {
-        if self.ensure_account_loaded(
-            contract_address,
-            RequireCache::None,
-            |acc| {
-                acc.map_or(false, |acc| {
-                    acc.is_contract()
-                        && acc.admin() == requester
-                        && acc.admin() != admin
-                })
-            },
-        )? {
-            self.require_exists(&contract_address, false)?
-                .set_admin(requester, admin);
-        }
+        self.require_exists(&contract_address, false)?
+            .set_admin(requester, admin);
         Ok(())
     }
 

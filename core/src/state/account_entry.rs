@@ -269,7 +269,10 @@ impl OverlayAccount {
     }
 
     pub fn set_admin(&mut self, requester: &Address, admin: &Address) {
-        if self.is_contract() && self.admin == *requester {
+        if self.is_contract()
+            && self.admin == *requester
+            && admin.is_user_account_address()
+        {
             self.admin = admin.clone();
         }
     }
