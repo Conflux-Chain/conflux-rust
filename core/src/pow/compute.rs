@@ -59,7 +59,7 @@ fn fnv_hash64(x: u64, y: u64) -> u64 {
 //         let hash_len = header_hash.len();
 //         buf[..hash_len].copy_from_slice(header_hash);
 //         let end = hash_len + mem::size_of::<u64>();
-//         buf[hash_len..end].copy_from_slice(&nonce.to_ne_bytes());
+//         buf[hash_len..end].copy_from_slice(&nonce.to_be_bytes());
 
 //         keccak_512::inplace_range(&mut buf, 0..end);
 //         buf[64..].copy_from_slice(mix_hash);
@@ -297,9 +297,9 @@ fn hash_compute(
             let hash_len = header_hash.len();
             out[..hash_len].copy_from_slice(header_hash);
             let end = hash_len + mem::size_of::<u64>();
-            out[hash_len..end].copy_from_slice(&result.to_ne_bytes());
+            out[hash_len..end].copy_from_slice(&result.to_be_bytes());
             // let end = nonce_end + mem::size_of::<u64>();
-            // out[nonce_end..end].copy_from_slice(&result.to_ne_bytes());
+            // out[nonce_end..end].copy_from_slice(&result.to_be_bytes());
 
             // compute keccak-512 hash and replicate across mix
             let mut tmp = [0u8; NODE_BYTES];
