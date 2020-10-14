@@ -11,7 +11,7 @@ use crate::{
     vm::Env,
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
-use cfx_parameters::consensus::GENESIS_GAS_LIMIT;
+use cfx_parameters::consensus::{GENESIS_GAS_LIMIT, ONE_CFX_IN_DRIP};
 use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{StorageManager, StorageManagerTrait};
 use cfx_types::{address_util::AddressUtil, Address, U256};
@@ -134,8 +134,7 @@ pub fn genesis_block(
         .parse::<Address>()
         .unwrap();
 
-    let genesis_account_init_balance =
-        U256::from_dec_str("1000000000000000000").unwrap();
+    let genesis_account_init_balance = U256::from(ONE_CFX_IN_DRIP);
     state
         .add_balance(
             &genesis_account_address,
