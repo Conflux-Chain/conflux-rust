@@ -804,7 +804,8 @@ impl TransactionPoolInner {
         }
 
         // check balance
-        let need_balance = need_gas + need_collateral_in_drip + transaction.value;
+        let need_balance =
+            need_gas + need_collateral_in_drip + transaction.value;
         if state_balance < need_balance {
             let msg = format!(
                 "Transaction {:?} is discarded due to out of balance, needs {:?} but account balance is {:?}",

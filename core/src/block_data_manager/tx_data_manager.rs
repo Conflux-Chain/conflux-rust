@@ -70,7 +70,7 @@ impl TransactionDataManager {
 
         // recover uncached tx
         if let Err(e) = self.recover_uncached_tx(uncached_trans) {
-            return Err(e)
+            return Err(e);
         }
 
         // return all matched transactions
