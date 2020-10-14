@@ -128,6 +128,7 @@ pub fn genesis_block(
             .unwrap();
         total_balance += balance;
     }
+    state.add_total_issued(total_balance);
 
     let genesis_account_address = "1949000000000000000000000000000000001001"
         .parse::<Address>()
@@ -142,8 +143,6 @@ pub fn genesis_block(
             CleanupMode::NoEmpty,
         )
         .unwrap();
-    total_balance += genesis_account_init_balance;
-    state.add_total_issued(total_balance);
 
     let mut debug_record = Some(ComputeEpochDebugRecord::default());
 

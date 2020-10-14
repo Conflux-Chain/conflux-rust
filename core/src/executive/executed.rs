@@ -131,7 +131,11 @@ impl Executed {
     pub fn not_enough_balance_fee_charged(
         tx: &TransactionWithSignature, fee: &U256,
     ) -> Self {
-        let gas_charged = fee / tx.gas_price;
+        let gas_charged = if tx.gas_price == U256::zero() {
+            U256::zero()
+        } else {
+            fee / tx.gas_price
+        };
         Self {
             gas_used: tx.gas,
             gas_charged,

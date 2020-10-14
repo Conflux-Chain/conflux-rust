@@ -207,7 +207,7 @@ pub fn initialize_common_modules(
         Address::from_str(GENESIS_VERSION).unwrap(),
         U256::zero(),
         machine.clone(),
-        true, /* need_to_execute */
+        conf.raw_conf.execute_genesis, /* need_to_execute */
         conf.raw_conf.chain_id,
     );
     debug!("Initialize genesis_block={:?}", genesis_block);
