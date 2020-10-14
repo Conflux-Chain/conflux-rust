@@ -67,9 +67,22 @@ impl TransactionDataManager {
                 .map(|tx| (0, tx.clone())) // idx not used
                 .collect()
         };
-        // Ignore the index and return the recovered tx list
-        self.recover_uncached_tx(uncached_trans)
-            .map(|tx_vec| tx_vec.into_iter().map(|(_, tx)| tx).collect())
+
+        // recover uncached tx
+        if let Err(e) = self.recover_uncached_tx(uncached_trans) {
+            return Err(e)
+        }
+
+        // return all matched transactions
+        let matched_trans = {
+            let tx_time_window = self.tx_time_window.read();
+            transactions
+                .iter()
+                .map(|tx| tx_time_window.get(&tx.hash).unwrap())
+                .cloned()
+                .collect()
+        };
+        Ok(matched_trans)
     }
 
     /// Recover public keys for the transactions in `block`.

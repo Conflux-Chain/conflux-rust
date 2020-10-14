@@ -4,6 +4,7 @@ use super::{
     impls::TreapMap,
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
 };
+use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_statedb::Result as StateDbResult;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -721,6 +722,10 @@ impl TransactionPoolInner {
         let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
         let mut sponsored_gas = U256::from(0);
 
+        let mut need_gas = transaction.gas * transaction.gas_price;
+        let mut need_collateral_in_drip = U256::from(transaction.storage_limit)
+            * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+
         // Compute sponsored_gas for `transaction`
         if let Action::Call(callee) = &transaction.action {
             // FIXME: This is a quick fix for performance issue.
@@ -745,13 +750,16 @@ impl TransactionPoolInner {
                             )
                         })?
                     {
-                        let estimated_gas =
-                            transaction.gas * transaction.gas_price;
-                        if estimated_gas <= sponsor_info.sponsor_gas_bound
-                            && estimated_gas
-                                <= sponsor_info.sponsor_balance_for_gas
+                        if need_gas <= sponsor_info.sponsor_gas_bound
+                            && need_gas <= sponsor_info.sponsor_balance_for_gas
                         {
                             sponsored_gas = transaction.gas;
+                            need_gas = U256::from(0);
+                        }
+                        if need_collateral_in_drip
+                            <= sponsor_info.sponsor_balance_for_collateral
+                        {
+                            need_collateral_in_drip = U256::from(0);
                         }
                     }
                 }
@@ -793,6 +801,19 @@ impl TransactionPoolInner {
                 "Transaction {:?} is discarded due to a too stale nonce",
                 transaction.hash()
             ));
+        }
+
+        // check balance
+        let need_balance = need_gas + need_collateral_in_drip + transaction.value;
+        if state_balance < need_balance {
+            let msg = format!(
+                "Transaction {:?} is discarded due to out of balance, needs {:?} but account balance is {:?}",
+                transaction.hash(),
+                need_balance,
+                state_balance
+            );
+            trace!("{}", msg);
+            return Err(msg);
         }
 
         let result = self.insert_transaction_without_readiness_check(
