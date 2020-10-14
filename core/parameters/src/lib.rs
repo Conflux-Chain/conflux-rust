@@ -271,24 +271,21 @@ pub mod light {
         pub static ref CLEANUP_PERIOD: Duration = Duration::from_secs(1);
 
         /// Request timeouts.
-        pub static ref EPOCH_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
-        pub static ref HEADER_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
-        pub static ref WITNESS_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
-        pub static ref BLOOM_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
-        pub static ref RECEIPT_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
-        pub static ref BLOCK_TX_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
-        pub static ref STATE_ROOT_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
-        pub static ref STATE_ENTRY_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
-        pub static ref TX_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
-        pub static ref TX_INFO_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
-        pub static ref STORAGE_ROOT_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref EPOCH_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+        pub static ref HEADER_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+        pub static ref WITNESS_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+        pub static ref BLOOM_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+        pub static ref RECEIPT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+        pub static ref BLOCK_TX_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+        pub static ref STATE_ROOT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+        pub static ref STATE_ENTRY_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+        pub static ref TX_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+        pub static ref TX_INFO_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+        pub static ref STORAGE_ROOT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
         /// Maximum time period we wait for a response for an on-demand query.
         /// After this timeout has been reached, we try another peer or give up.
         pub static ref MAX_POLL_TIME: Duration = Duration::from_secs(4);
-
-        /// Period of time to sleep between subsequent polls for on-demand queries.
-        pub static ref POLL_PERIOD: Duration = Duration::from_millis(100);
 
         /// Items not accessed for this amount of time are removed from the cache.
         pub static ref CACHE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
@@ -302,7 +299,7 @@ pub mod light {
 
     /// (Maximum) number of items requested in a single request.
     pub const EPOCH_REQUEST_BATCH_SIZE: usize = 100;
-    pub const HEADER_REQUEST_BATCH_SIZE: usize = 10;
+    pub const HEADER_REQUEST_BATCH_SIZE: usize = 30;
     pub const BLOOM_REQUEST_BATCH_SIZE: usize = 30;
     pub const WITNESS_REQUEST_BATCH_SIZE: usize = 50;
     pub const RECEIPT_REQUEST_BATCH_SIZE: usize = 30;

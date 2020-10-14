@@ -108,7 +108,7 @@ impl Epochs {
                     .fetch_add(hashes.epochs.len() as u64, Ordering::Relaxed);
             }
             None => {
-                warn!(
+                trace!(
                     "Received unsolicited GetBlockHashesResponse, id = {:?}",
                     id
                 );

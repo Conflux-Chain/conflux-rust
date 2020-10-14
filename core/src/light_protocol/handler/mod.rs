@@ -338,8 +338,8 @@ impl Handler {
             warn!("Received msg={:?} from handshaking peer={:?}", msg_id, peer);
             bail!(ErrorKind::UnexpectedMessage {
                 expected: vec![
-                    msgid::STATUS_PING_DEPRECATED,
-                    msgid::STATUS_PING_V2
+                    msgid::STATUS_PONG_DEPRECATED,
+                    msgid::STATUS_PONG_V2
                 ],
                 received: msg_id,
             });
@@ -547,6 +547,11 @@ impl Handler {
         resp: GetBlockHashesResponse,
     ) -> Result<()>
     {
+        debug!(
+            "received {} block hashes (request id = {})",
+            resp.hashes.len(),
+            resp.request_id
+        );
         trace!("on_block_hashes resp={:?}", resp);
 
         self.epochs.receive(&resp.request_id);
@@ -564,6 +569,11 @@ impl Handler {
         resp: GetBlockHeadersResponse,
     ) -> Result<()>
     {
+        debug!(
+            "received {} block headers (request id = {})",
+            resp.headers.len(),
+            resp.request_id
+        );
         trace!("on_block_headers resp={:?}", resp);
 
         self.headers.receive(
@@ -581,6 +591,11 @@ impl Handler {
         resp: GetBlockTxsResponse,
     ) -> Result<()>
     {
+        debug!(
+            "received {} block txs (request id = {})",
+            resp.block_txs.len(),
+            resp.request_id
+        );
         trace!("on_block_txs resp={:?}", resp);
 
         self.block_txs.receive(
@@ -596,6 +611,11 @@ impl Handler {
     fn on_blooms(
         &self, io: &dyn NetworkContext, peer: &NodeId, resp: GetBloomsResponse,
     ) -> Result<()> {
+        debug!(
+            "received {} blooms (request id = {})",
+            resp.blooms.len(),
+            resp.request_id
+        );
         trace!("on_blooms resp={:?}", resp);
 
         self.blooms
@@ -608,6 +628,7 @@ impl Handler {
     fn on_new_block_hashes(
         &self, io: &dyn NetworkContext, peer: &NodeId, msg: NewBlockHashes,
     ) -> Result<()> {
+        debug!("received {} new block hashes", msg.hashes.len());
         trace!("on_new_block_hashes msg={:?}", msg);
 
         if self.catch_up_mode() {
@@ -634,6 +655,11 @@ impl Handler {
         resp: GetReceiptsResponse,
     ) -> Result<()>
     {
+        debug!(
+            "received {} receipts (request id = {})",
+            resp.receipts.len(),
+            resp.request_id
+        );
         trace!("on_receipts resp={:?}", resp);
 
         self.receipts.receive(
@@ -651,6 +677,11 @@ impl Handler {
         resp: GetStateEntriesResponse,
     ) -> Result<()>
     {
+        debug!(
+            "received {} state entries (request id = {})",
+            resp.entries.len(),
+            resp.request_id
+        );
         trace!("on_state_entries resp={:?}", resp);
 
         self.state_entries.receive(
@@ -668,6 +699,11 @@ impl Handler {
         resp: GetStateRootsResponse,
     ) -> Result<()>
     {
+        debug!(
+            "received {} state roots (request id = {})",
+            resp.state_roots.len(),
+            resp.request_id
+        );
         trace!("on_state_roots resp={:?}", resp);
 
         self.state_roots.receive(
@@ -685,6 +721,11 @@ impl Handler {
         resp: GetStorageRootsResponse,
     ) -> Result<()>
     {
+        debug!(
+            "received {} storage roots (request id = {})",
+            resp.roots.len(),
+            resp.request_id
+        );
         trace!("on_storage_roots resp={:?}", resp);
 
         self.storage_roots.receive(
@@ -700,6 +741,11 @@ impl Handler {
     fn on_txs(
         &self, io: &dyn NetworkContext, peer: &NodeId, resp: GetTxsResponse,
     ) -> Result<()> {
+        debug!(
+            "received {} txs (request id = {})",
+            resp.txs.len(),
+            resp.request_id
+        );
         trace!("on_txs resp={:?}", resp);
 
         self.txs
@@ -712,6 +758,11 @@ impl Handler {
     fn on_tx_infos(
         &self, io: &dyn NetworkContext, peer: &NodeId, resp: GetTxInfosResponse,
     ) -> Result<()> {
+        debug!(
+            "received {} tx infos (request id = {})",
+            resp.infos.len(),
+            resp.request_id
+        );
         trace!("on_tx_infos resp={:?}", resp);
 
         self.tx_infos
@@ -726,6 +777,11 @@ impl Handler {
         resp: GetWitnessInfoResponse,
     ) -> Result<()>
     {
+        debug!(
+            "received {} witnesses (request id = {})",
+            resp.infos.len(),
+            resp.request_id
+        );
         trace!("on_witness_info resp={:?}", resp);
 
         self.witnesses.receive(

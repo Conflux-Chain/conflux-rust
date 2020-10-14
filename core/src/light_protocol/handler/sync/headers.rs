@@ -193,6 +193,7 @@ impl Headers {
                 .check_if_requested(peer, id, &hash)?
                 .is_none()
             {
+                trace!("Received unsolicited header: {:?}", hash);
                 continue;
             }
 
