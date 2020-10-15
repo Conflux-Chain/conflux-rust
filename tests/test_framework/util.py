@@ -307,6 +307,7 @@ def initialize_datadir(dirname, n, conf_parameters, extra_files: dict = {}):
             "jsonrpc_ws_port": str(pubsub_port(n)),
             "jsonrpc_http_port": str(remote_rpc_port(n)),
             "tg_config_path": "\'{}\'".format(os.path.join(datadir, "tg_config/tg_config.conf")),
+            "execute_genesis": "true",
         }
         local_conf.update(conflux.config.small_local_test_conf)
         local_conf.update(conf_parameters)
