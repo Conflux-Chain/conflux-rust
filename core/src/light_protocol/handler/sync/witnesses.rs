@@ -25,7 +25,7 @@ use cfx_parameters::{
 };
 use cfx_types::H256;
 use network::{node_table::NodeId, NetworkContext};
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use std::{collections::HashSet, sync::Arc};
 
 #[derive(Debug)]
@@ -74,9 +74,6 @@ pub struct Witnesses {
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
 
-    // mutex used to make sure at most one thread drives sync at any given time
-    syn: Mutex<()>,
-
     // sync and request manager
     sync_manager: SyncManager<u64, MissingWitness>,
 }
@@ -91,7 +88,6 @@ impl Witnesses {
         let height_of_latest_verified_header = RwLock::new(0);
         let in_flight = RwLock::new(HashSet::new());
         let ledger = LedgerInfo::new(consensus.clone());
-        let syn = Mutex::new(());
         let sync_manager =
             SyncManager::new(peers.clone(), msgid::GET_WITNESS_INFO);
 
@@ -101,7 +97,6 @@ impl Witnesses {
             in_flight,
             ledger,
             request_id_allocator,
-            syn,
             sync_manager,
         }
     }
@@ -291,11 +286,6 @@ impl Witnesses {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        let _guard = match self.syn.try_lock() {
-            None => return,
-            Some(g) => g,
-        };
-
         self.sync_manager.sync(
             MAX_WITNESSES_IN_FLIGHT,
             WITNESS_REQUEST_BATCH_SIZE,

@@ -27,7 +27,7 @@ use cfx_types::H256;
 use futures::future::FutureExt;
 use lru_time_cache::LruCache;
 use network::{node_table::NodeId, NetworkContext};
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use primitives::SignedTransaction;
 use std::{future::Future, sync::Arc};
 
@@ -50,9 +50,6 @@ pub struct BlockTxs {
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
 
-    // mutex used to make sure at most one thread drives sync at any given time
-    syn: Mutex<()>,
-
     // sync and request manager
     sync_manager: SyncManager<H256, MissingBlockTxs>,
 
@@ -70,7 +67,6 @@ impl BlockTxs {
     ) -> Self
     {
         let ledger = LedgerInfo::new(consensus.clone());
-        let syn = Mutex::new(());
         let sync_manager =
             SyncManager::new(peers.clone(), msgid::GET_BLOCK_TXS);
 
@@ -80,7 +76,6 @@ impl BlockTxs {
         BlockTxs {
             ledger,
             request_id_allocator,
-            syn,
             sync_manager,
             txs,
             verified,
@@ -205,11 +200,6 @@ impl BlockTxs {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        let _guard = match self.syn.try_lock() {
-            None => return,
-            Some(g) => g,
-        };
-
         self.sync_manager.sync(
             MAX_BLOCK_TXS_IN_FLIGHT,
             BLOCK_TX_REQUEST_BATCH_SIZE,

@@ -11,7 +11,7 @@ use crate::{
     message::{MsgId, RequestId},
 };
 use network::node_table::NodeId;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use std::{
     cmp::Ord,
     collections::HashMap,
@@ -46,6 +46,9 @@ pub struct SyncManager<Key, Item> {
     // collection of all peers available
     peers: Arc<Peers<FullPeerState>>,
 
+    // mutex used to make sure at most one thread drives sync at any given time
+    sync_lock: Mutex<()>,
+
     // priority queue of headers we need excluding the ones in `in_flight`
     waiting: RwLock<PriorityQueue<Key, Item>>,
 
@@ -62,11 +65,13 @@ where
         peers: Arc<Peers<FullPeerState>>, request_msg_id: MsgId,
     ) -> Self {
         let in_flight = RwLock::new(HashMap::new());
+        let sync_lock = Default::default();
         let waiting = RwLock::new(PriorityQueue::new());
 
         SyncManager {
             in_flight,
             peers,
+            sync_lock,
             waiting,
             request_msg_id,
         }
@@ -151,6 +156,11 @@ where
         request: impl Fn(&NodeId, Vec<Key>) -> Result<Option<RequestId>, Error>,
     )
     {
+        let _guard = match self.sync_lock.try_lock() {
+            None => return,
+            Some(g) => g,
+        };
+
         // check if there are any peers available
         if self.peers.is_empty() {
             debug!("No peers available; aborting sync");

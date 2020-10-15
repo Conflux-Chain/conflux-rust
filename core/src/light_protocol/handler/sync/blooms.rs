@@ -6,7 +6,7 @@ extern crate lru_time_cache;
 
 use cfx_types::Bloom;
 use lru_time_cache::LruCache;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use std::{future::Future, sync::Arc};
 
 use super::{
@@ -46,9 +46,6 @@ pub struct Blooms {
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
 
-    // mutex used to make sure at most one thread drives sync at any given time
-    syn: Mutex<()>,
-
     // sync and request manager
     sync_manager: SyncManager<u64, MissingBloom>,
 
@@ -65,7 +62,6 @@ impl Blooms {
         witnesses: Arc<Witnesses>,
     ) -> Self
     {
-        let syn = Mutex::new(());
         let sync_manager = SyncManager::new(peers.clone(), msgid::GET_BLOOMS);
 
         let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
@@ -73,7 +69,6 @@ impl Blooms {
 
         Blooms {
             request_id_allocator,
-            syn,
             sync_manager,
             verified,
             witnesses,
@@ -197,11 +192,6 @@ impl Blooms {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        let _guard = match self.syn.try_lock() {
-            None => return,
-            Some(g) => g,
-        };
-
         self.sync_manager.sync(
             MAX_BLOOMS_IN_FLIGHT,
             BLOOM_REQUEST_BATCH_SIZE,

@@ -28,7 +28,7 @@ use cfx_types::H160;
 use futures::future::FutureExt;
 use lru_time_cache::LruCache;
 use network::{node_table::NodeId, NetworkContext};
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use primitives::{StorageKey, StorageRoot};
 use std::{future::Future, sync::Arc};
 
@@ -50,9 +50,6 @@ pub struct StorageRoots {
     // state_root sync manager
     state_roots: Arc<StateRoots>,
 
-    // mutex used to make sure at most one thread drives sync at any given time
-    syn: Mutex<()>,
-
     // sync and request manager
     sync_manager: SyncManager<StorageRootKey, MissingStorageRoot>,
 
@@ -66,7 +63,6 @@ impl StorageRoots {
         request_id_allocator: Arc<UniqueId>,
     ) -> Self
     {
-        let syn = Mutex::new(());
         let sync_manager =
             SyncManager::new(peers.clone(), msgid::GET_STORAGE_ROOTS);
 
@@ -75,7 +71,6 @@ impl StorageRoots {
 
         StorageRoots {
             request_id_allocator,
-            syn,
             sync_manager,
             verified,
             state_roots,
@@ -209,11 +204,6 @@ impl StorageRoots {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        let _guard = match self.syn.try_lock() {
-            None => return,
-            Some(g) => g,
-        };
-
         self.sync_manager.sync(
             MAX_STORAGE_ROOTS_IN_FLIGHT,
             STORAGE_ROOT_REQUEST_BATCH_SIZE,

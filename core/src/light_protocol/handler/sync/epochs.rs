@@ -79,7 +79,7 @@ pub struct Epochs {
     request_id_allocator: Arc<UniqueId>,
 
     // mutex used to make sure at most one thread drives sync at any given time
-    syn: Mutex<()>,
+    sync_lock: Mutex<()>,
 
     // number of timeout epochs requests
     timeout_count: AtomicU64,
@@ -99,7 +99,7 @@ impl Epochs {
         let in_flight = RwLock::new(HashMap::new());
         let latest = AtomicU64::new(0);
         let received_count = AtomicU64::new(0);
-        let syn = Mutex::new(());
+        let sync_lock = Mutex::new(());
         let timeout_count = AtomicU64::new(0);
         let unexpected_count = AtomicU64::new(0);
 
@@ -112,7 +112,7 @@ impl Epochs {
             peers,
             received_count,
             request_id_allocator,
-            syn,
+            sync_lock,
             timeout_count,
             unexpected_count,
         }
@@ -248,7 +248,7 @@ impl Epochs {
     }
 
     pub fn sync(&self, io: &dyn NetworkContext) {
-        let _guard = match self.syn.try_lock() {
+        let _guard = match self.sync_lock.try_lock() {
             None => return,
             Some(g) => g,
         };

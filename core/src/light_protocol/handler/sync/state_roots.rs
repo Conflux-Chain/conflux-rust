@@ -24,7 +24,7 @@ use cfx_parameters::light::{
 use futures::future::FutureExt;
 use lru_time_cache::LruCache;
 use network::{node_table::NodeId, NetworkContext};
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use primitives::StateRoot;
 use std::{future::Future, sync::Arc};
 
@@ -46,9 +46,6 @@ pub struct StateRoots {
     // number of epochs per snapshot period
     snapshot_epoch_count: u64,
 
-    // mutex used to make sure at most one thread drives sync at any given time
-    syn: Mutex<()>,
-
     // sync and request manager
     sync_manager: SyncManager<u64, MissingStateRoot>,
 
@@ -65,7 +62,6 @@ impl StateRoots {
         snapshot_epoch_count: u64, witnesses: Arc<Witnesses>,
     ) -> Self
     {
-        let syn = Mutex::new(());
         let sync_manager =
             SyncManager::new(peers.clone(), msgid::GET_STATE_ROOTS);
 
@@ -74,7 +70,6 @@ impl StateRoots {
 
         StateRoots {
             request_id_allocator,
-            syn,
             sync_manager,
             snapshot_epoch_count,
             verified,
@@ -216,11 +211,6 @@ impl StateRoots {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        let _guard = match self.syn.try_lock() {
-            None => return,
-            Some(g) => g,
-        };
-
         self.sync_manager.sync(
             MAX_STATE_ROOTS_IN_FLIGHT,
             STATE_ROOT_REQUEST_BATCH_SIZE,

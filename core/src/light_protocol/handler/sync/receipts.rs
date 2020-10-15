@@ -25,7 +25,7 @@ use cfx_parameters::light::{
 use futures::future::FutureExt;
 use lru_time_cache::LruCache;
 use network::{node_table::NodeId, NetworkContext};
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use primitives::BlockReceipts;
 use std::{future::Future, sync::Arc};
 
@@ -44,9 +44,6 @@ type PendingReceipts = PendingItem<Vec<BlockReceipts>, ClonableError>;
 pub struct Receipts {
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
-
-    // mutex used to make sure at most one thread drives sync at any given time
-    syn: Mutex<()>,
 
     // sync and request manager
     sync_manager: SyncManager<u64, MissingReceipts>,
@@ -67,12 +64,10 @@ impl Receipts {
         let sync_manager = SyncManager::new(peers.clone(), msgid::GET_RECEIPTS);
 
         let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
-        let syn = Mutex::new(());
         let verified = Arc::new(RwLock::new(cache));
 
         Receipts {
             request_id_allocator,
-            syn,
             sync_manager,
             verified,
             witnesses,
@@ -209,11 +204,6 @@ impl Receipts {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        let _guard = match self.syn.try_lock() {
-            None => return,
-            Some(g) => g,
-        };
-
         self.sync_manager.sync(
             MAX_RECEIPTS_IN_FLIGHT,
             RECEIPT_REQUEST_BATCH_SIZE,

@@ -27,7 +27,7 @@ use cfx_parameters::light::{
 use futures::future::FutureExt;
 use lru_time_cache::LruCache;
 use network::{node_table::NodeId, NetworkContext};
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use primitives::StorageKey;
 use std::{future::Future, sync::Arc};
 
@@ -51,9 +51,6 @@ pub struct StateEntries {
     // state_root sync manager
     state_roots: Arc<StateRoots>,
 
-    // mutex used to make sure at most one thread drives sync at any given time
-    syn: Mutex<()>,
-
     // sync and request manager
     sync_manager: SyncManager<StateKey, MissingStateEntry>,
 
@@ -67,7 +64,6 @@ impl StateEntries {
         request_id_allocator: Arc<UniqueId>,
     ) -> Self
     {
-        let syn = Mutex::new(());
         let sync_manager =
             SyncManager::new(peers.clone(), msgid::GET_STATE_ENTRIES);
 
@@ -76,7 +72,6 @@ impl StateEntries {
 
         StateEntries {
             request_id_allocator,
-            syn,
             sync_manager,
             verified,
             state_roots,
@@ -213,11 +208,6 @@ impl StateEntries {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        let _guard = match self.syn.try_lock() {
-            None => return,
-            Some(g) => g,
-        };
-
         self.sync_manager.sync(
             MAX_STATE_ENTRIES_IN_FLIGHT,
             STATE_ENTRY_REQUEST_BATCH_SIZE,

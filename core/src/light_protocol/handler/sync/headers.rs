@@ -18,7 +18,6 @@ use cfx_parameters::light::{
 };
 use cfx_types::H256;
 use network::{node_table::NodeId, NetworkContext};
-use parking_lot::Mutex;
 use primitives::BlockHeader;
 use std::{
     cmp,
@@ -101,9 +100,6 @@ pub struct Headers {
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
 
-    // mutex used to make sure at most one thread drives sync at any given time
-    syn: Mutex<()>,
-
     // sync and request manager
     sync_manager: SyncManager<H256, MissingHeader>,
 
@@ -123,7 +119,6 @@ impl Headers {
     {
         let duplicate_count = AtomicU64::new(0);
         let inserted_count = AtomicU64::new(0);
-        let syn = Mutex::new(());
         let sync_manager =
             SyncManager::new(peers.clone(), msgid::GET_BLOCK_HEADERS);
         let timeout_count = AtomicU64::new(0);
@@ -135,7 +130,6 @@ impl Headers {
             graph,
             inserted_count,
             request_id_allocator,
-            syn,
             sync_manager,
             timeout_count,
             unexpected_count,
@@ -295,11 +289,6 @@ impl Headers {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        let _guard = match self.syn.try_lock() {
-            None => return,
-            Some(g) => g,
-        };
-
         let max_in_flight = self
             .config
             .max_headers_in_flight
