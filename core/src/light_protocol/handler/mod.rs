@@ -23,8 +23,8 @@ use crate::{
             TxInfos as GetTxInfosResponse, Txs as GetTxsResponse,
             WitnessInfo as GetWitnessInfoResponse,
         },
-        LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT, LIGHT_PROTOCOL_VERSION,
-        LIGHT_PROTO_V1,
+        LightNodeConfiguration, LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT,
+        LIGHT_PROTOCOL_VERSION, LIGHT_PROTO_V1,
     },
     message::{decode_msg, decode_rlp_and_check_deprecation, Message, MsgId},
     sync::{message::Throttled, SynchronizationGraph},
@@ -117,7 +117,7 @@ impl Handler {
     pub fn new(
         consensus: SharedConsensusGraph, graph: Arc<SynchronizationGraph>,
         throttling_config_file: Option<String>,
-        notifications: Arc<Notifications>,
+        notifications: Arc<Notifications>, config: LightNodeConfiguration,
     ) -> Self
     {
         let peers = Arc::new(Peers::new());
@@ -127,6 +127,7 @@ impl Handler {
             graph.clone(),
             peers.clone(),
             request_id_allocator.clone(),
+            config.clone(),
         ));
 
         let epochs = Epochs::new(
@@ -134,6 +135,7 @@ impl Handler {
             headers.clone(),
             peers.clone(),
             request_id_allocator.clone(),
+            config,
         );
 
         let witnesses = Arc::new(Witnesses::new(

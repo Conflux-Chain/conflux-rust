@@ -8,7 +8,7 @@ use crate::{
         common::{max_of_collection, FullPeerFilter, FullPeerState, Peers},
         handler::sync::headers::Headers,
         message::{msgid, GetBlockHashesByEpoch},
-        Error,
+        Error, LightNodeConfiguration,
     },
     message::{Message, RequestId},
     UniqueId,
@@ -33,7 +33,9 @@ use std::{
 #[derive(Debug)]
 struct Statistics {
     in_flight: usize,
-    received_count: u64,
+    received: u64,
+    unexpected: u64,
+    timeout: u64,
 }
 
 #[derive(Debug)]
@@ -52,6 +54,9 @@ impl EpochRequest {
 }
 
 pub struct Epochs {
+    // light node configuration
+    config: LightNodeConfiguration,
+
     // shared consensus graph
     consensus: SharedConsensusGraph,
 
@@ -75,20 +80,31 @@ pub struct Epochs {
 
     // mutex used to make sure at most one thread drives sync at any given time
     syn: Mutex<()>,
+
+    // number of timeout epochs requests
+    timeout_count: AtomicU64,
+
+    // number of unexpected epochs responses received
+    // these are mostly responses for timeout requests
+    unexpected_count: AtomicU64,
 }
 
 impl Epochs {
     pub fn new(
         consensus: SharedConsensusGraph, headers: Arc<Headers>,
         peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
+        config: LightNodeConfiguration,
     ) -> Self
     {
         let in_flight = RwLock::new(HashMap::new());
         let latest = AtomicU64::new(0);
         let received_count = AtomicU64::new(0);
         let syn = Mutex::new(());
+        let timeout_count = AtomicU64::new(0);
+        let unexpected_count = AtomicU64::new(0);
 
         Epochs {
+            config,
             consensus,
             headers,
             in_flight,
@@ -97,6 +113,8 @@ impl Epochs {
             received_count,
             request_id_allocator,
             syn,
+            timeout_count,
+            unexpected_count,
         }
     }
 
@@ -109,9 +127,10 @@ impl Epochs {
             }
             None => {
                 trace!(
-                    "Received unsolicited GetBlockHashesResponse, id = {:?}",
+                    "Received unexpected GetBlockHashesResponse, id = {:?}",
                     id
                 );
+                self.unexpected_count.fetch_add(1, Ordering::Relaxed);
                 // TODO(thegaram): add throttling
             }
         }
@@ -131,7 +150,9 @@ impl Epochs {
             "epoch sync statistics: {:?}",
             Statistics {
                 in_flight: self.in_flight.read().len(),
-                received_count: self.received_count.load(Ordering::Relaxed),
+                received: self.received_count.load(Ordering::Relaxed),
+                unexpected: self.unexpected_count.load(Ordering::Relaxed),
+                timeout: self.timeout_count.load(Ordering::Relaxed),
             }
         );
     }
@@ -152,7 +173,17 @@ impl Epochs {
     }
 
     fn collect_epochs_to_request(&self) -> Vec<u64> {
-        if self.in_flight.read().len() >= MAX_PARALLEL_EPOCH_REQUESTS {
+        let max_parallel = self
+            .config
+            .max_parallel_epochs_to_request
+            .unwrap_or(MAX_PARALLEL_EPOCH_REQUESTS);
+
+        let num_to_request = self
+            .config
+            .num_epochs_to_request
+            .unwrap_or(NUM_EPOCHS_TO_REQUEST);
+
+        if self.in_flight.read().len() >= max_parallel {
             return vec![];
         }
 
@@ -161,14 +192,16 @@ impl Epochs {
         let start_from = cmp::max(my_best, requested) + 1;
         let peer_best = self.best_peer_epoch();
 
-        (start_from..peer_best)
-            .take(NUM_EPOCHS_TO_REQUEST)
-            .collect()
+        (start_from..peer_best).take(num_to_request).collect()
     }
 
     pub fn clean_up(&self) {
         let mut in_flight = self.in_flight.write();
-        let timeout = *EPOCH_REQUEST_TIMEOUT;
+
+        let timeout = self
+            .config
+            .epoch_request_timeout
+            .unwrap_or(*EPOCH_REQUEST_TIMEOUT);
 
         // collect timed-out requests
         let ids: Vec<_> = in_flight
@@ -180,6 +213,9 @@ impl Epochs {
             .collect();
 
         trace!("Timeout epochs ({}): {:?}", ids.len(), ids);
+
+        self.timeout_count
+            .fetch_add(ids.len() as u64, Ordering::Relaxed);
 
         // remove requests from `in_flight`
         for id in &ids {
@@ -217,7 +253,12 @@ impl Epochs {
             Some(g) => g,
         };
 
-        if self.headers.num_waiting() >= NUM_WAITING_HEADERS_THRESHOLD {
+        let threshold = self
+            .config
+            .num_waiting_headers_threshold
+            .unwrap_or(NUM_WAITING_HEADERS_THRESHOLD);
+
+        if self.headers.num_waiting() >= threshold {
             return;
         }
 
@@ -225,7 +266,12 @@ impl Epochs {
         let epochs = self.collect_epochs_to_request();
 
         // request epochs in batches from random peers
-        for batch in epochs.chunks(EPOCH_REQUEST_BATCH_SIZE) {
+        let batch_size = self
+            .config
+            .epoch_request_batch_size
+            .unwrap_or(EPOCH_REQUEST_BATCH_SIZE);
+
+        for batch in epochs.chunks(batch_size) {
             // find maximal epoch number in this chunk
             let max = max_of_collection(batch.iter()).expect("chunk not empty");
 

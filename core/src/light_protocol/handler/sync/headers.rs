@@ -7,7 +7,7 @@ use crate::{
     light_protocol::{
         common::{FullPeerState, Peers},
         message::{msgid, GetBlockHeaders},
-        Error,
+        Error, LightNodeConfiguration,
     },
     message::{Message, RequestId},
     sync::SynchronizationGraph,
@@ -34,8 +34,10 @@ use std::{
 struct Statistics {
     in_flight: usize,
     waiting: usize,
-    received_count: u64,
-    duplicate_count: u64,
+    inserted: u64,
+    duplicate: u64,
+    unexpected: u64,
+    timeout: u64,
 }
 
 // NOTE: order defines priority: Epoch < Reference < NewHash
@@ -84,14 +86,17 @@ impl HasKey<H256> for MissingHeader {
 }
 
 pub struct Headers {
+    // light node configuration
+    config: LightNodeConfiguration,
+
     // number of headers received multiple times
     duplicate_count: AtomicU64,
 
     // shared synchronization graph
     graph: Arc<SynchronizationGraph>,
 
-    // number of headers received
-    received_count: AtomicU64,
+    // number of headers inserted into the sync graph
+    inserted_count: AtomicU64,
 
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
@@ -101,27 +106,39 @@ pub struct Headers {
 
     // sync and request manager
     sync_manager: SyncManager<H256, MissingHeader>,
+
+    // number of timeout header requests
+    timeout_count: AtomicU64,
+
+    // number of unexpected headers received
+    // these are mostly responses for timeout requests
+    unexpected_count: AtomicU64,
 }
 
 impl Headers {
     pub fn new(
         graph: Arc<SynchronizationGraph>, peers: Arc<Peers<FullPeerState>>,
-        request_id_allocator: Arc<UniqueId>,
+        request_id_allocator: Arc<UniqueId>, config: LightNodeConfiguration,
     ) -> Self
     {
         let duplicate_count = AtomicU64::new(0);
-        let received_count = AtomicU64::new(0);
+        let inserted_count = AtomicU64::new(0);
         let syn = Mutex::new(());
         let sync_manager =
             SyncManager::new(peers.clone(), msgid::GET_BLOCK_HEADERS);
+        let timeout_count = AtomicU64::new(0);
+        let unexpected_count = AtomicU64::new(0);
 
         Headers {
+            config,
             duplicate_count,
             graph,
-            received_count,
+            inserted_count,
             request_id_allocator,
             syn,
             sync_manager,
+            timeout_count,
+            unexpected_count,
         }
     }
 
@@ -135,8 +152,10 @@ impl Headers {
             Statistics {
                 in_flight: self.sync_manager.num_in_flight(),
                 waiting: self.sync_manager.num_waiting(),
-                received_count: self.received_count.load(Ordering::Relaxed),
-                duplicate_count: self.duplicate_count.load(Ordering::Relaxed),
+                inserted: self.inserted_count.load(Ordering::Relaxed),
+                duplicate: self.duplicate_count.load(Ordering::Relaxed),
+                unexpected: self.unexpected_count.load(Ordering::Relaxed),
+                timeout: self.timeout_count.load(Ordering::Relaxed),
             }
         );
     }
@@ -183,8 +202,6 @@ impl Headers {
 
         // TODO(thegaram): validate header timestamps
         for header in headers {
-            self.received_count.fetch_add(1, Ordering::Relaxed);
-
             let hash = header.hash();
 
             // check request id
@@ -193,7 +210,8 @@ impl Headers {
                 .check_if_requested(peer, id, &hash)?
                 .is_none()
             {
-                trace!("Received unsolicited header: {:?}", hash);
+                trace!("Received unexpected header: {:?}", hash);
+                self.unexpected_count.fetch_add(1, Ordering::Relaxed);
                 continue;
             }
 
@@ -219,6 +237,8 @@ impl Headers {
                 continue;
             }
 
+            self.inserted_count.fetch_add(1, Ordering::Relaxed);
+
             // store missing dependencies
             missing.insert(*header.parent_hash());
 
@@ -235,9 +255,17 @@ impl Headers {
 
     #[inline]
     pub fn clean_up(&self) {
-        let timeout = *HEADER_REQUEST_TIMEOUT;
+        let timeout = match self.config.header_request_timeout {
+            None => *HEADER_REQUEST_TIMEOUT,
+            Some(dur) => dur,
+        };
+
         let headers = self.sync_manager.remove_timeout_requests(timeout);
         trace!("Timeout headers ({}): {:?}", headers.len(), headers);
+
+        self.timeout_count
+            .fetch_add(headers.len() as u64, Ordering::Relaxed);
+
         self.sync_manager.insert_waiting(headers.into_iter());
     }
 
@@ -272,11 +300,20 @@ impl Headers {
             Some(g) => g,
         };
 
-        self.sync_manager.sync(
-            MAX_HEADERS_IN_FLIGHT,
-            HEADER_REQUEST_BATCH_SIZE,
-            |peer, hashes| self.send_request(io, peer, hashes),
-        );
+        let max_in_flight = self
+            .config
+            .max_headers_in_flight
+            .unwrap_or(MAX_HEADERS_IN_FLIGHT);
+
+        let batch_size = self
+            .config
+            .header_request_batch_size
+            .unwrap_or(HEADER_REQUEST_BATCH_SIZE);
+
+        self.sync_manager
+            .sync(max_in_flight, batch_size, |peer, hashes| {
+                self.send_request(io, peer, hashes)
+            });
     }
 }
 

@@ -271,17 +271,17 @@ pub mod light {
         pub static ref CLEANUP_PERIOD: Duration = Duration::from_secs(1);
 
         /// Request timeouts.
-        pub static ref EPOCH_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
-        pub static ref HEADER_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
-        pub static ref WITNESS_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
-        pub static ref BLOOM_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
-        pub static ref RECEIPT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
-        pub static ref BLOCK_TX_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
-        pub static ref STATE_ROOT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
-        pub static ref STATE_ENTRY_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
-        pub static ref TX_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
-        pub static ref TX_INFO_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
-        pub static ref STORAGE_ROOT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+        pub static ref EPOCH_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref HEADER_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref WITNESS_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref BLOOM_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref RECEIPT_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref BLOCK_TX_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref STATE_ROOT_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref STATE_ENTRY_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref TX_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref TX_INFO_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref STORAGE_ROOT_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
 
         /// Maximum time period we wait for a response for an on-demand query.
         /// After this timeout has been reached, we try another peer or give up.
@@ -329,12 +329,11 @@ pub mod light {
     pub const MAX_PARALLEL_EPOCH_REQUESTS: usize = 10;
 
     /// Number of epochs to request in one round (in possibly multiple batches).
-    pub const NUM_EPOCHS_TO_REQUEST: usize = 1000;
+    pub const NUM_EPOCHS_TO_REQUEST: usize = 200;
 
     /// Minimum number of missing items in the sync pipeline.
     /// If we have fewer, we will try to request some more.
     pub const NUM_WAITING_HEADERS_THRESHOLD: usize = 1000;
-    pub const NUM_WAITING_WITNESSES_THRESHOLD: usize = 30;
 
     /// Max number of epochs/headers/txs to send to a light peer in a response.
     pub const MAX_EPOCHS_TO_SEND: usize = 128;
