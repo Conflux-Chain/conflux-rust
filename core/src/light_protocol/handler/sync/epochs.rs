@@ -81,10 +81,10 @@ pub struct Epochs {
     // mutex used to make sure at most one thread drives sync at any given time
     sync_lock: Mutex<()>,
 
-    // number of timeout epochs requests
+    // number of timeout epoch requests
     timeout_count: AtomicU64,
 
-    // number of unexpected epochs responses received
+    // number of unexpected epoch responses received
     // these are mostly responses for timeout requests
     unexpected_count: AtomicU64,
 }
