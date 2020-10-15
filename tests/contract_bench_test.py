@@ -25,6 +25,7 @@ from web3 import Web3
 class ContractBenchTest(SmartContractBenchBase):
     def set_test_params(self):
         self.num_nodes = 1
+        self.conf_parameters["execute_genesis"] = "true"
         self.collateral_per_byte = 10 ** 18 // 1024
 
     def setup_network(self):
