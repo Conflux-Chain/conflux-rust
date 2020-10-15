@@ -437,6 +437,6 @@ jsonrpc_local_http_port=12539
 
 # The chain_id of conflux network
 # 1 for testnet
-# commentting out for not verify chain_id
 #
 chain_id = 1
+execute_genesis = true
