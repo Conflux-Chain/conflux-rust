@@ -249,10 +249,10 @@ impl Headers {
 
     #[inline]
     pub fn clean_up(&self) {
-        let timeout = match self.config.header_request_timeout {
-            None => *HEADER_REQUEST_TIMEOUT,
-            Some(dur) => dur,
-        };
+        let timeout = self
+            .config
+            .header_request_timeout
+            .unwrap_or(*HEADER_REQUEST_TIMEOUT);
 
         let headers = self.sync_manager.remove_timeout_requests(timeout);
         trace!("Timeout headers ({}): {:?}", headers.len(), headers);
