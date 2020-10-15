@@ -191,8 +191,8 @@ pub fn genesis_block(
                 &Address::zero(),
             )
             .expect("");
-        state.clean_account(&genesis_account_address);
     }
+    state.clean_account(&genesis_account_address);
 
     let state_root = state
         .compute_state_root(/* debug_record = */ debug_record.as_mut())
