@@ -19,7 +19,10 @@ use crate::{
     NodeType, Notifications, SharedTransactionPool,
 };
 use cfx_parameters::{consensus::*, consensus_internal::*};
-use cfx_storage::{state_manager::StateManagerTrait, StateIndex};
+use cfx_storage::{
+    state_manager::StateManagerTrait,
+    storage_db::SnapshotKeptToProvideSyncStatus, StateIndex,
+};
 use cfx_types::H256;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use parking_lot::Mutex;
@@ -1949,6 +1952,8 @@ impl ConsensusNewBlockHandler {
         {
             let pivot_arena_index = inner.pivot_chain[pivot_index];
             let pivot_hash = inner.arena[pivot_arena_index].hash;
+            let height = inner.arena[pivot_arena_index].height;
+            let mut has_storage = true;
 
             let mut compute_epoch = false;
             // Ensure that the commitments for the blocks on
@@ -1985,7 +1990,11 @@ impl ConsensusNewBlockHandler {
                             .storage_manager
                             .get_storage_manager()
                             .get_snapshot_info_at_epoch(next_snapshot_epoch)
-                            .is_none()
+                            // returns true when the snapshot is not available.
+                            .map_or(true, |info| {
+                                info.snapshot_info_kept_to_provide_sync
+                                    == SnapshotKeptToProvideSyncStatus::InfoOnly
+                            })
                         {
                             // The upcoming snapshot is not ready because at the
                             // last shutdown the snapshotting process wasn't
@@ -1998,12 +2007,13 @@ impl ConsensusNewBlockHandler {
                     if self
                         .data_man
                         .storage_manager
-                        .get_state_no_commit(
-                            StateIndex::new_for_readonly(
+                        .get_state_for_next_epoch(
+                            StateIndex::new_for_next_epoch(
                                 &pivot_hash,
                                 &commitment.state_root_with_aux_info,
+                                height,
+                                self.data_man.get_snapshot_epoch_count(),
                             ),
-                            false, /* try_open */
                         )
                         .expect("DB Error")
                         .is_none()
@@ -2012,6 +2022,7 @@ impl ConsensusNewBlockHandler {
                         // This is possible after a crash because commitments
                         // and states are stored in different databases.
                         compute_epoch = true;
+                        has_storage = false;
                     }
 
                     self.data_man
@@ -2020,6 +2031,11 @@ impl ConsensusNewBlockHandler {
                         .upper_bound += 1;
                 }
             }
+            debug!(
+                "construct_pivot_state: index {} height {} compute_epoch {} has_storage {}.",
+                pivot_index, height, compute_epoch, has_storage,
+            );
+
             if compute_epoch {
                 let reward_execution_info = self
                     .executor
