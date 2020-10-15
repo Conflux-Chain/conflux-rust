@@ -773,6 +773,11 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         )
     }
 
+    pub fn clean_account(&mut self, address: &Address) {
+        *&mut *self.require_or_new_basic_account(address).unwrap() =
+            OverlayAccount::from_loaded(address, Default::default());
+    }
+
     pub fn inc_nonce(&mut self, address: &Address) -> DbResult<()> {
         self.require_or_new_basic_account(address)
             .map(|mut x| x.inc_nonce())

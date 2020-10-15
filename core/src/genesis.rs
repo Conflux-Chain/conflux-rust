@@ -4,19 +4,25 @@
 
 use crate::{
     evm::Spec,
-    executive::InternalContractMap,
+    executive::{
+        contract_address, ExecutionOutcome, Executive, InternalContractMap,
+    },
+    machine::Machine,
     state::{CleanupMode, State},
     verification::{compute_receipts_root, compute_transaction_root},
+    vm::{CreateContractAddress, Env},
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
-use cfx_parameters::consensus::GENESIS_GAS_LIMIT;
+use cfx_parameters::consensus::{GENESIS_GAS_LIMIT, ONE_CFX_IN_DRIP};
 use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{StorageManager, StorageManagerTrait};
 use cfx_types::{address_util::AddressUtil, Address, U256};
+use hex::FromHex;
 use keylib::KeyPair;
+use parity_bytes::Bytes;
 use primitives::{
     storage::STORAGE_LAYOUT_REGULAR_V0, Action, Block, BlockHeaderBuilder,
-    BlockReceipts, Transaction,
+    BlockReceipts, SignedTransaction, Transaction,
 };
 use secret_store::SecretStore;
 use std::{
@@ -35,6 +41,8 @@ pub const DEV_GENESIS_PRI_KEY_2: &'static str =
 pub const GENESIS_TRANSACTION_DATA_STR: &'static str = "
 26870.10643898104687425822313361.30
 Cogito ergo sum. - René Descartes";
+
+pub const GENESIS_TRANSACTION_CREATE_CREATE2FACTORY: &'static str = "608060405234801561001057600080fd5b506102a2806100206000396000f3fe608060405234801561001057600080fd5b50600436106100365760003560e01c806390184b021461003b5780639c4ae2d014610075575b600080fd5b6100616004803603602081101561005157600080fd5b50356001600160a01b0316610139565b604080519115158252519081900360200190f35b61011d6004803603604081101561008b57600080fd5b8101906020810181356401000000008111156100a657600080fd5b8201836020820111156100b857600080fd5b803590602001918460018302840111640100000000831117156100da57600080fd5b91908080601f0160208091040260200160405190810160405280939291908181526020018383808284376000920191909152509295505091359250610157915050565b604080516001600160a01b039092168252519081900360200190f35b6001600160a01b031660009081526020819052604090205460ff1690565b600080600060019050838551602087016000f59150813b610176575060005b806101c8576040805162461bcd60e51b815260206004820152600e60248201527f63726561746532206661696c6564000000000000000000000000000000000000604482015290519081900360640190fd5b6001600160a01b03821660009081526020819052604090205460ff16156102205760405162461bcd60e51b815260040180806020018281038252602181526020018061024d6021913960400191505060405180910390fd5b506001600160a01b0381166000908152602081905260409020805460ff1916600117905590509291505056fe636f6e747261637420686173206265656e206465706c6f796564206265666f7265a265627a7a723158200af37f6335cc41d7dfae2771f8663b4a48fc54c11ec8a28682901a0951f9ce5364736f6c634300050b0032";
 
 lazy_static! {
     pub static ref DEV_GENESIS_KEY_PAIR: KeyPair =
@@ -100,7 +108,8 @@ pub fn initialize_internal_contract_accounts(state: &mut State) {
 pub fn genesis_block(
     storage_manager: &Arc<StorageManager>,
     genesis_accounts: HashMap<Address, U256>, test_net_version: Address,
-    initial_difficulty: U256,
+    initial_difficulty: U256, machine: Arc<Machine>, need_to_execute: bool,
+    genesis_chain_id: Option<u32>,
 ) -> Block
 {
     let mut state = State::new(
@@ -123,7 +132,68 @@ pub fn genesis_block(
     }
     state.add_total_issued(total_balance);
 
+    let genesis_account_address = "1949000000000000000000000000000000001001"
+        .parse::<Address>()
+        .unwrap();
+
+    let genesis_account_init_balance = U256::from(ONE_CFX_IN_DRIP);
+    state
+        .add_balance(
+            &genesis_account_address,
+            &genesis_account_init_balance,
+            CleanupMode::NoEmpty,
+        )
+        .unwrap();
+
     let mut debug_record = Some(ComputeEpochDebugRecord::default());
+
+    let genesis_chain_id = genesis_chain_id.unwrap_or(0);
+    let mut genesis_transaction = Transaction::default();
+    genesis_transaction.data = GENESIS_TRANSACTION_DATA_STR.as_bytes().into();
+    genesis_transaction.action = Action::Call(Default::default());
+    genesis_transaction.chain_id = genesis_chain_id; // Genesis transaction for Oceanus.
+
+    let mut create_create2factory_transaction = Transaction::default();
+    create_create2factory_transaction.data =
+        Bytes::from_hex(GENESIS_TRANSACTION_CREATE_CREATE2FACTORY).unwrap();
+    create_create2factory_transaction.action = Action::Create;
+    create_create2factory_transaction.chain_id = genesis_chain_id;
+    create_create2factory_transaction.gas = 300000.into();
+    create_create2factory_transaction.gas_price = 1.into();
+    create_create2factory_transaction.storage_limit = 512;
+
+    let genesis_transactions = vec![
+        Arc::new(genesis_transaction.fake_sign(Default::default())),
+        Arc::new(
+            create_create2factory_transaction
+                .fake_sign(genesis_account_address),
+        ),
+    ];
+
+    if need_to_execute {
+        execute_genesis_transaction(
+            genesis_transactions[1].as_ref(),
+            &mut state,
+            machine.clone(),
+        );
+    }
+
+    let (create2factory_contract_address, _) = contract_address(
+        CreateContractAddress::FromSenderNonceAndCodeHash,
+        0.into(),
+        &genesis_account_address,
+        &U256::zero(),
+        &genesis_transactions[1].as_ref().data,
+    );
+    state
+        .set_admin(
+            &genesis_account_address,
+            &create2factory_contract_address,
+            &Address::zero(),
+        )
+        .expect("");
+    state.clean_account(&genesis_account_address);
+
     let state_root = state
         .compute_state_root(/* debug_record = */ debug_record.as_mut())
         .unwrap();
@@ -133,12 +203,7 @@ pub fn genesis_block(
         secondary_reward: U256::zero(),
         tx_execution_error_messages: vec![],
     })]);
-    let mut genesis_transaction = Transaction::default();
-    genesis_transaction.data = GENESIS_TRANSACTION_DATA_STR.as_bytes().into();
-    genesis_transaction.action = Action::Call(Default::default());
-    genesis_transaction.chain_id = 2; // Genesis transaction for Oceanus.
-    let genesis_transactions =
-        vec![Arc::new(genesis_transaction.fake_sign(Default::default()))];
+
     let mut genesis = Block::new(
         BlockHeaderBuilder::new()
             .with_deferred_state_root(state_root.aux_info.state_root_hash)
@@ -158,6 +223,7 @@ pub fn genesis_block(
         genesis,
         genesis.hash()
     );
+
     state
         .commit(
             genesis.block_header.hash(),
@@ -170,6 +236,33 @@ pub fn genesis_block(
         serde_json::to_string(&debug_record).unwrap()
     );
     genesis
+}
+
+fn execute_genesis_transaction(
+    transaction: &SignedTransaction, state: &mut State, machine: Arc<Machine>,
+) {
+    let env = Env::default();
+    let spec = Spec::new_spec();
+    let internal_contract_map = InternalContractMap::new();
+
+    let r = {
+        Executive::new(
+            state,
+            &env,
+            machine.as_ref(),
+            &spec,
+            &internal_contract_map,
+        )
+        .transact(transaction)
+        .unwrap()
+    };
+
+    match r {
+        ExecutionOutcome::Finished(_executed) => {}
+        _ => {
+            panic!("genesis transaction should not fail!");
+        }
+    }
 }
 
 pub fn load_file(path: &String) -> Result<HashMap<Address, U256>, String> {
