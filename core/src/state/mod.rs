@@ -575,20 +575,8 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         admin: &Address,
     ) -> DbResult<()>
     {
-        if self.ensure_account_loaded(
-            contract_address,
-            RequireCache::None,
-            |acc| {
-                acc.map_or(false, |acc| {
-                    acc.is_contract()
-                        && acc.admin() == requester
-                        && acc.admin() != admin
-                })
-            },
-        )? {
-            self.require_exists(&contract_address, false)?
-                .set_admin(requester, admin);
-        }
+        self.require_exists(&contract_address, false)?
+            .set_admin(requester, admin);
         Ok(())
     }
 
@@ -783,6 +771,11 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 })
             },
         )
+    }
+
+    pub fn clean_account(&mut self, address: &Address) {
+        *&mut *self.require_or_new_basic_account(address).unwrap() =
+            OverlayAccount::from_loaded(address, Default::default());
     }
 
     pub fn inc_nonce(&mut self, address: &Address) -> DbResult<()> {

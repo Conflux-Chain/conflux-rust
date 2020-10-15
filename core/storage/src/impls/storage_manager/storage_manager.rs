@@ -40,10 +40,6 @@ impl PersistedSnapshotInfoMap {
         self.snapshot_info_map_by_epoch.get(epoch)
     }
 
-    fn contains_key(&self, epoch: &EpochId) -> bool {
-        self.snapshot_info_map_by_epoch.contains_key(epoch)
-    }
-
     fn remove(&mut self, epoch: &EpochId) -> Result<()> {
         self.snapshot_info_map_by_epoch.remove(epoch);
         self.snapshot_info_db.delete(epoch.as_ref())?;
@@ -535,10 +531,14 @@ impl StorageManager {
             this_cloned.in_progress_snapshotting_tasks.write();
 
         if !in_progress_snapshotting_tasks.contains_key(&snapshot_epoch_id)
-            && !this
+            && this
                 .snapshot_info_map_by_epoch
                 .read()
-                .contains_key(&snapshot_epoch_id)
+                .get(&snapshot_epoch_id)
+                .map_or(true, |info| {
+                    info.snapshot_info_kept_to_provide_sync
+                        == SnapshotKeptToProvideSyncStatus::InfoOnly
+                })
         {
             debug!(
                 "start check_make_register_snapshot_background: epoch={:?} height={:?}",
@@ -748,6 +748,8 @@ impl StorageManager {
         // Register intermediate MPT for the new snapshot.
         let mut snapshot_associated_mpts_locked =
             self.snapshot_associated_mpts_by_epoch.write();
+        let in_recover_mode =
+            snapshot_associated_mpts_locked.contains_key(snapshot_epoch_id);
 
         // Parent's delta mpt becomes intermediate_delta_mpt for the new
         // snapshot.
@@ -794,7 +796,9 @@ impl StorageManager {
         drop(snapshot_associated_mpts_locked);
         snapshot_info_map_locked
             .insert(snapshot_epoch_id, new_snapshot_info.clone())?;
-        self.current_snapshots.write().push(new_snapshot_info);
+        if !in_recover_mode {
+            self.current_snapshots.write().push(new_snapshot_info);
+        }
 
         Ok(())
     }

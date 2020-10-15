@@ -63,6 +63,7 @@ rayon = "1.0"
 rlp = "0.4.0"
 rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 rustc-hex = "1.0"
+hex = "0.4.2"
 secret-store = { path = "../secret_store" }
 serde = { version = "1.0", features = ["rc"] }
 serde_derive = "1.0"

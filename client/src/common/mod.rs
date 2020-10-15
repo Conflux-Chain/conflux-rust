@@ -197,11 +197,18 @@ pub fn initialize_common_modules(
         }
     };
 
+    let consensus_conf = conf.consensus_config();
+    let machine =
+        Arc::new(new_machine_with_builtin(consensus_conf.chain_id.clone()));
+
     let genesis_block = genesis_block(
         &storage_manager,
         genesis_accounts.clone(),
         Address::from_str(GENESIS_VERSION).unwrap(),
         U256::zero(),
+        machine.clone(),
+        conf.raw_conf.execute_genesis, /* need_to_execute */
+        conf.raw_conf.chain_id,
     );
     debug!("Initialize genesis_block={:?}", genesis_block);
 
@@ -217,10 +224,6 @@ pub fn initialize_common_modules(
         conf.data_mananger_config(),
         pow.clone(),
     ));
-
-    let consensus_conf = conf.consensus_config();
-    let machine =
-        Arc::new(new_machine_with_builtin(consensus_conf.chain_id.clone()));
 
     let txpool = Arc::new(TransactionPool::new(
         conf.txpool_config(),
