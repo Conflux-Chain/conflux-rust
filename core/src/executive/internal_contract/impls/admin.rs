@@ -54,7 +54,7 @@ pub fn set_admin(
 ) -> vm::Result<()>
 {
     Ok(state.set_admin(
-        &params.original_sender,
+        &params.sender,
         &contract_address,
         &new_admin_address,
     )?)
@@ -69,7 +69,7 @@ pub fn destroy(
 {
     debug!("contract_address={:?}", contract_address);
 
-    let requester = &params.original_sender;
+    let requester = &params.sender;
     let admin = state.admin(&contract_address)?;
     if admin == *requester {
         suicide(&contract_address, &admin, state, spec, substate)
