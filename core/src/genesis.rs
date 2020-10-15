@@ -176,23 +176,23 @@ pub fn genesis_block(
             &mut state,
             machine.clone(),
         );
-    }
 
-    let (create2factory_contract_address, _) = contract_address(
-        CreateContractAddress::FromSenderNonceAndCodeHash,
-        0.into(),
-        &genesis_account_address,
-        &U256::zero(),
-        &genesis_transactions[1].as_ref().data,
-    );
-    state
-        .set_admin(
+        let (create2factory_contract_address, _) = contract_address(
+            CreateContractAddress::FromSenderNonceAndCodeHash,
+            0.into(),
             &genesis_account_address,
-            &create2factory_contract_address,
-            &Address::zero(),
-        )
-        .expect("");
-    state.clean_account(&genesis_account_address);
+            &U256::zero(),
+            &genesis_transactions[1].as_ref().data,
+        );
+        state
+            .set_admin(
+                &genesis_account_address,
+                &create2factory_contract_address,
+                &Address::zero(),
+            )
+            .expect("");
+        state.clean_account(&genesis_account_address);
+    }
 
     let state_root = state
         .compute_state_root(/* debug_record = */ debug_record.as_mut())
