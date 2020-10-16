@@ -2,7 +2,7 @@
 """An example functional test
 """
 from conflux.rpc import RpcClient
-from conflux.utils import ec_random_keys, priv_to_addr
+from conflux.utils import ec_random_keys, priv_to_addr, encode_hex
 from test_framework.mininode import start_p2p_connection
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
@@ -21,7 +21,7 @@ class ZeroGasPriceTest(ConfluxTestFramework):
         STATUS_EXCEPTION_WITHOUT_NONCE_BUMP = "0x2"
         rpc_cient = RpcClient(self.nodes[0])
         sk1, pk1 = ec_random_keys()
-        address1 = priv_to_addr(sk1)
+        address1 = encode_hex(priv_to_addr(sk1))
 
         # Successful payment
         tx = rpc_cient.new_tx(gas_price=0, receiver=address1, value=42000)

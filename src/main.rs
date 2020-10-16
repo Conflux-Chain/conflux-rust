@@ -102,6 +102,8 @@ fn main() -> Result<(), String> {
             for crate_name in [
                 "blockgen",
                 "cfxcore",
+                "cfx_state",
+                "cfx_storage",
                 "conflux",
                 "db",
                 "keymgr",
