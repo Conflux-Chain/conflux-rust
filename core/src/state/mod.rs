@@ -26,7 +26,6 @@ use cfx_statedb::{
 };
 use cfx_storage::{utils::access_mode, StorageState, StorageStateTrait};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
-use itertools::chain;
 use parking_lot::{
     MappedRwLockWriteGuard, RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
@@ -1044,13 +1043,6 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         // TODO: Think about kill_dust and collateral refund.
         for address in &killed_addresses {
             self.db.delete_all::<access_mode::Write>(
-                StorageKey::new_storage_key(
-                    &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-                    address.as_ref(),
-                ),
-                debug_record.as_deref_mut(),
-            )?;
-            self.db.delete_all::<access_mode::Write>(
                 StorageKey::new_storage_root_key(address),
                 debug_record.as_deref_mut(),
             )?;
@@ -1167,9 +1159,68 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         Ok(())
     }
 
+    fn remove_whitelists_for_contract<AM: access_mode::AccessMode>(
+        &mut self, address: &Address,
+    ) -> DbResult<HashMap<Vec<u8>, Address>> {
+        let mut storage_owner_map = HashMap::new();
+        let key_values = self.db.delete_all::<AM>(
+            StorageKey::new_storage_key(
+                &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+                address.as_ref(),
+            ),
+            /* debug_record = */ None,
+        )?;
+        let mut sponsor_whitelist_control_address = self.require_exists(
+            &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+            /* require_code = */ false,
+        )?;
+        for (key, value) in &key_values {
+            if let StorageKey::StorageKey { storage_key, .. } =
+                StorageKey::from_key_bytes(&key[..])
+            {
+                let storage_value =
+                    rlp::decode::<StorageValue>(value.as_ref())?;
+                let storage_owner = storage_value.owner.unwrap_or_else(|| {
+                    SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS.clone()
+                });
+                storage_owner_map.insert(storage_key.to_vec(), storage_owner);
+            }
+        }
+
+        // Then scan unapplied storage changes.
+        for (key, _value) in sponsor_whitelist_control_address.storage_changes()
+        {
+            if key.starts_with(address.as_ref()) {
+                if let Some(storage_owner) =
+                    sponsor_whitelist_control_address
+                        .original_ownership_at(&self.db, key)?
+                {
+                    storage_owner_map.insert(key.clone(), storage_owner);
+                }
+            }
+        }
+        if !AM::is_read_only() {
+            // Note removal of all keys in storage_cache and storage_changes.
+            for (key, _storage_owner) in &storage_owner_map {
+                debug!("delete sponsor key {:?}", key);
+                sponsor_whitelist_control_address.set_storage(
+                    key.clone(),
+                    U256::zero(),
+                    /* owner doesn't matter for 0 value */
+                    Address::zero(),
+                );
+            }
+        }
+
+        Ok(storage_owner_map)
+    }
+
     pub fn record_storage_and_whitelist_entries_release(
         &mut self, address: &Address, substate: &mut Substate,
     ) -> DbResult<()> {
+        let sponsor_whitelist_key_storage_owners_map =
+            self.remove_whitelists_for_contract::<access_mode::Read>(address)?;
+
         let account_cache_read_guard = self.cache.read();
         let maybe_account = account_cache_read_guard
             .get(address)
@@ -1183,18 +1234,14 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             StorageKey::new_storage_root_key(address),
             None,
         )?;
-        let sponsor_whitelist_key_values =
-            self.db.delete_all::<access_mode::Read>(
-                StorageKey::new_storage_key(
-                    &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-                    address.as_ref(),
-                ),
-                None,
-            )?;
+        for (_key, storage_owner) in sponsor_whitelist_key_storage_owners_map {
+            substate.record_storage_release(
+                &storage_owner,
+                COLLATERAL_UNITS_PER_STORAGE_KEY,
+            );
+        }
 
-        for (key, value) in
-            chain(&storage_key_value, &sponsor_whitelist_key_values)
-        {
+        for (key, value) in &storage_key_value {
             if let StorageKey::StorageKey { storage_key, .. } =
                 StorageKey::from_key_bytes(&key[..])
             {
@@ -1233,6 +1280,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     pub fn remove_contract(&mut self, address: &Address) -> DbResult<()> {
+        self.remove_whitelists_for_contract::<access_mode::Write>(address)?;
         Self::update_cache(
             self.cache.get_mut(),
             self.checkpoints.get_mut(),
