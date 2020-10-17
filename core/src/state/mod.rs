@@ -578,8 +578,8 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         let fn_can_set_admin = |acc: &OverlayAccount| {
             acc.is_contract()
                 && acc.admin() == requester
-                && (acc.address().is_user_account_address()
-                    || acc.address().is_null_address())
+                && (admin.is_user_account_address()
+                    || admin.is_null_address())
         };
         if self.ensure_account_loaded(
             contract_address,
