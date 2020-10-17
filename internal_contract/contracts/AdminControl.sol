@@ -6,7 +6,7 @@ contract AdminControl {
      * @dev get admin of specific contract
      * @param contractAddr The address of specific contract
      */
-    function getAdmin(address contractAddr) public returns (address) {}
+    function getAdmin(address contractAddr) public view returns (address) {}
 
     function setAdmin(address, address) public {}
     function destroy(address) public {}
