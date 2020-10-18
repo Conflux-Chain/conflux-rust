@@ -574,8 +574,19 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         admin: &Address,
     ) -> DbResult<()>
     {
-        self.require_exists(&contract_address, false)?
-            .set_admin(requester, admin);
+        let fn_can_set_admin = |acc: &OverlayAccount| {
+            acc.is_contract()
+                && acc.admin() == requester
+                && (admin.is_user_account_address() || admin.is_null_address())
+        };
+        if self.ensure_account_loaded(
+            contract_address,
+            RequireCache::None,
+            |acc| acc.map_or(false, fn_can_set_admin),
+        )? {
+            self.require_exists(&contract_address, false)?
+                .set_admin(admin);
+        }
         Ok(())
     }
 
