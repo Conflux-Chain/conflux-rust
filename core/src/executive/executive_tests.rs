@@ -7,7 +7,7 @@ use crate::{
     evm::{Factory, FinalizationResult, VMType},
     executive::ExecutionOutcome,
     machine::Machine,
-    state::{CleanupMode, CollateralCheckResult, Substate},
+    state::{CleanupMode, CollateralCheckResult, State, Substate},
     test_helpers::{
         get_state_for_genesis_write, get_state_for_genesis_write_with_factory,
     },
@@ -15,6 +15,7 @@ use crate::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
     },
 };
+use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::{
     internal_contract_addresses::{
         SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
@@ -22,13 +23,18 @@ use cfx_parameters::{
     },
     staking::*,
 };
-use cfx_storage::tests::new_state_manager_for_unit_test;
+use cfx_statedb::StateDb;
+use cfx_storage::{
+    state_manager::StateManagerTrait, tests::new_state_manager_for_unit_test,
+    StateIndex,
+};
 use cfx_types::{
     address_util::AddressUtil, Address, BigEndianHash, U256, U512,
 };
 use keylib::{Generator, Random};
 use primitives::{
-    storage::STORAGE_LAYOUT_REGULAR_V0, transaction::Action, Transaction,
+    storage::STORAGE_LAYOUT_REGULAR_V0, transaction::Action, EpochId,
+    Transaction,
 };
 use rustc_hex::FromHex;
 use std::{
@@ -989,6 +995,168 @@ fn test_deposit_withdraw_lock() {
     assert_eq!(
         state.withdrawable_staking_balance(&sender).unwrap(),
         U256::from(0)
+    );
+}
+
+#[test]
+fn test_commission_privilege_all_whitelisted_across_epochs() {
+    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
+    let code = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
+
+    let storage_manager = new_state_manager_for_unit_test();
+    let mut state = get_state_for_genesis_write_with_factory(
+        &storage_manager,
+        factory.clone(),
+    );
+    let mut env = Env::default();
+    env.gas_limit = U256::MAX;
+    let machine = make_byzantium_machine(0);
+    let spec = machine.spec(env.number);
+
+    let sender = Random.generate().unwrap();
+    let address = contract_address(
+        CreateContractAddress::FromSenderNonceAndCodeHash,
+        /* block_number = */ 0.into(),
+        &sender.address(),
+        &U256::zero(),
+        &[],
+    )
+    .0;
+
+    state.checkpoint();
+    state
+        .new_contract_with_admin(
+            &address,
+            &sender.address(),
+            U256::zero(),
+            U256::one(),
+            Some(STORAGE_LAYOUT_REGULAR_V0),
+        )
+        .expect(&concat!(file!(), ":", line!(), ":", column!()));
+    state
+        .init_code(&address, code.clone(), sender.address())
+        .unwrap();
+    state
+        .add_balance(
+            &sender.address(),
+            &U256::from(1_000_000_000_000_000_000u64),
+            CleanupMode::NoEmpty,
+        )
+        .unwrap();
+
+    state
+        .add_commission_privilege(address, sender.address(), Default::default())
+        .unwrap();
+    let epoch_id = EpochId::from_uint(&U256::from(1));
+    state
+        .collect_and_settle_collateral(
+            &Address::default(),
+            &0.into(),
+            &mut Substate::new(),
+        )
+        .unwrap();
+    state.discard_checkpoint();
+    let mut debug_record = ComputeEpochDebugRecord::default();
+    state.commit(epoch_id, Some(&mut debug_record)).unwrap();
+    debug!("{:?}", debug_record);
+
+    let mut state = State::new(
+        StateDb::new(
+            storage_manager
+                .get_state_for_next_epoch(
+                    StateIndex::new_for_test_only_delta_mpt(&epoch_id),
+                )
+                .unwrap()
+                .unwrap(),
+        ),
+        factory.clone().into(),
+        &spec,
+        1, /* block_number */
+    );
+    state.checkpoint();
+    assert_eq!(
+        true,
+        state
+            .check_commission_privilege(&address, &sender.address())
+            .unwrap()
+    );
+    assert_eq!(
+        true,
+        state
+            .check_commission_privilege(&address, &Default::default())
+            .unwrap()
+    );
+    let epoch_id = EpochId::from_uint(&U256::from(2));
+    // Destroy the contract, then create again.
+    state.remove_contract(&address).unwrap();
+    state
+        .new_contract_with_admin(
+            &address,
+            &sender.address(),
+            U256::zero(),
+            U256::one(),
+            Some(STORAGE_LAYOUT_REGULAR_V0),
+        )
+        .unwrap();
+    state.init_code(&address, code, sender.address()).unwrap();
+    state
+        .add_balance(
+            &sender.address(),
+            &U256::from(1_000_000_000_000_000_000u64),
+            CleanupMode::NoEmpty,
+        )
+        .unwrap();
+    let whitelisted_caller = Address::random();
+    state
+        .add_commission_privilege(address, sender.address(), whitelisted_caller)
+        .unwrap();
+    assert_eq!(
+        true,
+        state
+            .check_commission_privilege(&address, &whitelisted_caller)
+            .unwrap()
+    );
+    assert_eq!(
+        false,
+        state
+            .check_commission_privilege(&address, &Default::default())
+            .unwrap()
+    );
+    state
+        .collect_and_settle_collateral(
+            &Address::default(),
+            &0.into(),
+            &mut Substate::new(),
+        )
+        .unwrap();
+    state.discard_checkpoint();
+    state.commit(epoch_id, None).unwrap();
+
+    let state = State::new(
+        StateDb::new(
+            storage_manager
+                .get_state_no_commit(
+                    StateIndex::new_for_test_only_delta_mpt(&epoch_id),
+                    /* try_open = */ false,
+                )
+                .unwrap()
+                .unwrap(),
+        ),
+        factory.clone().into(),
+        &spec,
+        2, /* block_number */
+    );
+    assert_eq!(
+        true,
+        state
+            .check_commission_privilege(&address, &whitelisted_caller)
+            .unwrap()
+    );
+    assert_eq!(
+        false,
+        state
+            .check_commission_privilege(&address, &Default::default())
+            .unwrap()
     );
 }
 
