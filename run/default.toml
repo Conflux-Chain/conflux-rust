@@ -404,16 +404,16 @@ jsonrpc_local_http_port=12539
 # ------------------ Light Node Parameters ----------------------
 
 # Header sync parameters.
-# ln_max_headers_in_flight = 1000
 # ln_header_request_batch_size = 30
 # ln_header_request_timeout_sec = 2
+# ln_max_headers_in_flight = 1000
 
 # Epoch sync parameters.
-# num_epochs_to_request = 200
-# max_parallel_epochs_to_request = 10
-# epoch_request_batch_size = 100
-# epoch_request_timeout_sec = 2
-# num_waiting_headers_threshold = 1000
+# ln_epoch_request_batch_size = 100
+# ln_epoch_request_timeout_sec = 2
+# ln_max_parallel_epochs_to_request = 10
+# ln_num_epochs_to_request = 200
+# ln_num_waiting_headers_threshold = 1000
 
 # -------------------- Others -------------------
 

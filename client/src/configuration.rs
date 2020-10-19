@@ -256,13 +256,13 @@ build_config! {
         (tg_config_path, (Option<String>), Some("./tg_config/tg_config.toml".to_string()))
 
         // Light node section
-        (ln_max_headers_in_flight, (Option<usize>), None)
-        (ln_header_request_batch_size, (Option<usize>), None)
-        (ln_header_request_timeout_sec, (Option<u64>), None)
-        (ln_num_epochs_to_request, (Option<usize>), None)
-        (ln_max_parallel_epochs_to_request, (Option<usize>), None)
         (ln_epoch_request_batch_size, (Option<usize>), None)
         (ln_epoch_request_timeout_sec, (Option<u64>), None)
+        (ln_header_request_batch_size, (Option<usize>), None)
+        (ln_header_request_timeout_sec, (Option<u64>), None)
+        (ln_max_headers_in_flight, (Option<usize>), None)
+        (ln_max_parallel_epochs_to_request, (Option<usize>), None)
+        (ln_num_epochs_to_request, (Option<usize>), None)
         (ln_num_waiting_headers_threshold, (Option<usize>), None)
     }
     {
@@ -821,7 +821,11 @@ impl Configuration {
 
     pub fn light_node_config(&self) -> LightNodeConfiguration {
         LightNodeConfiguration {
-            max_headers_in_flight: self.raw_conf.ln_max_headers_in_flight,
+            epoch_request_batch_size: self.raw_conf.ln_epoch_request_batch_size,
+            epoch_request_timeout: self
+                .raw_conf
+                .ln_epoch_request_timeout_sec
+                .map(Duration::from_secs),
             header_request_batch_size: self
                 .raw_conf
                 .ln_header_request_batch_size,
@@ -829,15 +833,11 @@ impl Configuration {
                 .raw_conf
                 .ln_header_request_timeout_sec
                 .map(Duration::from_secs),
-            num_epochs_to_request: self.raw_conf.ln_num_epochs_to_request,
+            max_headers_in_flight: self.raw_conf.ln_max_headers_in_flight,
             max_parallel_epochs_to_request: self
                 .raw_conf
                 .ln_max_parallel_epochs_to_request,
-            epoch_request_batch_size: self.raw_conf.ln_epoch_request_batch_size,
-            epoch_request_timeout: self
-                .raw_conf
-                .ln_epoch_request_timeout_sec
-                .map(Duration::from_secs),
+            num_epochs_to_request: self.raw_conf.ln_num_epochs_to_request,
             num_waiting_headers_threshold: self
                 .raw_conf
                 .ln_num_waiting_headers_threshold,
