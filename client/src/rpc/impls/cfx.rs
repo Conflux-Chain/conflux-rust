@@ -905,7 +905,7 @@ impl RpcImpl {
             ));
         }
         let response = EstimateGasAndCollateralResponse {
-            gas_used: executed.gas_used.into(),
+            gas_used: executed.gas_used * 64 / 63 + 100,
             storage_collateralized: storage_collateralized.into(),
         };
         Ok(response)
