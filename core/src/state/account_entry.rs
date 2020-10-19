@@ -268,14 +268,7 @@ impl OverlayAccount {
         self.sponsor_info.sponsor_balance_for_collateral += *by;
     }
 
-    pub fn set_admin(&mut self, requester: &Address, admin: &Address) {
-        if self.is_contract()
-            && self.admin == *requester
-            && (admin.is_user_account_address() || admin.is_null_address())
-        {
-            self.admin = admin.clone();
-        }
-    }
+    pub fn set_admin(&mut self, admin: &Address) { self.admin = admin.clone(); }
 
     pub fn check_commission_privilege<StateDbStorage: StorageStateTrait>(
         &self, db: &StateDbGeneric<StateDbStorage>, contract_address: &Address,

@@ -487,6 +487,11 @@ impl VerificationConfig {
             });
         }
 
+        // Forbid zero-gas-price tx
+        if tx.gas_price == 0.into() {
+            bail!(TransactionError::ZeroGasPrice);
+        }
+
         // check transaction intrinsic gas
         let tx_intrinsic_gas = Executive::gas_required_for(
             tx.action == Action::Create,

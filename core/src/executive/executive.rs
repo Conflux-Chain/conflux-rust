@@ -612,7 +612,8 @@ impl<'a> CallCreateExecutive<'a> {
 
                 let origin = OriginInfo::from(&params);
 
-                let result = if params.call_type != CallType::Call {
+                let result = if params.call_type != CallType::Call
+                    && params.call_type != CallType::StaticCall {
                     Err(vm::Error::InternalContract(
                         "Incorrect call type.",
                     ))

@@ -2007,13 +2007,12 @@ impl ConsensusNewBlockHandler {
                     if self
                         .data_man
                         .storage_manager
-                        .get_state_for_next_epoch(
-                            StateIndex::new_for_next_epoch(
+                        .get_state_no_commit(
+                            StateIndex::new_for_readonly(
                                 &pivot_hash,
                                 &commitment.state_root_with_aux_info,
-                                height,
-                                self.data_man.get_snapshot_epoch_count(),
                             ),
+                            /* try_open = */ false,
                         )
                         .expect("DB Error")
                         .is_none()

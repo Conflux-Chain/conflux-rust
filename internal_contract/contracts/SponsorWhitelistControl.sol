@@ -6,44 +6,44 @@ contract SponsorWhitelistControl {
      * @dev get gas sponsor address of specific contract
      * @param contractAddr The address of the sponsored contract
      */
-    function getSponsorForGas(address contractAddr) public returns (address) {}
+    function getSponsorForGas(address contractAddr) public view returns (address) {}
 
     /**
      * @dev get current Sponsored Balance for gas
      * @param contractAddr The address of the sponsored contract
      */
-    function getSponsoredBalanceForGas(address contractAddr) public returns (uint) {}
+    function getSponsoredBalanceForGas(address contractAddr) public view returns (uint) {}
 
     /**
      * @dev get current Sponsored Gas fee upper bound
      * @param contractAddr The address of the sponsored contract
      */
-    function getSponsoredGasFeeUpperBound(address contractAddr) public returns (uint) {}
+    function getSponsoredGasFeeUpperBound(address contractAddr) public view returns (uint) {}
 
     /**
      * @dev get collateral sponsor address
      * @param contractAddr The address of the sponsored contract
      */
-    function getSponsorForCollateral(address contractAddr) public returns (address) {}
+    function getSponsorForCollateral(address contractAddr) public view returns (address) {}
 
     /**
      * @dev get current Sponsored Balance for collateral
      * @param contractAddr The address of the sponsored contract
      */
-    function getSponsoredBalanceForCollateral(address contractAddr) public returns (uint) {}
+    function getSponsoredBalanceForCollateral(address contractAddr) public view returns (uint) {}
 
     /**
      * @dev check if a user is in a contract's whitelist
      * @param contractAddr The address of the sponsored contract
      * @param user The address of contract user
      */
-    function isWhitelisted(address contractAddr, address user) public returns (bool) {}
+    function isWhitelisted(address contractAddr, address user) public view returns (bool) {}
 
     /**
      * @dev check if all users are in a contract's whitelist
      * @param contractAddr The address of the sponsored contract
      */
-    function isAllWhitelisted(address contractAddr) public returns (bool) {}
+    function isAllWhitelisted(address contractAddr) public view returns (bool) {}
 
     /*** for contract admin only **/
     /**
