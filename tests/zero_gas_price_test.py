@@ -13,7 +13,7 @@ from test_framework.blocktools import encode_hex_0x
 
 class ZeroGasPriceTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.num_nodes = 1
+        self.num_nodes = 2
         self.conf_parameters = {"log_level": '"trace"'}
         self.rpc_timewait = 600000
 
