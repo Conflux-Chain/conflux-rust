@@ -19,6 +19,7 @@ use self::contracts::SolFnTable;
 
 pub use self::{contracts::InternalContractMap, impls::suicide};
 
+use crate::executive::executive::CallCreateExecutive;
 pub use solidity_abi::ABIDecodeError;
 
 lazy_static! {
@@ -37,8 +38,8 @@ pub trait InternalContractTrait: Send + Sync {
 
     /// execute this internal contract on the given parameters.
     fn execute(
-        &self, params: &ActionParams, spec: &Spec, state: &mut State,
-        substate: &mut Substate,
+        &self, exec: &CallCreateExecutive, params: &ActionParams, spec: &Spec,
+        state: &mut State, substate: &mut Substate,
     ) -> vm::Result<GasLeft>
     {
         let call_data = params
@@ -59,7 +60,7 @@ pub trait InternalContractTrait: Send + Sync {
             .get(&fn_sig)
             .ok_or(vm::Error::InternalContract("unsupported function"))?;
 
-        solidity_fn.execute(call_params, params, spec, state, substate)
+        solidity_fn.execute(call_params, exec, params, spec, state, substate)
     }
 
     fn code(&self) -> Arc<Bytes> { INTERNAL_CONTRACT_CODE.clone() }
@@ -72,8 +73,8 @@ pub trait InternalContractTrait: Send + Sync {
 /// Native implementation of a solidity-interface function.
 pub trait SolidityFunctionTrait: Send + Sync {
     fn execute(
-        &self, input: &[u8], params: &ActionParams, spec: &Spec,
-        state: &mut State, substate: &mut Substate,
+        &self, input: &[u8], exec: &CallCreateExecutive, params: &ActionParams,
+        spec: &Spec, state: &mut State, substate: &mut Substate,
     ) -> vm::Result<GasLeft>;
 
     /// The string for function sig

@@ -166,6 +166,12 @@ pub struct CallCreateExecutive<'a> {
     depth: usize,
     stack_depth: usize,
     static_flag: bool,
+    // When a contract constructor calls builtin / internal contract,
+    // the contract address is filled in contract_in_create until the finish of
+    // the call. If an internal contract issues other calls, the
+    // contract_in_create value remains. When a contract constructor calls
+    // other functions, the contract_in_create is None.
+    contract_in_creation: Option<Address>,
     is_create: bool,
     gas: U256,
     kind: CallCreateExecutiveKind,
@@ -178,20 +184,21 @@ impl<'a> CallCreateExecutive<'a> {
         params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
         stack_depth: usize, parent_static_flag: bool,
+        parent_is_create_flag: bool, parent_in_creation: Option<Address>,
         internal_contract_map: &'a InternalContractMap,
         contracts_in_callstack: Rc<RefCell<CallStackInfo>>,
     ) -> Self
     {
-        trace!(
-            "Executive::call(params={:?}) self.env={:?}, parent_static={}",
-            params,
-            env,
-            parent_static_flag
+        debug!(
+            "Executive::call(params={:?}) self.env={:?}, parent_static={}, \
+             parent_is_create_flag={}",
+            params, env, parent_static_flag, parent_is_create_flag,
         );
 
         let gas = params.gas;
         let static_flag =
             parent_static_flag || params.call_type == CallType::StaticCall;
+        let contract_in_creation;
 
         // if destination is builtin, try to execute it
         let kind = if let Some(builtin) =
@@ -202,7 +209,12 @@ impl<'a> CallCreateExecutive<'a> {
             if !builtin.is_active(env.number) {
                 panic!("Consensus failure: engine implementation prematurely enabled built-in at {}", params.code_address);
             }
-            trace!("CallBuiltin");
+            debug!("Executive::CallBuiltin");
+            if parent_is_create_flag {
+                contract_in_creation = Some(params.sender);
+            } else {
+                contract_in_creation = parent_in_creation;
+            }
             CallCreateExecutiveKind::CallBuiltin(params)
         } else if let Some(_) =
             internal_contract_map.contract(&params.code_address)
@@ -211,11 +223,21 @@ impl<'a> CallCreateExecutive<'a> {
                 "CallInternalContract: address={:?} data={:?}",
                 params.code_address, params.data
             );
+            if parent_is_create_flag {
+                contract_in_creation = Some(params.sender);
+            } else {
+                contract_in_creation = parent_in_creation;
+            }
             CallCreateExecutiveKind::CallInternalContract(
                 params,
                 Substate::with_call_stack(contracts_in_callstack),
             )
         } else {
+            if parent_is_create_flag {
+                contract_in_creation = None;
+            } else {
+                contract_in_creation = parent_in_creation;
+            }
             if params.code.is_some() {
                 trace!("ExecCall");
                 CallCreateExecutiveKind::ExecCall(
@@ -237,6 +259,7 @@ impl<'a> CallCreateExecutive<'a> {
             static_flag,
             kind,
             gas,
+            contract_in_creation,
             is_create: false,
             internal_contract_map,
         }
@@ -251,14 +274,13 @@ impl<'a> CallCreateExecutive<'a> {
         contracts_in_callstack: Rc<RefCell<CallStackInfo>>,
     ) -> Self
     {
-        trace!(
+        debug!(
             "Executive::create(params={:?}) self.env={:?}, static={}",
-            params,
-            env,
-            static_flag
+            params, env, static_flag
         );
 
         let gas = params.gas;
+        let contract_in_creation = Some(params.code_address);
 
         let kind = CallCreateExecutiveKind::ExecCreate(
             params,
@@ -275,6 +297,7 @@ impl<'a> CallCreateExecutive<'a> {
             static_flag,
             kind,
             gas,
+            contract_in_creation,
             is_create: true,
             internal_contract_map,
         }
@@ -320,6 +343,14 @@ impl<'a> CallCreateExecutive<'a> {
                 panic!("A temporally status in function `enact_output`, should not appear during execution.");
             }
         }
+    }
+
+    // Returns whether we are running the contract creation code in its own
+    // frame, or in its immediate call of Builtin / InternalContract.
+    // Note that if the constructor calls other contract, the return value will
+    // be false.
+    pub fn contract_in_creation(&self) -> Option<&Address> {
+        self.contract_in_creation.as_ref()
     }
 
     fn check_static_flag(
@@ -499,7 +530,9 @@ impl<'a> CallCreateExecutive<'a> {
     pub fn exec(
         mut self, state: &mut State, substate: &mut Substate,
     ) -> ExecutiveTrapResult<'a, FinalizationResult> {
-        match self.kind {
+        let kind =
+            std::mem::replace(&mut self.kind, CallCreateExecutiveKind::Moved);
+        match kind {
             CallCreateExecutiveKind::Transfer(ref params) => {
                 assert!(!self.is_create);
 
@@ -620,7 +653,13 @@ impl<'a> CallCreateExecutive<'a> {
                 } else if let Some(contract) =
                     internal_contract_map.contract(&params.code_address)
                 {
+                    self.kind = CallCreateExecutiveKind::CallInternalContract(
+                        params.clone(),
+                        // Substate is fake, FIXME, try if we can match &kind
+                        Substate::default()
+                    );
                     contract.execute(
+                        &self,
                         &params,
                         &spec,
                         state,
@@ -645,7 +684,6 @@ impl<'a> CallCreateExecutive<'a> {
                     self.internal_contract_map,
                 );
                 let out = Ok(result.finalize(context));
-                self.kind = CallCreateExecutiveKind::Moved;
                 self.enact_output(
                     out,
                     origin,
@@ -708,7 +746,6 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                self.kind = CallCreateExecutiveKind::Moved;
                 self.enact_output(
                     out,
                     origin,
@@ -779,7 +816,6 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                self.kind = CallCreateExecutiveKind::Moved;
                 self.enact_output(
                     out,
                     origin,
@@ -1012,6 +1048,8 @@ impl<'a> CallCreateExecutive<'a> {
                         resume.depth + 1,
                         resume.stack_depth,
                         resume.static_flag,
+                        resume.is_create,
+                        resume.contract_in_creation,
                         resume.internal_contract_map,
                         top_substate.contracts_in_callstack.clone(),
                     );
@@ -1172,6 +1210,8 @@ impl<'a> Executive<'a> {
             self.depth,
             stack_depth,
             self.static_flag,
+            false,
+            None,
             self.internal_contract_map,
             substate.contracts_in_callstack.clone(),
         )

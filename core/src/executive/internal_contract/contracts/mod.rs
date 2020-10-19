@@ -63,10 +63,10 @@ macro_rules! rename_interface {
         impl SolidityFunctionTrait for $new_name {
             fn name(&self) -> &'static str { $interface }
             fn execute(
-                &self, input: &[u8], params: &ActionParams, spec: &Spec,
+                &self, input: &[u8], exec: &CallCreateExecutive, params: &ActionParams, spec: &Spec,
                 state: &mut State, substate: &mut Substate,
             ) -> vm::Result<vm::GasLeft> {
-                $old_name.execute(input, params, spec, state, substate)
+                $old_name.execute(input, exec, params, spec, state, substate)
             }
         }
      };

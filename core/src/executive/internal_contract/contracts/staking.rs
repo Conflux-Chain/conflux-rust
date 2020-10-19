@@ -13,6 +13,7 @@ use super::{
 use crate::check_signature;
 use crate::{
     evm::{ActionParams, Spec},
+    executive::executive::CallCreateExecutive,
     impl_function_type, make_function_table, make_solidity_contract,
     make_solidity_function, rename_interface,
     state::{State, Substate},
@@ -57,8 +58,8 @@ impl UpfrontPaymentTrait for Deposit {
 
 impl ExecutionTrait for Deposit {
     fn execute_inner(
-        &self, input: U256, params: &ActionParams, _spec: &Spec,
-        state: &mut State, _substate: &mut Substate,
+        &self, input: U256, _exec: &CallCreateExecutive, params: &ActionParams,
+        _spec: &Spec, state: &mut State, _substate: &mut Substate,
     ) -> vm::Result<()>
     {
         deposit(input, params, state)
@@ -83,8 +84,8 @@ impl UpfrontPaymentTrait for Withdraw {
 
 impl ExecutionTrait for Withdraw {
     fn execute_inner(
-        &self, input: U256, params: &ActionParams, _spec: &Spec,
-        state: &mut State, _substate: &mut Substate,
+        &self, input: U256, _exec: &CallCreateExecutive, params: &ActionParams,
+        _spec: &Spec, state: &mut State, _substate: &mut Substate,
     ) -> vm::Result<()>
     {
         withdraw(input, params, state)
@@ -112,8 +113,9 @@ impl UpfrontPaymentTrait for VoteLock {
 
 impl ExecutionTrait for VoteLock {
     fn execute_inner(
-        &self, inputs: (U256, U256), params: &ActionParams, _spec: &Spec,
-        state: &mut State, _substate: &mut Substate,
+        &self, inputs: (U256, U256), _exec: &CallCreateExecutive,
+        params: &ActionParams, _spec: &Spec, state: &mut State,
+        _substate: &mut Substate,
     ) -> vm::Result<()>
     {
         vote_lock(inputs.0, inputs.1, params, state)
@@ -127,8 +129,8 @@ impl_function_type!(GetStakingBalance, "query_with_default_gas");
 
 impl ExecutionTrait for GetStakingBalance {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _spec: &Spec,
-        state: &mut State, _substate: &mut Substate,
+        &self, input: Address, _exec: &CallCreateExecutive, _: &ActionParams,
+        _spec: &Spec, state: &mut State, _substate: &mut Substate,
     ) -> vm::Result<U256>
     {
         Ok(state.staking_balance(&input)?)
@@ -153,8 +155,9 @@ impl UpfrontPaymentTrait for GetLockedStakingBalance {
 
 impl ExecutionTrait for GetLockedStakingBalance {
     fn execute_inner(
-        &self, (address, block_number): (Address, U256), _: &ActionParams,
-        _spec: &Spec, state: &mut State, _substate: &mut Substate,
+        &self, (address, block_number): (Address, U256),
+        _exec: &CallCreateExecutive, _: &ActionParams, _spec: &Spec,
+        state: &mut State, _substate: &mut Substate,
     ) -> vm::Result<U256>
     {
         Ok(get_locked_staking(address, block_number, state)?)
@@ -179,8 +182,9 @@ impl UpfrontPaymentTrait for GetVotePower {
 
 impl ExecutionTrait for GetVotePower {
     fn execute_inner(
-        &self, (address, block_number): (Address, U256), _: &ActionParams,
-        _spec: &Spec, state: &mut State, _substate: &mut Substate,
+        &self, (address, block_number): (Address, U256),
+        _exec: &CallCreateExecutive, _: &ActionParams, _spec: &Spec,
+        state: &mut State, _substate: &mut Substate,
     ) -> vm::Result<U256>
     {
         Ok(get_vote_power(address, block_number, state)?)

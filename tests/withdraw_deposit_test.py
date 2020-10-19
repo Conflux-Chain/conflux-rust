@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from http.client import CannotSendRequest
+
 from eth_utils import decode_hex
 from conflux.rpc import RpcClient
 from conflux.transactions import CONTRACT_DEFAULT_GAS, charged_of_huge_gas
@@ -134,29 +134,6 @@ class WithdrawDepositTest(ConfluxTestFramework):
         block_gen_thread.join()
         sync_blocks(self.nodes)
         self.log.info("Pass")
-
-    def wait_for_tx(self, all_txs):
-        for tx in all_txs:
-            self.log.debug("Wait for tx to confirm %s", tx.hash_hex())
-            for i in range(3):
-                try:
-                    retry = True
-                    while retry:
-                        try:
-                            wait_until(lambda: checktx(self.nodes[0], tx.hash_hex()), timeout=20)
-                            retry = False
-                        except CannotSendRequest:
-                            time.sleep(0.01)
-                    break
-                except AssertionError as _:
-                    self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=[tx]))
-                if i == 2:
-                        raise AssertionError("Tx {} not confirmed after 30 seconds".format(tx.hash_hex()))
-        # After having optimistic execution, get_receipts may get receipts with not deferred block, these extra blocks
-        # ensure that later get_balance can get correct executed balance for all transactions
-        client = RpcClient(self.nodes[0])
-        for _ in range(5):
-            client.generate_block()
 
 if __name__ == "__main__":
     WithdrawDepositTest().main()
