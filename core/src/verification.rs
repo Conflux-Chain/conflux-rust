@@ -487,8 +487,8 @@ impl VerificationConfig {
             });
         }
 
-        // Forbid zero-gas tx
-        if tx.gas == 0.into() {
+        // Forbid zero-gas-price tx
+        if tx.gas_price == 0.into() {
             bail!(TransactionError::ZeroGasPrice);
         }
 
