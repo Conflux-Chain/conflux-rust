@@ -905,7 +905,9 @@ impl RpcImpl {
             ));
         }
         let response = EstimateGasAndCollateralResponse {
-            gas_used: executed.gas_used * 64 / 63 + 100,
+            // 11/10 > (64/63)^5, so this estimation supports at least 5 levels
+            // message call.
+            gas_used: executed.gas_used * 11 / 10 + 100,
             storage_collateralized: storage_collateralized.into(),
         };
         Ok(response)
