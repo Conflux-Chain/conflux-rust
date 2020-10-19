@@ -130,7 +130,6 @@ impl fmt::Display for TransactionError {
                 "Transaction gas {} less than intrinsic gas {}",
                 got, required
             ),
-            ZeroGasPrice => "Zero gas price is not allowed".into(),
             Stale => "No longer valid".into(),
             TooCheapToReplace => "Gas price too low to replace".into(),
             LimitReached => "Transaction limit reached".into(),
@@ -156,6 +155,7 @@ impl fmt::Display for TransactionError {
             InvalidRlp(ref err) => {
                 format!("Transaction has invalid RLP structure: {}.", err)
             }
+            ZeroGasPrice => "Zero gas price is not allowed".into(),
         };
 
         f.write_fmt(format_args!("Transaction error ({})", msg))
