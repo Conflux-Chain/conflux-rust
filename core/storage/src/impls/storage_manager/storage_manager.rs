@@ -788,10 +788,12 @@ impl StorageManager {
                 parent_snapshot_associated_mpts.1.clone()
             }
         };
-        snapshot_associated_mpts_locked.insert(
-            snapshot_epoch_id.clone(),
-            (maybe_intermediate_delta_mpt, None),
-        );
+        if !in_recover_mode || maybe_intermediate_delta_mpt.is_some() {
+            snapshot_associated_mpts_locked.insert(
+                snapshot_epoch_id.clone(),
+                (maybe_intermediate_delta_mpt, None),
+            );
+        }
 
         drop(snapshot_associated_mpts_locked);
         snapshot_info_map_locked
