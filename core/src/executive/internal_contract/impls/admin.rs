@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    state::{State, Substate},
+    state::{OverlayAccount, RequireCache, State, Substate},
     vm::{self, ActionParams, Spec},
 };
 use cfx_types::{address_util::AddressUtil, Address};
@@ -50,14 +50,35 @@ pub fn suicide(
 /// `new_admin_address`
 pub fn set_admin(
     contract_address: Address, new_admin_address: Address,
-    params: &ActionParams, state: &mut State,
+    contract_in_creation: Option<&Address>, params: &ActionParams,
+    state: &mut State,
 ) -> vm::Result<()>
 {
-    Ok(state.set_admin(
-        &params.sender,
+    let requester = &params.sender;
+    debug!(
+        "set_admin requester {:?} contract {:?}, \
+         new_admin {:?}, contract_in_creation {:?}",
+        requester, contract_address, new_admin_address, contract_in_creation,
+    );
+    let fn_can_set_admin = |acc: &OverlayAccount| {
+        acc.is_contract()
+            // Allow set admin if requester matches or in contract creation to clear admin.
+            && (acc.admin() == requester
+                || contract_in_creation == Some(&contract_address) && new_admin_address.is_null_address())
+            // Only allow user account to be admin, if not to clear admin.
+            && (new_admin_address.is_user_account_address()
+                || new_admin_address.is_null_address())
+    };
+    if state.ensure_account_loaded(
         &contract_address,
-        &new_admin_address,
-    )?)
+        RequireCache::None,
+        |acc| acc.map_or(false, fn_can_set_admin),
+    )? {
+        debug!("set_admin to {:?}", new_admin_address);
+        // Admin is cleared by set new_admin_address to null address.
+        state.set_admin(&contract_address, &new_admin_address)?;
+    }
+    Ok(())
 }
 
 /// Implementation of `destroy(address)`.

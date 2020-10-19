@@ -13,6 +13,7 @@ use super::{
 use crate::check_signature;
 use crate::{
     evm::{ActionParams, Spec},
+    executive::executive::CallCreateExecutive,
     impl_function_type, make_function_table, make_solidity_contract,
     make_solidity_function, rename_interface,
     state::{State, Substate},
@@ -61,8 +62,9 @@ rename_interface! {
 
 impl ExecutionTrait for SetSponsorForGas {
     fn execute_inner(
-        &self, inputs: (Address, U256), params: &ActionParams, spec: &Spec,
-        state: &mut State, substate: &mut Substate,
+        &self, inputs: (Address, U256), _exec: &CallCreateExecutive,
+        params: &ActionParams, spec: &Spec, state: &mut State,
+        substate: &mut Substate,
     ) -> vm::Result<()>
     {
         set_sponsor_for_gas(inputs.0, inputs.1, params, spec, state, substate)
@@ -80,8 +82,9 @@ rename_interface! {
 
 impl ExecutionTrait for SetSponsorForCollateral {
     fn execute_inner(
-        &self, input: Address, params: &ActionParams, spec: &Spec,
-        state: &mut State, substate: &mut Substate,
+        &self, input: Address, _exec: &CallCreateExecutive,
+        params: &ActionParams, spec: &Spec, state: &mut State,
+        substate: &mut Substate,
     ) -> vm::Result<()>
     {
         set_sponsor_for_collateral(input, params, spec, state, substate)
@@ -106,8 +109,8 @@ impl UpfrontPaymentTrait for AddPrivilege {
 
 impl ExecutionTrait for AddPrivilege {
     fn execute_inner(
-        &self, addresses: Vec<Address>, params: &ActionParams, _: &Spec,
-        state: &mut State, _: &mut Substate,
+        &self, addresses: Vec<Address>, _exec: &CallCreateExecutive,
+        params: &ActionParams, _: &Spec, state: &mut State, _: &mut Substate,
     ) -> vm::Result<()>
     {
         if !params.sender.is_contract_address() {
@@ -137,8 +140,8 @@ impl UpfrontPaymentTrait for RemovePrivilege {
 
 impl ExecutionTrait for RemovePrivilege {
     fn execute_inner(
-        &self, addresses: Vec<Address>, params: &ActionParams, _: &Spec,
-        state: &mut State, _: &mut Substate,
+        &self, addresses: Vec<Address>, _exec: &CallCreateExecutive,
+        params: &ActionParams, _: &Spec, state: &mut State, _: &mut Substate,
     ) -> vm::Result<()>
     {
         if !params.sender.is_contract_address() {
@@ -158,8 +161,8 @@ impl_function_type!(GetSponsorForGas, "query_with_default_gas");
 
 impl ExecutionTrait for GetSponsorForGas {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _: &Spec, state: &mut State,
-        _: &mut Substate,
+        &self, input: Address, _exec: &CallCreateExecutive, _: &ActionParams,
+        _: &Spec, state: &mut State, _: &mut Substate,
     ) -> vm::Result<Address>
     {
         Ok(state.sponsor_for_gas(&input)?.unwrap_or_default())
@@ -173,8 +176,8 @@ impl_function_type!(GetSponsoredBalanceForGas, "query_with_default_gas");
 
 impl ExecutionTrait for GetSponsoredBalanceForGas {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _: &Spec, state: &mut State,
-        _: &mut Substate,
+        &self, input: Address, _exec: &CallCreateExecutive, _: &ActionParams,
+        _: &Spec, state: &mut State, _: &mut Substate,
     ) -> vm::Result<U256>
     {
         Ok(state.sponsor_balance_for_gas(&input)?)
@@ -188,8 +191,8 @@ impl_function_type!(GetSponsoredGasFeeUpperBound, "query_with_default_gas");
 
 impl ExecutionTrait for GetSponsoredGasFeeUpperBound {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _: &Spec, state: &mut State,
-        _: &mut Substate,
+        &self, input: Address, _exec: &CallCreateExecutive, _: &ActionParams,
+        _: &Spec, state: &mut State, _: &mut Substate,
     ) -> vm::Result<U256>
     {
         Ok(state.sponsor_gas_bound(&input)?)
@@ -203,8 +206,8 @@ impl_function_type!(GetSponsorForCollateral, "query_with_default_gas");
 
 impl ExecutionTrait for GetSponsorForCollateral {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _: &Spec, state: &mut State,
-        _: &mut Substate,
+        &self, input: Address, _exec: &CallCreateExecutive, _: &ActionParams,
+        _: &Spec, state: &mut State, _: &mut Substate,
     ) -> vm::Result<Address>
     {
         Ok(state.sponsor_for_collateral(&input)?.unwrap_or_default())
@@ -218,8 +221,8 @@ impl_function_type!(GetSponsoredBalanceForCollateral, "query_with_default_gas");
 
 impl ExecutionTrait for GetSponsoredBalanceForCollateral {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _: &Spec, state: &mut State,
-        _: &mut Substate,
+        &self, input: Address, _exec: &CallCreateExecutive, _: &ActionParams,
+        _: &Spec, state: &mut State, _: &mut Substate,
     ) -> vm::Result<U256>
     {
         Ok(state.sponsor_balance_for_collateral(&input)?)
@@ -233,8 +236,9 @@ impl_function_type!(IsWhitelisted, "query", gas: SPEC.sload_gas);
 
 impl ExecutionTrait for IsWhitelisted {
     fn execute_inner(
-        &self, (contract, user): (Address, Address), _: &ActionParams,
-        _: &Spec, state: &mut State, _: &mut Substate,
+        &self, (contract, user): (Address, Address),
+        _exec: &CallCreateExecutive, _: &ActionParams, _: &Spec,
+        state: &mut State, _: &mut Substate,
     ) -> vm::Result<bool>
     {
         if contract.is_contract_address() {
@@ -252,8 +256,8 @@ impl_function_type!(IsAllWhitelisted, "query", gas: SPEC.sload_gas);
 
 impl ExecutionTrait for IsAllWhitelisted {
     fn execute_inner(
-        &self, contract: Address, _: &ActionParams, _: &Spec,
-        state: &mut State, _: &mut Substate,
+        &self, contract: Address, _exec: &CallCreateExecutive,
+        _: &ActionParams, _: &Spec, state: &mut State, _: &mut Substate,
     ) -> vm::Result<bool>
     {
         if contract.is_contract_address() {
@@ -285,7 +289,8 @@ impl UpfrontPaymentTrait for AddPrivilegeByAdmin {
 impl ExecutionTrait for AddPrivilegeByAdmin {
     fn execute_inner(
         &self, (contract, addresses): (Address, Vec<Address>),
-        params: &ActionParams, _: &Spec, state: &mut State, _: &mut Substate,
+        _exec: &CallCreateExecutive, params: &ActionParams, _: &Spec,
+        state: &mut State, _: &mut Substate,
     ) -> vm::Result<()>
     {
         if contract.is_contract_address()
@@ -315,7 +320,8 @@ impl UpfrontPaymentTrait for RemovePrivilegeByAdmin {
 impl ExecutionTrait for RemovePrivilegeByAdmin {
     fn execute_inner(
         &self, (contract, addresses): (Address, Vec<Address>),
-        params: &ActionParams, _: &Spec, state: &mut State, _: &mut Substate,
+        _exec: &CallCreateExecutive, params: &ActionParams, _: &Spec,
+        state: &mut State, _: &mut Substate,
     ) -> vm::Result<()>
     {
         if contract.is_contract_address()

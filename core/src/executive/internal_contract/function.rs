@@ -4,6 +4,7 @@
 
 use super::SolidityFunctionTrait;
 use crate::{
+    executive::executive::CallCreateExecutive,
     state::{State, Substate},
     vm::{self, ActionParams, CallType, GasLeft, ReturnData, Spec},
 };
@@ -30,8 +31,8 @@ where T: InterfaceTrait
         + ExecutionTrait
 {
     fn execute(
-        &self, input: &[u8], params: &ActionParams, spec: &Spec,
-        state: &mut State, substate: &mut Substate,
+        &self, input: &[u8], exec: &CallCreateExecutive, params: &ActionParams,
+        spec: &Spec, state: &mut State, substate: &mut Substate,
     ) -> vm::Result<GasLeft>
     {
         self.pre_execution_check(params, substate)?;
@@ -43,7 +44,7 @@ where T: InterfaceTrait
             return Err(vm::Error::OutOfGas);
         }
 
-        self.execute_inner(solidity_params, params, spec, state, substate)
+        self.execute_inner(solidity_params, exec, params, spec, state, substate)
             .and_then(|output| {
                 let output = output.abi_encode();
                 let length = output.len();
@@ -77,8 +78,9 @@ pub trait PreExecCheckTrait: Send + Sync {
 
 pub trait ExecutionTrait: Send + Sync + InterfaceTrait {
     fn execute_inner(
-        &self, input: Self::Input, params: &ActionParams, spec: &Spec,
-        state: &mut State, substate: &mut Substate,
+        &self, input: Self::Input, exec: &CallCreateExecutive,
+        params: &ActionParams, spec: &Spec, state: &mut State,
+        substate: &mut Substate,
     ) -> vm::Result<<Self as InterfaceTrait>::Output>;
 }
 

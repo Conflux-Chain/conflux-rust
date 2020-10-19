@@ -185,11 +185,7 @@ pub fn genesis_block(
             &genesis_transactions[1].as_ref().data,
         );
         state
-            .set_admin(
-                &genesis_account_address,
-                &create2factory_contract_address,
-                &Address::zero(),
-            )
+            .set_admin(&create2factory_contract_address, &Address::zero())
             .expect("");
     }
     state.clean_account(&genesis_account_address);

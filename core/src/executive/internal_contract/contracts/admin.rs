@@ -13,6 +13,7 @@ use super::{
 use crate::check_signature;
 use crate::{
     evm::{ActionParams, Spec},
+    executive::executive::CallCreateExecutive,
     impl_function_type, make_function_table, make_solidity_contract,
     make_solidity_function, rename_interface,
     state::{State, Substate},
@@ -43,11 +44,18 @@ rename_interface! {
 
 impl ExecutionTrait for SetAdmin {
     fn execute_inner(
-        &self, inputs: (Address, Address), params: &ActionParams, _spec: &Spec,
-        state: &mut State, _substate: &mut Substate,
+        &self, inputs: (Address, Address), exec: &CallCreateExecutive,
+        params: &ActionParams, _spec: &Spec, state: &mut State,
+        _substate: &mut Substate,
     ) -> vm::Result<()>
     {
-        set_admin(inputs.0, inputs.1, params, state)
+        set_admin(
+            inputs.0,
+            inputs.1,
+            exec.contract_in_creation(),
+            params,
+            state,
+        )
     }
 }
 
@@ -58,8 +66,9 @@ impl_function_type!(Destroy, "non_payable_write", gas: SPEC.sstore_reset_gas);
 
 impl ExecutionTrait for Destroy {
     fn execute_inner(
-        &self, input: Address, params: &ActionParams, spec: &Spec,
-        state: &mut State, substate: &mut Substate,
+        &self, input: Address, _exec: &CallCreateExecutive,
+        params: &ActionParams, spec: &Spec, state: &mut State,
+        substate: &mut Substate,
     ) -> vm::Result<()>
     {
         destroy(input, params, state, spec, substate)
@@ -73,8 +82,8 @@ impl_function_type!(GetAdmin, "query_with_default_gas");
 
 impl ExecutionTrait for GetAdmin {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _: &Spec, state: &mut State,
-        _: &mut Substate,
+        &self, input: Address, _exec: &CallCreateExecutive, _: &ActionParams,
+        _: &Spec, state: &mut State, _: &mut Substate,
     ) -> vm::Result<Address>
     {
         Ok(state.admin(&input)?)

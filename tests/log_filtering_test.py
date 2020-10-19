@@ -5,6 +5,7 @@ import eth_utils
 from conflux.config import default_config
 from conflux.filter import Filter
 from conflux.rpc import RpcClient
+from conflux.transactions import COLLATERAL_UNIT_IN_DRIP
 from conflux.utils import sha3 as keccak, priv_to_addr
 from test_framework.blocktools import create_transaction, encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework
@@ -240,7 +241,7 @@ class LogFilteringTest(ConfluxTestFramework):
         assert_equal(receipt["outcomeStatus"], "0x0")
         address = receipt["contractCreated"]
         c1 = self.rpc.get_collateral_for_storage(sender)
-        assert_equal(c1 - c0, 512 * 10 ** 18 // 1024)
+        assert_equal(c1 - c0, 512 * COLLATERAL_UNIT_IN_DRIP)
         assert_is_hex_string(address)
         return receipt, address
 
@@ -251,7 +252,7 @@ class LogFilteringTest(ConfluxTestFramework):
         receipt = self.rpc.get_transaction_receipt(tx.hash_hex())
         assert_equal(receipt["outcomeStatus"], "0x0")
         c1 = self.rpc.get_collateral_for_storage(sender)
-        assert_equal(c1 - c0, storage_limit * 10 ** 18 // 1024)
+        assert_equal(c1 - c0, storage_limit * COLLATERAL_UNIT_IN_DRIP)
         return receipt
 
     def assert_response_format_correct(self, response):

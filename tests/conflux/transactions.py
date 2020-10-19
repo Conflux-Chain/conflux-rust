@@ -12,6 +12,7 @@ from .utils import TT256, mk_contract_address, zpad, int_to_32bytearray, \
     encode_hex, address
 
 CONTRACT_DEFAULT_GAS = 3_000_000
+COLLATERAL_UNIT_IN_DRIP = 10 ** 18 // 1024
 
 def charged_of_huge_gas(gas):
     return gas - gas // 4
