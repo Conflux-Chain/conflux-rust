@@ -1597,6 +1597,7 @@ impl Drop for TxReplayer {
 impl TxReplayer {
     const EPOCH_TXS: u64 = 20000;
     const SNAPSHOT_EPOCHS_CAPACITY: u32 = 400;
+    // const SNAPSHOT_EPOCHS_CAPACITY: u32 = 10;
 
     pub fn new(
         conflux_data_dir: &str, reset_db: bool, debug_snapshot_integrity: bool,
@@ -1675,13 +1676,16 @@ impl TxReplayer {
     pub fn commit(
         &self, latest_state: &mut StateDb, txs: u64, ops: u64,
     ) -> errors::Result<StateRootWithAuxInfo> {
-        warn!("Committing epoch at tx {}, ops {}.", txs, ops);
-
-        let storage = latest_state.get_storage_mut();
-        let state_root_with_aux = storage.compute_state_root().unwrap();
-        let epoch_id = state_root_with_aux.state_root.delta_root;
-        storage.commit(epoch_id).unwrap();
         let block_height = self.block_height.get();
+        warn!(
+            "Committing epoch at tx {}, ops {}, block_height {}.",
+            txs, ops, block_height
+        );
+
+        let state_root_with_aux =
+            latest_state.compute_state_root(None).unwrap();
+        let epoch_id = state_root_with_aux.state_root.delta_root;
+        latest_state.commit(epoch_id, None).unwrap();
         {
             let mut state_availability_boundary_mut =
                 self.state_availability_boundary.write();
@@ -1703,9 +1707,20 @@ impl TxReplayer {
                     confirmed_epoch_hash,
                     confirmed_epoch_state_root,
                     &self.state_availability_boundary,
-                    &|height, find_nearest_snapshot_multiple_of| {
-false },
-                        )?;
+                    &|_height, _find_nearest_snapshot_multiple_of| false,
+                    /*
+                    &|height, _find_nearest_snapshot_multiple_of| {
+                        let height_to_keep = block_height as u64
+                            / (5 * Self::SNAPSHOT_EPOCHS_CAPACITY) as u64
+                            * 5
+                            * Self::SNAPSHOT_EPOCHS_CAPACITY as u64;
+                        height == height_to_keep
+                            || height
+                                == (height_to_keep
+                                    - Self::SNAPSHOT_EPOCHS_CAPACITY as u64)
+                    },
+                     */
+                )?;
         }
         self.block_height.set(block_height + 1);
         self.commit_log.put_with_number_key(
@@ -1802,6 +1817,9 @@ false },
                         &0.into(), /* nonce */
                     )?;
                 }
+            }
+            if account.is_default() {
+                warn!("tx amount wei is {:?}", tx.amount_wei);
             }
             latest_state
                 .set::<Account>(
@@ -2158,7 +2176,6 @@ use cfx_internal_common::{
 };
 use cfx_statedb::{StateDb, StateDbExt};
 use cfx_storage::{
-    state::StateTrait,
     storage_db::key_value_db::{KeyValueDbTrait, KeyValueDbTraitRead},
     utils::StateRootWithAuxInfoToFromRlpBytes,
     KvdbSqlite, KvdbSqliteStatements, StateIndex, StorageConfiguration,
@@ -2183,7 +2200,9 @@ use heapsize::HeapSizeOf;
 use lazy_static::*;
 use log::*;
 use parking_lot::{Condvar, Mutex, RwLock};
-use primitives::{Account, StorageKey, MERKLE_NULL_NODE};
+use primitives::{
+    is_default::IsDefault, Account, StorageKey, MERKLE_NULL_NODE,
+};
 use rlp::{Decodable, *};
 use std::{
     cell::Cell,

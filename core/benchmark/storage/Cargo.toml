@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 cfxcore = { path = "../../../core" }
-cfx-types = { path = "../../../cfx_types" }
+cfx-types = { path = "../../../cfx_types", features=["storage_benchmark_no_account_space_check"] }
 cfx-statedb = { path = "../../../core/statedb" }
 cfx-storage = { path = "../../../core/storage" }
 cfx-internal-common = { path = "../../../core/internal_common" }
@@ -25,7 +25,7 @@ heapsize = "0.4"
 kvdb = "0.4"
 lazy_static = "1.4"
 log = "0.4"
-parking_lot = "0.10"
+parking_lot = "0.11"
 primitives = { path = "../../../primitives" }
 rlp = { version = "0.3.0", feature = ["ethereum"] }
 serde_json = "1.0"

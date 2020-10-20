@@ -131,7 +131,7 @@ impl ExecutionTrait for GetStakingBalance {
         state: &mut State, _substate: &mut Substate,
     ) -> vm::Result<U256>
     {
-        Ok(state.collateral_for_storage(&input)?)
+        Ok(state.staking_balance(&input)?)
     }
 }
 

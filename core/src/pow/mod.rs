@@ -24,6 +24,9 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(target_endian = "big")]
+compile_error!("The PoW implementation requires little-endian platform");
+
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub struct ProofOfWorkProblem {
     pub block_height: u64,

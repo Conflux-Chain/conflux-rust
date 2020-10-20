@@ -127,11 +127,17 @@ pub fn initialize_data_manager(
         U256::from(0),
     );
 
+    let machine =
+        Arc::new(new_machine_with_builtin(ChainIdParams { chain_id: 0 }));
+
     let genesis_block = Arc::new(genesis_block(
         &storage_manager,
         genesis_accounts,
         Address::from_str("1000000000000000000000000000000000000008").unwrap(),
         U256::from(10),
+        machine.clone(),
+        false, /* need_to_execute */
+        None,
     ));
 
     let data_man = Arc::new(BlockDataManager::new(

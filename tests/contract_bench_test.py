@@ -25,6 +25,7 @@ from web3 import Web3
 class ContractBenchTest(SmartContractBenchBase):
     def set_test_params(self):
         self.num_nodes = 1
+        self.conf_parameters["execute_genesis"] = "true"
         self.collateral_per_byte = 10 ** 18 // 1024
 
     def setup_network(self):
@@ -503,6 +504,43 @@ class ContractBenchTest(SmartContractBenchBase):
         result = self.rpc.call(vat_addr, data)
         assert_equal(int(result, 0), 0)
 
+    def testCreate2Factory(self):
+        CONTRACT_PATH = "contracts/create2factory_bytecode.dat"
+        file_dir = os.path.dirname(os.path.realpath(__file__))
+        create2factory = get_contract_instance(
+            abi_file = os.path.join(file_dir, "contracts/create2factory_abi.json"),
+            bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
+        )
+        create2factory_addr = "0x8a3a92281df6497105513b18543fd3b60c778e40"
+        create2factory_code = self.rpc.get_code(create2factory_addr).strip()
+        assert(len(create2factory_code) > 2)
+
+        # deploy erc1820
+        self.tx_conf["to"] = create2factory_addr
+        fin = open(os.path.join(file_dir, "contracts/erc1820_bytecode.dat"), 'r')
+        erc1820_bytecode = '0x' + fin.readline().strip()
+        fin.close()
+        data = create2factory.functions.deploy(erc1820_bytecode, 2).buildTransaction(self.tx_conf)["data"]
+        result = self.rpc.call(create2factory_addr, data)
+        assert(len(result) == 66)
+        erc1820_addr = "0x" + result[-40:]
+        assert(erc1820_addr == "0x861bfca161e8c9f314f6128d142d852905f52d05")
+        result = self.call_contract(self.sender, self.priv_key, create2factory_addr, data, 0, storage_limit=2048)
+        assert(result["outcomeStatus"] == "0x0")
+        # try deploy again
+        erc1820_code = self.rpc.get_code(erc1820_addr).strip()
+        assert(len(erc1820_code) > 2)
+        result = self.call_contract(self.sender, self.priv_key, create2factory_addr, data, 0, storage_limit=2048)
+        assert(result["outcomeStatus"] == "0x1")
+        # destory erc1820
+        data = "0x00f55d9d000000000000000000000000861bfca161e8c9f314f6128d142d852905f52d05"
+        result = self.call_contract(self.sender, self.priv_key, "0x0888000000000000000000000000000000000000", data, 0, storage_limit=2048)
+        assert(result["outcomeStatus"] == "0x0")
+        # try deploy again
+        result = self.call_contract(self.sender, self.priv_key, create2factory_addr, data, 0, storage_limit=2048)
+        assert(result["outcomeStatus"] == "0x1")
+        return;
+
     def run_test(self):
         file_dir = os.path.dirname(os.path.realpath(__file__))
         file_path = os.path.join(file_dir, "..", "internal_contract", "metadata", "Staking.json")
@@ -554,6 +592,8 @@ class ContractBenchTest(SmartContractBenchBase):
         self.testMappingContract()
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
         self.testDaiJoinContract()
+        self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
+        self.testCreate2Factory()
         self.log.info("Pass")
 
     def address_to_topic(self, address):

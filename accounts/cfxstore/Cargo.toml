@@ -16,7 +16,7 @@ serde_derive = "1.0"
 rustc-hex = "1.0"
 tiny-keccak = "1.4"
 time = "0.1.34"
-parking_lot = "0.10"
+parking_lot = "0.11"
 parity-crypto = "0.4.0"
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 smallvec = "1.4"
