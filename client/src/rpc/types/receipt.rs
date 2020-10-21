@@ -31,7 +31,7 @@ pub struct Receipt {
     pub gas_used: U256,
     /// The gas fee charged in the execution of the transaction.
     pub gas_fee: U256,
-    /// Address of contracts created during execution of transaction.
+    /// Address of contract created if the transaction action is create.
     pub contract_created: Option<Address>,
     /// Array of log objects, which this transaction generated.
     pub logs: Vec<Log>,

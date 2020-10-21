@@ -104,6 +104,14 @@ pub struct Substate {
     /// and passed back to caller when callee returns,
     /// through mem::swap.
     pub contracts_in_callstack: Rc<RefCell<CallStackInfo>>,
+    /// The contract which is being constructed. The contract address is set at
+    /// the beginning of the constructor. When an internal contract is called
+    /// from the contract constructor, the contract_in_creation is inherited
+    /// from the constructor as the contract address.
+    /// The contract address is set to None when calling a normal account.
+    /// When a new contract constructor is called, the contract_in_creation
+    /// address is set to the new contract address.
+    contract_in_creation: Option<Address>,
 }
 
 impl Substate {
@@ -123,6 +131,42 @@ impl Substate {
     #[inline]
     pub fn pop_callstack(&self) {
         self.contracts_in_callstack.borrow_mut().pop();
+    }
+
+    // Returns whether we are running the contract creation code in its own
+    // frame, or in its immediate call of Builtin / InternalContract.
+    // Note that if the constructor calls other contract, the return value will
+    // be false.
+    pub fn contract_in_creation(&self) -> Option<&Address> {
+        debug!("contract_in_creation {:?}", self.contract_in_creation);
+        self.contract_in_creation.as_ref()
+    }
+
+    pub fn update_contract_in_creation_call(
+        mut self, parent_contract_in_creation: Option<Address>,
+        is_internal_contract: bool,
+    ) -> Self
+    {
+        debug!(
+            "update_contract_in_creation_call {:?}, is_internal_contract {}",
+            parent_contract_in_creation, is_internal_contract
+        );
+        if is_internal_contract {
+            self.contract_in_creation = parent_contract_in_creation;
+        } else {
+            self.contract_in_creation = None;
+        }
+
+        self
+    }
+
+    pub fn set_contract_in_creation_create(
+        mut self, contract_in_creation: Address,
+    ) -> Self {
+        debug!("set_contract_in_creation_call {:?}", contract_in_creation);
+        self.contract_in_creation = Some(contract_in_creation);
+
+        self
     }
 
     /// Merge secondary substate `s` into self, accruing each element

@@ -178,6 +178,7 @@ impl<'a> CallCreateExecutive<'a> {
         params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
         stack_depth: usize, parent_static_flag: bool,
+        parent_contract_in_creation: Option<Address>,
         internal_contract_map: &'a InternalContractMap,
         contracts_in_callstack: Rc<RefCell<CallStackInfo>>,
     ) -> Self
@@ -186,7 +187,7 @@ impl<'a> CallCreateExecutive<'a> {
             "Executive::call(params={:?}) self.env={:?}, parent_static={}",
             params,
             env,
-            parent_static_flag
+            parent_static_flag,
         );
 
         let gas = params.gas;
@@ -213,14 +214,22 @@ impl<'a> CallCreateExecutive<'a> {
             );
             CallCreateExecutiveKind::CallInternalContract(
                 params,
-                Substate::with_call_stack(contracts_in_callstack),
+                Substate::with_call_stack(contracts_in_callstack)
+                    .update_contract_in_creation_call(
+                        parent_contract_in_creation,
+                        /* is_internal_contract = */ true,
+                    ),
             )
         } else {
             if params.code.is_some() {
                 trace!("ExecCall");
                 CallCreateExecutiveKind::ExecCall(
                     params,
-                    Substate::with_call_stack(contracts_in_callstack),
+                    Substate::with_call_stack(contracts_in_callstack)
+                        .update_contract_in_creation_call(
+                            parent_contract_in_creation,
+                            /* is_internal_contract = */ false,
+                        ),
                 )
             } else {
                 trace!("Transfer");
@@ -259,10 +268,12 @@ impl<'a> CallCreateExecutive<'a> {
         );
 
         let gas = params.gas;
+        let contract_in_creation = params.code_address;
 
         let kind = CallCreateExecutiveKind::ExecCreate(
             params,
-            Substate::with_call_stack(contracts_in_callstack),
+            Substate::with_call_stack(contracts_in_callstack)
+                .set_contract_in_creation_create(contract_in_creation),
         );
 
         Self {
@@ -499,7 +510,9 @@ impl<'a> CallCreateExecutive<'a> {
     pub fn exec(
         mut self, state: &mut State, substate: &mut Substate,
     ) -> ExecutiveTrapResult<'a, FinalizationResult> {
-        match self.kind {
+        let kind =
+            std::mem::replace(&mut self.kind, CallCreateExecutiveKind::Moved);
+        match kind {
             CallCreateExecutiveKind::Transfer(ref params) => {
                 assert!(!self.is_create);
 
@@ -645,7 +658,6 @@ impl<'a> CallCreateExecutive<'a> {
                     self.internal_contract_map,
                 );
                 let out = Ok(result.finalize(context));
-                self.kind = CallCreateExecutiveKind::Moved;
                 self.enact_output(
                     out,
                     origin,
@@ -708,7 +720,6 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                self.kind = CallCreateExecutiveKind::Moved;
                 self.enact_output(
                     out,
                     origin,
@@ -779,7 +790,6 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                self.kind = CallCreateExecutiveKind::Moved;
                 self.enact_output(
                     out,
                     origin,
@@ -1002,7 +1012,12 @@ impl<'a> CallCreateExecutive<'a> {
                         None => return val,
                     }
                 }
-                Some((_, _, Err(TrapError::Call(subparams, resume)))) => {
+                Some((_, _, Err(TrapError::Call(subparams, mut resume)))) => {
+                    let maybe_parent_contract_in_creation = resume
+                        .unconfirmed_substate()
+                        .map_or(None, |substate| {
+                            substate.contract_in_creation().cloned()
+                        });
                     let sub_exec = CallCreateExecutive::new_call_raw(
                         subparams,
                         resume.env,
@@ -1012,6 +1027,7 @@ impl<'a> CallCreateExecutive<'a> {
                         resume.depth + 1,
                         resume.stack_depth,
                         resume.static_flag,
+                        maybe_parent_contract_in_creation,
                         resume.internal_contract_map,
                         top_substate.contracts_in_callstack.clone(),
                     );
@@ -1172,6 +1188,7 @@ impl<'a> Executive<'a> {
             self.depth,
             stack_depth,
             self.static_flag,
+            None,
             self.internal_contract_map,
             substate.contracts_in_callstack.clone(),
         )
