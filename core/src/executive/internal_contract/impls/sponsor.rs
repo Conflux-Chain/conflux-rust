@@ -56,7 +56,7 @@ pub fn set_sponsor_for_gas(
         // unless previous sponsor's `sponsor_balance` is not able to cover
         // the upper bound.
         if prev_sponsor_balance >= prev_upper_bound
-            && upper_bound <= prev_upper_bound
+            && upper_bound < prev_upper_bound
         {
             return Err(vm::Error::InternalContract(
                 "upper_bound is not exceed previous sponsor",
