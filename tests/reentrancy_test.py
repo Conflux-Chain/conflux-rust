@@ -3,7 +3,6 @@
 from conflux.utils import priv_to_addr, parse_as_int
 from conflux.rpc import RpcClient
 from conflux.transactions import CONTRACT_DEFAULT_GAS
-from http.client import CannotSendRequest
 from test_framework.util import *
 from test_framework.mininode import *
 from test_framework.test_framework import ConfluxTestFramework
@@ -45,33 +44,6 @@ class ReentrancyTest(ConfluxTestFramework):
         self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=[transaction]))
         if wait:
             self.wait_for_tx([transaction], check_status)
-
-    def wait_for_tx(self, all_txs, check_status):
-        for tx in all_txs:
-            for i in range(3):
-                try:
-                    retry = True
-                    while retry:
-                        try:
-                            wait_until(lambda: checktx(self.nodes[0], tx.hash_hex()), timeout=20)
-                            retry = False
-                        except CannotSendRequest:
-                            time.sleep(0.01)
-                    break
-                except AssertionError as _:
-                    self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=[tx]))
-                if i == 2:
-                    raise AssertionError("Tx {} not confirmed after 30 seconds".format(tx.hash_hex()))
-        # After having optimistic execution, get_receipts may get receipts with not deferred block, these extra blocks
-        # ensure that later get_balance can get correct executed balance for all transactions
-        client = RpcClient(self.nodes[0])
-        for _ in range(5):
-            client.generate_block()
-        receipts = [client.get_transaction_receipt(tx.hash_hex()) for tx in all_txs]
-        self.log.debug("Receipts received: {}".format(receipts))
-        if check_status:
-            map(lambda x: assert_equal(x['outcomeStatus'], 0), receipts)
-        return receipts
 
     def call_contract_function(self, contract, name, args, sender_key, value=None,
                                contract_addr=None, wait=False,

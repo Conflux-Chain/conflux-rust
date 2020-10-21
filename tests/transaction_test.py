@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 from http.client import CannotSendRequest
-
-from eth_utils import decode_hex
-from rlp.sedes import Binary, BigEndianInt
-
-from conflux import utils
 from conflux.transactions import CONTRACT_DEFAULT_GAS, charged_of_huge_gas
 from conflux.utils import encode_hex, bytes_to_int, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
