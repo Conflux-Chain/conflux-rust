@@ -514,7 +514,6 @@ class ContractBenchTest(SmartContractBenchBase):
         fin = open(os.path.join(file_dir, "contracts/erc1820_bytecode.dat"), 'r')
         erc1820_bytecode = '0x' + fin.readline().strip()
         fin.close()
-        print(erc1820_bytecode)
         data = create2factory.functions.deploy(erc1820_bytecode, 2).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(create2factory_addr, data)
         assert(len(result) == 66)
