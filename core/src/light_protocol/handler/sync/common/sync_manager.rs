@@ -11,7 +11,7 @@ use crate::{
     message::{MsgId, RequestId},
 };
 use network::node_table::NodeId;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use std::{
     cmp::Ord,
     collections::HashMap,
@@ -46,6 +46,9 @@ pub struct SyncManager<Key, Item> {
     // collection of all peers available
     peers: Arc<Peers<FullPeerState>>,
 
+    // mutex used to make sure at most one thread drives sync at any given time
+    sync_lock: Mutex<()>,
+
     // priority queue of headers we need excluding the ones in `in_flight`
     waiting: RwLock<PriorityQueue<Key, Item>>,
 
@@ -62,11 +65,13 @@ where
         peers: Arc<Peers<FullPeerState>>, request_msg_id: MsgId,
     ) -> Self {
         let in_flight = RwLock::new(HashMap::new());
+        let sync_lock = Default::default();
         let waiting = RwLock::new(PriorityQueue::new());
 
         SyncManager {
             in_flight,
             peers,
+            sync_lock,
             waiting,
             request_msg_id,
         }
@@ -83,15 +88,6 @@ where
     pub fn contains(&self, key: &Key) -> bool {
         self.in_flight.read().contains_key(key)
             || self.waiting.read().contains(&key)
-    }
-
-    #[inline]
-    fn insert_in_flight<I>(&self, missing: I, request_id: RequestId)
-    where I: Iterator<Item = Item> {
-        // TODO: check if in waiting already
-        let new = missing
-            .map(|item| (item.key(), InFlightRequest::new(item, request_id)));
-        self.in_flight.write().extend(new);
     }
 
     #[inline]
@@ -155,64 +151,67 @@ where
         waiting.extend(missing);
     }
 
-    #[inline]
-    pub fn collect_to_request(&self, num_to_request: usize) -> Vec<Item> {
-        if num_to_request == 0 {
-            return vec![];
-        }
-
-        let in_flight = self.in_flight.read();
-        let mut waiting = self.waiting.write();
-
-        let mut items = vec![];
-
-        // NOTE: cannot use iterator on BinaryHeap as
-        // it returns elements in arbitrary order!
-        while let Some(item) = waiting.pop() {
-            if !in_flight.contains_key(&item.key()) {
-                items.push(item);
-            }
-
-            if items.len() == num_to_request {
-                break;
-            }
-        }
-
-        items
-    }
-
     pub fn sync(
         &self, max_in_flight: usize, batch_size: usize,
         request: impl Fn(&NodeId, Vec<Key>) -> Result<Option<RequestId>, Error>,
     )
     {
+        let _guard = match self.sync_lock.try_lock() {
+            None => return,
+            Some(g) => g,
+        };
+
         // check if there are any peers available
         if self.peers.is_empty() {
             debug!("No peers available; aborting sync");
             return;
         }
 
-        // choose set of hashes to request
-        let num_to_request = max_in_flight.saturating_sub(self.num_in_flight());
+        loop {
+            // unlock after each batch so that we do not block other threads
+            let mut in_flight = self.in_flight.write();
+            let mut waiting = self.waiting.write();
 
-        let items = match self.collect_to_request(num_to_request) {
-            ref hs if hs.is_empty() => return,
-            hs => hs,
-        };
+            // collect batch
+            let max_to_request = max_in_flight.saturating_sub(in_flight.len());
+            let num_to_request = std::cmp::min(max_to_request, batch_size);
 
-        // request items in batches from random peers
-        for batch in items.chunks(batch_size) {
+            if num_to_request == 0 {
+                return;
+            }
+
+            let mut batch: Vec<Item> = vec![];
+
+            // NOTE: cannot use iterator on BinaryHeap as
+            // it returns elements in arbitrary order!
+            while let Some(item) = waiting.pop() {
+                // skip occasional items already in flight
+                // this can happen if an item is inserted using
+                // `insert_waiting`, then inserted again using
+                // `request_now`
+                if !in_flight.contains_key(&item.key()) {
+                    batch.push(item);
+                }
+
+                if batch.len() == num_to_request {
+                    break;
+                }
+            }
+
+            // we're finished when there's nothing more to request
+            if batch.is_empty() {
+                return;
+            }
+
+            // select peer for batch
             let peer = match FullPeerFilter::new(self.request_msg_id)
                 .select(self.peers.clone())
             {
                 Some(peer) => peer,
                 None => {
                     warn!("No peers available");
-                    self.insert_waiting(batch.to_owned().into_iter());
-
-                    // NOTE: cannot do early return as that way items
-                    // in subsequent batches would be lost
-                    continue;
+                    waiting.extend(batch.to_owned().into_iter());
+                    return;
                 }
             };
 
@@ -221,10 +220,12 @@ where
             match request(&peer, keys) {
                 Ok(None) => {}
                 Ok(Some(request_id)) => {
-                    self.insert_in_flight(
-                        batch.to_owned().into_iter(),
-                        request_id,
-                    );
+                    let new_in_flight =
+                        batch.to_owned().into_iter().map(|item| {
+                            (item.key(), InFlightRequest::new(item, request_id))
+                        });
+
+                    in_flight.extend(new_in_flight);
                 }
                 Err(e) => {
                     warn!(
@@ -232,7 +233,7 @@ where
                         batch, peer, e
                     );
 
-                    self.insert_waiting(batch.to_owned().into_iter());
+                    waiting.extend(batch.to_owned().into_iter());
                 }
             }
         }
@@ -287,17 +288,30 @@ where
     ) where
         I: Iterator<Item = Item>,
     {
-        let items: Vec<_> = items.collect();
-        let keys = items.iter().map(|h| h.key()).collect();
+        let mut in_flight = self.in_flight.write();
+
+        let missing = items
+            .filter(|item| !in_flight.contains_key(&item.key()))
+            .collect::<Vec<_>>();
+
+        let keys = missing.iter().map(|h| h.key()).collect();
 
         match request(peer, keys) {
             Ok(None) => {}
             Ok(Some(request_id)) => {
-                self.insert_in_flight(items.into_iter(), request_id)
+                let new_in_flight = missing.into_iter().map(|item| {
+                    (item.key(), InFlightRequest::new(item, request_id))
+                });
+
+                in_flight.extend(new_in_flight);
             }
             Err(e) => {
-                warn!("Failed to request {:?} from {:?}: {:?}", items, peer, e);
-                self.insert_waiting(items.into_iter());
+                warn!(
+                    "Failed to request {:?} from {:?}: {:?}",
+                    missing, peer, e
+                );
+
+                self.insert_waiting(missing.into_iter());
             }
         }
     }

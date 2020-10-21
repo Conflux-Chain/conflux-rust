@@ -26,6 +26,7 @@ use cfxcore::{
     },
     consensus_internal_parameters::*,
     consensus_parameters::*,
+    light_protocol::LightNodeConfiguration,
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
     transaction_pool::TxPoolConfig,
@@ -253,6 +254,16 @@ build_config! {
         (candidate_pivot_waiting_timeout_ms, (u64), 10_000)
         (is_consortium, (bool), false)
         (tg_config_path, (Option<String>), Some("./tg_config/tg_config.toml".to_string()))
+
+        // Light node section
+        (ln_epoch_request_batch_size, (Option<usize>), None)
+        (ln_epoch_request_timeout_sec, (Option<u64>), None)
+        (ln_header_request_batch_size, (Option<usize>), None)
+        (ln_header_request_timeout_sec, (Option<u64>), None)
+        (ln_max_headers_in_flight, (Option<usize>), None)
+        (ln_max_parallel_epochs_to_request, (Option<usize>), None)
+        (ln_num_epochs_to_request, (Option<usize>), None)
+        (ln_num_waiting_headers_threshold, (Option<usize>), None)
     }
     {
         // Development related section.
@@ -807,6 +818,31 @@ impl Configuration {
     }
 
     pub fn is_consortium(&self) -> bool { self.raw_conf.is_consortium }
+
+    pub fn light_node_config(&self) -> LightNodeConfiguration {
+        LightNodeConfiguration {
+            epoch_request_batch_size: self.raw_conf.ln_epoch_request_batch_size,
+            epoch_request_timeout: self
+                .raw_conf
+                .ln_epoch_request_timeout_sec
+                .map(Duration::from_secs),
+            header_request_batch_size: self
+                .raw_conf
+                .ln_header_request_batch_size,
+            header_request_timeout: self
+                .raw_conf
+                .ln_header_request_timeout_sec
+                .map(Duration::from_secs),
+            max_headers_in_flight: self.raw_conf.ln_max_headers_in_flight,
+            max_parallel_epochs_to_request: self
+                .raw_conf
+                .ln_max_parallel_epochs_to_request,
+            num_epochs_to_request: self.raw_conf.ln_num_epochs_to_request,
+            num_waiting_headers_threshold: self
+                .raw_conf
+                .ln_num_waiting_headers_threshold,
+        }
+    }
 }
 
 /// Validates and formats bootnodes option.

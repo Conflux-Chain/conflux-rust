@@ -76,12 +76,15 @@ impl Blooms {
     }
 
     #[inline]
-    fn get_statistics(&self) -> Statistics {
-        Statistics {
-            cached: self.verified.read().len(),
-            in_flight: self.sync_manager.num_in_flight(),
-            waiting: self.sync_manager.num_waiting(),
-        }
+    pub fn print_stats(&self) {
+        debug!(
+            "bloom sync statistics: {:?}",
+            Statistics {
+                cached: self.verified.read().len(),
+                in_flight: self.sync_manager.num_in_flight(),
+                waiting: self.sync_manager.num_waiting(),
+            }
+        );
     }
 
     #[inline]
@@ -113,7 +116,7 @@ impl Blooms {
     ) -> Result<()>
     {
         for BloomWithEpoch { epoch, bloom } in blooms {
-            debug!("Validating bloom {:?} with epoch {}", bloom, epoch);
+            trace!("Validating bloom {:?} with epoch {}", bloom, epoch);
 
             match self.sync_manager.check_if_requested(peer, id, &epoch)? {
                 None => continue,
@@ -157,6 +160,7 @@ impl Blooms {
         // remove timeout in-flight requests
         let timeout = *BLOOM_REQUEST_TIMEOUT;
         let blooms = self.sync_manager.remove_timeout_requests(timeout);
+        trace!("Timeout blooms ({}): {:?}", blooms.len(), blooms);
         self.sync_manager.insert_waiting(blooms.into_iter());
 
         // trigger cache cleanup
@@ -167,13 +171,19 @@ impl Blooms {
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, epochs: Vec<u64>,
     ) -> Result<Option<RequestId>> {
-        debug!("send_request peer={:?} epochs={:?}", peer, epochs);
-
         if epochs.is_empty() {
             return Ok(None);
         }
 
         let request_id = self.request_id_allocator.next();
+
+        trace!(
+            "send_request GetBlooms peer={:?} id={:?} epochs={:?}",
+            peer,
+            request_id,
+            epochs
+        );
+
         let msg: Box<dyn Message> = Box::new(GetBlooms { request_id, epochs });
 
         msg.send(io, peer)?;
@@ -182,8 +192,6 @@ impl Blooms {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        debug!("bloom sync statistics: {:?}", self.get_statistics());
-
         self.sync_manager.sync(
             MAX_BLOOMS_IN_FLIGHT,
             BLOOM_REQUEST_BATCH_SIZE,
