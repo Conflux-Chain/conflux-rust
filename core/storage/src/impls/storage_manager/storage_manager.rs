@@ -788,10 +788,20 @@ impl StorageManager {
                 parent_snapshot_associated_mpts.1.clone()
             }
         };
+        let delta_mpt = if in_recover_mode {
+            snapshot_associated_mpts_locked
+                .get_mut(snapshot_epoch_id)
+                // This is guaranteed in the in_recover_mode condition above.
+                .unwrap()
+                .1
+                .take()
+        } else {
+            None
+        };
         if !in_recover_mode || maybe_intermediate_delta_mpt.is_some() {
             snapshot_associated_mpts_locked.insert(
                 snapshot_epoch_id.clone(),
-                (maybe_intermediate_delta_mpt, None),
+                (maybe_intermediate_delta_mpt, delta_mpt),
             );
         }
 
@@ -1313,29 +1323,6 @@ impl StorageManager {
                     },
                     _ => Err(e),
                 })?;
-            // If the snapshot info is kept to provide sync, we allow the
-            // snapshot itself to be missing, because a snapshot of
-            // snapshot_epoch_id's ancestor is kept to provide sync. We need to
-            // keep this snapshot info to know the parental relationship.
-            let snapshot_info_kept_to_provide_sync =
-                match snapshot_info_map.get(&snapshot_epoch_id) {
-                    None => false,
-                    Some(info) => {
-                        info!(
-                            "Missing snapshot db: {:?}, \
-                             snapshot_info_kept_to_provide_sync {:?}, {:?}, ",
-                            snapshot_epoch_id,
-                            info.snapshot_info_kept_to_provide_sync,
-                            info
-                        );
-
-                        info.snapshot_info_kept_to_provide_sync
-                            == SnapshotKeptToProvideSyncStatus::InfoOnly
-                    }
-                };
-            if snapshot_info_kept_to_provide_sync {
-                continue;
-            }
             snapshot_info_map.remove(&snapshot_epoch_id)?;
         }
 
@@ -1369,12 +1356,6 @@ impl StorageManager {
             {
                 if delta_mpts
                     .contains_key(&snapshot_info.parent_snapshot_epoch_id)
-                {
-                    continue;
-                }
-                // See comment above.
-                if snapshot_info.snapshot_info_kept_to_provide_sync
-                    == SnapshotKeptToProvideSyncStatus::InfoOnly
                 {
                     continue;
                 }

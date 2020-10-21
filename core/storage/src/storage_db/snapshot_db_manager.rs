@@ -16,11 +16,24 @@ pub trait SnapshotDbManagerTrait {
         &self, snapshot_info_map: &HashMap<EpochId, SnapshotInfo>,
     ) -> Result<Vec<EpochId>> {
         let mut missing_snapshots = HashMap::new();
-        for (snapshot_epoch_id, _snapshot_info) in snapshot_info_map {
-            missing_snapshots.insert(
+        let mut all_snapshots = HashMap::new();
+        for (snapshot_epoch_id, snapshot_info) in snapshot_info_map {
+            all_snapshots.insert(
                 self.get_snapshot_db_name(snapshot_epoch_id).into_bytes(),
                 snapshot_epoch_id.clone(),
             );
+            // If the snapshot info is kept to provide sync, we allow the
+            // snapshot itself to be missing, because a snapshot of
+            // snapshot_epoch_id's ancestor is kept to provide sync. We need to
+            // keep this snapshot info to know the parental relationship.
+            if snapshot_info.snapshot_info_kept_to_provide_sync
+                != SnapshotKeptToProvideSyncStatus::InfoOnly
+            {
+                missing_snapshots.insert(
+                    self.get_snapshot_db_name(snapshot_epoch_id).into_bytes(),
+                    snapshot_epoch_id.clone(),
+                );
+            }
         }
 
         // Scan the snapshot dir. Remove extra files, and return the list of
@@ -38,7 +51,7 @@ pub trait SnapshotDbManagerTrait {
                 continue;
             }
             let dir_name = dir_name.unwrap();
-            if !missing_snapshots.contains_key(dir_name.as_bytes()) {
+            if !all_snapshots.contains_key(dir_name.as_bytes()) {
                 error!(
                     "Unexpected snapshot path {}, deleted.",
                     entry.path().display()
