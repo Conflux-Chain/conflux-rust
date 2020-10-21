@@ -39,6 +39,8 @@ pub struct CallRequest {
 #[derive(Debug, Default, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EstimateGasAndCollateralResponse {
+    /// The recommended gas_limit.
+    pub gas_limit: U256,
     /// The amount of gas used in the execution.
     pub gas_used: U256,
     /// The number of bytes collateralized in the execution.
