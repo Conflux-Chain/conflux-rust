@@ -1299,20 +1299,9 @@ impl StorageManager {
             if snapshot_epoch_id == NULL_EPOCH {
                 continue;
             }
-            // Remove the delta mpt if the snapshot is missing.
-            self.delta_db_manager
-                .destroy_delta_db(
-                    &self
-                        .delta_db_manager
-                        .get_delta_db_name(&snapshot_epoch_id),
-                )
-                .or_else(|e| match e.kind() {
-                    ErrorKind::Io(io_err) => match io_err.kind() {
-                        std::io::ErrorKind::NotFound => Ok(()),
-                        _ => Err(e),
-                    },
-                    _ => Err(e),
-                })?;
+            // TODO Remove useless delta mpt if the snapshot is missing.
+            // Need to ensure it is not used by other snapshots.
+
             // If the snapshot info is kept to provide sync, we allow the
             // snapshot itself to be missing, because a snapshot of
             // snapshot_epoch_id's ancestor is kept to provide sync. We need to
