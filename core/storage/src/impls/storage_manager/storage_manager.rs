@@ -937,7 +937,7 @@ impl StorageManager {
             first_available_state_height,
         );
         let mut extra_snapshot_infos_kept_for_sync = vec![];
-        let mut non_pivot_snapshots_to_remove = vec![];
+        let mut non_pivot_snapshots_to_remove = HashSet::new();
         let mut old_pivot_snapshots_to_remove = vec![];
         // We will keep some extra snapshots to provide sync. For any snapshot
         // to keep, we must keep all snapshot_info from the pivot tip to
@@ -965,7 +965,7 @@ impl StorageManager {
                             &snapshot_info.parent_snapshot_epoch_id;
                     } else {
                         non_pivot_snapshots_to_remove
-                            .push(snapshot_epoch_id.clone());
+                            .insert(snapshot_epoch_id.clone());
                     }
                 } else if snapshot_info.height < confirmed_snapshot_height {
                     // We remove for older pivot snapshot one after another.
@@ -997,7 +997,7 @@ impl StorageManager {
                     } else {
                         // Any other snapshot with higher height is non-pivot.
                         non_pivot_snapshots_to_remove
-                            .push(snapshot_epoch_id.clone());
+                            .insert(snapshot_epoch_id.clone());
                     }
                 } else if snapshot_info.height
                     < maintained_state_height_lower_bound
@@ -1023,7 +1023,7 @@ impl StorageManager {
                             )
                         );
                         non_pivot_snapshots_to_remove
-                            .push(snapshot_epoch_id.clone());
+                            .insert(snapshot_epoch_id.clone());
                     }
                 }
             }
@@ -1054,7 +1054,7 @@ impl StorageManager {
                                 snapshot_info.get_snapshot_epoch_id(),
                                 path_epoch_id, maintained_epoch_id,
                             );
-                            non_pivot_snapshots_to_remove.push(
+                            non_pivot_snapshots_to_remove.insert(
                                 snapshot_info.get_snapshot_epoch_id().clone(),
                             );
                         }
@@ -1071,7 +1071,10 @@ impl StorageManager {
                                 snapshot_info.get_snapshot_epoch_id(),
                                 snapshot_info.parent_snapshot_epoch_id
                             );
-                            non_pivot_snapshots_to_remove.push(
+                            // The snapshot may already exist. This is why we
+                            // must use HashSet for
+                            // non_pivot_snapshots_to_remove.
+                            non_pivot_snapshots_to_remove.insert(
                                 snapshot_info.get_snapshot_epoch_id().clone(),
                             );
                         }
@@ -1127,6 +1130,8 @@ impl StorageManager {
             }
         }
 
+        let mut non_pivot_snapshots_to_remove =
+            non_pivot_snapshots_to_remove.drain().collect();
         // Update snapshot_infos and filter out already removed snapshots from
         // the removal lists.
         {
