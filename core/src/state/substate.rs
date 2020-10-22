@@ -134,9 +134,9 @@ impl Substate {
     }
 
     // Returns whether we are running the contract creation code in its own
-    // frame, or in its immediate call of Builtin / InternalContract.
+    // frame, or within its immediate call of InternalContract.
     // Note that if the constructor calls other contract, the return value will
-    // be false.
+    // be None within the call.
     pub fn contract_in_creation(&self) -> Option<&Address> {
         debug!("contract_in_creation {:?}", self.contract_in_creation);
         self.contract_in_creation.as_ref()
