@@ -355,7 +355,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         self.call_contract_function(
             contract=control_contract,
             name="setSponsorForGas",
-            args=[Web3.toChecksumAddress(contract_addr), tx_gas_upper_bound + 1],
+            args=[Web3.toChecksumAddress(contract_addr), tx_gas_upper_bound],
             value=5 * 10 ** 17,
             sender_key=priv_key3,
             contract_addr=sponsor_whitelist_contract_addr,
@@ -370,7 +370,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         self.call_contract_function(
             contract=control_contract,
             name="setSponsorForGas",
-            args=[Web3.toChecksumAddress(contract_addr), tx_gas_upper_bound],
+            args=[Web3.toChecksumAddress(contract_addr), tx_gas_upper_bound - 1],
             value=10 ** 18,
             sender_key=priv_key3,
             contract_addr=sponsor_whitelist_contract_addr,
