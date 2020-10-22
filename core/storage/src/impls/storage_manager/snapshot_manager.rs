@@ -24,6 +24,7 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait> SnapshotManagerTrait
     fn remove_old_pivot_snapshot(
         &self, snapshot_epoch_id: &EpochId,
     ) -> Result<()> {
+        debug!("remove_old_pivot_snapshot {:?}", snapshot_epoch_id);
         self.get_snapshot_db_manager()
             .destroy_snapshot(snapshot_epoch_id)
     }
@@ -31,6 +32,7 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait> SnapshotManagerTrait
     fn remove_non_pivot_snapshot(
         &self, snapshot_epoch_id: &EpochId,
     ) -> Result<()> {
+        debug!("remove_non_pivot_snapshot {:?}", snapshot_epoch_id);
         self.get_snapshot_db_manager()
             .destroy_snapshot(snapshot_epoch_id)
     }

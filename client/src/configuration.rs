@@ -219,7 +219,7 @@ build_config! {
         (tx_weight_exp, (u8), 1)
 
         // Storage Section.
-        (additional_maintained_snapshot_count, (u32), 0)
+        (additional_maintained_snapshot_count, (u32), 1)
         (block_cache_gc_period_ms, (u64), 5_000)
         // FIXME: use a fixed sub-dir of conflux_data_dir instead.
         (block_db_dir, (String), "./blockchain_db".to_string())

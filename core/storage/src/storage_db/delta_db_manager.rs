@@ -83,9 +83,14 @@ pub trait DeltaDbManagerTrait {
         }
 
         let mut missing_delta_dbs = vec![];
-        for (snapshot_epoch_id, _) in snapshot_info_map {
-            if !delta_mpts.contains_key(snapshot_epoch_id) {
-                missing_delta_dbs.push(snapshot_epoch_id.clone())
+        for (snapshot_epoch_id, snapshot_info) in snapshot_info_map {
+            // Skip if the snapshot doesn't exist.
+            if snapshot_info.snapshot_info_kept_to_provide_sync
+                == SnapshotKeptToProvideSyncStatus::No
+            {
+                if !delta_mpts.contains_key(snapshot_epoch_id) {
+                    missing_delta_dbs.push(snapshot_epoch_id.clone())
+                }
             }
         }
 
@@ -105,7 +110,9 @@ pub trait DeltaDbManagerTrait {
 
 use crate::{
     impls::errors::*,
-    storage_db::{key_value_db::*, SnapshotInfo},
+    storage_db::{
+        key_value_db::*, SnapshotInfo, SnapshotKeptToProvideSyncStatus,
+    },
 };
 use malloc_size_of::MallocSizeOf;
 use primitives::EpochId;

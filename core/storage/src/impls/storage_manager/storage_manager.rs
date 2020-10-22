@@ -788,10 +788,20 @@ impl StorageManager {
                 parent_snapshot_associated_mpts.1.clone()
             }
         };
+        let delta_mpt = if in_recover_mode {
+            snapshot_associated_mpts_locked
+                .get_mut(snapshot_epoch_id)
+                // This is guaranteed in the in_recover_mode condition above.
+                .unwrap()
+                .1
+                .take()
+        } else {
+            None
+        };
         if !in_recover_mode || maybe_intermediate_delta_mpt.is_some() {
             snapshot_associated_mpts_locked.insert(
                 snapshot_epoch_id.clone(),
-                (maybe_intermediate_delta_mpt, None),
+                (maybe_intermediate_delta_mpt, delta_mpt),
             );
         }
 
@@ -927,7 +937,7 @@ impl StorageManager {
             first_available_state_height,
         );
         let mut extra_snapshot_infos_kept_for_sync = vec![];
-        let mut non_pivot_snapshots_to_remove = vec![];
+        let mut non_pivot_snapshots_to_remove = HashSet::new();
         let mut old_pivot_snapshots_to_remove = vec![];
         // We will keep some extra snapshots to provide sync. For any snapshot
         // to keep, we must keep all snapshot_info from the pivot tip to
@@ -955,7 +965,7 @@ impl StorageManager {
                             &snapshot_info.parent_snapshot_epoch_id;
                     } else {
                         non_pivot_snapshots_to_remove
-                            .push(snapshot_epoch_id.clone());
+                            .insert(snapshot_epoch_id.clone());
                     }
                 } else if snapshot_info.height < confirmed_snapshot_height {
                     // We remove for older pivot snapshot one after another.
@@ -987,7 +997,7 @@ impl StorageManager {
                     } else {
                         // Any other snapshot with higher height is non-pivot.
                         non_pivot_snapshots_to_remove
-                            .push(snapshot_epoch_id.clone());
+                            .insert(snapshot_epoch_id.clone());
                     }
                 } else if snapshot_info.height
                     < maintained_state_height_lower_bound
@@ -1013,7 +1023,7 @@ impl StorageManager {
                             )
                         );
                         non_pivot_snapshots_to_remove
-                            .push(snapshot_epoch_id.clone());
+                            .insert(snapshot_epoch_id.clone());
                     }
                 }
             }
@@ -1044,7 +1054,7 @@ impl StorageManager {
                                 snapshot_info.get_snapshot_epoch_id(),
                                 path_epoch_id, maintained_epoch_id,
                             );
-                            non_pivot_snapshots_to_remove.push(
+                            non_pivot_snapshots_to_remove.insert(
                                 snapshot_info.get_snapshot_epoch_id().clone(),
                             );
                         }
@@ -1061,7 +1071,10 @@ impl StorageManager {
                                 snapshot_info.get_snapshot_epoch_id(),
                                 snapshot_info.parent_snapshot_epoch_id
                             );
-                            non_pivot_snapshots_to_remove.push(
+                            // The snapshot may already exist. This is why we
+                            // must use HashSet for
+                            // non_pivot_snapshots_to_remove.
+                            non_pivot_snapshots_to_remove.insert(
                                 snapshot_info.get_snapshot_epoch_id().clone(),
                             );
                         }
@@ -1117,6 +1130,8 @@ impl StorageManager {
             }
         }
 
+        let mut non_pivot_snapshots_to_remove =
+            non_pivot_snapshots_to_remove.drain().collect();
         // Update snapshot_infos and filter out already removed snapshots from
         // the removal lists.
         {
@@ -1313,29 +1328,6 @@ impl StorageManager {
                     },
                     _ => Err(e),
                 })?;
-            // If the snapshot info is kept to provide sync, we allow the
-            // snapshot itself to be missing, because a snapshot of
-            // snapshot_epoch_id's ancestor is kept to provide sync. We need to
-            // keep this snapshot info to know the parental relationship.
-            let snapshot_info_kept_to_provide_sync =
-                match snapshot_info_map.get(&snapshot_epoch_id) {
-                    None => false,
-                    Some(info) => {
-                        info!(
-                            "Missing snapshot db: {:?}, \
-                             snapshot_info_kept_to_provide_sync {:?}, {:?}, ",
-                            snapshot_epoch_id,
-                            info.snapshot_info_kept_to_provide_sync,
-                            info
-                        );
-
-                        info.snapshot_info_kept_to_provide_sync
-                            == SnapshotKeptToProvideSyncStatus::InfoOnly
-                    }
-                };
-            if snapshot_info_kept_to_provide_sync {
-                continue;
-            }
             snapshot_info_map.remove(&snapshot_epoch_id)?;
         }
 
@@ -1369,12 +1361,6 @@ impl StorageManager {
             {
                 if delta_mpts
                     .contains_key(&snapshot_info.parent_snapshot_epoch_id)
-                {
-                    continue;
-                }
-                // See comment above.
-                if snapshot_info.snapshot_info_kept_to_provide_sync
-                    == SnapshotKeptToProvideSyncStatus::InfoOnly
                 {
                     continue;
                 }
