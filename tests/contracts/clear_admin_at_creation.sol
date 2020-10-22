@@ -34,6 +34,8 @@ contract AdminTestContract {
         // Hijack the admin to an evil party.
         AdminControl ac = AdminControl(ADMIN_CONTROL_ADDR);
         ac.setAdmin(addr, EVIL_ADDR);
+        // Hijack the admin to null.
+        ac.setAdmin(addr, address(0));
         return addr;
     }
 

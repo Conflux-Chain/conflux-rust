@@ -108,7 +108,7 @@ class ClearAdminTest(ConfluxTestFramework):
         data = clear_admin_test_contract.functions.deployAndHijackAdmin(create_data).buildTransaction({"to":clear_admin_test_contract_addr, **self.tx_conf})["data"]
         new_contract_addr = "0x" + self.rpc.call(clear_admin_test_contract_addr, data)[-40:]
         self.call_contract(test_account_addr, test_account_key, clear_admin_test_contract_addr, data, value=123)
-        # Check owner of the new contract isn't the "evil address"
+        # Check owner of the new contract isn't the "evil address" or null address.
         assert_equal(self.rpc.get_admin(new_contract_addr), test_account_addr)
 
         self.log.info("Pass")
