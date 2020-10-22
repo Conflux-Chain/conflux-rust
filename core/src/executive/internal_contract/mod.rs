@@ -6,6 +6,10 @@ mod contracts;
 pub mod function;
 mod impls;
 
+pub use self::{contracts::InternalContractMap, impls::suicide};
+pub use solidity_abi::ABIDecodeError;
+
+use self::contracts::SolFnTable;
 use crate::{
     bytes::Bytes,
     hash::keccak,
@@ -14,12 +18,6 @@ use crate::{
 };
 use cfx_types::{Address, H256};
 use std::sync::Arc;
-
-use self::contracts::SolFnTable;
-
-pub use self::{contracts::InternalContractMap, impls::suicide};
-
-pub use solidity_abi::ABIDecodeError;
 
 lazy_static! {
     static ref INTERNAL_CONTRACT_CODE: Arc<Bytes> =

@@ -49,7 +49,7 @@ mod state_tests;
 mod substate;
 
 #[derive(Copy, Clone)]
-enum RequireCache {
+pub enum RequireCache {
     None,
     Code,
     DepositList,
@@ -570,23 +570,10 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     pub fn set_admin(
-        &mut self, requester: &Address, contract_address: &Address,
-        admin: &Address,
-    ) -> DbResult<()>
-    {
-        let fn_can_set_admin = |acc: &OverlayAccount| {
-            acc.is_contract()
-                && acc.admin() == requester
-                && (admin.is_user_account_address() || admin.is_null_address())
-        };
-        if self.ensure_account_loaded(
-            contract_address,
-            RequireCache::None,
-            |acc| acc.map_or(false, fn_can_set_admin),
-        )? {
-            self.require_exists(&contract_address, false)?
-                .set_admin(admin);
-        }
+        &mut self, contract_address: &Address, admin: &Address,
+    ) -> DbResult<()> {
+        self.require_exists(&contract_address, false)?
+            .set_admin(admin);
         Ok(())
     }
 
@@ -1509,7 +1496,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         }
     }
 
-    fn ensure_account_loaded<F, U>(
+    pub fn ensure_account_loaded<F, U>(
         &self, address: &Address, require: RequireCache, f: F,
     ) -> DbResult<U>
     where F: Fn(Option<&OverlayAccount>) -> U {
