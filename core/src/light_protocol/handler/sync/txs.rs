@@ -65,12 +65,15 @@ impl Txs {
     }
 
     #[inline]
-    fn get_statistics(&self) -> Statistics {
-        Statistics {
-            cached: self.verified.read().len(),
-            in_flight: self.sync_manager.num_in_flight(),
-            waiting: self.sync_manager.num_waiting(),
-        }
+    pub fn print_stats(&self) {
+        debug!(
+            "tx sync statistics: {:?}",
+            Statistics {
+                cached: self.verified.read().len(),
+                in_flight: self.sync_manager.num_in_flight(),
+                waiting: self.sync_manager.num_waiting(),
+            }
+        );
     }
 
     #[inline]
@@ -104,7 +107,7 @@ impl Txs {
     {
         for tx in txs {
             let hash = tx.hash();
-            debug!("Validating tx {:?}", hash);
+            trace!("Validating tx {:?}", hash);
 
             match self.sync_manager.check_if_requested(peer, id, &hash)? {
                 None => continue,
@@ -149,6 +152,7 @@ impl Txs {
         // remove timeout in-flight requests
         let timeout = *TX_REQUEST_TIMEOUT;
         let txs = self.sync_manager.remove_timeout_requests(timeout);
+        trace!("Timeout txs ({}): {:?}", txs.len(), txs);
         self.sync_manager.insert_waiting(txs.into_iter());
 
         // trigger cache cleanup
@@ -159,13 +163,19 @@ impl Txs {
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, hashes: Vec<H256>,
     ) -> Result<Option<RequestId>> {
-        debug!("send_request peer={:?} hashes={:?}", peer, hashes);
-
         if hashes.is_empty() {
             return Ok(None);
         }
 
         let request_id = self.request_id_allocator.next();
+
+        trace!(
+            "send_request GetTxs peer={:?} id={:?} hashes={:?}",
+            peer,
+            request_id,
+            hashes
+        );
+
         let msg: Box<dyn Message> = Box::new(GetTxs { request_id, hashes });
 
         msg.send(io, peer)?;
@@ -174,8 +184,6 @@ impl Txs {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        debug!("tx sync statistics: {:?}", self.get_statistics());
-
         self.sync_manager.sync(
             MAX_TXS_IN_FLIGHT,
             TX_REQUEST_BATCH_SIZE,

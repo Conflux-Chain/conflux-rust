@@ -8,8 +8,8 @@ use crate::{
         common::{FullPeerFilter, LedgerInfo},
         handler::sync::TxInfoValidated,
         message::msgid,
-        Error, ErrorKind, Handler as LightHandler, LIGHT_PROTOCOL_ID,
-        LIGHT_PROTOCOL_VERSION,
+        Error, ErrorKind, Handler as LightHandler, LightNodeConfiguration,
+        LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
     },
     rpc_errors::{account_result_to_rpc_result, Error as RpcError},
     sync::SynchronizationGraph,
@@ -88,7 +88,7 @@ impl QueryService {
     pub fn new(
         consensus: SharedConsensusGraph, graph: Arc<SynchronizationGraph>,
         network: Arc<NetworkService>, throttling_config_file: Option<String>,
-        notifications: Arc<Notifications>,
+        notifications: Arc<Notifications>, config: LightNodeConfiguration,
     ) -> Self
     {
         let handler = Arc::new(LightHandler::new(
@@ -96,6 +96,7 @@ impl QueryService {
             graph,
             throttling_config_file,
             notifications,
+            config,
         ));
         let ledger = LedgerInfo::new(consensus.clone());
 

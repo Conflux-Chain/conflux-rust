@@ -211,6 +211,8 @@ class RpcClient:
 
     ''' Ignore block_hash if epoch is not None '''
     def get_nonce(self, addr: str, epoch: str = None, block_hash: str = None) -> int:
+        if addr[:2] != "0x":
+            addr = "0x" + addr
         if epoch is None and block_hash is None:
             return int(self.node.cfx_getNextNonce(addr), 0)
         elif epoch is None:

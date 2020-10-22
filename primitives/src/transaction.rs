@@ -32,7 +32,10 @@ pub enum TransactionError {
     /// Transaction is already imported to the queue
     AlreadyImported,
     /// Chain id in the transaction doesn't match the chain id of the network.
-    ChainIdMismatch { expected: u32, got: u32 },
+    ChainIdMismatch {
+        expected: u32,
+        got: u32,
+    },
     /// Epoch height out of bound.
     EpochHeightOutOfBound {
         block_height: u64,
@@ -91,6 +94,7 @@ pub enum TransactionError {
     TooBig,
     /// Invalid RLP encoding
     InvalidRlp(String),
+    ZeroGasPrice,
 }
 
 impl From<keylib::Error> for TransactionError {
@@ -151,6 +155,7 @@ impl fmt::Display for TransactionError {
             InvalidRlp(ref err) => {
                 format!("Transaction has invalid RLP structure: {}.", err)
             }
+            ZeroGasPrice => "Zero gas price is not allowed".into(),
         };
 
         f.write_fmt(format_args!("Transaction error ({})", msg))

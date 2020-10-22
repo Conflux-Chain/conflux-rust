@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from http.client import CannotSendRequest
 from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, wait_for_initial_nonce_for_privkey, wait_for_account_stable

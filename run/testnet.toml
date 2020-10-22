@@ -401,6 +401,20 @@ jsonrpc_local_http_port=12539
 # storage_delta_mpts_node_map_vec_size=80000000
 # storage_delta_mpts_slab_idle_size=200000
 
+# ------------------ Light Node Parameters ----------------------
+
+# Header sync parameters.
+# ln_header_request_batch_size = 30
+# ln_header_request_timeout_sec = 2
+# ln_max_headers_in_flight = 1000
+
+# Epoch sync parameters.
+# ln_epoch_request_batch_size = 100
+# ln_epoch_request_timeout_sec = 2
+# ln_max_parallel_epochs_to_request = 10
+# ln_num_epochs_to_request = 200
+# ln_num_waiting_headers_threshold = 1000
+
 # -------------------- Others -------------------
 
 # Time (in milliseconds) after which accounts are re-read from disk.

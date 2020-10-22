@@ -287,9 +287,6 @@ pub mod light {
         /// After this timeout has been reached, we try another peer or give up.
         pub static ref MAX_POLL_TIME: Duration = Duration::from_secs(4);
 
-        /// Period of time to sleep between subsequent polls for on-demand queries.
-        pub static ref POLL_PERIOD: Duration = Duration::from_millis(100);
-
         /// Items not accessed for this amount of time are removed from the cache.
         pub static ref CACHE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
     }
@@ -301,7 +298,7 @@ pub mod light {
     pub const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 3;
 
     /// (Maximum) number of items requested in a single request.
-    pub const EPOCH_REQUEST_BATCH_SIZE: usize = 30;
+    pub const EPOCH_REQUEST_BATCH_SIZE: usize = 100;
     pub const HEADER_REQUEST_BATCH_SIZE: usize = 30;
     pub const BLOOM_REQUEST_BATCH_SIZE: usize = 30;
     pub const WITNESS_REQUEST_BATCH_SIZE: usize = 50;
@@ -315,7 +312,7 @@ pub mod light {
 
     /// Maximum number of in-flight items at any given time.
     /// If we reach this limit, we will not request any more.
-    pub const MAX_HEADERS_IN_FLIGHT: usize = 500;
+    pub const MAX_HEADERS_IN_FLIGHT: usize = 1000;
     pub const MAX_WITNESSES_IN_FLIGHT: usize = 500;
     pub const MAX_BLOOMS_IN_FLIGHT: usize = 500;
     pub const MAX_RECEIPTS_IN_FLIGHT: usize = 100;
@@ -337,7 +334,6 @@ pub mod light {
     /// Minimum number of missing items in the sync pipeline.
     /// If we have fewer, we will try to request some more.
     pub const NUM_WAITING_HEADERS_THRESHOLD: usize = 1000;
-    pub const NUM_WAITING_WITNESSES_THRESHOLD: usize = 30;
 
     /// Max number of epochs/headers/txs to send to a light peer in a response.
     pub const MAX_EPOCHS_TO_SEND: usize = 128;

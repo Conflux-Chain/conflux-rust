@@ -187,6 +187,14 @@ impl GetBlockHeadersResponse {
                 // the bodies may never be requested.
                 // See issue https://github.com/Conflux-Chain/conflux-rust/issues/1869.
                 if ctx.manager.in_recover_from_db_phase() {
+                    // Remove all from inflight keys so they can be requested
+                    // again after we clean up sync graph.
+                    ctx.manager.request_manager.headers_received(
+                        ctx.io,
+                        requested.clone(),
+                        requested,
+                        delay,
+                    );
                     return;
                 }
                 ctx.manager.graph.insert_block_header(

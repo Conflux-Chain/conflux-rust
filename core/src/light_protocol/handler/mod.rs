@@ -23,8 +23,8 @@ use crate::{
             TxInfos as GetTxInfosResponse, Txs as GetTxsResponse,
             WitnessInfo as GetWitnessInfoResponse,
         },
-        LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT, LIGHT_PROTOCOL_VERSION,
-        LIGHT_PROTO_V1,
+        LightNodeConfiguration, LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT,
+        LIGHT_PROTOCOL_VERSION, LIGHT_PROTO_V1,
     },
     message::{decode_msg, decode_rlp_and_check_deprecation, Message, MsgId},
     sync::{message::Throttled, SynchronizationGraph},
@@ -57,13 +57,7 @@ use throttling::token_bucket::TokenBucketManager;
 
 const SYNC_TIMER: TimerToken = 0;
 const REQUEST_CLEANUP_TIMER: TimerToken = 1;
-
-#[derive(Debug)]
-struct Statistics {
-    catch_up_mode: bool,
-    latest_epoch: u64,
-    latest_verified: u64,
-}
+const LOG_STATISTICS_TIMER: TimerToken = 2;
 
 /// Handler is responsible for maintaining peer meta-information and
 /// dispatching messages to the query and sync sub-handlers.
@@ -123,7 +117,7 @@ impl Handler {
     pub fn new(
         consensus: SharedConsensusGraph, graph: Arc<SynchronizationGraph>,
         throttling_config_file: Option<String>,
-        notifications: Arc<Notifications>,
+        notifications: Arc<Notifications>, config: LightNodeConfiguration,
     ) -> Self
     {
         let peers = Arc::new(Peers::new());
@@ -133,6 +127,7 @@ impl Handler {
             graph.clone(),
             peers.clone(),
             request_id_allocator.clone(),
+            config.clone(),
         ));
 
         let epochs = Epochs::new(
@@ -140,6 +135,7 @@ impl Handler {
             headers.clone(),
             peers.clone(),
             request_id_allocator.clone(),
+            config,
         );
 
         let witnesses = Arc::new(Witnesses::new(
@@ -344,8 +340,8 @@ impl Handler {
             warn!("Received msg={:?} from handshaking peer={:?}", msg_id, peer);
             bail!(ErrorKind::UnexpectedMessage {
                 expected: vec![
-                    msgid::STATUS_PING_DEPRECATED,
-                    msgid::STATUS_PING_V2
+                    msgid::STATUS_PONG_DEPRECATED,
+                    msgid::STATUS_PONG_V2
                 ],
                 received: msg_id,
             });
@@ -437,12 +433,13 @@ impl Handler {
     }
 
     #[inline]
-    fn get_statistics(&self) -> Statistics {
-        Statistics {
-            catch_up_mode: self.catch_up_mode(),
-            latest_epoch: self.consensus.best_epoch_number(),
-            latest_verified: self.witnesses.latest_verified(),
-        }
+    fn print_stats(&self) {
+        info!(
+            "Catch-up mode: {}, latest epoch: {}, latest verified: {}",
+            self.catch_up_mode(),
+            self.consensus.best_epoch_number(),
+            self.witnesses.latest_verified()
+        );
     }
 
     #[inline]
@@ -504,7 +501,7 @@ impl Handler {
     fn on_status_v2(
         &self, io: &dyn NetworkContext, peer: &NodeId, status: StatusPongV2,
     ) -> Result<()> {
-        info!("on_status peer={:?} status={:?}", peer, status);
+        info!("on_status (v2) peer={:?} status={:?}", peer, status);
 
         self.validate_peer_type(status.node_type)?;
         self.validate_genesis_hash(status.genesis_hash)?;
@@ -532,7 +529,7 @@ impl Handler {
         status: StatusPongDeprecatedV1,
     ) -> Result<()>
     {
-        info!("on_status peer={:?} status={:?}", peer, status);
+        info!("on_status (v1) peer={:?} status={:?}", peer, status);
 
         self.on_status_v2(
             io,
@@ -552,10 +549,16 @@ impl Handler {
         resp: GetBlockHashesResponse,
     ) -> Result<()>
     {
-        debug!("on_block_hashes resp={:?}", resp);
+        debug!(
+            "received {} block hashes (request id = {})",
+            resp.hashes.len(),
+            resp.request_id
+        );
+        trace!("on_block_hashes resp={:?}", resp);
 
         self.epochs.receive(&resp.request_id);
 
+        // TODO(thegaram): do not request hashes that we did not ask for
         let hashes = resp.hashes.into_iter();
         self.headers.request(hashes, HashSource::Epoch);
 
@@ -568,7 +571,12 @@ impl Handler {
         resp: GetBlockHeadersResponse,
     ) -> Result<()>
     {
-        debug!("on_block_headers resp={:?}", resp);
+        debug!(
+            "received {} block headers (request id = {})",
+            resp.headers.len(),
+            resp.request_id
+        );
+        trace!("on_block_headers resp={:?}", resp);
 
         self.headers.receive(
             peer,
@@ -585,7 +593,12 @@ impl Handler {
         resp: GetBlockTxsResponse,
     ) -> Result<()>
     {
-        debug!("on_block_txs resp={:?}", resp);
+        debug!(
+            "received {} block txs (request id = {})",
+            resp.block_txs.len(),
+            resp.request_id
+        );
+        trace!("on_block_txs resp={:?}", resp);
 
         self.block_txs.receive(
             peer,
@@ -600,7 +613,12 @@ impl Handler {
     fn on_blooms(
         &self, io: &dyn NetworkContext, peer: &NodeId, resp: GetBloomsResponse,
     ) -> Result<()> {
-        debug!("on_blooms resp={:?}", resp);
+        debug!(
+            "received {} blooms (request id = {})",
+            resp.blooms.len(),
+            resp.request_id
+        );
+        trace!("on_blooms resp={:?}", resp);
 
         self.blooms
             .receive(peer, resp.request_id, resp.blooms.into_iter())?;
@@ -612,7 +630,8 @@ impl Handler {
     fn on_new_block_hashes(
         &self, io: &dyn NetworkContext, peer: &NodeId, msg: NewBlockHashes,
     ) -> Result<()> {
-        debug!("on_new_block_hashes msg={:?}", msg);
+        debug!("received {} new block hashes", msg.hashes.len());
+        trace!("on_new_block_hashes msg={:?}", msg);
 
         if self.catch_up_mode() {
             if let Some(state) = self.peers.get(peer) {
@@ -638,7 +657,12 @@ impl Handler {
         resp: GetReceiptsResponse,
     ) -> Result<()>
     {
-        debug!("on_receipts resp={:?}", resp);
+        debug!(
+            "received {} receipts (request id = {})",
+            resp.receipts.len(),
+            resp.request_id
+        );
+        trace!("on_receipts resp={:?}", resp);
 
         self.receipts.receive(
             peer,
@@ -655,7 +679,12 @@ impl Handler {
         resp: GetStateEntriesResponse,
     ) -> Result<()>
     {
-        debug!("on_state_entries resp={:?}", resp);
+        debug!(
+            "received {} state entries (request id = {})",
+            resp.entries.len(),
+            resp.request_id
+        );
+        trace!("on_state_entries resp={:?}", resp);
 
         self.state_entries.receive(
             peer,
@@ -672,7 +701,12 @@ impl Handler {
         resp: GetStateRootsResponse,
     ) -> Result<()>
     {
-        debug!("on_state_roots resp={:?}", resp);
+        debug!(
+            "received {} state roots (request id = {})",
+            resp.state_roots.len(),
+            resp.request_id
+        );
+        trace!("on_state_roots resp={:?}", resp);
 
         self.state_roots.receive(
             peer,
@@ -689,7 +723,12 @@ impl Handler {
         resp: GetStorageRootsResponse,
     ) -> Result<()>
     {
-        debug!("on_storage_roots resp={:?}", resp);
+        debug!(
+            "received {} storage roots (request id = {})",
+            resp.roots.len(),
+            resp.request_id
+        );
+        trace!("on_storage_roots resp={:?}", resp);
 
         self.storage_roots.receive(
             peer,
@@ -704,7 +743,12 @@ impl Handler {
     fn on_txs(
         &self, io: &dyn NetworkContext, peer: &NodeId, resp: GetTxsResponse,
     ) -> Result<()> {
-        debug!("on_txs resp={:?}", resp);
+        debug!(
+            "received {} txs (request id = {})",
+            resp.txs.len(),
+            resp.request_id
+        );
+        trace!("on_txs resp={:?}", resp);
 
         self.txs
             .receive(peer, resp.request_id, resp.txs.into_iter())?;
@@ -716,7 +760,12 @@ impl Handler {
     fn on_tx_infos(
         &self, io: &dyn NetworkContext, peer: &NodeId, resp: GetTxInfosResponse,
     ) -> Result<()> {
-        debug!("on_tx_infos resp={:?}", resp);
+        debug!(
+            "received {} tx infos (request id = {})",
+            resp.infos.len(),
+            resp.request_id
+        );
+        trace!("on_tx_infos resp={:?}", resp);
 
         self.tx_infos
             .receive(peer, resp.request_id, resp.infos.into_iter())?;
@@ -730,7 +779,12 @@ impl Handler {
         resp: GetWitnessInfoResponse,
     ) -> Result<()>
     {
-        debug!("on_witness_info resp={:?}", resp);
+        debug!(
+            "received {} witnesses (request id = {})",
+            resp.infos.len(),
+            resp.request_id
+        );
+        trace!("on_witness_info resp={:?}", resp);
 
         self.witnesses.receive(
             peer,
@@ -743,8 +797,6 @@ impl Handler {
     }
 
     fn start_sync(&self, io: &dyn NetworkContext) {
-        info!("general sync statistics: {:?}", self.get_statistics());
-
         match self.catch_up_mode() {
             true => {
                 self.headers.sync(io);
@@ -768,7 +820,6 @@ impl Handler {
     }
 
     fn clean_up_requests(&self) {
-        trace!("clean_up_requests");
         self.block_txs.clean_up();
         self.blooms.clean_up();
         self.epochs.clean_up();
@@ -849,6 +900,9 @@ impl NetworkProtocolHandler for Handler {
 
         io.register_timer(REQUEST_CLEANUP_TIMER, *CLEANUP_PERIOD)
             .expect("Error registering request cleanup timer");
+
+        io.register_timer(LOG_STATISTICS_TIMER, Duration::from_secs(1))
+            .expect("Error registering log statistics timer");
     }
 
     fn on_message(&self, io: &dyn NetworkContext, peer: &NodeId, raw: &[u8]) {
@@ -866,7 +920,7 @@ impl NetworkProtocolHandler for Handler {
             }
         };
 
-        debug!("on_message: peer={:?}, msgid={:?}", peer, msg_id);
+        trace!("on_message: peer={:?}, msgid={:?}", peer, msg_id);
 
         if let Err(e) = self.dispatch_message(io, peer, msg_id.into(), rlp) {
             handle_error(io, peer, msg_id.into(), &e);
@@ -918,6 +972,20 @@ impl NetworkProtocolHandler for Handler {
         match timer {
             SYNC_TIMER => self.start_sync(io),
             REQUEST_CLEANUP_TIMER => self.clean_up_requests(),
+            LOG_STATISTICS_TIMER => {
+                self.print_stats();
+                self.block_txs.print_stats();
+                self.blooms.print_stats();
+                self.epochs.print_stats();
+                self.headers.print_stats();
+                self.receipts.print_stats();
+                self.state_entries.print_stats();
+                self.state_roots.print_stats();
+                self.storage_roots.print_stats();
+                self.tx_infos.print_stats();
+                self.txs.print_stats();
+                self.witnesses.print_stats();
+            }
             // TODO(thegaram): add other timers (e.g. data_man gc)
             _ => warn!("Unknown timer {} triggered.", timer),
         }
