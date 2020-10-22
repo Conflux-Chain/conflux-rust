@@ -4,7 +4,7 @@
             "inputs": [
                 {
                     "internalType": "address",
-                    "name": "",
+                    "name": "contractAddr",
                     "type": "address"
                 }
             ],
@@ -36,12 +36,12 @@
             "inputs": [
                 {
                     "internalType": "address",
-                    "name": "",
+                    "name": "contractAddr",
                     "type": "address"
                 },
                 {
                     "internalType": "address",
-                    "name": "",
+                    "name": "newAdmin",
                     "type": "address"
                 }
             ],

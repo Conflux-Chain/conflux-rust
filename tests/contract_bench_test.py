@@ -3,12 +3,7 @@ import os
 import eth_utils
 import time
 
-from http.client import CannotSendRequest
 from eth_utils import decode_hex
-
-from test_framework.block_gen_thread import BlockGenThread
-from test_framework.blocktools import create_transaction, encode_hex_0x
-from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.blocktools import create_transaction, encode_hex_0x
 from test_framework.util import *
@@ -16,7 +11,7 @@ from test_framework.smart_contract_bench_base import SmartContractBenchBase
 from conflux.config import default_config
 from conflux.filter import Filter
 from conflux.rpc import RpcClient
-from conflux.transactions import CONTRACT_DEFAULT_GAS, charged_of_huge_gas
+from conflux.transactions import CONTRACT_DEFAULT_GAS, COLLATERAL_UNIT_IN_DRIP, charged_of_huge_gas
 from conflux.utils import sha3 as keccak
 from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 
@@ -26,7 +21,6 @@ class ContractBenchTest(SmartContractBenchBase):
     def set_test_params(self):
         self.num_nodes = 1
         self.conf_parameters["execute_genesis"] = "true"
-        self.collateral_per_byte = 10 ** 18 // 1024
 
     def setup_network(self):
         self.setup_nodes()
@@ -607,8 +601,8 @@ class ContractBenchTest(SmartContractBenchBase):
         tx = self.rpc.new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key, storage_limit=storage_limit)
         assert_equal(self.rpc.send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc.get_transaction_receipt(tx.hash_hex())
-        self.log.info("deploy_contract storage_limit={}".format((self.rpc.get_collateral_for_storage(self.rpc.GENESIS_ADDR) - c0) // self.collateral_per_byte))
-        assert_equal(self.rpc.get_collateral_for_storage(self.rpc.GENESIS_ADDR), c0 + storage_limit * self.collateral_per_byte)
+        self.log.info("deploy_contract storage_limit={}".format((self.rpc.get_collateral_for_storage(self.rpc.GENESIS_ADDR) - c0) // COLLATERAL_UNIT_IN_DRIP))
+        assert_equal(self.rpc.get_collateral_for_storage(self.rpc.GENESIS_ADDR), c0 + storage_limit * COLLATERAL_UNIT_IN_DRIP)
         address = receipt["contractCreated"]
         assert_is_hex_string(address)
         return receipt, address
@@ -618,7 +612,7 @@ class ContractBenchTest(SmartContractBenchBase):
         tx = self.rpc.new_contract_tx(receiver=contract, data_hex=data_hex, sender=sender, priv_key=priv_key, value=value, storage_limit=storage_limit, gas=gas)
         assert_equal(self.rpc.send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc.get_transaction_receipt(tx.hash_hex())
-        self.log.info("call_contract storage_limit={}".format((self.rpc.get_collateral_for_storage(sender) - c0) // self.collateral_per_byte))
+        self.log.info("call_contract storage_limit={}".format((self.rpc.get_collateral_for_storage(sender) - c0) // COLLATERAL_UNIT_IN_DRIP))
         return receipt
 
     def fixto64(self, x):
