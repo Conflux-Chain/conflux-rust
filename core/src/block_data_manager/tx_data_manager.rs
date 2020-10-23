@@ -58,7 +58,7 @@ impl TransactionDataManager {
             transactions.iter().for_each(|tx| {
                 let tx_hash = tx.hash();
                 if tx_time_window.contains_key(&tx_hash) {
-                    let tx_cache = tx_time_window.get(&tx.hash).unwrap();
+                    let tx_cache = tx_time_window.get(&tx_hash).unwrap();
                     cached.push(tx_cache.clone());
                 } else {
                     uncached.push((0, tx.clone()));
