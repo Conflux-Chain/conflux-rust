@@ -40,6 +40,7 @@ impl<T: BitSetLike> BitIter<T> {
 
 impl<'a> BitIter<&'a mut BitSet> {
     /// Clears the rest of the bitset starting from the next inner layer.
+    #[allow(unused)]
     pub(crate) fn clear(&mut self) {
         use self::State::Continue;
         while let Some(level) =

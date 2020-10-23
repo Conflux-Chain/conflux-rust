@@ -160,6 +160,7 @@ impl BitSet {
         false
     }
 
+    #[allow(unused)]
     fn layer_mut(&mut self, level: usize, idx: usize) -> &mut usize {
         match level {
             0 => {
