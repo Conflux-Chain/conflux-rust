@@ -1,7 +1,7 @@
 use std::{
     iter::{FromIterator, IntoIterator},
     ops::{
-        BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not,
+        BitAnd, BitOr, BitXor, Not,
     },
     usize,
 };
@@ -13,92 +13,6 @@ use BitIter;
 use BitSet;
 use BitSetLike;
 use DrainableBitSet;
-
-impl<'a, B> BitOrAssign<&'a B> for BitSet
-where B: BitSetLike
-{
-    fn bitor_assign(&mut self, lhs: &B) {
-        use iter::State::Continue;
-        let mut iter = lhs.iter();
-        while let Some(level) =
-            (1..LAYERS).find(|&level| iter.handle_level(level) == Continue)
-        {
-            let lower = level - 1;
-            let idx = iter.prefix[lower] as usize >> BITS;
-            *self.layer_mut(lower, idx) |= lhs.get_from_layer(lower, idx);
-        }
-        self.layer3 |= lhs.layer3();
-    }
-}
-
-impl<'a, B> BitAndAssign<&'a B> for BitSet
-where B: BitSetLike
-{
-    fn bitand_assign(&mut self, lhs: &B) {
-        use iter::State::*;
-        let mut iter = lhs.iter();
-        iter.masks[LAYERS - 1] &= self.layer3();
-        while let Some(level) =
-            (1..LAYERS).find(|&level| iter.handle_level(level) == Continue)
-        {
-            let lower = level - 1;
-            let idx = iter.prefix[lower] as usize >> BITS;
-            let our_layer = self.get_from_layer(lower, idx);
-            let their_layer = lhs.get_from_layer(lower, idx);
-
-            iter.masks[lower] &= our_layer;
-
-            let mut masks = [0; LAYERS];
-            masks[lower] = our_layer & !their_layer;
-            BitIter::new(&mut *self, masks, iter.prefix).clear();
-
-            *self.layer_mut(lower, idx) &= their_layer;
-        }
-        let mut masks = [0; LAYERS];
-        masks[LAYERS - 1] = self.layer3() & !lhs.layer3();
-        BitIter::new(&mut *self, masks, [0; LAYERS - 1]).clear();
-
-        self.layer3 &= lhs.layer3();
-    }
-}
-
-impl<'a, B> BitXorAssign<&'a B> for BitSet
-where B: BitSetLike
-{
-    fn bitxor_assign(&mut self, lhs: &B) {
-        use iter::State::*;
-        let mut iter = lhs.iter();
-        while let Some(level) =
-            (1..LAYERS).find(|&level| iter.handle_level(level) == Continue)
-        {
-            let lower = level - 1;
-            let idx = iter.prefix[lower] as usize >> BITS;
-
-            if lower == 0 {
-                *self.layer_mut(lower, idx) ^= lhs.get_from_layer(lower, idx);
-
-                let mut change_bit = |level| {
-                    let lower = level - 1;
-                    let h =
-                        iter.prefix.get(level).cloned().unwrap_or(0) as usize;
-                    let l = iter.prefix[lower] as usize >> BITS;
-                    let mask = 1 << (l & !h);
-
-                    if self.get_from_layer(lower, l) == 0 {
-                        *self.layer_mut(level, h >> BITS) &= !mask;
-                    } else {
-                        *self.layer_mut(level, h >> BITS) |= mask;
-                    }
-                };
-
-                change_bit(level);
-                if iter.masks[level] == 0 {
-                    (2..LAYERS).for_each(change_bit);
-                }
-            }
-        }
-    }
-}
 
 /// `BitSetAnd` takes two [`BitSetLike`] items, and merges the masks
 /// returning a new virtual set, which represents an intersection of the

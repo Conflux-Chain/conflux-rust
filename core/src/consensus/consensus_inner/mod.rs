@@ -1187,7 +1187,9 @@ impl ConsensusGraphInner {
                 self, parent_arena_index,
             );
             debug!("check_mining_adaptive_block:before or len {}", anticone.len());
-            anticone |= &self.compute_future_bitset(parent_arena_index);
+            for i in self.compute_future_bitset(parent_arena_index) {
+                anticone.add(i);
+            }
             debug!("check_mining_adaptive_block:after or len {}", anticone.len());
         } else {
             anticone = self.compute_future_bitset(parent_arena_index);
