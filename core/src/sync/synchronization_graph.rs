@@ -974,7 +974,6 @@ impl SynchronizationGraphInner {
                 self.arena[*index].children.iter().map(|x| *x).collect();
             for child in children {
                 debug_assert!(invalid_set.contains(&child));
-                debug_assert!(self.arena[child].graph_status == BLOCK_INVALID);
                 self.arena[child].parent = NULL;
             }
 
@@ -982,9 +981,6 @@ impl SynchronizationGraphInner {
                 self.arena[*index].referrers.iter().map(|x| *x).collect();
             for referrer in referrers {
                 debug_assert!(invalid_set.contains(&referrer));
-                debug_assert!(
-                    self.arena[referrer].graph_status == BLOCK_INVALID
-                );
                 self.arena[referrer].referees.retain(|&x| x != *index);
             }
 
