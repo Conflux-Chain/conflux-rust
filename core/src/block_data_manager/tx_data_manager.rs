@@ -51,38 +51,42 @@ impl TransactionDataManager {
     pub fn recover_unsigned_tx(
         &self, transactions: &Vec<TransactionWithSignature>,
     ) -> Result<Vec<Arc<SignedTransaction>>, DecoderError> {
-        let uncached_trans = {
+        let mut uncached = Vec::new();
+        let mut cached = Vec::new();
+        {
             let tx_time_window = self.tx_time_window.read();
-            transactions
-                .iter()
-                .filter(|tx| {
-                    let tx_hash = tx.hash();
-                    let inserted = tx_time_window.contains_key(&tx_hash);
-                    // Sample 1/128 transactions
-                    if tx_hash[0] & 254 == 0 {
-                        debug!("Sampled transaction {:?} in tx pool", tx_hash);
-                    }
-                    !inserted
-                })
-                .map(|tx| (0, tx.clone())) // idx not used
-                .collect()
-        };
-
-        // recover uncached tx
-        if let Err(e) = self.recover_uncached_tx(uncached_trans) {
-            return Err(e);
+            transactions.iter().for_each(|tx| {
+                let tx_hash = tx.hash();
+                if tx_time_window.contains_key(&tx_hash) {
+                    let tx_cache = tx_time_window.get(&tx.hash).unwrap();
+                    cached.push(tx_cache.clone());
+                } else {
+                    uncached.push((0, tx.clone()));
+                }
+                // Sample 1/128 transactions
+                if tx_hash[0] & 254 == 0 {
+                    debug!("Sampled transaction {:?} in tx pool", tx_hash);
+                }
+            });
         }
 
-        // return all matched transactions
-        let matched_trans = {
-            let tx_time_window = self.tx_time_window.read();
-            transactions
-                .iter()
-                .map(|tx| tx_time_window.get(&tx.hash).unwrap())
-                .cloned()
-                .collect()
-        };
-        Ok(matched_trans)
+        let recover_uncached_result: Result<
+            Vec<Arc<SignedTransaction>>,
+            DecoderError,
+        > = self
+            .recover_uncached_tx(uncached)
+            .map(|tx_vec| tx_vec.into_iter().map(|(_, tx)| tx).collect());
+
+        match recover_uncached_result {
+            Err(e) => Err(e),
+            Ok(signed_txs) => {
+                let mut signed_txs_cloned = signed_txs.clone();
+                for tx in cached {
+                    signed_txs_cloned.push(tx.clone())
+                }
+                Ok(signed_txs_cloned)
+            }
+        }
     }
 
     /// Recover public keys for the transactions in `block`.
