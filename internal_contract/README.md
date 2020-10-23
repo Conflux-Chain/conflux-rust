@@ -40,7 +40,7 @@ All the example code in this document will use [js-conflux-sdk](https://github.c
 
 The `AdminControl` contract is a debug tool for contract development. When a contract is created during a transaction, the sender for the current transaction will become the contract admin automatically.
 
-The `admin` address can transfer the administrator rights to another **normal address** or **zero address** by calling interface `setAdmin(address contractAddr, address newAdmin)`. A contract can never been an admin. 
+The `admin` address can transfer the administrator rights to another **normal address** or **zero address** by calling interface `setAdmin(address contractAddr, address newAdmin)`. A contract can never be an admin. 
 
 The admin of a contract has several administrator rights. It can call interface `destroy(address contractAddr)` to destroy contract, just like a contract calling `suicide()` function. The SponsorWhitelist internal contract provides some functions can only be called by admin address. These functions can update the whitelist in sponsor mechanism. They will be introduced later. 
 
@@ -49,7 +49,7 @@ The admin of a contract has several administrator rights. It can call interface 
 ConfluxScan may mark a contract as debug mode if the contract has non-zero admin address. **So remember, if you think the contract is ready for production environment, you should set admin address to zero.**
 
 
-The `AdminControl` contract also provides a query interface `getAdmin(address contractAddr)` which can called by anyone. 
+The `AdminControl` contract also provides a query interface `getAdmin(address contractAddr)` which can be called by anyone. 
 
 **Corner cases:**
 1. The admin is set at the start of contract creation. So if sender `A` creates contract `B` and set admin to `C` during contract construction, the admin will be `C` when the contract is deployed. 
@@ -108,19 +108,21 @@ There are two resources that can be sponsored: gas consumption and storage colla
 + *For gas consumption*: If a transaction calls a contract with non-empty `sponsor_for_gas` and the sender is in the `whitelist` of the contract and the gas fee specified by the transaction is within the `sponsor_limit_for_gas_fee`, the gas consumption of the transaction is paid from the `sponsor_balance_for_gas` of the contract (if it is sufficient) rather than from the sender’s balance, and the execution of the transaction would fail if the `sponsor_balance_for_gas` cannot afford the gas consumption. Otherwise, the sender should pay for the gas consumption.
 + *For storage collateral*: If a transaction calls a contract with non-empty `sponsor_balance_for_collateral` and the sender is in the `whitelist` of the contract,  the collateral for storage incurred in the execution of the transaction is deducted from `sponsor_balance_for_collateral` of the contract, and the owner of those modified storage entries is set to the contract address accordingly. Otherwise, the sender should pay for the collateral for storage incurred in the execution.
 
-Both sponsorship for gas and for collateral can be updated by calling the SponsorControl contract. The current sponsors can call this contract to transfer funds to increase the sponsor balances directly, and the current sponsor for gas is also allowed to increase the `sponsor_limit_for_gas_fee` without transferring new funds. Other normal accounts can replace the current sponsors by calling this contract and providing more funds for sponsorship.
+Both sponsorship for gas and for collateral can be updated by calling the SponsorControl contract. The current sponsor can call this contract to transfer funds to increase the sponsor balances directly, and the current sponsor for gas is also allowed to increase the `sponsor_limit_for_gas_fee` without transferring new funds. Other normal accounts can replace the current sponsor by calling this contract and providing more funds for sponsorship.
 
 ## Sponsorship Replacement
 
-To replace the `sponsor_for_gas` of a contract, the new sponsor should call function `setSponsorForGas(address contractAddr, uint upperBound)` and transfer to the contract a fund. The following conditions are required to replace sponsor for gas:
+When a contract is created, its `sponsor_for_gas` and `sponsor_for_collateral` will be initialized by zero address, and the sponsor balance will be initialized by 0. 
+
+To replace the `sponsor_for_gas` of a contract, the new sponsor should call function `setSponsorForGas(address contractAddr, uint upperBound)` and transfer to the internal contract a fund. The following conditions are required to replace sponsor for gas:
 
 1. The transferred fund should more than the current `sponsor_balance_for_gas` of the contract.
 2. The new value for `sponsor_limit_for_gas_fee` (specified the `upperBound` parameter) should be no less than the old sponsor’s limit unless the old `sponsor_limit_for_gas_fee` cannot afford the old limit.
-3. The transferred fund should be >= 1000 times of the new limit, so that it is sufficient to subsidize at least `1000` transactions calling C.
+3. The transferred fund should be >= 1000 times of the new limit, so that it is sufficient to subsidize at least `1000` transactions calling the contract.
 
-If the above conditions are satisfied, the remaining `sponsor_balance_for_gas` will be refunded to the old `sponsor_for_gas`, and then `sponsor_balance_for_gas`, `sponsor_for_gas` and `sponsor_limit_for_gas_fee` will be updated according to the new sponsor’s specification. Otherwise, an exception will be triggered. 
+If the above conditions are satisfied, the remaining `sponsor_balance_for_gas` will be refunded to the old `sponsor_for_gas`, and the fund transferred to the internal contract will be added to the `sponsor_balance_for_gas` of the contract. Then the `sponsor_for_gas` and `sponsor_limit_for_gas_fee` will be updated according to the new sponsor’s specification. Otherwise, an exception will be triggered. 
 
-The replacement of `sponsor_for_collateral` is similar except that there is no analog of the limit for gas fee. The function is `setSponsorForCollateral(address contractAddr)`. The new sponsor should transfer to C a fund more than the fund provided by the current sponsor for collateral of the contract. Then the current `sponsor_for_collateral` will be fully refunded, i.e. the sum of `sponsor_balance_for_collateral` and the total collateral for storage used by the contract, and both collateral sponsorship fields are changed as the new sponsor’s request accordingly. A contract account is also allowed to be a sponsor.
+The replacement of `sponsor_for_collateral` is similar except that there is no analog of the limit for gas fee. The function is `setSponsorForCollateral(address contractAddr)`. The new sponsor should transfer a fund more than the fund provided by the current sponsor for collateral of the contract. Then the current `sponsor_for_collateral` will be fully refunded, i.e. the sum of `sponsor_balance_for_collateral` and the total collateral for storage used by the contract, and both collateral sponsorship fields are changed as the new sponsor’s request accordingly. A contract account is also allowed to be a sponsor.
 
 ## Add Sponsor Balance  
 
