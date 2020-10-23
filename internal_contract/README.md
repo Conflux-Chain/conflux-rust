@@ -76,7 +76,7 @@ const admin_contract = cfx.Contract({
   address: admin_contract_addr,
 });
 // to change administrator
-admin_contract.set_admin(contract_addr, new_admin).sendTransaction({
+admin_contract.setAdmin(contract_addr, new_admin).sendTransaction({
   from: account,
 }).confirmed();
 
@@ -154,14 +154,14 @@ contract CommissionPrivilegeTest {
         SponsorWhitelistControl cpc = SponsorWhitelistControl(0x0888000000000000000000000000000000000001);
         address[] memory a = new address[](1);
         a[0] = account;
-        cpc.add_privilege(a);
+        cpc.addPrivilege(a);
     }
 
     function remove(address account) public payable {
         SponsorWhitelistControl cpc = SponsorWhitelistControl(0x0888000000000000000000000000000000000001);
         address[] memory a = new address[](1);
         a[0] = account;
-        cpc.remove_privilege(a);
+        cpc.removePrivilege(a);
     }
 
     function foo() public payable {
@@ -191,15 +191,15 @@ const sponsor_contract = cfx.Contract({
   abi: require('./contracts/sponsor.abi.json'),
   address: sponsor_contract_addr,
 });
-sponsor_contract.set_sponsor_for_gas(contract_addr, your_upper_bound).sendTransaction({
+sponsor_contract.setSponsorForGas(contract_addr, your_upper_bound).sendTransaction({
   from: account,
   value: your_sponsor_value
 }).confirmed();
 ```
 
-As for sponsor the storage collateral, you can simply replace the function `set_sponsor_for_gas(contract_addr, your_upper_bound)` to `set_sponsor_for_collateral(contract_addr)`.
+As for sponsor the storage collateral, you can simply replace the function `setSponsorForGas(contract_addr, your_upper_bound)` to `setSponsorForCollateral(contract_addr)`.
 
-After that you can maintain the `whitelist` for your contract using `add_privilege` and `remove_privilege`. The special address `0x0000000000000000000000000000000000000000` with all zeros means everyone is in the `whitelist`. You need to use it carefully.
+After that you can maintain the `whitelist` for your contract using `addPrivilege` and `removePrivilege`. The special address `0x0000000000000000000000000000000000000000` with all zeros means everyone is in the `whitelist`. You need to use it carefully.
 
 ```javascript
 you_contract.add(white_list_addr).sendTransaction({
@@ -282,7 +282,7 @@ staking_contract.withdraw(your_number_of_tokens).sendTransaction({
 }).confirmed();
 
 // lock some tokens until some block number
-staking_contract.vote_lock(your_number_of_tokens, your_unlock_block_number).sendTransaction({
+staking_contract.voteLock(your_number_of_tokens, your_unlock_block_number).sendTransaction({
   from: account,
 }).confirmed();
 ```
