@@ -228,7 +228,7 @@ The user can also withdraw balance by `withdraw(uint amount)`. The caller can ca
 
 ## Interest Rate
 
-The staking interest rate is currently set to 4% per year. Compound interest is implemented in the granularity of blocks.
+The annualized staking interest rate is currently set to 4.08%. Compound interest is implemented in the granularity of blocks.
 
 When executing a transaction sent by account `addr` at block `B` to withdraw a fund of value `v` deposited at block `B'`, the interest is calculated as follows:
 
@@ -252,7 +252,7 @@ Here we introduce the detailed logic for locking balance by illustrating several
 
 Locking does not have any influence on the stake interest. When the account withdraw staking balance successfully, the staking interest will be computed as usual. 
 
-At any time, each locked Drip will be assigned a *vote power* from 0 to 1 according to its unlock time. The Drip to be unlocked in more than one year will have a full vote power. See the [Conflux Protocol Specification](https://confluxnetwork.org/developer/) for more details.
+At any time, each locked Drip will be assigned a *vote power* from 0 to 1 according to its unlock time. The Drip to be unlocked in more than one year will have a full vote power. See the [Conflux Protocol Specification](https://conflux-protocol.s3-ap-southeast-1.amazonaws.com/tech-specification.pdf) for more details.
 
 ## Examples
 
