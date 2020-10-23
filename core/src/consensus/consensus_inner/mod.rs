@@ -1186,7 +1186,9 @@ impl ConsensusGraphInner {
             anticone = consensus_new_block_handler::ConsensusNewBlockHandler::compute_anticone_bruteforce(
                 self, parent_arena_index,
             );
-            anticone |= &self.compute_future_bitset(parent_arena_index);
+            for i in self.compute_future_bitset(parent_arena_index) {
+                anticone.add(i);
+            }
         } else {
             anticone = self.compute_future_bitset(parent_arena_index);
             for index in parent_anticone_opt.unwrap() {
