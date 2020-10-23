@@ -1186,7 +1186,9 @@ impl ConsensusGraphInner {
             anticone = consensus_new_block_handler::ConsensusNewBlockHandler::compute_anticone_bruteforce(
                 self, parent_arena_index,
             );
+            debug!("check_mining_adaptive_block:before or len {}", anticone.len());
             anticone |= &self.compute_future_bitset(parent_arena_index);
+            debug!("check_mining_adaptive_block:after or len {}", anticone.len());
         } else {
             anticone = self.compute_future_bitset(parent_arena_index);
             for index in parent_anticone_opt.unwrap() {
@@ -1220,6 +1222,7 @@ impl ConsensusGraphInner {
             }
         }
         for index in my_past.drain() {
+            debug!("check_mining_adaptive_block:remove {}", index);
             anticone.remove(index);
         }
 

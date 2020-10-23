@@ -184,6 +184,7 @@ impl BitSet {
     /// to begin with.
     #[inline(always)]
     pub fn remove(&mut self, id: Index) -> bool {
+        Self::valid_range(id);
         let (p0, p1, p2) = offsets(id);
 
         if p0 >= self.layer0.len() {
