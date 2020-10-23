@@ -73,7 +73,7 @@ pub fn sign_call(
         nonce: request.nonce.unwrap_or_default(),
         action: request.to.map_or(Action::Create, Action::Call),
         gas,
-        gas_price: request.gas_price.unwrap_or_default(),
+        gas_price: request.gas_price.unwrap_or(1.into()),
         value: request.value.unwrap_or_default(),
         storage_limit: request
             .storage_limit
