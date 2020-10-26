@@ -138,7 +138,7 @@ impl QueryService {
 
         with_timeout(
             *MAX_POLL_TIME,
-            format!("Timeout while retrieving state entry for epoch {} with key {:?}", epoch, key),
+            format!("Timeout while retrieving state entry for epoch {:?} with key {:?}", epoch, key),
             self.with_io(|io| self.handler.state_entries.request_now(io, epoch, key)),
         )
         .await
@@ -179,7 +179,7 @@ impl QueryService {
 
         with_timeout(
             *MAX_POLL_TIME,
-            format!("Timeout while retrieving bloom for epoch {}", epoch),
+            format!("Timeout while retrieving bloom for epoch {:?}", epoch),
             self.handler.blooms.request(epoch),
         )
         .await
@@ -193,7 +193,7 @@ impl QueryService {
 
         with_timeout(
             *MAX_POLL_TIME,
-            format!("Timeout while retrieving receipts for epoch {}", epoch),
+            format!("Timeout while retrieving receipts for epoch {:?}", epoch),
             self.handler.receipts.request(epoch),
         )
         .await
@@ -208,7 +208,7 @@ impl QueryService {
 
         with_timeout(
             *MAX_POLL_TIME,
-            format!("Timeout while retrieving block txs for block {}", hash),
+            format!("Timeout while retrieving block txs for block {:?}", hash),
             self.handler.block_txs.request(hash),
         )
         .await
@@ -222,7 +222,7 @@ impl QueryService {
 
         with_timeout(
             *MAX_POLL_TIME,
-            format!("Timeout while retrieving tx info for tx {}", hash),
+            format!("Timeout while retrieving tx info for tx {:?}", hash),
             self.with_io(|io| self.handler.tx_infos.request_now(io, hash)),
         )
         .await
@@ -394,7 +394,10 @@ impl QueryService {
 
         with_timeout(
             *MAX_POLL_TIME,
-            format!("Timeout while retrieving transaction with hash {}", hash),
+            format!(
+                "Timeout while retrieving transaction with hash {:?}",
+                hash
+            ),
             self.with_io(|io| self.handler.txs.request_now(io, hash)),
         )
         .await
@@ -523,7 +526,7 @@ impl QueryService {
         Ok(latest_verifiable)
     }
 
-    fn get_height_from_epoch_number(
+    pub fn get_height_from_epoch_number(
         &self, epoch: EpochNumber,
     ) -> Result<u64, FilterError> {
         let latest_verifiable = self.get_latest_verifiable_epoch_number()?;

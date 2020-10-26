@@ -527,6 +527,16 @@ impl RpcImpl {
 
         Box::new(fut.boxed().compat())
     }
+
+    pub fn epoch_number(&self, epoch: Option<EpochNumber>) -> RpcResult<U256> {
+        let epoch = epoch.unwrap_or(EpochNumber::LatestMined);
+        info!("RPC Request: cfx_epochNumber epoch={:?}", epoch);
+
+        match self.light.get_height_from_epoch_number(epoch.into()) {
+            Ok(height) => Ok(height.into()),
+            Err(e) => Err(RpcError::invalid_params(e.to_string())),
+        }
+    }
 }
 
 pub struct CfxHandler {
@@ -548,7 +558,6 @@ impl Cfx for CfxHandler {
             fn block_by_hash_with_pivot_assumption(&self, block_hash: H256, pivot_hash: H256, epoch_number: U64) -> RpcResult<RpcBlock>;
             fn block_by_hash(&self, hash: H256, include_txs: bool) -> RpcResult<Option<RpcBlock>>;
             fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<H256>>;
-            fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<U256>;
             fn gas_price(&self) -> RpcResult<U256>;
             fn next_nonce(&self, address: H160, num: Option<BlockHashOrEpochNumber>) -> RpcResult<U256>;
             fn skipped_blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<H256>>;
@@ -564,6 +573,7 @@ impl Cfx for CfxHandler {
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn code(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
             fn collateral_for_storage(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
+            fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<U256>;
             fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<EstimateGasAndCollateralResponse>;
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256>;
