@@ -61,7 +61,10 @@ lazy_static! {
         KeyPair::from_secret(DEV_GENESIS_PRI_KEY_2.parse().unwrap()).unwrap();
 }
 
-pub fn default(_dev_or_test_mode: bool) -> HashMap<Address, U256> {
+pub fn default(dev_or_test_mode: bool) -> HashMap<Address, U256> {
+    if !dev_or_test_mode {
+        return HashMap::new();
+    }
     let mut accounts: HashMap<Address, U256> = HashMap::new();
     // FIXME: Decide the genesis initialization for mainnet.
     let balance = U256::from_dec_str("5000000000000000000000000000000000")
@@ -156,7 +159,7 @@ pub fn genesis_block(
         genesis_token_count - two_year_unlock_token_count;
 
     let genesis_account_init_balance =
-        U256::from(ONE_CFX_IN_DRIP * 100) + genesis_token_count;
+        U256::from(ONE_CFX_IN_DRIP) * 100 + genesis_token_count;
     state
         .add_balance(
             &genesis_account_address,
@@ -298,13 +301,13 @@ pub fn genesis_block(
     ];
 
     if need_to_execute {
-        const CREATE2FACTORY_TX_INDEX: u64 = 1;
-        const TWO_YEAR_UNLOCK_TX_INDEX: u64 = 2;
-        const FOUR_YEAR_UNLOCK_TX_INDEX: u64 = 3;
-        const INVESTOR_FUND_TX_INDEX: u64 = 4;
-        const TEAM_FUND_TX_INDEX: u64 = 5;
-        const ECO_FUND_TX_INDEX: u64 = 6;
-        const COMMUNITY_FUND_TX_INDEX: u64 = 7;
+        const CREATE2FACTORY_TX_INDEX: usize = 1;
+        const TWO_YEAR_UNLOCK_TX_INDEX: usize = 2;
+        const FOUR_YEAR_UNLOCK_TX_INDEX: usize = 3;
+        const INVESTOR_FUND_TX_INDEX: usize = 4;
+        const TEAM_FUND_TX_INDEX: usize = 5;
+        const ECO_FUND_TX_INDEX: usize = 6;
+        const COMMUNITY_FUND_TX_INDEX: usize = 7;
 
         // Execute create_create2factory_transaction
         execute_genesis_transaction(
@@ -350,7 +353,6 @@ pub fn genesis_block(
         );
         state
             .set_admin(
-                &genesis_account_address,
                 &genesis_token_manager_two_year_unlock_contract_address,
                 &Address::zero(),
             )
@@ -379,7 +381,6 @@ pub fn genesis_block(
         );
         state
             .set_admin(
-                &genesis_account_address,
                 &genesis_token_manager_four_year_unlock_contract_address,
                 &Address::zero(),
             )
@@ -405,7 +406,6 @@ pub fn genesis_block(
         );
         state
             .set_admin(
-                &genesis_account_address,
                 &genesis_investor_fund_contract_address,
                 &Address::zero(),
             )
@@ -430,11 +430,7 @@ pub fn genesis_block(
             genesis_team_fund_contract_address
         );
         state
-            .set_admin(
-                &genesis_account_address,
-                &genesis_team_fund_contract_address,
-                &Address::zero(),
-            )
+            .set_admin(&genesis_team_fund_contract_address, &Address::zero())
             .expect("");
 
         // Execute create_genesis_eco_fund_transaction
@@ -456,11 +452,7 @@ pub fn genesis_block(
             genesis_eco_fund_contract_address
         );
         state
-            .set_admin(
-                &genesis_account_address,
-                &genesis_eco_fund_contract_address,
-                &Address::zero(),
-            )
+            .set_admin(&genesis_eco_fund_contract_address, &Address::zero())
             .expect("");
 
         // Execute create_genesis_community_fund_transaction
@@ -483,7 +475,6 @@ pub fn genesis_block(
         );
         state
             .set_admin(
-                &genesis_account_address,
                 &genesis_community_fund_contract_address,
                 &Address::zero(),
             )
