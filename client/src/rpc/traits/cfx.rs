@@ -118,7 +118,7 @@ pub trait Cfx {
     #[rpc(name = "cfx_getNextNonce")]
     fn next_nonce(
         &self, addr: H160, epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> JsonRpcResult<U256>;
+    ) -> BoxFuture<U256>;
 
     //        /// Returns the number of transactions in a block with given hash.
     //        #[rpc(name = "cfx_getBlockTransactionCountByHash")]

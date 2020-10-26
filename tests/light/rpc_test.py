@@ -15,6 +15,7 @@ LIGHTNODE = 2
 
 ERA_EPOCH_COUNT = 100
 NUM_BLOCKS = 600
+NUM_TXS = 10
 
 class LightRPCTest(ConfluxTestFramework):
     def set_test_params(self):
@@ -58,7 +59,7 @@ class LightRPCTest(ConfluxTestFramework):
         self.rpc[FULLNODE0].generate_blocks(NUM_BLOCKS)
         sync_blocks(self.nodes)
 
-        self.log.info(f"Checking cfx_epochNumber results...")
+        self.log.info(f"Checking cfx_epochNumber...")
 
         earliest = self.rpc[LIGHTNODE].epoch_number("earliest")
         assert_equal(earliest, 0)
@@ -79,10 +80,36 @@ class LightRPCTest(ConfluxTestFramework):
 
         assert_raises_rpc_error(None, None, self.rpc[LIGHTNODE].epoch_number, hex(NUM_BLOCKS + 20))
 
-        self.log.info(f"Pass")
+        self.log.info(f"Pass -- cfx_epochNumber")
+
+    def test_cfx_get_next_nonce(self):
+        self.log.info(f"Generating transactions...")
+
+        address = self.rpc[FULLNODE0].GENESIS_ADDR
+
+        # send some txs to increase the nonce
+        for nonce in range(0, NUM_TXS):
+            receiver, _ = self.rpc[FULLNODE0].rand_account()
+            tx = self.rpc[FULLNODE0].new_tx(receiver=receiver, nonce=nonce)
+            self.rpc[FULLNODE0].send_tx(tx, wait_for_receipt=True)
+
+        # make sure we can check the blame for each header
+        self.rpc[FULLNODE0].generate_blocks(20)
+        sync_blocks(self.nodes)
+
+        self.log.info(f"Checking cfx_getNextNonce results...")
+
+        full_nonce = self.nodes[FULLNODE0].cfx_getNextNonce(address)
+        assert_equal(full_nonce, hex(NUM_TXS))
+
+        light_nonce = self.nodes[LIGHTNODE].cfx_getNextNonce(address)
+        assert_equal(light_nonce, full_nonce)
+
+        self.log.info(f"Pass -- cfx_getNextNonce")
 
     def run_test(self):
         self.test_cfx_epoch_number()
+        self.test_cfx_get_next_nonce()
 
 if __name__ == "__main__":
     LightRPCTest().main()

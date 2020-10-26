@@ -537,6 +537,47 @@ impl RpcImpl {
             Err(e) => Err(RpcError::invalid_params(e.to_string())),
         }
     }
+
+    pub fn next_nonce(
+        &self, address: H160, num: Option<BlockHashOrEpochNumber>,
+    ) -> RpcBoxFuture<U256> {
+        let address: H160 = address.into();
+
+        info!(
+            "RPC Request: cfx_getNextNonce address={:?} num={:?}",
+            address, num
+        );
+
+        // clone `self.light` to avoid lifetime issues due to capturing `self`
+        let light = self.light.clone();
+
+        let fut = async move {
+            let epoch = match num {
+                None => EpochNumber::LatestState,
+                Some(BlockHashOrEpochNumber::EpochNumber(e)) => e,
+                Some(BlockHashOrEpochNumber::BlockHash(h)) => light
+                    .consensus
+                    .get_block_epoch_number(&h)
+                    .map(Into::into)
+                    .map(EpochNumber::Num)
+                    .ok_or(RpcError::invalid_params(
+                        "Cannot find epoch corresponding to block hash",
+                    ))?,
+            }
+            .into();
+
+            let account = invalid_params_check(
+                "address",
+                light.get_account(epoch, address).await,
+            )?;
+
+            Ok(account
+                .map(|account| account.nonce.into())
+                .unwrap_or_default())
+        };
+
+        Box::new(fut.boxed().compat())
+    }
 }
 
 pub struct CfxHandler {
@@ -559,7 +600,6 @@ impl Cfx for CfxHandler {
             fn block_by_hash(&self, hash: H256, include_txs: bool) -> RpcResult<Option<RpcBlock>>;
             fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<H256>>;
             fn gas_price(&self) -> RpcResult<U256>;
-            fn next_nonce(&self, address: H160, num: Option<BlockHashOrEpochNumber>) -> RpcResult<U256>;
             fn skipped_blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<H256>>;
             fn confirmation_risk_by_hash(&self, block_hash: H256) -> RpcResult<Option<U256>>;
             fn get_status(&self) -> RpcResult<RpcStatus>;
@@ -576,6 +616,7 @@ impl Cfx for CfxHandler {
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<U256>;
             fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<EstimateGasAndCollateralResponse>;
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
+            fn next_nonce(&self, address: H160, num: Option<BlockHashOrEpochNumber>) -> BoxFuture<U256>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256>;
             fn sponsor_info(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<RpcSponsorInfo>;
             fn staking_balance(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;

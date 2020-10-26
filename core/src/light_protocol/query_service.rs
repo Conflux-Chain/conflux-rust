@@ -72,7 +72,7 @@ pub struct QueryService {
     protocol_version: ProtocolVersion,
 
     // shared consensus graph
-    consensus: SharedConsensusGraph,
+    pub consensus: SharedConsensusGraph,
 
     // light protocol handler
     handler: Arc<LightHandler>,
