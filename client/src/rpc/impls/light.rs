@@ -236,22 +236,6 @@ impl RpcImpl {
         Box::new(fut.boxed().compat())
     }
 
-    #[allow(unused_variables)]
-    fn call(
-        &self, request: CallRequest, epoch: Option<EpochNumber>,
-    ) -> RpcResult<Bytes> {
-        // TODO(thegaram)
-        Err(error_codes::unimplemented(None))
-    }
-
-    #[allow(unused_variables)]
-    fn sign_transaction(
-        &self, tx: SendTxRequest, password: Option<String>,
-    ) -> RpcResult<String> {
-        // TODO
-        Err(error_codes::unimplemented(None))
-    }
-
     fn code(
         &self, address: H160, epoch_num: Option<EpochNumber>,
     ) -> RpcBoxFuture<Bytes> {
@@ -281,14 +265,6 @@ impl RpcImpl {
         };
 
         Box::new(fut.boxed().compat())
-    }
-
-    #[allow(unused_variables)]
-    fn estimate_gas_and_collateral(
-        &self, request: CallRequest, epoch_number: Option<EpochNumber>,
-    ) -> RpcResult<EstimateGasAndCollateralResponse> {
-        // TODO(thegaram)
-        Err(error_codes::unimplemented(None))
     }
 
     fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>> {
@@ -599,22 +575,19 @@ impl Cfx for CfxHandler {
             fn block_by_hash_with_pivot_assumption(&self, block_hash: H256, pivot_hash: H256, epoch_number: U64) -> RpcResult<RpcBlock>;
             fn block_by_hash(&self, hash: H256, include_txs: bool) -> RpcResult<Option<RpcBlock>>;
             fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<H256>>;
-            fn gas_price(&self) -> RpcResult<U256>;
-            fn skipped_blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<H256>>;
             fn confirmation_risk_by_hash(&self, block_hash: H256) -> RpcResult<Option<U256>>;
-            fn get_status(&self) -> RpcResult<RpcStatus>;
             fn get_client_version(&self) -> RpcResult<String>;
+            fn get_status(&self) -> RpcResult<RpcStatus>;
+            fn skipped_blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<H256>>;
         }
 
         to self.rpc_impl {
             fn account(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn admin(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Option<H160>>;
             fn balance(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
-            fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn code(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
             fn collateral_for_storage(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<U256>;
-            fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<EstimateGasAndCollateralResponse>;
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn next_nonce(&self, address: H160, num: Option<BlockHashOrEpochNumber>) -> BoxFuture<U256>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256>;
@@ -627,11 +600,15 @@ impl Cfx for CfxHandler {
         }
     }
 
+    // TODO(thegaram): add support for these
     not_supported! {
         fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<U256>;
-        fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<U256>;
+        fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
         fn check_balance_against_transaction(&self, account_addr: H160, contract_addr: H160, gas_limit: U256, gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>) -> RpcResult<CheckBalanceAgainstTransactionResponse>;
+        fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<EstimateGasAndCollateralResponse>;
+        fn gas_price(&self) -> RpcResult<U256>;
         fn get_block_reward_info(&self, num: EpochNumber) -> RpcResult<Vec<RpcRewardInfo>>;
+        fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<U256>;
     }
 }
 
@@ -659,9 +636,9 @@ impl TestRpc for TestRpcImpl {
             fn get_goodput(&self) -> RpcResult<String>;
             fn get_nodeid(&self, challenge: Vec<u8>) -> RpcResult<Vec<u8>>;
             fn get_peer_info(&self) -> RpcResult<Vec<PeerInfo>>;
+            fn save_node_db(&self) -> RpcResult<()>;
             fn say_hello(&self) -> RpcResult<String>;
             fn stop(&self) -> RpcResult<()>;
-            fn save_node_db(&self) -> RpcResult<()>;
         }
     }
 
@@ -669,16 +646,16 @@ impl TestRpc for TestRpcImpl {
         fn expire_block_gc(&self, timeout: u64) -> RpcResult<()>;
         fn generate_block_with_blame_info(&self, num_txs: usize, block_size_limit: usize, blame_info: BlameInfo) -> RpcResult<H256>;
         fn generate_block_with_fake_txs(&self, raw_txs_without_data: Bytes, adaptive: Option<bool>, tx_data_len: Option<usize>) -> RpcResult<H256>;
+        fn generate_block_with_nonce_and_timestamp(&self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: U256, timestamp: u64, adaptive: bool) -> RpcResult<H256>;
         fn generate_custom_block(&self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes, adaptive: Option<bool>) -> RpcResult<H256>;
+        fn generate_empty_blocks(&self, num_blocks: usize) -> RpcResult<Vec<H256>>;
         fn generate_fixed_block(&self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>) -> RpcResult<H256>;
         fn generate_one_block_with_direct_txgen(&self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize, num_txs_erc20: usize) -> RpcResult<H256>;
-        fn generate_block_with_nonce_and_timestamp(&self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: U256, timestamp: u64, adaptive: bool) -> RpcResult<H256>;
         fn generate_one_block(&self, num_txs: usize, block_size_limit: usize) -> RpcResult<H256>;
-        fn generate_empty_blocks(&self, num_blocks: usize) -> RpcResult<Vec<H256>>;
-        fn get_pivot_chain_and_weight(&self, height_range: Option<(u64, u64)>) -> RpcResult<Vec<(H256, U256)>>;
-        fn get_executed_info(&self, block_hash: H256) -> RpcResult<(H256, H256)> ;
-        fn send_usable_genesis_accounts(&self, account_start_index: usize) -> RpcResult<Bytes>;
         fn get_block_status(&self, block_hash: H256) -> RpcResult<(u8, bool)>;
+        fn get_executed_info(&self, block_hash: H256) -> RpcResult<(H256, H256)> ;
+        fn get_pivot_chain_and_weight(&self, height_range: Option<(u64, u64)>) -> RpcResult<Vec<(H256, U256)>>;
+        fn send_usable_genesis_accounts(&self, account_start_index: usize) -> RpcResult<Bytes>;
         fn set_db_crash(&self, crash_probability: f64, crash_exit_code: i32) -> RpcResult<()>;
     }
 }
@@ -697,33 +674,33 @@ impl DebugRpcImpl {
 impl LocalRpc for DebugRpcImpl {
     delegate! {
         to self.common {
+            fn accounts(&self) -> RpcResult<Vec<H160>>;
             fn clear_tx_pool(&self) -> RpcResult<()>;
-            fn net_node(&self, id: NodeId) -> RpcResult<Option<(String, Node)>>;
+            fn lock_account(&self, address: H160) -> RpcResult<bool>;
             fn net_disconnect_node(&self, id: NodeId, op: Option<UpdateNodeOperation>) -> RpcResult<bool>;
+            fn net_node(&self, id: NodeId) -> RpcResult<Option<(String, Node)>>;
             fn net_sessions(&self, node_id: Option<NodeId>) -> RpcResult<Vec<SessionDetails>>;
             fn net_throttling(&self) -> RpcResult<throttling::Service>;
-            fn tx_inspect(&self, hash: H256) -> RpcResult<TxWithPoolInfo>;
-            fn txpool_content(&self, address: Option<H160>) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
-            fn txs_from_pool(&self, address: Option<H160>) -> RpcResult<Vec<RpcTransaction>>;
-            fn txpool_inspect(&self, address: Option<H160>) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
-            fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>>;
-            fn accounts(&self) -> RpcResult<Vec<H160>>;
             fn new_account(&self, password: String) -> RpcResult<H160>;
-            fn unlock_account(&self, address: H160, password: String, duration: Option<U128>) -> RpcResult<bool>;
-            fn lock_account(&self, address: H160) -> RpcResult<bool>;
             fn sign(&self, data: Bytes, address: H160, password: Option<String>) -> RpcResult<H520>;
             fn tx_inspect_pending(&self, address: H160) -> RpcResult<TxPoolPendingInfo>;
+            fn tx_inspect(&self, hash: H256) -> RpcResult<TxWithPoolInfo>;
+            fn txpool_content(&self, address: Option<H160>) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
+            fn txpool_inspect(&self, address: Option<H160>) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
+            fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>>;
+            fn txs_from_pool(&self, address: Option<H160>) -> RpcResult<Vec<RpcTransaction>>;
+            fn unlock_account(&self, address: H160, password: String, duration: Option<U128>) -> RpcResult<bool>;
         }
 
         to self.rpc_impl {
             fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<H256>;
-            fn sign_transaction(&self, tx: SendTxRequest, password: Option<String>) -> RpcResult<String>;
         }
     }
 
     not_supported! {
-        fn current_sync_phase(&self) -> RpcResult<String>;
         fn consensus_graph_state(&self) -> RpcResult<ConsensusGraphStates>;
+        fn current_sync_phase(&self) -> RpcResult<String>;
+        fn sign_transaction(&self, tx: SendTxRequest, password: Option<String>) -> RpcResult<String>;
         fn sync_graph_state(&self) -> RpcResult<SyncGraphStates>;
     }
 }
