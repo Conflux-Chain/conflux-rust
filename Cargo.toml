@@ -1,6 +1,6 @@
 [package]
 name = "conflux"
-version = "1.0.0-alpha-6"
+version = "1.0.0-alpha-7"
 edition = "2018"
 build = "build.rs"
 
