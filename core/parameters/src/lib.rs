@@ -171,7 +171,7 @@ pub mod pow {
     // growth of the metadata, the memory consumption of the consensus graph,
     // and the confirmation speed
     pub const TARGET_AVERAGE_BLOCK_GENERATION_PERIOD: u64 = 500000;
-    pub const INITIAL_DIFFICULTY: u64 = 1_000;
+    pub const INITIAL_DIFFICULTY: u64 = 1_000_000_000;
 }
 
 pub mod block {

@@ -6,6 +6,7 @@ from rlp.sedes import CountableList
 from conflux import utils, trie
 from conflux.config import DEFAULT_PY_TEST_CHAIN_ID, default_config
 from conflux.messages import BlockHeader, Block, Transactions, Account
+from conflux.rpc import RpcClient
 from conflux.transactions import Transaction, UnsignedTransaction
 from conflux.utils import *
 from trie import HexaryTrie
@@ -75,6 +76,21 @@ def create_block_with_nonce(
         adaptive=adaptive)
     block = Block(block_header=header, transactions=transactions)
     return block
+
+
+# They have wrong receipts root and state root, but they will be still be processed by consensus
+def create_chain_of_blocks(parent_hash, parent_height, count):
+    blocks = []
+    height = parent_height + 1
+    parent = parent_hash
+    for i in range(count):
+        if i % 1000 == 0:
+            print(f"prepared {i}")
+        b = create_block(parent_hash=parent, height=height)
+        parent = b.hash
+        height += 1
+        blocks.append(b)
+    return blocks
 
 
 def create_transaction(nonce=0, gas_price=1, gas=21000, value=0, receiver=default_config['GENESIS_COINBASE'],
