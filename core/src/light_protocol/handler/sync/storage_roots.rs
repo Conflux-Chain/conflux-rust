@@ -78,12 +78,15 @@ impl StorageRoots {
     }
 
     #[inline]
-    fn get_statistics(&self) -> Statistics {
-        Statistics {
-            cached: self.verified.read().len(),
-            in_flight: self.sync_manager.num_in_flight(),
-            waiting: self.sync_manager.num_waiting(),
-        }
+    pub fn print_stats(&self) {
+        debug!(
+            "storage root sync statistics: {:?}",
+            Statistics {
+                cached: self.verified.read().len(),
+                in_flight: self.sync_manager.num_in_flight(),
+                waiting: self.sync_manager.num_waiting(),
+            }
+        );
     }
 
     #[inline]
@@ -117,7 +120,7 @@ impl StorageRoots {
     ) -> Result<()>
     {
         for StorageRootWithKey { key, root, proof } in entries {
-            debug!("Validating storage root {:?} with key {:?}", root, key);
+            trace!("Validating storage root {:?} with key {:?}", root, key);
 
             match self.sync_manager.check_if_requested(peer, id, &key)? {
                 None => continue,
@@ -165,8 +168,9 @@ impl StorageRoots {
     pub fn clean_up(&self) {
         // remove timeout in-flight requests
         let timeout = *STORAGE_ROOT_REQUEST_TIMEOUT;
-        let entries = self.sync_manager.remove_timeout_requests(timeout);
-        self.sync_manager.insert_waiting(entries.into_iter());
+        let roots = self.sync_manager.remove_timeout_requests(timeout);
+        trace!("Timeout storage-roots ({}): {:?}", roots.len(), roots);
+        self.sync_manager.insert_waiting(roots.into_iter());
 
         // trigger cache cleanup
         self.verified.write().get(&Default::default());
@@ -178,13 +182,19 @@ impl StorageRoots {
         keys: Vec<StorageRootKey>,
     ) -> Result<Option<RequestId>>
     {
-        debug!("send_request peer={:?} keys={:?}", peer, keys);
-
         if keys.is_empty() {
             return Ok(None);
         }
 
         let request_id = self.request_id_allocator.next();
+
+        trace!(
+            "send_request GetStorageRoots peer={:?} id={:?} keys={:?}",
+            peer,
+            request_id,
+            keys
+        );
+
         let msg: Box<dyn Message> =
             Box::new(GetStorageRoots { request_id, keys });
 
@@ -194,8 +204,6 @@ impl StorageRoots {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        debug!("storage root sync statistics: {:?}", self.get_statistics());
-
         self.sync_manager.sync(
             MAX_STORAGE_ROOTS_IN_FLIGHT,
             STORAGE_ROOT_REQUEST_BATCH_SIZE,

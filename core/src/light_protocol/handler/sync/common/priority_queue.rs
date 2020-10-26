@@ -9,6 +9,9 @@ use std::{
 
 use super::missing_item::HasKey;
 
+// TODO(thegaram): switch to a heap implementation that allows removing
+// elements; this way we can enforce invariants in SyncManager.
+
 /// A data structure for storing unique elements and retrieving them according
 /// to some priority criteria.
 /// The value type `V` must implement `HasKey<K>`.

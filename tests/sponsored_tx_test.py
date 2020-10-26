@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
-from http.client import CannotSendRequest
 from eth_utils import decode_hex
-
 from conflux.rpc import RpcClient
-from conflux.transactions import CONTRACT_DEFAULT_GAS, charged_of_huge_gas
+from conflux.transactions import CONTRACT_DEFAULT_GAS, COLLATERAL_UNIT_IN_DRIP, charged_of_huge_gas
 from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, encode_hex_0x, wait_for_initial_nonce_for_address
@@ -46,33 +44,6 @@ class SponsoredTxTest(ConfluxTestFramework):
         if wait:
             self.wait_for_tx([transaction], check_status)
 
-    def wait_for_tx(self, all_txs, check_status):
-        for tx in all_txs:
-            for i in range(3):
-                try:
-                    retry = True
-                    while retry:
-                        try:
-                            wait_until(lambda: checktx(self.nodes[0], tx.hash_hex()), timeout=20)
-                            retry = False
-                        except CannotSendRequest:
-                            time.sleep(0.01)
-                    break
-                except AssertionError as _:
-                    self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=[tx]))
-                if i == 2:
-                    raise AssertionError("Tx {} not confirmed after 30 seconds".format(tx.hash_hex()))
-        # After having optimistic execution, get_receipts may get receipts with not deferred block, these extra blocks
-        # ensure that later get_balance can get correct executed balance for all transactions
-        client = RpcClient(self.nodes[0])
-        for _ in range(5):
-            client.generate_block()
-        receipts = [client.get_transaction_receipt(tx.hash_hex()) for tx in all_txs]
-        self.log.debug("Receipts received: {}".format(receipts))
-        if check_status:
-            map(lambda x: assert_equal(x['outcomeStatus'], 0), receipts)
-        return receipts
-
     def call_contract_function(self, contract, name, args, sender_key, value=None,
                                contract_addr=None, wait=False,
                                check_status=False,
@@ -109,7 +80,7 @@ class SponsoredTxTest(ConfluxTestFramework):
 
     def run_test(self):
         sponsor_whitelist_contract_addr = Web3.toChecksumAddress("0888000000000000000000000000000000000001")
-        collateral_per_storage_key = 10 ** 18 // 16
+        collateral_per_storage_key = COLLATERAL_UNIT_IN_DRIP * 64
         upper_bound = 5 * 10 ** 7
 
         file_dir = os.path.dirname(os.path.realpath(__file__))

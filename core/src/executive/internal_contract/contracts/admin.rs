@@ -44,10 +44,16 @@ rename_interface! {
 impl ExecutionTrait for SetAdmin {
     fn execute_inner(
         &self, inputs: (Address, Address), params: &ActionParams, _spec: &Spec,
-        state: &mut State, _substate: &mut Substate,
+        state: &mut State, substate: &mut Substate,
     ) -> vm::Result<()>
     {
-        set_admin(inputs.0, inputs.1, params, state)
+        set_admin(
+            inputs.0,
+            inputs.1,
+            substate.contract_in_creation(),
+            params,
+            state,
+        )
     }
 }
 

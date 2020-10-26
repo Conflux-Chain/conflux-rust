@@ -905,7 +905,16 @@ impl RpcImpl {
             ));
         }
         let response = EstimateGasAndCollateralResponse {
-            gas_used: executed.gas_used.into(),
+            // We multiply the gas_used for 2 reasons:
+            // 1. In each EVM call, the gas passed is at most 63/64 of the
+            // remaining gas, so the gas_limit should be multiplied a factor so
+            // that the gas passed into the sub-call is sufficient. The 4 / 3
+            // factor is sufficient for 18 level of calls.
+            // 2. In Conflux, we recommend setting the gas_limit to (gas_used *
+            // 4) / 3, because the extra gas will be refunded up to
+            // 1/4 of the gas limit.
+            gas_limit: executed.gas_used * 4 / 3,
+            gas_used: executed.gas_used,
             storage_collateralized: storage_collateralized.into(),
         };
         Ok(response)

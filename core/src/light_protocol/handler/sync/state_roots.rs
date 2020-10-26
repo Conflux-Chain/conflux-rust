@@ -78,12 +78,15 @@ impl StateRoots {
     }
 
     #[inline]
-    fn get_statistics(&self) -> Statistics {
-        Statistics {
-            cached: self.verified.read().len(),
-            in_flight: self.sync_manager.num_in_flight(),
-            waiting: self.sync_manager.num_waiting(),
-        }
+    pub fn print_stats(&self) {
+        debug!(
+            "state root sync statistics: {:?}",
+            Statistics {
+                cached: self.verified.read().len(),
+                in_flight: self.sync_manager.num_in_flight(),
+                waiting: self.sync_manager.num_waiting(),
+            }
+        );
     }
 
     /// Get state root for `epoch` from local cache.
@@ -125,9 +128,10 @@ impl StateRoots {
     ) -> Result<()>
     {
         for StateRootWithEpoch { epoch, state_root } in state_roots {
-            debug!(
+            trace!(
                 "Validating state root {:?} with epoch {}",
-                state_root, epoch
+                state_root,
+                epoch
             );
 
             match self.sync_manager.check_if_requested(peer, id, &epoch)? {
@@ -173,8 +177,9 @@ impl StateRoots {
     pub fn clean_up(&self) {
         // remove timeout in-flight requests
         let timeout = *STATE_ROOT_REQUEST_TIMEOUT;
-        let state_roots = self.sync_manager.remove_timeout_requests(timeout);
-        self.sync_manager.insert_waiting(state_roots.into_iter());
+        let roots = self.sync_manager.remove_timeout_requests(timeout);
+        trace!("Timeout state-roots ({}): {:?}", roots.len(), roots);
+        self.sync_manager.insert_waiting(roots.into_iter());
 
         // trigger cache cleanup
         self.verified.write().get(&Default::default());
@@ -184,13 +189,19 @@ impl StateRoots {
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, epochs: Vec<u64>,
     ) -> Result<Option<RequestId>> {
-        debug!("send_request peer={:?} epochs={:?}", peer, epochs);
-
         if epochs.is_empty() {
             return Ok(None);
         }
 
         let request_id = self.request_id_allocator.next();
+
+        trace!(
+            "send_request GetStateRoots peer={:?} id={:?} epochs={:?}",
+            peer,
+            request_id,
+            epochs
+        );
+
         let msg: Box<dyn Message> =
             Box::new(GetStateRoots { request_id, epochs });
 
@@ -200,8 +211,6 @@ impl StateRoots {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        debug!("state root sync statistics: {:?}", self.get_statistics());
-
         self.sync_manager.sync(
             MAX_STATE_ROOTS_IN_FLIGHT,
             STATE_ROOT_REQUEST_BATCH_SIZE,

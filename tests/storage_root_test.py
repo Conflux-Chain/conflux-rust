@@ -111,6 +111,8 @@ class StorageRootTest(ConfluxTestFramework):
 
         # check if other node's storage root matches
         sync_blocks(self.nodes[:])
+        wait_until(lambda: self.rpc[FULLNODE0].epoch_number("latest_state")
+                   == self.rpc[FULLNODE1].epoch_number("latest_state"))
         root = self.rpc[FULLNODE1].get_storage_root(contractAddr)
         assert(root == root4)
 

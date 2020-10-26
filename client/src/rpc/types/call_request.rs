@@ -39,6 +39,8 @@ pub struct CallRequest {
 #[derive(Debug, Default, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EstimateGasAndCollateralResponse {
+    /// The recommended gas_limit.
+    pub gas_limit: U256,
     /// The amount of gas used in the execution.
     pub gas_used: U256,
     /// The number of bytes collateralized in the execution.
@@ -71,7 +73,7 @@ pub fn sign_call(
         nonce: request.nonce.unwrap_or_default(),
         action: request.to.map_or(Action::Create, Action::Call),
         gas,
-        gas_price: request.gas_price.unwrap_or_default(),
+        gas_price: request.gas_price.unwrap_or(1.into()),
         value: request.value.unwrap_or_default(),
         storage_limit: request
             .storage_limit

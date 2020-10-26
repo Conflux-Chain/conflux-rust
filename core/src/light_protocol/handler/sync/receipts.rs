@@ -75,12 +75,15 @@ impl Receipts {
     }
 
     #[inline]
-    fn get_statistics(&self) -> Statistics {
-        Statistics {
-            cached: self.verified.read().len(),
-            in_flight: self.sync_manager.num_in_flight(),
-            waiting: self.sync_manager.num_waiting(),
-        }
+    pub fn print_stats(&self) {
+        debug!(
+            "receipt sync statistics: {:?}",
+            Statistics {
+                cached: self.verified.read().len(),
+                in_flight: self.sync_manager.num_in_flight(),
+                waiting: self.sync_manager.num_waiting(),
+            }
+        );
     }
 
     #[inline]
@@ -118,9 +121,10 @@ impl Receipts {
             epoch_receipts,
         } in receipts
         {
-            debug!(
+            trace!(
                 "Validating receipts {:?} with epoch {}",
-                epoch_receipts, epoch
+                epoch_receipts,
+                epoch
             );
 
             match self.sync_manager.check_if_requested(peer, id, &epoch)? {
@@ -166,8 +170,9 @@ impl Receipts {
     pub fn clean_up(&self) {
         // remove timeout in-flight requests
         let timeout = *RECEIPT_REQUEST_TIMEOUT;
-        let receiptss = self.sync_manager.remove_timeout_requests(timeout);
-        self.sync_manager.insert_waiting(receiptss.into_iter());
+        let receipts = self.sync_manager.remove_timeout_requests(timeout);
+        trace!("Timeout receipts ({}): {:?}", receipts.len(), receipts);
+        self.sync_manager.insert_waiting(receipts.into_iter());
 
         // trigger cache cleanup
         self.verified.write().get(&Default::default());
@@ -177,13 +182,19 @@ impl Receipts {
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, epochs: Vec<u64>,
     ) -> Result<Option<RequestId>> {
-        debug!("send_request peer={:?} epochs={:?}", peer, epochs);
-
         if epochs.is_empty() {
             return Ok(None);
         }
 
         let request_id = self.request_id_allocator.next();
+
+        trace!(
+            "send_request GetReceipts peer={:?} id={:?} epochs={:?}",
+            peer,
+            request_id,
+            epochs
+        );
+
         let msg: Box<dyn Message> =
             Box::new(GetReceipts { request_id, epochs });
 
@@ -193,8 +204,6 @@ impl Receipts {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        debug!("receipt sync statistics: {:?}", self.get_statistics());
-
         self.sync_manager.sync(
             MAX_RECEIPTS_IN_FLIGHT,
             RECEIPT_REQUEST_BATCH_SIZE,

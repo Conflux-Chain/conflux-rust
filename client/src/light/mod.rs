@@ -77,6 +77,7 @@ impl LightClient {
             network.clone(),
             conf.raw_conf.throttling_conf.clone(),
             notifications,
+            conf.light_node_config(),
         ));
         light.register().unwrap();
 

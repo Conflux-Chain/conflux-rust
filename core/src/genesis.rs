@@ -326,11 +326,7 @@ pub fn genesis_block(
         );
 
         state
-            .set_admin(
-                &genesis_account_address,
-                &create2factory_contract_address,
-                &Address::zero(),
-            )
+            .set_admin(&create2factory_contract_address, &Address::zero())
             .expect("");
 
         // Execute create_genesis_token_manager_two_year_unlock_transaction

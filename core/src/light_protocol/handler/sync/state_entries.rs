@@ -79,12 +79,15 @@ impl StateEntries {
     }
 
     #[inline]
-    fn get_statistics(&self) -> Statistics {
-        Statistics {
-            cached: self.verified.read().len(),
-            in_flight: self.sync_manager.num_in_flight(),
-            waiting: self.sync_manager.num_waiting(),
-        }
+    pub fn print_stats(&self) {
+        debug!(
+            "state entry sync statistics: {:?}",
+            Statistics {
+                cached: self.verified.read().len(),
+                in_flight: self.sync_manager.num_in_flight(),
+                waiting: self.sync_manager.num_waiting(),
+            }
+        );
     }
 
     #[inline]
@@ -118,9 +121,11 @@ impl StateEntries {
     ) -> Result<()>
     {
         for StateEntryWithKey { key, entry, proof } in entries {
-            debug!(
+            trace!(
                 "Validating state entry {:?} with key {:?} and proof {:?}",
-                entry, key, proof
+                entry,
+                key,
+                proof
             );
 
             match self.sync_manager.check_if_requested(peer, id, &key)? {
@@ -170,6 +175,7 @@ impl StateEntries {
         // remove timeout in-flight requests
         let timeout = *STATE_ENTRY_REQUEST_TIMEOUT;
         let entries = self.sync_manager.remove_timeout_requests(timeout);
+        trace!("Timeout state-entries ({}): {:?}", entries.len(), entries);
         self.sync_manager.insert_waiting(entries.into_iter());
 
         // trigger cache cleanup
@@ -180,13 +186,19 @@ impl StateEntries {
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, keys: Vec<StateKey>,
     ) -> Result<Option<RequestId>> {
-        debug!("send_request peer={:?} keys={:?}", peer, keys);
-
         if keys.is_empty() {
             return Ok(None);
         }
 
         let request_id = self.request_id_allocator.next();
+
+        trace!(
+            "send_request GetStateEntries peer={:?} id={:?} keys={:?}",
+            peer,
+            request_id,
+            keys
+        );
+
         let msg: Box<dyn Message> =
             Box::new(GetStateEntries { request_id, keys });
 
@@ -196,8 +208,6 @@ impl StateEntries {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        debug!("state entry sync statistics: {:?}", self.get_statistics());
-
         self.sync_manager.sync(
             MAX_STATE_ENTRIES_IN_FLIGHT,
             STATE_ENTRY_REQUEST_BATCH_SIZE,

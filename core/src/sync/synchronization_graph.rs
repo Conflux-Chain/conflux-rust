@@ -923,8 +923,8 @@ impl SynchronizationGraphInner {
         self.remove_blocks(invalid_set);
     }
 
-    fn remove_blocks(&mut self, invalid_set: &HashSet<usize>) {
-        for index in invalid_set {
+    fn remove_blocks(&mut self, to_remove_set: &HashSet<usize>) {
+        for index in to_remove_set {
             let hash = self.arena[*index].block_header.hash();
             self.not_ready_blocks_frontier.remove(index);
             self.old_era_blocks_frontier_set.remove(index);
@@ -973,18 +973,14 @@ impl SynchronizationGraphInner {
             let children: Vec<usize> =
                 self.arena[*index].children.iter().map(|x| *x).collect();
             for child in children {
-                debug_assert!(invalid_set.contains(&child));
-                debug_assert!(self.arena[child].graph_status == BLOCK_INVALID);
+                debug_assert!(to_remove_set.contains(&child));
                 self.arena[child].parent = NULL;
             }
 
             let referrers: Vec<usize> =
                 self.arena[*index].referrers.iter().map(|x| *x).collect();
             for referrer in referrers {
-                debug_assert!(invalid_set.contains(&referrer));
-                debug_assert!(
-                    self.arena[referrer].graph_status == BLOCK_INVALID
-                );
+                debug_assert!(to_remove_set.contains(&referrer));
                 self.arena[referrer].referees.retain(|&x| x != *index);
             }
 
