@@ -1641,13 +1641,13 @@ impl ConsensusNewBlockHandler {
             {
                 let mut state_availability_boundary =
                     inner.data_man.state_availability_boundary.write();
-                assert!(
-                    capped_fork_at > state_availability_boundary.lower_bound,
-                    "forked_at {} should > boundary_lower_bound, boundary {:?}",
-                    capped_fork_at,
-                    state_availability_boundary
-                );
                 if pivot_changed {
+                    assert!(
+                        capped_fork_at > state_availability_boundary.lower_bound,
+                        "forked_at {} should > boundary_lower_bound, boundary {:?}",
+                        capped_fork_at,
+                        state_availability_boundary
+                    );
                     if extend_pivot {
                         state_availability_boundary
                             .pivot_chain
