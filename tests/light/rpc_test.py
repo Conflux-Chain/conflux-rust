@@ -82,17 +82,18 @@ class LightRPCTest(ConfluxTestFramework):
         bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), CONTRACT_PATH)
         assert(os.path.isfile(bytecode_file))
         bytecode = open(bytecode_file).read()
-        _, contractAddr = self.deploy_contract(bytecode)
+        receipt, contractAddr = self.deploy_contract(bytecode)
         self.log.info(f"contract deployed: {contractAddr}")
 
         self.user = self.rpc[FULLNODE0].GENESIS_ADDR
         self.contract = contractAddr
+        self.deploy_tx = receipt['transactionHash']
 
         # make sure we can check the blame for each header
         self.rpc[FULLNODE0].generate_blocks(BLAME_CHECK_OFFSET)
         sync_blocks(self.nodes)
 
-    def test_local(self):
+    def test_local_methods(self):
         self.log.info(f"Checking cfx_getBestBlockHash...")
         full = self.nodes[FULLNODE0].cfx_getBestBlockHash()
         light = self.nodes[LIGHTNODE].cfx_getBestBlockHash()
@@ -174,7 +175,7 @@ class LightRPCTest(ConfluxTestFramework):
         assert_equal(light, full)
         self.log.info(f"Pass -- cfx_getSkippedBlocksByEpoch")
 
-    def test_state(self):
+    def test_state_methods(self):
         latest_state = self.nodes[LIGHTNODE].cfx_epochNumber("latest_state")
 
         # --------------------------
@@ -297,7 +298,7 @@ class LightRPCTest(ConfluxTestFramework):
 
         assert_equal(light_block, block)
 
-    def test_block(self):
+    def test_block_methods(self):
         self.log.info(f"Generating blocks with transactions...")
 
         address = self.rpc[FULLNODE0].GENESIS_ADDR
@@ -305,9 +306,9 @@ class LightRPCTest(ConfluxTestFramework):
 
         txs = []
 
-        for _ in range(10):
+        for ii in range(10):
             receiver = self.rpc[FULLNODE0].rand_addr()
-            tx = self.rpc[FULLNODE0].new_tx(receiver=receiver, nonce=nonce)
+            tx = self.rpc[FULLNODE0].new_tx(receiver=receiver, nonce=nonce + ii)
             nonce += 1
             txs.append(tx)
 
@@ -378,6 +379,32 @@ class LightRPCTest(ConfluxTestFramework):
 
         self.log.info(f"Pass -- cfx_getBlockByHashWithPivotAssumption")
 
+    def assert_txs_equal(self, light_tx, tx):
+        # light nodes do not retrieve receipts for tx queries
+        # so fields related to execution results are not filled
+
+        tx['blockHash'] = None
+        tx['contractCreated'] = None
+        tx['status'] = None
+        tx['transactionIndex'] = None
+
+        assert_equal(light_tx, tx)
+
+    def test_tx_methods(self):
+        self.log.info(f"Checking cfx_getTransactionByHash...")
+        full = self.nodes[FULLNODE0].cfx_getTransactionByHash(self.deploy_tx)
+        light = self.nodes[LIGHTNODE].cfx_getTransactionByHash(self.deploy_tx)
+        self.assert_txs_equal(light, full)
+        self.log.info(f"Pass -- cfx_getTransactionByHash")
+
+        self.log.info(f"Checking cfx_getTransactionReceipt...")
+        full = self.nodes[FULLNODE0].cfx_getTransactionReceipt(self.deploy_tx)
+        light = self.nodes[LIGHTNODE].cfx_getTransactionReceipt(self.deploy_tx)
+        assert_equal(light, full)
+        self.log.info(f"Pass -- cfx_getTransactionReceipt")
+
+        # note: cfx_getLogs and cfx_sendRawTransaction have separate tests
+
     def test_not_supported(self):
         self.log.info(f"Checking not supported APIs...")
 
@@ -392,9 +419,10 @@ class LightRPCTest(ConfluxTestFramework):
         self.log.info(f"Pass -- not supported APIs")
 
     def run_test(self):
-        self.test_local()
-        self.test_state()
-        self.test_block()
+        self.test_local_methods()
+        self.test_state_methods()
+        self.test_block_methods()
+        self.test_tx_methods()
         self.test_not_supported()
 
 if __name__ == "__main__":
