@@ -176,7 +176,7 @@ impl RpcImpl {
 
     pub fn block_by_hash(
         &self, hash: H256, include_txs: bool,
-    ) -> JsonRpcResult<Option<RpcBlock>> {
+    ) -> RpcResult<Option<RpcBlock>> {
         let consensus_graph = self.consensus_graph();
         let hash: H256 = hash.into();
         info!(

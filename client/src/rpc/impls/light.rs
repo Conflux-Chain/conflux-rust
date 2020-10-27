@@ -4,9 +4,10 @@
 
 use cfx_types::{H160, H256, H520, U128, U256, U64};
 use cfxcore::{
+    block_data_manager::BlockDataManager,
     light_protocol::query_service::TxInfo,
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
-    LightQueryService, PeerInfo,
+    ConsensusGraph, LightQueryService, PeerInfo, SharedConsensusGraph,
 };
 use cfxcore_accounts::AccountProvider;
 use delegate::delegate;
@@ -24,7 +25,6 @@ use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 use crate::{
     common::delegate_convert,
     rpc::{
-        error_codes,
         impls::{common::RpcImpl as CommonImpl, RpcImplConfiguration},
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
@@ -42,25 +42,35 @@ use crate::{
 };
 
 pub struct RpcImpl {
+    // account provider used for signing transactions
+    accounts: Arc<AccountProvider>,
+
     // configuration parameters
     config: RpcImplConfiguration,
 
+    // consensus graph
+    consensus: SharedConsensusGraph,
+
+    // block data manager
+    data_man: Arc<BlockDataManager>,
+
     // helper API for retrieving verified information from peers
     light: Arc<LightQueryService>,
-
-    accounts: Arc<AccountProvider>,
 }
 
 impl RpcImpl {
     pub fn new(
         config: RpcImplConfiguration, light: Arc<LightQueryService>,
-        accounts: Arc<AccountProvider>,
+        accounts: Arc<AccountProvider>, consensus: SharedConsensusGraph,
+        data_man: Arc<BlockDataManager>,
     ) -> Self
     {
         RpcImpl {
-            config,
-            light,
             accounts,
+            config,
+            consensus,
+            data_man,
+            light,
         }
     }
 
@@ -554,6 +564,38 @@ impl RpcImpl {
 
         Box::new(fut.boxed().compat())
     }
+
+    pub fn block_by_hash(
+        &self, hash: H256, include_txs: bool,
+    ) -> RpcBoxFuture<Option<RpcBlock>> {
+        let hash = hash.into();
+
+        info!(
+            "RPC Request: cfx_getBlockByHash hash={:?} include_txs={:?}",
+            hash, include_txs
+        );
+
+        // clone to avoid lifetime issues due to capturing `self`
+        let consensus_graph = self.consensus.clone();
+        let data_man = self.data_man.clone();
+        let light = self.light.clone();
+
+        let fut = async move {
+            let block = light.retrieve_block(hash).await?.unwrap();
+
+            // make sure not to hold the lock through await's
+            let inner = consensus_graph
+                .as_any()
+                .downcast_ref::<ConsensusGraph>()
+                .expect("downcast should succeed")
+                .inner
+                .read();
+
+            Ok(Some(RpcBlock::new(&block, &*inner, &data_man, include_txs)))
+        };
+
+        Box::new(fut.boxed().compat())
+    }
 }
 
 pub struct CfxHandler {
@@ -573,7 +615,6 @@ impl Cfx for CfxHandler {
             fn best_block_hash(&self) -> RpcResult<H256>;
             fn block_by_epoch_number(&self, epoch_num: EpochNumber, include_txs: bool) -> RpcResult<Option<RpcBlock>>;
             fn block_by_hash_with_pivot_assumption(&self, block_hash: H256, pivot_hash: H256, epoch_number: U64) -> RpcResult<RpcBlock>;
-            fn block_by_hash(&self, hash: H256, include_txs: bool) -> RpcResult<Option<RpcBlock>>;
             fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<H256>>;
             fn confirmation_risk_by_hash(&self, block_hash: H256) -> RpcResult<Option<U256>>;
             fn get_client_version(&self) -> RpcResult<String>;
@@ -585,6 +626,7 @@ impl Cfx for CfxHandler {
             fn account(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn admin(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Option<H160>>;
             fn balance(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
+            fn block_by_hash(&self, hash: H256, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;
             fn code(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
             fn collateral_for_storage(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<U256>;

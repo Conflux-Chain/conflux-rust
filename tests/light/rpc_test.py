@@ -89,7 +89,7 @@ class LightRPCTest(ConfluxTestFramework):
 
         # send some txs to increase the nonce
         for nonce in range(0, NUM_TXS):
-            receiver, _ = self.rpc[FULLNODE0].rand_account()
+            receiver = self.rpc[FULLNODE0].rand_addr()
             tx = self.rpc[FULLNODE0].new_tx(receiver=receiver, nonce=nonce)
             self.rpc[FULLNODE0].send_tx(tx, wait_for_receipt=True)
 
@@ -107,9 +107,54 @@ class LightRPCTest(ConfluxTestFramework):
 
         self.log.info(f"Pass -- cfx_getNextNonce")
 
+    def assert_blocks_equal(self, light_block, block):
+        # light nodes do not retrieve receipts for block queries
+        # so fields related to execution results are not filled
+
+        block['gasUsed'] = None
+
+        for tx in block['transactions']:
+            if type(tx) is not dict: continue
+            tx['blockHash'] = None
+            tx['status'] = None
+            tx['transactionIndex'] = None
+
+        assert_equal(light_block, block)
+
+    def test_cfx_get_block(self):
+        self.log.info(f"Generating blocks with transactions...")
+
+        address = self.rpc[FULLNODE0].GENESIS_ADDR
+        nonce = int(self.nodes[FULLNODE0].cfx_getNextNonce(address), 16)
+
+        txs = []
+
+        for _ in range(10):
+            receiver = self.rpc[FULLNODE0].rand_addr()
+            tx = self.rpc[FULLNODE0].new_tx(receiver=receiver, nonce=nonce)
+            nonce += 1
+            txs.append(tx)
+
+        block_hash = self.rpc[FULLNODE0].generate_block_with_fake_txs(txs)
+        self.rpc[FULLNODE0].generate_blocks(20) # make sure txs are executed
+        sync_blocks(self.nodes)
+
+        self.log.info(f"Checking cfx_GetBlockByHash results...")
+
+        block = self.rpc[FULLNODE0].block_by_hash(block_hash, False)
+        light_block = self.rpc[LIGHTNODE].block_by_hash(block_hash, False)
+        self.assert_blocks_equal(light_block, block)
+
+        block = self.rpc[FULLNODE0].block_by_hash(block_hash, True)
+        light_block = self.rpc[LIGHTNODE].block_by_hash(block_hash, True)
+        self.assert_blocks_equal(light_block, block)
+
+        self.log.info(f"Pass -- cfx_GetBlockByHash")
+
     def run_test(self):
         self.test_cfx_epoch_number()
         self.test_cfx_get_next_nonce()
+        self.test_cfx_get_block()
 
 if __name__ == "__main__":
     LightRPCTest().main()

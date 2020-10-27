@@ -95,7 +95,7 @@ pub trait Cfx {
     #[rpc(name = "cfx_getBlockByHash")]
     fn block_by_hash(
         &self, block_hash: H256, include_txs: bool,
-    ) -> JsonRpcResult<Option<Block>>;
+    ) -> BoxFuture<Option<Block>>;
 
     /// Returns block with given hash and pivot chain assumption.
     #[rpc(name = "cfx_getBlockByHashWithPivotAssumption")]

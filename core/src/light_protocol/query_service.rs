@@ -28,8 +28,8 @@ use network::{service::ProtocolVersion, NetworkContext, NetworkService};
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
-    Account, BlockReceipts, CodeInfo, EpochNumber, Receipt, SignedTransaction,
-    StorageKey, StorageRoot, StorageValue, TransactionIndex,
+    Account, Block, BlockReceipts, CodeInfo, EpochNumber, Receipt,
+    SignedTransaction, StorageKey, StorageRoot, StorageValue, TransactionIndex,
 };
 use rlp::Rlp;
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
@@ -200,11 +200,10 @@ impl QueryService {
         .map(|receipts| (epoch, receipts))
     }
 
-    async fn retrieve_block_txs(
-        &self, log: LocalizedLogEntry,
-    ) -> Result<(LocalizedLogEntry, Vec<SignedTransaction>), Error> {
-        trace!("retrieve_block_txs log = {:?}", log);
-        let hash = log.block_hash;
+    pub async fn retrieve_block_txs(
+        &self, hash: H256,
+    ) -> Result<Vec<SignedTransaction>, Error> {
+        trace!("retrieve_block_txs hash = {:?}", hash);
 
         with_timeout(
             *MAX_POLL_TIME,
@@ -212,7 +211,39 @@ impl QueryService {
             self.handler.block_txs.request(hash),
         )
         .await
-        .map(|block_txs| (log, block_txs))
+    }
+
+    async fn retrieve_block_txs_for_log(
+        &self, log: LocalizedLogEntry,
+    ) -> Result<(LocalizedLogEntry, Vec<SignedTransaction>), Error> {
+        trace!("retrieve_block_txs_for_log log = {:?}", log);
+
+        self.retrieve_block_txs(log.block_hash)
+            .await
+            .map(|block_txs| (log, block_txs))
+    }
+
+    pub async fn retrieve_block(
+        &self, hash: H256,
+    ) -> Result<Option<Block>, Error> {
+        let maybe_block_header = self
+            .consensus
+            .get_data_manager()
+            .block_header_by_hash(&hash);
+
+        let block_header = match maybe_block_header {
+            None => return Ok(None),
+            Some(h) => (*h).clone(),
+        };
+
+        let transactions = self
+            .retrieve_block_txs(hash)
+            .await?
+            .into_iter()
+            .map(Arc::new)
+            .collect();
+
+        Ok(Some(Block::new(block_header, transactions)))
     }
 
     async fn retrieve_tx_info(
@@ -700,7 +731,7 @@ impl QueryService {
             // retrieve block txs
             .map(|res| match res {
                 Err(e) => Either::Left(future::err(e)),
-                Ok(log) => Either::Right(self.retrieve_block_txs(log)),
+                Ok(log) => Either::Right(self.retrieve_block_txs_for_log(log)),
             })
             // --> Stream<TryFuture<(LocalizedLogEntry, Vec<SignedTransaction>)>>
 

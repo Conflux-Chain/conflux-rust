@@ -85,6 +85,8 @@ impl LightClient {
             conf.rpc_impl_config(),
             light.clone(),
             accounts,
+            consensus.clone(),
+            data_man.clone(),
         ));
         let debug_rpc_http_server = super::rpc::start_http(
             conf.local_http_config(),

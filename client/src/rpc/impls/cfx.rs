@@ -1100,7 +1100,7 @@ impl Cfx for CfxHandler {
                 &self, block_hash: H256, pivot_hash: H256, epoch_number: U64)
                 -> JsonRpcResult<RpcBlock>;
             fn block_by_hash(&self, hash: H256, include_txs: bool)
-                -> JsonRpcResult<Option<RpcBlock>>;
+                -> BoxFuture<Option<RpcBlock>>;
             fn confirmation_risk_by_hash(&self, block_hash: H256) -> JsonRpcResult<Option<U256>>;
             fn blocks_by_epoch(&self, num: EpochNumber) -> JsonRpcResult<Vec<H256>>;
             fn skipped_blocks_by_epoch(&self, num: EpochNumber) -> JsonRpcResult<Vec<H256>>;
