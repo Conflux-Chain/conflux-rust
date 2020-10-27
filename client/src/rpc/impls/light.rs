@@ -560,15 +560,15 @@ impl RpcImpl {
             address, num
         );
 
-        // clone `self.light` to avoid lifetime issues due to capturing `self`
+        // clone to avoid lifetime issues due to capturing `self`
+        let consensus_graph = self.consensus.clone();
         let light = self.light.clone();
 
         let fut = async move {
             let epoch = match num {
                 None => EpochNumber::LatestState,
                 Some(BlockHashOrEpochNumber::EpochNumber(e)) => e,
-                Some(BlockHashOrEpochNumber::BlockHash(h)) => light
-                    .consensus
+                Some(BlockHashOrEpochNumber::BlockHash(h)) => consensus_graph
                     .get_block_epoch_number(&h)
                     .map(Into::into)
                     .map(EpochNumber::Num)
