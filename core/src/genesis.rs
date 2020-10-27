@@ -546,10 +546,10 @@ fn execute_genesis_transaction(
         .unwrap()
     };
 
-    match r {
+    match &r {
         ExecutionOutcome::Finished(_executed) => {}
         _ => {
-            panic!("genesis transaction should not fail!");
+            panic!("genesis transaction should not fail! err={:?}", r);
         }
     }
 }
