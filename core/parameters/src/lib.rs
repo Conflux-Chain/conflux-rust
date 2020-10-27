@@ -69,6 +69,10 @@ pub mod consensus_internal {
         2_474_873, 2_369_947, 2_269_469, 2_173_251, 2_081_112, 1_992_880,
         1_908_388, 1_827_479,
     ];
+
+    pub const GENESIS_TOKEN_COUNT_IN_CFX: u64 = 5_000_000_000;
+    pub const TWO_YEAR_UNLOCK_TOKEN_COUNT_IN_CFX: u64 = 800_000_000;
+
     // How many quarters that the mining reward keep decaying.
     pub const MINING_REWARD_DECAY_PERIOD_IN_QUARTER: usize = 32;
     pub const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
