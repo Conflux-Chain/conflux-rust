@@ -204,10 +204,24 @@ class LightRPCTest(ConfluxTestFramework):
 
         self.log.info(f"Pass -- cfx_getBlockByHashWithPivotAssumption")
 
+    def test_not_supported(self):
+        self.log.info(f"Checking not supported APIs...")
+
+        assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_call, {}, "latest_checkpoint")
+        assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_checkBalanceAgainstTransaction, "0x1386b4185a223ef49592233b69291bbe5a80c527", "0x8b017126d2fede908a86b36b43969f17d25f3771", "0x5208", "0x2540be400", "0x0", "latest_checkpoint")
+        assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_estimateGasAndCollateral, {}, "latest_checkpoint")
+        assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_gasPrice)
+        assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_getAccumulateInterestRate, "latest_checkpoint")
+        assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_getBlockRewardInfo, "latest_checkpoint")
+        assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_getInterestRate, "latest_checkpoint")
+
+        self.log.info(f"Pass -- not supported APIs")
+
     def run_test(self):
         self.test_cfx_epoch_number()
         self.test_cfx_get_next_nonce()
         self.test_cfx_get_block()
+        self.test_not_supported()
 
 if __name__ == "__main__":
     LightRPCTest().main()

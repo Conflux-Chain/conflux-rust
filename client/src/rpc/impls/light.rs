@@ -25,6 +25,7 @@ use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 use crate::{
     common::delegate_convert,
     rpc::{
+        error_codes,
         impls::{common::RpcImpl as CommonImpl, RpcImplConfiguration},
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
@@ -40,6 +41,31 @@ use crate::{
         RpcBoxFuture,
     },
 };
+
+// macro for reducing boilerplate for unsupported methods
+#[macro_use]
+macro_rules! not_supported {
+    () => {};
+    ( fn $fn:ident ( &self $(, $name:ident : $type:ty)* ) $( -> BoxFuture<$ret:ty> )? ; $($tail:tt)* ) => {
+        #[allow(unused_variables)]
+        fn $fn ( &self $(, $name : $type)* ) $( -> BoxFuture<$ret> )? {
+            use jsonrpc_core::futures::future::{Future, IntoFuture};
+            Err(error_codes::unimplemented(Some("Tracking issue: https://github.com/Conflux-Chain/conflux-rust/issues/1461".to_string())))
+                .into_future()
+                .boxed()
+        }
+
+        not_supported!($($tail)*);
+    };
+    ( fn $fn:ident ( &self $(, $name:ident : $type:ty)* ) $( -> $ret:ty )? ; $($tail:tt)* ) => {
+        #[allow(unused_variables)]
+        fn $fn ( &self $(, $name : $type)* ) $( -> $ret )? {
+            Err(error_codes::unimplemented(Some("Tracking issue: https://github.com/Conflux-Chain/conflux-rust/issues/1461".to_string())))
+        }
+
+        not_supported!($($tail)*);
+    };
+}
 
 pub struct RpcImpl {
     // account provider used for signing transactions
