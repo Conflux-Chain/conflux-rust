@@ -1095,7 +1095,7 @@ impl Cfx for CfxHandler {
         to self.common {
             fn best_block_hash(&self) -> JsonRpcResult<H256>;
             fn block_by_epoch_number(
-                &self, epoch_num: EpochNumber, include_txs: bool) -> JsonRpcResult<Option<RpcBlock>>;
+                &self, epoch_num: EpochNumber, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;
             fn block_by_hash_with_pivot_assumption(
                 &self, block_hash: H256, pivot_hash: H256, epoch_number: U64)
                 -> JsonRpcResult<RpcBlock>;

@@ -97,7 +97,7 @@ class LightRPCTest(ConfluxTestFramework):
         self.rpc[FULLNODE0].generate_blocks(20)
         sync_blocks(self.nodes)
 
-        self.log.info(f"Checking cfx_getNextNonce results...")
+        self.log.info(f"Checking cfx_getNextNonce...")
 
         full_nonce = self.nodes[FULLNODE0].cfx_getNextNonce(address)
         assert_equal(full_nonce, hex(NUM_TXS))
@@ -111,7 +111,9 @@ class LightRPCTest(ConfluxTestFramework):
         # light nodes do not retrieve receipts for block queries
         # so fields related to execution results are not filled
 
-        block['gasUsed'] = None
+        # full nodes will use '0x0' for empty blocks and None
+        # for transactions not executed yet
+        block['gasUsed'] = '0x0' if block['gasUsed'] == '0x0' else None
 
         for tx in block['transactions']:
             if type(tx) is not dict: continue
@@ -139,7 +141,7 @@ class LightRPCTest(ConfluxTestFramework):
         self.rpc[FULLNODE0].generate_blocks(20) # make sure txs are executed
         sync_blocks(self.nodes)
 
-        self.log.info(f"Checking cfx_GetBlockByHash results...")
+        self.log.info(f"Checking cfx_GetBlockByHash...")
 
         block = self.rpc[FULLNODE0].block_by_hash(block_hash, False)
         light_block = self.rpc[LIGHTNODE].block_by_hash(block_hash, False)
@@ -150,6 +152,30 @@ class LightRPCTest(ConfluxTestFramework):
         self.assert_blocks_equal(light_block, block)
 
         self.log.info(f"Pass -- cfx_GetBlockByHash")
+
+        self.log.info(f"Checking cfx_getBlockByEpochNumber...")
+
+        # NOTE: do not use "latest_state" or "latest_mined" as these
+        # will point to different epochs on full and light nodes
+        block_epoch = block['height']
+
+        block = self.rpc[FULLNODE0].block_by_epoch(block_epoch, False)
+        light_block = self.rpc[LIGHTNODE].block_by_epoch(block_epoch, False)
+        self.assert_blocks_equal(light_block, block)
+
+        block = self.rpc[FULLNODE0].block_by_epoch(block_epoch, True)
+        light_block = self.rpc[LIGHTNODE].block_by_epoch(block_epoch, True)
+        self.assert_blocks_equal(light_block, block)
+
+        block = self.rpc[FULLNODE0].block_by_epoch("latest_checkpoint", False)
+        light_block = self.rpc[LIGHTNODE].block_by_epoch("latest_checkpoint", False)
+        self.assert_blocks_equal(light_block, block)
+
+        block = self.rpc[FULLNODE0].block_by_epoch("latest_checkpoint", True)
+        light_block = self.rpc[LIGHTNODE].block_by_epoch("latest_checkpoint", True)
+        self.assert_blocks_equal(light_block, block)
+
+        self.log.info(f"Pass -- cfx_getBlockByEpochNumber")
 
     def run_test(self):
         self.test_cfx_epoch_number()

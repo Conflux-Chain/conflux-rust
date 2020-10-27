@@ -127,7 +127,7 @@ impl RpcImpl {
 
     pub fn block_by_epoch_number(
         &self, epoch_num: EpochNumber, include_txs: bool,
-    ) -> JsonRpcResult<Option<RpcBlock>> {
+    ) -> RpcResult<Option<RpcBlock>> {
         let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
         info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
