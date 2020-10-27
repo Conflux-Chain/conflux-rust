@@ -302,183 +302,50 @@ pub fn genesis_block(
 
     if need_to_execute {
         const CREATE2FACTORY_TX_INDEX: usize = 1;
+        /*
         const TWO_YEAR_UNLOCK_TX_INDEX: usize = 2;
         const FOUR_YEAR_UNLOCK_TX_INDEX: usize = 3;
         const INVESTOR_FUND_TX_INDEX: usize = 4;
         const TEAM_FUND_TX_INDEX: usize = 5;
         const ECO_FUND_TX_INDEX: usize = 6;
         const COMMUNITY_FUND_TX_INDEX: usize = 7;
+        */
+        let contract_name_list = vec![
+            "CREATE2FACTORY",
+            "TWO_YEAR_UNLOCK",
+            "FOUR_YEAR_UNLOCK",
+            "INVESTOR_FUND",
+            "TEAM_FUND",
+            "ECO_FUND",
+            "COMMUNITY_FUND",
+        ];
+        let mut contract_addresses = Vec::new();
 
-        // Execute create_create2factory_transaction
-        execute_genesis_transaction(
-            genesis_transactions[CREATE2FACTORY_TX_INDEX].as_ref(),
-            &mut state,
-            machine.clone(),
-        );
+        for i in CREATE2FACTORY_TX_INDEX..=contract_name_list.len() {
+            execute_genesis_transaction(
+                genesis_transactions[i].as_ref(),
+                &mut state,
+                machine.clone(),
+            );
 
-        let (create2factory_contract_address, _) = contract_address(
-            CreateContractAddress::FromSenderNonceAndCodeHash,
-            0.into(),
-            &genesis_account_address,
-            &(CREATE2FACTORY_TX_INDEX - 1).into(),
-            &genesis_transactions[CREATE2FACTORY_TX_INDEX].as_ref().data,
-        );
-        info!(
-            "create2factory_contract_address: {:?}",
-            create2factory_contract_address
-        );
-
-        state
-            .set_admin(&create2factory_contract_address, &Address::zero())
-            .expect("");
-
-        // Execute create_genesis_token_manager_two_year_unlock_transaction
-        execute_genesis_transaction(
-            genesis_transactions[TWO_YEAR_UNLOCK_TX_INDEX].as_ref(),
-            &mut state,
-            machine.clone(),
-        );
-
-        let (genesis_token_manager_two_year_unlock_contract_address, _) =
-            contract_address(
+            let (contract_address, _) = contract_address(
                 CreateContractAddress::FromSenderNonceAndCodeHash,
                 0.into(),
                 &genesis_account_address,
-                &(TWO_YEAR_UNLOCK_TX_INDEX - 1).into(),
-                &genesis_transactions[TWO_YEAR_UNLOCK_TX_INDEX].as_ref().data,
+                &(i - 1).into(),
+                &genesis_transactions[i].as_ref().data,
             );
-        info!(
-            "genesis_token_manager_two_year_unlock_contract_address: {:?}",
-            genesis_token_manager_two_year_unlock_contract_address
-        );
-        state
-            .set_admin(
-                &genesis_token_manager_two_year_unlock_contract_address,
-                &Address::zero(),
-            )
-            .expect("");
+            contract_addresses.push(contract_address);
 
-        // Execute create_genesis_token_manager_four_year_unlock_transaction
-        execute_genesis_transaction(
-            genesis_transactions[FOUR_YEAR_UNLOCK_TX_INDEX].as_ref(),
-            &mut state,
-            machine.clone(),
-        );
-
-        let (genesis_token_manager_four_year_unlock_contract_address, _) =
-            contract_address(
-                CreateContractAddress::FromSenderNonceAndCodeHash,
-                0.into(),
-                &genesis_account_address,
-                &(FOUR_YEAR_UNLOCK_TX_INDEX - 1).into(),
-                &genesis_transactions[FOUR_YEAR_UNLOCK_TX_INDEX]
-                    .as_ref()
-                    .data,
+            state
+                .set_admin(&contract_address, &Address::zero())
+                .expect("");
+            info!(
+                "Genesis {:?} addresses: {:?}",
+                contract_name_list[i - 1],
+                contract_addresses
             );
-        info!(
-            "genesis_token_manager_four_year_unlock_contract_address: {:?}",
-            genesis_token_manager_four_year_unlock_contract_address
-        );
-        state
-            .set_admin(
-                &genesis_token_manager_four_year_unlock_contract_address,
-                &Address::zero(),
-            )
-            .expect("");
-
-        // Execute create_genesis_investor_fund_transaction
-        execute_genesis_transaction(
-            genesis_transactions[INVESTOR_FUND_TX_INDEX].as_ref(),
-            &mut state,
-            machine.clone(),
-        );
-
-        let (genesis_investor_fund_contract_address, _) = contract_address(
-            CreateContractAddress::FromSenderNonceAndCodeHash,
-            0.into(),
-            &genesis_account_address,
-            &(INVESTOR_FUND_TX_INDEX - 1).into(),
-            &genesis_transactions[INVESTOR_FUND_TX_INDEX].as_ref().data,
-        );
-        info!(
-            "genesis_investor_fund_contract_address: {:?}",
-            genesis_investor_fund_contract_address
-        );
-        state
-            .set_admin(
-                &genesis_investor_fund_contract_address,
-                &Address::zero(),
-            )
-            .expect("");
-
-        // Execute create_genesis_team_fund_transaction
-        execute_genesis_transaction(
-            genesis_transactions[TEAM_FUND_TX_INDEX].as_ref(),
-            &mut state,
-            machine.clone(),
-        );
-
-        let (genesis_team_fund_contract_address, _) = contract_address(
-            CreateContractAddress::FromSenderNonceAndCodeHash,
-            0.into(),
-            &genesis_account_address,
-            &(TEAM_FUND_TX_INDEX - 1).into(),
-            &genesis_transactions[TEAM_FUND_TX_INDEX].as_ref().data,
-        );
-        info!(
-            "genesis_team_fund_contract_address: {:?}",
-            genesis_team_fund_contract_address
-        );
-        state
-            .set_admin(&genesis_team_fund_contract_address, &Address::zero())
-            .expect("");
-
-        // Execute create_genesis_eco_fund_transaction
-        execute_genesis_transaction(
-            genesis_transactions[ECO_FUND_TX_INDEX].as_ref(),
-            &mut state,
-            machine.clone(),
-        );
-
-        let (genesis_eco_fund_contract_address, _) = contract_address(
-            CreateContractAddress::FromSenderNonceAndCodeHash,
-            0.into(),
-            &genesis_account_address,
-            &(ECO_FUND_TX_INDEX - 1).into(),
-            &genesis_transactions[ECO_FUND_TX_INDEX].as_ref().data,
-        );
-        info!(
-            "genesis_eco_fund_contract_address: {:?}",
-            genesis_eco_fund_contract_address
-        );
-        state
-            .set_admin(&genesis_eco_fund_contract_address, &Address::zero())
-            .expect("");
-
-        // Execute create_genesis_community_fund_transaction
-        execute_genesis_transaction(
-            genesis_transactions[COMMUNITY_FUND_TX_INDEX].as_ref(),
-            &mut state,
-            machine.clone(),
-        );
-
-        let (genesis_community_fund_contract_address, _) = contract_address(
-            CreateContractAddress::FromSenderNonceAndCodeHash,
-            0.into(),
-            &genesis_account_address,
-            &(COMMUNITY_FUND_TX_INDEX - 1).into(),
-            &genesis_transactions[COMMUNITY_FUND_TX_INDEX].as_ref().data,
-        );
-        info!(
-            "genesis_community_fund_contract_address: {:?}",
-            genesis_community_fund_contract_address
-        );
-        state
-            .set_admin(
-                &genesis_community_fund_contract_address,
-                &Address::zero(),
-            )
-            .expect("");
+        }
     }
 
     state.clean_account(&genesis_account_address);
