@@ -151,21 +151,25 @@ class LightRPCTest(ConfluxTestFramework):
         light_block = self.rpc[LIGHTNODE].block_by_hash(block_hash, True)
         self.assert_blocks_equal(light_block, block)
 
+        block_1_epoch = block['height']
+        block_1_hash = block['hash']
+
         self.log.info(f"Pass -- cfx_GetBlockByHash")
+
+        # --------------------------
 
         self.log.info(f"Checking cfx_getBlockByEpochNumber...")
 
+        block = self.rpc[FULLNODE0].block_by_epoch(block_1_epoch, False)
+        light_block = self.rpc[LIGHTNODE].block_by_epoch(block_1_epoch, False)
+        self.assert_blocks_equal(light_block, block)
+
+        block = self.rpc[FULLNODE0].block_by_epoch(block_1_epoch, True)
+        light_block = self.rpc[LIGHTNODE].block_by_epoch(block_1_epoch, True)
+        self.assert_blocks_equal(light_block, block)
+
         # NOTE: do not use "latest_state" or "latest_mined" as these
         # will point to different epochs on full and light nodes
-        block_epoch = block['height']
-
-        block = self.rpc[FULLNODE0].block_by_epoch(block_epoch, False)
-        light_block = self.rpc[LIGHTNODE].block_by_epoch(block_epoch, False)
-        self.assert_blocks_equal(light_block, block)
-
-        block = self.rpc[FULLNODE0].block_by_epoch(block_epoch, True)
-        light_block = self.rpc[LIGHTNODE].block_by_epoch(block_epoch, True)
-        self.assert_blocks_equal(light_block, block)
 
         block = self.rpc[FULLNODE0].block_by_epoch("latest_checkpoint", False)
         light_block = self.rpc[LIGHTNODE].block_by_epoch("latest_checkpoint", False)
@@ -175,7 +179,30 @@ class LightRPCTest(ConfluxTestFramework):
         light_block = self.rpc[LIGHTNODE].block_by_epoch("latest_checkpoint", True)
         self.assert_blocks_equal(light_block, block)
 
+        block_2_epoch = block['height']
+        block_2_hash = block['hash']
+
         self.log.info(f"Pass -- cfx_getBlockByEpochNumber")
+
+        # --------------------------
+
+        self.log.info(f"Checking cfx_getBlockByHashWithPivotAssumption...")
+
+        # NOTE: do not use "latest_state" or "latest_mined" as these
+        # will point to different epochs on full and light nodes
+
+        block = self.nodes[FULLNODE0].cfx_getBlockByHashWithPivotAssumption(block_1_hash, block_1_hash, block_1_epoch)
+        light_block = self.nodes[LIGHTNODE].cfx_getBlockByHashWithPivotAssumption(block_1_hash, block_1_hash, block_1_epoch)
+        self.assert_blocks_equal(light_block, block)
+
+        block = self.nodes[FULLNODE0].cfx_getBlockByHashWithPivotAssumption(block_2_hash, block_2_hash, block_2_epoch)
+        light_block = self.nodes[LIGHTNODE].cfx_getBlockByHashWithPivotAssumption(block_2_hash, block_2_hash, block_2_epoch)
+        self.assert_blocks_equal(light_block, block)
+
+        assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_getBlockByHashWithPivotAssumption, block_1_hash, block_2_hash, block_1_epoch)
+        assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_getBlockByHashWithPivotAssumption, block_1_hash, block_1_hash, block_2_epoch)
+
+        self.log.info(f"Pass -- cfx_getBlockByHashWithPivotAssumption")
 
     def run_test(self):
         self.test_cfx_epoch_number()

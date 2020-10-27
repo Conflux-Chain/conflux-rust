@@ -101,7 +101,7 @@ pub trait Cfx {
     #[rpc(name = "cfx_getBlockByHashWithPivotAssumption")]
     fn block_by_hash_with_pivot_assumption(
         &self, block_hash: H256, pivot_hash: H256, epoch_number: U64,
-    ) -> JsonRpcResult<Block>;
+    ) -> BoxFuture<Block>;
 
     /// Returns block with given epoch number.
     #[rpc(name = "cfx_getBlockByEpochNumber")]
