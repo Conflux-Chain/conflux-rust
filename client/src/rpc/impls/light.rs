@@ -607,7 +607,10 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            let block = light.retrieve_block(hash).await?.unwrap();
+            let block = match light.retrieve_block(hash).await? {
+                None => return Ok(None),
+                Some(b) => b,
+            };
 
             let inner = consensus_graph
                 .as_any()
@@ -652,7 +655,10 @@ impl RpcImpl {
                 .map_err(RpcError::invalid_params)?;
 
             // retrieve block body
-            let block = light.retrieve_block(block_hash).await?.unwrap();
+            let block = light
+                .retrieve_block(block_hash)
+                .await?
+                .ok_or_else(|| RpcError::invalid_params("Block not found"))?;
 
             let inner = consensus_graph
                 .as_any()
@@ -696,7 +702,11 @@ impl RpcImpl {
                 .get_pivot_hash_from_epoch_number(epoch)
                 .map_err(RpcError::invalid_params)?;
 
-            let block = light.retrieve_block(hash).await?.unwrap();
+            // retrieve block body
+            let block = match light.retrieve_block(hash).await? {
+                None => return Ok(None),
+                Some(b) => b,
+            };
 
             let inner = consensus_graph
                 .as_any()
