@@ -19,7 +19,8 @@ Use `mining_type` to allow start CPU mining or disable mining manually.
 - CIP-10 Base mining reward finalization.
 - CIP-12 Allow non-zero collateral contract to be killed.
 - CIP-13 Use Big-Endian MPT Keys.
-- CIP-16 Collect suicide logic at the end of transaction processing
+- CIP-16 Collect suicide logic at the end of transaction processing.
+- CIP-26 Use timestamp from pivot block as TIMESTAMP (opcode 42).
 - CIP-27 Remove sponsor whitelist keys at contract deletion.
 - Set snapshot epoch count to 2000.
 - Update code collateral calculation to a more reasonable method.
