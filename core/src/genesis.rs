@@ -319,7 +319,6 @@ pub fn genesis_block(
             "ECO_FUND",
             "COMMUNITY_FUND",
         ];
-        let mut contract_addresses = Vec::new();
 
         for i in CREATE2FACTORY_TX_INDEX..=contract_name_list.len() {
             execute_genesis_transaction(
@@ -335,7 +334,6 @@ pub fn genesis_block(
                 &(i - 1).into(),
                 &genesis_transactions[i].as_ref().data,
             );
-            contract_addresses.push(contract_address);
 
             state
                 .set_admin(&contract_address, &Address::zero())
@@ -343,7 +341,7 @@ pub fn genesis_block(
             info!(
                 "Genesis {:?} addresses: {:?}",
                 contract_name_list[i - 1],
-                contract_addresses
+                contract_address
             );
         }
     }
