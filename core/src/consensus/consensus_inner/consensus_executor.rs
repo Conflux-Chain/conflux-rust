@@ -1120,7 +1120,7 @@ impl ConsensusExecutionHandler {
             let mut env = Env {
                 number: block_number,
                 author: block.block_header.author().clone(),
-                timestamp: block.block_header.timestamp(),
+                timestamp: pivot_block.block_header.timestamp(),
                 difficulty: block.block_header.difficulty().clone(),
                 accumulated_gas_used: U256::zero(),
                 last_hash: last_block_hash,
