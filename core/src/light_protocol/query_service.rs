@@ -19,7 +19,10 @@ use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
     light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME},
 };
-use cfx_types::{BigEndianHash, Bloom, H160, H256, KECCAK_EMPTY_BLOOM, U256};
+use cfx_types::{
+    address_util::AddressUtil, BigEndianHash, Bloom, H160, H256,
+    KECCAK_EMPTY_BLOOM, U256,
+};
 use futures::{
     future::{self, Either},
     stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
@@ -292,6 +295,11 @@ impl QueryService {
         &self, epoch: EpochNumber, address: H160,
     ) -> Result<Option<Vec<u8>>, RpcError> {
         debug!("get_code epoch={:?} address={:?}", epoch, address);
+
+        // do not query peers for non-contract addresses
+        if !address.is_contract_address() && !address.is_builtin_address() {
+            return Ok(None);
+        }
 
         let epoch = self.get_height_from_epoch_number(epoch)?;
         let key = Self::account_key(&address);
