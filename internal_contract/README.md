@@ -68,13 +68,9 @@ const cfx = new Conflux({
   defaultGas: 1000000,
   logger: console,
 });
-const account = cfx.Account(PRIVATE_KEY); // create account instance
+const account = new PrivateKeyAccount(PRIVATE_KEY); // create account instance
 
-const admin_contract_addr = '0x0888000000000000000000000000000000000000';
-const admin_contract = cfx.Contract({
-  abi: require('./contracts/admin.abi.json'),
-  address: admin_contract_addr,
-});
+const admin_contract = cfx.InternalContract('AdminControl')
 // to change administrator
 admin_contract.setAdmin(contract_addr, new_admin).sendTransaction({
   from: account,
@@ -184,13 +180,9 @@ const cfx = new Conflux({
   defaultGas: 1000000,
   logger: console,
 });
-const account = cfx.Account(PRIVATE_KEY); // create account instance
+const account = new PrivateKeyAccount(PRIVATE_KEY); // create account instance
 
-const sponsor_contract_addr = '0x0888000000000000000000000000000000000001';
-const sponsor_contract = cfx.Contract({
-  abi: require('./contracts/sponsor.abi.json'),
-  address: sponsor_contract_addr,
-});
+const sponsor_contract = cfx.InternalContract('SponsorWhitelistControl');
 sponsor_contract.setSponsorForGas(contract_addr, your_upper_bound).sendTransaction({
   from: account,
   value: your_sponsor_value
@@ -264,13 +256,9 @@ const cfx = new Conflux({
   defaultGas: 1000000,
   logger: console,
 });
-const account = cfx.Account(PRIVATE_KEY); // create account instance
+const account = new PrivateKeyAccount(PRIVATE_KEY); // create account instance
 
-const staking_contract_addr = '0x0888000000000000000000000000000000000002';
-const staking_contract = cfx.Contract({
-  abi: require('./contracts/staking.abi.json'),
-  address: staking_contract_addr,
-});
+const staking_contract = cfx.InternalContract('Staking');
 // deposit some amount of tokens
 staking_contract.deposit(your_number_of_tokens).sendTransaction({
   from: account,
