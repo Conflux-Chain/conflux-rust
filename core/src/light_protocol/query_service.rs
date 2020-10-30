@@ -19,7 +19,10 @@ use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
     light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME},
 };
-use cfx_types::{BigEndianHash, Bloom, H160, H256, KECCAK_EMPTY_BLOOM, U256};
+use cfx_types::{
+    address_util::AddressUtil, BigEndianHash, Bloom, H160, H256,
+    KECCAK_EMPTY_BLOOM, U256,
+};
 use futures::{
     future::{self, Either},
     stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
@@ -28,8 +31,8 @@ use network::{service::ProtocolVersion, NetworkContext, NetworkService};
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
-    Account, BlockReceipts, CodeInfo, EpochNumber, Receipt, SignedTransaction,
-    StorageKey, StorageRoot, StorageValue, TransactionIndex,
+    Account, Block, BlockReceipts, CodeInfo, EpochNumber, Receipt,
+    SignedTransaction, StorageKey, StorageRoot, StorageValue, TransactionIndex,
 };
 use rlp::Rlp;
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
@@ -138,7 +141,7 @@ impl QueryService {
 
         with_timeout(
             *MAX_POLL_TIME,
-            format!("Timeout while retrieving state entry for epoch {} with key {:?}", epoch, key),
+            format!("Timeout while retrieving state entry for epoch {:?} with key {:?}", epoch, key),
             self.with_io(|io| self.handler.state_entries.request_now(io, epoch, key)),
         )
         .await
@@ -179,7 +182,7 @@ impl QueryService {
 
         with_timeout(
             *MAX_POLL_TIME,
-            format!("Timeout while retrieving bloom for epoch {}", epoch),
+            format!("Timeout while retrieving bloom for epoch {:?}", epoch),
             self.handler.blooms.request(epoch),
         )
         .await
@@ -193,26 +196,57 @@ impl QueryService {
 
         with_timeout(
             *MAX_POLL_TIME,
-            format!("Timeout while retrieving receipts for epoch {}", epoch),
+            format!("Timeout while retrieving receipts for epoch {:?}", epoch),
             self.handler.receipts.request(epoch),
         )
         .await
         .map(|receipts| (epoch, receipts))
     }
 
-    async fn retrieve_block_txs(
-        &self, log: LocalizedLogEntry,
-    ) -> Result<(LocalizedLogEntry, Vec<SignedTransaction>), Error> {
-        trace!("retrieve_block_txs log = {:?}", log);
-        let hash = log.block_hash;
+    pub async fn retrieve_block_txs(
+        &self, hash: H256,
+    ) -> Result<Vec<SignedTransaction>, Error> {
+        trace!("retrieve_block_txs hash = {:?}", hash);
 
         with_timeout(
             *MAX_POLL_TIME,
-            format!("Timeout while retrieving block txs for block {}", hash),
+            format!("Timeout while retrieving block txs for block {:?}", hash),
             self.handler.block_txs.request(hash),
         )
         .await
-        .map(|block_txs| (log, block_txs))
+    }
+
+    async fn retrieve_block_txs_for_log(
+        &self, log: LocalizedLogEntry,
+    ) -> Result<(LocalizedLogEntry, Vec<SignedTransaction>), Error> {
+        trace!("retrieve_block_txs_for_log log = {:?}", log);
+
+        self.retrieve_block_txs(log.block_hash)
+            .await
+            .map(|block_txs| (log, block_txs))
+    }
+
+    pub async fn retrieve_block(
+        &self, hash: H256,
+    ) -> Result<Option<Block>, Error> {
+        let maybe_block_header = self
+            .consensus
+            .get_data_manager()
+            .block_header_by_hash(&hash);
+
+        let block_header = match maybe_block_header {
+            None => return Ok(None),
+            Some(h) => (*h).clone(),
+        };
+
+        let transactions = self
+            .retrieve_block_txs(hash)
+            .await?
+            .into_iter()
+            .map(Arc::new)
+            .collect();
+
+        Ok(Some(Block::new(block_header, transactions)))
     }
 
     async fn retrieve_tx_info(
@@ -222,7 +256,7 @@ impl QueryService {
 
         with_timeout(
             *MAX_POLL_TIME,
-            format!("Timeout while retrieving tx info for tx {}", hash),
+            format!("Timeout while retrieving tx info for tx {:?}", hash),
             self.with_io(|io| self.handler.tx_infos.request_now(io, hash)),
         )
         .await
@@ -261,6 +295,11 @@ impl QueryService {
         &self, epoch: EpochNumber, address: H160,
     ) -> Result<Option<Vec<u8>>, RpcError> {
         debug!("get_code epoch={:?} address={:?}", epoch, address);
+
+        // do not query peers for non-contract addresses
+        if !address.is_contract_address() && !address.is_builtin_address() {
+            return Ok(None);
+        }
 
         let epoch = self.get_height_from_epoch_number(epoch)?;
         let key = Self::account_key(&address);
@@ -394,7 +433,10 @@ impl QueryService {
 
         with_timeout(
             *MAX_POLL_TIME,
-            format!("Timeout while retrieving transaction with hash {}", hash),
+            format!(
+                "Timeout while retrieving transaction with hash {:?}",
+                hash
+            ),
             self.with_io(|io| self.handler.txs.request_now(io, hash)),
         )
         .await
@@ -523,7 +565,7 @@ impl QueryService {
         Ok(latest_verifiable)
     }
 
-    fn get_height_from_epoch_number(
+    pub fn get_height_from_epoch_number(
         &self, epoch: EpochNumber,
     ) -> Result<u64, FilterError> {
         let latest_verifiable = self.get_latest_verifiable_epoch_number()?;
@@ -697,7 +739,7 @@ impl QueryService {
             // retrieve block txs
             .map(|res| match res {
                 Err(e) => Either::Left(future::err(e)),
-                Ok(log) => Either::Right(self.retrieve_block_txs(log)),
+                Ok(log) => Either::Right(self.retrieve_block_txs_for_log(log)),
             })
             // --> Stream<TryFuture<(LocalizedLogEntry, Vec<SignedTransaction>)>>
 
