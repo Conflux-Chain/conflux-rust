@@ -26,7 +26,7 @@ class VoteTokenTest(SmartContractBenchBase):
         self.num_of_options = 5
         self.gas_price = 1
         self.gas = CONTRACT_DEFAULT_GAS
-        self.tx_conf = {"gas":int_to_hex(self.gas), "gasPrice":int_to_hex(self.gas_price), "chainId":0}
+        self.tx_conf = {"gas":int_to_hex(self.gas), "gasPrice":int_to_hex(self.gas_price)}
 
     def setup_contract(self):
         file_dir = os.path.dirname(os.path.realpath(__file__))
@@ -46,10 +46,10 @@ class VoteTokenTest(SmartContractBenchBase):
         self.call_contract_function(self.vote_contract, "createIssue",
                                     [i, Web3.toChecksumAddress(self.token_address), [j for j in range(self.num_of_options)],
                                      [Web3.toChecksumAddress(priv_to_addr(acc)) for acc in self.accounts], "v"],
-                                    self.default_account_key, self.vote_address, True, True, storage_limit=64)
-        for i in range(self.num_of_options):
+                                    self.default_account_key, self.vote_address, True, True, storage_limit=5120)
+        for _ in range(self.num_of_options):
             self.call_contract_function(self.vote_contract, "vote", [i, random.randint(0, self.num_of_options-1)],
-                                        self.default_account_key, self.vote_address, True, True, storage_limit=64)
+                                        self.default_account_key, self.vote_address, True, True, storage_limit=5120)
 
 
 if __name__ == "__main__":

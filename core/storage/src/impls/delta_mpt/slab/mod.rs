@@ -234,12 +234,7 @@ impl<T> EntryTrait for Entry<T> {
 
     fn from_vacant_index(index: usize) -> Self { Entry::Vacant(index) }
 
-    fn is_vacant(&self) -> bool {
-        match &self {
-            Entry::Vacant(_) => true,
-            _ => false,
-        }
-    }
+    fn is_vacant(&self) -> bool { matches!(self, Entry::Vacant(_)) }
 
     fn get_next_vacant_index(&self) -> usize {
         match *self {

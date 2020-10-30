@@ -89,7 +89,7 @@ class SmartContractBenchBase(ConfluxTestFramework):
         self._send_transaction(transaction, wait, check_status)
         return transaction
 
-    def new_address_and_transfer(self, count=1, amount=100000000000000, wait=False, check_status=False):
+    def new_address_and_transfer(self, count=1, amount=int(1e22), wait=False, check_status=False):
         results = []
         for _ in range(count):
             pri_key, pub_key = ec_random_keys()
