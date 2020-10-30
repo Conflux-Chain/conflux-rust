@@ -720,6 +720,29 @@ impl RpcImpl {
 
         Box::new(fut.boxed().compat())
     }
+
+    pub fn blocks_by_epoch(&self, epoch: EpochNumber) -> RpcResult<Vec<H256>> {
+        info!("RPC Request: cfx_getBlocksByEpoch epoch_number={:?}", epoch);
+
+        let height = self
+            .light
+            .get_height_from_epoch_number(epoch.into())
+            .map_err(|e| e.to_string())
+            .map_err(RpcError::invalid_params)?;
+
+        let hashes = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed")
+            .inner
+            .read()
+            .block_hashes_by_epoch(height)
+            .map_err(|e| e.to_string())
+            .map_err(RpcError::invalid_params)?;
+
+        Ok(hashes)
+    }
 }
 
 pub struct CfxHandler {
@@ -737,7 +760,6 @@ impl Cfx for CfxHandler {
     delegate! {
         to self.common {
             fn best_block_hash(&self) -> RpcResult<H256>;
-            fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<H256>>;
             fn confirmation_risk_by_hash(&self, block_hash: H256) -> RpcResult<Option<U256>>;
             fn get_client_version(&self) -> RpcResult<String>;
             fn get_status(&self) -> RpcResult<RpcStatus>;
@@ -751,6 +773,7 @@ impl Cfx for CfxHandler {
             fn block_by_epoch_number(&self, epoch_num: EpochNumber, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;
             fn block_by_hash_with_pivot_assumption(&self, block_hash: H256, pivot_hash: H256, epoch_number: U64) -> BoxFuture<RpcBlock>;
             fn block_by_hash(&self, hash: H256, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;
+            fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<H256>>;
             fn code(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
             fn collateral_for_storage(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<U256>;
