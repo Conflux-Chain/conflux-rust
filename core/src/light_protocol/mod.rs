@@ -20,10 +20,10 @@ const LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT: u8 = 2;
 pub const LIGHT_PROTO_V1: ProtocolVersion = ProtocolVersion(1);
 pub const LIGHT_PROTO_V2: ProtocolVersion = ProtocolVersion(2);
 
-use error::{handle as handle_error, ErrorKind};
+use error::handle as handle_error;
 
 pub use config::Configuration as LightNodeConfiguration;
-pub use error::Error;
+pub use error::{Error, ErrorKind};
 pub use handler::Handler;
 pub use provider::Provider;
 pub use query_service::QueryService;
