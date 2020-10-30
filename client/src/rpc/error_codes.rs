@@ -136,7 +136,7 @@ pub mod codes {
 pub fn unimplemented(details: Option<String>) -> Error {
     Error {
         code: ErrorCode::ServerError(codes::UNSUPPORTED),
-        message: "This request is not implemented yet. Please create an issue on Github repo.".into(),
+        message: "This API is not implemented yet".into(),
         data: details.map(Value::String),
     }
 }
