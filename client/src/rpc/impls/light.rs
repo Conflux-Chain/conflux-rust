@@ -5,7 +5,7 @@
 use cfx_types::{H160, H256, H520, U128, U256, U64};
 use cfxcore::{
     block_data_manager::BlockDataManager,
-    light_protocol::query_service::TxInfo,
+    light_protocol::{query_service::TxInfo, Error as LightError, ErrorKind},
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     ConsensusGraph, LightQueryService, PeerInfo, SharedConsensusGraph,
 };
@@ -504,6 +504,16 @@ impl RpcImpl {
             //  return an RpcReceipt directly after splitting cfxcore into
             //  smaller crates. It's impossible now because of circular
             //  dependency.
+
+            // return `null` on timeout
+            let tx_info = match light.get_tx_info(hash).await {
+                Ok(t) => t,
+                Err(LightError(ErrorKind::Timeout(_), _)) => return Ok(None),
+                Err(LightError(e, _)) => {
+                    return Err(RpcError::invalid_params(e.to_string()))
+                }
+            };
+
             let TxInfo {
                 tx,
                 maybe_block_number,
@@ -512,11 +522,7 @@ impl RpcImpl {
                 maybe_epoch,
                 maybe_state_root,
                 prior_gas_used,
-            } = light
-                .get_tx_info(hash)
-                .await
-                .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
-                .map_err(RpcError::invalid_params)?;
+            } = tx_info;
 
             if maybe_block_number.is_none() {
                 return Ok(None);
