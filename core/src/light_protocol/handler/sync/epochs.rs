@@ -139,7 +139,7 @@ impl Epochs {
     }
 
     #[inline]
-    fn best_peer_epoch(&self) -> u64 {
+    pub fn best_peer_epoch(&self) -> u64 {
         self.peers.fold(0, |current_best, state| {
             let best_for_peer = state.read().best_epoch;
             cmp::max(current_best, best_for_peer)

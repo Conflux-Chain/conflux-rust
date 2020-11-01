@@ -436,12 +436,32 @@ impl Handler {
 
     #[inline]
     fn print_stats(&self) {
-        info!(
-            "Catch-up mode: {}, latest epoch: {}, latest verified: {}",
-            self.catch_up_mode(),
-            self.consensus.best_epoch_number(),
-            self.witnesses.latest_verified()
-        );
+        match self.catch_up_mode() {
+            true => {
+                let latest_epoch = self.consensus.best_epoch_number();
+                let best_peer_epoch = self.epochs.best_peer_epoch();
+
+                let progress = if best_peer_epoch == 0 {
+                    0.0
+                } else {
+                    100.0 * (latest_epoch as f64) / (best_peer_epoch as f64)
+                };
+
+                info!(
+                    "Catch-up mode: true, latest epoch: {} / {} ({:.2}%), latest verified: {}, inserted header count: {}",
+                    latest_epoch,
+                    best_peer_epoch,
+                    progress,
+                    self.witnesses.latest_verified(),
+                    self.headers.inserted_count.load(Ordering::Relaxed),
+                )
+            }
+            false => info!(
+                "Catch-up mode: false, latest epoch: {}, latest verified: {}",
+                self.consensus.best_epoch_number(),
+                self.witnesses.latest_verified(),
+            ),
+        }
     }
 
     #[inline]
