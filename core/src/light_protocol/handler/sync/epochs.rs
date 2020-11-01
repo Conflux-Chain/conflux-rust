@@ -36,6 +36,8 @@ struct Statistics {
     received: u64,
     unexpected: u64,
     timeout: u64,
+    latest_requested: u64,
+    peer_best: u64,
 }
 
 #[derive(Debug)]
@@ -153,6 +155,8 @@ impl Epochs {
                 received: self.received_count.load(Ordering::Relaxed),
                 unexpected: self.unexpected_count.load(Ordering::Relaxed),
                 timeout: self.timeout_count.load(Ordering::Relaxed),
+                latest_requested: self.latest.load(Ordering::Relaxed),
+                peer_best: self.best_peer_epoch(),
             }
         );
     }

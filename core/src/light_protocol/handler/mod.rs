@@ -31,7 +31,7 @@ use crate::{
     Notifications, UniqueId,
 };
 use cfx_parameters::light::{
-    CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, SYNC_PERIOD,
+    CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, HEARTBEAT_PERIOD, SYNC_PERIOD,
 };
 use cfx_types::H256;
 use io::TimerToken;
@@ -58,6 +58,7 @@ use throttling::token_bucket::TokenBucketManager;
 const SYNC_TIMER: TimerToken = 0;
 const REQUEST_CLEANUP_TIMER: TimerToken = 1;
 const LOG_STATISTICS_TIMER: TimerToken = 2;
+const HEARTBEAT_TIMER: TimerToken = 3;
 
 /// Handler is responsible for maintaining peer meta-information and
 /// dispatching messages to the query and sync sub-handlers.
@@ -490,6 +491,30 @@ impl Handler {
     }
 
     #[inline]
+    pub fn send_heartbeat(&self, io: &dyn NetworkContext) {
+        let peer_ids = self.peers.all_peers_satisfying(|_| true);
+
+        for peer in peer_ids {
+            let protocol_version = match self.get_existing_peer_state(&peer) {
+                Ok(state) => state.read().protocol_version,
+                Err(_) => {
+                    warn!("Peer not found for heartbeat: {:?}", peer);
+                    continue;
+                }
+            };
+
+            debug!("send_heartbeat peer={:?}", peer);
+
+            if let Err(e) = self.send_status(io, &peer, protocol_version) {
+                warn!(
+                    "Error while sending heartbeat to peer {:?}: {:?}",
+                    peer, e
+                );
+            }
+        }
+    }
+
+    #[inline]
     pub fn send_raw_tx(
         &self, io: &dyn NetworkContext, peer: &NodeId, raw: Vec<u8>,
     ) -> Result<()> {
@@ -501,7 +526,7 @@ impl Handler {
     fn on_status_v2(
         &self, io: &dyn NetworkContext, peer: &NodeId, status: StatusPongV2,
     ) -> Result<()> {
-        info!("on_status (v2) peer={:?} status={:?}", peer, status);
+        debug!("on_status (v2) peer={:?} status={:?}", peer, status);
 
         self.validate_peer_type(status.node_type)?;
         self.validate_genesis_hash(status.genesis_hash)?;
@@ -529,7 +554,7 @@ impl Handler {
         status: StatusPongDeprecatedV1,
     ) -> Result<()>
     {
-        info!("on_status (v1) peer={:?} status={:?}", peer, status);
+        debug!("on_status (v1) peer={:?} status={:?}", peer, status);
 
         self.on_status_v2(
             io,
@@ -903,6 +928,9 @@ impl NetworkProtocolHandler for Handler {
 
         io.register_timer(LOG_STATISTICS_TIMER, Duration::from_secs(1))
             .expect("Error registering log statistics timer");
+
+        io.register_timer(HEARTBEAT_TIMER, *HEARTBEAT_PERIOD)
+            .expect("Error registering heartbeat timer");
     }
 
     fn on_message(&self, io: &dyn NetworkContext, peer: &NodeId, raw: &[u8]) {
@@ -985,6 +1013,9 @@ impl NetworkProtocolHandler for Handler {
                 self.tx_infos.print_stats();
                 self.txs.print_stats();
                 self.witnesses.print_stats();
+            }
+            HEARTBEAT_TIMER => {
+                self.send_heartbeat(io);
             }
             // TODO(thegaram): add other timers (e.g. data_man gc)
             _ => warn!("Unknown timer {} triggered.", timer),
