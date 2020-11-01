@@ -29,6 +29,3 @@ core/src/light_protocol/message/message.rs	@yangzhe1990
 core/src/light_protocol/mod.rs			@yangzhe1990
 core/src/sync/message/message.rs		@yangzhe1990
 core/src/sync/mod.rs			@yangzhe1990
-
-
-changelogs/*.md	@Conflux-Chain/spec-change-review
