@@ -59,6 +59,7 @@ const SYNC_TIMER: TimerToken = 0;
 const REQUEST_CLEANUP_TIMER: TimerToken = 1;
 const LOG_STATISTICS_TIMER: TimerToken = 2;
 const HEARTBEAT_TIMER: TimerToken = 3;
+const TOTAL_WEIGHT_IN_PAST_TIMER: TimerToken = 4;
 
 /// Handler is responsible for maintaining peer meta-information and
 /// dispatching messages to the query and sync sub-handlers.
@@ -931,6 +932,9 @@ impl NetworkProtocolHandler for Handler {
 
         io.register_timer(HEARTBEAT_TIMER, *HEARTBEAT_PERIOD)
             .expect("Error registering heartbeat timer");
+
+        io.register_timer(TOTAL_WEIGHT_IN_PAST_TIMER, Duration::from_secs(20))
+            .expect("Error registering total weight in past timer");
     }
 
     fn on_message(&self, io: &dyn NetworkContext, peer: &NodeId, raw: &[u8]) {
@@ -1016,6 +1020,9 @@ impl NetworkProtocolHandler for Handler {
             }
             HEARTBEAT_TIMER => {
                 self.send_heartbeat(io);
+            }
+            TOTAL_WEIGHT_IN_PAST_TIMER => {
+                self.consensus.update_total_weight_delta_heartbeat();
             }
             // TODO(thegaram): add other timers (e.g. data_man gc)
             _ => warn!("Unknown timer {} triggered.", timer),
