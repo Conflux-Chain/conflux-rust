@@ -274,6 +274,9 @@ pub mod light {
         /// Frequency of checking request timeouts.
         pub static ref CLEANUP_PERIOD: Duration = Duration::from_secs(1);
 
+        /// Frequency of sending StatusPing message to peers.
+        pub static ref HEARTBEAT_PERIOD: Duration = Duration::from_secs(30);
+
         /// Request timeouts.
         pub static ref EPOCH_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
         pub static ref HEADER_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
