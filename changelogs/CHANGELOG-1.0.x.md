@@ -1,3 +1,12 @@
+# 1.0.1
+
+## Light nodes
+
+- Fix the following RPCs on light nodes: `cfx_epochNumber`, `cfx_getNextNonce`, `cfx_GetBlockByHash`, `cfx_getBlockByEpochNumber`, `cfx_getBlockByHashWithPivotAssumption`, `cfx_getBlocksByEpoch`.
+- Make `cfx_getTransactionReceipt` return null instead of timeout on light nodes to increasse compatibility with js-conflux-sdk.
+- Fix bug where light nodes disconnect peers if the user queries the genesis block.
+- Add periodic heartbeat messages to the light protocol.
+
 # 1.0.0
 
 ## Improvement
@@ -24,12 +33,3 @@ Use `mining_type` to allow start CPU mining or disable mining manually.
 - CIP-27 Remove sponsor whitelist keys at contract deletion.
 - Set snapshot epoch count to 2000.
 - Update code collateral calculation to a more reasonable method.
-
-# 1.0.1
-
-## Light nodes
-
-- Fix the following RPCs on light nodes: `cfx_epochNumber`, `cfx_getNextNonce`, `cfx_GetBlockByHash`, `cfx_getBlockByEpochNumber`, `cfx_getBlockByHashWithPivotAssumption`, `cfx_getBlocksByEpoch`.
-- Make `cfx_getTransactionReceipt` return null instead of timeout on light nodes to increasse compatibility with js-conflux-sdk.
-- Fix bug where light nodes disconnect peers if the user queries the genesis block.
-- Add periodic heartbeat messages to the light protocol.
