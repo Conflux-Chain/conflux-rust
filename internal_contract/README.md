@@ -97,7 +97,7 @@ The **SponsorControl** contract keeps the following information for each user-es
 + `sponsor_balance_for_gas`: this is the balance of subsidy available for gas consumption;
 + `sponsor_balance_for_collateral`: this is the balance of subsidy available for collateral for storage;
 + `sponsor_limit_for_gas_fee`: this is the upper bound for the gas fee subsidy paid for every sponsored transaction;
-+ `whitelist`: this is the list of normal accounts that are eligible for the subsidy, where a special all-zero address refers to all normal accounts. Only the contract itself has the authority to change this list.
++ `whitelist`: this is the list of normal accounts that are eligible for the subsidy, where a special all-zero address refers to all normal accounts. Only the contract itself and the admin have the authority to change this list.
 
 There are two resources that can be sponsored: gas consumption and storage collateral.
 
@@ -111,27 +111,27 @@ When a contract is created, its `sponsor_for_gas` and `sponsor_for_collateral` w
 To replace the `sponsor_for_gas` of a contract, the new sponsor should call function `setSponsorForGas(address contractAddr, uint upperBound)` and transfer to the internal contract a fund. The following conditions are required to replace sponsor for gas:
 
 1. The transferred fund should more than the current `sponsor_balance_for_gas` of the contract.
-2. The new value for `sponsor_limit_for_gas_fee` (specified the `upperBound` parameter) should be no less than the old sponsor’s limit unless the old `sponsor_limit_for_gas_fee` cannot afford the old limit.
+2. The new value for `sponsor_limit_for_gas_fee` (specified the `upperBound` parameter) should be no less than the old sponsor’s limit unless the old `sponsor_balance_for_gas` cannot afford the old `sponsor_limit_for_gas_fee`.
 3. The transferred fund should be >= 1000 times of the new limit, so that it is sufficient to subsidize at least `1000` transactions calling the contract.
 
 If the above conditions are satisfied, the remaining `sponsor_balance_for_gas` will be refunded to the old `sponsor_for_gas`, and the fund transferred to the internal contract will be added to the `sponsor_balance_for_gas` of the contract. Then the `sponsor_for_gas` and `sponsor_limit_for_gas_fee` will be updated according to the new sponsor’s specification. Otherwise, an exception will be triggered. 
 
-The replacement of `sponsor_for_collateral` is similar except that there is no analog of the limit for gas fee. The function is `setSponsorForCollateral(address contractAddr)`. The new sponsor should transfer a fund more than the fund provided by the current sponsor for collateral of the contract. Then the current `sponsor_for_collateral` will be fully refunded, i.e. the sum of `sponsor_balance_for_collateral` and the total collateral for storage used by the contract, and both collateral sponsorship fields are changed as the new sponsor’s request accordingly. A contract account is also allowed to be a sponsor.
+The replacement of `sponsor_for_collateral` is similar except that there is no analog of the limit for gas fee. The function is `setSponsorForCollateral(address contractAddr)`. The new sponsor should transfer a fund more than the fund provided by the current sponsor for collateral of the contract. Then the current `sponsor_for_collateral` will be fully refunded, i.e. the sum of `sponsor_balance_for_collateral` and the total collateral for storage used by the contract, and both collateral sponsorship fields are changed as the new sponsor’s request accordingly. 
+
+Conflux also allows a contract account to be a sponsor. 
 
 ## Add Sponsor Balance  
 
-The sponsor can provide additional sponsor balance without sponsorship replacement. In this case, the sponsor should also interact with function `setSponsorForGas(address contractAddr, uint upperBound)` or `setSponsorForCollateral(address contractAddr)`, and meet all the requirements expect condition 1. If requirements are satisfied, the transferred fund will be added to sponsor balance and the `sponsor_limit_for_gas_fee` will be updated accordingly.
+The sponsor can provide additional sponsor balance without sponsorship replacement. In this case, the sponsor should also interact with function `setSponsorForGas(address contractAddr, uint upperBound)` or `setSponsorForCollateral(address contractAddr)`, and meet all the requirements except condition 1. If requirements are satisfied, the transferred fund will be added to sponsor balance and the `sponsor_limit_for_gas_fee` will be updated accordingly.
 
 ## Whitelist maintenance
 
 Only the contract itself or contract admin can update the contract whitelist. The sponsors have no rights for changing whitelist. 
 
-A contract can call function `addPrivilege(address[] memory)` to any addresses to the whitelist. It means that if the `sponsor_for_gas` is set, the contract will pay the gas fee for the accounts in the whitelist, and if the `sponsor_for_collateral` is set, the contract will pay the CFS (collateral for storage) for the accounts in the whitelist. The zero address is a special address `0x0000000000000000000000000000000000000000`. If this address is added to whitelist, the contract will not check whether an address is in whitelist while sponsoring a transaction. 
+A contract can call function `addPrivilege(address[] memory)` to any addresses to the whitelist. It means that if the `sponsor_for_gas` is set, the contract will pay the gas fee for the accounts in the whitelist, and if the `sponsor_for_collateral` is set, the contract will pay the CFS (collateral for storage) for the accounts in the whitelist. The zero address is a special address `0x0000000000000000000000000000000000000000`. If this address is added to whitelist, all the transactions calling this contract will be sponsored. A contract can call this function `removePrivilege(address[] memory)` to remove some normal account address from the whitelist. Remove a non-existent address will not cause an error or exception. 
 
 **Corner cases:**
 1. A contract address can also be added to the whitelist, but it is meaningless because only the transaction sender could be sponsored. 
-
-`removePrivilege(address[] memory)`: A contract can call this function to remove some normal account address from the whitelist. Remove a non-existent address will not cause an error or exception. 
 
 The admin of a contract can use the interfaces `addPrivilegeByAdmin(address contractAddr, address[] memory addresses)` and `removePrivilegeByAdmin(address contractAddr, address[] memory addresses)` to maintain the whitelist.
 
@@ -214,7 +214,7 @@ Conflux introduces the staking mechanism for two reasons: first, staking mechani
 
 At a high level, Conflux implements a built-in **Staking** contract to record the staking information of all accounts, for both normal addresses and smart contracts. By sending a transaction to this contract, users (both external users and smart contracts) can deposit/withdraw funds, which is also called stakes in the contract. The interest of staked funds is issued at withdrawal, and depends on both the amount and staking period of the fund being withdrawn.
 
-A user (or a contract) can deposit balance for staking by calling `deposit(uint amount)` and then `amount` Drip will be moved from its `balance` and `stakingBalance`. Notice that this function is non-payable, the user only needs to specify the amount to be staked without transferring any funds to internal contract.
+A user (or a contract) can deposit balance for staking by calling `deposit(uint amount)` and then `amount` Drip will be moved from its `balance` to `stakingBalance`. Notice that this function is non-payable, the user only needs to specify the amount to be staked without transferring any funds to internal contract.
 
 The user can also withdraw balance by `withdraw(uint amount)`. The caller can call this function to withdraw some tokens from the Conflux Internal Staking Contract. This will also trigger interest settlement. The staking capital and staking interest will be transferred to the user's balance in time. All the withdrawal applications will be processed on a first-come-first-served basis according to the sequence of staking orders.
 
@@ -239,12 +239,12 @@ Here we introduce the detailed logic for locking balance by illustrating several
 1. If an account has 10 CFX in `stakingBalance`, if it calls `voteLock(100 * 10^18, x)`, then the transaction will  fail because this account tries to lock 100 CFX but it doesn't have enough `stakingBalance`.   
 2. However, if this account calls `voteLock(8 * 10^18, x)`, then the transaction will success.
 3. After that, if this account calls `voteLock(6 * 10^18, x+y)`, then the transaction will also success. It means that 2 CFX will be unlocked at the end of this year, and another 6 CFX will be locked at the end of next year. 
-4. Then, if this account calls `voteLock(0, x)`, nothing will happen. The transaction will not trigger an error during execution. Instead, the internal contract will regard this call as a meaning less promise: the account will has at least 0 CFX in `stakingBalance`, while the old promises made in step 2 and step 3 will still hold.
+4. Then, if this account calls `voteLock(0, x)`, nothing will happen. The transaction will not trigger an error during execution. The internal contract will regard this call as a meaningless promise: the account will has at least 0 CFX in `stakingBalance`, while the old promises made in step 2 and step 3 will still hold.
 5. If this account calls `voteLock(9 * 10^18, x+y)`, the old two promises will be overwritten because "locking 9 CFX until the end of the next year is a stronger promise".
 
 Locking does not have any influence on the stake interest. When the account withdraw staking balance successfully, the staking interest will be computed as usual. 
 
-At any time, each locked Drip will be assigned a *vote power* from 0 to 1 according to its unlock time. The Drip to be unlocked in more than one year will have a full vote power. See the [Conflux Protocol Specification](https://conflux-protocol.s3-ap-southeast-1.amazonaws.com/tech-specification.pdf) for more details.
+At any time, each locked Drip will be assigned a *vote power* from 0 to 1 according to its unlock time. The Drip to be unlocked in more than one year will have a full vote power. See section 8.3.2 in the [Conflux Protocol Specification](https://conflux-protocol.s3-ap-southeast-1.amazonaws.com/tech-specification.pdf) for more details.
 
 ## Examples
 
