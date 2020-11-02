@@ -229,6 +229,12 @@ impl QueryService {
     pub async fn retrieve_block(
         &self, hash: H256,
     ) -> Result<Option<Block>, Error> {
+        let genesis = self.consensus.get_data_manager().true_genesis.clone();
+
+        if hash == genesis.hash() {
+            return Ok(Some((*genesis).clone()));
+        }
+
         let maybe_block_header = self
             .consensus
             .get_data_manager()

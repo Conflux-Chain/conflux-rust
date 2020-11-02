@@ -93,6 +93,9 @@ class LightRPCTest(ConfluxTestFramework):
         self.rpc[FULLNODE0].generate_blocks(BLAME_CHECK_OFFSET)
         sync_blocks(self.nodes)
 
+        # save genesis hash
+        self.GENESIS_HASH = self.nodes[FULLNODE0].cfx_getBlocksByEpoch("earliest")[-1]
+
     def test_local_methods(self):
         self.log.info(f"Checking cfx_getBestBlockHash...")
         full = self.nodes[FULLNODE0].cfx_getBestBlockHash()
@@ -103,9 +106,15 @@ class LightRPCTest(ConfluxTestFramework):
         # --------------------------
 
         self.log.info(f"Checking cfx_getBlocksByEpoch...")
+
+        full = self.nodes[FULLNODE0].cfx_getBlocksByEpoch("earliest")
+        light = self.nodes[LIGHTNODE].cfx_getBlocksByEpoch("earliest")
+        assert_equal(light, full)
+
         full = self.nodes[FULLNODE0].cfx_getBlocksByEpoch("latest_checkpoint")
         light = self.nodes[LIGHTNODE].cfx_getBlocksByEpoch("latest_checkpoint")
         assert_equal(light, full)
+
         self.log.info(f"Pass -- cfx_getBlocksByEpoch")
 
         # --------------------------
@@ -316,7 +325,11 @@ class LightRPCTest(ConfluxTestFramework):
         self.rpc[FULLNODE0].generate_blocks(BLAME_CHECK_OFFSET) # make sure txs are executed
         sync_blocks(self.nodes)
 
-        self.log.info(f"Checking cfx_GetBlockByHash...")
+        self.log.info(f"Checking cfx_getBlockByHash...")
+
+        block = self.rpc[FULLNODE0].block_by_hash(self.GENESIS_HASH, True)
+        light_block = self.rpc[LIGHTNODE].block_by_hash(self.GENESIS_HASH, True)
+        self.assert_blocks_equal(light_block, block)
 
         block = self.rpc[FULLNODE0].block_by_hash(block_hash, False)
         light_block = self.rpc[LIGHTNODE].block_by_hash(block_hash, False)
@@ -334,6 +347,10 @@ class LightRPCTest(ConfluxTestFramework):
         # --------------------------
 
         self.log.info(f"Checking cfx_getBlockByEpochNumber...")
+
+        block = self.rpc[FULLNODE0].block_by_epoch("earliest", True)
+        light_block = self.rpc[LIGHTNODE].block_by_epoch("earliest", True)
+        self.assert_blocks_equal(light_block, block)
 
         block = self.rpc[FULLNODE0].block_by_epoch(block_1_epoch, False)
         light_block = self.rpc[LIGHTNODE].block_by_epoch(block_1_epoch, False)
@@ -365,6 +382,10 @@ class LightRPCTest(ConfluxTestFramework):
 
         # NOTE: do not use "latest_state" or "latest_mined" as these
         # will point to different epochs on full and light nodes
+
+        block = self.nodes[FULLNODE0].cfx_getBlockByHashWithPivotAssumption(self.GENESIS_HASH, self.GENESIS_HASH, "0x0")
+        light_block = self.nodes[LIGHTNODE].cfx_getBlockByHashWithPivotAssumption(self.GENESIS_HASH, self.GENESIS_HASH, "0x0")
+        self.assert_blocks_equal(light_block, block)
 
         block = self.nodes[FULLNODE0].cfx_getBlockByHashWithPivotAssumption(block_1_hash, block_1_hash, block_1_epoch)
         light_block = self.nodes[LIGHTNODE].cfx_getBlockByHashWithPivotAssumption(block_1_hash, block_1_hash, block_1_epoch)
