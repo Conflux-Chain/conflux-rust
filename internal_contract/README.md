@@ -63,12 +63,10 @@ Consider you have deployed a contract whose address is `contract_addr`. The admi
 ```javascript
 const PRIVATE_KEY = '0xxxxxxx';
 const cfx = new Conflux({
-  url: 'http://testnet-jsonrpc.conflux-chain.org:12537',
-  defaultGasPrice: 100,
-  defaultGas: 1000000,
+  url: 'http://test.confluxrpc.org',
   logger: console,
 });
-const account = new PrivateKeyAccount(PRIVATE_KEY); // create account instance
+const account = cfx.wallet.addPrivateKey(PRIVATE_KEY); // create account instance
 
 const admin_contract = cfx.InternalContract('AdminControl')
 // to change administrator
@@ -175,12 +173,10 @@ After deploying the contract and the address is `contract_addr`, if someone want
 ```javascript
 const PRIVATE_KEY = '0xxxxxxx';
 const cfx = new Conflux({
-  url: 'http://testnet-jsonrpc.conflux-chain.org:12537',
-  defaultGasPrice: 100,
-  defaultGas: 1000000,
+  url: 'http://test.confluxrpc.org',
   logger: console,
 });
-const account = new PrivateKeyAccount(PRIVATE_KEY); // create account instance
+const account = cfx.wallet.addPrivateKey(PRIVATE_KEY); // create account instance
 
 const sponsor_contract = cfx.InternalContract('SponsorWhitelistControl');
 sponsor_contract.setSponsorForGas(contract_addr, your_upper_bound).sendTransaction({
@@ -251,12 +247,10 @@ At any time, each locked Drip will be assigned a *vote power* from 0 to 1 accord
 ```javascript
 const PRIVATE_KEY = '0xxxxxxx';
 const cfx = new Conflux({
-  url: 'http://testnet-jsonrpc.conflux-chain.org:12537',
-  defaultGasPrice: 100,
-  defaultGas: 1000000,
+  url: 'http://test.confluxrpc.org',
   logger: console,
 });
-const account = new PrivateKeyAccount(PRIVATE_KEY); // create account instance
+const account = cfx.wallet.addPrivateKey(PRIVATE_KEY); // create account instance
 
 const staking_contract = cfx.InternalContract('Staking');
 // deposit some amount of tokens
