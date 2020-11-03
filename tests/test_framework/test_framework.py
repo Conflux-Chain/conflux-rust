@@ -552,7 +552,8 @@ class ConfluxTestFramework:
         receipts = [client.get_transaction_receipt(tx.hash_hex()) for tx in all_txs]
         self.log.debug("Receipts received: {}".format(receipts))
         if check_status:
-            map(lambda x: assert_equal(x['outcomeStatus'], 0), receipts)
+            for i in receipts:
+                assert_equal(int(i["outcomeStatus"], 0), 0)
         return receipts
 
 class SkipTest(Exception):

@@ -95,7 +95,7 @@ pub struct Headers {
     graph: Arc<SynchronizationGraph>,
 
     // number of headers inserted into the sync graph
-    inserted_count: AtomicU64,
+    pub inserted_count: AtomicU64,
 
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,

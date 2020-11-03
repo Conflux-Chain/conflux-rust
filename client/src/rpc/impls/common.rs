@@ -127,7 +127,7 @@ impl RpcImpl {
 
     pub fn block_by_epoch_number(
         &self, epoch_num: EpochNumber, include_txs: bool,
-    ) -> JsonRpcResult<Option<RpcBlock>> {
+    ) -> RpcResult<Option<RpcBlock>> {
         let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
         info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
@@ -176,7 +176,7 @@ impl RpcImpl {
 
     pub fn block_by_hash(
         &self, hash: H256, include_txs: bool,
-    ) -> JsonRpcResult<Option<RpcBlock>> {
+    ) -> RpcResult<Option<RpcBlock>> {
         let consensus_graph = self.consensus_graph();
         let hash: H256 = hash.into();
         info!(
@@ -196,7 +196,7 @@ impl RpcImpl {
 
     pub fn block_by_hash_with_pivot_assumption(
         &self, block_hash: H256, pivot_hash: H256, epoch_number: U64,
-    ) -> JsonRpcResult<RpcBlock> {
+    ) -> RpcResult<RpcBlock> {
         let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
         let block_hash: H256 = block_hash.into();
@@ -212,13 +212,13 @@ impl RpcImpl {
             .check_block_pivot_assumption(&pivot_hash, epoch_number)
             .map_err(RpcError::invalid_params)?;
 
-        self.data_man
+        let block = self
+            .data_man
             .block_by_hash(&block_hash, false /* update_cache */)
-            .ok_or_else(|| RpcError::invalid_params("Block not found"))
-            .map(|block| {
-                debug!("Build RpcBlock {}", block.hash());
-                RpcBlock::new(&*block, inner, &self.data_man, true)
-            })
+            .ok_or_else(|| RpcError::invalid_params("Block not found"))?;
+
+        debug!("Build RpcBlock {}", block.hash());
+        Ok(RpcBlock::new(&*block, inner, &self.data_man, true))
     }
 
     pub fn blocks_by_epoch(
