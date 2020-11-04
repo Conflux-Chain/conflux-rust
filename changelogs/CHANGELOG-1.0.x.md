@@ -1,3 +1,9 @@
+# 1.0.2
+
+## Light nodes
+
+- Support `cfx_gasPrice` on light nodes.
+
 # 1.0.1
 
 ## Light nodes

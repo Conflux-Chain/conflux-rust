@@ -104,7 +104,7 @@ impl RpcImpl {
         Ok(self.consensus.best_block_hash().into())
     }
 
-    pub fn gas_price(&self) -> JsonRpcResult<U256> {
+    pub fn gas_price(&self) -> RpcResult<U256> {
         let consensus_graph = self.consensus_graph();
         info!("RPC Request: cfx_gasPrice()");
         Ok(consensus_graph

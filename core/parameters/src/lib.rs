@@ -360,6 +360,15 @@ pub mod light {
     /// there's always plenty of items in flight. This way, we can reduce idle
     /// time when we're waiting to receive an item.
     pub const LOG_FILTERING_LOOKAHEAD: usize = 100;
+
+    // Number of blocks to sample for cfx_gasPrice.
+    pub const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 30;
+
+    // Maximum number of transactions to sample for cfx_gasPrice.
+    pub const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 1000;
+
+    // Number of blocks we retrieve in parallel for the gas price sample.
+    pub const GAS_PRICE_BATCH_SIZE: usize = 30;
 }
 
 pub const WORKER_COMPUTATION_PARALLELISM: usize = 8;

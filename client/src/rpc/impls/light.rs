@@ -5,6 +5,7 @@
 use cfx_types::{H160, H256, H520, U128, U256, U64};
 use cfxcore::{
     block_data_manager::BlockDataManager,
+    consensus_parameters::ONE_GDRIP_IN_DRIP,
     light_protocol::{query_service::TxInfo, Error as LightError, ErrorKind},
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     ConsensusGraph, LightQueryService, PeerInfo, SharedConsensusGraph,
@@ -749,6 +750,23 @@ impl RpcImpl {
 
         Ok(hashes)
     }
+
+    pub fn gas_price(&self) -> RpcBoxFuture<U256> {
+        info!("RPC Request: cfx_gasPrice");
+
+        let light = self.light.clone();
+
+        let fut = async move {
+            Ok(light
+                .gas_price()
+                .await
+                .map_err(|e| e.to_string())
+                .map_err(RpcError::invalid_params)?
+                .unwrap_or(ONE_GDRIP_IN_DRIP.into()))
+        };
+
+        Box::new(fut.boxed().compat())
+    }
 }
 
 pub struct CfxHandler {
@@ -783,6 +801,7 @@ impl Cfx for CfxHandler {
             fn code(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
             fn collateral_for_storage(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<U256>;
+            fn gas_price(&self) -> BoxFuture<U256>;
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn next_nonce(&self, address: H160, num: Option<BlockHashOrEpochNumber>) -> BoxFuture<U256>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256>;
@@ -801,7 +820,6 @@ impl Cfx for CfxHandler {
         fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
         fn check_balance_against_transaction(&self, account_addr: H160, contract_addr: H160, gas_limit: U256, gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>) -> RpcResult<CheckBalanceAgainstTransactionResponse>;
         fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<EstimateGasAndCollateralResponse>;
-        fn gas_price(&self) -> RpcResult<U256>;
         fn get_block_reward_info(&self, num: EpochNumber) -> RpcResult<Vec<RpcRewardInfo>>;
         fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<U256>;
     }
