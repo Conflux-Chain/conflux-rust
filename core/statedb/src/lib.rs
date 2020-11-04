@@ -19,7 +19,9 @@ pub use self::{
         StateDb as StateDbGeneric, StateDbCheckpointMethods,
         StateDbGetOriginalMethods,
     },
-    statedb_ext::StateDbExt,
+    statedb_ext::{
+        StateDbExt, ACCUMULATE_INTEREST_RATE_KEY, INTEREST_RATE_KEY,
+    },
 };
 pub type StateDb = StateDbGeneric<StorageState>;
 

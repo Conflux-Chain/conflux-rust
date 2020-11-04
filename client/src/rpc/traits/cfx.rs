@@ -192,13 +192,13 @@ pub trait Cfx {
     #[rpc(name = "cfx_getInterestRate")]
     fn interest_rate(
         &self, epoch_number: Option<EpochNumber>,
-    ) -> JsonRpcResult<U256>;
+    ) -> BoxFuture<U256>;
 
     /// Returns accumulate interest rate of the given epoch
     #[rpc(name = "cfx_getAccumulateInterestRate")]
     fn accumulate_interest_rate(
         &self, epoch_number: Option<EpochNumber>,
-    ) -> JsonRpcResult<U256>;
+    ) -> BoxFuture<U256>;
 
     #[rpc(name = "cfx_getConfirmationRiskByHash")]
     fn confirmation_risk_by_hash(

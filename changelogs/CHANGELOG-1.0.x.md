@@ -1,3 +1,9 @@
+# 1.0.2
+
+## Light nodes
+
+- Support `cfx_getAccumulateInterestRate` and `cfx_getInterestRate` on light nodes.
+
 # 1.0.1
 
 ## Light nodes

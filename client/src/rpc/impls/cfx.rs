@@ -1115,8 +1115,8 @@ impl Cfx for CfxHandler {
         to self.rpc_impl {
             fn code(&self, addr: H160, epoch_number: Option<EpochNumber>) -> BoxFuture<Bytes>;
             fn account(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
-            fn interest_rate(&self, num: Option<EpochNumber>) -> JsonRpcResult<U256>;
-            fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> JsonRpcResult<U256>;
+            fn interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
+            fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn admin(&self, address: H160, num: Option<EpochNumber>)
                 -> BoxFuture<Option<H160>>;
             fn sponsor_info(&self, address: H160, num: Option<EpochNumber>)

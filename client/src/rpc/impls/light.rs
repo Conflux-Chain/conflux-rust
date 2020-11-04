@@ -749,6 +749,48 @@ impl RpcImpl {
 
         Ok(hashes)
     }
+
+    fn interest_rate(&self, epoch: Option<EpochNumber>) -> RpcBoxFuture<U256> {
+        let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
+        info!("RPC Request: cfx_getInterestRate epoch={:?}", epoch);
+
+        // clone to avoid lifetime issues due to capturing `self`
+        let light = self.light.clone();
+
+        let fut = async move {
+            Ok(light
+                .get_interest_rate(epoch)
+                .await
+                .map_err(|e| e.to_string())
+                .map_err(RpcError::invalid_params)?)
+        };
+
+        Box::new(fut.boxed().compat())
+    }
+
+    fn accumulate_interest_rate(
+        &self, epoch: Option<EpochNumber>,
+    ) -> RpcBoxFuture<U256> {
+        let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
+
+        info!(
+            "RPC Request: cfx_getAccumulateInterestRate epoch={:?}",
+            epoch
+        );
+
+        // clone to avoid lifetime issues due to capturing `self`
+        let light = self.light.clone();
+
+        let fut = async move {
+            Ok(light
+                .get_accumulate_interest_rate(epoch)
+                .await
+                .map_err(|e| e.to_string())
+                .map_err(RpcError::invalid_params)?)
+        };
+
+        Box::new(fut.boxed().compat())
+    }
 }
 
 pub struct CfxHandler {
@@ -774,6 +816,7 @@ impl Cfx for CfxHandler {
 
         to self.rpc_impl {
             fn account(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
+            fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn admin(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Option<H160>>;
             fn balance(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn block_by_epoch_number(&self, epoch_num: EpochNumber, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;
@@ -784,6 +827,7 @@ impl Cfx for CfxHandler {
             fn collateral_for_storage(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<U256>;
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
+            fn interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn next_nonce(&self, address: H160, num: Option<BlockHashOrEpochNumber>) -> BoxFuture<U256>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256>;
             fn sponsor_info(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<RpcSponsorInfo>;
@@ -797,13 +841,11 @@ impl Cfx for CfxHandler {
 
     // TODO(thegaram): add support for these
     not_supported! {
-        fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<U256>;
         fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
         fn check_balance_against_transaction(&self, account_addr: H160, contract_addr: H160, gas_limit: U256, gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>) -> RpcResult<CheckBalanceAgainstTransactionResponse>;
         fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<EstimateGasAndCollateralResponse>;
         fn gas_price(&self) -> RpcResult<U256>;
         fn get_block_reward_info(&self, num: EpochNumber) -> RpcResult<Vec<RpcRewardInfo>>;
-        fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<U256>;
     }
 }
 
