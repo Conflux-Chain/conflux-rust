@@ -1563,10 +1563,8 @@ impl<'a> Executive<'a> {
                 );
             }
 
-            self.state.record_storage_and_whitelist_entries_release(
-                address,
-                &mut substate,
-            )?;
+            self.state
+                .record_storage_entries_release(address, &mut substate)?;
         }
 
         let res = self.state.settle_collateral_for_all(&substate)?;
@@ -1611,7 +1609,8 @@ impl<'a> Executive<'a> {
         for contract_address in suicides {
             let burnt_balance = self.state.balance(contract_address)?
                 + self.state.staking_balance(contract_address)?;
-            self.state.remove_contract(contract_address)?;
+            self.state
+                .remove_contract(contract_address, &mut substate)?;
             self.state.subtract_total_issued(burnt_balance);
         }
 

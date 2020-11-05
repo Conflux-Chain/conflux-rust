@@ -306,11 +306,9 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     ) -> DbResult<()> {
         if let Some(checkpoint) = self.checkpoints.get_mut().last() {
             for address in checkpoint.keys() {
-                if let Some(ref mut maybe_acc) = self
-                    .cache
-                    .get_mut()
-                    .get_mut(address)
-                    .filter(|x| x.is_dirty())
+                if let Some(ref mut maybe_acc) =
+                    self.cache.get_mut().get_mut(address)
+                //.filter(|x| x.is_dirty())
                 {
                     if let Some(ref mut acc) = maybe_acc.account.as_mut() {
                         acc.commit_ownership_change(&self.db, substate)?;
@@ -1158,7 +1156,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     fn remove_whitelists_for_contract<AM: access_mode::AccessMode>(
-        &mut self, address: &Address,
+        &mut self, address: &Address, substate: &mut Substate,
     ) -> DbResult<HashMap<Vec<u8>, Address>> {
         let mut storage_owner_map = HashMap::new();
         let key_values = self.db.delete_all::<AM>(
@@ -1208,17 +1206,16 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                     Address::zero(),
                 );
             }
+            sponsor_whitelist_control_address
+                .commit_ownership_change(&self.db, substate)?;
         }
 
         Ok(storage_owner_map)
     }
 
-    pub fn record_storage_and_whitelist_entries_release(
+    pub fn record_storage_entries_release(
         &mut self, address: &Address, substate: &mut Substate,
     ) -> DbResult<()> {
-        let sponsor_whitelist_key_storage_owners_map =
-            self.remove_whitelists_for_contract::<access_mode::Read>(address)?;
-
         let account_cache_read_guard = self.cache.read();
         let maybe_account = account_cache_read_guard
             .get(address)
@@ -1232,13 +1229,6 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             StorageKey::new_storage_root_key(address),
             None,
         )?;
-        for (_key, storage_owner) in sponsor_whitelist_key_storage_owners_map {
-            substate.record_storage_release(
-                &storage_owner,
-                COLLATERAL_UNITS_PER_STORAGE_KEY,
-            );
-        }
-
         for (key, value) in &storage_key_value {
             if let StorageKey::StorageKey { storage_key, .. } =
                 StorageKey::from_key_bytes(&key[..])
@@ -1277,8 +1267,12 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         Ok(())
     }
 
-    pub fn remove_contract(&mut self, address: &Address) -> DbResult<()> {
-        self.remove_whitelists_for_contract::<access_mode::Write>(address)?;
+    pub fn remove_contract(
+        &mut self, address: &Address, substate: &mut Substate,
+    ) -> DbResult<()> {
+        self.remove_whitelists_for_contract::<access_mode::Write>(
+            address, substate,
+        )?;
         Self::update_cache(
             self.cache.get_mut(),
             self.checkpoints.get_mut(),
