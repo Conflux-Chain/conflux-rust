@@ -1220,11 +1220,6 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     ) -> DbResult<()> {
         self.remove_whitelists_for_contract::<access_mode::Write>(address)?;
 
-        let account_cache_read_guard = self.cache.read();
-        let maybe_account = account_cache_read_guard
-            .get(address)
-            .and_then(|acc| acc.account.as_ref());
-
         // Process collateral for removed storage.
         // TODO: try to do it in a better way, e.g. first log the deletion
         //  somewhere then apply the collateral change.
@@ -1236,6 +1231,11 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             sponsor_whitelist_control_address
                 .commit_ownership_change(&self.db, substate)?;
         }
+
+        let account_cache_read_guard = self.cache.read();
+        let maybe_account = account_cache_read_guard
+            .get(address)
+            .and_then(|acc| acc.account.as_ref());
 
         let storage_key_value = self.db.delete_all::<access_mode::Read>(
             StorageKey::new_storage_root_key(address),
