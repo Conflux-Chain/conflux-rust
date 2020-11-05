@@ -481,8 +481,8 @@ impl BlockDataManager {
     }
 
     pub fn block_height_by_hash(&self, hash: &H256) -> Option<u64> {
-        let result = self.block_by_hash(hash, false /* update_cache */)?;
-        Some(result.block_header.height())
+        let result = self.block_header_by_hash(hash)?;
+        Some(result.height())
     }
 
     pub fn compact_block_by_hash(&self, hash: &H256) -> Option<CompactBlock> {
