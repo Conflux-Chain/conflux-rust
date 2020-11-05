@@ -7,6 +7,9 @@
 - Fix bug where light nodes disconnect peers if the user queries the genesis block.
 - Add periodic heartbeat messages to the light protocol.
 
+## Bug Fixes
+- Fix crash issue in whitelist removal at contract removal.
+
 # 1.0.0
 
 ## Improvement
