@@ -52,15 +52,24 @@ pub struct OverlayAccount {
     // FIXME: there are changes, so no need to have cache for both storage and
     // ownership
 
-    // This is a cache for storage change.
-    storage_cache: RwLock<HashMap<Vec<u8>, U256>>,
-    storage_changes: HashMap<Vec<u8>, U256>,
+    // This is a read cache for storage values of the current account in db.
+    storage_value_read_cache: RwLock<HashMap<Vec<u8>, U256>>,
+    // This is a write cache for changing storage value in db. It will be
+    // written to db when committing overlay account.
+    storage_value_write_cache: HashMap<Vec<u8>, U256>,
 
-    // This is a cache for storage ownership change.
-    ownership_cache: RwLock<HashMap<Vec<u8>, Option<Address>>>,
-    // This maintains the current owner of a specific key. If the owner is
-    // `None`, the value of current key is zero.
-    ownership_changes: HashMap<Vec<u8>, Option<Address>>,
+    // This is a level 2 cache for storage ownership change of the current
+    // account. It will be written to db when committing overlay account.
+    storage_owner_lv2_write_cache: RwLock<HashMap<Vec<u8>, Option<Address>>>,
+    // This is a level 1 cache for storage ownership change of the current
+    // account. It will be updated when executing EVM or calling
+    // `set_storage` function. It will be merged to level 2 cache at the
+    // end of message call or calling `collect_commit_changes`.
+    //
+    // This maintains the current owner of a
+    // specific key. If the owner is `None`, the value of current key is
+    // zero.
+    storage_owner_lv1_write_cache: HashMap<Vec<u8>, Option<Address>>,
 
     // Storage layout change.
     storage_layout_change: Option<StorageLayout>,
@@ -111,10 +120,10 @@ impl OverlayAccount {
             nonce: account.nonce,
             admin: account.admin,
             sponsor_info: account.sponsor_info,
-            storage_cache: Default::default(),
-            storage_changes: HashMap::new(),
-            ownership_cache: Default::default(),
-            ownership_changes: HashMap::new(),
+            storage_value_read_cache: Default::default(),
+            storage_value_write_cache: HashMap::new(),
+            storage_owner_lv2_write_cache: Default::default(),
+            storage_owner_lv1_write_cache: HashMap::new(),
             storage_layout_change: None,
             staking_balance: account.staking_balance,
             collateral_for_storage: account.collateral_for_storage,
@@ -142,10 +151,10 @@ impl OverlayAccount {
             nonce,
             admin: Address::zero(),
             sponsor_info: Default::default(),
-            storage_cache: Default::default(),
-            storage_changes: HashMap::new(),
-            ownership_cache: Default::default(),
-            ownership_changes: HashMap::new(),
+            storage_value_read_cache: Default::default(),
+            storage_value_write_cache: HashMap::new(),
+            storage_owner_lv2_write_cache: Default::default(),
+            storage_owner_lv1_write_cache: HashMap::new(),
             storage_layout_change: if address.is_builtin_address() {
                 storage_layout
             } else {
@@ -191,10 +200,10 @@ impl OverlayAccount {
             nonce,
             admin: admin.clone(),
             sponsor_info: Default::default(),
-            storage_cache: Default::default(),
-            storage_changes: HashMap::new(),
-            ownership_cache: Default::default(),
-            ownership_changes: HashMap::new(),
+            storage_value_read_cache: Default::default(),
+            storage_value_write_cache: HashMap::new(),
+            storage_owner_lv2_write_cache: Default::default(),
+            storage_owner_lv1_write_cache: HashMap::new(),
             storage_layout_change: storage_layout,
             staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
@@ -372,13 +381,15 @@ impl OverlayAccount {
         }
     }
 
-    pub fn storage_changes(&self) -> &HashMap<Vec<u8>, U256> {
-        &self.storage_changes
+    pub fn storage_value_write_cache(&self) -> &HashMap<Vec<u8>, U256> {
+        &self.storage_value_write_cache
     }
 
     #[cfg(test)]
-    pub fn ownership_changes(&self) -> &HashMap<Vec<u8>, Option<Address>> {
-        &self.ownership_changes
+    pub fn storage_owner_lv1_write_cache(
+        &self,
+    ) -> &HashMap<Vec<u8>, Option<Address>> {
+        &self.storage_owner_lv1_write_cache
     }
 
     #[cfg(test)]
@@ -579,10 +590,10 @@ impl OverlayAccount {
             nonce: self.nonce,
             admin: self.admin,
             sponsor_info: self.sponsor_info.clone(),
-            storage_cache: Default::default(),
-            storage_changes: HashMap::new(),
-            ownership_cache: Default::default(),
-            ownership_changes: HashMap::new(),
+            storage_value_read_cache: Default::default(),
+            storage_value_write_cache: HashMap::new(),
+            storage_owner_lv2_write_cache: Default::default(),
+            storage_owner_lv1_write_cache: HashMap::new(),
             storage_layout_change: None,
             staking_balance: self.staking_balance,
             collateral_for_storage: self.collateral_for_storage,
@@ -597,21 +608,24 @@ impl OverlayAccount {
 
     pub fn clone_dirty(&self) -> Self {
         let mut account = self.clone_basic();
-        account.storage_changes = self.storage_changes.clone();
-        account.storage_cache = RwLock::new(self.storage_cache.read().clone());
-        account.ownership_cache =
-            RwLock::new(self.ownership_cache.read().clone());
-        account.ownership_changes = self.ownership_changes.clone();
+        account.storage_value_write_cache =
+            self.storage_value_write_cache.clone();
+        account.storage_value_read_cache =
+            RwLock::new(self.storage_value_read_cache.read().clone());
+        account.storage_owner_lv2_write_cache =
+            RwLock::new(self.storage_owner_lv2_write_cache.read().clone());
+        account.storage_owner_lv1_write_cache =
+            self.storage_owner_lv1_write_cache.clone();
         account.storage_layout_change = self.storage_layout_change.clone();
         account
     }
 
     pub fn set_storage(&mut self, key: Vec<u8>, value: U256, owner: Address) {
-        self.storage_changes.insert(key.clone(), value);
+        self.storage_value_write_cache.insert(key.clone(), value);
         if value.is_zero() {
-            self.ownership_changes.insert(key, None);
+            self.storage_owner_lv1_write_cache.insert(key, None);
         } else {
-            self.ownership_changes.insert(key, Some(owner));
+            self.storage_owner_lv1_write_cache.insert(key, Some(owner));
         }
     }
 
@@ -625,10 +639,10 @@ impl OverlayAccount {
     }
 
     pub fn cached_storage_at(&self, key: &[u8]) -> Option<U256> {
-        if let Some(value) = self.storage_changes.get(key) {
+        if let Some(value) = self.storage_value_write_cache.get(key) {
             return Some(value.clone());
         }
-        if let Some(value) = self.storage_cache.read().get(key) {
+        if let Some(value) = self.storage_value_read_cache.read().get(key) {
             return Some(value.clone());
         }
         None
@@ -644,8 +658,8 @@ impl OverlayAccount {
             Ok(U256::zero())
         } else {
             Self::get_and_cache_storage(
-                &mut self.storage_cache.write(),
-                &mut self.ownership_cache.write(),
+                &mut self.storage_value_read_cache.write(),
+                &mut self.storage_owner_lv2_write_cache.write(),
                 db,
                 &self.address,
                 key,
@@ -655,19 +669,19 @@ impl OverlayAccount {
     }
 
     fn get_and_cache_storage<StateDbStorage: StorageStateTrait>(
-        storage_cache: &mut HashMap<Vec<u8>, U256>,
-        ownership_cache: &mut HashMap<Vec<u8>, Option<Address>>,
+        storage_value_read_cache: &mut HashMap<Vec<u8>, U256>,
+        storage_owner_lv2_write_cache: &mut HashMap<Vec<u8>, Option<Address>>,
         db: &StateDbGeneric<StateDbStorage>, address: &Address, key: &[u8],
         cache_ownership: bool,
     ) -> DbResult<U256>
     {
-        assert!(!ownership_cache.contains_key(key));
+        assert!(!storage_owner_lv2_write_cache.contains_key(key));
         if let Some(value) = db.get::<StorageValue>(
             StorageKey::new_storage_key(address, key.as_ref()),
         )? {
-            storage_cache.insert(key.to_vec(), value.value);
+            storage_value_read_cache.insert(key.to_vec(), value.value);
             if cache_ownership {
-                ownership_cache.insert(
+                storage_owner_lv2_write_cache.insert(
                     key.to_vec(),
                     Some(match value.owner {
                         Some(owner) => owner,
@@ -677,9 +691,9 @@ impl OverlayAccount {
             }
             Ok(value.value)
         } else {
-            storage_cache.insert(key.to_vec(), U256::zero());
+            storage_value_read_cache.insert(key.to_vec(), U256::zero());
             if cache_ownership {
-                ownership_cache.insert(key.to_vec(), None);
+                storage_owner_lv2_write_cache.insert(key.to_vec(), None);
             }
             Ok(U256::zero())
         }
@@ -700,10 +714,12 @@ impl OverlayAccount {
         self.sponsor_info = other.sponsor_info;
         self.code_hash = other.code_hash;
         self.code = other.code;
-        self.storage_cache = other.storage_cache;
-        self.storage_changes = other.storage_changes;
-        self.ownership_cache = other.ownership_cache;
-        self.ownership_changes = other.ownership_changes;
+        self.storage_value_read_cache = other.storage_value_read_cache;
+        self.storage_value_write_cache = other.storage_value_write_cache;
+        self.storage_owner_lv2_write_cache =
+            other.storage_owner_lv2_write_cache;
+        self.storage_owner_lv1_write_cache =
+            other.storage_owner_lv1_write_cache;
         self.storage_layout_change = other.storage_layout_change;
         self.staking_balance = other.staking_balance;
         self.collateral_for_storage = other.collateral_for_storage;
@@ -719,22 +735,27 @@ impl OverlayAccount {
     pub fn original_ownership_at<StateDbStorage: StorageStateTrait>(
         &self, db: &StateDbGeneric<StateDbStorage>, key: &Vec<u8>,
     ) -> DbResult<Option<Address>> {
-        if let Some(value) = self.ownership_cache.read().get(key) {
+        if let Some(value) = self.storage_owner_lv2_write_cache.read().get(key)
+        {
             return Ok(value.clone());
         }
         if self.is_newly_created_contract {
             return Ok(None);
         }
-        let ownership_cache = &mut *self.ownership_cache.write();
+        let storage_owner_lv2_write_cache =
+            &mut *self.storage_owner_lv2_write_cache.write();
         Self::get_and_cache_storage(
-            &mut self.storage_cache.write(),
-            ownership_cache,
+            &mut self.storage_value_read_cache.write(),
+            storage_owner_lv2_write_cache,
             db,
             &self.address,
             key,
             true, /* cache_ownership */
         )?;
-        Ok(ownership_cache.get(key).expect("key exists").clone())
+        Ok(storage_owner_lv2_write_cache
+            .get(key)
+            .expect("key exists")
+            .clone())
     }
 
     /// Return the storage change of each related account.
@@ -745,9 +766,9 @@ impl OverlayAccount {
     pub fn commit_ownership_change<StateDbStorage: StorageStateTrait>(
         &mut self, db: &StateDbGeneric<StateDbStorage>, substate: &mut Substate,
     ) -> DbResult<()> {
-        let ownership_changes: Vec<_> =
-            self.ownership_changes.drain().collect();
-        for (k, current_owner_opt) in ownership_changes {
+        let storage_owner_lv1_write_cache: Vec<_> =
+            self.storage_owner_lv1_write_cache.drain().collect();
+        for (k, current_owner_opt) in storage_owner_lv1_write_cache {
             // Get the owner of `k` before execution. If it is `None`, it means
             // the value of the key is zero before execution. Otherwise, the
             // value of the key is nonzero.
@@ -768,10 +789,12 @@ impl OverlayAccount {
                     );
                 }
             }
-            // Commit ownership change to `ownership_cache`.
-            self.ownership_cache.get_mut().insert(k, current_owner_opt);
+            // Commit ownership change to `storage_owner_lv2_write_cache`.
+            self.storage_owner_lv2_write_cache
+                .get_mut()
+                .insert(k, current_owner_opt);
         }
-        assert!(self.ownership_changes.is_empty());
+        assert!(self.storage_owner_lv1_write_cache.is_empty());
         Ok(())
     }
 
@@ -787,9 +810,10 @@ impl OverlayAccount {
             )?;
         }
 
-        assert!(self.ownership_changes.is_empty());
-        let ownership_cache = self.ownership_cache.get_mut();
-        for (k, v) in self.storage_changes.drain() {
+        assert!(self.storage_owner_lv1_write_cache.is_empty());
+        let storage_owner_lv2_write_cache =
+            self.storage_owner_lv2_write_cache.get_mut();
+        for (k, v) in self.storage_value_write_cache.drain() {
             let address_key =
                 StorageKey::new_storage_key(&self.address, k.as_ref());
             match v.is_zero() {
@@ -797,7 +821,7 @@ impl OverlayAccount {
                     state.db.delete(address_key, debug_record.as_deref_mut())?
                 }
                 false => {
-                    let owner = ownership_cache
+                    let owner = storage_owner_lv2_write_cache
                         .get(&k)
                         .expect("all key must exist")
                         .expect("owner exists");
