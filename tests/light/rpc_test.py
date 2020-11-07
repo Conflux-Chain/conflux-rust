@@ -317,13 +317,27 @@ class LightRPCTest(ConfluxTestFramework):
 
         for ii in range(10):
             receiver = self.rpc[FULLNODE0].rand_addr()
-            tx = self.rpc[FULLNODE0].new_tx(receiver=receiver, nonce=nonce + ii)
+            tx = self.rpc[FULLNODE0].new_tx(receiver=receiver, nonce=nonce + ii, gas_price=7)
             nonce += 1
             txs.append(tx)
 
         block_hash = self.rpc[FULLNODE0].generate_block_with_fake_txs(txs)
         self.rpc[FULLNODE0].generate_blocks(BLAME_CHECK_OFFSET) # make sure txs are executed
         sync_blocks(self.nodes)
+
+        # --------------------------
+
+        self.log.info(f"Checking cfx_gasPrice...")
+
+        light = self.nodes[LIGHTNODE].cfx_gasPrice()
+
+        # median of all (10) txs from the last 30 blocks
+        # NOTE: full node samples more blocks so the result might be different
+        assert_equal(light, '0x7')
+
+        self.log.info(f"Pass -- cfx_gasPrice")
+
+        # --------------------------
 
         self.log.info(f"Checking cfx_getBlockByHash...")
 
@@ -432,7 +446,6 @@ class LightRPCTest(ConfluxTestFramework):
         assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_call, {}, "latest_checkpoint")
         assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_checkBalanceAgainstTransaction, "0x1386b4185a223ef49592233b69291bbe5a80c527", "0x8b017126d2fede908a86b36b43969f17d25f3771", "0x5208", "0x2540be400", "0x0", "latest_checkpoint")
         assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_estimateGasAndCollateral, {}, "latest_checkpoint")
-        assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_gasPrice)
         assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_getAccumulateInterestRate, "latest_checkpoint")
         assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_getBlockRewardInfo, "latest_checkpoint")
         assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_getInterestRate, "latest_checkpoint")

@@ -1,6 +1,13 @@
+# 1.0.3
+
+## Improvements
+
+- Support `cfx_gasPrice` on light nodes.
+
 # 1.0.2
 
 ## Bug Fixes
+
 - Fix bugs in whitelist removal at contract removal.
 
 # 1.0.1

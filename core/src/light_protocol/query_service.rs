@@ -13,11 +13,15 @@ use crate::{
     },
     rpc_errors::{account_result_to_rpc_result, Error as RpcError},
     sync::SynchronizationGraph,
-    Notifications,
+    ConsensusGraph, Notifications,
 };
 use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
-    light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME},
+    light::{
+        GAS_PRICE_BATCH_SIZE, GAS_PRICE_BLOCK_SAMPLE_SIZE,
+        GAS_PRICE_TRANSACTION_SAMPLE_SIZE, LOG_FILTERING_LOOKAHEAD,
+        MAX_POLL_TIME,
+    },
 };
 use cfx_types::{
     address_util::AddressUtil, BigEndianHash, Bloom, H160, H256,
@@ -266,6 +270,78 @@ impl QueryService {
             self.with_io(|io| self.handler.tx_infos.request_now(io, hash)),
         )
         .await
+    }
+
+    pub async fn gas_price(&self) -> Result<Option<U256>, Error> {
+        // collect block hashes for gas price sample
+        let mut epoch = self.consensus.best_epoch_number();
+        let mut hashes = vec![];
+
+        let inner = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed")
+            .inner
+            .clone();
+
+        loop {
+            if hashes.len() >= GAS_PRICE_BLOCK_SAMPLE_SIZE || epoch == 0 {
+                break;
+            }
+
+            let mut epoch_hashes = inner.read().block_hashes_by_epoch(epoch)?;
+            epoch_hashes.reverse();
+
+            let missing = GAS_PRICE_BLOCK_SAMPLE_SIZE - hashes.len();
+            hashes.extend(epoch_hashes.into_iter().take(missing));
+
+            epoch -= 1;
+        }
+
+        // retrieve blocks in batches
+        let mut stream = stream::iter(hashes)
+            .map(|h| {
+                async move { self.retrieve_block(h).await.map(move |b| (h, b)) }
+            })
+            .buffered(GAS_PRICE_BATCH_SIZE);
+
+        // collect gas price sample
+        let mut prices = vec![];
+
+        while let Some(item) = stream.try_next().await? {
+            let block = match item {
+                (_, Some(b)) => b,
+                (hash, None) => {
+                    // `retrieve_block` will only return None if we do not have
+                    // the corresponding header, which should not happen in this
+                    // case.
+                    bail!(ErrorKind::InternalError(format!(
+                        "Block {:?} not found during gas price sampling",
+                        hash
+                    )));
+                }
+            };
+
+            trace!("samping gas prices from block {:?}", block.hash());
+
+            for tx in block.transactions.iter() {
+                prices.push(tx.gas_price().clone());
+
+                if prices.len() == GAS_PRICE_TRANSACTION_SAMPLE_SIZE {
+                    break;
+                }
+            }
+        }
+
+        trace!("gas price sample: {:?}", prices);
+
+        if prices.is_empty() {
+            Ok(None)
+        } else {
+            prices.sort();
+            Ok(Some(prices[prices.len() / 2]))
+        }
     }
 
     fn account_key(address: &H160) -> Vec<u8> {
