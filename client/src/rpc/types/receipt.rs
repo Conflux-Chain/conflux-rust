@@ -6,28 +6,11 @@ use crate::rpc::types::Log;
 use cfx_types::{Address, Bloom, H256, U256, U64};
 use cfxcore::{executive::contract_address, vm::CreateContractAddress};
 use primitives::{
-    receipt::{
-        Receipt as PrimitiveReceipt, StorageChange as PrimitiveStorageChange,
-    },
+    receipt::{Receipt as PrimitiveReceipt, StorageChange},
     transaction::Action,
     SignedTransaction as PrimitiveTransaction, TransactionIndex,
 };
 use serde_derive::Serialize;
-
-#[derive(Debug, Serialize, Clone, Deserialize)]
-pub struct StorageChange {
-    pub address: Address,
-    pub collaterals: U64,
-}
-
-impl From<PrimitiveStorageChange> for StorageChange {
-    fn from(sc: PrimitiveStorageChange) -> StorageChange {
-        StorageChange {
-            address: sc.address,
-            collaterals: sc.collaterals.into(),
-        }
-    }
-}
 
 #[derive(Debug, Serialize, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -113,9 +96,6 @@ impl Receipt {
             .map(|sc| sc.collaterals)
             .map(Into::into)
             .unwrap_or_default();
-
-        let storage_released =
-            storage_released.into_iter().map(Into::into).collect();
 
         Receipt {
             transaction_hash: transaction.hash.into(),
