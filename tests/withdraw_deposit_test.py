@@ -130,6 +130,15 @@ class WithdrawDepositTest(ConfluxTestFramework):
         assert_equal(client.get_balance(addr), balance + capital + interest - charged_of_huge_gas(gas))
         assert_equal(client.get_staking_balance(addr), 5 * 10 ** 17 - capital)
 
+        vote_list = client.get_vote_list(addr)
+        assert_equal(len(vote_list), 1)
+        assert_equal(vote_list[0]['unlockBlockNumber'], 100000)
+        assert_equal(vote_list[0]['amount'], "0x58d15e176280000")
+
+        deposit_list = client.get_deposit_list(addr)
+        assert_equal(len(deposit_list), 1)
+        assert_equal(deposit_list[0]['amount'], "0x58d15e176280000")
+
         block_gen_thread.stop()
         block_gen_thread.join()
         sync_blocks(self.nodes)

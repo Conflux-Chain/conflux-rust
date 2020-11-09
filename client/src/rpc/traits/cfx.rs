@@ -4,10 +4,11 @@
 
 use super::super::types::{
     Account as RpcAccount, Block, Bytes, CallRequest,
-    CheckBalanceAgainstTransactionResponse, EpochNumber,
-    EstimateGasAndCollateralResponse, Filter as RpcFilter, Log as RpcLog,
-    Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
+    CheckBalanceAgainstTransactionResponse, DepositInfo as RpcDepositInfo,
+    EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
+    Log as RpcLog, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
     SponsorInfo as RpcSponsorInfo, Status as RpcStatus, Transaction,
+    VoteStakeInfo as RpcVoteStakeInfo,
 };
 use crate::rpc::types::BlockHashOrEpochNumber;
 use cfx_types::{H160, H256, U256, U64};
@@ -67,6 +68,18 @@ pub trait Cfx {
     fn staking_balance(
         &self, addr: H160, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<U256>;
+
+    /// Returns balance of the given account.
+    #[rpc(name = "cfx_getDepositList")]
+    fn deposit_list(
+        &self, addr: H160, epoch_number: Option<EpochNumber>,
+    ) -> BoxFuture<Vec<RpcDepositInfo>>;
+
+    /// Returns balance of the given account.
+    #[rpc(name = "cfx_getVoteList")]
+    fn vote_list(
+        &self, addr: H160, epoch_number: Option<EpochNumber>,
+    ) -> BoxFuture<Vec<RpcVoteStakeInfo>>;
 
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getCollateralForStorage")]

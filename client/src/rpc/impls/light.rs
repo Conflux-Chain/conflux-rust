@@ -33,11 +33,12 @@ use crate::{
             Account as RpcAccount, BlameInfo, Block as RpcBlock,
             BlockHashOrEpochNumber, Bytes, CallRequest,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
-            EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
+            DepositInfo as RpcDepositInfo, EpochNumber,
+            EstimateGasAndCollateralResponse, Filter as RpcFilter,
             Log as RpcLog, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
             SendTxRequest, SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
             SyncGraphStates, Transaction as RpcTransaction, TxPoolPendingInfo,
-            TxWithPoolInfo,
+            TxWithPoolInfo, VoteStakeInfo as RpcVoteStakeInfo,
         },
         RpcBoxFuture,
     },
@@ -240,6 +241,64 @@ impl RpcImpl {
             Ok(account
                 .map(|account| account.staking_balance.into())
                 .unwrap_or_default())
+        };
+
+        Box::new(fut.boxed().compat())
+    }
+
+    fn deposit_list(
+        &self, address: H160, num: Option<EpochNumber>,
+    ) -> RpcBoxFuture<Vec<RpcDepositInfo>> {
+        let epoch = num.unwrap_or(EpochNumber::LatestState).into();
+        info!(
+            "RPC Request: cfx_getDepositList address={:?} epoch_num={:?}",
+            address, epoch
+        );
+
+        // clone `self.light` to avoid lifetime issues due to capturing `self`
+        let light = self.light.clone();
+
+        let fut = async move {
+            let mut result = vec![];
+            if let Some(deposit_list) = invalid_params_check(
+                "address",
+                light.get_deposit_list(epoch, address).await,
+            )? {
+                for deposit_info in &*deposit_list {
+                    result.push(RpcDepositInfo::new(deposit_info.clone()))
+                }
+            }
+
+            Ok(result)
+        };
+
+        Box::new(fut.boxed().compat())
+    }
+
+    fn vote_list(
+        &self, address: H160, num: Option<EpochNumber>,
+    ) -> RpcBoxFuture<Vec<RpcVoteStakeInfo>> {
+        let epoch = num.unwrap_or(EpochNumber::LatestState).into();
+        info!(
+            "RPC Request: cfx_getVoteList address={:?} epoch_num={:?}",
+            address, epoch
+        );
+
+        // clone `self.light` to avoid lifetime issues due to capturing `self`
+        let light = self.light.clone();
+
+        let fut = async move {
+            let mut result = vec![];
+            if let Some(vote_list) = invalid_params_check(
+                "address",
+                light.get_vote_list(epoch, address).await,
+            )? {
+                for vote_info in &*vote_list {
+                    result.push(RpcVoteStakeInfo::new(vote_info.clone()))
+                }
+            }
+
+            Ok(result)
         };
 
         Box::new(fut.boxed().compat())
@@ -853,6 +912,8 @@ impl Cfx for CfxHandler {
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256>;
             fn sponsor_info(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<RpcSponsorInfo>;
             fn staking_balance(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
+            fn deposit_list(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Vec<RpcDepositInfo>>;
+            fn vote_list(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Vec<RpcVoteStakeInfo>>;
             fn storage_at(&self, addr: H160, pos: H256, epoch_number: Option<EpochNumber>) -> BoxFuture<Option<H256>>;
             fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;

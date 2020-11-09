@@ -4,7 +4,9 @@
 
 use cfx_types::{H160, H256, U256};
 use primitives::{
-    Account as PrimitiveAccount, SponsorInfo as PrimitiveSponsorInfo,
+    Account as PrimitiveAccount, DepositInfo as PrimitiveDepositInfo,
+    SponsorInfo as PrimitiveSponsorInfo,
+    VoteStakeInfo as PrimitiveVoteStakeInfo,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -57,6 +59,49 @@ impl SponsorInfo {
             sponsor_balance_for_collateral: sponsor_info
                 .sponsor_balance_for_collateral
                 .into(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DepositInfo {
+    /// This is the number of tokens in this deposit.
+    pub amount: U256,
+    /// This is the timestamp when this deposit happened, measured in the
+    /// number of past blocks. It will be used to calculate
+    /// the service charge.
+    pub deposit_time: u64,
+    /// This is the accumulated interest rate when this deposit happened.
+    pub accumulated_interest_rate: U256,
+}
+
+impl DepositInfo {
+    pub fn new(deposit_info: PrimitiveDepositInfo) -> Self {
+        Self {
+            amount: deposit_info.amount,
+            deposit_time: deposit_info.deposit_time,
+            accumulated_interest_rate: deposit_info.accumulated_interest_rate,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoteStakeInfo {
+    /// This is the number of tokens should be locked before
+    /// `unlock_block_number`.
+    pub amount: U256,
+    /// This is the timestamp when the vote right will be invalid, measured in
+    /// the number of past blocks.
+    pub unlock_block_number: u64,
+}
+
+impl VoteStakeInfo {
+    pub fn new(vote_stake_info: PrimitiveVoteStakeInfo) -> Self {
+        Self {
+            amount: vote_stake_info.amount,
+            unlock_block_number: vote_stake_info.unlock_block_number,
         }
     }
 }
