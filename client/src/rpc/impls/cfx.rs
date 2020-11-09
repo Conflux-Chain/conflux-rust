@@ -49,12 +49,13 @@ use crate::{
             sign_call, Account as RpcAccount, BlameInfo, Block as RpcBlock,
             BlockHashOrEpochNumber, Bytes, CallRequest,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
-            EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
+            DepositInfo as RpcDepositInfo, EpochNumber,
+            EstimateGasAndCollateralResponse, Filter as RpcFilter,
             Log as RpcLog, PackedOrExecuted, Receipt as RpcReceipt,
             RewardInfo as RpcRewardInfo, SendTxRequest,
             SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
             SyncGraphStates, Transaction as RpcTransaction, TxPoolPendingInfo,
-            TxWithPoolInfo,
+            TxWithPoolInfo, VoteStakeInfo as RpcVoteStakeInfo,
         },
         RpcResult,
     },
@@ -204,6 +205,46 @@ impl RpcImpl {
         let acc = state_db.get_account(&address)?;
 
         Ok(acc.map_or(U256::zero(), |acc| acc.staking_balance).into())
+    }
+
+    fn deposit_list(
+        &self, address: H160, num: Option<EpochNumber>,
+    ) -> RpcResult<Vec<RpcDepositInfo>> {
+        let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
+        info!(
+            "RPC Request: cfx_getDepositList address={:?} epoch_num={:?}",
+            address, epoch_num
+        );
+
+        let state_db =
+            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let mut result = vec![];
+        if let Some(deposit_list) = state_db.get_deposit_list(&address)? {
+            for deposit_info in &*deposit_list {
+                result.push(RpcDepositInfo::new(deposit_info.clone()))
+            }
+        }
+        Ok(result)
+    }
+
+    fn vote_list(
+        &self, address: H160, num: Option<EpochNumber>,
+    ) -> RpcResult<Vec<RpcVoteStakeInfo>> {
+        let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
+        info!(
+            "RPC Request: cfx_getVoteList address={:?} epoch_num={:?}",
+            address, epoch_num
+        );
+
+        let state_db =
+            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let mut result = vec![];
+        if let Some(vote_list) = state_db.get_vote_list(&address)? {
+            for vote_info in &*vote_list {
+                result.push(RpcVoteStakeInfo::new(vote_info.clone()))
+            }
+        }
+        Ok(result)
     }
 
     fn collateral_for_storage(
@@ -1124,6 +1165,8 @@ impl Cfx for CfxHandler {
             fn balance(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn staking_balance(&self, address: H160, num: Option<EpochNumber>)
                 -> BoxFuture<U256>;
+            fn deposit_list(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Vec<RpcDepositInfo>>;
+            fn vote_list(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Vec<RpcVoteStakeInfo>>;
             fn collateral_for_storage(&self, address: H160, num: Option<EpochNumber>)
                 -> BoxFuture<U256>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>)
