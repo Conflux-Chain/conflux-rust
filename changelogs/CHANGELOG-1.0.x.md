@@ -3,6 +3,7 @@
 ## Improvements
 
 - Support `cfx_gasPrice` on light nodes.
+- Add the following new fields in the return value of `cfx_getTransactionReceipt`: `gasCoveredBySponsor`, `storageCollateralized`, `storageCoveredBySponsor`, `storageReleased`.
 
 # 1.0.2
 
@@ -22,7 +23,8 @@
 # 1.0.0
 
 ## Improvement
-- Start stratum services automatically if `mining_author` is set. 
+
+- Start stratum services automatically if `mining_author` is set.
 Use `mining_type` to allow start CPU mining or disable mining manually.
 - block info returned by rpc methods `cfx_getBlockByEpochNumber`, `cfx_getBlockByHash`, `cfx_getBlockByHashWithPivotAssumption` add one new field `gasUsed` (backward compatible)
 

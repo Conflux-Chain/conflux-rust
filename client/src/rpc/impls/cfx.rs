@@ -882,7 +882,7 @@ impl RpcImpl {
             }
             ExecutionOutcome::Finished(executed) => executed,
         };
-        let mut storage_collateralized = 0;
+        let mut storage_collateralized = U64::from(0);
         for storage_change in &executed.storage_collateralized {
             storage_collateralized += storage_change.collaterals;
         }
@@ -915,7 +915,7 @@ impl RpcImpl {
             // 1/4 of the gas limit.
             gas_limit: executed.gas_used * 4 / 3,
             gas_used: executed.gas_used,
-            storage_collateralized: storage_collateralized.into(),
+            storage_collateralized,
         };
         Ok(response)
     }
