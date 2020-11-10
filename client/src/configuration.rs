@@ -436,7 +436,10 @@ impl Configuration {
                 chain_id: self
                     .raw_conf
                     .chain_id
-                    .unwrap_or_else(|| rand::thread_rng().gen()),
+                    .unwrap_or_else(|| {
+                        let random_number: u32 = rand::thread_rng().gen();
+                        random_number % (std::u32::MAX - CHAIN_ID_RANGE) + CHAIN_ID_RANGE
+                    }),
             },
             inner_conf: ConsensusInnerConfig {
                 adaptive_weight_beta: self.raw_conf.adaptive_weight_beta,

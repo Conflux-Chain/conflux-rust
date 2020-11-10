@@ -39,6 +39,8 @@ pub mod consensus {
     pub const ONE_UCFX_IN_DRIP: u64 = 1_000_000_000_000;
 
     pub const ONE_GDRIP_IN_DRIP: u64 = 1_000_000_000;
+
+    pub const CHAIN_ID_RANGE: u32 = 10_000;
 }
 
 pub mod consensus_internal {
