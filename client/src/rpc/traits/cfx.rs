@@ -69,13 +69,13 @@ pub trait Cfx {
         &self, addr: H160, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<U256>;
 
-    /// Returns balance of the given account.
+    /// Returns deposit list of the given account.
     #[rpc(name = "cfx_getDepositList")]
     fn deposit_list(
         &self, addr: H160, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<Vec<RpcDepositInfo>>;
 
-    /// Returns balance of the given account.
+    /// Returns vote list of the given account.
     #[rpc(name = "cfx_getVoteList")]
     fn vote_list(
         &self, addr: H160, epoch_number: Option<EpochNumber>,
