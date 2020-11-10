@@ -34,7 +34,13 @@ use crate::{
     vm_factory::VmFactory,
     NodeType, Notifications,
 };
-use cfx_parameters::{consensus::*, consensus_internal::*};
+use cfx_parameters::{
+    consensus::*,
+    rpc::{
+        GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
+        TRANSACTION_COUNT_PER_BLOCK_WATER_LINE,
+    },
+};
 use cfx_statedb::StateDb;
 use cfx_storage::state_manager::StateManagerTrait;
 use cfx_types::{Bloom, H160, H256, U256};
@@ -421,7 +427,7 @@ impl ConsensusGraph {
 
         prices.sort();
         if prices.is_empty() {
-            None
+            Some(U256::from(1))
         } else {
             if average_transaction_count_per_block
                 < TRANSACTION_COUNT_PER_BLOCK_WATER_LINE

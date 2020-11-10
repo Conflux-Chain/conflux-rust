@@ -75,9 +75,6 @@ pub mod consensus_internal {
 
     // How many quarters that the mining reward keep decaying.
     pub const MINING_REWARD_DECAY_PERIOD_IN_QUARTER: usize = 32;
-    pub const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
-    pub const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
-    pub const TRANSACTION_COUNT_PER_BLOCK_WATER_LINE: usize = 600;
 
     /// This is the cap of the size of the anticone barrier. If we have more
     /// than this number we will use the brute_force O(n) algorithm instead.
@@ -107,6 +104,12 @@ pub mod consensus_internal {
     /// to update the meter every 20 blocks. Note that confirmation meter
     /// update is CPU intensive if the tree graph is in a unstable state.
     pub const CONFIRMATION_METER_UPDATE_FREQUENCY: usize = 20;
+}
+
+pub mod rpc {
+    pub const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
+    pub const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
+    pub const TRANSACTION_COUNT_PER_BLOCK_WATER_LINE: usize = 600;
 }
 
 pub mod sync {
