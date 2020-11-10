@@ -77,6 +77,7 @@ pub mod consensus_internal {
     pub const MINING_REWARD_DECAY_PERIOD_IN_QUARTER: usize = 32;
     pub const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
     pub const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
+    pub const TRANSACTION_COUNT_PER_BLOCK_WATER_LINE: usize = 600;
 
     /// This is the cap of the size of the anticone barrier. If we have more
     /// than this number we will use the brute_force O(n) algorithm instead.

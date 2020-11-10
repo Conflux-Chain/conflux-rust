@@ -373,6 +373,7 @@ impl ConsensusGraph {
         let mut number_of_blocks_to_sample = GAS_PRICE_BLOCK_SAMPLE_SIZE;
         let mut tx_hashes = HashSet::new();
         let mut prices = Vec::new();
+        let mut total_transaction_count_in_processed_blocks = 0;
 
         loop {
             if number_of_blocks_to_sample == 0 || last_epoch_number == 0 {
@@ -392,6 +393,8 @@ impl ConsensusGraph {
                     .data_man
                     .block_by_hash(&hash, false /* update_cache */)
                     .unwrap();
+                total_transaction_count_in_processed_blocks +=
+                    block.transactions.len();
                 for tx in block.transactions.iter() {
                     if tx_hashes.insert(tx.hash()) {
                         prices.push(tx.gas_price().clone());
@@ -407,11 +410,28 @@ impl ConsensusGraph {
             }
         }
 
+        let processed_block_count =
+            GAS_PRICE_BLOCK_SAMPLE_SIZE - number_of_blocks_to_sample;
+        let average_transaction_count_per_block = if processed_block_count != 0
+        {
+            total_transaction_count_in_processed_blocks / processed_block_count
+        } else {
+            0
+        };
+
         prices.sort();
         if prices.is_empty() {
             None
         } else {
-            Some(prices[prices.len() / 2])
+            if average_transaction_count_per_block
+                < TRANSACTION_COUNT_PER_BLOCK_WATER_LINE
+            {
+                // TPS is not that high, which indicates the transactions can
+                // easily be packed.
+                Some(prices[prices.len() / 8])
+            } else {
+                Some(prices[prices.len() / 2])
+            }
         }
     }
 
