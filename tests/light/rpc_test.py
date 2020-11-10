@@ -203,6 +203,16 @@ class LightRPCTest(ConfluxTestFramework):
 
         # --------------------------
 
+        self.log.info(f"Checking cfx_getAccumulateInterestRate...")
+
+        full = self.nodes[FULLNODE0].cfx_getAccumulateInterestRate(latest_state)
+        light = self.nodes[LIGHTNODE].cfx_getAccumulateInterestRate(latest_state)
+        assert_equal(light, full)
+
+        self.log.info(f"Pass -- cfx_getAccumulateInterestRate")
+
+        # --------------------------
+
         self.log.info(f"Checking cfx_getAdmin...")
         full = self.nodes[FULLNODE0].cfx_getAdmin(self.user, latest_state)
         light = self.nodes[LIGHTNODE].cfx_getAdmin(self.user, latest_state)
@@ -238,6 +248,16 @@ class LightRPCTest(ConfluxTestFramework):
         light = self.nodes[LIGHTNODE].cfx_getCollateralForStorage(self.user, latest_state)
         assert_equal(light, full)
         self.log.info(f"Pass -- cfx_getCollateralForStorage")
+
+        # --------------------------
+
+        self.log.info(f"Checking cfx_getInterestRate...")
+
+        full = self.nodes[FULLNODE0].cfx_getInterestRate(latest_state)
+        light = self.nodes[LIGHTNODE].cfx_getInterestRate(latest_state)
+        assert_equal(light, full)
+
+        self.log.info(f"Pass -- cfx_getInterestRate")
 
         # --------------------------
 
@@ -446,9 +466,7 @@ class LightRPCTest(ConfluxTestFramework):
         assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_call, {}, "latest_checkpoint")
         assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_checkBalanceAgainstTransaction, "0x1386b4185a223ef49592233b69291bbe5a80c527", "0x8b017126d2fede908a86b36b43969f17d25f3771", "0x5208", "0x2540be400", "0x0", "latest_checkpoint")
         assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_estimateGasAndCollateral, {}, "latest_checkpoint")
-        assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_getAccumulateInterestRate, "latest_checkpoint")
         assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_getBlockRewardInfo, "latest_checkpoint")
-        assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_getInterestRate, "latest_checkpoint")
 
         self.log.info(f"Pass -- not supported APIs")
 

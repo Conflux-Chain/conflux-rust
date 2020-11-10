@@ -2,7 +2,7 @@
 
 ## Improvements
 
-- Support `cfx_gasPrice` on light nodes.
+- Support `cfx_gasPrice`, `cfx_getAccumulateInterestRate` and `cfx_getInterestRate` on light nodes.
 - Add the following new fields in the return value of `cfx_getTransactionReceipt`: `gasCoveredBySponsor`, `storageCollateralized`, `storageCoveredBySponsor`, `storageReleased`.
 
 # 1.0.2

@@ -62,8 +62,9 @@ pub trait StateDbExt {
     fn is_initialized(&self) -> Result<bool>;
 }
 
-const ACCUMULATE_INTEREST_RATE_KEY: &'static [u8] = b"accumulate_interest_rate";
-const INTEREST_RATE_KEY: &'static [u8] = b"interest_rate";
+pub const ACCUMULATE_INTEREST_RATE_KEY: &'static [u8] =
+    b"accumulate_interest_rate";
+pub const INTEREST_RATE_KEY: &'static [u8] = b"interest_rate";
 const TOTAL_BANK_TOKENS_KEY: &'static [u8] = b"total_staking_tokens";
 const TOTAL_STORAGE_TOKENS_KEY: &'static [u8] = b"total_storage_tokens";
 const TOTAL_TOKENS_KEY: &'static [u8] = b"total_issued_tokens";

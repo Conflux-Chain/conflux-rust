@@ -17,12 +17,14 @@ use crate::{
 };
 use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
+    internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
     light::{
         GAS_PRICE_BATCH_SIZE, GAS_PRICE_BLOCK_SAMPLE_SIZE,
         GAS_PRICE_TRANSACTION_SAMPLE_SIZE, LOG_FILTERING_LOOKAHEAD,
         MAX_POLL_TIME,
     },
 };
+use cfx_statedb::{ACCUMULATE_INTEREST_RATE_KEY, INTEREST_RATE_KEY};
 use cfx_types::{
     address_util::AddressUtil, BigEndianHash, Bloom, H160, H256,
     KECCAK_EMPTY_BLOOM, U256,
@@ -433,10 +435,46 @@ impl QueryService {
     pub async fn get_storage_root(
         &self, epoch: EpochNumber, address: H160,
     ) -> Result<StorageRoot, Error> {
-        debug!("get_storage_root epoch={:?} address={:?}", epoch, address,);
+        debug!("get_storage_root epoch={:?} address={:?}", epoch, address);
 
         let epoch = self.get_height_from_epoch_number(epoch)?;
         self.retrieve_storage_root(epoch, address).await
+    }
+
+    pub async fn get_interest_rate(
+        &self, epoch: EpochNumber,
+    ) -> Result<U256, Error> {
+        debug!("get_interest_rate epoch={:?}", epoch);
+
+        let epoch = self.get_height_from_epoch_number(epoch)?;
+
+        let key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            INTEREST_RATE_KEY,
+        )
+        .to_key_bytes();
+
+        self.retrieve_state_entry::<U256>(epoch, key)
+            .await
+            .map(|opt| opt.unwrap_or_default())
+    }
+
+    pub async fn get_accumulate_interest_rate(
+        &self, epoch: EpochNumber,
+    ) -> Result<U256, Error> {
+        debug!("get_accumulate_interest_rate epoch={:?}", epoch);
+
+        let epoch = self.get_height_from_epoch_number(epoch)?;
+
+        let key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            ACCUMULATE_INTEREST_RATE_KEY,
+        )
+        .to_key_bytes();
+
+        self.retrieve_state_entry::<U256>(epoch, key)
+            .await
+            .map(|opt| opt.unwrap_or_default())
     }
 
     pub async fn get_tx_info(&self, hash: H256) -> Result<TxInfo, Error> {
