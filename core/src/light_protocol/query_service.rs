@@ -21,7 +21,8 @@ use cfx_parameters::{
     light::{
         GAS_PRICE_BATCH_SIZE, GAS_PRICE_BLOCK_SAMPLE_SIZE,
         GAS_PRICE_TRANSACTION_SAMPLE_SIZE, LOG_FILTERING_LOOKAHEAD,
-        MAX_POLL_TIME,
+        MAX_POLL_TIME, TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW,
+        TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM,
     },
 };
 use cfx_statedb::{ACCUMULATE_INTEREST_RATE_KEY, INTEREST_RATE_KEY};
@@ -278,6 +279,8 @@ impl QueryService {
         // collect block hashes for gas price sample
         let mut epoch = self.consensus.best_epoch_number();
         let mut hashes = vec![];
+        let mut total_transaction_count_in_processed_blocks = 0;
+        let mut processed_block_count = 0;
 
         let inner = self
             .consensus
@@ -325,7 +328,10 @@ impl QueryService {
                 }
             };
 
-            trace!("samping gas prices from block {:?}", block.hash());
+            trace!("sampling gas prices from block {:?}", block.hash());
+            processed_block_count += 1;
+            total_transaction_count_in_processed_blocks +=
+                block.transactions.len();
 
             for tx in block.transactions.iter() {
                 prices.push(tx.gas_price().clone());
@@ -338,11 +344,28 @@ impl QueryService {
 
         trace!("gas price sample: {:?}", prices);
 
+        let average_transaction_count_per_block = if processed_block_count != 0
+        {
+            total_transaction_count_in_processed_blocks / processed_block_count
+        } else {
+            0
+        };
+
         if prices.is_empty() {
-            Ok(None)
+            Ok(Some(U256::from(1)))
         } else {
             prices.sort();
-            Ok(Some(prices[prices.len() / 2]))
+            if average_transaction_count_per_block
+                < TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW
+            {
+                Ok(Some(U256::from(1)))
+            } else if average_transaction_count_per_block
+                < TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM
+            {
+                Ok(Some(prices[prices.len() / 8]))
+            } else {
+                Ok(Some(prices[prices.len() / 2]))
+            }
         }
     }
 
