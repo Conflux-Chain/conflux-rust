@@ -38,7 +38,8 @@ use cfx_parameters::{
     consensus::*,
     rpc::{
         GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
-        TRANSACTION_COUNT_PER_BLOCK_WATER_LINE,
+        TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW,
+        TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM,
     },
 };
 use cfx_statedb::StateDb;
@@ -430,10 +431,12 @@ impl ConsensusGraph {
             Some(U256::from(1))
         } else {
             if average_transaction_count_per_block
-                < TRANSACTION_COUNT_PER_BLOCK_WATER_LINE
+                < TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW
             {
-                // TPS is not that high, which indicates the transactions can
-                // easily be packed.
+                Some(U256::from(1))
+            } else if average_transaction_count_per_block
+                < TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM
+            {
                 Some(prices[prices.len() / 8])
             } else {
                 Some(prices[prices.len() / 2])

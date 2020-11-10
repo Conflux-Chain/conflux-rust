@@ -109,7 +109,8 @@ pub mod consensus_internal {
 pub mod rpc {
     pub const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
     pub const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
-    pub const TRANSACTION_COUNT_PER_BLOCK_WATER_LINE: usize = 600;
+    pub const TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW: usize = 100;
+    pub const TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM: usize = 600;
 }
 
 pub mod sync {
@@ -370,6 +371,9 @@ pub mod light {
 
     // Maximum number of transactions to sample for cfx_gasPrice.
     pub const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 1000;
+
+    pub const TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW: usize = 100;
+    pub const TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM: usize = 600;
 
     // Number of blocks we retrieve in parallel for the gas price sample.
     pub const GAS_PRICE_BATCH_SIZE: usize = 30;
