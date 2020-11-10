@@ -882,7 +882,7 @@ impl RpcImpl {
             }
             ExecutionOutcome::Finished(executed) => executed,
         };
-        let mut storage_collateralized = 0;
+        let mut storage_collateralized = U64::from(0);
         for storage_change in &executed.storage_collateralized {
             storage_collateralized += storage_change.collaterals;
         }
@@ -915,7 +915,7 @@ impl RpcImpl {
             // 1/4 of the gas limit.
             gas_limit: executed.gas_used * 4 / 3,
             gas_used: executed.gas_used,
-            storage_collateralized: storage_collateralized.into(),
+            storage_collateralized,
         };
         Ok(response)
     }
@@ -1105,7 +1105,7 @@ impl Cfx for CfxHandler {
             fn blocks_by_epoch(&self, num: EpochNumber) -> JsonRpcResult<Vec<H256>>;
             fn skipped_blocks_by_epoch(&self, num: EpochNumber) -> JsonRpcResult<Vec<H256>>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<U256>;
-            fn gas_price(&self) -> JsonRpcResult<U256>;
+            fn gas_price(&self) -> BoxFuture<U256>;
             fn next_nonce(&self, address: H160, num: Option<BlockHashOrEpochNumber>)
                 -> BoxFuture<U256>;
             fn get_status(&self) -> JsonRpcResult<RpcStatus>;

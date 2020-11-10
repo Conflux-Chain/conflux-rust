@@ -1706,12 +1706,12 @@ impl<'a> Executive<'a> {
                         if inc > 0 {
                             storage_collateralized.push(StorageChange {
                                 address: *address,
-                                collaterals: inc,
+                                collaterals: inc.into(),
                             });
                         } else if sub > 0 {
                             storage_released.push(StorageChange {
                                 address: *address,
-                                collaterals: sub,
+                                collaterals: sub.into(),
                             });
                         }
                     }

@@ -1621,7 +1621,7 @@ fn test_storage_commission_privilege() {
     assert_eq!(storage_collateralized[0].address, sender.address());
     assert_eq!(
         storage_collateralized[0].collaterals,
-        COLLATERAL_UNITS_PER_STORAGE_KEY
+        COLLATERAL_UNITS_PER_STORAGE_KEY.into()
     );
     assert_eq!(storage_released.len(), 0);
 
@@ -1766,13 +1766,13 @@ fn test_storage_commission_privilege() {
     assert_eq!(storage_collateralized[0].address, caller3.address());
     assert_eq!(
         storage_collateralized[0].collaterals,
-        COLLATERAL_UNITS_PER_STORAGE_KEY
+        COLLATERAL_UNITS_PER_STORAGE_KEY.into()
     );
     assert_eq!(storage_released.len(), 1);
     assert_eq!(storage_released[0].address, sender.address());
     assert_eq!(
         storage_released[0].collaterals,
-        COLLATERAL_UNITS_PER_STORAGE_KEY
+        COLLATERAL_UNITS_PER_STORAGE_KEY.into()
     );
     assert_eq!(gas_used, U256::from(26_017));
     assert_eq!(
@@ -1847,13 +1847,13 @@ fn test_storage_commission_privilege() {
     assert_eq!(storage_collateralized[0].address, address);
     assert_eq!(
         storage_collateralized[0].collaterals,
-        COLLATERAL_UNITS_PER_STORAGE_KEY
+        COLLATERAL_UNITS_PER_STORAGE_KEY.into()
     );
     assert_eq!(storage_released.len(), 1);
     assert_eq!(storage_released[0].address, caller3.address());
     assert_eq!(
         storage_released[0].collaterals,
-        COLLATERAL_UNITS_PER_STORAGE_KEY
+        COLLATERAL_UNITS_PER_STORAGE_KEY.into()
     );
     assert_eq!(gas_used, U256::from(26_017));
     assert_eq!(
@@ -1946,13 +1946,13 @@ fn test_storage_commission_privilege() {
     assert_eq!(storage_collateralized[0].address, caller2.address());
     assert_eq!(
         storage_collateralized[0].collaterals,
-        COLLATERAL_UNITS_PER_STORAGE_KEY
+        COLLATERAL_UNITS_PER_STORAGE_KEY.into()
     );
     assert_eq!(storage_released.len(), 1);
     assert_eq!(storage_released[0].address, address);
     assert_eq!(
         storage_released[0].collaterals,
-        COLLATERAL_UNITS_PER_STORAGE_KEY
+        COLLATERAL_UNITS_PER_STORAGE_KEY.into()
     );
     assert_eq!(gas_used, U256::from(26_017));
     assert_eq!(
@@ -2078,13 +2078,13 @@ fn test_storage_commission_privilege() {
     assert_eq!(storage_collateralized[0].address, caller1.address());
     assert_eq!(
         storage_collateralized[0].collaterals,
-        COLLATERAL_UNITS_PER_STORAGE_KEY
+        COLLATERAL_UNITS_PER_STORAGE_KEY.into()
     );
     assert_eq!(storage_released.len(), 1);
     assert_eq!(storage_released[0].address, caller2.address());
     assert_eq!(
         storage_released[0].collaterals,
-        COLLATERAL_UNITS_PER_STORAGE_KEY
+        COLLATERAL_UNITS_PER_STORAGE_KEY.into()
     );
     assert_eq!(gas_used, U256::from(26_017));
     assert_eq!(

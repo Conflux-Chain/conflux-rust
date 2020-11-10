@@ -391,12 +391,12 @@ class ConfluxTestFramework:
     def wait_for_node_exit(self, i, timeout):
         self.nodes[i].process.wait(timeout)
 
-    def maybe_restart_node(self, i, stop_probability, clean_probability):
+    def maybe_restart_node(self, i, stop_probability, clean_probability, wait_time=300):
         if random.random() <= stop_probability:
             self.log.info("stop %s", i)
             clean_data = True if random.random() <= clean_probability else False
             self.stop_node(i, clean=clean_data)
-            self.start_node(i, wait_time=120, phase_to_wait=("NormalSyncPhase"))
+            self.start_node(i, wait_time=wait_time, phase_to_wait=("NormalSyncPhase"))
 
     # Private helper methods. These should not be accessed by the subclass test scripts.
 

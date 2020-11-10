@@ -1185,8 +1185,9 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             }
         }
 
-        // Then scan unapplied storage changes.
-        for (key, _value) in sponsor_whitelist_control_address.storage_changes()
+        // Then scan storage changes in cache.
+        for (key, _value) in
+            sponsor_whitelist_control_address.storage_value_write_cache()
         {
             if key.starts_with(address.as_ref()) {
                 if let Some(storage_owner) =
@@ -1194,11 +1195,16 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                         .original_ownership_at(&self.db, key)?
                 {
                     storage_owner_map.insert(key.clone(), storage_owner);
+                } else {
+                    // The corresponding entry has been reset during transaction
+                    // execution, so we do not need to handle it now.
+                    storage_owner_map.remove(key);
                 }
             }
         }
         if !AM::is_read_only() {
-            // Note removal of all keys in storage_cache and storage_changes.
+            // Note removal of all keys in storage_value_read_cache and
+            // storage_value_write_cache.
             for (key, _storage_owner) in &storage_owner_map {
                 debug!("delete sponsor key {:?}", key);
                 sponsor_whitelist_control_address.set_storage(
@@ -1216,29 +1222,29 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     pub fn record_storage_and_whitelist_entries_release(
         &mut self, address: &Address, substate: &mut Substate,
     ) -> DbResult<()> {
-        let sponsor_whitelist_key_storage_owners_map =
-            self.remove_whitelists_for_contract::<access_mode::Read>(address)?;
+        self.remove_whitelists_for_contract::<access_mode::Write>(address)?;
+
+        // Process collateral for removed storage.
+        // TODO: try to do it in a better way, e.g. first log the deletion
+        //  somewhere then apply the collateral change.
+        {
+            let mut sponsor_whitelist_control_address = self.require_exists(
+                &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+                /* require_code = */ false,
+            )?;
+            sponsor_whitelist_control_address
+                .commit_ownership_change(&self.db, substate)?;
+        }
 
         let account_cache_read_guard = self.cache.read();
         let maybe_account = account_cache_read_guard
             .get(address)
             .and_then(|acc| acc.account.as_ref());
 
-        // Process collateral for removed storage.
-        // TODO: try to do it in a better way, e.g. first log the deletion
-        //  somewhere then apply the collateral change.
-
         let storage_key_value = self.db.delete_all::<access_mode::Read>(
             StorageKey::new_storage_root_key(address),
             None,
         )?;
-        for (_key, storage_owner) in sponsor_whitelist_key_storage_owners_map {
-            substate.record_storage_release(
-                &storage_owner,
-                COLLATERAL_UNITS_PER_STORAGE_KEY,
-            );
-        }
-
         for (key, value) in &storage_key_value {
             if let StorageKey::StorageKey { storage_key, .. } =
                 StorageKey::from_key_bytes(&key[..])
@@ -1247,7 +1253,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 // information to find out if collateral refund is necessary
                 // for touched keys.
                 if maybe_account.map_or(true, |acc| {
-                    acc.storage_changes().get(storage_key).is_none()
+                    acc.storage_value_write_cache().get(storage_key).is_none()
                 }) {
                     let storage_value =
                         rlp::decode::<StorageValue>(value.as_ref())?;
@@ -1263,7 +1269,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
 
         if let Some(acc) = maybe_account {
             // The current value isn't important because it will be deleted.
-            for (key, _value) in acc.storage_changes() {
+            for (key, _value) in acc.storage_value_write_cache() {
                 if let Some(storage_owner) =
                     acc.original_ownership_at(&self.db, key)?
                 {
@@ -1278,7 +1284,13 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     pub fn remove_contract(&mut self, address: &Address) -> DbResult<()> {
-        self.remove_whitelists_for_contract::<access_mode::Write>(address)?;
+        let removed_whitelist =
+            self.remove_whitelists_for_contract::<access_mode::Write>(address)?;
+        if !removed_whitelist.is_empty() {
+            error!(
+                "removed_whitelist here should be empty unless in unit tests."
+            );
+        }
         Self::update_cache(
             self.cache.get_mut(),
             self.checkpoints.get_mut(),

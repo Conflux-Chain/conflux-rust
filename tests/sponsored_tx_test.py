@@ -157,7 +157,7 @@ class SponsoredTxTest(ConfluxTestFramework):
         # set privilege for addr1
         b0 = client.get_balance(genesis_addr)
         c0 = client.get_collateral_for_storage(genesis_addr)
-        self.call_contract_function(
+        transaction = self.call_contract_function(
             contract=test_contract,
             name="add",
             args=[Web3.toChecksumAddress(addr1)],
@@ -168,11 +168,12 @@ class SponsoredTxTest(ConfluxTestFramework):
             storage_limit=64)
         assert_equal(client.get_balance(genesis_addr), b0 - charged_of_huge_gas(gas) - collateral_per_storage_key)
         assert_equal(client.get_collateral_for_storage(genesis_addr), c0 + collateral_per_storage_key)
+        assert_equal(self.wait_for_tx([transaction], True)[0]['gasCoveredBySponsor'], False)
 
         # addr1 call contract with privilege without enough cfx for gas fee
         sb = client.get_sponsor_balance_for_gas(contract_addr)
         b1 = client.get_balance(addr1)
-        self.call_contract_function(
+        transaction = self.call_contract_function(
             contract=test_contract,
             name="foo",
             args=[],
@@ -182,6 +183,7 @@ class SponsoredTxTest(ConfluxTestFramework):
             check_status=True)
         assert_equal(client.get_balance(addr1), 10 ** 6)
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sb - charged_of_huge_gas(gas))
+        assert_equal(self.wait_for_tx([transaction], True)[0]['gasCoveredBySponsor'], True)
 
         self.log.info("Pass")
 

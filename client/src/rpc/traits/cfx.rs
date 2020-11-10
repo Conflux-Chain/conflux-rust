@@ -36,7 +36,7 @@ pub trait Cfx {
 
     /// Returns current gas price.
     #[rpc(name = "cfx_gasPrice")]
-    fn gas_price(&self) -> JsonRpcResult<U256>;
+    fn gas_price(&self) -> BoxFuture<U256>;
 
     /// Returns highest epoch number.
     #[rpc(name = "cfx_epochNumber")]
