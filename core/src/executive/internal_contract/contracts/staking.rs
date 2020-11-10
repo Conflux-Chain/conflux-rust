@@ -15,28 +15,30 @@ use crate::{
     evm::{ActionParams, Spec},
     impl_function_type, make_function_table, make_solidity_contract,
     make_solidity_function, rename_interface,
-    state::{State, Substate},
+    state::{StateGeneric, Substate},
     vm,
 };
+#[cfg(test)]
+use cfx_storage::StorageState;
+use cfx_storage::StorageStateTrait;
 use cfx_types::{Address, U256};
 #[cfg(test)]
 use rustc_hex::FromHex;
 
-lazy_static! {
-    static ref CONTRACT_TABLE: SolFnTable =
-        make_function_table!(Deposit, Withdraw, VoteLockSnake);
-    static ref CONTRACT_TABLE_V2: SolFnTable = make_function_table!(
-        Deposit,
-        Withdraw,
-        VoteLock,
-        GetStakingBalance,
-        GetLockedStakingBalance,
-        GetVotePower
-    );
+fn generate_fn_table<S: StorageStateTrait + Send + Sync + 'static>(
+) -> SolFnTable<S> {
+    make_function_table!(
+        Deposit<S>,
+        Withdraw<S>,
+        VoteLock<S>,
+        GetStakingBalance<S>,
+        GetLockedStakingBalance<S>,
+        GetVotePower<S>
+    )
 }
 
 make_solidity_contract! {
-    pub struct Staking(STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,CONTRACT_TABLE_V2);
+    pub struct Staking(STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS, generate_fn_table);
 }
 
 make_solidity_function! {
@@ -44,10 +46,10 @@ make_solidity_function! {
 }
 impl_function_type!(Deposit, "non_payable_write");
 
-impl UpfrontPaymentTrait for Deposit {
+impl<S: StorageStateTrait + Send + Sync> UpfrontPaymentTrait<S> for Deposit<S> {
     fn upfront_gas_payment(
         &self, _: &Self::Input, params: &ActionParams, spec: &Spec,
-        state: &State,
+        state: &StateGeneric<S>,
     ) -> U256
     {
         let length = state.deposit_list_length(&params.sender).unwrap_or(0);
@@ -55,10 +57,10 @@ impl UpfrontPaymentTrait for Deposit {
     }
 }
 
-impl ExecutionTrait for Deposit {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for Deposit<S> {
     fn execute_inner(
         &self, input: U256, params: &ActionParams, _spec: &Spec,
-        state: &mut State, _substate: &mut Substate,
+        state: &mut StateGeneric<S>, _substate: &mut Substate,
     ) -> vm::Result<()>
     {
         deposit(input, params, state)
@@ -70,10 +72,12 @@ make_solidity_function! {
 }
 impl_function_type!(Withdraw, "non_payable_write");
 
-impl UpfrontPaymentTrait for Withdraw {
+impl<S: StorageStateTrait + Send + Sync> UpfrontPaymentTrait<S>
+    for Withdraw<S>
+{
     fn upfront_gas_payment(
         &self, _input: &Self::Input, params: &ActionParams, spec: &Spec,
-        state: &State,
+        state: &StateGeneric<S>,
     ) -> U256
     {
         let length = state.deposit_list_length(&params.sender).unwrap_or(0);
@@ -81,10 +85,10 @@ impl UpfrontPaymentTrait for Withdraw {
     }
 }
 
-impl ExecutionTrait for Withdraw {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for Withdraw<S> {
     fn execute_inner(
         &self, input: U256, params: &ActionParams, _spec: &Spec,
-        state: &mut State, _substate: &mut Substate,
+        state: &mut StateGeneric<S>, _substate: &mut Substate,
     ) -> vm::Result<()>
     {
         withdraw(input, params, state)
@@ -99,10 +103,12 @@ rename_interface! {
     struct VoteLockSnake(VoteLock, "vote_lock(uint256,uint256)");
 }
 
-impl UpfrontPaymentTrait for VoteLock {
+impl<S: StorageStateTrait + Send + Sync> UpfrontPaymentTrait<S>
+    for VoteLock<S>
+{
     fn upfront_gas_payment(
         &self, _input: &Self::Input, params: &ActionParams, spec: &Spec,
-        state: &State,
+        state: &StateGeneric<S>,
     ) -> U256
     {
         let length = state.vote_stake_list_length(&params.sender).unwrap_or(0);
@@ -110,10 +116,10 @@ impl UpfrontPaymentTrait for VoteLock {
     }
 }
 
-impl ExecutionTrait for VoteLock {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for VoteLock<S> {
     fn execute_inner(
         &self, inputs: (U256, U256), params: &ActionParams, _spec: &Spec,
-        state: &mut State, _substate: &mut Substate,
+        state: &mut StateGeneric<S>, _substate: &mut Substate,
     ) -> vm::Result<()>
     {
         vote_lock(inputs.0, inputs.1, params, state)
@@ -125,10 +131,12 @@ make_solidity_function! {
 }
 impl_function_type!(GetStakingBalance, "query_with_default_gas");
 
-impl ExecutionTrait for GetStakingBalance {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
+    for GetStakingBalance<S>
+{
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _spec: &Spec,
-        state: &mut State, _substate: &mut Substate,
+        state: &mut StateGeneric<S>, _substate: &mut Substate,
     ) -> vm::Result<U256>
     {
         Ok(state.staking_balance(&input)?)
@@ -140,10 +148,12 @@ make_solidity_function! {
 }
 impl_function_type!(GetLockedStakingBalance, "query");
 
-impl UpfrontPaymentTrait for GetLockedStakingBalance {
+impl<S: StorageStateTrait + Send + Sync> UpfrontPaymentTrait<S>
+    for GetLockedStakingBalance<S>
+{
     fn upfront_gas_payment(
         &self, (address, _): &(Address, U256), _: &ActionParams, spec: &Spec,
-        state: &State,
+        state: &StateGeneric<S>,
     ) -> U256
     {
         let length = state.vote_stake_list_length(address).unwrap_or(0);
@@ -151,10 +161,12 @@ impl UpfrontPaymentTrait for GetLockedStakingBalance {
     }
 }
 
-impl ExecutionTrait for GetLockedStakingBalance {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
+    for GetLockedStakingBalance<S>
+{
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
-        _spec: &Spec, state: &mut State, _substate: &mut Substate,
+        _spec: &Spec, state: &mut StateGeneric<S>, _substate: &mut Substate,
     ) -> vm::Result<U256>
     {
         Ok(get_locked_staking(address, block_number, state)?)
@@ -166,10 +178,12 @@ make_solidity_function! {
 }
 impl_function_type!(GetVotePower, "query");
 
-impl UpfrontPaymentTrait for GetVotePower {
+impl<S: StorageStateTrait + Send + Sync> UpfrontPaymentTrait<S>
+    for GetVotePower<S>
+{
     fn upfront_gas_payment(
         &self, (address, _): &(Address, U256), _: &ActionParams, spec: &Spec,
-        state: &State,
+        state: &StateGeneric<S>,
     ) -> U256
     {
         let length = state.vote_stake_list_length(address).unwrap_or(0);
@@ -177,10 +191,10 @@ impl UpfrontPaymentTrait for GetVotePower {
     }
 }
 
-impl ExecutionTrait for GetVotePower {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for GetVotePower<S> {
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
-        _spec: &Spec, state: &mut State, _substate: &mut Substate,
+        _spec: &Spec, state: &mut StateGeneric<S>, _substate: &mut Substate,
     ) -> vm::Result<U256>
     {
         Ok(get_vote_power(address, block_number, state)?)
@@ -197,10 +211,18 @@ fn test_staking_contract_sig() {
     /// `0x5547dedb`.
     static VOTE_LOCK_SIG: &'static [u8] = &[0x55, 0x47, 0xde, 0xdb];
 
-    assert_eq!(Deposit {}.function_sig().to_vec(), DEPOSIT_SIG.to_vec());
-    assert_eq!(Withdraw {}.function_sig().to_vec(), WITHDRAW_SIG.to_vec());
     assert_eq!(
-        VoteLockSnake {}.function_sig().to_vec(),
+        <Deposit<StorageState>>::default().function_sig().to_vec(),
+        DEPOSIT_SIG.to_vec()
+    );
+    assert_eq!(
+        <Withdraw<StorageState>>::default().function_sig().to_vec(),
+        WITHDRAW_SIG.to_vec()
+    );
+    assert_eq!(
+        <VoteLockSnake<StorageState>>::default()
+            .function_sig()
+            .to_vec(),
         VOTE_LOCK_SIG.to_vec()
     );
 }
@@ -209,10 +231,10 @@ fn test_staking_contract_sig() {
 fn test_staking_contract_sig_v2() {
     // Check the consistency between signature generated by rust code and java
     // sdk.
-    check_signature!(GetStakingBalance, "b04ef9c2");
-    check_signature!(GetLockedStakingBalance, "b3657ee7");
-    check_signature!(GetVotePower, "c90abac8");
-    check_signature!(Deposit, "b6b55f25");
-    check_signature!(Withdraw, "2e1a7d4d");
-    check_signature!(VoteLock, "44a51d6d");
+    check_signature!(GetStakingBalance<StorageState>, "b04ef9c2");
+    check_signature!(GetLockedStakingBalance<StorageState>, "b3657ee7");
+    check_signature!(GetVotePower<StorageState>, "c90abac8");
+    check_signature!(Deposit<StorageState>, "b6b55f25");
+    check_signature!(Withdraw<StorageState>, "2e1a7d4d");
+    check_signature!(VoteLock<StorageState>, "44a51d6d");
 }
