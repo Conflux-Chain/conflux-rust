@@ -18,4 +18,6 @@ pub struct Status {
     pub block_number: U64,
     /// The number of pending transactions
     pub pending_tx_number: U64,
+    /// The network id,
+    pub network_id: U64,
 }

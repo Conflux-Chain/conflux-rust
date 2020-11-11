@@ -89,7 +89,7 @@ pub const NODE_TAG_FULL: &str = "full";
 pub struct NetworkConfiguration {
     pub is_consortium: bool,
     /// Network identifier
-    pub id: u64,
+    pub id: u32,
     /// Directory path to store general network configuration. None means
     /// nothing will be saved
     pub config_path: Option<String>,
@@ -141,7 +141,7 @@ pub struct NetworkConfiguration {
 }
 
 impl NetworkConfiguration {
-    pub fn new(id: u64, discovery_config: DiscoveryConfiguration) -> Self {
+    pub fn new(id: u32, discovery_config: DiscoveryConfiguration) -> Self {
         NetworkConfiguration {
             is_consortium: false,
             id,
@@ -175,7 +175,7 @@ impl NetworkConfiguration {
     }
 
     pub fn new_with_port(
-        id: u64, port: u16, discovery_config: DiscoveryConfiguration,
+        id: u32, port: u16, discovery_config: DiscoveryConfiguration,
     ) -> NetworkConfiguration {
         let mut config = NetworkConfiguration::new(id, discovery_config);
         config.listen_address = Some(SocketAddr::V4(SocketAddrV4::new(

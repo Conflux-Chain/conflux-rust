@@ -423,6 +423,7 @@ impl RpcImpl {
         let epoch_number = best_info.best_epoch_number;
         let block_number = self.consensus.block_count();
         let tx_count = self.tx_pool.total_unpacked();
+        let network_id = self.network.config.id;
 
         Ok(RpcStatus {
             best_hash: H256::from(best_hash),
@@ -430,6 +431,7 @@ impl RpcImpl {
             epoch_number: epoch_number.into(),
             block_number: block_number.into(),
             pending_tx_number: tx_count.into(),
+            network_id: network_id.into(),
         })
     }
 

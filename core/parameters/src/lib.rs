@@ -110,6 +110,10 @@ pub mod consensus_internal {
     pub const CONFIRMATION_METER_UPDATE_FREQUENCY: usize = 20;
 }
 
+pub mod network {
+    pub const NETWORK_ID_RANGE: u32 = 10_000;
+}
+
 pub mod sync {
     use std::time::Duration;
 

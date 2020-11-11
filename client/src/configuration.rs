@@ -6,7 +6,9 @@ use crate::rpc::{
     impls::RpcImplConfiguration, HttpConfiguration, TcpConfiguration,
     WsConfiguration,
 };
-use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
+use cfx_parameters::{
+    block::DEFAULT_TARGET_BLOCK_GAS_LIMIT, network::NETWORK_ID_RANGE,
+};
 use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
@@ -148,7 +150,7 @@ build_config! {
         // Only override the network_id for local experiments,
         // when user would like to keep the existing blockchain data
         // but disconnect from the public network.
-        (network_id, (Option<u64>), None)
+        (network_id, (Option<u32>), None)
         (tcp_port, (u16), 32323)
         (public_tcp_port, (Option<u16>), None)
         (public_address, (Option<String>), None)
@@ -321,12 +323,16 @@ impl Configuration {
         Ok(config)
     }
 
-    fn network_id(&self) -> u64 {
+    fn network_id(&self) -> u32 {
         match self.raw_conf.network_id {
             Some(x) => x,
             // The default network id is 1 for historic reason. It doesn't
             // really matter.
-            None => self.raw_conf.chain_id.unwrap_or(1) as u64,
+            None => self.raw_conf.chain_id.unwrap_or_else(|| {
+                let random_number: u32 = rand::thread_rng().gen();
+                random_number % (std::u32::MAX - NETWORK_ID_RANGE)
+                    + NETWORK_ID_RANGE
+            }),
         }
     }
 

@@ -370,7 +370,7 @@ impl Session {
     fn read_hello(
         &mut self, rlp: &Rlp, host: &NetworkServiceInner,
     ) -> Result<(), Error> {
-        let remote_network_id: u64 = rlp.val_at(0)?;
+        let remote_network_id: u32 = rlp.val_at(0)?;
         if remote_network_id != host.metadata.network_id {
             debug!(
                 "failed to read hello, network id mismatch, self = {}, remote = {}",

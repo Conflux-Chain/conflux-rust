@@ -153,7 +153,7 @@ pub struct NetworkService {
     pub io_service: Option<IoService<NetworkIoMessage>>,
     pub inner: Option<Arc<NetworkServiceInner>>,
     network_poll: Arc<Poll>,
-    config: NetworkConfiguration,
+    pub config: NetworkConfiguration,
 }
 
 impl NetworkService {
@@ -399,7 +399,7 @@ impl NetworkService {
 type SharedSession = Arc<RwLock<Session>>;
 
 pub struct HostMetadata {
-    pub network_id: u64,
+    pub network_id: u32,
     /// Our private and public keys.
     pub keys: KeyPair,
     pub protocols: RwLock<Vec<ProtocolInfo>>,
