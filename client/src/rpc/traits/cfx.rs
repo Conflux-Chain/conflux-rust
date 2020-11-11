@@ -4,17 +4,16 @@
 
 use super::super::types::{
     Account as RpcAccount, Block, Bytes, CallRequest,
-    CheckBalanceAgainstTransactionResponse, DepositInfo as RpcDepositInfo,
-    EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
-    Log as RpcLog, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
-    SponsorInfo as RpcSponsorInfo, Status as RpcStatus, Transaction,
-    VoteStakeInfo as RpcVoteStakeInfo,
+    CheckBalanceAgainstTransactionResponse, EpochNumber,
+    EstimateGasAndCollateralResponse, Filter as RpcFilter, Log as RpcLog,
+    Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, Status as RpcStatus,
+    Transaction,
 };
 use crate::rpc::types::BlockHashOrEpochNumber;
 use cfx_types::{H160, H256, U256, U64};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
 use jsonrpc_derive::rpc;
-use primitives::StorageRoot;
+use primitives::{DepositInfo, SponsorInfo, StorageRoot, VoteStakeInfo};
 
 /// Cfx rpc interface.
 #[rpc(server)]
@@ -61,7 +60,7 @@ pub trait Cfx {
     #[rpc(name = "cfx_getSponsorInfo")]
     fn sponsor_info(
         &self, addr: H160, epoch_number: Option<EpochNumber>,
-    ) -> BoxFuture<RpcSponsorInfo>;
+    ) -> BoxFuture<SponsorInfo>;
 
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getStakingBalance")]
@@ -73,13 +72,13 @@ pub trait Cfx {
     #[rpc(name = "cfx_getDepositList")]
     fn deposit_list(
         &self, addr: H160, epoch_number: Option<EpochNumber>,
-    ) -> BoxFuture<Vec<RpcDepositInfo>>;
+    ) -> BoxFuture<Vec<DepositInfo>>;
 
     /// Returns vote list of the given account.
     #[rpc(name = "cfx_getVoteList")]
     fn vote_list(
         &self, addr: H160, epoch_number: Option<EpochNumber>,
-    ) -> BoxFuture<Vec<RpcVoteStakeInfo>>;
+    ) -> BoxFuture<Vec<VoteStakeInfo>>;
 
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getCollateralForStorage")]
