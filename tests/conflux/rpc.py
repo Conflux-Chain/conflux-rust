@@ -123,6 +123,10 @@ class RpcClient:
         logs = self.node.cfx_getLogs(filter.__dict__)
         return logs
 
+    def get_status(self) -> dict:
+        status = self.node.cfx_getStatus()
+        return status
+
     def get_storage_at(self, addr: str, pos: str, epoch: str = None) -> str:
         assert_is_hash_string(addr, length=40)
         assert_is_hash_string(pos)

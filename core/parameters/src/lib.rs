@@ -77,8 +77,6 @@ pub mod consensus_internal {
 
     // How many quarters that the mining reward keep decaying.
     pub const MINING_REWARD_DECAY_PERIOD_IN_QUARTER: usize = 32;
-    pub const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
-    pub const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
 
     /// This is the cap of the size of the anticone barrier. If we have more
     /// than this number we will use the brute_force O(n) algorithm instead.
@@ -112,6 +110,13 @@ pub mod consensus_internal {
 
 pub mod network {
     pub const NETWORK_ID_RANGE: u32 = 10_000;
+}
+
+pub mod rpc {
+    pub const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
+    pub const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
+    pub const TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW: usize = 100;
+    pub const TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM: usize = 600;
 }
 
 pub mod sync {
@@ -372,6 +377,9 @@ pub mod light {
 
     // Maximum number of transactions to sample for cfx_gasPrice.
     pub const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 1000;
+
+    pub const TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW: usize = 100;
+    pub const TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM: usize = 600;
 
     // Number of blocks we retrieve in parallel for the gas price sample.
     pub const GAS_PRICE_BATCH_SIZE: usize = 30;
