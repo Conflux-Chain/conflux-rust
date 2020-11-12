@@ -18,18 +18,20 @@ use crate::{
             NewBlockHashes, NodeType, Receipts as GetReceiptsResponse,
             SendRawTx, StateEntries as GetStateEntriesResponse,
             StateRoots as GetStateRootsResponse, StatusPingDeprecatedV1,
-            StatusPingV2, StatusPongDeprecatedV1, StatusPongV2,
+            StatusPingDeprecatedV2, StatusPingV3, StatusPongDeprecatedV1,
+            StatusPongDeprecatedV2, StatusPongV3,
             StorageRoots as GetStorageRootsResponse,
             TxInfos as GetTxInfosResponse, Txs as GetTxsResponse,
             WitnessInfo as GetWitnessInfoResponse,
         },
         LightNodeConfiguration, LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT,
-        LIGHT_PROTOCOL_VERSION, LIGHT_PROTO_V1,
+        LIGHT_PROTOCOL_VERSION, LIGHT_PROTO_V1, LIGHT_PROTO_V2,
     },
     message::{decode_msg, decode_rlp_and_check_deprecation, Message, MsgId},
     sync::{message::Throttled, SynchronizationGraph},
     Notifications, UniqueId,
 };
+use cfx_internal_common::ChainIdParamsDeprecated;
 use cfx_parameters::light::{
     CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, HEARTBEAT_PERIOD, SYNC_PERIOD,
 };
@@ -335,15 +337,17 @@ impl Handler {
     fn validate_peer_state(&self, peer: &NodeId, msg_id: MsgId) -> Result<()> {
         let state = self.get_existing_peer_state(&peer)?;
 
-        if msg_id != msgid::STATUS_PONG_DEPRECATED
-            && msg_id != msgid::STATUS_PONG_V2
+        if msg_id != msgid::STATUS_PONG_DEPRECATED_V1
+            && msg_id != msgid::STATUS_PONG_DEPRECATED_V2
+            && msg_id != msgid::STATUS_PONG_V3
             && !state.read().handshake_completed
         {
             warn!("Received msg={:?} from handshaking peer={:?}", msg_id, peer);
             bail!(ErrorKind::UnexpectedMessage {
                 expected: vec![
-                    msgid::STATUS_PONG_DEPRECATED,
-                    msgid::STATUS_PONG_V2
+                    msgid::STATUS_PONG_DEPRECATED_V1,
+                    msgid::STATUS_PONG_DEPRECATED_V2,
+                    msgid::STATUS_PONG_V3,
                 ],
                 received: msg_id,
             });
@@ -384,8 +388,9 @@ impl Handler {
 
         match msg_id {
             // general messages
-            msgid::STATUS_PONG_DEPRECATED => self.on_status_deprecated(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
-            msgid::STATUS_PONG_V2 => self.on_status_v2(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::STATUS_PONG_DEPRECATED_V1 => self.on_status_deprecated_v1(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::STATUS_PONG_DEPRECATED_V2 => self.on_status_deprecated_v2(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::STATUS_PONG_V3 => self.on_status_v3(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
 
             // sync messages
             msgid::BLOCK_HASHES => self.on_block_hashes(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
@@ -495,9 +500,21 @@ impl Handler {
                     .hash(),
                 node_type: NodeType::Light,
             });
+        } else if peer_protocol_version == LIGHT_PROTO_V2 {
+            msg = Box::new(StatusPingDeprecatedV2 {
+                chain_id: ChainIdParamsDeprecated {
+                    chain_id: self.consensus.best_chain_id(),
+                },
+                genesis_hash: self
+                    .consensus
+                    .get_data_manager()
+                    .true_genesis
+                    .hash(),
+                node_type: NodeType::Light,
+            });
         } else {
-            msg = Box::new(StatusPingV2 {
-                chain_id: self.consensus.get_config().chain_id.clone(),
+            msg = Box::new(StatusPingV3 {
+                chain_id: self.consensus.get_config().chain_id.read().clone(),
                 genesis_hash: self
                     .consensus
                     .get_data_manager()
@@ -544,16 +561,41 @@ impl Handler {
         Ok(())
     }
 
-    fn on_status_v2(
-        &self, io: &dyn NetworkContext, peer: &NodeId, status: StatusPongV2,
-    ) -> Result<()> {
+    fn on_status_deprecated_v1(
+        &self, io: &dyn NetworkContext, peer: &NodeId,
+        status: StatusPongDeprecatedV1,
+    ) -> Result<()>
+    {
+        debug!("on_status (v1) peer={:?} status={:?}", peer, status);
+
+        self.on_status_deprecated_v2(
+            io,
+            peer,
+            StatusPongDeprecatedV2 {
+                chain_id: ChainIdParamsDeprecated {
+                    chain_id: self.consensus.best_chain_id(),
+                },
+                node_type: status.node_type,
+                genesis_hash: status.genesis_hash,
+                best_epoch: status.best_epoch,
+                terminals: status.terminals,
+            },
+        )
+    }
+
+    fn on_status_deprecated_v2(
+        &self, io: &dyn NetworkContext, peer: &NodeId,
+        status: StatusPongDeprecatedV2,
+    ) -> Result<()>
+    {
         debug!("on_status (v2) peer={:?} status={:?}", peer, status);
 
         self.validate_peer_type(status.node_type)?;
         self.validate_genesis_hash(status.genesis_hash)?;
         validate_chain_id(
-            &self.consensus.get_config().chain_id,
-            &status.chain_id,
+            &*self.consensus.get_config().chain_id.read(),
+            status.chain_id.clone().into(),
+            status.best_epoch,
         )?;
 
         {
@@ -570,24 +612,31 @@ impl Handler {
         Ok(())
     }
 
-    fn on_status_deprecated(
-        &self, io: &dyn NetworkContext, peer: &NodeId,
-        status: StatusPongDeprecatedV1,
-    ) -> Result<()>
-    {
-        debug!("on_status (v1) peer={:?} status={:?}", peer, status);
+    fn on_status_v3(
+        &self, io: &dyn NetworkContext, peer: &NodeId, status: StatusPongV3,
+    ) -> Result<()> {
+        debug!("on_status (v3) peer={:?} status={:?}", peer, status);
 
-        self.on_status_v2(
-            io,
-            peer,
-            StatusPongV2 {
-                chain_id: self.consensus.get_config().chain_id.clone(),
-                node_type: status.node_type,
-                genesis_hash: status.genesis_hash,
-                best_epoch: status.best_epoch,
-                terminals: status.terminals,
-            },
-        )
+        self.validate_peer_type(status.node_type)?;
+        self.validate_genesis_hash(status.genesis_hash)?;
+        validate_chain_id(
+            &*self.consensus.get_config().chain_id.read(),
+            status.chain_id.clone(),
+            status.best_epoch,
+        )?;
+
+        {
+            let state = self.get_existing_peer_state(peer)?;
+            let mut state = state.write();
+            state.best_epoch = status.best_epoch;
+            state.handshake_completed = true;
+            state.terminals = status.terminals.into_iter().collect();
+        }
+
+        // NOTE: `start_sync` acquires read locks on peer states so
+        // we need to make sure to release locks before calling it
+        self.start_sync(io);
+        Ok(())
     }
 
     fn on_block_hashes(

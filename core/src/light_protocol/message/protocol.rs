@@ -7,10 +7,11 @@ use rlp_derive::{RlpDecodable, RlpEncodable};
 
 use super::NodeType;
 use crate::message::RequestId;
+use cfx_internal_common::{ChainIdParamsDeprecated, ChainIdParamsInner};
 use cfx_storage::{NodeMerkleProof, StateProof, TrieProof};
 use primitives::{
-    BlockHeader, BlockReceipts, ChainIdParams, Receipt, SignedTransaction,
-    StateRoot, StorageRoot,
+    BlockHeader, BlockReceipts, Receipt, SignedTransaction, StateRoot,
+    StorageRoot,
 };
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
@@ -30,16 +31,32 @@ pub struct StatusPongDeprecatedV1 {
 }
 
 #[derive(Clone, Debug, RlpEncodable, RlpDecodable)]
-pub struct StatusPingV2 {
-    pub chain_id: ChainIdParams,
+pub struct StatusPingDeprecatedV2 {
+    pub chain_id: ChainIdParamsDeprecated,
     pub genesis_hash: H256,
     pub node_type: NodeType,
 }
 
 #[derive(Clone, Debug, RlpEncodable, RlpDecodable)]
-pub struct StatusPongV2 {
+pub struct StatusPingV3 {
+    pub chain_id: ChainIdParamsInner,
+    pub genesis_hash: H256,
+    pub node_type: NodeType,
+}
+
+#[derive(Clone, Debug, RlpEncodable, RlpDecodable)]
+pub struct StatusPongDeprecatedV2 {
     pub best_epoch: u64,
-    pub chain_id: ChainIdParams,
+    pub chain_id: ChainIdParamsDeprecated,
+    pub genesis_hash: H256,
+    pub node_type: NodeType,
+    pub terminals: Vec<H256>,
+}
+
+#[derive(Clone, Debug, RlpEncodable, RlpDecodable)]
+pub struct StatusPongV3 {
+    pub best_epoch: u64,
+    pub chain_id: ChainIdParamsInner,
     pub genesis_hash: H256,
     pub node_type: NodeType,
     pub terminals: Vec<H256>,

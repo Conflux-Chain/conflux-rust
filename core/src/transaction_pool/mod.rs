@@ -569,6 +569,11 @@ impl TransactionPool {
     {
         let mut inner = self.inner.write_with_metric(&PACK_TRANSACTION_LOCK);
         best_epoch_height += 1;
+        let chain_id = self
+            .verification_config
+            .chain_id_params
+            .read()
+            .get_chain_id(best_epoch_height);
         let transaction_epoch_bound =
             self.verification_config.transaction_epoch_bound;
         let height_lower_bound = if best_epoch_height > transaction_epoch_bound
@@ -584,6 +589,7 @@ impl TransactionPool {
             block_size_limit,
             height_lower_bound,
             height_upper_bound,
+            chain_id,
         )
     }
 

@@ -26,7 +26,7 @@ use metrics::{register_meter_with_group, Meter};
 use parity_bytes::ToPretty;
 use parking_lot::RwLock;
 use primitives::{
-    transaction::Action, Account, ChainIdParams, SignedTransaction, Transaction,
+    transaction::Action, Account, SignedTransaction, Transaction,
 };
 use rand::prelude::*;
 use rlp::Encodable;
@@ -219,7 +219,7 @@ impl TransactionGenerator {
                 value: balance_to_transfer,
                 action: Action::Call(receiver_address),
                 storage_limit: 0,
-                chain_id: txgen.consensus.get_config().chain_id.chain_id,
+                chain_id: txgen.consensus.best_chain_id(),
                 epoch_height: txgen.consensus.best_epoch_number(),
                 data: Bytes::new(),
             };
@@ -334,7 +334,7 @@ impl DirectTransactionGenerator {
 
     pub fn generate_transactions(
         &mut self, block_size_limit: &mut usize, mut num_txs_simple: usize,
-        mut num_txs_erc20: usize, chain_id: &ChainIdParams,
+        mut num_txs_erc20: usize, chain_id: u32,
     ) -> Vec<Arc<SignedTransaction>>
     {
         let mut result = vec![];
@@ -416,7 +416,7 @@ impl DirectTransactionGenerator {
                 // large value to avoid FIXME: this sloppy zero
                 // becomes an issue in the experiments.
                 epoch_height: 0,
-                chain_id: chain_id.chain_id,
+                chain_id,
                 data: vec![0u8; 128],
             };
             let signed_transaction = tx.sign(sender_kp.secret());
@@ -507,7 +507,7 @@ impl DirectTransactionGenerator {
                 // large value to avoid FIXME: this sloppy zero
                 // becomes an issue in the experiments.
                 epoch_height: 0,
-                chain_id: chain_id.chain_id,
+                chain_id,
                 data: tx_data,
             };
             let signed_transaction = tx.sign(sender_kp.secret());

@@ -60,7 +60,7 @@ pub use self::{
     snapshot_manifest_response::SnapshotManifestResponse,
     state_sync_candidate_request::StateSyncCandidateRequest,
     state_sync_candidate_response::StateSyncCandidateResponse,
-    status::{StatusV2, StatusV3},
+    status::*,
     throttling::Throttled,
     transactions::{
         GetTransactions, GetTransactionsFromTxHashes,

@@ -581,7 +581,7 @@ impl TransactionPoolInner {
     pub fn pack_transactions<'a>(
         &mut self, num_txs: usize, block_gas_limit: U256,
         block_size_limit: usize, epoch_height_lower_bound: u64,
-        epoch_height_upper_bound: u64,
+        epoch_height_upper_bound: u64, chain_id: u32,
     ) -> Vec<Arc<SignedTransaction>>
     {
         let mut packed_transactions: Vec<Arc<SignedTransaction>> = Vec::new();
@@ -607,6 +607,12 @@ impl TransactionPoolInner {
                 } else {
                     break 'out;
                 }
+            }
+
+            // Drop any tx with mismatched chain_id when a hard fork is
+            // happening.
+            if tx.chain_id != chain_id {
+                continue 'out;
             }
 
             // If in rare case we popped up something that is currently outside

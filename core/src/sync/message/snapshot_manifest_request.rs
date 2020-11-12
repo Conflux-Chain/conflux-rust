@@ -15,7 +15,7 @@ use crate::{
         },
         request_manager::{AsAny, Request},
         state::storage::{RangedManifest, SnapshotSyncCandidate},
-        Error, ProtocolConfiguration, SYNC_PROTO_V1, SYNC_PROTO_V3,
+        Error, ProtocolConfiguration, SYNC_PROTO_V1, SYNC_PROTO_V4,
     },
 };
 use cfx_parameters::{
@@ -39,7 +39,7 @@ pub struct SnapshotManifestRequest {
 
 build_msg_with_request_id_impl! {
     SnapshotManifestRequest, msgid::GET_SNAPSHOT_MANIFEST,
-    "SnapshotManifestRequest", SYNC_PROTO_V1, SYNC_PROTO_V3
+    "SnapshotManifestRequest", SYNC_PROTO_V1, SYNC_PROTO_V4
 }
 
 impl Handleable for SnapshotManifestRequest {

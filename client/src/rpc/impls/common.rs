@@ -495,7 +495,7 @@ impl RpcImpl {
 
         Ok(RpcStatus {
             best_hash: H256::from(best_hash),
-            chain_id: best_info.chain_id.into(),
+            chain_id: best_info.best_chain_id().into(),
             epoch_number: epoch_number.into(),
             block_number: block_number.into(),
             pending_tx_number: tx_count.into(),

@@ -13,8 +13,9 @@ use crate::{
     sync::{
         message::{
             handle_rlp_message, msgid, Context, DynamicCapability,
-            GetBlockHeadersResponse, Heartbeat, NewBlockHashes, StatusV2,
-            StatusV3, TransactionDigests,
+            GetBlockHeadersResponse, Heartbeat, NewBlockHashes,
+            StatusDeprecatedV2, StatusDeprecatedV3, StatusV4,
+            TransactionDigests,
         },
         request_manager::{try_get_block_hashes, Request},
         state::SnapshotChunkSync,
@@ -23,9 +24,11 @@ use crate::{
         StateSyncConfiguration,
         SYNCHRONIZATION_PROTOCOL_OLD_VERSIONS_TO_SUPPORT,
         SYNCHRONIZATION_PROTOCOL_VERSION, SYNC_PROTO_V1, SYNC_PROTO_V2,
+        SYNC_PROTO_V3,
     },
     NodeType,
 };
+use cfx_internal_common::ChainIdParamsDeprecated;
 use cfx_parameters::{block::MAX_BLOCK_SIZE_IN_BYTES, sync::*};
 use cfx_types::H256;
 use io::TimerToken;
@@ -544,8 +547,9 @@ impl SynchronizationProtocolHandler {
                 // `syn.peers`, and this peer should be in
                 // `syn.handshaking_peers`
                 if !self.syn.handshaking_peers.read().contains_key(peer)
-                    || (msg_id != msgid::STATUS_V3
-                        && msg_id != msgid::STATUS_V2)
+                    || (msg_id != msgid::STATUS_DEPRECATED_V2
+                        && msg_id != msgid::STATUS_DEPRECATED_V3
+                        && msg_id != msgid::STATUS_V4)
                 {
                     debug!("Message from unknown peer {:?}", msg_id);
                     return Ok(());
@@ -1173,12 +1177,14 @@ impl SynchronizationProtocolHandler {
         Ok(())
     }
 
-    fn produce_status_message_v2(&self) -> StatusV2 {
+    fn produce_status_message_v2(&self) -> StatusDeprecatedV2 {
         let best_info = self.graph.consensus.best_info();
-        let chain_id = self.graph.consensus.get_config().chain_id.clone();
+        let chain_id = ChainIdParamsDeprecated {
+            chain_id: self.graph.consensus.best_chain_id(),
+        };
         let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
 
-        StatusV2 {
+        StatusDeprecatedV2 {
             chain_id,
             genesis_hash: self.graph.data_man.true_genesis.hash(),
             best_epoch: best_info.best_epoch_number,
@@ -1186,12 +1192,29 @@ impl SynchronizationProtocolHandler {
         }
     }
 
-    fn produce_status_message_v3(&self) -> StatusV3 {
+    fn produce_status_message_v3(&self) -> StatusDeprecatedV3 {
         let best_info = self.graph.consensus.best_info();
-        let chain_id = self.graph.consensus.get_config().chain_id.clone();
+        let chain_id = ChainIdParamsDeprecated {
+            chain_id: self.graph.consensus.best_chain_id(),
+        };
         let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
 
-        StatusV3 {
+        StatusDeprecatedV3 {
+            chain_id,
+            node_type: self.node_type(),
+            genesis_hash: self.graph.data_man.true_genesis.hash(),
+            best_epoch: best_info.best_epoch_number,
+            terminal_block_hashes: terminal_hashes,
+        }
+    }
+
+    fn produce_status_message_v4(&self) -> StatusV4 {
+        let best_info = self.graph.consensus.best_info();
+        let chain_id =
+            self.graph.consensus.get_config().chain_id.read().clone();
+        let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
+
+        StatusV4 {
             chain_id,
             node_type: self.node_type(),
             genesis_hash: self.graph.data_man.true_genesis.hash(),
@@ -1219,15 +1242,18 @@ impl SynchronizationProtocolHandler {
             let status_message = self.produce_status_message_v2();
             debug!("Sending status message to {}: {:?}", peer, status_message);
             status_message.send(io, peer)
-        } else {
+        } else if peer_protocol_version == SYNC_PROTO_V3 {
             let status_message = self.produce_status_message_v3();
+            debug!("Sending status message to {}: {:?}", peer, status_message);
+            status_message.send(io, peer)
+        } else {
+            let status_message = self.produce_status_message_v4();
             debug!("Sending status message to {}: {:?}", peer, status_message);
             status_message.send(io, peer)
         }
     }
 
     fn broadcast_heartbeat(&self, io: &dyn NetworkContext) {
-        let status_message = self.produce_status_message_v2();
         let heartbeat_message = self.produce_heartbeat_message();
         debug!("Broadcasting heartbeat message: {:?}", heartbeat_message);
 
@@ -1236,12 +1262,6 @@ impl SynchronizationProtocolHandler {
             .is_err()
         {
             warn!("Error broadcasting heartbeat message");
-        }
-        if self
-            .broadcast_message(io, &Default::default(), &status_message)
-            .is_err()
-        {
-            warn!("Error broadcasting status message");
         }
     }
 
