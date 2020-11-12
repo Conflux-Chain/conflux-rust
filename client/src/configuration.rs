@@ -6,6 +6,7 @@ use crate::rpc::{
     impls::RpcImplConfiguration, HttpConfiguration, TcpConfiguration,
     WsConfiguration,
 };
+use cfx_internal_common::{ChainIdParams, ChainIdParamsInner};
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
@@ -31,13 +32,17 @@ use cfxcore::{
     sync_parameters::*,
     transaction_pool::TxPoolConfig,
 };
+use lazy_static::*;
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
-use parking_lot::lock_api::RwLock;
-use primitives::ChainIdParams;
+use parking_lot::RwLock;
 use rand::Rng;
 use std::convert::TryInto;
 use txgen::TransactionGeneratorConfig;
+
+lazy_static! {
+    pub static ref CHAIN_ID: RwLock<Option<ChainIdParams>> = Default::default();
+}
 
 // usage:
 // ```
@@ -281,6 +286,12 @@ build_config! {
             }
         )
 
+        // Genesis Section
+        // chain_id_params describes a complex setup where chain id can change over epochs.
+        // Usually this is needed to describe forks. This config override0
+        (chain_id_params, (Option<ChainIdParamsInner>), None,
+            ChainIdParamsInner::parse_config_str)
+
         // Storage section.
         (provide_more_snapshot_for_sync,
             (Vec<ProvideExtraSnapshotSyncConfig>),
@@ -425,6 +436,17 @@ impl Configuration {
         )
     }
 
+    pub fn chain_id_params(&self) -> ChainIdParams {
+        if CHAIN_ID.read().is_none() {
+            *CHAIN_ID.write() = Some(ChainIdParamsInner::new(
+                self.raw_conf
+                    .chain_id
+                    .unwrap_or_else(|| rand::thread_rng().gen()),
+            ));
+        }
+        CHAIN_ID.read().as_ref().unwrap().clone()
+    }
+
     pub fn consensus_config(&self) -> ConsensusConfig {
         let enable_optimistic_execution = if DEFERRED_STATE_EPOCH_COUNT <= 1 {
             false
@@ -432,12 +454,7 @@ impl Configuration {
             self.raw_conf.enable_optimistic_execution
         };
         ConsensusConfig {
-            chain_id: ChainIdParams {
-                chain_id: self
-                    .raw_conf
-                    .chain_id
-                    .unwrap_or_else(|| rand::thread_rng().gen()),
-            },
+            chain_id: self.chain_id_params(),
             inner_conf: ConsensusInnerConfig {
                 adaptive_weight_beta: self.raw_conf.adaptive_weight_beta,
                 heavy_block_difficulty_ratio: self
@@ -515,6 +532,7 @@ impl Configuration {
             self.raw_conf.referee_bound,
             self.raw_conf.max_block_size_in_bytes,
             self.raw_conf.transaction_epoch_bound,
+            self.chain_id_params(),
         )
     }
 

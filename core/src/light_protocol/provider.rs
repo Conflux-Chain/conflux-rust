@@ -25,20 +25,22 @@ use crate::{
             StateEntries as GetStateEntriesResponse, StateEntryProof,
             StateEntryWithKey, StateKey, StateRootWithEpoch,
             StateRoots as GetStateRootsResponse, StatusPingDeprecatedV1,
-            StatusPingV2, StatusPongDeprecatedV1, StatusPongV2, StorageRootKey,
+            StatusPingDeprecatedV2, StatusPingV3, StatusPongDeprecatedV1,
+            StatusPongDeprecatedV2, StatusPongV3, StorageRootKey,
             StorageRootProof, StorageRootWithKey,
             StorageRoots as GetStorageRootsResponse, TxInfo,
             TxInfos as GetTxInfosResponse, Txs as GetTxsResponse,
             WitnessInfo as GetWitnessInfoResponse,
         },
         LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT,
-        LIGHT_PROTOCOL_VERSION, LIGHT_PROTO_V1,
+        LIGHT_PROTOCOL_VERSION, LIGHT_PROTO_V1, LIGHT_PROTO_V2,
     },
     message::{decode_msg, decode_rlp_and_check_deprecation, Message, MsgId},
     sync::{message::Throttled, SynchronizationGraph},
     verification::{compute_epoch_receipt_proof, compute_transaction_proof},
     TransactionPool,
 };
+use cfx_internal_common::ChainIdParamsDeprecated;
 use cfx_parameters::light::{
     MAX_EPOCHS_TO_SEND, MAX_HEADERS_TO_SEND, MAX_ITEMS_TO_SEND,
     MAX_TXS_TO_SEND, MAX_WITNESSES_TO_SEND,
@@ -151,15 +153,17 @@ impl Provider {
     fn validate_peer_state(&self, peer: &NodeId, msg_id: MsgId) -> Result<()> {
         let state = self.get_existing_peer_state(&peer)?;
 
-        if msg_id != msgid::STATUS_PING_DEPRECATED
-            && msg_id != msgid::STATUS_PING_V2
+        if msg_id != msgid::STATUS_PING_DEPRECATED_V1
+            && msg_id != msgid::STATUS_PING_DEPRECATED_V2
+            && msg_id != msgid::STATUS_PING_V3
             && !state.read().handshake_completed
         {
             warn!("Received msg={:?} from handshaking peer={:?}", msg_id, peer);
             bail!(ErrorKind::UnexpectedMessage {
                 expected: vec![
-                    msgid::STATUS_PING_DEPRECATED,
-                    msgid::STATUS_PING_V2
+                    msgid::STATUS_PING_DEPRECATED_V1,
+                    msgid::STATUS_PING_DEPRECATED_V2,
+                    msgid::STATUS_PING_V3,
                 ],
                 received: msg_id,
             });
@@ -178,8 +182,9 @@ impl Provider {
         let protocol = io.get_protocol();
 
         match msg_id {
-            msgid::STATUS_PING_DEPRECATED => self.on_status_deprecated(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
-            msgid::STATUS_PING_V2 => self.on_status_v2(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::STATUS_PING_DEPRECATED_V1 => self.on_status_deprecated_v1(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::STATUS_PING_DEPRECATED_V2 => self.on_status_deprecated_v2(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::STATUS_PING_V3 => self.on_status_v3(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::GET_STATE_ENTRIES => self.on_get_state_entries(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::GET_STATE_ROOTS => self.on_get_state_roots(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::GET_BLOCK_HASHES_BY_EPOCH => self.on_get_block_hashes_by_epoch(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
@@ -366,9 +371,19 @@ impl Provider {
                 node_type: self.node_type,
                 terminals,
             });
+        } else if self.peer_version(peer)? == LIGHT_PROTO_V2 {
+            msg = Box::new(StatusPongDeprecatedV2 {
+                chain_id: ChainIdParamsDeprecated {
+                    chain_id: self.consensus.best_chain_id(),
+                },
+                best_epoch: best_info.best_epoch_number,
+                genesis_hash,
+                node_type: self.node_type,
+                terminals,
+            });
         } else {
-            msg = Box::new(StatusPongV2 {
-                chain_id: self.consensus.get_config().chain_id.clone(),
+            msg = Box::new(StatusPongV3 {
+                chain_id: self.consensus.get_config().chain_id.read().clone(),
                 best_epoch: best_info.best_epoch_number,
                 genesis_hash,
                 node_type: self.node_type,
@@ -400,17 +415,41 @@ impl Provider {
         Ok(())
     }
 
-    fn on_status_v2(
-        &self, io: &dyn NetworkContext, peer: &NodeId, status: StatusPingV2,
-    ) -> Result<()> {
+    fn on_status_deprecated_v1(
+        &self, io: &dyn NetworkContext, peer: &NodeId,
+        status: StatusPingDeprecatedV1,
+    ) -> Result<()>
+    {
+        debug!("on_status (v1) peer={:?} status={:?}", peer, status);
+
+        self.on_status_v3(
+            io,
+            peer,
+            StatusPingV3 {
+                genesis_hash: status.genesis_hash,
+                node_type: status.node_type,
+                chain_id: self.consensus.get_config().chain_id.read().clone(),
+            },
+        )
+    }
+
+    fn on_status_deprecated_v2(
+        &self, io: &dyn NetworkContext, peer: &NodeId,
+        status: StatusPingDeprecatedV2,
+    ) -> Result<()>
+    {
         debug!("on_status (v2) peer={:?} status={:?}", peer, status);
         self.throttle(peer, &status)?;
 
         self.validate_peer_type(status.node_type)?;
         self.validate_genesis_hash(status.genesis_hash)?;
         validate_chain_id(
-            &self.consensus.get_config().chain_id,
-            &status.chain_id,
+            &ChainIdParamsDeprecated {
+                chain_id: self.consensus.best_chain_id(),
+            }
+            .into(),
+            status.chain_id.clone().into(),
+            0,
         )?;
 
         self.send_status(io, peer)
@@ -422,22 +461,30 @@ impl Provider {
         Ok(())
     }
 
-    fn on_status_deprecated(
-        &self, io: &dyn NetworkContext, peer: &NodeId,
-        status: StatusPingDeprecatedV1,
-    ) -> Result<()>
-    {
-        debug!("on_status (v1) peer={:?} status={:?}", peer, status);
+    fn on_status_v3(
+        &self, io: &dyn NetworkContext, peer: &NodeId, status: StatusPingV3,
+    ) -> Result<()> {
+        debug!("on_status (v2) peer={:?} status={:?}", peer, status);
+        self.throttle(peer, &status)?;
 
-        self.on_status_v2(
-            io,
-            peer,
-            StatusPingV2 {
-                genesis_hash: status.genesis_hash,
-                node_type: status.node_type,
-                chain_id: self.consensus.get_config().chain_id.clone(),
-            },
-        )
+        self.validate_peer_type(status.node_type)?;
+        self.validate_genesis_hash(status.genesis_hash)?;
+        validate_chain_id(
+            &ChainIdParamsDeprecated {
+                chain_id: self.consensus.best_chain_id(),
+            }
+            .into(),
+            status.chain_id.clone(),
+            0,
+        )?;
+
+        self.send_status(io, peer)
+            .chain_err(|| ErrorKind::SendStatusFailed { peer: *peer })?;
+
+        let state = self.get_existing_peer_state(peer)?;
+        let mut state = state.write();
+        state.handshake_completed = true;
+        Ok(())
     }
 
     fn on_get_state_roots(

@@ -46,9 +46,8 @@ pub use crate::{
     },
     storage_key::*,
     transaction::{
-        Action, ChainIdParams, SignedTransaction, Transaction,
-        TransactionWithSignature, TransactionWithSignatureSerializePart,
-        TxPropagateId,
+        Action, SignedTransaction, Transaction, TransactionWithSignature,
+        TransactionWithSignatureSerializePart, TxPropagateId,
     },
     transaction_index::TransactionIndex,
 };

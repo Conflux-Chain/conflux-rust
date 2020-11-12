@@ -194,6 +194,13 @@ impl BlockGenerator {
         }
     }
 
+    pub fn get_best_chain_id(&self) -> u32 {
+        let (best_info, _block_gas_limit, _transactions) = self
+            .txpool
+            .get_best_info_with_packed_transactions(0, 0, vec![]);
+        best_info.best_chain_id()
+    }
+
     // TODO: should not hold and pass write lock to consensus.
     fn assemble_new_block_impl(
         &self, parent_hash: H256, mut referees: Vec<H256>,

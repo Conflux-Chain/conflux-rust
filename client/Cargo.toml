@@ -18,6 +18,7 @@ io = { path = "../util/io" }
 cfxkey = { path = "../accounts/cfxkey" }
 cfxcore-accounts = { path = "../accounts" }
 cfxstore = { path = "../accounts/cfxstore" }
+cfx-internal-common = { path = "../core/internal_common" }
 cfx-statedb = { path = "../core/statedb" }
 cfx-storage = { path = "../core/storage" }
 app_dirs = "1.2.1"

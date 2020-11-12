@@ -9,6 +9,7 @@ use crate::{
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
     vm,
 };
+use cfx_internal_common::ChainIdParams;
 use cfx_parameters::block::*;
 use cfx_storage::{
     into_simple_mpt_key, make_simple_mpt, simple_mpt_merkle_root,
@@ -25,6 +26,7 @@ use unexpected::{Mismatch, OutOfBounds};
 
 #[derive(Debug, Clone)]
 pub struct VerificationConfig {
+    pub chain_id_params: ChainIdParams,
     pub verify_timestamp: bool,
     pub referee_bound: usize,
     pub max_block_size_in_bytes: usize,
@@ -199,7 +201,7 @@ pub fn is_valid_receipt_inclusion_proof(
 impl VerificationConfig {
     pub fn new(
         test_mode: bool, referee_bound: usize, max_block_size_in_bytes: usize,
-        transaction_epoch_bound: u64,
+        transaction_epoch_bound: u64, chain_id_params: ChainIdParams,
     ) -> Self
     {
         if test_mode {
@@ -209,6 +211,7 @@ impl VerificationConfig {
                 max_block_size_in_bytes,
                 transaction_epoch_bound,
                 vm_spec: vm::Spec::new_spec(),
+                chain_id_params,
             }
         } else {
             VerificationConfig {
@@ -217,6 +220,7 @@ impl VerificationConfig {
                 max_block_size_in_bytes,
                 transaction_epoch_bound,
                 vm_spec: vm::Spec::new_spec(),
+                chain_id_params,
             }
         }
     }

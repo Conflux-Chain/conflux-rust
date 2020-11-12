@@ -34,6 +34,7 @@ use crate::{
     vm_factory::VmFactory,
     NodeType, Notifications,
 };
+use cfx_internal_common::ChainIdParams;
 use cfx_parameters::{
     consensus::*,
     rpc::{
@@ -58,7 +59,7 @@ use primitives::{
     filter::{Filter, FilterError},
     log_entry::LocalizedLogEntry,
     receipt::Receipt,
-    ChainIdParams, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
+    EpochId, EpochNumber, SignedTransaction, TransactionIndex,
 };
 use rayon::prelude::*;
 use std::{
@@ -139,7 +140,7 @@ impl ConsensusGraphStatistics {
 
 #[derive(Default, DeriveMallocSizeOf)]
 pub struct BestInformation {
-    pub chain_id: u32,
+    chain_id: u32,
     pub best_block_hash: H256,
     pub best_epoch_number: u64,
     pub current_difficulty: U256,
@@ -1341,7 +1342,11 @@ impl ConsensusGraphTrait for ConsensusGraph {
         let best_epoch_number = inner.best_epoch_number();
         BEST_EPOCH_NUMBER.update(best_epoch_number as usize);
         *best_info = Arc::new(BestInformation {
-            chain_id: self.config.chain_id.get_chain_id(best_epoch_number),
+            chain_id: self
+                .config
+                .chain_id
+                .read()
+                .get_chain_id(best_epoch_number),
             best_block_hash: inner.best_block_hash(),
             best_epoch_number,
             current_difficulty: inner.current_difficulty,

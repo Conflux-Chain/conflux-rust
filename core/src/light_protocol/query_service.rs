@@ -705,6 +705,7 @@ impl QueryService {
             .consensus
             .get_config()
             .chain_id
+            .read()
             .get_chain_id(epoch_number))
     }
 
