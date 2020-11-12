@@ -4,10 +4,12 @@
 
 use crate::{bytes::Bytes, hash::keccak};
 use cfx_types::{Address, BigEndianHash, H160, H256, U256};
+use fixed_hash::alloc_::sync::Arc;
 use keylib::{
     self, public_to_address, recover, verify_public, Public, Secret, Signature,
 };
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use parking_lot::RwLock;
 use rlp::{self, Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
@@ -200,14 +202,39 @@ impl Encodable for Action {
 
 /// The parameters needed to determine the chain_id based on epoch_number.
 #[derive(Clone, Debug, Eq, RlpEncodable, RlpDecodable, PartialEq, Default)]
-pub struct ChainIdParams {
+pub struct ChainIdParamsDeprecated {
     /// Preconfigured chain_id.
     pub chain_id: u32,
 }
 
-impl ChainIdParams {
+impl ChainIdParamsDeprecated {
     /// The function return the chain_id with given parameters
     pub fn get_chain_id(&self, _epoch_number: u64) -> u32 { self.chain_id }
+}
+
+#[derive(Clone, Debug, Eq, RlpEncodable, RlpDecodable, PartialEq, Default)]
+pub struct ChainIdParamsInner {
+    /// Preconfigured chain_id.
+    pub chain_id: u32,
+}
+
+pub type ChainIdParams = Arc<RwLock<ChainIdParamsInner>>;
+
+impl ChainIdParamsInner {
+    /// The function return the chain_id with given parameters
+    pub fn get_chain_id(&self, _epoch_number: u64) -> u32 { unimplemented!() }
+
+    pub fn new(chain_id: u32) -> ChainIdParams {
+        Arc::new(RwLock::new(Self { chain_id }))
+    }
+}
+
+impl From<ChainIdParamsDeprecated> for ChainIdParamsInner {
+    fn from(x: ChainIdParamsDeprecated) -> Self {
+        Self {
+            chain_id: x.chain_id,
+        }
+    }
 }
 
 #[derive(

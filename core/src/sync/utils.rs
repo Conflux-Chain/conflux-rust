@@ -25,8 +25,8 @@ use cfx_parameters::{
 use cfx_storage::{StorageConfiguration, StorageManager};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use core::str::FromStr;
-use parking_lot::Mutex;
-use primitives::{Block, BlockHeaderBuilder, ChainIdParams};
+use parking_lot::{Mutex, RwLock};
+use primitives::{Block, BlockHeaderBuilder, ChainIdParamsInner};
 use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
 use threadpool::ThreadPool;
 
@@ -127,8 +127,9 @@ pub fn initialize_data_manager(
         U256::from(0),
     );
 
-    let machine =
-        Arc::new(new_machine_with_builtin(ChainIdParams { chain_id: 0 }));
+    let machine = Arc::new(new_machine_with_builtin(Arc::new(RwLock::new(
+        ChainIdParamsInner { chain_id: 0 },
+    ))));
 
     let genesis_block = Arc::new(genesis_block(
         &storage_manager,
@@ -198,7 +199,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
     let notifications = Notifications::init();
     let consensus = Arc::new(ConsensusGraph::new(
         ConsensusConfig {
-            chain_id: ChainIdParams { chain_id: 0 },
+            chain_id: Arc::new(RwLock::new(ChainIdParamsInner { chain_id: 0 })),
             inner_conf: ConsensusInnerConfig {
                 adaptive_weight_beta: beta,
                 heavy_block_difficulty_ratio: h,

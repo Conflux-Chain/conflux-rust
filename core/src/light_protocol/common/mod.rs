@@ -9,7 +9,7 @@ pub use ledger_info::LedgerInfo;
 pub use peers::{FullPeerFilter, FullPeerState, LightPeerState, Peers};
 
 use super::{Error, ErrorKind};
-use primitives::ChainIdParams;
+use primitives::ChainIdParamsInner;
 use std::{cmp, fmt::Debug};
 
 pub fn max_of_collection<I, T: Ord>(collection: I) -> Option<T>
@@ -20,13 +20,15 @@ where I: Iterator<Item = T> {
     })
 }
 
-pub fn validate_chain_id(
-    ours: &ChainIdParams, theirs: &ChainIdParams,
+pub fn validate_chain_id<
+    ChainIdT: Clone + PartialEq + Into<ChainIdParamsInner>,
+>(
+    ours: &ChainIdT, theirs: &ChainIdT,
 ) -> Result<(), Error> {
     if ours != theirs {
         let error_kind = ErrorKind::ChainIdMismatch {
-            ours: ours.clone(),
-            theirs: theirs.clone(),
+            ours: ours.clone().into(),
+            theirs: theirs.clone().into(),
         };
         debug!("{:?}", error_kind);
         bail!(error_kind);

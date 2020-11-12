@@ -578,6 +578,7 @@ impl TransactionPool {
             0
         };
         let height_upper_bound = best_epoch_height + transaction_epoch_bound;
+        // FIXME: pass chain_id.
         inner.pack_transactions(
             num_txs,
             block_gas_limit,
@@ -731,6 +732,7 @@ impl TransactionPool {
         let target_gas_limit = self.config.target_block_gas_limit.into();
         let self_gas_limit = min(max(target_gas_limit, gas_lower), gas_upper);
 
+        // FIXME: chain_id.
         let transactions_from_pool = self.pack_transactions(
             num_txs,
             self_gas_limit.clone(),

@@ -34,7 +34,7 @@ use cfxcore::{
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
 use parking_lot::lock_api::RwLock;
-use primitives::ChainIdParams;
+use primitives::ChainIdParamsInner;
 use rand::Rng;
 use std::convert::TryInto;
 use txgen::TransactionGeneratorConfig;
@@ -432,12 +432,11 @@ impl Configuration {
             self.raw_conf.enable_optimistic_execution
         };
         ConsensusConfig {
-            chain_id: ChainIdParams {
-                chain_id: self
-                    .raw_conf
-                    .chain_id
-                    .unwrap_or_else(|| rand::thread_rng().gen()),
-            },
+            // FIXME:
+            chain_id: ChainIdParamsInner::new(self
+                .raw_conf
+                .chain_id
+                .unwrap_or_else(|| rand::thread_rng().gen())),
             inner_conf: ConsensusInnerConfig {
                 adaptive_weight_beta: self.raw_conf.adaptive_weight_beta,
                 heavy_block_difficulty_ratio: self
