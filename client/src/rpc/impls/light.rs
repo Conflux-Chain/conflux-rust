@@ -19,7 +19,10 @@ use network::{
     node_table::{Node, NodeId},
     throttling, SessionDetails, UpdateNodeOperation,
 };
-use primitives::{Account, StorageRoot, TransactionWithSignature};
+use primitives::{
+    Account, DepositInfo, SponsorInfo, StorageRoot, TransactionWithSignature,
+    VoteStakeInfo,
+};
 use rlp::Encodable;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
@@ -35,9 +38,8 @@ use crate::{
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
             EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
             Log as RpcLog, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
-            SendTxRequest, SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
-            SyncGraphStates, Transaction as RpcTransaction, TxPoolPendingInfo,
-            TxWithPoolInfo,
+            SendTxRequest, Status as RpcStatus, SyncGraphStates,
+            Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
         },
         RpcBoxFuture,
     },
@@ -191,7 +193,7 @@ impl RpcImpl {
 
     fn sponsor_info(
         &self, address: H160, num: Option<EpochNumber>,
-    ) -> RpcBoxFuture<RpcSponsorInfo> {
+    ) -> RpcBoxFuture<SponsorInfo> {
         let address: H160 = address.into();
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
@@ -209,9 +211,7 @@ impl RpcImpl {
                 light.get_account(epoch, address).await,
             )?;
 
-            Ok(RpcSponsorInfo::new(
-                account.map_or(Default::default(), |acc| acc.sponsor_info),
-            ))
+            Ok(account.map_or(Default::default(), |acc| acc.sponsor_info))
         };
 
         Box::new(fut.boxed().compat())
@@ -240,6 +240,60 @@ impl RpcImpl {
             Ok(account
                 .map(|account| account.staking_balance.into())
                 .unwrap_or_default())
+        };
+
+        Box::new(fut.boxed().compat())
+    }
+
+    fn deposit_list(
+        &self, address: H160, num: Option<EpochNumber>,
+    ) -> RpcBoxFuture<Vec<DepositInfo>> {
+        let epoch = num.unwrap_or(EpochNumber::LatestState).into();
+        info!(
+            "RPC Request: cfx_getDepositList address={:?} epoch_num={:?}",
+            address, epoch
+        );
+
+        // clone `self.light` to avoid lifetime issues due to capturing `self`
+        let light = self.light.clone();
+
+        let fut = async move {
+            let mut result = vec![];
+            if let Some(deposit_list) = invalid_params_check(
+                "address",
+                light.get_deposit_list(epoch, address).await,
+            )? {
+                result = (*deposit_list).clone();
+            }
+
+            Ok(result)
+        };
+
+        Box::new(fut.boxed().compat())
+    }
+
+    fn vote_list(
+        &self, address: H160, num: Option<EpochNumber>,
+    ) -> RpcBoxFuture<Vec<VoteStakeInfo>> {
+        let epoch = num.unwrap_or(EpochNumber::LatestState).into();
+        info!(
+            "RPC Request: cfx_getVoteList address={:?} epoch_num={:?}",
+            address, epoch
+        );
+
+        // clone `self.light` to avoid lifetime issues due to capturing `self`
+        let light = self.light.clone();
+
+        let fut = async move {
+            let mut result = vec![];
+            if let Some(vote_list) = invalid_params_check(
+                "address",
+                light.get_vote_list(epoch, address).await,
+            )? {
+                result = (*vote_list).clone();
+            }
+
+            Ok(result)
         };
 
         Box::new(fut.boxed().compat())
@@ -851,8 +905,10 @@ impl Cfx for CfxHandler {
             fn interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn next_nonce(&self, address: H160, num: Option<BlockHashOrEpochNumber>) -> BoxFuture<U256>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256>;
-            fn sponsor_info(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<RpcSponsorInfo>;
+            fn sponsor_info(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<SponsorInfo>;
             fn staking_balance(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
+            fn deposit_list(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Vec<DepositInfo>>;
+            fn vote_list(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Vec<VoteStakeInfo>>;
             fn storage_at(&self, addr: H160, pos: H256, epoch_number: Option<EpochNumber>) -> BoxFuture<Option<H256>>;
             fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;

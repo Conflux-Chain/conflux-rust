@@ -27,8 +27,9 @@ use network::{
 };
 use parking_lot::Mutex;
 use primitives::{
-    filter::Filter, transaction::Action::Call, Account, SignedTransaction,
-    StorageKey, StorageRoot, StorageValue, TransactionWithSignature,
+    filter::Filter, transaction::Action::Call, Account, DepositInfo,
+    SignedTransaction, SponsorInfo, StorageKey, StorageRoot, StorageValue,
+    TransactionWithSignature, VoteStakeInfo,
 };
 use random_crash::*;
 use rlp::Rlp;
@@ -51,8 +52,7 @@ use crate::{
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
             EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
             Log as RpcLog, PackedOrExecuted, Receipt as RpcReceipt,
-            RewardInfo as RpcRewardInfo, SendTxRequest,
-            SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
+            RewardInfo as RpcRewardInfo, SendTxRequest, Status as RpcStatus,
             SyncGraphStates, Transaction as RpcTransaction, TxPoolPendingInfo,
             TxWithPoolInfo,
         },
@@ -174,7 +174,7 @@ impl RpcImpl {
 
     fn sponsor_info(
         &self, address: H160, num: Option<EpochNumber>,
-    ) -> RpcResult<RpcSponsorInfo> {
+    ) -> RpcResult<SponsorInfo> {
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
         info!(
             "RPC Request: cfx_getSponsorInfo address={:?} epoch_num={:?}",
@@ -185,9 +185,7 @@ impl RpcImpl {
             self.consensus.get_state_db_by_epoch_number(epoch_num)?;
         let acc = state_db.get_account(&address)?;
 
-        Ok(RpcSponsorInfo::new(
-            acc.map(|acc| acc.sponsor_info.clone()).unwrap_or_default(),
-        ))
+        Ok(acc.map(|acc| acc.sponsor_info.clone()).unwrap_or_default())
     }
 
     fn staking_balance(
@@ -204,6 +202,42 @@ impl RpcImpl {
         let acc = state_db.get_account(&address)?;
 
         Ok(acc.map_or(U256::zero(), |acc| acc.staking_balance).into())
+    }
+
+    fn deposit_list(
+        &self, address: H160, num: Option<EpochNumber>,
+    ) -> RpcResult<Vec<DepositInfo>> {
+        let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
+        info!(
+            "RPC Request: cfx_getDepositList address={:?} epoch_num={:?}",
+            address, epoch_num
+        );
+
+        let state_db =
+            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let mut result = vec![];
+        if let Some(deposit_list) = state_db.get_deposit_list(&address)? {
+            result = (*deposit_list).clone();
+        }
+        Ok(result)
+    }
+
+    fn vote_list(
+        &self, address: H160, num: Option<EpochNumber>,
+    ) -> RpcResult<Vec<VoteStakeInfo>> {
+        let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
+        info!(
+            "RPC Request: cfx_getVoteList address={:?} epoch_num={:?}",
+            address, epoch_num
+        );
+
+        let state_db =
+            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let mut result = vec![];
+        if let Some(vote_list) = state_db.get_vote_list(&address)? {
+            result = (*vote_list).clone()
+        }
+        Ok(result)
     }
 
     fn collateral_for_storage(
@@ -1120,10 +1154,12 @@ impl Cfx for CfxHandler {
             fn admin(&self, address: H160, num: Option<EpochNumber>)
                 -> BoxFuture<Option<H160>>;
             fn sponsor_info(&self, address: H160, num: Option<EpochNumber>)
-                -> BoxFuture<RpcSponsorInfo>;
+                -> BoxFuture<SponsorInfo>;
             fn balance(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn staking_balance(&self, address: H160, num: Option<EpochNumber>)
                 -> BoxFuture<U256>;
+            fn deposit_list(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Vec<DepositInfo>>;
+            fn vote_list(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Vec<VoteStakeInfo>>;
             fn collateral_for_storage(&self, address: H160, num: Option<EpochNumber>)
                 -> BoxFuture<U256>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>)
