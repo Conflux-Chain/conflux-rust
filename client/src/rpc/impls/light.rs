@@ -2,7 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{H160, H256, H520, U128, U256, U64};
+use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+use cfx_types::{H160, H256, H520, U128, U256, U512, U64};
 use cfxcore::{
     block_data_manager::BlockDataManager,
     consensus_parameters::ONE_GDRIP_IN_DRIP,
@@ -12,7 +13,7 @@ use cfxcore::{
 };
 use cfxcore_accounts::AccountProvider;
 use delegate::delegate;
-use futures::future::{FutureExt, TryFutureExt};
+use futures::future::{self, FutureExt, TryFutureExt};
 use futures01;
 use jsonrpc_core::{BoxFuture, Error as RpcError, Result as RpcResult};
 use network::{
@@ -865,6 +866,85 @@ impl RpcImpl {
 
         Box::new(fut.boxed().compat())
     }
+
+    fn check_balance_against_transaction(
+        &self, account_addr: H160, contract_addr: H160, gas_limit: U256,
+        gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>,
+    ) -> RpcBoxFuture<CheckBalanceAgainstTransactionResponse>
+    {
+        let epoch: primitives::EpochNumber =
+            epoch.unwrap_or(EpochNumber::LatestState).into();
+
+        info!(
+            "RPC Request: cfx_checkBalanceAgainstTransaction account_addr={:?} contract_addr={:?} gas_limit={:?} gas_price={:?} storage_limit={:?} epoch={:?}",
+            account_addr, contract_addr, gas_limit, gas_price, storage_limit, epoch
+        );
+
+        // clone to avoid lifetime issues due to capturing `self`
+        let light = self.light.clone();
+
+        let fut = async move {
+            // retrieve accounts and sponsor info in parallel
+            let (user_account, contract_account, is_sponsored) =
+                future::try_join3(
+                    light.get_account(epoch.clone(), account_addr),
+                    light.get_account(epoch.clone(), contract_addr),
+                    light.is_user_sponsored(epoch, contract_addr, account_addr),
+                )
+                .await?;
+
+            let gas_bound: U512 = contract_account
+                .as_ref()
+                .map(|a| a.sponsor_info.sponsor_gas_bound)
+                .unwrap_or_default()
+                .into();
+
+            let balance_for_gas: U512 = contract_account
+                .as_ref()
+                .map(|a| a.sponsor_info.sponsor_balance_for_gas)
+                .unwrap_or_default()
+                .into();
+
+            let balance_for_collateral: U512 = contract_account
+                .as_ref()
+                .map(|a| a.sponsor_info.sponsor_balance_for_collateral)
+                .unwrap_or_default()
+                .into();
+
+            let user_balance: U512 =
+                user_account.map(|a| a.balance).unwrap_or_default().into();
+
+            // check if eligible for sponsorship
+            let gas_cost = gas_limit.full_mul(gas_price);
+
+            let will_pay_tx_fee = !is_sponsored
+                || (gas_cost > gas_bound)
+                || (gas_cost > balance_for_gas);
+
+            let storage_limit_in_drip =
+                storage_limit.full_mul(*DRIPS_PER_STORAGE_COLLATERAL_UNIT);
+
+            let will_pay_collateral = !is_sponsored
+                || (storage_limit_in_drip > balance_for_collateral);
+
+            let minimum_balance = match (will_pay_tx_fee, will_pay_collateral) {
+                (false, false) => 0.into(),
+                (true, false) => gas_cost,
+                (false, true) => storage_limit_in_drip,
+                (true, true) => gas_cost + storage_limit_in_drip,
+            };
+
+            let is_balance_enough = user_balance >= minimum_balance;
+
+            Ok(CheckBalanceAgainstTransactionResponse {
+                will_pay_tx_fee,
+                will_pay_collateral,
+                is_balance_enough,
+            })
+        };
+
+        Box::new(fut.boxed().compat())
+    }
 }
 
 pub struct CfxHandler {
@@ -897,8 +977,10 @@ impl Cfx for CfxHandler {
             fn block_by_hash_with_pivot_assumption(&self, block_hash: H256, pivot_hash: H256, epoch_number: U64) -> BoxFuture<RpcBlock>;
             fn block_by_hash(&self, hash: H256, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;
             fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<H256>>;
+            fn check_balance_against_transaction(&self, account_addr: H160, contract_addr: H160, gas_limit: U256, gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>) -> BoxFuture<CheckBalanceAgainstTransactionResponse>;
             fn code(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
             fn collateral_for_storage(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
+            fn deposit_list(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Vec<DepositInfo>>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<U256>;
             fn gas_price(&self) -> BoxFuture<U256>;
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
@@ -907,19 +989,17 @@ impl Cfx for CfxHandler {
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256>;
             fn sponsor_info(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<SponsorInfo>;
             fn staking_balance(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
-            fn deposit_list(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Vec<DepositInfo>>;
-            fn vote_list(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Vec<VoteStakeInfo>>;
             fn storage_at(&self, addr: H160, pos: H256, epoch_number: Option<EpochNumber>) -> BoxFuture<Option<H256>>;
             fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
+            fn vote_list(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Vec<VoteStakeInfo>>;
         }
     }
 
     // TODO(thegaram): add support for these
     not_supported! {
         fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
-        fn check_balance_against_transaction(&self, account_addr: H160, contract_addr: H160, gas_limit: U256, gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>) -> RpcResult<CheckBalanceAgainstTransactionResponse>;
         fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<EstimateGasAndCollateralResponse>;
         fn get_block_reward_info(&self, num: EpochNumber) -> RpcResult<Vec<RpcRewardInfo>>;
     }

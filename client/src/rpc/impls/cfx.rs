@@ -1169,7 +1169,7 @@ impl Cfx for CfxHandler {
                 -> JsonRpcResult<EstimateGasAndCollateralResponse>;
             fn check_balance_against_transaction(
                 &self, account_addr: H160, contract_addr: H160, gas_limit: U256, gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>,
-            ) -> JsonRpcResult<CheckBalanceAgainstTransactionResponse>;
+            ) -> BoxFuture<CheckBalanceAgainstTransactionResponse>;
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
             fn send_raw_transaction(&self, raw: Bytes) -> JsonRpcResult<H256>;
