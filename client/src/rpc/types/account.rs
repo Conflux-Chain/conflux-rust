@@ -3,9 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_types::{H160, H256, U256};
-use primitives::{
-    Account as PrimitiveAccount, SponsorInfo as PrimitiveSponsorInfo,
-};
+use primitives::Account as PrimitiveAccount;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,32 +29,6 @@ impl Account {
                 .accumulated_interest_return
                 .into(),
             admin: account.admin.into(),
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SponsorInfo {
-    pub sponsor_for_gas: H160,
-    pub sponsor_for_collateral: H160,
-    pub sponsor_gas_bound: U256,
-    pub sponsor_balance_for_gas: U256,
-    pub sponsor_balance_for_collateral: U256,
-}
-
-impl SponsorInfo {
-    pub fn new(sponsor_info: PrimitiveSponsorInfo) -> Self {
-        Self {
-            sponsor_for_gas: sponsor_info.sponsor_for_gas.into(),
-            sponsor_for_collateral: sponsor_info.sponsor_for_collateral.into(),
-            sponsor_gas_bound: sponsor_info.sponsor_gas_bound.into(),
-            sponsor_balance_for_gas: sponsor_info
-                .sponsor_balance_for_gas
-                .into(),
-            sponsor_balance_for_collateral: sponsor_info
-                .sponsor_balance_for_collateral
-                .into(),
         }
     }
 }

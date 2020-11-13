@@ -22,7 +22,7 @@ mod transaction;
 pub mod pubsub;
 
 pub use self::{
-    account::{Account, SponsorInfo},
+    account::Account,
     blame_info::BlameInfo,
     block::{Block, BlockTransactions, Header},
     bytes::Bytes,

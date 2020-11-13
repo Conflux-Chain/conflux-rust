@@ -2,12 +2,14 @@
 
 # allow imports from parent directory
 # source: https://stackoverflow.com/a/11158224
-import os, sys, random, time
+import os, sys, random, time, json
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
+from eth_utils import decode_hex
 from conflux.rpc import RpcClient
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.util import assert_equal, assert_greater_than, assert_is_hex_string, assert_raises_rpc_error, connect_nodes, sync_blocks
+from test_framework.util import assert_equal, assert_greater_than, assert_is_hex_string, assert_raises_rpc_error, connect_nodes, sync_blocks, get_contract_instance
+from web3 import Web3
 
 FULLNODE0 = 0
 FULLNODE1 = 1
@@ -43,6 +45,29 @@ class LightRPCTest(ConfluxTestFramework):
         address = receipt["contractCreated"]
         assert_is_hex_string(address)
         return receipt, address
+
+    def _setup_stake_contract(self, addr, priv):
+        file_dir = os.path.dirname(os.path.realpath(__file__))
+        file_path = os.path.join(file_dir, "../..", "internal_contract", "metadata", "Staking.json")
+        staking_contract_dict = json.loads(open(os.path.join(file_path), "r").read())
+        staking_contract = get_contract_instance(contract_dict=staking_contract_dict)
+        contract_addr = Web3.toChecksumAddress("0888000000000000000000000000000000000002")
+        tx_conf = {
+            "from": Web3.toChecksumAddress(addr),
+            "to": contract_addr,
+            "nonce": 0,
+            "gas": 3_000_000,
+            "gasPrice": 1,
+            "chainId": 0
+        }
+
+        tx_data = decode_hex(staking_contract.functions.deposit(10 ** 18).buildTransaction(tx_conf)["data"])
+        tx = self.rpc[FULLNODE0].new_tx(value=0, sender=addr, receiver=contract_addr, gas=3_000_000, data=tx_data, priv_key=priv)
+        assert_equal(self.rpc[FULLNODE0].send_tx(tx, True), tx.hash_hex())
+
+        tx_data = decode_hex(staking_contract.functions.voteLock(4 * 10 ** 17, 100000).buildTransaction(tx_conf)["data"])
+        tx = self.rpc[FULLNODE0].new_tx(value=0, sender=addr, receiver=contract_addr, gas=3_000_000, data=tx_data, priv_key=priv)
+        assert_equal(self.rpc[FULLNODE0].send_tx(tx, True), tx.hash_hex())
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)
@@ -84,6 +109,11 @@ class LightRPCTest(ConfluxTestFramework):
         bytecode = open(bytecode_file).read()
         receipt, contractAddr = self.deploy_contract(bytecode)
         self.log.info(f"contract deployed: {contractAddr}")
+
+        (self.stake_addr, self.stake_priv) = self.rpc[FULLNODE0].rand_account()
+        tx = self.rpc[FULLNODE0].new_tx(receiver=self.stake_addr, value=10**19)
+        self.rpc[FULLNODE0].send_tx(tx, wait_for_receipt=True)
+        self._setup_stake_contract(self.stake_addr, self.stake_priv)
 
         self.user = self.rpc[FULLNODE0].GENESIS_ADDR
         self.contract = contractAddr
@@ -203,6 +233,16 @@ class LightRPCTest(ConfluxTestFramework):
 
         # --------------------------
 
+        self.log.info(f"Checking cfx_getAccumulateInterestRate...")
+
+        full = self.nodes[FULLNODE0].cfx_getAccumulateInterestRate(latest_state)
+        light = self.nodes[LIGHTNODE].cfx_getAccumulateInterestRate(latest_state)
+        assert_equal(light, full)
+
+        self.log.info(f"Pass -- cfx_getAccumulateInterestRate")
+
+        # --------------------------
+
         self.log.info(f"Checking cfx_getAdmin...")
         full = self.nodes[FULLNODE0].cfx_getAdmin(self.user, latest_state)
         light = self.nodes[LIGHTNODE].cfx_getAdmin(self.user, latest_state)
@@ -238,6 +278,16 @@ class LightRPCTest(ConfluxTestFramework):
         light = self.nodes[LIGHTNODE].cfx_getCollateralForStorage(self.user, latest_state)
         assert_equal(light, full)
         self.log.info(f"Pass -- cfx_getCollateralForStorage")
+
+        # --------------------------
+
+        self.log.info(f"Checking cfx_getInterestRate...")
+
+        full = self.nodes[FULLNODE0].cfx_getInterestRate(latest_state)
+        light = self.nodes[LIGHTNODE].cfx_getInterestRate(latest_state)
+        assert_equal(light, full)
+
+        self.log.info(f"Pass -- cfx_getInterestRate")
 
         # --------------------------
 
@@ -291,6 +341,19 @@ class LightRPCTest(ConfluxTestFramework):
 
         self.log.info(f"Pass -- cfx_getStorageRoot")
 
+        # --------------------------
+
+        self.log.info(f"Checking cfx_getDepositList & cfx_getVoteList")
+        full = self.nodes[FULLNODE0].cfx_getDepositList(self.stake_addr, latest_state)
+        light = self.nodes[LIGHTNODE].cfx_getDepositList(self.stake_addr, latest_state)
+        assert_equal(light, full)
+
+        full = self.nodes[FULLNODE0].cfx_getVoteList(self.stake_addr, latest_state)
+        light = self.nodes[LIGHTNODE].cfx_getVoteList(self.stake_addr, latest_state)
+        assert_equal(light, full)
+
+        self.log.info(f"Pass -- cfx_getDepositList & cfx_getVoteList")
+
     def assert_blocks_equal(self, light_block, block):
         # light nodes do not retrieve receipts for block queries
         # so fields related to execution results are not filled
@@ -317,13 +380,27 @@ class LightRPCTest(ConfluxTestFramework):
 
         for ii in range(10):
             receiver = self.rpc[FULLNODE0].rand_addr()
-            tx = self.rpc[FULLNODE0].new_tx(receiver=receiver, nonce=nonce + ii)
+            tx = self.rpc[FULLNODE0].new_tx(receiver=receiver, nonce=nonce + ii, gas_price=7)
             nonce += 1
             txs.append(tx)
 
         block_hash = self.rpc[FULLNODE0].generate_block_with_fake_txs(txs)
         self.rpc[FULLNODE0].generate_blocks(BLAME_CHECK_OFFSET) # make sure txs are executed
         sync_blocks(self.nodes)
+
+        # --------------------------
+
+        self.log.info(f"Checking cfx_gasPrice...")
+
+        light = self.nodes[LIGHTNODE].cfx_gasPrice()
+
+        # median of all (10) txs from the last 30 blocks
+        # NOTE: full node samples more blocks so the result might be different
+        assert_equal(light, '0x1')
+
+        self.log.info(f"Pass -- cfx_gasPrice")
+
+        # --------------------------
 
         self.log.info(f"Checking cfx_getBlockByHash...")
 
@@ -432,10 +509,7 @@ class LightRPCTest(ConfluxTestFramework):
         assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_call, {}, "latest_checkpoint")
         assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_checkBalanceAgainstTransaction, "0x1386b4185a223ef49592233b69291bbe5a80c527", "0x8b017126d2fede908a86b36b43969f17d25f3771", "0x5208", "0x2540be400", "0x0", "latest_checkpoint")
         assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_estimateGasAndCollateral, {}, "latest_checkpoint")
-        assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_gasPrice)
-        assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_getAccumulateInterestRate, "latest_checkpoint")
         assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_getBlockRewardInfo, "latest_checkpoint")
-        assert_raises_rpc_error(None, None, self.nodes[LIGHTNODE].cfx_getInterestRate, "latest_checkpoint")
 
         self.log.info(f"Pass -- not supported APIs")
 

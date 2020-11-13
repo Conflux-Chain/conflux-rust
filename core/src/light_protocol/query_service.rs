@@ -13,12 +13,19 @@ use crate::{
     },
     rpc_errors::{account_result_to_rpc_result, Error as RpcError},
     sync::SynchronizationGraph,
-    Notifications,
+    ConsensusGraph, Notifications,
 };
 use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
-    light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME},
+    internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+    light::{
+        GAS_PRICE_BATCH_SIZE, GAS_PRICE_BLOCK_SAMPLE_SIZE,
+        GAS_PRICE_TRANSACTION_SAMPLE_SIZE, LOG_FILTERING_LOOKAHEAD,
+        MAX_POLL_TIME, TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW,
+        TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM,
+    },
 };
+use cfx_statedb::{ACCUMULATE_INTEREST_RATE_KEY, INTEREST_RATE_KEY};
 use cfx_types::{
     address_util::AddressUtil, BigEndianHash, Bloom, H160, H256,
     KECCAK_EMPTY_BLOOM, U256,
@@ -31,8 +38,9 @@ use network::{service::ProtocolVersion, NetworkContext, NetworkService};
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
-    Account, Block, BlockReceipts, CodeInfo, EpochNumber, Receipt,
+    Account, Block, BlockReceipts, CodeInfo, DepositList, EpochNumber, Receipt,
     SignedTransaction, StorageKey, StorageRoot, StorageValue, TransactionIndex,
+    VoteStakeList,
 };
 use rlp::Rlp;
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
@@ -268,6 +276,100 @@ impl QueryService {
         .await
     }
 
+    pub async fn gas_price(&self) -> Result<Option<U256>, Error> {
+        // collect block hashes for gas price sample
+        let mut epoch = self.consensus.best_epoch_number();
+        let mut hashes = vec![];
+        let mut total_transaction_count_in_processed_blocks = 0;
+        let mut processed_block_count = 0;
+
+        let inner = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed")
+            .inner
+            .clone();
+
+        loop {
+            if hashes.len() >= GAS_PRICE_BLOCK_SAMPLE_SIZE || epoch == 0 {
+                break;
+            }
+
+            let mut epoch_hashes = inner.read().block_hashes_by_epoch(epoch)?;
+            epoch_hashes.reverse();
+
+            let missing = GAS_PRICE_BLOCK_SAMPLE_SIZE - hashes.len();
+            hashes.extend(epoch_hashes.into_iter().take(missing));
+
+            epoch -= 1;
+        }
+
+        // retrieve blocks in batches
+        let mut stream = stream::iter(hashes)
+            .map(|h| {
+                async move { self.retrieve_block(h).await.map(move |b| (h, b)) }
+            })
+            .buffered(GAS_PRICE_BATCH_SIZE);
+
+        // collect gas price sample
+        let mut prices = vec![];
+
+        while let Some(item) = stream.try_next().await? {
+            let block = match item {
+                (_, Some(b)) => b,
+                (hash, None) => {
+                    // `retrieve_block` will only return None if we do not have
+                    // the corresponding header, which should not happen in this
+                    // case.
+                    bail!(ErrorKind::InternalError(format!(
+                        "Block {:?} not found during gas price sampling",
+                        hash
+                    )));
+                }
+            };
+
+            trace!("sampling gas prices from block {:?}", block.hash());
+            processed_block_count += 1;
+            total_transaction_count_in_processed_blocks +=
+                block.transactions.len();
+
+            for tx in block.transactions.iter() {
+                prices.push(tx.gas_price().clone());
+
+                if prices.len() == GAS_PRICE_TRANSACTION_SAMPLE_SIZE {
+                    break;
+                }
+            }
+        }
+
+        trace!("gas price sample: {:?}", prices);
+
+        let average_transaction_count_per_block = if processed_block_count != 0
+        {
+            total_transaction_count_in_processed_blocks / processed_block_count
+        } else {
+            0
+        };
+
+        if prices.is_empty() {
+            Ok(Some(U256::from(1)))
+        } else {
+            prices.sort();
+            if average_transaction_count_per_block
+                < TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW
+            {
+                Ok(Some(U256::from(1)))
+            } else if average_transaction_count_per_block
+                < TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM
+            {
+                Ok(Some(prices[prices.len() / 8]))
+            } else {
+                Ok(Some(prices[prices.len() / 2]))
+            }
+        }
+    }
+
     fn account_key(address: &H160) -> Vec<u8> {
         StorageKey::new_account_key(&address).to_key_bytes()
     }
@@ -278,6 +380,14 @@ impl QueryService {
 
     fn storage_key(address: &H160, position: &H256) -> Vec<u8> {
         StorageKey::new_storage_key(&address, &position.0).to_key_bytes()
+    }
+
+    fn deposit_list_key(address: &H160) -> Vec<u8> {
+        StorageKey::new_deposit_list_key(address).to_key_bytes()
+    }
+
+    fn vote_list_key(address: &H160) -> Vec<u8> {
+        StorageKey::new_vote_list_key(address).to_key_bytes()
     }
 
     pub async fn get_account(
@@ -295,6 +405,22 @@ impl QueryService {
                 Account::new_from_rlp(address, &Rlp::new(&rlp)),
             )?)),
         }
+    }
+
+    pub async fn get_deposit_list(
+        &self, epoch: EpochNumber, address: H160,
+    ) -> Result<Option<DepositList>, Error> {
+        let epoch = self.get_height_from_epoch_number(epoch)?;
+        let key = Self::deposit_list_key(&address);
+        self.retrieve_state_entry::<DepositList>(epoch, key).await
+    }
+
+    pub async fn get_vote_list(
+        &self, epoch: EpochNumber, address: H160,
+    ) -> Result<Option<VoteStakeList>, Error> {
+        let epoch = self.get_height_from_epoch_number(epoch)?;
+        let key = Self::vote_list_key(&address);
+        self.retrieve_state_entry::<VoteStakeList>(epoch, key).await
     }
 
     pub async fn get_code(
@@ -357,10 +483,46 @@ impl QueryService {
     pub async fn get_storage_root(
         &self, epoch: EpochNumber, address: H160,
     ) -> Result<StorageRoot, Error> {
-        debug!("get_storage_root epoch={:?} address={:?}", epoch, address,);
+        debug!("get_storage_root epoch={:?} address={:?}", epoch, address);
 
         let epoch = self.get_height_from_epoch_number(epoch)?;
         self.retrieve_storage_root(epoch, address).await
+    }
+
+    pub async fn get_interest_rate(
+        &self, epoch: EpochNumber,
+    ) -> Result<U256, Error> {
+        debug!("get_interest_rate epoch={:?}", epoch);
+
+        let epoch = self.get_height_from_epoch_number(epoch)?;
+
+        let key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            INTEREST_RATE_KEY,
+        )
+        .to_key_bytes();
+
+        self.retrieve_state_entry::<U256>(epoch, key)
+            .await
+            .map(|opt| opt.unwrap_or_default())
+    }
+
+    pub async fn get_accumulate_interest_rate(
+        &self, epoch: EpochNumber,
+    ) -> Result<U256, Error> {
+        debug!("get_accumulate_interest_rate epoch={:?}", epoch);
+
+        let epoch = self.get_height_from_epoch_number(epoch)?;
+
+        let key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            ACCUMULATE_INTEREST_RATE_KEY,
+        )
+        .to_key_bytes();
+
+        self.retrieve_state_entry::<U256>(epoch, key)
+            .await
+            .map(|opt| opt.unwrap_or_default())
     }
 
     pub async fn get_tx_info(&self, hash: H256) -> Result<TxInfo, Error> {

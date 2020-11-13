@@ -6,14 +6,14 @@ use super::super::types::{
     Account as RpcAccount, Block, Bytes, CallRequest,
     CheckBalanceAgainstTransactionResponse, EpochNumber,
     EstimateGasAndCollateralResponse, Filter as RpcFilter, Log as RpcLog,
-    Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
-    SponsorInfo as RpcSponsorInfo, Status as RpcStatus, Transaction,
+    Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, Status as RpcStatus,
+    Transaction,
 };
 use crate::rpc::types::BlockHashOrEpochNumber;
 use cfx_types::{H160, H256, U256, U64};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
 use jsonrpc_derive::rpc;
-use primitives::StorageRoot;
+use primitives::{DepositInfo, SponsorInfo, StorageRoot, VoteStakeInfo};
 
 /// Cfx rpc interface.
 #[rpc(server)]
@@ -36,7 +36,7 @@ pub trait Cfx {
 
     /// Returns current gas price.
     #[rpc(name = "cfx_gasPrice")]
-    fn gas_price(&self) -> JsonRpcResult<U256>;
+    fn gas_price(&self) -> BoxFuture<U256>;
 
     /// Returns highest epoch number.
     #[rpc(name = "cfx_epochNumber")]
@@ -60,13 +60,25 @@ pub trait Cfx {
     #[rpc(name = "cfx_getSponsorInfo")]
     fn sponsor_info(
         &self, addr: H160, epoch_number: Option<EpochNumber>,
-    ) -> BoxFuture<RpcSponsorInfo>;
+    ) -> BoxFuture<SponsorInfo>;
 
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getStakingBalance")]
     fn staking_balance(
         &self, addr: H160, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<U256>;
+
+    /// Returns deposit list of the given account.
+    #[rpc(name = "cfx_getDepositList")]
+    fn deposit_list(
+        &self, addr: H160, epoch_number: Option<EpochNumber>,
+    ) -> BoxFuture<Vec<DepositInfo>>;
+
+    /// Returns vote list of the given account.
+    #[rpc(name = "cfx_getVoteList")]
+    fn vote_list(
+        &self, addr: H160, epoch_number: Option<EpochNumber>,
+    ) -> BoxFuture<Vec<VoteStakeInfo>>;
 
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getCollateralForStorage")]
@@ -192,13 +204,13 @@ pub trait Cfx {
     #[rpc(name = "cfx_getInterestRate")]
     fn interest_rate(
         &self, epoch_number: Option<EpochNumber>,
-    ) -> JsonRpcResult<U256>;
+    ) -> BoxFuture<U256>;
 
     /// Returns accumulate interest rate of the given epoch
     #[rpc(name = "cfx_getAccumulateInterestRate")]
     fn accumulate_interest_rate(
         &self, epoch_number: Option<EpochNumber>,
-    ) -> JsonRpcResult<U256>;
+    ) -> BoxFuture<U256>;
 
     #[rpc(name = "cfx_getConfirmationRiskByHash")]
     fn confirmation_risk_by_hash(

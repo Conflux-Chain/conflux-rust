@@ -1185,8 +1185,9 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             }
         }
 
-        // Then scan unapplied storage changes.
-        for (key, _value) in sponsor_whitelist_control_address.storage_changes()
+        // Then scan storage changes in cache.
+        for (key, _value) in
+            sponsor_whitelist_control_address.storage_value_write_cache()
         {
             if key.starts_with(address.as_ref()) {
                 if let Some(storage_owner) =
@@ -1195,12 +1196,15 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 {
                     storage_owner_map.insert(key.clone(), storage_owner);
                 } else {
+                    // The corresponding entry has been reset during transaction
+                    // execution, so we do not need to handle it now.
                     storage_owner_map.remove(key);
                 }
             }
         }
         if !AM::is_read_only() {
-            // Note removal of all keys in storage_cache and storage_changes.
+            // Note removal of all keys in storage_value_read_cache and
+            // storage_value_write_cache.
             for (key, _storage_owner) in &storage_owner_map {
                 debug!("delete sponsor key {:?}", key);
                 sponsor_whitelist_control_address.set_storage(
@@ -1249,7 +1253,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 // information to find out if collateral refund is necessary
                 // for touched keys.
                 if maybe_account.map_or(true, |acc| {
-                    acc.storage_changes().get(storage_key).is_none()
+                    acc.storage_value_write_cache().get(storage_key).is_none()
                 }) {
                     let storage_value =
                         rlp::decode::<StorageValue>(value.as_ref())?;
@@ -1265,7 +1269,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
 
         if let Some(acc) = maybe_account {
             // The current value isn't important because it will be deleted.
-            for (key, _value) in acc.storage_changes() {
+            for (key, _value) in acc.storage_value_write_cache() {
                 if let Some(storage_owner) =
                     acc.original_ownership_at(&self.db, key)?
                 {

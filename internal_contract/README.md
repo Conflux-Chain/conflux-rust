@@ -32,7 +32,7 @@ The addresses of these three internal contracts are list as follows:
 - SponsorWhitelistControl: `0x0888000000000000000000000000000000000001`
 - Staking: `0x0888000000000000000000000000000000000002`
 
-All the example code in this document will use [js-conflux-sdk](https://github.com/Conflux-Chain/js-conflux-sdk).
+All the example code in this document will use [js-conflux-sdk](https://github.com/Conflux-Chain/js-conflux-sdk). The solidity function apis are list [here](https://github.com/Conflux-Chain/conflux-rust/tree/master/internal_contract/contracts).
 
 # AdminControl contract
 
