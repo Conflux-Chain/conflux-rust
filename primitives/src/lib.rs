@@ -20,15 +20,15 @@ pub mod block;
 pub mod block_header;
 pub mod epoch;
 pub mod filter;
+pub mod is_default;
 pub mod log_entry;
 pub mod receipt;
 pub mod state_root;
+pub mod static_bool;
 pub mod storage;
 pub mod storage_key;
 pub mod transaction;
 pub mod transaction_index;
-
-pub mod is_default;
 
 pub use crate::{
     account::{
@@ -41,6 +41,7 @@ pub use crate::{
     log_entry::LogEntry,
     receipt::{BlockReceipts, Receipt},
     state_root::*,
+    static_bool::StaticBool,
     storage::{
         MptValue, NodeMerkleTriplet, StorageLayout, StorageRoot, StorageValue,
     },

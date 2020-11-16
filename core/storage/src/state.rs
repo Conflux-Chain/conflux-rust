@@ -11,8 +11,8 @@
 /// state manager. State is supposed to be owned by single user.
 pub use super::impls::state::State;
 
-pub type WithProof = utils::Yes;
-pub type NoProof = utils::No;
+pub type WithProof = primitives::static_bool::Yes;
+pub type NoProof = primitives::static_bool::No;
 
 // The trait is created to separate the implementation to another file, and the
 // concrete struct is put into inner mod, because the implementation is
@@ -47,7 +47,7 @@ pub trait StateTrait {
     /// Compute the merkle of the node under `access_key` in all tries.
     /// Node merkle is computed on the value and children hashes, ignoring the
     /// compressed path.
-    fn get_node_merkle_all_versions<WithProof: utils::StaticBool>(
+    fn get_node_merkle_all_versions<WithProof: StaticBool>(
         &self, access_key: StorageKey,
     ) -> Result<(NodeMerkleTriplet, NodeMerkleProof)>;
 }
@@ -56,7 +56,7 @@ use super::{
     impls::{
         errors::*, node_merkle_proof::NodeMerkleProof, state_proof::StateProof,
     },
-    utils::{self, access_mode},
+    utils::access_mode,
     MptKeyValue, StateRootWithAuxInfo,
 };
-use primitives::{EpochId, NodeMerkleTriplet, StorageKey};
+use primitives::{EpochId, NodeMerkleTriplet, StaticBool, StorageKey};
