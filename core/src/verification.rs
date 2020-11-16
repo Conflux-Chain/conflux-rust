@@ -9,7 +9,10 @@ use crate::{
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
     vm,
 };
-use cfx_parameters::block::*;
+use cfx_parameters::{
+    block::*,
+    consensus::{PHASE2_HEADER_CUSTOM, PHASE2_HEIGHT},
+};
 use cfx_storage::{
     into_simple_mpt_key, make_simple_mpt, simple_mpt_merkle_root,
     simple_mpt_proof, SimpleMpt, TrieProof,
@@ -324,6 +327,23 @@ impl VerificationConfig {
                     found: custom_len,
                 },
             )));
+        }
+
+        // For height below PHASE2_HEIGHT, there is no specified value.
+        // Note that this is just used to rule out deprecated blocks, so the
+        // change of header struct actually happens before the change of
+        // reward is reflected in the state root. The first state root
+        // including results of new rewards will in the header after another
+        // REWARD_EPOCH_COUNT + DEFERRED_STATE_EPOCH_COUNT epochs.
+        if header.height() >= PHASE2_HEIGHT {
+            let expected_custom = vec![PHASE2_HEADER_CUSTOM.to_vec()];
+            if *header.custom() != expected_custom {
+                return Err(BlockError::InvalidCustom(
+                    header.custom().clone(),
+                    expected_custom,
+                )
+                .into());
+            }
         }
 
         // verify POW
