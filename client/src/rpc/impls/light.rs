@@ -2,8 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-use cfx_types::{H160, H256, H520, U128, U256, U512, U64};
+use cfx_types::{H160, H256, H520, U128, U256, U64};
 use cfxcore::{
     block_data_manager::BlockDataManager,
     consensus_parameters::ONE_GDRIP_IN_DRIP,
@@ -31,7 +30,10 @@ use crate::{
     common::delegate_convert,
     rpc::{
         error_codes,
-        impls::{common::RpcImpl as CommonImpl, RpcImplConfiguration},
+        impls::{
+            common::{self, RpcImpl as CommonImpl},
+            RpcImplConfiguration,
+        },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
             Account as RpcAccount, BlameInfo, Block as RpcBlock,
@@ -884,6 +886,10 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            if storage_limit > U256::from(std::u64::MAX) {
+                bail!(RpcError::invalid_params(format!("storage_limit has to be within the range of u64 but {} supplied!", storage_limit)));
+            }
+
             // retrieve accounts and sponsor info in parallel
             let (user_account, contract_account, is_sponsored) =
                 future::try_join3(
@@ -893,54 +899,14 @@ impl RpcImpl {
                 )
                 .await?;
 
-            let gas_bound: U512 = contract_account
-                .as_ref()
-                .map(|a| a.sponsor_info.sponsor_gas_bound)
-                .unwrap_or_default()
-                .into();
-
-            let balance_for_gas: U512 = contract_account
-                .as_ref()
-                .map(|a| a.sponsor_info.sponsor_balance_for_gas)
-                .unwrap_or_default()
-                .into();
-
-            let balance_for_collateral: U512 = contract_account
-                .as_ref()
-                .map(|a| a.sponsor_info.sponsor_balance_for_collateral)
-                .unwrap_or_default()
-                .into();
-
-            let user_balance: U512 =
-                user_account.map(|a| a.balance).unwrap_or_default().into();
-
-            // check if eligible for sponsorship
-            let gas_cost = gas_limit.full_mul(gas_price);
-
-            let will_pay_tx_fee = !is_sponsored
-                || (gas_cost > gas_bound)
-                || (gas_cost > balance_for_gas);
-
-            let storage_limit_in_drip =
-                storage_limit.full_mul(*DRIPS_PER_STORAGE_COLLATERAL_UNIT);
-
-            let will_pay_collateral = !is_sponsored
-                || (storage_limit_in_drip > balance_for_collateral);
-
-            let minimum_balance = match (will_pay_tx_fee, will_pay_collateral) {
-                (false, false) => 0.into(),
-                (true, false) => gas_cost,
-                (false, true) => storage_limit_in_drip,
-                (true, true) => gas_cost + storage_limit_in_drip,
-            };
-
-            let is_balance_enough = user_balance >= minimum_balance;
-
-            Ok(CheckBalanceAgainstTransactionResponse {
-                will_pay_tx_fee,
-                will_pay_collateral,
-                is_balance_enough,
-            })
+            Ok(common::check_balance_against_transaction(
+                user_account,
+                contract_account,
+                is_sponsored,
+                gas_limit,
+                gas_price,
+                storage_limit,
+            ))
         };
 
         Box::new(fut.boxed().compat())
