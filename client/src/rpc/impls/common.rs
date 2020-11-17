@@ -69,9 +69,10 @@ pub fn check_balance_against_transaction(
     is_sponsored: bool, gas_limit: U256, gas_price: U256, storage_limit: U256,
 ) -> CheckBalanceAgainstTransactionResponse
 {
-    let sponsor_for_gas = contract_account
+    let sponsor_for_gas: H160 = contract_account
         .as_ref()
-        .map(|a| a.sponsor_info.sponsor_for_gas);
+        .map(|a| a.sponsor_info.sponsor_for_gas)
+        .unwrap_or_default();
 
     let gas_bound: U512 = contract_account
         .as_ref()
@@ -85,9 +86,10 @@ pub fn check_balance_against_transaction(
         .unwrap_or_default()
         .into();
 
-    let sponsor_for_collateral = contract_account
+    let sponsor_for_collateral: H160 = contract_account
         .as_ref()
-        .map(|a| a.sponsor_info.sponsor_for_collateral);
+        .map(|a| a.sponsor_info.sponsor_for_collateral)
+        .unwrap_or_default();
 
     let balance_for_collateral: U512 = contract_account
         .as_ref()
@@ -101,7 +103,7 @@ pub fn check_balance_against_transaction(
     let gas_cost_in_drip = gas_limit.full_mul(gas_price);
 
     let will_pay_tx_fee = !is_sponsored
-        || sponsor_for_gas.is_none()
+        || sponsor_for_gas.is_zero()
         || (gas_cost_in_drip > gas_bound)
         || (gas_cost_in_drip > balance_for_gas);
 
@@ -109,7 +111,7 @@ pub fn check_balance_against_transaction(
         storage_limit.full_mul(*DRIPS_PER_STORAGE_COLLATERAL_UNIT);
 
     let will_pay_collateral = !is_sponsored
-        || sponsor_for_collateral.is_none()
+        || sponsor_for_collateral.is_zero()
         || (storage_cost_in_drip > balance_for_collateral);
 
     let minimum_balance = match (will_pay_tx_fee, will_pay_collateral) {
