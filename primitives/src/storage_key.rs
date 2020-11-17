@@ -4,8 +4,8 @@
 
 use crate::static_bool::{self, StaticBool};
 
-pub type Checked = static_bool::Yes;
-pub type NotChecked = static_bool::No;
+pub type CheckInput = static_bool::Yes;
+pub type SkipInputCheck = static_bool::No;
 
 pub trait ConditionalReturnValue<'a> {
     type Output;
@@ -14,11 +14,11 @@ pub trait ConditionalReturnValue<'a> {
     fn from_result(r: Result<StorageKey<'a>, String>) -> Self::Output;
 }
 
-pub struct FromKeyBytesResult<InputChecked: StaticBool> {
-    phantom: std::marker::PhantomData<InputChecked>,
+pub struct FromKeyBytesResult<ShouldCheckInput: StaticBool> {
+    phantom: std::marker::PhantomData<ShouldCheckInput>,
 }
 
-impl<'a> ConditionalReturnValue<'a> for FromKeyBytesResult<NotChecked> {
+impl<'a> ConditionalReturnValue<'a> for FromKeyBytesResult<SkipInputCheck> {
     type Output = StorageKey<'a>;
 
     fn from_key(k: StorageKey<'a>) -> Self::Output { k }
@@ -28,7 +28,7 @@ impl<'a> ConditionalReturnValue<'a> for FromKeyBytesResult<NotChecked> {
     }
 }
 
-impl<'a> ConditionalReturnValue<'a> for FromKeyBytesResult<Checked> {
+impl<'a> ConditionalReturnValue<'a> for FromKeyBytesResult<CheckInput> {
     type Output = Result<StorageKey<'a>, String>;
 
     fn from_key(k: StorageKey<'a>) -> Self::Output { Ok(k) }
@@ -249,10 +249,10 @@ impl<'a> StorageKey<'a> {
 
     // from_key_bytes::<Checked>(...) returns Result<StorageKey, String>
     // from_key_bytes::<NotChecked>(...) returns StorageKey, crashes on error
-    pub fn from_key_bytes<InputChecked: StaticBool>(
+    pub fn from_key_bytes<ShouldCheckInput: StaticBool>(
         mut bytes: &'a [u8],
-    ) -> <FromKeyBytesResult<InputChecked> as ConditionalReturnValue<'a>>::Output
-    where FromKeyBytesResult<InputChecked>: ConditionalReturnValue<'a> {
+    ) -> <FromKeyBytesResult<ShouldCheckInput> as ConditionalReturnValue<'a>>::Output
+where FromKeyBytesResult<ShouldCheckInput>: ConditionalReturnValue<'a>{
         let key = if bytes.len() <= Self::ACCOUNT_BYTES {
             StorageKey::AccountKey(bytes)
         } else {
@@ -285,8 +285,10 @@ impl<'a> StorageKey<'a> {
             }
             // unknown key format => we report an error or crash
             // depending on the generic parameter
-            else if InputChecked::value() == Checked::value() {
-                return <FromKeyBytesResult<InputChecked> as ConditionalReturnValue<'a>>::from_result(Err(format!("Unable to parse storage key: {:?} - {:?}", address_bytes, bytes)));
+            else if ShouldCheckInput::value() == CheckInput::value() {
+                return <FromKeyBytesResult<ShouldCheckInput> as ConditionalReturnValue<'a>>::from_result(
+                    Err(format!("Unable to parse storage key: {:?} - {:?}", address_bytes, bytes))
+                );
             } else {
                 if cfg!(debug_assertions) {
                     unreachable!(
@@ -299,7 +301,7 @@ impl<'a> StorageKey<'a> {
             }
         };
 
-        <FromKeyBytesResult<InputChecked> as ConditionalReturnValue<'a>>::from_key(key)
+        <FromKeyBytesResult<ShouldCheckInput> as ConditionalReturnValue<'a>>::from_key(key)
     }
 }
 

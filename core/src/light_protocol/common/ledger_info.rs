@@ -16,7 +16,7 @@ use cfx_storage::{
 };
 use cfx_types::{Address, Bloom, H256};
 use primitives::{
-    Block, BlockHeader, BlockHeaderBuilder, BlockReceipts, Checked,
+    Block, BlockHeader, BlockHeaderBuilder, BlockReceipts, CheckInput,
     EpochNumber, StorageKey, StorageRoot,
 };
 
@@ -211,7 +211,7 @@ impl LedgerInfo {
     ) -> Result<(Option<Vec<u8>>, StateProof), Error> {
         let state = self.state_of(epoch)?;
 
-        let key = StorageKey::from_key_bytes::<Checked>(&key)?;
+        let key = StorageKey::from_key_bytes::<CheckInput>(&key)?;
 
         let (value, proof) =
             StateDb::new(state).get_original_raw_with_proof(key)?;
