@@ -247,8 +247,9 @@ impl<'a> StorageKey<'a> {
         }
     }
 
-    // from_key_bytes::<Checked>(...) returns Result<StorageKey, String>
-    // from_key_bytes::<NotChecked>(...) returns StorageKey, crashes on error
+    // from_key_bytes::<CheckInput>(...) returns Result<StorageKey, String>
+    // from_key_bytes::<SkipInputCheck>(...) returns StorageKey, crashes on
+    // error
     pub fn from_key_bytes<ShouldCheckInput: StaticBool>(
         mut bytes: &'a [u8],
     ) -> <FromKeyBytesResult<ShouldCheckInput> as ConditionalReturnValue<'a>>::Output
