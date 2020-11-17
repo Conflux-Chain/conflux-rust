@@ -32,8 +32,8 @@ use parking_lot::{
 #[cfg(test)]
 use primitives::storage::STORAGE_LAYOUT_REGULAR_V0;
 use primitives::{
-    Account, DepositList, EpochId, SponsorInfo, StorageKey, StorageLayout,
-    StorageValue, VoteStakeList,
+    Account, DepositList, EpochId, SkipInputCheck, SponsorInfo, StorageKey,
+    StorageLayout, StorageValue, VoteStakeList,
 };
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
@@ -1174,7 +1174,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         )?;
         for (key, value) in &key_values {
             if let StorageKey::StorageKey { storage_key, .. } =
-                StorageKey::from_key_bytes(&key[..])
+                StorageKey::from_key_bytes::<SkipInputCheck>(&key[..])
             {
                 let storage_value =
                     rlp::decode::<StorageValue>(value.as_ref())?;
@@ -1247,7 +1247,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         )?;
         for (key, value) in &storage_key_value {
             if let StorageKey::StorageKey { storage_key, .. } =
-                StorageKey::from_key_bytes(&key[..])
+                StorageKey::from_key_bytes::<SkipInputCheck>(&key[..])
             {
                 // Check if the key has been touched. We use the local
                 // information to find out if collateral refund is necessary

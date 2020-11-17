@@ -2,9 +2,42 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::static_bool::{self, StaticBool};
+
+pub type CheckInput = static_bool::Yes;
+pub type SkipInputCheck = static_bool::No;
+
+pub trait ConditionalReturnValue<'a> {
+    type Output;
+
+    fn from_key(k: StorageKey<'a>) -> Self::Output;
+    fn from_result(r: Result<StorageKey<'a>, String>) -> Self::Output;
+}
+
+pub struct FromKeyBytesResult<ShouldCheckInput: StaticBool> {
+    phantom: std::marker::PhantomData<ShouldCheckInput>,
+}
+
+impl<'a> ConditionalReturnValue<'a> for FromKeyBytesResult<SkipInputCheck> {
+    type Output = StorageKey<'a>;
+
+    fn from_key(k: StorageKey<'a>) -> Self::Output { k }
+
+    fn from_result(_r: Result<StorageKey<'a>, String>) -> Self::Output {
+        unreachable!()
+    }
+}
+
+impl<'a> ConditionalReturnValue<'a> for FromKeyBytesResult<CheckInput> {
+    type Output = Result<StorageKey<'a>, String>;
+
+    fn from_key(k: StorageKey<'a>) -> Self::Output { Ok(k) }
+
+    fn from_result(r: Result<StorageKey<'a>, String>) -> Self::Output { r }
+}
+
 // The original StorageKeys unprocessed, in contrary to StorageKey which is
 // processed to use in DeltaMpt.
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StorageKey<'a> {
     AccountKey(&'a [u8]),
@@ -214,8 +247,14 @@ impl<'a> StorageKey<'a> {
         }
     }
 
-    pub fn from_key_bytes(mut bytes: &'a [u8]) -> Self {
-        if bytes.len() <= Self::ACCOUNT_BYTES {
+    // from_key_bytes::<CheckInput>(...) returns Result<StorageKey, String>
+    // from_key_bytes::<SkipInputCheck>(...) returns StorageKey, crashes on
+    // error
+    pub fn from_key_bytes<ShouldCheckInput: StaticBool>(
+        mut bytes: &'a [u8],
+    ) -> <FromKeyBytesResult<ShouldCheckInput> as ConditionalReturnValue<'a>>::Output
+where FromKeyBytesResult<ShouldCheckInput>: ConditionalReturnValue<'a>{
+        let key = if bytes.len() <= Self::ACCOUNT_BYTES {
             StorageKey::AccountKey(bytes)
         } else {
             let address_bytes = &bytes[0..Self::ACCOUNT_BYTES];
@@ -244,6 +283,13 @@ impl<'a> StorageKey<'a> {
                 StorageKey::DepositListKey(address_bytes)
             } else if bytes.starts_with(Self::VOTE_LIST_PREFIX) {
                 StorageKey::VoteListKey(address_bytes)
+            }
+            // unknown key format => we report an error or crash
+            // depending on the generic parameter
+            else if ShouldCheckInput::value() == CheckInput::value() {
+                return <FromKeyBytesResult<ShouldCheckInput> as ConditionalReturnValue<'a>>::from_result(
+                    Err(format!("Unable to parse storage key: {:?} - {:?}", address_bytes, bytes))
+                );
             } else {
                 if cfg!(debug_assertions) {
                     unreachable!(
@@ -254,7 +300,9 @@ impl<'a> StorageKey<'a> {
                     unsafe { unreachable_unchecked() }
                 }
             }
-        }
+        };
+
+        <FromKeyBytesResult<ShouldCheckInput> as ConditionalReturnValue<'a>>::from_key(key)
     }
 }
 

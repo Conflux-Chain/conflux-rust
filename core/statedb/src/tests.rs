@@ -5,11 +5,12 @@
 use super::StateDbGeneric;
 use cfx_internal_common::StateRootWithAuxInfo;
 use cfx_storage::{
-    utils::{access_mode, StaticBool},
-    ErrorKind, MptKeyValue, NodeMerkleProof, Result, StateProof,
-    StorageStateTrait,
+    utils::access_mode, ErrorKind, MptKeyValue, NodeMerkleProof, Result,
+    StateProof, StorageStateTrait,
 };
-use primitives::{EpochId, NodeMerkleTriplet, StorageKey, MERKLE_NULL_NODE};
+use primitives::{
+    EpochId, NodeMerkleTriplet, StaticBool, StorageKey, MERKLE_NULL_NODE,
+};
 use std::{cell::RefCell, collections::HashMap};
 
 type StorageValue = Box<[u8]>;
