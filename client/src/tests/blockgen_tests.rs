@@ -22,7 +22,11 @@ fn test_mining_10_epochs_inner(
     handle: &ClientComponents<BlockGenerator, ArchiveClientExtraComponents>,
 ) {
     let bgen = handle.blockgen.clone().unwrap();
-    //println!("Pow Config: {:?}", bgen.pow_config());
+    // BlockGenerator does not wait for catching up in test mode, so we wait
+    // here.
+    while handle.other_components.sync.catch_up_mode() {
+        thread::sleep(Duration::from_millis(100));
+    }
     thread::spawn(move || {
         BlockGenerator::start_mining(bgen, 0);
     });

@@ -6,6 +6,7 @@ use crate::{bytes::Bytes, hash::KECCAK_EMPTY};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
+use serde_derive::{Deserialize, Serialize};
 
 use std::{
     fmt,
@@ -28,8 +29,18 @@ pub enum AccountError {
 }
 
 #[derive(
-    Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
+    Clone,
+    Debug,
+    RlpDecodable,
+    RlpEncodable,
+    Ord,
+    PartialOrd,
+    Eq,
+    PartialEq,
+    Serialize,
+    Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 pub struct DepositInfo {
     /// This is the number of tokens in this deposit.
     pub amount: U256,
@@ -42,8 +53,18 @@ pub struct DepositInfo {
 }
 
 #[derive(
-    Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
+    Clone,
+    Debug,
+    RlpDecodable,
+    RlpEncodable,
+    Ord,
+    PartialOrd,
+    Eq,
+    PartialEq,
+    Serialize,
+    Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 pub struct VoteStakeInfo {
     /// This is the number of tokens should be locked before
     /// `unlock_block_number`.
@@ -137,7 +158,10 @@ impl Decodable for CodeInfo {
     Eq,
     PartialEq,
     Default,
+    Serialize,
+    Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 pub struct SponsorInfo {
     /// This is the address of the sponsor for gas cost of the contract.
     pub sponsor_for_gas: Address,
