@@ -177,7 +177,7 @@ pub trait Cfx {
     fn check_balance_against_transaction(
         &self, account_addr: H160, contract_addr: H160, gas_limit: U256,
         gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>,
-    ) -> JsonRpcResult<CheckBalanceAgainstTransactionResponse>;
+    ) -> BoxFuture<CheckBalanceAgainstTransactionResponse>;
 
     #[rpc(name = "cfx_getBlocksByEpoch")]
     fn blocks_by_epoch(

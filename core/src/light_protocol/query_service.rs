@@ -12,12 +12,16 @@ use crate::{
         LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
     },
     rpc_errors::{account_result_to_rpc_result, Error as RpcError},
+    state::COMMISSION_PRIVILEGE_SPECIAL_KEY,
     sync::SynchronizationGraph,
     ConsensusGraph, Notifications,
 };
 use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
-    internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+    internal_contract_addresses::{
+        SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+        STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+    },
     light::{
         GAS_PRICE_BATCH_SIZE, GAS_PRICE_BLOCK_SAMPLE_SIZE,
         GAS_PRICE_TRANSACTION_SAMPLE_SIZE, LOG_FILTERING_LOOKAHEAD,
@@ -378,8 +382,8 @@ impl QueryService {
         StorageKey::new_code_key(&address, &code_hash).to_key_bytes()
     }
 
-    fn storage_key(address: &H160, position: &H256) -> Vec<u8> {
-        StorageKey::new_storage_key(&address, &position.0).to_key_bytes()
+    fn storage_key(address: &H160, position: &[u8]) -> Vec<u8> {
+        StorageKey::new_storage_key(&address, &position).to_key_bytes()
     }
 
     fn deposit_list_key(address: &H160) -> Vec<u8> {
@@ -392,7 +396,7 @@ impl QueryService {
 
     pub async fn get_account(
         &self, epoch: EpochNumber, address: H160,
-    ) -> Result<Option<Account>, RpcError> {
+    ) -> Result<Option<Account>, Error> {
         debug!("get_account epoch={:?} address={:?}", epoch, address);
 
         let epoch = self.get_height_from_epoch_number(epoch)?;
@@ -400,10 +404,9 @@ impl QueryService {
 
         match self.retrieve_state_entry_raw(epoch, key).await? {
             None => Ok(None),
-            Some(rlp) => Ok(Some(account_result_to_rpc_result(
-                "address",
-                Account::new_from_rlp(address, &Rlp::new(&rlp)),
-            )?)),
+            Some(rlp) => {
+                Ok(Some(Account::new_from_rlp(address, &Rlp::new(&rlp))?))
+            }
         }
     }
 
@@ -471,13 +474,66 @@ impl QueryService {
         );
 
         let epoch = self.get_height_from_epoch_number(epoch)?;
-        let key = Self::storage_key(&address, &position);
+        let key = Self::storage_key(&address, &position.0);
 
         match self.retrieve_state_entry::<StorageValue>(epoch, key).await {
             Err(e) => Err(e),
             Ok(None) => Ok(None),
             Ok(Some(entry)) => Ok(Some(H256::from_uint(&entry.value))),
         }
+    }
+
+    pub async fn is_user_sponsored(
+        &self, epoch: EpochNumber, contract: H160, user: H160,
+    ) -> Result<bool, Error> {
+        debug!(
+            "is_user_sponsored epoch={:?} contract={:?} user={:?}",
+            epoch, contract, user
+        );
+
+        let epoch = self.get_height_from_epoch_number(epoch)?;
+
+        // check if sponsorship is enabled for all users
+        let all_sponsored = {
+            let mut pos = Vec::with_capacity(H160::len_bytes() * 2);
+            pos.extend_from_slice(contract.as_bytes());
+            pos.extend_from_slice(COMMISSION_PRIVILEGE_SPECIAL_KEY.as_bytes());
+
+            let key = Self::storage_key(
+                &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+                &pos,
+            );
+
+            self.retrieve_state_entry::<StorageValue>(epoch, key)
+        };
+
+        // check if sponsorship is enabled for this specific user
+        let user_sponsored = {
+            let mut pos = Vec::with_capacity(H160::len_bytes() * 2);
+            pos.extend_from_slice(contract.as_bytes());
+            pos.extend_from_slice(user.as_bytes());
+
+            let key = Self::storage_key(
+                &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+                &pos,
+            );
+
+            self.retrieve_state_entry::<StorageValue>(epoch, key)
+        };
+
+        // execute in parallel
+        let (all_sponsored, user_sponsored) =
+            future::join(all_sponsored, user_sponsored).await;
+
+        if matches!(all_sponsored?, Some(n) if !n.value.is_zero()) {
+            return Ok(true);
+        }
+
+        if matches!(user_sponsored?, Some(n) if !n.value.is_zero()) {
+            return Ok(true);
+        }
+
+        Ok(false)
     }
 
     pub async fn get_storage_root(

@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 pub use self::{
-    account_entry::OverlayAccount,
+    account_entry::{OverlayAccount, COMMISSION_PRIVILEGE_SPECIAL_KEY},
     substate::{CallStackInfo, Substate},
 };
 
