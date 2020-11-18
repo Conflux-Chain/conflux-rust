@@ -554,7 +554,7 @@ impl StateTrait for State {
         // No need to check v.len() because there are no tombStone values in
         // snapshot.
         for (k, v) in snapshot_kvs {
-            let storage_key = StorageKey::from_key_bytes(&k);
+            let storage_key = StorageKey::from_key_bytes::<SkipInputCheck>(&k);
             if !AM::is_read_only() {
                 self.delete(storage_key)?;
             }
@@ -901,13 +901,14 @@ use crate::{
     },
     state::*,
     storage_db::*,
-    utils::{access_mode, to_key_prefix_iter_upper_bound, StaticBool},
+    utils::{access_mode, to_key_prefix_iter_upper_bound},
 };
 use cfx_internal_common::{StateRootAuxInfo, StateRootWithAuxInfo};
 use fallible_iterator::FallibleIterator;
 use primitives::{
     DeltaMptKeyPadding, EpochId, MerkleHash, MptValue, NodeMerkleTriplet,
-    StateRoot, StorageKey, MERKLE_NULL_NODE, NULL_EPOCH,
+    SkipInputCheck, StateRoot, StaticBool, StorageKey, MERKLE_NULL_NODE,
+    NULL_EPOCH,
 };
 use rustc_hex::ToHex;
 use std::{

@@ -4,15 +4,18 @@
 
 use crate::rpc::{
     types::{
-        Block as RpcBlock, BlockHashOrEpochNumber, Bytes, EpochNumber,
+        Block as RpcBlock, BlockHashOrEpochNumber, Bytes,
+        CheckBalanceAgainstTransactionResponse, EpochNumber,
         Status as RpcStatus, Transaction as RpcTransaction, TxPoolPendingInfo,
         TxWithPoolInfo,
     },
     RpcResult,
 };
 use bigdecimal::BigDecimal;
-use cfx_parameters::consensus::ONE_CFX_IN_DRIP;
-use cfx_types::{Address, H160, H256, H520, U128, U256, U64};
+use cfx_parameters::{
+    consensus::ONE_CFX_IN_DRIP, staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
+};
+use cfx_types::{Address, H160, H256, H520, U128, U256, U512, U64};
 use cfxcore::{
     BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
     SharedConsensusGraph, SharedTransactionPool,
@@ -31,7 +34,7 @@ use network::{
 };
 use num_bigint::{BigInt, ToBigInt};
 use parking_lot::{Condvar, Mutex};
-use primitives::{Action, SignedTransaction};
+use primitives::{Account, Action, SignedTransaction};
 use std::{
     collections::{BTreeMap, HashSet},
     net::SocketAddr,
@@ -59,6 +62,72 @@ where F: Fn(Arc<SignedTransaction>) -> T {
     }
 
     addr_grouped_txs
+}
+
+pub fn check_balance_against_transaction(
+    user_account: Option<Account>, contract_account: Option<Account>,
+    is_sponsored: bool, gas_limit: U256, gas_price: U256, storage_limit: U256,
+) -> CheckBalanceAgainstTransactionResponse
+{
+    let sponsor_for_gas: H160 = contract_account
+        .as_ref()
+        .map(|a| a.sponsor_info.sponsor_for_gas)
+        .unwrap_or_default();
+
+    let gas_bound: U512 = contract_account
+        .as_ref()
+        .map(|a| a.sponsor_info.sponsor_gas_bound)
+        .unwrap_or_default()
+        .into();
+
+    let balance_for_gas: U512 = contract_account
+        .as_ref()
+        .map(|a| a.sponsor_info.sponsor_balance_for_gas)
+        .unwrap_or_default()
+        .into();
+
+    let sponsor_for_collateral: H160 = contract_account
+        .as_ref()
+        .map(|a| a.sponsor_info.sponsor_for_collateral)
+        .unwrap_or_default();
+
+    let balance_for_collateral: U512 = contract_account
+        .as_ref()
+        .map(|a| a.sponsor_info.sponsor_balance_for_collateral)
+        .unwrap_or_default()
+        .into();
+
+    let user_balance: U512 =
+        user_account.map(|a| a.balance).unwrap_or_default().into();
+
+    let gas_cost_in_drip = gas_limit.full_mul(gas_price);
+
+    let will_pay_tx_fee = !is_sponsored
+        || sponsor_for_gas.is_zero()
+        || (gas_cost_in_drip > gas_bound)
+        || (gas_cost_in_drip > balance_for_gas);
+
+    let storage_cost_in_drip =
+        storage_limit.full_mul(*DRIPS_PER_STORAGE_COLLATERAL_UNIT);
+
+    let will_pay_collateral = !is_sponsored
+        || sponsor_for_collateral.is_zero()
+        || (storage_cost_in_drip > balance_for_collateral);
+
+    let minimum_balance = match (will_pay_tx_fee, will_pay_collateral) {
+        (false, false) => 0.into(),
+        (true, false) => gas_cost_in_drip,
+        (false, true) => storage_cost_in_drip,
+        (true, true) => gas_cost_in_drip + storage_cost_in_drip,
+    };
+
+    let is_balance_enough = user_balance >= minimum_balance;
+
+    CheckBalanceAgainstTransactionResponse {
+        will_pay_tx_fee,
+        will_pay_collateral,
+        is_balance_enough,
+    }
 }
 
 pub struct RpcImpl {

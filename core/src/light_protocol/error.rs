@@ -11,7 +11,9 @@ use cfx_types::{H160, H256};
 use error_chain::ChainedError;
 use network::{node_table::NodeId, NetworkContext, UpdateNodeOperation};
 use parking_lot::Mutex;
-use primitives::{filter::FilterError, ChainIdParams, StateRoot};
+use primitives::{
+    account::AccountError, filter::FilterError, ChainIdParams, StateRoot,
+};
 use rlp::DecoderError;
 use std::sync::Arc;
 
@@ -24,6 +26,7 @@ error_chain! {
     foreign_links {
         Decoder(DecoderError);
         Filter(FilterError);
+        AccountError(AccountError);
     }
 
     errors {
@@ -235,7 +238,8 @@ pub fn handle(
         | ErrorKind::InvalidTxSignature{..}
         | ErrorKind::InvalidWitnessRoot{..}
         | ErrorKind::AlreadyThrottled(_)
-        | ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
+        | ErrorKind::Decoder(_)
+        | ErrorKind::AccountError(_) => op = Some(UpdateNodeOperation::Remove),
 
         ErrorKind::Throttled(_, resp) => {
             disconnect = false;
