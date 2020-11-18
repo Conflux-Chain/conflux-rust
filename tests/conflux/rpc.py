@@ -176,6 +176,18 @@ class RpcClient:
         else:
             return int(self.node.cfx_getStakingBalance(addr, epoch), 0)
 
+    def get_vote_list(self, addr: str, epoch: str = None) -> list:
+        if epoch is None:
+            return self.node.cfx_getVoteList(addr)
+        else:
+            return self.node.cfx_getVoteList(addr, epoch)
+
+    def get_deposit_list(self, addr: str, epoch: str = None) -> list:
+        if epoch is None:
+            return self.node.cfx_getDepositList(addr)
+        else:
+            return self.node.cfx_getDepositList(addr, epoch)
+
     def get_collateral_for_storage(self, addr: str, epoch: str = None) -> int:
         if epoch is None:
             return int(self.node.cfx_getCollateralForStorage(addr), 0)

@@ -3,20 +3,30 @@
 // See http://www.gnu.org/licenses/
 
 use crate::log_entry::LogEntry;
-use cfx_types::{Address, Bloom, U256};
+use cfx_types::{Address, Bloom, U256, U64};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rlp_derive::{RlpDecodable, RlpEncodable};
+use serde_derive::{Deserialize, Serialize};
 
 pub const TRANSACTION_OUTCOME_SUCCESS: u8 = 0;
 pub const TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING: u8 = 1; // gas fee charged
 pub const TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING: u8 = 2; // no gas fee charged
 
-#[derive(Debug, Clone, PartialEq, Eq, RlpDecodable, RlpEncodable)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    RlpDecodable,
+    RlpEncodable,
+    Serialize,
+    Deserialize,
+)]
 pub struct StorageChange {
     pub address: Address,
     /// Number of storage collateral units to deposit / refund (absolute
     /// value).
-    pub collaterals: u64,
+    pub collaterals: U64,
 }
 
 /// Information describing execution of a transaction.

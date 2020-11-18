@@ -6,7 +6,8 @@ use crate::rpc::types::Log;
 use cfx_types::{Address, Bloom, H256, U256, U64};
 use cfxcore::{executive::contract_address, vm::CreateContractAddress};
 use primitives::{
-    receipt::Receipt as PrimitiveReceipt, transaction::Action,
+    receipt::{Receipt as PrimitiveReceipt, StorageChange},
+    transaction::Action,
     SignedTransaction as PrimitiveTransaction, TransactionIndex,
 };
 use serde_derive::Serialize;
@@ -20,11 +21,11 @@ pub struct Receipt {
     pub index: U64,
     /// Block hash.
     pub block_hash: H256,
-    /// epoch number where this transaction was in.
+    /// Epoch number where this transaction was in.
     pub epoch_number: Option<U64>,
-    /// address of the sender.
+    /// Address of the sender.
     pub from: Address,
-    /// address of the receiver, null when it's a contract creation
+    /// Address of the receiver, null when it's a contract creation
     /// transaction.
     pub to: Option<Address>,
     /// The gas used in the execution of the transaction.
@@ -37,7 +38,7 @@ pub struct Receipt {
     pub logs: Vec<Log>,
     /// Bloom filter for light clients to quickly retrieve related logs.
     pub logs_bloom: Bloom,
-    /// state root.
+    /// State root.
     pub state_root: H256,
     /// Transaction outcome.
     pub outcome_status: U64,
@@ -45,6 +46,14 @@ pub struct Receipt {
     /// is None if tx execution is successful or it can not be offered.
     /// Error message can not be offered by light client.
     pub tx_exec_error_msg: Option<String>,
+    // Whether gas costs were covered by the sponsor.
+    pub gas_covered_by_sponsor: bool,
+    // Whether storage costs were covered by the sponsor.
+    pub storage_covered_by_sponsor: bool,
+    // The amount of storage collateralized by the sender.
+    pub storage_collateralized: U64,
+    // Storage collaterals released during the execution of the transaction.
+    pub storage_released: Vec<StorageChange>,
 }
 
 impl Receipt {
@@ -55,8 +64,21 @@ impl Receipt {
         maybe_state_root: Option<H256>, tx_exec_error_msg: Option<String>,
     ) -> Receipt
     {
+        let PrimitiveReceipt {
+            accumulated_gas_used,
+            gas_fee,
+            gas_sponsor_paid,
+            log_bloom,
+            logs,
+            outcome_status,
+            storage_collateralized,
+            storage_released,
+            storage_sponsor_paid,
+            ..
+        } = receipt;
+
         let mut address = None;
-        if Action::Create == transaction.action && receipt.outcome_status == 0 {
+        if Action::Create == transaction.action && outcome_status == 0 {
             let (created_address, _) = contract_address(
                 CreateContractAddress::FromSenderNonceAndCodeHash,
                 block_number.into(),
@@ -66,25 +88,38 @@ impl Receipt {
             );
             address = Some(created_address);
         }
+
+        // this is an array, but it will only have at most one element:
+        // the storage collateral of the sender address.
+        let storage_collateralized = storage_collateralized
+            .get(0)
+            .map(|sc| sc.collaterals)
+            .map(Into::into)
+            .unwrap_or_default();
+
         Receipt {
             transaction_hash: transaction.hash.into(),
             index: U64::from(transaction_index.index),
             block_hash: transaction_index.block_hash.into(),
-            gas_used: (receipt.accumulated_gas_used - prior_gas_used).into(),
-            gas_fee: receipt.gas_fee.into(),
+            gas_used: (accumulated_gas_used - prior_gas_used).into(),
+            gas_fee: gas_fee.into(),
             from: transaction.sender,
             to: match &transaction.action {
                 Action::Create => None,
                 Action::Call(address) => Some(address.clone()),
             },
-            outcome_status: U64::from(receipt.outcome_status),
+            outcome_status: U64::from(outcome_status),
             contract_created: address,
-            logs: receipt.logs.into_iter().map(Log::from).collect(),
-            logs_bloom: receipt.log_bloom,
+            logs: logs.into_iter().map(Log::from).collect(),
+            logs_bloom: log_bloom,
             state_root: maybe_state_root
                 .map_or_else(Default::default, Into::into),
             epoch_number: epoch_number.map(U64::from),
             tx_exec_error_msg,
+            gas_covered_by_sponsor: gas_sponsor_paid,
+            storage_covered_by_sponsor: storage_sponsor_paid,
+            storage_collateralized,
+            storage_released,
         }
     }
 }
