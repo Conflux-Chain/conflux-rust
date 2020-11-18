@@ -54,7 +54,7 @@ impl Handleable for GetBlockHeadersResponse {
                 requested,
                 None,
                 None,
-            );
+            )?;
             return Ok(());
         }
 
@@ -114,7 +114,7 @@ impl Handleable for GetBlockHeadersResponse {
             requested,
             chosen_peer,
             delay,
-        );
+        )?;
 
         timestamp_validation_result
     }
@@ -126,7 +126,7 @@ impl GetBlockHeadersResponse {
         &self, ctx: &Context, block_headers: &Vec<BlockHeader>,
         requested: HashSet<H256>, chosen_peer: Option<NodeId>,
         delay: Option<Duration>,
-    )
+    ) -> Result<(), Error>
     {
         // This stores the block hashes for blocks without block body.
         let mut hashes = Vec::new();
@@ -195,7 +195,7 @@ impl GetBlockHeadersResponse {
                         requested,
                         delay,
                     );
-                    return;
+                    return Ok(());
                 }
                 ctx.manager.graph.insert_block_header(
                     &mut header.clone(),
@@ -205,7 +205,9 @@ impl GetBlockHeadersResponse {
                     true, /* persistent */
                 )
             };
-            if !insert_result.is_new_valid() {
+            if insert_result.is_invalid() {
+                return Err(ErrorKind::InvalidBlock.into());
+            } else if !insert_result.is_new_valid() {
                 continue;
             }
 
@@ -279,5 +281,6 @@ impl GetBlockHeadersResponse {
             // relay if necessary
             ctx.manager.relay_blocks(ctx.io, need_to_relay).ok();
         }
+        Ok(())
     }
 }
