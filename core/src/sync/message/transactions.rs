@@ -146,7 +146,6 @@ impl Handleable for TransactionDigests {
                 {
                     bail!(ErrorKind::TooManyTrans);
                 }
-
             }
         }
 
