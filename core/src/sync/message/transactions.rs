@@ -146,10 +146,12 @@ impl Handleable for TransactionDigests {
                 {
                     bail!(ErrorKind::TooManyTrans);
                 }
-                if self.short_ids.len() % Self::SHORT_ID_SIZE_IN_BYTES != 0 {
-                    bail!(ErrorKind::InvalidMessageFormat);
-                }
+
             }
+        }
+
+        if self.short_ids.len() % Self::SHORT_ID_SIZE_IN_BYTES != 0 {
+            bail!(ErrorKind::InvalidMessageFormat);
         }
 
         // We will not request transactions when in the catch up mode, because
