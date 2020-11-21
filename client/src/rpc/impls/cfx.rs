@@ -4,11 +4,9 @@
 
 use crate::rpc::types::MAX_GAS_CALL_REQUEST;
 use blockgen::BlockGenerator;
-use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
 use cfx_types::{
-    address_util::AddressUtil, BigEndianHash, H160, H256, H520, U128, U256,
-    U512, U64,
+    address_util::AddressUtil, BigEndianHash, H160, H256, H520, U128, U256, U64,
 };
 use cfxcore::{
     block_data_manager::BlockExecutionResultWithEpoch,
@@ -44,7 +42,10 @@ use crate::{
             call_execution_error, invalid_params,
             request_rejected_in_catch_up_mode,
         },
-        impls::{common::RpcImpl as CommonImpl, RpcImplConfiguration},
+        impls::{
+            common::{self, RpcImpl as CommonImpl},
+            RpcImplConfiguration,
+        },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
             sign_call, Account as RpcAccount, BlameInfo, Block as RpcBlock,
@@ -959,58 +960,34 @@ impl RpcImpl {
         gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>,
     ) -> RpcResult<CheckBalanceAgainstTransactionResponse>
     {
-        let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
+        let epoch: primitives::EpochNumber =
+            epoch.unwrap_or(EpochNumber::LatestState).into();
+
+        info!(
+            "RPC Request: cfx_checkBalanceAgainstTransaction account_addr={:?} contract_addr={:?} gas_limit={:?} gas_price={:?} storage_limit={:?} epoch={:?}",
+            account_addr, contract_addr, gas_limit, gas_price, storage_limit, epoch
+        );
+
         if storage_limit > U256::from(std::u64::MAX) {
             bail!(JsonRpcError::invalid_params(format!("storage_limit has to be within the range of u64 but {} supplied!", storage_limit)));
         }
 
-        let state = self.consensus.get_state_by_epoch_number(epoch)?;
-        let gas_cost = gas_limit.full_mul(gas_price);
-        let mut gas_sponsored = false;
-        let mut storage_sponsored = false;
-        if state.check_commission_privilege(&contract_addr, &account_addr)? {
-            // No need to check for gas sponsor account existence.
-            gas_sponsored = gas_cost
-                <= U512::from(state.sponsor_gas_bound(&contract_addr)?);
-            storage_sponsored =
-                state.sponsor_for_collateral(&contract_addr)?.is_some();
-        }
-        let gas_sponsor_balance = if gas_sponsored {
-            U512::from(state.sponsor_balance_for_gas(&contract_addr)?)
-        } else {
-            0.into()
-        };
-        let will_pay_tx_fee = !gas_sponsored || gas_sponsor_balance < gas_cost;
+        let state = self.consensus.get_state_by_epoch_number(epoch.clone())?;
+        let state_db = self.consensus.get_state_db_by_epoch_number(epoch)?;
 
-        let storage_limit_in_drip =
-            storage_limit * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-        let storage_sponsor_balance = if storage_sponsored {
-            state.sponsor_balance_for_collateral(&contract_addr)?
-        } else {
-            0.into()
-        };
+        let user_account = state_db.get_account(&account_addr)?;
+        let contract_account = state_db.get_account(&contract_addr)?;
+        let is_sponsored =
+            state.check_commission_privilege(&contract_addr, &account_addr)?;
 
-        let will_pay_collateral = !storage_sponsored
-            || storage_limit_in_drip > storage_sponsor_balance;
-
-        let mut minimum_balance = U512::from(0);
-
-        if will_pay_tx_fee {
-            minimum_balance += gas_cost;
-        }
-
-        if will_pay_collateral {
-            minimum_balance += storage_limit_in_drip.into();
-        }
-
-        let balance = state.balance(&account_addr)?;
-        let is_balance_enough = U512::from(balance) >= minimum_balance;
-
-        Ok(CheckBalanceAgainstTransactionResponse {
-            will_pay_tx_fee,
-            will_pay_collateral,
-            is_balance_enough,
-        })
+        Ok(common::check_balance_against_transaction(
+            user_account,
+            contract_account,
+            is_sponsored,
+            gas_limit,
+            gas_price,
+            storage_limit,
+        ))
     }
 
     fn exec_transaction(
@@ -1169,7 +1146,7 @@ impl Cfx for CfxHandler {
                 -> JsonRpcResult<EstimateGasAndCollateralResponse>;
             fn check_balance_against_transaction(
                 &self, account_addr: H160, contract_addr: H160, gas_limit: U256, gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>,
-            ) -> JsonRpcResult<CheckBalanceAgainstTransactionResponse>;
+            ) -> BoxFuture<CheckBalanceAgainstTransactionResponse>;
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
             fn send_raw_transaction(&self, raw: Bytes) -> JsonRpcResult<H256>;
