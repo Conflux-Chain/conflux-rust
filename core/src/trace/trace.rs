@@ -253,8 +253,7 @@ impl DatabaseEncodable for BlockExecTraces {
 mod tests {
     use crate::{
         trace::trace::{
-            Action, BlockExecTraces, Call, ExecTrace, Suicide,
-            TransactionExecTraces,
+            Action, BlockExecTraces, Call, ExecTrace, TransactionExecTraces,
         },
         vm::CallType,
     };
