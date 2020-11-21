@@ -93,8 +93,8 @@ fn txexe_benchmark(c: &mut Criterion) {
                 &spec,
                 &internal_contract_map,
             );
-            let options = TransactOptions::with_no_tracing();
             b.iter(|| {
+                let options = TransactOptions::with_no_tracing();
                 ex.transact(&tx, options).unwrap();
                 ex.state.clear();
             })
