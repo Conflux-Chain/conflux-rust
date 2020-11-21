@@ -8,7 +8,7 @@ use cfx_statedb::StateDb;
 use cfx_storage::{state_manager::StateIndex, StorageManagerTrait};
 use cfx_types::{H256, U256};
 use cfxcore::{
-    executive::{Executive, InternalContractMap},
+    executive::{Executive, InternalContractMap, TransactOptions},
     machine::new_machine_with_builtin,
     state::State,
     vm::{Env, Spec},
@@ -93,8 +93,9 @@ fn txexe_benchmark(c: &mut Criterion) {
                 &spec,
                 &internal_contract_map,
             );
+            let options = TransactOptions::with_no_tracing();
             b.iter(|| {
-                ex.transact(&tx).unwrap();
+                ex.transact(&tx, options).unwrap();
                 ex.state.clear();
             })
         })
