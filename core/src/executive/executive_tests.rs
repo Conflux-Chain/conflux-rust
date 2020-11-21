@@ -1429,6 +1429,7 @@ fn test_commission_privilege() {
         state.balance(&caller2.address()).unwrap(),
         U256::from(100_000)
     );
+    let options = TransactOptions::with_no_tracing();
     let Executed { gas_used, .. } = Executive::new(
         &mut state,
         &env,
@@ -1436,7 +1437,7 @@ fn test_commission_privilege() {
         &spec,
         &internal_contract_map,
     )
-    .transact(&tx)
+    .transact(&tx, options)
     .unwrap()
     .successfully_executed()
     .unwrap();
