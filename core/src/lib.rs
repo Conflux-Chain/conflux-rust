@@ -44,6 +44,7 @@ pub mod state;
 pub mod state_exposer;
 pub mod statistics;
 pub mod sync;
+pub mod trace;
 pub mod transaction_pool;
 pub mod unique_id;
 pub mod verification;

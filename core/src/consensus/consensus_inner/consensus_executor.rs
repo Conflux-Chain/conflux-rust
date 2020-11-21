@@ -13,7 +13,7 @@ use crate::{
     },
     executive::{
         revert_reason_decode, ExecutionError, ExecutionOutcome, Executive,
-        InternalContractMap,
+        InternalContractMap, TransactOptions,
     },
     machine::Machine,
     rpc_errors::{invalid_params_check, Result as RpcResult},
@@ -23,6 +23,7 @@ use crate::{
         },
         CleanupMode, State,
     },
+    trace::trace::{ExecTrace, TransactionExecTraces},
     verification::{compute_receipts_root, VerificationConfig},
     vm::{Env, Error as VmErr, Spec},
     vm_factory::VmFactory,
@@ -1135,13 +1136,16 @@ impl ConsensusExecutionHandler {
 
             block_number += 1;
             last_block_hash = block.hash();
+            let mut block_traces: Vec<TransactionExecTraces> =
+                Default::default();
             for (idx, transaction) in block.transactions.iter().enumerate() {
                 let tx_outcome_status;
                 let mut transaction_logs = Vec::new();
                 let mut storage_released = Vec::new();
                 let mut storage_collateralized = Vec::new();
 
-                let r = {
+                let r = if self.config.executive_trace {
+                    let options = TransactOptions::with_tracing();
                     Executive::new(
                         state,
                         &env,
@@ -1149,7 +1153,17 @@ impl ConsensusExecutionHandler {
                         &spec,
                         &internal_contract_map,
                     )
-                    .transact(transaction)?
+                    .transact(transaction, options)?
+                } else {
+                    let options = TransactOptions::with_no_tracing();
+                    Executive::new(
+                        state,
+                        &env,
+                        self.machine.as_ref(),
+                        &spec,
+                        &internal_contract_map,
+                    )
+                    .transact(transaction, options)?
                 };
 
                 let gas_fee;
@@ -1168,6 +1182,9 @@ impl ConsensusExecutionHandler {
                             e
                         );
                         gas_fee = U256::zero();
+                        if self.config.executive_trace {
+                            block_traces.push(Vec::<ExecTrace>::new().into());
+                        }
                     }
                     ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                         tx_outcome_status =
@@ -1188,6 +1205,9 @@ impl ConsensusExecutionHandler {
                             to_pending.push(transaction.clone())
                         }
                         gas_fee = U256::zero();
+                        if self.config.executive_trace {
+                            block_traces.push(Vec::<ExecTrace>::new().into());
+                        }
                     }
                     ExecutionOutcome::ExecutionErrorBumpNonce(
                         error,
@@ -1207,6 +1227,9 @@ impl ConsensusExecutionHandler {
                         };
                         env.accumulated_gas_used += executed.gas_used;
                         gas_fee = executed.fee;
+                        if self.config.executive_trace {
+                            block_traces.push(executed.trace.into());
+                        }
                         debug!(
                             "tx execution error: err={:?}, transaction={:?}",
                             error, transaction
@@ -1228,6 +1251,10 @@ impl ConsensusExecutionHandler {
                         storage_sponsor_paid = executed.storage_sponsor_paid;
 
                         trace!("tx executed successfully: result={:?}, transaction={:?}, in block {:?}", executed, transaction, block.hash());
+
+                        if self.config.executive_trace {
+                            block_traces.push(executed.trace.into());
+                        }
                     }
                 }
 
@@ -1257,6 +1284,14 @@ impl ConsensusExecutionHandler {
                             .insert_transaction_index(&hash, &tx_index);
                     }
                 }
+            }
+
+            if self.config.executive_trace {
+                self.data_man.insert_block_traces(
+                    block.hash(),
+                    block_traces.into(),
+                    on_local_pivot,
+                );
             }
 
             let block_receipts = Arc::new(BlockReceipts {
@@ -1726,4 +1761,5 @@ pub struct ConsensusExecutionConfiguration {
     /// It should be less than `timer_chain_beta`.
     pub anticone_penalty_ratio: u64,
     pub base_reward_table_in_ucfx: Vec<u64>,
+    pub executive_trace: bool,
 }
