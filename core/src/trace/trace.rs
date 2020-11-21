@@ -97,27 +97,6 @@ impl Create {
     }
 }
 
-/// Suicide action.
-#[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable)]
-pub struct Suicide {
-    /// Suicided address.
-    pub address: Address,
-    /// Suicided contract heir.
-    pub refund_address: Address,
-    /// Balance of the contract just before suicide.
-    pub balance: U256,
-}
-
-impl Suicide {
-    /// Return suicide action bloom.
-    pub fn bloom(&self) -> Bloom {
-        let mut bloom = Bloom::default();
-        bloom.accrue(BloomInput::Raw(self.address.as_bytes()));
-        bloom.accrue(BloomInput::Raw(self.refund_address.as_bytes()));
-        bloom
-    }
-}
-
 /// Description of an action that we trace; will be either a call or a create.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
