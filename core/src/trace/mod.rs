@@ -14,12 +14,10 @@ pub trait Tracer: Send {
     /// Data returned when draining the Tracer.
     type Output;
 
-    /// Prepares call trace for given params. Would panic if prepare/done_trace
-    /// are not balanced.
+    /// Prepares call trace for given params.
     fn prepare_trace_call(&mut self, params: &ActionParams);
 
-    /// Prepares create trace for given params. Would panic if
-    /// prepare/done_trace are not balanced.
+    /// Prepares create trace for given params.
     fn prepare_trace_create(&mut self, params: &ActionParams);
 
     /// Consumes self and returns all traces.
