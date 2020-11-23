@@ -20,17 +20,17 @@ class RpcTest(ConfluxTestFramework):
         self.setup_nodes()
 
     def run_test(self):
-        # time.sleep(7)
-        # self._test_sayhello()
-        #
-        # blocks = self.nodes[0].generate_empty_blocks(1)
-        # self.best_block_hash = blocks[-1] #make_genesis().block_header.hash
-        #
-        # self._test_getblockcount()
-        # self._test_best_block_hash()
-        # self._test_getpeerinfo()
-        # self._test_addlatency()
-        # self._test_getstatus()
+        time.sleep(7)
+        self._test_sayhello()
+
+        blocks = self.nodes[0].generate_empty_blocks(1)
+        self.best_block_hash = blocks[-1] #make_genesis().block_header.hash
+
+        self._test_getblockcount()
+        self._test_best_block_hash()
+        self._test_getpeerinfo()
+        self._test_addlatency()
+        self._test_getstatus()
         # self._test_gettransactionreceipt()
 
         # Test all cases under subfolder
@@ -43,7 +43,7 @@ class RpcTest(ConfluxTestFramework):
         cur_dir = os.path.dirname(os.path.abspath(__file__))
         sub_dir = os.path.join(cur_dir, name)
         for file in os.listdir(sub_dir):
-            if file.startswith("test_") and file.endswith(".py") and "token" in file:
+            if file.startswith("test_") and file.endswith(".py"):
                 module_name = file[0:-3]
                 module = __import__(name + "." + module_name, fromlist=True)
                 self._test_module(module)
