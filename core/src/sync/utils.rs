@@ -227,6 +227,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         ConsensusExecutionConfiguration {
             anticone_penalty_ratio: tcr - 1,
             base_reward_table_in_ucfx: vec![INITIAL_BASE_MINING_REWARD_IN_UCFX],
+            executive_trace: false,
         },
         verification_config.clone(),
         NodeType::Archive,

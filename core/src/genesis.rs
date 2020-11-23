@@ -6,6 +6,7 @@ use crate::{
     evm::Spec,
     executive::{
         contract_address, ExecutionOutcome, Executive, InternalContractMap,
+        TransactOptions,
     },
     machine::Machine,
     state::{CleanupMode, State},
@@ -398,6 +399,7 @@ fn execute_genesis_transaction(
     let spec = Spec::new_spec();
     let internal_contract_map = InternalContractMap::new();
 
+    let options = TransactOptions::with_no_tracing();
     let r = {
         Executive::new(
             state,
@@ -406,7 +408,7 @@ fn execute_genesis_transaction(
             &spec,
             &internal_contract_map,
         )
-        .transact(transaction)
+        .transact(transaction, options)
         .unwrap()
     };
 

@@ -8,6 +8,7 @@ use crate::{
     bytes::Bytes,
     machine::Machine,
     state::{State, Substate},
+    trace,
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
         ContractCreateResult, CreateContractAddress, Env, MessageCallResult,
@@ -231,10 +232,12 @@ impl<'a> ContextTrait for Context<'a> {
             self.static_flag,
             self.internal_contract_map,
         );
+        let mut tracer = trace::NoopTracer;
         let out = ex.create_with_stack_depth(
             params,
             self.substate,
             self.stack_depth + 1,
+            &mut tracer,
         );
         Ok(Ok(into_contract_create_result(
             out,
