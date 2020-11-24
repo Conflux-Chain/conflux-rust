@@ -1079,8 +1079,7 @@ impl RpcImpl {
     pub fn get_token_supply_info(
         &self, epoch: Option<EpochNumber>,
     ) -> RpcResult<TokenSupplyInfo> {
-        let epoch: primitives::EpochNumber =
-            epoch.unwrap_or(EpochNumber::LatestState).into();
+        let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
         let state = self.consensus.get_state_by_epoch_number(epoch)?;
         let total_issued = *state.total_issued_tokens();
         let total_staking = *state.total_staking_tokens();
