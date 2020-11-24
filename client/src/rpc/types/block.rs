@@ -356,7 +356,7 @@ pub struct Header {
     /// state_root/receipts_root/logs_bloom_hash/blame are not correct.
     /// It acts as a vote to help light client determining the
     /// state_root/receipts_root/logs_bloom_hash are correct or not.
-    pub blame: u32,
+    pub blame: U64,
     /// Transactions root hash
     pub transactions_root: H256,
     /// Epoch number
@@ -400,7 +400,7 @@ impl Header {
             deferred_state_root: H256::from(*h.deferred_state_root()),
             deferred_receipts_root: H256::from(*h.deferred_receipts_root()),
             deferred_logs_bloom_hash: H256::from(*h.deferred_logs_bloom_hash()),
-            blame: h.blame(),
+            blame: U64::from(h.blame()),
             transactions_root: H256::from(*h.transactions_root()),
             epoch_number,
             gas_limit: h.gas_limit().into(),

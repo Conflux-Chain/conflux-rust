@@ -1,3 +1,9 @@
+# 1.0.4
+
+## Bug Fixes
+
+- Change the `blame` field returned from the `newHeads` pub-sub to hex.
+
 # 1.0.3
 
 ## Improvements
