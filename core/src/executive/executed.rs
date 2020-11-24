@@ -42,6 +42,8 @@ pub struct Executed {
     pub contracts_created: Vec<Address>,
     /// Transaction output.
     pub output: Bytes,
+    /// The trace of this transaction.
+    pub trace: Vec<ExecTrace>,
 }
 
 #[derive(Debug)]
@@ -147,6 +149,7 @@ impl Executed {
             storage_collateralized: Vec::new(),
             storage_released: Vec::new(),
             output: Default::default(),
+            trace: Default::default(),
         }
     }
 
@@ -164,6 +167,7 @@ impl Executed {
             storage_collateralized: Vec::new(),
             storage_released: Vec::new(),
             output: Default::default(),
+            trace: Default::default(),
         }
     }
 }
@@ -199,8 +203,10 @@ pub fn revert_reason_decode(output: &Bytes) -> String {
     }
 }
 
+use crate::trace::trace::ExecTrace;
 #[cfg(test)]
 use rustc_hex::FromHex;
+
 #[test]
 fn test_decode_result() {
     let input_hex =

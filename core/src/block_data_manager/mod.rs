@@ -34,8 +34,11 @@ use threadpool::ThreadPool;
 pub mod block_data_types;
 pub mod db_manager;
 pub mod tx_data_manager;
-use crate::block_data_manager::{
-    db_manager::DBManager, tx_data_manager::TransactionDataManager,
+use crate::{
+    block_data_manager::{
+        db_manager::DBManager, tx_data_manager::TransactionDataManager,
+    },
+    trace::trace::BlockExecTraces,
 };
 pub use block_data_types::*;
 use cfx_internal_common::{
@@ -93,6 +96,7 @@ pub struct BlockDataManager {
     compact_blocks: RwLock<HashMap<H256, CompactBlock>>,
     block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
     block_rewards: RwLock<HashMap<H256, BlockRewardResult>>,
+    block_traces: RwLock<HashMap<H256, BlockExecTraces>>,
     transaction_indices: RwLock<HashMap<H256, TransactionIndex>>,
     local_block_info: RwLock<HashMap<H256, LocalBlockInfo>>,
     blamed_header_verified_roots:
@@ -190,6 +194,7 @@ impl BlockDataManager {
             compact_blocks: Default::default(),
             block_receipts: Default::default(),
             block_rewards: Default::default(),
+            block_traces: Default::default(),
             transaction_indices: Default::default(),
             local_block_info: Default::default(),
             blamed_header_verified_roots: Default::default(),
@@ -444,6 +449,36 @@ impl BlockDataManager {
             self.remove_block_header(hash, remove_db);
             self.remove_block_body(hash, remove_db);
         }
+    }
+
+    pub fn block_traces_by_hash(&self, hash: &H256) -> Option<BlockExecTraces> {
+        self.get(
+            hash,
+            &self.block_traces,
+            |key| self.db_manager.block_traces_from_db(key),
+            Some(CacheId::BlockTraces(*hash)),
+        )
+    }
+
+    pub fn insert_block_traces(
+        &self, hash: H256, block_traces: BlockExecTraces, persistent: bool,
+    ) {
+        self.insert(
+            hash,
+            block_traces,
+            &self.block_traces,
+            |_, value| self.db_manager.insert_block_traces_to_db(&hash, value),
+            Some(CacheId::BlockTraces(hash)),
+            persistent,
+        )
+    }
+
+    /// remove block traces in memory cache and db
+    pub fn remove_block_traces(&self, hash: &H256, remove_db: bool) {
+        if remove_db {
+            self.db_manager.remove_block_header_from_db(hash);
+        }
+        self.block_headers.write().remove(hash);
     }
 
     pub fn block_header_by_hash(
@@ -1102,6 +1137,7 @@ impl BlockDataManager {
         let compact_blocks = self.compact_blocks.read().size_of(malloc_ops);
         let block_receipts = self.block_receipts.read().size_of(malloc_ops);
         let block_rewards = self.block_rewards.read().size_of(malloc_ops);
+        let block_traces = self.block_traces.read().size_of(malloc_ops);
         let transaction_indices =
             self.transaction_indices.read().size_of(malloc_ops);
         let local_block_infos =
@@ -1112,6 +1148,7 @@ impl BlockDataManager {
             blocks,
             block_receipts,
             block_rewards,
+            block_traces,
             transaction_indices,
             compact_blocks,
             local_block_infos,
@@ -1125,6 +1162,7 @@ impl BlockDataManager {
         let mut compact_blocks = self.compact_blocks.write();
         let mut executed_results = self.block_receipts.write();
         let mut reward_results = self.block_rewards.write();
+        let mut block_traces = self.block_traces.write();
         let mut tx_indices = self.transaction_indices.write();
         let mut local_block_info = self.local_block_info.write();
         let mut blamed_header_verified_roots =
@@ -1132,13 +1170,14 @@ impl BlockDataManager {
         let mut cache_man = self.cache_man.lock();
 
         debug!(
-            "Before gc cache_size={} {} {} {} {} {} {} {} {}",
+            "Before gc cache_size={} {} {} {} {} {} {} {} {} {}",
             current_size,
             block_headers.len(),
             blocks.len(),
             compact_blocks.len(),
             executed_results.len(),
             reward_results.len(),
+            block_traces.len(),
             tx_indices.len(),
             local_block_info.len(),
             blamed_header_verified_roots.len(),
@@ -1162,6 +1201,9 @@ impl BlockDataManager {
                     CacheId::BlockRewards(h) => {
                         reward_results.remove(h);
                     }
+                    CacheId::BlockTraces(h) => {
+                        block_traces.remove(h);
+                    }
                     CacheId::TransactionAddress(h) => {
                         tx_indices.remove(h);
                     }
@@ -1179,6 +1221,7 @@ impl BlockDataManager {
                 + blocks.size_of(malloc_ops)
                 + executed_results.size_of(malloc_ops)
                 + reward_results.size_of(malloc_ops)
+                + block_traces.size_of(malloc_ops)
                 + tx_indices.size_of(malloc_ops)
                 + compact_blocks.size_of(malloc_ops)
                 + local_block_info.size_of(malloc_ops)
@@ -1188,6 +1231,7 @@ impl BlockDataManager {
         blocks.shrink_to_fit();
         executed_results.shrink_to_fit();
         reward_results.shrink_to_fit();
+        block_traces.shrink_to_fit();
         tx_indices.shrink_to_fit();
         compact_blocks.shrink_to_fit();
         local_block_info.shrink_to_fit();

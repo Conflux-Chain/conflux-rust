@@ -1,3 +1,9 @@
+# 1.0.4
+
+## Improvements
+
+- Add new rpc `cfx_getSupplyInfo` for archive/full nodes.
+
 # 1.0.3
 
 ## Improvements

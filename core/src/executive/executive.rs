@@ -18,6 +18,7 @@ use crate::{
     state::{
         CallStackInfo, CleanupMode, CollateralCheckResult, State, Substate,
     },
+    trace::{self, trace::ExecTrace, Tracer},
     verification::VerificationConfig,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
@@ -142,6 +143,36 @@ pub fn into_contract_create_result(
             return_data,
         }) => vm::ContractCreateResult::Reverted(gas_left, return_data),
         _ => vm::ContractCreateResult::Failed,
+    }
+}
+
+/// Transaction execution options.
+#[derive(Copy, Clone, PartialEq)]
+pub struct TransactOptions<T> {
+    /// Enable call tracing.
+    pub tracer: T,
+}
+
+impl<T> TransactOptions<T> {
+    /// Create new `TransactOptions` with given tracer and VM tracer.
+    pub fn new(tracer: T) -> Self { TransactOptions { tracer } }
+}
+
+impl TransactOptions<trace::ExecutiveTracer> {
+    /// Creates new `TransactOptions` with default tracing and no VM tracing.
+    pub fn with_tracing() -> Self {
+        TransactOptions {
+            tracer: trace::ExecutiveTracer::default(),
+        }
+    }
+}
+
+impl TransactOptions<trace::NoopTracer> {
+    /// Creates new `TransactOptions` without any tracing.
+    pub fn with_no_tracing() -> Self {
+        TransactOptions {
+            tracer: trace::NoopTracer,
+        }
     }
 }
 
@@ -939,8 +970,8 @@ impl<'a> CallCreateExecutive<'a> {
     /// Execute and consume the current executive. This function handles resume
     /// traps and sub-level tracing. The caller is expected to handle
     /// current-level tracing.
-    pub fn consume(
-        self, state: &mut State, top_substate: &mut Substate,
+    pub fn consume<T: Tracer>(
+        self, state: &mut State, top_substate: &mut Substate, tracer: &mut T,
     ) -> vm::Result<FinalizationResult> {
         let mut last_res =
             Some((false, self.gas, self.exec(state, top_substate)));
@@ -1013,6 +1044,7 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 }
                 Some((_, _, Err(TrapError::Call(subparams, mut resume)))) => {
+                    tracer.prepare_trace_call(&subparams);
                     let maybe_parent_contract_in_creation = resume
                         .unconfirmed_substate()
                         .map_or(None, |substate| {
@@ -1044,6 +1076,7 @@ impl<'a> CallCreateExecutive<'a> {
                     _,
                     Err(TrapError::Create(subparams, address, resume)),
                 )) => {
+                    tracer.prepare_trace_create(&subparams);
                     let sub_exec = CallCreateExecutive::new_create_raw(
                         subparams,
                         resume.env,
@@ -1140,11 +1173,14 @@ impl<'a> Executive<'a> {
         )
     }
 
-    pub fn create_with_stack_depth(
+    pub fn create_with_stack_depth<T>(
         &mut self, params: ActionParams, substate: &mut Substate,
-        stack_depth: usize,
+        stack_depth: usize, tracer: &mut T,
     ) -> vm::Result<FinalizationResult>
+    where
+        T: Tracer,
     {
+        tracer.prepare_trace_create(&params);
         let _address = params.address;
         let _gas = params.gas;
 
@@ -1161,22 +1197,29 @@ impl<'a> Executive<'a> {
             self.internal_contract_map,
             substate.contracts_in_callstack.clone(),
         )
-        .consume(self.state, substate);
+        .consume(self.state, substate, tracer);
 
         result
     }
 
-    pub fn create(
+    pub fn create<T>(
         &mut self, params: ActionParams, substate: &mut Substate,
-    ) -> vm::Result<FinalizationResult> {
-        self.create_with_stack_depth(params, substate, 0)
+        tracer: &mut T,
+    ) -> vm::Result<FinalizationResult>
+    where
+        T: Tracer,
+    {
+        self.create_with_stack_depth(params, substate, 0, tracer)
     }
 
-    pub fn call_with_stack_depth(
+    pub fn call_with_stack_depth<T>(
         &mut self, params: ActionParams, substate: &mut Substate,
-        stack_depth: usize,
+        stack_depth: usize, tracer: &mut T,
     ) -> vm::Result<FinalizationResult>
+    where
+        T: Tracer,
     {
+        tracer.prepare_trace_call(&params);
         let vm_factory = self.state.vm_factory();
 
         let result = CallCreateExecutive::new_call_raw(
@@ -1192,15 +1235,19 @@ impl<'a> Executive<'a> {
             self.internal_contract_map,
             substate.contracts_in_callstack.clone(),
         )
-        .consume(self.state, substate);
+        .consume(self.state, substate, tracer);
 
         result
     }
 
-    pub fn call(
+    pub fn call<T>(
         &mut self, params: ActionParams, substate: &mut Substate,
-    ) -> vm::Result<FinalizationResult> {
-        self.call_with_stack_depth(params, substate, 0)
+        tracer: &mut T,
+    ) -> vm::Result<FinalizationResult>
+    where
+        T: Tracer,
+    {
+        self.call_with_stack_depth(params, substate, 0, tracer)
     }
 
     pub fn transact_virtual(
@@ -1218,12 +1265,14 @@ impl<'a> Executive<'a> {
                 CleanupMode::NoEmpty,
             )?;
         }
-        self.transact(tx)
+        let options = TransactOptions::with_no_tracing();
+        self.transact(tx, options)
     }
 
-    pub fn transact(
-        &mut self, tx: &SignedTransaction,
-    ) -> DbResult<ExecutionOutcome> {
+    pub fn transact<T>(
+        &mut self, tx: &SignedTransaction, mut options: TransactOptions<T>,
+    ) -> DbResult<ExecutionOutcome>
+    where T: Tracer<Output = trace::trace::ExecTrace> {
         let spec = &self.spec;
         let sender = tx.sender();
         let nonce = self.state.nonce(&sender)?;
@@ -1475,7 +1524,7 @@ impl<'a> Executive<'a> {
                     params_type: vm::ParamsType::Embedded,
                     storage_limit_in_drip: total_storage_limit,
                 };
-                self.create(params, &mut substate)
+                self.create(params, &mut substate, &mut options.tracer)
             }
             Action::Call(ref address) => {
                 let params = ActionParams {
@@ -1494,7 +1543,7 @@ impl<'a> Executive<'a> {
                     params_type: vm::ParamsType::Separate,
                     storage_limit_in_drip: total_storage_limit,
                 };
-                self.call(params, &mut substate)
+                self.call(params, &mut substate, &mut options.tracer)
             }
         };
 
@@ -1543,6 +1592,7 @@ impl<'a> Executive<'a> {
             output,
             refund_receiver,
             storage_sponsored,
+            options.tracer.drain(),
         )?)
     }
 
@@ -1623,6 +1673,7 @@ impl<'a> Executive<'a> {
         &mut self, tx: &SignedTransaction, mut substate: Substate,
         result: vm::Result<FinalizationResult>, output: Bytes,
         refund_receiver: Option<Address>, storage_sponsor_paid: bool,
+        trace: Vec<ExecTrace>,
     ) -> DbResult<ExecutionOutcome>
     {
         let gas_left = match result {
@@ -1728,6 +1779,7 @@ impl<'a> Executive<'a> {
                     storage_collateralized,
                     storage_released,
                     output,
+                    trace,
                 };
 
                 if r.apply_state {

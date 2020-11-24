@@ -249,6 +249,7 @@ build_config! {
         (persist_tx_index, (bool), false)
         (print_memory_usage_period_s, (Option<u64>), None)
         (target_block_gas_limit, (u64), DEFAULT_TARGET_BLOCK_GAS_LIMIT)
+        (executive_trace, (bool), false)
 
         // TreeGraph Section.
         (candidate_pivot_waiting_timeout_ms, (u64), 10_000)
@@ -768,6 +769,7 @@ impl Configuration {
         ConsensusExecutionConfiguration {
             anticone_penalty_ratio: self.raw_conf.anticone_penalty_ratio,
             base_reward_table_in_ucfx: MINING_REWARD_TABLE_IN_UCFX.to_vec(),
+            executive_trace: self.raw_conf.executive_trace,
         }
     }
 

@@ -153,10 +153,8 @@ impl SendTxRequest {
                 Some(address) => Action::Call(address.into()),
             },
             value: self.value.into(),
-            storage_limit: self
-                .storage_limit
-                .unwrap_or(std::u64::MAX.into())
-                .as_usize() as u64,
+            storage_limit: self.storage_limit.unwrap_or_default().as_usize()
+                as u64,
             epoch_height: self
                 .epoch_height
                 .unwrap_or(best_epoch_height.into())

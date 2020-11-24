@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::MAX_GAS_CALL_REQUEST;
+use crate::rpc::types::{TokenSupplyInfo, MAX_GAS_CALL_REQUEST};
 use blockgen::BlockGenerator;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
 use cfx_types::{
@@ -1076,6 +1076,21 @@ impl RpcImpl {
         Ok((status.to_db_status(), state_valid))
     }
 
+    pub fn get_supply_info(
+        &self, epoch: Option<EpochNumber>,
+    ) -> RpcResult<TokenSupplyInfo> {
+        let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
+        let state = self.consensus.get_state_by_epoch_number(epoch)?;
+        let total_issued = *state.total_issued_tokens();
+        let total_staking = *state.total_staking_tokens();
+        let total_collateral = *state.total_storage_tokens();
+        Ok(TokenSupplyInfo {
+            total_issued,
+            total_staking,
+            total_collateral,
+        })
+    }
+
     pub fn set_db_crash(
         &self, crash_probability: f64, crash_exit_code: i32,
     ) -> RpcResult<()> {
@@ -1155,6 +1170,7 @@ impl Cfx for CfxHandler {
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
             fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
+            fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
         }
     }
 }

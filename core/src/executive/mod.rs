@@ -12,7 +12,7 @@ mod executive_tests;
 
 pub use self::{
     executed::*,
-    executive::{contract_address, Executive},
+    executive::{contract_address, Executive, TransactOptions},
     internal_contract::{
         function, suicide, ABIDecodeError, InternalContractMap,
         InternalContractTrait, SolidityFunctionTrait,
