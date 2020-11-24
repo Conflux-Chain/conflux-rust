@@ -30,9 +30,9 @@ use crate::hash::KECCAK_EMPTY;
 /// Transaction value
 #[derive(Clone, Debug)]
 pub enum ActionValue {
-    /// Value that should be transferred
+    /// Value that should be transfered
     Transfer(U256),
-    /// Apparent value for transaction (not transferred)
+    /// Apparent value for transaction (not transfered)
     Apparent(U256),
 }
 

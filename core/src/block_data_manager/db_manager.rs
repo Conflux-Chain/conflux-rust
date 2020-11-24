@@ -5,11 +5,10 @@ use crate::{
         EpochExecutionContext, LocalBlockInfo,
     },
     db::{
-        COL_BLAMED_HEADER_VERIFIED_ROOTS, COL_BLOCKS, COL_BLOCK_TRACES,
-        COL_EPOCH_NUMBER, COL_MISC, COL_TX_INDEX,
+        COL_BLAMED_HEADER_VERIFIED_ROOTS, COL_BLOCKS, COL_EPOCH_NUMBER,
+        COL_MISC, COL_TX_INDEX,
     },
     pow::PowComputer,
-    trace::trace::BlockExecTraces,
     verification::VerificationConfig,
 };
 use byteorder::{ByteOrder, LittleEndian};
@@ -44,7 +43,6 @@ enum DBTable {
     Transactions,
     EpochNumbers,
     BlamedHeaderVerifiedRoots,
-    BlockTraces,
 }
 
 fn rocks_db_col(table: DBTable) -> u32 {
@@ -54,7 +52,6 @@ fn rocks_db_col(table: DBTable) -> u32 {
         DBTable::Transactions => COL_TX_INDEX,
         DBTable::EpochNumbers => COL_EPOCH_NUMBER,
         DBTable::BlamedHeaderVerifiedRoots => COL_BLAMED_HEADER_VERIFIED_ROOTS,
-        DBTable::BlockTraces => COL_BLOCK_TRACES,
     }
 }
 
@@ -65,7 +62,6 @@ fn sqlite_db_table(table: DBTable) -> String {
         DBTable::Transactions => "transactions",
         DBTable::EpochNumbers => "epoch_numbers",
         DBTable::BlamedHeaderVerifiedRoots => "blamed_header_verified_roots",
-        DBTable::BlockTraces => "block_traces",
     }
     .into()
 }
@@ -84,7 +80,6 @@ impl DBManager {
             DBTable::Transactions,
             DBTable::EpochNumbers,
             DBTable::BlamedHeaderVerifiedRoots,
-            DBTable::BlockTraces,
         ] {
             table_db.insert(
                 table,
@@ -111,7 +106,6 @@ impl DBManager {
             DBTable::Transactions,
             DBTable::EpochNumbers,
             DBTable::BlamedHeaderVerifiedRoots,
-            DBTable::BlockTraces,
         ] {
             let table_str = sqlite_db_table(table);
             let (_, sqlite_db) = KvdbSqlite::open_or_create(
@@ -141,24 +135,6 @@ impl DBManager {
 }
 
 impl DBManager {
-    pub fn insert_block_traces_to_db(
-        &self, block_hash: &H256, block_traces: &BlockExecTraces,
-    ) {
-        self.insert_encodable_val(
-            DBTable::BlockTraces,
-            block_hash.as_bytes(),
-            block_traces,
-        );
-    }
-
-    pub fn block_traces_from_db(
-        &self, block_hash: &H256,
-    ) -> Option<BlockExecTraces> {
-        let block_traces = self
-            .load_decodable_val(DBTable::BlockTraces, block_hash.as_bytes())?;
-        Some(block_traces)
-    }
-
     /// TODO Use new_with_rlp_size
     pub fn block_from_db(&self, block_hash: &H256) -> Option<Block> {
         Some(Block::new(

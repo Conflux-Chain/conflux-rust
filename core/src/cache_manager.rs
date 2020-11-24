@@ -35,7 +35,6 @@ pub enum CacheId {
     CompactBlock(H256),
     BlockReceipts(H256),
     BlockRewards(H256),
-    BlockTraces(H256),
     TransactionAddress(H256),
     LocalBlockInfo(H256),
     BlamedHeaderVerifiedRoots(u64),
@@ -138,8 +137,6 @@ pub struct CacheSize {
     pub block_receipts: usize,
     /// Block Rewards cache size.
     pub block_rewards: usize,
-    /// Block Traces cache size.
-    pub block_traces: usize,
     /// Transaction indices cache size.
     pub transaction_indices: usize,
     /// Local block info cache size.
@@ -154,7 +151,6 @@ impl CacheSize {
             + self.compact_blocks
             + self.block_receipts
             + self.block_rewards
-            + self.block_traces
             + self.transaction_indices
             + self.local_block_infos
     }
