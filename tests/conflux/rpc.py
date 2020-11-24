@@ -398,6 +398,6 @@ class RpcClient:
 
     def get_supply_info(self, epoch:str=None):
         if epoch is None:
-            return self.node.cfx_getTokenSupplyInfo()
+            return self.node.cfx_getSupplyInfo()
         else:
-            return self.node.cfx_getTokenSupplyInfo(epoch)
+            return self.node.cfx_getSupplyInfo(epoch)
