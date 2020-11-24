@@ -1,5 +1,9 @@
 # 1.0.4
 
+## Improvements
+
+- Add new rpc `cfx_getSupplyInfo` for archive/full nodes.
+
 ## Bug Fixes
 
 - Change the `blame` field returned from the `newHeads` pub-sub to hex.
