@@ -1110,6 +1110,10 @@ impl SynchronizationProtocolHandler {
         let parent_hash = *block.block_header.parent_hash();
 
         assert!(self.graph.contains_block_header(&parent_hash));
+        if self.graph.contains_block_header(&hash) {
+            warn!("Mined an duplicate block, the mining power is wasted!");
+            return;
+        }
         self.graph.insert_block_header(
             &mut block.block_header,
             false,
