@@ -2,7 +2,7 @@
 
 ## Improvements
 
-- Add new rpc `cfx_getTokenSupplyInfo` for archive/full nodes.
+- Add new rpc `cfx_getSupplyInfo` for archive/full nodes.
 
 # 1.0.3
 

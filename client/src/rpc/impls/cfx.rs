@@ -1076,7 +1076,7 @@ impl RpcImpl {
         Ok((status.to_db_status(), state_valid))
     }
 
-    pub fn get_token_supply_info(
+    pub fn get_supply_info(
         &self, epoch: Option<EpochNumber>,
     ) -> RpcResult<TokenSupplyInfo> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
@@ -1170,7 +1170,7 @@ impl Cfx for CfxHandler {
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
             fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
-            fn get_token_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
+            fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
         }
     }
 }

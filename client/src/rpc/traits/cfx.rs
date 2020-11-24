@@ -231,8 +231,8 @@ pub trait Cfx {
     fn get_client_version(&self) -> JsonRpcResult<String>;
 
     /// Return information about total token supply.
-    #[rpc(name = "cfx_getTokenSupplyInfo")]
-    fn get_token_supply_info(
+    #[rpc(name = "cfx_getSupplyInfo")]
+    fn get_supply_info(
         &self, epoch_number: Option<EpochNumber>,
     ) -> JsonRpcResult<TokenSupplyInfo>;
 

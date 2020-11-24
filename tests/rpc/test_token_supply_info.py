@@ -22,7 +22,7 @@ class TestTokenSupplyInfo(RpcClient):
         file_dir = os.path.dirname(os.path.realpath(__file__))
 
         # Two test accounts and genesis accounts
-        info = self.get_token_supply_info()
+        info = self.get_supply_info()
         assert_equal(int(info["totalIssued"], 16), 10000005000000000000000000000000000)
         assert_equal(int(info["totalStaking"], 16), 0)
         assert_equal(int(info["totalCollateral"], 16), 0)
@@ -44,7 +44,7 @@ class TestTokenSupplyInfo(RpcClient):
         tx = self.new_tx(data=tx_data, gas=tx_conf["gas"], receiver=tx_conf["to"], value=0)
         self.send_tx(tx, True)
         # Stake 10**18 drip, and generating 5 blocks does not affect rewards
-        info = self.get_token_supply_info()
+        info = self.get_supply_info()
         assert_equal(int(info["totalIssued"], 16), 10000005000000000000000000000000000)
         assert_equal(int(info["totalStaking"], 16), 10**18)
         assert_equal(int(info["totalCollateral"], 16), 0)
@@ -61,7 +61,7 @@ class TestTokenSupplyInfo(RpcClient):
         tx = self.new_tx(data=tx_data, gas=tx_conf["gas"], receiver='', storage_limit=512, value=0)
         self.send_tx(tx, True)
         # Collateral for pay_contract
-        info = self.get_token_supply_info()
+        info = self.get_supply_info()
         assert_equal(int(info["totalIssued"], 16), 10000005000000000000000000000000000)
         assert_equal(int(info["totalStaking"], 16), 10**18)
         assert_equal(int(info["totalCollateral"], 16), 512 * 976562500000000)
@@ -69,7 +69,7 @@ class TestTokenSupplyInfo(RpcClient):
         # 17 blocks [12 (REWARD_EPOCH_COUNT) + 5 (DEFERRED_STATE_COUNT)] will trigger the first reward computation.
         h = self.epoch_number()
         self.generate_blocks(17 - h)
-        info = self.get_token_supply_info()
+        info = self.get_supply_info()
         assert_equal(int(info["totalIssued"], 16), 10000005000000007000000000000000000)
         assert_equal(int(info["totalStaking"], 16), 10**18)
         assert_equal(int(info["totalCollateral"], 16), 512 * 976562500000000)

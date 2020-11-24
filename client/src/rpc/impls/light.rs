@@ -969,7 +969,7 @@ impl Cfx for CfxHandler {
         fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
         fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<EstimateGasAndCollateralResponse>;
         fn get_block_reward_info(&self, num: EpochNumber) -> RpcResult<Vec<RpcRewardInfo>>;
-        fn get_token_supply_info(&self, epoch_num: Option<EpochNumber>) -> RpcResult<TokenSupplyInfo>;
+        fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> RpcResult<TokenSupplyInfo>;
     }
 }
 
