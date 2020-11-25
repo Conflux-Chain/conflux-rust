@@ -356,7 +356,7 @@ pub struct Header {
     /// state_root/receipts_root/logs_bloom_hash/blame are not correct.
     /// It acts as a vote to help light client determining the
     /// state_root/receipts_root/logs_bloom_hash are correct or not.
-    pub blame: u32,
+    pub blame: U64,
     /// Transactions root hash
     pub transactions_root: H256,
     /// Epoch number
@@ -400,7 +400,7 @@ impl Header {
             deferred_state_root: H256::from(*h.deferred_state_root()),
             deferred_receipts_root: H256::from(*h.deferred_receipts_root()),
             deferred_logs_bloom_hash: H256::from(*h.deferred_logs_bloom_hash()),
-            blame: h.blame(),
+            blame: U64::from(h.blame()),
             transactions_root: H256::from(*h.transactions_root()),
             epoch_number,
             gas_limit: h.gas_limit().into(),
@@ -522,7 +522,7 @@ mod tests {
             deferred_state_root: Default::default(),
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP.into(),
             deferred_logs_bloom_hash: cfx_types::KECCAK_EMPTY_BLOOM.into(),
-            blame: 0,
+            blame: 0.into(),
             transactions_root: KECCAK_EMPTY_LIST_RLP.into(),
             epoch_number: None,
             gas_limit: U256::default(),
@@ -535,6 +535,6 @@ mod tests {
         };
         let serialized_header = serde_json::to_string(&header).unwrap();
 
-        assert_eq!(serialized_header, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":0,"transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0"}"#);
+        assert_eq!(serialized_header, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0"}"#);
     }
 }
