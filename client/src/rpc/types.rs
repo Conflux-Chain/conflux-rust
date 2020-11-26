@@ -19,6 +19,7 @@ mod status;
 mod sync_graph_states;
 mod token_supply_info;
 mod transaction;
+mod trace;
 
 pub mod pubsub;
 
@@ -46,4 +47,5 @@ pub use self::{
         PackedOrExecuted, SendTxRequest, Transaction, TxPoolPendingInfo,
         TxWithPoolInfo,
     },
+    trace::LocalizedBlockTrace,
 };

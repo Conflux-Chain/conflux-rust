@@ -11,10 +11,12 @@ use cfx_types::{Address, Bloom, BloomInput, U256};
 use malloc_size_of_derive::MallocSizeOf;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
+use serde::Serialize;
 
 /// Description of a _call_ action, either a `CALL` operation or a message
 /// transaction.
-#[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable)]
+#[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Call {
     /// The sending account.
     pub from: Address,
@@ -66,7 +68,8 @@ impl Call {
 
 /// Description of a _create_ action, either a `CREATE` operation or a create
 /// transaction.
-#[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable)]
+#[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Create {
     /// The address of the creator.
     pub from: Address,
