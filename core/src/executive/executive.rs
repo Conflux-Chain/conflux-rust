@@ -438,6 +438,8 @@ impl<'a> CallCreateExecutive<'a> {
         Ok(())
     }
 
+    // FIXME: handle statedberror correctly so that the exec() throw exception
+    // immediately.
     fn enact_output(
         mut self, output: ExecTrapResult<FinalizationResult>,
         origin: OriginInfo, state: &mut State, substate: &mut Substate,

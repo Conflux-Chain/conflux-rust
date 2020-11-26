@@ -20,9 +20,6 @@ use rlp_derive::{RlpDecodable, RlpEncodable};
 pub struct SnapshotManifestResponse {
     pub request_id: u64,
     pub manifest: RangedManifest,
-    // FIXME: this TODO must be addressed before release, or we must have a
-    // FIXME: protocol version field
-    //
     // We actually need state_root_blame_vec for two epochs: snapshot_epoch_id
     // and its next snapshot + 1 epoch; and the state_root of snapshot_epoch_id
     // and the state root of its next snapshot + 1 epoch to get
