@@ -2,9 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfxcore::trace::trace::{Action, BlockExecTraces, ExecTrace, TransactionExecTraces};
-use serde::ser::SerializeStruct;
-use serde::{Serialize, Serializer};
+use cfxcore::trace::trace::{
+    Action, BlockExecTraces, ExecTrace, TransactionExecTraces,
+};
+use serde::{ser::SerializeStruct, Serialize, Serializer};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,47 +26,46 @@ pub struct LocalizedTrace {
 
 impl Serialize for LocalizedTrace {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-		where S: Serializer
-	{
+    where S: Serializer {
         let mut struc = serializer.serialize_struct("LocalizedTrace", 2)?;
-        
-		match self.action {
-			Action::Call(ref call) => {
-				struc.serialize_field("type", "call")?;
-				struc.serialize_field("action", call)?;
-			},
-			Action::Create(ref create) => {
-				struc.serialize_field("type", "create")?;
-				struc.serialize_field("action", create)?;
-			},
-		}
 
-		struc.end()
-	}
+        match self.action {
+            Action::Call(ref call) => {
+                struc.serialize_field("type", "call")?;
+                struc.serialize_field("action", call)?;
+            }
+            Action::Create(ref create) => {
+                struc.serialize_field("type", "create")?;
+                struc.serialize_field("action", create)?;
+            }
+        }
+
+        struc.end()
+    }
 }
 
-impl From<ExecTrace> for LocalizedTrace{
-	fn from(trace: ExecTrace) -> Self {
-		LocalizedTrace{
-			action: trace.action,
-		}
-	}
+impl From<ExecTrace> for LocalizedTrace {
+    fn from(trace: ExecTrace) -> Self {
+        LocalizedTrace {
+            action: trace.action,
+        }
+    }
 }
 
 impl From<TransactionExecTraces> for LocalizedTransactionTrace {
-	fn from(traces: TransactionExecTraces) -> Self {
-		let traces : Vec<ExecTrace> = traces.into();
-		LocalizedTransactionTrace{
-			traces: traces.into_iter().map(Into::into).collect(),
-		}
-	}
+    fn from(traces: TransactionExecTraces) -> Self {
+        let traces: Vec<ExecTrace> = traces.into();
+        LocalizedTransactionTrace {
+            traces: traces.into_iter().map(Into::into).collect(),
+        }
+    }
 }
 
 impl From<BlockExecTraces> for LocalizedBlockTrace {
-	fn from(traces: BlockExecTraces) -> Self {
-		let traces : Vec<TransactionExecTraces> = traces.into();
-		LocalizedBlockTrace {
-			transaction_traces: traces.into_iter().map(Into::into).collect(),
-		}
-	}
+    fn from(traces: BlockExecTraces) -> Self {
+        let traces: Vec<TransactionExecTraces> = traces.into();
+        LocalizedBlockTrace {
+            transaction_traces: traces.into_iter().map(Into::into).collect(),
+        }
+    }
 }

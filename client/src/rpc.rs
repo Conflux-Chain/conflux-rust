@@ -48,7 +48,9 @@ use self::{
         pubsub::PubSubClient,
         trace::TraceHandler,
     },
-    traits::{cfx::Cfx, debug::LocalRpc, pubsub::PubSub, test::TestRpc, trace::Trace},
+    traits::{
+        cfx::Cfx, debug::LocalRpc, pubsub::PubSub, test::TestRpc, trace::Trace,
+    },
 };
 
 pub use self::types::{Block as RpcBlock, Origin};
@@ -153,7 +155,8 @@ pub fn setup_public_rpc_apis(
     handler.extend_with(RpcProxy::new(cfx, interceptor));
     if conf.raw_conf.executive_trace && conf.raw_conf.tracing {
         let trace = TraceHandler::new(data_man).to_delegate();
-        let interceptor = ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc");
+        let interceptor =
+            ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc");
         handler.extend_with(RpcProxy::new(trace, interceptor));
     }
     if let Some(pubsub) = pubsub {
@@ -181,7 +184,8 @@ pub fn setup_debug_rpc_apis(
     handler.extend_with(debug);
     if conf.raw_conf.executive_trace {
         let trace = TraceHandler::new(data_man).to_delegate();
-        let interceptor = ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc");
+        let interceptor =
+            ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc");
         handler.extend_with(RpcProxy::new(trace, interceptor));
     }
     if let Some(pubsub) = pubsub {
