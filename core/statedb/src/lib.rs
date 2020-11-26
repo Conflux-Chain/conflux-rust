@@ -383,7 +383,8 @@ mod impls {
             // First of all, apply all changes to the underlying storage.
             for (k, v) in accessed_entries {
                 if v.is_modified() {
-                    let storage_key = StorageKey::from_key_bytes(k);
+                    let storage_key =
+                        StorageKey::from_key_bytes::<SkipInputCheck>(k);
                     match &v.current_value {
                         Some(v) => {
                             self.storage.set(storage_key, (&**v).into())?;
@@ -631,7 +632,9 @@ mod impls {
     use cfx_types::{address_util::AddressUtil, Address};
     use hashbrown::HashMap;
     use parking_lot::RwLock;
-    use primitives::{EpochId, StorageKey, StorageLayout, StorageRoot};
+    use primitives::{
+        EpochId, SkipInputCheck, StorageKey, StorageLayout, StorageRoot,
+    };
     use std::{
         collections::{btree_map::Entry::Occupied, BTreeMap},
         ops::Bound::{Excluded, Included, Unbounded},

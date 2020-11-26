@@ -7,7 +7,7 @@ use super::super::types::{
     CheckBalanceAgainstTransactionResponse, EpochNumber,
     EstimateGasAndCollateralResponse, Filter as RpcFilter, Log as RpcLog,
     Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, Status as RpcStatus,
-    Transaction,
+    TokenSupplyInfo, Transaction,
 };
 use crate::rpc::types::BlockHashOrEpochNumber;
 use cfx_types::{H160, H256, U256, U64};
@@ -177,7 +177,7 @@ pub trait Cfx {
     fn check_balance_against_transaction(
         &self, account_addr: H160, contract_addr: H160, gas_limit: U256,
         gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>,
-    ) -> JsonRpcResult<CheckBalanceAgainstTransactionResponse>;
+    ) -> BoxFuture<CheckBalanceAgainstTransactionResponse>;
 
     #[rpc(name = "cfx_getBlocksByEpoch")]
     fn blocks_by_epoch(
@@ -229,6 +229,12 @@ pub trait Cfx {
     /// Return the client version as a string
     #[rpc(name = "cfx_clientVersion")]
     fn get_client_version(&self) -> JsonRpcResult<String>;
+
+    /// Return information about total token supply.
+    #[rpc(name = "cfx_getSupplyInfo")]
+    fn get_supply_info(
+        &self, epoch_number: Option<EpochNumber>,
+    ) -> JsonRpcResult<TokenSupplyInfo>;
 
     //        /// Returns transaction at given block hash and index.
     //        #[rpc(name = "cfx_getTransactionByBlockHashAndIndex")]

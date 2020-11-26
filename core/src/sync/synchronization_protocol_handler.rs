@@ -1110,16 +1110,17 @@ impl SynchronizationProtocolHandler {
         let parent_hash = *block.block_header.parent_hash();
 
         assert!(self.graph.contains_block_header(&parent_hash));
-        assert!(!self.graph.contains_block_header(&hash));
-        let (insert_result, _to_relay) = self.graph.insert_block_header(
+        if self.graph.contains_block_header(&hash) {
+            warn!("Mined an duplicate block, the mining power is wasted!");
+            return;
+        }
+        self.graph.insert_block_header(
             &mut block.block_header,
             false,
             false,
             false,
             true,
         );
-        assert!(insert_result.is_new_valid());
-        assert!(!self.graph.contains_block(&hash));
         // Do not need to look at the result since this new block will be
         // broadcast to peers.
         self.graph.insert_block(

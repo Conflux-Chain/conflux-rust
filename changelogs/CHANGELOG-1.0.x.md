@@ -1,8 +1,14 @@
+# 1.0.4
+
+## Improvements
+
+- Add new rpc `cfx_getSupplyInfo` for archive/full nodes.
+
 # 1.0.3
 
 ## Improvements
 
-- Support `cfx_gasPrice`, `cfx_getAccumulateInterestRate` and `cfx_getInterestRate` on light nodes.
+- Support `cfx_gasPrice`, `cfx_getAccumulateInterestRate`, `cfx_getInterestRate`, and `cfx_checkBalanceAgainstTransaction` on light nodes.
 - Add the following new fields in the return value of `cfx_getTransactionReceipt`: `gasCoveredBySponsor`, `storageCollateralized`, `storageCoveredBySponsor`, `storageReleased`.
 - Add new rpc `cfx_getDepositList` and `cfx_getVoteList` in archive/full/light nodes.
 

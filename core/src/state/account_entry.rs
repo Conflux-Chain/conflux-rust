@@ -21,14 +21,9 @@ use primitives::{
 use std::{collections::HashMap, sync::Arc};
 
 lazy_static! {
-    static ref SPONSOR_ADDRESS_STORAGE_KEY: Vec<u8> =
-        keccak("sponsor_address").as_bytes().to_vec();
-    static ref SPONSOR_BALANCE_STORAGE_KEY: Vec<u8> =
-        keccak("sponsor_balance").as_bytes().to_vec();
-    static ref COMMISSION_PRIVILEGE_STORAGE_VALUE: U256 =
-        U256::one();
+    static ref COMMISSION_PRIVILEGE_STORAGE_VALUE: U256 = U256::one();
     /// If we set this key, it means every account has commission privilege.
-    static ref COMMISSION_PRIVILEGE_SPECIAL_KEY: Address = Address::zero();
+    pub static ref COMMISSION_PRIVILEGE_SPECIAL_KEY: Address = Address::zero();
 }
 
 #[derive(Debug)]

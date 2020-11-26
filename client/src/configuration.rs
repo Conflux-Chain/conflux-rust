@@ -251,6 +251,7 @@ build_config! {
         (persist_tx_index, (bool), false)
         (print_memory_usage_period_s, (Option<u64>), None)
         (target_block_gas_limit, (u64), DEFAULT_TARGET_BLOCK_GAS_LIMIT)
+        (executive_trace, (bool), false)
 
         // TreeGraph Section.
         (candidate_pivot_waiting_timeout_ms, (u64), 10_000)
@@ -771,6 +772,7 @@ impl Configuration {
 
     pub fn execution_config(&self) -> ConsensusExecutionConfiguration {
         ConsensusExecutionConfiguration {
+            executive_trace: self.raw_conf.executive_trace,
         }
     }
 

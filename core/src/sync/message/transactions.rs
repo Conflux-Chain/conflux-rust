@@ -146,9 +146,6 @@ impl Handleable for TransactionDigests {
                 {
                     bail!(ErrorKind::TooManyTrans);
                 }
-                if self.short_ids.len() % Self::SHORT_ID_SIZE_IN_BYTES != 0 {
-                    bail!(ErrorKind::InvalidMessageFormat);
-                }
             }
         }
 

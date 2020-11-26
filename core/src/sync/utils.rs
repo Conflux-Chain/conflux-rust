@@ -223,6 +223,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         pow.clone(),
         notifications.clone(),
         ConsensusExecutionConfiguration {
+            executive_trace: false,
         },
         verification_config.clone(),
         NodeType::Archive,
