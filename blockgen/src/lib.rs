@@ -7,9 +7,7 @@ use crate::miner::{
     stratum::{Options as StratumOption, Stratum},
     work_notify::NotifyWork,
 };
-use cfx_parameters::consensus::{
-    GENESIS_GAS_LIMIT, PHASE2_HEADER_CUSTOM, PHASE2_HEIGHT,
-};
+use cfx_parameters::consensus::GENESIS_GAS_LIMIT;
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
     block_parameters::*, consensus::consensus_inner::StateBlameInfo, pow::*,
@@ -245,11 +243,12 @@ impl BlockGenerator {
         // See comments in verify_header_graph_ready_block()
         let my_timestamp = max(parent_timestamp, now);
 
-        let custom = if parent_height + 1 >= PHASE2_HEIGHT {
-            vec![PHASE2_HEADER_CUSTOM.to_vec()]
-        } else {
-            vec![]
-        };
+        let custom = self
+            .txpool
+            .machine()
+            .params()
+            .custom(parent_height + 1)
+            .unwrap_or(vec![]);
         let block_header = BlockHeaderBuilder::new()
             .with_transactions_root(compute_transaction_root(&transactions))
             .with_parent_hash(parent_hash)

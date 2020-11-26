@@ -31,7 +31,7 @@ use crate::{
 use cfx_internal_common::{
     debug::*, EpochExecutionCommitment, StateRootWithAuxInfo,
 };
-use cfx_parameters::{consensus::*, consensus_internal::*};
+use cfx_parameters::consensus::*;
 use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{
     defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
@@ -452,7 +452,7 @@ impl ConsensusExecutor {
                         // adjustment.
                         // LINT.IfChange(ANTICONE_PENALTY_1)
                         if anticone_difficulty / U512::from(epoch_difficulty)
-                            >= U512::from(self.handler.config.anticone_penalty_ratio)
+                            >= U512::from(self.handler.machine.params().anticone_penalty_ratio)
                         {
                             no_reward = true;
                         }
@@ -1286,7 +1286,8 @@ impl ConsensusExecutionHandler {
     fn compute_block_base_reward(
         &self, past_block_count: u64, pivot_height: u64,
     ) -> U512 {
-        self.config
+        self.machine
+            .params()
             .base_reward_in_ucfx(past_block_count, pivot_height)
     }
 
@@ -1359,8 +1360,12 @@ impl ConsensusExecutionHandler {
                         / U512::from(epoch_difficulty)
                         * anticone_difficulty
                         / U512::from(epoch_difficulty)
-                        / U512::from(self.config.anticone_penalty_ratio)
-                        / U512::from(self.config.anticone_penalty_ratio);
+                        / U512::from(
+                            self.machine.params().anticone_penalty_ratio,
+                        )
+                        / U512::from(
+                            self.machine.params().anticone_penalty_ratio,
+                        );
                     // Lint.ThenChange(consensus/mod.rs#ANTICONE_PENALTY_1)
 
                     debug_assert!(reward > anticone_penalty);
@@ -1713,33 +1718,4 @@ impl ConsensusExecutionHandler {
 }
 
 pub struct ConsensusExecutionConfiguration {
-    /// Anticone penalty ratio for reward processing.
-    /// It should be less than `timer_chain_beta`.
-    pub anticone_penalty_ratio: u64,
-    pub base_reward_table_in_ucfx: Vec<u64>,
-}
-
-impl ConsensusExecutionConfiguration {
-    pub fn base_reward_in_ucfx(
-        &self, past_block_count: u64, height: u64,
-    ) -> U512 {
-        let reward_in_ucfx = if height >= PHASE2_HEIGHT {
-            MINING_REWARD_PHASE2_IN_UCFX
-        } else {
-            let reward_table_index = if past_block_count
-                < INITIAL_NO_DECAY_PERIOD
-            {
-                0
-            } else {
-                ((past_block_count - INITIAL_NO_DECAY_PERIOD)
-                    / MINED_BLOCK_COUNT_PER_QUARTER) as usize
-            };
-            if reward_table_index < self.base_reward_table_in_ucfx.len() {
-                self.base_reward_table_in_ucfx[reward_table_index]
-            } else {
-                ULTIMATE_BASE_MINING_REWARD_IN_UCFX
-            }
-        };
-        U512::from(reward_in_ucfx) * U512::from(ONE_UCFX_IN_DRIP)
-    }
 }
