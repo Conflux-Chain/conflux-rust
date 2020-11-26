@@ -6,7 +6,8 @@ use crate::message::Bytes;
 use cfx_parameters::{
     consensus::{ONE_UCFX_IN_DRIP, PHASE2_HEADER_CUSTOM},
     consensus_internal::{
-        INITIAL_BASE_MINING_REWARD_IN_UCFX, MINING_REWARD_PHASE2_IN_UCFX,
+        ANTICONE_PENALTY_RATIO, INITIAL_BASE_MINING_REWARD_IN_UCFX,
+        MINING_REWARD_PHASE2_IN_UCFX,
     },
 };
 use cfx_types::{Address, H256, U256, U512};
@@ -90,8 +91,9 @@ impl Default for CommonParams {
             gas_limit_bound_divisor: 0x0400.into(),
             max_code_size: 24576,
             max_transaction_size: 300 * 1024,
+            anticone_penalty_ratio: ANTICONE_PENALTY_RATIO,
             base_block_rewards,
-            ..Default::default()
+            phase2_transition: 0,
         }
     }
 }
