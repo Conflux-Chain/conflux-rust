@@ -153,7 +153,7 @@ pub fn setup_public_rpc_apis(
     // extend_with maps each method in RpcImpl object into a RPC handler
     let mut handler = MetaIoHandler::default();
     handler.extend_with(RpcProxy::new(cfx, interceptor));
-    if conf.raw_conf.executive_trace && conf.raw_conf.tracing {
+    if conf.raw_conf.executive_trace && conf.raw_conf.enable_tracing {
         let trace = TraceHandler::new(data_man).to_delegate();
         let interceptor =
             ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc");

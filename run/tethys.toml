@@ -425,7 +425,7 @@ jsonrpc_local_http_port=12539
 # is set to `true`. On the other hand, once `executive_trace` is enabled, the tracing
 # RPC is always enabled for local access.
 #
-# tracing = false
+# enable_tracing = false
 
 # -------------------- Others -------------------
 
