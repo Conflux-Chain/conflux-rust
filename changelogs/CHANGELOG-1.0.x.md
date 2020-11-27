@@ -3,6 +3,7 @@
 ## Improvements
 
 - Add new rpc `cfx_getSupplyInfo` for archive/full nodes.
+- Add new rpc `trace_block` for archive/full nodes.
 
 ## Bug Fixes
 

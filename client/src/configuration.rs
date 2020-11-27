@@ -153,6 +153,7 @@ build_config! {
         (public_tcp_port, (Option<u16>), None)
         (public_address, (Option<String>), None)
         (udp_port, (Option<u16>), Some(32323))
+        (enable_tracing, (bool), false)
 
         // Network parameters section.
         (blocks_request_timeout_ms, (u64), 20_000)
