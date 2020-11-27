@@ -681,7 +681,7 @@ impl RpcImpl {
                         &mut block_size_limit,
                         num_txs_simple,
                         num_txs_erc20,
-                        &self.consensus.get_config().chain_id,
+                        self.consensus.best_chain_id(),
                     );
 
                 Ok(block_gen.generate_block(

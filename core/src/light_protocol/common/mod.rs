@@ -9,7 +9,7 @@ pub use ledger_info::LedgerInfo;
 pub use peers::{FullPeerFilter, FullPeerState, LightPeerState, Peers};
 
 use super::{Error, ErrorKind};
-use primitives::ChainIdParams;
+use cfx_internal_common::ChainIdParamsInner;
 use std::{cmp, fmt::Debug};
 
 pub fn max_of_collection<I, T: Ord>(collection: I) -> Option<T>
@@ -21,12 +21,12 @@ where I: Iterator<Item = T> {
 }
 
 pub fn validate_chain_id(
-    ours: &ChainIdParams, theirs: &ChainIdParams,
+    ours: &ChainIdParamsInner, theirs: ChainIdParamsInner, peer_height: u64,
 ) -> Result<(), Error> {
-    if ours != theirs {
+    if !ours.matches(&theirs, peer_height) {
         let error_kind = ErrorKind::ChainIdMismatch {
             ours: ours.clone(),
-            theirs: theirs.clone(),
+            theirs,
         };
         debug!("{:?}", error_kind);
         bail!(error_kind);
