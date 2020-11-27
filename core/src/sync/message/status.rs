@@ -12,16 +12,16 @@ use crate::{
     },
     NodeType,
 };
+use cfx_internal_common::ChainIdParamsDeprecated;
 use cfx_types::H256;
 use network::{NODE_TAG_ARCHIVE, NODE_TAG_FULL, NODE_TAG_NODE_TYPE};
-use primitives::ChainIdParams;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{collections::HashSet, time::Instant};
 use throttling::token_bucket::TokenBucketManager;
 
 #[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
 pub struct StatusV2 {
-    pub chain_id: ChainIdParams,
+    pub chain_id: ChainIdParamsDeprecated,
     pub genesis_hash: H256,
     pub best_epoch: u64,
     pub terminal_block_hashes: Vec<H256>,
@@ -31,8 +31,8 @@ impl Handleable for StatusV2 {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_status, msg=:{:?}", self);
 
-        let chain_id = &ctx.manager.graph.consensus.get_config().chain_id;
-        if chain_id.ne(&self.chain_id) {
+        let chain_id = ctx.manager.graph.consensus.best_chain_id();
+        if chain_id != self.chain_id.chain_id {
             debug!(
                 "Peer {:?} chain_id mismatches (ours: {:?}, theirs: {:?})",
                 ctx.node_id, chain_id, self.chain_id,
@@ -127,7 +127,7 @@ impl Handleable for StatusV2 {
 
 #[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
 pub struct StatusV3 {
-    pub chain_id: ChainIdParams,
+    pub chain_id: ChainIdParamsDeprecated,
     pub genesis_hash: H256,
     pub best_epoch: u64,
     pub node_type: NodeType,
@@ -138,8 +138,8 @@ impl Handleable for StatusV3 {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_status, msg=:{:?}", self);
 
-        let chain_id = &ctx.manager.graph.consensus.get_config().chain_id;
-        if chain_id.ne(&self.chain_id) {
+        let chain_id = ctx.manager.graph.consensus.best_chain_id();
+        if chain_id != self.chain_id.chain_id {
             debug!(
                 "Peer {:?} chain_id mismatches (ours: {:?}, theirs: {:?})",
                 ctx.node_id, chain_id, self.chain_id,

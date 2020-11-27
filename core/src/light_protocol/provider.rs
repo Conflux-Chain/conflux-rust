@@ -39,6 +39,7 @@ use crate::{
     verification::{compute_epoch_receipt_proof, compute_transaction_proof},
     TransactionPool,
 };
+use cfx_internal_common::ChainIdParamsDeprecated;
 use cfx_parameters::light::{
     MAX_EPOCHS_TO_SEND, MAX_HEADERS_TO_SEND, MAX_ITEMS_TO_SEND,
     MAX_TXS_TO_SEND, MAX_WITNESSES_TO_SEND,
@@ -368,7 +369,9 @@ impl Provider {
             });
         } else {
             msg = Box::new(StatusPongV2 {
-                chain_id: self.consensus.get_config().chain_id.clone(),
+                chain_id: ChainIdParamsDeprecated {
+                    chain_id: self.consensus.best_chain_id(),
+                },
                 best_epoch: best_info.best_epoch_number,
                 genesis_hash,
                 node_type: self.node_type,
@@ -409,8 +412,9 @@ impl Provider {
         self.validate_peer_type(status.node_type)?;
         self.validate_genesis_hash(status.genesis_hash)?;
         validate_chain_id(
-            &self.consensus.get_config().chain_id,
-            &status.chain_id,
+            &self.consensus.get_config().chain_id.read(),
+            status.chain_id.into(),
+            /* peer_height = */ 0,
         )?;
 
         self.send_status(io, peer)
@@ -435,7 +439,9 @@ impl Provider {
             StatusPingV2 {
                 genesis_hash: status.genesis_hash,
                 node_type: status.node_type,
-                chain_id: self.consensus.get_config().chain_id.clone(),
+                chain_id: ChainIdParamsDeprecated {
+                    chain_id: self.consensus.best_chain_id(),
+                },
             },
         )
     }

@@ -7,13 +7,12 @@ use crate::{
     sync::message::Throttled,
     NodeType,
 };
+use cfx_internal_common::ChainIdParamsInner;
 use cfx_types::{H160, H256};
 use error_chain::ChainedError;
 use network::{node_table::NodeId, NetworkContext, UpdateNodeOperation};
 use parking_lot::Mutex;
-use primitives::{
-    account::AccountError, filter::FilterError, ChainIdParams, StateRoot,
-};
+use primitives::{account::AccountError, filter::FilterError, StateRoot};
 use rlp::DecoderError;
 use std::sync::Arc;
 
@@ -35,7 +34,7 @@ error_chain! {
             display("packet already throttled: {:?}", msg_name),
         }
 
-        ChainIdMismatch{ ours: ChainIdParams, theirs: ChainIdParams } {
+        ChainIdMismatch{ ours: ChainIdParamsInner, theirs: ChainIdParamsInner } {
             description("ChainId mismatch"),
             display("ChainId mismatch, ours={:?}, theirs={:?}.", ours, theirs),
         }

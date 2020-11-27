@@ -26,6 +26,7 @@ use crate::{
     },
     NodeType,
 };
+use cfx_internal_common::ChainIdParamsDeprecated;
 use cfx_parameters::{block::MAX_BLOCK_SIZE_IN_BYTES, sync::*};
 use cfx_types::H256;
 use io::TimerToken;
@@ -1175,7 +1176,9 @@ impl SynchronizationProtocolHandler {
 
     fn produce_status_message_v2(&self) -> StatusV2 {
         let best_info = self.graph.consensus.best_info();
-        let chain_id = self.graph.consensus.get_config().chain_id.clone();
+        let chain_id = ChainIdParamsDeprecated {
+            chain_id: best_info.best_chain_id(),
+        };
         let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
 
         StatusV2 {
@@ -1188,7 +1191,9 @@ impl SynchronizationProtocolHandler {
 
     fn produce_status_message_v3(&self) -> StatusV3 {
         let best_info = self.graph.consensus.best_info();
-        let chain_id = self.graph.consensus.get_config().chain_id.clone();
+        let chain_id = ChainIdParamsDeprecated {
+            chain_id: best_info.best_chain_id(),
+        };
         let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
 
         StatusV3 {

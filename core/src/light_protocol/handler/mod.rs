@@ -30,6 +30,7 @@ use crate::{
     sync::{message::Throttled, SynchronizationGraph},
     Notifications, UniqueId,
 };
+use cfx_internal_common::ChainIdParamsDeprecated;
 use cfx_parameters::light::{
     CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, HEARTBEAT_PERIOD, SYNC_PERIOD,
 };
@@ -497,7 +498,9 @@ impl Handler {
             });
         } else {
             msg = Box::new(StatusPingV2 {
-                chain_id: self.consensus.get_config().chain_id.clone(),
+                chain_id: ChainIdParamsDeprecated {
+                    chain_id: self.consensus.best_chain_id(),
+                },
                 genesis_hash: self
                     .consensus
                     .get_data_manager()
@@ -552,8 +555,9 @@ impl Handler {
         self.validate_peer_type(status.node_type)?;
         self.validate_genesis_hash(status.genesis_hash)?;
         validate_chain_id(
-            &self.consensus.get_config().chain_id,
-            &status.chain_id,
+            &self.consensus.get_config().chain_id.read(),
+            status.chain_id.into(),
+            status.best_epoch,
         )?;
 
         {
@@ -581,7 +585,9 @@ impl Handler {
             io,
             peer,
             StatusPongV2 {
-                chain_id: self.consensus.get_config().chain_id.clone(),
+                chain_id: ChainIdParamsDeprecated {
+                    chain_id: self.consensus.best_chain_id(),
+                },
                 node_type: status.node_type,
                 genesis_hash: status.genesis_hash,
                 best_epoch: status.best_epoch,
