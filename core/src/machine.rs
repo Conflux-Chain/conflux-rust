@@ -7,11 +7,12 @@ use crate::{
     builtin::{builtin_factory, Linear},
     vm::Spec,
 };
+use cfx_internal_common::ChainIdParams;
 use cfx_types::{Address, H256, U256};
-use primitives::{BlockNumber, ChainIdParams};
+use primitives::BlockNumber;
 use std::{collections::BTreeMap, str::FromStr, sync::Arc};
 
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, Default)]
 pub struct CommonParams {
     /// Account start nonce.
     pub account_start_nonce: U256,
