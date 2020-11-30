@@ -34,15 +34,15 @@ pub(super) type SolFnTable<S> =
 /// A marco to implement an internal contract.
 #[macro_export]
 macro_rules! make_solidity_contract {
-    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr,$table:ident); ) => {
+    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr,$gen_table:ident); ) => {
         $(#[$attr])*
         #[derive(Copy, Clone)]
         $visibility struct $name<S> {
-            pub phantom: std::marker::PhantomData<S>,
+            phantom: std::marker::PhantomData<S>,
         }
 
-        impl<S> Default for $name<S> {
-            fn default() -> Self {
+        impl<S> $name<S> {
+            pub fn instance() -> Self {
                 Self {
                     phantom: Default::default(),
                 }
@@ -51,7 +51,7 @@ macro_rules! make_solidity_contract {
 
         impl<S: cfx_storage::StorageStateTrait + Send + Sync + 'static> InternalContractTrait<S> for $name<S> {
             fn address(&self) -> &Address { &$addr }
-            fn get_func_table(&self) -> SolFnTable<S> { $table::<S>() }
+            fn get_func_table(&self) -> SolFnTable<S> { $gen_table::<S>() }
         }
     };
 }
@@ -62,7 +62,7 @@ macro_rules! make_solidity_contract {
 macro_rules! make_function_table {
     ($($func:ty), *) => { {
         let mut table = SolFnTable::new();
-        $({ let f = <$func>::default(); table.insert(f.function_sig(), Box::new(f)); }) *
+        $({ let f = <$func>::instance(); table.insert(f.function_sig(), Box::new(f)); }) *
         table
     } }
 }
@@ -74,8 +74,9 @@ macro_rules! rename_interface {
             phantom: std::marker::PhantomData<S>,
         }
 
-        impl<S> Default for $new_name<S> {
-            fn default() -> Self {
+        impl<S> $new_name<S> {
+            #[cfg(test)]
+            pub fn instance() -> Self {
                 Self {
                     phantom: Default::default(),
                 }
@@ -88,7 +89,7 @@ macro_rules! rename_interface {
                 &self, input: &[u8], params: &ActionParams, spec: &Spec,
                 state: &mut StateGeneric<S>, substate: &mut Substate,
             ) -> vm::Result<vm::GasLeft> {
-                <$old_name::<S>>::default().execute(input, params, spec, state, substate)
+                <$old_name::<S>>::instance().execute(input, params, spec, state, substate)
             }
         }
      };
@@ -96,8 +97,8 @@ macro_rules! rename_interface {
 
 #[macro_export]
 macro_rules! check_signature {
-    ($interface:ty, $signature:expr) => {
-        let f = <$interface>::default();
+    ($interface:ident, $signature:expr) => {
+        let f = <$interface<cfx_storage::StorageState>>::instance();
         assert_eq!(
             f.function_sig().to_vec(),
             $signature.from_hex().unwrap(),
@@ -145,9 +146,9 @@ pub fn internal_contract_factory<
     name: &str,
 ) -> Box<dyn InternalContractTrait<S>> {
     match name {
-        "admin" => Box::new(<AdminControl<S>>::default()),
-        "staking" => Box::new(<Staking<S>>::default()),
-        "sponsor" => Box::new(<SponsorWhitelistControl<S>>::default()),
+        "admin" => Box::new(<AdminControl<S>>::instance()),
+        "staking" => Box::new(<Staking<S>>::instance()),
+        "sponsor" => Box::new(<SponsorWhitelistControl<S>>::instance()),
         _ => panic!("invalid internal contract name: {}", name),
     }
 }

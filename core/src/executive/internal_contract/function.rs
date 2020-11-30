@@ -154,8 +154,8 @@ macro_rules! make_solidity_function {
             phantom: std::marker::PhantomData<S>,
         }
 
-        impl<S> Default for $name<S> {
-            fn default() -> Self {
+        impl<S> $name<S> {
+            pub fn instance() -> Self {
                 Self {
                     phantom: Default::default(),
                 }
