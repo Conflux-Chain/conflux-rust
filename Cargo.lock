@@ -467,11 +467,13 @@ dependencies = [
  "log 0.4.11",
  "malloc_size_of",
  "malloc_size_of_derive",
+ "parking_lot 0.11.0",
  "primitives",
  "rlp",
  "rlp_derive",
  "serde",
  "serde_derive",
+ "toml 0.4.10",
 ]
 
 [[package]]
@@ -761,6 +763,7 @@ dependencies = [
  "bigdecimal",
  "blockgen",
  "cfx-bytes",
+ "cfx-internal-common",
  "cfx-parameters",
  "cfx-statedb",
  "cfx-storage",
