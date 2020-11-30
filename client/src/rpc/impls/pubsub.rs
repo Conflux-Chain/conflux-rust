@@ -9,7 +9,10 @@ use crate::rpc::{
     traits::PubSub,
     types::{pubsub, Header as RpcHeader, Log as RpcLog},
 };
-use cfx_parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
+use cfx_parameters::{
+    consensus::DEFERRED_STATE_EPOCH_COUNT,
+    consensus_internal::REWARD_EPOCH_COUNT,
+};
 use cfx_types::H256;
 use cfxcore::{
     channel::Channel, BlockDataManager, Notifications, SharedConsensusGraph,
@@ -144,8 +147,10 @@ impl PubSubClient {
         // subscribe to the `epochs_ordered` channel
         let mut receiver = epochs_ordered.subscribe();
 
+        // use a queue to make sure we only process an epoch once it has been
+        // executed for sure
         let mut queue = EpochQueue::<Vec<H256>>::with_capacity(
-            (DEFERRED_STATE_EPOCH_COUNT - 1) as usize,
+            (DEFERRED_STATE_EPOCH_COUNT + REWARD_EPOCH_COUNT) as usize,
         );
 
         // loop asynchronously
@@ -324,6 +329,8 @@ impl ChainNotificationHandler {
             }
         }
 
+        // note: this can only happen if there was a chain reorg, in which case
+        // we will eventually re-process this epoch with the correct pivot hash
         warn!("Cannot find receipts with {:?}/{:?}", block, pivot);
         None
     }
