@@ -26,6 +26,7 @@ use crate::{
     },
     NodeType,
 };
+use cfx_internal_common::ChainIdParamsDeprecated;
 use cfx_parameters::{block::MAX_BLOCK_SIZE_IN_BYTES, sync::*};
 use cfx_types::H256;
 use io::TimerToken;
@@ -1110,16 +1111,17 @@ impl SynchronizationProtocolHandler {
         let parent_hash = *block.block_header.parent_hash();
 
         assert!(self.graph.contains_block_header(&parent_hash));
-        assert!(!self.graph.contains_block_header(&hash));
-        let (insert_result, _to_relay) = self.graph.insert_block_header(
+        if self.graph.contains_block_header(&hash) {
+            warn!("Mined an duplicate block, the mining power is wasted!");
+            return;
+        }
+        self.graph.insert_block_header(
             &mut block.block_header,
             false,
             false,
             false,
             true,
         );
-        assert!(insert_result.is_new_valid());
-        assert!(!self.graph.contains_block(&hash));
         // Do not need to look at the result since this new block will be
         // broadcast to peers.
         self.graph.insert_block(
@@ -1174,7 +1176,9 @@ impl SynchronizationProtocolHandler {
 
     fn produce_status_message_v2(&self) -> StatusV2 {
         let best_info = self.graph.consensus.best_info();
-        let chain_id = self.graph.consensus.get_config().chain_id.clone();
+        let chain_id = ChainIdParamsDeprecated {
+            chain_id: best_info.best_chain_id(),
+        };
         let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
 
         StatusV2 {
@@ -1187,7 +1191,9 @@ impl SynchronizationProtocolHandler {
 
     fn produce_status_message_v3(&self) -> StatusV3 {
         let best_info = self.graph.consensus.best_info();
-        let chain_id = self.graph.consensus.get_config().chain_id.clone();
+        let chain_id = ChainIdParamsDeprecated {
+            chain_id: best_info.best_chain_id(),
+        };
         let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
 
         StatusV3 {

@@ -395,6 +395,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ContextTrait
         self.machine
             .params()
             .chain_id
+            .read()
             .get_chain_id(self.env.epoch_height) as u64
     }
 
