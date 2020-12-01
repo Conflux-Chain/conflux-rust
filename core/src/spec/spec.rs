@@ -60,8 +60,6 @@ pub struct CommonParams {
     pub min_gas_limit: U256,
     /// Gas limit bound divisor (how much gas limit can change per block)
     pub gas_limit_bound_divisor: U256,
-    /// Maximum contract code size that can be deployed.
-    pub max_code_size: u64,
     /// Number of first block where max code size limit is active.
     /// Maximum size of transaction's RLP payload.
     pub max_transaction_size: usize,
@@ -89,7 +87,6 @@ impl Default for CommonParams {
             subprotocol_name: "cfx".into(),
             min_gas_limit: 10_000_000.into(),
             gas_limit_bound_divisor: 0x0400.into(),
-            max_code_size: 24576,
             max_transaction_size: 300 * 1024,
             anticone_penalty_ratio: ANTICONE_PENALTY_RATIO,
             base_block_rewards,

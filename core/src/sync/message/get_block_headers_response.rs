@@ -140,6 +140,7 @@ impl GetBlockHeadersResponse {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
+        let mut has_invalid_header = false;
         for header in block_headers {
             let hash = header.hash();
             returned_headers.insert(hash);
@@ -206,7 +207,8 @@ impl GetBlockHeadersResponse {
                 )
             };
             if insert_result.is_invalid() {
-                return Err(ErrorKind::InvalidBlock.into());
+                has_invalid_header = true;
+                continue;
             } else if !insert_result.is_new_valid() {
                 continue;
             }
@@ -280,6 +282,9 @@ impl GetBlockHeadersResponse {
 
             // relay if necessary
             ctx.manager.relay_blocks(ctx.io, need_to_relay).ok();
+        }
+        if has_invalid_header {
+            return Err(ErrorKind::InvalidBlock.into());
         }
         Ok(())
     }
