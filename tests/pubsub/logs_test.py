@@ -2,7 +2,7 @@
 
 # allow imports from parent directory
 # source: https://stackoverflow.com/a/11158224
-import os, sys
+import os, sys, time
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 import asyncio
@@ -16,7 +16,7 @@ from conflux.rpc import RpcClient
 from conflux.utils import sha3 as keccak, priv_to_addr, bytes_to_int
 from test_framework.blocktools import encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.util import assert_equal, assert_is_hex_string, connect_nodes, sync_blocks
+from test_framework.util import assert_equal, assert_ne, assert_is_hex_string, connect_nodes, sync_blocks
 
 FULLNODE0 = 0
 FULLNODE1 = 1
@@ -80,6 +80,10 @@ class PubSubTest(ConfluxTestFramework):
             receipts.append(r)
             assert(r != None)
 
+        # make sure the pub-sub layer processes the logs
+        self.rpc[FULLNODE0].generate_blocks(20)
+        sync_blocks(self.nodes)
+
         # collect pub-sub notifications
         logs1 = [l async for l in sub_all.iter()]
         logs2 = [l async for l in sub_one.iter()]
@@ -116,6 +120,31 @@ class PubSubTest(ConfluxTestFramework):
         assert_equal(len(logs), num_to_reexecute)
 
         self.log.info(f"Pass -- retrieved re-executed logs after fork")
+
+        # create one transaction that is mined but not executed yet
+        sync_blocks(self.nodes)
+        tx = self.rpc[FULLNODE0].new_contract_tx(receiver=contract1, data_hex=FOO_TOPIC, sender=sender, priv_key=priv_key, storage_limit=20000)
+        assert_equal(self.rpc[FULLNODE0].send_tx(tx, wait_for_receipt=False), tx.hash_hex())
+        self.rpc[FULLNODE0].generate_block(num_txs=1)
+
+        receipt = self.rpc[FULLNODE0].get_transaction_receipt(tx.hash_hex())
+        assert_equal(receipt, None)
+
+        time.sleep(1)
+
+        # mine more blocks, the transaction is now executed
+        self.rpc[FULLNODE0].generate_blocks(4)
+        receipt = self.rpc[FULLNODE0].get_transaction_receipt(tx.hash_hex())
+        assert_ne(receipt, None)
+
+        # make sure the pub-sub layer processes the logs
+        self.rpc[FULLNODE0].generate_blocks(20)
+        sync_blocks(self.nodes)
+
+        # this would timeout before #1989 was fixed
+        await sub_all.next()
+
+        self.log.info(f"Pass -- test #1989 fix")
 
     def run_test(self):
         asyncio.get_event_loop().run_until_complete(self.run_async())
