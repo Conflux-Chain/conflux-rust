@@ -9,7 +9,7 @@ pub mod internal_contract_addresses;
 
 pub mod consensus {
     pub const DEFERRED_STATE_EPOCH_COUNT: u64 = 5;
-    pub const EPOCH_SET_PERSISTENCE_DELAY: u64 = 100;
+    pub const EPOCH_SET_PERSISTENCE_DELAY: u64 = 0;
 
     pub const ADAPTIVE_WEIGHT_DEFAULT_BETA: u64 = 1000;
     pub const HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 250;

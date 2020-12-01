@@ -11,6 +11,7 @@ use crate::{
         synchronization_state::SynchronizationState,
         SharedSynchronizationGraph, SynchronizationGraphInner,
     },
+    SynchronizationGraph,
 };
 use cfx_internal_common::StateAvailabilityBoundary;
 use cfx_parameters::{consensus::NULL, sync::CATCH_UP_EPOCH_LAG_THRESHOLD};
@@ -139,7 +140,8 @@ impl SynchronizationPhaseManager {
             sync_state.clone(),
             sync_graph.clone(),
         )));
-        sync_manager.register_phase(Arc::new(NormalSyncPhase::new()));
+        sync_manager
+            .register_phase(Arc::new(NormalSyncPhase::new(sync_graph.clone())));
 
         sync_manager
     }
@@ -422,63 +424,12 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
     {
         info!("start phase {:?}", self.name());
         {
-            // FIXME: consider alliance tree graph
-            let consensus = self
-                .graph
-                .consensus
-                .as_any()
-                .downcast_ref::<ConsensusGraph>()
-                .expect("downcast should succeed");
-            // Acquire the lock of synchronization graph first to make sure no
-            // more blocks will be inserted into synchronization graph.
-            let old_sync_inner = &mut *self.graph.inner.write();
-            // Wait until all the graph ready blocks in queue are inserted into
-            // consensus graph.
-            while self.graph.is_consensus_worker_busy() {
-                thread::sleep(time::Duration::from_millis(100));
-            }
-            // Now, we can safely acquire the lock of consensus graph.
-            let old_consensus_inner = &mut *consensus.inner.write();
-            // We should assign a new instance_id here since we construct a new
-            // consensus graph.
-            old_sync_inner.data_man.initialize_instance_id();
-
-            let (cur_era_genesis_hash, cur_era_genesis_height) =
-                old_sync_inner.get_genesis_hash_and_height_in_current_era();
-
-            let (cur_era_stable_hash, cur_era_stable_height) =
-                old_sync_inner.get_stable_hash_and_height_in_current_era();
-
-            debug!("Build new consensus graph for sync-recovery with identified genesis {} height {} stable block {} height {}", cur_era_genesis_hash, cur_era_genesis_height, cur_era_stable_hash, cur_era_stable_height);
-
-            // TODO: Make sure that the checkpoint will not change between the
-            // end of CatchUpCheckpointPhase and the start of
-            // CatchUpRecoverBlockFromDbPhase.
-
-            let new_consensus_inner = ConsensusGraphInner::with_era_genesis(
-                old_consensus_inner.pow_config.clone(),
-                self.graph.pow.clone(),
-                self.graph.data_man.clone(),
-                old_consensus_inner.inner_conf.clone(),
-                &cur_era_genesis_hash,
-                &cur_era_stable_hash,
-            );
             // For archive node, this will be `None`.
             // For full node, this is `None` when the state of checkpoint is
             // already in disk and we didn't sync it from peer.
             // In both cases, we should set `state_availability_boundary` to
             // `[cur_era_stable_height, cur_era_stable_height]`.
             if let Some(epoch_synced) = &*sync_handler.synced_epoch_id.lock() {
-                // TODO Implement a mechanism to ensure the expect.
-                // We need `for_snapshot` because the blocks within the next
-                // snapshot do not have correct state_root
-                // locally.
-                let trusted_blame_block = old_consensus_inner
-                    .get_trusted_blame_block_for_snapshot(&epoch_synced)
-                    .expect(
-                        "It's ensured that a trusted blame block can be found for \
-                     a stable epoch_to_sync",
-                    );
                 let epoch_synced_height = self
                     .graph
                     .data_man
@@ -495,36 +446,6 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                     .state_availability_boundary
                     .write()
                     .set_synced_state_height(epoch_synced_height);
-                // This map will be used to recover `state_valid` info for each
-                // pivot block before `trusted_blame_block`.
-                let mut pivot_block_state_valid_map =
-                    consensus.pivot_block_state_valid_map.lock();
-                let mut cur = *old_consensus_inner
-                    .hash_to_arena_indices
-                    .get(&trusted_blame_block)
-                    .unwrap();
-                while cur != NULL {
-                    let blame = self
-                        .graph
-                        .data_man
-                        .block_header_by_hash(
-                            &old_consensus_inner.arena[cur].hash,
-                        )
-                        .unwrap()
-                        .blame();
-                    for i in 0..blame + 1 {
-                        trace!("Backup state_valid: hash={:?} height={} state_valid={},", old_consensus_inner.arena[cur].hash, old_consensus_inner.arena[cur].height,
-                                   i == 0);
-                        pivot_block_state_valid_map.insert(
-                            old_consensus_inner.arena[cur].hash,
-                            i == 0,
-                        );
-                        cur = old_consensus_inner.arena[cur].parent;
-                        if cur == NULL {
-                            break;
-                        }
-                    }
-                }
             } else {
                 let cur_era_stable_hash =
                     self.graph.data_man.get_cur_consensus_era_stable_hash();
@@ -540,35 +461,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                         cur_era_stable_height,
                     );
             }
-            *old_consensus_inner = new_consensus_inner;
-            // FIXME: We may need to some information of `confirmation_meter`.
-            consensus.confirmation_meter.clear();
-
-            let new_sync_inner = SynchronizationGraphInner::with_genesis_block(
-                self.graph
-                    .data_man
-                    .block_header_by_hash(&cur_era_genesis_hash)
-                    .expect("era genesis exists"),
-                old_sync_inner.pow_config.clone(),
-                old_sync_inner.pow.clone(),
-                old_sync_inner.config.clone(),
-                old_sync_inner.data_man.clone(),
-                self.graph.machine(),
-            );
-            *old_sync_inner = new_sync_inner;
-
-            self.graph
-                .statistics
-                .clear_sync_and_consensus_graph_statistics();
         }
-        self.graph.consensus.update_best_info();
-        self.graph
-            .consensus
-            .get_tx_pool()
-            .notify_new_best_info(self.graph.consensus.best_info())
-            // FIXME: propogate error.
-            .expect(&concat!(file!(), ":", line!(), ":", column!()));
-
         self.recovered.store(false, AtomicOrdering::SeqCst);
         let recovered = self.recovered.clone();
         let graph = self.graph.clone();
@@ -621,6 +514,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
         if self.graph.consensus.best_epoch_number()
             + CATCH_UP_EPOCH_LAG_THRESHOLD
             >= middle_epoch
+            && self.graph.is_block_catch_up_completed()
         {
             return SyncPhaseType::Normal;
         }
@@ -645,10 +539,14 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
     }
 }
 
-pub struct NormalSyncPhase {}
+pub struct NormalSyncPhase {
+    graph: Arc<SynchronizationGraph>,
+}
 
 impl NormalSyncPhase {
-    pub fn new() -> Self { NormalSyncPhase {} }
+    pub fn new(graph: Arc<SynchronizationGraph>) -> Self {
+        NormalSyncPhase { graph }
+    }
 }
 
 impl SynchronizationPhaseTrait for NormalSyncPhase {
@@ -672,5 +570,9 @@ impl SynchronizationPhaseTrait for NormalSyncPhase {
     {
         info!("start phase {:?}", self.name());
         sync_handler.request_missing_terminals(io);
+        // FIXME: Consensus graph may have made progress to make latest blocks
+        // missing bodies.
+        self.graph.inner.write().catch_up = false;
+        self.graph.consensus.construct_pivot_state();
     }
 }

@@ -163,6 +163,7 @@ pub struct SynchronizationGraphInner {
     pub not_ready_blocks_frontier: UnreadyBlockFrontier,
     pub old_era_blocks_frontier: VecDeque<usize>,
     pub old_era_blocks_frontier_set: HashSet<usize>,
+    pub catch_up: bool,
     machine: Arc<Machine>,
 }
 
@@ -200,6 +201,7 @@ impl SynchronizationGraphInner {
             not_ready_blocks_frontier: UnreadyBlockFrontier::new(),
             old_era_blocks_frontier: Default::default(),
             old_era_blocks_frontier_set: Default::default(),
+            catch_up: true,
             machine,
         };
         let genesis_hash = genesis_header.hash();
@@ -1436,17 +1438,6 @@ impl SynchronizationGraph {
             self.inner.read().not_ready_blocks_frontier.get_frontier()
         );
 
-        info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
-        if !header_only && !self.is_consortium() {
-            // Rebuild pivot chain state info.
-            self.consensus.construct_pivot_state();
-        }
-        self.consensus.update_best_info();
-        self.consensus
-            .get_tx_pool()
-            .notify_new_best_info(self.consensus.best_info())
-            // FIXME: propogate error.
-            .expect(&concat!(file!(), ":", line!(), ":", column!()));
         info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
     }
 
@@ -1619,12 +1610,13 @@ impl SynchronizationGraph {
 
     pub fn insert_block_header(
         &self, header: &mut BlockHeader, need_to_verify: bool,
-        bench_mode: bool, insert_to_consensus: bool, persistent: bool,
+        bench_mode: bool, mut insert_to_consensus: bool, persistent: bool,
     ) -> (BlockHeaderInsertionResult, Vec<H256>)
     {
         let _timer = MeterTimer::time_func(SYNC_INSERT_HEADER.as_ref());
         self.statistics.inc_sync_graph_inserted_header_count();
         let inner = &mut *self.inner.write();
+        insert_to_consensus |= inner.catch_up;
         let hash = header.hash();
 
         let (invalid, local_info_opt) = self.data_man.verified_invalid(&hash);
@@ -1770,7 +1762,7 @@ impl SynchronizationGraph {
 
     fn set_graph_ready(
         &self, inner: &mut SynchronizationGraphInner, index: usize,
-        recover_from_db: bool,
+        recover: bool,
     )
     {
         inner.arena[index].graph_status = BLOCK_GRAPH_READY;
@@ -1793,7 +1785,7 @@ impl SynchronizationGraph {
         // into consensus graph; Otherwise Consensus Worker can handle the
         // block in order asynchronously. In addition, if this block is
         // recovered from db, we can simply ignore body.
-        if !recover_from_db {
+        if !recover {
             CONSENSUS_WORKER_QUEUE.enqueue(1);
 
             self.consensus_unprocessed_count
@@ -1821,13 +1813,6 @@ impl SynchronizationGraph {
                     },
                 );
             }
-        } else {
-            // best info only needs to be updated after all blocks have been
-            // inserted into consensus
-            self.consensus.on_new_block(
-                &h, true,  /* ignore_body */
-                false, /* update_best_info */
-            );
         }
     }
 
@@ -1854,7 +1839,7 @@ impl SynchronizationGraph {
                     index,
                 );
             } else if inner.new_to_be_block_graph_ready(index) {
-                self.set_graph_ready(inner, index, recover_from_db);
+                self.set_graph_ready(inner, index, recover_from_db || inner.catch_up);
                 for child in &inner.arena[index].children {
                     debug_assert!(
                         inner.arena[*child].graph_status < BLOCK_GRAPH_READY
@@ -2182,6 +2167,27 @@ impl SynchronizationGraph {
 
     pub fn is_consensus_worker_busy(&self) -> bool {
         self.consensus_unprocessed_count.load(Ordering::SeqCst) != 0
+    }
+
+    /// Return `true` if all block bodies we need for catch-up have been retrieved.
+    pub fn is_block_catch_up_completed(&self) -> bool {
+        let pivot_hash = self.consensus.best_block_hash();
+        let inner = self.inner.read();
+        let pivot_index = *inner
+            .hash_to_arena_indices
+            .get(&pivot_hash)
+            .expect("best block should be in sync graph");
+        inner.arena[pivot_index].graph_status == BLOCK_GRAPH_READY
+    }
+
+    /// Return `(hash, height)` of the last block on the pivot chain that is BLOCK_GRAPH_READY.
+    /// This block represents our progress in downloading block bodies in `CatchUpSyncBlock`.
+    pub fn best_epoch_with_body(&self) -> (H256, BlockHeight) {
+        let mut best_epoch = self.consensus.best_block_hash();
+        let inner = self.inner.read();
+        loop {
+
+        }
     }
 }
 

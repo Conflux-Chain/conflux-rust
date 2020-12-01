@@ -51,6 +51,8 @@ class P2PTest(ConfluxTestFramework):
         # archive node to catch up
         connect_sample_nodes(self.nodes, self.log, sample=self.num_nodes - 1)
         sync_blocks(self.nodes)
+        for node in self.nodes:
+            node.wait_for_recovery(["NormalSyncPhase"], 30)
 
     def run_test(self):
         block_number = 2000
