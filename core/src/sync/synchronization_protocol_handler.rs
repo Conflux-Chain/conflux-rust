@@ -818,7 +818,14 @@ impl SynchronizationProtocolHandler {
         // See https://github.com/Conflux-Chain/conflux-rust/issues/1466.
         let median_peer_epoch =
             self.syn.median_epoch_from_normal_peers().unwrap_or(0);
-        let my_best_epoch = self.graph.consensus.best_epoch_number();
+        let my_best_epoch = if matches!(
+            self.phase_manager.get_current_phase().phase_type(),
+            SyncPhaseType::CatchUpSyncBlock
+        ) {
+            self.graph.best_epoch_with_body().1
+        } else {
+            self.graph.consensus.best_epoch_number()
+        };
         let (mut latest_requested_epoch, latest_request_time) =
             *latest_requested;
 
@@ -1631,8 +1638,7 @@ impl SynchronizationProtocolHandler {
 
         if let Some(height) = self
             .graph
-            .block_by_hash(hash)
-            .map(|block| block.block_header.height())
+            .data_man.block_height_by_hash(hash)
         {
             let best_height = self.graph.consensus.best_epoch_number();
             if height > best_height

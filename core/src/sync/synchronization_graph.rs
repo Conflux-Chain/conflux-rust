@@ -1839,7 +1839,11 @@ impl SynchronizationGraph {
                     index,
                 );
             } else if inner.new_to_be_block_graph_ready(index) {
-                self.set_graph_ready(inner, index, recover_from_db || inner.catch_up);
+                self.set_graph_ready(
+                    inner,
+                    index,
+                    recover_from_db || inner.catch_up,
+                );
                 for child in &inner.arena[index].children {
                     debug_assert!(
                         inner.arena[*child].graph_status < BLOCK_GRAPH_READY
@@ -2169,24 +2173,39 @@ impl SynchronizationGraph {
         self.consensus_unprocessed_count.load(Ordering::SeqCst) != 0
     }
 
-    /// Return `true` if all block bodies we need for catch-up have been retrieved.
+    /// Return `true` if all block bodies we need for catch-up have been
+    /// retrieved.
     pub fn is_block_catch_up_completed(&self) -> bool {
         let pivot_hash = self.consensus.best_block_hash();
         let inner = self.inner.read();
-        let pivot_index = *inner
+        let index = *inner
             .hash_to_arena_indices
             .get(&pivot_hash)
             .expect("best block should be in sync graph");
-        inner.arena[pivot_index].graph_status == BLOCK_GRAPH_READY
+        inner.arena[index].graph_status == BLOCK_GRAPH_READY
     }
 
-    /// Return `(hash, height)` of the last block on the pivot chain that is BLOCK_GRAPH_READY.
-    /// This block represents our progress in downloading block bodies in `CatchUpSyncBlock`.
-    pub fn best_epoch_with_body(&self) -> (H256, BlockHeight) {
-        let mut best_epoch = self.consensus.best_block_hash();
+    /// Return `(hash, height)` of the last block on the pivot chain that is
+    /// BLOCK_GRAPH_READY. This block represents our progress in downloading
+    /// block bodies in `CatchUpSyncBlock`.
+    pub fn best_epoch_with_body(&self) -> (H256, u64) {
         let inner = self.inner.read();
-        loop {
+        let mut index = *inner
+            .hash_to_arena_indices
+            .get(&self.consensus.best_block_hash())
+            .expect("pivot chain blocks are in sync graph");
 
+        // This loop will terminate at cur_era_genesis if no block body has been
+        // retrieved.
+        loop {
+            let block_hash = inner.arena[index].block_header.hash();
+            if inner.arena[index].graph_status == BLOCK_GRAPH_READY
+                || block_hash
+                    == self.data_man.get_cur_consensus_era_genesis_hash()
+            {
+                return (block_hash, inner.arena[index].block_header.height());
+            }
+            index = inner.arena[index].parent;
         }
     }
 }
