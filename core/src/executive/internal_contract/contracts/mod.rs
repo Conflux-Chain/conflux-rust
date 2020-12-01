@@ -18,6 +18,7 @@ use std::collections::{BTreeMap, HashMap};
 pub use self::{
     admin::AdminControl, sponsor::SponsorWhitelistControl, staking::Staking,
 };
+use cfx_storage::StorageStateTrait;
 
 use crate::evm::Spec;
 use cfx_types::Address;
@@ -27,19 +28,30 @@ lazy_static! {
     static ref SPEC: Spec = Spec::default();
 }
 
-pub(super) type SolFnTable = HashMap<[u8; 4], Box<dyn SolidityFunctionTrait>>;
+pub(super) type SolFnTable<S> =
+    HashMap<[u8; 4], Box<dyn SolidityFunctionTrait<S>>>;
 
 /// A marco to implement an internal contract.
 #[macro_export]
 macro_rules! make_solidity_contract {
-    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr,$table:expr); ) => {
+    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr,$gen_table:ident); ) => {
         $(#[$attr])*
         #[derive(Copy, Clone)]
-        $visibility struct $name;
+        $visibility struct $name<S> {
+            phantom: std::marker::PhantomData<S>,
+        }
 
-        impl InternalContractTrait for $name {
+        impl<S> $name<S> {
+            pub fn instance() -> Self {
+                Self {
+                    phantom: Default::default(),
+                }
+            }
+        }
+
+        impl<S: cfx_storage::StorageStateTrait + Send + Sync + 'static> InternalContractTrait<S> for $name<S> {
             fn address(&self) -> &Address { &$addr }
-            fn get_func_table(&self) -> &SolFnTable { &$table }
+            fn get_func_table(&self) -> SolFnTable<S> { $gen_table::<S>() }
         }
     };
 }
@@ -48,9 +60,9 @@ macro_rules! make_solidity_contract {
 /// of types implements `SolidityFunctionTrait`.
 #[macro_export]
 macro_rules! make_function_table {
-    ($($func:ident), *) => { {
+    ($($func:ty), *) => { {
         let mut table = SolFnTable::new();
-        $( table.insert($func.function_sig(), Box::new($func)); ) *
+        $({ let f = <$func>::instance(); table.insert(f.function_sig(), Box::new(f)); }) *
         table
     } }
 }
@@ -58,15 +70,26 @@ macro_rules! make_function_table {
 #[macro_export]
 macro_rules! rename_interface {
     ( $(#[$attr:meta])* $visibility:vis struct $new_name:ident ($old_name:ident, $interface:expr ); ) => {
-        $(#[$attr])* $visibility struct $new_name;
+        $(#[$attr])* $visibility struct $new_name<S> {
+            phantom: std::marker::PhantomData<S>,
+        }
 
-        impl SolidityFunctionTrait for $new_name {
+        impl<S> $new_name<S> {
+            #[cfg(test)]
+            pub fn instance() -> Self {
+                Self {
+                    phantom: Default::default(),
+                }
+            }
+        }
+
+        impl<S: StorageStateTrait + Send + Sync> SolidityFunctionTrait<S> for $new_name<S> {
             fn name(&self) -> &'static str { $interface }
             fn execute(
                 &self, input: &[u8], params: &ActionParams, spec: &Spec,
-                state: &mut State, substate: &mut Substate,
+                state: &mut StateGeneric<S>, substate: &mut Substate,
             ) -> vm::Result<vm::GasLeft> {
-                $old_name.execute(input, params, spec, state, substate)
+                <$old_name::<S>>::instance().execute(input, params, spec, state, substate)
             }
         }
      };
@@ -75,31 +98,32 @@ macro_rules! rename_interface {
 #[macro_export]
 macro_rules! check_signature {
     ($interface:ident, $signature:expr) => {
+        let f = <$interface<cfx_storage::StorageState>>::instance();
         assert_eq!(
-            $interface {}.function_sig().to_vec(),
+            f.function_sig().to_vec(),
             $signature.from_hex().unwrap(),
             "Test solidity signature for {}",
-            $interface {}.name()
+            f.name()
         );
     };
 }
 
-pub struct InternalContractMap {
-    builtin: Arc<BTreeMap<Address, Box<dyn InternalContractTrait>>>,
+pub struct InternalContractMap<S: StorageStateTrait> {
+    builtin: Arc<BTreeMap<Address, Box<dyn InternalContractTrait<S>>>>,
 }
 
-impl std::ops::Deref for InternalContractMap {
-    type Target = Arc<BTreeMap<Address, Box<dyn InternalContractTrait>>>;
+impl<S: StorageStateTrait> std::ops::Deref for InternalContractMap<S> {
+    type Target = Arc<BTreeMap<Address, Box<dyn InternalContractTrait<S>>>>;
 
     fn deref(&self) -> &Self::Target { &self.builtin }
 }
 
-impl InternalContractMap {
+impl<S: StorageStateTrait + Send + Sync + 'static> InternalContractMap<S> {
     pub fn new() -> Self {
         let mut builtin = BTreeMap::new();
-        let admin = internal_contract_factory("admin");
-        let sponsor = internal_contract_factory("sponsor");
-        let staking = internal_contract_factory("staking");
+        let admin = internal_contract_factory::<S>("admin");
+        let sponsor = internal_contract_factory::<S>("sponsor");
+        let staking = internal_contract_factory::<S>("staking");
         builtin.insert(*admin.address(), admin);
         builtin.insert(*sponsor.address(), sponsor);
         builtin.insert(*staking.address(), staking);
@@ -110,19 +134,21 @@ impl InternalContractMap {
 
     pub fn contract(
         &self, address: &Address,
-    ) -> Option<&Box<dyn InternalContractTrait>> {
+    ) -> Option<&Box<dyn InternalContractTrait<S>>> {
         self.builtin.get(address)
     }
 }
 
 /// Built-in instruction factory.
-pub fn internal_contract_factory(name: &str) -> Box<dyn InternalContractTrait> {
+pub fn internal_contract_factory<
+    S: StorageStateTrait + Send + Sync + 'static,
+>(
+    name: &str,
+) -> Box<dyn InternalContractTrait<S>> {
     match name {
-        "admin" => Box::new(AdminControl) as Box<dyn InternalContractTrait>,
-        "staking" => Box::new(Staking) as Box<dyn InternalContractTrait>,
-        "sponsor" => {
-            Box::new(SponsorWhitelistControl) as Box<dyn InternalContractTrait>
-        }
+        "admin" => Box::new(<AdminControl<S>>::instance()),
+        "staking" => Box::new(<Staking<S>>::instance()),
+        "sponsor" => Box::new(<SponsorWhitelistControl<S>>::instance()),
         _ => panic!("invalid internal contract name: {}", name),
     }
 }

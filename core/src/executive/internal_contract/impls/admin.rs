@@ -3,9 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    state::{OverlayAccount, RequireCache, State, Substate},
+    state::{OverlayAccount, RequireCache, StateGeneric, Substate},
     vm::{self, ActionParams, Spec},
 };
+use cfx_storage::StorageStateTrait;
 use cfx_types::{address_util::AddressUtil, Address};
 
 /// The Actual Implementation of `suicide`.
@@ -15,9 +16,9 @@ use cfx_types::{address_util::AddressUtil, Address};
 ///   2. refund sponsor balance
 ///   3. refund contract balance
 ///   4. kill the contract
-pub fn suicide(
-    contract_address: &Address, refund_address: &Address, state: &mut State,
-    spec: &Spec, substate: &mut Substate,
+pub fn suicide<S: StorageStateTrait>(
+    contract_address: &Address, refund_address: &Address,
+    state: &mut StateGeneric<S>, spec: &Spec, substate: &mut Substate,
 ) -> vm::Result<()>
 {
     substate.suicides.insert(contract_address.clone());
@@ -48,10 +49,10 @@ pub fn suicide(
 /// Implementation of `set_admin(address,address)`.
 /// The input should consist of 20 bytes `contract_address` + 20 bytes
 /// `new_admin_address`
-pub fn set_admin(
+pub fn set_admin<S: StorageStateTrait>(
     contract_address: Address, new_admin_address: Address,
     contract_in_creation: Option<&Address>, params: &ActionParams,
-    state: &mut State,
+    state: &mut StateGeneric<S>,
 ) -> vm::Result<()>
 {
     let requester = &params.sender;
@@ -83,9 +84,9 @@ pub fn set_admin(
 
 /// Implementation of `destroy(address)`.
 /// The input should consist of 20 bytes `contract_address`
-pub fn destroy(
-    contract_address: Address, params: &ActionParams, state: &mut State,
-    spec: &Spec, substate: &mut Substate,
+pub fn destroy<S: StorageStateTrait>(
+    contract_address: Address, params: &ActionParams,
+    state: &mut StateGeneric<S>, spec: &Spec, substate: &mut Substate,
 ) -> vm::Result<()>
 {
     debug!("contract_address={:?}", contract_address);

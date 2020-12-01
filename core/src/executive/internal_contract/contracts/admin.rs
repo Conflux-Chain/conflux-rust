@@ -15,21 +15,21 @@ use crate::{
     evm::{ActionParams, Spec},
     impl_function_type, make_function_table, make_solidity_contract,
     make_solidity_function, rename_interface,
-    state::{State, Substate},
+    state::{StateGeneric, Substate},
     vm,
 };
+use cfx_storage::StorageStateTrait;
 use cfx_types::{Address, U256};
 #[cfg(test)]
 use rustc_hex::FromHex;
 
-lazy_static! {
-    static ref CONTRACT_TABLE: SolFnTable =
-        make_function_table!(SetAdminSnake, Destroy);
-    static ref CONTRACT_TABLE_V2: SolFnTable =
-        make_function_table!(SetAdmin, Destroy, GetAdmin);
+fn generate_fn_table<S: StorageStateTrait + Send + Sync + 'static>(
+) -> SolFnTable<S> {
+    make_function_table!(SetAdmin<S>, Destroy<S>, GetAdmin<S>)
 }
+
 make_solidity_contract! {
-    pub struct AdminControl(ADMIN_CONTROL_CONTRACT_ADDRESS, CONTRACT_TABLE_V2);
+    pub struct AdminControl(ADMIN_CONTROL_CONTRACT_ADDRESS, generate_fn_table);
 }
 
 make_solidity_function! {
@@ -41,10 +41,10 @@ rename_interface! {
     struct SetAdminSnake(SetAdmin, "set_admin(address,address)");
 }
 
-impl ExecutionTrait for SetAdmin {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for SetAdmin<S> {
     fn execute_inner(
         &self, inputs: (Address, Address), params: &ActionParams, _spec: &Spec,
-        state: &mut State, substate: &mut Substate,
+        state: &mut StateGeneric<S>, substate: &mut Substate,
     ) -> vm::Result<()>
     {
         set_admin(
@@ -62,10 +62,10 @@ make_solidity_function! {
 }
 impl_function_type!(Destroy, "non_payable_write", gas: SPEC.sstore_reset_gas);
 
-impl ExecutionTrait for Destroy {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for Destroy<S> {
     fn execute_inner(
         &self, input: Address, params: &ActionParams, spec: &Spec,
-        state: &mut State, substate: &mut Substate,
+        state: &mut StateGeneric<S>, substate: &mut Substate,
     ) -> vm::Result<()>
     {
         destroy(input, params, state, spec, substate)
@@ -77,10 +77,10 @@ make_solidity_function! {
 }
 impl_function_type!(GetAdmin, "query_with_default_gas");
 
-impl ExecutionTrait for GetAdmin {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for GetAdmin<S> {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _: &Spec, state: &mut State,
-        _: &mut Substate,
+        &self, input: Address, _: &ActionParams, _: &Spec,
+        state: &mut StateGeneric<S>, _: &mut Substate,
     ) -> vm::Result<Address>
     {
         Ok(state.admin(&input)?)
@@ -89,16 +89,11 @@ impl ExecutionTrait for GetAdmin {
 
 #[test]
 fn test_admin_contract_sig() {
-    /// The first 4 bytes of keccak('set_admin(address,address)') is 0x73e80cba.
-    static SET_ADMIN_SIG: &'static [u8] = &[0x73, 0xe8, 0x0c, 0xba];
-    /// The first 4 bytes of keccak('destroy(address)') is 0x00f55d9d.
-    static DESTROY_SIG: &'static [u8] = &[0x00, 0xf5, 0x5d, 0x9d];
+    // The first 4 bytes of keccak('set_admin(address,address)') is 0x73e80cba.
+    check_signature!(SetAdminSnake, "73e80cba");
 
-    assert_eq!(
-        SetAdminSnake {}.function_sig().to_vec(),
-        SET_ADMIN_SIG.to_vec()
-    );
-    assert_eq!(Destroy {}.function_sig().to_vec(), DESTROY_SIG.to_vec());
+    // The first 4 bytes of keccak('destroy(address)') is 0x00f55d9d.
+    check_signature!(Destroy, "00f55d9d");
 }
 
 #[test]
