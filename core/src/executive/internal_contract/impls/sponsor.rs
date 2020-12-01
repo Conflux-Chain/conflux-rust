@@ -3,15 +3,16 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    state::{State, Substate},
+    state::{StateGeneric, Substate},
     vm::{self, ActionParams, Spec},
 };
+use cfx_storage::StorageStateTrait;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 
 /// Implementation of `set_sponsor_for_gas(address,uint256)`.
-pub fn set_sponsor_for_gas(
+pub fn set_sponsor_for_gas<S: StorageStateTrait>(
     contract_address: Address, upper_bound: U256, params: &ActionParams,
-    spec: &Spec, state: &mut State, substate: &mut Substate,
+    spec: &Spec, state: &mut StateGeneric<S>, substate: &mut Substate,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
@@ -109,9 +110,9 @@ pub fn set_sponsor_for_gas(
 }
 
 /// Implementation of `set_sponsor_for_collateral(address)`.
-pub fn set_sponsor_for_collateral(
+pub fn set_sponsor_for_collateral<S: StorageStateTrait>(
     contract_address: Address, params: &ActionParams, spec: &Spec,
-    state: &mut State, substate: &mut Substate,
+    state: &mut StateGeneric<S>, substate: &mut Substate,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
@@ -188,9 +189,9 @@ pub fn set_sponsor_for_collateral(
 
 /// Implementation of `addPrivilege(address[])` and
 /// `addPrivilegeByAdmin(address,address[])`.
-pub fn add_privilege(
+pub fn add_privilege<S: StorageStateTrait>(
     contract: Address, addresses: Vec<Address>, params: &ActionParams,
-    state: &mut State,
+    state: &mut StateGeneric<S>,
 ) -> vm::Result<()>
 {
     for user_addr in addresses {
@@ -206,9 +207,9 @@ pub fn add_privilege(
 
 /// Implementation of `removePrivilege(address[])` and
 /// `removePrivilegeByAdmin(address,address[])`.
-pub fn remove_privilege(
+pub fn remove_privilege<S: StorageStateTrait>(
     contract: Address, addresses: Vec<Address>, params: &ActionParams,
-    state: &mut State,
+    state: &mut StateGeneric<S>,
 ) -> vm::Result<()>
 {
     for user_addr in addresses {

@@ -3,10 +3,12 @@
 ## Improvements
 
 - Add new rpc `cfx_getSupplyInfo` for archive/full nodes.
+- Add new rpc `trace_block` for archive/full nodes.
 
 ## Bug Fixes
 
 - Change the `blame` field returned from the `newHeads` pub-sub to hex.
+- Fix issue where the `logs` pub-sub API would skip logs.
 
 # 1.0.3
 
