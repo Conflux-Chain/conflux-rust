@@ -2176,13 +2176,17 @@ impl SynchronizationGraph {
     /// Return `true` if all block bodies we need for catch-up have been
     /// retrieved.
     pub fn is_block_catch_up_completed(&self) -> bool {
-        let pivot_hash = self.consensus.best_block_hash();
-        let inner = self.inner.read();
-        let index = *inner
-            .hash_to_arena_indices
-            .get(&pivot_hash)
-            .expect("best block should be in sync graph");
-        inner.arena[index].graph_status == BLOCK_GRAPH_READY
+        for block_hash in &self.consensus.best_info().bounded_terminal_block_hashes {
+            let inner = self.inner.read();
+            let index = *inner
+                .hash_to_arena_indices
+                .get(block_hash)
+                .expect("best block should be in sync graph");
+            if inner.arena[index].graph_status != BLOCK_GRAPH_READY {
+                return false;
+            }
+        }
+        true
     }
 
     /// Return `(hash, height)` of the last block on the pivot chain that is

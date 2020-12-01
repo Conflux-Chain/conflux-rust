@@ -570,9 +570,11 @@ impl SynchronizationPhaseTrait for NormalSyncPhase {
     {
         info!("start phase {:?}", self.name());
         sync_handler.request_missing_terminals(io);
-        // FIXME: Consensus graph may have made progress to make latest blocks
-        // missing bodies.
-        self.graph.inner.write().catch_up = false;
+        let mut graph_inner = self.graph.inner.write();
+        while self.graph.is_consensus_worker_busy() {
+            thread::sleep(time::Duration::from_millis(100));
+        }
         self.graph.consensus.construct_pivot_state();
+        graph_inner.catch_up = false;
     }
 }

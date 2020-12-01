@@ -809,6 +809,8 @@ impl SynchronizationProtocolHandler {
         }
     }
 
+    // FIXME Use another function for block catch up. It should only use local epoch set and end
+    // with all consensus block retrieved, not related to median peer epoch.
     pub fn request_epochs(&self, io: &dyn NetworkContext) {
         // make sure only one thread can request new epochs at a time
         let mut latest_requested = self.latest_epoch_requested.lock();
@@ -1636,10 +1638,7 @@ impl SynchronizationProtocolHandler {
             return true;
         }
 
-        if let Some(height) = self
-            .graph
-            .data_man.block_height_by_hash(hash)
-        {
+        if let Some(height) = self.graph.data_man.block_height_by_hash(hash) {
             let best_height = self.graph.consensus.best_epoch_number();
             if height > best_height
                 || best_height - height <= LOCAL_BLOCK_INFO_QUERY_THRESHOLD
@@ -1669,7 +1668,10 @@ impl SynchronizationProtocolHandler {
                 return true;
             }
 
-            if info.get_instance_id() == self.graph.data_man.get_instance_id() {
+            if !self.graph.inner.read().catch_up
+                && info.get_instance_id()
+                    == self.graph.data_man.get_instance_id()
+            {
                 // This block has already entered consensus graph
                 // in this run.
                 return true;
