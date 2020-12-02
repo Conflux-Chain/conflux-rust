@@ -14,7 +14,7 @@ use crate::check_signature;
 use crate::{
     evm::{ActionParams, Spec},
     impl_function_type, make_function_table, make_solidity_contract,
-    make_solidity_function, rename_interface,
+    make_solidity_function,
     state::{StateGeneric, Substate},
     vm,
 };
@@ -36,10 +36,6 @@ make_solidity_function! {
     struct SetAdmin((Address, Address), "setAdmin(address,address)");
 }
 impl_function_type!(SetAdmin, "non_payable_write", gas: SPEC.sstore_reset_gas);
-
-rename_interface! {
-    struct SetAdminSnake(SetAdmin, "set_admin(address,address)");
-}
 
 impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for SetAdmin<S> {
     fn execute_inner(

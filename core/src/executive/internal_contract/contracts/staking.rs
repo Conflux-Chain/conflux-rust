@@ -14,7 +14,7 @@ use crate::check_signature;
 use crate::{
     evm::{ActionParams, Spec},
     impl_function_type, make_function_table, make_solidity_contract,
-    make_solidity_function, rename_interface,
+    make_solidity_function,
     state::{StateGeneric, Substate},
     vm,
 };
@@ -97,9 +97,6 @@ make_solidity_function! {
     struct VoteLock((U256, U256), "voteLock(uint256,uint256)");
 }
 impl_function_type!(VoteLock, "non_payable_write");
-rename_interface! {
-    struct VoteLockSnake(VoteLock, "vote_lock(uint256,uint256)");
-}
 
 impl<S: StorageStateTrait + Send + Sync> UpfrontPaymentTrait<S>
     for VoteLock<S>
