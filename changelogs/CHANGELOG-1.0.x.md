@@ -2,13 +2,16 @@
 
 ## Improvements
 
-- Add new rpc `cfx_getSupplyInfo` for archive/full nodes.
-- Add new rpc `trace_block` for archive/full nodes.
+- Add config parameter `executive_trace` to allow storing block execution traces. (default is `false`)
+- Add config parameter `enable_tracing` to allow public access to `trace_*` RPC APIs. (default is `false`)
+- Add new rpc `trace_block` for archive/full nodes. (only works for blocks processed after setting `executive_trace`)
+- Use 0 as default for storage limit in `cfx_sendTransaction` and `cfx_signTransaction`.
 
 ## Bug Fixes
 
 - Change the `blame` field returned from the `newHeads` pub-sub to hex.
-- Fix issue where the `logs` pub-sub API would skip logs.
+- Fix an issue where the `logs` pub-sub API would skip logs.
+- Fix an issue where if miners submit the nonce solution to multiple nodes, some of these nodes may stop mining (Issue #1985).
 
 # 1.0.3
 
