@@ -55,7 +55,9 @@ impl CommonParams {
             max_code_size: 24576,
             max_code_size_transition: 0,
             max_transaction_size: 300 * 1024,
-            alt_bn128_transition: i64::MAX as u64, // TODO: Update it when the time point of the next update enabled.
+            alt_bn128_transition: i64::MAX as u64, /* TODO: Update it when
+                                                    * the time point of the
+                                                    * next update enabled. */
         }
     }
 }
