@@ -17,6 +17,8 @@ mod receipt;
 mod reward_info;
 mod status;
 mod sync_graph_states;
+mod token_supply_info;
+mod trace;
 mod transaction;
 
 pub mod pubsub;
@@ -40,6 +42,8 @@ pub use self::{
     reward_info::RewardInfo,
     status::Status,
     sync_graph_states::SyncGraphStates,
+    token_supply_info::TokenSupplyInfo,
+    trace::LocalizedBlockTrace,
     transaction::{
         PackedOrExecuted, SendTxRequest, Transaction, TxPoolPendingInfo,
         TxWithPoolInfo,

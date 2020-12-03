@@ -74,8 +74,14 @@ impl Linear {
 }
 
 /// A special pricing model for modular exponentiation.
-struct ModexpPricer {
+pub(crate) struct ModexpPricer {
     divisor: usize,
+}
+
+impl ModexpPricer {
+    pub(crate) fn new(divisor: usize) -> ModexpPricer {
+        ModexpPricer { divisor }
+    }
 }
 
 impl Pricer for Linear {
@@ -87,10 +93,15 @@ impl Pricer for Linear {
 
 /// A alt_bn128_parinig pricing model. This computes a price using a base cost
 /// and a cost per pair.
-#[allow(dead_code)]
-struct AltBn128PairingPricer {
+pub(crate) struct AltBn128PairingPricer {
     base: usize,
     pair: usize,
+}
+
+impl AltBn128PairingPricer {
+    pub(crate) fn new(base: usize, pair: usize) -> AltBn128PairingPricer {
+        AltBn128PairingPricer { base, pair }
+    }
 }
 
 impl Pricer for AltBn128PairingPricer {

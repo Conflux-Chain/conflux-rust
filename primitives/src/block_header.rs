@@ -3,8 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    bytes::Bytes, hash::keccak, receipt::BlockReceipts, MERKLE_NULL_NODE,
-    NULL_EPOCH,
+    block::BlockHeight, bytes::Bytes, hash::keccak, receipt::BlockReceipts,
+    MERKLE_NULL_NODE, NULL_EPOCH,
 };
 use cfx_types::{Address, Bloom, H256, KECCAK_EMPTY_BLOOM, U256};
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
@@ -20,7 +20,7 @@ pub struct BlockHeaderRlpPart {
     /// Parent hash.
     parent_hash: H256,
     /// Block height
-    height: u64,
+    height: BlockHeight,
     /// Block timestamp.
     timestamp: u64,
     /// Block author.

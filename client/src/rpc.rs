@@ -46,8 +46,11 @@ use self::{
             RpcImpl as LightImpl, TestRpcImpl as LightTestRpcImpl,
         },
         pubsub::PubSubClient,
+        trace::TraceHandler,
     },
-    traits::{cfx::Cfx, debug::LocalRpc, pubsub::PubSub, test::TestRpc},
+    traits::{
+        cfx::Cfx, debug::LocalRpc, pubsub::PubSub, test::TestRpc, trace::Trace,
+    },
 };
 
 pub use self::types::{Block as RpcBlock, Origin};
@@ -142,6 +145,7 @@ pub fn setup_public_rpc_apis(
     conf: &Configuration,
 ) -> MetaIoHandler<Metadata>
 {
+    let data_man = rpc.consensus.get_data_manager().clone();
     let cfx = CfxHandler::new(common, rpc).to_delegate();
     let interceptor =
         ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc");
@@ -149,6 +153,12 @@ pub fn setup_public_rpc_apis(
     // extend_with maps each method in RpcImpl object into a RPC handler
     let mut handler = MetaIoHandler::default();
     handler.extend_with(RpcProxy::new(cfx, interceptor));
+    if conf.raw_conf.executive_trace && conf.raw_conf.enable_tracing {
+        let trace = TraceHandler::new(data_man).to_delegate();
+        let interceptor =
+            ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc");
+        handler.extend_with(RpcProxy::new(trace, interceptor));
+    }
     if let Some(pubsub) = pubsub {
         handler.extend_with(pubsub.to_delegate());
     }
@@ -160,6 +170,7 @@ pub fn setup_debug_rpc_apis(
     conf: &Configuration,
 ) -> MetaIoHandler<Metadata>
 {
+    let data_man = rpc.consensus.get_data_manager().clone();
     let cfx = CfxHandler::new(common.clone(), rpc.clone()).to_delegate();
     let interceptor =
         ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc_local");
@@ -171,6 +182,12 @@ pub fn setup_debug_rpc_apis(
     handler.extend_with(RpcProxy::new(cfx, interceptor));
     handler.extend_with(test);
     handler.extend_with(debug);
+    if conf.raw_conf.executive_trace {
+        let trace = TraceHandler::new(data_man).to_delegate();
+        let interceptor =
+            ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc");
+        handler.extend_with(RpcProxy::new(trace, interceptor));
+    }
     if let Some(pubsub) = pubsub {
         handler.extend_with(pubsub.to_delegate());
     }

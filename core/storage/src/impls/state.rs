@@ -56,7 +56,6 @@ impl State {
             owned_node_set: Some(Default::default()),
             dirty: false,
             children_merkle_map: ChildrenMerkleMap::new(),
-
             parent_epoch_id: state_trees.parent_epoch_id,
         }
     }

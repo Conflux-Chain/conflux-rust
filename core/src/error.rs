@@ -2,12 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::message::Bytes;
 use cfx_types::{Address, H256, U256};
 use primitives::{filter::FilterError, transaction::TransactionError};
 use std::{error, fmt, time::SystemTime};
 use unexpected::{Mismatch, OutOfBounds};
 
-#[derive(Debug, PartialEq, Clone, Copy, Eq)]
+#[derive(Debug, PartialEq, Clone, Eq)]
 /// Errors concerning block processing.
 pub enum BlockError {
     /// Number field of header is invalid.
@@ -50,6 +51,8 @@ pub enum BlockError {
     UnknownParent(H256),
     /// Duplicate parent or referee hashes exist.
     DuplicateParentOrRefereeHashes(H256),
+    /// The value in `custom` does not match the specification.
+    InvalidCustom(Vec<Bytes>, Vec<Bytes>),
 }
 
 impl fmt::Display for BlockError {
@@ -105,6 +108,10 @@ impl fmt::Display for BlockError {
             DuplicateParentOrRefereeHashes(ref hash) => {
                 format!("Duplicate parent or referee hashes: {}", hash)
             }
+            InvalidCustom(ref header_custom, ref expected_custom) => format!(
+                "Invalid custom in header: expected {:?}, get {:?}",
+                expected_custom, header_custom
+            ),
         };
 
         f.write_fmt(format_args!("Block error ({})", msg))
