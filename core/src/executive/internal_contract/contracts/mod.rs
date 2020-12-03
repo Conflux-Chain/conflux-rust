@@ -68,34 +68,6 @@ macro_rules! make_function_table {
 }
 
 #[macro_export]
-macro_rules! rename_interface {
-    ( $(#[$attr:meta])* $visibility:vis struct $new_name:ident ($old_name:ident, $interface:expr ); ) => {
-        $(#[$attr])* $visibility struct $new_name<S> {
-            phantom: std::marker::PhantomData<S>,
-        }
-
-        impl<S> $new_name<S> {
-            #[cfg(test)]
-            pub fn instance() -> Self {
-                Self {
-                    phantom: Default::default(),
-                }
-            }
-        }
-
-        impl<S: StorageStateTrait + Send + Sync> SolidityFunctionTrait<S> for $new_name<S> {
-            fn name(&self) -> &'static str { $interface }
-            fn execute(
-                &self, input: &[u8], params: &ActionParams, spec: &Spec,
-                state: &mut StateGeneric<S>, substate: &mut Substate,
-            ) -> vm::Result<vm::GasLeft> {
-                <$old_name::<S>>::instance().execute(input, params, spec, state, substate)
-            }
-        }
-     };
-}
-
-#[macro_export]
 macro_rules! check_signature {
     ($interface:ident, $signature:expr) => {
         let f = <$interface<cfx_storage::StorageState>>::instance();

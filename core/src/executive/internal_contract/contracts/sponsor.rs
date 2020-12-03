@@ -14,7 +14,7 @@ use crate::check_signature;
 use crate::{
     evm::{ActionParams, Spec},
     impl_function_type, make_function_table, make_solidity_contract,
-    make_solidity_function, rename_interface,
+    make_solidity_function,
     state::{StateGeneric, Substate},
     vm,
 };
@@ -51,10 +51,6 @@ make_solidity_function! {
 }
 impl_function_type!(SetSponsorForGas, "payable_write", gas: 2 * SPEC.sstore_reset_gas);
 
-rename_interface! {
-    struct SetSponsorForGasSnake(SetSponsorForGas, "set_sponsor_for_gas(address,uint256)");
-}
-
 impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     for SetSponsorForGas<S>
 {
@@ -72,10 +68,6 @@ make_solidity_function! {
 }
 impl_function_type!(SetSponsorForCollateral, "payable_write", gas: 2 * SPEC.sstore_reset_gas);
 
-rename_interface! {
-    struct SetSponsorForCollateralSnake(SetSponsorForCollateral, "set_sponsor_for_collateral(address)");
-}
-
 impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     for SetSponsorForCollateral<S>
 {
@@ -92,9 +84,6 @@ make_solidity_function! {
     struct AddPrivilege(Vec<Address>, "addPrivilege(address[])");
 }
 impl_function_type!(AddPrivilege, "non_payable_write");
-rename_interface! {
-    struct AddPrivilegeSnake(AddPrivilege, "add_privilege(address[])");
-}
 
 impl<S: StorageStateTrait + Send + Sync> UpfrontPaymentTrait<S>
     for AddPrivilege<S>
@@ -127,9 +116,6 @@ make_solidity_function! {
     struct RemovePrivilege(Vec<Address>, "removePrivilege(address[])");
 }
 impl_function_type!(RemovePrivilege, "non_payable_write");
-rename_interface! {
-    struct RemovePrivilegeSnake(RemovePrivilege, "remove_privilege(address[])");
-}
 
 impl<S: StorageStateTrait + Send + Sync> UpfrontPaymentTrait<S>
     for RemovePrivilege<S>
@@ -359,24 +345,6 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
         }
         Ok(())
     }
-}
-
-#[test]
-fn test_sponsor_contract_sig() {
-    // The first 4 bytes of keccak('set_sponsor_for_gas(address,uint256)') is
-    // `0xe9ac3d4a`.
-    check_signature!(SetSponsorForGasSnake, "e9ac3d4a");
-
-    // The first 4 bytes of keccak('set_sponsor_for_collateral(address)') is
-    // `0x0862bf68`.
-    check_signature!(SetSponsorForCollateralSnake, "0862bf68");
-
-    // The first 4 bytes of keccak('add_privilege(address[])') is `0xfe15156c`.
-    check_signature!(AddPrivilegeSnake, "fe15156c");
-
-    // The first 4 bytes of keccak('remove_privilege(address[])') is
-    // `0x44c0bd21`.
-    check_signature!(RemovePrivilegeSnake, "44c0bd21");
 }
 
 #[test]
