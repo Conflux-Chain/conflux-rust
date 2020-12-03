@@ -7,7 +7,7 @@ use super::{executive::*, suicide as suicide_impl, InternalContractMap};
 use crate::{
     bytes::Bytes,
     machine::Machine,
-    state::{State, Substate},
+    state::{StateGeneric, Substate},
     trace,
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
@@ -18,6 +18,7 @@ use crate::{
 use cfx_parameters::staking::{
     code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
+use cfx_storage::StorageStateTrait;
 use cfx_types::{Address, H256, U256};
 use primitives::transaction::UNSIGNED_SENDER;
 use std::sync::Arc;
@@ -65,9 +66,8 @@ impl OriginInfo {
 }
 
 /// Implementation of evm context.
-#[allow(dead_code)]
-pub struct Context<'a> {
-    state: &'a mut State,
+pub struct Context<'a, S: StorageStateTrait> {
+    state: &'a mut StateGeneric<S>,
     env: &'a Env,
     depth: usize,
     // The stack_depth is never read in context, even before this commit.
@@ -78,17 +78,17 @@ pub struct Context<'a> {
     spec: &'a Spec,
     output: OutputPolicy,
     static_flag: bool,
-    internal_contract_map: &'a InternalContractMap,
+    internal_contract_map: &'a InternalContractMap<S>,
 }
 
-impl<'a> Context<'a> {
+impl<'a, S: StorageStateTrait> Context<'a, S> {
     /// Basic `Context` constructor.
     pub fn new(
-        state: &'a mut State, env: &'a Env, machine: &'a Machine,
+        state: &'a mut StateGeneric<S>, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, depth: usize, stack_depth: usize,
         origin: &'a OriginInfo, substate: &'a mut Substate,
         output: OutputPolicy, static_flag: bool,
-        internal_contract_map: &'a InternalContractMap,
+        internal_contract_map: &'a InternalContractMap<S>,
     ) -> Self
     {
         Context {
@@ -107,7 +107,9 @@ impl<'a> Context<'a> {
     }
 }
 
-impl<'a> ContextTrait for Context<'a> {
+impl<'a, S: StorageStateTrait + Send + Sync + 'static> ContextTrait
+    for Context<'a, S>
+{
     fn storage_at(&self, key: &Vec<u8>) -> vm::Result<U256> {
         self.substate
             .storage_at(self.state, &self.origin.address, key)
@@ -223,7 +225,7 @@ impl<'a> ContextTrait for Context<'a> {
         }
 
         // The following code is only reachable in test mode.
-        let mut ex = Executive::from_parent(
+        let mut ex = ExecutiveGeneric::from_parent(
             self.state,
             self.env,
             self.machine,
@@ -393,6 +395,7 @@ impl<'a> ContextTrait for Context<'a> {
         self.machine
             .params()
             .chain_id
+            .read()
             .get_chain_id(self.env.epoch_height) as u64
     }
 
@@ -450,7 +453,7 @@ mod tests {
     };
     use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
     use cfx_storage::{
-        new_storage_manager_for_testing, tests::FakeStateManager,
+        new_storage_manager_for_testing, tests::FakeStateManager, StorageState,
     };
     use cfx_types::{address_util::AddressUtil, Address, H256, U256};
     use std::str::FromStr;
@@ -489,7 +492,7 @@ mod tests {
         storage_manager: FakeStateManager,
         state: State,
         machine: Machine,
-        internal_contract_map: InternalContractMap,
+        internal_contract_map: InternalContractMap<StorageState>,
         spec: Spec,
         substate: Substate,
         env: Env,

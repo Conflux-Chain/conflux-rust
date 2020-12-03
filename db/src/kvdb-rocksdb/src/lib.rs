@@ -335,6 +335,7 @@ fn generate_options(config: &DatabaseConfig) -> DBOptions {
     opts.set_keep_log_file_num(1);
     opts.increase_parallelism(cmp::max(1, num_cpus::get() as i32 / 2));
     opts.enable_statistics(true);
+    opts.create_missing_column_families(true);
 
     opts
 }

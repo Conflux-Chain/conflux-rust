@@ -1,40 +1,36 @@
-#![allow(dead_code, unused_imports, unused_variables)]
+// Copyright 2020 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
 
 use crate::rpc::{
     error_codes,
-    helpers::{SubscriberId, Subscribers},
+    helpers::{EpochQueue, SubscriberId, Subscribers},
     metadata::Metadata,
     traits::PubSub,
     types::{pubsub, Header as RpcHeader, Log as RpcLog},
 };
-use cfx_types::{H160, H256, H520, U128, U256, U64};
+use cfx_parameters::{
+    consensus::DEFERRED_STATE_EPOCH_COUNT,
+    consensus_internal::REWARD_EPOCH_COUNT,
+};
+use cfx_types::H256;
 use cfxcore::{
-    block_data_manager::BlockExecutionResult, channel::Channel,
-    BlockDataManager, Notifications, SharedConsensusGraph,
-    SynchronizationGraph,
+    channel::Channel, BlockDataManager, Notifications, SharedConsensusGraph,
 };
 use futures::{
     compat::Future01CompatExt,
     future::{join_all, FutureExt, TryFutureExt},
 };
 use itertools::zip;
-use jsonrpc_core::{
-    futures::{sync::mpsc, Future, IntoFuture, Stream},
-    BoxFuture, Error, Result as RpcResult,
-};
+use jsonrpc_core::{futures::Future, Result as RpcResult};
 use jsonrpc_pubsub::{
     typed::{Sink, Subscriber},
     SubscriptionId,
 };
 use parking_lot::RwLock;
-use primitives::{
-    filter::Filter,
-    log_entry::{LocalizedLogEntry, LogEntry},
-    BlockHeader, BlockReceipts,
-};
+use primitives::{filter::Filter, log_entry::LocalizedLogEntry, BlockReceipts};
 use runtime::Executor;
 use std::{
-    collections::BTreeMap,
     sync::{Arc, Weak},
     time::Duration,
 };
@@ -68,8 +64,6 @@ impl PubSubClient {
             consensus: consensus.clone(),
             data_man: consensus.get_data_manager().clone(),
             heads_subscribers: heads_subscribers.clone(),
-            epochs_subscribers: epochs_subscribers.clone(),
-            logs_subscribers: logs_subscribers.clone(),
         });
 
         // --------- newHeads ---------
@@ -153,6 +147,12 @@ impl PubSubClient {
         // subscribe to the `epochs_ordered` channel
         let mut receiver = epochs_ordered.subscribe();
 
+        // use a queue to make sure we only process an epoch once it has been
+        // executed for sure
+        let mut queue = EpochQueue::<Vec<H256>>::with_capacity(
+            (DEFERRED_STATE_EPOCH_COUNT + REWARD_EPOCH_COUNT) as usize,
+        );
+
         // loop asynchronously
         let fut = async move {
             let mut last_epoch = 0;
@@ -168,6 +168,11 @@ impl PubSubClient {
                         epochs_ordered.unsubscribe(receiver.id);
                         return;
                     }
+                };
+
+                let epoch = match queue.push(epoch) {
+                    None => continue,
+                    Some(e) => e,
                 };
 
                 // publish pivot chain reorg if necessary
@@ -196,8 +201,6 @@ pub struct ChainNotificationHandler {
     consensus: SharedConsensusGraph,
     data_man: Arc<BlockDataManager>,
     heads_subscribers: Arc<RwLock<Subscribers<Client>>>,
-    epochs_subscribers: Arc<RwLock<Subscribers<Client>>>,
-    logs_subscribers: Arc<RwLock<Subscribers<(Client, Filter)>>>,
 }
 
 impl ChainNotificationHandler {
@@ -280,8 +283,6 @@ impl ChainNotificationHandler {
     ) {
         trace!("notify_logs({:?})", epoch);
 
-        let epoch_number = epoch.0;
-
         // NOTE: calls to DbManager are supposed to be cached
         // FIXME(thegaram): what is the perf impact of calling this for each
         // subscriber? would it be better to do this once for each epoch?
@@ -315,7 +316,7 @@ impl ChainNotificationHandler {
         const NUM_POLLS: i8 = 10;
         const POLL_INTERVAL_MS: Duration = Duration::from_millis(100);
 
-        for iter in 0..NUM_POLLS {
+        for _ in 0..NUM_POLLS {
             match self.data_man.block_execution_result_by_hash_with_epoch(
                 &block, &pivot, false, /* update_pivot_assumption */
                 true,  /* update_cache */
@@ -328,6 +329,8 @@ impl ChainNotificationHandler {
             }
         }
 
+        // note: this can only happen if there was a chain reorg, in which case
+        // we will eventually re-process this epoch with the correct pivot hash
         warn!("Cannot find receipts with {:?}/{:?}", block, pivot);
         None
     }

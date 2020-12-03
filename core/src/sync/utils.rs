@@ -16,6 +16,7 @@ use crate::{
     vm_factory::VmFactory,
     ConsensusGraph, NodeType, Notifications, TransactionPool,
 };
+use cfx_internal_common::ChainIdParamsInner;
 use cfx_parameters::{
     block::{MAX_BLOCK_SIZE_IN_BYTES, REFEREE_DEFAULT_BOUND},
     consensus::{GENESIS_GAS_LIMIT, TRANSACTION_DEFAULT_EPOCH_BOUND},
@@ -25,7 +26,7 @@ use cfx_storage::{StorageConfiguration, StorageManager};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use core::str::FromStr;
 use parking_lot::Mutex;
-use primitives::{Block, BlockHeaderBuilder, ChainIdParams};
+use primitives::{Block, BlockHeaderBuilder};
 use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
 use threadpool::ThreadPool;
 
@@ -196,7 +197,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
     let notifications = Notifications::init();
     let consensus = Arc::new(ConsensusGraph::new(
         ConsensusConfig {
-            chain_id: ChainIdParams { chain_id: 0 },
+            chain_id: ChainIdParamsInner::new_simple(0),
             inner_conf: ConsensusInnerConfig {
                 adaptive_weight_beta: beta,
                 heavy_block_difficulty_ratio: h,

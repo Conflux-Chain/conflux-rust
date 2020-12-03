@@ -13,9 +13,10 @@ use self::contracts::SolFnTable;
 use crate::{
     bytes::Bytes,
     hash::keccak,
-    state::{State, Substate},
+    state::{StateGeneric, Substate},
     vm::{self, ActionParams, GasLeft, Spec},
 };
+use cfx_storage::StorageStateTrait;
 use cfx_types::{Address, H256};
 use std::sync::Arc;
 
@@ -26,16 +27,16 @@ lazy_static! {
 }
 
 /// Native implementation of an internal contract.
-pub trait InternalContractTrait: Send + Sync {
+pub trait InternalContractTrait<S: StorageStateTrait> {
     /// Address of the internal contract
     fn address(&self) -> &Address;
 
     /// A hash-map for solidity function sig and execution handler.
-    fn get_func_table(&self) -> &SolFnTable;
+    fn get_func_table(&self) -> SolFnTable<S>;
 
     /// execute this internal contract on the given parameters.
     fn execute(
-        &self, params: &ActionParams, spec: &Spec, state: &mut State,
+        &self, params: &ActionParams, spec: &Spec, state: &mut StateGeneric<S>,
         substate: &mut Substate,
     ) -> vm::Result<GasLeft>
     {
@@ -52,8 +53,9 @@ pub trait InternalContractTrait: Send + Sync {
         let mut fn_sig = [0u8; 4];
         fn_sig.clone_from_slice(fn_sig_slice);
 
-        let solidity_fn = self
-            .get_func_table()
+        let func_table = self.get_func_table();
+
+        let solidity_fn = func_table
             .get(&fn_sig)
             .ok_or(vm::Error::InternalContract("unsupported function"))?;
 
@@ -68,10 +70,10 @@ pub trait InternalContractTrait: Send + Sync {
 }
 
 /// Native implementation of a solidity-interface function.
-pub trait SolidityFunctionTrait: Send + Sync {
+pub trait SolidityFunctionTrait<S: StorageStateTrait>: Send + Sync {
     fn execute(
         &self, input: &[u8], params: &ActionParams, spec: &Spec,
-        state: &mut State, substate: &mut Substate,
+        state: &mut StateGeneric<S>, substate: &mut Substate,
     ) -> vm::Result<GasLeft>;
 
     /// The string for function sig

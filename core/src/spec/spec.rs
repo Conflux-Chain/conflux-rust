@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::message::Bytes;
+use cfx_internal_common::ChainIdParams;
 use cfx_parameters::{
     consensus::{ONE_UCFX_IN_DRIP, PHASE2_HEADER_CUSTOM},
     consensus_internal::{
@@ -11,7 +12,7 @@ use cfx_parameters::{
     },
 };
 use cfx_types::{Address, H256, U256, U512};
-use primitives::{block::BlockHeight, ChainIdParams};
+use primitives::block::BlockHeight;
 use std::collections::BTreeMap;
 
 struct Spec {
@@ -44,7 +45,7 @@ impl Default for Spec {
     fn default() -> Self { unimplemented!() }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct CommonParams {
     /// Account start nonce.
     pub account_start_nonce: U256,
@@ -69,6 +70,8 @@ pub struct CommonParams {
     /// Initial base rewards according to block height.
     pub base_block_rewards: BTreeMap<BlockHeight, U256>,
 
+    /// Number of first block where ec built-in contract enabled.
+    pub alt_bn128_transition: u64,
     /// The height to change block base reward.
     /// The block `custom` field of this height is required to be
     /// `phase2_transition_header_custom`.
@@ -83,13 +86,14 @@ impl Default for CommonParams {
             account_start_nonce: 0x00.into(),
             maximum_extra_data_size: 0x20,
             network_id: 0x1,
-            chain_id: ChainIdParams { chain_id: 1 },
+            chain_id: Default::default(),
             subprotocol_name: "cfx".into(),
             min_gas_limit: 10_000_000.into(),
             gas_limit_bound_divisor: 0x0400.into(),
             max_transaction_size: 300 * 1024,
             anticone_penalty_ratio: ANTICONE_PENALTY_RATIO,
             base_block_rewards,
+            alt_bn128_transition: i64::MAX as u64,
             phase2_transition: 0,
         }
     }
@@ -109,6 +113,7 @@ impl CommonParams {
         params.chain_id = chain_id;
         params.anticone_penalty_ratio = anticone_penalty_ratio;
         params.phase2_transition = phase2_transition;
+        params.alt_bn128_transition = phase2_transition;
         params.base_block_rewards = base_block_rewards;
         params
     }

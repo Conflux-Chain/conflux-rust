@@ -58,7 +58,7 @@ The `AdminControl` contract also provides a query interface `getAdmin(address co
 
 ## Examples
 
-Consider you have deployed a contract whose address is `contract_addr`. The administrator can call `AdminControl.set_admin(contract_addr, new_admin)` to change the administrator and call `AdminControl.destroy(contract_addr)` to kill the contract. 
+Consider you have deployed a contract whose address is `contract_addr`. The administrator can call `AdminControl.setAdmin(contract_addr, new_admin)` to change the administrator and call `AdminControl.destroy(contract_addr)` to kill the contract. 
 
 ```javascript
 const PRIVATE_KEY = '0xxxxxxx';
