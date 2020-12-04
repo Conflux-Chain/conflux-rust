@@ -41,6 +41,7 @@ pub mod consensus {
     pub const ONE_GDRIP_IN_DRIP: u64 = 1_000_000_000;
 
     pub const PHASE2_HEIGHT: u64 = 2_000_000;
+    pub const PHASE2_HEADER_CUSTOM_END_HEIGHT: u64 = 2_086_400;
     pub const PHASE2_HEADER_CUSTOM: [u8; 1] = [1];
 }
 
