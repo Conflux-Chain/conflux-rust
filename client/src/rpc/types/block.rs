@@ -28,6 +28,7 @@ use primitives::{
 };
 
 use crate::rpc::types::{transaction::PackedOrExecuted, Receipt, Transaction};
+use cfx_bytes::Bytes;
 
 #[derive(PartialEq, Debug)]
 pub enum BlockTransactions {
@@ -130,6 +131,8 @@ pub struct Block {
     pub transactions: BlockTransactions,
     /// Size in bytes
     pub size: Option<U256>,
+    /// Custom field
+    pub custom: Vec<Bytes>,
 }
 
 impl Block {
@@ -284,6 +287,7 @@ impl Block {
                 .collect(),
             nonce: b.block_header.nonce().into(),
             transactions,
+            custom: b.block_header.custom().clone(),
             size: Some(b.size().into()),
         }
     }
@@ -475,6 +479,7 @@ mod tests {
             adaptive: false,
             nonce: 0.into(),
             transactions: BlockTransactions::Hashes(vec![]),
+            custom: vec![],
             size: Some(69.into()),
         };
         let serialized_block = serde_json::to_string(&block).unwrap();
@@ -505,6 +510,7 @@ mod tests {
             adaptive: false,
             nonce: 0.into(),
             transactions: BlockTransactions::Full(vec![]),
+            custom: vec![],
             size: Some(69.into()),
         };
         let deserialized_block: Block =
