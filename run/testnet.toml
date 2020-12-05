@@ -415,6 +415,18 @@ jsonrpc_local_http_port=12539
 # ln_num_epochs_to_request = 200
 # ln_num_waiting_headers_threshold = 1000
 
+# -------------------- Trace Parameters -------------------
+
+# Whether to trace EVM execution and records the result in database.
+#
+# executive_trace = false
+
+# Whether to enable tracing RPC for public access. It works only if `executive_trace`
+# is set to `true`. On the other hand, once `executive_trace` is enabled, the tracing
+# RPC is always enabled for local access.
+#
+# enable_tracing = false
+
 # -------------------- Others -------------------
 
 # Time (in milliseconds) after which accounts are re-read from disk.

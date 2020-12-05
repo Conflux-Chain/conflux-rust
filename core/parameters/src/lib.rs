@@ -39,6 +39,10 @@ pub mod consensus {
     pub const ONE_UCFX_IN_DRIP: u64 = 1_000_000_000_000;
 
     pub const ONE_GDRIP_IN_DRIP: u64 = 1_000_000_000;
+
+    pub const PHASE2_HEIGHT: u64 = 2_000_000;
+    pub const PHASE2_HEADER_CUSTOM_END_HEIGHT: u64 = 2_086_400;
+    pub const PHASE2_HEADER_CUSTOM: [u8; 1] = [1];
 }
 
 pub mod consensus_internal {
@@ -69,7 +73,7 @@ pub mod consensus_internal {
         2_474_873, 2_369_947, 2_269_469, 2_173_251, 2_081_112, 1_992_880,
         1_908_388, 1_827_479,
     ];
-
+    pub const MINING_REWARD_PHASE2_IN_UCFX: u64 = 2_000_000;
     pub const GENESIS_TOKEN_COUNT_IN_CFX: u64 = 5_000_000_000;
     pub const TWO_YEAR_UNLOCK_TOKEN_COUNT_IN_CFX: u64 = 800_000_000;
 

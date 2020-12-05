@@ -21,9 +21,11 @@
 //! EVM call types.
 
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use serde::Serialize;
 
 /// The type of the call-like instruction.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum CallType {
     /// Not a CALL.
     None,

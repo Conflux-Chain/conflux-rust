@@ -13,7 +13,7 @@ use crate::{
     },
     executive::{
         revert_reason_decode, ExecutionError, ExecutionOutcome, Executive,
-        InternalContractMap,
+        InternalContractMap, TransactOptions,
     },
     machine::Machine,
     rpc_errors::{invalid_params_check, Result as RpcResult},
@@ -23,6 +23,7 @@ use crate::{
         },
         CleanupMode, State,
     },
+    trace::trace::{ExecTrace, TransactionExecTraces},
     verification::{compute_receipts_root, VerificationConfig},
     vm::{Env, Error as VmErr, Spec},
     vm_factory::VmFactory,
@@ -31,7 +32,7 @@ use crate::{
 use cfx_internal_common::{
     debug::*, EpochExecutionCommitment, StateRootWithAuxInfo,
 };
-use cfx_parameters::{consensus::*, consensus_internal::*};
+use cfx_parameters::consensus::*;
 use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{
     defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
@@ -452,7 +453,7 @@ impl ConsensusExecutor {
                         // adjustment.
                         // LINT.IfChange(ANTICONE_PENALTY_1)
                         if anticone_difficulty / U512::from(epoch_difficulty)
-                            >= U512::from(self.handler.config.anticone_penalty_ratio)
+                            >= U512::from(self.handler.machine.params().anticone_penalty_ratio)
                         {
                             no_reward = true;
                         }
@@ -1135,13 +1136,16 @@ impl ConsensusExecutionHandler {
 
             block_number += 1;
             last_block_hash = block.hash();
+            let mut block_traces: Vec<TransactionExecTraces> =
+                Default::default();
             for (idx, transaction) in block.transactions.iter().enumerate() {
                 let tx_outcome_status;
                 let mut transaction_logs = Vec::new();
                 let mut storage_released = Vec::new();
                 let mut storage_collateralized = Vec::new();
 
-                let r = {
+                let r = if self.config.executive_trace {
+                    let options = TransactOptions::with_tracing();
                     Executive::new(
                         state,
                         &env,
@@ -1149,7 +1153,17 @@ impl ConsensusExecutionHandler {
                         &spec,
                         &internal_contract_map,
                     )
-                    .transact(transaction)?
+                    .transact(transaction, options)?
+                } else {
+                    let options = TransactOptions::with_no_tracing();
+                    Executive::new(
+                        state,
+                        &env,
+                        self.machine.as_ref(),
+                        &spec,
+                        &internal_contract_map,
+                    )
+                    .transact(transaction, options)?
                 };
 
                 let gas_fee;
@@ -1168,6 +1182,9 @@ impl ConsensusExecutionHandler {
                             e
                         );
                         gas_fee = U256::zero();
+                        if self.config.executive_trace {
+                            block_traces.push(Vec::<ExecTrace>::new().into());
+                        }
                     }
                     ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                         tx_outcome_status =
@@ -1188,6 +1205,9 @@ impl ConsensusExecutionHandler {
                             to_pending.push(transaction.clone())
                         }
                         gas_fee = U256::zero();
+                        if self.config.executive_trace {
+                            block_traces.push(Vec::<ExecTrace>::new().into());
+                        }
                     }
                     ExecutionOutcome::ExecutionErrorBumpNonce(
                         error,
@@ -1207,6 +1227,9 @@ impl ConsensusExecutionHandler {
                         };
                         env.accumulated_gas_used += executed.gas_used;
                         gas_fee = executed.fee;
+                        if self.config.executive_trace {
+                            block_traces.push(executed.trace.into());
+                        }
                         debug!(
                             "tx execution error: err={:?}, transaction={:?}",
                             error, transaction
@@ -1228,6 +1251,10 @@ impl ConsensusExecutionHandler {
                         storage_sponsor_paid = executed.storage_sponsor_paid;
 
                         trace!("tx executed successfully: result={:?}, transaction={:?}, in block {:?}", executed, transaction, block.hash());
+
+                        if self.config.executive_trace {
+                            block_traces.push(executed.trace.into());
+                        }
                     }
                 }
 
@@ -1259,6 +1286,14 @@ impl ConsensusExecutionHandler {
                 }
             }
 
+            if self.config.executive_trace {
+                self.data_man.insert_block_traces(
+                    block.hash(),
+                    block_traces.into(),
+                    on_local_pivot,
+                );
+            }
+
             let block_receipts = Arc::new(BlockReceipts {
                 receipts,
                 block_number,
@@ -1283,22 +1318,12 @@ impl ConsensusExecutionHandler {
         Ok(epoch_receipts)
     }
 
-    fn compute_block_base_reward(&self, past_block_count: u64) -> U512 {
-        let reward_table_index = if past_block_count < INITIAL_NO_DECAY_PERIOD {
-            0
-        } else {
-            ((past_block_count - INITIAL_NO_DECAY_PERIOD)
-                / MINED_BLOCK_COUNT_PER_QUARTER) as usize
-        };
-        let reward_in_ucfx = if reward_table_index
-            < self.config.base_reward_table_in_ucfx.len()
-        {
-            self.config.base_reward_table_in_ucfx[reward_table_index]
-        } else {
-            ULTIMATE_BASE_MINING_REWARD_IN_UCFX
-        };
-
-        U512::from(reward_in_ucfx) * U512::from(ONE_UCFX_IN_DRIP)
+    fn compute_block_base_reward(
+        &self, past_block_count: u64, pivot_height: u64,
+    ) -> U512 {
+        self.machine
+            .params()
+            .base_reward_in_ucfx(past_block_count, pivot_height)
     }
 
     /// `epoch_block_states` includes if a block is partial invalid and its
@@ -1323,8 +1348,10 @@ impl ConsensusExecutionHandler {
         // This is the total primary tokens issued in this epoch.
         let mut total_base_reward: U256 = 0.into();
 
-        let base_reward_per_block =
-            self.compute_block_base_reward(reward_info.past_block_count);
+        let base_reward_per_block = self.compute_block_base_reward(
+            reward_info.past_block_count,
+            pivot_block.block_header.height(),
+        );
 
         // Base reward and anticone penalties.
         for (enum_idx, block) in epoch_blocks.iter().enumerate() {
@@ -1368,8 +1395,12 @@ impl ConsensusExecutionHandler {
                         / U512::from(epoch_difficulty)
                         * anticone_difficulty
                         / U512::from(epoch_difficulty)
-                        / U512::from(self.config.anticone_penalty_ratio)
-                        / U512::from(self.config.anticone_penalty_ratio);
+                        / U512::from(
+                            self.machine.params().anticone_penalty_ratio,
+                        )
+                        / U512::from(
+                            self.machine.params().anticone_penalty_ratio,
+                        );
                     // Lint.ThenChange(consensus/mod.rs#ANTICONE_PENALTY_1)
 
                     debug_assert!(reward > anticone_penalty);
@@ -1722,8 +1753,5 @@ impl ConsensusExecutionHandler {
 }
 
 pub struct ConsensusExecutionConfiguration {
-    /// Anticone penalty ratio for reward processing.
-    /// It should be less than `timer_chain_beta`.
-    pub anticone_penalty_ratio: u64,
-    pub base_reward_table_in_ucfx: Vec<u64>,
+    pub executive_trace: bool,
 }
