@@ -2,7 +2,8 @@
 
 ## Incompatible changes
 
-- CIP-XX: Reduce the block base reward to 2 CFX from the height XXX.
+- Reduce the block base reward to 2 CFX from the height 4,855,000.
+- Blocks from height 4,855,000 to 5,000,000 (both included) are required to set their `custom` field in the header to be `[1]`.
 
 ## Improvements
 
