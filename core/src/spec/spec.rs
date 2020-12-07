@@ -5,7 +5,7 @@
 use crate::message::Bytes;
 use cfx_internal_common::ChainIdParams;
 use cfx_parameters::{
-    consensus::{ONE_UCFX_IN_DRIP, PHASE2_HEADER_CUSTOM},
+    consensus::{ONE_UCFX_IN_DRIP, PHASE2_HEADER_CUSTOM_FIRST_ELEMENT},
     consensus_internal::{
         ANTICONE_PENALTY_RATIO, INITIAL_BASE_MINING_REWARD_IN_UCFX,
         MINING_REWARD_PHASE2_IN_UCFX,
@@ -133,7 +133,7 @@ impl CommonParams {
 
     pub fn custom_prefix(&self, height: BlockHeight) -> Option<Vec<Bytes>> {
         if height >= self.phase2_transition {
-            Some(vec![PHASE2_HEADER_CUSTOM.to_vec()])
+            Some(vec![PHASE2_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
         } else {
             None
         }

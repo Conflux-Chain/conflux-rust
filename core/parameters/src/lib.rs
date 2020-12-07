@@ -42,7 +42,7 @@ pub mod consensus {
 
     /// About 2020.12.11-14:30.
     pub const PHASE2_HEIGHT: u64 = 3_640_000;
-    pub const PHASE2_HEADER_CUSTOM: [u8; 1] = [1];
+    pub const PHASE2_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [1];
 }
 
 pub mod consensus_internal {

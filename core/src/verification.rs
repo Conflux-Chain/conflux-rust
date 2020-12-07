@@ -335,29 +335,30 @@ impl VerificationConfig {
         // reward is reflected in the state root. The first state root
         // including results of new rewards will in the header after another
         // REWARD_EPOCH_COUNT + DEFERRED_STATE_EPOCH_COUNT epochs.
-        if let Some(expected_custom) =
+        if let Some(expected_custom_prefix) =
             self.machine.params().custom_prefix(header.height())
         {
-            for (i, expected_bytes) in expected_custom.iter().enumerate() {
+            for (i, expected_bytes) in expected_custom_prefix.iter().enumerate()
+            {
                 let header_custum = header.custom();
                 // Header custom is too short.
                 let b =
                     header_custum.get(i).ok_or(BlockError::InvalidCustom(
                         header_custum.clone(),
-                        expected_custom.clone(),
+                        expected_custom_prefix.clone(),
                     ))?;
                 if b != expected_bytes {
                     return Err(BlockError::InvalidCustom(
                         header_custum.clone(),
-                        expected_custom.clone(),
+                        expected_custom_prefix.clone(),
                     )
                     .into());
                 }
             }
-            if *header.custom() != expected_custom {
+            if *header.custom() != expected_custom_prefix {
                 return Err(BlockError::InvalidCustom(
                     header.custom().clone(),
-                    expected_custom,
+                    expected_custom_prefix,
                 )
                 .into());
             }
