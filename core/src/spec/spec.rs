@@ -5,7 +5,10 @@
 use crate::message::Bytes;
 use cfx_internal_common::ChainIdParams;
 use cfx_parameters::{
-    consensus::{ONE_UCFX_IN_DRIP, PHASE2_HEADER_CUSTOM_FIRST_ELEMENT},
+    consensus::{
+        BN128_ENABLE_NUMBER, ONE_UCFX_IN_DRIP,
+        PHASE2_HEADER_CUSTOM_FIRST_ELEMENT,
+    },
     consensus_internal::{
         ANTICONE_PENALTY_RATIO, INITIAL_BASE_MINING_REWARD_IN_UCFX,
         MINING_REWARD_PHASE2_IN_UCFX,
@@ -70,7 +73,7 @@ pub struct CommonParams {
     /// Initial base rewards according to block height.
     pub base_block_rewards: BTreeMap<BlockHeight, U256>,
 
-    /// Number of first block where ec built-in contract enabled.
+    /// Number of first block where bn128 built-in contract enabled.
     pub alt_bn128_transition: u64,
     /// The height to change block base reward.
     /// The block `custom` field of this height is required to be
@@ -93,7 +96,7 @@ impl Default for CommonParams {
             max_transaction_size: 300 * 1024,
             anticone_penalty_ratio: ANTICONE_PENALTY_RATIO,
             base_block_rewards,
-            alt_bn128_transition: i64::MAX as u64,
+            alt_bn128_transition: BN128_ENABLE_NUMBER,
             phase2_transition: 0,
         }
     }
@@ -113,7 +116,6 @@ impl CommonParams {
         params.chain_id = chain_id;
         params.anticone_penalty_ratio = anticone_penalty_ratio;
         params.phase2_transition = phase2_transition;
-        params.alt_bn128_transition = phase2_transition;
         params.base_block_rewards = base_block_rewards;
         params
     }
