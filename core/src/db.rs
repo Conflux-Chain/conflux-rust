@@ -37,8 +37,10 @@ pub const COL_TX_INDEX: u32 = 2;
 pub const COL_EPOCH_NUMBER: u32 = 3;
 /// Column for verified roots of blamed headers on light nodes
 pub const COL_BLAMED_HEADER_VERIFIED_ROOTS: u32 = 4;
+/// Column for block traces
+pub const COL_BLOCK_TRACES: u32 = 5;
 /// Number of columns in DB
-pub const NUM_COLUMNS: u32 = 5;
+pub const NUM_COLUMNS: u32 = 6;
 
 /// Modes for updating caches.
 #[derive(Clone, Copy)]

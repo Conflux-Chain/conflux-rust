@@ -6,6 +6,7 @@ use crate::rpc::{
     impls::RpcImplConfiguration, HttpConfiguration, TcpConfiguration,
     WsConfiguration,
 };
+use cfx_internal_common::{ChainIdParams, ChainIdParamsInner};
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
@@ -31,13 +32,17 @@ use cfxcore::{
     sync_parameters::*,
     transaction_pool::TxPoolConfig,
 };
+use lazy_static::*;
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
-use parking_lot::lock_api::RwLock;
-use primitives::ChainIdParams;
+use parking_lot::RwLock;
 use rand::Rng;
 use std::convert::TryInto;
 use txgen::TransactionGeneratorConfig;
+
+lazy_static! {
+    pub static ref CHAIN_ID: RwLock<Option<ChainIdParams>> = Default::default();
+}
 
 // usage:
 // ```
@@ -153,6 +158,7 @@ build_config! {
         (public_tcp_port, (Option<u16>), None)
         (public_address, (Option<String>), None)
         (udp_port, (Option<u16>), Some(32323))
+        (enable_tracing, (bool), false)
 
         // Network parameters section.
         (blocks_request_timeout_ms, (u64), 20_000)
@@ -249,6 +255,7 @@ build_config! {
         (persist_tx_index, (bool), false)
         (print_memory_usage_period_s, (Option<u64>), None)
         (target_block_gas_limit, (u64), DEFAULT_TARGET_BLOCK_GAS_LIMIT)
+        (executive_trace, (bool), false)
 
         // TreeGraph Section.
         (candidate_pivot_waiting_timeout_ms, (u64), 10_000)
@@ -280,6 +287,12 @@ build_config! {
                 }
             }
         )
+
+        // Genesis Section
+        // chain_id_params describes a complex setup where chain id can change over epochs.
+        // Usually this is needed to describe forks. This config overrides chain_id.
+        (chain_id_params, (Option<ChainIdParamsInner>), None,
+            ChainIdParamsInner::parse_config_str)
 
         // Storage section.
         (provide_more_snapshot_for_sync,
@@ -324,9 +337,12 @@ impl Configuration {
     fn network_id(&self) -> u64 {
         match self.raw_conf.network_id {
             Some(x) => x,
-            // The default network id is 1 for historic reason. It doesn't
-            // really matter.
-            None => self.raw_conf.chain_id.unwrap_or(1) as u64,
+            // If undefined, the network id is set to the chain_id at genesis.
+            None => {
+                self.chain_id_params()
+                    .read()
+                    .get_chain_id(/* epoch_number = */ 0) as u64
+            }
         }
     }
 
@@ -425,6 +441,26 @@ impl Configuration {
         )
     }
 
+    pub fn chain_id_params(&self) -> ChainIdParams {
+        if CHAIN_ID.read().is_none() {
+            let mut to_init = CHAIN_ID.write();
+            if to_init.is_none() {
+                if let Some(chain_id_params) = &self.raw_conf.chain_id_params {
+                    *to_init = Some(ChainIdParamsInner::new_from_inner(
+                        chain_id_params,
+                    ))
+                } else {
+                    *to_init = Some(ChainIdParamsInner::new_simple(
+                        self.raw_conf
+                            .chain_id
+                            .unwrap_or_else(|| rand::thread_rng().gen()),
+                    ));
+                }
+            }
+        }
+        CHAIN_ID.read().as_ref().unwrap().clone()
+    }
+
     pub fn consensus_config(&self) -> ConsensusConfig {
         let enable_optimistic_execution = if DEFERRED_STATE_EPOCH_COUNT <= 1 {
             false
@@ -432,12 +468,7 @@ impl Configuration {
             self.raw_conf.enable_optimistic_execution
         };
         ConsensusConfig {
-            chain_id: ChainIdParams {
-                chain_id: self
-                    .raw_conf
-                    .chain_id
-                    .unwrap_or_else(|| rand::thread_rng().gen()),
-            },
+            chain_id: self.chain_id_params(),
             inner_conf: ConsensusInnerConfig {
                 adaptive_weight_beta: self.raw_conf.adaptive_weight_beta,
                 heavy_block_difficulty_ratio: self
@@ -768,6 +799,7 @@ impl Configuration {
         ConsensusExecutionConfiguration {
             anticone_penalty_ratio: self.raw_conf.anticone_penalty_ratio,
             base_reward_table_in_ucfx: MINING_REWARD_TABLE_IN_UCFX.to_vec(),
+            executive_trace: self.raw_conf.executive_trace,
         }
     }
 

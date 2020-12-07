@@ -6,9 +6,10 @@ use crate::{
     evm::Spec,
     executive::{
         contract_address, ExecutionOutcome, Executive, InternalContractMap,
+        TransactOptions,
     },
     machine::Machine,
-    state::{CleanupMode, State},
+    state::{CleanupMode, State, StateGeneric},
     verification::{compute_receipts_root, compute_transaction_root},
     vm::{CreateContractAddress, Env},
 };
@@ -20,7 +21,7 @@ use cfx_parameters::{
     },
 };
 use cfx_statedb::{Result as DbResult, StateDb};
-use cfx_storage::{StorageManager, StorageManagerTrait};
+use cfx_storage::{StorageManager, StorageManagerTrait, StorageStateTrait};
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use hex::FromHex;
 use keylib::KeyPair;
@@ -97,10 +98,14 @@ pub fn load_secrets_file(
     Ok(accounts)
 }
 
-pub fn initialize_internal_contract_accounts(state: &mut State) {
+pub fn initialize_internal_contract_accounts<
+    S: StorageStateTrait + Send + Sync + 'static,
+>(
+    state: &mut StateGeneric<S>,
+) {
     || -> DbResult<()> {
         {
-            for address in InternalContractMap::new().keys() {
+            for address in InternalContractMap::<S>::new().keys() {
                 state.new_contract_with_admin(
                     address,
                     /* No admin; admin = */ &Address::zero(),
@@ -398,6 +403,7 @@ fn execute_genesis_transaction(
     let spec = Spec::new_spec();
     let internal_contract_map = InternalContractMap::new();
 
+    let options = TransactOptions::with_no_tracing();
     let r = {
         Executive::new(
             state,
@@ -406,7 +412,7 @@ fn execute_genesis_transaction(
             &spec,
             &internal_contract_map,
         )
-        .transact(transaction)
+        .transact(transaction, options)
         .unwrap()
     };
 
