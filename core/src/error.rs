@@ -108,10 +108,12 @@ impl fmt::Display for BlockError {
             DuplicateParentOrRefereeHashes(ref hash) => {
                 format!("Duplicate parent or referee hashes: {}", hash)
             }
-            InvalidCustom(ref header_custom, ref expected_custom) => format!(
-                "Invalid custom in header: expected {:?}, get {:?}",
-                expected_custom, header_custom
-            ),
+            InvalidCustom(ref header_custom, ref expected_custom_prefix) => {
+                format!(
+                    "Invalid custom in header: expect prefix {:?}, get {:?}",
+                    expected_custom_prefix, header_custom
+                )
+            }
         };
 
         f.write_fmt(format_args!("Block error ({})", msg))

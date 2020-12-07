@@ -247,7 +247,7 @@ impl BlockGenerator {
             .txpool
             .machine()
             .params()
-            .custom(parent_height + 1)
+            .custom_prefix(parent_height + 1)
             .unwrap_or(vec![]);
         let block_header = BlockHeaderBuilder::new()
             .with_transactions_root(compute_transaction_root(&transactions))
