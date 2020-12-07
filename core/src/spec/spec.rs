@@ -76,7 +76,6 @@ pub struct CommonParams {
     /// The block `custom` field of this height is required to be
     /// `phase2_transition_header_custom`.
     pub phase2_transition: BlockHeight,
-    pub phase2_transition_header_custom_end: BlockHeight,
 }
 
 impl Default for CommonParams {
@@ -96,7 +95,6 @@ impl Default for CommonParams {
             base_block_rewards,
             alt_bn128_transition: i64::MAX as u64,
             phase2_transition: 0,
-            phase2_transition_header_custom_end: 0,
         }
     }
 }
@@ -105,10 +103,8 @@ impl CommonParams {
     pub fn common_params(
         chain_id: ChainIdParams, anticone_penalty_ratio: u64,
         phase2_transition: BlockHeight,
-        phase2_transition_header_custom_end: BlockHeight,
     ) -> Self
     {
-        assert!(phase2_transition_header_custom_end >= phase2_transition, "phase2_transition_header_custom_end cannot be less than phase2_transition!");
         let mut base_block_rewards = BTreeMap::new();
         base_block_rewards.insert(0, INITIAL_BASE_MINING_REWARD_IN_UCFX.into());
         base_block_rewards
@@ -118,8 +114,6 @@ impl CommonParams {
         params.anticone_penalty_ratio = anticone_penalty_ratio;
         params.phase2_transition = phase2_transition;
         params.alt_bn128_transition = phase2_transition;
-        params.phase2_transition_header_custom_end =
-            phase2_transition_header_custom_end;
         params.base_block_rewards = base_block_rewards;
         params
     }
@@ -137,10 +131,8 @@ impl CommonParams {
         U512::from(start_base_ward) * U512::from(ONE_UCFX_IN_DRIP)
     }
 
-    pub fn custom(&self, height: BlockHeight) -> Option<Vec<Bytes>> {
-        if height >= self.phase2_transition
-            && height <= self.phase2_transition_header_custom_end
-        {
+    pub fn custom_prefix(&self, height: BlockHeight) -> Option<Vec<Bytes>> {
+        if height >= self.phase2_transition {
             Some(vec![PHASE2_HEADER_CUSTOM.to_vec()])
         } else {
             None

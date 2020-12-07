@@ -336,8 +336,24 @@ impl VerificationConfig {
         // including results of new rewards will in the header after another
         // REWARD_EPOCH_COUNT + DEFERRED_STATE_EPOCH_COUNT epochs.
         if let Some(expected_custom) =
-            self.machine.params().custom(header.height())
+            self.machine.params().custom_prefix(header.height())
         {
+            for (i, expected_bytes) in expected_custom.iter().enumerate() {
+                let header_custum = header.custom();
+                // Header custom is too short.
+                let b =
+                    header_custum.get(i).ok_or(BlockError::InvalidCustom(
+                        header_custum.clone(),
+                        expected_custom.clone(),
+                    ))?;
+                if b != expected_bytes {
+                    return Err(BlockError::InvalidCustom(
+                        header_custum.clone(),
+                        expected_custom.clone(),
+                    )
+                    .into());
+                }
+            }
             if *header.custom() != expected_custom {
                 return Err(BlockError::InvalidCustom(
                     header.custom().clone(),
