@@ -203,7 +203,6 @@ pub fn initialize_common_modules(
             consensus_conf.chain_id.clone(),
             conf.raw_conf.anticone_penalty_ratio,
             conf.raw_conf.phase2_transition_height,
-            conf.raw_conf.phase2_transition_header_custom_end_height,
         )));
 
     let genesis_block = genesis_block(
