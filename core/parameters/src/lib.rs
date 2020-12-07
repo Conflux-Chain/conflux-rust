@@ -41,7 +41,7 @@ pub mod consensus {
     pub const ONE_GDRIP_IN_DRIP: u64 = 1_000_000_000;
 
     pub const PHASE2_HEIGHT: u64 = 4_990_000;
-    pub const BN128_ENABLE_NUMBER: u64 = 7_590_000;
+    pub const BN128_ENABLE_NUMBER: u64 = 5_940_000;
 
     pub const PHASE2_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [1];
 }
