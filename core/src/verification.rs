@@ -355,13 +355,6 @@ impl VerificationConfig {
                     .into());
                 }
             }
-            if *header.custom() != expected_custom_prefix {
-                return Err(BlockError::InvalidCustom(
-                    header.custom().clone(),
-                    expected_custom_prefix,
-                )
-                .into());
-            }
         }
 
         // verify POW
