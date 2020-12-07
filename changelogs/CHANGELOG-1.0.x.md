@@ -2,8 +2,8 @@
 
 ## Incompatible changes
 
-- Reduce the block base reward to 2 CFX from the height 4,855,000.
-- Blocks from height 4,855,000 to 5,000,000 (both included) are required to set their `custom` field in the header to be `[1]`.
+- Reduce the block base reward to 2 CFX from the epoch number 4,990,000.
+- Blocks from the height 4,990,000 (included) are required to set their `custom` field in the header to be `[1]`.
 
 ## Improvements
 
