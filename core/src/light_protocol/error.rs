@@ -221,12 +221,12 @@ pub fn handle(
 
 
         ErrorKind::GenesisMismatch{..}
+        | ErrorKind::InvalidHeader
         | ErrorKind::ChainIdMismatch{..}
         | ErrorKind::UnexpectedMessage{..}
         | ErrorKind::UnexpectedPeerType{..} => op = Some(UpdateNodeOperation::Failure),
 
-        ErrorKind::InvalidHeader
-        | ErrorKind::UnexpectedResponse{..} => {
+        ErrorKind::UnexpectedResponse{..} => {
             op = Some(UpdateNodeOperation::Demotion)
         }
 
