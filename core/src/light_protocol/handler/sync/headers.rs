@@ -7,7 +7,7 @@ use crate::{
     light_protocol::{
         common::{FullPeerState, Peers},
         message::{msgid, GetBlockHeaders},
-        Error, LightNodeConfiguration,
+        Error, ErrorKind, LightNodeConfiguration,
     },
     message::{Message, RequestId},
     sync::SynchronizationGraph,
@@ -193,6 +193,7 @@ impl Headers {
     ) -> Result<(), Error>
     {
         let mut missing = HashSet::new();
+        let mut has_invalid_header = false;
 
         // TODO(thegaram): validate header timestamps
         for header in headers {
@@ -227,6 +228,17 @@ impl Headers {
                 true,  /* persistent */
             );
 
+            if insert_result.is_invalid() {
+                debug!(
+                    "Received invalid header {:?} from peer {:?}",
+                    hash, peer
+                );
+                has_invalid_header = true;
+                continue;
+            }
+
+            // the header is likely to be new as we checked this before, but we
+            // still want to avoid unnecessarily re-requesting its ancestors
             if !insert_result.is_new_valid() {
                 continue;
             }
@@ -243,6 +255,11 @@ impl Headers {
 
         let missing = missing.into_iter();
         self.request(missing, HashSource::Dependency);
+
+        // disconnect peers who send invalid headers
+        if has_invalid_header {
+            bail!(ErrorKind::InvalidHeader);
+        }
 
         Ok(())
     }

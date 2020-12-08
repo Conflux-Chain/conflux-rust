@@ -59,6 +59,11 @@ error_chain! {
             display("Logs bloom hash validation for epoch {} failed, expected={:?}, received={:?}", epoch, expected, received),
         }
 
+        InvalidHeader {
+            description("Header verification failed"),
+            display("Header verification failed"),
+        }
+
         InvalidLedgerProofSize{ hash: H256, expected: u64, received: u64 } {
             description("Invalid ledger proof size"),
             display("Invalid ledger proof size for header {:?}: expected={}, received={}", hash, expected, received),
@@ -220,7 +225,8 @@ pub fn handle(
         | ErrorKind::UnexpectedMessage{..}
         | ErrorKind::UnexpectedPeerType{..} => op = Some(UpdateNodeOperation::Failure),
 
-        ErrorKind::UnexpectedResponse{..} => {
+        ErrorKind::InvalidHeader
+        | ErrorKind::UnexpectedResponse{..} => {
             op = Some(UpdateNodeOperation::Demotion)
         }
 
