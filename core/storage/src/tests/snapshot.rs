@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::storage_db::SnapshotMptTraitReadAndIterate;
-
 #[cfg(test)]
 mod slicer;
 #[cfg(test)]
@@ -624,7 +622,8 @@ use crate::{
     },
     storage_db::{
         snapshot_mpt::CHECK_LOADED_SNAPSHOT_MPT_NODE, SnapshotMptIteraterTrait,
-        SnapshotMptNode, SnapshotMptTraitRead, SnapshotMptTraitRw,
+        SnapshotMptNode, SnapshotMptTraitRead, SnapshotMptTraitReadAndIterate,
+        SnapshotMptTraitRw,
     },
 };
 use fallible_iterator::FallibleIterator;
@@ -645,7 +644,7 @@ use crate::{
         snapshot::verifier::FakeSnapshotDb, DumpedMptKvIterator,
         TEST_NUMBER_OF_KEYS,
     },
-    StateIndex,
+    StateIndex, StorageStateTraitExt,
 };
 #[cfg(test)]
 use parking_lot::Mutex;
