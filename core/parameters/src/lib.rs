@@ -41,10 +41,10 @@ pub mod consensus {
     pub const ONE_GDRIP_IN_DRIP: u64 = 1_000_000_000;
 
     /// About 2020.12.11-15:30 for both the height and the block number.
-    pub const PHASE2_HEIGHT: u64 = 3_645_000;
-    pub const BN128_ENABLE_NUMBER: u64 = 7_590_000;
+    pub const TANZANITE_HEIGHT: u64 = 3_615_000;
+    pub const BN128_ENABLE_NUMBER: u64 = 7_600_000;
 
-    pub const PHASE2_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [1];
+    pub const TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [1];
 }
 
 pub mod consensus_internal {
@@ -62,7 +62,7 @@ pub mod consensus_internal {
     // The average number of blocks mined per quarter.
     pub const MINED_BLOCK_COUNT_PER_QUARTER: u64 = 15_768_000;
 
-    pub const MINING_REWARD_PHASE2_IN_UCFX: u64 = 2_000_000;
+    pub const MINING_REWARD_TANZANITE_IN_UCFX: u64 = 2_000_000;
     pub const GENESIS_TOKEN_COUNT_IN_CFX: u64 = 5_000_000_000;
     pub const TWO_YEAR_UNLOCK_TOKEN_COUNT_IN_CFX: u64 = 800_000_000;
 

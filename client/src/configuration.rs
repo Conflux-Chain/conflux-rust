@@ -127,7 +127,7 @@ build_config! {
         (genesis_accounts, (Option<String>), None)
         (genesis_secrets, (Option<String>), None)
         (initial_difficulty, (Option<u64>), None)
-        (phase2_transition_height, (u64), PHASE2_HEIGHT)
+        (tanzanite_transition_height, (u64), TANZANITE_HEIGHT)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)

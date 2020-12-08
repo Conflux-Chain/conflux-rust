@@ -202,7 +202,7 @@ pub fn initialize_common_modules(
         Arc::new(new_machine_with_builtin(CommonParams::common_params(
             consensus_conf.chain_id.clone(),
             conf.raw_conf.anticone_penalty_ratio,
-            conf.raw_conf.phase2_transition_height,
+            conf.raw_conf.tanzanite_transition_height,
         )));
 
     let genesis_block = genesis_block(
