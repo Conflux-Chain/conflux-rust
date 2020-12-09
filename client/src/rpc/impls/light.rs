@@ -42,8 +42,7 @@ use crate::{
             EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
             Log as RpcLog, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
             SendTxRequest, Status as RpcStatus, SyncGraphStates,
-            TokenSupplyInfo, Transaction as RpcTransaction, TxPoolPendingInfo,
-            TxWithPoolInfo,
+            Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
         },
         RpcBoxFuture,
     },
@@ -969,7 +968,6 @@ impl Cfx for CfxHandler {
         fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
         fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<EstimateGasAndCollateralResponse>;
         fn get_block_reward_info(&self, num: EpochNumber) -> RpcResult<Vec<RpcRewardInfo>>;
-        fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> RpcResult<TokenSupplyInfo>;
     }
 }
 
