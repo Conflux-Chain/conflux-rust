@@ -509,6 +509,7 @@ dependencies = [
  "cfx-bytes",
  "cfx-internal-common",
  "cfx-types",
+ "delegate 0.5.0",
  "derivative",
  "error-chain",
  "fallible-iterator",
@@ -776,7 +777,7 @@ dependencies = [
  "criterion",
  "ctrlc",
  "db",
- "delegate",
+ "delegate 0.4.2",
  "dir",
  "error-chain",
  "futures 0.3.8",
@@ -1165,6 +1166,17 @@ dependencies = [
 [[package]]
 name = "delegate"
 version = "0.4.2"
+dependencies = [
+ "proc-macro2 1.0.24",
+ "quote 1.0.7",
+ "syn 1.0.52",
+]
+
+[[package]]
+name = "delegate"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a57ed03a3563e9d6214c1eec5bd3b151fc21fb2052448b97692c8df30d113c8c"
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.7",

@@ -190,7 +190,7 @@ mod tests {
             let key = into_simple_mpt_key(k, num_items);
             let proof = simple_mpt_proof(&mut mpt, &key);
 
-            assert!(proof_size.contains(&proof.get_proof_nodes().len()));
+            assert!(proof_size.contains(&proof.number_nodes()));
 
             // proof should be able to verify correct k-v
             assert!(proof.is_valid_kv(

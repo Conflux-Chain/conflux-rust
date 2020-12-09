@@ -163,6 +163,8 @@ pub use self::{
             simple_mpt::*, KVInserter, MptKeyValue, TrieProof,
         },
         node_merkle_proof::{NodeMerkleProof, StorageRootProof},
+        proof_merger::StateProofMerger,
+        recording_storage::RecordingStorage,
         snapshot_sync::{FullSyncVerifier, MptSlicer},
         state_proof::StateProof,
         storage_db::{

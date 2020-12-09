@@ -11,6 +11,7 @@ cfg-if = "0.1"
 cfx-bytes = { path = "../../cfx_bytes" }
 cfx-internal-common = { path = "../internal_common" }
 cfx-types = { path = "../../cfx_types" }
+delegate = "0.5.0"
 derivative = "2.0.2"
 error-chain = { version = "0.12", default-features = false }
 fallible-iterator = "0.2"
