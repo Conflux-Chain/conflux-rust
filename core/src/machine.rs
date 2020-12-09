@@ -5,62 +5,12 @@
 use super::builtin::Builtin;
 use crate::{
     builtin::{builtin_factory, AltBn128PairingPricer, Linear, ModexpPricer},
+    spec::CommonParams,
     vm::Spec,
 };
-use cfx_internal_common::ChainIdParams;
-use cfx_types::{Address, H256, U256};
+use cfx_types::{Address, H256};
 use primitives::BlockNumber;
 use std::{collections::BTreeMap, sync::Arc};
-
-#[derive(Debug, Default)]
-pub struct CommonParams {
-    /// Account start nonce.
-    pub account_start_nonce: U256,
-    /// Maximum size of extra data.
-    pub maximum_extra_data_size: usize,
-    /// Network id.
-    pub network_id: u64,
-    /// Chain id.
-    pub chain_id: ChainIdParams,
-    /// Main subprotocol name.
-    pub subprotocol_name: String,
-    /// Minimum gas limit.
-    pub min_gas_limit: U256,
-    /// Gas limit bound divisor (how much gas limit can change per block)
-    pub gas_limit_bound_divisor: U256,
-    /// Node permission managing contract address.
-    pub node_permission_contract: Option<Address>,
-    /// Maximum contract code size that can be deployed.
-    pub max_code_size: u64,
-    /// Number of first block where max code size limit is active.
-    pub max_code_size_transition: BlockNumber,
-    /// Maximum size of transaction's RLP payload.
-    pub max_transaction_size: usize,
-
-    /// Number of first block where ec built-in contract enabled.
-    pub alt_bn128_transition: u64,
-}
-
-impl CommonParams {
-    fn common_params(chain_id: ChainIdParams) -> Self {
-        CommonParams {
-            account_start_nonce: 0x00.into(),
-            maximum_extra_data_size: 0x20,
-            network_id: 0x1,
-            chain_id,
-            subprotocol_name: "cfx".into(),
-            min_gas_limit: 10_000_000.into(),
-            gas_limit_bound_divisor: 0x0400.into(),
-            node_permission_contract: None,
-            max_code_size: 24576,
-            max_code_size_transition: 0,
-            max_transaction_size: 300 * 1024,
-            alt_bn128_transition: i64::MAX as u64, /* TODO: Update it when
-                                                    * the time point of the
-                                                    * next update enabled. */
-        }
-    }
-}
 
 pub type SpecCreationRules = dyn Fn(&mut Spec, BlockNumber) + Sync + Send;
 
@@ -103,17 +53,16 @@ impl Machine {
     pub fn builtins(&self) -> &BTreeMap<Address, Builtin> { &*self.builtins }
 }
 
-pub fn new_machine(chain_id: ChainIdParams) -> Machine {
+pub fn new_machine(params: CommonParams) -> Machine {
     Machine {
-        params: CommonParams::common_params(chain_id),
+        params,
         builtins: Arc::new(BTreeMap::new()),
         spec_rules: None,
     }
 }
 
-pub fn new_machine_with_builtin(chain_id: ChainIdParams) -> Machine {
+pub fn new_machine_with_builtin(params: CommonParams) -> Machine {
     let mut btree = BTreeMap::new();
-    let params = CommonParams::common_params(chain_id);
     btree.insert(
         Address::from(H256::from_low_u64_be(1)),
         Builtin::new(

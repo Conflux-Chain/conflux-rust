@@ -589,7 +589,7 @@ impl SynchronizationProtocolHandler {
         // NOTE, DO NOT USE WILDCARD IN THE FOLLOWING MATCH STATEMENT!
         // COMPILER WILL HELP TO FIND UNHANDLED ERROR CASES.
         match e.0 {
-            ErrorKind::InvalidBlock => op = Some(UpdateNodeOperation::Demotion),
+            ErrorKind::InvalidBlock => op = Some(UpdateNodeOperation::Failure),
             ErrorKind::InvalidGetBlockTxn(_) => {
                 op = Some(UpdateNodeOperation::Demotion)
             }
