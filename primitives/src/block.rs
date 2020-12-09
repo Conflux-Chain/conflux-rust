@@ -17,6 +17,7 @@ use std::{
 };
 
 pub type BlockNumber = u64;
+pub type BlockHeight = u64;
 
 /// A block, encoded as it is on the block chain.
 #[derive(Debug, Clone, PartialEq)]

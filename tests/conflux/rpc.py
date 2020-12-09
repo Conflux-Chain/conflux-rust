@@ -395,3 +395,7 @@ class RpcClient:
             return self.node.cfx_call(tx)
         else:
             return self.node.cfx_call(tx, epoch)
+
+
+    def get_block_count(self):
+        return self.node.getblockcount()

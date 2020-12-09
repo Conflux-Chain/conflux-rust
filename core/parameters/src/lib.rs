@@ -39,6 +39,12 @@ pub mod consensus {
     pub const ONE_UCFX_IN_DRIP: u64 = 1_000_000_000_000;
 
     pub const ONE_GDRIP_IN_DRIP: u64 = 1_000_000_000;
+
+    /// About 2020.12.11-15:30 for both the height and the block number.
+    pub const TANZANITE_HEIGHT: u64 = 3_615_000;
+    pub const BN128_ENABLE_NUMBER: u64 = 7_600_000;
+
+    pub const TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [1];
 }
 
 pub mod consensus_internal {
@@ -53,23 +59,10 @@ pub mod consensus_internal {
     pub const EPOCH_EXECUTED_BLOCK_BOUND: usize = 200;
     // The initial base mining reward in uCFX.
     pub const INITIAL_BASE_MINING_REWARD_IN_UCFX: u64 = 7_000_000;
-    // The ultimate base mining reward in uCFX.
-    pub const ULTIMATE_BASE_MINING_REWARD_IN_UCFX: u64 = 1_750_000;
-    pub const INITIAL_NO_DECAY_PERIOD: u64 = MINED_BLOCK_COUNT_PER_QUARTER * 16;
     // The average number of blocks mined per quarter.
     pub const MINED_BLOCK_COUNT_PER_QUARTER: u64 = 15_768_000;
-    // The `MINING_REWARD_DECAY_RATIO_PER_QUARTER` equals to `(1/2)^(1/16)`,
-    // which is about 0.9576.
-    pub const MINING_REWARD_TABLE_IN_UCFX: [u64;
-        MINING_REWARD_DECAY_PERIOD_IN_QUARTER] = [
-        7_000_000, 6_703_222, 6_419_028, 6_146_882, 5_886_274, 5_636_716,
-        5_397_737, 5_168_891, 4_949_747, 4_739_894, 4_538_938, 4_346_502,
-        4_162_224, 3_985_760, 3_816_777, 3_654_958, 3_500_000, 3_351_611,
-        3_209_514, 3_073_441, 2_943_137, 2_818_358, 2_698_868, 2_584_445,
-        2_474_873, 2_369_947, 2_269_469, 2_173_251, 2_081_112, 1_992_880,
-        1_908_388, 1_827_479,
-    ];
 
+    pub const MINING_REWARD_TANZANITE_IN_UCFX: u64 = 2_000_000;
     pub const GENESIS_TOKEN_COUNT_IN_CFX: u64 = 5_000_000_000;
     pub const TWO_YEAR_UNLOCK_TOKEN_COUNT_IN_CFX: u64 = 800_000_000;
 

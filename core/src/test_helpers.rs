@@ -1,6 +1,6 @@
 use crate::{
     evm::{Factory, Spec},
-    genesis::initialize_internal_contract_accounts,
+    spec::genesis::initialize_internal_contract_accounts,
     state::State,
 };
 use cfx_statedb::StateDb;

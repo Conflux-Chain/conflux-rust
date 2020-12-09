@@ -1,3 +1,13 @@
+# 1.1.0
+
+## Incompatible changes
+
+- CIP-38: Reduce the block base reward to 2 CFX from the epoch number 3,615,000.
+- CIP-39: Blocks from the height 3,615,000 (included) are required to set the first element of their `custom` field in the header to `[1]`.
+
+## Improvements
+- Return the `custom` field in the block header for related RPCs (`cfx_getBlockByHash`, `cfx_getBlockByHashWithPivotAssumption`, `cfx_getBlockByEpochNumber`).
+
 - Add config parameter `executive_trace` to allow storing block execution traces. (default is `false`)
 - Add config parameter `enable_tracing` to allow public access to `trace_*` RPC APIs. (default is `false`)
 - Add new rpc `trace_block` for archive/full nodes. (only works for blocks processed after setting `executive_trace`)
