@@ -2,6 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+// `TrieProofMerger` and `StateProofMerger` allow us to combine multiple proofs
+// into a single proof. Any key that can be verified by any of the original
+// proofs can also be verified by the combined proof. While a single proof is
+// usually a path in the MPT from the root to a node, the combined proof is a
+// subtree rooted at the MPT's root.
+
 #[derive(Debug, Default)]
 struct TrieProofMerger {
     hashes: HashSet<MerkleHash>,

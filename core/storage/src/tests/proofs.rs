@@ -605,9 +605,6 @@ fn test_recording_storage() {
     }
 
     for key in &read_none {
-        let mut value = key.clone();
-        value[0] = !value[0];
-
         assert!(!proof.is_valid_kv(
             key,
             vec![1][..].into(),
