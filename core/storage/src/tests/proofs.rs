@@ -159,15 +159,24 @@ fn generate_random_state(
     epoch_id_2.as_bytes_mut()[0] = 3;
     let _root_2 = state_2.compute_state_root().unwrap();
     state_2.commit(epoch_id_2).unwrap();
-    // println!("root = {:?}", root);
 
     keys.shuffle(rng);
 
     (state_manager, state_2, intermediate_padding, keys)
 }
 
+fn select_keys(
+    rng: &mut ChaChaRng, existing_keys: &Vec<Vec<u8>>,
+) -> Vec<Vec<u8>> {
+    existing_keys
+        .iter()
+        .filter(|_| rng.gen_bool(0.1))
+        .cloned()
+        .collect()
+}
+
 fn generate_nonexistent_keys(
-    rng: &mut ChaChaRng, existing_keys: Vec<Vec<u8>>,
+    rng: &mut ChaChaRng, existing_keys: &Vec<Vec<u8>>,
 ) -> Vec<Vec<u8>> {
     generate_account_keys(TEST_NUMBER_OF_KEYS)
         .into_iter()
@@ -292,7 +301,7 @@ fn test_valid_state_proof_for_nonexistent_key() {
     // note: do not drop state_manager (_mgr)
     let (_mgr, state, padding, keys) = generate_random_state(&mut rng);
     let root = state.get_state_root().unwrap().state_root;
-    let keys = generate_nonexistent_keys(&mut rng, keys);
+    let keys = generate_nonexistent_keys(&mut rng, &keys);
 
     for key in keys {
         let (value, proof) = state
@@ -424,7 +433,7 @@ fn test_valid_node_merkle_proof_for_nonexistent_key() {
     // note: do not drop state_manager (_mgr)
     let (_mgr, state, padding, keys) = generate_random_state(&mut rng);
     let root = state.get_state_root().unwrap().state_root;
-    let keys = generate_nonexistent_keys(&mut rng, keys);
+    let keys = generate_nonexistent_keys(&mut rng, &keys);
 
     for key in keys {
         let (triplet, proof) = state
@@ -531,6 +540,99 @@ fn test_invalid_node_merkle_proof() {
     }
 }
 
+#[test]
+fn test_recording_storage() {
+    let mut rng = get_rng_for_test();
+
+    // note: do not drop state_manager (_mgr)
+    let (_mgr, state, padding, keys) = generate_random_state(&mut rng);
+
+    let state = RecordingStorage::new(state);
+    let root = state.get_state_root().unwrap().state_root;
+
+    let read_some = select_keys(&mut rng, &keys);
+    let read_none = generate_nonexistent_keys(&mut rng, &keys);
+    let read_all: Vec<_> =
+        read_some.iter().chain(read_none.iter()).cloned().collect();
+
+    // lookup keys
+    for key in &read_all {
+        let _value = state
+            .get(StorageKey::AccountKey(key))
+            .expect("kv lookup failed");
+    }
+
+    // extract proof
+    let proof = state.try_into_proof().expect("proof is inconsistent");
+
+    // proof should work for all keys read
+    for key in &read_some {
+        assert!(proof.is_valid_kv(
+            key,
+            key[..].into(),
+            root.clone(),
+            Some(padding.clone())
+        ));
+    }
+
+    for key in &read_none {
+        assert!(proof.is_valid_kv(
+            key,
+            None,
+            root.clone(),
+            Some(padding.clone())
+        ));
+    }
+
+    // proof should not work with incorrect value
+    for key in &read_some {
+        let mut value = key.clone();
+        value[0] = !value[0];
+
+        assert!(!proof.is_valid_kv(
+            key,
+            value[..].into(),
+            root.clone(),
+            Some(padding.clone())
+        ));
+
+        assert!(!proof.is_valid_kv(
+            key,
+            None,
+            root.clone(),
+            Some(padding.clone())
+        ));
+    }
+
+    for key in &read_none {
+        let mut value = key.clone();
+        value[0] = !value[0];
+
+        assert!(!proof.is_valid_kv(
+            key,
+            vec![1][..].into(),
+            root.clone(),
+            Some(padding.clone())
+        ));
+    }
+
+    // proof should not work for any other keys
+    for key in generate_nonexistent_keys(&mut rng, &read_all) {
+        let can_prove = proof.is_valid_kv(
+            &key,
+            key[..].into(),
+            root.clone(),
+            Some(padding.clone()),
+        );
+
+        // note: a proof might incidentally prove other key-value pairs in the
+        // state. for instance, a nonexistence proof for a key might happen to
+        // prove the existence of another.
+
+        assert!(!can_prove || keys.contains(&key));
+    }
+}
+
 use crate::{
     state::*,
     state_manager::*,
@@ -539,6 +641,7 @@ use crate::{
         new_state_manager_for_unit_test_with_snapshot_epoch_count,
         FakeStateManager, TEST_NUMBER_OF_KEYS,
     },
+    RecordingStorage,
 };
 use cfx_types::H256;
 use primitives::{
