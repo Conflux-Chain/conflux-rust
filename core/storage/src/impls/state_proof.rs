@@ -127,9 +127,206 @@ impl StateProof {
             Some(proof) => proof.is_valid_kv(key, value, snapshot_root),
         }
     }
+
+    pub fn get_value(
+        &self, storage_key: StorageKey, state_root: &StateRoot,
+        maybe_intermediate_padding: &Option<DeltaMptKeyPadding>,
+    ) -> (bool, Option<&[u8]>)
+    {
+        let delta_root = &state_root.delta_root;
+        let intermediate_root = &state_root.intermediate_delta_root;
+        let snapshot_root = &state_root.snapshot_root;
+
+        match self.delta_proof {
+            None => {
+                // empty proof for non-empty trie is invalid
+                if delta_root.ne(&MERKLE_NULL_NODE) {
+                    return (false, None);
+                }
+            }
+
+            Some(ref proof) => {
+                let padding = StorageKey::delta_mpt_padding(
+                    &snapshot_root,
+                    &intermediate_root,
+                );
+
+                let key = storage_key.to_delta_mpt_key_bytes(&padding);
+
+                // check if delta proof is valid
+                match proof.get_value(&key[..], delta_root) {
+                    (false, _) => return (false, None),
+                    (true, Some(x)) => return (true, Some(x)),
+                    _ => {}
+                }
+            }
+        }
+
+        match self.intermediate_proof {
+            None => {
+                // empty proof for non-empty trie is invalid
+                if intermediate_root.ne(&MERKLE_NULL_NODE) {
+                    return (false, None);
+                }
+            }
+
+            Some(ref proof) => {
+                // convert storage key into delta mpt key
+                let key = match maybe_intermediate_padding {
+                    None => return (false, None),
+                    Some(p) => storage_key.to_delta_mpt_key_bytes(&p),
+                };
+
+                // check if intermediate proof is valid
+                match proof.get_value(&key[..], intermediate_root) {
+                    (false, _) => return (false, None),
+                    (true, Some(x)) => return (true, Some(x)),
+                    _ => {}
+                }
+            }
+        }
+
+        match self.snapshot_proof {
+            None => {
+                // empty proof for non-empty trie is invalid
+                if snapshot_root.ne(&MERKLE_NULL_NODE) {
+                    return (false, None);
+                }
+
+                (true, None)
+            }
+
+            Some(ref proof) => {
+                let key = storage_key.to_key_bytes();
+
+                match proof.get_value(&key[..], snapshot_root) {
+                    (false, _) => return (false, None),
+                    (true, Some(x)) => return (true, Some(x)),
+                    _ => return (true, None),
+                }
+            }
+        }
+    }
+
+    pub fn get_all_kv_in_subtree(
+        &self, storage_key_prefix: StorageKey, root: &StateRoot,
+        maybe_intermediate_padding: &Option<DeltaMptKeyPadding>,
+    ) -> (bool, Vec<MptKeyValue>)
+    {
+        let delta_root = &root.delta_root;
+        let intermediate_root = &root.intermediate_delta_root;
+        let snapshot_root = &root.snapshot_root;
+
+        let delta_trie_kvs = match self.delta_proof {
+            None => {
+                // empty proof for non-empty trie is invalid
+                if delta_root.ne(&MERKLE_NULL_NODE) {
+                    return (false, vec![]);
+                }
+
+                None
+            }
+
+            Some(ref proof) => {
+                let padding = StorageKey::delta_mpt_padding(
+                    &snapshot_root,
+                    &intermediate_root,
+                );
+
+                let key = storage_key_prefix.to_delta_mpt_key_bytes(&padding);
+
+                match proof.get_all_kv_in_subtree(&key[..], &delta_root) {
+                    (false, _) => return (false, vec![]),
+                    (true, kvs) => Some(kvs),
+                }
+            }
+        };
+
+        let intermediate_trie_kvs = match self.intermediate_proof {
+            None => {
+                // empty proof for non-empty trie is invalid
+                if intermediate_root.ne(&MERKLE_NULL_NODE) {
+                    return (false, vec![]);
+                }
+
+                None
+            }
+
+            Some(ref proof) => {
+                // convert storage key into delta mpt key
+                let key = match maybe_intermediate_padding {
+                    None => return (false, vec![]),
+                    Some(p) => storage_key_prefix.to_delta_mpt_key_bytes(&p),
+                };
+
+                match proof.get_all_kv_in_subtree(&key[..], &intermediate_root)
+                {
+                    (false, _) => return (false, vec![]),
+                    (true, kvs) => Some(kvs),
+                }
+            }
+        };
+
+        let snapshot_kvs = match self.snapshot_proof {
+            None => {
+                // empty proof for non-empty trie is invalid
+                if snapshot_root.ne(&MERKLE_NULL_NODE) {
+                    return (false, vec![]);
+                }
+
+                None
+            }
+
+            Some(ref proof) => {
+                let key = storage_key_prefix.to_key_bytes();
+
+                match proof.get_all_kv_in_subtree(&key[..], &snapshot_root) {
+                    (false, _) => return (false, vec![]),
+                    (true, kvs) => Some(kvs),
+                }
+            }
+        };
+
+        // collect visited keys
+        let mut visited = std::collections::HashSet::new();
+        let mut result = vec![];
+
+        if let Some(kvs) = delta_trie_kvs {
+            for (k, v) in kvs {
+                if !visited.contains(&k) && v.len() > 0 {
+                    let storage_key = StorageKey::from_delta_mpt_key(&k);
+                    let k = storage_key.to_key_bytes();
+                    visited.insert(k.clone());
+                    result.push((k, v));
+                }
+            }
+        }
+
+        if let Some(kvs) = intermediate_trie_kvs {
+            for (k, v) in kvs {
+                if !visited.contains(&k) && v.len() > 0 {
+                    let storage_key = StorageKey::from_delta_mpt_key(&k);
+                    let k = storage_key.to_key_bytes();
+                    visited.insert(k.clone());
+                    result.push((k, v));
+                }
+            }
+        }
+
+        if let Some(kvs) = snapshot_kvs {
+            for (k, v) in kvs {
+                if !visited.contains(&k) && v.len() > 0 {
+                    // visited.insert(k.clone());
+                    result.push((k, v));
+                }
+            }
+        }
+
+        (true, result)
+    }
 }
 
-use crate::impls::merkle_patricia_trie::TrieProof;
+use crate::impls::merkle_patricia_trie::{MptKeyValue, TrieProof};
 use primitives::{
     CheckInput, DeltaMptKeyPadding, MptValue, StateRoot, StorageKey,
     MERKLE_NULL_NODE,

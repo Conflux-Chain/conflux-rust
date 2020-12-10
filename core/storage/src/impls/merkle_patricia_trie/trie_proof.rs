@@ -253,6 +253,110 @@ impl TrieProof {
         }
     }
 
+    pub fn get_all_kv_in_subtree(
+        &self, path: &[u8], root: &MerkleHash,
+    ) -> (bool, Vec<MptKeyValue>) {
+        // empty trie
+        if root == &MERKLE_NULL_NODE {
+            return (true, vec![]);
+        }
+
+        // traverse the trie along `path`
+        let mut key = path;
+        let mut hash = root;
+
+        loop {
+            let node = match self.merkle_to_node_index.get(hash) {
+                Some(node_index) => self
+                    .nodes
+                    .get(*node_index)
+                    .expect("Proof node guaranteed to exist"),
+                None => {
+                    // Missing node. The proof can be invalid or incomplete for
+                    // the key. We do not return partial results.
+                    return (false, vec![]);
+                }
+            };
+
+            match node.walk::<access_mode::Read>(key) {
+                WalkStop::Arrived => {
+                    break;
+                }
+                WalkStop::PathDiverted { .. } => {
+                    // TODO: implement this
+                    // TODO: try to trigger this in test
+                    unimplemented!()
+                }
+                WalkStop::ChildNotFound { .. } => {
+                    return (true, vec![]);
+                }
+                WalkStop::Descent {
+                    key_remaining,
+                    child_node,
+                    ..
+                } => {
+                    hash = child_node;
+                    key = key_remaining;
+                }
+            }
+        }
+
+        // traverse subtree using BFS
+        let key_prefix: CompressedPathRaw = path.into();
+
+        // queue elements are <node-hash, maybe-child-id, key-prefix>
+        // node-hash: hash of the node to be visited
+        // maybe-child-id: the id of this node in its parent
+        // key-prefix: key prefix leading to this node
+        let mut queue = VecDeque::new();
+        queue.push_back((hash, None, key_prefix));
+
+        let mut kv: Vec<MptKeyValue> = vec![];
+
+        loop {
+            let (hash, maybe_child_id, key_prefix) = match queue.pop_front() {
+                None => break,
+                Some(h) => h,
+            };
+
+            // visit node
+            let node = match self.merkle_to_node_index.get(hash) {
+                Some(node_index) => self
+                    .nodes
+                    .get(*node_index)
+                    .expect("Proof node guaranteed to exist"),
+                None => {
+                    // Missing node. The proof can be invalid or incomplete for
+                    // the key. We do not return partial results.
+                    return (false, vec![]);
+                }
+            };
+
+            let key = match maybe_child_id {
+                None => key_prefix,
+                Some(id) => CompressedPathRaw::join_connected_paths(
+                    &key_prefix,
+                    id,
+                    &node.compressed_path_ref(),
+                ),
+            };
+
+            // store key-value pair if node contains value
+            if let MptValue::Some(value) = node.value_as_slice() {
+                let key = key.path_slice().to_vec();
+                kv.push((key, value.into()));
+            }
+
+            // iterate all children
+            for (id, child_hash) in node.get_children_table_ref().iter() {
+                assert_ne!(*child_hash, MERKLE_NULL_NODE);
+                queue.push_back((child_hash, Some(id), key.clone()));
+            }
+        }
+
+        (true, kv)
+    }
+
     #[inline]
     pub fn number_nodes(&self) -> usize { self.nodes.len() }
 
@@ -389,7 +493,7 @@ use crate::{
         merkle_patricia_trie::{
             merkle::compute_merkle,
             walk::{TrieNodeWalkTrait, WalkStop},
-            CompressedPathRaw, CompressedPathTrait, TrieNodeTrait,
+            CompressedPathRaw, CompressedPathTrait, MptKeyValue, TrieNodeTrait,
             VanillaChildrenTable, VanillaTrieNode, CHILDREN_COUNT,
         },
     },
@@ -399,6 +503,6 @@ use cfx_types::H256;
 use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
 use rlp::*;
 use std::{
-    collections::{hash_map::RandomState, HashMap},
+    collections::{hash_map::RandomState, HashMap, VecDeque},
     ops::{Deref, DerefMut},
 };
