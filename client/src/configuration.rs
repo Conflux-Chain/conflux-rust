@@ -29,6 +29,7 @@ use cfxcore::{
     consensus_parameters::*,
     light_protocol::LightNodeConfiguration,
     machine::Machine,
+    spec::CommonParams,
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
     transaction_pool::TxPoolConfig,
@@ -877,6 +878,18 @@ impl Configuration {
                 .raw_conf
                 .ln_num_waiting_headers_threshold,
         }
+    }
+
+    pub fn common_params(&self) -> CommonParams {
+        let mut params = CommonParams::common_params(
+            self.chain_id_params(),
+            self.raw_conf.anticone_penalty_ratio,
+            self.raw_conf.tanzanite_transition_height,
+        );
+        if self.is_test_or_dev_mode() {
+            params.alt_bn128_transition = 0;
+        }
+        params
     }
 }
 
