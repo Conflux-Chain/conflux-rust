@@ -737,10 +737,7 @@ use cfxcore::{
     block_data_manager::BlockDataManager,
     machine::{new_machine_with_builtin, Machine},
     pow::PowComputer,
-    spec::{
-        genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
-        CommonParams,
-    },
+    spec::genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
     statistics::Statistics,
     sync::SyncPhaseType,
     vm_factory::VmFactory,
