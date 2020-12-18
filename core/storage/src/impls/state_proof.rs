@@ -288,14 +288,14 @@ impl StateProof {
         };
 
         // collect visited keys
-        let mut visited = std::collections::HashSet::new();
+        let mut visited = HashSet::new();
         let mut result = vec![];
 
         if let Some(kvs) = delta_trie_kvs {
             for (k, v) in kvs {
+                let k = StorageKey::from_delta_mpt_key(&k).to_key_bytes();
+
                 if !visited.contains(&k) && v.len() > 0 {
-                    let storage_key = StorageKey::from_delta_mpt_key(&k);
-                    let k = storage_key.to_key_bytes();
                     visited.insert(k.clone());
                     result.push((k, v));
                 }
@@ -304,9 +304,9 @@ impl StateProof {
 
         if let Some(kvs) = intermediate_trie_kvs {
             for (k, v) in kvs {
+                let k = StorageKey::from_delta_mpt_key(&k).to_key_bytes();
+
                 if !visited.contains(&k) && v.len() > 0 {
-                    let storage_key = StorageKey::from_delta_mpt_key(&k);
-                    let k = storage_key.to_key_bytes();
                     visited.insert(k.clone());
                     result.push((k, v));
                 }
@@ -316,7 +316,6 @@ impl StateProof {
         if let Some(kvs) = snapshot_kvs {
             for (k, v) in kvs {
                 if !visited.contains(&k) && v.len() > 0 {
-                    // visited.insert(k.clone());
                     result.push((k, v));
                 }
             }
@@ -332,3 +331,4 @@ use primitives::{
     MERKLE_NULL_NODE,
 };
 use rlp_derive::{RlpDecodable, RlpEncodable};
+use std::collections::HashSet;

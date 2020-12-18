@@ -25,10 +25,7 @@ impl ProofStorage {
 
 impl StateTrait for ProofStorage {
     fn commit(&mut self, epoch_id: EpochId) -> Result<StateRootWithAuxInfo> {
-        bail!(
-            "ProofStorage is read-only; unexpected call: commit({:?})",
-            epoch_id
-        );
+        bail!("Unexpected call on ProofStorage: commit({:?})", epoch_id);
     }
 
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {
@@ -36,10 +33,7 @@ impl StateTrait for ProofStorage {
     }
 
     fn delete(&mut self, access_key: StorageKey) -> Result<()> {
-        bail!(
-            "ProofStorage is read-only; unexpected call: delete({:?})",
-            access_key
-        );
+        bail!("Unexpected call on ProofStorage: delete({:?})", access_key);
     }
 
     fn delete_all<AM: access_mode::AccessMode>(
@@ -52,7 +46,10 @@ impl StateTrait for ProofStorage {
         );
 
         if !AM::is_read_only() {
-            bail!("ProofStorage is read-only; unexpected call: delete_all<Write>({:?})", access_key_prefix);
+            bail!(
+                "Unexpected call on ProofStorage: delete_all<Write>({:?})",
+                access_key_prefix
+            );
         }
 
         match self.proof.get_all_kv_in_subtree(
@@ -115,7 +112,7 @@ impl StateTrait for ProofStorage {
 
     fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()> {
         bail!(
-            "ProofStorage is read-only; unexpected call: set({:?}, {:?})",
+            "Unexpected call on ProofStorage: set({:?}, {:?})",
             access_key,
             value
         );
