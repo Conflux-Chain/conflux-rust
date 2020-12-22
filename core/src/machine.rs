@@ -4,63 +4,13 @@
 
 use super::builtin::Builtin;
 use crate::{
-    builtin::{builtin_factory, Linear},
+    builtin::{builtin_factory, AltBn128PairingPricer, Linear, ModexpPricer},
+    spec::CommonParams,
     vm::Spec,
 };
-use cfx_internal_common::ChainIdParams;
-use cfx_types::{Address, H256, U256};
+use cfx_types::{Address, H256};
 use primitives::BlockNumber;
-use std::{collections::BTreeMap, str::FromStr, sync::Arc};
-
-#[derive(Debug, Default)]
-pub struct CommonParams {
-    /// Account start nonce.
-    pub account_start_nonce: U256,
-    /// Maximum size of extra data.
-    pub maximum_extra_data_size: usize,
-    /// Network id.
-    pub network_id: u64,
-    /// Chain id.
-    pub chain_id: ChainIdParams,
-    /// Main subprotocol name.
-    pub subprotocol_name: String,
-    /// Minimum gas limit.
-    pub min_gas_limit: U256,
-    /// Gas limit bound divisor (how much gas limit can change per block)
-    pub gas_limit_bound_divisor: U256,
-    /// Registrar contract address.
-    pub registrar: Address,
-    /// Node permission managing contract address.
-    pub node_permission_contract: Option<Address>,
-    /// Maximum contract code size that can be deployed.
-    pub max_code_size: u64,
-    /// Number of first block where max code size limit is active.
-    pub max_code_size_transition: BlockNumber,
-    /// Maximum size of transaction's RLP payload.
-    pub max_transaction_size: usize,
-}
-
-impl CommonParams {
-    fn common_params(chain_id: ChainIdParams) -> Self {
-        CommonParams {
-            account_start_nonce: 0x00.into(),
-            maximum_extra_data_size: 0x20,
-            network_id: 0x1,
-            chain_id,
-            subprotocol_name: "cfx".into(),
-            min_gas_limit: 10_000_000.into(),
-            gas_limit_bound_divisor: 0x0400.into(),
-            registrar: Address::from_str(
-                "c6d9d2cd449a754c494264e1809c50e34d64562b",
-            )
-            .unwrap(),
-            node_permission_contract: None,
-            max_code_size: 24576,
-            max_code_size_transition: 0,
-            max_transaction_size: 300 * 1024,
-        }
-    }
-}
+use std::{collections::BTreeMap, sync::Arc};
 
 pub type SpecCreationRules = dyn Fn(&mut Spec, BlockNumber) + Sync + Send;
 
@@ -103,15 +53,15 @@ impl Machine {
     pub fn builtins(&self) -> &BTreeMap<Address, Builtin> { &*self.builtins }
 }
 
-pub fn new_machine(chain_id: ChainIdParams) -> Machine {
+pub fn new_machine(params: CommonParams) -> Machine {
     Machine {
-        params: CommonParams::common_params(chain_id),
+        params,
         builtins: Arc::new(BTreeMap::new()),
         spec_rules: None,
     }
 }
 
-pub fn new_machine_with_builtin(chain_id: ChainIdParams) -> Machine {
+pub fn new_machine_with_builtin(params: CommonParams) -> Machine {
     let mut btree = BTreeMap::new();
     btree.insert(
         Address::from(H256::from_low_u64_be(1)),
@@ -145,8 +95,40 @@ pub fn new_machine_with_builtin(chain_id: ChainIdParams) -> Machine {
             0,
         ),
     );
+    btree.insert(
+        Address::from(H256::from_low_u64_be(5)),
+        Builtin::new(
+            Box::new(ModexpPricer::new(20)),
+            builtin_factory("modexp"),
+            params.alt_bn128_transition,
+        ),
+    );
+    btree.insert(
+        Address::from(H256::from_low_u64_be(6)),
+        Builtin::new(
+            Box::new(Linear::new(500, 0)),
+            builtin_factory("alt_bn128_add"),
+            params.alt_bn128_transition,
+        ),
+    );
+    btree.insert(
+        Address::from(H256::from_low_u64_be(7)),
+        Builtin::new(
+            Box::new(Linear::new(40_000, 0)),
+            builtin_factory("alt_bn128_mul"),
+            params.alt_bn128_transition,
+        ),
+    );
+    btree.insert(
+        Address::from(H256::from_low_u64_be(8)),
+        Builtin::new(
+            Box::new(AltBn128PairingPricer::new(100_000, 80_000)),
+            builtin_factory("alt_bn128_pairing"),
+            params.alt_bn128_transition,
+        ),
+    );
     Machine {
-        params: CommonParams::common_params(chain_id),
+        params,
         builtins: Arc::new(btree),
         spec_rules: None,
     }

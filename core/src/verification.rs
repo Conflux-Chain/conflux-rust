@@ -5,6 +5,7 @@
 use crate::{
     error::{BlockError, Error},
     executive::Executive,
+    machine::Machine,
     pow::{self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem},
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
     vm,
@@ -23,13 +24,14 @@ use rlp::Encodable;
 use std::{collections::HashSet, convert::TryInto, sync::Arc};
 use unexpected::{Mismatch, OutOfBounds};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct VerificationConfig {
     pub verify_timestamp: bool,
     pub referee_bound: usize,
     pub max_block_size_in_bytes: usize,
     pub transaction_epoch_bound: u64,
     vm_spec: vm::Spec,
+    machine: Arc<Machine>,
 }
 
 /// Create an MPT from the ordered list of block transactions.
@@ -199,7 +201,7 @@ pub fn is_valid_receipt_inclusion_proof(
 impl VerificationConfig {
     pub fn new(
         test_mode: bool, referee_bound: usize, max_block_size_in_bytes: usize,
-        transaction_epoch_bound: u64,
+        transaction_epoch_bound: u64, machine: Arc<Machine>,
     ) -> Self
     {
         if test_mode {
@@ -209,6 +211,7 @@ impl VerificationConfig {
                 max_block_size_in_bytes,
                 transaction_epoch_bound,
                 vm_spec: vm::Spec::new_spec(),
+                machine,
             }
         } else {
             VerificationConfig {
@@ -217,6 +220,7 @@ impl VerificationConfig {
                 max_block_size_in_bytes,
                 transaction_epoch_bound,
                 vm_spec: vm::Spec::new_spec(),
+                machine,
             }
         }
     }
@@ -324,6 +328,33 @@ impl VerificationConfig {
                     found: custom_len,
                 },
             )));
+        }
+
+        // Note that this is just used to rule out deprecated blocks, so the
+        // change of header struct actually happens before the change of
+        // reward is reflected in the state root. The first state root
+        // including results of new rewards will in the header after another
+        // REWARD_EPOCH_COUNT + DEFERRED_STATE_EPOCH_COUNT epochs.
+        if let Some(expected_custom_prefix) =
+            self.machine.params().custom_prefix(header.height())
+        {
+            for (i, expected_bytes) in expected_custom_prefix.iter().enumerate()
+            {
+                let header_custum = header.custom();
+                // Header custom is too short.
+                let b =
+                    header_custum.get(i).ok_or(BlockError::InvalidCustom(
+                        header_custum.clone(),
+                        expected_custom_prefix.clone(),
+                    ))?;
+                if b != expected_bytes {
+                    return Err(BlockError::InvalidCustom(
+                        header_custum.clone(),
+                        expected_custom_prefix.clone(),
+                    )
+                    .into());
+                }
+            }
         }
 
         // verify POW

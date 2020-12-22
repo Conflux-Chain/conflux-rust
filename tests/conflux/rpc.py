@@ -401,3 +401,6 @@ class RpcClient:
             return self.node.cfx_getSupplyInfo()
         else:
             return self.node.cfx_getSupplyInfo(epoch)
+
+    def get_block_count(self):
+        return self.node.getblockcount()

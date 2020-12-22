@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-#[derive(MallocSizeOfDerive)]
+#[derive(MallocSizeOfDerive, Clone)]
 pub struct KvdbRocksdb {
     pub kvdb: Arc<Database>,
     pub col: u32,

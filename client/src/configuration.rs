@@ -28,6 +28,8 @@ use cfxcore::{
     consensus_internal_parameters::*,
     consensus_parameters::*,
     light_protocol::LightNodeConfiguration,
+    machine::Machine,
+    spec::CommonParams,
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
     transaction_pool::TxPoolConfig,
@@ -37,7 +39,7 @@ use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
 use parking_lot::RwLock;
 use rand::Rng;
-use std::convert::TryInto;
+use std::{convert::TryInto, sync::Arc};
 use txgen::TransactionGeneratorConfig;
 
 lazy_static! {
@@ -126,6 +128,7 @@ build_config! {
         (genesis_accounts, (Option<String>), None)
         (genesis_secrets, (Option<String>), None)
         (initial_difficulty, (Option<u64>), None)
+        (tanzanite_transition_height, (u64), TANZANITE_HEIGHT)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
@@ -542,12 +545,15 @@ impl Configuration {
         )
     }
 
-    pub fn verification_config(&self) -> VerificationConfig {
+    pub fn verification_config(
+        &self, machine: Arc<Machine>,
+    ) -> VerificationConfig {
         VerificationConfig::new(
             self.is_test_mode(),
             self.raw_conf.referee_bound,
             self.raw_conf.max_block_size_in_bytes,
             self.raw_conf.transaction_epoch_bound,
+            machine,
         )
     }
 
@@ -799,8 +805,6 @@ impl Configuration {
 
     pub fn execution_config(&self) -> ConsensusExecutionConfiguration {
         ConsensusExecutionConfiguration {
-            anticone_penalty_ratio: self.raw_conf.anticone_penalty_ratio,
-            base_reward_table_in_ucfx: MINING_REWARD_TABLE_IN_UCFX.to_vec(),
             executive_trace: self.raw_conf.executive_trace,
         }
     }
@@ -876,6 +880,18 @@ impl Configuration {
                 .raw_conf
                 .ln_num_waiting_headers_threshold,
         }
+    }
+
+    pub fn common_params(&self) -> CommonParams {
+        let mut params = CommonParams::common_params(
+            self.chain_id_params(),
+            self.raw_conf.anticone_penalty_ratio,
+            self.raw_conf.tanzanite_transition_height,
+        );
+        if self.is_test_or_dev_mode() {
+            params.alt_bn128_transition = 0;
+        }
+        params
     }
 }
 

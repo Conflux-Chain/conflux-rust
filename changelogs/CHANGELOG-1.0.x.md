@@ -1,14 +1,27 @@
+# 1.1.0
+
+## Incompatible changes
+
+- CIP-38: Reduce the block base reward to 2 CFX from the epoch number 3,615,000.
+- CIP-39: Blocks from the height 3,615,000 (included) are required to set the first element of their `custom` field in the header to `[1]`.
+
+## Improvements
+- Return the `custom` field in the block header for related RPCs (`cfx_getBlockByHash`, `cfx_getBlockByHashWithPivotAssumption`, `cfx_getBlockByEpochNumber`).
+
 # 1.0.4
 
 ## Improvements
 
-- Add new rpc `cfx_getSupplyInfo` for archive/full nodes.
-- Add new rpc `trace_block` for archive/full nodes.
+- Add config parameter `executive_trace` to allow storing block execution traces. (default is `false`)
+- Add config parameter `enable_tracing` to allow public access to `trace_*` RPC APIs. (default is `false`)
+- Add new rpc `trace_block` for archive/full nodes. (only works for blocks processed after setting `executive_trace`)
+- Use 0 as default for storage limit in `cfx_sendTransaction` and `cfx_signTransaction`.
 
 ## Bug Fixes
 
 - Change the `blame` field returned from the `newHeads` pub-sub to hex.
-- Fix issue where the `logs` pub-sub API would skip logs.
+- Fix an issue where the `logs` pub-sub API would skip logs.
+- Fix an issue where if miners submit the nonce solution to multiple nodes, some of these nodes may stop mining (Issue #1985).
 
 # 1.0.3
 

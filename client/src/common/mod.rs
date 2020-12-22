@@ -234,9 +234,10 @@ pub fn initialize_common_modules(
         pow.clone(),
     ));
 
+    let verification_config = conf.verification_config(machine.clone());
     let txpool = Arc::new(TransactionPool::new(
         conf.txpool_config(),
-        conf.verification_config(),
+        verification_config.clone(),
         data_man.clone(),
         machine.clone(),
     ));
@@ -255,11 +256,10 @@ pub fn initialize_common_modules(
         pow.clone(),
         notifications.clone(),
         conf.execution_config(),
-        conf.verification_config(),
+        conf.verification_config(machine.clone()),
         node_type,
     ));
 
-    let verification_config = conf.verification_config();
     let sync_config = conf.sync_graph_config();
 
     let sync_graph = Arc::new(SynchronizationGraph::new(
@@ -741,9 +741,9 @@ use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use cfxcore::{
     block_data_manager::BlockDataManager,
-    genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
     machine::{new_machine_with_builtin, Machine},
     pow::PowComputer,
+    spec::genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
     statistics::Statistics,
     sync::SyncPhaseType,
     vm_factory::VmFactory,

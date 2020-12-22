@@ -6,9 +6,9 @@ use crate::{
         ConsensusConfig, ConsensusInnerConfig,
     },
     db::NUM_COLUMNS,
-    genesis::genesis_block,
     machine::new_machine_with_builtin,
     pow::{self, PowComputer, ProofOfWorkConfig},
+    spec::genesis::genesis_block,
     statistics::Statistics,
     sync::{SyncGraphConfig, SynchronizationGraph},
     transaction_pool::TxPoolConfig,
@@ -20,7 +20,6 @@ use cfx_internal_common::ChainIdParamsInner;
 use cfx_parameters::{
     block::{MAX_BLOCK_SIZE_IN_BYTES, REFEREE_DEFAULT_BOUND},
     consensus::{GENESIS_GAS_LIMIT, TRANSACTION_DEFAULT_EPOCH_BOUND},
-    consensus_internal::INITIAL_BASE_MINING_REWARD_IN_UCFX,
     WORKER_COMPUTATION_PARALLELISM,
 };
 use cfx_storage::{StorageConfiguration, StorageManager};
@@ -128,8 +127,7 @@ pub fn initialize_data_manager(
         U256::from(0),
     );
 
-    let machine =
-        Arc::new(new_machine_with_builtin(ChainIdParamsInner::new_simple(0)));
+    let machine = Arc::new(new_machine_with_builtin(Default::default()));
 
     let genesis_block = Arc::new(genesis_block(
         &storage_manager,
@@ -163,14 +161,14 @@ pub fn initialize_synchronization_graph_with_data_manager(
     era_epoch_count: u64, pow: Arc<PowComputer>,
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
 {
+    let machine = Arc::new(new_machine_with_builtin(Default::default()));
     let verification_config = VerificationConfig::new(
         true, /* test_mode */
         REFEREE_DEFAULT_BOUND,
         MAX_BLOCK_SIZE_IN_BYTES,
         TRANSACTION_DEFAULT_EPOCH_BOUND,
+        machine.clone(),
     );
-
-    let machine = Arc::new(new_machine_with_builtin(Default::default()));
 
     let txpool = Arc::new(TransactionPool::new(
         TxPoolConfig::default(),
@@ -228,8 +226,6 @@ pub fn initialize_synchronization_graph_with_data_manager(
         pow.clone(),
         notifications.clone(),
         ConsensusExecutionConfiguration {
-            anticone_penalty_ratio: tcr - 1,
-            base_reward_table_in_ucfx: vec![INITIAL_BASE_MINING_REWARD_IN_UCFX],
             executive_trace: false,
         },
         verification_config.clone(),

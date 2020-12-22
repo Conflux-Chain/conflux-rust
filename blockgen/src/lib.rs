@@ -243,6 +243,12 @@ impl BlockGenerator {
         // See comments in verify_header_graph_ready_block()
         let my_timestamp = max(parent_timestamp, now);
 
+        let custom = self
+            .txpool
+            .machine()
+            .params()
+            .custom_prefix(parent_height + 1)
+            .unwrap_or(vec![]);
         let block_header = BlockHeaderBuilder::new()
             .with_transactions_root(compute_transaction_root(&transactions))
             .with_parent_hash(parent_hash)
@@ -258,6 +264,7 @@ impl BlockGenerator {
             .with_referee_hashes(referees)
             .with_nonce(U256::zero())
             .with_gas_limit(block_gas_limit)
+            .with_custom(custom)
             .build();
 
         Block::new(block_header, transactions)
