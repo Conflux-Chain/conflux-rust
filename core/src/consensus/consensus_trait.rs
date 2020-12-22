@@ -13,7 +13,7 @@ use crate::{
 use cfx_statedb::StateDb;
 use cfx_types::{H256, U256};
 use primitives::{EpochId, EpochNumber, SignedTransaction};
-use std::{any::Any, sync::Arc};
+use std::{any::Any, collections::HashSet, sync::Arc};
 
 /// FIXME: redesign this trait
 pub trait ConsensusGraphTrait: Send + Sync {
@@ -98,6 +98,10 @@ pub trait ConsensusGraphTrait: Send + Sync {
     fn get_state_db_by_epoch_number(
         &self, epoch_number: EpochNumber,
     ) -> RpcResult<StateDb>;
+
+    fn get_blocks_needing_bodies(&self) -> HashSet<H256>;
+
+    fn catch_up_completed(&self, peer_median_epoch: u64) -> bool;
 }
 
 pub type SharedConsensusGraph =

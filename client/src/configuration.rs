@@ -508,6 +508,8 @@ impl Configuration {
             referee_bound: self.raw_conf.referee_bound,
             get_logs_epoch_batch_size: self.raw_conf.get_logs_epoch_batch_size,
             get_logs_filter_max_epoch_range: self.raw_conf.get_logs_filter_max_epoch_range,
+            sync_starting_epoch: None,
+            sync_epoch_gap: None,
         }
     }
 

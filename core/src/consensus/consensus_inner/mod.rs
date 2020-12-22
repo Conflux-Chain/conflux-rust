@@ -3874,6 +3874,22 @@ impl ConsensusGraphInner {
         }
         Ok(chain)
     }
+
+    /// Return `None` if `root_block` is not in consensus.
+    pub fn get_subtree(&self, root_block: &H256) -> Option<Vec<H256>> {
+        let root_arena_index = *self.hash_to_arena_indices.get(root_block)?;
+        let mut queue = VecDeque::new();
+        let mut subtree = Vec::new();
+        queue.push_back(root_arena_index);
+        while !queue.is_empty() {
+            let i = queue.pop_front().expect("non-empty");
+            subtree.push(self.arena[i].hash);
+            for child in &self.arena[i].children {
+                queue.push_back(*child);
+            }
+        }
+        Some(subtree)
+    }
 }
 
 impl StateMaintenanceTrait for ConsensusGraphInner {

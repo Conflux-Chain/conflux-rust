@@ -2,19 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    consensus::{ConsensusGraph, ConsensusGraphInner},
-    sync::{
-        message::DynamicCapability,
-        state::{SnapshotChunkSync, Status},
-        synchronization_protocol_handler::SynchronizationProtocolHandler,
-        synchronization_state::SynchronizationState,
-        SharedSynchronizationGraph, SynchronizationGraphInner,
-    },
-    SynchronizationGraph,
+use crate::sync::{
+    message::DynamicCapability,
+    state::{SnapshotChunkSync, Status},
+    synchronization_protocol_handler::SynchronizationProtocolHandler,
+    synchronization_state::SynchronizationState,
+    SharedSynchronizationGraph,
 };
 use cfx_internal_common::StateAvailabilityBoundary;
-use cfx_parameters::{consensus::NULL, sync::CATCH_UP_EPOCH_LAG_THRESHOLD};
+use cfx_parameters::sync::CATCH_UP_EPOCH_LAG_THRESHOLD;
 use network::NetworkContext;
 use parking_lot::RwLock;
 use std::{
@@ -23,8 +19,7 @@ use std::{
         atomic::{AtomicBool, Ordering as AtomicOrdering},
         Arc,
     },
-    thread,
-    time::{self, Instant},
+    time::Instant,
 };
 
 ///
@@ -41,7 +36,7 @@ pub enum SyncPhaseType {
     CatchUpRecoverBlockHeaderFromDB = 0,
     CatchUpSyncBlockHeader = 1,
     CatchUpCheckpoint = 2,
-    CatchUpRecoverBlockFromDB = 3,
+    CatchUpFillBlockBodyPhase = 3,
     CatchUpSyncBlock = 4,
     Normal = 5,
 }
@@ -133,15 +128,14 @@ impl SynchronizationPhaseManager {
         ));
         sync_manager
             .register_phase(Arc::new(CatchUpCheckpointPhase::new(state_sync)));
-        sync_manager.register_phase(Arc::new(
-            CatchUpRecoverBlockFromDbPhase::new(sync_graph.clone()),
-        ));
+        sync_manager.register_phase(Arc::new(CatchUpFillBlockBodyPhase::new(
+            sync_graph.clone(),
+        )));
         sync_manager.register_phase(Arc::new(CatchUpSyncBlockPhase::new(
             sync_state.clone(),
             sync_graph.clone(),
         )));
-        sync_manager
-            .register_phase(Arc::new(NormalSyncPhase::new(sync_graph.clone())));
+        sync_manager.register_phase(Arc::new(NormalSyncPhase::new()));
 
         sync_manager
     }
@@ -259,18 +253,24 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
         _sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
-        // FIXME: use target_height instead.
-        let middle_epoch = self.syn.median_epoch_from_normal_peers();
-        if middle_epoch.is_none() {
-            return self.phase_type();
-        }
-        let middle_epoch = middle_epoch.unwrap();
+        let median_epoch = match self.syn.median_epoch_from_normal_peers() {
+            None => {
+                return if self.syn.is_dev_or_test_mode() {
+                    SyncPhaseType::CatchUpCheckpoint
+                } else {
+                    self.phase_type()
+                }
+            }
+            Some(epoch) => epoch,
+        };
+        debug!(
+            "best_epoch: {}, peer median: {}",
+            self.graph.consensus.best_epoch_number(),
+            median_epoch
+        );
         // FIXME: OK, what if the chain height is close, or even local height is
         // FIXME: larger, but the chain forked earlier very far away?
-        if self.graph.consensus.best_epoch_number()
-            + CATCH_UP_EPOCH_LAG_THRESHOLD
-            >= middle_epoch
-        {
+        if self.graph.consensus.catch_up_completed(median_epoch) {
             return SyncPhaseType::CatchUpCheckpoint;
         }
 
@@ -321,7 +321,7 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
     ) -> SyncPhaseType
     {
         if self.has_state.load(AtomicOrdering::SeqCst) {
-            return SyncPhaseType::CatchUpRecoverBlockFromDB;
+            return SyncPhaseType::CatchUpFillBlockBodyPhase;
         }
         let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
         let current_era_genesis = sync_handler
@@ -337,7 +337,7 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
         if self.state_sync.status() == Status::Completed {
             self.state_sync.restore_execution_state(sync_handler);
             *sync_handler.synced_epoch_id.lock() = Some(epoch_to_sync);
-            SyncPhaseType::CatchUpRecoverBlockFromDB
+            SyncPhaseType::CatchUpFillBlockBodyPhase
         } else {
             self.phase_type()
         }
@@ -385,25 +385,21 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
     }
 }
 
-pub struct CatchUpRecoverBlockFromDbPhase {
+pub struct CatchUpFillBlockBodyPhase {
     pub graph: SharedSynchronizationGraph,
-    pub recovered: Arc<AtomicBool>,
 }
 
-impl CatchUpRecoverBlockFromDbPhase {
+impl CatchUpFillBlockBodyPhase {
     pub fn new(graph: SharedSynchronizationGraph) -> Self {
-        CatchUpRecoverBlockFromDbPhase {
-            graph,
-            recovered: Arc::new(AtomicBool::new(false)),
-        }
+        CatchUpFillBlockBodyPhase { graph }
     }
 }
 
-impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
-    fn name(&self) -> &'static str { "CatchUpRecoverBlockFromDbPhase" }
+impl SynchronizationPhaseTrait for CatchUpFillBlockBodyPhase {
+    fn name(&self) -> &'static str { "CatchUpFillBlockBodyPhase" }
 
     fn phase_type(&self) -> SyncPhaseType {
-        SyncPhaseType::CatchUpRecoverBlockFromDB
+        SyncPhaseType::CatchUpFillBlockBodyPhase
     }
 
     fn next(
@@ -411,14 +407,16 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
         _sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
-        if self.recovered.load(AtomicOrdering::SeqCst) == false {
-            return self.phase_type();
+        if self.graph.is_block_body_completed() {
+            self.graph.complete_filling_block_bodies();
+            SyncPhaseType::CatchUpSyncBlock
+        } else {
+            self.phase_type()
         }
-        SyncPhaseType::CatchUpSyncBlock
     }
 
     fn start(
-        &self, _io: &dyn NetworkContext,
+        &self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
     )
     {
@@ -461,18 +459,11 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                         cur_era_stable_height,
                     );
             }
+            self.graph.inner.write().missing_body_block_set =
+                self.graph.consensus.get_blocks_needing_bodies();
+            self.graph.inner.write().filling_block_bodies = true;
+            sync_handler.request_block_bodies(io);
         }
-        self.recovered.store(false, AtomicOrdering::SeqCst);
-        let recovered = self.recovered.clone();
-        let graph = self.graph.clone();
-        std::thread::Builder::new()
-            .name("recover_blocks".into())
-            .spawn(move || {
-                graph.recover_graph_from_db(false /* header_only */);
-                recovered.store(true, AtomicOrdering::SeqCst);
-                info!("finish recover block graph from db");
-            })
-            .expect("Thread spawn failure");
     }
 }
 
@@ -500,21 +491,21 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
     ) -> SyncPhaseType
     {
         // FIXME: use target_height instead.
-        let middle_epoch = self.syn.median_epoch_from_normal_peers();
-        if middle_epoch.is_none() {
-            if self.syn.is_dev_or_test_mode() {
-                return SyncPhaseType::Normal;
-            } else {
-                return self.phase_type();
+        let median_epoch = match self.syn.median_epoch_from_normal_peers() {
+            None => {
+                return if self.syn.is_dev_or_test_mode() {
+                    SyncPhaseType::Normal
+                } else {
+                    self.phase_type()
+                }
             }
-        }
-        let middle_epoch = middle_epoch.unwrap();
+            Some(epoch) => epoch,
+        };
         // FIXME: OK, what if the chain height is close, or even local height is
         // FIXME: larger, but the chain forked earlier very far away?
         if self.graph.consensus.best_epoch_number()
             + CATCH_UP_EPOCH_LAG_THRESHOLD
-            >= middle_epoch
-            && self.graph.is_block_catch_up_completed()
+            >= median_epoch
         {
             return SyncPhaseType::Normal;
         }
@@ -528,7 +519,6 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
     )
     {
         info!("start phase {:?}", self.name());
-
         let (_, cur_era_genesis_height) =
             self.graph.get_genesis_hash_and_height_in_current_era();
         *sync_handler.latest_epoch_requested.lock() =
@@ -539,14 +529,10 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
     }
 }
 
-pub struct NormalSyncPhase {
-    graph: Arc<SynchronizationGraph>,
-}
+pub struct NormalSyncPhase {}
 
 impl NormalSyncPhase {
-    pub fn new(graph: Arc<SynchronizationGraph>) -> Self {
-        NormalSyncPhase { graph }
-    }
+    pub fn new() -> Self { NormalSyncPhase {} }
 }
 
 impl SynchronizationPhaseTrait for NormalSyncPhase {
@@ -570,11 +556,5 @@ impl SynchronizationPhaseTrait for NormalSyncPhase {
     {
         info!("start phase {:?}", self.name());
         sync_handler.request_missing_terminals(io);
-        let mut graph_inner = self.graph.inner.write();
-        while self.graph.is_consensus_worker_busy() {
-            thread::sleep(time::Duration::from_millis(100));
-        }
-        self.graph.consensus.construct_pivot_state();
-        graph_inner.catch_up = false;
     }
 }
