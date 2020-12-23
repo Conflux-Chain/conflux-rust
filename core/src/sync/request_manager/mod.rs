@@ -195,6 +195,12 @@ impl RequestManager {
             .collect()
     }
 
+    pub fn set_block_inflight(&self, block_hash: H256) -> bool {
+        self.inflight_keys
+            .write(msgid::GET_BLOCKS)
+            .insert(Key::Hash(block_hash))
+    }
+
     /// Send request to remote peer with delay mechanism. If failed,
     /// add the request to waiting queue to resend later.
     pub fn request_with_delay(

@@ -207,8 +207,7 @@ pub fn initialize_common_modules(
         }
         NodeType::Unknown => {}
     }
-    let machine =
-        Arc::new(new_machine_with_builtin(consensus_conf.chain_id.clone()));
+    let machine = Arc::new(new_machine_with_builtin(conf.common_params()));
 
     let genesis_block = genesis_block(
         &storage_manager,

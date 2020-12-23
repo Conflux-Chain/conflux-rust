@@ -164,6 +164,7 @@ pub struct SynchronizationGraphInner {
     pub old_era_blocks_frontier: VecDeque<usize>,
     pub old_era_blocks_frontier_set: HashSet<usize>,
     pub filling_block_bodies: bool,
+
     pub missing_body_block_set: HashSet<H256>,
     machine: Arc<Machine>,
 }
