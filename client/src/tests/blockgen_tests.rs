@@ -89,7 +89,8 @@ fn test_mining_10_epochs() {
     conf.raw_conf.jsonrpc_http_port = Some(18001);
     conf.raw_conf.mining_author =
         Some("1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into());
-    conf.raw_conf.mining_type = Some("cpu".into());
+    // Avoid starting the mining thread in `ArchiveClient::start`.
+    conf.raw_conf.mining_type = Some("disable".into());
 
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
     let handle = ArchiveClient::start(conf, exit).unwrap();
@@ -127,7 +128,8 @@ fn test_mining_10_epochs_with_larger_pow_problem_window() {
     conf.raw_conf.jsonrpc_http_port = Some(18002);
     conf.raw_conf.mining_author =
         Some("1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into());
-    conf.raw_conf.mining_type = Some("cpu".into());
+    // Avoid starting the mining thread in `ArchiveClient::start`.
+    conf.raw_conf.mining_type = Some("disable".into());
 
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
     let handle = ArchiveClient::start(conf, exit).unwrap();

@@ -37,40 +37,25 @@ impl Handleable for GetBlockHashesResponse {
             .request_manager
             .epochs_received(ctx.io, req, rec, delay);
 
+        // request missing headers
+        let missing_headers = self
+            .hashes
+            .iter()
+            .filter(|h| !ctx.manager.graph.contains_block_header(&h))
+            .cloned()
+            .collect();
+
         // NOTE: this is to make sure no section of the DAG is skipped
         // e.g. if the request for epoch 4 is lost or the reply is in-
         // correct, the request for epoch 5 should recursively request
         // all dependent blocks (see on_block_headers_response)
 
-        if ctx.manager.need_requesting_blocks() {
-            // request missing headers
-            let missing_blocks = self
-                .hashes
-                .iter()
-                .filter(|h| !ctx.manager.graph.contains_block(&h))
-                .cloned()
-                .collect();
-
-            ctx.manager.request_blocks(
-                ctx.io,
-                Some(ctx.node_id),
-                missing_blocks,
-            );
-        } else {
-            // request missing headers
-            let missing_headers = self
-                .hashes
-                .iter()
-                .filter(|h| !ctx.manager.graph.contains_block_header(&h))
-                .cloned()
-                .collect();
-            ctx.manager.request_block_headers(
-                ctx.io,
-                Some(ctx.node_id),
-                missing_headers,
-                true, /* ignore_db */
-            );
-        }
+        ctx.manager.request_block_headers(
+            ctx.io,
+            Some(ctx.node_id),
+            missing_headers,
+            true, /* ignore_db */
+        );
 
         // TODO: handle empty response
 
