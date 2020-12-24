@@ -24,11 +24,11 @@ use std::{
 
 ///
 /// Archive node goes through the following phases:
-///     CatchUpRecoverBlockFromDB --> CatchUpSyncBlock --> Normal
+///     CatchUpFillBlockBody --> CatchUpSyncBlock --> Normal
 ///
 /// Full node goes through the following phases:
 ///     CatchUpRecoverBlockHeaderFromDB --> CatchUpSyncBlockHeader -->
-///     CatchUpCheckpoint --> CatchUpRecoverBlockFromDB -->
+///     CatchUpCheckpoint --> CatchUpFillBlockBody -->
 ///     CatchUpSyncBlock --> Normal
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]

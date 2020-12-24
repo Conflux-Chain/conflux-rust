@@ -115,7 +115,14 @@ pub struct ConsensusConfig {
     pub get_logs_epoch_batch_size: usize,
     pub get_logs_filter_max_epoch_range: Option<u64>,
 
+    /// TODO: These parameters are only utilized in catch-up now.
+    /// TODO: They should be used in data garbage collection, too.
+    /// TODO: States, receipts, and block bodies need separate parameters.
+    /// The starting epoch that we need to sync its state and start replaying
+    /// transactions.
     pub sync_starting_epoch: Option<u64>,
+    /// The number of extra epochs that we want to keep
+    /// states/receipts/transactions.
     pub sync_epoch_gap: Option<u64>,
 }
 
@@ -1402,6 +1409,10 @@ impl ConsensusGraphTrait for ConsensusGraph {
         self.get_state_db_by_height_and_hash(height, &hash)
     }
 
+    /// Return the blocks in the subtree of stable genesis and the blocks in the
+    /// `REWARD_EPOCH_COUNT` epochs before it. Block bodies of other blocks
+    /// in the consensus graph will never be needed for executions after this
+    /// stable genesis, as long as the checkpoint is not reverted.
     fn get_blocks_needing_bodies(&self) -> HashSet<H256> {
         let inner = self.inner.read();
         // TODO: This may not be stable genesis with other configurations.
@@ -1435,6 +1446,8 @@ impl ConsensusGraphTrait for ConsensusGraph {
         block_set
     }
 
+    /// Check if we have downloaded all the headers to find the lowest needed
+    /// checkpoint. We can enter `CatchUpCheckpoint` if it's true.
     fn catch_up_completed(&self, peer_median_epoch: u64) -> bool {
         let stable_genesis_height = self
             .data_man

@@ -810,6 +810,7 @@ impl SynchronizationProtocolHandler {
         }
     }
 
+    /// Request missing block bodies from random peers in batches.
     pub fn request_block_bodies(&self, io: &dyn NetworkContext) {
         let in_flight_blocks = self.request_manager.in_flight_blocks();
         let to_request_blocks: Vec<_> = self
@@ -824,6 +825,9 @@ impl SynchronizationProtocolHandler {
             BLOCK_SYNC_MAX_INFLIGHT - in_flight_blocks.len(),
             to_request_blocks.len(),
         );
+
+        // Use `MAX_BLOCKS_TO_SEND` as the batch size so the peer can respond
+        // with all blocks.
         for block_chunk in to_request_blocks[0..n_blocks_to_request]
             .chunks(MAX_BLOCKS_TO_SEND as usize)
         {

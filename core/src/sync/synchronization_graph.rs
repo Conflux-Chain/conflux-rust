@@ -163,8 +163,12 @@ pub struct SynchronizationGraphInner {
     pub not_ready_blocks_frontier: UnreadyBlockFrontier,
     pub old_era_blocks_frontier: VecDeque<usize>,
     pub old_era_blocks_frontier_set: HashSet<usize>,
-    pub filling_block_bodies: bool,
 
+    /// Set to `true` in `CatchUpFillBlockBodyPhase`. This is included in
+    /// `Inner` for atomicity.
+    pub filling_block_bodies: bool,
+    /// The set of blocks that we need to download block bodies in
+    /// `CatchUpFillBlockBodyPhase`.
     pub missing_body_block_set: HashSet<H256>,
     machine: Arc<Machine>,
 }
@@ -2188,30 +2192,10 @@ impl SynchronizationGraph {
         self.inner.read().missing_body_block_set.is_empty()
     }
 
-    /// Return `(hash, height)` of the last block on the pivot chain that is
-    /// BLOCK_GRAPH_READY. This block represents our progress in downloading
-    /// block bodies in `CatchUpSyncBlock`.
-    pub fn best_epoch_with_body(&self) -> (H256, u64) {
-        let inner = self.inner.read();
-        let mut index = *inner
-            .hash_to_arena_indices
-            .get(&self.consensus.best_block_hash())
-            .expect("pivot chain blocks are in sync graph");
-
-        // This loop will terminate at cur_era_genesis if no block body has been
-        // retrieved.
-        loop {
-            let block_hash = inner.arena[index].block_header.hash();
-            if inner.arena[index].graph_status == BLOCK_GRAPH_READY
-                || block_hash
-                    == self.data_man.get_cur_consensus_era_genesis_hash()
-            {
-                return (block_hash, inner.arena[index].block_header.height());
-            }
-            index = inner.arena[index].parent;
-        }
-    }
-
+    /// Construct the states along the pivot chain, set all
+    /// `BLOCK_HEADER_GRAPH_READY` blocks as `BLOCK_GRAPH_READY` and remove all
+    /// other blocks. All blocks in the future can be processed normally in
+    /// sync graph and consensus graph.
     pub fn complete_filling_block_bodies(&self) {
         self.consensus.construct_pivot_state();
         let mut inner = self.inner.write();
