@@ -164,9 +164,10 @@ pub struct SynchronizationGraphInner {
     pub old_era_blocks_frontier: VecDeque<usize>,
     pub old_era_blocks_frontier_set: HashSet<usize>,
 
-    /// Set to `true` in `CatchUpFillBlockBodyPhase`. This is included in
-    /// `Inner` for atomicity.
-    pub filling_block_bodies: bool,
+    /// Set to `true` in `CatchUpCheckpointPhase` and
+    /// `CatchUpFillBlockBodyPhase` so that sync graph and consensus graph
+    /// remain unchanged for consistency.
+    pub locked_for_catchup: bool,
     /// The set of blocks that we need to download block bodies in
     /// `CatchUpFillBlockBodyPhase`.
     pub missing_body_block_set: HashSet<H256>,
@@ -208,7 +209,7 @@ impl SynchronizationGraphInner {
             old_era_blocks_frontier: Default::default(),
             old_era_blocks_frontier_set: Default::default(),
             missing_body_block_set: Default::default(),
-            filling_block_bodies: false,
+            locked_for_catchup: false,
             machine,
         };
         let genesis_hash = genesis_header.hash();
@@ -1622,7 +1623,7 @@ impl SynchronizationGraph {
         let _timer = MeterTimer::time_func(SYNC_INSERT_HEADER.as_ref());
         self.statistics.inc_sync_graph_inserted_header_count();
         let inner = &mut *self.inner.write();
-        if inner.filling_block_bodies {
+        if inner.locked_for_catchup {
             // Ignore received headers when we are downloading block bodies.
             return (
                 BlockHeaderInsertionResult::AlreadyProcessedInSync,
@@ -1948,7 +1949,9 @@ impl SynchronizationGraph {
             }
         }
 
-        if inner.filling_block_bodies {
+        // If we are locked for catch-up, make sure no new block will enter sync
+        // graph.
+        if inner.locked_for_catchup {
             if !inner.missing_body_block_set.remove(&hash) {
                 warn!("Receive unexpected block body, hash={:?}", hash);
             }
@@ -2199,7 +2202,7 @@ impl SynchronizationGraph {
     pub fn complete_filling_block_bodies(&self) {
         self.consensus.construct_pivot_state();
         let mut inner = self.inner.write();
-        inner.filling_block_bodies = false;
+        inner.locked_for_catchup = false;
         let to_remove = inner
             .arena
             .iter_mut()

@@ -1106,7 +1106,7 @@ impl SynchronizationProtocolHandler {
             task.delay,
             self.preferred_peer_node_type_for_get_block(),
         );
-        if self.graph.inner.read().filling_block_bodies {
+        if self.graph.inner.read().locked_for_catchup {
             self.request_block_bodies(io);
             Ok(())
         } else {
@@ -1662,7 +1662,7 @@ impl SynchronizationProtocolHandler {
             return true;
         }
 
-        if !self.graph.inner.read().filling_block_bodies {
+        if !self.graph.inner.read().locked_for_catchup {
             if let Some(height) = self.graph.data_man.block_height_by_hash(hash)
             {
                 let best_height = self.graph.consensus.best_epoch_number();
@@ -1695,7 +1695,7 @@ impl SynchronizationProtocolHandler {
                 return true;
             }
 
-            if !self.graph.inner.read().filling_block_bodies
+            if !self.graph.inner.read().locked_for_catchup
                 && info.get_instance_id()
                     == self.graph.data_man.get_instance_id()
             {

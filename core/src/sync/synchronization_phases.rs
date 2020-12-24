@@ -19,7 +19,8 @@ use std::{
         atomic::{AtomicBool, Ordering as AtomicOrdering},
         Arc,
     },
-    time::Instant,
+    thread,
+    time::{self, Instant},
 };
 
 ///
@@ -349,6 +350,10 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
     )
     {
         info!("start phase {:?}", self.name());
+        sync_handler.graph.inner.write().locked_for_catchup = true;
+        while sync_handler.graph.is_consensus_worker_busy() {
+            thread::sleep(time::Duration::from_millis(100));
+        }
         let current_era_genesis = sync_handler
             .graph
             .data_man
@@ -461,7 +466,6 @@ impl SynchronizationPhaseTrait for CatchUpFillBlockBodyPhase {
             }
             self.graph.inner.write().missing_body_block_set =
                 self.graph.consensus.get_blocks_needing_bodies();
-            self.graph.inner.write().filling_block_bodies = true;
             sync_handler.request_block_bodies(io);
         }
     }
