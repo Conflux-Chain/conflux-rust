@@ -736,29 +736,6 @@ impl SynchronizationProtocolHandler {
         }
     }
 
-    /// request missing blocked after `recover_graph_from_db` is called
-    /// should be called in `start_sync`
-    pub fn request_initial_missed_block(&self, io: &dyn NetworkContext) {
-        let to_request;
-        {
-            let mut missing_hashes =
-                self.graph.initial_missed_block_hashes.lock();
-            if missing_hashes.is_empty() {
-                return;
-            }
-            to_request = missing_hashes.drain().collect::<Vec<H256>>();
-            missing_hashes.clear();
-        }
-        let chosen_peer =
-            PeerFilter::new(msgid::GET_BLOCK_HEADERS).select(&self.syn);
-        self.request_block_headers(
-            io,
-            chosen_peer,
-            to_request,
-            true, /* ignore_db */
-        );
-    }
-
     pub fn request_missing_terminals(&self, io: &dyn NetworkContext) {
         let peers: Vec<NodeId> =
             self.syn.peers.read().keys().cloned().collect();

@@ -207,7 +207,7 @@ impl Handler {
             consensus.get_data_manager().clone(),
         ));
 
-        graph.recover_graph_from_db(true /* header_only */);
+        graph.recover_graph_from_db();
 
         Handler {
             block_txs,

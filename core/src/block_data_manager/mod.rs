@@ -836,20 +836,12 @@ impl BlockDataManager {
         })
     }
 
-    pub fn insert_block_terminals_to_db(&self, terminals: Vec<H256>) {
-        self.db_manager.insert_block_terminals_to_db(&terminals)
+    pub fn insert_terminals_to_db(&self, terminals: Vec<H256>) {
+        self.db_manager.insert_terminals_to_db(&terminals)
     }
 
-    pub fn block_terminals_from_db(&self) -> Option<Vec<H256>> {
-        self.db_manager.block_terminals_from_db()
-    }
-
-    pub fn insert_header_terminals_to_db(&self, terminals: Vec<H256>) {
-        self.db_manager.insert_header_terminals_to_db(&terminals)
-    }
-
-    pub fn header_terminals_from_db(&self) -> Option<Vec<H256>> {
-        self.db_manager.header_terminals_from_db()
+    pub fn terminals_from_db(&self) -> Option<Vec<H256>> {
+        self.db_manager.terminals_from_db()
     }
 
     pub fn insert_executed_epoch_set_hashes_to_db(

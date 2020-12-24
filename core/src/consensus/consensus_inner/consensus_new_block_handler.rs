@@ -885,16 +885,12 @@ impl ConsensusNewBlockHandler {
         inner.cur_era_genesis_block_arena_index
     }
 
-    fn persist_terminals(&self, inner: &ConsensusGraphInner, has_body: bool) {
+    fn persist_terminals(&self, inner: &ConsensusGraphInner) {
         let mut terminals = Vec::with_capacity(inner.terminal_hashes.len());
         for h in &inner.terminal_hashes {
             terminals.push(h.clone());
         }
-        if has_body {
-            self.data_man.insert_block_terminals_to_db(terminals);
-        } else {
-            self.data_man.insert_header_terminals_to_db(terminals);
-        }
+        self.data_man.insert_terminals_to_db(terminals);
     }
 
     fn try_clear_blockset_in_own_view_of_epoch(
@@ -1364,7 +1360,7 @@ impl ConsensusNewBlockHandler {
                     != inner.cur_era_stable_block_hash))
             && !self.conf.bench_mode
         {
-            self.persist_terminals(inner, has_body);
+            self.persist_terminals(inner);
             if pivot_changed {
                 // If we switch to a chain without stable block,
                 // we should avoid execute unavailable states.
@@ -1708,7 +1704,7 @@ impl ConsensusNewBlockHandler {
             }
         }
 
-        self.persist_terminals(inner, has_body);
+        self.persist_terminals(inner);
         debug!(
             "Finish activating block in ConsensusGraph: index={:?} hash={:?}",
             me, inner.arena[me].hash

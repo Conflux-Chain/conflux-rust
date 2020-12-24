@@ -24,7 +24,7 @@ use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
     register_meter_with_group, register_queue, Meter, MeterTimer, Queue,
 };
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use primitives::{
     transaction::SignedTransaction, Block, BlockHeader, EpochNumber,
 };
@@ -1036,7 +1036,6 @@ pub struct SynchronizationGraph {
     pub consensus: SharedConsensusGraph,
     pub data_man: Arc<BlockDataManager>,
     pub pow: Arc<PowComputer>,
-    pub initial_missed_block_hashes: Mutex<HashSet<H256>>,
     pub verification_config: VerificationConfig,
     pub sync_config: SyncGraphConfig,
     pub statistics: SharedStatistics,
@@ -1061,11 +1060,7 @@ pub struct SynchronizationGraph {
 impl MallocSizeOf for SynchronizationGraph {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         let inner_size = self.inner.read().size_of(ops);
-        let initial_missed_block_hashes_size =
-            self.initial_missed_block_hashes.lock().size_of(ops);
-        let mut malloc_size = inner_size
-            + self.data_man.size_of(ops)
-            + initial_missed_block_hashes_size;
+        let mut malloc_size = inner_size + self.data_man.size_of(ops);
 
         // TODO: Add statistics for consortium.
         if !self.is_consortium() {
@@ -1120,7 +1115,6 @@ impl SynchronizationGraph {
             ),
             data_man: data_man.clone(),
             pow: pow.clone(),
-            initial_missed_block_hashes: Mutex::new(HashSet::new()),
             verification_config,
             sync_config,
             consensus: consensus.clone(),
@@ -1272,11 +1266,10 @@ impl SynchronizationGraph {
     }
 
     /// In full/archive node, this function can be invoked during
-    /// CatchUpRecoverBlockHeaderFromDbPhase phase and
-    /// CatchUpRecoverBlockFromDbPhase phase.
-    /// It tries to construct the consensus graph based on block/header
+    /// CatchUpRecoverBlockHeaderFromDbPhase phase.
+    /// It tries to construct the consensus graph based on header
     /// information stored in db.
-    pub fn recover_graph_from_db(&self, header_only: bool) {
+    pub fn recover_graph_from_db(&self) {
         info!("Start fast recovery of the block DAG from database");
 
         // Recover the initial sequence number in consensus graph
@@ -1303,31 +1296,7 @@ impl SynchronizationGraph {
         );
 
         // Get terminals stored in db.
-        let terminals_opt = if header_only {
-            // Recover from both the header terminal and body terminal.
-            // If a full node crashes in the header sync phase, the header
-            // terminal should be further than the body terminal.
-            // If it crashes after entering NormalSyncPhase, the body terminal
-            // should be further than the header terminal.
-            let mut terminals = Vec::new();
-            if let Some(header_terminals) =
-                self.data_man.header_terminals_from_db()
-            {
-                terminals.extend(header_terminals);
-            }
-            if let Some(block_terminals) =
-                self.data_man.block_terminals_from_db()
-            {
-                terminals.extend(block_terminals);
-            }
-            if terminals.is_empty() {
-                None
-            } else {
-                Some(terminals)
-            }
-        } else {
-            self.data_man.block_terminals_from_db()
-        };
+        let terminals_opt = self.data_man.terminals_from_db();
         if terminals_opt.is_none() {
             return;
         }
@@ -1377,46 +1346,16 @@ impl SynchronizationGraph {
                 }
             }
 
-            // Insert headers or full blocks depending on our phase.
-            // Note that if we have headers in db for recover block phase, we
-            // will not insert the headers, so the blocks can be
-            // retrieved later.
-            let get_and_insert = |hash| {
-                if header_only {
-                    self.data_man.block_header_by_hash(hash).map(|header| {
-                        self.insert_block_header(
-                            &mut header.as_ref().clone(),
-                            true,  /* need_to_verify */
-                            false, /* bench_mode */
-                            true,  /* insert_to_consensus */
-                            false, /* persistent */
-                        );
-                        header
-                    })
-                } else {
-                    self.data_man
-                        .block_by_hash(hash, true /* update_cache */)
-                        .map(|block| {
-                            let mut header = block.block_header.clone();
-                            self.insert_block_header(
-                                &mut header,
-                                true,  /* need_to_verify */
-                                false, /* bench_mode */
-                                false, /* insert_to_consensus */
-                                false, /* persistent */
-                            );
-                            self.insert_block(
-                                block.as_ref().clone(),
-                                true,  /* need_to_verify */
-                                false, /* persistent */
-                                true,  /* recover_from_db */
-                            );
-                            Arc::new(header)
-                        })
-                }
-            };
-
-            if let Some(block_header) = get_and_insert(&hash) {
+            if let Some(block_header) =
+                self.data_man.block_header_by_hash(&hash)
+            {
+                self.insert_block_header(
+                    &mut block_header.as_ref().clone(),
+                    true,  /* need_to_verify */
+                    false, /* bench_mode */
+                    true,  /* insert_to_consensus */
+                    false, /* persistent */
+                );
                 let parent = block_header.parent_hash().clone();
                 let referees = block_header.referee_hashes().clone();
                 if !visited_blocks.contains(&parent) {
@@ -1434,13 +1373,8 @@ impl SynchronizationGraph {
             }
         }
 
-        debug!("Initial missed blocks {:?}", missed_hashes);
-        *self.initial_missed_block_hashes.lock() = missed_hashes;
-
         // Resolve out-of-era dependencies for graph-unready blocks.
-        self.resolve_outside_dependencies(
-            header_only, /* insert_header_into_consensus */
-        );
+        self.resolve_outside_dependencies(true);
         debug!(
             "Current frontier after recover from db: {:?}",
             self.inner.read().not_ready_blocks_frontier.get_frontier()
