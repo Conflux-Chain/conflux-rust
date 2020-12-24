@@ -1062,61 +1062,18 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     /// This is the main function that SynchronizationGraph calls to deliver a
     /// new block to the consensus graph.
-    fn on_new_block(
-        &self, hash: &H256, ignore_body: bool, update_best_info: bool,
-    ) {
+    fn on_new_block(&self, hash: &H256, update_best_info: bool) {
         let _timer =
             MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
         self.statistics.inc_consensus_graph_processed_block_count();
 
-        let block_opt = if ignore_body {
-            None
-        } else {
-            self.data_man.block_by_hash(hash, true /* update_cache */)
-        };
-
-        let header_opt = if ignore_body {
-            self.data_man.block_header_by_hash(hash)
-        } else {
-            None
-        };
-
         {
             let inner = &mut *self.inner.write();
-            if !ignore_body {
-                let block = block_opt.unwrap();
-                debug!(
-                    "insert new block into consensus: block_header={:?} tx_count={}, block_size={}",
-                    block.block_header,
-                    block.transactions.len(),
-                    block.size(),
-                );
-                self.new_block_handler.on_new_block(
-                    inner,
-                    &self.confirmation_meter,
-                    hash,
-                    &block.block_header,
-                    Some(block.transactions.clone()),
-                );
-            } else {
-                // This `ignore_body` case will only be used when
-                // 1. archive node is in `CatchUpRecoverBlockFromDB` phase
-                // 2. full node is in `CatchUpRecoverBlockHeaderFromDB`,
-                // `CatchUpSyncBlockHeader` or `CatchUpRecoverBlockFromDB` phase
-                let header = header_opt.unwrap();
-                debug!(
-                    "insert new block_header into consensus: block_header={:?}",
-                    header
-                );
-                self.new_block_handler.on_new_block(
-                    inner,
-                    &self.confirmation_meter,
-                    hash,
-                    header.as_ref(),
-                    None,
-                );
-            }
-
+            self.new_block_handler.on_new_block(
+                inner,
+                &self.confirmation_meter,
+                hash,
+            );
             // for full node, we should recover state_valid for pivot block
             let mut pivot_block_state_valid_map =
                 self.pivot_block_state_valid_map.lock();

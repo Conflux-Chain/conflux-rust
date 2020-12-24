@@ -23,9 +23,7 @@ pub trait ConsensusGraphTrait: Send + Sync {
 
     fn get_config(&self) -> &Self::ConsensusConfig;
 
-    fn on_new_block(
-        &self, hash: &H256, ignore_body: bool, update_best_info: bool,
-    );
+    fn on_new_block(&self, hash: &H256, update_best_info: bool);
 
     fn update_total_weight_delta_heartbeat(&self) {}
 

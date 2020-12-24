@@ -381,7 +381,7 @@ fn main() {
         }
         if genesis_idx != i {
             let h = blocks[i].hash();
-            consensus_n.on_new_block(&h, true, false);
+            consensus_n.on_new_block(&h, false);
         }
     }
 

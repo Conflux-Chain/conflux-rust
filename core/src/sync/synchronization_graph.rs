@@ -1046,7 +1046,7 @@ pub struct SynchronizationGraph {
 
     /// Channel used to send block hashes to `ConsensusGraph` and PubSub.
     /// Each element is <block_hash, ignore_body>
-    new_block_hashes: Arc<Channel<(H256, bool)>>,
+    new_block_hashes: Arc<Channel<H256>>,
 
     /// The blocks whose timestamps are near future.
     /// They will be inserted into sync graph inner at their timestamp.
@@ -1135,7 +1135,7 @@ impl SynchronizationGraph {
                 // 1. It will almost make sure that the self mined block being processed first
                 //
                 // 2. In case of a DoS attack that a malicious player releases a large chunk of old blocks. This strategy will make the consensus to process the meaningful blocks first.
-                let mut priority_queue: BinaryHeap<(u64, H256, bool)> = BinaryHeap::new();
+                let mut priority_queue: BinaryHeap<(u64, H256)> = BinaryHeap::new();
                 let mut reverse_map : HashMap<H256, Vec<H256>> = HashMap::new();
                 let mut counter_map = HashMap::new();
 
@@ -1157,7 +1157,7 @@ impl SynchronizationGraph {
 
                         match maybe_item {
                             // FIXME: We need to investigate why duplicate hash may send to the consensus worker
-                            Ok((hash, ignore_body)) => if !reverse_map.contains_key(&hash) {
+                            Ok(hash) => if !reverse_map.contains_key(&hash) {
                                 debug!("Worker thread receive: block = {}", hash);
                                 let header = data_man.block_header_by_hash(&hash).expect("Header must exist before sending to the consensus worker!");
                                 let mut cnt: usize = 0;
@@ -1175,9 +1175,9 @@ impl SynchronizationGraph {
                                 reverse_map.insert(hash.clone(), Vec::new());
                                 if cnt == 0 {
                                     let epoch_number = consensus.get_block_epoch_number(parent_hash).unwrap_or(0);
-                                    priority_queue.push((epoch_number, hash, ignore_body));
+                                    priority_queue.push((epoch_number, hash));
                                 } else {
-                                    counter_map.insert(hash, (cnt, ignore_body));
+                                    counter_map.insert(hash, cnt);
                                 }
                             } else {
                                 warn!("Duplicate block = {} sent to the consensus worker", hash);
@@ -1186,24 +1186,22 @@ impl SynchronizationGraph {
                             Err(TryRecvError::Closed) => break 'outer,
                         }
                     }
-                    if let Some((_, hash, ignore_body)) = priority_queue.pop() {
+                    if let Some((_, hash)) = priority_queue.pop() {
                         CONSENSUS_WORKER_QUEUE.dequeue(1);
                         let successors = reverse_map.remove(&hash).unwrap();
                         for succ in successors {
                             let cnt_tuple = counter_map.get_mut(&succ).unwrap();
-                            cnt_tuple.0 -= 1;
-                            if cnt_tuple.0 == 0 {
-                                let ignore_body = cnt_tuple.1;
+                            *cnt_tuple -= 1;
+                            if *cnt_tuple == 0 {
                                 counter_map.remove(&succ);
                                 let header_succ = data_man.block_header_by_hash(&succ).expect("Header must exist before sending to the consensus worker!");
                                 let parent_succ = header_succ.parent_hash();
                                 let epoch_number = consensus.get_block_epoch_number(parent_succ).unwrap_or(0);
-                                priority_queue.push((epoch_number, succ, ignore_body));
+                                priority_queue.push((epoch_number, succ));
                             }
                         }
                         consensus.on_new_block(
                             &hash,
-                            ignore_body,
                             true, /* update_best_info */
                         );
                         consensus_unprocessed_count.fetch_sub(1, Ordering::SeqCst);
@@ -1498,10 +1496,8 @@ impl SynchronizationGraph {
                     self.consensus_unprocessed_count
                         .fetch_add(1, Ordering::SeqCst);
                     assert!(
-                        self.new_block_hashes.send((
-                            inner.arena[index].block_header.hash(),
-                            true, /* ignore_body */
-                        )),
+                        self.new_block_hashes
+                            .send(inner.arena[index].block_header.hash(),),
                         "consensus receiver dropped"
                     );
 
@@ -1726,10 +1722,7 @@ impl SynchronizationGraph {
 
         self.consensus_unprocessed_count
             .fetch_add(1, Ordering::SeqCst);
-        assert!(
-            self.new_block_hashes.send((h, false /* ignore_body */)),
-            "consensus receiver dropped"
-        );
+        assert!(self.new_block_hashes.send(h), "consensus receiver dropped");
 
         if inner.config.enable_state_expose {
             STATE_EXPOSER.sync_graph.lock().ready_block_vec.push(
