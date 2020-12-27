@@ -200,10 +200,11 @@ pub fn initialize_common_modules(
     let mut consensus_conf = conf.consensus_config();
     match node_type {
         NodeType::Archive => {
-            consensus_conf.sync_starting_epoch = Some(0);
+            consensus_conf.sync_state_starting_epoch = Some(0);
         }
         NodeType::Full | NodeType::Light => {
-            consensus_conf.sync_epoch_gap = Some(CATCH_UP_EPOCH_LAG_THRESHOLD);
+            consensus_conf.sync_state_epoch_gap =
+                Some(CATCH_UP_EPOCH_LAG_THRESHOLD);
         }
         NodeType::Unknown => {}
     }

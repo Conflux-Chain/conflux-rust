@@ -120,10 +120,10 @@ pub struct ConsensusConfig {
     /// TODO: States, receipts, and block bodies need separate parameters.
     /// The starting epoch that we need to sync its state and start replaying
     /// transactions.
-    pub sync_starting_epoch: Option<u64>,
+    pub sync_state_starting_epoch: Option<u64>,
     /// The number of extra epochs that we want to keep
     /// states/receipts/transactions.
-    pub sync_epoch_gap: Option<u64>,
+    pub sync_state_epoch_gap: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -1455,12 +1455,12 @@ impl ConsensusGraphTrait for ConsensusGraph {
                 &self.data_man.get_cur_consensus_era_stable_hash(),
             )
             .expect("stable exists");
-        if let Some(target_epoch) = self.config.sync_starting_epoch {
+        if let Some(target_epoch) = self.config.sync_state_starting_epoch {
             if stable_genesis_height < target_epoch {
                 return false;
             }
         }
-        if let Some(gap) = self.config.sync_epoch_gap {
+        if let Some(gap) = self.config.sync_state_epoch_gap {
             if self.best_epoch_number() + gap < peer_median_epoch {
                 return false;
             }
