@@ -4,7 +4,7 @@
 
 use crate::{
     bytes::Bytes,
-    vm::{ActionParams, CallType},
+    vm::{ActionParams, CallType, ContractCreateResult, MessageCallResult},
 };
 use cfx_internal_common::{DatabaseDecodable, DatabaseEncodable};
 use cfx_types::{Address, Bloom, BloomInput, U256};
@@ -66,6 +66,40 @@ impl Call {
     }
 }
 
+/// Description of the result of a _call_ action.
+#[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CallResult {
+    /// 0 means success, 1 means reverted, and 2 means failed
+    pub outcome: u8,
+    /// The amount of gas left
+    pub gas_left: U256,
+    /// Output data
+    pub return_data: Bytes,
+}
+
+impl From<&MessageCallResult> for CallResult {
+    fn from(r: &MessageCallResult) -> Self {
+        match r {
+            MessageCallResult::Success(gas_left, return_data) => CallResult {
+                outcome: 0,
+                gas_left: gas_left.clone(),
+                return_data: return_data.to_vec(),
+            },
+            MessageCallResult::Reverted(gas_left, return_data) => CallResult {
+                outcome: 1,
+                gas_left: gas_left.clone(),
+                return_data: return_data.to_vec(),
+            },
+            MessageCallResult::Failed => CallResult {
+                outcome: 2,
+                gas_left: U256::zero(),
+                return_data: vec![],
+            },
+        }
+    }
+}
+
 /// Description of a _create_ action, either a `CREATE` operation or a create
 /// transaction.
 #[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable, Serialize)]
@@ -100,6 +134,59 @@ impl Create {
     }
 }
 
+/// Description of the result of a _create_ action.
+#[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateResult {
+    /// 0 means success, 1 means reverted, and 2 means failed
+    pub outcome: u8,
+    /// The created contract address
+    pub addr: Address,
+    /// The amount of gas left
+    pub gas_left: U256,
+    /// Output data
+    pub return_data: Bytes,
+}
+
+impl From<&ContractCreateResult> for CreateResult {
+    fn from(r: &ContractCreateResult) -> Self {
+        match r {
+            ContractCreateResult::Created(addr, gas_left) => CreateResult {
+                outcome: 0,
+                addr: addr.clone(),
+                gas_left: gas_left.clone(),
+                return_data: vec![],
+            },
+            ContractCreateResult::Reverted(gas_left, return_data) => {
+                CreateResult {
+                    outcome: 1,
+                    addr: Address::zero(),
+                    gas_left: gas_left.clone(),
+                    return_data: return_data.to_vec(),
+                }
+            }
+            ContractCreateResult::Failed => CreateResult {
+                outcome: 2,
+                addr: Address::zero(),
+                gas_left: U256::zero(),
+                return_data: vec![],
+            },
+        }
+    }
+}
+
+impl CreateResult {
+    /// Returns create result bloom.
+    /// The bloom contains only created contract address.
+    pub fn bloom(&self) -> Bloom {
+        if self.outcome == 0 {
+            BloomInput::Raw(self.addr.as_bytes()).into()
+        } else {
+            Bloom::default()
+        }
+    }
+}
+
 /// Description of an action that we trace; will be either a call or a create.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
@@ -107,6 +194,10 @@ pub enum Action {
     Call(Call),
     /// It's a create action.
     Create(Create),
+    /// It's the result of a call action
+    CallResult(CallResult),
+    /// It's the result of a create action
+    CreateResult(CreateResult),
 }
 
 impl Encodable for Action {
@@ -121,6 +212,14 @@ impl Encodable for Action {
                 s.append(&1u8);
                 s.append(create);
             }
+            Action::CallResult(ref call_result) => {
+                s.append(&2u8);
+                s.append(call_result);
+            }
+            Action::CreateResult(ref create_result) => {
+                s.append(&3u8);
+                s.append(create_result);
+            }
         }
     }
 }
@@ -131,6 +230,8 @@ impl Decodable for Action {
         match action_type {
             0 => rlp.val_at(1).map(Action::Call),
             1 => rlp.val_at(1).map(Action::Create),
+            2 => rlp.val_at(1).map(Action::CallResult),
+            3 => rlp.val_at(1).map(Action::CreateResult),
             _ => Err(DecoderError::Custom("Invalid action type.")),
         }
     }
@@ -142,6 +243,8 @@ impl Action {
         match *self {
             Action::Call(ref call) => call.bloom(),
             Action::Create(ref create) => create.bloom(),
+            Action::CallResult(_) => Bloom::default(),
+            Action::CreateResult(ref create_result) => create_result.bloom(),
         }
     }
 }
