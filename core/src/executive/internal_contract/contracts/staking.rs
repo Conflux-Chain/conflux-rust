@@ -16,6 +16,7 @@ use crate::{
     impl_function_type, make_function_table, make_solidity_contract,
     make_solidity_function,
     state::{StateGeneric, Substate},
+    trace::{trace::ExecTrace, Tracer},
     vm,
 };
 use cfx_storage::StorageStateTrait;
@@ -59,9 +60,10 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for Deposit<S> {
     fn execute_inner(
         &self, input: U256, params: &ActionParams, _spec: &Spec,
         state: &mut StateGeneric<S>, _substate: &mut Substate,
+        tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        deposit(input, params, state)
+        deposit(input, params, state, tracer)
     }
 }
 
@@ -87,9 +89,10 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for Withdraw<S> {
     fn execute_inner(
         &self, input: U256, params: &ActionParams, _spec: &Spec,
         state: &mut StateGeneric<S>, _substate: &mut Substate,
+        tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        withdraw(input, params, state)
+        withdraw(input, params, state, tracer)
     }
 }
 
@@ -115,6 +118,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for VoteLock<S> {
     fn execute_inner(
         &self, inputs: (U256, U256), params: &ActionParams, _spec: &Spec,
         state: &mut StateGeneric<S>, _substate: &mut Substate,
+        _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
         vote_lock(inputs.0, inputs.1, params, state)
@@ -132,6 +136,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _spec: &Spec,
         state: &mut StateGeneric<S>, _substate: &mut Substate,
+        _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
         Ok(state.staking_balance(&input)?)
@@ -162,6 +167,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
         _spec: &Spec, state: &mut StateGeneric<S>, _substate: &mut Substate,
+        _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
         Ok(get_locked_staking(address, block_number, state)?)
@@ -190,6 +196,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for GetVotePower<S> {
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
         _spec: &Spec, state: &mut StateGeneric<S>, _substate: &mut Substate,
+        _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
         Ok(get_vote_power(address, block_number, state)?)

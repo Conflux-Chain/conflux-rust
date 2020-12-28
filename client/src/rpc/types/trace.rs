@@ -46,6 +46,10 @@ impl Serialize for LocalizedTrace {
                 struc.serialize_field("type", "create_result")?;
                 struc.serialize_field("action", create_result)?;
             }
+            Action::InternalContractAction(ref internal_action) => {
+                struc.serialize_field("type", "internal_contract_action")?;
+                struc.serialize_field("action", internal_action)?;
+            }
         }
 
         struc.end()

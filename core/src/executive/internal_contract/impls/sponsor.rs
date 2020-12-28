@@ -4,8 +4,10 @@
 
 use crate::{
     state::{StateGeneric, Substate},
+    trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, Spec},
 };
+use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
 use cfx_storage::StorageStateTrait;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 
@@ -13,6 +15,7 @@ use cfx_types::{address_util::AddressUtil, Address, U256};
 pub fn set_sponsor_for_gas<S: StorageStateTrait>(
     contract_address: Address, upper_bound: U256, params: &ActionParams,
     spec: &Spec, state: &mut StateGeneric<S>, substate: &mut Substate,
+    tracer: &mut dyn Tracer<Output = ExecTrace>,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
@@ -65,6 +68,11 @@ pub fn set_sponsor_for_gas<S: StorageStateTrait>(
         }
         // refund to previous sponsor
         if prev_sponsor.is_some() {
+            tracer.prepare_internal_contract_action(
+                *SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+                prev_sponsor.unwrap(),
+                prev_sponsor_balance,
+            );
             state.add_balance(
                 prev_sponsor.as_ref().unwrap(),
                 &prev_sponsor_balance,
@@ -113,6 +121,7 @@ pub fn set_sponsor_for_gas<S: StorageStateTrait>(
 pub fn set_sponsor_for_collateral<S: StorageStateTrait>(
     contract_address: Address, params: &ActionParams, spec: &Spec,
     state: &mut StateGeneric<S>, substate: &mut Substate,
+    tracer: &mut dyn Tracer<Output = ExecTrace>,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
@@ -156,6 +165,11 @@ pub fn set_sponsor_for_collateral<S: StorageStateTrait>(
         }
         // refund to previous sponsor
         if prev_sponsor.is_some() {
+            tracer.prepare_internal_contract_action(
+                *SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+                prev_sponsor.unwrap(),
+                prev_sponsor_balance + collateral_for_storage,
+            );
             state.add_balance(
                 prev_sponsor.as_ref().unwrap(),
                 &(prev_sponsor_balance + collateral_for_storage),

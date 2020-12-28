@@ -14,6 +14,7 @@ use crate::{
     bytes::Bytes,
     hash::keccak,
     state::{StateGeneric, Substate},
+    trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, GasLeft, Spec},
 };
 use cfx_storage::StorageStateTrait;
@@ -37,7 +38,7 @@ pub trait InternalContractTrait<S: StorageStateTrait> {
     /// execute this internal contract on the given parameters.
     fn execute(
         &self, params: &ActionParams, spec: &Spec, state: &mut StateGeneric<S>,
-        substate: &mut Substate,
+        substate: &mut Substate, tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>
     {
         let call_data = params
@@ -59,7 +60,7 @@ pub trait InternalContractTrait<S: StorageStateTrait> {
             .get(&fn_sig)
             .ok_or(vm::Error::InternalContract("unsupported function"))?;
 
-        solidity_fn.execute(call_params, params, spec, state, substate)
+        solidity_fn.execute(call_params, params, spec, state, substate, tracer)
     }
 
     fn code(&self) -> Arc<Bytes> { INTERNAL_CONTRACT_CODE.clone() }
@@ -74,6 +75,7 @@ pub trait SolidityFunctionTrait<S: StorageStateTrait>: Send + Sync {
     fn execute(
         &self, input: &[u8], params: &ActionParams, spec: &Spec,
         state: &mut StateGeneric<S>, substate: &mut Substate,
+        tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>;
 
     /// The string for function sig
