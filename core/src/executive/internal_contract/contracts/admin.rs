@@ -16,6 +16,7 @@ use crate::{
     impl_function_type, make_function_table, make_solidity_contract,
     make_solidity_function,
     state::{StateGeneric, Substate},
+    trace::{trace::ExecTrace, Tracer},
     vm,
 };
 use cfx_storage::StorageStateTrait;
@@ -41,6 +42,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for SetAdmin<S> {
     fn execute_inner(
         &self, inputs: (Address, Address), params: &ActionParams, _spec: &Spec,
         state: &mut StateGeneric<S>, substate: &mut Substate,
+        _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
         set_admin(
@@ -62,6 +64,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for Destroy<S> {
     fn execute_inner(
         &self, input: Address, params: &ActionParams, spec: &Spec,
         state: &mut StateGeneric<S>, substate: &mut Substate,
+        _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
         destroy(input, params, state, spec, substate)
@@ -77,6 +80,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for GetAdmin<S> {
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _: &Spec,
         state: &mut StateGeneric<S>, _: &mut Substate,
+        _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<Address>
     {
         Ok(state.admin(&input)?)

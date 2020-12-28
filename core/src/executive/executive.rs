@@ -543,9 +543,13 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
     /// Execute the executive. If a sub-call/create action is required, a
     /// resume trap error is returned. The caller is then expected to call
     /// `resume_call` or `resume_create` to continue the execution.
-    pub fn exec(
+    pub fn exec<T>(
         mut self, state: &mut StateGeneric<S>, substate: &mut Substate,
-    ) -> ExecutiveTrapResult<'a, FinalizationResult, S> {
+        tracer: &mut T,
+    ) -> ExecutiveTrapResult<'a, FinalizationResult, S>
+    where
+        T: Tracer<Output = trace::trace::ExecTrace>,
+    {
         let kind =
             std::mem::replace(&mut self.kind, CallCreateExecutiveKind::Moved);
         match kind {
@@ -674,6 +678,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
                         &spec,
                         state,
                         &mut unconfirmed_substate,
+                        tracer,
                     )
                 } else {
                     Ok(GasLeft::Known(params.gas))
@@ -975,13 +980,15 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
     /// Execute and consume the current executive. This function handles resume
     /// traps and sub-level tracing. The caller is expected to handle
     /// current-level tracing.
-    pub fn consume<T: Tracer>(
+    pub fn consume<T>(
         self, state: &mut StateGeneric<S>, top_substate: &mut Substate,
         tracer: &mut T,
     ) -> vm::Result<FinalizationResult>
+    where
+        T: Tracer<Output = trace::trace::ExecTrace>,
     {
         let mut last_res =
-            Some((false, self.gas, self.exec(state, top_substate)));
+            Some((false, self.gas, self.exec(state, top_substate, tracer)));
 
         let mut callstack: Vec<(Option<Address>, CallCreateExecutive<'a, S>)> =
             Vec::new();
@@ -999,7 +1006,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
                                 None => top_substate,
                             };
 
-                            last_res = Some((exec.is_create, exec.gas, exec.exec(state, parent_substate)));
+                            last_res = Some((exec.is_create, exec.gas, exec.exec(state, parent_substate, tracer)));
                         }
                         None => panic!("When callstack only had one item and it was executed, this function would return; callstack never reaches zero item; qed"),
                     }
@@ -1190,7 +1197,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ExecutiveGeneric<'a, S> {
         stack_depth: usize, tracer: &mut T,
     ) -> vm::Result<FinalizationResult>
     where
-        T: Tracer,
+        T: Tracer<Output = trace::trace::ExecTrace>,
     {
         tracer.prepare_trace_create(&params);
         let _address = params.address;
@@ -1219,7 +1226,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ExecutiveGeneric<'a, S> {
         tracer: &mut T,
     ) -> vm::Result<FinalizationResult>
     where
-        T: Tracer,
+        T: Tracer<Output = trace::trace::ExecTrace>,
     {
         self.create_with_stack_depth(params, substate, 0, tracer)
     }
@@ -1229,7 +1236,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ExecutiveGeneric<'a, S> {
         stack_depth: usize, tracer: &mut T,
     ) -> vm::Result<FinalizationResult>
     where
-        T: Tracer,
+        T: Tracer<Output = trace::trace::ExecTrace>,
     {
         tracer.prepare_trace_call(&params);
         let vm_factory = self.state.vm_factory();
@@ -1257,7 +1264,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ExecutiveGeneric<'a, S> {
         tracer: &mut T,
     ) -> vm::Result<FinalizationResult>
     where
-        T: Tracer,
+        T: Tracer<Output = trace::trace::ExecTrace>,
     {
         self.call_with_stack_depth(params, substate, 0, tracer)
     }

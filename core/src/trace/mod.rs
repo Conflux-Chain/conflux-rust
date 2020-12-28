@@ -3,9 +3,13 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    trace::trace::{Action, Call, CallResult, Create, CreateResult, ExecTrace},
+    trace::trace::{
+        Action, Call, CallResult, Create, CreateResult, ExecTrace,
+        InternalContractAction,
+    },
     vm::{ActionParams, ContractCreateResult, MessageCallResult},
 };
+use cfx_types::{Address, U256};
 
 pub mod trace;
 
@@ -26,6 +30,11 @@ pub trait Tracer: Send {
     /// Prepares create result trace
     fn prepare_trace_create_result(&mut self, result: &ContractCreateResult);
 
+    /// Prepares internal contract action
+    fn prepare_internal_contract_action(
+        &mut self, from: Address, to: Address, value: U256,
+    );
+
     /// Consumes self and returns all traces.
     fn drain(self) -> Vec<Self::Output>;
 }
@@ -43,6 +52,11 @@ impl Tracer for NoopTracer {
     fn prepare_trace_create(&mut self, _: &ActionParams) {}
 
     fn prepare_trace_create_result(&mut self, _: &ContractCreateResult) {}
+
+    fn prepare_internal_contract_action(
+        &mut self, _: Address, _: Address, _: U256,
+    ) {
+    }
 
     fn drain(self) -> Vec<ExecTrace> { vec![] }
 }
@@ -81,6 +95,18 @@ impl Tracer for ExecutiveTracer {
         let trace = ExecTrace {
             action: Action::CreateResult(CreateResult::from(result)),
         };
+        self.traces.push(trace);
+    }
+
+    fn prepare_internal_contract_action(
+        &mut self, from: Address, to: Address, value: U256,
+    ) {
+        let trace =
+            ExecTrace {
+                action: Action::InternalContractAction(
+                    InternalContractAction { from, to, value },
+                ),
+            };
         self.traces.push(trace);
     }
 
