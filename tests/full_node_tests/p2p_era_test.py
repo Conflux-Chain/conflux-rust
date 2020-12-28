@@ -26,6 +26,7 @@ class P2PTest(ConfluxTestFramework):
         self.conf_parameters["era_epoch_count"] = "100"
         self.conf_parameters["dev_snapshot_epoch_count"] = "25"
         self.conf_parameters["anticone_penalty_ratio"] = "10"
+        self.conf_parameters["dev_allow_phase_change_without_peer"] = "false"
 
         self.stop_probability = 0.02
         self.clean_probability = 0.5
@@ -39,7 +40,7 @@ class P2PTest(ConfluxTestFramework):
 
         # start half of the nodes as archive nodes
         for i in self.archive_nodes:
-            self.start_node(i)
+            self.start_node(i, phase_to_wait=None)
 
         # start half of the nodes as full nodes
         for i in self.full_nodes:

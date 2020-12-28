@@ -48,4 +48,5 @@ small_local_test_conf = dict(
     subnet_quota = 0,
     persist_tx_index = "true",
     execute_genesis = "false",
+    dev_allow_phase_change_without_peer = "true",
 )

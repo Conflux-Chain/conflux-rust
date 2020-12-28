@@ -524,6 +524,7 @@ class ConfluxTestFramework:
 
         Create an empty blockchain and num_nodes wallets.
         Useful if a test case wants complete control over initialization."""
+
         for i in range(self.num_nodes):
             initialize_datadir(self.options.tmpdir, i, self.conf_parameters, self.extra_conf_files)
 

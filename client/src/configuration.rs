@@ -168,6 +168,7 @@ build_config! {
         (check_request_period_ms, (u64), 1_000)
         (chunk_size_byte, (u64), DEFAULT_CHUNK_SIZE)
         (demote_peer_for_timeout, (bool), false)
+        (dev_allow_phase_change_without_peer, (bool), false)
         (egress_queue_capacity, (usize), 256)
         (egress_min_throttle, (usize), 10)
         (egress_max_throttle, (usize), 64)
@@ -695,6 +696,9 @@ impl Configuration {
             sync_expire_block_timeout: Duration::from_secs(
                 self.raw_conf.sync_expire_block_timeout_s,
             ),
+            allow_phase_change_without_peer: self
+                .raw_conf
+                .dev_allow_phase_change_without_peer,
         }
     }
 

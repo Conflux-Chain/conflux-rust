@@ -411,6 +411,7 @@ pub struct ProtocolConfiguration {
     pub demote_peer_for_timeout: bool,
     pub max_unprocessed_block_size: usize,
     pub max_chunk_number_in_manifest: usize,
+    pub allow_phase_change_without_peer: bool,
 }
 
 impl SynchronizationProtocolHandler {
@@ -425,7 +426,7 @@ impl SynchronizationProtocolHandler {
         let sync_state = Arc::new(SynchronizationState::new(
             protocol_config.is_consortium,
             node_type,
-            protocol_config.dev_mode || protocol_config.test_mode,
+            protocol_config.allow_phase_change_without_peer,
         ));
         let recover_public_queue = Arc::new(AsyncTaskQueue::new(
             SyncHandlerWorkType::RecoverPublic,
