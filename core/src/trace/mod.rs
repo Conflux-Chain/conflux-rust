@@ -3,8 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    trace::trace::{Action, Call, Create, ExecTrace},
-    vm::ActionParams,
+    trace::trace::{Action, Call, CallResult, Create, CreateResult, ExecTrace},
+    vm::{ActionParams, ContractCreateResult, MessageCallResult},
 };
 
 pub mod trace;
@@ -17,8 +17,14 @@ pub trait Tracer: Send {
     /// Prepares call trace for given params.
     fn prepare_trace_call(&mut self, params: &ActionParams);
 
+    /// Prepares call result trace
+    fn prepare_trace_call_result(&mut self, result: &MessageCallResult);
+
     /// Prepares create trace for given params.
     fn prepare_trace_create(&mut self, params: &ActionParams);
+
+    /// Prepares create result trace
+    fn prepare_trace_create_result(&mut self, result: &ContractCreateResult);
 
     /// Consumes self and returns all traces.
     fn drain(self) -> Vec<Self::Output>;
@@ -32,13 +38,16 @@ impl Tracer for NoopTracer {
 
     fn prepare_trace_call(&mut self, _: &ActionParams) {}
 
+    fn prepare_trace_call_result(&mut self, _: &MessageCallResult) {}
+
     fn prepare_trace_create(&mut self, _: &ActionParams) {}
+
+    fn prepare_trace_create_result(&mut self, _: &ContractCreateResult) {}
 
     fn drain(self) -> Vec<ExecTrace> { vec![] }
 }
 
-/// Simple executive tracer. Traces all calls and creates. Ignores
-/// delegatecalls.
+/// Simple executive tracer. Traces all calls and creates.
 #[derive(Default)]
 pub struct ExecutiveTracer {
     traces: Vec<ExecTrace>,
@@ -54,9 +63,23 @@ impl Tracer for ExecutiveTracer {
         self.traces.push(trace);
     }
 
+    fn prepare_trace_call_result(&mut self, result: &MessageCallResult) {
+        let trace = ExecTrace {
+            action: Action::CallResult(CallResult::from(result)),
+        };
+        self.traces.push(trace);
+    }
+
     fn prepare_trace_create(&mut self, params: &ActionParams) {
         let trace = ExecTrace {
             action: Action::Create(Create::from(params.clone())),
+        };
+        self.traces.push(trace);
+    }
+
+    fn prepare_trace_create_result(&mut self, result: &ContractCreateResult) {
+        let trace = ExecTrace {
+            action: Action::CreateResult(CreateResult::from(result)),
         };
         self.traces.push(trace);
     }

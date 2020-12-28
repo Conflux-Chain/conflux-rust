@@ -1020,6 +1020,9 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
                                 };
 
                                 let contract_create_result = into_contract_create_result(val, &address, exec.unconfirmed_substate().expect("Executive is resumed from a create; it has an unconfirmed substate; qed"));
+                                tracer.prepare_trace_create_result(
+                                    &contract_create_result,
+                                );
                                 last_res = Some((
                                     exec.is_create,
                                     exec.gas,
@@ -1035,12 +1038,16 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
                                     Some((_, ref mut second_last)) => second_last.unconfirmed_substate().expect("Current stack value is created from second last item; second last item must be call or create; qed"),
                                     None => top_substate,
                                 };
-
+                                let contract_call_result =
+                                    into_message_call_result(val);
+                                tracer.prepare_trace_call_result(
+                                    &contract_call_result,
+                                );
                                 last_res = Some((
                                     exec.is_create,
                                     exec.gas,
                                     exec.resume_call(
-                                        into_message_call_result(val),
+                                        contract_call_result,
                                         state,
                                         parent_substate,
                                     ),
