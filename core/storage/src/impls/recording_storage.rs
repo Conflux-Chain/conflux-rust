@@ -30,26 +30,18 @@ impl<Storage: StateTrait> RecordingStorage<Storage> {
     }
 }
 
-impl<Storage: StateTrait> StateTrait for RecordingStorage<Storage> {
+impl<Storage: StateTrait + StateTraitExt> StateTrait
+    for RecordingStorage<Storage>
+{
     delegate! {
         to self.storage {
-            fn get_with_proof(&self, access_key: StorageKey) -> Result<(Option<Box<[u8]>>, StateProof)>;
             fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()>;
             fn delete(&mut self, access_key: StorageKey) -> Result<()>;
             fn delete_test_only(&mut self, access_key: StorageKey) -> Result<Option<Box<[u8]>>>;
             fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo>;
             fn get_state_root(&self) -> Result<StateRootWithAuxInfo>;
             fn commit(&mut self, epoch_id: EpochId) -> Result<StateRootWithAuxInfo>;
-            fn revert(&mut self);
         }
-    }
-
-    // `delegate!` is unable to pass generic "marker" types
-    fn get_node_merkle_all_versions<WithProof: StaticBool>(
-        &self, access_key: StorageKey,
-    ) -> Result<(NodeMerkleTriplet, NodeMerkleProof)> {
-        self.storage
-            .get_node_merkle_all_versions::<WithProof>(access_key)
     }
 
     // we need to record `get` operations
@@ -82,8 +74,7 @@ impl<Storage: StateTrait> StateTrait for RecordingStorage<Storage> {
 
 use crate::{
     impls::{
-        errors::*, merkle_patricia_trie::MptKeyValue,
-        node_merkle_proof::NodeMerkleProof, state_proof::StateProof,
+        errors::*, merkle_patricia_trie::MptKeyValue, state_proof::StateProof,
     },
     state::*,
     utils::access_mode,
@@ -92,6 +83,4 @@ use crate::{
 use cfx_internal_common::StateRootWithAuxInfo;
 use delegate::delegate;
 use parking_lot::Mutex;
-use primitives::{
-    CheckInput, EpochId, NodeMerkleTriplet, StaticBool, StorageKey,
-};
+use primitives::{CheckInput, EpochId, StorageKey};
