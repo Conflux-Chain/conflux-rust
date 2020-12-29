@@ -67,6 +67,7 @@ fn test_mining_10_epochs() {
     let mut conf = Configuration::default();
     conf.raw_conf.mode = Some("test".to_owned());
     conf.raw_conf.initial_difficulty = Some(10_000);
+    conf.raw_conf.dev_allow_phase_change_without_peer = true;
 
     let tmp_dir = TempDir::new("conflux-test").unwrap();
     conf.raw_conf.conflux_data_dir =
@@ -106,6 +107,7 @@ fn test_mining_10_epochs_with_larger_pow_problem_window() {
     conf.raw_conf.mode = Some("test".to_owned());
     conf.raw_conf.initial_difficulty = Some(10_000);
     conf.raw_conf.pow_problem_window_size = 4;
+    conf.raw_conf.dev_allow_phase_change_without_peer = true;
 
     let tmp_dir = TempDir::new("conflux-test").unwrap();
     conf.raw_conf.conflux_data_dir =
