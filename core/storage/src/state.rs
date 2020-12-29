@@ -18,11 +18,6 @@ pub type NoProof = primitives::static_bool::No;
 // concrete struct is put into inner mod, because the implementation is
 // anticipated to be too complex to present in the same file of the API.
 pub trait StateTrait {
-    // Verifiable proof related methods.
-    fn get_with_proof(
-        &self, access_key: StorageKey,
-    ) -> Result<(Option<Box<[u8]>>, StateProof)>;
-
     // Actions.
     fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>>;
     fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()>;
@@ -42,7 +37,12 @@ pub trait StateTrait {
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo>;
     fn get_state_root(&self) -> Result<StateRootWithAuxInfo>;
     fn commit(&mut self, epoch: EpochId) -> Result<StateRootWithAuxInfo>;
-    fn revert(&mut self);
+}
+
+pub trait StateTraitExt {
+    fn get_with_proof(
+        &self, access_key: StorageKey,
+    ) -> Result<(Option<Box<[u8]>>, StateProof)>;
 
     /// Compute the merkle of the node under `access_key` in all tries.
     /// Node merkle is computed on the value and children hashes, ignoring the
