@@ -91,23 +91,8 @@ impl StateTrait for ProofStorage {
         }
     }
 
-    fn get_node_merkle_all_versions<WithProof: StaticBool>(
-        &self, access_key: StorageKey,
-    ) -> Result<(NodeMerkleTriplet, NodeMerkleProof)> {
-        bail!("Unexpected call on ProofStorage: get_node_merkle_all_versions({:?})", access_key);
-    }
-
     fn get_state_root(&self) -> Result<StateRootWithAuxInfo> {
         bail!("Unexpected call on ProofStorage: get_state_root()");
-    }
-
-    fn get_with_proof(
-        &self, access_key: StorageKey,
-    ) -> Result<(Option<Box<[u8]>>, StateProof)> {
-        bail!(
-            "Unexpected call on ProofStorage: get_with_proof({:?})",
-            access_key
-        );
     }
 
     fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()> {
@@ -117,21 +102,13 @@ impl StateTrait for ProofStorage {
             value
         );
     }
-
-    fn revert(&mut self) { unimplemented!() }
 }
 
 use crate::{
-    impls::{
-        errors::*, merkle_patricia_trie::MptKeyValue,
-        node_merkle_proof::NodeMerkleProof,
-    },
+    impls::{errors::*, merkle_patricia_trie::MptKeyValue},
     state::*,
     utils::access_mode,
     StateProof,
 };
 use cfx_internal_common::StateRootWithAuxInfo;
-use primitives::{
-    DeltaMptKeyPadding, EpochId, NodeMerkleTriplet, StateRoot, StaticBool,
-    StorageKey,
-};
+use primitives::{DeltaMptKeyPadding, EpochId, StateRoot, StorageKey};
