@@ -1502,7 +1502,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ExecutiveGeneric<'a, S> {
                 // not happen. Unless we enable account dust in
                 // future. We add this check just in case it
                 // helps in future.
-                if self.state.is_contract_with_code(&new_address) {
+                if self.state.is_contract_with_code(&new_address)? {
                     self.state.revert_to_checkpoint();
                     return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                         ExecutionError::ContractAddressConflict,

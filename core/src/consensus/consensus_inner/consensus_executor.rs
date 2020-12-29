@@ -994,7 +994,9 @@ impl ConsensusExecutionHandler {
             self.vm.clone(),
             &spec,
             start_block_number - 1, /* block_number */
-        );
+        )
+        .expect("Failed to initialize state");
+
         let epoch_receipts = self
             .process_epoch_transactions(
                 &spec,
@@ -1661,7 +1663,7 @@ impl ConsensusExecutionHandler {
             self.vm.clone(),
             &spec,
             start_block_number - 1, /* block_number */
-        );
+        )?;
         self.process_epoch_transactions(
             &spec,
             *pivot_hash,
@@ -1722,7 +1724,7 @@ impl ConsensusExecutionHandler {
             self.vm.clone(),
             &spec,
             start_block_number,
-        );
+        )?;
         drop(state_availability_boundary);
 
         let env = Env {

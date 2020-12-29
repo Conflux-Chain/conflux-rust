@@ -1379,7 +1379,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
             Default::default(), /* vm */
             &Spec::new_spec(),
             start_block_number,
-        ))
+        )?)
     }
 
     fn get_state_db_by_epoch_number(

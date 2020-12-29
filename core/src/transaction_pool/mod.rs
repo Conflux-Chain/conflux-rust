@@ -750,24 +750,27 @@ impl TransactionPool {
     fn best_executed_state(
         data_man: &BlockDataManager, best_executed_epoch: StateIndex,
     ) -> StorageResult<Arc<State>> {
-        Ok(Arc::new(State::new(
-            StateDb::new(
-                data_man
-                    .storage_manager
-                    .get_state_no_commit(
-                        best_executed_epoch,
-                        /* try_open = */ false,
-                    )?
-                    // Safe because the state is guaranteed to be available
-                    .unwrap(),
-            ),
-            Default::default(),
-            &Spec::new_spec(),
-            // So far block_number is unused in txpool's state, it's fine to
-            // specify a fake number. block_number 1 corresponds to the state
-            // of genesis block.
-            1, /* block_number */
-        )))
+        Ok(Arc::new(
+            State::new(
+                StateDb::new(
+                    data_man
+                        .storage_manager
+                        .get_state_no_commit(
+                            best_executed_epoch,
+                            /* try_open = */ false,
+                        )?
+                        // Safe because the state is guaranteed to be available
+                        .unwrap(),
+                ),
+                Default::default(),
+                &Spec::new_spec(),
+                // So far block_number is unused in txpool's state, it's fine
+                // to specify a fake number. block_number 1
+                // corresponds to the state of genesis block.
+                1, /* block_number */
+            )
+            .expect("Failed to initialize state"),
+        ))
     }
 
     pub fn set_best_executed_epoch(

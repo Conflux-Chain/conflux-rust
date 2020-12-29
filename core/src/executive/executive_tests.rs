@@ -1094,7 +1094,9 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
         factory.clone().into(),
         &spec,
         1, /* block_number */
-    );
+    )
+    .expect("Failed to initialize state");
+
     state.checkpoint();
     assert_eq!(
         true,
@@ -1167,7 +1169,9 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
         factory.clone().into(),
         &spec,
         2, /* block_number */
-    );
+    )
+    .expect("Failed to initialize state");
+
     assert_eq!(
         true,
         state
