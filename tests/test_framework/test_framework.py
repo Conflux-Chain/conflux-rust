@@ -26,7 +26,7 @@ from .test_node import TestNode
 from .util import (
     CONFLUX_RPC_WAIT_TIMEOUT,
     MAX_NODES,
-    PortSeed,
+    PortMin,
     assert_equal,
     check_json_precision,
     checktx,
@@ -173,11 +173,16 @@ class ConfluxTestFramework:
                 os.path.dirname(os.path.realpath(__file__)),
                 "../../target/release/conflux"),
             type=str)
+        parser.add_argument(
+            "--port-min",
+            dest="port_min",
+            default=11000,
+            type=int)
         self.add_options(parser)
         self.options = parser.parse_args()
         self.after_options_parsed()
 
-        PortSeed.n = self.options.port_seed
+        PortMin.n = self.options.port_min
 
         check_json_precision()
 
@@ -193,7 +198,6 @@ class ConfluxTestFramework:
                 default=tempfile.mkdtemp(prefix="conflux_test_"))
         
         self._start_logging()
-        self.log.info("PortSeed.n=" + str(PortSeed.n))
 
         success = TestStatus.FAILED
 
@@ -282,10 +286,7 @@ class ConfluxTestFramework:
     def setup_chain(self):
         """Override this method to customize blockchain setup"""
         self.log.info("Initializing test directory " + self.options.tmpdir)
-        if self.setup_clean_chain:
-            self._initialize_chain_clean()
-        else:
-            self._initialize_chain()
+        self._initialize_chain_clean()
 
     def setup_network(self):
         """Override this method to customize test network topology"""
@@ -433,99 +434,13 @@ class ConfluxTestFramework:
             rpc_handler.setLevel(logging.DEBUG)
             rpc_logger.addHandler(rpc_handler)
 
-    def _initialize_chain(self):
-        """Initialize a pre-mined blockchain for use by the test.
-
-        Create a cache of a 200-block-long chain (with wallet) for MAX_NODES
-        Afterward, create num_nodes copies from the cache."""
-
-        assert self.num_nodes <= MAX_NODES
-        create_cache = False
-        for i in range(MAX_NODES):
-            if not os.path.isdir(get_datadir_path(self.options.cachedir, i)):
-                create_cache = True
-                break
-
-        if create_cache:
-            self.log.debug("Creating data directories from cached datadir")
-
-            # find and delete old cache directories if any exist
-            for i in range(MAX_NODES):
-                if os.path.isdir(get_datadir_path(self.options.cachedir, i)):
-                    shutil.rmtree(get_datadir_path(self.options.cachedir, i))
-
-            # Create cache directories, run bitcoinds:
-            for i in range(MAX_NODES):
-                datadir = initialize_datadir(self.options.cachedir, i, self.extra_conf_files)
-                args = [self.options.bitcoind, "-datadir=" + datadir]
-                if i > 0:
-                    args.append("-connect=127.0.0.1:" + str(p2p_port(0)))
-                self.nodes.append(
-                    TestNode(
-                        i,
-                        get_datadir_path(self.options.cachedir, i),
-                        extra_conf=["bind=127.0.0.1"],
-                        extra_args=[],
-                        rpchost=None,
-                        rpc_timeout=self.rpc_timewait,
-                        bitcoind=self.options.bitcoind,
-                        bitcoin_cli=self.options.bitcoincli,
-                        mocktime=self.mocktime,
-                        coverage_dir=None))
-                self.nodes[i].args = args
-                self.start_node(i)
-
-            # Wait for RPC connections to be ready
-            for node in self.nodes:
-                node.wait_for_rpc_connection()
-
-            # Create a 200-block-long chain; each of the 4 first nodes
-            # gets 25 mature blocks and 25 immature.
-            # Note: To preserve compatibility with older versions of
-            # initialize_chain, only 4 nodes will generate coins.
-            #
-            # blocks are created with timestamps 10 minutes apart
-            # starting from 2010 minutes in the past
-            self.enable_mocktime()
-            block_time = self.mocktime - (201 * 10 * 60)
-            for i in range(2):
-                for peer in range(4):
-                    for j in range(25):
-                        set_node_times(self.nodes, block_time)
-                        self.nodes[peer].generate_empty_blocks(1)
-                        block_time += 10 * 60
-                    # Must sync before next peer starts generating blocks
-                    sync_blocks(self.nodes)
-
-            # Shut them down, and clean up cache directories:
-            self.stop_nodes()
-            self.nodes = []
-            self.disable_mocktime()
-
-            def cache_path(n, *paths):
-                return os.path.join(
-                    get_datadir_path(self.options.cachedir, n), "regtest",
-                    *paths)
-
-            for i in range(MAX_NODES):
-                for entry in os.listdir(cache_path(i)):
-                    if entry not in ['wallets', 'chainstate', 'blocks']:
-                        os.remove(cache_path(i, entry))
-
-        for i in range(self.num_nodes):
-            from_dir = get_datadir_path(self.options.cachedir, i)
-            to_dir = get_datadir_path(self.options.tmpdir, i)
-            shutil.copytree(from_dir, to_dir)
-            initialize_datadir(self.options.tmpdir,
-                               i, self.conf_parameters, self.extra_conf_files)  # Overwrite port/rpcport in bitcoin.conf
-
     def _initialize_chain_clean(self):
         """Initialize empty blockchain for use by the test.
 
         Create an empty blockchain and num_nodes wallets.
         Useful if a test case wants complete control over initialization."""
         for i in range(self.num_nodes):
-            initialize_datadir(self.options.tmpdir, i, self.conf_parameters, self.extra_conf_files)
+            initialize_datadir(self.options.tmpdir, i, self.options.port_min, self.conf_parameters, self.extra_conf_files)
 
     def wait_for_tx(self, all_txs, check_status = False):
         for tx in all_txs:
