@@ -23,7 +23,7 @@ use crate::{
 use account_cache::AccountCache;
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_statedb::{Result as StateDbResult, StateDb};
-use cfx_storage::{Result as StorageResult, StateIndex, StorageManagerTrait};
+use cfx_storage::{StateIndex, StorageManagerTrait};
 use cfx_types::{Address, H256, U256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{
@@ -749,33 +749,30 @@ impl TransactionPool {
 
     fn best_executed_state(
         data_man: &BlockDataManager, best_executed_epoch: StateIndex,
-    ) -> StorageResult<Arc<State>> {
-        Ok(Arc::new(
-            State::new(
-                StateDb::new(
-                    data_man
-                        .storage_manager
-                        .get_state_no_commit(
-                            best_executed_epoch,
-                            /* try_open = */ false,
-                        )?
-                        // Safe because the state is guaranteed to be available
-                        .unwrap(),
-                ),
-                Default::default(),
-                &Spec::new_spec(),
-                // So far block_number is unused in txpool's state, it's fine
-                // to specify a fake number. block_number 1
-                // corresponds to the state of genesis block.
-                1, /* block_number */
-            )
-            .expect("Failed to initialize state"),
-        ))
+    ) -> StateDbResult<Arc<State>> {
+        Ok(Arc::new(State::new(
+            StateDb::new(
+                data_man
+                    .storage_manager
+                    .get_state_no_commit(
+                        best_executed_epoch,
+                        /* try_open = */ false,
+                    )?
+                    // Safe because the state is guaranteed to be available
+                    .unwrap(),
+            ),
+            Default::default(),
+            &Spec::new_spec(),
+            // So far block_number is unused in txpool's state, it's fine
+            // to specify a fake number. block_number 1
+            // corresponds to the state of genesis block.
+            1, /* block_number */
+        )?))
     }
 
     pub fn set_best_executed_epoch(
         &self, best_executed_epoch: StateIndex,
-    ) -> StorageResult<()> {
+    ) -> StateDbResult<()> {
         *self.best_executed_state.lock() =
             Self::best_executed_state(&self.data_man, best_executed_epoch)?;
 
