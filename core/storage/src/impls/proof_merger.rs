@@ -18,6 +18,7 @@ impl TrieProofMerger {
     pub fn merge(&mut self, proof: TrieProof) {
         for node in proof.into_proof_nodes() {
             if !self.hashes.contains(&node.get_merkle()) {
+                self.hashes.insert(*node.get_merkle());
                 self.nodes.push(node);
             }
         }
