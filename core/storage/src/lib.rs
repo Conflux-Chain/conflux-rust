@@ -172,7 +172,10 @@ pub use self::{
             sqlite::SqliteConnection,
         },
     },
-    state::{State as StorageState, StateTrait as StorageStateTrait},
+    state::{
+        State as StorageState, StateTrait as StorageStateTrait,
+        StateTraitExt as StorageStateTraitExt,
+    },
     state_manager::{
         StateIndex, StateManager as StorageManager,
         StateManagerTrait as StorageManagerTrait,

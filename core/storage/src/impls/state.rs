@@ -234,149 +234,6 @@ impl StateTrait for State {
             .map(|(value, _)| value)
     }
 
-    fn get_with_proof(
-        &self, access_key: StorageKey,
-    ) -> Result<(Option<Box<[u8]>>, StateProof)> {
-        self.ensure_temp_slab_for_db_load();
-
-        self.check_freshly_synced_snapshot("proof")?;
-        self.get_from_all_tries::<WithProof>(access_key)
-    }
-
-    fn get_node_merkle_all_versions<WithProof: StaticBool>(
-        &self, access_key: StorageKey,
-    ) -> Result<(NodeMerkleTriplet, NodeMerkleProof)> {
-        self.check_freshly_synced_snapshot("proof")?;
-        let mut proof = NodeMerkleProof::default();
-
-        // ----------- get from delta -----------
-        let delta = match self.delta_trie_root {
-            Some(ref root_node) => {
-                let key = access_key
-                    .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
-
-                let mut owned_node_set = Some(Default::default());
-
-                let mut visitor = SubTrieVisitor::new(
-                    &self.delta_trie,
-                    root_node.clone(),
-                    // won't create any new nodes
-                    &mut owned_node_set,
-                )?;
-
-                let delta = visitor.get_merkle_hash_wo_compressed_path(&key)?;
-
-                let maybe_proof = match WithProof::value() {
-                    false => None,
-                    true => Some(
-                        SubTrieVisitor::new(
-                            &self.delta_trie,
-                            root_node.clone(),
-                            // won't create any new nodes
-                            &mut Some(Default::default()),
-                        )?
-                        .get_proof(&key)?,
-                    ),
-                };
-
-                proof.with_delta(maybe_proof);
-
-                // for tombstones, we ignore the node merkle
-                if visitor.get(&key)?.is_tombstone() {
-                    MptValue::TombStone
-                } else {
-                    MptValue::from(delta)
-                }
-            }
-            None => MptValue::None,
-        };
-
-        // ----------- get from intermediate -----------
-        let intermediate = match (
-            &self.intermediate_trie_root,
-            &self.maybe_intermediate_trie,
-            &self.maybe_intermediate_trie_key_padding,
-        ) {
-            (
-                Some(ref root_node),
-                Some(ref intermediate_trie),
-                Some(ref intermediate_trie_key_padding),
-            ) => {
-                let key = access_key
-                    .to_delta_mpt_key_bytes(&intermediate_trie_key_padding);
-
-                let mut owned_node_set = Some(Default::default());
-
-                let mut visitor = SubTrieVisitor::new(
-                    &intermediate_trie,
-                    root_node.clone(),
-                    // won't create any new nodes
-                    &mut owned_node_set,
-                )?;
-
-                let intermediate =
-                    visitor.get_merkle_hash_wo_compressed_path(&key)?;
-
-                let maybe_proof = match WithProof::value() {
-                    false => None,
-                    true => Some(
-                        SubTrieVisitor::new(
-                            &intermediate_trie,
-                            root_node.clone(),
-                            // won't create any new nodes
-                            &mut Some(Default::default()),
-                        )?
-                        .get_proof(&key)?,
-                    ),
-                };
-
-                proof.with_intermediate(maybe_proof);
-
-                // for tombstones, we ignore the node merkle
-                if visitor.get(&key)?.is_tombstone() {
-                    MptValue::TombStone
-                } else {
-                    MptValue::from(intermediate)
-                }
-            }
-            _ => MptValue::None,
-        };
-
-        // ----------- get from snapshot -----------
-        let key = access_key.to_key_bytes();
-
-        let mut mpt = self.snapshot_db.open_snapshot_mpt_shared()?;
-        let mut cursor = MptCursor::<
-            &mut dyn SnapshotMptTraitRead,
-            BasicPathNode<&mut dyn SnapshotMptTraitRead>,
-        >::new(&mut mpt);
-        cursor.load_root()?;
-        let snapshot =
-            match cursor.open_path_for_key::<access_mode::Read>(&key)? {
-                CursorOpenPathTerminal::Arrived => Some(
-                    cursor
-                        .current_node_mut()
-                        .trie_node
-                        .get_merkle_hash_wo_compressed_path(),
-                ),
-                _ => None,
-            };
-        let maybe_proof = match WithProof::value() {
-            false => None,
-            true => Some(cursor.to_proof()),
-        };
-        cursor.finish()?;
-        proof.with_snapshot(maybe_proof);
-
-        let triplet = NodeMerkleTriplet {
-            delta,
-            intermediate,
-            snapshot,
-        };
-
-        Ok((triplet, proof))
-    }
-
     fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()> {
         self.pre_modification();
 
@@ -632,18 +489,150 @@ impl StateTrait for State {
 
         Ok(self.state_root(merkle_root))
     }
+}
 
-    fn revert(&mut self) {
-        self.dirty = false;
+impl StateTraitExt for State {
+    fn get_with_proof(
+        &self, access_key: StorageKey,
+    ) -> Result<(Option<Box<[u8]>>, StateProof)> {
+        self.ensure_temp_slab_for_db_load();
 
-        // Free all modified nodes.
-        let owned_node_set = self.owned_node_set.as_ref().unwrap();
-        for owned_node in owned_node_set {
-            self.delta_trie.get_node_memory_manager().free_owned_node(
-                &mut owned_node.clone(),
-                self.delta_trie.get_mpt_id(),
-            );
-        }
+        self.check_freshly_synced_snapshot("proof")?;
+        self.get_from_all_tries::<WithProof>(access_key)
+    }
+
+    fn get_node_merkle_all_versions<WithProof: StaticBool>(
+        &self, access_key: StorageKey,
+    ) -> Result<(NodeMerkleTriplet, NodeMerkleProof)> {
+        self.check_freshly_synced_snapshot("proof")?;
+        let mut proof = NodeMerkleProof::default();
+
+        // ----------- get from delta -----------
+        let delta = match self.delta_trie_root {
+            Some(ref root_node) => {
+                let key = access_key
+                    .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
+
+                let mut owned_node_set = Some(Default::default());
+
+                let mut visitor = SubTrieVisitor::new(
+                    &self.delta_trie,
+                    root_node.clone(),
+                    // won't create any new nodes
+                    &mut owned_node_set,
+                )?;
+
+                let delta = visitor.get_merkle_hash_wo_compressed_path(&key)?;
+
+                let maybe_proof = match WithProof::value() {
+                    false => None,
+                    true => Some(
+                        SubTrieVisitor::new(
+                            &self.delta_trie,
+                            root_node.clone(),
+                            // won't create any new nodes
+                            &mut Some(Default::default()),
+                        )?
+                        .get_proof(&key)?,
+                    ),
+                };
+
+                proof.with_delta(maybe_proof);
+
+                // for tombstones, we ignore the node merkle
+                if visitor.get(&key)?.is_tombstone() {
+                    MptValue::TombStone
+                } else {
+                    MptValue::from(delta)
+                }
+            }
+            None => MptValue::None,
+        };
+
+        // ----------- get from intermediate -----------
+        let intermediate = match (
+            &self.intermediate_trie_root,
+            &self.maybe_intermediate_trie,
+            &self.maybe_intermediate_trie_key_padding,
+        ) {
+            (
+                Some(ref root_node),
+                Some(ref intermediate_trie),
+                Some(ref intermediate_trie_key_padding),
+            ) => {
+                let key = access_key
+                    .to_delta_mpt_key_bytes(&intermediate_trie_key_padding);
+
+                let mut owned_node_set = Some(Default::default());
+
+                let mut visitor = SubTrieVisitor::new(
+                    &intermediate_trie,
+                    root_node.clone(),
+                    // won't create any new nodes
+                    &mut owned_node_set,
+                )?;
+
+                let intermediate =
+                    visitor.get_merkle_hash_wo_compressed_path(&key)?;
+
+                let maybe_proof = match WithProof::value() {
+                    false => None,
+                    true => Some(
+                        SubTrieVisitor::new(
+                            &intermediate_trie,
+                            root_node.clone(),
+                            // won't create any new nodes
+                            &mut Some(Default::default()),
+                        )?
+                        .get_proof(&key)?,
+                    ),
+                };
+
+                proof.with_intermediate(maybe_proof);
+
+                // for tombstones, we ignore the node merkle
+                if visitor.get(&key)?.is_tombstone() {
+                    MptValue::TombStone
+                } else {
+                    MptValue::from(intermediate)
+                }
+            }
+            _ => MptValue::None,
+        };
+
+        // ----------- get from snapshot -----------
+        let key = access_key.to_key_bytes();
+
+        let mut mpt = self.snapshot_db.open_snapshot_mpt_shared()?;
+        let mut cursor = MptCursor::<
+            &mut dyn SnapshotMptTraitRead,
+            BasicPathNode<&mut dyn SnapshotMptTraitRead>,
+        >::new(&mut mpt);
+        cursor.load_root()?;
+        let snapshot =
+            match cursor.open_path_for_key::<access_mode::Read>(&key)? {
+                CursorOpenPathTerminal::Arrived => Some(
+                    cursor
+                        .current_node_mut()
+                        .trie_node
+                        .get_merkle_hash_wo_compressed_path(),
+                ),
+                _ => None,
+            };
+        let maybe_proof = match WithProof::value() {
+            false => None,
+            true => Some(cursor.to_proof()),
+        };
+        cursor.finish()?;
+        proof.with_snapshot(maybe_proof);
+
+        let triplet = NodeMerkleTriplet {
+            delta,
+            intermediate,
+            snapshot,
+        };
+
+        Ok((triplet, proof))
     }
 }
 
@@ -883,6 +872,19 @@ impl State {
         };
 
         inserter.iterate(dumper)
+    }
+
+    fn revert(&mut self) {
+        self.dirty = false;
+
+        // Free all modified nodes.
+        let owned_node_set = self.owned_node_set.as_ref().unwrap();
+        for owned_node in owned_node_set {
+            self.delta_trie.get_node_memory_manager().free_owned_node(
+                &mut owned_node.clone(),
+                self.delta_trie.get_mpt_id(),
+            );
+        }
     }
 }
 
