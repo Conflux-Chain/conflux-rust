@@ -5,12 +5,9 @@
 use super::StateDbGeneric;
 use cfx_internal_common::StateRootWithAuxInfo;
 use cfx_storage::{
-    utils::access_mode, ErrorKind, MptKeyValue, NodeMerkleProof, Result,
-    StateProof, StorageStateTrait,
+    utils::access_mode, ErrorKind, MptKeyValue, Result, StorageStateTrait,
 };
-use primitives::{
-    EpochId, NodeMerkleTriplet, StaticBool, StorageKey, MERKLE_NULL_NODE,
-};
+use primitives::{EpochId, StorageKey, MERKLE_NULL_NODE};
 use std::{cell::RefCell, collections::HashMap};
 
 type StorageValue = Box<[u8]>;
@@ -102,23 +99,9 @@ impl StorageStateTrait for MockStorage {
         Ok(self.contents.get(&key).cloned())
     }
 
-    fn get_node_merkle_all_versions<WithProof: StaticBool>(
-        &self, access_key: StorageKey,
-    ) -> Result<(NodeMerkleTriplet, NodeMerkleProof)> {
-        unimplemented!()
-    }
-
     fn get_state_root(&self) -> Result<StateRootWithAuxInfo> {
         Err(ErrorKind::Msg("No state root".to_owned()).into())
     }
-
-    fn get_with_proof(
-        &self, access_key: StorageKey,
-    ) -> Result<(Option<Box<[u8]>>, StateProof)> {
-        unimplemented!()
-    }
-
-    fn revert(&mut self) { unimplemented!() }
 
     fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()> {
         *self.num_writes.get_mut() += 1;
