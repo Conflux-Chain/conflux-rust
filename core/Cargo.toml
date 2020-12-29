@@ -37,7 +37,7 @@ kvdb-rocksdb = {path="../db/src/kvdb-rocksdb"}
 lazy_static = "1.4"
 link-cut-tree = { path = "../util/link-cut-tree" }
 log = "0.4"
-log4rs = "0.9.0"
+log4rs = "1.0.0"
 lru_time_cache = "0.9.0"
 malloc_size_of = {path = "../util/malloc_size_of"}
 malloc_size_of_derive = {path = "../util/malloc_size_of_derive"}
