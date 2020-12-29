@@ -8,7 +8,7 @@ from conflux.messages import GetBlockHeaders, GET_BLOCK_HEADERS_RESPONSE
 from test_framework.mininode import start_p2p_connection
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import assert_equal, connect_nodes, get_peer_addr, wait_until, WaitHandler, \
-    initialize_datadir
+    initialize_datadir, PortMin
 
 
 class RpcTest(ConfluxTestFramework):
@@ -61,7 +61,7 @@ class RpcTest(ConfluxTestFramework):
         self.stop_nodes()
         self.add_nodes(1)
         node_index = len(self.nodes) - 1
-        initialize_datadir(self.options.tmpdir, node_index, self.conf_parameters)
+        initialize_datadir(self.options.tmpdir, node_index, PortMin.n, self.conf_parameters)
         self.start_node(node_index)
         obj = class_type(self.nodes[node_index])
 
