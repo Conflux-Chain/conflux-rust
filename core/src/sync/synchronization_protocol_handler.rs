@@ -810,7 +810,7 @@ impl SynchronizationProtocolHandler {
         for block_chunk in to_request_blocks[0..n_blocks_to_request]
             .chunks(MAX_BLOCKS_TO_SEND as usize)
         {
-            self.request_blocks(io, None, block_chunk.to_vec());
+            self.request_blocks_without_check(io, None, block_chunk.to_vec());
         }
     }
 
@@ -1616,10 +1616,15 @@ impl SynchronizationProtocolHandler {
         mut hashes: Vec<H256>,
     )
     {
-        hashes.retain(|hash| !self.try_request_block_from_db(io, hash));
-        // Blocks may have been inserted into sync graph before as dependent
-        // blocks
-        hashes.retain(|h| !self.graph.contains_block(h));
+        hashes.retain(|hash| !self.already_processed(hash));
+        self.request_blocks_without_check(io, peer_id, hashes)
+    }
+
+    pub fn request_blocks_without_check(
+        &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
+        hashes: Vec<H256>,
+    )
+    {
         let preferred_node_type = self.preferred_peer_node_type_for_get_block();
         self.request_manager.request_blocks(
             io,
@@ -1634,25 +1639,9 @@ impl SynchronizationProtocolHandler {
     /// Try to get the block from db. Return `true` if the block exists in db or
     /// is inserted before. Handle the block if its seq_num is less
     /// than that of the current era genesis.
-    fn try_request_block_from_db(
-        &self, io: &dyn NetworkContext, hash: &H256,
-    ) -> bool {
+    fn already_processed(&self, hash: &H256) -> bool {
         if self.graph.contains_block(hash) {
             return true;
-        }
-
-        if !self.graph.inner.read().locked_for_catchup {
-            if let Some(height) = self.graph.data_man.block_height_by_hash(hash)
-            {
-                let best_height = self.graph.consensus.best_epoch_number();
-                if height > best_height
-                    || best_height - height <= LOCAL_BLOCK_INFO_QUERY_THRESHOLD
-                {
-                    return false;
-                }
-            } else {
-                return false;
-            }
         }
 
         if let Some(info) = self.graph.data_man.local_block_info_by_hash(hash) {
@@ -1674,48 +1663,13 @@ impl SynchronizationProtocolHandler {
                 return true;
             }
 
-            if !self.graph.inner.read().locked_for_catchup
-                && info.get_instance_id()
-                    == self.graph.data_man.get_instance_id()
-            {
+            if info.get_instance_id() == self.graph.data_man.get_instance_id() {
                 // This block has already entered consensus graph
                 // in this run.
                 return true;
             }
         }
-
-        // FIXME: If there is no block info in db, whether we need to fetch
-        // block from db?
-        if let Some(block) = self
-            .graph
-            .data_man
-            .block_by_hash(hash, true /* update_cache */)
-        {
-            debug!("Recovered block {:?} from db", hash);
-            // Process blocks from db
-            // The parameter `failed_peer` is only used when there exist some
-            // blocks in `requested` but not in `blocks`.
-            // Here `requested` and `blocks` have the same block, so it's okay
-            // to set `failed_peer` to Default::default() since it will not be
-            // used.
-            let mut requested = HashSet::new();
-            requested.insert(block.hash());
-            // TODO: Handle inflight block bodies separately?
-            self.request_manager.set_block_inflight(block.hash());
-            self.recover_public_queue.dispatch(
-                io,
-                RecoverPublicTask::new(
-                    vec![block.as_ref().clone()],
-                    requested,
-                    Default::default(),
-                    false,
-                    None,
-                ),
-            );
-            return true;
-        } else {
-            return false;
-        }
+        return false;
     }
 
     pub fn blocks_received(

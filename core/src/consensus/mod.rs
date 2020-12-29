@@ -1067,30 +1067,11 @@ impl ConsensusGraphTrait for ConsensusGraph {
             MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
         self.statistics.inc_consensus_graph_processed_block_count();
 
-        {
-            let inner = &mut *self.inner.write();
-            self.new_block_handler.on_new_block(
-                inner,
-                &self.confirmation_meter,
-                hash,
-            );
-            // for full node, we should recover state_valid for pivot block
-            let mut pivot_block_state_valid_map =
-                self.pivot_block_state_valid_map.lock();
-            if !pivot_block_state_valid_map.is_empty()
-                && pivot_block_state_valid_map.contains_key(&hash)
-            {
-                let arena_index =
-                    *inner.hash_to_arena_indices.get(&hash).unwrap();
-                trace!(
-                    "Restore state_valid: hash={:?} height={}",
-                    hash,
-                    inner.arena[arena_index].height
-                );
-                inner.arena[arena_index].data.state_valid =
-                    pivot_block_state_valid_map.remove(&hash);
-            }
-        }
+        self.new_block_handler.on_new_block(
+            &mut *self.inner.write(),
+            &self.confirmation_meter,
+            hash,
+        );
 
         // Skip updating best info during recovery
         if update_best_info {
@@ -1366,19 +1347,24 @@ impl ConsensusGraphTrait for ConsensusGraph {
         self.get_state_db_by_height_and_hash(height, &hash)
     }
 
-    /// Return the blocks in the subtree of stable genesis and the blocks in the
-    /// `REWARD_EPOCH_COUNT` epochs before it. Block bodies of other blocks
-    /// in the consensus graph will never be needed for executions after this
-    /// stable genesis, as long as the checkpoint is not reverted.
+    /// Return the blocks without bodies in the subtree of stable genesis and
+    /// the blocks in the `REWARD_EPOCH_COUNT` epochs before it. Block
+    /// bodies of other blocks in the consensus graph will never be needed
+    /// for executions after this stable genesis, as long as the checkpoint
+    /// is not reverted.
     fn get_blocks_needing_bodies(&self) -> HashSet<H256> {
         let inner = self.inner.read();
         // TODO: This may not be stable genesis with other configurations.
         let stable_genesis = self.data_man.get_cur_consensus_era_stable_hash();
-        let mut block_set: HashSet<_> = inner
+        let mut missing_body_blocks = HashSet::new();
+        for block_hash in inner
             .get_subtree(&stable_genesis)
             .expect("stable is in consensus")
-            .into_iter()
-            .collect();
+        {
+            if self.data_man.block_by_hash(&block_hash, false).is_none() {
+                missing_body_blocks.insert(block_hash);
+            }
+        }
         // We also need the block bodies before the checkpoint to compute
         // rewards.
         let stable_height = self
@@ -1396,11 +1382,13 @@ impl ConsensusGraphTrait for ConsensusGraph {
                 .executed_epoch_set_hashes_from_db(height)
                 .expect("epoch sets before stable should exist")
             {
-                block_set.insert(block_hash);
+                if self.data_man.block_by_hash(&block_hash, false).is_none() {
+                    missing_body_blocks.insert(block_hash);
+                }
             }
         }
-        block_set.remove(&self.data_man.true_genesis.hash());
-        block_set
+        missing_body_blocks.remove(&self.data_man.true_genesis.hash());
+        missing_body_blocks
     }
 
     /// Check if we have downloaded all the headers to find the lowest needed

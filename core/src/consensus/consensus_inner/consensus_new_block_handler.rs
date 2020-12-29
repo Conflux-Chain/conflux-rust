@@ -1710,6 +1710,10 @@ impl ConsensusNewBlockHandler {
             .data_man
             .block_header_by_hash(hash)
             .expect("header exist for consensus");
+        debug!(
+            "insert new block into consensus: header_only={:?} block={:?}",
+            inner.header_only, &block_header
+        );
         let parent_hash = block_header.parent_hash();
         let parent_index = inner.hash_to_arena_indices.get(&parent_hash);
         let me = if parent_index.is_none()
