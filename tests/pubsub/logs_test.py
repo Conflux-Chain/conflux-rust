@@ -80,8 +80,6 @@ class PubSubTest(ConfluxTestFramework):
             receipts.append(r)
             assert(r != None)
 
-        # make sure the pub-sub layer processes the logs
-        self.rpc[FULLNODE0].generate_blocks(20)
         sync_blocks(self.nodes)
 
         # collect pub-sub notifications
@@ -136,9 +134,6 @@ class PubSubTest(ConfluxTestFramework):
         self.rpc[FULLNODE0].generate_blocks(4)
         receipt = self.rpc[FULLNODE0].get_transaction_receipt(tx.hash_hex())
         assert_ne(receipt, None)
-
-        # make sure the pub-sub layer processes the logs
-        self.rpc[FULLNODE0].generate_blocks(20)
         sync_blocks(self.nodes)
 
         # this would timeout before #1989 was fixed
