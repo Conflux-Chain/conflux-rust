@@ -1,5 +1,9 @@
 # 1.1.1
 
+## Improvements
+
+- Reduce delay in logs pub-sub; now we send logs immediately after they become available.
+
 # 1.1.0
 
 ## Incompatible changes
