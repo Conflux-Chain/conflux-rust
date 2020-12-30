@@ -156,27 +156,26 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             }
         } else {
             // If db is not initialized, all the loaded value should be zero.
-            if !annual_interest_rate.is_zero() {
-                bail!("annual_interest_rate is non-zero when db is un-init");
-            }
-
-            if !accumulate_interest_rate.is_zero() {
-                bail!(
-                    "accumulate_interest_rate is non-zero when db is un-init"
-                );
-            }
-
-            if !total_issued_tokens.is_zero() {
-                bail!("total_issued_tokens is non-zero when db is un-init");
-            }
-
-            if !total_staking_tokens.is_zero() {
-                bail!("total_staking_tokens is non-zero when db is un-init");
-            }
-
-            if !total_storage_tokens.is_zero() {
-                bail!("total_storage_tokens is non-zero when db is un-init");
-            }
+            assert!(
+                annual_interest_rate.is_zero(),
+                "annual_interest_rate is non-zero when db is un-init"
+            );
+            assert!(
+                accumulate_interest_rate.is_zero(),
+                "accumulate_interest_rate is non-zero when db is un-init"
+            );
+            assert!(
+                total_issued_tokens.is_zero(),
+                "total_issued_tokens is non-zero when db is un-init"
+            );
+            assert!(
+                total_staking_tokens.is_zero(),
+                "total_staking_tokens is non-zero when db is un-init"
+            );
+            assert!(
+                total_storage_tokens.is_zero(),
+                "total_storage_tokens is non-zero when db is un-init"
+            );
 
             StakingState {
                 total_issued_tokens: U256::default(),
@@ -1653,21 +1652,21 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         }))
     }
 
-    pub fn clear(&mut self) -> DbResult<()> {
+    pub fn clear(&mut self) {
         assert!(self.checkpoints.get_mut().is_empty());
         assert!(self.staking_state_checkpoints.get_mut().is_empty());
         self.cache.get_mut().clear();
         self.staking_state.interest_rate_per_block =
-            self.db.get_annual_interest_rate()? / U256::from(BLOCKS_PER_YEAR);
+            self.db.get_annual_interest_rate().expect("no db error")
+                / U256::from(BLOCKS_PER_YEAR);
         self.staking_state.accumulate_interest_rate =
-            self.db.get_accumulate_interest_rate()?;
+            self.db.get_accumulate_interest_rate().expect("no db error");
         self.staking_state.total_issued_tokens =
-            self.db.get_total_issued_tokens()?;
+            self.db.get_total_issued_tokens().expect("no db error");
         self.staking_state.total_staking_tokens =
-            self.db.get_total_staking_tokens()?;
+            self.db.get_total_staking_tokens().expect("no db error");
         self.staking_state.total_storage_tokens =
-            self.db.get_total_storage_tokens()?;
-        Ok(())
+            self.db.get_total_storage_tokens().expect("no db error");
     }
 }
 
