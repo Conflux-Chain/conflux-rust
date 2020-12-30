@@ -906,7 +906,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             // the interest will be put in balance.
             self.staking_state.total_issued_tokens += interest;
             self.staking_state.total_staking_tokens -= *amount;
-            Ok(amount + interest)
+            Ok(interest)
         } else {
             Ok(U256::zero())
         }

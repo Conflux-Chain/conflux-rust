@@ -224,22 +224,20 @@ impl CreateResult {
     }
 }
 
-/// Description of the result of an internal contract action regarding about
+/// Description of the result of an internal transfer action regarding about
 /// CFX.
 #[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct InternalContractAction {
-    /// The source address (if it is the internal contract, it means a give
-    /// action).
+pub struct InternalTransferAction {
+    /// The source address. If it is zero, then it is an interest mint action.
     pub from: Address,
-    /// The destination address (if it is the internal contract, it means a
-    /// take action).
+    /// The destination address. If it is zero, then it is a burnt action.
     pub to: Address,
     /// The amount of CFX
     pub value: U256,
 }
 
-impl InternalContractAction {
+impl InternalTransferAction {
     pub fn bloom(&self) -> Bloom {
         let mut bloom = Bloom::default();
         bloom.accrue(BloomInput::Raw(self.from.as_bytes()));
@@ -259,8 +257,8 @@ pub enum Action {
     CallResult(CallResult),
     /// It's the result of a create action
     CreateResult(CreateResult),
-    /// It's an internal contract action
-    InternalContractAction(InternalContractAction),
+    /// It's an internal transfer action
+    InternalTransferAction(InternalTransferAction),
 }
 
 impl Encodable for Action {
@@ -283,7 +281,7 @@ impl Encodable for Action {
                 s.append(&3u8);
                 s.append(create_result);
             }
-            Action::InternalContractAction(ref internal_action) => {
+            Action::InternalTransferAction(ref internal_action) => {
                 s.append(&4u8);
                 s.append(internal_action);
             }
@@ -299,7 +297,7 @@ impl Decodable for Action {
             1 => rlp.val_at(1).map(Action::Create),
             2 => rlp.val_at(1).map(Action::CallResult),
             3 => rlp.val_at(1).map(Action::CreateResult),
-            4 => rlp.val_at(1).map(Action::InternalContractAction),
+            4 => rlp.val_at(1).map(Action::InternalTransferAction),
             _ => Err(DecoderError::Custom("Invalid action type.")),
         }
     }
@@ -313,7 +311,7 @@ impl Action {
             Action::Create(ref create) => create.bloom(),
             Action::CallResult(_) => Bloom::default(),
             Action::CreateResult(ref create_result) => create_result.bloom(),
-            Action::InternalContractAction(ref internal_action) => {
+            Action::InternalTransferAction(ref internal_action) => {
                 internal_action.bloom()
             }
         }

@@ -64,10 +64,10 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for Destroy<S> {
     fn execute_inner(
         &self, input: Address, params: &ActionParams, spec: &Spec,
         state: &mut StateGeneric<S>, substate: &mut Substate,
-        _tracer: &mut dyn Tracer<Output = ExecTrace>,
+        tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        destroy(input, params, state, spec, substate)
+        destroy(input, params, state, spec, substate, tracer)
     }
 }
 

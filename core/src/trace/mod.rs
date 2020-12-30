@@ -5,7 +5,7 @@
 use crate::{
     trace::trace::{
         Action, Call, CallResult, Create, CreateResult, ExecTrace,
-        InternalContractAction,
+        InternalTransferAction,
     },
     vm::{ActionParams, ContractCreateResult, MessageCallResult},
 };
@@ -30,8 +30,8 @@ pub trait Tracer: Send {
     /// Prepares create result trace
     fn prepare_trace_create_result(&mut self, result: &ContractCreateResult);
 
-    /// Prepares internal contract action
-    fn prepare_internal_contract_action(
+    /// Prepares internal transfer action
+    fn prepare_internal_transfer_action(
         &mut self, from: Address, to: Address, value: U256,
     );
 
@@ -53,7 +53,7 @@ impl Tracer for NoopTracer {
 
     fn prepare_trace_create_result(&mut self, _: &ContractCreateResult) {}
 
-    fn prepare_internal_contract_action(
+    fn prepare_internal_transfer_action(
         &mut self, _: Address, _: Address, _: U256,
     ) {
     }
@@ -98,13 +98,13 @@ impl Tracer for ExecutiveTracer {
         self.traces.push(trace);
     }
 
-    fn prepare_internal_contract_action(
+    fn prepare_internal_transfer_action(
         &mut self, from: Address, to: Address, value: U256,
     ) {
         let trace =
             ExecTrace {
-                action: Action::InternalContractAction(
-                    InternalContractAction { from, to, value },
+                action: Action::InternalTransferAction(
+                    InternalTransferAction { from, to, value },
                 ),
             };
         self.traces.push(trace);

@@ -26,7 +26,7 @@ pub fn deposit<S: StorageStateTrait>(
     } else if state.balance(&params.sender)? < amount {
         Err(vm::Error::InternalContract("not enough balance to deposit"))
     } else {
-        tracer.prepare_internal_contract_action(
+        tracer.prepare_internal_transfer_action(
             params.sender,
             *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             amount,
@@ -48,11 +48,16 @@ pub fn withdraw<S: StorageStateTrait>(
             "not enough withdrawable staking balance to withdraw",
         ))
     } else {
-        let withdraw_amount = state.withdraw(&params.sender, &amount)?;
-        tracer.prepare_internal_contract_action(
+        tracer.prepare_internal_transfer_action(
             *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             params.sender,
-            withdraw_amount,
+            amount,
+        );
+        let interest_amount = state.withdraw(&params.sender, &amount)?;
+        tracer.prepare_internal_transfer_action(
+            Address::zero(),
+            params.sender,
+            interest_amount,
         );
         Ok(())
     }
