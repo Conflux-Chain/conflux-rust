@@ -5,6 +5,7 @@
 use super::SolidityFunctionTrait;
 use crate::{
     state::{StateGeneric, Substate},
+    trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, CallType, GasLeft, ReturnData, Spec},
 };
 use cfx_storage::StorageStateTrait;
@@ -33,6 +34,7 @@ where T: InterfaceTrait
     fn execute(
         &self, input: &[u8], params: &ActionParams, spec: &Spec,
         state: &mut StateGeneric<S>, substate: &mut Substate,
+        tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>
     {
         self.pre_execution_check(params, substate)?;
@@ -44,21 +46,28 @@ where T: InterfaceTrait
             return Err(vm::Error::OutOfGas);
         }
 
-        self.execute_inner(solidity_params, params, spec, state, substate)
-            .and_then(|output| {
-                let output = output.abi_encode();
-                let length = output.len();
-                let return_cost = (length + 31) / 32 * spec.memory_gas;
-                if params.gas < cost + return_cost {
-                    Err(vm::Error::OutOfGas)
-                } else {
-                    Ok(GasLeft::NeedsReturn {
-                        gas_left: params.gas - cost - return_cost,
-                        data: ReturnData::new(output, 0, length),
-                        apply_state: true,
-                    })
-                }
-            })
+        self.execute_inner(
+            solidity_params,
+            params,
+            spec,
+            state,
+            substate,
+            tracer,
+        )
+        .and_then(|output| {
+            let output = output.abi_encode();
+            let length = output.len();
+            let return_cost = (length + 31) / 32 * spec.memory_gas;
+            if params.gas < cost + return_cost {
+                Err(vm::Error::OutOfGas)
+            } else {
+                Ok(GasLeft::NeedsReturn {
+                    gas_left: params.gas - cost - return_cost,
+                    data: ReturnData::new(output, 0, length),
+                    apply_state: true,
+                })
+            }
+        })
     }
 
     fn name(&self) -> &'static str { return Self::NAME_AND_PARAMS; }
@@ -82,6 +91,7 @@ pub trait ExecutionTrait<S: StorageStateTrait>:
     fn execute_inner(
         &self, input: Self::Input, params: &ActionParams, spec: &Spec,
         state: &mut StateGeneric<S>, substate: &mut Substate,
+        tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<<Self as InterfaceTrait>::Output>;
 }
 

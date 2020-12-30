@@ -888,7 +888,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
 
     pub fn withdraw(
         &mut self, address: &Address, amount: &U256,
-    ) -> DbResult<()> {
+    ) -> DbResult<U256> {
         if !amount.is_zero() {
             let interest;
             {
@@ -906,8 +906,10 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             // the interest will be put in balance.
             self.staking_state.total_issued_tokens += interest;
             self.staking_state.total_staking_tokens -= *amount;
+            Ok(interest)
+        } else {
+            Ok(U256::zero())
         }
-        Ok(())
     }
 
     pub fn vote_lock(
