@@ -381,6 +381,7 @@ pub struct ProtocolConfiguration {
     pub is_consortium: bool,
     pub send_tx_period: Duration,
     pub check_request_period: Duration,
+    pub check_phase_change_period: Duration,
     pub heartbeat_period_interval: Duration,
     pub heartbeat_timeout: Duration,
     pub block_cache_gc_period: Duration,
@@ -1780,7 +1781,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         .expect("Error registering block_cache_gc timer");
         io.register_timer(
             CHECK_CATCH_UP_MODE_TIMER,
-            Duration::from_millis(1000),
+            self.protocol_config.check_phase_change_period,
         )
         .expect("Error registering check_catch_up_mode timer");
         io.register_timer(LOG_STATISTIC_TIMER, Duration::from_millis(5000))

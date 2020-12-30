@@ -249,6 +249,7 @@ build_config! {
 
         // General/Unclassified section.
         (account_provider_refresh_time_ms, (u64), 1000)
+        (check_phase_change_period_ms, (u64), 1000)
         (enable_optimistic_execution, (bool), true)
         (future_block_buffer_capacity, (usize), 32768)
         (get_logs_filter_max_limit, (Option<usize>), None)
@@ -622,6 +623,9 @@ impl Configuration {
             ),
             check_request_period: Duration::from_millis(
                 self.raw_conf.check_request_period_ms,
+            ),
+            check_phase_change_period: Duration::from_millis(
+                self.raw_conf.check_phase_change_period_ms,
             ),
             heartbeat_period_interval: Duration::from_millis(
                 self.raw_conf.heartbeat_period_interval_ms,
