@@ -1657,6 +1657,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         }))
     }
 
+    #[cfg(test)]
     pub fn clear(&mut self) {
         assert!(self.checkpoints.get_mut().is_empty());
         assert!(self.staking_state_checkpoints.get_mut().is_empty());
