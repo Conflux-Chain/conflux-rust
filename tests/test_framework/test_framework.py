@@ -264,6 +264,10 @@ class ConfluxTestFramework:
                     os.path.dirname(os.path.realpath(__file__)) +
                     "/../combine_logs.py"), self.options.tmpdir))
             exit_code = TEST_EXIT_FAILED
+        handlers = self.log.handlers[:]
+        for handler in handlers:
+            self.log.removeHandler(handler)
+            handler.close()
         logging.shutdown()
         if cleanup_tree_on_exit:
             shutil.rmtree(self.options.tmpdir)

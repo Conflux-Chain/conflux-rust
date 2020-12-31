@@ -4,7 +4,7 @@
 
 use crate::{
     bytes::Bytes,
-    vm::{ActionParams, CallType},
+    vm::{ActionParams, CallType, ContractCreateResult, MessageCallResult},
 };
 use cfx_internal_common::{DatabaseDecodable, DatabaseEncodable};
 use cfx_types::{Address, Bloom, BloomInput, U256};
@@ -66,6 +66,77 @@ impl Call {
     }
 }
 
+/// The outcome of the action result.
+#[derive(Debug, PartialEq, Clone, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Outcome {
+    Success,
+    Reverted,
+    Fail,
+}
+
+impl Encodable for Outcome {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        let v = match *self {
+            Outcome::Success => 0u32,
+            Outcome::Reverted => 1,
+            Outcome::Fail => 2,
+        };
+        Encodable::rlp_append(&v, s);
+    }
+}
+
+impl Decodable for Outcome {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        rlp.as_val().and_then(|v| {
+            Ok(match v {
+                0u32 => Outcome::Success,
+                1 => Outcome::Reverted,
+                2 => Outcome::Fail,
+                _ => {
+                    return Err(DecoderError::Custom(
+                        "Invalid value of CallType item",
+                    ));
+                }
+            })
+        })
+    }
+}
+
+/// Description of the result of a _call_ action.
+#[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CallResult {
+    /// The outcome of the result
+    pub outcome: Outcome,
+    /// The amount of gas left
+    pub gas_left: U256,
+    /// Output data
+    pub return_data: Bytes,
+}
+
+impl From<&MessageCallResult> for CallResult {
+    fn from(r: &MessageCallResult) -> Self {
+        match r {
+            MessageCallResult::Success(gas_left, return_data) => CallResult {
+                outcome: Outcome::Success,
+                gas_left: gas_left.clone(),
+                return_data: return_data.to_vec(),
+            },
+            MessageCallResult::Reverted(gas_left, return_data) => CallResult {
+                outcome: Outcome::Reverted,
+                gas_left: gas_left.clone(),
+                return_data: return_data.to_vec(),
+            },
+            MessageCallResult::Failed => CallResult {
+                outcome: Outcome::Fail,
+                gas_left: U256::zero(),
+                return_data: vec![],
+            },
+        }
+    }
+}
+
 /// Description of a _create_ action, either a `CREATE` operation or a create
 /// transaction.
 #[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable, Serialize)]
@@ -100,6 +171,81 @@ impl Create {
     }
 }
 
+/// Description of the result of a _create_ action.
+#[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateResult {
+    /// The outcome of the create
+    pub outcome: Outcome,
+    /// The created contract address
+    pub addr: Address,
+    /// The amount of gas left
+    pub gas_left: U256,
+    /// Output data
+    pub return_data: Bytes,
+}
+
+impl From<&ContractCreateResult> for CreateResult {
+    fn from(r: &ContractCreateResult) -> Self {
+        match r {
+            ContractCreateResult::Created(addr, gas_left) => CreateResult {
+                outcome: Outcome::Success,
+                addr: addr.clone(),
+                gas_left: gas_left.clone(),
+                return_data: vec![],
+            },
+            ContractCreateResult::Reverted(gas_left, return_data) => {
+                CreateResult {
+                    outcome: Outcome::Reverted,
+                    addr: Address::zero(),
+                    gas_left: gas_left.clone(),
+                    return_data: return_data.to_vec(),
+                }
+            }
+            ContractCreateResult::Failed => CreateResult {
+                outcome: Outcome::Fail,
+                addr: Address::zero(),
+                gas_left: U256::zero(),
+                return_data: vec![],
+            },
+        }
+    }
+}
+
+impl CreateResult {
+    /// Returns create result bloom.
+    /// The bloom contains only created contract address.
+    pub fn bloom(&self) -> Bloom {
+        if self.outcome == Outcome::Success {
+            BloomInput::Raw(self.addr.as_bytes()).into()
+        } else {
+            Bloom::default()
+        }
+    }
+}
+
+/// Description of the result of an internal transfer action regarding about
+/// CFX.
+#[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InternalTransferAction {
+    /// The source address. If it is zero, then it is an interest mint action.
+    pub from: Address,
+    /// The destination address. If it is zero, then it is a burnt action.
+    pub to: Address,
+    /// The amount of CFX
+    pub value: U256,
+}
+
+impl InternalTransferAction {
+    pub fn bloom(&self) -> Bloom {
+        let mut bloom = Bloom::default();
+        bloom.accrue(BloomInput::Raw(self.from.as_bytes()));
+        bloom.accrue(BloomInput::Raw(self.to.as_bytes()));
+        bloom
+    }
+}
+
 /// Description of an action that we trace; will be either a call or a create.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
@@ -107,6 +253,12 @@ pub enum Action {
     Call(Call),
     /// It's a create action.
     Create(Create),
+    /// It's the result of a call action
+    CallResult(CallResult),
+    /// It's the result of a create action
+    CreateResult(CreateResult),
+    /// It's an internal transfer action
+    InternalTransferAction(InternalTransferAction),
 }
 
 impl Encodable for Action {
@@ -121,6 +273,18 @@ impl Encodable for Action {
                 s.append(&1u8);
                 s.append(create);
             }
+            Action::CallResult(ref call_result) => {
+                s.append(&2u8);
+                s.append(call_result);
+            }
+            Action::CreateResult(ref create_result) => {
+                s.append(&3u8);
+                s.append(create_result);
+            }
+            Action::InternalTransferAction(ref internal_action) => {
+                s.append(&4u8);
+                s.append(internal_action);
+            }
         }
     }
 }
@@ -131,6 +295,9 @@ impl Decodable for Action {
         match action_type {
             0 => rlp.val_at(1).map(Action::Call),
             1 => rlp.val_at(1).map(Action::Create),
+            2 => rlp.val_at(1).map(Action::CallResult),
+            3 => rlp.val_at(1).map(Action::CreateResult),
+            4 => rlp.val_at(1).map(Action::InternalTransferAction),
             _ => Err(DecoderError::Custom("Invalid action type.")),
         }
     }
@@ -142,6 +309,11 @@ impl Action {
         match *self {
             Action::Call(ref call) => call.bloom(),
             Action::Create(ref create) => create.bloom(),
+            Action::CallResult(_) => Bloom::default(),
+            Action::CreateResult(ref create_result) => create_result.bloom(),
+            Action::InternalTransferAction(ref internal_action) => {
+                internal_action.bloom()
+            }
         }
     }
 }

@@ -17,10 +17,11 @@ class ThrottleRpcTests(ConfluxTestFramework):
     def setup_chain(self):
         # prepare throttling configuratoin file
         throttle_conf = os.path.join(self.options.tmpdir, "throttling.toml")
+        # Note: Should not use cfx_getBestBlockHash for this test, because it has been called to start a node.
         with open(throttle_conf, "w") as fp:
             fp.write("[rpc_local]\n")
             fp.write("cfx_epochNumber=\"300,200,1,100,1\"\n")
-            fp.write("cfx_getBestBlockHash=\"5,5,2,1,0\"\n")
+            fp.write("cfx_gasPrice=\"5,5,2,1,0\"\n")
 
         self.conf_parameters["throttling_conf"] = "'{}'".format(throttle_conf)
 
@@ -66,11 +67,11 @@ class ThrottleRpcTests(ConfluxTestFramework):
     def test_recharged(self, client):
         # allow 5 times
         for _ in range(5):
-            assert client.best_block_hash() is not None
+            assert client.gas_price() is not None
 
         # throttled
         try:
-            client.best_block_hash()
+            client.gas_price()
             assert "should be throttled"
         except ReceivedErrorResponseError as e:
             assert e.response.code == -32072
@@ -78,7 +79,7 @@ class ThrottleRpcTests(ConfluxTestFramework):
 
         # do not tolerate once throttled
         try:
-            client.best_block_hash()
+            client.gas_price()
             assert "should be throttled"
         except ReceivedErrorResponseError as e:
             assert e.response.code == -32072
@@ -88,12 +89,12 @@ class ThrottleRpcTests(ConfluxTestFramework):
         time.sleep(1)
 
         # 2 tokens recharged
-        assert client.best_block_hash() is not None
-        assert client.best_block_hash() is not None
+        assert client.gas_price() is not None
+        assert client.gas_price() is not None
 
         # throttled again
         try:
-            client.best_block_hash()
+            client.gas_price()
             assert "should be throttled"
         except ReceivedErrorResponseError as e:
             assert e.response.code == -32072
