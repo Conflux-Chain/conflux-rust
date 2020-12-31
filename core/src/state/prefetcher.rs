@@ -107,9 +107,7 @@ impl PrefetcherThreadWorker {
                 }
                 self.cancel_task_id.store(0, Ordering::Relaxed);
             }
-            state
-                .try_load(address)
-                .expect("db error during account load");
+            state.try_load(address);
         }
     }
 

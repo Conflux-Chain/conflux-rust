@@ -1300,16 +1300,19 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     /// Return whether or not the address exists.
-    pub fn try_load(&self, address: &Address) -> DbResult<bool> {
-        if self.ensure_account_loaded(address, RequireCache::None, |maybe| {
-            maybe.is_some()
-        })? {
+    pub fn try_load(&self, address: &Address) -> bool {
+        if self
+            .ensure_account_loaded(address, RequireCache::None, |maybe| {
+                maybe.is_some()
+            })
+            .unwrap()
+        {
             // Try to load the code, but don't fail if there is no code.
-            self.ensure_account_loaded(address, RequireCache::Code, |_| ())?;
-
-            Ok(true)
+            self.ensure_account_loaded(address, RequireCache::Code, |_| ())
+                .unwrap();
+            true
         } else {
-            Ok(false)
+            false
         }
     }
 
