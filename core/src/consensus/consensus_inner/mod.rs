@@ -3881,8 +3881,7 @@ impl ConsensusGraphInner {
         let mut queue = VecDeque::new();
         let mut subtree = Vec::new();
         queue.push_back(root_arena_index);
-        while !queue.is_empty() {
-            let i = queue.pop_front().expect("non-empty");
+        while let Some(i) = queue.pop_front() {
             subtree.push(self.arena[i].hash);
             for child in &self.arena[i].children {
                 queue.push_back(*child);
