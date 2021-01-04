@@ -175,7 +175,7 @@ fn checkpoint_from_empty_get_storage_at() {
     let k2 = u256_to_vec(&U256::from(1));
 
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
-    state.clear();
+    state.clear_test_only();
 
     let mut substates = Vec::<Substate>::new();
     substates.push(Substate::new());
@@ -461,7 +461,7 @@ fn checkpoint_get_storage_at() {
     state
         .commit(BigEndianHash::from_uint(&U256::from(1u64)), None)
         .unwrap();
-    state.clear();
+    state.clear_test_only();
     substates.clear();
     substates.push(Substate::new());
 
@@ -485,7 +485,7 @@ fn checkpoint_get_storage_at() {
         state.collateral_for_storage(&a).unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
-    state.clear();
+    state.clear_test_only();
     substates.clear();
     substates.push(Substate::new());
     let cm1 = state.checkpoint();
@@ -1010,7 +1010,7 @@ fn create_contract_fail_previous_storage() {
     state
         .commit(BigEndianHash::from_uint(&U256::from(1)), None)
         .unwrap();
-    state.clear();
+    state.clear_test_only();
     substates.clear();
     substates.push(Substate::new());
 
@@ -1018,7 +1018,7 @@ fn create_contract_fail_previous_storage() {
         state.storage_at(&contract_addr, &k).unwrap(),
         U256::from(0xffff)
     );
-    state.clear();
+    state.clear_test_only();
     substates.clear();
     substates.push(Substate::new());
     state =
