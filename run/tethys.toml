@@ -296,7 +296,7 @@ jsonrpc_local_http_port=12539
 # `netconf_dir` is the directory to store network related persistent data, including `net_key`,
 # a list of trusted nodes and a list of untrusted nodes.
 #
-# netconf_dir="./net_config"
+# netconf_dir="./blockchain_data/net_config"
 
 # `net_key` is the 256-bit private key to generate a unique node id for this node.
 # The value is a 64-digit hex string.
@@ -370,11 +370,11 @@ jsonrpc_local_http_port=12539
 
 # The root directory of all data (block data, state data, log files, node database).
 #
-# conflux_data_dir = "./"
+# conflux_data_dir = "./blockchain_data"
 
 # The directory to store block-related data.
 #
-# block_db_dir = "./blockchain_db"
+# block_db_dir = "./blockchain_data/blockchain_db"
 
 # Maximum size of cached ledger data (block, receipts, e.t.c.)
 # The unit is MB.
