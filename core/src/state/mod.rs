@@ -1308,15 +1308,14 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             Ok(false) => Ok(false),
             Ok(true) => {
                 // Try to load the code.
-                if let Err(e) = self.ensure_account_loaded(
+                match self.ensure_account_loaded(
                     address,
                     RequireCache::Code,
                     |_| (),
                 ) {
-                    return Err(e);
+                    Ok(()) => Ok(true),
+                    Err(e) => Err(e),
                 }
-
-                Ok(true)
             }
         }
     }
