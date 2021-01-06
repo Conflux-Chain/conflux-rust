@@ -137,20 +137,15 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     pub fn new(
         db: StateDb<StateDbStorage>, vm: VmFactory, spec: &Spec,
         block_number: u64,
-    ) -> Self
+    ) -> DbResult<Self>
     {
-        let annual_interest_rate =
-            db.get_annual_interest_rate().expect("no db error");
-        let accumulate_interest_rate =
-            db.get_accumulate_interest_rate().expect("no db error");
-        let total_issued_tokens =
-            db.get_total_issued_tokens().expect("No db error");
-        let total_staking_tokens =
-            db.get_total_staking_tokens().expect("No db error");
-        let total_storage_tokens =
-            db.get_total_storage_tokens().expect("No db error");
+        let annual_interest_rate = db.get_annual_interest_rate()?;
+        let accumulate_interest_rate = db.get_accumulate_interest_rate()?;
+        let total_issued_tokens = db.get_total_issued_tokens()?;
+        let total_staking_tokens = db.get_total_staking_tokens()?;
+        let total_storage_tokens = db.get_total_storage_tokens()?;
 
-        let staking_state = if db.is_initialized().expect("no db error") {
+        let staking_state = if db.is_initialized()? {
             StakingState {
                 total_issued_tokens,
                 total_staking_tokens,
@@ -181,6 +176,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 total_storage_tokens.is_zero(),
                 "total_storage_tokens is non-zero when db is un-init"
             );
+
             StakingState {
                 total_issued_tokens: U256::default(),
                 total_staking_tokens: U256::default(),
@@ -201,7 +197,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         } else {
             U256::zero()
         };
-        StateGeneric {
+        Ok(StateGeneric {
             db,
             cache: Default::default(),
             staking_state_checkpoints: Default::default(),
@@ -212,7 +208,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             block_number,
             vm,
             accounts_to_notify: Default::default(),
-        }
+        })
     }
 
     pub fn contract_start_nonce(&self) -> U256 { self.contract_start_nonce }
@@ -468,14 +464,13 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         })
     }
 
-    pub fn is_contract_with_code(&self, address: &Address) -> bool {
+    pub fn is_contract_with_code(&self, address: &Address) -> DbResult<bool> {
         if !address.is_contract_address() {
-            return false;
+            return Ok(false);
         }
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(false, |acc| acc.code_hash() != KECCAK_EMPTY)
         })
-        .unwrap_or(false)
     }
 
     fn maybe_address(address: &Address) -> Option<Address> {
@@ -770,9 +765,10 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         )
     }
 
-    pub fn clean_account(&mut self, address: &Address) {
-        *&mut *self.require_or_new_basic_account(address).unwrap() =
+    pub fn clean_account(&mut self, address: &Address) -> DbResult<()> {
+        *&mut *self.require_or_new_basic_account(address)? =
             OverlayAccount::from_loaded(address, Default::default());
+        Ok(())
     }
 
     pub fn inc_nonce(&mut self, address: &Address) -> DbResult<()> {
@@ -1304,18 +1300,23 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     /// Return whether or not the address exists.
-    pub fn try_load(&self, address: &Address) -> bool {
-        if let Ok(true) =
-            self.ensure_account_loaded(address, RequireCache::None, |maybe| {
-                maybe.is_some()
-            })
-        {
-            // Try to load the code, but don't fail if there is no code.
-            self.ensure_account_loaded(address, RequireCache::Code, |_| ())
-                .ok();
-            true
-        } else {
-            false
+    pub fn try_load(&self, address: &Address) -> DbResult<bool> {
+        match self.ensure_account_loaded(address, RequireCache::None, |maybe| {
+            maybe.is_some()
+        }) {
+            Err(e) => Err(e),
+            Ok(false) => Ok(false),
+            Ok(true) => {
+                // Try to load the code.
+                match self.ensure_account_loaded(
+                    address,
+                    RequireCache::Code,
+                    |_| (),
+                ) {
+                    Ok(()) => Ok(true),
+                    Err(e) => Err(e),
+                }
+            }
         }
     }
 
@@ -1393,10 +1394,10 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
 
     pub fn storage_at(&self, address: &Address, key: &[u8]) -> DbResult<U256> {
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
-            acc.map_or(U256::zero(), |account| {
-                account.storage_at(&self.db, key).unwrap_or(U256::zero())
+            acc.map_or(Ok(U256::zero()), |account| {
+                account.storage_at(&self.db, key)
             })
-        })
+        })?
     }
 
     /// Get the value of storage at a specific checkpoint.
@@ -1660,7 +1661,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         }))
     }
 
-    pub fn clear(&mut self) {
+    pub fn clear_test_only(&mut self) {
         assert!(self.checkpoints.get_mut().is_empty());
         assert!(self.staking_state_checkpoints.get_mut().is_empty());
         self.cache.get_mut().clear();
@@ -1670,11 +1671,11 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         self.staking_state.accumulate_interest_rate =
             self.db.get_accumulate_interest_rate().expect("no db error");
         self.staking_state.total_issued_tokens =
-            self.db.get_total_issued_tokens().expect("No db error");
+            self.db.get_total_issued_tokens().expect("no db error");
         self.staking_state.total_staking_tokens =
-            self.db.get_total_staking_tokens().expect("No db error");
+            self.db.get_total_staking_tokens().expect("no db error");
         self.staking_state.total_storage_tokens =
-            self.db.get_total_storage_tokens().expect("No db error");
+            self.db.get_total_storage_tokens().expect("no db error");
     }
 }
 

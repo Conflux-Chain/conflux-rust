@@ -189,7 +189,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ContextTrait
         // address. This should generally not happen. Unless we enable
         // account dust in future. We add this check just in case it
         // helps in future.
-        if self.state.is_contract_with_code(&address) {
+        if self.state.is_contract_with_code(&address)? {
             debug!("Contract address conflict!");
             return Ok(Ok(ContractCreateResult::Failed));
         }
