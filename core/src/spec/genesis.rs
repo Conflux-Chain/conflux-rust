@@ -134,7 +134,8 @@ pub fn genesis_block(
         Default::default(),
         &Spec::new_spec(),
         0, /* block_number */
-    );
+    )
+    .expect("Failed to initialize state");
 
     let mut genesis_block_author = test_net_version;
     genesis_block_author.set_user_account_type_bits();
@@ -350,7 +351,9 @@ pub fn genesis_block(
         }
     }
 
-    state.clean_account(&genesis_account_address);
+    state
+        .clean_account(&genesis_account_address)
+        .expect("Clean account failed");
 
     let state_root = state
         .compute_state_root(/* debug_record = */ debug_record.as_mut())

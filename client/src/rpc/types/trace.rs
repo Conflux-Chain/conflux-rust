@@ -38,6 +38,18 @@ impl Serialize for LocalizedTrace {
                 struc.serialize_field("type", "create")?;
                 struc.serialize_field("action", create)?;
             }
+            Action::CallResult(ref call_result) => {
+                struc.serialize_field("type", "call_result")?;
+                struc.serialize_field("action", call_result)?;
+            }
+            Action::CreateResult(ref create_result) => {
+                struc.serialize_field("type", "create_result")?;
+                struc.serialize_field("action", create_result)?;
+            }
+            Action::InternalTransferAction(ref internal_action) => {
+                struc.serialize_field("type", "internal_transfer_action")?;
+                struc.serialize_field("action", internal_action)?;
+            }
         }
 
         struc.end()

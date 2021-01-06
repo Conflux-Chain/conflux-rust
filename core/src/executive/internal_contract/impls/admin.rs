@@ -4,6 +4,7 @@
 
 use crate::{
     state::{OverlayAccount, RequireCache, StateGeneric, Substate},
+    trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, Spec},
 };
 use cfx_storage::StorageStateTrait;
@@ -19,6 +20,7 @@ use cfx_types::{address_util::AddressUtil, Address};
 pub fn suicide<S: StorageStateTrait>(
     contract_address: &Address, refund_address: &Address,
     state: &mut StateGeneric<S>, spec: &Spec, substate: &mut Substate,
+    tracer: &mut dyn Tracer<Output = ExecTrace>,
 ) -> vm::Result<()>
 {
     substate.suicides.insert(contract_address.clone());
@@ -26,6 +28,11 @@ pub fn suicide<S: StorageStateTrait>(
 
     if refund_address == contract_address || !refund_address.is_valid_address()
     {
+        tracer.prepare_internal_transfer_action(
+            *contract_address,
+            Address::zero(),
+            balance,
+        );
         // When destroying, the balance will be burnt.
         state.sub_balance(
             contract_address,
@@ -35,6 +42,11 @@ pub fn suicide<S: StorageStateTrait>(
         state.subtract_total_issued(balance);
     } else {
         trace!(target: "context", "Destroying {} -> {} (xfer: {})", contract_address, refund_address, balance);
+        tracer.prepare_internal_transfer_action(
+            *contract_address,
+            *refund_address,
+            balance,
+        );
         state.transfer_balance(
             contract_address,
             refund_address,
@@ -87,6 +99,7 @@ pub fn set_admin<S: StorageStateTrait>(
 pub fn destroy<S: StorageStateTrait>(
     contract_address: Address, params: &ActionParams,
     state: &mut StateGeneric<S>, spec: &Spec, substate: &mut Substate,
+    tracer: &mut dyn Tracer<Output = ExecTrace>,
 ) -> vm::Result<()>
 {
     debug!("contract_address={:?}", contract_address);
@@ -94,7 +107,7 @@ pub fn destroy<S: StorageStateTrait>(
     let requester = &params.sender;
     let admin = state.admin(&contract_address)?;
     if admin == *requester {
-        suicide(&contract_address, &admin, state, spec, substate)
+        suicide(&contract_address, &admin, state, spec, substate, tracer)
     } else {
         Ok(())
     }
