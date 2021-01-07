@@ -1661,6 +1661,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         }))
     }
 
+    #[cfg(any(test, feature = "testonly_code"))]
     pub fn clear_test_only(&mut self) {
         assert!(self.checkpoints.get_mut().is_empty());
         assert!(self.staking_state_checkpoints.get_mut().is_empty());

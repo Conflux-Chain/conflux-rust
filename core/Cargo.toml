@@ -94,3 +94,7 @@ default-features = false
 
 [features]
 default = ["cfx-storage"]
+# Unfortunately cfg test attributes doesn't work across crates,
+# we have to define a feature for test code.
+# https://users.rust-lang.org/t/cfg-test-doesnt-propagate-to-external-crates/13046
+testonly_code = []
