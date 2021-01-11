@@ -42,6 +42,13 @@ pub enum DecodingError {
     ChecksumFailed(u64),
     /// Unexpected character (char).
     InvalidChar(char),
+    /// Padding is invalid. Either padding_bits > from_bits or
+    /// padding is non-zero.
+    InvalidPadding {
+        from_bits: u8,
+        padding_bits: u8,
+        padding: u16,
+    },
     /// Version byte was not recognized.
     InvalidVersion(u8),
     /// Upper and lowercase address string.
@@ -68,6 +75,26 @@ impl fmt::Display for DecodingError {
             DecodingError::InvalidLength(length) => {
                 write!(f, "invalid length ({})", length)
             }
+            DecodingError::InvalidPadding {
+                from_bits,
+                padding_bits,
+                padding,
+            } => {
+                write!(f, "invalid padding (")?;
+                if padding_bits >= from_bits {
+                    write!(
+                        f,
+                        "padding_bits({}) >= from_bits({})",
+                        padding_bits, from_bits
+                    )?;
+                    if *padding != 0 {
+                        write!(f, ", padding({:#b}) is non-zero)", padding)?;
+                    }
+                } else {
+                    write!(f, "padding({:#b}) is non-zero)", padding)?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -84,6 +111,7 @@ impl Error for DecodingError {
             DecodingError::InvalidVersion(_) => "invalid version byte",
             DecodingError::InvalidPrefix(_) => "invalid prefix",
             DecodingError::InvalidLength(_) => "invalid length",
+            DecodingError::InvalidPadding { .. } => "invalid padding",
         }
     }
 }

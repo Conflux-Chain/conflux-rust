@@ -17,17 +17,14 @@ pub const TYPE_MASK: u8 = 0x78;
 // // pub const TYPE_BITCOIN_P2SH: u8 = 0x08;
 //
 // In Conflux we have so far only one type of account key format. So we try to
-// use the 4 type bits differently.
-
-// DApps can still use the same hex address for testnet and mainnet. This is
-// an-extra layer of protection to prevent users from sending assets to mainnet
-// instead of testnet.
-pub const TYPE_CFX_TESTNET_FLAG: u8 = 0x08;
-// The other 3 type bits are so far reserved. In the future we may use them
-// in some special transaction scenarios. e.g. A one time payment code.
+// use the 4 type bits differently. In the future we may use them in some
+// special transaction scenarios. e.g. A payment code, an address linked to
+// off-chain or cross-chain mechanism.
 
 pub const SIZE_MASK: u8 = 0x07;
 pub const SIZE_160: u8 = 0x00;
+// In Conflux we only have 160 bits hash size, however we keep these unused
+// sizes for unit test and compatibility.
 pub const SIZE_192: u8 = 0x01;
 pub const SIZE_224: u8 = 0x02;
 pub const SIZE_256: u8 = 0x03;
@@ -46,7 +43,7 @@ pub enum Network {
 
 // Prefixes
 const MAINNET_PREFIX: &str = "cfx";
-const TESTNET_PREFIX: &str = "cfx-test";
+const TESTNET_PREFIX: &str = "cfx_test";
 
 impl Network {
     pub fn to_addr_prefix(&self) -> &'static str {
