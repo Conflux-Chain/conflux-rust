@@ -153,7 +153,7 @@ pub fn call_execution_error(message: String, output: Vec<u8>) -> Error {
     Error {
         code: ErrorCode::ServerError(codes::CALL_EXECUTION_ERROR),
         message,
-        data: Some(Value::String(format!("0x{}", output.to_hex()))),
+        data: Some(Value::String(format!("0x{}", output.to_hex::<String>()))),
     }
 }
 

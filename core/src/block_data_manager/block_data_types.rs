@@ -2,7 +2,6 @@ use cfx_internal_common::{DatabaseDecodable, DatabaseEncodable};
 use cfx_types::{Bloom, H256, U256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
-use parity_bytes::Bytes;
 use primitives::BlockReceipts;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
@@ -250,7 +249,7 @@ impl MallocSizeOf for BlamedHeaderVerifiedRoots {
     fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
 
-pub fn db_encode_list<T>(list: &[T]) -> Bytes
+pub fn db_encode_list<T>(list: &[T]) -> Vec<u8>
 where T: DatabaseEncodable {
     let mut rlp_stream = RlpStream::new();
     rlp_stream.begin_list(list.len());

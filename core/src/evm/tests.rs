@@ -343,7 +343,7 @@ fn test_log_sender(factory: super::Factory) {
     assert_eq!(
         ctx.logs[0].data,
         "ff00000000000000000000000000000000000000000000000000000000000000"
-            .from_hex()
+            .from_hex::<Vec<u8>>()
             .unwrap()
     );
 }
@@ -1196,7 +1196,7 @@ fn test_subs_substack_limit(factory: super::Factory) {
     //    SUB
     //    JUMPSUB :s
 
-    let mut code = "6104006007565c5b80600d57005b6001900360065e"
+    let mut code: Vec<u8> = "6104006007565c5b80600d57005b6001900360065e"
         .from_hex()
         .unwrap();
     code[1..3].copy_from_slice(&(MAX_SUB_STACK_SIZE as u16).to_be_bytes()[..]);
@@ -1217,7 +1217,7 @@ fn test_subs_substack_limit(factory: super::Factory) {
 
 evm_test! {test_subs_substack_out: test_subs_substack_out_int}
 fn test_subs_substack_out(factory: super::Factory) {
-    let mut code = "6104006007565c5b80600d57005b6001900360065e"
+    let mut code: Vec<u8> = "6104006007565c5b80600d57005b6001900360065e"
         .from_hex()
         .unwrap();
     code[1..3]

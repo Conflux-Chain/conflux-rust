@@ -49,7 +49,7 @@ futures = "0.1.29"
 docopt = "1.0"
 cfxkey = { path = "accounts/cfxkey" }
 parity-wordlist = "1.3.0"
-rustc-hex = "2.0.1"
+rustc-hex = "2.1"
 env_logger = "0.5"
 malloc_size_of = {path="util/malloc_size_of"}
 

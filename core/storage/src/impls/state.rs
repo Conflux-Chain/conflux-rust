@@ -827,7 +827,7 @@ impl State {
             ["parent_epoch_id_".as_bytes(), epoch_id.as_ref()]
                 .concat()
                 .as_slice(),
-            self.parent_epoch_id.as_ref().to_hex().as_bytes(),
+            self.parent_epoch_id.as_ref().to_hex::<String>().as_bytes(),
         )?;
 
         commit_transaction

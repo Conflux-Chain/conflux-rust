@@ -5,13 +5,14 @@
 extern crate cfx_bytes as bytes;
 extern crate cfxkey as keylib;
 extern crate core;
+#[macro_use]
+extern crate log;
 extern crate network;
 extern crate parking_lot;
 extern crate primitives;
 extern crate rand;
+extern crate rustc_hex;
 extern crate secret_store;
-#[macro_use]
-extern crate log;
 
 use crate::bytes::Bytes;
 use cfx_types::{Address, BigEndianHash, H256, H512, U256, U512};
@@ -19,17 +20,16 @@ use cfxcore::{
     executive::contract_address, vm::CreateContractAddress,
     SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
 };
-use hex::FromHex;
 use keylib::{public_to_address, Generator, KeyPair, Random, Secret};
 use lazy_static::lazy_static;
 use metrics::{register_meter_with_group, Meter};
-use parity_bytes::ToPretty;
 use parking_lot::RwLock;
 use primitives::{
     transaction::Action, Account, SignedTransaction, Transaction,
 };
 use rand::prelude::*;
 use rlp::Encodable;
+use rustc_hex::{FromHex, ToHex};
 use secret_store::SharedSecretStore;
 use std::{
     cmp::Ordering,
@@ -484,16 +484,15 @@ impl DirectTransactionGenerator {
             }
 
             // Calls transfer of ERC20 contract.
-            let tx_data = Vec::from_hex(
-                String::new()
-                    + "a9059cbb000000000000000000000000"
-                    + &receiver_address.to_hex()[2..]
-                    + {
-                        let h: H256 =
-                            BigEndianHash::from_uint(&balance_to_transfer);
-                        &h.to_hex()[2..]
-                    },
-            )
+            let tx_data = (String::new()
+                + "a9059cbb000000000000000000000000"
+                + &receiver_address.0.to_hex::<String>()[2..]
+                + {
+                    let h: H256 =
+                        BigEndianHash::from_uint(&balance_to_transfer);
+                    &h.0.to_hex::<String>()[2..]
+                })
+            .from_hex()
             .unwrap();
 
             let tx = Transaction {

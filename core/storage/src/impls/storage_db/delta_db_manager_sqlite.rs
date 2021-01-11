@@ -47,7 +47,7 @@ impl DeltaDbManagerTrait for DeltaDbManagerSqlite {
 
     fn get_delta_db_name(&self, snapshot_epoch_id: &EpochId) -> String {
         Self::DELTA_DB_SQLITE_DIR_PREFIX.to_string()
-            + &snapshot_epoch_id.as_ref().to_hex()
+            + &snapshot_epoch_id.as_ref().to_hex::<String>()
     }
 
     fn get_delta_db_path(&self, delta_db_name: &str) -> PathBuf {

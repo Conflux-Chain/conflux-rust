@@ -18,7 +18,6 @@ impl MallocSizeOf for EpochExecutionCommitment {
 impl_db_encoding_as_rlp!(EpochExecutionCommitment);
 
 use crate::StateRootWithAuxInfo;
-use cfx_bytes::Bytes;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use primitives::MerkleHash;
 use rlp::*;

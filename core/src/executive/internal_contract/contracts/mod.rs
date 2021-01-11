@@ -73,7 +73,7 @@ macro_rules! check_signature {
         let f = <$interface<cfx_storage::StorageState>>::instance();
         assert_eq!(
             f.function_sig().to_vec(),
-            $signature.from_hex().unwrap(),
+            $signature.from_hex::<Vec<u8>>().unwrap(),
             "Test solidity signature for {}",
             f.name()
         );

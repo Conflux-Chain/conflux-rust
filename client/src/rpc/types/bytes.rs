@@ -53,7 +53,7 @@ impl Serialize for Bytes {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
         let mut serialized = "0x".to_owned();
-        serialized.push_str(self.0.to_hex().as_ref());
+        serialized.push_str(self.0.to_hex::<String>().as_ref());
         serializer.serialize_str(serialized.as_ref())
     }
 }

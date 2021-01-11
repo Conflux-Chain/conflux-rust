@@ -429,7 +429,7 @@ impl RpcImpl {
             invalid_params("tx", format!("failed to sign transaction: {:?}", e))
         })?;
         let raw_tx = rlp::encode(&tx);
-        Ok(format!("0x{}", raw_tx.to_hex()))
+        Ok(format!("0x{}", raw_tx.to_hex::<String>()))
     }
 
     fn storage_root(
