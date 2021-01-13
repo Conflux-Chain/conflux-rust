@@ -534,7 +534,7 @@ class LightRPCTest(ConfluxTestFramework):
 
     def test_tx_methods(self):
         self.log.info(f"Checking cfx_getTransactionByHash...")
-        full = self.nodes[FULLNODE0].cfx_getTransactionByHash(self.deploy_tx)
+        full = self.rpc[FULLNODE0].get_tra(self.deploy_tx)
         light = self.nodes[LIGHTNODE].cfx_getTransactionByHash(self.deploy_tx)
         self.assert_txs_equal(light, full)
         self.log.info(f"Pass -- cfx_getTransactionByHash")

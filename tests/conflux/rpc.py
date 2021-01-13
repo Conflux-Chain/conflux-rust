@@ -4,7 +4,7 @@ import random
 import eth_utils
 import rlp
 
-from .address import hex_to_b32_address
+from .address import hex_to_b32_address, b32_address_to_hex
 from .config import DEFAULT_PY_TEST_CHAIN_ID, default_config
 from .transactions import CONTRACT_DEFAULT_GAS, Transaction, UnsignedTransaction
 from .filter import Filter
@@ -20,6 +20,11 @@ from test_framework.util import (
     assert_is_hex_string,
     wait_until, checktx
 )
+
+
+def convert_b32_address_field_to_hex(original_dict: dict, field_name: str):
+    original_dict[field_name] = b32_address_to_hex(original_dict[field_name])
+
 
 class RpcClient:
     def __init__(self, node=None, auto_restart=False):
@@ -162,7 +167,8 @@ class RpcClient:
         return int(self.node.cfx_gasPrice(), 0)
 
     def get_block_reward_info(self, epoch: str):
-        return self.node.cfx_getBlockRewardInfo(epoch)
+        reward = self.node.cfx_getBlockRewardInfo(epoch)
+        convert_b32_address_field_to_hex(reward, "author")
 
     def epoch_number(self, epoch: str = None) -> int:
         if epoch is None:
@@ -284,10 +290,14 @@ class RpcClient:
         wait_until(check_tx, timeout=timeout)
 
     def block_by_hash(self, block_hash: str, include_txs: bool = False) -> dict:
-        return self.node.cfx_getBlockByHash(block_hash, include_txs)
+        block = self.node.cfx_getBlockByHash(block_hash, include_txs)
+        convert_b32_address_field_to_hex(block, "miner")
+        return block
 
     def block_by_epoch(self, epoch: str, include_txs: bool = False) -> dict:
-        return self.node.cfx_getBlockByEpochNumber(epoch, include_txs)
+        block = self.node.cfx_getBlockByEpochNumber(epoch, include_txs)
+        convert_b32_address_field_to_hex(block, "miner")
+        return block
 
     def best_block_hash(self) -> str:
         return self.node.cfx_getBestBlockHash()
@@ -429,7 +439,9 @@ class RpcClient:
 
     def get_account(self, addr: str, epoch: str = None):
         addr = hex_to_b32_address(addr)
-        return self.node.cfx_getAccount(addr, epoch)
+        account = self.node.cfx_getAccount(addr, epoch)
+        convert_b32_address_field_to_hex(account, "admin")
+        return account
 
     def get_accumulate_interest_rate(self, epoch: str = None):
         return self.node.cfx_getAccumulateInterestRate(epoch)
@@ -442,3 +454,12 @@ class RpcClient:
         signature = self.node.getnodeid(list(int_to_bytes(challenge)))
         node_id, _, _ = convert_to_nodeid(signature, challenge)
         return node_id
+
+    def get_transaction_by_hash(self, tx_hash: str):
+        tx = self.node.cfx_getTransactionByHash(tx_hash)
+        convert_b32_address_field_to_hex(tx, "from")
+        if tx["to"] != "null":
+            convert_b32_address_field_to_hex(tx, "to")
+        if tx["contractCreated"] != "null":
+            convert_b32_address_field_to_hex(tx, "contractCreated")
+        return tx
