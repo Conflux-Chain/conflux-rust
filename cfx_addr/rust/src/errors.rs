@@ -11,6 +11,7 @@ use std::{error::Error, fmt};
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum EncodingError {
     InvalidLength(usize),
+    InvalidNetworkId(u64),
 }
 
 impl fmt::Display for EncodingError {
@@ -18,6 +19,9 @@ impl fmt::Display for EncodingError {
         match self {
             Self::InvalidLength(length) => {
                 write!(f, "invalid length ({})", length)
+            }
+            Self::InvalidNetworkId(network_id) => {
+                write!(f, "invalid network_id (reserved: {})", network_id)
             }
         }
     }
@@ -50,7 +54,7 @@ pub enum DecodingError {
         padding: u16,
     },
     /// Version byte was not recognized.
-    InvalidVersion(u8),
+    VersionNotRecognized(u8),
     /// Upper and lowercase address string.
     MixedCase,
 }
@@ -66,8 +70,8 @@ impl fmt::Display for DecodingError {
             }
             DecodingError::NoPrefix => write!(f, "zero or multiple prefixes"),
             DecodingError::MixedCase => write!(f, "mixed case string"),
-            DecodingError::InvalidVersion(c) => {
-                write!(f, "invalid version byte ({})", c)
+            DecodingError::VersionNotRecognized(c) => {
+                write!(f, "version byte ({}) not recognized", c)
             }
             DecodingError::InvalidPrefix(prefix) => {
                 write!(f, "invalid prefix ({})", prefix)
@@ -108,7 +112,9 @@ impl Error for DecodingError {
             DecodingError::InvalidChar(_) => "invalid char",
             DecodingError::NoPrefix => "zero or multiple prefixes",
             DecodingError::MixedCase => "mixed case string",
-            DecodingError::InvalidVersion(_) => "invalid version byte",
+            DecodingError::VersionNotRecognized(_) => {
+                "version byte not recognized"
+            }
             DecodingError::InvalidPrefix(_) => "invalid prefix",
             DecodingError::InvalidLength(_) => "invalid length",
             DecodingError::InvalidPadding { .. } => "invalid padding",

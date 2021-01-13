@@ -5,7 +5,7 @@
 // Modification based on https://github.com/hlb8122/rust-bitcoincash-addr in MIT License.
 // A copy of the original license is included in LICENSE.rust-bitcoincash-addr.
 
-use super::errors::DecodingError;
+use super::errors::{DecodingError, EncodingError};
 
 pub const CHARSET_SIZE: usize = 32;
 
@@ -39,17 +39,29 @@ pub enum Network {
     Main,
     /// Test network.
     Test,
+    /// Specific Network Id.
+    Id(u64),
 }
 
 // Prefixes
 const MAINNET_PREFIX: &str = "cfx";
-const TESTNET_PREFIX: &str = "cfx_test";
+const TESTNET_PREFIX: &str = "cfxtest";
+const NETWORK_ID_PREFIX: &str = "net";
+// These two network_ids are reserved.
+const RESERVED_NETWORK_IDS: [u64; 2] = [1, 1029];
 
 impl Network {
-    pub fn to_addr_prefix(&self) -> &'static str {
+    pub fn to_addr_prefix(&self) -> Result<String, EncodingError> {
         match self {
-            Network::Main => MAINNET_PREFIX,
-            Network::Test => TESTNET_PREFIX,
+            Network::Main => Ok(MAINNET_PREFIX.into()),
+            Network::Test => Ok(TESTNET_PREFIX.into()),
+            Network::Id(network_id) => {
+                if RESERVED_NETWORK_IDS.contains(network_id) {
+                    Err(EncodingError::InvalidNetworkId(*network_id))
+                } else {
+                    Ok(format!("net{}", network_id))
+                }
+            }
         }
     }
 
@@ -57,7 +69,32 @@ impl Network {
         match prefix {
             MAINNET_PREFIX => Ok(Network::Main),
             TESTNET_PREFIX => Ok(Network::Test),
-            _ => Err(DecodingError::InvalidPrefix(prefix.to_string())),
+            _ => {
+                let maybe_network_id = if !prefix
+                    .starts_with(NETWORK_ID_PREFIX)
+                {
+                    None
+                } else {
+                    match prefix[NETWORK_ID_PREFIX.len()..].parse::<u64>() {
+                        Err(_) => None,
+                        Ok(network_id) => {
+                            // Check if network_id is valid.
+                            if RESERVED_NETWORK_IDS.contains(&network_id) {
+                                None
+                            } else {
+                                Some(network_id)
+                            }
+                        }
+                    }
+                };
+
+                match maybe_network_id {
+                    None => {
+                        Err(DecodingError::InvalidPrefix(prefix.to_string()))
+                    }
+                    Some(network_id) => Ok(Network::Id(network_id)),
+                }
+            }
         }
     }
 }
