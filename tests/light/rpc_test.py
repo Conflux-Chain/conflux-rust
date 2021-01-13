@@ -342,8 +342,8 @@ class LightRPCTest(ConfluxTestFramework):
         # --------------------------
 
         self.log.info(f"Checking cfx_getStakingBalance...")
-        full = self.rpc[FULLNODE0].cfx_getStakingBalance(self.user, latest_state)
-        light = self.rpc[LIGHTNODE].cfx_getStakingBalance(self.user, latest_state)
+        full = self.rpc[FULLNODE0].get_staking_balance(self.user, latest_state)
+        light = self.rpc[LIGHTNODE].get_staking_balance(self.user, latest_state)
         assert_equal(light, full)
         self.log.info(f"Pass -- cfx_getStakingBalance")
 
