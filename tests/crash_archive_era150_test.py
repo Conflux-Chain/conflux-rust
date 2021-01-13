@@ -86,14 +86,15 @@ class CrashArchiveNodeTest(ConfluxTestFramework):
         # Generate 2 * CACHE_INDEX_STRIDE to start evicting anticone cache
         for _ in range(2000):
             self.nodes[0].generate_empty_blocks(1)
-        assert_equal(parse_as_int(self.nodes[0].cfx_getBalance(sender_addr)), sender_balance)
-        assert_equal(parse_as_int(self.nodes[0].cfx_getBalance(receiver_addr)), value)
+        client = RpcClient(self.nodes[0])
+        assert_equal(client.get_balance(sender_addr), sender_balance)
+        assert_equal(client.get_balance(receiver_addr), value)
         time.sleep(1)
         self.stop_node(0)
         self.start_node(0)
         self.log.info("Wait for node 0 to recover from crash")
-        wait_until(lambda: parse_as_int(self.nodes[0].cfx_getBalance(sender_addr)) == sender_balance)
-        wait_until(lambda: parse_as_int(self.nodes[0].cfx_getBalance(receiver_addr)) == value)
+        wait_until(lambda: client.get_balance(sender_addr) == sender_balance)
+        wait_until(lambda: client.get_balance(receiver_addr) == value)
         self.log.info("Pass 2")
 
 

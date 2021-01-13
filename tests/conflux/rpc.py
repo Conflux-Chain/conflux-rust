@@ -1,4 +1,6 @@
 import os
+import random
+
 import eth_utils
 import rlp
 
@@ -6,7 +8,7 @@ from .address import hex_to_b32_address
 from .config import DEFAULT_PY_TEST_CHAIN_ID, default_config
 from .transactions import CONTRACT_DEFAULT_GAS, Transaction, UnsignedTransaction
 from .filter import Filter
-from .utils import priv_to_addr, sha3_256
+from .utils import priv_to_addr, sha3_256, int_to_bytes, convert_to_nodeid
 
 import sys
 sys.path.append("..")
@@ -424,3 +426,19 @@ class RpcClient:
 
     def get_block_count(self):
         return self.node.getblockcount()
+
+    def get_account(self, addr: str, epoch: str = None):
+        addr = hex_to_b32_address(addr)
+        return self.node.cfx_getAccount(addr, epoch)
+
+    def get_accumulate_interest_rate(self, epoch: str = None):
+        return self.node.cfx_getAccumulateInterestRate(epoch)
+
+    def get_interest_rate(self, epoch: str = None):
+        return self.node.cfx_getInterestRate(epoch)
+
+    def get_node_id(self):
+        challenge = random.randint(0, 2**32-1)
+        signature = self.node.getnodeid(list(int_to_bytes(challenge)))
+        node_id, _, _ = convert_to_nodeid(signature, challenge)
+        return node_id
