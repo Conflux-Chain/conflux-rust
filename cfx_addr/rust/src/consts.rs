@@ -9,10 +9,12 @@ use super::errors::{DecodingError, EncodingError};
 
 pub const CHARSET_SIZE: usize = 32;
 
-pub const TYPE_MASK: u8 = 0x78;
+pub const RESERVED_BITS_MASK: u8 = 0xf8;
+
 // Because we use a different CHARSET than BCH, it's OK that we disregard all of
 // the BITCOIN type bits.
 //
+// // pub const TYPE_MASK: u8 = 0x78;
 // // pub const TYPE_BITCOIN_P2PKH: u8 = 0x00;
 // // pub const TYPE_BITCOIN_P2SH: u8 = 0x08;
 //
@@ -70,8 +72,7 @@ impl Network {
             MAINNET_PREFIX => Ok(Network::Main),
             TESTNET_PREFIX => Ok(Network::Test),
             _ => {
-                let maybe_network_id = if !prefix
-                    .starts_with(NETWORK_ID_PREFIX)
+                let maybe_network_id = if !prefix.starts_with(NETWORK_ID_PREFIX)
                 {
                     None
                 } else {

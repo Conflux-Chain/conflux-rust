@@ -191,8 +191,10 @@ pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
     {
         return Err(DecodingError::InvalidLength(body_len));
     }
-    // FIXME: Check reserved bits
-
+    // Check reserved bits
+    if version & consts::RESERVED_BITS_MASK != 0 {
+        return Err(DecodingError::VersionNotRecognized(version));
+    }
 
     Ok(UserAddress {
         body: body.to_vec(),

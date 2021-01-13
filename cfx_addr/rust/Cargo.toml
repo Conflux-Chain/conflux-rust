@@ -6,4 +6,4 @@ description = "Conflux Address Encoder/Decoder"
 
 [dependencies]
 lazy_static = "1.4"
-rustc-hex = "2.0"
+rustc-hex = "2.1"
