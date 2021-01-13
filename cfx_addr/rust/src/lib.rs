@@ -79,7 +79,7 @@ pub fn cfx_addr_encode(
     };
 
     // Get prefix
-    let prefix = network.to_addr_prefix();
+    let prefix = network.to_addr_prefix()?;
 
     // Convert payload to 5 bit array
     let mut payload = Vec::with_capacity(1 + raw.len());
@@ -95,7 +95,7 @@ pub fn cfx_addr_encode(
         .collect();
 
     // Create checksum
-    let expanded_prefix = expand_prefix(prefix);
+    let expanded_prefix = expand_prefix(&prefix);
     let checksum_input =
         [&expanded_prefix[..], &payload_5_bits, &[0; 8][..]].concat();
     let checksum = polymod(&checksum_input);
@@ -106,15 +106,15 @@ pub fn cfx_addr_encode(
         .map(|i| CHARSET[((checksum >> (i * 5)) & 31) as usize] as char)
         .collect();
 
-    // Concatentate all parts
-    let cashaddr = [prefix, ":", &payload_str, &checksum_str].concat();
+    // Concatenate all parts
+    let cashaddr = [&prefix, ":", &payload_str, &checksum_str].concat();
     Ok(cashaddr)
 }
 
 pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
     // Delimit and extract prefix
     let parts: Vec<&str> = addr_str.split(':').collect();
-    if parts.len() != 2 {
+    if parts.len() < 2 {
         return Err(DecodingError::NoPrefix);
     }
     // FIXME: add a unit test for prefix in capital letters.
@@ -127,8 +127,11 @@ pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
     // Match network
     let network = Network::from_addr_prefix(prefix.as_str())?;
 
-    // Do some sanity checks on the string
-    let payload_str = parts[1];
+    // Parse optional parts. We will ignore everything we can't understand.
+    // FIXME: to implement.
+
+    // Do some sanity checks on the payload string
+    let payload_str = parts[parts.len() - 1];
     if payload_str.len() == 0 {
         return Err(DecodingError::InvalidLength(0));
     }
@@ -153,8 +156,9 @@ pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
     let payload_5_bits = payload_5_bits?;
 
     // Verify the checksum
-    let checksum =
-        polymod(&[&expand_prefix(prefix.as_str()), &payload_5_bits[..]].concat());
+    let checksum = polymod(
+        &[&expand_prefix(prefix.as_str()), &payload_5_bits[..]].concat(),
+    );
     if checksum != 0 {
         // TODO: according to the spec it is possible to do correction based on
         // the checksum,  we shouldn't do it automatically but we could
@@ -187,6 +191,8 @@ pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
     {
         return Err(DecodingError::InvalidLength(body_len));
     }
+    // FIXME: Check reserved bits
+
 
     Ok(UserAddress {
         body: body.to_vec(),
