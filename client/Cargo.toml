@@ -51,7 +51,7 @@ keccak-hash = "0.5"
 rand = "0.7.2"
 kvdb-rocksdb = {path="../db/src/kvdb-rocksdb"}
 tempdir = "0.3"
-rustc-hex= "1.0"
+rustc-hex = "2.1"
 threadpool = "1.0"
 metrics = { path = "../util/metrics" }
 delegate = { path = "../util/delegate" }

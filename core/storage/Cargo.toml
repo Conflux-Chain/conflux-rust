@@ -33,7 +33,7 @@ rand_chacha="0.2.1"
 random-crash = { path = "../../util/random_crash" }
 rlp = "0.4.0"
 rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
-rustc-hex = "1.0"
+rustc-hex = "2.1"
 serde = { version = "1.0", features = ["rc"] }
 serde_derive = "1.0"
 sqlite = "0.25"
