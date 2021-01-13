@@ -5,7 +5,12 @@
 // Modification based on https://github.com/hlb8122/rust-bitcoincash-addr in MIT License.
 // A copy of the original license is included in LICENSE.rust-bitcoincash-addr.
 
-use super::errors::{DecodingError, EncodingError};
+use super::errors::{DecodingError, EncodingError, OptionError};
+
+use cfx_types::{
+    address_util::{self, AddressUtil},
+    Address,
+};
 
 pub const CHARSET_SIZE: usize = 32;
 
@@ -52,6 +57,14 @@ const NETWORK_ID_PREFIX: &str = "net";
 // These two network_ids are reserved.
 const RESERVED_NETWORK_IDS: [u64; 2] = [1, 1029];
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum AddressType {
+    Builtin,
+    Contract,
+    Null,
+    User,
+}
+
 impl Network {
     pub fn to_addr_prefix(&self) -> Result<String, EncodingError> {
         match self {
@@ -96,6 +109,39 @@ impl Network {
                     Some(network_id) => Ok(Network::Id(network_id)),
                 }
             }
+        }
+    }
+}
+
+impl AddressType {
+    pub fn parse(text: &str) -> Result<Self, DecodingError> {
+        if text == "builtin" {
+            Ok(Self::Builtin)
+        } else if text == "contract" {
+            Ok(Self::Contract)
+        } else if text == "null" {
+            Ok(Self::Null)
+        } else if text == "user" {
+            Ok(Self::User)
+        } else {
+            Err(DecodingError::InvalidOption(
+                OptionError::InvalidAddressType(text.into()),
+            ))
+        }
+    }
+
+    pub fn from_address(address_hex: &Address) -> Result<Self, EncodingError> {
+        match *address_hex.type_byte() {
+            address_util::TYPE_BITS_BUILTIN => {
+                if address_hex.is_null_address() {
+                    Ok(Self::Null)
+                } else {
+                    Ok(Self::Builtin)
+                }
+            }
+            address_util::TYPE_BITS_CONTRACT => Ok(Self::Contract),
+            address_util::TYPE_BITS_USER_ACCOUNT => Ok(Self::User),
+            n @ _ => Err(EncodingError::InvalidAddressType(n)),
         }
     }
 }

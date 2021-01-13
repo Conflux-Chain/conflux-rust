@@ -5,11 +5,14 @@
 // Modification based on https://github.com/hlb8122/rust-bitcoincash-addr in MIT License.
 // A copy of the original license is included in LICENSE.rust-bitcoincash-addr.
 
+use super::consts::AddressType;
+
 use std::{error::Error, fmt};
 
 /// Error concerning encoding of cashaddrs.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum EncodingError {
+    InvalidAddressType(u8),
     InvalidLength(usize),
     InvalidNetworkId(u64),
 }
@@ -17,6 +20,9 @@ pub enum EncodingError {
 impl fmt::Display for EncodingError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Self::InvalidAddressType(type_byte) => {
+                write!(f, "unrecognized type bits 0x{:02x}", type_byte)
+            }
             Self::InvalidLength(length) => {
                 write!(f, "invalid length ({})", length)
             }
@@ -42,6 +48,8 @@ pub enum DecodingError {
     NoPrefix,
     /// Failed to match known prefixes (prefix).
     InvalidPrefix(String),
+    /// Failed to match known options.
+    InvalidOption(OptionError),
     /// Checksum failed (checksum).
     ChecksumFailed(u64),
     /// Unexpected character (char).
@@ -59,6 +67,21 @@ pub enum DecodingError {
     MixedCase,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum OptionError {
+    /// The option string isn't in a valid format.
+    ParseError(String),
+    /// The address type specified in option doesn't match the decoded address.
+    /// The got can be an Err(()) because decoded address may have invalid
+    /// address type.
+    AddressTypeMismatch {
+        expected: AddressType,
+        got: Result<AddressType, ()>,
+    },
+    /// The address type is invalid.
+    InvalidAddressType(String),
+}
+
 impl fmt::Display for DecodingError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -67,14 +90,6 @@ impl fmt::Display for DecodingError {
             }
             DecodingError::InvalidChar(index) => {
                 write!(f, "invalid char ({})", index)
-            }
-            DecodingError::NoPrefix => write!(f, "zero or multiple prefixes"),
-            DecodingError::MixedCase => write!(f, "mixed case string"),
-            DecodingError::VersionNotRecognized(c) => {
-                write!(f, "version byte ({}) not recognized", c)
-            }
-            DecodingError::InvalidPrefix(prefix) => {
-                write!(f, "invalid prefix ({})", prefix)
             }
             DecodingError::InvalidLength(length) => {
                 write!(f, "invalid length ({})", length)
@@ -99,6 +114,25 @@ impl fmt::Display for DecodingError {
                 }
                 Ok(())
             }
+            DecodingError::InvalidPrefix(prefix) => {
+                write!(f, "invalid prefix ({})", prefix)
+            }
+            DecodingError::InvalidOption(option_error) => match option_error {
+                OptionError::AddressTypeMismatch { expected, got } => {
+                    write!(f, "expected address type specified in option {:?}, decoded address type {:?}", expected, got)
+                }
+                OptionError::ParseError(option_str) => {
+                    write!(f, "invalid option string ({})", option_str)
+                }
+                OptionError::InvalidAddressType(type_str) => {
+                    write!(f, "invalid address type ({})", type_str)
+                }
+            },
+            DecodingError::NoPrefix => write!(f, "zero or multiple prefixes"),
+            DecodingError::MixedCase => write!(f, "mixed case string"),
+            DecodingError::VersionNotRecognized(c) => {
+                write!(f, "version byte ({}) not recognized", c)
+            }
         }
     }
 }
@@ -107,17 +141,24 @@ impl Error for DecodingError {
     fn cause(&self) -> Option<&dyn Error> { None }
 
     fn description(&self) -> &str {
-        match *self {
+        match self {
             DecodingError::ChecksumFailed { .. } => "invalid checksum",
             DecodingError::InvalidChar(_) => "invalid char",
+            DecodingError::InvalidLength(_) => "invalid length",
+            DecodingError::InvalidOption(option_error) => match option_error {
+                OptionError::AddressTypeMismatch { .. } => {
+                    "decoded address does not match address type in option"
+                }
+                OptionError::ParseError(_) => "invalid option",
+                OptionError::InvalidAddressType(_) => "invalid address type",
+            },
+            DecodingError::InvalidPadding { .. } => "invalid padding",
+            DecodingError::InvalidPrefix(_) => "invalid prefix",
             DecodingError::NoPrefix => "zero or multiple prefixes",
             DecodingError::MixedCase => "mixed case string",
             DecodingError::VersionNotRecognized(_) => {
                 "version byte not recognized"
             }
-            DecodingError::InvalidPrefix(_) => "invalid prefix",
-            DecodingError::InvalidLength(_) => "invalid length",
-            DecodingError::InvalidPadding { .. } => "invalid padding",
         }
     }
 }

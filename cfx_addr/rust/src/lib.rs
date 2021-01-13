@@ -5,6 +5,7 @@
 // Modification based on https://github.com/hlb8122/rust-bitcoincash-addr in MIT License.
 // A copy of the original license is included in LICENSE.rust-bitcoincash-addr.
 
+extern crate cfx_types;
 #[macro_use]
 extern crate lazy_static;
 extern crate rustc_hex;
@@ -16,8 +17,9 @@ pub mod errors;
 #[cfg(test)]
 mod tests;
 
+use cfx_types::Address;
 use checksum::polymod;
-use consts::Network;
+use consts::{AddressType, Network};
 use errors::*;
 
 const BASE32_CHARS: &str = "0123456789abcdefghijklmnopqrstuvwxyz";
@@ -55,6 +57,8 @@ lazy_static! {
 pub struct UserAddress {
     /// Address bytes
     pub body: Vec<u8>,
+    /// The parsed address in H160 format.
+    pub hex_address: Option<Address>,
     /// Network
     pub network: Network,
 }
@@ -127,8 +131,21 @@ pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
     // Match network
     let network = Network::from_addr_prefix(prefix.as_str())?;
 
+    let mut address_type = None;
     // Parse optional parts. We will ignore everything we can't understand.
-    // FIXME: to implement.
+    for option_str in &parts[1..parts.len() - 1] {
+        let option_lowercase = option_str.to_lowercase();
+        let key_value: Vec<&str> = option_lowercase.split('=').collect();
+        if key_value.len() != 2 {
+            return Err(DecodingError::InvalidOption(OptionError::ParseError(
+                (*option_str).into(),
+            )));
+        }
+        // Address type.
+        if key_value[0] == "type" {
+            address_type = Some(AddressType::parse(key_value[1])?);
+        }
+    }
 
     // Do some sanity checks on the payload string
     let payload_str = parts[parts.len() - 1];
@@ -196,8 +213,30 @@ pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
         return Err(DecodingError::VersionNotRecognized(version));
     }
 
+    let hex_address;
+    // Check address type for parsed H160 address.
+    if version_size == consts::SIZE_160 {
+        hex_address = Some(Address::from_slice(body));
+        match address_type {
+            Some(expected) => {
+                let got =
+                    AddressType::from_address(hex_address.as_ref().unwrap())
+                        .or(Err(()));
+                if got.as_ref() != Ok(&expected) {
+                    return Err(DecodingError::InvalidOption(
+                        OptionError::AddressTypeMismatch { expected, got },
+                    ));
+                }
+            }
+            None => {}
+        }
+    } else {
+        hex_address = None;
+    }
+
     Ok(UserAddress {
         body: body.to_vec(),
+        hex_address,
         network,
     })
 }
