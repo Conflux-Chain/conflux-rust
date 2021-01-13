@@ -129,7 +129,7 @@ class AdminControlTest(ConfluxTestFramework):
         assert_equal(client.get_balance(contract_addr), 0)
 
         # deposit 10**18
-        b0 = int(node.cfx_getBalance(addr), 16)
+        b0 = client.get_balance(addr)
         tx = self.call_contract_function(
             contract=pay_contract,
             name="recharge",

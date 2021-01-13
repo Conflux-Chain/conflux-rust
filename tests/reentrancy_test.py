@@ -80,6 +80,7 @@ class ReentrancyTest(ConfluxTestFramework):
         start_p2p_connection(self.nodes)
         block_gen_thread = BlockGenThread(self.nodes, self.log)
         block_gen_thread.start()
+        client = RpcClient(self.nodes[0])
 
         file_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -117,9 +118,9 @@ class ReentrancyTest(ConfluxTestFramework):
             gas_price=ReentrancyTest.REQUEST_BASE['gas'])
         self.send_transaction(tx, True, False)
 
-        user1_balance = parse_as_int(self.nodes[0].cfx_getBalance(user1_addr_hex))
+        user1_balance = client.get_balance(user1_addr_hex)
         assert_equal(user1_balance, value)
-        user2_balance_before_contract_construction = parse_as_int(self.nodes[0].cfx_getBalance(user2_addr_hex))
+        user2_balance_before_contract_construction = client.get_balance(user2_addr_hex)
         assert_equal(user2_balance_before_contract_construction, value)
 
         transaction = self.call_contract_function(self.buggy_contract, "constructor", [], self.genesis_priv_key, storage_limit=20000)
@@ -127,7 +128,7 @@ class ReentrancyTest(ConfluxTestFramework):
 
         transaction = self.call_contract_function(self.exploit_contract, "constructor", [], user2, storage_limit=200000)
         exploit_addr = self.wait_for_tx([transaction], True)[0]['contractCreated']
-        user2_balance_after_contract_construction = parse_as_int(self.nodes[0].cfx_getBalance(user2_addr_hex))
+        user2_balance_after_contract_construction = client.get_balance(user2_addr_hex)
         self.log.debug("user2 balance contract created %s" % user2_balance_after_contract_construction)
         assert_greater_than_or_equal(user2_balance_before_contract_construction, user2_balance_after_contract_construction)
         user2_refund_upper_bound = \
@@ -139,15 +140,15 @@ class ReentrancyTest(ConfluxTestFramework):
         transaction = self.call_contract_function(self.exploit_contract, "deposit", [Web3.toChecksumAddress(contract_addr)], user2, 10 ** 18,
                                                   exploit_addr, True, True, storage_limit=128)
 
-        user1_balance = parse_as_int(self.nodes[0].cfx_getBalance(user1_addr_hex))
+        user1_balance = client.get_balance(user1_addr_hex)
         assert_greater_than_or_equal(user1_balance, 899999999999999999999999950000000)
-        user2_balance_after_deposit = parse_as_int(self.nodes[0].cfx_getBalance(user2_addr_hex))
+        user2_balance_after_deposit = client.get_balance(user2_addr_hex)
         # User2 paid storage collateral `vulnerable_contract` in deposit call.
         user2_refund_upper_bound += 10 ** 18 // 16
         self.log.debug("user2 balance after deposit %s" % user2_balance_after_deposit)
         assert_greater_than_or_equal(user2_balance_after_contract_construction, user2_balance_after_deposit + 10 ** 18)
         assert_greater_than_or_equal(user2_balance_after_deposit, 899999999999999999999999900000000)
-        contract_balance = parse_as_int(self.nodes[0].cfx_getBalance(contract_addr))
+        contract_balance = client.get_balance(contract_addr)
         assert_equal(contract_balance, 2 * 10 ** 18)
         user2_balance_in_contract = RpcClient(self.nodes[0]).call(
             contract_addr,
@@ -161,9 +162,9 @@ class ReentrancyTest(ConfluxTestFramework):
         transaction = self.call_contract_function(self.exploit_contract, "get_money", [], user2, 0,
                                                   exploit_addr, True, True, storage_limit=128)
 
-        user1_balance = parse_as_int(self.nodes[0].cfx_getBalance(user1_addr_hex))
+        user1_balance = client.get_balance(user1_addr_hex)
         assert_greater_than_or_equal(user1_balance, 899999999999999999999999950000000)
-        contract_balance = parse_as_int(self.nodes[0].cfx_getBalance(contract_addr))
+        contract_balance = client.get_balance(contract_addr)
         assert_equal(contract_balance, 1 * 10 ** 18)
 
         user2_balance_in_contract = RpcClient(self.nodes[0]).call(
@@ -174,7 +175,7 @@ class ReentrancyTest(ConfluxTestFramework):
 
         assert_equal(parse_as_int(user2_balance_in_contract), 0)
         self.log.debug("user2 balance in contract %s" % user2_balance_in_contract)
-        user2_balance_after_contract_destruct = parse_as_int(self.nodes[0].cfx_getBalance(user2_addr_hex))
+        user2_balance_after_contract_destruct = client.get_balance(user2_addr_hex)
         self.log.debug("user2 balance after contract destruct %s" % user2_balance_after_contract_destruct)
         assert_greater_than_or_equal(
             user2_balance_after_contract_destruct,

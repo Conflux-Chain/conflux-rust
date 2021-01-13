@@ -42,8 +42,8 @@ class StorageMaintenanceTest(ConfluxTestFramework):
 
         # 3. Produce 10 empty blocks, and the miner's reward for the first block will be updated to world-state
         for _ in range(10): self.rpc.generate_block()
-        balance = parse_as_int(self.nodes[0].cfx_getBalance(self.mining_author))
-        count = self.nodes[0].getblockcount()
+        balance = self.rpc.get_balance(self.mining_author)
+        count = self.rpc.get_block_count()
         expected = block_reward
         self.log.info("block count: %d, balance: %d, expected: %d", count, balance, expected)
         assert_equal(balance, expected)
@@ -51,7 +51,7 @@ class StorageMaintenanceTest(ConfluxTestFramework):
         # 4. Produce 1 empty block, and the miner will receive reward for the second block. This block reward should
         # contains transaction fee.
         self.rpc.generate_blocks(1)
-        balance = parse_as_int(self.nodes[0].cfx_getBalance(self.mining_author))
+        balance = self.rpc.get_balance(self.mining_author)
         count = self.nodes[0].getblockcount()
         transaction_fee = parse_as_int(receipt['gasFee'])
         expected += block_reward + transaction_fee
@@ -62,7 +62,7 @@ class StorageMaintenanceTest(ConfluxTestFramework):
         # 5. Produce 1 empty block, and the miner will receive reward for the third empty block. This block reward
         # should contains storage maintenance fee.
         self.rpc.generate_blocks(1)
-        balance = parse_as_int(self.nodes[0].cfx_getBalance(self.mining_author))
+        balance = self.rpc.get_balance(self.mining_author)
         count = self.nodes[0].getblockcount()
         collateral_for_storage = self.rpc.get_collateral_for_storage(sender)
         storage_fee = collateral_for_storage * 4 // 100 // 63072000
@@ -74,7 +74,7 @@ class StorageMaintenanceTest(ConfluxTestFramework):
         # 6. Produce 1 empty block, and the miner will receive reward for the forth empty block. This block reward
         # should contains storage maintenance fee.
         self.rpc.generate_blocks(1)
-        balance = parse_as_int(self.nodes[0].cfx_getBalance(self.mining_author))
+        balance = self.rpc.get_balance(self.mining_author)
         count = self.nodes[0].getblockcount()
         collateral_for_storage = self.rpc.get_collateral_for_storage(sender)
         storage_fee = collateral_for_storage * 4 // 100 // 63072000
