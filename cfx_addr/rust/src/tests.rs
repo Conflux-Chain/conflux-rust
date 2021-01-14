@@ -137,7 +137,8 @@ fn testnet_32byte() {
     verify(
         Network::Test,
         &"3173EF6623C6B48FFD1A3DCC0CC6489B0A07BB47A37F47CFEF4FE69DE825C060"
-            .from_hex().unwrap(),
+            .from_hex()
+            .unwrap(),
         "cfxtest:0csr7vv64f3b93zx38yws36692dgm1xv8yhryhyfxx7yd7f84r060hkzn7njc",
     );
 }

@@ -82,7 +82,7 @@ pub fn cfx_addr_encode(
         64 => consts::SIZE_512,
         _ => return Err(EncodingError::InvalidLength(length)),
     };
-    
+
     // Get prefix
     let prefix = network.to_addr_prefix()?;
 
@@ -117,26 +117,28 @@ pub fn cfx_addr_encode(
 }
 
 pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
-    // Delimit and extract prefix
-    let parts: Vec<&str> = addr_str.split(':').collect();
-    if parts.len() < 2 {
-        return Err(DecodingError::NoPrefix);
-    }
-    // FIXME: add a unit test for prefix in capital letters.
-    let prefix = parts[0].to_lowercase();
-    let has_lowercase = prefix.chars().any(|c| c.is_lowercase());
-    let has_uppercase = prefix.chars().any(|c| c.is_uppercase());
+    // FIXME: add a unit test for addr_str in capital letters.
+    let has_lowercase = addr_str.chars().any(|c| c.is_lowercase());
+    let has_uppercase = addr_str.chars().any(|c| c.is_uppercase());
     if has_lowercase && has_uppercase {
         return Err(DecodingError::MixedCase);
     }
+    let lowercase = addr_str.to_lowercase();
+    drop(addr_str);
+
+    // Delimit and extract prefix
+    let parts: Vec<&str> = lowercase.split(':').collect();
+    if parts.len() < 2 {
+        return Err(DecodingError::NoPrefix);
+    }
+    let prefix = parts[0];
     // Match network
-    let network = Network::from_addr_prefix(prefix.as_str())?;
+    let network = Network::from_addr_prefix(prefix)?;
 
     let mut address_type = None;
     // Parse optional parts. We will ignore everything we can't understand.
     for option_str in &parts[1..parts.len() - 1] {
-        let option_lowercase = option_str.to_lowercase();
-        let key_value: Vec<&str> = option_lowercase.split('=').collect();
+        let key_value: Vec<&str> = option_str.split('.').collect();
         if key_value.len() != 2 {
             return Err(DecodingError::InvalidOption(OptionError::ParseError(
                 (*option_str).into(),
@@ -174,9 +176,8 @@ pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
     let payload_5_bits = payload_5_bits?;
 
     // Verify the checksum
-    let checksum = polymod(
-        &[&expand_prefix(prefix.as_str()), &payload_5_bits[..]].concat(),
-    );
+    let checksum =
+        polymod(&[&expand_prefix(prefix), &payload_5_bits[..]].concat());
     if checksum != 0 {
         // TODO: according to the spec it is possible to do correction based on
         // the checksum,  we shouldn't do it automatically but we could
