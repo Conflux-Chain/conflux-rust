@@ -63,6 +63,7 @@ pub struct UserAddress {
     pub network: Network,
 }
 
+// TODO: verbose level and address type.
 pub fn cfx_addr_encode(
     raw: &[u8], network: Network,
 ) -> Result<String, EncodingError> {
@@ -81,7 +82,7 @@ pub fn cfx_addr_encode(
         64 => consts::SIZE_512,
         _ => return Err(EncodingError::InvalidLength(length)),
     };
-
+    
     // Get prefix
     let prefix = network.to_addr_prefix()?;
 
