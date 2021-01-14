@@ -748,25 +748,25 @@ mod tests {
         let mut o = [255u8; 32];
         f.execute(&i[..], &mut BytesRef::Fixed(&mut o[..]))
             .expect("Builtin should not fail");
-        assert_eq!(&o[..], &(FromHex::from_hex("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855").unwrap())[..]);
+        assert_eq!(&o[..], &("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".from_hex::<Vec<u8>>().unwrap())[..]);
 
         let mut o8 = [255u8; 8];
         f.execute(&i[..], &mut BytesRef::Fixed(&mut o8[..]))
             .expect("Builtin should not fail");
         assert_eq!(
             &o8[..],
-            &(FromHex::from_hex("e3b0c44298fc1c14").unwrap())[..]
+            &("e3b0c44298fc1c14".from_hex::<Vec<u8>>().unwrap())[..]
         );
 
         let mut o34 = [255u8; 34];
         f.execute(&i[..], &mut BytesRef::Fixed(&mut o34[..]))
             .expect("Builtin should not fail");
-        assert_eq!(&o34[..], &(FromHex::from_hex("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855ffff").unwrap())[..]);
+        assert_eq!(&o34[..], &("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855ffff".from_hex::<Vec<u8>>().unwrap())[..]);
 
         let mut ov = vec![];
         f.execute(&i[..], &mut BytesRef::Flexible(&mut ov))
             .expect("Builtin should not fail");
-        assert_eq!(&ov[..], &(FromHex::from_hex("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855").unwrap())[..]);
+        assert_eq!(&ov[..], &("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".from_hex::<Vec<u8>>().unwrap())[..]);
     }
 
     #[test]
@@ -778,89 +778,89 @@ mod tests {
         let mut o = [255u8; 32];
         f.execute(&i[..], &mut BytesRef::Fixed(&mut o[..]))
             .expect("Builtin should not fail");
-        assert_eq!(&o[..], &(FromHex::from_hex("0000000000000000000000009c1185a5c5e9fc54612808977ee8f548b2258d31").unwrap())[..]);
+        assert_eq!(&o[..], &("0000000000000000000000009c1185a5c5e9fc54612808977ee8f548b2258d31".from_hex::<Vec<u8>>().unwrap())[..]);
 
         let mut o8 = [255u8; 8];
         f.execute(&i[..], &mut BytesRef::Fixed(&mut o8[..]))
             .expect("Builtin should not fail");
         assert_eq!(
             &o8[..],
-            &(FromHex::from_hex("0000000000000000").unwrap())[..]
+            &("0000000000000000".from_hex::<Vec<u8>>().unwrap())[..]
         );
 
         let mut o34 = [255u8; 34];
         f.execute(&i[..], &mut BytesRef::Fixed(&mut o34[..]))
             .expect("Builtin should not fail");
-        assert_eq!(&o34[..], &(FromHex::from_hex("0000000000000000000000009c1185a5c5e9fc54612808977ee8f548b2258d31ffff").unwrap())[..]);
+        assert_eq!(&o34[..], &("0000000000000000000000009c1185a5c5e9fc54612808977ee8f548b2258d31ffff".from_hex::<Vec<u8>>().unwrap())[..]);
     }
 
     #[test]
     fn ecrecover() {
         let f = builtin_factory("ecrecover");
 
-        let i = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad000000000000000000000000000000000000000000000000000000000000001b650acf9d3f5f0a2c799776a1254355d5f4061762a237396a99a0e0e3fc2bcd6729514a0dacb2e623ac4abd157cb18163ff942280db4d5caad66ddf941ba12e03").unwrap();
+        let i: Vec<u8> = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad000000000000000000000000000000000000000000000000000000000000001b650acf9d3f5f0a2c799776a1254355d5f4061762a237396a99a0e0e3fc2bcd6729514a0dacb2e623ac4abd157cb18163ff942280db4d5caad66ddf941ba12e03").unwrap();
 
         let mut o = [255u8; 32];
         f.execute(&i[..], &mut BytesRef::Fixed(&mut o[..]))
             .expect("Builtin should not fail");
-        assert_eq!(&o[..], &(FromHex::from_hex("000000000000000000000000108b5542d177ac6686946920409741463a15dddb").unwrap())[..]);
+        assert_eq!(&o[..], &("000000000000000000000000108b5542d177ac6686946920409741463a15dddb".from_hex::<Vec<u8>>().unwrap())[..]);
 
-        let i2 = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad0000000000000000000000000000000000000000000000000000000000000000650acf9d3f5f0a2c799776a1254355d5f4061762a237396a99a0e0e3fc2bcd6729514a0dacb2e623ac4abd157cb18163ff942280db4d5caad66ddf941ba12e03").unwrap();
+        let i2: Vec<u8> = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad0000000000000000000000000000000000000000000000000000000000000000650acf9d3f5f0a2c799776a1254355d5f4061762a237396a99a0e0e3fc2bcd6729514a0dacb2e623ac4abd157cb18163ff942280db4d5caad66ddf941ba12e03").unwrap();
 
         let mut o2 = [255u8; 32];
         f.execute(&i2[..], &mut BytesRef::Fixed(&mut o2[..]))
             .expect("Builtin should not fail");
-        assert_eq!(&o2[..], &(FromHex::from_hex("000000000000000000000000108b5542d177ac6686946920409741463a15dddb").unwrap())[..]);
+        assert_eq!(&o2[..], &("000000000000000000000000108b5542d177ac6686946920409741463a15dddb".from_hex::<Vec<u8>>().unwrap())[..]);
 
         let mut o8 = [255u8; 8];
         f.execute(&i[..], &mut BytesRef::Fixed(&mut o8[..]))
             .expect("Builtin should not fail");
         assert_eq!(
             &o8[..],
-            &(FromHex::from_hex("0000000000000000").unwrap())[..]
+            &("0000000000000000".from_hex::<Vec<u8>>().unwrap())[..]
         );
 
         let mut o34 = [255u8; 34];
         f.execute(&i[..], &mut BytesRef::Fixed(&mut o34[..]))
             .expect("Builtin should not fail");
-        assert_eq!(&o34[..], &(FromHex::from_hex("000000000000000000000000108b5542d177ac6686946920409741463a15dddbffff").unwrap())[..]);
+        assert_eq!(&o34[..], &("000000000000000000000000108b5542d177ac6686946920409741463a15dddbffff".from_hex::<Vec<u8>>().unwrap())[..]);
 
-        let i_bad = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad000000000000000000000000000000000000000000000000000000000000001a650acf9d3f5f0a2c799776a1254355d5f4061762a237396a99a0e0e3fc2bcd6729514a0dacb2e623ac4abd157cb18163ff942280db4d5caad66ddf941ba12e03").unwrap();
+        let i_bad: Vec<u8> = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad000000000000000000000000000000000000000000000000000000000000001a650acf9d3f5f0a2c799776a1254355d5f4061762a237396a99a0e0e3fc2bcd6729514a0dacb2e623ac4abd157cb18163ff942280db4d5caad66ddf941ba12e03").unwrap();
         let mut o = [255u8; 32];
         f.execute(&i_bad[..], &mut BytesRef::Fixed(&mut o[..]))
             .expect("Builtin should not fail");
-        assert_eq!(&o[..], &(FromHex::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap())[..]);
+        assert_eq!(&o[..], &("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".from_hex::<Vec<u8>>().unwrap())[..]);
 
-        let i_bad = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad000000000000000000000000000000000000000000000000000000000000001b000000000000000000000000000000000000000000000000000000000000001b0000000000000000000000000000000000000000000000000000000000000000").unwrap();
+        let i_bad: Vec<u8> = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad000000000000000000000000000000000000000000000000000000000000001b000000000000000000000000000000000000000000000000000000000000001b0000000000000000000000000000000000000000000000000000000000000000").unwrap();
         let mut o = [255u8; 32];
         f.execute(&i_bad[..], &mut BytesRef::Fixed(&mut o[..]))
             .expect("Builtin should not fail");
-        assert_eq!(&o[..], &(FromHex::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap())[..]);
+        assert_eq!(&o[..], &("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".from_hex::<Vec<u8>>().unwrap())[..]);
 
-        let i_bad = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad000000000000000000000000000000000000000000000000000000000000001b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001b").unwrap();
+        let i_bad: Vec<u8> = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad000000000000000000000000000000000000000000000000000000000000001b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001b").unwrap();
         let mut o = [255u8; 32];
         f.execute(&i_bad[..], &mut BytesRef::Fixed(&mut o[..]))
             .expect("Builtin should not fail");
-        assert_eq!(&o[..], &(FromHex::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap())[..]);
+        assert_eq!(&o[..], &("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".from_hex::<Vec<u8>>().unwrap())[..]);
 
-        let i_bad = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad000000000000000000000000000000000000000000000000000000000000001bffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff000000000000000000000000000000000000000000000000000000000000001b").unwrap();
+        let i_bad: Vec<u8> = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad000000000000000000000000000000000000000000000000000000000000001bffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff000000000000000000000000000000000000000000000000000000000000001b").unwrap();
         let mut o = [255u8; 32];
         f.execute(&i_bad[..], &mut BytesRef::Fixed(&mut o[..]))
             .expect("Builtin should not fail");
-        assert_eq!(&o[..], &(FromHex::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap())[..]);
+        assert_eq!(&o[..], &("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".from_hex::<Vec<u8>>().unwrap())[..]);
 
-        let i_bad = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad000000000000000000000000000000000000000000000000000000000000001b000000000000000000000000000000000000000000000000000000000000001bffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap();
+        let i_bad: Vec<u8> = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad000000000000000000000000000000000000000000000000000000000000001b000000000000000000000000000000000000000000000000000000000000001bffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap();
         let mut o = [255u8; 32];
         f.execute(&i_bad[..], &mut BytesRef::Fixed(&mut o[..]))
             .expect("Builtin should not fail");
-        assert_eq!(&o[..], &(FromHex::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap())[..]);
+        assert_eq!(&o[..], &("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".from_hex::<Vec<u8>>().unwrap())[..]);
 
         // TODO: Should this (corrupted version of the above) fail rather than
         // returning some address?
         /*	let i_bad = FromHex::from_hex("48173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad000000000000000000000000000000000000000000000000000000000000001b650acf9d3f5f0a2c799776a1254355d5f4061762a237396a99a0e0e3fc2bcd6729514a0dacb2e623ac4abd157cb18163ff942280db4d5caad66ddf941ba12e03").unwrap();
         let mut o = [255u8; 32];
         f.execute(&i_bad[..], &mut BytesRef::Fixed(&mut o[..]));
-        assert_eq!(&o[..], &(FromHex::from_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap())[..]);*/
+        assert_eq!(&o[..], &("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".from_hex::<Vec<u8>>().unwrap())[..]);*/
     }
 
     #[test]
@@ -873,21 +873,21 @@ mod tests {
 
         // test for potential gas cost multiplication overflow
         {
-            let input = FromHex::from_hex("0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000003b27bafd00000000000000000000000000000000000000000000000000000000503c8ac3").unwrap();
+            let input: Vec<u8> = FromHex::from_hex("0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000003b27bafd00000000000000000000000000000000000000000000000000000000503c8ac3").unwrap();
             let expected_cost = U256::max_value();
             assert_eq!(f.cost(&input[..]), expected_cost.into());
         }
 
         // test for potential exp len overflow
         {
-            let input = FromHex::from_hex("\
+            let input: Vec<u8> = FromHex::from_hex("\
 				00000000000000000000000000000000000000000000000000000000000000ff\
 				2a1e530000000000000000000000000000000000000000000000000000000000\
 				0000000000000000000000000000000000000000000000000000000000000000"
             ).unwrap();
 
             let mut output = vec![0u8; 32];
-            let expected = FromHex::from_hex("0000000000000000000000000000000000000000000000000000000000000000").unwrap();
+            let expected: Vec<u8> = FromHex::from_hex("0000000000000000000000000000000000000000000000000000000000000000").unwrap();
             let expected_cost = U256::max_value();
 
             f.execute(&input[..], &mut BytesRef::Fixed(&mut output[..]))
@@ -898,7 +898,7 @@ mod tests {
 
         // fermat's little theorem example.
         {
-            let input = FromHex::from_hex("\
+            let input: Vec<u8> = FromHex::from_hex("\
 				0000000000000000000000000000000000000000000000000000000000000001\
 				0000000000000000000000000000000000000000000000000000000000000020\
 				0000000000000000000000000000000000000000000000000000000000000020\
@@ -908,7 +908,7 @@ mod tests {
             ).unwrap();
 
             let mut output = vec![0u8; 32];
-            let expected = FromHex::from_hex("0000000000000000000000000000000000000000000000000000000000000001").unwrap();
+            let expected: Vec<u8> = FromHex::from_hex("0000000000000000000000000000000000000000000000000000000000000001").unwrap();
             let expected_cost = 13056;
 
             f.execute(&input[..], &mut BytesRef::Fixed(&mut output[..]))
@@ -919,7 +919,7 @@ mod tests {
 
         // zero base.
         {
-            let input = FromHex::from_hex("\
+            let input: Vec<u8> = FromHex::from_hex("\
 				0000000000000000000000000000000000000000000000000000000000000000\
 				0000000000000000000000000000000000000000000000000000000000000020\
 				0000000000000000000000000000000000000000000000000000000000000020\
@@ -928,7 +928,7 @@ mod tests {
             ).unwrap();
 
             let mut output = vec![0u8; 32];
-            let expected = FromHex::from_hex("0000000000000000000000000000000000000000000000000000000000000000").unwrap();
+            let expected: Vec<u8> = FromHex::from_hex("0000000000000000000000000000000000000000000000000000000000000000").unwrap();
             let expected_cost = 13056;
 
             f.execute(&input[..], &mut BytesRef::Fixed(&mut output[..]))
@@ -939,7 +939,7 @@ mod tests {
 
         // zero-padding
         {
-            let input = FromHex::from_hex("\
+            let input: Vec<u8> = FromHex::from_hex("\
 				0000000000000000000000000000000000000000000000000000000000000001\
 				0000000000000000000000000000000000000000000000000000000000000002\
 				0000000000000000000000000000000000000000000000000000000000000020\
@@ -949,7 +949,7 @@ mod tests {
             ).unwrap();
 
             let mut output = vec![0u8; 32];
-            let expected = FromHex::from_hex("3b01b01ac41f2d6e917c6d6a221ce793802469026d9ab7578fa2e79e4da6aaab").unwrap();
+            let expected: Vec<u8> = FromHex::from_hex("3b01b01ac41f2d6e917c6d6a221ce793802469026d9ab7578fa2e79e4da6aaab").unwrap();
             let expected_cost = 768;
 
             f.execute(&input[..], &mut BytesRef::Fixed(&mut output[..]))
@@ -960,7 +960,7 @@ mod tests {
 
         // zero-length modulus.
         {
-            let input = FromHex::from_hex("\
+            let input: Vec<u8> = FromHex::from_hex("\
 				0000000000000000000000000000000000000000000000000000000000000001\
 				0000000000000000000000000000000000000000000000000000000000000002\
 				0000000000000000000000000000000000000000000000000000000000000000\
@@ -988,7 +988,7 @@ mod tests {
 
         // zero-points additions
         {
-            let input = FromHex::from_hex("\
+            let input: Vec<u8> = FromHex::from_hex("\
 				0000000000000000000000000000000000000000000000000000000000000000\
 				0000000000000000000000000000000000000000000000000000000000000000\
 				0000000000000000000000000000000000000000000000000000000000000000\
@@ -996,7 +996,7 @@ mod tests {
             ).unwrap();
 
             let mut output = vec![0u8; 64];
-            let expected = FromHex::from_hex("\
+            let expected: Vec<u8> = FromHex::from_hex("\
 				0000000000000000000000000000000000000000000000000000000000000000\
 				0000000000000000000000000000000000000000000000000000000000000000"
             ).unwrap();
@@ -1012,7 +1012,7 @@ mod tests {
             let input = BytesRef::Fixed(&mut empty);
 
             let mut output = vec![0u8; 64];
-            let expected = FromHex::from_hex("\
+            let expected: Vec<u8> = FromHex::from_hex("\
 				0000000000000000000000000000000000000000000000000000000000000000\
 				0000000000000000000000000000000000000000000000000000000000000000"
             ).unwrap();
@@ -1024,7 +1024,7 @@ mod tests {
 
         // should fail - point not on curve
         {
-            let input = FromHex::from_hex("\
+            let input: Vec<u8> = FromHex::from_hex("\
 				1111111111111111111111111111111111111111111111111111111111111111\
 				1111111111111111111111111111111111111111111111111111111111111111\
 				1111111111111111111111111111111111111111111111111111111111111111\
@@ -1049,14 +1049,14 @@ mod tests {
 
         // zero-point multiplication
         {
-            let input = FromHex::from_hex("\
+            let input: Vec<u8> = FromHex::from_hex("\
 				0000000000000000000000000000000000000000000000000000000000000000\
 				0000000000000000000000000000000000000000000000000000000000000000\
 				0200000000000000000000000000000000000000000000000000000000000000"
             ).unwrap();
 
             let mut output = vec![0u8; 64];
-            let expected = FromHex::from_hex("\
+            let expected: Vec<u8> = FromHex::from_hex("\
 				0000000000000000000000000000000000000000000000000000000000000000\
 				0000000000000000000000000000000000000000000000000000000000000000"
             ).unwrap();
@@ -1068,7 +1068,7 @@ mod tests {
 
         // should fail - point not on curve
         {
-            let input = FromHex::from_hex("\
+            let input: Vec<u8> = FromHex::from_hex("\
 				1111111111111111111111111111111111111111111111111111111111111111\
 				1111111111111111111111111111111111111111111111111111111111111111\
 				0f00000000000000000000000000000000000000000000000000000000000000"
