@@ -24,9 +24,7 @@ impl<Storage: StateTrait> RecordingStorage<Storage> {
     }
 
     pub fn try_into_proof(self) -> Result<StateProof> {
-        let mut merger = StateProofMerger::default();
-        std::mem::swap(&mut merger, &mut *self.proof_merger.lock());
-        merger.finish()
+        self.proof_merger.into_inner().finish()
     }
 }
 
