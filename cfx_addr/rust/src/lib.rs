@@ -63,9 +63,15 @@ pub struct UserAddress {
     pub network: Network,
 }
 
+#[derive(Copy, Clone)]
+pub enum EncodingOptions {
+    Simple,
+    QrCode,
+}
+
 // TODO: verbose level and address type.
 pub fn cfx_addr_encode(
-    raw: &[u8], network: Network,
+    raw: &[u8], network: Network, encoding_options: EncodingOptions,
 ) -> Result<String, EncodingError> {
     // Calculate version byte
     let length = raw.len();
@@ -84,7 +90,7 @@ pub fn cfx_addr_encode(
     };
 
     // Get prefix
-    let prefix = network.to_addr_prefix()?;
+    let prefix = network.to_prefix()?;
 
     // Convert payload to 5 bit array
     let mut payload = Vec::with_capacity(1 + raw.len());
@@ -112,7 +118,25 @@ pub fn cfx_addr_encode(
         .collect();
 
     // Concatenate all parts
-    let cashaddr = [&prefix, ":", &payload_str, &checksum_str].concat();
+    let cashaddr;
+    match encoding_options {
+        EncodingOptions::Simple => {
+            cashaddr = [&prefix, ":", &payload_str, &checksum_str].concat();
+        }
+        EncodingOptions::QrCode => {
+            let addr_type_str = AddressType::from_address(&raw)?.to_str();
+            cashaddr = [
+                &prefix,
+                ":type.",
+                addr_type_str,
+                ":",
+                &payload_str,
+                &checksum_str,
+            ]
+            .concat()
+            .to_uppercase();
+        }
+    };
     Ok(cashaddr)
 }
 
@@ -132,7 +156,7 @@ pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
     }
     let prefix = parts[0];
     // Match network
-    let network = Network::from_addr_prefix(prefix)?;
+    let network = Network::from_prefix(prefix)?;
 
     let mut address_type = None;
     // Parse optional parts. We will ignore everything we can't understand.
@@ -161,7 +185,7 @@ pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
     }
 
     // Decode payload to 5 bit array
-    let payload_chars = payload_str.chars(); // Reintialize iterator here
+    let payload_chars = payload_str.chars();
     let payload_5_bits: Result<Vec<u8>, DecodingError> = payload_chars
         .map(|c| {
             let i = c as usize;

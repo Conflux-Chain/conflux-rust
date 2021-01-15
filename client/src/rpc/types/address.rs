@@ -2,7 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_addr::{cfx_addr_decode, cfx_addr_encode, UserAddress};
+use cfx_addr::{
+    cfx_addr_decode, cfx_addr_encode, EncodingOptions, UserAddress,
+};
 use cfx_types::H160;
 use serde::{de, ser, Deserialize, Deserializer, Serialize, Serializer};
 use std::{convert::TryInto, ops::Deref};
@@ -43,10 +45,14 @@ impl<'a> Deserialize<'a> for Address {
 impl Serialize for Address {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
-        let addr_str = cfx_addr_encode(&self.0.body[..], self.0.network)
-            .map_err(|e| {
-                ser::Error::custom(format!("Failed to encode address: {}", e))
-            })?;
+        let addr_str = cfx_addr_encode(
+            &self.0.body[..],
+            self.0.network,
+            EncodingOptions::QrCode,
+        )
+        .map_err(|e| {
+            ser::Error::custom(format!("Failed to encode address: {}", e))
+        })?;
 
         serializer.serialize_str(&addr_str)
     }
