@@ -338,7 +338,7 @@ dependencies = [
  "crunchy",
  "lazy_static",
  "rand 0.5.6",
- "rustc-hex 2.1.0",
+ "rustc-hex",
 ]
 
 [[package]]
@@ -539,7 +539,7 @@ dependencies = [
  "random-crash",
  "rlp",
  "rlp_derive",
- "rustc-hex 1.0.0",
+ "rustc-hex",
  "serde",
  "serde_derive",
  "sqlite",
@@ -603,7 +603,6 @@ dependencies = [
  "fs_extra",
  "futures 0.3.8",
  "hashbrown 0.7.2",
- "hex 0.4.2",
  "hibitset",
  "io",
  "itertools 0.9.0",
@@ -625,7 +624,6 @@ dependencies = [
  "network",
  "num",
  "num-traits",
- "parity-bytes",
  "parity-crypto 0.3.1",
  "parity-util-mem",
  "parking_lot 0.11.1",
@@ -640,7 +638,7 @@ dependencies = [
  "rayon",
  "rlp",
  "rlp_derive",
- "rustc-hex 1.0.0",
+ "rustc-hex",
  "secret-store",
  "serde",
  "serde_derive",
@@ -691,7 +689,7 @@ dependencies = [
  "parity-wordlist",
  "quick-error",
  "rand 0.7.3",
- "rustc-hex 1.0.0",
+ "rustc-hex",
  "serde",
  "serde_derive",
  "tiny-keccak 1.5.0",
@@ -712,7 +710,7 @@ dependencies = [
  "parity-wordlist",
  "parking_lot 0.11.1",
  "rand 0.7.3",
- "rustc-hex 1.0.0",
+ "rustc-hex",
  "serde",
  "serde_derive",
  "serde_json",
@@ -816,7 +814,7 @@ dependencies = [
  "rayon",
  "rlp",
  "runtime",
- "rustc-hex 1.0.0",
+ "rustc-hex",
  "secret-store",
  "serde",
  "serde_derive",
@@ -901,7 +899,7 @@ dependencies = [
  "rlp",
  "rpassword",
  "runtime",
- "rustc-hex 2.1.0",
+ "rustc-hex",
  "secret-store",
  "serde",
  "serde_derive",
@@ -1410,7 +1408,7 @@ dependencies = [
  "byteorder",
  "libc",
  "rand 0.7.3",
- "rustc-hex 2.1.0",
+ "rustc-hex",
  "static_assertions",
 ]
 
@@ -1422,7 +1420,7 @@ checksum = "11498d382790b7a8f2fd211780bec78619bba81cdad3a283997c0c41f836759c"
 dependencies = [
  "byteorder",
  "rand 0.7.3",
- "rustc-hex 2.1.0",
+ "rustc-hex",
  "static_assertions",
 ]
 
@@ -1735,24 +1733,6 @@ checksum = "5aca5565f760fb5b220e499d72710ed156fdb74e631659e99377d9ebfbd13ae8"
 dependencies = [
  "libc",
 ]
-
-[[package]]
-name = "hex"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6a22814455d41612f41161581c2883c0c6a1c41852729b17d5ed88f01e153aa"
-
-[[package]]
-name = "hex"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "805026a5d0141ffc30abb3be3173848ad46a1b1664fe632428479619a3644d77"
-
-[[package]]
-name = "hex"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "644f9158b2f133fd50f5fb3242878846d9eb792e445c893805ff0e3824006e35"
 
 [[package]]
 name = "hibitset"
@@ -2964,7 +2944,7 @@ dependencies = [
  "pbkdf2 0.3.0",
  "rand 0.7.3",
  "ripemd160",
- "rustc-hex 2.1.0",
+ "rustc-hex",
  "scrypt 0.2.0",
  "sha2 0.8.2",
  "subtle 2.3.0",
@@ -3660,7 +3640,7 @@ version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1190dcc8c3a512f1eef5d09bb8c84c7f39e1054e174d1795482e18f5272f2e73"
 dependencies = [
- "rustc-hex 2.1.0",
+ "rustc-hex",
 ]
 
 [[package]]
@@ -3711,12 +3691,6 @@ name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
-
-[[package]]
-name = "rustc-hex"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ceb8ce7a5e520de349e1fa172baeba4a9e8d5ef06c47471863530bc4972ee1e"
 
 [[package]]
 name = "rustc-hex"
@@ -4021,9 +3995,8 @@ name = "solidity-abi"
 version = "0.1.0"
 dependencies = [
  "cfx-types",
- "hex 0.3.2",
  "lazy_static",
- "parity-bytes",
+ "rustc-hex",
 ]
 
 [[package]]
@@ -4635,18 +4608,17 @@ dependencies = [
  "cfxkey",
  "clap",
  "db",
- "hex 0.2.0",
  "io",
  "lazy_static",
  "log 0.4.11",
  "metrics",
  "network",
- "parity-bytes",
  "parking_lot 0.11.1",
  "primitives",
  "priority-send-queue",
  "rand 0.7.3",
  "rlp",
+ "rustc-hex",
  "secret-store",
  "toml 0.4.10",
 ]
@@ -4680,7 +4652,7 @@ checksum = "9db035e67dfaf7edd9aebfe8676afcd63eed53c8a4044fed514c8cccf1835177"
 dependencies = [
  "byteorder",
  "crunchy",
- "rustc-hex 2.1.0",
+ "rustc-hex",
  "static_assertions",
 ]
 

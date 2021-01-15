@@ -99,7 +99,7 @@ fn txexe_benchmark(c: &mut Criterion) {
             b.iter(|| {
                 let options = TransactOptions::with_no_tracing();
                 ex.transact(&tx, options).unwrap();
-                ex.state.clear_test_only();
+                ex.state.clear();
             })
         })
         .measurement_time(Duration::from_secs(10))
