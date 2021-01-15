@@ -19,7 +19,7 @@ mod tests;
 
 use cfx_types::Address;
 use checksum::polymod;
-use consts::{AddressType, Network};
+pub use consts::{AddressType, Network};
 use errors::*;
 
 const BASE32_CHARS: &str = "0123456789abcdefghijklmnopqrstuvwxyz";
