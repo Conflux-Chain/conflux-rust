@@ -29,7 +29,6 @@ NUM_CALLS = 20
 class PubSubTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
-        self.conf_parameters["log_level"] = '"trace"'
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)
@@ -66,8 +65,8 @@ class PubSubTest(ConfluxTestFramework):
         _, contract2 = self.deploy_contract(sender, priv_key, bytecode)
 
         # subscribe
-        sub_all = await self.pubsub[FULLNODE1].subscribe("logs")
-        sub_one = await self.pubsub[FULLNODE1].subscribe("logs", Filter(address=[contract2]).__dict__)
+        sub_all = await self.pubsub[FULLNODE0].subscribe("logs")
+        sub_one = await self.pubsub[FULLNODE0].subscribe("logs", Filter(address=[contract2]).__dict__)
 
         # call contracts and collect receipts
         receipts = []
