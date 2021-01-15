@@ -17,7 +17,7 @@ use crate::{
 };
 use cfx_parameters::sync::OLD_ERA_BLOCK_GC_BATCH_SIZE;
 use cfx_types::{H256, U256};
-use dag::{Graph, RichDAG, RichTreeGraph, TreeGraph};
+use dag::{Graph, RichDAG, RichTreeGraph, TreeGraph, DAG};
 use futures::executor::block_on;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -749,6 +749,9 @@ impl SynchronizationGraphInner {
             let hash = self.arena[*index].block_header.hash();
             self.not_ready_blocks_frontier.remove(index);
             self.old_era_blocks_frontier_set.remove(index);
+            // This include invalid blocks and blocks not received after a long
+            // time.
+            self.missing_body_block_set.remove(&hash);
 
             let parent = self.arena[*index].parent;
             if parent != NULL {
@@ -1684,9 +1687,6 @@ impl SynchronizationGraph {
         // If we are locked for catch-up, make sure no new block will enter sync
         // graph.
         if inner.locked_for_catchup {
-            if !inner.block_to_fill_set.remove(&hash) {
-                warn!("Receive unexpected block body, hash={:?}", hash);
-            }
             if inner.arena[me].graph_status == BLOCK_INVALID {
                 let invalid_set = self.propagate_graph_status(inner, vec![me]);
                 for i in &invalid_set {
@@ -1696,6 +1696,9 @@ impl SynchronizationGraph {
                         .block_to_fill_set
                         .remove(&inner.arena[*i].block_header.hash());
                 }
+                // Invalid blocks will also be removed from
+                // `missing_body_block_set`
+                // in `process_invalid_blocks`.
                 inner.process_invalid_blocks(&invalid_set);
                 return BlockInsertionResult::Invalid;
             } else {
@@ -1801,26 +1804,61 @@ impl SynchronizationGraph {
     /// `BLOCK_HEADER_GRAPH_READY` blocks as `BLOCK_GRAPH_READY` and remove all
     /// other blocks. All blocks in the future can be processed normally in
     /// sync graph and consensus graph.
-    pub fn complete_filling_block_bodies(&self) {
-        self.consensus.construct_pivot_state();
-        let mut inner = self.inner.write();
+    pub fn complete_filling_block_bodies(&self) -> bool {
+        let mut inner = &mut *self.inner.write();
+
         inner.locked_for_catchup = false;
-        let to_remove = inner
-            .arena
-            .iter_mut()
-            .filter_map(|(i, graph_node)| {
-                if graph_node.graph_status == BLOCK_HEADER_GRAPH_READY {
-                    graph_node.block_ready = true;
-                    graph_node.graph_status = BLOCK_GRAPH_READY;
-                }
-                if graph_node.graph_status != BLOCK_GRAPH_READY {
-                    Some(i)
-                } else {
-                    None
-                }
-            })
-            .collect();
+        // Iterating over `hash_to_arena_indices` might be more efficient than
+        // iterating over `arena`.
+        let to_remove = {
+            let arena = &mut inner.arena;
+            inner
+                .hash_to_arena_indices
+                .iter()
+                .filter_map(|(_, index)| {
+                    let graph_node = &mut arena[*index];
+                    if graph_node.graph_status == BLOCK_HEADER_GRAPH_READY {
+                        graph_node.block_ready = true;
+                        graph_node.graph_status = BLOCK_GRAPH_READY;
+                    }
+                    if graph_node.graph_status != BLOCK_GRAPH_READY {
+                        Some(*index)
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        };
         inner.remove_blocks(&to_remove);
+
+        let missing_body_blocks = self.consensus.get_blocks_needing_bodies();
+        let has_skipped_bodies = missing_body_blocks.iter().any(|block_hash| {
+            !inner.hash_to_arena_indices.contains_key(block_hash)
+        });
+        if has_skipped_bodies {
+            // Some headers should not enter consensus, so we just reconstruct
+            // the consensus graph with the current sync graph.
+            self.consensus.reset();
+
+            let all_block_indices: HashSet<_> = inner
+                .hash_to_arena_indices
+                .iter()
+                .map(|(_, i)| *i)
+                .collect();
+            // Send blocks in topological order.
+            let sorted_blocks = inner.topological_sort(all_block_indices);
+            for i in sorted_blocks {
+                self.consensus_unprocessed_count
+                    .fetch_add(1, Ordering::SeqCst);
+                assert!(
+                    self.new_block_hashes
+                        .send(inner.arena[i].block_header.hash()),
+                    "consensus receiver dropped"
+                );
+            }
+        }
+        self.consensus.construct_pivot_state();
+        true
     }
 }
 

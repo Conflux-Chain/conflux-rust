@@ -1417,4 +1417,25 @@ impl ConsensusGraphTrait for ConsensusGraph {
             .notify_new_best_info(self.best_info.read_recursive().clone())
             .expect("No DB error")
     }
+
+    fn reset(&self) {
+        let old_consensus_inner = &mut *self.inner.write();
+
+        let cur_era_genesis_hash =
+            self.data_man.get_cur_consensus_era_genesis_hash();
+        let cur_era_stable_hash =
+            self.data_man.get_cur_consensus_era_stable_hash();
+        let new_consensus_inner = ConsensusGraphInner::with_era_genesis(
+            old_consensus_inner.pow_config.clone(),
+            old_consensus_inner.pow.clone(),
+            self.data_man.clone(),
+            old_consensus_inner.inner_conf.clone(),
+            &cur_era_genesis_hash,
+            &cur_era_stable_hash,
+        );
+        *old_consensus_inner = new_consensus_inner;
+        debug!("Build new consensus graph for sync-recovery with identified genesis {} stable block {}", cur_era_genesis_hash, cur_era_stable_hash);
+
+        self.confirmation_meter.clear();
+    }
 }
