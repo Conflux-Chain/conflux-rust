@@ -249,9 +249,15 @@ pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
                     AddressType::from_address(hex_address.as_ref().unwrap())
                         .or(Err(()));
                 if got.as_ref() != Ok(&expected) {
-                    return Err(DecodingError::InvalidOption(
-                        OptionError::AddressTypeMismatch { expected, got },
-                    ));
+                    // FIXME: need to test this.
+                    // It's fine to specify "builtin" for the null address.
+                    if !(expected == AddressType::Builtin
+                        && got == Ok(AddressType::Null))
+                    {
+                        return Err(DecodingError::InvalidOption(
+                            OptionError::AddressTypeMismatch { expected, got },
+                        ));
+                    }
                 }
             }
             None => {}
