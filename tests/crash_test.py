@@ -27,7 +27,8 @@ class CrashTest(ConfluxTestFramework):
         for i in range(1, self.num_nodes):
             self.start_node(i, extra_args=self.node_extra_args)
         for i in range(self.num_nodes):
-            wait_until(lambda: len(self.nodes[i].getpeerinfo()) >= 2)
+            # Make sure the graph is connected even after we stop node 0.
+            wait_until(lambda: len(self.nodes[i].getpeerinfo()) >= 4)
 
     def run_test(self):
         block_number = 10

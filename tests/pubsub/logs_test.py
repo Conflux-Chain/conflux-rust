@@ -65,8 +65,8 @@ class PubSubTest(ConfluxTestFramework):
         _, contract2 = self.deploy_contract(sender, priv_key, bytecode)
 
         # subscribe
-        sub_all = await self.pubsub[FULLNODE1].subscribe("logs")
-        sub_one = await self.pubsub[FULLNODE1].subscribe("logs", Filter(address=[contract2]).__dict__)
+        sub_all = await self.pubsub[FULLNODE0].subscribe("logs")
+        sub_one = await self.pubsub[FULLNODE0].subscribe("logs", Filter(address=[contract2]).__dict__)
 
         # call contracts and collect receipts
         receipts = []
