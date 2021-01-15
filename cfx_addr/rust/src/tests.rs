@@ -183,7 +183,8 @@ fn testnet_64byte() {
 }
 
 fn verify(network: Network, data: &Vec<u8>, cashaddr: &str) {
-    let output = cfx_addr_encode(data, network).unwrap();
+    let output =
+        cfx_addr_encode(data, network, EncodingOptions::Simple).unwrap();
     assert!(
         output == cashaddr.to_ascii_lowercase(),
         "expected address {}, got {}",
