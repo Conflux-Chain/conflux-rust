@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_addr::{cfx_addr_decode, cfx_addr_encode, Network, UserAddress};
+use cfx_addr::{cfx_addr_decode, cfx_addr_encode, UserAddress};
 use cfx_types::H160;
 use serde::{de, ser, Deserialize, Deserializer, Serialize, Serializer};
 use std::{convert::TryInto, ops::Deref};
@@ -54,8 +54,10 @@ impl Serialize for Address {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::Address;
+    use cfx_addr::Network;
     use serde_json;
+    use std::convert::TryInto;
 
     fn check_deserialize(raw: &str, hex: &str, network: Network) {
         let addr_hex = hex.trim_start_matches("0x").parse().unwrap();
