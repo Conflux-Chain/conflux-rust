@@ -1027,9 +1027,8 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
 
                                 let contract_create_result = into_contract_create_result(val, &address, exec.unconfirmed_substate().expect("Executive is resumed from a create; it has an unconfirmed substate; qed"));
 
-                                match contract_create_result.as_ref() {
-                                    Ok(result) => tracer.prepare_trace_create_result(result),
-                                    Err(_) => {},
+                                if let Ok(result) = &contract_create_result {
+                                    tracer.prepare_trace_create_result(result);
                                 }
 
                                 last_res = Some((
@@ -1051,9 +1050,8 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
                                 let contract_call_result =
                                     into_message_call_result(val);
 
-                                match contract_call_result.as_ref() {
-                                    Ok(result) => tracer.prepare_trace_call_result(result),
-                                    Err(_) => {},
+                                if let Ok(result) = &contract_call_result {
+                                    tracer.prepare_trace_call_result(result);
                                 }
 
                                 last_res = Some((
