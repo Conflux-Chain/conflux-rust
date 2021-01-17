@@ -108,19 +108,20 @@ pub fn contract_address(
 /// Convert a finalization result into a VM message call result.
 pub fn into_message_call_result(
     result: vm::Result<FinalizationResult>,
-) -> vm::MessageCallResult {
+) -> vm::Result<vm::MessageCallResult> {
     match result {
         Ok(FinalizationResult {
             gas_left,
             return_data,
             apply_state: true,
-        }) => vm::MessageCallResult::Success(gas_left, return_data),
+        }) => Ok(vm::MessageCallResult::Success(gas_left, return_data)),
         Ok(FinalizationResult {
             gas_left,
             return_data,
             apply_state: false,
-        }) => vm::MessageCallResult::Reverted(gas_left, return_data),
-        _ => vm::MessageCallResult::Failed,
+        }) => Ok(vm::MessageCallResult::Reverted(gas_left, return_data)),
+        Err(vm::Error::StateDbError(err)) => Err(vm::Error::StateDbError(err)),
+        _ => Ok(vm::MessageCallResult::Failed),
     }
 }
 
@@ -128,7 +129,7 @@ pub fn into_message_call_result(
 pub fn into_contract_create_result(
     result: vm::Result<FinalizationResult>, address: &Address,
     substate: &mut Substate,
-) -> vm::ContractCreateResult
+) -> vm::Result<vm::ContractCreateResult>
 {
     match result {
         Ok(FinalizationResult {
@@ -137,14 +138,15 @@ pub fn into_contract_create_result(
             ..
         }) => {
             substate.contracts_created.push(address.clone());
-            vm::ContractCreateResult::Created(address.clone(), gas_left)
+            Ok(vm::ContractCreateResult::Created(address.clone(), gas_left))
         }
         Ok(FinalizationResult {
             gas_left,
             apply_state: false,
             return_data,
-        }) => vm::ContractCreateResult::Reverted(gas_left, return_data),
-        _ => vm::ContractCreateResult::Failed,
+        }) => Ok(vm::ContractCreateResult::Reverted(gas_left, return_data)),
+        Err(vm::Error::StateDbError(err)) => Err(vm::Error::StateDbError(err)),
+        _ => Ok(vm::ContractCreateResult::Failed),
     }
 }
 
@@ -1024,14 +1026,17 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
                                 };
 
                                 let contract_create_result = into_contract_create_result(val, &address, exec.unconfirmed_substate().expect("Executive is resumed from a create; it has an unconfirmed substate; qed"));
-                                tracer.prepare_trace_create_result(
-                                    &contract_create_result,
-                                );
+
+                                match contract_create_result.as_ref() {
+                                    Ok(result) => tracer.prepare_trace_create_result(result),
+                                    Err(_) => {},
+                                }
+
                                 last_res = Some((
                                     exec.is_create,
                                     exec.gas,
                                     exec.resume_create(
-                                        contract_create_result,
+                                        contract_create_result?,
                                         state,
                                         parent_substate,
                                         tracer,
@@ -1045,14 +1050,17 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
                                 };
                                 let contract_call_result =
                                     into_message_call_result(val);
-                                tracer.prepare_trace_call_result(
-                                    &contract_call_result,
-                                );
+
+                                match contract_call_result.as_ref() {
+                                    Ok(result) => tracer.prepare_trace_call_result(result),
+                                    Err(_) => {},
+                                }
+
                                 last_res = Some((
                                     exec.is_create,
                                     exec.gas,
                                     exec.resume_call(
-                                        contract_call_result,
+                                        contract_call_result?,
                                         state,
                                         parent_substate,
                                         tracer,
