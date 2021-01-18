@@ -6,12 +6,18 @@ use cfx_addr::{
     cfx_addr_decode, cfx_addr_encode, EncodingOptions, Network, UserAddress,
 };
 use cfx_types::H160;
+use parking_lot::RwLock;
 use serde::{de, ser, Deserialize, Deserializer, Serialize, Serializer};
 use std::{convert::TryInto, ops::Deref};
 
 // TODO: I prefer to use { .addr, .network }
 #[derive(Debug)]
 pub struct Address(UserAddress);
+
+lazy_static! {
+    pub static ref FORCE_BASE32_ADDRESS: RwLock<bool> = RwLock::new(false);
+    pub static ref NODE_NETWORK: RwLock<Network> = RwLock::new(Network::Main);
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RpcAddress {
@@ -72,20 +78,27 @@ impl Serialize for Address {
 impl<'a> Deserialize<'a> for RpcAddress {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'a> {
-        let s: String = Deserialize::deserialize(deserializer)?;
+        if *FORCE_BASE32_ADDRESS.read() {
+            let s: String = Deserialize::deserialize(deserializer)?;
 
-        let parsed_address = cfx_addr_decode(&s).map_err(|e| {
-            de::Error::custom(format!("Invalid base32 address: {}", e))
-        })?;
+            let parsed_address = cfx_addr_decode(&s).map_err(|e| {
+                de::Error::custom(format!("Invalid base32 address: {}", e))
+            })?;
 
-        Ok(RpcAddress {
-            hex_address: parsed_address.hex_address.ok_or_else(|| {
-                de::Error::custom(
-                    "Invalid base32 address: not a SIZE_160 address.",
-                )
-            })?,
-            network: parsed_address.network,
-        })
+            Ok(RpcAddress {
+                hex_address: parsed_address.hex_address.ok_or_else(|| {
+                    de::Error::custom(
+                        "Invalid base32 address: not a SIZE_160 address.",
+                    )
+                })?,
+                network: parsed_address.network,
+            })
+        } else {
+            Ok(Self {
+                hex_address: Deserialize::deserialize(deserializer)?,
+                network: *NODE_NETWORK.read(),
+            })
+        }
     }
 }
 

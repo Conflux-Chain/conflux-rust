@@ -3,8 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::{
-    call_request::rpc_call_request_network, errors::check_rpc_address_network,
-    TokenSupplyInfo, MAX_GAS_CALL_REQUEST,
+    address::NODE_NETWORK, call_request::rpc_call_request_network,
+    errors::check_rpc_address_network, TokenSupplyInfo, MAX_GAS_CALL_REQUEST,
 };
 use blockgen::BlockGenerator;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
@@ -99,6 +99,8 @@ impl RpcImpl {
         config: RpcImplConfiguration, accounts: Arc<AccountProvider>,
     ) -> Self
     {
+        *NODE_NETWORK.write() =
+            network_id_to_known_cfx_network(sync.get_network_id());
         RpcImpl {
             consensus,
             sync,
@@ -384,9 +386,7 @@ impl RpcImpl {
         &self, mut tx: SendTxRequest, password: Option<String>,
     ) -> RpcResult<TransactionWithSignature> {
         let consensus_graph = self.consensus_graph();
-        let our_network =
-            network_id_to_known_cfx_network(self.sync.get_network_id());
-        tx.check_rpc_address_network("tx", our_network)?;
+        tx.check_rpc_address_network("tx", *NODE_NETWORK.read())?;
 
         if tx.nonce.is_none() {
             let nonce = consensus_graph.next_nonce(
@@ -991,11 +991,12 @@ impl RpcImpl {
                 request.to.as_ref(),
             ),
         )?;
-        let our_network =
-            network_id_to_known_cfx_network(self.sync.get_network_id());
         invalid_params_check(
             "request",
-            check_rpc_address_network(rpc_request_network, our_network),
+            check_rpc_address_network(
+                rpc_request_network,
+                *NODE_NETWORK.read(),
+            ),
         )?;
 
         let consensus_graph = self.consensus_graph();

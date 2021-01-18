@@ -187,19 +187,22 @@ pub fn rpc_call_request_network(
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
+    use super::CallRequest;
 
+    use crate::rpc::types::address::{RpcAddress, FORCE_BASE32_ADDRESS};
+    use cfx_addr::Network;
+    use cfx_types::{H160, U256, U64};
     use rustc_hex::FromHex;
     use serde_json;
+    use std::str::FromStr;
 
-    use cfx_types::{H160, U256, U64};
-
-    use super::CallRequest;
-    use crate::rpc::types::address::RpcAddress;
-    use cfx_addr::Network;
+    // TODO: remove this function.
+    fn force_base32_address() { *FORCE_BASE32_ADDRESS.write() = true; }
 
     #[test]
     fn call_request_deserialize() {
+        force_base32_address();
+
         let expected = CallRequest {
             from: Some(RpcAddress {
                 hex_address: H160::from_low_u64_be(1),
@@ -234,6 +237,8 @@ mod tests {
 
     #[test]
     fn call_request_deserialize2() {
+        force_base32_address();
+
         let expected = CallRequest {
             from: Some(RpcAddress{ hex_address: H160::from_str("160e8dd61c5d32be8058bb8eb970870f07233155").unwrap(), network: Network::Main }),
             to: Some(RpcAddress{ hex_address: H160::from_str("846e8dd67c5d32be8058bb8eb970870f07244567").unwrap(), network: Network::Main}),
@@ -261,6 +266,8 @@ mod tests {
 
     #[test]
     fn call_request_deserialize_empty() {
+        force_base32_address();
+
         let expected = CallRequest {
             from: Some(RpcAddress {
                 hex_address: H160::from_low_u64_be(1),
