@@ -19,7 +19,7 @@ mod tests;
 
 use cfx_types::Address;
 use checksum::polymod;
-use consts::{AddressType, Network};
+pub use consts::{AddressType, Network};
 use errors::*;
 
 const BASE32_CHARS: &str = "0123456789abcdefghijklmnopqrstuvwxyz";
@@ -124,7 +124,6 @@ pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
         return Err(DecodingError::MixedCase);
     }
     let lowercase = addr_str.to_lowercase();
-    drop(addr_str);
 
     // Delimit and extract prefix
     let parts: Vec<&str> = lowercase.split(':').collect();
@@ -289,13 +288,7 @@ fn convert_bits(
         // If there's some bits left, figure out if we need to remove padding
         // and add it
         let padding = ((data.len() * inbits as usize) % outbits as usize) as u8;
-        if num >= inbits {
-            return Err(DecodingError::InvalidPadding {
-                from_bits: inbits,
-                padding_bits: padding,
-                padding: acc,
-            });
-        } else if acc != 0 {
+        if num >= inbits || acc != 0 {
             return Err(DecodingError::InvalidPadding {
                 from_bits: inbits,
                 padding_bits: padding,

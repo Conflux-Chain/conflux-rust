@@ -40,7 +40,7 @@ pub const SIZE_384: u8 = 0x05;
 pub const SIZE_448: u8 = 0x06;
 pub const SIZE_512: u8 = 0x07;
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
 pub enum Network {
     /// Main network.
     Main,
@@ -131,7 +131,7 @@ impl AddressType {
     }
 
     pub fn from_address(address_hex: &Address) -> Result<Self, EncodingError> {
-        match *address_hex.type_byte() {
+        match address_hex.address_type_bits() {
             address_util::TYPE_BITS_BUILTIN => {
                 if address_hex.is_null_address() {
                     Ok(Self::Null)

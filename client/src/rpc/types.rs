@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 mod account;
+mod address;
 mod blame_info;
 mod block;
 mod bytes;
@@ -25,6 +26,7 @@ pub mod pubsub;
 
 pub use self::{
     account::Account,
+    address::Address,
     blame_info::BlameInfo,
     block::{Block, BlockTransactions, Header},
     bytes::Bytes,
