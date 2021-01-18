@@ -2,12 +2,24 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::Bytes;
-use cfx_types::{address_util::AddressUtil, Address, H160, U256, U64};
-use primitives::{
-    transaction::Action, SignedTransaction, Transaction as PrimitiveTransaction,
+use crate::rpc::{
+    types::{
+        address::RpcAddress,
+        errors::{check_rpc_address_network, RcpAddressNetworkInconsistent},
+        Bytes,
+    },
+    RpcResult,
 };
-use std::cmp::min;
+use cfx_addr::Network;
+use cfx_types::{address_util::AddressUtil, Address, U256, U64};
+use cfxcore::rpc_errors::invalid_params_check;
+use cfxcore_accounts::AccountProvider;
+use cfxkey::Password;
+use primitives::{
+    transaction::Action, SignedTransaction,
+    Transaction as PrimitiveTransaction, TransactionWithSignature,
+};
+use std::{cmp::min, sync::Arc};
 
 // use serde_json::de::ParserNumber::U64;
 
@@ -15,13 +27,13 @@ use std::cmp::min;
 /// not too high that a call_virtual consumes too much resource.
 pub const MAX_GAS_CALL_REQUEST: u64 = 500_000_000;
 
-#[derive(Debug, Default, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CallRequest {
     /// From
-    pub from: Option<H160>,
+    pub from: Option<RpcAddress>,
     /// To
-    pub to: Option<H160>,
+    pub to: Option<RpcAddress>,
     /// Gas Price
     pub gas_price: Option<U256>,
     /// Gas
@@ -34,6 +46,21 @@ pub struct CallRequest {
     pub nonce: Option<U256>,
     /// StorageLimit
     pub storage_limit: Option<U64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendTxRequest {
+    pub from: RpcAddress,
+    pub to: Option<RpcAddress>,
+    pub gas: U256,
+    pub gas_price: U256,
+    pub value: U256,
+    pub data: Option<Bytes>,
+    pub nonce: Option<U256>,
+    pub storage_limit: Option<U256>,
+    pub chain_id: Option<U256>,
+    pub epoch_height: Option<U256>,
 }
 
 #[derive(Debug, Default, PartialEq, Deserialize, Serialize)]
@@ -58,20 +85,72 @@ pub struct CheckBalanceAgainstTransactionResponse {
     pub is_balance_enough: bool,
 }
 
+impl SendTxRequest {
+    pub fn check_rpc_address_network(
+        &self, param_name: &str, expected: Network,
+    ) -> RpcResult<()> {
+        let rpc_request_network = invalid_params_check(
+            param_name,
+            rpc_call_request_network(Some(&self.from), self.to.as_ref()),
+        )?;
+        invalid_params_check(
+            param_name,
+            check_rpc_address_network(rpc_request_network, expected),
+        )
+    }
+
+    pub fn sign_with(
+        self, best_epoch_height: u64, chain_id: u32, password: Option<String>,
+        accounts: Arc<AccountProvider>,
+    ) -> RpcResult<TransactionWithSignature>
+    {
+        let tx = PrimitiveTransaction {
+            nonce: self.nonce.unwrap_or_default().into(),
+            gas_price: self.gas_price.into(),
+            gas: self.gas.into(),
+            action: match self.to {
+                None => Action::Create,
+                Some(address) => Action::Call(address.into()),
+            },
+            value: self.value.into(),
+            storage_limit: self.storage_limit.unwrap_or_default().as_usize()
+                as u64,
+            epoch_height: self
+                .epoch_height
+                .unwrap_or(best_epoch_height.into())
+                .as_usize() as u64,
+            chain_id: self.chain_id.unwrap_or(chain_id.into()).as_u32(),
+            data: self.data.unwrap_or(Bytes::new(vec![])).into(),
+        };
+
+        let password = password.map(Password::from);
+        let sig = accounts
+            .sign(self.from.into(), password, tx.hash())
+            .map_err(|e| format!("failed to sign transaction: {:?}", e))?;
+
+        Ok(tx.with_signature(sig))
+    }
+}
+
 pub fn sign_call(
     epoch_height: u64, chain_id: u32, request: CallRequest,
-) -> SignedTransaction {
+) -> RpcResult<SignedTransaction> {
     let max_gas = U256::from(MAX_GAS_CALL_REQUEST);
     let gas = min(request.gas.unwrap_or(max_gas), max_gas);
-    let from = request.from.unwrap_or_else(|| {
-        let mut address = Address::random();
-        address.set_user_account_type_bits();
-        address
-    });
+    let from = request.from.map_or_else(
+        || {
+            let mut address = Address::random();
+            address.set_user_account_type_bits();
+            address
+        },
+        |rpc_addr| rpc_addr.hex_address,
+    );
 
-    PrimitiveTransaction {
+    Ok(PrimitiveTransaction {
         nonce: request.nonce.unwrap_or_default(),
-        action: request.to.map_or(Action::Create, Action::Call),
+        action: request.to.map_or(Action::Create, |rpc_addr| {
+            Action::Call(rpc_addr.hex_address)
+        }),
         gas,
         gas_price: request.gas_price.unwrap_or(1.into()),
         value: request.value.unwrap_or_default(),
@@ -83,7 +162,27 @@ pub fn sign_call(
         chain_id,
         data: request.data.unwrap_or_default().into_vec(),
     }
-    .fake_sign(from)
+    .fake_sign(from))
+}
+
+pub fn rpc_call_request_network(
+    from: Option<&RpcAddress>, to: Option<&RpcAddress>,
+) -> Result<Option<Network>, RcpAddressNetworkInconsistent> {
+    let request_network = from.map(|rpc_addr| rpc_addr.network);
+    match request_network {
+        None => Ok(to.map(|rpc_addr| rpc_addr.network)),
+        Some(network) => {
+            if let Some(to) = to {
+                if to.network != network {
+                    return Err(RcpAddressNetworkInconsistent {
+                        from_network: network,
+                        to_network: to.network,
+                    });
+                }
+            }
+            Ok(Some(network))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -96,12 +195,31 @@ mod tests {
     use cfx_types::{H160, U256, U64};
 
     use super::CallRequest;
+    use crate::rpc::types::address::RpcAddress;
+    use cfx_addr::Network;
 
     #[test]
     fn call_request_deserialize() {
+        let expected = CallRequest {
+            from: Some(RpcAddress {
+                hex_address: H160::from_low_u64_be(1),
+                network: Network::Main,
+            }),
+            to: Some(RpcAddress {
+                hex_address: H160::from_low_u64_be(2),
+                network: Network::Main,
+            }),
+            gas_price: Some(U256::from(1)),
+            gas: Some(U256::from(2)),
+            value: Some(U256::from(3)),
+            data: Some(vec![0x12, 0x34, 0x56].into()),
+            storage_limit: Some(U64::from_str("7b").unwrap()),
+            nonce: Some(U256::from(4)),
+        };
+
         let s = r#"{
-            "from":"0x0000000000000000000000000000000000000001",
-            "to":"0x0000000000000000000000000000000000000002",
+            "from":"cfx:type.builtin:000000000000000000000000000000000482u4m4mw",
+            "to":"cfx:type.builtin:00000000000000000000000000000000083pjbwgzg",
             "gasPrice":"0x1",
             "gas":"0x2",
             "value":"0x3",
@@ -111,26 +229,25 @@ mod tests {
         }"#;
         let deserialized: CallRequest = serde_json::from_str(s).unwrap();
 
-        assert_eq!(
-            deserialized,
-            CallRequest {
-                from: Some(H160::from_low_u64_be(1)),
-                to: Some(H160::from_low_u64_be(2)),
-                gas_price: Some(U256::from(1)),
-                gas: Some(U256::from(2)),
-                value: Some(U256::from(3)),
-                data: Some(vec![0x12, 0x34, 0x56].into()),
-                storage_limit: Some(U64::from_str("7b").unwrap()),
-                nonce: Some(U256::from(4)),
-            }
-        );
+        assert_eq!(deserialized, expected);
     }
 
     #[test]
     fn call_request_deserialize2() {
+        let expected = CallRequest {
+            from: Some(RpcAddress{ hex_address: H160::from_str("160e8dd61c5d32be8058bb8eb970870f07233155").unwrap(), network: Network::Main }),
+            to: Some(RpcAddress{ hex_address: H160::from_str("846e8dd67c5d32be8058bb8eb970870f07244567").unwrap(), network: Network::Main}),
+            gas_price: Some(U256::from_str("9184e72a000").unwrap()),
+            gas: Some(U256::from_str("76c0").unwrap()),
+            value: Some(U256::from_str("9184e72a").unwrap()),
+            storage_limit: Some(U64::from_str("3344adf").unwrap()),
+            data: Some("d46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675".from_hex::<Vec<u8>>().unwrap().into()),
+            nonce: None
+        };
+
         let s = r#"{
-            "from": "0xb60e8dd61c5d32be8058bb8eb970870f07233155",
-            "to": "0xd46e8dd67c5d32be8058bb8eb970870f07244567",
+            "from": "cfx:type.user:00b0x3ep3hek5fm0b2xsxebggw7ge8tham2t5r0mzt",
+            "to": "cfx:type.contract:0226x3epfhek5fm0b2xsxebggw7ge925cw91tb58ps",
             "gas": "0x76c0",
             "gasPrice": "0x9184e72a000",
             "value": "0x9184e72a",
@@ -139,35 +256,28 @@ mod tests {
         }"#;
         let deserialized: CallRequest = serde_json::from_str(s).unwrap();
 
-        assert_eq!(deserialized, CallRequest {
-            from: Some(H160::from_str("b60e8dd61c5d32be8058bb8eb970870f07233155").unwrap()),
-            to: Some(H160::from_str("d46e8dd67c5d32be8058bb8eb970870f07244567").unwrap()),
-            gas_price: Some(U256::from_str("9184e72a000").unwrap()),
-            gas: Some(U256::from_str("76c0").unwrap()),
-            value: Some(U256::from_str("9184e72a").unwrap()),
-            storage_limit: Some(U64::from_str("3344adf").unwrap()),
-            data: Some("d46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675".from_hex::<Vec<u8>>().unwrap().into()),
-            nonce: None
-        });
+        assert_eq!(deserialized, expected);
     }
 
     #[test]
     fn call_request_deserialize_empty() {
-        let s = r#"{"from":"0x0000000000000000000000000000000000000001"}"#;
+        let expected = CallRequest {
+            from: Some(RpcAddress {
+                hex_address: H160::from_low_u64_be(1),
+                network: Network::Main,
+            }),
+            to: None,
+            gas_price: None,
+            gas: None,
+            value: None,
+            data: None,
+            storage_limit: None,
+            nonce: None,
+        };
+
+        let s = r#"{"from":"cfx:type.builtin:000000000000000000000000000000000482u4m4mw"}"#;
         let deserialized: CallRequest = serde_json::from_str(s).unwrap();
 
-        assert_eq!(
-            deserialized,
-            CallRequest {
-                from: Some(H160::from_low_u64_be(1)),
-                to: None,
-                gas_price: None,
-                gas: None,
-                value: None,
-                data: None,
-                storage_limit: None,
-                nonce: None,
-            }
-        );
+        assert_eq!(deserialized, expected);
     }
 }

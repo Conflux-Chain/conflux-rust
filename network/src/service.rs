@@ -166,6 +166,8 @@ impl NetworkService {
         }
     }
 
+    pub fn get_network_id(&self) -> u64 { self.config.id }
+
     pub fn is_consortium(&self) -> bool { self.config.is_consortium }
 
     pub fn start_io_service(&mut self) -> Result<(), Error> {

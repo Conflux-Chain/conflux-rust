@@ -8,7 +8,7 @@
 use super::errors::{DecodingError, EncodingError, OptionError};
 
 use cfx_types::address_util::{self, AddressUtil};
-use std::string::ToString;
+use std::{fmt, string::ToString};
 
 pub const CHARSET_SIZE: usize = 32;
 
@@ -61,6 +61,18 @@ pub enum AddressType {
     Contract,
     Null,
     User,
+}
+
+impl fmt::Display for Network {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.to_prefix() {
+            Err(EncodingError::InvalidNetworkId(network_id)) => {
+                write!(f, "invalid network prefix net{}", network_id)
+            }
+            Err(_) => unreachable!(),
+            Ok(prefix) => write!(f, "{}", prefix),
+        }
+    }
 }
 
 impl Network {
