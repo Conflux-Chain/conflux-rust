@@ -2,7 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{TokenSupplyInfo, MAX_GAS_CALL_REQUEST};
+use crate::rpc::types::{
+    Address as Base32Address, TokenSupplyInfo, MAX_GAS_CALL_REQUEST,
+};
 use blockgen::BlockGenerator;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
 use cfx_types::{
@@ -32,7 +34,9 @@ use primitives::{
 use random_crash::*;
 use rlp::Rlp;
 use rustc_hex::ToHex;
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
+use std::{
+    collections::BTreeMap, convert::TryInto, net::SocketAddr, sync::Arc,
+};
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
 use crate::{
@@ -142,7 +146,7 @@ impl RpcImpl {
     }
 
     fn balance(
-        &self, address: H160, num: Option<EpochNumber>,
+        &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcResult<U256> {
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
         info!(
@@ -152,15 +156,17 @@ impl RpcImpl {
 
         let state_db =
             self.consensus.get_state_db_by_epoch_number(epoch_num)?;
-        let acc = state_db.get_account(&address)?;
+        let acc = state_db.get_account(&address.try_into()?)?;
 
         Ok(acc.map_or(U256::zero(), |acc| acc.balance).into())
     }
 
     fn admin(
-        &self, address: H160, num: Option<EpochNumber>,
-    ) -> RpcResult<Option<H160>> {
+        &self, address: Base32Address, num: Option<EpochNumber>,
+    ) -> RpcResult<Option<Base32Address>> {
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
+        let network = address.network;
+
         info!(
             "RPC Request: cfx_getAdmin address={:?} epoch_num={:?}",
             address, epoch_num
@@ -168,9 +174,11 @@ impl RpcImpl {
 
         let state_db =
             self.consensus.get_state_db_by_epoch_number(epoch_num)?;
-        let acc = state_db.get_account(&address)?;
 
-        Ok(acc.map(|acc| acc.admin.into()))
+        match state_db.get_account(&address.try_into()?)? {
+            None => Ok(None),
+            Some(acc) => Ok(Some(Base32Address::try_from(acc.admin, network)?)),
+        }
     }
 
     fn sponsor_info(
@@ -1143,11 +1151,11 @@ impl Cfx for CfxHandler {
             fn account(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
-            fn admin(&self, address: H160, num: Option<EpochNumber>)
-                -> BoxFuture<Option<H160>>;
+            fn admin(&self, address: Base32Address, num: Option<EpochNumber>)
+                -> BoxFuture<Option<Base32Address>>;
             fn sponsor_info(&self, address: H160, num: Option<EpochNumber>)
                 -> BoxFuture<SponsorInfo>;
-            fn balance(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
+            fn balance(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn staking_balance(&self, address: H160, num: Option<EpochNumber>)
                 -> BoxFuture<U256>;
             fn deposit_list(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Vec<DepositInfo>>;

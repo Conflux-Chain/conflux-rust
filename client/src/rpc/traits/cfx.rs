@@ -9,7 +9,7 @@ use super::super::types::{
     Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, Status as RpcStatus,
     TokenSupplyInfo, Transaction,
 };
-use crate::rpc::types::BlockHashOrEpochNumber;
+use crate::rpc::types::{Address as Base32Address, BlockHashOrEpochNumber};
 use cfx_types::{H160, H256, U256, U64};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
 use jsonrpc_derive::rpc;
@@ -47,14 +47,14 @@ pub trait Cfx {
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getBalance")]
     fn balance(
-        &self, addr: H160, epoch_number: Option<EpochNumber>,
+        &self, addr: Base32Address, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<U256>;
 
     /// Returns admin of the given contract
     #[rpc(name = "cfx_getAdmin")]
     fn admin(
-        &self, addr: H160, epoch_number: Option<EpochNumber>,
-    ) -> BoxFuture<Option<H160>>;
+        &self, addr: Base32Address, epoch_number: Option<EpochNumber>,
+    ) -> BoxFuture<Option<Base32Address>>;
 
     /// Returns sponsor information of the given contract
     #[rpc(name = "cfx_getSponsorInfo")]

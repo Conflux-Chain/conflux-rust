@@ -36,8 +36,8 @@ use crate::{
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
-            Account as RpcAccount, BlameInfo, Block as RpcBlock,
-            BlockHashOrEpochNumber, Bytes, CallRequest,
+            Account as RpcAccount, Address as Base32Address, BlameInfo,
+            Block as RpcBlock, BlockHashOrEpochNumber, Bytes, CallRequest,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
             EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
             Log as RpcLog, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
@@ -48,6 +48,7 @@ use crate::{
         RpcBoxFuture,
     },
 };
+use std::convert::TryInto;
 
 // macro for reducing boilerplate for unsupported methods
 #[macro_use]
@@ -142,20 +143,21 @@ impl RpcImpl {
     }
 
     fn balance(
-        &self, address: H160, num: Option<EpochNumber>,
+        &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcBoxFuture<U256> {
-        let address: H160 = address.into();
-        let epoch = num.unwrap_or(EpochNumber::LatestState).into();
-
         info!(
             "RPC Request: cfx_getBalance address={:?} epoch={:?}",
-            address, epoch
+            address, num
         );
+
+        let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
 
         let fut = async move {
+            let address: H160 = address.try_into()?;
+
             let account = invalid_params_check(
                 "address",
                 light.get_account(epoch, address).await,
@@ -170,10 +172,10 @@ impl RpcImpl {
     }
 
     fn admin(
-        &self, address: H160, num: Option<EpochNumber>,
-    ) -> RpcBoxFuture<Option<H160>> {
-        let address: H160 = address.into();
+        &self, address: Base32Address, num: Option<EpochNumber>,
+    ) -> RpcBoxFuture<Option<Base32Address>> {
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
+        let network = address.network;
 
         info!(
             "RPC Request: cfx_getAdmin address={:?} epoch={:?}",
@@ -184,12 +186,19 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            let address: H160 = address.try_into()?;
+
             let account = invalid_params_check(
                 "address",
                 light.get_account(epoch, address).await,
             )?;
 
-            Ok(account.map(|account| account.admin.into()))
+            match account {
+                None => Ok(None),
+                Some(acc) => {
+                    Ok(Some(Base32Address::try_from(acc.admin, network)?))
+                }
+            }
         };
 
         Box::new(fut.boxed().compat())
@@ -938,8 +947,8 @@ impl Cfx for CfxHandler {
         to self.rpc_impl {
             fn account(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
-            fn admin(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Option<H160>>;
-            fn balance(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
+            fn admin(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<Option<Base32Address>>;
+            fn balance(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn block_by_epoch_number(&self, epoch_num: EpochNumber, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;
             fn block_by_hash_with_pivot_assumption(&self, block_hash: H256, pivot_hash: H256, epoch_number: U64) -> BoxFuture<RpcBlock>;
             fn block_by_hash(&self, hash: H256, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;

@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_addr::{cfx_addr_decode, cfx_addr_encode, UserAddress};
+use cfx_addr::{cfx_addr_decode, cfx_addr_encode, Network, UserAddress};
 use cfx_types::H160;
 use serde::{de, ser, Deserialize, Deserializer, Serialize, Serializer};
 use std::{convert::TryInto, ops::Deref};
@@ -20,10 +20,22 @@ impl TryInto<H160> for Address {
     type Error = String;
 
     fn try_into(self) -> Result<H160, Self::Error> {
-        match self.hex_address {
+        match self.hex {
             Some(h) => Ok(h),
             None => Err("Not a hex address".into()),
         }
+    }
+}
+
+impl Address {
+    pub fn try_from(addr: H160, network: Network) -> Result<Self, String> {
+        // TODO: is there a simpler way?
+        let addr_str =
+            cfx_addr_encode(&addr.0, network).map_err(|e| e.to_string())?;
+        let user_addr =
+            cfx_addr_decode(&addr_str).map_err(|e| e.to_string())?;
+        assert_eq!(user_addr.hex, Some(addr));
+        Ok(Address(user_addr))
     }
 }
 
@@ -43,8 +55,8 @@ impl<'a> Deserialize<'a> for Address {
 impl Serialize for Address {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
-        let addr_str = cfx_addr_encode(&self.0.body[..], self.0.network)
-            .map_err(|e| {
+        let addr_str =
+            cfx_addr_encode(&self.bytes[..], self.network).map_err(|e| {
                 ser::Error::custom(format!("Failed to encode address: {}", e))
             })?;
 
