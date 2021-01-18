@@ -1,5 +1,5 @@
 use std::{
-    collections::{BinaryHeap, HashMap},
+    collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     hash::Hash,
 };
 
@@ -47,6 +47,36 @@ where
     reversed_indices
 }
 
+// TODO: Support BitSet?
+fn get_future<NodeIndex, F, FStop>(
+    index_set: &Vec<NodeIndex>, incoming_edges: F, stop_condition: FStop,
+) -> HashSet<NodeIndex>
+where
+    NodeIndex: Copy + Hash + Eq + PartialEq + Ord,
+    F: Fn(NodeIndex) -> Vec<NodeIndex>,
+    FStop: Fn(NodeIndex) -> bool,
+{
+    let mut queue = VecDeque::new();
+    let mut visited = HashSet::new();
+    for i in index_set {
+        visited.insert(*i);
+        queue.push_back(*i);
+    }
+    // TODO: Implement future.
+    while let Some(x) = queue.pop_front() {
+        for succ in incoming_edges(x) {
+            if stop_condition(succ) {
+                continue;
+            }
+            if !visited.contains(&succ) {
+                queue.push_back(succ);
+                visited.insert(succ);
+            }
+        }
+    }
+    visited
+}
+
 pub trait Graph {
     type NodeIndex: Copy + Hash + Eq + PartialEq + Ord;
 }
@@ -75,10 +105,17 @@ pub trait RichDAG: DAG {
     fn incoming_edges(
         &self, node_index: Self::NodeIndex,
     ) -> Vec<Self::NodeIndex>;
+
+    fn get_future<FStop>(
+        &self, index_set: &Vec<Self::NodeIndex>, stop_condition: FStop,
+    ) -> HashSet<Self::NodeIndex>
+    where FStop: Fn(Self::NodeIndex) -> bool {
+        get_future(index_set, |i| self.incoming_edges(i), stop_condition)
+    }
 }
 
 pub trait TreeGraph: Graph {
-    fn parent(&self, node_index: Self::NodeIndex) -> Self::NodeIndex;
+    fn parent(&self, node_index: Self::NodeIndex) -> Option<Self::NodeIndex>;
     fn referees(&self, node_index: Self::NodeIndex) -> Vec<Self::NodeIndex>;
 }
 
@@ -92,7 +129,9 @@ impl<T: TreeGraph> DAG for T {
         &self, node_index: Self::NodeIndex,
     ) -> Vec<Self::NodeIndex> {
         let mut outgoing_edges = self.referees(node_index);
-        outgoing_edges.push(self.parent(node_index));
+        if let Some(p) = self.parent(node_index) {
+            outgoing_edges.push(p);
+        }
         outgoing_edges
     }
 }

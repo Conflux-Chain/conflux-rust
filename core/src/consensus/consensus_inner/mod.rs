@@ -3078,29 +3078,16 @@ impl ConsensusGraphInner {
             debug!("New block parent = {} referees = {:?} not extending timer chain (len = {}), fork at timer chain height {}, timer chain index {}", parent, referees, self.timer_chain.len(), fork_at, fork_at_index);
             // Now we need to update the timer_chain_height field of the
             // remaining blocks with topological sort
-            let mut queue = VecDeque::new();
-            let mut visited = BitSet::new();
-            if i == NULL {
-                queue.push_back(self.cur_era_genesis_block_arena_index);
-                visited.add(self.cur_era_genesis_block_arena_index as u32);
+            let start_point = if i == NULL {
+                self.cur_era_genesis_block_arena_index
             } else {
-                queue.push_back(self.timer_chain[fork_at_index - 1]);
-                visited.add(self.timer_chain[fork_at_index - 1] as u32);
-            }
-            // TODO: Implement future.
-            while let Some(x) = queue.pop_front() {
-                for succ in self.incoming_edges(x) {
-                    if anticone.contains(*succ as u32) {
-                        continue;
-                    }
-                    if !visited.contains(*succ as u32) {
-                        queue.push_back(*succ);
-                        visited.add(*succ as u32);
-                    }
-                }
-            }
+                self.timer_chain[fork_at_index - 1]
+            };
+            let visited = self.get_future(&vec![start_point], |i| {
+                anticone.contains(i as u32)
+            });
             let visited_in_order =
-                self.topological_sort(visited.into_iter().collect(), |_| true);
+                self.topological_sort(&visited.into_iter().collect(), |_| true);
             for x in visited_in_order {
                 let mut timer_chain_height = 0;
                 for pred in &self.outgoing_edges(x) {
@@ -3798,8 +3785,12 @@ impl Graph for ConsensusGraphInner {
 }
 
 impl TreeGraph for ConsensusGraphInner {
-    fn parent(&self, node_index: Self::NodeIndex) -> Self::NodeIndex {
-        self.arena[node_index].parent
+    fn parent(&self, node_index: Self::NodeIndex) -> Option<Self::NodeIndex> {
+        if self.arena[node_index].parent != NULL {
+            Some(self.arena[node_index].parent)
+        } else {
+            None
+        }
     }
 
     fn referees(&self, node_index: Self::NodeIndex) -> Vec<Self::NodeIndex> {
