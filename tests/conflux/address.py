@@ -6,6 +6,7 @@ from conflux.utils import encode_hex
 
 MAINNET_PREFIX = "cfx"
 TESTNET_PREFIX = "cfx_test"
+OTHER_NET_PREFIX = "net"
 VERSION_BYTE = 0x00
 MAINNET_NETWORK_ID = 1029
 TESTNET_NETWORK_ID = 1
@@ -14,8 +15,10 @@ TESTNET_NETWORK_ID = 1
 def network_id_to_prefix(network_id):
     if network_id == TESTNET_NETWORK_ID:
         return TESTNET_PREFIX
-    else:
+    elif network_id == MAINNET_NETWORK_ID:
         return MAINNET_PREFIX
+    else:
+        return OTHER_NET_PREFIX + str(network_id)
 
 
 def prefix_to_network_id(prefix):
@@ -23,6 +26,8 @@ def prefix_to_network_id(prefix):
         return MAINNET_NETWORK_ID
     elif prefix == TESTNET_PREFIX:
         return TESTNET_NETWORK_ID
+    elif prefix[:3] == OTHER_NET_PREFIX and int(prefix[3:]) not in [TESTNET_NETWORK_ID, MAINNET_NETWORK_ID]:
+        return int(prefix[3:])
     else:
         assert False, "Invalid address prefix"
 
