@@ -298,3 +298,74 @@ fn convert_bits(
     }
     Ok(ret)
 }
+
+#[test]
+fn test_expand_prefix() {
+    assert_eq!(expand_prefix("cfx"), vec![0x03, 0x06, 0x18, 0x00]);
+
+    assert_eq!(
+        expand_prefix("cfxtest"),
+        vec![0x03, 0x06, 0x18, 0x14, 0x05, 0x13, 0x14, 0x00]
+    );
+
+    assert_eq!(
+        expand_prefix("cfx17"),
+        vec![0x03, 0x06, 0x18, 0x11, 0x17, 0x00]
+    );
+}
+
+#[test]
+fn test_convert_bits() {
+    // 8 --> 1
+    assert_eq!(convert_bits(&[0], 8, 1, false), Ok(vec![0; 8]));
+
+    // 8 --> 3
+    assert_eq!(convert_bits(&[0], 8, 3, false), Ok(vec![0, 0]));
+    assert!(convert_bits(&[1], 8, 3, false).is_err()); // 01 != 0
+    assert_eq!(convert_bits(&[0], 8, 3, true), Ok(vec![0, 0, 0]));
+    assert_eq!(convert_bits(&[1], 8, 3, true), Ok(vec![0, 0, 2]));
+
+    // 8 --> 7
+    assert_eq!(convert_bits(&[1], 8, 7, true), Ok(vec![0, 64]));
+
+    // 1 --> 8
+    assert_eq!(convert_bits(&[0; 8], 1, 8, false), Ok(vec![0]));
+
+    // 3 --> 8
+    assert_eq!(convert_bits(&[0, 0, 2], 3, 8, false), Ok(vec![1]));
+    assert!(convert_bits(&[0, 0, 3], 3, 8, false).is_err()); // 1 != 0
+    assert_eq!(convert_bits(&[0, 0, 2], 3, 8, true), Ok(vec![1, 0]));
+
+    // 8 --> 5
+    // 00000000 00000001 00000010 00000011 00000100
+    // 00000 00000 00000 10000 00100 00000 11000 00100
+    assert_eq!(
+        convert_bits(&[0, 1, 2, 3, 4], 8, 5, false),
+        Ok(vec![0, 0, 0, 16, 4, 0, 24, 4])
+    );
+
+    // 00000000 00000001 00000010
+    // 00000 00000 00000 10000 00100 (+1 bit padding added)
+    assert!(convert_bits(&[0, 1, 2], 8, 5, false).is_err()); // 0010 != 0
+
+    assert_eq!(
+        convert_bits(&[0, 1, 2], 8, 5, true),
+        Ok(vec![0, 0, 0, 16, 4])
+    );
+
+    // 5 --> 8
+    assert_eq!(
+        convert_bits(&[0, 0, 0, 16, 4, 0, 24, 4], 5, 8, false),
+        Ok(vec![0, 1, 2, 3, 4])
+    );
+
+    assert_eq!(
+        convert_bits(&[0, 0, 0, 16, 4], 5, 8, false),
+        Ok(vec![0, 1, 2])
+    );
+
+    assert_eq!(
+        convert_bits(&[0, 0, 0, 16, 4], 5, 8, true),
+        Ok(vec![0, 1, 2, 0])
+    );
+}
