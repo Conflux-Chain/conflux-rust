@@ -118,14 +118,13 @@ pub fn cfx_addr_encode(
         .collect();
 
     // Concatenate all parts
-    let cashaddr;
-    match encoding_options {
+    let cfx_base32_addr = match encoding_options {
         EncodingOptions::Simple => {
-            cashaddr = [&prefix, ":", &payload_str, &checksum_str].concat();
+            [&prefix, ":", &payload_str, &checksum_str].concat()
         }
         EncodingOptions::QrCode => {
             let addr_type_str = AddressType::from_address(&raw)?.to_str();
-            cashaddr = [
+            [
                 &prefix,
                 ":type.",
                 addr_type_str,
@@ -134,10 +133,10 @@ pub fn cfx_addr_encode(
                 &checksum_str,
             ]
             .concat()
-            .to_uppercase();
+            .to_uppercase()
         }
     };
-    Ok(cashaddr)
+    Ok(cfx_base32_addr)
 }
 
 pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
@@ -248,15 +247,9 @@ pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
                     AddressType::from_address(hex_address.as_ref().unwrap())
                         .or(Err(()));
                 if got.as_ref() != Ok(&expected) {
-                    // FIXME: need to test this.
-                    // It's fine to specify "builtin" for the null address.
-                    if !(expected == AddressType::Builtin
-                        && got == Ok(AddressType::Null))
-                    {
-                        return Err(DecodingError::InvalidOption(
-                            OptionError::AddressTypeMismatch { expected, got },
-                        ));
-                    }
+                    return Err(DecodingError::InvalidOption(
+                        OptionError::AddressTypeMismatch { expected, got },
+                    ));
                 }
             }
             None => {}

@@ -9,7 +9,7 @@ use super::consts::AddressType;
 
 use std::{error::Error, fmt};
 
-/// Error concerning encoding of cashaddrs.
+/// Error concerning encoding of cfx_base32_addr.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum EncodingError {
     InvalidAddressType(u8),
@@ -39,7 +39,7 @@ impl Error for EncodingError {
     fn description(&self) -> &str { "invalid length" }
 }
 
-/// Error concerning decoding of cashaddrs.
+/// Error concerning decoding of cfx_base32_addr.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum DecodingError {
     /// Invalid length (length).
