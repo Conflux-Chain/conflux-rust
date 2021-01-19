@@ -1078,7 +1078,7 @@ impl LocalRpc for DebugRpcImpl {
             fn net_sessions(&self, node_id: Option<NodeId>) -> RpcResult<Vec<SessionDetails>>;
             fn net_throttling(&self) -> RpcResult<throttling::Service>;
             fn new_account(&self, password: String) -> RpcResult<H160>;
-            fn sign(&self, data: Bytes, address: H160, password: Option<String>) -> RpcResult<H520>;
+            fn sign(&self, data: Bytes, address: Base32Address, password: Option<String>) -> RpcResult<H520>;
             fn tx_inspect_pending(&self, address: Base32Address) -> RpcResult<TxPoolPendingInfo>;
             fn tx_inspect(&self, hash: H256) -> RpcResult<TxWithPoolInfo>;
             fn txpool_content(&self, address: Option<Base32Address>) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;

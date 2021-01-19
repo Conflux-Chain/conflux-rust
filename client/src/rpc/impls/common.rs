@@ -772,18 +772,20 @@ impl RpcImpl {
     }
 
     pub fn sign(
-        &self, data: Bytes, address: H160, password: Option<String>,
-    ) -> JsonRpcResult<H520> {
+        &self, data: Bytes, address: Base32Address, password: Option<String>,
+    ) -> RpcResult<H520> {
+        // TODO: add check for address.network
+        let address: H160 = address.try_into()?;
+
         let message = eth_data_hash(data.0);
         let password = password.map(Password::from);
-        let signature =
-            match self.accounts.sign(address.into(), password, message) {
-                Ok(signature) => signature,
-                Err(err) => {
-                    warn!("Unable to sign the message. With error {:?}", err);
-                    return Err(RpcError::internal_error());
-                }
-            };
+        let signature = match self.accounts.sign(address, password, message) {
+            Ok(signature) => signature,
+            Err(err) => {
+                warn!("Unable to sign the message. With error {:?}", err);
+                bail!(RpcError::internal_error());
+            }
+        };
         Ok(H520(signature.into()))
     }
 
