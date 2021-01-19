@@ -49,7 +49,7 @@ pub trait LocalRpc {
 
     #[rpc(name = "getTransactionsFromPool")]
     fn txs_from_pool(
-        &self, address: Option<H160>,
+        &self, address: Option<Base32Address>,
     ) -> JsonRpcResult<Vec<RpcTransaction>>;
 
     #[rpc(name = "clear_tx_pool")]

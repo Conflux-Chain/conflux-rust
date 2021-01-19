@@ -593,8 +593,16 @@ impl RpcImpl {
     }
 
     pub fn txs_from_pool(
-        &self, address: Option<H160>,
-    ) -> JsonRpcResult<Vec<RpcTransaction>> {
+        &self, address: Option<Base32Address>,
+    ) -> RpcResult<Vec<RpcTransaction>> {
+        let address: Option<H160> = match address {
+            None => None,
+            Some(addr) => {
+                // TODO: add check for address.network
+                Some(addr.try_into()?)
+            }
+        };
+
         let (ready_txs, deferred_txs) = self.tx_pool.content(address);
         let converter = |tx: &Arc<SignedTransaction>| -> RpcTransaction {
             RpcTransaction::from_signed(&tx, None)
