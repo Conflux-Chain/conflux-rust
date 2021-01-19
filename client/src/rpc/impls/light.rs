@@ -1081,7 +1081,7 @@ impl LocalRpc for DebugRpcImpl {
             fn sign(&self, data: Bytes, address: H160, password: Option<String>) -> RpcResult<H520>;
             fn tx_inspect_pending(&self, address: Base32Address) -> RpcResult<TxPoolPendingInfo>;
             fn tx_inspect(&self, hash: H256) -> RpcResult<TxWithPoolInfo>;
-            fn txpool_content(&self, address: Option<H160>) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
+            fn txpool_content(&self, address: Option<Base32Address>) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
             fn txpool_inspect(&self, address: Option<Base32Address>) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
             fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>>;
             fn txs_from_pool(&self, address: Option<H160>) -> RpcResult<Vec<RpcTransaction>>;

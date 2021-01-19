@@ -608,13 +608,21 @@ impl RpcImpl {
     }
 
     pub fn txpool_content(
-        &self, address: Option<H160>,
-    ) -> JsonRpcResult<
+        &self, address: Option<Base32Address>,
+    ) -> RpcResult<
         BTreeMap<
             String,
             BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
         >,
     > {
+        let address: Option<H160> = match address {
+            None => None,
+            Some(addr) => {
+                // TODO: add check for address.network
+                Some(addr.try_into()?)
+            }
+        };
+
         let (ready_txs, deferred_txs) = self.tx_pool.content(address);
         let converter = |tx: Arc<SignedTransaction>| -> RpcTransaction {
             RpcTransaction::from_signed(&tx, None)

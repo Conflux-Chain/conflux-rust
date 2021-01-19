@@ -39,7 +39,7 @@ pub trait LocalRpc {
 
     #[rpc(name = "txpool_content")]
     fn txpool_content(
-        &self, address: Option<H160>,
+        &self, address: Option<Base32Address>,
     ) -> JsonRpcResult<
         BTreeMap<
             String,
