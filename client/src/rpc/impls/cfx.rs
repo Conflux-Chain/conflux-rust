@@ -336,8 +336,10 @@ impl RpcImpl {
     }
 
     fn storage_at(
-        &self, address: H160, position: H256, epoch_num: Option<EpochNumber>,
-    ) -> RpcResult<Option<H256>> {
+        &self, address: Base32Address, position: H256,
+        epoch_num: Option<EpochNumber>,
+    ) -> RpcResult<Option<H256>>
+    {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -347,6 +349,8 @@ impl RpcImpl {
 
         let state_db =
             self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+
+        let address: H160 = address.try_into()?;
         let key = StorageKey::new_storage_key(&address, position.as_ref());
 
         Ok(match state_db.get::<StorageValue>(key)? {
@@ -1181,7 +1185,7 @@ impl Cfx for CfxHandler {
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
             fn send_raw_transaction(&self, raw: Bytes) -> JsonRpcResult<H256>;
-            fn storage_at(&self, addr: H160, pos: H256, epoch_number: Option<EpochNumber>)
+            fn storage_at(&self, addr: Base32Address, pos: H256, epoch_number: Option<EpochNumber>)
                 -> BoxFuture<Option<H256>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;

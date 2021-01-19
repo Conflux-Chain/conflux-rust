@@ -517,9 +517,10 @@ impl RpcImpl {
     }
 
     fn storage_at(
-        &self, address: H160, position: H256, epoch_num: Option<EpochNumber>,
-    ) -> BoxFuture<Option<H256>> {
-        let address: H160 = address.into();
+        &self, address: Base32Address, position: H256,
+        epoch_num: Option<EpochNumber>,
+    ) -> RpcBoxFuture<Option<H256>>
+    {
         let position: H256 = position.into();
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
 
@@ -532,6 +533,8 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            let address: H160 = address.try_into()?;
+
             let maybe_entry = light
                 .get_storage(epoch_num.into(), address, position)
                 .await
@@ -974,7 +977,7 @@ impl Cfx for CfxHandler {
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256>;
             fn sponsor_info(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<SponsorInfo>;
             fn staking_balance(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<U256>;
-            fn storage_at(&self, addr: H160, pos: H256, epoch_number: Option<EpochNumber>) -> BoxFuture<Option<H256>>;
+            fn storage_at(&self, addr: Base32Address, pos: H256, epoch_number: Option<EpochNumber>) -> BoxFuture<Option<H256>>;
             fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
