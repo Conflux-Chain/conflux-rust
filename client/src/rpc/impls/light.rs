@@ -197,7 +197,7 @@ impl RpcImpl {
             match account {
                 None => Ok(None),
                 Some(acc) => {
-                    Ok(Some(Base32Address::try_from(acc.admin, network)?))
+                    Ok(Some(Base32Address::try_from_h160(acc.admin, network)?))
                 }
             }
         };

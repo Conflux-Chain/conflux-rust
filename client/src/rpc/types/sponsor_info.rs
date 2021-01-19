@@ -24,7 +24,7 @@ pub struct SponsorInfo {
 
 impl SponsorInfo {
     pub fn default(network: Network) -> Self {
-        let null_addr = Base32Address::try_from(H160::default(), network)
+        let null_addr = Base32Address::try_from_h160(H160::default(), network)
             .expect("failed converting null-address, to base32");
 
         Self {
@@ -40,11 +40,11 @@ impl SponsorInfo {
         sponsor_info: PrimitiveSponsorInfo, network: Network,
     ) -> Result<Self, String> {
         Ok(Self {
-            sponsor_for_gas: Base32Address::try_from(
+            sponsor_for_gas: Base32Address::try_from_h160(
                 sponsor_info.sponsor_for_gas,
                 network,
             )?,
-            sponsor_for_collateral: Base32Address::try_from(
+            sponsor_for_collateral: Base32Address::try_from_h160(
                 sponsor_info.sponsor_for_collateral,
                 network,
             )?,

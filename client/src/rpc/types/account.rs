@@ -32,7 +32,7 @@ impl Account {
             accumulated_interest_return: account
                 .accumulated_interest_return
                 .into(),
-            admin: Base32Address::try_from(account.admin, network)?,
+            admin: Base32Address::try_from_h160(account.admin, network)?,
         })
     }
 }

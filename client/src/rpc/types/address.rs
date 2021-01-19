@@ -2,10 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_addr::{cfx_addr_decode, cfx_addr_encode, Network, UserAddress};
+use cfx_addr::{
+    cfx_addr_decode, cfx_addr_encode, DecodingError, Network, UserAddress,
+};
 use cfx_types::H160;
 use serde::{de, ser, Deserialize, Deserializer, Serialize, Serializer};
-use std::{convert::TryInto, ops::Deref};
+use std::{
+    convert::{TryFrom, TryInto},
+    ops::Deref,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Address(UserAddress);
@@ -28,7 +33,7 @@ impl TryInto<H160> for Address {
 }
 
 impl Address {
-    pub fn try_from(addr: H160, network: Network) -> Result<Self, String> {
+    pub fn try_from_h160(addr: H160, network: Network) -> Result<Self, String> {
         // TODO: is there a simpler way?
         let addr_str =
             cfx_addr_encode(&addr.0, network).map_err(|e| e.to_string())?;
@@ -36,6 +41,15 @@ impl Address {
             cfx_addr_decode(&addr_str).map_err(|e| e.to_string())?;
         assert_eq!(user_addr.hex, Some(addr));
         Ok(Address(user_addr))
+    }
+}
+
+impl TryFrom<&str> for Address {
+    type Error = DecodingError;
+
+    fn try_from(raw: &str) -> Result<Self, Self::Error> {
+        let inner = cfx_addr_decode(raw)?;
+        Ok(Address(inner))
     }
 }
 
@@ -75,7 +89,7 @@ mod tests {
         let addr_hex = hex.trim_start_matches("0x").parse().unwrap();
         let parsed: Address = serde_json::from_str(raw).unwrap();
         assert_eq!(parsed.network, network);
-        assert_eq!(parsed.hex_address, Some(addr_hex));
+        assert_eq!(parsed.hex, Some(addr_hex));
         assert_eq!(parsed.try_into(), Ok(addr_hex));
     }
 

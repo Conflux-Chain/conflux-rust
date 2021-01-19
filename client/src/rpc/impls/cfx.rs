@@ -182,7 +182,9 @@ impl RpcImpl {
 
         match state_db.get_account(&address.try_into()?)? {
             None => Ok(None),
-            Some(acc) => Ok(Some(Base32Address::try_from(acc.admin, network)?)),
+            Some(acc) => {
+                Ok(Some(Base32Address::try_from_h160(acc.admin, network)?))
+            }
         }
     }
 
