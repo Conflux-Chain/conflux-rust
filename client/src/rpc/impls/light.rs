@@ -290,9 +290,10 @@ impl RpcImpl {
     }
 
     fn vote_list(
-        &self, address: H160, num: Option<EpochNumber>,
+        &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcBoxFuture<Vec<VoteStakeInfo>> {
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
+
         info!(
             "RPC Request: cfx_getVoteList address={:?} epoch_num={:?}",
             address, epoch
@@ -302,15 +303,17 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            let mut result = vec![];
-            if let Some(vote_list) = invalid_params_check(
+            let address: H160 = address.try_into()?;
+
+            let maybe_list = invalid_params_check(
                 "address",
                 light.get_vote_list(epoch, address).await,
-            )? {
-                result = (*vote_list).clone();
-            }
+            )?;
 
-            Ok(result)
+            match maybe_list {
+                None => Ok(vec![]),
+                Some(vote_list) => Ok(vote_list.0),
+            }
         };
 
         Box::new(fut.boxed().compat())
@@ -973,7 +976,7 @@ impl Cfx for CfxHandler {
             fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
-            fn vote_list(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Vec<VoteStakeInfo>>;
+            fn vote_list(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<Vec<VoteStakeInfo>>;
         }
     }
 

@@ -234,9 +234,10 @@ impl RpcImpl {
     }
 
     fn vote_list(
-        &self, address: H160, num: Option<EpochNumber>,
+        &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcResult<Vec<VoteStakeInfo>> {
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
+
         info!(
             "RPC Request: cfx_getVoteList address={:?} epoch_num={:?}",
             address, epoch_num
@@ -244,11 +245,11 @@ impl RpcImpl {
 
         let state_db =
             self.consensus.get_state_db_by_epoch_number(epoch_num)?;
-        let mut result = vec![];
-        if let Some(vote_list) = state_db.get_vote_list(&address)? {
-            result = (*vote_list).clone()
+
+        match state_db.get_vote_list(&address.try_into()?)? {
+            None => Ok(vec![]),
+            Some(vote_list) => Ok(vote_list.0),
         }
-        Ok(result)
     }
 
     fn collateral_for_storage(
@@ -1161,7 +1162,7 @@ impl Cfx for CfxHandler {
             fn staking_balance(&self, address: Base32Address, num: Option<EpochNumber>)
                 -> BoxFuture<U256>;
             fn deposit_list(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<Vec<DepositInfo>>;
-            fn vote_list(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Vec<VoteStakeInfo>>;
+            fn vote_list(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<Vec<VoteStakeInfo>>;
             fn collateral_for_storage(&self, address: H160, num: Option<EpochNumber>)
                 -> BoxFuture<U256>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>)
