@@ -158,7 +158,7 @@ impl AddressType {
             }
             address_util::TYPE_BITS_CONTRACT => Ok(Self::Contract),
             address_util::TYPE_BITS_USER_ACCOUNT => Ok(Self::User),
-            n @ _ => Err(EncodingError::InvalidAddressType(n)),
+            n => Err(EncodingError::InvalidAddressType(n)),
         }
     }
 

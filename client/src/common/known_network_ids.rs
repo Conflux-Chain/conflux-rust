@@ -8,6 +8,6 @@ pub fn network_id_to_known_cfx_network(id: u64) -> Network {
     match id {
         1 => Network::Test,
         1029 => Network::Main,
-        n @ _ => Network::Id(n),
+        n => Network::Id(n),
     }
 }

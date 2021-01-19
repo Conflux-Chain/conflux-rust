@@ -428,6 +428,8 @@ impl RpcImpl {
     ) -> BoxFuture<H256> {
         info!("RPC Request: cfx_sendTransaction tx={:?}", tx);
 
+        tx.check_rpc_address_network("tx", *NODE_NETWORK.read())?;
+
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
         let accounts = self.accounts.clone();

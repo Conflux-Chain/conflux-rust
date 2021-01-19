@@ -43,7 +43,7 @@ impl TryInto<H160> for Address {
 }
 
 impl From<RpcAddress> for H160 {
-    fn from(x: RpcAddress) -> Self { x.hex_address.clone() }
+    fn from(x: RpcAddress) -> Self { x.hex_address }
 }
 
 impl<'a> Deserialize<'a> for Address {
