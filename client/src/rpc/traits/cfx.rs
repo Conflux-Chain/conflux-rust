@@ -130,7 +130,8 @@ pub trait Cfx {
     /// given address at given time (epoch number).
     #[rpc(name = "cfx_getNextNonce")]
     fn next_nonce(
-        &self, addr: H160, epoch_number: Option<BlockHashOrEpochNumber>,
+        &self, addr: Base32Address,
+        epoch_number: Option<BlockHashOrEpochNumber>,
     ) -> BoxFuture<U256>;
 
     //        /// Returns the number of transactions in a block with given hash.

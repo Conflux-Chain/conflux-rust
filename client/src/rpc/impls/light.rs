@@ -639,10 +639,8 @@ impl RpcImpl {
     }
 
     pub fn next_nonce(
-        &self, address: H160, num: Option<BlockHashOrEpochNumber>,
+        &self, address: Base32Address, num: Option<BlockHashOrEpochNumber>,
     ) -> RpcBoxFuture<U256> {
-        let address: H160 = address.into();
-
         info!(
             "RPC Request: cfx_getNextNonce address={:?} num={:?}",
             address, num
@@ -653,6 +651,8 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            let address: H160 = address.try_into()?;
+
             let epoch = match num {
                 None => EpochNumber::LatestState,
                 Some(BlockHashOrEpochNumber::EpochNumber(e)) => e,
@@ -975,7 +975,7 @@ impl Cfx for CfxHandler {
             fn gas_price(&self) -> BoxFuture<U256>;
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
-            fn next_nonce(&self, address: H160, num: Option<BlockHashOrEpochNumber>) -> BoxFuture<U256>;
+            fn next_nonce(&self, address: Base32Address, num: Option<BlockHashOrEpochNumber>) -> BoxFuture<U256>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256>;
             fn sponsor_info(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<SponsorInfo>;
             fn staking_balance(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<U256>;

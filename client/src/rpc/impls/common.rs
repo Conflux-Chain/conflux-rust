@@ -4,8 +4,8 @@
 
 use crate::rpc::{
     types::{
-        Block as RpcBlock, BlockHashOrEpochNumber, Bytes,
-        CheckBalanceAgainstTransactionResponse, EpochNumber,
+        Address as Base32Address, Block as RpcBlock, BlockHashOrEpochNumber,
+        Bytes, CheckBalanceAgainstTransactionResponse, EpochNumber,
         Status as RpcStatus, Transaction as RpcTransaction, TxPoolPendingInfo,
         TxWithPoolInfo,
     },
@@ -37,6 +37,7 @@ use parking_lot::{Condvar, Mutex};
 use primitives::{Account, Action, SignedTransaction};
 use std::{
     collections::{BTreeMap, HashSet},
+    convert::TryInto,
     net::SocketAddr,
     sync::Arc,
     time::Duration,
@@ -316,18 +317,21 @@ impl RpcImpl {
     }
 
     pub fn next_nonce(
-        &self, address: H160, num: Option<BlockHashOrEpochNumber>,
+        &self, address: Base32Address, num: Option<BlockHashOrEpochNumber>,
     ) -> RpcResult<U256> {
         let consensus_graph = self.consensus_graph();
+
         let num = num.unwrap_or(BlockHashOrEpochNumber::EpochNumber(
             EpochNumber::LatestState,
         ));
+
         info!(
             "RPC Request: cfx_getNextNonce address={:?} epoch_num={:?}",
             address, num
         );
 
-        consensus_graph.next_nonce(address.into(), num.into())
+        let address: H160 = address.try_into()?;
+        consensus_graph.next_nonce(address, num.into())
     }
 }
 

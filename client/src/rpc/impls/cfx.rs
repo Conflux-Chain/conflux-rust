@@ -1152,7 +1152,7 @@ impl Cfx for CfxHandler {
             fn skipped_blocks_by_epoch(&self, num: EpochNumber) -> JsonRpcResult<Vec<H256>>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<U256>;
             fn gas_price(&self) -> BoxFuture<U256>;
-            fn next_nonce(&self, address: H160, num: Option<BlockHashOrEpochNumber>)
+            fn next_nonce(&self, address: Base32Address, num: Option<BlockHashOrEpochNumber>)
                 -> BoxFuture<U256>;
             fn get_status(&self) -> JsonRpcResult<RpcStatus>;
             fn get_client_version(&self) -> JsonRpcResult<String>;
