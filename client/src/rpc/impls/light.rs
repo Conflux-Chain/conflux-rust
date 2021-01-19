@@ -260,9 +260,10 @@ impl RpcImpl {
     }
 
     fn deposit_list(
-        &self, address: H160, num: Option<EpochNumber>,
+        &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcBoxFuture<Vec<DepositInfo>> {
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
+
         info!(
             "RPC Request: cfx_getDepositList address={:?} epoch_num={:?}",
             address, epoch
@@ -272,15 +273,17 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            let mut result = vec![];
-            if let Some(deposit_list) = invalid_params_check(
+            let address: H160 = address.try_into()?;
+
+            let maybe_list = invalid_params_check(
                 "address",
                 light.get_deposit_list(epoch, address).await,
-            )? {
-                result = (*deposit_list).clone();
-            }
+            )?;
 
-            Ok(result)
+            match maybe_list {
+                None => Ok(vec![]),
+                Some(deposit_list) => Ok(deposit_list.0),
+            }
         };
 
         Box::new(fut.boxed().compat())
@@ -957,7 +960,7 @@ impl Cfx for CfxHandler {
             fn check_balance_against_transaction(&self, account_addr: H160, contract_addr: H160, gas_limit: U256, gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>) -> BoxFuture<CheckBalanceAgainstTransactionResponse>;
             fn code(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
             fn collateral_for_storage(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
-            fn deposit_list(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Vec<DepositInfo>>;
+            fn deposit_list(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<Vec<DepositInfo>>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<U256>;
             fn gas_price(&self) -> BoxFuture<U256>;
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;

@@ -71,7 +71,7 @@ pub trait Cfx {
     /// Returns deposit list of the given account.
     #[rpc(name = "cfx_getDepositList")]
     fn deposit_list(
-        &self, addr: H160, epoch_number: Option<EpochNumber>,
+        &self, addr: Base32Address, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<Vec<DepositInfo>>;
 
     /// Returns vote list of the given account.

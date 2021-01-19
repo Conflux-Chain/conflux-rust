@@ -215,9 +215,10 @@ impl RpcImpl {
     }
 
     fn deposit_list(
-        &self, address: H160, num: Option<EpochNumber>,
+        &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcResult<Vec<DepositInfo>> {
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
+
         info!(
             "RPC Request: cfx_getDepositList address={:?} epoch_num={:?}",
             address, epoch_num
@@ -225,11 +226,11 @@ impl RpcImpl {
 
         let state_db =
             self.consensus.get_state_db_by_epoch_number(epoch_num)?;
-        let mut result = vec![];
-        if let Some(deposit_list) = state_db.get_deposit_list(&address)? {
-            result = (*deposit_list).clone();
+
+        match state_db.get_deposit_list(&address.try_into()?)? {
+            None => Ok(vec![]),
+            Some(deposit_list) => Ok(deposit_list.0),
         }
-        Ok(result)
     }
 
     fn vote_list(
@@ -1159,7 +1160,7 @@ impl Cfx for CfxHandler {
             fn balance(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn staking_balance(&self, address: Base32Address, num: Option<EpochNumber>)
                 -> BoxFuture<U256>;
-            fn deposit_list(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Vec<DepositInfo>>;
+            fn deposit_list(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<Vec<DepositInfo>>;
             fn vote_list(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Vec<VoteStakeInfo>>;
             fn collateral_for_storage(&self, address: H160, num: Option<EpochNumber>)
                 -> BoxFuture<U256>;
