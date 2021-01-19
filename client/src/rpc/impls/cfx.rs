@@ -1309,7 +1309,7 @@ impl LocalRpc for LocalRpcImpl {
             fn txpool_content(&self, address: Option<H160>) -> JsonRpcResult<
                 BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
             fn txs_from_pool(&self, address: Option<H160>) -> JsonRpcResult<Vec<RpcTransaction>>;
-            fn txpool_inspect(&self, address: Option<H160>) -> JsonRpcResult<
+            fn txpool_inspect(&self, address: Option<Base32Address>) -> JsonRpcResult<
                 BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
             fn txpool_status(&self) -> JsonRpcResult<BTreeMap<String, usize>>;
             fn accounts(&self) -> JsonRpcResult<Vec<H160>>;

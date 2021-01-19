@@ -1082,7 +1082,7 @@ impl LocalRpc for DebugRpcImpl {
             fn tx_inspect_pending(&self, address: Base32Address) -> RpcResult<TxPoolPendingInfo>;
             fn tx_inspect(&self, hash: H256) -> RpcResult<TxWithPoolInfo>;
             fn txpool_content(&self, address: Option<H160>) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
-            fn txpool_inspect(&self, address: Option<H160>) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
+            fn txpool_inspect(&self, address: Option<Base32Address>) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
             fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>>;
             fn txs_from_pool(&self, address: Option<H160>) -> RpcResult<Vec<RpcTransaction>>;
             fn unlock_account(&self, address: H160, password: String, duration: Option<U128>) -> RpcResult<bool>;

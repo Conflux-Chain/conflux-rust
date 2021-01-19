@@ -32,7 +32,7 @@ pub trait LocalRpc {
 
     #[rpc(name = "txpool_inspect")]
     fn txpool_inspect(
-        &self, address: Option<H160>,
+        &self, address: Option<Base32Address>,
     ) -> JsonRpcResult<
         BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
     >;
