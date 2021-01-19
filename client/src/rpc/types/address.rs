@@ -7,7 +7,7 @@ use cfx_types::H160;
 use serde::{de, ser, Deserialize, Deserializer, Serialize, Serializer};
 use std::{convert::TryInto, ops::Deref};
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Address(UserAddress);
 
 impl Deref for Address {

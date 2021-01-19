@@ -2,8 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::EpochNumber;
-use cfx_types::{H160, H256, U64};
+use super::{Address as Base32Address, EpochNumber};
+use cfx_types::{H256, U64};
 use jsonrpc_core::Error as RpcError;
 use primitives::filter::Filter as PrimitiveFilter;
 use serde::{
@@ -11,6 +11,7 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use serde_json::{from_value, Value};
+use std::convert::TryInto;
 
 const FILTER_BLOCK_HASH_LIMIT: usize = 128;
 
@@ -87,7 +88,7 @@ pub struct Filter {
     ///
     /// If None, match all.
     /// If specified, log must be produced by one of these addresses.
-    pub address: Option<VariadicValue<H160>>,
+    pub address: Option<VariadicValue<Base32Address>>,
 
     /// Search topics.
     ///
@@ -159,7 +160,19 @@ impl Filter {
         };
 
         // address, limit
-        let address = self.address.and_then(Into::into);
+        let address = match self.address {
+            None => None,
+            Some(VariadicValue::Null) => None,
+            Some(VariadicValue::Single(x)) => {
+                Some(vec![x.try_into().map_err(RpcError::invalid_params)?])
+            }
+            Some(VariadicValue::Multiple(xs)) => Some(
+                xs.into_iter()
+                    .map(|x| x.try_into().map_err(RpcError::invalid_params))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+        };
+
         let limit = self.limit.map(|x| x.as_u64() as usize);
 
         Ok(PrimitiveFilter {
