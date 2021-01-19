@@ -245,7 +245,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ContextTrait
             out,
             &address,
             self.substate,
-        ).unwrap()))
+        )?))
     }
 
     fn call(

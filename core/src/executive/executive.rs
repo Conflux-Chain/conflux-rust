@@ -108,7 +108,7 @@ pub fn contract_address(
 /// Convert a finalization result into a VM message call result.
 pub fn into_message_call_result(
     result: vm::Result<FinalizationResult>,
-) -> vm::Result<vm::MessageCallResult> {
+) -> DbResult<vm::MessageCallResult> {
     match result {
         Ok(FinalizationResult {
             gas_left,
@@ -120,7 +120,7 @@ pub fn into_message_call_result(
             return_data,
             apply_state: false,
         }) => Ok(vm::MessageCallResult::Reverted(gas_left, return_data)),
-        Err(vm::Error::StateDbError(err)) => Err(vm::Error::StateDbError(err)),
+        Err(vm::Error::StateDbError(err)) => Err(err.0),
         _ => Ok(vm::MessageCallResult::Failed),
     }
 }
@@ -129,7 +129,7 @@ pub fn into_message_call_result(
 pub fn into_contract_create_result(
     result: vm::Result<FinalizationResult>, address: &Address,
     substate: &mut Substate,
-) -> vm::Result<vm::ContractCreateResult>
+) -> DbResult<vm::ContractCreateResult>
 {
     match result {
         Ok(FinalizationResult {
@@ -145,7 +145,7 @@ pub fn into_contract_create_result(
             apply_state: false,
             return_data,
         }) => Ok(vm::ContractCreateResult::Reverted(gas_left, return_data)),
-        Err(vm::Error::StateDbError(err)) => Err(vm::Error::StateDbError(err)),
+        Err(vm::Error::StateDbError(err)) => Err(err.0),
         _ => Ok(vm::ContractCreateResult::Failed),
     }
 }
