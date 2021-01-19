@@ -296,7 +296,7 @@ mod tests {
              \"fromEpoch\":\"0x3e8\",\
              \"toEpoch\":\"latest_state\",\
              \"blockHashes\":[\"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
-             \"address\":[\"cfx:0000000000000000000000000000000000pe51b8as\",\"cfx:000000000000000000000000000000000482u4m4mw\"],\
+             \"address\":[\"CFX:TYPE.NULL:0000000000000000000000000000000000PE51B8AS\",\"CFX:TYPE.BUILTIN:000000000000000000000000000000000482U4M4MW\"],\
              \"topics\":[\
                 \"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\
                 [\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\"]\
