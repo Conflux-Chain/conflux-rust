@@ -103,7 +103,7 @@ pub trait LocalRpc {
 
     /// Lock an account
     #[rpc(name = "lock_account")]
-    fn lock_account(&self, address: H160) -> JsonRpcResult<bool>;
+    fn lock_account(&self, address: Base32Address) -> JsonRpcResult<bool>;
 
     #[rpc(name = "sign")]
     fn sign(

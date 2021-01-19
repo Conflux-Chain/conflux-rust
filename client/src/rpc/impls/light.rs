@@ -1072,7 +1072,7 @@ impl LocalRpc for DebugRpcImpl {
         to self.common {
             fn accounts(&self) -> RpcResult<Vec<H160>>;
             fn clear_tx_pool(&self) -> RpcResult<()>;
-            fn lock_account(&self, address: H160) -> RpcResult<bool>;
+            fn lock_account(&self, address: Base32Address) -> RpcResult<bool>;
             fn net_disconnect_node(&self, id: NodeId, op: Option<UpdateNodeOperation>) -> RpcResult<bool>;
             fn net_node(&self, id: NodeId) -> RpcResult<Option<(String, Node)>>;
             fn net_sessions(&self, node_id: Option<NodeId>) -> RpcResult<Vec<SessionDetails>>;

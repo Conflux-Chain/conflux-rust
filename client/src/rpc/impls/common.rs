@@ -758,12 +758,15 @@ impl RpcImpl {
         }
     }
 
-    pub fn lock_account(&self, address: H160) -> JsonRpcResult<bool> {
-        match self.accounts.lock_account(address.into()) {
+    pub fn lock_account(&self, address: Base32Address) -> RpcResult<bool> {
+        // TODO: add check for address.network
+        let address: H160 = address.try_into()?;
+
+        match self.accounts.lock_account(address) {
             Ok(_) => Ok(true),
             Err(err) => {
                 warn!("Unable to lock the account. With error {:?}", err);
-                Err(RpcError::internal_error())
+                bail!(RpcError::internal_error())
             }
         }
     }
