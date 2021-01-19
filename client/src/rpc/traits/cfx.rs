@@ -200,7 +200,7 @@ pub trait Cfx {
     /// Return account related states of the given account
     #[rpc(name = "cfx_getAccount")]
     fn account(
-        &self, address: H160, epoch_num: Option<EpochNumber>,
+        &self, address: Base32Address, epoch_num: Option<EpochNumber>,
     ) -> BoxFuture<RpcAccount>;
 
     /// Returns interest rate of the given epoch

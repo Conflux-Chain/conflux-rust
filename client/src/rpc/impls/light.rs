@@ -109,9 +109,8 @@ impl RpcImpl {
     }
 
     fn account(
-        &self, address: H160, num: Option<EpochNumber>,
+        &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcBoxFuture<RpcAccount> {
-        let address: H160 = address.into();
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
         info!(
             "RPC Request: cfx_getAccount address={:?} epoch={:?}",
@@ -122,21 +121,24 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            let network = address.network;
+            let address: H160 = address.try_into()?;
+
             let account = invalid_params_check(
                 "address",
                 light.get_account(epoch, address).await,
             )?;
 
-            Ok(RpcAccount::new(account.unwrap_or(
-                account_result_to_rpc_result(
-                    "address",
-                    Account::new_empty_with_balance(
-                        &address,
-                        &U256::zero(), /* balance */
-                        &U256::zero(), /* nonce */
-                    ),
-                )?,
-            )))
+            let account = account.unwrap_or(account_result_to_rpc_result(
+                "address",
+                Account::new_empty_with_balance(
+                    &address,
+                    &U256::zero(), /* balance */
+                    &U256::zero(), /* nonce */
+                ),
+            )?);
+
+            Ok(RpcAccount::try_from(account, network)?)
         };
 
         Box::new(fut.boxed().compat())
@@ -963,7 +965,7 @@ impl Cfx for CfxHandler {
         }
 
         to self.rpc_impl {
-            fn account(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
+            fn account(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn admin(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<Option<Base32Address>>;
             fn balance(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<U256>;

@@ -277,19 +277,22 @@ impl RpcImpl {
 
     /// Return account related states of the given account
     fn account(
-        &self, address: H160, epoch_num: Option<EpochNumber>,
+        &self, address: Base32Address, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<RpcAccount> {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
+        let network = address.network;
 
         info!(
             "RPC Request: cfx_getAccount address={:?} epoch_num={:?}",
             address, epoch_num
         );
 
+        let address: H160 = address.try_into()?;
+
         let state_db =
             self.consensus.get_state_db_by_epoch_number(epoch_num)?;
 
-        Ok(RpcAccount::new(match state_db.get_account(&address)? {
+        let account = match state_db.get_account(&address)? {
             Some(t) => t,
             None => account_result_to_rpc_result(
                 "address",
@@ -299,7 +302,9 @@ impl RpcImpl {
                     &U256::zero(), /* nonce */
                 ),
             )?,
-        }))
+        };
+
+        Ok(RpcAccount::try_from(account, network)?)
     }
 
     /// Returns interest rate of the given epoch
@@ -1164,7 +1169,7 @@ impl Cfx for CfxHandler {
 
         to self.rpc_impl {
             fn code(&self, addr: Base32Address, epoch_number: Option<EpochNumber>) -> BoxFuture<Bytes>;
-            fn account(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
+            fn account(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn admin(&self, address: Base32Address, num: Option<EpochNumber>)
