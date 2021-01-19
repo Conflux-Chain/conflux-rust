@@ -118,9 +118,10 @@ impl RpcImpl {
     }
 
     fn code(
-        &self, address: H160, num: Option<EpochNumber>,
+        &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
         let epoch_num = num.unwrap_or(EpochNumber::LatestState);
+
         info!(
             "RPC Request: cfx_getCode address={:?} epoch_num={:?}",
             address, epoch_num
@@ -129,6 +130,9 @@ impl RpcImpl {
         let state_db = self
             .consensus
             .get_state_db_by_epoch_number(epoch_num.clone().into())?;
+
+        let address: H160 = address.try_into()?;
+
         let acc = invalid_params_check(
             "address",
             state_db.get_account(&address)?.ok_or(format!(
@@ -1151,7 +1155,7 @@ impl Cfx for CfxHandler {
         }
 
         to self.rpc_impl {
-            fn code(&self, addr: H160, epoch_number: Option<EpochNumber>) -> BoxFuture<Bytes>;
+            fn code(&self, addr: Base32Address, epoch_number: Option<EpochNumber>) -> BoxFuture<Bytes>;
             fn account(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
