@@ -198,9 +198,10 @@ impl RpcImpl {
     }
 
     fn staking_balance(
-        &self, address: H160, num: Option<EpochNumber>,
+        &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcResult<U256> {
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
+
         info!(
             "RPC Request: cfx_getStakingBalance address={:?} epoch_num={:?}",
             address, epoch_num
@@ -208,7 +209,7 @@ impl RpcImpl {
 
         let state_db =
             self.consensus.get_state_db_by_epoch_number(epoch_num)?;
-        let acc = state_db.get_account(&address)?;
+        let acc = state_db.get_account(&address.try_into()?)?;
 
         Ok(acc.map_or(U256::zero(), |acc| acc.staking_balance).into())
     }
@@ -1156,7 +1157,7 @@ impl Cfx for CfxHandler {
             fn sponsor_info(&self, address: H160, num: Option<EpochNumber>)
                 -> BoxFuture<SponsorInfo>;
             fn balance(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<U256>;
-            fn staking_balance(&self, address: H160, num: Option<EpochNumber>)
+            fn staking_balance(&self, address: Base32Address, num: Option<EpochNumber>)
                 -> BoxFuture<U256>;
             fn deposit_list(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Vec<DepositInfo>>;
             fn vote_list(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<Vec<VoteStakeInfo>>;

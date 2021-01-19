@@ -231,9 +231,8 @@ impl RpcImpl {
     }
 
     fn staking_balance(
-        &self, address: H160, num: Option<EpochNumber>,
+        &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcBoxFuture<U256> {
-        let address: H160 = address.into();
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -245,6 +244,8 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            let address: H160 = address.try_into()?;
+
             let account = invalid_params_check(
                 "address",
                 light.get_account(epoch, address).await,
@@ -964,7 +965,7 @@ impl Cfx for CfxHandler {
             fn next_nonce(&self, address: H160, num: Option<BlockHashOrEpochNumber>) -> BoxFuture<U256>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256>;
             fn sponsor_info(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<SponsorInfo>;
-            fn staking_balance(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
+            fn staking_balance(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn storage_at(&self, addr: H160, pos: H256, epoch_number: Option<EpochNumber>) -> BoxFuture<Option<H256>>;
             fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;

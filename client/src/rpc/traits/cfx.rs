@@ -65,7 +65,7 @@ pub trait Cfx {
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getStakingBalance")]
     fn staking_balance(
-        &self, addr: H160, epoch_number: Option<EpochNumber>,
+        &self, addr: Base32Address, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<U256>;
 
     /// Returns deposit list of the given account.
