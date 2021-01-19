@@ -52,6 +52,7 @@ lazy_static! {
     }) ();
 }
 
+// FIXME: rename to DecodedAddress.
 /// Struct containing the bytes and metadata of a Conflux address.
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct UserAddress {

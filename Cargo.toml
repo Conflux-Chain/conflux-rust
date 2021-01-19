@@ -75,8 +75,6 @@ path = "tools/tg_config_gen/main.rs"
 
 # Use workspace section to allow test all cases under root folder (cargo test --all).
 [workspace]
-# TODO: remove it, this is temporary.
-exclude = ["cfx_addr"]
 
 [features]
 default = ["jemalloc-global"]
