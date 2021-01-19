@@ -3,7 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_addr::{
-    cfx_addr_decode, cfx_addr_encode, DecodingError, Network, UserAddress,
+    cfx_addr_decode, cfx_addr_encode, DecodingError, EncodingOptions, Network,
+    UserAddress,
 };
 use cfx_types::H160;
 use serde::{de, ser, Deserialize, Deserializer, Serialize, Serializer};
@@ -36,7 +37,8 @@ impl Address {
     pub fn try_from_h160(addr: H160, network: Network) -> Result<Self, String> {
         // TODO: is there a simpler way?
         let addr_str =
-            cfx_addr_encode(&addr.0, network).map_err(|e| e.to_string())?;
+            cfx_addr_encode(&addr.0, network, EncodingOptions::Simple)
+                .map_err(|e| e.to_string())?;
         let user_addr =
             cfx_addr_decode(&addr_str).map_err(|e| e.to_string())?;
         assert_eq!(user_addr.hex, Some(addr));
@@ -69,10 +71,14 @@ impl<'a> Deserialize<'a> for Address {
 impl Serialize for Address {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
-        let addr_str =
-            cfx_addr_encode(&self.bytes[..], self.network).map_err(|e| {
-                ser::Error::custom(format!("Failed to encode address: {}", e))
-            })?;
+        let addr_str = cfx_addr_encode(
+            &self.bytes[..],
+            self.network,
+            EncodingOptions::QrCode,
+        )
+        .map_err(|e| {
+            ser::Error::custom(format!("Failed to encode address: {}", e))
+        })?;
 
         serializer.serialize_str(&addr_str)
     }
