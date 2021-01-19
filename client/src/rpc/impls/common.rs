@@ -319,6 +319,8 @@ impl RpcImpl {
     pub fn next_nonce(
         &self, address: Base32Address, num: Option<BlockHashOrEpochNumber>,
     ) -> RpcResult<U256> {
+        // TODO: add check for address.network
+
         let consensus_graph = self.consensus_graph();
 
         let num = num.unwrap_or(BlockHashOrEpochNumber::EpochNumber(
@@ -769,8 +771,11 @@ impl RpcImpl {
     }
 
     pub fn tx_inspect_pending(
-        &self, address: H160,
-    ) -> JsonRpcResult<TxPoolPendingInfo> {
+        &self, address: Base32Address,
+    ) -> RpcResult<TxPoolPendingInfo> {
+        // TODO: add check for address.network
+        let address: H160 = address.try_into()?;
+
         let mut ret = TxPoolPendingInfo::default();
         let (deferred_txs, _) = self.tx_pool.content(Some(address));
         let mut max_nonce: U256 = U256::from(0);

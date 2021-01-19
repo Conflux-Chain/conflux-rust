@@ -1320,7 +1320,7 @@ impl LocalRpc for LocalRpcImpl {
             fn lock_account(&self, address: H160) -> JsonRpcResult<bool>;
             fn sign(&self, data: Bytes, address: H160, password: Option<String>)
                 -> JsonRpcResult<H520>;
-            fn tx_inspect_pending(&self, address: H160) -> JsonRpcResult<TxPoolPendingInfo>;
+            fn tx_inspect_pending(&self, address: Base32Address) -> JsonRpcResult<TxPoolPendingInfo>;
 
         }
 

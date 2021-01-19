@@ -3,8 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::types::{
-    Bytes as RpcBytes, ConsensusGraphStates, SyncGraphStates,
-    Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
+    Address as Base32Address, Bytes as RpcBytes, ConsensusGraphStates,
+    SyncGraphStates, Transaction as RpcTransaction, TxPoolPendingInfo,
+    TxWithPoolInfo,
 };
 use crate::rpc::types::SendTxRequest;
 use cfx_types::{H160, H256, H520, U128};
@@ -23,7 +24,7 @@ pub trait LocalRpc {
 
     #[rpc(name = "tx_inspect_pending")]
     fn tx_inspect_pending(
-        &self, address: H160,
+        &self, address: Base32Address,
     ) -> JsonRpcResult<TxPoolPendingInfo>;
 
     #[rpc(name = "tx_inspect")]
