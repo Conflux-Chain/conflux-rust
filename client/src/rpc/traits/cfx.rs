@@ -177,8 +177,9 @@ pub trait Cfx {
     /// Check if user balance is enough for the transaction.
     #[rpc(name = "cfx_checkBalanceAgainstTransaction")]
     fn check_balance_against_transaction(
-        &self, account_addr: H160, contract_addr: H160, gas_limit: U256,
-        gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>,
+        &self, account_addr: Base32Address, contract_addr: Base32Address,
+        gas_limit: U256, gas_price: U256, storage_limit: U256,
+        epoch: Option<EpochNumber>,
     ) -> BoxFuture<CheckBalanceAgainstTransactionResponse>;
 
     #[rpc(name = "cfx_getBlocksByEpoch")]

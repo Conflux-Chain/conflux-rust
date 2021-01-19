@@ -894,8 +894,9 @@ impl RpcImpl {
     }
 
     fn check_balance_against_transaction(
-        &self, account_addr: H160, contract_addr: H160, gas_limit: U256,
-        gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>,
+        &self, account_addr: Base32Address, contract_addr: Base32Address,
+        gas_limit: U256, gas_price: U256, storage_limit: U256,
+        epoch: Option<EpochNumber>,
     ) -> RpcBoxFuture<CheckBalanceAgainstTransactionResponse>
     {
         let epoch: primitives::EpochNumber =
@@ -910,6 +911,9 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            let account_addr: H160 = account_addr.try_into()?;
+            let contract_addr: H160 = contract_addr.try_into()?;
+
             if storage_limit > U256::from(std::u64::MAX) {
                 bail!(RpcError::invalid_params(format!("storage_limit has to be within the range of u64 but {} supplied!", storage_limit)));
             }
@@ -967,7 +971,7 @@ impl Cfx for CfxHandler {
             fn block_by_hash_with_pivot_assumption(&self, block_hash: H256, pivot_hash: H256, epoch_number: U64) -> BoxFuture<RpcBlock>;
             fn block_by_hash(&self, hash: H256, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;
             fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<H256>>;
-            fn check_balance_against_transaction(&self, account_addr: H160, contract_addr: H160, gas_limit: U256, gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>) -> BoxFuture<CheckBalanceAgainstTransactionResponse>;
+            fn check_balance_against_transaction(&self, account_addr: Base32Address, contract_addr: Base32Address, gas_limit: U256, gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>) -> BoxFuture<CheckBalanceAgainstTransactionResponse>;
             fn code(&self, address: Base32Address, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
             fn collateral_for_storage(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn deposit_list(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<Vec<DepositInfo>>;

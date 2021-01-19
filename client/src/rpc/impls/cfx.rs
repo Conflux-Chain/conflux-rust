@@ -976,8 +976,9 @@ impl RpcImpl {
     }
 
     fn check_balance_against_transaction(
-        &self, account_addr: H160, contract_addr: H160, gas_limit: U256,
-        gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>,
+        &self, account_addr: Base32Address, contract_addr: Base32Address,
+        gas_limit: U256, gas_price: U256, storage_limit: U256,
+        epoch: Option<EpochNumber>,
     ) -> RpcResult<CheckBalanceAgainstTransactionResponse>
     {
         let epoch: primitives::EpochNumber =
@@ -987,6 +988,9 @@ impl RpcImpl {
             "RPC Request: cfx_checkBalanceAgainstTransaction account_addr={:?} contract_addr={:?} gas_limit={:?} gas_price={:?} storage_limit={:?} epoch={:?}",
             account_addr, contract_addr, gas_limit, gas_price, storage_limit, epoch
         );
+
+        let account_addr: H160 = account_addr.try_into()?;
+        let contract_addr: H160 = contract_addr.try_into()?;
 
         if storage_limit > U256::from(std::u64::MAX) {
             bail!(JsonRpcError::invalid_params(format!("storage_limit has to be within the range of u64 but {} supplied!", storage_limit)));
@@ -1180,7 +1184,7 @@ impl Cfx for CfxHandler {
                 &self, request: CallRequest, epoch_number: Option<EpochNumber>)
                 -> JsonRpcResult<EstimateGasAndCollateralResponse>;
             fn check_balance_against_transaction(
-                &self, account_addr: H160, contract_addr: H160, gas_limit: U256, gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>,
+                &self, account_addr: Base32Address, contract_addr: Base32Address, gas_limit: U256, gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>,
             ) -> BoxFuture<CheckBalanceAgainstTransactionResponse>;
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
