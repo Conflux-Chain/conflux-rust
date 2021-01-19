@@ -320,9 +320,8 @@ impl RpcImpl {
     }
 
     fn collateral_for_storage(
-        &self, address: H160, num: Option<EpochNumber>,
+        &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcBoxFuture<U256> {
-        let address: H160 = address.into();
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -334,6 +333,8 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            let address: H160 = address.try_into()?;
+
             let account = invalid_params_check(
                 "address",
                 light.get_account(epoch, address).await,
@@ -962,7 +963,7 @@ impl Cfx for CfxHandler {
             fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<H256>>;
             fn check_balance_against_transaction(&self, account_addr: H160, contract_addr: H160, gas_limit: U256, gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>) -> BoxFuture<CheckBalanceAgainstTransactionResponse>;
             fn code(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
-            fn collateral_for_storage(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<U256>;
+            fn collateral_for_storage(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn deposit_list(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<Vec<DepositInfo>>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<U256>;
             fn gas_price(&self) -> BoxFuture<U256>;

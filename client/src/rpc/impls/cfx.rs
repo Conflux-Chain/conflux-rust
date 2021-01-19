@@ -253,9 +253,10 @@ impl RpcImpl {
     }
 
     fn collateral_for_storage(
-        &self, address: H160, num: Option<EpochNumber>,
+        &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcResult<U256> {
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
+
         info!(
             "RPC Request: cfx_getCollateralForStorage address={:?} epoch_num={:?}",
             address, epoch_num
@@ -263,7 +264,7 @@ impl RpcImpl {
 
         let state_db =
             self.consensus.get_state_db_by_epoch_number(epoch_num)?;
-        let acc = state_db.get_account(&address)?;
+        let acc = state_db.get_account(&address.try_into()?)?;
 
         Ok(acc
             .map_or(U256::zero(), |acc| acc.collateral_for_storage)
@@ -1163,7 +1164,7 @@ impl Cfx for CfxHandler {
                 -> BoxFuture<U256>;
             fn deposit_list(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<Vec<DepositInfo>>;
             fn vote_list(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<Vec<VoteStakeInfo>>;
-            fn collateral_for_storage(&self, address: H160, num: Option<EpochNumber>)
+            fn collateral_for_storage(&self, address: Base32Address, num: Option<EpochNumber>)
                 -> BoxFuture<U256>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>)
                 -> JsonRpcResult<Bytes>;

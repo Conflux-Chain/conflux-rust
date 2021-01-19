@@ -83,7 +83,7 @@ pub trait Cfx {
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getCollateralForStorage")]
     fn collateral_for_storage(
-        &self, addr: H160, epoch_number: Option<EpochNumber>,
+        &self, addr: Base32Address, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<U256>;
 
     /// Returns the code at given address at given time (epoch number).
