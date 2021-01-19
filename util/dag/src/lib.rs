@@ -3,6 +3,9 @@ use std::{
     hash::Hash,
 };
 
+/// Topologically sort `index_set` and return a sorted `Vec`.
+/// For the nodes without order-before relationship, the ones with smaller
+/// `order_indicator` output will be ordered first.
 fn topological_sort<NodeIndex, F, OrderIndicator, FOrd>(
     index_set: &Vec<NodeIndex>, prev_edges: F, order_indicator: FOrd,
 ) -> Vec<NodeIndex>
@@ -16,9 +19,9 @@ where
 
     for me in index_set {
         num_next_edges.entry(*me).or_insert(0);
-        for d in &prev_edges(*me) {
-            if index_set.contains(d) {
-                *num_next_edges.entry(*d).or_insert(0) += 1;
+        for prev in &prev_edges(*me) {
+            if index_set.contains(prev) {
+                *num_next_edges.entry(*prev).or_insert(0) += 1;
             }
         }
     }
@@ -34,11 +37,11 @@ where
     while let Some((_, me)) = candidates.pop() {
         reversed_indices.push(me);
 
-        for d in &prev_edges(me) {
-            if index_set.contains(d) {
-                num_next_edges.entry(*d).and_modify(|e| *e -= 1);
-                if num_next_edges[d] == 0 {
-                    candidates.push((order_indicator(*d), *d));
+        for prev in &prev_edges(me) {
+            if index_set.contains(prev) {
+                num_next_edges.entry(*prev).and_modify(|e| *e -= 1);
+                if num_next_edges[prev] == 0 {
+                    candidates.push((order_indicator(*prev), *prev));
                 }
             }
         }
@@ -84,7 +87,8 @@ pub trait Graph {
 // TODO: Decide if returning Iterator is better than returning `Vec`?
 pub trait DAG: Graph {
     fn prev_edges(&self, node_index: Self::NodeIndex) -> Vec<Self::NodeIndex>;
-    fn topological_sort<OrderIndicator, FOrd>(
+
+    fn topological_sort_with_order_indicator<OrderIndicator, FOrd>(
         &self, index_set: &Vec<Self::NodeIndex>, order_indicator: FOrd,
     ) -> Vec<Self::NodeIndex>
     where
@@ -92,6 +96,14 @@ pub trait DAG: Graph {
         FOrd: Fn(Self::NodeIndex) -> OrderIndicator,
     {
         topological_sort(&index_set, |i| self.prev_edges(i), order_indicator)
+    }
+
+    fn topological_sort(
+        &self, index_set: &Vec<Self::NodeIndex>,
+    ) -> Vec<Self::NodeIndex> {
+        // Any topological order will work, so just return a constant for
+        // `order_indicator`.
+        self.topological_sort_with_order_indicator(index_set, |_| true)
     }
 }
 

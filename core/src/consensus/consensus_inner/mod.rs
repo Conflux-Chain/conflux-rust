@@ -951,9 +951,10 @@ impl ConsensusGraphInner {
         }
 
         self.arena[pivot].data.ordered_executable_epoch_blocks = self
-            .topological_sort(&filtered_blockset.into_iter().collect(), |i| {
-                self.arena[i].hash
-            });
+            .topological_sort_with_order_indicator(
+                &filtered_blockset.into_iter().collect(),
+                |i| self.arena[i].hash,
+            );
         self.arena[pivot]
             .data
             .ordered_executable_epoch_blocks
@@ -3087,7 +3088,7 @@ impl ConsensusGraphInner {
                 anticone.contains(i as u32)
             });
             let visited_in_order =
-                self.topological_sort(&visited.into_iter().collect(), |_| true);
+                self.topological_sort(&visited.into_iter().collect());
             for x in visited_in_order {
                 let mut timer_chain_height = 0;
                 for pred in &self.prev_edges(x) {
