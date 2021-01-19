@@ -33,7 +33,6 @@ def prefix_to_network_id(prefix):
 
 
 def encode_b32_address(addr, network_id=DEFAULT_PY_TEST_CHAIN_ID):
-    assert len(addr) == 20, "Invalid address length"
     payload = convertbits([VERSION_BYTE] + list(addr), 8, 5)
     prefix = network_id_to_prefix(network_id)
     checksum = calculate_checksum(prefix, payload)
