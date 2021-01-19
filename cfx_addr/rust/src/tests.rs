@@ -182,14 +182,15 @@ fn testnet_64byte() {
     );
 }
 
-fn verify(network: Network, data: &Vec<u8>, cashaddr: &str) {
-    let output = cfx_addr_encode(data, network).unwrap();
+fn verify(network: Network, data: &Vec<u8>, cfx_base32_addr: &str) {
+    let output =
+        cfx_addr_encode(data, network, EncodingOptions::Simple).unwrap();
     assert!(
-        output == cashaddr.to_ascii_lowercase(),
+        output == cfx_base32_addr.to_ascii_lowercase(),
         "expected address {}, got {}",
-        cashaddr.to_ascii_lowercase(),
+        cfx_base32_addr.to_ascii_lowercase(),
         output
     );
-    let decoded = cfx_addr_decode(cashaddr).unwrap();
+    let decoded = cfx_addr_decode(cfx_base32_addr).unwrap();
     assert!(&decoded.body == data, "decoded address mismatch");
 }
