@@ -98,7 +98,7 @@ pub trait LocalRpc {
     /// Unlock an account
     #[rpc(name = "unlock_account")]
     fn unlock_account(
-        &self, address: H160, password: String, duration: Option<U128>,
+        &self, address: Base32Address, password: String, duration: Option<U128>,
     ) -> JsonRpcResult<bool>;
 
     /// Lock an account

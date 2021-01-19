@@ -1315,7 +1315,7 @@ impl LocalRpc for LocalRpcImpl {
             fn accounts(&self) -> JsonRpcResult<Vec<H160>>;
             fn new_account(&self, password: String) -> JsonRpcResult<H160>;
             fn unlock_account(
-                &self, address: H160, password: String, duration: Option<U128>)
+                &self, address: Base32Address, password: String, duration: Option<U128>)
                 -> JsonRpcResult<bool>;
             fn lock_account(&self, address: H160) -> JsonRpcResult<bool>;
             fn sign(&self, data: Bytes, address: H160, password: Option<String>)

@@ -1085,7 +1085,7 @@ impl LocalRpc for DebugRpcImpl {
             fn txpool_inspect(&self, address: Option<Base32Address>) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
             fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>>;
             fn txs_from_pool(&self, address: Option<Base32Address>) -> RpcResult<Vec<RpcTransaction>>;
-            fn unlock_account(&self, address: H160, password: String, duration: Option<U128>) -> RpcResult<bool>;
+            fn unlock_account(&self, address: Base32Address, password: String, duration: Option<U128>) -> RpcResult<bool>;
         }
 
         to self.rpc_impl {

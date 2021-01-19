@@ -716,9 +716,10 @@ impl RpcImpl {
     }
 
     pub fn unlock_account(
-        &self, address: H160, password: String, duration: Option<U128>,
-    ) -> JsonRpcResult<bool> {
-        let account: Address = address.into();
+        &self, address: Base32Address, password: String, duration: Option<U128>,
+    ) -> RpcResult<bool> {
+        // TODO: add check for address.network
+        let account: H160 = address.try_into()?;
         let store = self.accounts.clone();
         let duration = match duration {
             None => None,
@@ -726,9 +727,7 @@ impl RpcImpl {
                 let duration: U128 = duration.into();
                 let v = duration.low_u64() as u32;
                 if duration != v.into() {
-                    return Err(RpcError::invalid_params(
-                        "invalid duration number",
-                    ));
+                    bail!(RpcError::invalid_params("invalid duration number",));
                 } else {
                     Some(v)
                 }
@@ -754,7 +753,7 @@ impl RpcImpl {
             Ok(_) => Ok(true),
             Err(err) => {
                 warn!("Unable to unlock the account. With error {:?}", err);
-                Err(RpcError::internal_error())
+                bail!(RpcError::internal_error())
             }
         }
     }
