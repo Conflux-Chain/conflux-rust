@@ -3090,7 +3090,7 @@ impl ConsensusGraphInner {
                 self.topological_sort(&visited.into_iter().collect(), |_| true);
             for x in visited_in_order {
                 let mut timer_chain_height = 0;
-                for pred in &self.outgoing_edges(x) {
+                for pred in &self.prev_edges(x) {
                     let mut height = if let Some(v) = res.get(pred) {
                         *v
                     } else {
