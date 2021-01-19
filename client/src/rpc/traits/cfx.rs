@@ -101,7 +101,7 @@ pub trait Cfx {
 
     #[rpc(name = "cfx_getStorageRoot")]
     fn storage_root(
-        &self, address: H160, epoch_num: Option<EpochNumber>,
+        &self, address: Base32Address, epoch_num: Option<EpochNumber>,
     ) -> BoxFuture<Option<StorageRoot>>;
 
     /// Returns block with given hash.

@@ -492,7 +492,7 @@ impl RpcImpl {
     }
 
     fn storage_root(
-        &self, address: H160, epoch_num: Option<EpochNumber>,
+        &self, address: Base32Address, epoch_num: Option<EpochNumber>,
     ) -> RpcBoxFuture<Option<StorageRoot>> {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
 
@@ -505,6 +505,8 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            let address: H160 = address.try_into()?;
+
             let root = invalid_params_check(
                 "address",
                 light.get_storage_root(epoch_num.into(), address).await,
@@ -978,7 +980,7 @@ impl Cfx for CfxHandler {
             fn sponsor_info(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<SponsorInfo>;
             fn staking_balance(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn storage_at(&self, addr: Base32Address, pos: H256, epoch_number: Option<EpochNumber>) -> BoxFuture<Option<H256>>;
-            fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
+            fn storage_root(&self, address: Base32Address, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
             fn vote_list(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<Vec<VoteStakeInfo>>;

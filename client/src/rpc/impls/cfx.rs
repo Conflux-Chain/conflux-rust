@@ -453,7 +453,7 @@ impl RpcImpl {
     }
 
     fn storage_root(
-        &self, address: H160, epoch_num: Option<EpochNumber>,
+        &self, address: Base32Address, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<Option<StorageRoot>> {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
 
@@ -465,7 +465,7 @@ impl RpcImpl {
         let root = self
             .consensus
             .get_state_db_by_epoch_number(epoch_num)?
-            .get_original_storage_root(&address)?;
+            .get_original_storage_root(&address.try_into()?)?;
 
         Ok(Some(root))
     }
@@ -1189,7 +1189,7 @@ impl Cfx for CfxHandler {
                 -> BoxFuture<Option<H256>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
-            fn storage_root(&self, address: H160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
+            fn storage_root(&self, address: Base32Address, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
         }
     }
