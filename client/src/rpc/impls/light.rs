@@ -20,8 +20,7 @@ use network::{
     throttling, SessionDetails, UpdateNodeOperation,
 };
 use primitives::{
-    Account, DepositInfo, SponsorInfo, StorageRoot, TransactionWithSignature,
-    VoteStakeInfo,
+    Account, DepositInfo, StorageRoot, TransactionWithSignature, VoteStakeInfo,
 };
 use rlp::Encodable;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
@@ -41,7 +40,7 @@ use crate::{
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
             EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
             Log as RpcLog, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
-            SendTxRequest, Status as RpcStatus, SyncGraphStates,
+            SendTxRequest, SponsorInfo, Status as RpcStatus, SyncGraphStates,
             TokenSupplyInfo, Transaction as RpcTransaction, TxPoolPendingInfo,
             TxWithPoolInfo,
         },
@@ -207,9 +206,8 @@ impl RpcImpl {
     }
 
     fn sponsor_info(
-        &self, address: H160, num: Option<EpochNumber>,
+        &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcBoxFuture<SponsorInfo> {
-        let address: H160 = address.into();
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -221,12 +219,20 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            let network = address.network;
+            let address: H160 = address.try_into()?;
+
             let account = invalid_params_check(
                 "address",
                 light.get_account(epoch, address).await,
             )?;
 
-            Ok(account.map_or(Default::default(), |acc| acc.sponsor_info))
+            match account {
+                None => Ok(SponsorInfo::default(network)),
+                Some(acc) => {
+                    Ok(SponsorInfo::try_from(acc.sponsor_info, network)?)
+                }
+            }
         };
 
         Box::new(fut.boxed().compat())
@@ -983,7 +989,7 @@ impl Cfx for CfxHandler {
             fn interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn next_nonce(&self, address: Base32Address, num: Option<BlockHashOrEpochNumber>) -> BoxFuture<U256>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256>;
-            fn sponsor_info(&self, address: H160, num: Option<EpochNumber>) -> BoxFuture<SponsorInfo>;
+            fn sponsor_info(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<SponsorInfo>;
             fn staking_balance(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn storage_at(&self, addr: Base32Address, pos: H256, epoch_number: Option<EpochNumber>) -> BoxFuture<Option<H256>>;
             fn storage_root(&self, address: Base32Address, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;

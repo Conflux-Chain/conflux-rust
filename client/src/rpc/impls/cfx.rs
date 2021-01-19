@@ -3,7 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::{
-    Address as Base32Address, TokenSupplyInfo, MAX_GAS_CALL_REQUEST,
+    Address as Base32Address, SponsorInfo, TokenSupplyInfo,
+    MAX_GAS_CALL_REQUEST,
 };
 use blockgen::BlockGenerator;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
@@ -28,7 +29,7 @@ use network::{
 use parking_lot::Mutex;
 use primitives::{
     filter::Filter, transaction::Action::Call, Account, DepositInfo,
-    SignedTransaction, SponsorInfo, StorageKey, StorageRoot, StorageValue,
+    SignedTransaction, StorageKey, StorageRoot, StorageValue,
     TransactionWithSignature, VoteStakeInfo,
 };
 use random_crash::*;
@@ -186,9 +187,11 @@ impl RpcImpl {
     }
 
     fn sponsor_info(
-        &self, address: H160, num: Option<EpochNumber>,
+        &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcResult<SponsorInfo> {
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
+        let network = address.network;
+
         info!(
             "RPC Request: cfx_getSponsorInfo address={:?} epoch_num={:?}",
             address, epoch_num
@@ -196,9 +199,11 @@ impl RpcImpl {
 
         let state_db =
             self.consensus.get_state_db_by_epoch_number(epoch_num)?;
-        let acc = state_db.get_account(&address)?;
 
-        Ok(acc.map(|acc| acc.sponsor_info.clone()).unwrap_or_default())
+        match state_db.get_account(&address.try_into()?)? {
+            None => Ok(SponsorInfo::default(network)),
+            Some(acc) => Ok(SponsorInfo::try_from(acc.sponsor_info, network)?),
+        }
     }
 
     fn staking_balance(
@@ -1174,7 +1179,7 @@ impl Cfx for CfxHandler {
             fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn admin(&self, address: Base32Address, num: Option<EpochNumber>)
                 -> BoxFuture<Option<Base32Address>>;
-            fn sponsor_info(&self, address: H160, num: Option<EpochNumber>)
+            fn sponsor_info(&self, address: Base32Address, num: Option<EpochNumber>)
                 -> BoxFuture<SponsorInfo>;
             fn balance(&self, address: Base32Address, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn staking_balance(&self, address: Base32Address, num: Option<EpochNumber>)

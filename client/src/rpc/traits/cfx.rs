@@ -6,14 +6,14 @@ use super::super::types::{
     Account as RpcAccount, Block, Bytes, CallRequest,
     CheckBalanceAgainstTransactionResponse, EpochNumber,
     EstimateGasAndCollateralResponse, Filter as RpcFilter, Log as RpcLog,
-    Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, Status as RpcStatus,
-    TokenSupplyInfo, Transaction,
+    Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, SponsorInfo,
+    Status as RpcStatus, TokenSupplyInfo, Transaction,
 };
 use crate::rpc::types::{Address as Base32Address, BlockHashOrEpochNumber};
-use cfx_types::{H160, H256, U256, U64};
+use cfx_types::{H256, U256, U64};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
 use jsonrpc_derive::rpc;
-use primitives::{DepositInfo, SponsorInfo, StorageRoot, VoteStakeInfo};
+use primitives::{DepositInfo, StorageRoot, VoteStakeInfo};
 
 /// Cfx rpc interface.
 #[rpc(server)]
@@ -59,7 +59,7 @@ pub trait Cfx {
     /// Returns sponsor information of the given contract
     #[rpc(name = "cfx_getSponsorInfo")]
     fn sponsor_info(
-        &self, addr: H160, epoch_number: Option<EpochNumber>,
+        &self, addr: Base32Address, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<SponsorInfo>;
 
     /// Returns balance of the given account.
