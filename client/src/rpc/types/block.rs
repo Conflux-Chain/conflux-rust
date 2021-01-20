@@ -440,7 +440,7 @@ impl Header {
 #[cfg(test)]
 mod tests {
     use super::{Base32Address, Block, BlockTransactions, Header};
-    use crate::rpc::types::{address::force_base32_address, Transaction};
+    use crate::rpc::types::Transaction;
     use cfx_addr::Network;
     use cfx_types::{H256, U256};
     use keccak_hash::KECCAK_EMPTY_LIST_RLP;
@@ -464,8 +464,6 @@ mod tests {
     #[test]
     #[serial] // TODO: remove
     fn test_deserialize_block_transactions() {
-        force_base32_address();
-
         let result_block_transactions =
             BlockTransactions::Hashes(vec![H256::default(), H256::default()]);
         let serialized = r#"["0x0000000000000000000000000000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000000000000000000000000000"]"#;
@@ -515,8 +513,6 @@ mod tests {
     #[test]
     #[serial] // TODO: remove
     fn test_deserialize_block() {
-        force_base32_address();
-
         let serialized = r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"cfx:0000000000000000000000000000000000pe51b8as","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":"0x0","gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"stable":null,"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45","custom":[]}"#;
         let result_block = Block {
             hash: H256::default(),

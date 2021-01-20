@@ -156,7 +156,8 @@ def try_rpc(code, message, fun, *args, **kwds):
 
 def assert_is_hex_string(string):
     try:
-        int(string, 16)
+        if string != "0x":
+            int(string, 16)
     except Exception as e:
         raise AssertionError(
             "Couldn't interpret %r as hexadecimal; raised: %s" % (string, e))
