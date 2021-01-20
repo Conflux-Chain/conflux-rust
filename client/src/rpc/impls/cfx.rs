@@ -3,8 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::{
-    Address as Base32Address, SponsorInfo, TokenSupplyInfo,
-    MAX_GAS_CALL_REQUEST,
+    address::NODE_NETWORK, call_request::rpc_call_request_network,
+    errors::check_rpc_address_network, Address as Base32Address, SponsorInfo,
+    TokenSupplyInfo, MAX_GAS_CALL_REQUEST,
 };
 use blockgen::BlockGenerator;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
@@ -41,7 +42,9 @@ use std::{
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
 use crate::{
-    common::delegate_convert,
+    common::{
+        delegate_convert, known_network_ids::network_id_to_known_cfx_network,
+    },
     rpc::{
         error_codes::{
             call_execution_error, invalid_params,
@@ -99,6 +102,8 @@ impl RpcImpl {
         config: RpcImplConfiguration, accounts: Arc<AccountProvider>,
     ) -> Self
     {
+        *NODE_NETWORK.write() =
+            network_id_to_known_cfx_network(sync.get_network_id());
         RpcImpl {
             consensus,
             sync,
@@ -422,38 +427,22 @@ impl RpcImpl {
         &self, mut tx: SendTxRequest, password: Option<String>,
     ) -> RpcResult<TransactionWithSignature> {
         let consensus_graph = self.consensus_graph();
+        tx.check_rpc_address_network("tx", *NODE_NETWORK.read())?;
 
         if tx.nonce.is_none() {
-            let nonce = consensus_graph
-                .next_nonce(
-                    tx.from.clone().into(),
-                    BlockHashOrEpochNumber::EpochNumber(
-                        EpochNumber::LatestState,
-                    )
+            let nonce = consensus_graph.next_nonce(
+                // FIXME: check transaction input.
+                tx.from.clone().into(),
+                BlockHashOrEpochNumber::EpochNumber(EpochNumber::LatestState)
                     .into_primitive(),
-                )
-                .map_err(|e| {
-                    invalid_params(
-                        "tx",
-                        format!("failed to send transaction: {:?}", e),
-                    )
-                })?;
+            )?;
             tx.nonce.replace(nonce.into());
             debug!("after loading nonce in latest state, tx = {:?}", tx);
         }
 
         let epoch_height = consensus_graph.best_epoch_number();
         let chain_id = consensus_graph.best_chain_id();
-        let tx = tx
-            .sign_with(epoch_height, chain_id, password, self.accounts.clone())
-            .map_err(|e| {
-                invalid_params(
-                    "tx",
-                    format!("failed to send transaction: {:?}", e),
-                )
-            })?;
-
-        Ok(tx)
+        tx.sign_with(epoch_height, chain_id, password, self.accounts.clone())
     }
 
     fn send_transaction(
@@ -1045,12 +1034,27 @@ impl RpcImpl {
     fn exec_transaction(
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<ExecutionOutcome> {
+        let rpc_request_network = invalid_params_check(
+            "request",
+            rpc_call_request_network(
+                request.from.as_ref(),
+                request.to.as_ref(),
+            ),
+        )?;
+        invalid_params_check(
+            "request",
+            check_rpc_address_network(
+                rpc_request_network,
+                *NODE_NETWORK.read(),
+            ),
+        )?;
+
         let consensus_graph = self.consensus_graph();
         let epoch = epoch.unwrap_or(EpochNumber::LatestState);
 
         let best_epoch_height = consensus_graph.best_epoch_number();
         let chain_id = consensus_graph.best_chain_id();
-        let signed_tx = sign_call(best_epoch_height, chain_id, request);
+        let signed_tx = sign_call(best_epoch_height, chain_id, request)?;
         trace!("call tx {:?}", signed_tx);
         consensus_graph.call_virtual(&signed_tx, epoch.into())
     }

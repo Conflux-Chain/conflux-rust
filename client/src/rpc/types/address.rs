@@ -7,6 +7,7 @@ use cfx_addr::{
     UserAddress,
 };
 use cfx_types::H160;
+use parking_lot::RwLock;
 use serde::{de, ser, Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     convert::{TryFrom, TryInto},
@@ -15,6 +16,17 @@ use std::{
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Address(UserAddress);
+
+lazy_static! {
+    pub static ref FORCE_BASE32_ADDRESS: RwLock<bool> = RwLock::new(false);
+    pub static ref NODE_NETWORK: RwLock<Network> = RwLock::new(Network::Main);
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct RpcAddress {
+    pub hex_address: H160,
+    pub network: Network,
+}
 
 impl Deref for Address {
     type Target = UserAddress;
@@ -55,6 +67,10 @@ impl TryFrom<&str> for Address {
     }
 }
 
+impl From<RpcAddress> for H160 {
+    fn from(x: RpcAddress) -> Self { x.hex_address }
+}
+
 impl<'a> Deserialize<'a> for Address {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'a> {
@@ -73,6 +89,49 @@ impl Serialize for Address {
     where S: Serializer {
         let addr_str = cfx_addr_encode(
             &self.bytes[..],
+            self.network,
+            EncodingOptions::QrCode,
+        )
+        .map_err(|e| {
+            ser::Error::custom(format!("Failed to encode address: {}", e))
+        })?;
+
+        serializer.serialize_str(&addr_str)
+    }
+}
+
+impl<'a> Deserialize<'a> for RpcAddress {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: Deserializer<'a> {
+        if *FORCE_BASE32_ADDRESS.read() {
+            let s: String = Deserialize::deserialize(deserializer)?;
+
+            let parsed_address = cfx_addr_decode(&s).map_err(|e| {
+                de::Error::custom(format!("Invalid base32 address: {}", e))
+            })?;
+
+            Ok(RpcAddress {
+                hex_address: parsed_address.hex.ok_or_else(|| {
+                    de::Error::custom(
+                        "Invalid base32 address: not a SIZE_160 address.",
+                    )
+                })?,
+                network: parsed_address.network,
+            })
+        } else {
+            Ok(Self {
+                hex_address: Deserialize::deserialize(deserializer)?,
+                network: *NODE_NETWORK.read(),
+            })
+        }
+    }
+}
+
+impl Serialize for RpcAddress {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        let addr_str = cfx_addr_encode(
+            self.hex_address.as_bytes(),
             self.network,
             EncodingOptions::QrCode,
         )

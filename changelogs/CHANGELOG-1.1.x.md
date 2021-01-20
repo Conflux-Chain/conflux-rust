@@ -1,5 +1,8 @@
 # 1.1.1
 
+## Incompatible Changes
+- CIP-37: Conflux to shift to base32 address format. The hex address format similar to Ethereum is deprecated in rpc interactions to full node.
+
 ## Improvements
 
 - Reduce delay in logs pub-sub; now we send logs immediately after they become available.

@@ -585,7 +585,7 @@ impl ConsensusGraph {
         };
         let state = self.get_state_by_epoch_number(epoch_number)?;
 
-        invalid_params_check("address", state.nonce(&address))
+        Ok(state.nonce(&address)?)
     }
 
     fn earliest_epoch_available(&self) -> u64 {

@@ -20,8 +20,8 @@ mod tests;
 use cfx_types::Address;
 use checksum::polymod;
 pub use consts::{AddressType, Network};
-use errors::*;
 pub use errors::DecodingError;
+use errors::*;
 
 const BASE32_CHARS: &str = "0123456789abcdefghijklmnopqrstuvwxyz";
 const EXCLUDE_CHARS: [char; 4] = ['o', 'i', 'l', 'q'];
@@ -53,6 +53,7 @@ lazy_static! {
     }) ();
 }
 
+// FIXME: rename to DecodedAddress.
 /// Struct containing the bytes and metadata of a Conflux address.
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct UserAddress {
