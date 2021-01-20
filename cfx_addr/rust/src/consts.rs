@@ -7,10 +7,8 @@
 
 use super::errors::{DecodingError, EncodingError, OptionError};
 
-use cfx_types::{
-    address_util::{self, AddressUtil},
-    Address,
-};
+use cfx_types::address_util::{self, AddressUtil};
+use std::{fmt, string::ToString};
 
 pub const CHARSET_SIZE: usize = 32;
 
@@ -65,8 +63,20 @@ pub enum AddressType {
     User,
 }
 
+impl fmt::Display for Network {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.to_prefix() {
+            Err(EncodingError::InvalidNetworkId(network_id)) => {
+                write!(f, "invalid network prefix net{}", network_id)
+            }
+            Err(_) => unreachable!(),
+            Ok(prefix) => write!(f, "{}", prefix),
+        }
+    }
+}
+
 impl Network {
-    pub fn to_addr_prefix(&self) -> Result<String, EncodingError> {
+    pub fn to_prefix(&self) -> Result<String, EncodingError> {
         match self {
             Network::Main => Ok(MAINNET_PREFIX.into()),
             Network::Test => Ok(TESTNET_PREFIX.into()),
@@ -80,7 +90,7 @@ impl Network {
         }
     }
 
-    pub fn from_addr_prefix(prefix: &str) -> Result<Self, DecodingError> {
+    pub fn from_prefix(prefix: &str) -> Result<Self, DecodingError> {
         match prefix {
             MAINNET_PREFIX => Ok(Network::Main),
             TESTNET_PREFIX => Ok(Network::Test),
@@ -114,14 +124,19 @@ impl Network {
 }
 
 impl AddressType {
+    const BUILTIN: &'static str = "builtin";
+    const CONTRACT: &'static str = "contract";
+    const NULL: &'static str = "null";
+    const USER: &'static str = "user";
+
     pub fn parse(text: &str) -> Result<Self, DecodingError> {
-        if text == "builtin" {
+        if text == Self::BUILTIN {
             Ok(Self::Builtin)
-        } else if text == "contract" {
+        } else if text == Self::CONTRACT {
             Ok(Self::Contract)
-        } else if text == "null" {
+        } else if text == Self::NULL {
             Ok(Self::Null)
-        } else if text == "user" {
+        } else if text == Self::USER {
             Ok(Self::User)
         } else {
             Err(DecodingError::InvalidOption(
@@ -130,7 +145,9 @@ impl AddressType {
         }
     }
 
-    pub fn from_address(address_hex: &Address) -> Result<Self, EncodingError> {
+    pub fn from_address<T: AddressUtil>(
+        address_hex: &T,
+    ) -> Result<Self, EncodingError> {
         match address_hex.address_type_bits() {
             address_util::TYPE_BITS_BUILTIN => {
                 if address_hex.is_null_address() {
@@ -141,7 +158,20 @@ impl AddressType {
             }
             address_util::TYPE_BITS_CONTRACT => Ok(Self::Contract),
             address_util::TYPE_BITS_USER_ACCOUNT => Ok(Self::User),
-            n @ _ => Err(EncodingError::InvalidAddressType(n)),
+            n => Err(EncodingError::InvalidAddressType(n)),
         }
     }
+
+    pub fn to_str(&self) -> &'static str {
+        match self {
+            Self::Builtin => Self::BUILTIN,
+            Self::Contract => Self::CONTRACT,
+            Self::Null => Self::NULL,
+            Self::User => Self::USER,
+        }
+    }
+}
+
+impl ToString for AddressType {
+    fn to_string(&self) -> String { self.to_str().into() }
 }

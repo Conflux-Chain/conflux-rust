@@ -2,15 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::Bytes;
-use cfx_types::{H160, H256, U256};
+use crate::rpc::types::{Address as Base32Address, Bytes};
+use cfx_addr::Network;
+use cfx_types::{H256, U256};
 use primitives::log_entry::{LocalizedLogEntry, LogEntry};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Log {
     /// Address
-    pub address: H160,
+    pub address: Base32Address,
 
     /// Topics
     pub topics: Vec<H256>,
@@ -43,10 +44,12 @@ pub struct Log {
     pub transaction_log_index: Option<U256>,
 }
 
-impl From<LocalizedLogEntry> for Log {
-    fn from(e: LocalizedLogEntry) -> Log {
-        Log {
-            address: e.entry.address.into(),
+impl Log {
+    pub fn try_from_localized(
+        e: LocalizedLogEntry, network: Network,
+    ) -> Result<Log, String> {
+        Ok(Log {
+            address: Base32Address::try_from_h160(e.entry.address, network)?,
             topics: e.entry.topics.into_iter().map(Into::into).collect(),
             data: e.entry.data.into(),
             block_hash: Some(e.block_hash.into()),
@@ -55,14 +58,12 @@ impl From<LocalizedLogEntry> for Log {
             transaction_index: Some(e.transaction_index.into()),
             log_index: Some(e.log_index.into()),
             transaction_log_index: Some(e.transaction_log_index.into()),
-        }
+        })
     }
-}
 
-impl From<LogEntry> for Log {
-    fn from(e: LogEntry) -> Log {
-        Log {
-            address: e.address.into(),
+    pub fn try_from(e: LogEntry, network: Network) -> Result<Log, String> {
+        Ok(Log {
+            address: Base32Address::try_from_h160(e.address, network)?,
             topics: e.topics.into_iter().map(Into::into).collect(),
             data: e.data.into(),
             block_hash: None,
@@ -71,23 +72,23 @@ impl From<LogEntry> for Log {
             transaction_index: None,
             log_index: None,
             transaction_log_index: None,
-        }
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::rpc::types::Log;
-    use cfx_types::{H160, H256, U256};
+    use cfx_types::{H256, U256};
     use serde_json;
-    use std::str::FromStr;
+    use std::{convert::TryInto, str::FromStr};
 
     #[test]
     fn log_serialization() {
-        let s = r#"{"address":"0x33990122638b9132ca29c723bdf037f1a891a70c","topics":["0xa6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc","0x4861736852656700000000000000000000000000000000000000000000000000"],"data":"0x","blockHash":"0xed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5","epochNumber":"0x4510c","transactionHash":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionIndex":"0x0","logIndex":"0x1","transactionLogIndex":"0x1"}"#;
+        let s = r#"{"address":"CFXTEST:TYPE.USER:00CWEGPESGNTWKRZ7E2CVVEDWBUSMDRM9W7KY3YE3R","topics":["0xa6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc","0x4861736852656700000000000000000000000000000000000000000000000000"],"data":"0x","blockHash":"0xed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5","epochNumber":"0x4510c","transactionHash":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionIndex":"0x0","logIndex":"0x1","transactionLogIndex":"0x1"}"#;
 
         let log = Log {
-            address: H160::from_str("33990122638b9132ca29c723bdf037f1a891a70c").unwrap(),
+            address: "cfxtest:00cwegpesgntwkrz7e2cvvedwbusmdrm9w7ky3ye3r".try_into().unwrap(),
             topics: vec![
                 H256::from_str("a6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc").unwrap(),
                 H256::from_str("4861736852656700000000000000000000000000000000000000000000000000").unwrap(),

@@ -90,7 +90,9 @@ fn encoding_errors() {
         .from_hex::<Vec<u8>>()
         .unwrap();
 
-    assert!(cfx_addr_encode(&data, Network::Main).is_err());
+    assert!(
+        cfx_addr_encode(&data, Network::Main, EncodingOptions::Simple).is_err()
+    );
 }
 
 #[test]
@@ -263,10 +265,11 @@ fn bch_tests() {
 
 fn verify(network: Network, data: &str, base32addr: &str) {
     let data: Vec<u8> = data.from_hex().unwrap();
-    let output = cfx_addr_encode(&data, network).unwrap();
+    let output =
+        cfx_addr_encode(&data, network, EncodingOptions::Simple).unwrap();
     assert_eq!(output, base32addr);
 
     let decoded = cfx_addr_decode(base32addr).unwrap();
-    assert_eq!(decoded.body, data, "decoded address mismatch");
+    assert_eq!(decoded.bytes, data, "decoded address mismatch");
     assert_eq!(decoded.network, network, "decoded network mismatch");
 }

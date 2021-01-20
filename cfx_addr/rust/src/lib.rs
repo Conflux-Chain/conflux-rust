@@ -20,6 +20,7 @@ mod tests;
 use cfx_types::Address;
 use checksum::polymod;
 pub use consts::{AddressType, Network};
+pub use errors::DecodingError;
 use errors::*;
 
 const BASE32_CHARS: &str = "0123456789abcdefghijklmnopqrstuvwxyz";
@@ -52,20 +53,29 @@ lazy_static! {
     }) ();
 }
 
+// FIXME: rename to DecodedAddress.
 /// Struct containing the bytes and metadata of a Conflux address.
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct UserAddress {
+    /// Base32 address
+    pub base32: String,
     /// Address bytes
-    pub body: Vec<u8>,
+    pub bytes: Vec<u8>,
     /// The parsed address in H160 format.
-    pub hex_address: Option<Address>,
+    pub hex: Option<Address>,
     /// Network
     pub network: Network,
 }
 
+#[derive(Copy, Clone)]
+pub enum EncodingOptions {
+    Simple,
+    QrCode,
+}
+
 // TODO: verbose level and address type.
 pub fn cfx_addr_encode(
-    raw: &[u8], network: Network,
+    raw: &[u8], network: Network, encoding_options: EncodingOptions,
 ) -> Result<String, EncodingError> {
     // Calculate version byte
     let length = raw.len();
@@ -84,7 +94,7 @@ pub fn cfx_addr_encode(
     };
 
     // Get prefix
-    let prefix = network.to_addr_prefix()?;
+    let prefix = network.to_prefix()?;
 
     // Convert payload to 5 bit array
     let mut payload = Vec::with_capacity(1 + raw.len());
@@ -112,8 +122,25 @@ pub fn cfx_addr_encode(
         .collect();
 
     // Concatenate all parts
-    let cashaddr = [&prefix, ":", &payload_str, &checksum_str].concat();
-    Ok(cashaddr)
+    let cfx_base32_addr = match encoding_options {
+        EncodingOptions::Simple => {
+            [&prefix, ":", &payload_str, &checksum_str].concat()
+        }
+        EncodingOptions::QrCode => {
+            let addr_type_str = AddressType::from_address(&raw)?.to_str();
+            [
+                &prefix,
+                ":type.",
+                addr_type_str,
+                ":",
+                &payload_str,
+                &checksum_str,
+            ]
+            .concat()
+            .to_uppercase()
+        }
+    };
+    Ok(cfx_base32_addr)
 }
 
 pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
@@ -132,7 +159,7 @@ pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
     }
     let prefix = parts[0];
     // Match network
-    let network = Network::from_addr_prefix(prefix)?;
+    let network = Network::from_prefix(prefix)?;
 
     let mut address_type = None;
     // Parse optional parts. We will ignore everything we can't understand.
@@ -161,7 +188,7 @@ pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
     }
 
     // Decode payload to 5 bit array
-    let payload_chars = payload_str.chars(); // Reintialize iterator here
+    let payload_chars = payload_str.chars();
     let payload_5_bits: Result<Vec<u8>, DecodingError> = payload_chars
         .map(|c| {
             let i = c as usize;
@@ -236,8 +263,9 @@ pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
     }
 
     Ok(UserAddress {
-        body: body.to_vec(),
-        hex_address,
+        base32: addr_str.to_lowercase(),
+        bytes: body.to_vec(),
+        hex: hex_address,
         network,
     })
 }

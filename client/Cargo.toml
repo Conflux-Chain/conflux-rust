@@ -73,6 +73,7 @@ cfx-parameters = { path = "../core/parameters" }
 criterion = "0.2"
 cfx-parameters = { path = "../core/parameters" }
 cfxcore = { path = "../core", features = ["testonly_code"] }
+serial_test = "0.5.1"
 
 [features]
 # Unfortunately cfg test attributes doesn't work across crates,
