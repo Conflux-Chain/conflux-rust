@@ -23,7 +23,7 @@ from test_framework.util import (
 
 
 def convert_b32_address_field_to_hex(original_dict: dict, field_name: str):
-    if field_name in original_dict and original_dict[field_name] not in [None, "null"]:
+    if original_dict is not None and field_name in original_dict and original_dict[field_name] not in [None, "null"]:
         original_dict[field_name] = b32_address_to_hex(original_dict[field_name])
 
 

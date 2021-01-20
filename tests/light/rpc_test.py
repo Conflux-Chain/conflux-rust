@@ -440,7 +440,7 @@ class LightRPCTest(ConfluxTestFramework):
 
         # median of all (10) txs from the last 30 blocks
         # NOTE: full node samples more blocks so the result might be different
-        assert_equal(light, '0x1')
+        assert_equal(light, 1)
 
         self.log.info(f"Pass -- cfx_gasPrice")
 
