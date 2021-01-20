@@ -879,11 +879,12 @@ impl RpcImpl {
                 if let Some(block_header) =
                     self.consensus.get_data_manager().block_header_by_hash(&b)
                 {
-                    ret.push(RpcRewardInfo::new(
-                        b,
-                        block_header.author().clone(),
-                        reward_result,
-                    ));
+                    let author = Base32Address::try_from_h160(
+                        *block_header.author(),
+                        *NODE_NETWORK.read(),
+                    )?;
+
+                    ret.push(RpcRewardInfo::new(b, author, reward_result));
                 }
             }
         }
