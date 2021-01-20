@@ -130,6 +130,8 @@ class RpcClient:
 
     def get_logs(self, filter: Filter) -> list:
         logs = self.node.cfx_getLogs(filter.__dict__)
+        for log in logs:
+            convert_b32_address_field_to_hex(log, "address")
         return logs
 
     def get_storage_at(self, addr: str, pos: str, epoch: str = None) -> str:
@@ -240,9 +242,10 @@ class RpcClient:
     def get_admin(self, addr: str, epoch: str = None) -> str:
         addr = hex_to_b32_address(addr)
         if epoch is None:
-            return self.node.cfx_getAdmin(addr)
+            r = self.node.cfx_getAdmin(addr)
         else:
-            return self.node.cfx_getAdmin(addr, epoch)
+            r = self.node.cfx_getAdmin(addr, epoch)
+        return b32_address_to_hex(r)
 
     ''' Ignore block_hash if epoch is not None '''
     def get_nonce(self, addr: str, epoch: str = None, block_hash: str = None) -> int:

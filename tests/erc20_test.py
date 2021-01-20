@@ -83,7 +83,7 @@ class P2PTest(ConfluxTestFramework):
 
     def get_balance(self, contract, token_address):
         tx = contract.functions.balanceOf(Web3.toChecksumAddress(encode_hex(token_address))).buildTransaction(self.tx_conf)
-        result = self.client.call(contract.address, tx["data"])
+        result = self.client.call(tx["to"], tx["data"])
         balance = bytes_to_int(decode_hex(result))
         self.log.debug("address=%s, balance=%s", encode_hex(token_address), balance)
         return balance
