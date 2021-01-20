@@ -18,7 +18,7 @@ use std::{
 pub struct Address(pub UserAddress);
 
 lazy_static! {
-    pub static ref FORCE_BASE32_ADDRESS: RwLock<bool> = RwLock::new(false);
+    pub static ref FORCE_BASE32_ADDRESS: RwLock<bool> = RwLock::new(true);
     pub static ref NODE_NETWORK: RwLock<Network> = RwLock::new(Network::Main);
 }
 

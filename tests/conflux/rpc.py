@@ -23,7 +23,8 @@ from test_framework.util import (
 
 
 def convert_b32_address_field_to_hex(original_dict: dict, field_name: str):
-    original_dict[field_name] = b32_address_to_hex(original_dict[field_name])
+    if field_name in original_dict and original_dict[field_name] != "null":
+        original_dict[field_name] = b32_address_to_hex(original_dict[field_name])
 
 
 class RpcClient:
@@ -247,8 +248,6 @@ class RpcClient:
     ''' Ignore block_hash if epoch is not None '''
     def get_nonce(self, addr: str, epoch: str = None, block_hash: str = None) -> int:
         addr = hex_to_b32_address(addr)
-        if addr[:2] != "0x":
-            addr = "0x" + addr
         if epoch is None and block_hash is None:
             return int(self.node.cfx_getNextNonce(addr), 0)
         elif epoch is None:
@@ -374,7 +373,8 @@ class RpcClient:
 
     def get_transaction_receipt(self, tx_hash: str) -> dict:
         assert_is_hash_string(tx_hash)
-        return self.node.cfx_getTransactionReceipt(tx_hash)
+        r = self.node.cfx_getTransactionReceipt(tx_hash)
+        convert_b32_address_field_to_hex(r, "contractCreated")
 
     def txpool_status(self) -> (int, int):
         status = self.node.txpool_status()
@@ -458,8 +458,6 @@ class RpcClient:
     def get_transaction_by_hash(self, tx_hash: str):
         tx = self.node.cfx_getTransactionByHash(tx_hash)
         convert_b32_address_field_to_hex(tx, "from")
-        if tx["to"] != "null":
-            convert_b32_address_field_to_hex(tx, "to")
-        if tx["contractCreated"] != "null":
-            convert_b32_address_field_to_hex(tx, "contractCreated")
+        convert_b32_address_field_to_hex(tx, "to")
+        convert_b32_address_field_to_hex(tx, "contractCreated")
         return tx
