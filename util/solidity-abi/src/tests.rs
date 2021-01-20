@@ -4,9 +4,8 @@
 
 use super::{ABIDecodable, ABIDecodeError, ABIEncodable};
 use cfx_types::{Address, U256};
-use hex;
 use lazy_static;
-use parity_bytes::ToPretty;
+use rustc_hex::{FromHex, ToHex};
 use std::str::FromStr;
 
 lazy_static! {
@@ -21,7 +20,7 @@ fn test_address() {
     let addr: Address = ADDR1.clone();
     let mut encoded = addr.abi_encode();
     assert_eq!(
-        encoded.to_hex(),
+        encoded.to_hex::<String>(),
         "000000000000000000000000176c45928d7c26b0175dec8bf6051108563c62c5"
     );
     assert_eq!(Address::abi_decode(encoded.as_slice()).unwrap(), addr);
@@ -48,7 +47,7 @@ fn test_u256() {
     let integer: U256 = U256::from(33);
     let mut encoded = integer.abi_encode();
     assert_eq!(
-        encoded.to_hex(),
+        encoded.to_hex::<String>(),
         "0000000000000000000000000000000000000000000000000000000000000021"
     );
     assert_eq!(U256::abi_decode(encoded.as_slice()).unwrap(), integer);
@@ -68,11 +67,11 @@ fn test_u256() {
 #[test]
 fn test_bool() {
     assert_eq!(
-        true.abi_encode().to_hex(),
+        true.abi_encode().to_hex::<String>(),
         "0000000000000000000000000000000000000000000000000000000000000001"
     );
     assert_eq!(
-        false.abi_encode().to_hex(),
+        false.abi_encode().to_hex::<String>(),
         "0000000000000000000000000000000000000000000000000000000000000000"
     );
     // The Solidity ABIEncoder V1 ignores padding zeros.
@@ -85,7 +84,7 @@ fn test_static_tuple() {
     let amt: U256 = U256::from(33);
     let encoded = (addr, amt).abi_encode();
     assert_eq!(
-        encoded.to_hex(),
+        encoded.to_hex::<String>(),
         "000000000000000000000000176c45928d7c26b0175dec8bf6051108563c62c5\
          0000000000000000000000000000000000000000000000000000000000000021"
     );
@@ -100,7 +99,7 @@ fn test_vector() {
     let addresses: Vec<Address> = vec![ADDR1.clone(), ADDR2.clone()];
     let encoded = addresses.abi_encode();
     assert_eq!(
-        encoded.to_hex(),
+        encoded.to_hex::<String>(),
         "0000000000000000000000000000000000000000000000000000000000000020\
          0000000000000000000000000000000000000000000000000000000000000002\
          000000000000000000000000176c45928d7c26b0175dec8bf6051108563c62c5\
@@ -118,7 +117,7 @@ fn test_vector_in_tuple() {
     let amt: U256 = U256::from(33);
     let encoded = (amt, addresses.clone()).abi_encode();
     assert_eq!(
-        encoded.to_hex(),
+        encoded.to_hex::<String>(),
         "0000000000000000000000000000000000000000000000000000000000000021\
          0000000000000000000000000000000000000000000000000000000000000040\
          0000000000000000000000000000000000000000000000000000000000000002\
@@ -132,7 +131,7 @@ fn test_vector_in_tuple() {
 
     let encoded = (addresses.clone(), amt).abi_encode();
     assert_eq!(
-        encoded.to_hex(),
+        encoded.to_hex::<String>(),
         "0000000000000000000000000000000000000000000000000000000000000040\
          0000000000000000000000000000000000000000000000000000000000000021\
          0000000000000000000000000000000000000000000000000000000000000002\
@@ -153,7 +152,7 @@ fn test_vector_in_vector() {
     ];
     let encoded = data.abi_encode();
     assert_eq!(
-        encoded.to_hex(),
+        encoded.to_hex::<String>(),
         "0000000000000000000000000000000000000000000000000000000000000020\
          0000000000000000000000000000000000000000000000000000000000000002\
          0000000000000000000000000000000000000000000000000000000000000040\
@@ -186,7 +185,7 @@ fn test_strange_input() {
          0000000000000000000000000000000000000000000000000000000000000002\
          0000000000000000000000000000000000000000000000000000000000000003\
          0000000000000000000000000000000000000000000000000000000000000004";
-    let encoded = hex::decode(input_hex).unwrap();
+    let encoded = input_hex.from_hex::<Vec<u8>>().unwrap();
     let output = (
         vec![U256::from(1), U256::from(2)],
         vec![U256::from(3), U256::from(4)],
@@ -202,7 +201,7 @@ fn test_string() {
     let msg: String = "abi test".to_string();
     let encoded = msg.abi_encode();
     assert_eq!(
-        encoded.to_hex(),
+        encoded.to_hex::<String>(),
         "0000000000000000000000000000000000000000000000000000000000000020\
          0000000000000000000000000000000000000000000000000000000000000008\
          6162692074657374000000000000000000000000000000000000000000000000"
@@ -215,7 +214,7 @@ fn test_string_utf8() {
     let msg: String = "中文测试".to_string();
     let encoded = msg.abi_encode();
     assert_eq!(
-        encoded.to_hex(),
+        encoded.to_hex::<String>(),
         "0000000000000000000000000000000000000000000000000000000000000020\
          000000000000000000000000000000000000000000000000000000000000000c\
          e4b8ade69687e6b58be8af950000000000000000000000000000000000000000"
@@ -228,7 +227,7 @@ fn test_long_string() {
     let msg: String = "0123456789abcdef0123456789abcdef".to_string();
     let encoded = msg.abi_encode();
     assert_eq!(
-        encoded.to_hex(),
+        encoded.to_hex::<String>(),
         "0000000000000000000000000000000000000000000000000000000000000020\
          0000000000000000000000000000000000000000000000000000000000000020\
          3031323334353637383961626364656630313233343536373839616263646566"
@@ -238,7 +237,7 @@ fn test_long_string() {
     let msg: String = "0123456789abcdef0123456789abcdef0".to_string();
     let encoded = msg.abi_encode();
     assert_eq!(
-        encoded.to_hex(),
+        encoded.to_hex::<String>(),
         "0000000000000000000000000000000000000000000000000000000000000020\
          0000000000000000000000000000000000000000000000000000000000000021\
          3031323334353637383961626364656630313233343536373839616263646566\

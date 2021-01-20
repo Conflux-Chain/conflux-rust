@@ -259,7 +259,11 @@ impl TrieProof {
     #[inline]
     pub fn number_leaf_nodes(&self) -> u32 { self.number_leaf_nodes }
 
+    #[inline]
     pub fn get_proof_nodes(&self) -> &Vec<TrieProofNode> { &self.nodes }
+
+    #[inline]
+    pub fn into_proof_nodes(self) -> Vec<TrieProofNode> { self.nodes }
 
     /// Returns the (snapshot_mpt_key, child_index, trie_node) along the proof
     /// path of key.

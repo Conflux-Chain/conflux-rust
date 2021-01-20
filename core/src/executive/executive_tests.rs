@@ -327,7 +327,7 @@ fn test_call_to_create() {
     // 60 00 - push 0
     // f3 - return
 
-    let code = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
+    let code: Vec<u8> = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
     let code_len = code.len();
 
     let sender =
@@ -420,8 +420,8 @@ fn test_revert() {
     let sender =
         Address::from_str("1f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
 
-    let code = "6c726576657274656420646174616000557f726576657274206d657373616765000000000000000000000000000000000000600052600e6000fd".from_hex().unwrap();
-    let returns = "726576657274206d657373616765".from_hex().unwrap();
+    let code: Vec<u8> = "6c726576657274656420646174616000557f726576657274206d657373616765000000000000000000000000000000000000600052600e6000fd".from_hex().unwrap();
+    let returns: Vec<u8> = "726576657274206d657373616765".from_hex().unwrap();
 
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write_with_factory(
@@ -1023,7 +1023,7 @@ fn test_deposit_withdraw_lock() {
 #[test]
 fn test_commission_privilege_all_whitelisted_across_epochs() {
     let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-    let code = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
+    let code: Vec<u8> = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
 
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write_with_factory(

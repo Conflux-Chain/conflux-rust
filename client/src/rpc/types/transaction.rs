@@ -4,14 +4,12 @@
 
 use crate::rpc::types::{receipt::Receipt, Bytes};
 use cfx_types::{H160, H256, U256, U64};
-use cfxcore_accounts::AccountProvider;
-use cfxkey::{Error, Password};
+use cfxkey::Error;
 use primitives::{
     transaction::Action, SignedTransaction,
     Transaction as PrimitiveTransaction, TransactionIndex,
     TransactionWithSignature, TransactionWithSignatureSerializePart,
 };
-use std::sync::Arc;
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -120,55 +118,6 @@ impl Transaction {
         };
         let public = tx_with_sig.recover_public()?;
         Ok(SignedTransaction::new(public, tx_with_sig))
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SendTxRequest {
-    pub from: H160,
-    pub to: Option<H160>,
-    pub gas: U256,
-    pub gas_price: U256,
-    pub value: U256,
-    pub data: Option<Bytes>,
-    pub nonce: Option<U256>,
-    pub storage_limit: Option<U256>,
-    pub chain_id: Option<U256>,
-    pub epoch_height: Option<U256>,
-}
-
-impl SendTxRequest {
-    pub fn sign_with(
-        self, best_epoch_height: u64, chain_id: u32, password: Option<String>,
-        accounts: Arc<AccountProvider>,
-    ) -> Result<TransactionWithSignature, String>
-    {
-        let tx = PrimitiveTransaction {
-            nonce: self.nonce.unwrap_or_default().into(),
-            gas_price: self.gas_price.into(),
-            gas: self.gas.into(),
-            action: match self.to {
-                None => Action::Create,
-                Some(address) => Action::Call(address.into()),
-            },
-            value: self.value.into(),
-            storage_limit: self.storage_limit.unwrap_or_default().as_usize()
-                as u64,
-            epoch_height: self
-                .epoch_height
-                .unwrap_or(best_epoch_height.into())
-                .as_usize() as u64,
-            chain_id: self.chain_id.unwrap_or(chain_id.into()).as_u32(),
-            data: self.data.unwrap_or(Bytes::new(vec![])).into(),
-        };
-
-        let password = password.map(Password::from);
-        let sig = accounts
-            .sign(self.from.into(), password, tx.hash())
-            .map_err(|e| format!("failed to sign transaction: {:?}", e))?;
-
-        Ok(tx.with_signature(sig))
     }
 }
 

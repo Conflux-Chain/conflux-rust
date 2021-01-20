@@ -35,6 +35,7 @@ error-chain = { version = "0.12" }
 lazy_static = "1.4"
 log = "0.4"
 cfx-types = { path = "../cfx_types" }
+cfx-addr = { path = "../cfx_addr/rust" }
 cfx-bytes = { path = "../cfx_bytes" }
 runtime = { path = "../util/runtime" }
 slab = "0.4"
@@ -51,7 +52,7 @@ keccak-hash = "0.5"
 rand = "0.7.2"
 kvdb-rocksdb = {path="../db/src/kvdb-rocksdb"}
 tempdir = "0.3"
-rustc-hex= "1.0"
+rustc-hex = "2.1"
 threadpool = "1.0"
 metrics = { path = "../util/metrics" }
 delegate = { path = "../util/delegate" }
