@@ -26,7 +26,7 @@ use cfx_internal_common::{
 };
 use cfx_parameters::{consensus::*, consensus_internal::*};
 use cfx_types::{H256, U256, U512};
-use dag::{Graph, RichDAG, RichTreeGraph, TreeGraph, DAG};
+use dag::{topological_sort, Graph, RichDAG, RichTreeGraph, TreeGraph, DAG};
 use hashbrown::HashMap as FastHashMap;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use link_cut_tree::{CaterpillarMinLinkCutTree, SizeMinLinkCutTree};
@@ -951,10 +951,9 @@ impl ConsensusGraphInner {
         }
 
         self.arena[pivot].data.ordered_executable_epoch_blocks = self
-            .topological_sort_with_order_indicator(
-                &filtered_blockset.into_iter().collect(),
-                |i| self.arena[i].hash,
-            );
+            .topological_sort_with_order_indicator(&filtered_blockset, |i| {
+                self.arena[i].hash
+            });
         self.arena[pivot]
             .data
             .ordered_executable_epoch_blocks
@@ -3084,12 +3083,18 @@ impl ConsensusGraphInner {
             } else {
                 self.timer_chain[fork_at_index - 1]
             };
-            let visited = self.get_future(&vec![start_point], |i| {
-                anticone.contains(i as u32)
-            });
-            let visited_in_order =
-                self.topological_sort(&visited.into_iter().collect());
+            let mut start_set = BitSet::new
+            let visited: BitSet = self
+                .get_future_with_stop_condition(vec![start_point], |i| {
+                    anticone.contains(i as u32)
+                });
+            let visited_in_order: Vec<u32> = topological_sort(
+                &visited,
+                |i| self.prev_edges(i as usize).into(),
+                |_| true,
+            );
             for x in visited_in_order {
+                let x = x as usize;
                 let mut timer_chain_height = 0;
                 for pred in &self.prev_edges(x) {
                     let mut height = if let Some(v) = res.get(pred) {

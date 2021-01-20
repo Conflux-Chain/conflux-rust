@@ -29,6 +29,7 @@ use primitives::{
     transaction::SignedTransaction, Block, BlockHeader, EpochNumber,
 };
 use slab::Slab;
+use static_assertions::_core::hash::Hash;
 use std::{
     cmp::max,
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
@@ -921,7 +922,7 @@ impl SynchronizationGraphInner {
             // again
             self.data_man.invalidate_block(hash);
         }
-        self.remove_blocks(invalid_set);
+        self.remove_blocks(&invalid_set);
     }
 
     fn remove_blocks(&mut self, to_remove_set: &HashSet<usize>) {
@@ -2100,13 +2101,8 @@ impl SynchronizationGraph {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        let frontier = inner
-            .not_ready_blocks_frontier
-            .get_frontier()
-            .iter()
-            .cloned()
-            .collect();
-        let all_not_ready = inner.get_future(&frontier, |_| false);
+        let frontier = inner.not_ready_blocks_frontier.get_frontier().clone();
+        let all_not_ready: HashSet<_> = inner.get_future(frontier);
         let mut expire_set = HashSet::new();
         for index in all_not_ready {
             if inner.arena[index].last_update_timestamp + expire_time < now {
@@ -2115,8 +2111,7 @@ impl SynchronizationGraph {
         }
 
         // find blocks reached by previous found expired blocks
-        let all_expire =
-            inner.get_future(&expire_set.into_iter().collect(), |_| false);
+        let all_expire: HashSet<_> = inner.get_future(expire_set);
         debug!("all_expire: {:?}", all_expire);
         inner.remove_blocks(&all_expire);
     }
@@ -2131,7 +2126,7 @@ impl SynchronizationGraph {
                 index_set.push(*index);
             }
         }
-        let index_set_and_future = inner.get_future(&index_set, |_| false);
+        let index_set_and_future: HashSet<_> = inner.get_future(index_set);
         inner.remove_blocks(&index_set_and_future);
     }
 

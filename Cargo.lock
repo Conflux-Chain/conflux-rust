@@ -1163,6 +1163,9 @@ dependencies = [
 [[package]]
 name = "dag"
 version = "0.1.0"
+dependencies = [
+ "hibitset",
+]
 
 [[package]]
 name = "db"

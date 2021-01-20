@@ -1,3 +1,4 @@
+use hibitset::BitSet;
 use std::{
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     hash::Hash,
@@ -6,18 +7,20 @@ use std::{
 /// Topologically sort `index_set` and return a sorted `Vec`.
 /// For the nodes without order-before relationship, the ones with smaller
 /// `order_indicator` output will be ordered first.
-fn topological_sort<NodeIndex, F, OrderIndicator, FOrd>(
-    index_set: &Vec<NodeIndex>, prev_edges: F, order_indicator: FOrd,
+pub fn topological_sort<'a, NodeIndex, F, OrderIndicator, FOrd, Set>(
+    index_set: &'a Set, prev_edges: F, order_indicator: FOrd,
 ) -> Vec<NodeIndex>
 where
-    NodeIndex: Copy + Hash + Eq + PartialEq + Ord,
+    NodeIndex: 'a + Copy + Hash + Eq + PartialEq + Ord,
     F: Fn(NodeIndex) -> Vec<NodeIndex>,
     OrderIndicator: Ord,
     FOrd: Fn(NodeIndex) -> OrderIndicator,
+    Set: 'a + SetLike<NodeIndex> + Default,
+    &'a Set: IntoIterator<Item = &'a NodeIndex>,
 {
     let mut num_next_edges = HashMap::new();
 
-    for me in index_set {
+    for me in index_set.into_iter() {
         num_next_edges.entry(*me).or_insert(0);
         for prev in &prev_edges(*me) {
             if index_set.contains(prev) {
@@ -29,7 +32,7 @@ where
     let mut candidates = BinaryHeap::new();
     let mut reversed_indices = Vec::new();
 
-    for me in index_set {
+    for me in index_set.into_iter() {
         if num_next_edges[me] == 0 {
             candidates.push((order_indicator(*me), *me));
         }
@@ -50,20 +53,23 @@ where
     reversed_indices
 }
 
-// TODO: Support BitSet?
-fn get_future<NodeIndex, F, FStop>(
-    index_set: &Vec<NodeIndex>, next_edges: F, stop_condition: FStop,
-) -> HashSet<NodeIndex>
+// TODO: Ideally I want to allow `Iter: for<'a> Iterator<Item = &'a NodeIndex>`,
+// but this is not allowed for associated types because of https://github.com/rust-lang/rust/issues/49601.
+fn get_future<NodeIndex, F, FStop, Set, Iter>(
+    index_set: Iter, next_edges: F, stop_condition: FStop,
+) -> Set
 where
     NodeIndex: Copy + Hash + Eq + PartialEq + Ord,
     F: Fn(NodeIndex) -> Vec<NodeIndex>,
     FStop: Fn(NodeIndex) -> bool,
+    Set: SetLike<NodeIndex> + Default,
+    Iter: Iterator<Item = NodeIndex>,
 {
     let mut queue = VecDeque::new();
-    let mut visited = HashSet::new();
+    let mut visited = Set::default();
     for i in index_set {
-        visited.insert(*i);
-        queue.push_back(*i);
+        visited.insert(i);
+        queue.push_back(i);
     }
     // TODO: Implement future.
     while let Some(x) = queue.pop_front() {
@@ -81,26 +87,32 @@ where
 }
 
 pub trait Graph {
-    type NodeIndex: Copy + Hash + Eq + PartialEq + Ord;
+    type NodeIndex: 'static + Copy + Hash + Eq + PartialEq + Ord;
 }
 
 // TODO: Decide if returning Iterator is better than returning `Vec`?
 pub trait DAG: Graph {
     fn prev_edges(&self, node_index: Self::NodeIndex) -> Vec<Self::NodeIndex>;
 
-    fn topological_sort_with_order_indicator<OrderIndicator, FOrd>(
-        &self, index_set: &Vec<Self::NodeIndex>, order_indicator: FOrd,
+    fn topological_sort_with_order_indicator<'a, OrderIndicator, FOrd, Set>(
+        &self, index_set: &'a Set, order_indicator: FOrd,
     ) -> Vec<Self::NodeIndex>
     where
         OrderIndicator: Ord,
         FOrd: Fn(Self::NodeIndex) -> OrderIndicator,
+        Set: 'a + SetLike<Self::NodeIndex> + Default,
+        &'a Set: IntoIterator<Item = &'a Self::NodeIndex>,
     {
         topological_sort(&index_set, |i| self.prev_edges(i), order_indicator)
     }
 
-    fn topological_sort(
-        &self, index_set: &Vec<Self::NodeIndex>,
-    ) -> Vec<Self::NodeIndex> {
+    fn topological_sort<'a, Set>(
+        &self, index_set: &'a Set,
+    ) -> Vec<Self::NodeIndex>
+    where
+        Set: 'a + SetLike<Self::NodeIndex> + Default,
+        &'a Set: IntoIterator<Item = &'a Self::NodeIndex>,
+    {
         // Any topological order will work, so just return a constant for
         // `order_indicator`.
         self.topological_sort_with_order_indicator(index_set, |_| true)
@@ -110,11 +122,23 @@ pub trait DAG: Graph {
 pub trait RichDAG: DAG {
     fn next_edges(&self, node_index: Self::NodeIndex) -> Vec<Self::NodeIndex>;
 
-    fn get_future<FStop>(
-        &self, index_set: &Vec<Self::NodeIndex>, stop_condition: FStop,
-    ) -> HashSet<Self::NodeIndex>
-    where FStop: Fn(Self::NodeIndex) -> bool {
+    fn get_future_with_stop_condition<FStop, Set, Iter>(
+        &self, index_set: Iter, stop_condition: FStop,
+    ) -> Set
+    where
+        FStop: Fn(Self::NodeIndex) -> bool,
+        Set: SetLike<Self::NodeIndex> + Default,
+        Iter: Iterator<Item = Self::NodeIndex>,
+    {
         get_future(index_set, |i| self.next_edges(i), stop_condition)
+    }
+
+    fn get_future<Set, Iter>(&self, index_set: Iter) -> Set
+    where
+        Set: SetLike<Self::NodeIndex> + Default,
+        Iter: Iterator<Item = Self::NodeIndex>,
+    {
+        self.get_future_with_stop_condition(index_set, |_| false)
     }
 }
 
@@ -144,4 +168,21 @@ impl<T: RichTreeGraph + DAG> RichDAG for T {
         next_edges.append(&mut self.referrers(node_index));
         next_edges
     }
+}
+
+pub trait SetLike<T> {
+    fn insert(&mut self, i: T) -> bool;
+    fn contains(&self, i: &T) -> bool;
+}
+
+impl<T: Eq + Hash> SetLike<T> for HashSet<T> {
+    fn insert(&mut self, i: T) -> bool { self.insert(i) }
+
+    fn contains(&self, i: &T) -> bool { self.contains(i) }
+}
+
+impl SetLike<usize> for BitSet {
+    fn insert(&mut self, i: usize) -> bool { self.add(i as u32) }
+
+    fn contains(&self, i: &usize) -> bool { self.contains(*i as u32) }
 }
