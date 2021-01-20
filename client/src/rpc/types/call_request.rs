@@ -197,9 +197,11 @@ mod tests {
     use cfx_types::{H160, U256, U64};
     use rustc_hex::FromHex;
     use serde_json;
+    use serial_test::serial;
     use std::str::FromStr;
 
     #[test]
+    #[serial] // TODO: remove
     fn call_request_deserialize() {
         force_base32_address();
 
@@ -240,6 +242,7 @@ mod tests {
     }
 
     #[test]
+    #[serial] // TODO: remove
     fn call_request_deserialize2() {
         force_base32_address();
 
@@ -269,6 +272,7 @@ mod tests {
     }
 
     #[test]
+    #[serial] // TODO: remove
     fn call_request_deserialize_empty() {
         force_base32_address();
 

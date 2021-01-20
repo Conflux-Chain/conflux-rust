@@ -178,6 +178,7 @@ mod tests {
     use super::{force_base32_address, Address};
     use cfx_addr::Network;
     use serde_json;
+    use serial_test::serial;
     use std::convert::TryInto;
 
     fn check_deserialize(raw: &str, hex: &str, network: Network) {
@@ -189,6 +190,7 @@ mod tests {
     }
 
     #[test]
+    #[serial] // TODO: remove
     fn test_deserialize_address() {
         force_base32_address();
 
@@ -213,6 +215,7 @@ mod tests {
 
     #[test]
     #[should_panic]
+    #[serial] // TODO: remove
     fn test_deserialize_incorrect_network_prefix() {
         force_base32_address();
 
@@ -225,6 +228,7 @@ mod tests {
 
     #[test]
     #[should_panic]
+    #[serial] // TODO: remove
     fn test_deserialize_no_network_prefix() {
         force_base32_address();
 
@@ -237,6 +241,7 @@ mod tests {
 
     #[test]
     #[should_panic]
+    #[serial] // TODO: remove
     fn test_deserialize_incorrect_type() {
         force_base32_address();
 
@@ -249,6 +254,7 @@ mod tests {
 
     #[test]
     #[should_panic]
+    #[serial] // TODO: remove
     fn test_deserialize_incorrect_checksum() {
         force_base32_address();
 

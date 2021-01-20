@@ -445,6 +445,7 @@ mod tests {
     use cfx_types::{H256, U256};
     use keccak_hash::KECCAK_EMPTY_LIST_RLP;
     use serde_json;
+    use serial_test::serial;
 
     #[test]
     fn test_serialize_block_transactions() {
@@ -461,6 +462,7 @@ mod tests {
     }
 
     #[test]
+    #[serial] // TODO: remove
     fn test_deserialize_block_transactions() {
         force_base32_address();
 
@@ -511,6 +513,7 @@ mod tests {
     }
 
     #[test]
+    #[serial] // TODO: remove
     fn test_deserialize_block() {
         force_base32_address();
 

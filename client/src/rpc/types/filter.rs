@@ -206,6 +206,7 @@ mod tests {
         filter::Filter as PrimitiveFilter,
     };
     use serde_json;
+    use serial_test::serial;
     use std::{convert::TryInto, str::FromStr};
 
     #[test]
@@ -318,6 +319,7 @@ mod tests {
     }
 
     #[test]
+    #[serial] // TODO: remove
     fn test_deserialize_filter() {
         force_base32_address();
 
