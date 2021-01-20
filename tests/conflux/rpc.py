@@ -23,7 +23,7 @@ from test_framework.util import (
 
 
 def convert_b32_address_field_to_hex(original_dict: dict, field_name: str):
-    if field_name in original_dict and original_dict[field_name] != "null":
+    if field_name in original_dict and original_dict[field_name] not in [None, "null"]:
         original_dict[field_name] = b32_address_to_hex(original_dict[field_name])
 
 
@@ -375,6 +375,7 @@ class RpcClient:
         assert_is_hash_string(tx_hash)
         r = self.node.cfx_getTransactionReceipt(tx_hash)
         convert_b32_address_field_to_hex(r, "contractCreated")
+        return r
 
     def txpool_status(self) -> (int, int):
         status = self.node.txpool_status()

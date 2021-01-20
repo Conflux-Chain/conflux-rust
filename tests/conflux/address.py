@@ -42,6 +42,7 @@ def encode_b32_address(addr, network_id=DEFAULT_PY_TEST_CHAIN_ID):
 # Note: This function does not return network_id on purpose, because in python tests it is DEFAULT_PY_TEST_CHAIN_ID
 # while the prefix is `cfx`.
 def decode_b32_address(b32_addr):
+    b32_addr = b32_addr.lower()
     addr_array = b32_addr.split(":")
     prefix = addr_array[0]
     payload_and_checksum = addr_array[-1]
