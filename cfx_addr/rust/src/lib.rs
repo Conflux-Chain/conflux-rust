@@ -263,7 +263,7 @@ pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
     }
 
     Ok(UserAddress {
-        base32: addr_str.into(),
+        base32: addr_str.to_lowercase(),
         bytes: body.to_vec(),
         hex: hex_address,
         network,

@@ -441,7 +441,10 @@ impl RpcImpl {
                 .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
                 .map_err(RpcError::invalid_params)?;
 
-            Ok(logs.into_iter().map(RpcLog::from).collect())
+            Ok(logs
+                .into_iter()
+                .map(|l| RpcLog::try_from_localized(l, *NODE_NETWORK.read()))
+                .collect::<Result<_, _>>()?)
         };
 
         Box::new(fut.boxed().compat())
@@ -608,7 +611,7 @@ impl RpcImpl {
 
     fn transaction_receipt(
         &self, tx_hash: H256,
-    ) -> BoxFuture<Option<RpcReceipt>> {
+    ) -> RpcBoxFuture<Option<RpcReceipt>> {
         let hash: H256 = tx_hash.into();
         info!("RPC Request: cfx_getTransactionReceipt hash={:?}", hash);
 
@@ -626,7 +629,7 @@ impl RpcImpl {
                 Ok(t) => t,
                 Err(LightError(ErrorKind::Timeout(_), _)) => return Ok(None),
                 Err(LightError(e, _)) => {
-                    return Err(RpcError::invalid_params(e.to_string()))
+                    bail!(RpcError::invalid_params(e.to_string()))
                 }
             };
 
@@ -654,7 +657,8 @@ impl RpcImpl {
                 maybe_state_root,
                 // Can not offer error_message from light node.
                 None,
-            );
+                *NODE_NETWORK.read(),
+            )?;
 
             Ok(Some(receipt))
         };

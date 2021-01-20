@@ -310,13 +310,23 @@ impl ChainNotificationHandler {
             .iter()
             .filter(|l| filter.matches(&l.entry))
             .cloned()
-            .map(RpcLog::from);
+            .map(|l| RpcLog::try_from_localized(l, *NODE_NETWORK.read()));
 
         // send logs in order
         // FIXME(thegaram): Sink::notify flushes after each item.
         // consider sending them in a batch.
         for log in logs {
-            Self::notify_async(subscriber, pubsub::Result::Log(log)).await
+            match log {
+                Ok(l) => {
+                    Self::notify_async(subscriber, pubsub::Result::Log(l)).await
+                }
+                Err(e) => {
+                    error!(
+                        "Unexpected error while constructing RpcLog: {:?}",
+                        e
+                    );
+                }
+            }
         }
     }
 

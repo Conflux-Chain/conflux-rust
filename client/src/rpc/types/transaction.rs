@@ -45,6 +45,29 @@ pub enum PackedOrExecuted {
 }
 
 impl Transaction {
+    pub fn default(network: Network) -> Result<Transaction, String> {
+        Ok(Transaction {
+            hash: Default::default(),
+            nonce: Default::default(),
+            block_hash: Default::default(),
+            transaction_index: Default::default(),
+            from: Base32Address::null(network)?,
+            to: Default::default(),
+            value: Default::default(),
+            gas_price: Default::default(),
+            gas: Default::default(),
+            contract_created: Default::default(),
+            data: Default::default(),
+            storage_limit: Default::default(),
+            epoch_height: Default::default(),
+            chain_id: Default::default(),
+            status: Default::default(),
+            v: Default::default(),
+            r: Default::default(),
+            s: Default::default(),
+        })
+    }
+
     pub fn from_signed(
         t: &SignedTransaction,
         maybe_packed_or_executed: Option<PackedOrExecuted>, network: Network,
@@ -64,10 +87,7 @@ impl Transaction {
                 block_hash = Some(receipt.block_hash);
                 transaction_index = Some(receipt.index.into());
                 if let Some(ref address) = receipt.contract_created {
-                    contract_created = Some(Base32Address::try_from_h160(
-                        address.clone(),
-                        network,
-                    )?);
+                    contract_created = Some(address.clone());
                 }
                 status = Some(receipt.outcome_status);
             }

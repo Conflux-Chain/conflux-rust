@@ -544,7 +544,8 @@ impl RpcImpl {
                         block_number,
                         maybe_state_root,
                         tx_exec_error_msg,
-                    ))
+                        *NODE_NETWORK.read(),
+                    )?)
                 }
             };
             let rpc_tx = RpcTransaction::from_signed(
@@ -641,7 +642,8 @@ impl RpcImpl {
             } else {
                 Some(tx_exec_error_msg.clone())
             },
-        );
+            *NODE_NETWORK.read(),
+        )?;
         Ok(Some(rpc_receipt))
     }
 
@@ -853,8 +855,8 @@ impl RpcImpl {
             .logs(filter)?
             .iter()
             .cloned()
-            .map(RpcLog::from)
-            .collect())
+            .map(|l| RpcLog::try_from_localized(l, *NODE_NETWORK.read()))
+            .collect::<Result<_, _>>()?)
     }
 
     fn get_block_reward_info(
