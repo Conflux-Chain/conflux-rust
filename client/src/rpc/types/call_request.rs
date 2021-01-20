@@ -190,9 +190,7 @@ pub fn rpc_call_request_network(
 mod tests {
     use super::CallRequest;
 
-    use crate::rpc::types::address::{
-        force_base32_address, Address as Base32Address,
-    };
+    use crate::rpc::types::address::Address as Base32Address;
     use cfx_addr::{Network, UserAddress};
     use cfx_types::{H160, U256, U64};
     use rustc_hex::FromHex;
@@ -203,8 +201,6 @@ mod tests {
     #[test]
     #[serial] // TODO: remove
     fn call_request_deserialize() {
-        force_base32_address();
-
         let expected = CallRequest {
             from: Some(Base32Address(UserAddress {
                 base32: "cfx:type.builtin:000000000000000000000000000000000482u4m4mw".into(),
@@ -244,8 +240,6 @@ mod tests {
     #[test]
     #[serial] // TODO: remove
     fn call_request_deserialize2() {
-        force_base32_address();
-
         let expected = CallRequest {
             from: Some(Base32Address::try_from_h160("160e8dd61c5d32be8058bb8eb970870f07233155".parse().unwrap(), Network::Main).unwrap()),
             to: Some(Base32Address::try_from_h160("846e8dd67c5d32be8058bb8eb970870f07244567".parse().unwrap(), Network::Main).unwrap()),
@@ -274,8 +268,6 @@ mod tests {
     #[test]
     #[serial] // TODO: remove
     fn call_request_deserialize_empty() {
-        force_base32_address();
-
         let expected = CallRequest {
             from: Some(Base32Address(UserAddress {
                 base32: "cfx:type.builtin:000000000000000000000000000000000482u4m4mw".into(),
