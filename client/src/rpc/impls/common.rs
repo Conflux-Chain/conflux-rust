@@ -732,24 +732,28 @@ impl RpcImpl {
         Ok(ret)
     }
 
-    pub fn accounts(&self) -> JsonRpcResult<Vec<H160>> {
+    pub fn accounts(&self) -> RpcResult<Vec<Base32Address>> {
         let accounts: Vec<Address> = self.accounts.accounts().map_err(|e| {
             warn!("Could not fetch accounts. With error {:?}", e);
             RpcError::internal_error()
         })?;
-        Ok(accounts.into_iter().map(Into::into).collect::<Vec<H160>>())
+
+        let network = *NODE_NETWORK.read();
+
+        Ok(accounts
+            .into_iter()
+            .map(|addr| Base32Address::try_from_h160(addr, network))
+            .collect::<Result<_, _>>()?)
     }
 
-    pub fn new_account(&self, password: String) -> JsonRpcResult<H160> {
-        let address: Address = self
-            .accounts
-            .new_account(&password.into())
-            .map(Into::into)
-            .map_err(|e| {
+    pub fn new_account(&self, password: String) -> RpcResult<Base32Address> {
+        let address: Address =
+            self.accounts.new_account(&password.into()).map_err(|e| {
                 warn!("Could not create account. With error {:?}", e);
                 RpcError::internal_error()
             })?;
-        Ok(address.into())
+
+        Ok(Base32Address::try_from_h160(address, *NODE_NETWORK.read())?)
     }
 
     pub fn unlock_account(

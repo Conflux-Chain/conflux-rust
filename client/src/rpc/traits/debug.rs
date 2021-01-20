@@ -8,7 +8,7 @@ use super::super::types::{
     TxWithPoolInfo,
 };
 use crate::rpc::types::SendTxRequest;
-use cfx_types::{H160, H256, H520, U128};
+use cfx_types::{H256, H520, U128};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
 use jsonrpc_derive::rpc;
 use network::{
@@ -89,11 +89,11 @@ pub trait LocalRpc {
 
     /// Returns accounts list.
     #[rpc(name = "accounts")]
-    fn accounts(&self) -> JsonRpcResult<Vec<H160>>;
+    fn accounts(&self) -> JsonRpcResult<Vec<Base32Address>>;
 
     /// Create a new account
     #[rpc(name = "new_account")]
-    fn new_account(&self, password: String) -> JsonRpcResult<H160>;
+    fn new_account(&self, password: String) -> JsonRpcResult<Base32Address>;
 
     /// Unlock an account
     #[rpc(name = "unlock_account")]

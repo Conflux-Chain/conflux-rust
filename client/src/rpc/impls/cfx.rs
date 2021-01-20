@@ -1336,8 +1336,8 @@ impl LocalRpc for LocalRpcImpl {
             fn txpool_inspect(&self, address: Option<Base32Address>) -> JsonRpcResult<
                 BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
             fn txpool_status(&self) -> JsonRpcResult<BTreeMap<String, usize>>;
-            fn accounts(&self) -> JsonRpcResult<Vec<H160>>;
-            fn new_account(&self, password: String) -> JsonRpcResult<H160>;
+            fn accounts(&self) -> JsonRpcResult<Vec<Base32Address>>;
+            fn new_account(&self, password: String) -> JsonRpcResult<Base32Address>;
             fn unlock_account(
                 &self, address: Base32Address, password: String, duration: Option<U128>)
                 -> JsonRpcResult<bool>;

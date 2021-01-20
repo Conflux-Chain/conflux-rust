@@ -1124,14 +1124,14 @@ impl DebugRpcImpl {
 impl LocalRpc for DebugRpcImpl {
     delegate! {
         to self.common {
-            fn accounts(&self) -> JsonRpcResult<Vec<H160>>;
+            fn accounts(&self) -> JsonRpcResult<Vec<Base32Address>>;
             fn clear_tx_pool(&self) -> JsonRpcResult<()>;
             fn lock_account(&self, address: Base32Address) -> JsonRpcResult<bool>;
             fn net_disconnect_node(&self, id: NodeId, op: Option<UpdateNodeOperation>) -> JsonRpcResult<bool>;
             fn net_node(&self, id: NodeId) -> JsonRpcResult<Option<(String, Node)>>;
             fn net_sessions(&self, node_id: Option<NodeId>) -> JsonRpcResult<Vec<SessionDetails>>;
             fn net_throttling(&self) -> JsonRpcResult<throttling::Service>;
-            fn new_account(&self, password: String) -> JsonRpcResult<H160>;
+            fn new_account(&self, password: String) -> JsonRpcResult<Base32Address>;
             fn sign(&self, data: Bytes, address: Base32Address, password: Option<String>) -> JsonRpcResult<H520>;
             fn tx_inspect_pending(&self, address: Base32Address) -> JsonRpcResult<TxPoolPendingInfo>;
             fn tx_inspect(&self, hash: H256) -> JsonRpcResult<TxWithPoolInfo>;
