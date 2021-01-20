@@ -107,16 +107,25 @@ impl<'a> Deserialize<'a> for Address {
 impl Serialize for Address {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
-        let addr_str = cfx_addr_encode(
-            &self.bytes[..],
-            self.network,
-            EncodingOptions::QrCode,
-        )
-        .map_err(|e| {
-            ser::Error::custom(format!("Failed to encode address: {}", e))
-        })?;
+        if *FORCE_BASE32_ADDRESS.read() {
+            let addr_str = cfx_addr_encode(
+                &self.bytes[..],
+                self.network,
+                EncodingOptions::QrCode,
+            )
+            .map_err(|e| {
+                ser::Error::custom(format!("Failed to encode address: {}", e))
+            })?;
 
-        serializer.serialize_str(&addr_str)
+            serializer.serialize_str(&addr_str)
+        } else {
+            // TODO: remove this
+            if let Some(hex) = self.hex {
+                serializer.serialize_str(&format!("{:?}", hex))
+            } else {
+                serializer.serialize_none()
+            }
+        }
     }
 }
 
@@ -139,6 +148,7 @@ impl<'a> Deserialize<'a> for RpcAddress {
                 network: parsed_address.network,
             })
         } else {
+            // TODO: remove this
             Ok(Self {
                 hex_address: Deserialize::deserialize(deserializer)?,
                 network: *NODE_NETWORK.read(),
