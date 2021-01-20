@@ -6,7 +6,7 @@ from conflux.config import DEFAULT_PY_TEST_CHAIN_ID
 from conflux.utils import encode_hex
 
 MAINNET_PREFIX = "cfx"
-TESTNET_PREFIX = "cfx_test"
+TESTNET_PREFIX = "cfxtest"
 OTHER_NET_PREFIX = "net"
 VERSION_BYTE = 0x00
 MAINNET_NETWORK_ID = 1029
