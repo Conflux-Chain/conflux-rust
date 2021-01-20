@@ -581,7 +581,7 @@ impl RpcImpl {
 
     fn transaction_by_hash(
         &self, hash: H256,
-    ) -> BoxFuture<Option<RpcTransaction>> {
+    ) -> RpcBoxFuture<Option<RpcTransaction>> {
         info!("RPC Request: cfx_getTransactionByHash hash={:?}", hash);
 
         // TODO(thegaram): try to retrieve from local tx pool or cache first
@@ -596,7 +596,11 @@ impl RpcImpl {
                 .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
                 .map_err(RpcError::invalid_params)?;
 
-            Ok(Some(RpcTransaction::from_signed(&tx, None)))
+            Ok(Some(RpcTransaction::from_signed(
+                &tx,
+                None,
+                *NODE_NETWORK.read(),
+            )?))
         };
 
         Box::new(fut.boxed().compat())

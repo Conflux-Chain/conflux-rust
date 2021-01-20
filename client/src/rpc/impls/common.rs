@@ -639,14 +639,15 @@ impl RpcImpl {
         };
 
         let (ready_txs, deferred_txs) = self.tx_pool.content(address);
-        let converter = |tx: &Arc<SignedTransaction>| -> RpcTransaction {
-            RpcTransaction::from_signed(&tx, None)
-        };
+        let converter =
+            |tx: &Arc<SignedTransaction>| -> Result<RpcTransaction, String> {
+                RpcTransaction::from_signed(&tx, None, *NODE_NETWORK.read())
+            };
         let result = ready_txs
             .iter()
             .map(converter)
             .chain(deferred_txs.iter().map(converter))
-            .collect();
+            .collect::<Result<_, _>>()?;
         return Ok(result);
     }
 
@@ -668,7 +669,8 @@ impl RpcImpl {
 
         let (ready_txs, deferred_txs) = self.tx_pool.content(address);
         let converter = |tx: Arc<SignedTransaction>| -> RpcTransaction {
-            RpcTransaction::from_signed(&tx, None)
+            RpcTransaction::from_signed(&tx, None, *NODE_NETWORK.read())
+                .expect("transaction conversion with correct network id should not fail")
         };
 
         let mut ret: BTreeMap<

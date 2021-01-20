@@ -198,23 +198,24 @@ impl Block {
                                             } else {
                                                 Some(tx_exec_error_msg.clone())
                                             }))),
+                                        network,
                                     )
                                 }
                                 TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING => {
-                                    Transaction::from_signed(tx, None)
+                                    Transaction::from_signed(tx, None, network)
                                 }
                                 _ => {
                                     unreachable!();
                                 }
                             }
                         })
-                        .collect()
+                        .collect::<Result<_, _>>()?
                     }
                     None => b
                         .transactions
                         .iter()
-                        .map(|x| Transaction::from_signed(x, None))
-                        .collect(),
+                        .map(|x| Transaction::from_signed(x, None, network))
+                        .collect::<Result<_, _>>()?,
                 };
                 BlockTransactions::Full(tx_vec)
             }

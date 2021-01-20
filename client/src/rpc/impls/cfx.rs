@@ -547,13 +547,18 @@ impl RpcImpl {
                     ))
                 }
             };
-            let rpc_tx =
-                RpcTransaction::from_signed(&tx, Some(packed_or_executed));
+            let rpc_tx = RpcTransaction::from_signed(
+                &tx,
+                Some(packed_or_executed),
+                *NODE_NETWORK.read(),
+            )?;
+
             return Ok(Some(rpc_tx));
         }
 
         if let Some(tx) = self.tx_pool.get_transaction(&hash) {
-            let rpc_tx = RpcTransaction::from_signed(&tx, None);
+            let rpc_tx =
+                RpcTransaction::from_signed(&tx, None, *NODE_NETWORK.read())?;
             return Ok(Some(rpc_tx));
         }
 
