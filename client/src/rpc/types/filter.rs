@@ -199,6 +199,7 @@ impl Filter {
 #[cfg(test)]
 mod tests {
     use super::{EpochNumber, Filter, VariadicValue};
+    use crate::rpc::types::address::force_base32_address;
     use cfx_types::{H160, H256, U64};
     use primitives::{
         epoch::EpochNumber as PrimitiveEpochNumber,
@@ -318,6 +319,8 @@ mod tests {
 
     #[test]
     fn test_deserialize_filter() {
+        force_base32_address();
+
         let serialized = "{}";
 
         let result_filter = Filter {

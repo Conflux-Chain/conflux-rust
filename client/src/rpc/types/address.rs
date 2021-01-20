@@ -26,6 +26,9 @@ lazy_static! {
 #[cfg(test)]
 pub fn force_base32_address() { *FORCE_BASE32_ADDRESS.write() = true; }
 
+#[cfg(test)]
+pub fn disable_base32_address() { *FORCE_BASE32_ADDRESS.write() = false; }
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct RpcAddress {
     pub hex_address: H160,
