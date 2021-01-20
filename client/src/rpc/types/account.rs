@@ -2,7 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{H160, H256, U256};
+use super::Address as Base32Address;
+use cfx_addr::Network;
+use cfx_types::{H256, U256};
 use primitives::Account as PrimitiveAccount;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -14,12 +16,14 @@ pub struct Account {
     pub staking_balance: U256,
     pub collateral_for_storage: U256,
     pub accumulated_interest_return: U256,
-    pub admin: H160,
+    pub admin: Base32Address,
 }
 
 impl Account {
-    pub fn new(account: PrimitiveAccount) -> Self {
-        Self {
+    pub fn try_from(
+        account: PrimitiveAccount, network: Network,
+    ) -> Result<Self, String> {
+        Ok(Self {
             balance: account.balance.into(),
             nonce: account.nonce.into(),
             code_hash: account.code_hash.into(),
@@ -28,7 +32,7 @@ impl Account {
             accumulated_interest_return: account
                 .accumulated_interest_return
                 .into(),
-            admin: account.admin.into(),
-        }
+            admin: Base32Address::try_from_h160(account.admin, network)?,
+        })
     }
 }

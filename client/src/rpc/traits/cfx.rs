@@ -6,14 +6,14 @@ use super::super::types::{
     Account as RpcAccount, Block, Bytes, CallRequest,
     CheckBalanceAgainstTransactionResponse, EpochNumber,
     EstimateGasAndCollateralResponse, Filter as RpcFilter, Log as RpcLog,
-    Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, Status as RpcStatus,
-    TokenSupplyInfo, Transaction,
+    Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, SponsorInfo,
+    Status as RpcStatus, TokenSupplyInfo, Transaction,
 };
-use crate::rpc::types::BlockHashOrEpochNumber;
-use cfx_types::{H160, H256, U256, U64};
+use crate::rpc::types::{Address as Base32Address, BlockHashOrEpochNumber};
+use cfx_types::{H256, U256, U64};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
 use jsonrpc_derive::rpc;
-use primitives::{DepositInfo, SponsorInfo, StorageRoot, VoteStakeInfo};
+use primitives::{DepositInfo, StorageRoot, VoteStakeInfo};
 
 /// Cfx rpc interface.
 #[rpc(server)]
@@ -47,60 +47,61 @@ pub trait Cfx {
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getBalance")]
     fn balance(
-        &self, addr: H160, epoch_number: Option<EpochNumber>,
+        &self, addr: Base32Address, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<U256>;
 
     /// Returns admin of the given contract
     #[rpc(name = "cfx_getAdmin")]
     fn admin(
-        &self, addr: H160, epoch_number: Option<EpochNumber>,
-    ) -> BoxFuture<Option<H160>>;
+        &self, addr: Base32Address, epoch_number: Option<EpochNumber>,
+    ) -> BoxFuture<Option<Base32Address>>;
 
     /// Returns sponsor information of the given contract
     #[rpc(name = "cfx_getSponsorInfo")]
     fn sponsor_info(
-        &self, addr: H160, epoch_number: Option<EpochNumber>,
+        &self, addr: Base32Address, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<SponsorInfo>;
 
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getStakingBalance")]
     fn staking_balance(
-        &self, addr: H160, epoch_number: Option<EpochNumber>,
+        &self, addr: Base32Address, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<U256>;
 
     /// Returns deposit list of the given account.
     #[rpc(name = "cfx_getDepositList")]
     fn deposit_list(
-        &self, addr: H160, epoch_number: Option<EpochNumber>,
+        &self, addr: Base32Address, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<Vec<DepositInfo>>;
 
     /// Returns vote list of the given account.
     #[rpc(name = "cfx_getVoteList")]
     fn vote_list(
-        &self, addr: H160, epoch_number: Option<EpochNumber>,
+        &self, addr: Base32Address, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<Vec<VoteStakeInfo>>;
 
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getCollateralForStorage")]
     fn collateral_for_storage(
-        &self, addr: H160, epoch_number: Option<EpochNumber>,
+        &self, addr: Base32Address, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<U256>;
 
     /// Returns the code at given address at given time (epoch number).
     #[rpc(name = "cfx_getCode")]
     fn code(
-        &self, addr: H160, epoch_number: Option<EpochNumber>,
+        &self, addr: Base32Address, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<Bytes>;
 
     /// Returns storage entries from a given contract.
     #[rpc(name = "cfx_getStorageAt")]
     fn storage_at(
-        &self, addr: H160, pos: H256, epoch_number: Option<EpochNumber>,
+        &self, addr: Base32Address, pos: H256,
+        epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<Option<H256>>;
 
     #[rpc(name = "cfx_getStorageRoot")]
     fn storage_root(
-        &self, address: H160, epoch_num: Option<EpochNumber>,
+        &self, address: Base32Address, epoch_num: Option<EpochNumber>,
     ) -> BoxFuture<Option<StorageRoot>>;
 
     /// Returns block with given hash.
@@ -129,7 +130,8 @@ pub trait Cfx {
     /// given address at given time (epoch number).
     #[rpc(name = "cfx_getNextNonce")]
     fn next_nonce(
-        &self, addr: H160, epoch_number: Option<BlockHashOrEpochNumber>,
+        &self, addr: Base32Address,
+        epoch_number: Option<BlockHashOrEpochNumber>,
     ) -> BoxFuture<U256>;
 
     //        /// Returns the number of transactions in a block with given hash.
@@ -175,8 +177,9 @@ pub trait Cfx {
     /// Check if user balance is enough for the transaction.
     #[rpc(name = "cfx_checkBalanceAgainstTransaction")]
     fn check_balance_against_transaction(
-        &self, account_addr: H160, contract_addr: H160, gas_limit: U256,
-        gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>,
+        &self, account_addr: Base32Address, contract_addr: Base32Address,
+        gas_limit: U256, gas_price: U256, storage_limit: U256,
+        epoch: Option<EpochNumber>,
     ) -> BoxFuture<CheckBalanceAgainstTransactionResponse>;
 
     #[rpc(name = "cfx_getBlocksByEpoch")]
@@ -197,7 +200,7 @@ pub trait Cfx {
     /// Return account related states of the given account
     #[rpc(name = "cfx_getAccount")]
     fn account(
-        &self, address: H160, epoch_num: Option<EpochNumber>,
+        &self, address: Base32Address, epoch_num: Option<EpochNumber>,
     ) -> BoxFuture<RpcAccount>;
 
     /// Returns interest rate of the given epoch

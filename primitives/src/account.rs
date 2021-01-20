@@ -158,10 +158,7 @@ impl Decodable for CodeInfo {
     Eq,
     PartialEq,
     Default,
-    Serialize,
-    Deserialize,
 )]
-#[serde(rename_all = "camelCase")]
 pub struct SponsorInfo {
     /// This is the address of the sponsor for gas cost of the contract.
     pub sponsor_for_gas: Address,

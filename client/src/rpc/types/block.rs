@@ -2,21 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::sync::Arc;
-
-use jsonrpc_core::Error as RpcError;
-use serde::{
-    de::{Deserialize, Deserializer, Error, Unexpected},
-    Serialize, Serializer,
-};
-use serde_json::Value;
-
+use super::Address as Base32Address;
+use cfx_addr::Network;
 use cfx_types::{H160, H256, U256, U64};
 use cfxcore::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     consensus::ConsensusGraphInner,
     pow, SharedConsensusGraph,
 };
+use jsonrpc_core::Error as RpcError;
 use primitives::{
     receipt::{
         TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
@@ -26,6 +20,12 @@ use primitives::{
     Block as PrimitiveBlock, BlockHeader as PrimitiveBlockHeader,
     BlockHeaderBuilder, TransactionIndex,
 };
+use serde::{
+    de::{Deserialize, Deserializer, Error, Unexpected},
+    Serialize, Serializer,
+};
+use serde_json::Value;
+use std::{convert::TryInto, sync::Arc};
 
 use crate::rpc::types::{transaction::PackedOrExecuted, Receipt, Transaction};
 use cfx_bytes::Bytes;
@@ -94,7 +94,7 @@ pub struct Block {
     /// Distance to genesis
     pub height: U256,
     /// Author's address
-    pub miner: H160,
+    pub miner: Base32Address,
     /// State root hash
     pub deferred_state_root: H256,
     /// Root hash of all receipts in this block's epoch
@@ -137,9 +137,10 @@ pub struct Block {
 
 impl Block {
     pub fn new(
-        b: &PrimitiveBlock, consensus_inner: &ConsensusGraphInner,
+        b: &PrimitiveBlock, network: Network,
+        consensus_inner: &ConsensusGraphInner,
         data_man: &Arc<BlockDataManager>, include_txs: bool,
-    ) -> Self
+    ) -> Result<Self, String>
     {
         let transactions = match include_txs {
             false => BlockTransactions::Hashes(
@@ -196,24 +197,27 @@ impl Block {
                                                 None
                                             } else {
                                                 Some(tx_exec_error_msg.clone())
-                                            }))),
+                                            },
+                                            network,
+                                        )?)),
+                                        network,
                                     )
                                 }
                                 TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING => {
-                                    Transaction::from_signed(tx, None)
+                                    Transaction::from_signed(tx, None, network)
                                 }
                                 _ => {
                                     unreachable!();
                                 }
                             }
                         })
-                        .collect()
+                        .collect::<Result<_, _>>()?
                     }
                     None => b
                         .transactions
                         .iter()
-                        .map(|x| Transaction::from_signed(x, None))
-                        .collect(),
+                        .map(|x| Transaction::from_signed(x, None, network))
+                        .collect::<Result<_, _>>()?,
                 };
                 BlockTransactions::Full(tx_vec)
             }
@@ -249,11 +253,14 @@ impl Block {
             }
         };
 
-        Block {
+        Ok(Block {
             hash: H256::from(block_hash),
             parent_hash: H256::from(b.block_header.parent_hash().clone()),
             height: b.block_header.height().into(),
-            miner: H160::from(b.block_header.author().clone()),
+            miner: Base32Address::try_from_h160(
+                *b.block_header.author(),
+                network,
+            )?,
             deferred_state_root: H256::from(
                 b.block_header.deferred_state_root().clone(),
             ),
@@ -289,10 +296,17 @@ impl Block {
             transactions,
             custom: b.block_header.custom().clone(),
             size: Some(b.size().into()),
-        }
+        })
     }
 
     pub fn into_primitive(self) -> Result<PrimitiveBlock, RpcError> {
+        let miner: H160 = match self.miner.try_into() {
+            Ok(m) => m,
+            Err(_) => bail!(RpcError::invalid_params(
+                "Invalid params: expected a valid base32-encoded Conflux address",
+            )),
+        };
+
         match self.transactions {
             BlockTransactions::Hashes(_) => Err(RpcError::invalid_params(
                 "Invalid params: expected a array of transaction objects.",
@@ -302,7 +316,7 @@ impl Block {
                     .with_parent_hash(self.parent_hash.into())
                     .with_height(self.height.as_usize() as u64)
                     .with_timestamp(self.timestamp.as_usize() as u64)
-                    .with_author(self.miner.into())
+                    .with_author(miner)
                     .with_transactions_root(self.transactions_root.into())
                     .with_deferred_state_root(self.deferred_state_root.into())
                     .with_deferred_receipts_root(
@@ -349,7 +363,7 @@ pub struct Header {
     /// Distance to genesis
     pub height: U256,
     /// Miner's address
-    pub miner: H160,
+    pub miner: Base32Address,
     /// State root hash
     pub deferred_state_root: H256,
     /// Root hash of all receipts in this block's epoch
@@ -384,8 +398,10 @@ pub struct Header {
 
 impl Header {
     pub fn new(
-        h: &PrimitiveBlockHeader, consensus: SharedConsensusGraph,
-    ) -> Self {
+        h: &PrimitiveBlockHeader, network: Network,
+        consensus: SharedConsensusGraph,
+    ) -> Result<Self, String>
+    {
         let hash = h.hash();
 
         let epoch_number = consensus
@@ -396,11 +412,11 @@ impl Header {
         let referee_hashes =
             h.referee_hashes().iter().map(|x| H256::from(*x)).collect();
 
-        Header {
+        Ok(Header {
             hash: H256::from(hash),
             parent_hash: H256::from(*h.parent_hash()),
             height: h.height().into(),
-            miner: H160::from(*h.author()),
+            miner: Base32Address::try_from_h160(*h.author(), network)?,
             deferred_state_root: H256::from(*h.deferred_state_root()),
             deferred_receipts_root: H256::from(*h.deferred_receipts_root()),
             deferred_logs_bloom_hash: H256::from(*h.deferred_logs_bloom_hash()),
@@ -417,23 +433,28 @@ impl Header {
                 pow::pow_hash_to_quality(&pow_hash, &h.nonce())
             }), /* TODO(thegaram):
                  * include custom */
-        }
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Block, BlockTransactions, Header};
-    use crate::rpc::types::Transaction;
-    use cfx_types::{H160, H256, U256};
+    use super::{Base32Address, Block, BlockTransactions, Header};
+    use crate::rpc::types::{address::force_base32_address, Transaction};
+    use cfx_addr::Network;
+    use cfx_types::{H256, U256};
     use keccak_hash::KECCAK_EMPTY_LIST_RLP;
     use serde_json;
+    use serial_test::serial;
 
     #[test]
     fn test_serialize_block_transactions() {
-        let t = BlockTransactions::Full(vec![Transaction::default()]);
+        let t =
+            BlockTransactions::Full(vec![
+                Transaction::default(Network::Main).unwrap()
+            ]);
         let serialized = serde_json::to_string(&t).unwrap();
-        assert_eq!(serialized, r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","contractCreated":null,"data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x0","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#);
+        assert_eq!(serialized, r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"transactionIndex":null,"from":"CFX:TYPE.NULL:0000000000000000000000000000000000PE51B8AS","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","contractCreated":null,"data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x0","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#);
 
         let t = BlockTransactions::Hashes(vec![H256::default()]);
         let serialized = serde_json::to_string(&t).unwrap();
@@ -441,7 +462,10 @@ mod tests {
     }
 
     #[test]
+    #[serial] // TODO: remove
     fn test_deserialize_block_transactions() {
+        force_base32_address();
+
         let result_block_transactions =
             BlockTransactions::Hashes(vec![H256::default(), H256::default()]);
         let serialized = r#"["0x0000000000000000000000000000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000000000000000000000000000"]"#;
@@ -449,9 +473,10 @@ mod tests {
             serde_json::from_str(serialized).unwrap();
         assert_eq!(result_block_transactions, deserialized_block_transactions);
 
-        let result_block_transactions =
-            BlockTransactions::Full(vec![Transaction::default()]);
-        let serialized = r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x0","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#;
+        let result_block_transactions = BlockTransactions::Full(vec![
+            Transaction::default(Network::Main).unwrap(),
+        ]);
+        let serialized = r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"cfx:0000000000000000000000000000000000pe51b8as","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x0","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#;
         let deserialized_block_transactions: BlockTransactions =
             serde_json::from_str(serialized).unwrap();
         assert_eq!(result_block_transactions, deserialized_block_transactions);
@@ -463,7 +488,7 @@ mod tests {
             hash: H256::default(),
             parent_hash: H256::default(),
             height: 0.into(),
-            miner: H160::default(),
+            miner: Base32Address::null(Network::Main).unwrap(),
             deferred_state_root: Default::default(),
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP.into(),
             deferred_logs_bloom_hash: cfx_types::KECCAK_EMPTY_BLOOM.into(),
@@ -484,17 +509,20 @@ mod tests {
         };
         let serialized_block = serde_json::to_string(&block).unwrap();
 
-        assert_eq!(serialized_block, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","gasUsed":null,"timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45","custom":[]}"#);
+        assert_eq!(serialized_block, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"CFX:TYPE.NULL:0000000000000000000000000000000000PE51B8AS","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","gasUsed":null,"timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45","custom":[]}"#);
     }
 
     #[test]
+    #[serial] // TODO: remove
     fn test_deserialize_block() {
-        let serialized = r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":"0x0","gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"stable":null,"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45","custom":[]}"#;
+        force_base32_address();
+
+        let serialized = r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"cfx:0000000000000000000000000000000000pe51b8as","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":"0x0","gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"stable":null,"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45","custom":[]}"#;
         let result_block = Block {
             hash: H256::default(),
             parent_hash: H256::default(),
             height: 0.into(),
-            miner: H160::default(),
+            miner: Base32Address::null(Network::Main).unwrap(),
             deferred_state_root: Default::default(),
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP.into(),
             deferred_logs_bloom_hash: cfx_types::KECCAK_EMPTY_BLOOM.into(),
@@ -516,6 +544,9 @@ mod tests {
         let deserialized_block: Block =
             serde_json::from_str(serialized).unwrap();
         assert_eq!(deserialized_block, result_block);
+
+        println!("deserialized_block: {:?}", deserialized_block);
+        println!("result_block: {:?}", result_block);
     }
 
     #[test]
@@ -524,7 +555,7 @@ mod tests {
             hash: H256::default(),
             parent_hash: H256::default(),
             height: 0.into(),
-            miner: H160::default(),
+            miner: Base32Address::null(Network::Main).unwrap(),
             deferred_state_root: Default::default(),
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP.into(),
             deferred_logs_bloom_hash: cfx_types::KECCAK_EMPTY_BLOOM.into(),
@@ -541,6 +572,6 @@ mod tests {
         };
         let serialized_header = serde_json::to_string(&header).unwrap();
 
-        assert_eq!(serialized_header, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0"}"#);
+        assert_eq!(serialized_header, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"CFX:TYPE.NULL:0000000000000000000000000000000000PE51B8AS","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0"}"#);
     }
 }

@@ -18,6 +18,7 @@ mod provenance;
 pub mod pubsub;
 mod receipt;
 mod reward_info;
+mod sponsor_info;
 mod status;
 mod sync_graph_states;
 mod token_supply_info;
@@ -42,6 +43,7 @@ pub use self::{
     provenance::Origin,
     receipt::Receipt,
     reward_info::RewardInfo,
+    sponsor_info::SponsorInfo,
     status::Status,
     sync_graph_states::SyncGraphStates,
     token_supply_info::TokenSupplyInfo,
