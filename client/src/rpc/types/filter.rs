@@ -35,6 +35,16 @@ impl<T> Into<Option<Vec<T>>> for VariadicValue<T> {
     }
 }
 
+impl<T> VariadicValue<T> {
+    pub fn iter<'a>(&'a self) -> Box<dyn std::iter::Iterator<Item = &T> + 'a> {
+        match self {
+            VariadicValue::Null => Box::new(std::iter::empty()),
+            VariadicValue::Single(x) => Box::new(std::iter::once(x)),
+            VariadicValue::Multiple(xs) => Box::new(xs.iter()),
+        }
+    }
+}
+
 impl<T> Serialize for VariadicValue<T>
 where T: Serialize
 {

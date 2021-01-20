@@ -2,7 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::address::NODE_NETWORK;
+use crate::rpc::types::{
+    address::NODE_NETWORK, errors::check_rpc_address_network,
+};
 use cfx_types::{H160, H256, H520, U128, U256, U64};
 use cfxcore::{
     block_data_manager::BlockDataManager,
@@ -16,7 +18,6 @@ use cfxcore::{
 use cfxcore_accounts::AccountProvider;
 use delegate::delegate;
 use futures::future::{self, FutureExt, TryFutureExt};
-use futures01;
 use jsonrpc_core::{BoxFuture, Error as RpcError, Result as JsonRpcResult};
 use network::{
     node_table::{Node, NodeId},
@@ -33,7 +34,7 @@ use crate::{
     rpc::{
         error_codes,
         impls::{
-            common::{self, RpcImpl as CommonImpl},
+            common::{self, check_address_network, RpcImpl as CommonImpl},
             RpcImplConfiguration,
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
@@ -115,6 +116,7 @@ impl RpcImpl {
         &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcBoxFuture<RpcAccount> {
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
+
         info!(
             "RPC Request: cfx_getAccount address={:?} epoch={:?}",
             address, epoch
@@ -124,6 +126,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            check_address_network(address.network)?;
             let network = address.network;
             let address: H160 = address.try_into()?;
 
@@ -161,6 +164,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            check_address_network(address.network)?;
             let address: H160 = address.try_into()?;
 
             let account = invalid_params_check(
@@ -191,6 +195,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            check_address_network(address.network)?;
             let address: H160 = address.try_into()?;
 
             let account = invalid_params_check(
@@ -223,6 +228,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            check_address_network(address.network)?;
             let network = address.network;
             let address: H160 = address.try_into()?;
 
@@ -256,6 +262,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            check_address_network(address.network)?;
             let address: H160 = address.try_into()?;
 
             let account = invalid_params_check(
@@ -285,6 +292,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            check_address_network(address.network)?;
             let address: H160 = address.try_into()?;
 
             let maybe_list = invalid_params_check(
@@ -315,6 +323,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            check_address_network(address.network)?;
             let address: H160 = address.try_into()?;
 
             let maybe_list = invalid_params_check(
@@ -345,6 +354,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            check_address_network(address.network)?;
             let address: H160 = address.try_into()?;
 
             let account = invalid_params_check(
@@ -374,6 +384,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            check_address_network(address.network)?;
             let address: H160 = address.try_into()?;
 
             // FIMXE:
@@ -392,27 +403,38 @@ impl RpcImpl {
         Box::new(fut.boxed().compat())
     }
 
-    fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>> {
+    fn get_logs(&self, filter: RpcFilter) -> RpcBoxFuture<Vec<RpcLog>> {
         info!("RPC Request: cfx_getLogs filter={:?}", filter);
-
-        let mut filter = match filter.into_primitive() {
-            Ok(filter) => filter,
-            Err(e) => return Box::new(futures01::future::err(e)),
-        };
-
-        // If max_limit is set, the value in `filter` will be modified to
-        // satisfy this limitation to avoid loading too many blocks
-        // TODO Should the response indicate that the filter is modified?
-        if let Some(max_limit) = self.config.get_logs_filter_max_limit {
-            if filter.limit.is_none() || filter.limit.unwrap() > max_limit {
-                filter.limit = Some(max_limit);
-            }
-        }
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
+        let get_logs_filter_max_limit = self.config.get_logs_filter_max_limit;
 
         let fut = async move {
+            // all addresses specified should be for the correct network
+            if let Some(addresses) = &filter.address {
+                for address in addresses.iter() {
+                    invalid_params_check(
+                        "filter.address",
+                        check_rpc_address_network(
+                            Some(address.network),
+                            *NODE_NETWORK.read(),
+                        ),
+                    )?;
+                }
+            }
+
+            let mut filter = filter.into_primitive()?;
+
+            // If max_limit is set, the value in `filter` will be modified to
+            // satisfy this limitation to avoid loading too many blocks
+            // TODO Should the response indicate that the filter is modified?
+            if let Some(max_limit) = get_logs_filter_max_limit {
+                if filter.limit.is_none() || filter.limit.unwrap() > max_limit {
+                    filter.limit = Some(max_limit);
+                }
+            }
+
             let logs = light
                 .get_logs(filter)
                 .await
@@ -511,6 +533,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            check_address_network(address.network)?;
             let address: H160 = address.try_into()?;
 
             let root = invalid_params_check(
@@ -541,6 +564,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            check_address_network(address.network)?;
             let address: H160 = address.try_into()?;
 
             let maybe_entry = light
@@ -659,6 +683,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            check_address_network(address.network)?;
             let address: H160 = address.try_into()?;
 
             let epoch = match num {
@@ -919,6 +944,9 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            check_address_network(account_addr.network)?;
+            check_address_network(contract_addr.network)?;
+
             let account_addr: H160 = account_addr.try_into()?;
             let contract_addr: H160 = contract_addr.try_into()?;
 

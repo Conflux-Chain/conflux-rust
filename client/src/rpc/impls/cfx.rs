@@ -51,7 +51,7 @@ use crate::{
             request_rejected_in_catch_up_mode,
         },
         impls::{
-            common::{self, RpcImpl as CommonImpl},
+            common::{self, check_address_network, RpcImpl as CommonImpl},
             RpcImplConfiguration,
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
@@ -126,7 +126,7 @@ impl RpcImpl {
     fn code(
         &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
-        // TODO: add check for address.network
+        check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState);
 
         info!(
@@ -159,7 +159,7 @@ impl RpcImpl {
     fn balance(
         &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcResult<U256> {
-        // TODO: add check for address.network
+        check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -177,7 +177,7 @@ impl RpcImpl {
     fn admin(
         &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcResult<Option<Base32Address>> {
-        // TODO: add check for address.network
+        check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
         let network = address.network;
 
@@ -200,7 +200,7 @@ impl RpcImpl {
     fn sponsor_info(
         &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcResult<SponsorInfo> {
-        // TODO: add check for address.network
+        check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
         let network = address.network;
 
@@ -221,7 +221,7 @@ impl RpcImpl {
     fn staking_balance(
         &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcResult<U256> {
-        // TODO: add check for address.network
+        check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -239,7 +239,7 @@ impl RpcImpl {
     fn deposit_list(
         &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcResult<Vec<DepositInfo>> {
-        // TODO: add check for address.network
+        check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -259,7 +259,7 @@ impl RpcImpl {
     fn vote_list(
         &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcResult<Vec<VoteStakeInfo>> {
-        // TODO: add check for address.network
+        check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -279,7 +279,7 @@ impl RpcImpl {
     fn collateral_for_storage(
         &self, address: Base32Address, num: Option<EpochNumber>,
     ) -> RpcResult<U256> {
-        // TODO: add check for address.network
+        check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -300,7 +300,7 @@ impl RpcImpl {
     fn account(
         &self, address: Base32Address, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<RpcAccount> {
-        // TODO: add check for address.network
+        check_address_network(address.network)?;
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
         let network = address.network;
 
@@ -367,7 +367,7 @@ impl RpcImpl {
         epoch_num: Option<EpochNumber>,
     ) -> RpcResult<Option<H256>>
     {
-        // TODO: add check for address.network
+        check_address_network(address.network)?;
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -467,7 +467,7 @@ impl RpcImpl {
     fn storage_root(
         &self, address: Base32Address, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<Option<StorageRoot>> {
-        // TODO: add check for address.network
+        check_address_network(address.network)?;
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -816,7 +816,18 @@ impl RpcImpl {
     }
 
     fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
-        // TODO: add check for filter.address.network
+        // all addresses specified should be for the correct network
+        if let Some(addresses) = &filter.address {
+            for address in addresses.iter() {
+                invalid_params_check(
+                    "filter.address",
+                    check_rpc_address_network(
+                        Some(address.network),
+                        *NODE_NETWORK.read(),
+                    ),
+                )?;
+            }
+        }
 
         let _timer = ScopeTimer::time_scope(GET_LOGS_TIMER.as_ref());
         let consensus_graph = self.consensus_graph();
@@ -996,7 +1007,8 @@ impl RpcImpl {
         epoch: Option<EpochNumber>,
     ) -> RpcResult<CheckBalanceAgainstTransactionResponse>
     {
-        // TODO: add check for address.network
+        check_address_network(account_addr.network)?;
+        check_address_network(contract_addr.network)?;
 
         let epoch: primitives::EpochNumber =
             epoch.unwrap_or(EpochNumber::LatestState).into();

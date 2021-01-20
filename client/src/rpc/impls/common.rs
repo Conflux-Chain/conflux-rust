@@ -4,6 +4,7 @@
 
 use crate::rpc::{
     types::{
+        address::NODE_NETWORK, errors::check_rpc_address_network,
         Address as Base32Address, Block as RpcBlock, BlockHashOrEpochNumber,
         Bytes, CheckBalanceAgainstTransactionResponse, EpochNumber,
         Status as RpcStatus, Transaction as RpcTransaction, TxPoolPendingInfo,
@@ -12,13 +13,14 @@ use crate::rpc::{
     RpcResult,
 };
 use bigdecimal::BigDecimal;
+use cfx_addr::Network;
 use cfx_parameters::{
     consensus::ONE_CFX_IN_DRIP, staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
 use cfx_types::{Address, H160, H256, H520, U128, U256, U512, U64};
 use cfxcore::{
-    BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
-    SharedConsensusGraph, SharedTransactionPool,
+    rpc_errors::invalid_params_check, BlockDataManager, ConsensusGraph,
+    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
@@ -42,6 +44,13 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+
+pub fn check_address_network(network: Network) -> RpcResult<()> {
+    invalid_params_check(
+        "address",
+        check_rpc_address_network(Some(network), *NODE_NETWORK.read()),
+    )
+}
 
 fn grouped_txs<T, F>(
     txs: Vec<Arc<SignedTransaction>>, converter: F,
@@ -319,8 +328,7 @@ impl RpcImpl {
     pub fn next_nonce(
         &self, address: Base32Address, num: Option<BlockHashOrEpochNumber>,
     ) -> RpcResult<U256> {
-        // TODO: add check for address.network
-
+        check_address_network(address.network)?;
         let consensus_graph = self.consensus_graph();
 
         let num = num.unwrap_or(BlockHashOrEpochNumber::EpochNumber(
@@ -598,7 +606,7 @@ impl RpcImpl {
         let address: Option<H160> = match address {
             None => None,
             Some(addr) => {
-                // TODO: add check for address.network
+                check_address_network(addr.network)?;
                 Some(addr.try_into()?)
             }
         };
@@ -626,7 +634,7 @@ impl RpcImpl {
         let address: Option<H160> = match address {
             None => None,
             Some(addr) => {
-                // TODO: add check for address.network
+                check_address_network(addr.network)?;
                 Some(addr.try_into()?)
             }
         };
@@ -654,7 +662,7 @@ impl RpcImpl {
         let address: Option<H160> = match address {
             None => None,
             Some(addr) => {
-                // TODO: add check for address.network
+                check_address_network(addr.network)?;
                 Some(addr.try_into()?)
             }
         };
@@ -718,9 +726,10 @@ impl RpcImpl {
     pub fn unlock_account(
         &self, address: Base32Address, password: String, duration: Option<U128>,
     ) -> RpcResult<bool> {
-        // TODO: add check for address.network
+        check_address_network(address.network)?;
         let account: H160 = address.try_into()?;
         let store = self.accounts.clone();
+
         let duration = match duration {
             None => None,
             Some(duration) => {
@@ -759,7 +768,7 @@ impl RpcImpl {
     }
 
     pub fn lock_account(&self, address: Base32Address) -> RpcResult<bool> {
-        // TODO: add check for address.network
+        check_address_network(address.network)?;
         let address: H160 = address.try_into()?;
 
         match self.accounts.lock_account(address) {
@@ -774,7 +783,7 @@ impl RpcImpl {
     pub fn sign(
         &self, data: Bytes, address: Base32Address, password: Option<String>,
     ) -> RpcResult<H520> {
-        // TODO: add check for address.network
+        check_address_network(address.network)?;
         let address: H160 = address.try_into()?;
 
         let message = eth_data_hash(data.0);
@@ -801,7 +810,7 @@ impl RpcImpl {
     pub fn tx_inspect_pending(
         &self, address: Base32Address,
     ) -> RpcResult<TxPoolPendingInfo> {
-        // TODO: add check for address.network
+        check_address_network(address.network)?;
         let address: H160 = address.try_into()?;
 
         let mut ret = TxPoolPendingInfo::default();
