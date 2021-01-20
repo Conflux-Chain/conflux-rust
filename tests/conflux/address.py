@@ -36,7 +36,9 @@ def encode_b32_address(addr, network_id=DEFAULT_PY_TEST_CHAIN_ID):
     payload = convertbits([VERSION_BYTE] + list(addr), 8, 5)
     prefix = network_id_to_prefix(network_id)
     checksum = calculate_checksum(prefix, payload)
-    return "{}:{}".format(prefix, b32encode(payload + checksum))
+    r = "{}:{}".format(prefix, b32encode(payload + checksum))
+    print(r)
+    return r
 
 
 # Note: This function does not return network_id on purpose, because in python tests it is DEFAULT_PY_TEST_CHAIN_ID
