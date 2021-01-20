@@ -42,17 +42,17 @@ class TestGetLogs(RpcClient):
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
         # invalid `address` type
-        filter = Filter(address="")
+        filter = Filter(address="", encode_address=False)
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
-        filter = Filter(address=["0x0"])
+        filter = Filter(address=["0x0"], encode_address=False)
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
         # invalid `topics` type
-        filter = Filter(topics="")
+        filter = Filter(topics="", encode_address=False)
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
-        filter = Filter(topics=["0x0"])
+        filter = Filter(topics=["0x0"], encode_address=False)
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
         # invalid topics length

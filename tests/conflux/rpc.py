@@ -172,6 +172,7 @@ class RpcClient:
     def get_block_reward_info(self, epoch: str):
         reward = self.node.cfx_getBlockRewardInfo(epoch)
         convert_b32_address_field_to_hex(reward, "author")
+        return reward
 
     def epoch_number(self, epoch: str = None) -> int:
         if epoch is None:
@@ -304,7 +305,11 @@ class RpcClient:
         return self.node.cfx_getBestBlockHash()
 
     def get_tx(self, tx_hash: str) -> dict:
-        return self.node.cfx_getTransactionByHash(tx_hash)
+        tx = self.node.cfx_getTransactionByHash(tx_hash)
+        convert_b32_address_field_to_hex(tx, "from")
+        convert_b32_address_field_to_hex(tx, "to")
+        convert_b32_address_field_to_hex(tx, "contractCreated")
+        return tx
 
     def new_tx(self, sender = None, receiver = None, nonce = None, gas_price=1, gas=21000, value=100, data=b'', sign=True, priv_key=None, storage_limit=None, epoch_height=0, chain_id=DEFAULT_PY_TEST_CHAIN_ID):
         if sender is None:
@@ -377,6 +382,8 @@ class RpcClient:
         assert_is_hash_string(tx_hash)
         r = self.node.cfx_getTransactionReceipt(tx_hash)
         convert_b32_address_field_to_hex(r, "contractCreated")
+        convert_b32_address_field_to_hex(r, "from")
+        convert_b32_address_field_to_hex(r, "to")
         return r
 
     def txpool_status(self) -> (int, int):
@@ -457,10 +464,3 @@ class RpcClient:
         signature = self.node.getnodeid(list(int_to_bytes(challenge)))
         node_id, _, _ = convert_to_nodeid(signature, challenge)
         return node_id
-
-    def get_transaction_by_hash(self, tx_hash: str):
-        tx = self.node.cfx_getTransactionByHash(tx_hash)
-        convert_b32_address_field_to_hex(tx, "from")
-        convert_b32_address_field_to_hex(tx, "to")
-        convert_b32_address_field_to_hex(tx, "contractCreated")
-        return tx
