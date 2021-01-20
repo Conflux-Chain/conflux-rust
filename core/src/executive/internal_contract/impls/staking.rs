@@ -5,21 +5,32 @@
 use crate::{
     consensus_internal_parameters::MINED_BLOCK_COUNT_PER_QUARTER,
     state::StateGeneric,
+    trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams},
 };
-use cfx_parameters::consensus::ONE_CFX_IN_DRIP;
+use cfx_parameters::{
+    consensus::ONE_CFX_IN_DRIP,
+    internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+};
 use cfx_storage::StorageStateTrait;
 use cfx_types::{Address, U256};
 
 /// Implementation of `deposit(uint256)`.
 pub fn deposit<S: StorageStateTrait>(
     amount: U256, params: &ActionParams, state: &mut StateGeneric<S>,
-) -> vm::Result<()> {
+    tracer: &mut dyn Tracer<Output = ExecTrace>,
+) -> vm::Result<()>
+{
     if amount < U256::from(ONE_CFX_IN_DRIP) {
         Err(vm::Error::InternalContract("invalid deposit amount"))
     } else if state.balance(&params.sender)? < amount {
         Err(vm::Error::InternalContract("not enough balance to deposit"))
     } else {
+        tracer.prepare_internal_transfer_action(
+            params.sender,
+            *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            amount,
+        );
         state.deposit(&params.sender, &amount)?;
         Ok(())
     }
@@ -28,14 +39,26 @@ pub fn deposit<S: StorageStateTrait>(
 /// Implementation of `withdraw(uint256)`.
 pub fn withdraw<S: StorageStateTrait>(
     amount: U256, params: &ActionParams, state: &mut StateGeneric<S>,
-) -> vm::Result<()> {
+    tracer: &mut dyn Tracer<Output = ExecTrace>,
+) -> vm::Result<()>
+{
     state.remove_expired_vote_stake_info(&params.sender)?;
     if state.withdrawable_staking_balance(&params.sender)? < amount {
         Err(vm::Error::InternalContract(
             "not enough withdrawable staking balance to withdraw",
         ))
     } else {
-        state.withdraw(&params.sender, &amount)?;
+        tracer.prepare_internal_transfer_action(
+            *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            params.sender,
+            amount,
+        );
+        let interest_amount = state.withdraw(&params.sender, &amount)?;
+        tracer.prepare_internal_transfer_action(
+            Address::zero(),
+            params.sender,
+            interest_amount,
+        );
         Ok(())
     }
 }

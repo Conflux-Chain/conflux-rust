@@ -92,11 +92,7 @@ class Issue988Test(ConfluxTestFramework):
         attrs["chainId"] = 0
         attrs["to"] = Web3.toChecksumAddress(contract_addr)
         tx = func(*args).buildTransaction(attrs)
-        tx["value"] = int_to_hex(tx["value"])
-        tx["v"] = "0x0"
-        tx["r"] = "0x0"
-        tx["s"] = "0x0"
-        return self.nodes[0].cfx_call(tx)
+        return RpcClient(self.nodes[0]).call(contract_addr, tx["data"])
 
     def run_test(self):
         file_dir = os.path.dirname(os.path.realpath(__file__))
@@ -125,7 +121,7 @@ class Issue988Test(ConfluxTestFramework):
         self.log.info("addr=%s priv_key=%s", addr, priv_key)
         tx = client.new_tx(value=20 * 10 ** 18, receiver=addr, nonce=self.get_nonce(genesis_addr))
         client.send_tx(tx, True)
-        assert_equal(node.cfx_getBalance(addr), hex(20000000000000000000))
+        assert_equal(client.get_balance(addr), 20000000000000000000)
 
         # deploy test contract
         c0 = client.get_collateral_for_storage(addr)
@@ -141,7 +137,7 @@ class Issue988Test(ConfluxTestFramework):
         c1 = client.get_collateral_for_storage(addr)
         assert_equal(c1 - c0, storage_limit * COLLATERAL_UNIT_IN_DRIP)
         self.log.info("contract_addr={}".format(contract_addr))
-        assert_equal(node.cfx_getBalance(contract_addr), hex(0))
+        assert_equal(client.get_balance(contract_addr), 0)
 
         raw_result = self.call_contract_function_rpc(
             contract=test_contract,

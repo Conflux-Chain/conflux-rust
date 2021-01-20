@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+pub mod known_network_ids;
+
 /// Hold all top-level components for a type of client.
 /// This struct implement ClientShutdownTrait.
 pub struct ClientComponents<BlockGenT, Rest> {
@@ -198,12 +200,7 @@ pub fn initialize_common_modules(
     };
 
     let consensus_conf = conf.consensus_config();
-    let machine =
-        Arc::new(new_machine_with_builtin(CommonParams::common_params(
-            consensus_conf.chain_id.clone(),
-            conf.raw_conf.anticone_penalty_ratio,
-            conf.raw_conf.phase2_transition_height,
-        )));
+    let machine = Arc::new(new_machine_with_builtin(conf.common_params()));
 
     let genesis_block = genesis_block(
         &storage_manager,
@@ -742,10 +739,7 @@ use cfxcore::{
     block_data_manager::BlockDataManager,
     machine::{new_machine_with_builtin, Machine},
     pow::PowComputer,
-    spec::{
-        genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
-        CommonParams,
-    },
+    spec::genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
     statistics::Statistics,
     sync::SyncPhaseType,
     vm_factory::VmFactory,

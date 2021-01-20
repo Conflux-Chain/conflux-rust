@@ -40,7 +40,7 @@ mod impls {
     type Checkpoint = BTreeMap<Key, Option<Value>>;
 
     // Use generic type for better test-ability.
-    pub struct StateDb<Storage: StorageStateTrait> {
+    pub struct StateDb<Storage> {
         /// Contains the original storage key values for all loaded and
         /// modified key values.
         accessed_entries: RwLock<AccessedEntries>,
@@ -489,7 +489,7 @@ mod impls {
         }
     }
 
-    impl<Storage: StorageStateTrait> StateDbGetOriginalMethods
+    impl<Storage: StorageStateTraitExt> StateDbGetOriginalMethods
         for StateDb<Storage>
     {
         fn get_original_raw_with_proof(
@@ -628,6 +628,7 @@ mod impls {
         state::{NoProof, WithProof},
         utils::{access_mode, to_key_prefix_iter_upper_bound},
         MptKeyValue, StateProof, StorageRootProof, StorageStateTrait,
+        StorageStateTraitExt,
     };
     use cfx_types::{address_util::AddressUtil, Address};
     use hashbrown::HashMap;

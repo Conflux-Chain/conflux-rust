@@ -545,7 +545,9 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
     /// `resume_call` or `resume_create` to continue the execution.
     pub fn exec(
         mut self, state: &mut StateGeneric<S>, substate: &mut Substate,
-    ) -> ExecutiveTrapResult<'a, FinalizationResult, S> {
+        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
+    ) -> ExecutiveTrapResult<'a, FinalizationResult, S>
+    {
         let kind =
             std::mem::replace(&mut self.kind, CallCreateExecutiveKind::Moved);
         match kind {
@@ -674,6 +676,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
                         &spec,
                         state,
                         &mut unconfirmed_substate,
+                        tracer,
                     )
                 } else {
                     Ok(GasLeft::Known(params.gas))
@@ -750,7 +753,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
                         OutputPolicy::Return,
                         self.internal_contract_map,
                     );
-                    match exec.exec(&mut context) {
+                    match exec.exec(&mut context, tracer) {
                         Ok(val) => Ok(val.finalize(context)),
                         Err(err) => Err(err),
                     }
@@ -820,7 +823,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
                         OutputPolicy::InitContract,
                         self.internal_contract_map,
                     );
-                    match exec.exec(&mut context) {
+                    match exec.exec(&mut context, tracer) {
                         Ok(val) => Ok(val.finalize(context)),
                         Err(err) => Err(err),
                     }
@@ -849,7 +852,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
     /// Resume execution from a call trap previously trapped by `exec'.
     pub fn resume_call(
         mut self, result: vm::MessageCallResult, state: &mut StateGeneric<S>,
-        substate: &mut Substate,
+        substate: &mut Substate, tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> ExecutiveTrapResult<'a, FinalizationResult, S>
     {
         match self.kind {
@@ -878,7 +881,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
                         },
                         self.internal_contract_map,
                     );
-                    match exec.exec(&mut context) {
+                    match exec.exec(&mut context, tracer) {
                         Ok(val) => Ok(val.finalize(context)),
                         Err(err) => Err(err),
                     }
@@ -913,6 +916,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
     pub fn resume_create(
         mut self, result: vm::ContractCreateResult,
         state: &mut StateGeneric<S>, substate: &mut Substate,
+        tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> ExecutiveTrapResult<'a, FinalizationResult, S>
     {
         match self.kind {
@@ -941,7 +945,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
                         },
                         self.internal_contract_map,
                     );
-                    match exec.exec(&mut context) {
+                    match exec.exec(&mut context, tracer) {
                         Ok(val) => Ok(val.finalize(context)),
                         Err(err) => Err(err),
                     }
@@ -975,13 +979,13 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
     /// Execute and consume the current executive. This function handles resume
     /// traps and sub-level tracing. The caller is expected to handle
     /// current-level tracing.
-    pub fn consume<T: Tracer>(
+    pub fn consume(
         self, state: &mut StateGeneric<S>, top_substate: &mut Substate,
-        tracer: &mut T,
+        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
     ) -> vm::Result<FinalizationResult>
     {
         let mut last_res =
-            Some((false, self.gas, self.exec(state, top_substate)));
+            Some((false, self.gas, self.exec(state, top_substate, tracer)));
 
         let mut callstack: Vec<(Option<Address>, CallCreateExecutive<'a, S>)> =
             Vec::new();
@@ -999,7 +1003,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
                                 None => top_substate,
                             };
 
-                            last_res = Some((exec.is_create, exec.gas, exec.exec(state, parent_substate)));
+                            last_res = Some((exec.is_create, exec.gas, exec.exec(state, parent_substate, tracer)));
                         }
                         None => panic!("When callstack only had one item and it was executed, this function would return; callstack never reaches zero item; qed"),
                     }
@@ -1020,6 +1024,9 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
                                 };
 
                                 let contract_create_result = into_contract_create_result(val, &address, exec.unconfirmed_substate().expect("Executive is resumed from a create; it has an unconfirmed substate; qed"));
+                                tracer.prepare_trace_create_result(
+                                    &contract_create_result,
+                                );
                                 last_res = Some((
                                     exec.is_create,
                                     exec.gas,
@@ -1027,6 +1034,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
                                         contract_create_result,
                                         state,
                                         parent_substate,
+                                        tracer,
                                     ),
                                 ));
                             } else {
@@ -1035,14 +1043,19 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
                                     Some((_, ref mut second_last)) => second_last.unconfirmed_substate().expect("Current stack value is created from second last item; second last item must be call or create; qed"),
                                     None => top_substate,
                                 };
-
+                                let contract_call_result =
+                                    into_message_call_result(val);
+                                tracer.prepare_trace_call_result(
+                                    &contract_call_result,
+                                );
                                 last_res = Some((
                                     exec.is_create,
                                     exec.gas,
                                     exec.resume_call(
-                                        into_message_call_result(val),
+                                        contract_call_result,
                                         state,
                                         parent_substate,
+                                        tracer,
                                     ),
                                 ));
                             }
@@ -1178,12 +1191,11 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ExecutiveGeneric<'a, S> {
         )
     }
 
-    pub fn create_with_stack_depth<T>(
+    pub fn create_with_stack_depth(
         &mut self, params: ActionParams, substate: &mut Substate,
-        stack_depth: usize, tracer: &mut T,
+        stack_depth: usize,
+        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
     ) -> vm::Result<FinalizationResult>
-    where
-        T: Tracer,
     {
         tracer.prepare_trace_create(&params);
         let _address = params.address;
@@ -1207,22 +1219,19 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ExecutiveGeneric<'a, S> {
         result
     }
 
-    pub fn create<T>(
+    pub fn create(
         &mut self, params: ActionParams, substate: &mut Substate,
-        tracer: &mut T,
+        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
     ) -> vm::Result<FinalizationResult>
-    where
-        T: Tracer,
     {
         self.create_with_stack_depth(params, substate, 0, tracer)
     }
 
-    pub fn call_with_stack_depth<T>(
+    pub fn call_with_stack_depth(
         &mut self, params: ActionParams, substate: &mut Substate,
-        stack_depth: usize, tracer: &mut T,
+        stack_depth: usize,
+        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
     ) -> vm::Result<FinalizationResult>
-    where
-        T: Tracer,
     {
         tracer.prepare_trace_call(&params);
         let vm_factory = self.state.vm_factory();
@@ -1245,12 +1254,10 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ExecutiveGeneric<'a, S> {
         result
     }
 
-    pub fn call<T>(
+    pub fn call(
         &mut self, params: ActionParams, substate: &mut Substate,
-        tracer: &mut T,
+        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
     ) -> vm::Result<FinalizationResult>
-    where
-        T: Tracer,
     {
         self.call_with_stack_depth(params, substate, 0, tracer)
     }
@@ -1502,7 +1509,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ExecutiveGeneric<'a, S> {
                 // not happen. Unless we enable account dust in
                 // future. We add this check just in case it
                 // helps in future.
-                if self.state.is_contract_with_code(&new_address) {
+                if self.state.is_contract_with_code(&new_address)? {
                     self.state.revert_to_checkpoint();
                     return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                         ExecutionError::ContractAddressConflict,

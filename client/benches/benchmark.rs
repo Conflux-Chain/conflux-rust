@@ -85,7 +85,9 @@ fn txexe_benchmark(c: &mut Criterion) {
                 VmFactory::new(1024 * 32),
                 &spec,
                 0, /* block_number */
-            );
+            )
+            .expect("Failed to initialize state");
+
             let mut ex = Executive::new(
                 &mut state,
                 &env,
@@ -93,6 +95,7 @@ fn txexe_benchmark(c: &mut Criterion) {
                 &spec,
                 &internal_contract_map,
             );
+
             b.iter(|| {
                 let options = TransactOptions::with_no_tracing();
                 ex.transact(&tx, options).unwrap();

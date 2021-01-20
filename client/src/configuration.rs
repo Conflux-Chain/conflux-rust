@@ -29,6 +29,7 @@ use cfxcore::{
     consensus_parameters::*,
     light_protocol::LightNodeConfiguration,
     machine::Machine,
+    spec::CommonParams,
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
     transaction_pool::TxPoolConfig,
@@ -127,7 +128,7 @@ build_config! {
         (genesis_accounts, (Option<String>), None)
         (genesis_secrets, (Option<String>), None)
         (initial_difficulty, (Option<u64>), None)
-        (phase2_transition_height, (u64), PHASE2_HEIGHT)
+        (tanzanite_transition_height, (u64), TANZANITE_HEIGHT)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
@@ -212,7 +213,7 @@ build_config! {
         (discovery_throttling_limit_ping, (usize), 20)
         (discovery_throttling_limit_find_nodes, (usize), 10)
         (enable_discovery, (bool), true)
-        (netconf_dir, (Option<String>), Some("./net_config".to_string()))
+        (netconf_dir, (Option<String>), Some("./blockchain_data/net_config".to_string()))
         (net_key, (Option<String>), None)
         (node_table_timeout_s, (u64), 300)
         (node_table_promotion_timeout_s, (u64), 3 * 24 * 3600)
@@ -229,11 +230,10 @@ build_config! {
         // Storage Section.
         (additional_maintained_snapshot_count, (u32), 1)
         (block_cache_gc_period_ms, (u64), 5_000)
-        // FIXME: use a fixed sub-dir of conflux_data_dir instead.
-        (block_db_dir, (String), "./blockchain_db".to_string())
+        (block_db_dir, (String), "./blockchain_data/blockchain_db".to_string())
         (block_db_type, (String), "rocksdb".to_string())
         // The conflux data dir, if unspecified, is the workdir where conflux is started.
-        (conflux_data_dir, (String), "./".to_string())
+        (conflux_data_dir, (String), "./blockchain_data".to_string())
         (ledger_cache_size, (usize), DEFAULT_LEDGER_CACHE_SIZE)
         (invalid_block_hash_cache_size_in_count, (usize), DEFAULT_INVALID_BLOCK_HASH_CACHE_SIZE_IN_COUNT)
         (rocksdb_cache_size, (Option<usize>), Some(128))
@@ -248,6 +248,7 @@ build_config! {
 
         // General/Unclassified section.
         (account_provider_refresh_time_ms, (u64), 1000)
+        (check_phase_change_period_ms, (u64), 1000)
         (enable_optimistic_execution, (bool), true)
         (future_block_buffer_capacity, (usize), 32768)
         (get_logs_filter_max_limit, (Option<usize>), None)
@@ -622,6 +623,9 @@ impl Configuration {
             check_request_period: Duration::from_millis(
                 self.raw_conf.check_request_period_ms,
             ),
+            check_phase_change_period: Duration::from_millis(
+                self.raw_conf.check_phase_change_period_ms,
+            ),
             heartbeat_period_interval: Duration::from_millis(
                 self.raw_conf.heartbeat_period_interval_ms,
             ),
@@ -877,6 +881,18 @@ impl Configuration {
                 .raw_conf
                 .ln_num_waiting_headers_threshold,
         }
+    }
+
+    pub fn common_params(&self) -> CommonParams {
+        let mut params = CommonParams::common_params(
+            self.chain_id_params(),
+            self.raw_conf.anticone_penalty_ratio,
+            self.raw_conf.tanzanite_transition_height,
+        );
+        if self.is_test_or_dev_mode() {
+            params.alt_bn128_transition = 0;
+        }
+        params
     }
 }
 

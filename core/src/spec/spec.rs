@@ -5,10 +5,13 @@
 use crate::message::Bytes;
 use cfx_internal_common::ChainIdParams;
 use cfx_parameters::{
-    consensus::{ONE_UCFX_IN_DRIP, PHASE2_HEADER_CUSTOM_FIRST_ELEMENT},
+    consensus::{
+        BN128_ENABLE_NUMBER, ONE_UCFX_IN_DRIP,
+        TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT,
+    },
     consensus_internal::{
         ANTICONE_PENALTY_RATIO, INITIAL_BASE_MINING_REWARD_IN_UCFX,
-        MINING_REWARD_PHASE2_IN_UCFX,
+        MINING_REWARD_TANZANITE_IN_UCFX,
     },
 };
 use cfx_types::{Address, H256, U256, U512};
@@ -70,12 +73,12 @@ pub struct CommonParams {
     /// Initial base rewards according to block height.
     pub base_block_rewards: BTreeMap<BlockHeight, U256>,
 
-    /// Number of first block where ec built-in contract enabled.
+    /// Number of first block where bn128 built-in contract enabled.
     pub alt_bn128_transition: u64,
     /// The height to change block base reward.
     /// The block `custom` field of this height is required to be
-    /// `phase2_transition_header_custom`.
-    pub phase2_transition: BlockHeight,
+    /// `tanzanite_transition_header_custom`.
+    pub tanzanite_transition: BlockHeight,
 }
 
 impl Default for CommonParams {
@@ -93,8 +96,8 @@ impl Default for CommonParams {
             max_transaction_size: 300 * 1024,
             anticone_penalty_ratio: ANTICONE_PENALTY_RATIO,
             base_block_rewards,
-            alt_bn128_transition: i64::MAX as u64,
-            phase2_transition: 0,
+            alt_bn128_transition: BN128_ENABLE_NUMBER,
+            tanzanite_transition: 0,
         }
     }
 }
@@ -102,18 +105,19 @@ impl Default for CommonParams {
 impl CommonParams {
     pub fn common_params(
         chain_id: ChainIdParams, anticone_penalty_ratio: u64,
-        phase2_transition: BlockHeight,
+        tanzanite_transition: BlockHeight,
     ) -> Self
     {
         let mut base_block_rewards = BTreeMap::new();
         base_block_rewards.insert(0, INITIAL_BASE_MINING_REWARD_IN_UCFX.into());
-        base_block_rewards
-            .insert(phase2_transition, MINING_REWARD_PHASE2_IN_UCFX.into());
+        base_block_rewards.insert(
+            tanzanite_transition,
+            MINING_REWARD_TANZANITE_IN_UCFX.into(),
+        );
         let mut params = CommonParams::default();
         params.chain_id = chain_id;
         params.anticone_penalty_ratio = anticone_penalty_ratio;
-        params.phase2_transition = phase2_transition;
-        params.alt_bn128_transition = phase2_transition;
+        params.tanzanite_transition = tanzanite_transition;
         params.base_block_rewards = base_block_rewards;
         params
     }
@@ -132,8 +136,8 @@ impl CommonParams {
     }
 
     pub fn custom_prefix(&self, height: BlockHeight) -> Option<Vec<Bytes>> {
-        if height >= self.phase2_transition {
-            Some(vec![PHASE2_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
+        if height >= self.tanzanite_transition {
+            Some(vec![TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
         } else {
             None
         }
