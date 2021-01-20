@@ -1,3 +1,4 @@
+import eth_utils
 from eth_utils import decode_hex
 
 from .address_utils import *
@@ -36,9 +37,7 @@ def encode_b32_address(addr, network_id=DEFAULT_PY_TEST_CHAIN_ID):
     payload = convertbits([VERSION_BYTE] + list(addr), 8, 5)
     prefix = network_id_to_prefix(network_id)
     checksum = calculate_checksum(prefix, payload)
-    r = "{}:{}".format(prefix, b32encode(payload + checksum))
-    print(r)
-    return r
+    return "{}:{}".format(prefix, b32encode(payload + checksum))
 
 
 # Note: This function does not return network_id on purpose, because in python tests it is DEFAULT_PY_TEST_CHAIN_ID
@@ -60,7 +59,7 @@ def decode_b32_address(b32_addr):
 
 
 def b32_address_to_hex(addr):
-    return encode_hex(decode_b32_address(addr))
+    return eth_utils.encode_hex(decode_b32_address(addr))
 
 
 def hex_to_b32_address(addr, network_id=DEFAULT_PY_TEST_CHAIN_ID):

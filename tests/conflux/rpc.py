@@ -215,27 +215,26 @@ class RpcClient:
     def get_sponsor_info(self, addr: str, epoch: str = None) -> dict:
         addr = hex_to_b32_address(addr)
         if epoch is None:
-            return self.node.cfx_getSponsorInfo(addr)
+            r = self.node.cfx_getSponsorInfo(addr)
         else:
-            return self.node.cfx_getSponsorInfo(addr, epoch)
+            r = self.node.cfx_getSponsorInfo(addr, epoch)
+        convert_b32_address_field_to_hex(r, 'sponsorForGas')
+        convert_b32_address_field_to_hex(r, 'sponsorForCollateral')
+        return r
 
     def get_sponsor_for_gas(self, addr: str, epoch: str = None) -> str:
-        addr = hex_to_b32_address(addr)
         return self.get_sponsor_info(addr, epoch)['sponsorForGas']
 
     def get_sponsor_for_collateral(self, addr: str, epoch: str = None) -> str:
-        addr = hex_to_b32_address(addr)
         return self.get_sponsor_info(addr, epoch)['sponsorForCollateral']
 
     def get_sponsor_balance_for_collateral(self, addr: str, epoch: str = None) -> int:
         return int(self.get_sponsor_info(addr, epoch)['sponsorBalanceForCollateral'], 0)
 
     def get_sponsor_balance_for_gas(self, addr: str, epoch: str = None) -> int:
-        addr = hex_to_b32_address(addr)
         return int(self.get_sponsor_info(addr, epoch)['sponsorBalanceForGas'], 0)
 
     def get_sponsor_gas_bound(self, addr: str, epoch: str = None) -> int:
-        addr = hex_to_b32_address(addr)
         return int(self.get_sponsor_info(addr, epoch)['sponsorGasBound'], 0)
 
     def get_admin(self, addr: str, epoch: str = None) -> str:
