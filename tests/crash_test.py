@@ -57,6 +57,7 @@ class CrashTest(ConfluxTestFramework):
         self.nodes[0].add_p2p_connection(P2PInterface())
         network_thread_start()
         self.nodes[0].p2p.wait_for_status()
+        client = RpcClient(self.nodes[0])
         gas_price = 1
         value = 1
         receiver_sk, _ = ec_random_keys()
@@ -67,7 +68,6 @@ class CrashTest(ConfluxTestFramework):
         self.log.debug("New tx %s: %s send value %d to %s", encode_hex(tx.hash), eth_utils.encode_hex(priv_to_addr(sender_key))[-4:],
                        value, eth_utils.encode_hex(priv_to_addr(receiver_sk))[-4:])
         def check_packed():
-            client = RpcClient(self.nodes[0])
             client.generate_block(1)
             return checktx(self.nodes[0], tx.hash_hex())
         wait_until(lambda: check_packed())
@@ -76,14 +76,14 @@ class CrashTest(ConfluxTestFramework):
         sender_balance = default_config["TOTAL_COIN"] - value - gas_price * 21000
         # Generate 2 * CACHE_INDEX_STRIDE to start evicting anticone cache
         self.nodes[0].generate_empty_blocks(2000)
-        assert_equal(parse_as_int(self.nodes[0].cfx_getBalance(sender_addr)), sender_balance)
-        assert_equal(parse_as_int(self.nodes[0].cfx_getBalance(receiver_addr)), value)
+        assert_equal(client.get_balance(sender_addr), sender_balance)
+        assert_equal(client.get_balance(receiver_addr), value)
         time.sleep(1)
         self.stop_node(0)
         self.start_node(0)
-        self.log.info("Wait for node 0 to recover from crash");
-        wait_until(lambda: parse_as_int(self.nodes[0].cfx_getBalance(sender_addr)) == sender_balance)
-        wait_until(lambda: parse_as_int(self.nodes[0].cfx_getBalance(receiver_addr)) == value)
+        self.log.info("Wait for node 0 to recover from crash")
+        wait_until(lambda: client.get_balance(sender_addr) == sender_balance)
+        wait_until(lambda: client.get_balance(receiver_addr) == value)
         self.log.info("Pass 2")
 
 

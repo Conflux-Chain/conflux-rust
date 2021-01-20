@@ -20,6 +20,7 @@ mod tests;
 use cfx_types::Address;
 use checksum::polymod;
 pub use consts::{AddressType, Network};
+pub use errors::DecodingError;
 use errors::*;
 
 const BASE32_CHARS: &str = "0123456789abcdefghijklmnopqrstuvwxyz";
@@ -56,10 +57,12 @@ lazy_static! {
 /// Struct containing the bytes and metadata of a Conflux address.
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct UserAddress {
+    /// Base32 address
+    pub base32: String,
     /// Address bytes
-    pub body: Vec<u8>,
+    pub bytes: Vec<u8>,
     /// The parsed address in H160 format.
-    pub hex_address: Option<Address>,
+    pub hex: Option<Address>,
     /// Network
     pub network: Network,
 }
@@ -260,8 +263,9 @@ pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
     }
 
     Ok(UserAddress {
-        body: body.to_vec(),
-        hex_address,
+        base32: addr_str.to_lowercase(),
+        bytes: body.to_vec(),
+        hex: hex_address,
         network,
     })
 }

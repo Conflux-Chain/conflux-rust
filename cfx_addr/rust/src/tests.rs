@@ -192,5 +192,5 @@ fn verify(network: Network, data: &Vec<u8>, cfx_base32_addr: &str) {
         output
     );
     let decoded = cfx_addr_decode(cfx_base32_addr).unwrap();
-    assert!(&decoded.body == data, "decoded address mismatch");
+    assert!(&decoded.bytes == data, "decoded address mismatch");
 }

@@ -7,7 +7,9 @@ use crate::rpc::{
     helpers::{EpochQueue, SubscriberId, Subscribers},
     metadata::Metadata,
     traits::PubSub,
-    types::{pubsub, Header as RpcHeader, Log as RpcLog},
+    types::{
+        address::NODE_NETWORK, pubsub, Header as RpcHeader, Log as RpcLog,
+    },
 };
 use cfx_parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
 use cfx_types::H256;
@@ -234,8 +236,23 @@ impl ChainNotificationHandler {
         }
 
         let header = match self.data_man.block_header_by_hash(hash) {
-            Some(h) => RpcHeader::new(&*h, self.consensus.clone()),
+            Some(h) => RpcHeader::new(
+                &*h,
+                *NODE_NETWORK.read(),
+                self.consensus.clone(),
+            ),
             None => return warn!("Unable to retrieve header for {:?}", hash),
+        };
+
+        let header = match header {
+            Ok(h) => h,
+            Err(e) => {
+                error!(
+                    "Unexpected error while constructing RpcHeader: {:?}",
+                    e
+                );
+                return;
+            }
         };
 
         for subscriber in subscribers.values() {
@@ -293,13 +310,23 @@ impl ChainNotificationHandler {
             .iter()
             .filter(|l| filter.matches(&l.entry))
             .cloned()
-            .map(RpcLog::from);
+            .map(|l| RpcLog::try_from_localized(l, *NODE_NETWORK.read()));
 
         // send logs in order
         // FIXME(thegaram): Sink::notify flushes after each item.
         // consider sending them in a batch.
         for log in logs {
-            Self::notify_async(subscriber, pubsub::Result::Log(log)).await
+            match log {
+                Ok(l) => {
+                    Self::notify_async(subscriber, pubsub::Result::Log(l)).await
+                }
+                Err(e) => {
+                    error!(
+                        "Unexpected error while constructing RpcLog: {:?}",
+                        e
+                    );
+                }
+            }
         }
     }
 

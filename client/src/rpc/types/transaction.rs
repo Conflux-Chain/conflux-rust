@@ -2,28 +2,30 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{receipt::Receipt, Bytes};
-use cfx_types::{H160, H256, U256, U64};
+use crate::rpc::types::{receipt::Receipt, Address as Base32Address, Bytes};
+use cfx_addr::Network;
+use cfx_types::{H256, U256, U64};
 use cfxkey::Error;
 use primitives::{
     transaction::Action, SignedTransaction,
     Transaction as PrimitiveTransaction, TransactionIndex,
     TransactionWithSignature, TransactionWithSignatureSerializePart,
 };
+use std::convert::TryInto;
 
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
     pub hash: H256,
     pub nonce: U256,
     pub block_hash: Option<H256>,
     pub transaction_index: Option<U64>,
-    pub from: H160,
-    pub to: Option<H160>,
+    pub from: Base32Address,
+    pub to: Option<Base32Address>,
     pub value: U256,
     pub gas_price: U256,
     pub gas: U256,
-    pub contract_created: Option<H160>,
+    pub contract_created: Option<Base32Address>,
     pub data: Bytes,
     pub storage_limit: U256,
     pub epoch_height: U256,
@@ -43,10 +45,33 @@ pub enum PackedOrExecuted {
 }
 
 impl Transaction {
+    pub fn default(network: Network) -> Result<Transaction, String> {
+        Ok(Transaction {
+            hash: Default::default(),
+            nonce: Default::default(),
+            block_hash: Default::default(),
+            transaction_index: Default::default(),
+            from: Base32Address::null(network)?,
+            to: Default::default(),
+            value: Default::default(),
+            gas_price: Default::default(),
+            gas: Default::default(),
+            contract_created: Default::default(),
+            data: Default::default(),
+            storage_limit: Default::default(),
+            epoch_height: Default::default(),
+            chain_id: Default::default(),
+            status: Default::default(),
+            v: Default::default(),
+            r: Default::default(),
+            s: Default::default(),
+        })
+    }
+
     pub fn from_signed(
         t: &SignedTransaction,
-        maybe_packed_or_executed: Option<PackedOrExecuted>,
-    ) -> Transaction
+        maybe_packed_or_executed: Option<PackedOrExecuted>, network: Network,
+    ) -> Result<Transaction, String>
     {
         let mut contract_created = None;
         let mut status: Option<U64> = None;
@@ -62,22 +87,24 @@ impl Transaction {
                 block_hash = Some(receipt.block_hash);
                 transaction_index = Some(receipt.index.into());
                 if let Some(ref address) = receipt.contract_created {
-                    contract_created = Some(address.clone().into());
+                    contract_created = Some(address.clone());
                 }
                 status = Some(receipt.outcome_status);
             }
         }
-        Transaction {
+        Ok(Transaction {
             hash: t.transaction.hash().into(),
             nonce: t.nonce.into(),
             block_hash,
             transaction_index,
             status,
             contract_created,
-            from: t.sender().into(),
+            from: Base32Address::try_from_h160(t.sender(), network)?,
             to: match t.action {
                 Action::Create => None,
-                Action::Call(ref address) => Some(address.clone().into()),
+                Action::Call(ref address) => Some(
+                    Base32Address::try_from_h160(address.clone(), network)?,
+                ),
             },
             value: t.value.into(),
             gas_price: t.gas_price.into(),
@@ -89,7 +116,7 @@ impl Transaction {
             v: t.transaction.v.into(),
             r: t.transaction.r.into(),
             s: t.transaction.s.into(),
-        }
+        })
     }
 
     pub fn into_signed(self) -> Result<SignedTransaction, Error> {
@@ -101,7 +128,9 @@ impl Transaction {
                     gas: self.gas.into(),
                     action: match self.to {
                         None => Action::Create,
-                        Some(address) => Action::Call(address.into()),
+                        Some(address) => Action::Call(
+                            address.try_into().map_err(Error::Custom)?,
+                        ),
                     },
                     value: self.value.into(),
                     storage_limit: self.storage_limit.as_u64(),

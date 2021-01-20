@@ -2,8 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::EpochNumber;
-use cfx_types::{H160, H256, U64};
+use super::{Address as Base32Address, EpochNumber};
+use cfx_types::{H256, U64};
 use jsonrpc_core::Error as RpcError;
 use primitives::filter::Filter as PrimitiveFilter;
 use serde::{
@@ -11,6 +11,7 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use serde_json::{from_value, Value};
+use std::convert::TryInto;
 
 const FILTER_BLOCK_HASH_LIMIT: usize = 128;
 
@@ -30,6 +31,16 @@ impl<T> Into<Option<Vec<T>>> for VariadicValue<T> {
             VariadicValue::Null => None,
             VariadicValue::Single(x) => Some(vec![x]),
             VariadicValue::Multiple(xs) => Some(xs),
+        }
+    }
+}
+
+impl<T> VariadicValue<T> {
+    pub fn iter<'a>(&'a self) -> Box<dyn std::iter::Iterator<Item = &T> + 'a> {
+        match self {
+            VariadicValue::Null => Box::new(std::iter::empty()),
+            VariadicValue::Single(x) => Box::new(std::iter::once(x)),
+            VariadicValue::Multiple(xs) => Box::new(xs.iter()),
         }
     }
 }
@@ -87,7 +98,7 @@ pub struct Filter {
     ///
     /// If None, match all.
     /// If specified, log must be produced by one of these addresses.
-    pub address: Option<VariadicValue<H160>>,
+    pub address: Option<VariadicValue<Base32Address>>,
 
     /// Search topics.
     ///
@@ -159,7 +170,19 @@ impl Filter {
         };
 
         // address, limit
-        let address = self.address.and_then(Into::into);
+        let address = match self.address {
+            None => None,
+            Some(VariadicValue::Null) => None,
+            Some(VariadicValue::Single(x)) => {
+                Some(vec![x.try_into().map_err(RpcError::invalid_params)?])
+            }
+            Some(VariadicValue::Multiple(xs)) => Some(
+                xs.into_iter()
+                    .map(|x| x.try_into().map_err(RpcError::invalid_params))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+        };
+
         let limit = self.limit.map(|x| x.as_u64() as usize);
 
         Ok(PrimitiveFilter {
@@ -176,13 +199,14 @@ impl Filter {
 #[cfg(test)]
 mod tests {
     use super::{EpochNumber, Filter, VariadicValue};
-    use cfx_types::{Address, H160, H256, U64};
+    use cfx_types::{H160, H256, U64};
     use primitives::{
         epoch::EpochNumber as PrimitiveEpochNumber,
         filter::Filter as PrimitiveFilter,
     };
     use serde_json;
-    use std::str::FromStr;
+    use serial_test::serial;
+    use std::{convert::TryInto, str::FromStr};
 
     #[test]
     fn test_serialize_variadic_value() {
@@ -262,8 +286,8 @@ mod tests {
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
             ]),
             address: Some(VariadicValue::Multiple(vec![
-                Address::from_str("0000000000000000000000000000000000000000").unwrap(),
-                Address::from_str("0000000000000000000000000000000000000001").unwrap()
+                "cfx:0000000000000000000000000000000000pe51b8as".try_into().unwrap(),
+                "cfx:000000000000000000000000000000000482u4m4mw".try_into().unwrap(),
             ])),
             topics: Some(vec![
                 VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
@@ -283,7 +307,7 @@ mod tests {
              \"fromEpoch\":\"0x3e8\",\
              \"toEpoch\":\"latest_state\",\
              \"blockHashes\":[\"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
-             \"address\":[\"0x0000000000000000000000000000000000000000\",\"0x0000000000000000000000000000000000000001\"],\
+             \"address\":[\"CFX:TYPE.NULL:0000000000000000000000000000000000PE51B8AS\",\"CFX:TYPE.BUILTIN:000000000000000000000000000000000482U4M4MW\"],\
              \"topics\":[\
                 \"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\
                 [\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\"]\
@@ -294,6 +318,7 @@ mod tests {
     }
 
     #[test]
+    #[serial] // TODO: remove
     fn test_deserialize_filter() {
         let serialized = "{}";
 
@@ -314,7 +339,7 @@ mod tests {
              \"fromEpoch\":\"0x3e8\",\
              \"toEpoch\":\"latest_state\",\
              \"blockHashes\":[\"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
-             \"address\":[\"0x0000000000000000000000000000000000000000\",\"0x0000000000000000000000000000000000000001\"],\
+             \"address\":[\"cfx:0000000000000000000000000000000000pe51b8as\",\"cfx:000000000000000000000000000000000482u4m4mw\"],\
              \"topics\":[\
                 \"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\
                 [\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\"]\
@@ -330,8 +355,8 @@ mod tests {
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
             ]),
             address: Some(VariadicValue::Multiple(vec![
-                H160::from_str("0000000000000000000000000000000000000000").unwrap(),
-                H160::from_str("0000000000000000000000000000000000000001").unwrap()
+                "cfx:0000000000000000000000000000000000pe51b8as".try_into().unwrap(),
+                "cfx:000000000000000000000000000000000482u4m4mw".try_into().unwrap(),
             ])),
             topics: Some(vec![
                 VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
@@ -358,8 +383,8 @@ mod tests {
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
             ]),
             address: Some(VariadicValue::Multiple(vec![
-                H160::from_str("0000000000000000000000000000000000000000").unwrap(),
-                H160::from_str("0000000000000000000000000000000000000001").unwrap()
+                "cfx:0000000000000000000000000000000000pe51b8as".try_into().unwrap(),
+                "cfx:000000000000000000000000000000000482u4m4mw".try_into().unwrap(),
             ])),
             topics: Some(vec![
                 VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),

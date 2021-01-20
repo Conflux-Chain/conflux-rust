@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 from http.client import CannotSendRequest
+
+from conflux.rpc import RpcClient
 from conflux.transactions import CONTRACT_DEFAULT_GAS, charged_of_huge_gas
 from conflux.utils import encode_hex, bytes_to_int, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
@@ -116,10 +118,11 @@ class TransactionTest(DefaultConfluxTestFramework):
 
     def check_account(self, k, balance_map):
         addr = eth_utils.encode_hex(priv_to_addr(k))
+        client = RpcClient(self.nodes[0])
         try:
-            balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
-            staking_balance = parse_as_int(self.nodes[0].cfx_getStakingBalance(addr))
-            collateral_for_storage = parse_as_int(self.nodes[0].cfx_getCollateralForStorage(addr))
+            balance = client.get_balance(addr)
+            staking_balance = client.get_staking_balance(addr)
+            collateral_for_storage = client.get_collateral_for_storage(addr)
         except Exception as e:
             self.log.info("Fail to get balance, error=%s", str(e))
             return False
