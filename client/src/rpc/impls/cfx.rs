@@ -213,7 +213,7 @@ impl RpcImpl {
             self.consensus.get_state_db_by_epoch_number(epoch_num)?;
 
         match state_db.get_account(&address.try_into()?)? {
-            None => Ok(SponsorInfo::default(network)),
+            None => Ok(SponsorInfo::default(network)?),
             Some(acc) => Ok(SponsorInfo::try_from(acc.sponsor_info, network)?),
         }
     }

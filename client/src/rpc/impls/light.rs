@@ -238,7 +238,7 @@ impl RpcImpl {
             )?;
 
             match account {
-                None => Ok(SponsorInfo::default(network)),
+                None => Ok(SponsorInfo::default(network)?),
                 Some(acc) => {
                     Ok(SponsorInfo::try_from(acc.sponsor_info, network)?)
                 }
@@ -740,7 +740,13 @@ impl RpcImpl {
                 .inner
                 .read();
 
-            Ok(Some(RpcBlock::new(&block, &*inner, &data_man, include_txs)))
+            Ok(Some(RpcBlock::new(
+                &block,
+                *NODE_NETWORK.read(),
+                &*inner,
+                &data_man,
+                include_txs,
+            )?))
         };
 
         Box::new(fut.boxed().compat())
@@ -788,7 +794,13 @@ impl RpcImpl {
                 .inner
                 .read();
 
-            Ok(RpcBlock::new(&block, &*inner, &data_man, true))
+            Ok(RpcBlock::new(
+                &block,
+                *NODE_NETWORK.read(),
+                &*inner,
+                &data_man,
+                true,
+            )?)
         };
 
         Box::new(fut.boxed().compat())
@@ -836,7 +848,13 @@ impl RpcImpl {
                 .inner
                 .read();
 
-            Ok(Some(RpcBlock::new(&block, &*inner, &data_man, include_txs)))
+            Ok(Some(RpcBlock::new(
+                &block,
+                *NODE_NETWORK.read(),
+                &*inner,
+                &data_man,
+                include_txs,
+            )?))
         };
 
         Box::new(fut.boxed().compat())

@@ -221,10 +221,18 @@ impl RpcImpl {
 
         let maybe_block = self
             .data_man
-            .block_by_hash(&pivot_hash, false /* update_cache */)
-            .map(|b| RpcBlock::new(&*b, inner, &self.data_man, include_txs));
+            .block_by_hash(&pivot_hash, false /* update_cache */);
 
-        Ok(maybe_block)
+        match maybe_block {
+            None => Ok(None),
+            Some(b) => Ok(Some(RpcBlock::new(
+                &*b,
+                *NODE_NETWORK.read(),
+                inner,
+                &self.data_man,
+                include_txs,
+            )?)),
+        }
     }
 
     pub fn confirmation_risk_by_hash(
@@ -265,12 +273,19 @@ impl RpcImpl {
 
         let inner = &*consensus_graph.inner.read();
 
-        let maybe_block = self
-            .data_man
-            .block_by_hash(&hash, false /* update_cache */)
-            .map(|b| RpcBlock::new(&*b, inner, &self.data_man, include_txs));
+        let maybe_block =
+            self.data_man.block_by_hash(&hash, false /* update_cache */);
 
-        Ok(maybe_block)
+        match maybe_block {
+            None => Ok(None),
+            Some(b) => Ok(Some(RpcBlock::new(
+                &*b,
+                *NODE_NETWORK.read(),
+                inner,
+                &self.data_man,
+                include_txs,
+            )?)),
+        }
     }
 
     pub fn block_by_hash_with_pivot_assumption(
@@ -297,7 +312,13 @@ impl RpcImpl {
             .ok_or_else(|| RpcError::invalid_params("Block not found"))?;
 
         debug!("Build RpcBlock {}", block.hash());
-        Ok(RpcBlock::new(&*block, inner, &self.data_man, true))
+        Ok(RpcBlock::new(
+            &*block,
+            *NODE_NETWORK.read(),
+            inner,
+            &self.data_man,
+            true,
+        )?)
     }
 
     pub fn blocks_by_epoch(
@@ -373,7 +394,7 @@ impl RpcImpl {
         }
     }
 
-    pub fn chain(&self) -> JsonRpcResult<Vec<RpcBlock>> {
+    pub fn chain(&self) -> RpcResult<Vec<RpcBlock>> {
         info!("RPC Request: cfx_getChain");
         let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
@@ -384,14 +405,20 @@ impl RpcImpl {
                 .block_by_hash(hash, false /* update_cache */)
                 .expect("Error to get block by hash");
 
-            RpcBlock::new(&*block, inner, &self.data_man, true)
+            RpcBlock::new(
+                &*block,
+                *NODE_NETWORK.read(),
+                inner,
+                &self.data_man,
+                true,
+            )
         };
 
         Ok(inner
             .all_blocks_with_topo_order()
             .iter()
             .map(construct_block)
-            .collect())
+            .collect::<Result<_, _>>()?)
     }
 
     pub fn drop_peer(

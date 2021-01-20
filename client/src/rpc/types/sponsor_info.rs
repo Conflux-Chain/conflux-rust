@@ -4,7 +4,7 @@
 
 use super::Address as Base32Address;
 use cfx_addr::Network;
-use cfx_types::{H160, U256};
+use cfx_types::U256;
 use primitives::SponsorInfo as PrimitiveSponsorInfo;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -23,17 +23,14 @@ pub struct SponsorInfo {
 }
 
 impl SponsorInfo {
-    pub fn default(network: Network) -> Self {
-        let null_addr = Base32Address::try_from_h160(H160::default(), network)
-            .expect("failed converting null-address, to base32");
-
-        Self {
-            sponsor_for_gas: null_addr.clone(),
-            sponsor_for_collateral: null_addr,
+    pub fn default(network: Network) -> Result<Self, String> {
+        Ok(Self {
+            sponsor_for_gas: Base32Address::null(network)?,
+            sponsor_for_collateral: Base32Address::null(network)?,
             sponsor_gas_bound: Default::default(),
             sponsor_balance_for_gas: Default::default(),
             sponsor_balance_for_collateral: Default::default(),
-        }
+        })
     }
 
     pub fn try_from(

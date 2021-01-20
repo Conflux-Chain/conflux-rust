@@ -56,6 +56,10 @@ impl Address {
         assert_eq!(user_addr.hex, Some(addr));
         Ok(Address(user_addr))
     }
+
+    pub fn null(network: Network) -> Result<Self, String> {
+        Self::try_from_h160(H160::default(), network)
+    }
 }
 
 impl TryFrom<&str> for Address {
