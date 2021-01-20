@@ -432,7 +432,7 @@ impl RpcImpl {
         if tx.nonce.is_none() {
             let nonce = consensus_graph.next_nonce(
                 // FIXME: check transaction input.
-                tx.from.clone().into(),
+                tx.from.clone().try_into()?,
                 BlockHashOrEpochNumber::EpochNumber(EpochNumber::LatestState)
                     .into_primitive(),
             )?;

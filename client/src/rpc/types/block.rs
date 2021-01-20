@@ -537,6 +537,9 @@ mod tests {
         let deserialized_block: Block =
             serde_json::from_str(serialized).unwrap();
         assert_eq!(deserialized_block, result_block);
+
+        println!("deserialized_block: {:?}", deserialized_block);
+        println!("result_block: {:?}", result_block);
     }
 
     #[test]
