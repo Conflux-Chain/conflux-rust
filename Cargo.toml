@@ -37,7 +37,7 @@ blockgen = { path = "blockgen" }
 txgen = { path = "transactiongen" }
 secret-store = { path = "secret_store" }
 primitives = { path = "primitives" }
-log4rs = "1.0.0"
+log4rs = { version = "1.0.0", features = ["background_rotation", "gzip"] }
 rlp = "0.4.0"
 keccak-hash = "0.5"
 rand = "0.7"
