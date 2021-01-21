@@ -72,6 +72,7 @@ use cfxcore::{
 };
 use lazy_static::lazy_static;
 use metrics::{register_timer_with_group, ScopeTimer, Timer};
+use cfxcore::spec::genesis::{genesis_contract_address_two_year, genesis_contract_address_four_year};
 
 lazy_static! {
     static ref SEND_RAW_TX_TIMER: Arc<dyn Timer> =
@@ -1156,7 +1157,13 @@ impl RpcImpl {
         let total_issued = *state.total_issued_tokens();
         let total_staking = *state.total_staking_tokens();
         let total_collateral = *state.total_storage_tokens();
+        let two_year_unlock_address = genesis_contract_address_two_year();
+        let four_year_unlock_address = genesis_contract_address_four_year();
+        let two_year_locked = state.balance(&two_year_unlock_address).unwrap_or(U256::zero());
+        let four_year_locked = state.balance(&four_year_unlock_address).unwrap_or(U256::zero());
+        let total_circulating = total_issued - two_year_locked - four_year_locked;
         Ok(TokenSupplyInfo {
+            total_circulating,
             total_issued,
             total_staking,
             total_collateral,
