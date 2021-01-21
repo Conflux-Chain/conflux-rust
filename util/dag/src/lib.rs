@@ -55,8 +55,9 @@ where
     reversed_indices
 }
 
-// TODO: Ideally I want to allow `Iter: for<'a> Iterator<Item = &'a NodeIndex>`,
-// but this is not allowed for associated types because of https://github.com/rust-lang/rust/issues/49601.
+/// Return the future set of the nodes in `index_set`.
+/// The future set (including itself) of a node whose `stop_condition` is `true`
+/// will not be included.
 pub fn get_future<'a, InIndex, OutIndex, F, FStop, Set, Iter>(
     index_set: Iter, next_edges: F, stop_condition: FStop,
 ) -> Set
@@ -75,7 +76,6 @@ where
         visited.insert(i.try_into().expect("index in range"));
         queue.push_back(i);
     }
-    // TODO: Implement future.
     while let Some(x) = queue.pop_front() {
         for succ in next_edges(x) {
             if stop_condition(succ) {
