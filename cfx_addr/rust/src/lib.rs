@@ -337,63 +337,69 @@ fn test_expand_prefix() {
     );
 
     assert_eq!(
-        expand_prefix("cfx17"),
-        vec![0x03, 0x06, 0x18, 0x11, 0x17, 0x00]
+        expand_prefix("net17"),
+        vec![0x0e, 0x05, 0x14, 0x11, 0x17, 0x00]
     );
 }
 
 #[test]
 fn test_convert_bits() {
-    // 8 --> 1
+    // 00000000 --> 0, 0, 0, 0, 0, 0, 0, 0
     assert_eq!(convert_bits(&[0], 8, 1, false), Ok(vec![0; 8]));
 
-    // 8 --> 3
-    assert_eq!(convert_bits(&[0], 8, 3, false), Ok(vec![0, 0]));
-    assert!(convert_bits(&[1], 8, 3, false).is_err()); // 01 != 0
-    assert_eq!(convert_bits(&[0], 8, 3, true), Ok(vec![0, 0, 0]));
-    assert_eq!(convert_bits(&[1], 8, 3, true), Ok(vec![0, 0, 2]));
+    // 00000000 --> 000, 000, 00_
+    assert_eq!(convert_bits(&[0], 8, 3, false), Ok(vec![0, 0])); // 00_ is dropped
+    assert_eq!(convert_bits(&[0], 8, 3, true), Ok(vec![0, 0, 0])); // 00_ becomes 000
 
-    // 8 --> 7
-    assert_eq!(convert_bits(&[1], 8, 7, true), Ok(vec![0, 64]));
+    // 00000001 --> 000, 000, 01_
+    assert!(convert_bits(&[1], 8, 3, false).is_err()); // 01_ != 0 (ignored incomplete chunk must be 0)
+    assert_eq!(convert_bits(&[1], 8, 3, true), Ok(vec![0, 0, 2])); // 01_ becomes 010
 
-    // 1 --> 8
+    // 00000001 --> 0000000, 1______
+    assert_eq!(convert_bits(&[1], 8, 7, true), Ok(vec![0, 64])); // 1______ becomes 1000000
+
+    // 0, 0, 0, 0, 0, 0, 0, 0 --> 00000000
     assert_eq!(convert_bits(&[0; 8], 1, 8, false), Ok(vec![0]));
 
-    // 3 --> 8
-    assert_eq!(convert_bits(&[0, 0, 2], 3, 8, false), Ok(vec![1]));
-    assert!(convert_bits(&[0, 0, 3], 3, 8, false).is_err()); // 1 != 0
-    assert_eq!(convert_bits(&[0, 0, 2], 3, 8, true), Ok(vec![1, 0]));
+    // 000, 000, 010 -> 00000001, 0_______
+    assert_eq!(convert_bits(&[0, 0, 2], 3, 8, false), Ok(vec![1])); // 0_______ is dropped
+    assert_eq!(convert_bits(&[0, 0, 2], 3, 8, true), Ok(vec![1, 0])); // 0_______ becomes 00000000
 
-    // 8 --> 5
-    // 00000000 00000001 00000010 00000011 00000100
-    // 00000 00000 00000 10000 00100 00000 11000 00100
+    // 000, 000, 011 -> 00000001, 1_______
+    assert!(convert_bits(&[0, 0, 3], 3, 8, false).is_err()); // 1_______ != 0 (ignored incomplete chunk must be 0)
+
+    // 00000000, 00000001, 00000010, 00000011, 00000100 -->
+    // 00000, 00000, 00000, 10000, 00100, 00000, 11000, 00100
     assert_eq!(
         convert_bits(&[0, 1, 2, 3, 4], 8, 5, false),
         Ok(vec![0, 0, 0, 16, 4, 0, 24, 4])
     );
 
-    // 00000000 00000001 00000010
-    // 00000 00000 00000 10000 00100 (+1 bit padding added)
-    assert!(convert_bits(&[0, 1, 2], 8, 5, false).is_err()); // 0010 != 0
+    // 00000000, 00000001, 00000010 -->
+    // 00000, 00000, 00000, 10000, 0010_
+    assert!(convert_bits(&[0, 1, 2], 8, 5, false).is_err()); // 0010_ != 0 (ignored incomplete chunk must be 0)
 
     assert_eq!(
         convert_bits(&[0, 1, 2], 8, 5, true),
         Ok(vec![0, 0, 0, 16, 4])
-    );
+    ); // 0010_ becomes 00100
 
-    // 5 --> 8
+    // 00000, 00000, 00000, 10000, 00100, 00000, 11000, 00100 -->
+    // 00000000, 00000001, 00000010, 00000011, 00000100
     assert_eq!(
         convert_bits(&[0, 0, 0, 16, 4, 0, 24, 4], 5, 8, false),
         Ok(vec![0, 1, 2, 3, 4])
     );
 
+    // 00000, 00000, 00000, 10000, 00100 -->
+    // 00000000, 00000001, 00000010, 0_______
     assert_eq!(
         convert_bits(&[0, 0, 0, 16, 4], 5, 8, false),
         Ok(vec![0, 1, 2])
-    );
+    ); // 0_______ is dropped
 
     assert_eq!(
         convert_bits(&[0, 0, 0, 16, 4], 5, 8, true),
         Ok(vec![0, 1, 2, 0])
-    );
+    ); // 0_______ becomes 00000000
 }
