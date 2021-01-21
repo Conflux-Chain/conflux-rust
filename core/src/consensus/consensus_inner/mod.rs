@@ -26,6 +26,9 @@ use cfx_internal_common::{
 };
 use cfx_parameters::{consensus::*, consensus_internal::*};
 use cfx_types::{H256, U256, U512};
+use dag::{
+    get_future, topological_sort, Graph, RichDAG, RichTreeGraph, TreeGraph, DAG,
+};
 use hashbrown::HashMap as FastHashMap;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use link_cut_tree::{CaterpillarMinLinkCutTree, SizeMinLinkCutTree};
@@ -949,8 +952,10 @@ impl ConsensusGraphInner {
             }
         }
 
-        self.arena[pivot].data.ordered_executable_epoch_blocks =
-            self.topological_sort(&filtered_blockset);
+        self.arena[pivot].data.ordered_executable_epoch_blocks = self
+            .topological_sort_with_order_indicator(filtered_blockset, |i| {
+                self.arena[i].hash
+            });
         self.arena[pivot]
             .data
             .ordered_executable_epoch_blocks
@@ -1836,53 +1841,6 @@ impl ConsensusGraphInner {
         }
         visited.remove(me as u32);
         visited
-    }
-
-    fn topological_sort(&self, index_set: &HashSet<usize>) -> Vec<usize> {
-        let mut num_incoming_edges = HashMap::new();
-
-        for me in index_set {
-            num_incoming_edges.entry(*me).or_insert(0);
-            let parent = self.arena[*me].parent;
-            if index_set.contains(&parent) {
-                *num_incoming_edges.entry(parent).or_insert(0) += 1;
-            }
-            for referee in &self.arena[*me].referees {
-                if index_set.contains(referee) {
-                    *num_incoming_edges.entry(*referee).or_insert(0) += 1;
-                }
-            }
-        }
-
-        let mut candidates = BinaryHeap::new();
-        let mut reversed_indices = Vec::new();
-
-        for me in index_set {
-            if num_incoming_edges[me] == 0 {
-                candidates.push((self.arena[*me].hash, *me));
-            }
-        }
-        while let Some((_, me)) = candidates.pop() {
-            reversed_indices.push(me);
-
-            let parent = self.arena[me].parent;
-            if index_set.contains(&parent) {
-                num_incoming_edges.entry(parent).and_modify(|e| *e -= 1);
-                if num_incoming_edges[&parent] == 0 {
-                    candidates.push((self.arena[parent].hash, parent));
-                }
-            }
-            for referee in &self.arena[me].referees {
-                if index_set.contains(referee) {
-                    num_incoming_edges.entry(*referee).and_modify(|e| *e -= 1);
-                    if num_incoming_edges[referee] == 0 {
-                        candidates.push((self.arena[*referee].hash, *referee));
-                    }
-                }
-            }
-        }
-        reversed_indices.reverse();
-        reversed_indices
     }
 
     /// Return the consensus graph indexes of the pivot block where the rewards
@@ -3122,57 +3080,33 @@ impl ConsensusGraphInner {
             debug!("New block parent = {} referees = {:?} not extending timer chain (len = {}), fork at timer chain height {}, timer chain index {}", parent, referees, self.timer_chain.len(), fork_at, fork_at_index);
             // Now we need to update the timer_chain_height field of the
             // remaining blocks with topological sort
-            let mut queue = VecDeque::new();
-            let mut visited = BitSet::new();
-            if i == NULL {
-                queue.push_back(self.cur_era_genesis_block_arena_index);
-                visited.add(self.cur_era_genesis_block_arena_index as u32);
+            let start_point = if i == NULL {
+                self.cur_era_genesis_block_arena_index
             } else {
-                queue.push_back(self.timer_chain[fork_at_index - 1]);
-                visited.add(self.timer_chain[fork_at_index - 1] as u32);
-            }
-            while let Some(x) = queue.pop_front() {
-                for succ in self.arena[x]
-                    .children
-                    .iter()
-                    .chain(self.arena[x].referrers.iter())
-                {
-                    if anticone.contains(*succ as u32) {
-                        continue;
-                    }
-                    if !visited.contains(*succ as u32) {
-                        queue.push_back(*succ);
-                        visited.add(*succ as u32);
-                    }
-                }
-            }
-            let mut counter = HashMap::new();
-            for x in &visited {
-                let mut cnt = 0;
-                if self.arena[x as usize].parent != NULL {
-                    if visited.contains(self.arena[x as usize].parent as u32) {
-                        cnt = 1;
-                    }
-                }
-                for referee in &self.arena[x as usize].referees {
-                    if visited.contains(*referee as u32) {
-                        cnt += 1;
-                    }
-                }
-                counter.insert(x as usize, cnt);
-            }
-            if i == NULL {
-                queue.push_back(self.cur_era_genesis_block_arena_index);
-            } else {
-                queue.push_back(self.timer_chain[fork_at_index - 1]);
-            }
-            while let Some(x) = queue.pop_front() {
+                self.timer_chain[fork_at_index - 1]
+            };
+            let mut start_set = HashSet::new();
+            start_set.insert(start_point);
+            let visited: BitSet = get_future(
+                start_set,
+                // TODO: This conversion overhead can be avoided
+                |i| self.successor_edges(i as usize),
+                |i| anticone.contains(i as u32),
+            );
+            let visited_in_order: Vec<usize> = topological_sort(
+                visited,
+                |i| {
+                    self.predecessor_edges(i as usize)
+                        .into_iter()
+                        .map(|i| i as u32)
+                        .collect()
+                },
+                |_| true,
+            );
+            for x in visited_in_order {
+                let x = x as usize;
                 let mut timer_chain_height = 0;
-                let mut preds = self.arena[x].referees.clone();
-                if self.arena[x].parent != NULL {
-                    preds.push(self.arena[x].parent);
-                }
-                for pred in &preds {
+                for pred in &self.predecessor_edges(x) {
                     let mut height = if let Some(v) = res.get(pred) {
                         *v
                     } else {
@@ -3188,20 +3122,6 @@ impl ConsensusGraphInner {
                     }
                 }
                 res.insert(x, timer_chain_height);
-                for succ in self.arena[x]
-                    .children
-                    .iter()
-                    .chain(self.arena[x].referrers.iter())
-                {
-                    if !visited.contains(*succ as u32) {
-                        continue;
-                    }
-                    let cnt = counter.get(succ).unwrap() - 1;
-                    if cnt == 0 {
-                        queue.push_back(*succ);
-                    }
-                    counter.insert(*succ, cnt);
-                }
             }
         }
 
@@ -3873,6 +3793,34 @@ impl ConsensusGraphInner {
             ));
         }
         Ok(chain)
+    }
+}
+
+impl Graph for ConsensusGraphInner {
+    type NodeIndex = usize;
+}
+
+impl TreeGraph for ConsensusGraphInner {
+    fn parent(&self, node_index: Self::NodeIndex) -> Option<Self::NodeIndex> {
+        if self.arena[node_index].parent != NULL {
+            Some(self.arena[node_index].parent)
+        } else {
+            None
+        }
+    }
+
+    fn referees(&self, node_index: Self::NodeIndex) -> Vec<Self::NodeIndex> {
+        self.arena[node_index].referees.clone()
+    }
+}
+
+impl RichTreeGraph for ConsensusGraphInner {
+    fn children(&self, node_index: Self::NodeIndex) -> Vec<Self::NodeIndex> {
+        self.arena[node_index].children.clone()
+    }
+
+    fn referrers(&self, node_index: Self::NodeIndex) -> Vec<Self::NodeIndex> {
+        self.arena[node_index].referrers.clone()
     }
 }
 

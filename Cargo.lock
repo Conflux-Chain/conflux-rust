@@ -604,6 +604,7 @@ dependencies = [
  "cfxkey",
  "clap",
  "criterion",
+ "dag",
  "db",
  "derivative",
  "either",
@@ -1167,6 +1168,13 @@ dependencies = [
  "kernel32-sys",
  "libc",
  "winapi 0.2.8",
+]
+
+[[package]]
+name = "dag"
+version = "0.1.0"
+dependencies = [
+ "hibitset",
 ]
 
 [[package]]

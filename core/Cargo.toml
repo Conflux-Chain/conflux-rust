@@ -19,6 +19,7 @@ cfx-storage = { path = "storage", optional = true }
 cfx-types = { path = "../cfx_types" }
 cfx-utils = { path = "../cfx_utils" }
 clap = "2"
+dag = {path = "../util/dag"}
 derivative = "2.0.2"
 db = { path = "../db" }
 either = "1.5.3"
