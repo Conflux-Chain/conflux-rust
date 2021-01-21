@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 from http.client import CannotSendRequest
+
+from conflux.rpc import RpcClient
 from conflux.utils import encode_hex, bytes_to_int, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_block, create_transaction, wait_for_initial_nonce_for_privkey, wait_for_account_stable
@@ -130,7 +132,7 @@ class GenerateSampleChain(DefaultConfluxTestFramework):
     def check_account(self, k, balance_map):
         addr = eth_utils.encode_hex(priv_to_addr(k))
         try:
-            balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
+            balance = RpcClient(self.nodes[0]).get_balance(addr)
         except Exception as e:
             self.log.info("Fail to get balance, error=%s", str(e))
             return False

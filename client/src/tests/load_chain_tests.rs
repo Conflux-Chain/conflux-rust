@@ -6,10 +6,8 @@ extern crate tempdir;
 
 use self::tempdir::TempDir;
 use crate::{
-    archive::ArchiveClient,
-    common::client_methods,
-    configuration::Configuration,
-    rpc::{types::address::disable_base32_address, RpcBlock},
+    archive::ArchiveClient, common::client_methods,
+    configuration::Configuration, rpc::RpcBlock,
 };
 use cfx_types::H256;
 use cfxcore::ConsensusGraphTrait;
@@ -58,8 +56,6 @@ fn get_expected_best_hash() -> String {
 #[test]
 #[serial] // TODO: remove
 fn test_load_chain() {
-    disable_base32_address();
-
     let mut conf = Configuration::default();
     conf.raw_conf.mode = Some("test".to_owned());
     let tmp_dir = TempDir::new("conflux-test").unwrap();

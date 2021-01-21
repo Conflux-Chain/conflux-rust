@@ -2,15 +2,19 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::{
-    types::{
-        address::NODE_NETWORK, errors::check_rpc_address_network,
-        Address as Base32Address, Block as RpcBlock, BlockHashOrEpochNumber,
-        Bytes, CheckBalanceAgainstTransactionResponse, EpochNumber,
-        Status as RpcStatus, Transaction as RpcTransaction, TxPoolPendingInfo,
-        TxWithPoolInfo,
+use crate::{
+    common::known_network_ids::network_id_to_known_cfx_network,
+    rpc::{
+        types::{
+            address::NODE_NETWORK, errors::check_rpc_address_network,
+            Address as Base32Address, Block as RpcBlock,
+            BlockHashOrEpochNumber, Bytes,
+            CheckBalanceAgainstTransactionResponse, EpochNumber,
+            Status as RpcStatus, Transaction as RpcTransaction,
+            TxPoolPendingInfo, TxWithPoolInfo,
+        },
+        RpcResult,
     },
-    RpcResult,
 };
 use bigdecimal::BigDecimal;
 use cfx_addr::Network;
@@ -156,6 +160,8 @@ impl RpcImpl {
         accounts: Arc<AccountProvider>,
     ) -> Self
     {
+        *NODE_NETWORK.write() =
+            network_id_to_known_cfx_network(network.network_id());
         let data_man = consensus.get_data_manager().clone();
 
         RpcImpl {

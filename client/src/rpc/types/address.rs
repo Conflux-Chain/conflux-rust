@@ -18,16 +18,9 @@ use std::{
 pub struct Address(pub UserAddress);
 
 lazy_static! {
-    pub static ref FORCE_BASE32_ADDRESS: RwLock<bool> = RwLock::new(false);
+    pub static ref FORCE_BASE32_ADDRESS: RwLock<bool> = RwLock::new(true);
     pub static ref NODE_NETWORK: RwLock<Network> = RwLock::new(Network::Main);
 }
-
-// TODO: remove this function.
-#[cfg(test)]
-pub fn force_base32_address() { *FORCE_BASE32_ADDRESS.write() = true; }
-
-#[cfg(test)]
-pub fn disable_base32_address() { *FORCE_BASE32_ADDRESS.write() = false; }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RpcAddress {
@@ -175,7 +168,7 @@ impl Serialize for RpcAddress {
 
 #[cfg(test)]
 mod tests {
-    use super::{force_base32_address, Address};
+    use super::Address;
     use cfx_addr::Network;
     use serde_json;
     use serial_test::serial;
@@ -192,8 +185,6 @@ mod tests {
     #[test]
     #[serial] // TODO: remove
     fn test_deserialize_address() {
-        force_base32_address();
-
         check_deserialize(
             "\"cfx:022xg0j5vg1fba4nh7gz372we6740puptms36cm58c\"",
             "0x85d80245dc02f5a89589e1f19c5c718e405b56cd",
@@ -217,8 +208,6 @@ mod tests {
     #[should_panic]
     #[serial] // TODO: remove
     fn test_deserialize_incorrect_network_prefix() {
-        force_base32_address();
-
         check_deserialize(
             "\"cfy:022xg0j5vg1fba4nh7gz372we6740puptmj8nwjfc6\"",
             "0x85d80245dc02f5a89589e1f19c5c718e405b56cd",
@@ -230,8 +219,6 @@ mod tests {
     #[should_panic]
     #[serial] // TODO: remove
     fn test_deserialize_no_network_prefix() {
-        force_base32_address();
-
         check_deserialize(
             "\"022xg0j5vg1fba4nh7gz372we6740puptmj8nwjfc6\"",
             "0x85d80245dc02f5a89589e1f19c5c718e405b56cd",
@@ -243,8 +230,6 @@ mod tests {
     #[should_panic]
     #[serial] // TODO: remove
     fn test_deserialize_incorrect_type() {
-        force_base32_address();
-
         check_deserialize(
             "\"cfx:type.user:022xg0j5vg1fba4nh7gz372we6740puptmj8nwjfc6\"",
             "0x85d80245dc02f5a89589e1f19c5c718e405b56cd",
@@ -256,8 +241,6 @@ mod tests {
     #[should_panic]
     #[serial] // TODO: remove
     fn test_deserialize_incorrect_checksum() {
-        force_base32_address();
-
         check_deserialize(
             "\"cfx:022xg0j5vg1fba4nh7gz372we6740puptmj8nwjfc7\"",
             "0x85d80245dc02f5a89589e1f19c5c718e405b56cd",

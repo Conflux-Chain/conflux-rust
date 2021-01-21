@@ -42,9 +42,7 @@ use std::{
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
 use crate::{
-    common::{
-        delegate_convert, known_network_ids::network_id_to_known_cfx_network,
-    },
+    common::delegate_convert,
     rpc::{
         error_codes::{
             call_execution_error, invalid_params,
@@ -102,8 +100,6 @@ impl RpcImpl {
         config: RpcImplConfiguration, accounts: Arc<AccountProvider>,
     ) -> Self
     {
-        *NODE_NETWORK.write() =
-            network_id_to_known_cfx_network(sync.get_network_id());
         RpcImpl {
             consensus,
             sync,
