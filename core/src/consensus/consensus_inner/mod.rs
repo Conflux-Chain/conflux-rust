@@ -26,7 +26,9 @@ use cfx_internal_common::{
 };
 use cfx_parameters::{consensus::*, consensus_internal::*};
 use cfx_types::{H256, U256, U512};
-use dag::{topological_sort, Graph, RichDAG, RichTreeGraph, TreeGraph, DAG};
+use dag::{
+    get_future, topological_sort, Graph, RichDAG, RichTreeGraph, TreeGraph, DAG,
+};
 use hashbrown::HashMap as FastHashMap;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use link_cut_tree::{CaterpillarMinLinkCutTree, SizeMinLinkCutTree};
@@ -951,7 +953,7 @@ impl ConsensusGraphInner {
         }
 
         self.arena[pivot].data.ordered_executable_epoch_blocks = self
-            .topological_sort_with_order_indicator(&filtered_blockset, |i| {
+            .topological_sort_with_order_indicator(filtered_blockset, |i| {
                 self.arena[i].hash
             });
         self.arena[pivot]
@@ -3083,14 +3085,22 @@ impl ConsensusGraphInner {
             } else {
                 self.timer_chain[fork_at_index - 1]
             };
-            let mut start_set = BitSet::new
-            let visited: BitSet = self
-                .get_future_with_stop_condition(vec![start_point], |i| {
-                    anticone.contains(i as u32)
-                });
-            let visited_in_order: Vec<u32> = topological_sort(
-                &visited,
-                |i| self.prev_edges(i as usize).into(),
+            let mut start_set = HashSet::new();
+            start_set.insert(start_point);
+            let visited: BitSet = get_future(
+                start_set,
+                // TODO: This conversion overhead can be avoided
+                |i| self.next_edges(i as usize),
+                |i| anticone.contains(i as u32),
+            );
+            let visited_in_order: Vec<usize> = topological_sort(
+                visited,
+                |i| {
+                    self.prev_edges(i as usize)
+                        .into_iter()
+                        .map(|i| i as u32)
+                        .collect()
+                },
                 |_| true,
             );
             for x in visited_in_order {

@@ -29,7 +29,6 @@ use primitives::{
     transaction::SignedTransaction, Block, BlockHeader, EpochNumber,
 };
 use slab::Slab;
-use static_assertions::_core::hash::Hash;
 use std::{
     cmp::max,
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},

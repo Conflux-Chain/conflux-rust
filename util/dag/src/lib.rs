@@ -1,30 +1,32 @@
 use hibitset::BitSet;
 use std::{
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
+    convert::TryInto,
+    fmt::Debug,
     hash::Hash,
 };
 
 /// Topologically sort `index_set` and return a sorted `Vec`.
 /// For the nodes without order-before relationship, the ones with smaller
 /// `order_indicator` output will be ordered first.
-pub fn topological_sort<'a, NodeIndex, F, OrderIndicator, FOrd, Set>(
-    index_set: &'a Set, prev_edges: F, order_indicator: FOrd,
-) -> Vec<NodeIndex>
+pub fn topological_sort<InIndex, OutIndex, F, OrderIndicator, FOrd, Set>(
+    index_set: Set, prev_edges: F, order_indicator: FOrd,
+) -> Vec<OutIndex>
 where
-    NodeIndex: 'a + Copy + Hash + Eq + PartialEq + Ord,
-    F: Fn(NodeIndex) -> Vec<NodeIndex>,
+    InIndex: Copy + Hash + Eq + PartialEq + Ord + TryInto<OutIndex>,
+    <InIndex as TryInto<OutIndex>>::Error: Debug,
+    F: Fn(InIndex) -> Vec<InIndex>,
     OrderIndicator: Ord,
-    FOrd: Fn(NodeIndex) -> OrderIndicator,
-    Set: 'a + SetLike<NodeIndex> + Default,
-    &'a Set: IntoIterator<Item = &'a NodeIndex>,
+    FOrd: Fn(InIndex) -> OrderIndicator,
+    Set: SetLike<InIndex> + Default + Clone + IntoIterator<Item = InIndex>,
 {
     let mut num_next_edges = HashMap::new();
 
-    for me in index_set.into_iter() {
-        num_next_edges.entry(*me).or_insert(0);
-        for prev in &prev_edges(*me) {
-            if index_set.contains(prev) {
-                *num_next_edges.entry(*prev).or_insert(0) += 1;
+    for me in index_set.clone() {
+        num_next_edges.entry(me).or_insert(0);
+        for prev in prev_edges(me) {
+            if index_set.contains(&prev) {
+                *num_next_edges.entry(prev).or_insert(0) += 1;
             }
         }
     }
@@ -32,19 +34,19 @@ where
     let mut candidates = BinaryHeap::new();
     let mut reversed_indices = Vec::new();
 
-    for me in index_set.into_iter() {
-        if num_next_edges[me] == 0 {
-            candidates.push((order_indicator(*me), *me));
+    for me in index_set.clone() {
+        if num_next_edges[&me] == 0 {
+            candidates.push((order_indicator(me), me));
         }
     }
     while let Some((_, me)) = candidates.pop() {
-        reversed_indices.push(me);
+        reversed_indices.push(me.try_into().expect("index in range"));
 
-        for prev in &prev_edges(me) {
-            if index_set.contains(prev) {
-                num_next_edges.entry(*prev).and_modify(|e| *e -= 1);
-                if num_next_edges[prev] == 0 {
-                    candidates.push((order_indicator(*prev), *prev));
+        for prev in prev_edges(me) {
+            if index_set.contains(&prev) {
+                num_next_edges.entry(prev).and_modify(|e| *e -= 1);
+                if num_next_edges[&prev] == 0 {
+                    candidates.push((order_indicator(prev), prev));
                 }
             }
         }
@@ -55,20 +57,22 @@ where
 
 // TODO: Ideally I want to allow `Iter: for<'a> Iterator<Item = &'a NodeIndex>`,
 // but this is not allowed for associated types because of https://github.com/rust-lang/rust/issues/49601.
-fn get_future<NodeIndex, F, FStop, Set, Iter>(
+pub fn get_future<'a, InIndex, OutIndex, F, FStop, Set, Iter>(
     index_set: Iter, next_edges: F, stop_condition: FStop,
 ) -> Set
 where
-    NodeIndex: Copy + Hash + Eq + PartialEq + Ord,
-    F: Fn(NodeIndex) -> Vec<NodeIndex>,
-    FStop: Fn(NodeIndex) -> bool,
-    Set: SetLike<NodeIndex> + Default,
-    Iter: Iterator<Item = NodeIndex>,
+    InIndex: 'a + Copy + TryInto<OutIndex>,
+    <InIndex as TryInto<OutIndex>>::Error: Debug,
+    OutIndex: 'a + Copy + Hash + Eq + PartialEq + Ord,
+    F: Fn(InIndex) -> Vec<InIndex>,
+    FStop: Fn(InIndex) -> bool,
+    Set: SetLike<OutIndex> + Default,
+    Iter: IntoIterator<Item = InIndex>,
 {
     let mut queue = VecDeque::new();
     let mut visited = Set::default();
     for i in index_set {
-        visited.insert(i);
+        visited.insert(i.try_into().expect("index in range"));
         queue.push_back(i);
     }
     // TODO: Implement future.
@@ -77,9 +81,10 @@ where
             if stop_condition(succ) {
                 continue;
             }
-            if !visited.contains(&succ) {
+            let out_index = succ.try_into().expect("index in range");
+            if !visited.contains(&out_index) {
                 queue.push_back(succ);
-                visited.insert(succ);
+                visited.insert(out_index);
             }
         }
     }
@@ -94,25 +99,25 @@ pub trait Graph {
 pub trait DAG: Graph {
     fn prev_edges(&self, node_index: Self::NodeIndex) -> Vec<Self::NodeIndex>;
 
-    fn topological_sort_with_order_indicator<'a, OrderIndicator, FOrd, Set>(
-        &self, index_set: &'a Set, order_indicator: FOrd,
+    fn topological_sort_with_order_indicator<OrderIndicator, FOrd, Set>(
+        &self, index_set: Set, order_indicator: FOrd,
     ) -> Vec<Self::NodeIndex>
     where
         OrderIndicator: Ord,
         FOrd: Fn(Self::NodeIndex) -> OrderIndicator,
-        Set: 'a + SetLike<Self::NodeIndex> + Default,
-        &'a Set: IntoIterator<Item = &'a Self::NodeIndex>,
+        Set: SetLike<Self::NodeIndex>
+            + Default
+            + Clone
+            + IntoIterator<Item = Self::NodeIndex>,
     {
-        topological_sort(&index_set, |i| self.prev_edges(i), order_indicator)
+        topological_sort(index_set, |i| self.prev_edges(i), order_indicator)
     }
 
-    fn topological_sort<'a, Set>(
-        &self, index_set: &'a Set,
-    ) -> Vec<Self::NodeIndex>
-    where
-        Set: 'a + SetLike<Self::NodeIndex> + Default,
-        &'a Set: IntoIterator<Item = &'a Self::NodeIndex>,
-    {
+    fn topological_sort<Set>(&self, index_set: Set) -> Vec<Self::NodeIndex>
+    where Set: SetLike<Self::NodeIndex>
+            + Default
+            + Clone
+            + IntoIterator<Item = Self::NodeIndex> {
         // Any topological order will work, so just return a constant for
         // `order_indicator`.
         self.topological_sort_with_order_indicator(index_set, |_| true)
@@ -128,7 +133,7 @@ pub trait RichDAG: DAG {
     where
         FStop: Fn(Self::NodeIndex) -> bool,
         Set: SetLike<Self::NodeIndex> + Default,
-        Iter: Iterator<Item = Self::NodeIndex>,
+        Iter: IntoIterator<Item = Self::NodeIndex>,
     {
         get_future(index_set, |i| self.next_edges(i), stop_condition)
     }
@@ -136,7 +141,7 @@ pub trait RichDAG: DAG {
     fn get_future<Set, Iter>(&self, index_set: Iter) -> Set
     where
         Set: SetLike<Self::NodeIndex> + Default,
-        Iter: Iterator<Item = Self::NodeIndex>,
+        Iter: IntoIterator<Item = Self::NodeIndex>,
     {
         self.get_future_with_stop_condition(index_set, |_| false)
     }
@@ -181,8 +186,8 @@ impl<T: Eq + Hash> SetLike<T> for HashSet<T> {
     fn contains(&self, i: &T) -> bool { self.contains(i) }
 }
 
-impl SetLike<usize> for BitSet {
-    fn insert(&mut self, i: usize) -> bool { self.add(i as u32) }
+impl SetLike<u32> for BitSet {
+    fn insert(&mut self, i: u32) -> bool { self.add(i) }
 
-    fn contains(&self, i: &usize) -> bool { self.contains(*i as u32) }
+    fn contains(&self, i: &u32) -> bool { self.contains(*i) }
 }
