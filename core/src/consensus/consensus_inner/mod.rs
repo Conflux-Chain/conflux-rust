@@ -3090,13 +3090,13 @@ impl ConsensusGraphInner {
             let visited: BitSet = get_future(
                 start_set,
                 // TODO: This conversion overhead can be avoided
-                |i| self.next_edges(i as usize),
+                |i| self.successor_edges(i as usize),
                 |i| anticone.contains(i as u32),
             );
             let visited_in_order: Vec<usize> = topological_sort(
                 visited,
                 |i| {
-                    self.prev_edges(i as usize)
+                    self.predecessor_edges(i as usize)
                         .into_iter()
                         .map(|i| i as u32)
                         .collect()
@@ -3106,7 +3106,7 @@ impl ConsensusGraphInner {
             for x in visited_in_order {
                 let x = x as usize;
                 let mut timer_chain_height = 0;
-                for pred in &self.prev_edges(x) {
+                for pred in &self.predecessor_edges(x) {
                     let mut height = if let Some(v) = res.get(pred) {
                         *v
                     } else {

@@ -10,7 +10,7 @@ use std::{
 /// For the nodes without order-before relationship, the ones with smaller
 /// `order_indicator` output will be ordered first.
 pub fn topological_sort<InIndex, OutIndex, F, OrderIndicator, FOrd, Set>(
-    index_set: Set, prev_edges: F, order_indicator: FOrd,
+    index_set: Set, predecessor_edges: F, order_indicator: FOrd,
 ) -> Vec<OutIndex>
 where
     InIndex: Copy + Hash + Eq + PartialEq + Ord + TryInto<OutIndex>,
@@ -24,7 +24,7 @@ where
 
     for me in index_set.clone() {
         num_next_edges.entry(me).or_insert(0);
-        for prev in prev_edges(me) {
+        for prev in predecessor_edges(me) {
             if index_set.contains(&prev) {
                 *num_next_edges.entry(prev).or_insert(0) += 1;
             }
@@ -42,7 +42,7 @@ where
     while let Some((_, me)) = candidates.pop() {
         reversed_indices.push(me.try_into().expect("index in range"));
 
-        for prev in prev_edges(me) {
+        for prev in predecessor_edges(me) {
             if index_set.contains(&prev) {
                 num_next_edges.entry(prev).and_modify(|e| *e -= 1);
                 if num_next_edges[&prev] == 0 {
@@ -59,7 +59,7 @@ where
 /// The future set (including itself) of a node whose `stop_condition` is `true`
 /// will not be included.
 pub fn get_future<'a, InIndex, OutIndex, F, FStop, Set, Iter>(
-    index_set: Iter, next_edges: F, stop_condition: FStop,
+    index_set: Iter, successor_edges: F, stop_condition: FStop,
 ) -> Set
 where
     InIndex: 'a + Copy + TryInto<OutIndex>,
@@ -77,7 +77,7 @@ where
         queue.push_back(i);
     }
     while let Some(x) = queue.pop_front() {
-        for succ in next_edges(x) {
+        for succ in successor_edges(x) {
             if stop_condition(succ) {
                 continue;
             }
@@ -97,7 +97,9 @@ pub trait Graph {
 
 // TODO: Decide if returning Iterator is better than returning `Vec`?
 pub trait DAG: Graph {
-    fn prev_edges(&self, node_index: Self::NodeIndex) -> Vec<Self::NodeIndex>;
+    fn predecessor_edges(
+        &self, node_index: Self::NodeIndex,
+    ) -> Vec<Self::NodeIndex>;
 
     fn topological_sort_with_order_indicator<OrderIndicator, FOrd, Set>(
         &self, index_set: Set, order_indicator: FOrd,
@@ -110,7 +112,11 @@ pub trait DAG: Graph {
             + Clone
             + IntoIterator<Item = Self::NodeIndex>,
     {
-        topological_sort(index_set, |i| self.prev_edges(i), order_indicator)
+        topological_sort(
+            index_set,
+            |i| self.predecessor_edges(i),
+            order_indicator,
+        )
     }
 
     fn topological_sort<Set>(&self, index_set: Set) -> Vec<Self::NodeIndex>
@@ -125,7 +131,9 @@ pub trait DAG: Graph {
 }
 
 pub trait RichDAG: DAG {
-    fn next_edges(&self, node_index: Self::NodeIndex) -> Vec<Self::NodeIndex>;
+    fn successor_edges(
+        &self, node_index: Self::NodeIndex,
+    ) -> Vec<Self::NodeIndex>;
 
     fn get_future_with_stop_condition<FStop, Set, Iter>(
         &self, index_set: Iter, stop_condition: FStop,
@@ -135,7 +143,7 @@ pub trait RichDAG: DAG {
         Set: SetLike<Self::NodeIndex> + Default,
         Iter: IntoIterator<Item = Self::NodeIndex>,
     {
-        get_future(index_set, |i| self.next_edges(i), stop_condition)
+        get_future(index_set, |i| self.successor_edges(i), stop_condition)
     }
 
     fn get_future<Set, Iter>(&self, index_set: Iter) -> Set
@@ -158,20 +166,24 @@ pub trait RichTreeGraph: TreeGraph {
 }
 
 impl<T: TreeGraph> DAG for T {
-    fn prev_edges(&self, node_index: Self::NodeIndex) -> Vec<Self::NodeIndex> {
-        let mut prev_edges = self.referees(node_index);
+    fn predecessor_edges(
+        &self, node_index: Self::NodeIndex,
+    ) -> Vec<Self::NodeIndex> {
+        let mut predecessor_edges = self.referees(node_index);
         if let Some(p) = self.parent(node_index) {
-            prev_edges.push(p);
+            predecessor_edges.push(p);
         }
-        prev_edges
+        predecessor_edges
     }
 }
 
 impl<T: RichTreeGraph + DAG> RichDAG for T {
-    fn next_edges(&self, node_index: Self::NodeIndex) -> Vec<Self::NodeIndex> {
-        let mut next_edges = self.children(node_index);
-        next_edges.append(&mut self.referrers(node_index));
-        next_edges
+    fn successor_edges(
+        &self, node_index: Self::NodeIndex,
+    ) -> Vec<Self::NodeIndex> {
+        let mut successor_edges = self.children(node_index);
+        successor_edges.append(&mut self.referrers(node_index));
+        successor_edges
     }
 }
 
