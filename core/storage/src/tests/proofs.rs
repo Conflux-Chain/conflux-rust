@@ -115,11 +115,6 @@ fn generate_random_state(
     let root_1 = state_1.compute_state_root().unwrap();
     state_1.commit(epoch_id_1).unwrap();
 
-    let intermediate_padding = StorageKey::delta_mpt_padding(
-        &root_1.state_root.snapshot_root,
-        &root_1.state_root.intermediate_delta_root,
-    );
-
     // insert 2nd, 3rd, 5th, 6th 1/7 portions into state-2
     let mut state_2 = state_manager
         .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
@@ -157,12 +152,27 @@ fn generate_random_state(
 
     let mut epoch_id_2 = H256::default();
     epoch_id_2.as_bytes_mut()[0] = 3;
-    let _root_2 = state_2.compute_state_root().unwrap();
+    let root_2 = state_2.compute_state_root().unwrap();
     state_2.commit(epoch_id_2).unwrap();
 
     keys.shuffle(rng);
 
-    (state_manager, state_2, intermediate_padding, keys)
+    let intermediate_padding = StorageKey::delta_mpt_padding(
+        &root_2.state_root.snapshot_root,
+        &root_2.state_root.intermediate_delta_root,
+    );
+
+    let new_state = state_manager
+        .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
+            &epoch_id_2,
+            &root_2,
+            3,
+            snapshot_epoch_count,
+        ))
+        .unwrap()
+        .unwrap();
+
+    (state_manager, new_state, intermediate_padding, keys)
 }
 
 fn select_keys(
