@@ -282,12 +282,27 @@ fn test_valid_state_proof_for_existing_key() {
         // validation of valid proof should succeed
         let key = &key.to_vec();
         let value = value.as_ref().map(|b| &**b);
+
         assert!(proof.is_valid_kv(
             key,
             value,
             root.clone(),
             Some(padding.clone())
         ));
+
+        assert_eq!(
+            proof.get_value(
+                StorageKey::from_key_bytes::<CheckInput>(&key).unwrap(),
+                &root,
+                &Some(padding.clone())
+            ),
+            (true, value)
+        );
+
+        // note: `get_with_proof` returns incomplete proofs, i.e. if the key
+        // is in the delta MPT, then it will not provide any proofs for the
+        // intermediate MPT and snapshot. as a result, `get_all_kv_in_subtree`
+        // will fail in this case.
 
         // proof should be serializable
         assert_eq!(proof, rlp::decode(&rlp::encode(&proof)).unwrap());
@@ -312,12 +327,22 @@ fn test_valid_state_proof_for_nonexistent_key() {
 
         // validation of valid proof should succeed
         let key = &key.to_vec();
+
         assert!(proof.is_valid_kv(
             key,
             None,
             root.clone(),
             Some(padding.clone())
         ));
+
+        assert_eq!(
+            proof.get_value(
+                StorageKey::from_key_bytes::<CheckInput>(&key).unwrap(),
+                &root,
+                &Some(padding.clone())
+            ),
+            (true, None)
+        );
 
         // proof should be serializable
         assert_eq!(proof, rlp::decode(&rlp::encode(&proof)).unwrap());
@@ -353,9 +378,20 @@ fn test_invalid_state_proof() {
         assert!(!proof.is_valid_kv(
             key,
             value,
-            invalid_root,
+            invalid_root.clone(),
             Some(padding.clone())
         ));
+
+        assert_eq!(
+            proof
+                .get_value(
+                    StorageKey::from_key_bytes::<CheckInput>(&key).unwrap(),
+                    &invalid_root,
+                    &Some(padding.clone())
+                )
+                .0,
+            false
+        );
 
         // checking proof with invalid value should fail
         let invalid_value = Some(&[0x00; 100][..]);
@@ -374,8 +410,19 @@ fn test_invalid_state_proof() {
                 key,
                 value,
                 root.clone(),
-                Some(invalid_padding),
+                Some(invalid_padding.clone()),
             ));
+
+            assert_eq!(
+                proof
+                    .get_value(
+                        StorageKey::from_key_bytes::<CheckInput>(&key).unwrap(),
+                        &root,
+                        &Some(invalid_padding)
+                    )
+                    .0,
+                false
+            );
 
             assert!(!proof.is_valid_kv(key, value, root.clone(), None));
         }
@@ -573,6 +620,15 @@ fn test_recording_storage() {
             root.clone(),
             Some(padding.clone())
         ));
+
+        assert_eq!(
+            proof.get_value(
+                StorageKey::from_key_bytes::<CheckInput>(&key).unwrap(),
+                &root,
+                &Some(padding.clone())
+            ),
+            (true, Some(key[..].into()))
+        );
     }
 
     for key in &read_none {
@@ -582,6 +638,15 @@ fn test_recording_storage() {
             root.clone(),
             Some(padding.clone())
         ));
+
+        assert_eq!(
+            proof.get_value(
+                StorageKey::from_key_bytes::<CheckInput>(&key).unwrap(),
+                &root,
+                &Some(padding.clone())
+            ),
+            (true, None)
+        );
     }
 
     // proof should not work with incorrect value
@@ -642,7 +707,8 @@ use crate::{
 };
 use cfx_types::H256;
 use primitives::{
-    DeltaMptKeyPadding, MptValue, NodeMerkleTriplet, StateRoot, StorageKey,
+    CheckInput, DeltaMptKeyPadding, MptValue, NodeMerkleTriplet, StateRoot,
+    StorageKey,
 };
 use rand::{seq::SliceRandom, Rng};
 use rand_chacha::ChaChaRng;
