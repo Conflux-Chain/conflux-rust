@@ -23,13 +23,12 @@ use cfx_parameters::{
 use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{StorageManager, StorageManagerTrait, StorageStateTrait};
 use cfx_types::{address_util::AddressUtil, Address, U256};
-use hex::FromHex;
 use keylib::KeyPair;
-use parity_bytes::Bytes;
 use primitives::{
     storage::STORAGE_LAYOUT_REGULAR_V0, Action, Block, BlockHeaderBuilder,
     BlockReceipts, SignedTransaction, Transaction,
 };
+use rustc_hex::FromHex;
 use secret_store::SecretStore;
 use std::{
     collections::HashMap,
@@ -134,7 +133,8 @@ pub fn genesis_block(
         Default::default(),
         &Spec::new_spec(),
         0, /* block_number */
-    );
+    )
+    .expect("Failed to initialize state");
 
     let mut genesis_block_author = test_net_version;
     genesis_block_author.set_user_account_type_bits();
@@ -183,7 +183,9 @@ pub fn genesis_block(
     let mut create_create2factory_transaction = Transaction::default();
     create_create2factory_transaction.nonce = 0.into();
     create_create2factory_transaction.data =
-        Bytes::from_hex(GENESIS_TRANSACTION_CREATE_CREATE2FACTORY).unwrap();
+        GENESIS_TRANSACTION_CREATE_CREATE2FACTORY
+            .from_hex()
+            .unwrap();
     create_create2factory_transaction.action = Action::Create;
     create_create2factory_transaction.chain_id = genesis_chain_id;
     create_create2factory_transaction.gas = 300000.into();
@@ -194,10 +196,9 @@ pub fn genesis_block(
         Transaction::default();
     create_genesis_token_manager_two_year_unlock_transaction.nonce = 1.into();
     create_genesis_token_manager_two_year_unlock_transaction.data =
-        Bytes::from_hex(
-            GENESIS_TRANSACTION_CREATE_GENESIS_TOKEN_MANAGER_TWO_YEAR_UNLOCK,
-        )
-        .unwrap();
+        GENESIS_TRANSACTION_CREATE_GENESIS_TOKEN_MANAGER_TWO_YEAR_UNLOCK
+            .from_hex()
+            .unwrap();
     create_genesis_token_manager_two_year_unlock_transaction.value =
         two_year_unlock_token_count;
     create_genesis_token_manager_two_year_unlock_transaction.action =
@@ -215,10 +216,9 @@ pub fn genesis_block(
         Transaction::default();
     create_genesis_token_manager_four_year_unlock_transaction.nonce = 2.into();
     create_genesis_token_manager_four_year_unlock_transaction.data =
-        Bytes::from_hex(
-            GENESIS_TRANSACTION_CREATE_GENESIS_TOKEN_MANAGER_FOUR_YEAR_UNLOCK,
-        )
-        .unwrap();
+        GENESIS_TRANSACTION_CREATE_GENESIS_TOKEN_MANAGER_FOUR_YEAR_UNLOCK
+            .from_hex()
+            .unwrap();
     create_genesis_token_manager_four_year_unlock_transaction.value =
         four_year_unlock_token_count;
     create_genesis_token_manager_four_year_unlock_transaction.action =
@@ -235,7 +235,7 @@ pub fn genesis_block(
     let mut create_genesis_investor_fund_transaction = Transaction::default();
     create_genesis_investor_fund_transaction.nonce = 3.into();
     create_genesis_investor_fund_transaction.data =
-        Bytes::from_hex(GENESIS_TRANSACTION_CREATE_FUND_POOL).unwrap();
+        GENESIS_TRANSACTION_CREATE_FUND_POOL.from_hex().unwrap();
     create_genesis_investor_fund_transaction.action = Action::Create;
     create_genesis_investor_fund_transaction.chain_id = genesis_chain_id;
     create_genesis_investor_fund_transaction.gas = 400000.into();
@@ -245,7 +245,7 @@ pub fn genesis_block(
     let mut create_genesis_team_fund_transaction = Transaction::default();
     create_genesis_team_fund_transaction.nonce = 4.into();
     create_genesis_team_fund_transaction.data =
-        Bytes::from_hex(GENESIS_TRANSACTION_CREATE_FUND_POOL).unwrap();
+        GENESIS_TRANSACTION_CREATE_FUND_POOL.from_hex().unwrap();
     create_genesis_team_fund_transaction.action = Action::Create;
     create_genesis_team_fund_transaction.chain_id = genesis_chain_id;
     create_genesis_team_fund_transaction.gas = 400000.into();
@@ -255,7 +255,7 @@ pub fn genesis_block(
     let mut create_genesis_eco_fund_transaction = Transaction::default();
     create_genesis_eco_fund_transaction.nonce = 5.into();
     create_genesis_eco_fund_transaction.data =
-        Bytes::from_hex(GENESIS_TRANSACTION_CREATE_FUND_POOL).unwrap();
+        GENESIS_TRANSACTION_CREATE_FUND_POOL.from_hex().unwrap();
     create_genesis_eco_fund_transaction.action = Action::Create;
     create_genesis_eco_fund_transaction.chain_id = genesis_chain_id;
     create_genesis_eco_fund_transaction.gas = 400000.into();
@@ -265,7 +265,7 @@ pub fn genesis_block(
     let mut create_genesis_community_fund_transaction = Transaction::default();
     create_genesis_community_fund_transaction.nonce = 6.into();
     create_genesis_community_fund_transaction.data =
-        Bytes::from_hex(GENESIS_TRANSACTION_CREATE_FUND_POOL).unwrap();
+        GENESIS_TRANSACTION_CREATE_FUND_POOL.from_hex().unwrap();
     create_genesis_community_fund_transaction.action = Action::Create;
     create_genesis_community_fund_transaction.chain_id = genesis_chain_id;
     create_genesis_community_fund_transaction.gas = 400000.into();
@@ -350,7 +350,9 @@ pub fn genesis_block(
         }
     }
 
-    state.clean_account(&genesis_account_address);
+    state
+        .clean_account(&genesis_account_address)
+        .expect("Clean account failed");
 
     let state_root = state
         .compute_state_root(/* debug_record = */ debug_record.as_mut())

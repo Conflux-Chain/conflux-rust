@@ -1,5 +1,13 @@
 # 1.1.1
 
+## Incompatible Changes
+- CIP-37: Conflux to shift to base32 address format. The hex address format similar to Ethereum is deprecated in rpc interactions to full node.
+
+## Improvements
+
+- Reduce delay in logs pub-sub; now we send logs immediately after they become available.
+- Implement Execution Trace functionality. It includes detailed call/create/return/internal_transfer events being triggered by a transfer. Inspecting the trace information will enable the applications like conflux-scan to be able to track all transfers of CFX accurately. 
+
 # 1.1.0
 
 ## Incompatible changes

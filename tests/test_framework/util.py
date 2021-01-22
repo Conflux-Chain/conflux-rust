@@ -156,7 +156,8 @@ def try_rpc(code, message, fun, *args, **kwds):
 
 def assert_is_hex_string(string):
     try:
-        int(string, 16)
+        if string != "0x":
+            int(string, 16)
     except Exception as e:
         raise AssertionError(
             "Couldn't interpret %r as hexadecimal; raised: %s" % (string, e))
@@ -295,7 +296,7 @@ def initialize_tg_config(dirname, nodes):
         with open(os.path.join(datadir, 'net_config', 'key'), 'w') as f:
             f.write(private_keys[n])
 
-def initialize_datadir(dirname, n, conf_parameters, extra_files: dict = {}):
+def initialize_datadir(dirname, n, port_min, conf_parameters, extra_files: dict = {}):
     datadir = get_datadir_path(dirname, n)
     if not os.path.isdir(datadir):
         os.makedirs(datadir)
@@ -484,14 +485,12 @@ class WaitHandler:
 ############################################
 
 # The maximum number of nodes a single test can spawn
-MAX_NODES = 100
-# Don't assign rpc or p2p ports lower than this
-PORT_MIN = 11000
+MAX_NODES = 20
 # The number of ports to "reserve" for p2p and rpc, each
-PORT_RANGE = 5000
+PORT_RANGE = 100
 
 
-class PortSeed:
+class PortMin:
     # Must be initialized with a unique integer for each process
     n = None
 
@@ -528,13 +527,10 @@ def get_simple_rpc_proxy(url, node=None, timeout=CONFLUX_RPC_WAIT_TIMEOUT):
 
 def p2p_port(n):
     assert (n <= MAX_NODES)
-    return PORT_MIN + n + (MAX_NODES * PortSeed.n) % (
-        PORT_RANGE - 1 - MAX_NODES)
-
+    return PortMin.n + n
 
 def rpc_port(n):
-    return PORT_MIN + PORT_RANGE + n*3 + (MAX_NODES * PortSeed.n) % (
-        PORT_RANGE - 1 - MAX_NODES)
+    return PortMin.n + MAX_NODES + n*3
 
 def remote_rpc_port(n):
     return rpc_port(n) + 1

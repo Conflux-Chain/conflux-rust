@@ -3,34 +3,37 @@
 // See http://www.gnu.org/licenses/
 
 mod account;
+pub mod address;
 mod blame_info;
 mod block;
 mod bytes;
-mod call_request;
+pub mod call_request;
 mod consensus_graph_states;
 mod epoch_number;
+pub mod errors;
 mod filter;
 mod index;
 mod log;
 mod provenance;
+pub mod pubsub;
 mod receipt;
 mod reward_info;
+mod sponsor_info;
 mod status;
 mod sync_graph_states;
 mod token_supply_info;
 mod trace;
 mod transaction;
 
-pub mod pubsub;
-
 pub use self::{
     account::Account,
+    address::Address,
     blame_info::BlameInfo,
     block::{Block, BlockTransactions, Header},
     bytes::Bytes,
     call_request::{
         sign_call, CallRequest, CheckBalanceAgainstTransactionResponse,
-        EstimateGasAndCollateralResponse, MAX_GAS_CALL_REQUEST,
+        EstimateGasAndCollateralResponse, SendTxRequest, MAX_GAS_CALL_REQUEST,
     },
     consensus_graph_states::ConsensusGraphStates,
     epoch_number::{BlockHashOrEpochNumber, EpochNumber},
@@ -40,12 +43,12 @@ pub use self::{
     provenance::Origin,
     receipt::Receipt,
     reward_info::RewardInfo,
+    sponsor_info::SponsorInfo,
     status::Status,
     sync_graph_states::SyncGraphStates,
     token_supply_info::TokenSupplyInfo,
     trace::LocalizedBlockTrace,
     transaction::{
-        PackedOrExecuted, SendTxRequest, Transaction, TxPoolPendingInfo,
-        TxWithPoolInfo,
+        PackedOrExecuted, Transaction, TxPoolPendingInfo, TxWithPoolInfo,
     },
 };

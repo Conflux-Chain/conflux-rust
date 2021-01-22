@@ -42,7 +42,6 @@ use cfx_types::{BigEndianHash, H256, KECCAK_EMPTY_BLOOM, U256, U512};
 use core::convert::TryFrom;
 use hash::KECCAK_EMPTY_LIST_RLP;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
-use parity_bytes::ToPretty;
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     receipt::{
@@ -54,6 +53,7 @@ use primitives::{
     Action, Block, BlockHeaderBuilder, EpochId, SignedTransaction,
     TransactionIndex, MERKLE_NULL_NODE,
 };
+use rustc_hex::ToHex;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     convert::From,
@@ -994,7 +994,9 @@ impl ConsensusExecutionHandler {
             self.vm.clone(),
             &spec,
             start_block_number - 1, /* block_number */
-        );
+        )
+        .expect("Failed to initialize state");
+
         let epoch_receipts = self
             .process_epoch_transactions(
                 &spec,
@@ -1607,10 +1609,10 @@ impl ConsensusExecutionHandler {
                     .push(AuthorValue(address, reward));
                 debug_out.state_ops.push(StateOp::IncentiveLevelOp {
                     op_name: "add_balance".to_string(),
-                    key: address.to_hex().as_bytes().to_vec(),
+                    key: address.0.to_hex::<String>().as_bytes().to_vec(),
                     maybe_value: Some({
                         let h: H256 = BigEndianHash::from_uint(&reward);
-                        h.to_hex().as_bytes().into()
+                        h.0.to_hex::<String>().as_bytes().into()
                     }),
                 });
             }
@@ -1661,7 +1663,7 @@ impl ConsensusExecutionHandler {
             self.vm.clone(),
             &spec,
             start_block_number - 1, /* block_number */
-        );
+        )?;
         self.process_epoch_transactions(
             &spec,
             *pivot_hash,
@@ -1722,7 +1724,7 @@ impl ConsensusExecutionHandler {
             self.vm.clone(),
             &spec,
             start_block_number,
-        );
+        )?;
         drop(state_availability_boundary);
 
         let env = Env {

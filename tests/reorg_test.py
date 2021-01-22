@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from conflux.rpc import RpcClient
 from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, wait_for_initial_nonce_for_privkey, wait_for_account_stable
@@ -120,7 +121,7 @@ class ReorgTest(ConfluxTestFramework):
     def check_account(self, k, balance_map, node):
         addr = eth_utils.encode_hex(priv_to_addr(k))
         try:
-            balance = parse_as_int(node.cfx_getBalance(addr))
+            balance = RpcClient(node).get_balance(addr)
         except Exception as e:
             self.log.debug("Fail to get balance, error=%s", str(e))
             return False

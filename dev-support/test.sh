@@ -6,6 +6,7 @@ source $SCRIPT_DIR/dep_pip3.sh
 set -o pipefail
 
 ROOT_DIR="$( cd $SCRIPT_DIR/.. && pwd )"
+TEST_MAX_WORKERS="${1-8}"
 
 export PYTHONUNBUFFERED=1
 export CARGO_TARGET_DIR=$ROOT_DIR/build
@@ -78,7 +79,7 @@ function check_integration_tests {
     result=$(
         # Make symbolic link for conflux binary to where integration test assumes its existence.
         rm -f target; ln -s build target
-        ./tests/test_all.py | tee /dev/stderr
+        ./tests/test_all.py --max-workers $TEST_MAX_WORKERS| tee /dev/stderr
     )
     local exit_code=$?
     popd > /dev/null

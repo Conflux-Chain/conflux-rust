@@ -2,15 +2,35 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::Log;
-use cfx_types::{Address, Bloom, H256, U256, U64};
+use crate::rpc::types::{Address as Base32Address, Log};
+use cfx_addr::Network;
+use cfx_types::{Bloom, H256, U256, U64};
 use cfxcore::{executive::contract_address, vm::CreateContractAddress};
 use primitives::{
-    receipt::{Receipt as PrimitiveReceipt, StorageChange},
+    receipt::{
+        Receipt as PrimitiveReceipt, StorageChange as PrimitiveStorageChange,
+    },
     transaction::Action,
     SignedTransaction as PrimitiveTransaction, TransactionIndex,
 };
 use serde_derive::Serialize;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StorageChange {
+    pub address: Base32Address,
+    pub collaterals: U64,
+}
+
+impl StorageChange {
+    pub fn try_from(
+        sc: PrimitiveStorageChange, network: Network,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            address: Base32Address::try_from_h160(sc.address, network)?,
+            collaterals: sc.collaterals,
+        })
+    }
+}
 
 #[derive(Debug, Serialize, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -24,16 +44,16 @@ pub struct Receipt {
     /// Epoch number where this transaction was in.
     pub epoch_number: Option<U64>,
     /// Address of the sender.
-    pub from: Address,
+    pub from: Base32Address,
     /// Address of the receiver, null when it's a contract creation
     /// transaction.
-    pub to: Option<Address>,
+    pub to: Option<Base32Address>,
     /// The gas used in the execution of the transaction.
     pub gas_used: U256,
     /// The gas fee charged in the execution of the transaction.
     pub gas_fee: U256,
     /// Address of contract created if the transaction action is create.
-    pub contract_created: Option<Address>,
+    pub contract_created: Option<Base32Address>,
     /// Array of log objects, which this transaction generated.
     pub logs: Vec<Log>,
     /// Bloom filter for light clients to quickly retrieve related logs.
@@ -62,7 +82,8 @@ impl Receipt {
         transaction_index: TransactionIndex, prior_gas_used: U256,
         epoch_number: Option<u64>, block_number: u64,
         maybe_state_root: Option<H256>, tx_exec_error_msg: Option<String>,
-    ) -> Receipt
+        network: Network,
+    ) -> Result<Receipt, String>
     {
         let PrimitiveReceipt {
             accumulated_gas_used,
@@ -86,7 +107,8 @@ impl Receipt {
                 &transaction.nonce,
                 &transaction.data,
             );
-            address = Some(created_address);
+            address =
+                Some(Base32Address::try_from_h160(created_address, network)?);
         }
 
         // this is an array, but it will only have at most one element:
@@ -97,20 +119,26 @@ impl Receipt {
             .map(Into::into)
             .unwrap_or_default();
 
-        Receipt {
+        Ok(Receipt {
             transaction_hash: transaction.hash.into(),
             index: U64::from(transaction_index.index),
             block_hash: transaction_index.block_hash.into(),
             gas_used: (accumulated_gas_used - prior_gas_used).into(),
             gas_fee: gas_fee.into(),
-            from: transaction.sender,
+            from: Base32Address::try_from_h160(transaction.sender, network)?,
             to: match &transaction.action {
                 Action::Create => None,
-                Action::Call(address) => Some(address.clone()),
+                Action::Call(address) => Some(Base32Address::try_from_h160(
+                    address.clone(),
+                    network,
+                )?),
             },
             outcome_status: U64::from(outcome_status),
             contract_created: address,
-            logs: logs.into_iter().map(Log::from).collect(),
+            logs: logs
+                .into_iter()
+                .map(|l| Log::try_from(l, cfx_addr::Network::Main))
+                .collect::<Result<_, _>>()?,
             logs_bloom: log_bloom,
             state_root: maybe_state_root
                 .map_or_else(Default::default, Into::into),
@@ -119,7 +147,10 @@ impl Receipt {
             gas_covered_by_sponsor: gas_sponsor_paid,
             storage_covered_by_sponsor: storage_sponsor_paid,
             storage_collateralized,
-            storage_released,
-        }
+            storage_released: storage_released
+                .into_iter()
+                .map(|sc| StorageChange::try_from(sc, network))
+                .collect::<Result<_, _>>()?,
+        })
     }
 }

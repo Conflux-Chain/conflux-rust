@@ -198,13 +198,13 @@ impl SnapshotDbManagerSqlite {
     }
 
     fn get_merge_temp_snapshot_db_path(
-        &self, old_snapshot_epoch_id: &EpochId, delta_merkle_root: &MerkleHash,
+        &self, old_snapshot_epoch_id: &EpochId, new_snapshot_epoch_id: &EpochId,
     ) -> PathBuf {
         self.snapshot_path.join(
             Self::SNAPSHOT_DB_SQLITE_DIR_PREFIX.to_string()
                 + "merge_temp_"
-                + &old_snapshot_epoch_id.as_ref().to_hex()
-                + &delta_merkle_root.as_ref().to_hex(),
+                + &old_snapshot_epoch_id.as_ref().to_hex::<String>()
+                + &new_snapshot_epoch_id.as_ref().to_hex::<String>(),
         )
     }
 
@@ -214,8 +214,8 @@ impl SnapshotDbManagerSqlite {
         self.snapshot_path.join(
             Self::SNAPSHOT_DB_SQLITE_DIR_PREFIX.to_string()
                 + "full_sync_temp_"
-                + &snapshot_epoch_id.as_ref().to_hex()
-                + &merkle_root.as_ref().to_hex(),
+                + &snapshot_epoch_id.as_ref().to_hex::<String>()
+                + &merkle_root.as_ref().to_hex::<String>(),
         )
     }
 
@@ -351,7 +351,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
 
     fn get_snapshot_db_name(&self, snapshot_epoch_id: &EpochId) -> String {
         Self::SNAPSHOT_DB_SQLITE_DIR_PREFIX.to_string()
-            + &snapshot_epoch_id.as_ref().to_hex()
+            + &snapshot_epoch_id.as_ref().to_hex::<String>()
     }
 
     fn get_snapshot_db_path(&self, snapshot_epoch_id: &EpochId) -> PathBuf {
@@ -391,10 +391,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 // empty.
                 let temp_db_path = self.get_merge_temp_snapshot_db_path(
                     old_snapshot_epoch_id,
-                    &delta_mpt
-                        .mpt
-                        .get_merkle(delta_mpt.maybe_root_node.clone())?
-                        .unwrap(),
+                    &snapshot_epoch_id,
                 );
 
                 let mut snapshot_db;

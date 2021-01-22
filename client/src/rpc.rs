@@ -30,7 +30,7 @@ pub mod informant;
 mod interceptor;
 pub mod metadata;
 mod traits;
-mod types;
+pub mod types;
 
 pub use cfxcore::rpc_errors::{
     BoxFuture as RpcBoxFuture, Error as RpcError, ErrorKind as RpcErrorKind,
