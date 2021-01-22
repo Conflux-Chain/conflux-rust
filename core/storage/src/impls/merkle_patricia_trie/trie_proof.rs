@@ -283,9 +283,7 @@ impl TrieProof {
                     break;
                 }
                 WalkStop::PathDiverted { .. } => {
-                    // TODO: implement this
-                    // TODO: try to trigger this in test
-                    unimplemented!()
+                    return (true, vec![]);
                 }
                 WalkStop::ChildNotFound { .. } => {
                     return (true, vec![]);
@@ -316,7 +314,7 @@ impl TrieProof {
         loop {
             let (hash, maybe_child_id, key_prefix) = match queue.pop_front() {
                 None => break,
-                Some(h) => h,
+                Some(item) => item,
             };
 
             // visit node
