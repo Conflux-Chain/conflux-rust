@@ -399,3 +399,9 @@ class RpcClient:
 
     def get_block_count(self):
         return self.node.getblockcount()
+        
+    def get_supply_info(self, epoch:str=None):
+        if epoch is None:
+            return self.node.cfx_getSupplyInfo()
+        else:
+            return self.node.cfx_getSupplyInfo(epoch)

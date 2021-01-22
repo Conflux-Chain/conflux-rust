@@ -18,6 +18,7 @@
 - Change the `blame` field returned from the `newHeads` pub-sub to hex.
 - Fix an issue where the `logs` pub-sub API would skip logs.
 - Fix an issue where if miners submit the nonce solution to multiple nodes, some of these nodes may stop mining (Issue #1985).
+
 # 1.0.3
 
 ## Improvements
