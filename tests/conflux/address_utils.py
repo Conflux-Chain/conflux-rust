@@ -23,7 +23,7 @@ SOFTWARE.
 """
 
 
-BASE32_CHARS = '0123456789abcdefghijklmnopqrstuvwxyz'
+BASE32_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789'
 EXCLUDE_CHARS = {'o', 'i', 'l', 'q'}
 CHARSET = ''
 for c in BASE32_CHARS:

@@ -15,7 +15,7 @@ use std::{
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Address(pub UserAddress);
+pub struct Address(UserAddress);
 
 lazy_static! {
     pub static ref FORCE_BASE32_ADDRESS: RwLock<bool> = RwLock::new(true);
@@ -78,22 +78,13 @@ impl From<RpcAddress> for H160 {
 impl<'a> Deserialize<'a> for Address {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'a> {
-        if *FORCE_BASE32_ADDRESS.read() {
-            let s: String = Deserialize::deserialize(deserializer)?;
+        let s: String = Deserialize::deserialize(deserializer)?;
 
-            let inner = cfx_addr_decode(&s).map_err(|e| {
-                de::Error::custom(format!("Invalid base32 address: {}", e))
-            })?;
+        let inner = cfx_addr_decode(&s).map_err(|e| {
+            de::Error::custom(format!("Invalid base32 address: {}", e))
+        })?;
 
-            Ok(Address(inner))
-        } else {
-            Ok(Address(UserAddress {
-                base32: "".into(),
-                bytes: vec![],
-                hex: Deserialize::deserialize(deserializer)?,
-                network: *NODE_NETWORK.read(),
-            }))
-        }
+        Ok(Address(inner))
     }
 }
 
@@ -169,36 +160,44 @@ impl Serialize for RpcAddress {
 #[cfg(test)]
 mod tests {
     use super::Address;
-    use cfx_addr::Network;
+    use cfx_addr::{cfx_addr_encode, EncodingOptions, Network};
+    use cfx_types::H160;
     use serde_json;
-    use serial_test::serial;
-    use std::convert::TryInto;
 
-    fn check_deserialize(raw: &str, hex: &str, network: Network) {
-        let addr_hex = hex.trim_start_matches("0x").parse().unwrap();
-        let parsed: Address = serde_json::from_str(raw).unwrap();
+    fn check_deserialize(base32_address: &str, hex: &str, network: Network) {
+        let addr_hex: H160 = hex.trim_start_matches("0x").parse().unwrap();
+        let parsed_result = serde_json::from_str::<Address>(base32_address);
+        debug!(
+            "parsed: {:?}, expected hex addr {:?}, expected base32 addr {:?}",
+            parsed_result,
+            addr_hex,
+            cfx_addr_encode(
+                addr_hex.as_bytes(),
+                network,
+                EncodingOptions::Simple
+            )
+        );
+        let parsed = parsed_result.unwrap();
         assert_eq!(parsed.network, network);
         assert_eq!(parsed.hex, Some(addr_hex));
-        assert_eq!(parsed.try_into(), Ok(addr_hex));
     }
 
     #[test]
-    #[serial] // TODO: remove
     fn test_deserialize_address() {
         check_deserialize(
-            "\"cfx:022xg0j5vg1fba4nh7gz372we6740puptms36cm58c\"",
+            "\"cfx:acc7uawf5ubtnmezvhu9dhc6sghea0403y2dgpyfjp\"",
             "0x85d80245dc02f5a89589e1f19c5c718e405b56cd",
             Network::Main,
         );
 
         check_deserialize(
-            "\"cfxtest:022xg0j5vg1fba4nh7gz372we6740puptmj8nwjfc6\"",
+            "\"cfxtest:acc7uawf5ubtnmezvhu9dhc6sghea0403ywjz6wtpg\"",
             "0x85d80245dc02f5a89589e1f19c5c718e405b56cd",
             Network::Test,
         );
 
         check_deserialize(
-            "\"cfxtest:type.contract:022xg0j5vg1fba4nh7gz372we6740puptmj8nwjfc6\"",
+            "\"cfxtest:type.contract:acc7uawf5ubtnmezvhu9dhc6sghea0403ywjz6wtpg\"",
             "0x85d80245dc02f5a89589e1f19c5c718e405b56cd",
             Network::Test,
         );
@@ -206,10 +205,9 @@ mod tests {
 
     #[test]
     #[should_panic]
-    #[serial] // TODO: remove
     fn test_deserialize_incorrect_network_prefix() {
         check_deserialize(
-            "\"cfy:022xg0j5vg1fba4nh7gz372we6740puptmj8nwjfc6\"",
+            "\"cfy:acc7uawf5ubtnmezvhu9dhc6sghea0403y2dgpyfjp\"",
             "0x85d80245dc02f5a89589e1f19c5c718e405b56cd",
             Network::Main,
         );
@@ -217,10 +215,9 @@ mod tests {
 
     #[test]
     #[should_panic]
-    #[serial] // TODO: remove
     fn test_deserialize_no_network_prefix() {
         check_deserialize(
-            "\"022xg0j5vg1fba4nh7gz372we6740puptmj8nwjfc6\"",
+            "\"acc7uawf5ubtnmezvhu9dhc6sghea0403ywjz6wtpg\"",
             "0x85d80245dc02f5a89589e1f19c5c718e405b56cd",
             Network::Main,
         );
@@ -228,10 +225,9 @@ mod tests {
 
     #[test]
     #[should_panic]
-    #[serial] // TODO: remove
     fn test_deserialize_incorrect_type() {
         check_deserialize(
-            "\"cfx:type.user:022xg0j5vg1fba4nh7gz372we6740puptmj8nwjfc6\"",
+            "\"cfx:type.user:acc7uawf5ubtnmezvhu9dhc6sghea0403y2dgpyfjp\"",
             "0x85d80245dc02f5a89589e1f19c5c718e405b56cd",
             Network::Main,
         );
@@ -239,10 +235,9 @@ mod tests {
 
     #[test]
     #[should_panic]
-    #[serial] // TODO: remove
     fn test_deserialize_incorrect_checksum() {
         check_deserialize(
-            "\"cfx:022xg0j5vg1fba4nh7gz372we6740puptmj8nwjfc7\"",
+            "\"cfx:acc7uawf5ubtnmezvhu9dhc6sghea0403ywjz6wtpg\"",
             "0x85d80245dc02f5a89589e1f19c5c718e405b56cd",
             Network::Main,
         );
