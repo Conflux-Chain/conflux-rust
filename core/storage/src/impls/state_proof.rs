@@ -72,15 +72,17 @@ impl StateProof {
             Some(&*tombstone_value)
         };
 
+        let mut is_proven = false;
         // The delta proof must prove the key-value or key non-existence.
         match &self.delta_proof {
             Some(proof) => {
-                // Existence proof.
-                if proof.is_valid_kv(&delta_mpt_key, delta_value, delta_root) {
-                    return true;
-                }
-                // Non-existence proof.
-                if !proof.is_valid_kv(&delta_mpt_key, None, delta_root) {
+                let is_existence_proof =
+                    proof.is_valid_kv(&delta_mpt_key, delta_value, delta_root);
+                is_proven |= is_existence_proof;
+                // Existence proof or non-existence proof, one must hold.
+                if !is_existence_proof
+                    && !proof.is_valid_kv(&delta_mpt_key, None, delta_root)
+                {
                     return false;
                 }
             }
@@ -95,37 +97,62 @@ impl StateProof {
         // Now check intermediate_proof since it's required. Same logic applies.
         match &self.intermediate_proof {
             Some(proof) => {
+                // Has to check this condition even if the key value is proven
+                // valid by delta proof.
                 if maybe_intermediate_mpt_key.is_none() {
                     return false;
                 }
-                if proof.is_valid_kv(
-                    maybe_intermediate_mpt_key.as_ref().unwrap(),
-                    delta_value,
-                    intermediate_root,
-                ) {
-                    return true;
-                }
-                if !proof.is_valid_kv(
-                    maybe_intermediate_mpt_key.as_ref().unwrap(),
-                    None,
-                    intermediate_root,
-                ) {
-                    return false;
+                if !is_proven {
+                    let is_existence_proof = proof.is_valid_kv(
+                        maybe_intermediate_mpt_key.as_ref().unwrap(),
+                        delta_value,
+                        intermediate_root,
+                    );
+                    is_proven |= is_existence_proof;
+                    // Existence proof or non-existence proof, one must hold.
+                    if !is_existence_proof
+                        && !proof.is_valid_kv(
+                            maybe_intermediate_mpt_key.as_ref().unwrap(),
+                            None,
+                            intermediate_root,
+                        )
+                    {
+                        return false;
+                    }
                 }
             }
             None => {
-                // When intermediate trie exists, the proof can't be empty.
-                if intermediate_root.ne(&MERKLE_NULL_NODE) {
+                // Unless proven, when intermediate trie exists, the proof can't
+                // be empty.
+                if !is_proven && intermediate_root.ne(&MERKLE_NULL_NODE) {
                     return false;
                 }
             }
         }
 
-        // At last, check snapshot
-        match &self.snapshot_proof {
-            None => false,
-            Some(proof) => proof.is_valid_kv(key, value, snapshot_root),
+        // At last, check snapshot.
+        if !is_proven {
+            match &self.snapshot_proof {
+                None => {
+                    // Unless proven, snapshot proof can't be empty.
+                    return false;
+                }
+
+                Some(proof) => {
+                    is_proven |= proof.is_valid_kv(key, value, snapshot_root);
+                    // When value is None, we can skip the extra non-existence
+                    // proof check.
+                    if !is_proven
+                        && (value.is_none()
+                            || !proof.is_valid_kv(key, None, snapshot_root))
+                    {
+                        return false;
+                    }
+                }
+            }
         }
+
+        is_proven
     }
 }
 
