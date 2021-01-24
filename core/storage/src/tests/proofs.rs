@@ -376,10 +376,8 @@ fn test_invalid_state_proof() {
             Some(padding.clone())
         ));
 
-        // checking proof with invalid padding should fail
+        // checking proof with invalid intermediate mpt existence should fail.
         if proof.intermediate_proof.is_some() {
-<<<<<<< HEAD
-=======
             assert!(!proof.is_valid_kv(key, value, root.clone(), None));
 
             // Existence proof with invalid padding can be fine when delta proof
@@ -387,9 +385,8 @@ fn test_invalid_state_proof() {
             // of intermediate padding results into non-existence key in
             // the intermediate mpt.
             // TODO: we can consider adding short-circuit logic for
-            // get_with_proof  to re-enable this check.
+            //  get_with_proof to re-enable this check.
             /*
->>>>>>> 5e7ced81... fix
             let invalid_padding = get_invalid_delta_padding(&padding);
 
             assert!(!proof.is_valid_kv(
@@ -398,8 +395,7 @@ fn test_invalid_state_proof() {
                 root.clone(),
                 Some(invalid_padding),
             ));
-
-            assert!(!proof.is_valid_kv(key, value, root.clone(), None));
+             */
         }
 
         // checking valid existence proof as non-existence proof should fail
