@@ -23,7 +23,7 @@ pub use consts::{AddressType, Network};
 pub use errors::DecodingError;
 use errors::*;
 
-const BASE32_CHARS: &str = "0123456789abcdefghijklmnopqrstuvwxyz";
+const BASE32_CHARS: &str = "abcdefghijklmnopqrstuvwxyz0123456789";
 const EXCLUDE_CHARS: [char; 4] = ['o', 'i', 'l', 'q'];
 lazy_static! {
     // Regular expression for application to match string. This regex isn't strict,

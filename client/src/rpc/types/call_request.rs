@@ -4,7 +4,7 @@
 
 use crate::rpc::{
     types::{
-        address::Address as Base32Address,
+        address::RpcAddress,
         errors::{check_rpc_address_network, RcpAddressNetworkInconsistent},
         Bytes,
     },
@@ -19,7 +19,7 @@ use primitives::{
     transaction::Action, SignedTransaction,
     Transaction as PrimitiveTransaction, TransactionWithSignature,
 };
-use std::{cmp::min, convert::TryInto, sync::Arc};
+use std::{cmp::min, sync::Arc};
 
 // use serde_json::de::ParserNumber::U64;
 
@@ -31,9 +31,9 @@ pub const MAX_GAS_CALL_REQUEST: u64 = 500_000_000;
 #[serde(rename_all = "camelCase")]
 pub struct CallRequest {
     /// From
-    pub from: Option<Base32Address>,
+    pub from: Option<RpcAddress>,
     /// To
-    pub to: Option<Base32Address>,
+    pub to: Option<RpcAddress>,
     /// Gas Price
     pub gas_price: Option<U256>,
     /// Gas
@@ -51,8 +51,8 @@ pub struct CallRequest {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SendTxRequest {
-    pub from: Base32Address,
-    pub to: Option<Base32Address>,
+    pub from: RpcAddress,
+    pub to: Option<RpcAddress>,
     pub gas: U256,
     pub gas_price: U256,
     pub value: U256,
@@ -110,7 +110,7 @@ impl SendTxRequest {
             gas: self.gas.into(),
             action: match self.to {
                 None => Action::Create,
-                Some(address) => Action::Call(address.try_into()?),
+                Some(address) => Action::Call(address.into()),
             },
             value: self.value.into(),
             storage_limit: self.storage_limit.unwrap_or_default().as_usize()
@@ -125,7 +125,7 @@ impl SendTxRequest {
 
         let password = password.map(Password::from);
         let sig = accounts
-            .sign(self.from.try_into()?, password, tx.hash())
+            .sign(self.from.into(), password, tx.hash())
             .map_err(|e| format!("failed to sign transaction: {:?}", e))?;
 
         Ok(tx.with_signature(sig))
@@ -137,21 +137,20 @@ pub fn sign_call(
 ) -> RpcResult<SignedTransaction> {
     let max_gas = U256::from(MAX_GAS_CALL_REQUEST);
     let gas = min(request.gas.unwrap_or(max_gas), max_gas);
-
-    let from = request.from.and_then(|addr| addr.hex).unwrap_or_else(|| {
-        let mut address = Address::random();
-        address.set_user_account_type_bits();
-        address
-    });
-
-    let action = request
-        .to
-        .and_then(|addr| addr.hex)
-        .map_or(Action::Create, |addr| Action::Call(addr));
+    let from = request.from.map_or_else(
+        || {
+            let mut address = Address::random();
+            address.set_user_account_type_bits();
+            address
+        },
+        |rpc_addr| rpc_addr.hex_address,
+    );
 
     Ok(PrimitiveTransaction {
         nonce: request.nonce.unwrap_or_default(),
-        action,
+        action: request.to.map_or(Action::Create, |rpc_addr| {
+            Action::Call(rpc_addr.hex_address)
+        }),
         gas,
         gas_price: request.gas_price.unwrap_or(1.into()),
         value: request.value.unwrap_or_default(),
@@ -167,11 +166,11 @@ pub fn sign_call(
 }
 
 pub fn rpc_call_request_network(
-    from: Option<&Base32Address>, to: Option<&Base32Address>,
+    from: Option<&RpcAddress>, to: Option<&RpcAddress>,
 ) -> Result<Option<Network>, RcpAddressNetworkInconsistent> {
-    let request_network = from.map(|addr| addr.network);
+    let request_network = from.map(|rpc_addr| rpc_addr.network);
     match request_network {
-        None => Ok(to.map(|addr| addr.network)),
+        None => Ok(to.map(|rpc_addr| rpc_addr.network)),
         Some(network) => {
             if let Some(to) = to {
                 if to.network != network {
@@ -190,30 +189,24 @@ pub fn rpc_call_request_network(
 mod tests {
     use super::CallRequest;
 
-    use crate::rpc::types::address::Address as Base32Address;
-    use cfx_addr::{Network, UserAddress};
+    use crate::rpc::types::address::RpcAddress;
+    use cfx_addr::Network;
     use cfx_types::{H160, U256, U64};
     use rustc_hex::FromHex;
     use serde_json;
-    use serial_test::serial;
     use std::str::FromStr;
 
     #[test]
-    #[serial] // TODO: remove
     fn call_request_deserialize() {
         let expected = CallRequest {
-            from: Some(Base32Address(UserAddress {
-                base32: "cfx:type.builtin:000000000000000000000000000000000482u4m4mw".into(),
-                bytes: vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-                hex: Some(H160::from_low_u64_be(1)),
+            from: Some(RpcAddress {
+                hex_address: H160::from_low_u64_be(1),
                 network: Network::Main,
-            })),
-            to: Some(Base32Address(UserAddress {
-                base32: "cfx:type.builtin:00000000000000000000000000000000083pjbwgzg".into(),
-                bytes: vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-                hex: Some(H160::from_low_u64_be(2)),
+            }),
+            to: Some(RpcAddress {
+                hex_address: H160::from_low_u64_be(2),
                 network: Network::Main,
-            })),
+            }),
             gas_price: Some(U256::from(1)),
             gas: Some(U256::from(2)),
             value: Some(U256::from(3)),
@@ -223,8 +216,8 @@ mod tests {
         };
 
         let s = r#"{
-            "from":"cfx:type.builtin:000000000000000000000000000000000482u4m4mw",
-            "to":"cfx:type.builtin:00000000000000000000000000000000083pjbwgzg",
+            "from":"cfx:type.builtin:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaejc4eyey6",
+            "to":"cfx:type.builtin:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaajd0wn6u9u",
             "gasPrice":"0x1",
             "gas":"0x2",
             "value":"0x3",
@@ -232,17 +225,20 @@ mod tests {
             "storageLimit":"0x7b",
             "nonce":"0x4"
         }"#;
-        let deserialized: CallRequest = serde_json::from_str(s).unwrap();
-
-        assert_eq!(deserialized, expected);
+        let deserialized_result = serde_json::from_str::<CallRequest>(s);
+        assert!(
+            deserialized_result.is_ok(),
+            "serialized str should look like {}",
+            serde_json::to_string(&expected).unwrap()
+        );
+        assert_eq!(deserialized_result.unwrap(), expected);
     }
 
     #[test]
-    #[serial] // TODO: remove
     fn call_request_deserialize2() {
         let expected = CallRequest {
-            from: Some(Base32Address::try_from_h160("160e8dd61c5d32be8058bb8eb970870f07233155".parse().unwrap(), Network::Main).unwrap()),
-            to: Some(Base32Address::try_from_h160("846e8dd67c5d32be8058bb8eb970870f07244567".parse().unwrap(), Network::Main).unwrap()),
+            from: Some(RpcAddress{ hex_address: H160::from_str("160e8dd61c5d32be8058bb8eb970870f07233155").unwrap(), network: Network::Main }),
+            to: Some(RpcAddress{ hex_address: H160::from_str("846e8dd67c5d32be8058bb8eb970870f07244567").unwrap(), network: Network::Main}),
             gas_price: Some(U256::from_str("9184e72a000").unwrap()),
             gas: Some(U256::from_str("76c0").unwrap()),
             value: Some(U256::from_str("9184e72a").unwrap()),
@@ -252,29 +248,30 @@ mod tests {
         };
 
         let s = r#"{
-            "from": "cfx:00b0x3ep3hek5fm0b2xsxebggw7ge8tham2t5r0mzt",
-            "to": "cfx:0226x3epfhek5fm0b2xsxebggw7ge925cw91tb58ps",
+            "from": "cfx:type.user:aana7ds0dvsxftyanc727snuu6husj3vmyc3f1ay93",
+            "to": "cfx:type.contract:accg7ds0tvsxftyanc727snuu6huskcfp6kb3nfj02",
             "gas": "0x76c0",
             "gasPrice": "0x9184e72a000",
             "value": "0x9184e72a",
             "storageLimit":"0x3344adf",
             "data": "0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"
         }"#;
-        let deserialized: CallRequest = serde_json::from_str(s).unwrap();
-
-        assert_eq!(deserialized, expected);
+        let deserialized_result = serde_json::from_str::<CallRequest>(s);
+        assert!(
+            deserialized_result.is_ok(),
+            "serialized str should look like {}",
+            serde_json::to_string(&expected).unwrap()
+        );
+        assert_eq!(deserialized_result.unwrap(), expected);
     }
 
     #[test]
-    #[serial] // TODO: remove
     fn call_request_deserialize_empty() {
         let expected = CallRequest {
-            from: Some(Base32Address(UserAddress {
-                base32: "cfx:type.builtin:000000000000000000000000000000000482u4m4mw".into(),
-                bytes: vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-                hex: Some(H160::from_low_u64_be(1)),
+            from: Some(RpcAddress {
+                hex_address: H160::from_low_u64_be(1),
                 network: Network::Main,
-            })),
+            }),
             to: None,
             gas_price: None,
             gas: None,
@@ -284,9 +281,13 @@ mod tests {
             nonce: None,
         };
 
-        let s = r#"{"from":"cfx:type.builtin:000000000000000000000000000000000482u4m4mw"}"#;
-        let deserialized: CallRequest = serde_json::from_str(s).unwrap();
-
-        assert_eq!(deserialized, expected);
+        let s = r#"{"from":"cfx:type.builtin:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaejc4eyey6"}"#;
+        let deserialized_result = serde_json::from_str::<CallRequest>(s);
+        assert!(
+            deserialized_result.is_ok(),
+            "serialized str should look like {}",
+            serde_json::to_string(&expected).unwrap()
+        );
+        assert_eq!(deserialized_result.unwrap(), expected);
     }
 }

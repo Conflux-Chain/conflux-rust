@@ -198,15 +198,15 @@ impl Filter {
 
 #[cfg(test)]
 mod tests {
-    use super::{EpochNumber, Filter, VariadicValue};
+    use super::{super::Address, EpochNumber, Filter, VariadicValue};
+    use cfx_addr::Network;
     use cfx_types::{H160, H256, U64};
     use primitives::{
         epoch::EpochNumber as PrimitiveEpochNumber,
         filter::Filter as PrimitiveFilter,
     };
     use serde_json;
-    use serial_test::serial;
-    use std::{convert::TryInto, str::FromStr};
+    use std::str::FromStr;
 
     #[test]
     fn test_serialize_variadic_value() {
@@ -286,8 +286,8 @@ mod tests {
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
             ]),
             address: Some(VariadicValue::Multiple(vec![
-                "cfx:0000000000000000000000000000000000pe51b8as".try_into().unwrap(),
-                "cfx:000000000000000000000000000000000482u4m4mw".try_into().unwrap(),
+                Address::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main).unwrap(),
+                Address::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main).unwrap(),
             ])),
             topics: Some(vec![
                 VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
@@ -307,7 +307,7 @@ mod tests {
              \"fromEpoch\":\"0x3e8\",\
              \"toEpoch\":\"latest_state\",\
              \"blockHashes\":[\"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
-             \"address\":[\"CFX:TYPE.NULL:0000000000000000000000000000000000PE51B8AS\",\"CFX:TYPE.BUILTIN:000000000000000000000000000000000482U4M4MW\"],\
+             \"address\":[\"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2\",\"CFX:TYPE.BUILTIN:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEJC4EYEY6\"],\
              \"topics\":[\
                 \"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\
                 [\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\"]\
@@ -318,7 +318,6 @@ mod tests {
     }
 
     #[test]
-    #[serial] // TODO: remove
     fn test_deserialize_filter() {
         let serialized = "{}";
 
@@ -339,7 +338,7 @@ mod tests {
              \"fromEpoch\":\"0x3e8\",\
              \"toEpoch\":\"latest_state\",\
              \"blockHashes\":[\"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
-             \"address\":[\"cfx:0000000000000000000000000000000000pe51b8as\",\"cfx:000000000000000000000000000000000482u4m4mw\"],\
+             \"address\":[\"cfx:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0sfbnjm2\",\"cfx:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaejc4eyey6\"],\
              \"topics\":[\
                 \"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\
                 [\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\"]\
@@ -355,8 +354,8 @@ mod tests {
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
             ]),
             address: Some(VariadicValue::Multiple(vec![
-                "cfx:0000000000000000000000000000000000pe51b8as".try_into().unwrap(),
-                "cfx:000000000000000000000000000000000482u4m4mw".try_into().unwrap(),
+                Address::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main).unwrap(),
+                Address::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main).unwrap(),
             ])),
             topics: Some(vec![
                 VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
@@ -383,8 +382,8 @@ mod tests {
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
             ]),
             address: Some(VariadicValue::Multiple(vec![
-                "cfx:0000000000000000000000000000000000pe51b8as".try_into().unwrap(),
-                "cfx:000000000000000000000000000000000482u4m4mw".try_into().unwrap(),
+                Address::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main).unwrap(),
+                Address::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main).unwrap(),
             ])),
             topics: Some(vec![
                 VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
@@ -405,7 +404,7 @@ mod tests {
             ]),
             address: Some(vec![
                 H160::from_str("0000000000000000000000000000000000000000").unwrap(),
-                H160::from_str("0000000000000000000000000000000000000001").unwrap()
+                H160::from_str("0000000000000000000000000000000000000001").unwrap(),
             ]),
             topics: vec![
                 Some(vec![H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()]),

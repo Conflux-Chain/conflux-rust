@@ -494,7 +494,7 @@ impl RpcImpl {
                 // TODO(thegaram): consider adding a light node specific tx pool
                 // to track the nonce
 
-                let address = tx.from.clone().try_into()?;
+                let address = tx.from.clone().into();
                 let epoch = EpochNumber::LatestState.into_primitive();
 
                 let nonce = light

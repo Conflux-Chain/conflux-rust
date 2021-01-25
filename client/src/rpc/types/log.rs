@@ -78,17 +78,18 @@ impl Log {
 
 #[cfg(test)]
 mod tests {
-    use crate::rpc::types::Log;
-    use cfx_types::{H256, U256};
+    use crate::rpc::types::{Address, Log};
+    use cfx_addr::Network;
+    use cfx_types::{H160, H256, U256};
     use serde_json;
-    use std::{convert::TryInto, str::FromStr};
+    use std::str::FromStr;
 
     #[test]
     fn log_serialization() {
-        let s = r#"{"address":"CFXTEST:TYPE.USER:00CWEGPESGNTWKRZ7E2CVVEDWBUSMDRM9W7KY3YE3R","topics":["0xa6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc","0x4861736852656700000000000000000000000000000000000000000000000000"],"data":"0x","blockHash":"0xed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5","epochNumber":"0x4510c","transactionHash":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionIndex":"0x0","logIndex":"0x1","transactionLogIndex":"0x1"}"#;
+        let s = r#"{"address":"CFXTEST:TYPE.USER:AAK3WAKCPSF3CP0MFHDWHTTUG924VERHBUV9NMM3YC","topics":["0xa6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc","0x4861736852656700000000000000000000000000000000000000000000000000"],"data":"0x","blockHash":"0xed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5","epochNumber":"0x4510c","transactionHash":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionIndex":"0x0","logIndex":"0x1","transactionLogIndex":"0x1"}"#;
 
         let log = Log {
-            address: "cfxtest:00cwegpesgntwkrz7e2cvvedwbusmdrm9w7ky3ye3r".try_into().unwrap(),
+            address: Address::try_from_h160(H160::from_str("13990122638b9132ca29c723bdf037f1a891a70c").unwrap(), Network::Test).unwrap(),
             topics: vec![
                 H256::from_str("a6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc").unwrap(),
                 H256::from_str("4861736852656700000000000000000000000000000000000000000000000000").unwrap(),
