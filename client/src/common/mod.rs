@@ -431,8 +431,22 @@ pub fn initialize_not_light_node_modules(
 
     let maybe_author: Option<Address> =
         conf.raw_conf.mining_author.as_ref().map(|hex_str| {
-            parse_hex_string(hex_str)
-                .expect("mining-author should be 40-digit hex string")
+            let base32_err = match cfx_addr_decode(hex_str) {
+                Ok(address) => match address.hex {
+                    Some(hex_address) => return hex_address,
+                    None => panic!("Invalid decoded hash size for base32 address"),
+                }
+                Err(e) => e,
+            };
+            let hex_err = match parse_hex_string(hex_str) {
+                Ok(address) => return address,
+                Err(e) => e
+            };
+            // `mining_author` does not match either format
+            panic!("mining-author should be a valid base32 address or a 40-digit hex string!
+            base32_err={:?}
+            hex_err={:?}",
+            base32_err, hex_err)
         });
     let blockgen = Arc::new(BlockGenerator::new(
         sync_graph,
@@ -733,6 +747,7 @@ use crate::{
     GENESIS_VERSION,
 };
 use blockgen::BlockGenerator;
+use cfx_addr::cfx_addr_decode;
 use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use cfxcore::{
