@@ -7,6 +7,7 @@
 
 - Reduce delay in logs pub-sub; now we send logs immediately after they become available.
 - Implement Execution Trace functionality. It includes detailed call/create/return/internal_transfer events being triggered by a transfer. Inspecting the trace information will enable the applications like conflux-scan to be able to track all transfers of CFX accurately. 
+- Include `networkId` in `cfx_getStatus` response.
 
 # 1.1.0
 
