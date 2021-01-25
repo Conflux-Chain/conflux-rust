@@ -36,6 +36,7 @@ fn get_state(
         &Spec::new_spec(),
         if epoch_id.is_zero() { 0 } else { 1 }, /* block_number */
     )
+    .expect("Failed to initialize state")
 }
 
 fn u256_to_vec(val: &U256) -> Vec<u8> {

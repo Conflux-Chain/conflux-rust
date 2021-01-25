@@ -23,6 +23,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[cfg(test)]
+use serial_test::serial;
+
 fn get_expected_best_hash() -> String {
     let mut file =
         File::open(r#"../tests/blockchain_tests/general_2.json"#).unwrap();
@@ -51,6 +54,7 @@ fn get_expected_best_hash() -> String {
 }
 
 #[test]
+#[serial] // TODO: remove
 fn test_load_chain() {
     let mut conf = Configuration::default();
     conf.raw_conf.mode = Some("test".to_owned());

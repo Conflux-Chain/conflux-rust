@@ -65,8 +65,8 @@ class PubSubTest(ConfluxTestFramework):
         _, contract2 = self.deploy_contract(sender, priv_key, bytecode)
 
         # subscribe
-        sub_all = await self.pubsub[FULLNODE1].subscribe("logs")
-        sub_one = await self.pubsub[FULLNODE1].subscribe("logs", Filter(address=[contract2]).__dict__)
+        sub_all = await self.pubsub[FULLNODE0].subscribe("logs")
+        sub_one = await self.pubsub[FULLNODE0].subscribe("logs", Filter(address=[contract2]).__dict__)
 
         # call contracts and collect receipts
         receipts = []
@@ -80,8 +80,6 @@ class PubSubTest(ConfluxTestFramework):
             receipts.append(r)
             assert(r != None)
 
-        # make sure the pub-sub layer processes the logs
-        self.rpc[FULLNODE0].generate_blocks(20)
         sync_blocks(self.nodes)
 
         # collect pub-sub notifications
@@ -136,9 +134,6 @@ class PubSubTest(ConfluxTestFramework):
         self.rpc[FULLNODE0].generate_blocks(4)
         receipt = self.rpc[FULLNODE0].get_transaction_receipt(tx.hash_hex())
         assert_ne(receipt, None)
-
-        # make sure the pub-sub layer processes the logs
-        self.rpc[FULLNODE0].generate_blocks(20)
         sync_blocks(self.nodes)
 
         # this would timeout before #1989 was fixed

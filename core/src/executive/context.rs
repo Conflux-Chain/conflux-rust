@@ -8,7 +8,7 @@ use crate::{
     bytes::Bytes,
     machine::Machine,
     state::{StateGeneric, Substate},
-    trace,
+    trace::{self, trace::ExecTrace, Tracer},
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
         ContractCreateResult, CreateContractAddress, Env, MessageCallResult,
@@ -189,7 +189,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ContextTrait
         // address. This should generally not happen. Unless we enable
         // account dust in future. We add this check just in case it
         // helps in future.
-        if self.state.is_contract_with_code(&address) {
+        if self.state.is_contract_with_code(&address)? {
             debug!("Contract address conflict!");
             return Ok(Ok(ContractCreateResult::Failed));
         }
@@ -245,7 +245,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ContextTrait
             out,
             &address,
             self.substate,
-        )))
+        )?))
     }
 
     fn call(
@@ -373,7 +373,11 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ContextTrait
         Ok(())
     }
 
-    fn suicide(&mut self, refund_address: &Address) -> vm::Result<()> {
+    fn suicide(
+        &mut self, refund_address: &Address,
+        tracer: &mut dyn Tracer<Output = ExecTrace>,
+    ) -> vm::Result<()>
+    {
         if self.is_static_or_reentrancy() {
             return Err(vm::Error::MutableCallInStaticContext);
         }
@@ -384,6 +388,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ContextTrait
             &mut self.state,
             &self.spec,
             &mut self.substate,
+            tracer,
         )
     }
 
@@ -446,6 +451,7 @@ mod tests {
         machine::{new_machine_with_builtin, Machine},
         state::{State, Substate},
         test_helpers::get_state_for_genesis_write,
+        trace,
         vm::{
             CallType, Context as ContextTrait, ContractCreateResult,
             CreateContractAddress, Env, Spec,
@@ -733,7 +739,8 @@ mod tests {
                 false, /* static_flag */
                 &setup.internal_contract_map,
             );
-            ctx.suicide(&refund_account).unwrap();
+            let mut tracer = trace::NoopTracer;
+            ctx.suicide(&refund_account, &mut tracer).unwrap();
         }
 
         assert_eq!(setup.substate.suicides.len(), 1);

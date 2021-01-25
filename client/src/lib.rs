@@ -13,6 +13,8 @@ extern crate log;
 extern crate serde_derive;
 extern crate cfxkey as keylib;
 extern crate tempdir;
+#[macro_use]
+extern crate lazy_static;
 
 #[macro_use]
 mod config_macro;

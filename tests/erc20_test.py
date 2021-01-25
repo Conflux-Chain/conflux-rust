@@ -41,11 +41,11 @@ class P2PTest(ConfluxTestFramework):
         raw_create = erc20_contract.constructor().buildTransaction(self.tx_conf)
         tx_data = decode_hex(raw_create["data"])
         tx_create = create_transaction(pri_key=genesis_key, receiver=b'', nonce=nonce, gas_price=gas_price, data=tx_data, gas=gas, value=0, storage_limit=1920)
-        client = RpcClient(self.nodes[0])
-        c0 = client.get_collateral_for_storage(genesis_addr)
-        client.send_tx(tx_create, True)
-        receipt = client.get_transaction_receipt(tx_create.hash_hex())
-        c1 = client.get_collateral_for_storage(genesis_addr)
+        self.client = RpcClient(self.nodes[0])
+        c0 = self.client.get_collateral_for_storage(genesis_addr)
+        self.client.send_tx(tx_create, True)
+        receipt = self.client.get_transaction_receipt(tx_create.hash_hex())
+        c1 = self.client.get_collateral_for_storage(genesis_addr)
         assert_equal(c1 - c0, 1920 * 10 ** 18 / 1024)
         contract_addr = receipt['contractCreated']
         self.log.info("Contract " + str(contract_addr) + " created, start transferring tokens")
@@ -73,23 +73,17 @@ class P2PTest(ConfluxTestFramework):
         self.log.info("Check final token balance")
         for sk in balance_map:
             addr = priv_to_addr(sk)
-            assert_equal(self.get_balance(erc20_contract, addr, nonce), balance_map[sk])
-        c2 = client.get_collateral_for_storage(genesis_addr)
+            assert_equal(self.get_balance(erc20_contract, addr), balance_map[sk])
+        c2 = self.client.get_collateral_for_storage(genesis_addr)
         assert_equal(c2 - c1, 64 * tx_n * 10 ** 18 / 1024)
         block_gen_thread.stop()
         block_gen_thread.join()
         sync_blocks(self.nodes)
         self.log.info("Pass")
 
-    def get_balance(self, contract, token_address, nonce):
+    def get_balance(self, contract, token_address):
         tx = contract.functions.balanceOf(Web3.toChecksumAddress(encode_hex(token_address))).buildTransaction(self.tx_conf)
-        tx["value"] = int_to_hex(tx['value'])
-        tx["hash"] = "0x"+"0"*64
-        tx["nonce"] = int_to_hex(nonce)
-        tx["v"] = "0x0"
-        tx["r"] = "0x0"
-        tx["s"] = "0x0"
-        result = self.nodes[0].cfx_call(tx)
+        result = self.client.call(tx["to"], tx["data"])
         balance = bytes_to_int(decode_hex(result))
         self.log.debug("address=%s, balance=%s", encode_hex(token_address), balance)
         return balance

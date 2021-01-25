@@ -96,7 +96,7 @@ impl PrefetcherThreadWorker {
     fn prefetch_accounts(
         &self, task_id: u64, state: &'static State,
         accounts: &'static [&'static Address],
-    )
+    ) -> DbResult<()>
     {
         self.cancel_task_id.store(0, Ordering::Relaxed);
         for address in accounts {
@@ -107,8 +107,10 @@ impl PrefetcherThreadWorker {
                 }
                 self.cancel_task_id.store(0, Ordering::Relaxed);
             }
-            state.try_load(address);
+            state.try_load(address)?;
         }
+
+        Ok(())
     }
 
     fn run(
@@ -130,7 +132,10 @@ impl PrefetcherThreadWorker {
                 return;
             } else {
                 *self.current_task_id.write() = (task_epoch_id, task_id);
-                self.prefetch_accounts(task_id, state, accounts);
+
+                // prefetch accounts, ignore db errors for now
+                let _ = self.prefetch_accounts(task_id, state, accounts);
+
                 task_finish_signal.send(()).expect(
                     // Should not return error.
                     &concat!(file!(), ":", line!(), ":", column!()),
@@ -352,6 +357,7 @@ impl CancelByKey for PrefetchTaskKey {
 }
 
 use crate::state::State;
+use cfx_statedb::Result as DbResult;
 use cfx_types::Address;
 use cfx_utils::cancellable_task_channel::*;
 use parking_lot::{Mutex, RwLock};
