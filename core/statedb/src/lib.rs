@@ -92,6 +92,8 @@ mod impls {
             }
         }
 
+        pub fn drop(self) -> Storage { self.storage }
+
         /// Set `key` to `value` in latest checkpoint if not set previously.
         fn update_checkpoint(&mut self, key: &Key, value: Option<Value>) {
             if let Some(checkpoint) = self.checkpoints.last_mut() {

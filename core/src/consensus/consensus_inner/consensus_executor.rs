@@ -13,7 +13,7 @@ use crate::{
     },
     executive::{
         revert_reason_decode, ExecutionError, ExecutionOutcome, Executive,
-        InternalContractMap, TransactOptions,
+        ExecutiveGeneric, InternalContractMap, TransactOptions,
     },
     machine::Machine,
     rpc_errors::{invalid_params_check, Result as RpcResult},
@@ -21,7 +21,7 @@ use crate::{
         prefetcher::{
             prefetch_accounts, ExecutionStatePrefetcher, PrefetchTaskHandle,
         },
-        CleanupMode, State,
+        CleanupMode, State, StateGeneric,
     },
     trace::trace::{ExecTrace, TransactionExecTraces},
     verification::{compute_receipts_root, VerificationConfig},
@@ -33,10 +33,11 @@ use cfx_internal_common::{
     debug::*, EpochExecutionCommitment, StateRootWithAuxInfo,
 };
 use cfx_parameters::consensus::*;
-use cfx_statedb::{Result as DbResult, StateDb};
+use cfx_statedb::{Result as DbResult, StateDb, StateDbGeneric};
 use cfx_storage::{
-    defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
-    StorageManagerTrait,
+    defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, ProofStorage,
+    RecordingStorage, StateIndex, StateProof, StorageManagerTrait,
+    StorageState, StorageStateTrait,
 };
 use cfx_types::{BigEndianHash, H256, KECCAK_EMPTY_BLOOM, U256, U512};
 use core::convert::TryFrom;
@@ -50,8 +51,8 @@ use primitives::{
         TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
-    Action, Block, BlockHeaderBuilder, EpochId, SignedTransaction,
-    TransactionIndex, MERKLE_NULL_NODE,
+    Action, Block, BlockHeaderBuilder, DeltaMptKeyPadding, EpochId,
+    SignedTransaction, StateRoot, TransactionIndex, MERKLE_NULL_NODE,
 };
 use rustc_hex::ToHex;
 use std::{
@@ -187,7 +188,7 @@ impl ConsensusExecutor {
         let machine = tx_pool.machine();
         let handler = Arc::new(ConsensusExecutionHandler::new(
             tx_pool,
-            data_man.clone(),
+            data_man,
             vm,
             config,
             verification_config,
@@ -610,10 +611,84 @@ impl ConsensusExecutor {
         }
     }
 
+    pub fn get_storage_for(&self, epoch_id: &H256) -> RpcResult<StorageState> {
+        let height = match self.handler.data_man.block_header_by_hash(epoch_id)
+        {
+            None => bail!("invalid epoch id"),
+            Some(h) => h.height(),
+        };
+
+        // keeping the lock will ensure state index is available
+        let state_availability_boundary =
+            self.handler.data_man.state_availability_boundary.read();
+
+        if !state_availability_boundary.check_availability(height, epoch_id) {
+            bail!("state is not ready");
+        }
+
+        let state_index = self
+            .handler
+            .data_man
+            .get_state_readonly_index(epoch_id)
+            .expect("state index is not available after availability check");
+
+        let storage = self
+            .handler
+            .data_man
+            .storage_manager
+            .get_state_no_commit(state_index, /* try_open = */ true)?
+            .ok_or("state deleted")?;
+
+        Ok(storage)
+    }
+
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
     ) -> RpcResult<ExecutionOutcome> {
-        self.handler.call_virtual(tx, epoch_id, epoch_size)
+        let storage = self.get_storage_for(epoch_id)?;
+
+        let (r, _) = self
+            .handler
+            .call_virtual(tx, storage, epoch_id, epoch_size)?;
+
+        Ok(r)
+    }
+
+    pub fn call_virtual_record_proof(
+        &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
+    ) -> RpcResult<(ExecutionOutcome, StateProof)> {
+        // wrap original storage
+        let storage = self.get_storage_for(epoch_id)?;
+        let storage = RecordingStorage::new(storage);
+
+        let (r, storage) = self
+            .handler
+            .call_virtual(tx, storage, epoch_id, epoch_size)?;
+
+        let proof = storage
+            .try_into_proof()
+            .expect("recorded proof is inconsistent");
+
+        Ok((r, proof))
+    }
+
+    pub fn call_virtual_verified(
+        &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
+        execution_proof: StateProof, state_root: StateRoot,
+        maybe_intermediate_padding: Option<DeltaMptKeyPadding>,
+    ) -> RpcResult<ExecutionOutcome>
+    {
+        let storage = ProofStorage::new(
+            execution_proof,
+            state_root,
+            maybe_intermediate_padding,
+        );
+
+        let (r, _) = self
+            .handler
+            .call_virtual(tx, storage, epoch_id, epoch_size)?;
+
+        Ok(r)
     }
 
     pub fn stop(&self) {
@@ -1674,21 +1749,24 @@ impl ConsensusExecutionHandler {
         )
     }
 
-    pub fn call_virtual(
-        &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
-    ) -> RpcResult<ExecutionOutcome> {
+    pub fn call_virtual<S: StorageStateTrait + Send + Sync + 'static>(
+        &self, tx: &SignedTransaction, storage: S, epoch_id: &H256,
+        epoch_size: usize,
+    ) -> RpcResult<(ExecutionOutcome, S)>
+    {
         let spec = Spec::new_spec();
         let internal_contract_map = InternalContractMap::new();
-        let best_block_header = self.data_man.block_header_by_hash(epoch_id);
-        if best_block_header.is_none() {
-            bail!("invalid epoch id");
-        }
-        let best_block_header = best_block_header.unwrap();
+
+        let best_block_header =
+            match self.data_man.block_header_by_hash(epoch_id) {
+                Some(h) => h,
+                None => bail!("invalid epoch id"),
+            };
+
+        trace!("best_block_header: {:?}", best_block_header);
+        let time_stamp = best_block_header.timestamp();
+
         let block_height = best_block_header.height() + 1;
-        let start_block_number = match self.data_man.get_epoch_execution_context(epoch_id) {
-            Some(v) => v.start_block_number + epoch_size as u64,
-            None => bail!("cannot obtain the execution context. Database is potentially corrupted!"),
-        };
 
         invalid_params_check(
             "tx",
@@ -1699,33 +1777,17 @@ impl ConsensusExecutionHandler {
             ),
         )?;
 
-        // Keep the lock until we get the desired State, otherwise the State may
-        // expire.
-        let state_availability_boundary =
-            self.data_man.state_availability_boundary.read();
-        if !state_availability_boundary
-            .check_availability(best_block_header.height(), epoch_id)
-        {
-            bail!("state is not ready");
-        }
-        let state_index = self.data_man.get_state_readonly_index(epoch_id);
-        trace!("best_block_header: {:?}", best_block_header);
-        let time_stamp = best_block_header.timestamp();
-        let mut state = State::new(
-            StateDb::new(
-                self.data_man
-                    .storage_manager
-                    .get_state_no_commit(
-                        state_index.unwrap(),
-                        /* try_open = */ true,
-                    )?
-                    .ok_or("state deleted")?,
-            ),
+        let start_block_number = match self.data_man.get_epoch_execution_context(epoch_id) {
+            Some(v) => v.start_block_number + epoch_size as u64,
+            None => bail!("cannot obtain the execution context. Database is potentially corrupted!"),
+        };
+
+        let mut state = StateGeneric::new(
+            StateDbGeneric::new(storage),
             self.vm.clone(),
             &spec,
             start_block_number,
         )?;
-        drop(state_availability_boundary);
 
         let env = Env {
             number: start_block_number,
@@ -1741,16 +1803,18 @@ impl ConsensusExecutionHandler {
                 .transaction_epoch_bound,
         };
         assert_eq!(state.block_number(), env.number);
-        let mut ex = Executive::new(
+        let mut ex = ExecutiveGeneric::new(
             &mut state,
             &env,
             self.machine.as_ref(),
             &spec,
             &internal_contract_map,
         );
+
         let r = ex.transact_virtual(tx);
         trace!("Execution result {:?}", r);
-        Ok(r?)
+        let storage = state.drop().drop();
+        Ok((r?, storage))
     }
 }
 

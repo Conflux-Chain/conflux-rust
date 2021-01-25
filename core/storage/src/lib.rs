@@ -164,6 +164,7 @@ pub use self::{
         },
         node_merkle_proof::{NodeMerkleProof, StorageRootProof},
         proof_merger::StateProofMerger,
+        proof_storage::ProofStorage,
         recording_storage::RecordingStorage,
         snapshot_sync::{FullSyncVerifier, MptSlicer},
         state_proof::StateProof,

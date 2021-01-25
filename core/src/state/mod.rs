@@ -211,6 +211,8 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         })
     }
 
+    pub fn drop(self) -> StateDb<StateDbStorage> { self.db }
+
     pub fn contract_start_nonce(&self) -> U256 { self.contract_start_nonce }
 
     /// Increase block number and calculate the current secondary reward.
