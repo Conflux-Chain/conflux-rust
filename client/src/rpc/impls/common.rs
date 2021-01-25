@@ -543,6 +543,7 @@ impl RpcImpl {
         Ok(RpcStatus {
             best_hash: H256::from(best_hash),
             chain_id: best_info.chain_id.into(),
+            network_id: self.network.network_id().into(),
             epoch_number: epoch_number.into(),
             block_number: block_number.into(),
             pending_tx_number: tx_count.into(),
