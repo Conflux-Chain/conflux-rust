@@ -7,11 +7,30 @@ use cfx_addr::Network;
 use cfx_types::{Bloom, H256, U256, U64};
 use cfxcore::{executive::contract_address, vm::CreateContractAddress};
 use primitives::{
-    receipt::{Receipt as PrimitiveReceipt, StorageChange},
+    receipt::{
+        Receipt as PrimitiveReceipt, StorageChange as PrimitiveStorageChange,
+    },
     transaction::Action,
     SignedTransaction as PrimitiveTransaction, TransactionIndex,
 };
 use serde_derive::Serialize;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StorageChange {
+    pub address: Base32Address,
+    pub collaterals: U64,
+}
+
+impl StorageChange {
+    pub fn try_from(
+        sc: PrimitiveStorageChange, network: Network,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            address: Base32Address::try_from_h160(sc.address, network)?,
+            collaterals: sc.collaterals,
+        })
+    }
+}
 
 #[derive(Debug, Serialize, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -128,7 +147,10 @@ impl Receipt {
             gas_covered_by_sponsor: gas_sponsor_paid,
             storage_covered_by_sponsor: storage_sponsor_paid,
             storage_collateralized,
-            storage_released,
+            storage_released: storage_released
+                .into_iter()
+                .map(|sc| StorageChange::try_from(sc, network))
+                .collect::<Result<_, _>>()?,
         })
     }
 }
