@@ -27,7 +27,7 @@ class P2PTest(ConfluxTestFramework):
         self.conf_parameters["dev_snapshot_epoch_count"] = "25"
         self.conf_parameters["anticone_penalty_ratio"] = "10"
 
-        self.stop_probability = 0.02
+        self.stop_probability = 0.01
         self.clean_probability = 0.5
 
         self.all_nodes = list(range(0, self.num_nodes))

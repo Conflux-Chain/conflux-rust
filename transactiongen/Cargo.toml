@@ -11,11 +11,11 @@ clap = "2"
 cfxcore = { path = "../core" }
 cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
-hex = "0.2"
 primitives = { path = "../primitives" }
 parking_lot = "0.11"
 rlp = "0.4.0"
 rand = "0.7"
+rustc-hex = "2.1"
 secret-store = { path = "../secret_store" }
 network = { path = "../network" }
 cfxkey = { path = "../accounts/cfxkey" }
@@ -26,4 +26,3 @@ io = { path = "../util/io" }
 priority-send-queue = { path = "../util/priority-send-queue" }
 metrics = { path = "../util/metrics" }
 lazy_static = "1.4"
-parity-bytes = "0.1"

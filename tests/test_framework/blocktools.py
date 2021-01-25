@@ -8,6 +8,7 @@ from conflux.config import DEFAULT_PY_TEST_CHAIN_ID, default_config
 from conflux.messages import BlockHeader, Block, Transactions, Account
 from conflux.transactions import Transaction, UnsignedTransaction
 from conflux.utils import *
+from conflux.rpc import RpcClient
 from trie import HexaryTrie
 import time
 import jsonrpcclient
@@ -102,7 +103,7 @@ def wait_for_initial_nonce_for_address(node, addr, timeout=10):
             raise AssertionError("Wait for initial nonce for address {} timeout after {} seconds, last exception is {}"
                                  .format(addr, timeout, last_exception))
         try:
-            nonce = int(node.cfx_getNextNonce(addr), 0)
+            nonce = RpcClient(node).get_nonce(addr)
         except jsonrpcclient.exceptions.ReceivedErrorResponseError as e:
             # It's possible that
             last_exception = e

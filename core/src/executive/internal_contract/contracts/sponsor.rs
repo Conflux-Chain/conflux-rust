@@ -16,6 +16,7 @@ use crate::{
     impl_function_type, make_function_table, make_solidity_contract,
     make_solidity_function,
     state::{StateGeneric, Substate},
+    trace::{trace::ExecTrace, Tracer},
     vm,
 };
 use cfx_storage::StorageStateTrait;
@@ -57,9 +58,12 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     fn execute_inner(
         &self, inputs: (Address, U256), params: &ActionParams, spec: &Spec,
         state: &mut StateGeneric<S>, substate: &mut Substate,
+        tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        set_sponsor_for_gas(inputs.0, inputs.1, params, spec, state, substate)
+        set_sponsor_for_gas(
+            inputs.0, inputs.1, params, spec, state, substate, tracer,
+        )
     }
 }
 
@@ -74,9 +78,10 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     fn execute_inner(
         &self, input: Address, params: &ActionParams, spec: &Spec,
         state: &mut StateGeneric<S>, substate: &mut Substate,
+        tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        set_sponsor_for_collateral(input, params, spec, state, substate)
+        set_sponsor_for_collateral(input, params, spec, state, substate, tracer)
     }
 }
 
@@ -101,6 +106,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for AddPrivilege<S> {
     fn execute_inner(
         &self, addresses: Vec<Address>, params: &ActionParams, _: &Spec,
         state: &mut StateGeneric<S>, _: &mut Substate,
+        _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
         if !params.sender.is_contract_address() {
@@ -135,6 +141,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     fn execute_inner(
         &self, addresses: Vec<Address>, params: &ActionParams, _: &Spec,
         state: &mut StateGeneric<S>, _: &mut Substate,
+        _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
         if !params.sender.is_contract_address() {
@@ -158,6 +165,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _: &Spec,
         state: &mut StateGeneric<S>, _: &mut Substate,
+        _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<Address>
     {
         Ok(state.sponsor_for_gas(&input)?.unwrap_or_default())
@@ -175,6 +183,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _: &Spec,
         state: &mut StateGeneric<S>, _: &mut Substate,
+        _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
         Ok(state.sponsor_balance_for_gas(&input)?)
@@ -192,6 +201,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _: &Spec,
         state: &mut StateGeneric<S>, _: &mut Substate,
+        _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
         Ok(state.sponsor_gas_bound(&input)?)
@@ -209,6 +219,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _: &Spec,
         state: &mut StateGeneric<S>, _: &mut Substate,
+        _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<Address>
     {
         Ok(state.sponsor_for_collateral(&input)?.unwrap_or_default())
@@ -226,6 +237,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _: &Spec,
         state: &mut StateGeneric<S>, _: &mut Substate,
+        _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
         Ok(state.sponsor_balance_for_collateral(&input)?)
@@ -243,6 +255,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     fn execute_inner(
         &self, (contract, user): (Address, Address), _: &ActionParams,
         _: &Spec, state: &mut StateGeneric<S>, _: &mut Substate,
+        _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<bool>
     {
         if contract.is_contract_address() {
@@ -264,6 +277,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     fn execute_inner(
         &self, contract: Address, _: &ActionParams, _: &Spec,
         state: &mut StateGeneric<S>, _: &mut Substate,
+        _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<bool>
     {
         if contract.is_contract_address() {
@@ -300,7 +314,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     fn execute_inner(
         &self, (contract, addresses): (Address, Vec<Address>),
         params: &ActionParams, _: &Spec, state: &mut StateGeneric<S>,
-        _: &mut Substate,
+        _: &mut Substate, _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
         if contract.is_contract_address()
@@ -335,7 +349,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     fn execute_inner(
         &self, (contract, addresses): (Address, Vec<Address>),
         params: &ActionParams, _: &Spec, state: &mut StateGeneric<S>,
-        _: &mut Substate,
+        _: &mut Substate, _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
         if contract.is_contract_address()

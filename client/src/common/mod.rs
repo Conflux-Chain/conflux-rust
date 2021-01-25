@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+pub mod known_network_ids;
+
 /// Hold all top-level components for a type of client.
 /// This struct implement ClientShutdownTrait.
 pub struct ClientComponents<BlockGenT, Rest> {
@@ -198,12 +200,7 @@ pub fn initialize_common_modules(
     };
 
     let consensus_conf = conf.consensus_config();
-    let machine =
-        Arc::new(new_machine_with_builtin(CommonParams::common_params(
-            consensus_conf.chain_id.clone(),
-            conf.raw_conf.anticone_penalty_ratio,
-            conf.raw_conf.phase2_transition_height,
-        )));
+    let machine = Arc::new(new_machine_with_builtin(conf.common_params()));
 
     let genesis_block = genesis_block(
         &storage_manager,
@@ -434,8 +431,28 @@ pub fn initialize_not_light_node_modules(
 
     let maybe_author: Option<Address> =
         conf.raw_conf.mining_author.as_ref().map(|hex_str| {
-            parse_hex_string(hex_str)
-                .expect("mining-author should be 40-digit hex string")
+            let base32_err = match cfx_addr_decode(hex_str) {
+                Ok(address) => {
+                    if address.network != network_id_to_known_cfx_network(network.network_id()) {
+                        panic!("mining_author has unmatching network id: network_id={},\
+                         address.network={}", network.network_id(), address.network)
+                    }
+                    match address.hex {
+                        Some(hex_address) => return hex_address,
+                        None => panic!("Invalid decoded hash size for base32 address"),
+                    }
+                }
+                Err(e) => e,
+            };
+            let hex_err = match parse_hex_string(hex_str) {
+                Ok(address) => return address,
+                Err(e) => e
+            };
+            // `mining_author` does not match either format
+            panic!("mining-author should be a valid base32 address or a 40-digit hex string!
+            base32_err={:?}
+            hex_err={:?}",
+            base32_err, hex_err)
         });
     let blockgen = Arc::new(BlockGenerator::new(
         sync_graph,
@@ -724,6 +741,7 @@ pub mod delegate_convert {
 pub use crate::configuration::Configuration;
 use crate::{
     accounts::{account_provider, keys_path},
+    common::known_network_ids::network_id_to_known_cfx_network,
     configuration::parse_hex_string,
     rpc::{
         extractor::RpcExtractor,
@@ -736,16 +754,14 @@ use crate::{
     GENESIS_VERSION,
 };
 use blockgen::BlockGenerator;
+use cfx_addr::cfx_addr_decode;
 use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use cfxcore::{
     block_data_manager::BlockDataManager,
     machine::{new_machine_with_builtin, Machine},
     pow::PowComputer,
-    spec::{
-        genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
-        CommonParams,
-    },
+    spec::genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
     statistics::Statistics,
     sync::SyncPhaseType,
     vm_factory::VmFactory,
