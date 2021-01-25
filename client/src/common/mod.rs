@@ -432,9 +432,15 @@ pub fn initialize_not_light_node_modules(
     let maybe_author: Option<Address> =
         conf.raw_conf.mining_author.as_ref().map(|hex_str| {
             let base32_err = match cfx_addr_decode(hex_str) {
-                Ok(address) => match address.hex {
-                    Some(hex_address) => return hex_address,
-                    None => panic!("Invalid decoded hash size for base32 address"),
+                Ok(address) => {
+                    if address.network != network_id_to_known_cfx_network(network.network_id()) {
+                        panic!("mining_author has unmatching network id: network_id={},\
+                         address.network={}", network.network_id(), address.network)
+                    }
+                    match address.hex {
+                        Some(hex_address) => return hex_address,
+                        None => panic!("Invalid decoded hash size for base32 address"),
+                    }
                 }
                 Err(e) => e,
             };
@@ -735,6 +741,7 @@ pub mod delegate_convert {
 pub use crate::configuration::Configuration;
 use crate::{
     accounts::{account_provider, keys_path},
+    common::known_network_ids::network_id_to_known_cfx_network,
     configuration::parse_hex_string,
     rpc::{
         extractor::RpcExtractor,
