@@ -300,23 +300,12 @@ impl TrieProof {
         }
 
         // traverse subtree using BFS
-        let key_prefix: CompressedPathRaw = path.into();
-
-        // queue elements are <node-hash, maybe-child-id, key-prefix>
-        // node-hash: hash of the node to be visited
-        // maybe-child-id: the id of this node in its parent
-        // key-prefix: key prefix leading to this node
-        let mut queue = VecDeque::new();
-        queue.push_back((hash, None, key_prefix));
+        let mut queue = VecDeque::<(&H256, CompressedPathRaw)>::new();
+        queue.push_back((hash, path.into()));
 
         let mut kv: Vec<MptKeyValue> = vec![];
 
-        loop {
-            let (hash, maybe_child_id, key_prefix) = match queue.pop_front() {
-                None => break,
-                Some(item) => item,
-            };
-
+        while let Some((hash, key)) = queue.pop_front() {
             // visit node
             let node = match self.merkle_to_node_index.get(hash) {
                 Some(node_index) => self
@@ -330,15 +319,6 @@ impl TrieProof {
                 }
             };
 
-            let key = match maybe_child_id {
-                None => key_prefix,
-                Some(id) => CompressedPathRaw::join_connected_paths(
-                    &key_prefix,
-                    id,
-                    &node.compressed_path_ref(),
-                ),
-            };
-
             // store key-value pair if node contains value
             if let MptValue::Some(value) = node.value_as_slice() {
                 let key = key.path_slice().to_vec();
@@ -347,8 +327,16 @@ impl TrieProof {
 
             // iterate all children
             for (id, child_hash) in node.get_children_table_ref().iter() {
+                // ChildrenTableIterator only yields existing child nodes
                 assert_ne!(*child_hash, MERKLE_NULL_NODE);
-                queue.push_back((child_hash, Some(id), key.clone()));
+
+                let child_key = CompressedPathRaw::join_connected_paths(
+                    &key,
+                    id,
+                    &node.compressed_path_ref(),
+                );
+
+                queue.push_back((child_hash, child_key));
             }
         }
 
