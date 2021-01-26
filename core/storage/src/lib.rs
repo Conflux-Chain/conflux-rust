@@ -163,6 +163,8 @@ pub use self::{
             simple_mpt::*, KVInserter, MptKeyValue, TrieProof,
         },
         node_merkle_proof::{NodeMerkleProof, StorageRootProof},
+        proof_merger::StateProofMerger,
+        recording_storage::RecordingStorage,
         snapshot_sync::{FullSyncVerifier, MptSlicer},
         state_proof::StateProof,
         storage_db::{
@@ -172,7 +174,10 @@ pub use self::{
             sqlite::SqliteConnection,
         },
     },
-    state::{State as StorageState, StateTrait as StorageStateTrait},
+    state::{
+        State as StorageState, StateTrait as StorageStateTrait,
+        StateTraitExt as StorageStateTraitExt,
+    },
     state_manager::{
         StateIndex, StateManager as StorageManager,
         StateManagerTrait as StorageManagerTrait,

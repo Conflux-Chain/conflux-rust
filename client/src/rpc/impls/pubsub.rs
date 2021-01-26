@@ -7,12 +7,11 @@ use crate::rpc::{
     helpers::{EpochQueue, SubscriberId, Subscribers},
     metadata::Metadata,
     traits::PubSub,
-    types::{pubsub, Header as RpcHeader, Log as RpcLog},
+    types::{
+        address::NODE_NETWORK, pubsub, Header as RpcHeader, Log as RpcLog,
+    },
 };
-use cfx_parameters::{
-    consensus::DEFERRED_STATE_EPOCH_COUNT,
-    consensus_internal::REWARD_EPOCH_COUNT,
-};
+use cfx_parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
 use cfx_types::H256;
 use cfxcore::{
     channel::Channel, BlockDataManager, Notifications, SharedConsensusGraph,
@@ -150,7 +149,7 @@ impl PubSubClient {
         // use a queue to make sure we only process an epoch once it has been
         // executed for sure
         let mut queue = EpochQueue::<Vec<H256>>::with_capacity(
-            (DEFERRED_STATE_EPOCH_COUNT + REWARD_EPOCH_COUNT) as usize,
+            (DEFERRED_STATE_EPOCH_COUNT - 1) as usize,
         );
 
         // loop asynchronously
@@ -237,8 +236,23 @@ impl ChainNotificationHandler {
         }
 
         let header = match self.data_man.block_header_by_hash(hash) {
-            Some(h) => RpcHeader::new(&*h, self.consensus.clone()),
+            Some(h) => RpcHeader::new(
+                &*h,
+                *NODE_NETWORK.read(),
+                self.consensus.clone(),
+            ),
             None => return warn!("Unable to retrieve header for {:?}", hash),
+        };
+
+        let header = match header {
+            Ok(h) => h,
+            Err(e) => {
+                error!(
+                    "Unexpected error while constructing RpcHeader: {:?}",
+                    e
+                );
+                return;
+            }
         };
 
         for subscriber in subscribers.values() {
@@ -296,13 +310,23 @@ impl ChainNotificationHandler {
             .iter()
             .filter(|l| filter.matches(&l.entry))
             .cloned()
-            .map(RpcLog::from);
+            .map(|l| RpcLog::try_from_localized(l, *NODE_NETWORK.read()));
 
         // send logs in order
         // FIXME(thegaram): Sink::notify flushes after each item.
         // consider sending them in a batch.
         for log in logs {
-            Self::notify_async(subscriber, pubsub::Result::Log(log)).await
+            match log {
+                Ok(l) => {
+                    Self::notify_async(subscriber, pubsub::Result::Log(l)).await
+                }
+                Err(e) => {
+                    error!(
+                        "Unexpected error while constructing RpcLog: {:?}",
+                        e
+                    );
+                }
+            }
         }
     }
 
@@ -313,13 +337,19 @@ impl ChainNotificationHandler {
     async fn retrieve_block_receipts(
         &self, block: &H256, pivot: &H256,
     ) -> Option<Arc<BlockReceipts>> {
-        const NUM_POLLS: i8 = 10;
         const POLL_INTERVAL_MS: Duration = Duration::from_millis(100);
 
-        for _ in 0..NUM_POLLS {
+        // we assume that all epochs we receive (with a distance of at least
+        // `DEFERRED_STATE_EPOCH_COUNT` from the tip of the pivot chain) are
+        // eventually executed, i.e. epochs are not dropped from the execution
+        // queue on pivot chain reorgs. moreover, multiple execution results
+        // might be stored for the same block for all epochs it was executed in.
+        // if these assumptions hold, we will eventually successfully read these
+        // execution results, even if they are outdated.
+        for ii in 0.. {
             match self.data_man.block_execution_result_by_hash_with_epoch(
                 &block, &pivot, false, /* update_pivot_assumption */
-                true,  /* update_cache */
+                false, /* update_cache */
             ) {
                 Some(res) => return Some(res.block_receipts.clone()),
                 None => {
@@ -327,12 +357,15 @@ impl ChainNotificationHandler {
                     let _ = sleep(POLL_INTERVAL_MS).compat().await;
                 }
             }
+
+            // this should not happen
+            if ii > 100 {
+                error!("Cannot find receipts with {:?}/{:?}", block, pivot);
+                return None;
+            }
         }
 
-        // note: this can only happen if there was a chain reorg, in which case
-        // we will eventually re-process this epoch with the correct pivot hash
-        warn!("Cannot find receipts with {:?}/{:?}", block, pivot);
-        None
+        unreachable!()
     }
 
     async fn retrieve_epoch_logs(

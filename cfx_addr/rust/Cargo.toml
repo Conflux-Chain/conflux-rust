@@ -1,0 +1,10 @@
+[package]
+name = "cfx-addr"
+version = "0.1.0"
+license = "GPL-3.0"
+description = "Conflux Address Encoder/Decoder"
+
+[dependencies]
+cfx-types = { path = "../../cfx_types" }
+lazy_static = "1.4"
+rustc-hex = "2.1"

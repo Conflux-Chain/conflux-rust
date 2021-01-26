@@ -17,6 +17,7 @@ use crate::{
 };
 use cfx_parameters::sync::OLD_ERA_BLOCK_GC_BATCH_SIZE;
 use cfx_types::{H256, U256};
+use dag::{Graph, RichDAG, RichTreeGraph, TreeGraph};
 use futures::executor::block_on;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -930,7 +931,7 @@ impl SynchronizationGraphInner {
             // again
             self.data_man.invalidate_block(hash);
         }
-        self.remove_blocks(invalid_set);
+        self.remove_blocks(&invalid_set);
     }
 
     fn remove_blocks(&mut self, to_remove_set: &HashSet<usize>) {
@@ -2106,85 +2107,33 @@ impl SynchronizationGraph {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        let mut queue = VecDeque::new();
+        let frontier = inner.not_ready_blocks_frontier.get_frontier().clone();
+        let all_not_ready: HashSet<_> = inner.get_future(frontier);
         let mut expire_set = HashSet::new();
-        let mut visited = HashSet::new();
-        // find expire blocks
-        for index in inner.not_ready_blocks_frontier.get_frontier() {
-            queue.push_back(*index);
-            visited.insert(*index);
-        }
-        while let Some(index) = queue.pop_front() {
+        for index in all_not_ready {
             if inner.arena[index].last_update_timestamp + expire_time < now {
                 expire_set.insert(index);
             }
-            for child in &inner.arena[index].children {
-                if !visited.contains(child) {
-                    visited.insert(*child);
-                    queue.push_back(*child);
-                }
-            }
-            for referrer in &inner.arena[index].referrers {
-                if !visited.contains(referrer) {
-                    visited.insert(*referrer);
-                    queue.push_back(*referrer);
-                }
-            }
-        }
-        // find blocks reached by previous found expired blocks
-        for index in &expire_set {
-            queue.push_back(*index);
-        }
-        while let Some(index) = queue.pop_front() {
-            inner.arena[index].graph_status = BLOCK_INVALID;
-            for child in &inner.arena[index].children {
-                if !expire_set.contains(child) {
-                    expire_set.insert(*child);
-                    queue.push_back(*child);
-                }
-            }
-            for referrer in &inner.arena[index].referrers {
-                if !expire_set.contains(referrer) {
-                    expire_set.insert(*referrer);
-                    queue.push_back(*referrer);
-                }
-            }
         }
 
-        debug!("expire_set: {:?}", expire_set);
-        inner.remove_blocks(&expire_set);
+        // find blocks reached by previous found expired blocks
+        let all_expire: HashSet<_> = inner.get_future(expire_set);
+        debug!("all_expire: {:?}", all_expire);
+        inner.remove_blocks(&all_expire);
     }
 
     /// Remove all blocks in `to_remove_set` and their future set from the
     /// graph.
     pub fn remove_blocks_and_future(&self, to_remove_set: &HashSet<H256>) {
         let mut inner = self.inner.write();
-        let mut queue = VecDeque::new();
-        let mut visited = HashSet::new();
-
+        let mut index_set = Vec::new();
         for block_hash in to_remove_set {
             if let Some(index) = inner.hash_to_arena_indices.get(block_hash) {
-                queue.push_back(*index);
-                visited.insert(*index);
+                index_set.push(*index);
             }
         }
-
-        // TODO Merge codes for graph traversal.
-        while let Some(index) = queue.pop_front() {
-            for child in &inner.arena[index].children {
-                if !visited.contains(child) {
-                    visited.insert(*child);
-                    queue.push_back(*child);
-                }
-            }
-            for referrer in &inner.arena[index].referrers {
-                if !visited.contains(referrer) {
-                    visited.insert(*referrer);
-                    queue.push_back(*referrer);
-                }
-            }
-        }
-        inner.remove_blocks(&visited);
+        let index_set_and_future: HashSet<_> = inner.get_future(index_set);
+        inner.remove_blocks(&index_set_and_future);
     }
 
     pub fn is_consensus_worker_busy(&self) -> bool {
@@ -2219,6 +2168,34 @@ impl SynchronizationGraph {
             })
             .collect();
         inner.remove_blocks(&to_remove);
+    }
+}
+
+impl Graph for SynchronizationGraphInner {
+    type NodeIndex = usize;
+}
+
+impl TreeGraph for SynchronizationGraphInner {
+    fn parent(&self, node_index: Self::NodeIndex) -> Option<Self::NodeIndex> {
+        if self.arena[node_index].parent != NULL {
+            Some(self.arena[node_index].parent)
+        } else {
+            None
+        }
+    }
+
+    fn referees(&self, node_index: Self::NodeIndex) -> Vec<Self::NodeIndex> {
+        self.arena[node_index].referees.clone()
+    }
+}
+
+impl RichTreeGraph for SynchronizationGraphInner {
+    fn children(&self, node_index: Self::NodeIndex) -> Vec<Self::NodeIndex> {
+        self.arena[node_index].children.clone()
+    }
+
+    fn referrers(&self, node_index: Self::NodeIndex) -> Vec<Self::NodeIndex> {
+        self.arena[node_index].referrers.clone()
     }
 }
 

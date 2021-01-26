@@ -28,7 +28,7 @@ class TestGetBalance(RpcClient):
 
     def test_address_too_long(self):
         addr = self.rand_addr()
-        assert_raises_rpc_error(None, None, self.get_balance, addr + "6")
+        assert_raises_rpc_error(None, None, self.node.cfx_getBalance, addr + "6")
 
     def test_address_lowercase(self):
         addr = self.rand_addr()

@@ -1,11 +1,14 @@
 import os
+import random
+
 import eth_utils
 import rlp
 
+from .address import hex_to_b32_address, b32_address_to_hex
 from .config import DEFAULT_PY_TEST_CHAIN_ID, default_config
 from .transactions import CONTRACT_DEFAULT_GAS, Transaction, UnsignedTransaction
 from .filter import Filter
-from .utils import priv_to_addr, sha3_256
+from .utils import priv_to_addr, sha3_256, int_to_bytes, convert_to_nodeid
 
 import sys
 sys.path.append("..")
@@ -17,6 +20,12 @@ from test_framework.util import (
     assert_is_hex_string,
     wait_until, checktx
 )
+
+
+def convert_b32_address_field_to_hex(original_dict: dict, field_name: str):
+    if original_dict is not None and field_name in original_dict and original_dict[field_name] not in [None, "null"]:
+        original_dict[field_name] = b32_address_to_hex(original_dict[field_name])
+
 
 class RpcClient:
     def __init__(self, node=None, auto_restart=False):
@@ -121,10 +130,13 @@ class RpcClient:
 
     def get_logs(self, filter: Filter) -> list:
         logs = self.node.cfx_getLogs(filter.__dict__)
+        for log in logs:
+            convert_b32_address_field_to_hex(log, "address")
         return logs
 
     def get_storage_at(self, addr: str, pos: str, epoch: str = None) -> str:
         assert_is_hash_string(addr, length=40)
+        addr = hex_to_b32_address(addr)
         assert_is_hash_string(pos)
 
         if epoch is None:
@@ -136,6 +148,7 @@ class RpcClient:
 
     def get_storage_root(self, addr: str, epoch: str = None) -> str:
         assert_is_hash_string(addr, length=40)
+        addr = hex_to_b32_address(addr)
 
         if epoch is None:
             res = self.node.cfx_getStorageRoot(addr)
@@ -145,6 +158,7 @@ class RpcClient:
         return res
 
     def get_code(self, address: str, epoch: str = None) -> str:
+        address = hex_to_b32_address(address)
         if epoch is None:
             code = self.node.cfx_getCode(address)
         else:
@@ -156,7 +170,9 @@ class RpcClient:
         return int(self.node.cfx_gasPrice(), 0)
 
     def get_block_reward_info(self, epoch: str):
-        return self.node.cfx_getBlockRewardInfo(epoch)
+        reward = self.node.cfx_getBlockRewardInfo(epoch)
+        convert_b32_address_field_to_hex(reward, "author")
+        return reward
 
     def epoch_number(self, epoch: str = None) -> int:
         if epoch is None:
@@ -165,40 +181,49 @@ class RpcClient:
             return int(self.node.cfx_epochNumber(epoch), 0)
 
     def get_balance(self, addr: str, epoch: str = None) -> int:
+        addr = hex_to_b32_address(addr)
         if epoch is None:
             return int(self.node.cfx_getBalance(addr), 0)
         else:
             return int(self.node.cfx_getBalance(addr, epoch), 0)
 
     def get_staking_balance(self, addr: str, epoch: str = None) -> int:
+        addr = hex_to_b32_address(addr)
         if epoch is None:
             return int(self.node.cfx_getStakingBalance(addr), 0)
         else:
             return int(self.node.cfx_getStakingBalance(addr, epoch), 0)
 
     def get_vote_list(self, addr: str, epoch: str = None) -> list:
+        addr = hex_to_b32_address(addr)
         if epoch is None:
             return self.node.cfx_getVoteList(addr)
         else:
             return self.node.cfx_getVoteList(addr, epoch)
 
     def get_deposit_list(self, addr: str, epoch: str = None) -> list:
+        addr = hex_to_b32_address(addr)
         if epoch is None:
             return self.node.cfx_getDepositList(addr)
         else:
             return self.node.cfx_getDepositList(addr, epoch)
 
     def get_collateral_for_storage(self, addr: str, epoch: str = None) -> int:
+        addr = hex_to_b32_address(addr)
         if epoch is None:
             return int(self.node.cfx_getCollateralForStorage(addr), 0)
         else:
             return int(self.node.cfx_getCollateralForStorage(addr, epoch), 0)
     
     def get_sponsor_info(self, addr: str, epoch: str = None) -> dict:
+        addr = hex_to_b32_address(addr)
         if epoch is None:
-            return self.node.cfx_getSponsorInfo(addr)
+            r = self.node.cfx_getSponsorInfo(addr)
         else:
-            return self.node.cfx_getSponsorInfo(addr, epoch)
+            r = self.node.cfx_getSponsorInfo(addr, epoch)
+        convert_b32_address_field_to_hex(r, 'sponsorForGas')
+        convert_b32_address_field_to_hex(r, 'sponsorForCollateral')
+        return r
 
     def get_sponsor_for_gas(self, addr: str, epoch: str = None) -> str:
         return self.get_sponsor_info(addr, epoch)['sponsorForGas']
@@ -216,15 +241,16 @@ class RpcClient:
         return int(self.get_sponsor_info(addr, epoch)['sponsorGasBound'], 0)
 
     def get_admin(self, addr: str, epoch: str = None) -> str:
+        addr = hex_to_b32_address(addr)
         if epoch is None:
-            return self.node.cfx_getAdmin(addr)
+            r = self.node.cfx_getAdmin(addr)
         else:
-            return self.node.cfx_getAdmin(addr, epoch)
+            r = self.node.cfx_getAdmin(addr, epoch)
+        return b32_address_to_hex(r)
 
     ''' Ignore block_hash if epoch is not None '''
     def get_nonce(self, addr: str, epoch: str = None, block_hash: str = None) -> int:
-        if addr[:2] != "0x":
-            addr = "0x" + addr
+        addr = hex_to_b32_address(addr)
         if epoch is None and block_hash is None:
             return int(self.node.cfx_getNextNonce(addr), 0)
         elif epoch is None:
@@ -266,16 +292,24 @@ class RpcClient:
         wait_until(check_tx, timeout=timeout)
 
     def block_by_hash(self, block_hash: str, include_txs: bool = False) -> dict:
-        return self.node.cfx_getBlockByHash(block_hash, include_txs)
+        block = self.node.cfx_getBlockByHash(block_hash, include_txs)
+        convert_b32_address_field_to_hex(block, "miner")
+        return block
 
     def block_by_epoch(self, epoch: str, include_txs: bool = False) -> dict:
-        return self.node.cfx_getBlockByEpochNumber(epoch, include_txs)
+        block = self.node.cfx_getBlockByEpochNumber(epoch, include_txs)
+        convert_b32_address_field_to_hex(block, "miner")
+        return block
 
     def best_block_hash(self) -> str:
         return self.node.cfx_getBestBlockHash()
 
     def get_tx(self, tx_hash: str) -> dict:
-        return self.node.cfx_getTransactionByHash(tx_hash)
+        tx = self.node.cfx_getTransactionByHash(tx_hash)
+        convert_b32_address_field_to_hex(tx, "from")
+        convert_b32_address_field_to_hex(tx, "to")
+        convert_b32_address_field_to_hex(tx, "contractCreated")
+        return tx
 
     def new_tx(self, sender = None, receiver = None, nonce = None, gas_price=1, gas=21000, value=100, data=b'', sign=True, priv_key=None, storage_limit=None, epoch_height=0, chain_id=DEFAULT_PY_TEST_CHAIN_ID):
         if sender is None:
@@ -346,7 +380,11 @@ class RpcClient:
 
     def get_transaction_receipt(self, tx_hash: str) -> dict:
         assert_is_hash_string(tx_hash)
-        return self.node.cfx_getTransactionReceipt(tx_hash)
+        r = self.node.cfx_getTransactionReceipt(tx_hash)
+        convert_b32_address_field_to_hex(r, "contractCreated")
+        convert_b32_address_field_to_hex(r, "from")
+        convert_b32_address_field_to_hex(r, "to")
+        return r
 
     def txpool_status(self) -> (int, int):
         status = self.node.txpool_status()
@@ -357,6 +395,8 @@ class RpcClient:
             sender = self.GENESIS_ADDR
         if nonce is None:
             nonce = self.get_nonce(sender)
+        sender = hex_to_b32_address(sender)
+        contract_addr = hex_to_b32_address(contract_addr)
 
         return {
             "hash": "0x"+"0"*64,
@@ -387,7 +427,9 @@ class RpcClient:
         return response['storageCollateralized']
 
     def check_balance_against_transaction(self, account_addr: str, contract_addr: str, gas_limit: int, gas_price: int, storage_limit: int) -> dict:
-       return self.node.cfx_checkBalanceAgainstTransaction(account_addr, contract_addr, hex(gas_limit), hex(gas_price), hex(storage_limit))
+        account_addr = hex_to_b32_address(account_addr)
+        contract_addr = hex_to_b32_address(contract_addr)
+        return self.node.cfx_checkBalanceAgainstTransaction(account_addr, contract_addr, hex(gas_limit), hex(gas_price), hex(storage_limit))
 
     def call(self, contract_addr:str, data_hex:str, nonce=None, epoch:str=None) -> str:
         tx = self.new_tx_for_call(contract_addr, data_hex, nonce=nonce)
@@ -404,3 +446,21 @@ class RpcClient:
 
     def get_block_count(self):
         return self.node.getblockcount()
+
+    def get_account(self, addr: str, epoch: str = None):
+        addr = hex_to_b32_address(addr)
+        account = self.node.cfx_getAccount(addr, epoch)
+        convert_b32_address_field_to_hex(account, "admin")
+        return account
+
+    def get_accumulate_interest_rate(self, epoch: str = None):
+        return self.node.cfx_getAccumulateInterestRate(epoch)
+
+    def get_interest_rate(self, epoch: str = None):
+        return self.node.cfx_getInterestRate(epoch)
+
+    def get_node_id(self):
+        challenge = random.randint(0, 2**32-1)
+        signature = self.node.getnodeid(list(int_to_bytes(challenge)))
+        node_id, _, _ = convert_to_nodeid(signature, challenge)
+        return node_id

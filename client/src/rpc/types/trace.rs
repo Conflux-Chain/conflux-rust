@@ -2,10 +2,135 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfxcore::trace::trace::{
-    Action, BlockExecTraces, ExecTrace, TransactionExecTraces,
+use super::Address as Base32Address;
+use cfx_addr::Network;
+use cfx_bytes::Bytes;
+use cfx_types::U256;
+use cfxcore::{
+    trace::trace::{
+        Action as VmAction, BlockExecTraces, Call as VmCall, CallResult,
+        Create as VmCreate, CreateResult as VmCreateResult, ExecTrace,
+        InternalTransferAction as VmInternalTransferAction, Outcome,
+        TransactionExecTraces,
+    },
+    vm::CallType,
 };
 use serde::{ser::SerializeStruct, Serialize, Serializer};
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Action {
+    Call(Call),
+    Create(Create),
+    CallResult(CallResult),
+    CreateResult(CreateResult),
+    InternalTransferAction(InternalTransferAction),
+}
+
+impl Action {
+    fn try_from(action: VmAction, network: Network) -> Result<Self, String> {
+        Ok(match action {
+            VmAction::Call(x) => Action::Call(Call::try_from(x, network)?),
+            VmAction::Create(x) => {
+                Action::Create(Create::try_from(x, network)?)
+            }
+            VmAction::CallResult(x) => Action::CallResult(x),
+            VmAction::CreateResult(x) => {
+                Action::CreateResult(CreateResult::try_from(x, network)?)
+            }
+            VmAction::InternalTransferAction(x) => {
+                Action::InternalTransferAction(
+                    InternalTransferAction::try_from(x, network)?,
+                )
+            }
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Call {
+    pub from: Base32Address,
+    pub to: Base32Address,
+    pub value: U256,
+    pub gas: U256,
+    pub input: Bytes,
+    pub call_type: CallType,
+}
+
+impl Call {
+    fn try_from(call: VmCall, network: Network) -> Result<Self, String> {
+        Ok(Self {
+            from: Base32Address::try_from_h160(call.from, network)?,
+            to: Base32Address::try_from_h160(call.to, network)?,
+            value: call.value,
+            gas: call.gas,
+            input: call.input,
+            call_type: call.call_type,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Create {
+    pub from: Base32Address,
+    pub value: U256,
+    pub gas: U256,
+    pub init: Bytes,
+}
+
+impl Create {
+    fn try_from(create: VmCreate, network: Network) -> Result<Self, String> {
+        Ok(Self {
+            from: Base32Address::try_from_h160(create.from, network)?,
+            value: create.value,
+            gas: create.gas,
+            init: create.init,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateResult {
+    pub outcome: Outcome,
+    pub addr: Base32Address,
+    pub gas_left: U256,
+    pub return_data: Bytes,
+}
+
+impl CreateResult {
+    fn try_from(
+        result: VmCreateResult, network: Network,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            outcome: result.outcome,
+            addr: Base32Address::try_from_h160(result.addr, network)?,
+            gas_left: result.gas_left,
+            return_data: result.return_data,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InternalTransferAction {
+    pub from: Base32Address,
+    pub to: Base32Address,
+    pub value: U256,
+}
+
+impl InternalTransferAction {
+    fn try_from(
+        action: VmInternalTransferAction, network: Network,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            from: Base32Address::try_from_h160(action.from, network)?,
+            to: Base32Address::try_from_h160(action.to, network)?,
+            value: action.value,
+        })
+    }
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,34 +163,58 @@ impl Serialize for LocalizedTrace {
                 struc.serialize_field("type", "create")?;
                 struc.serialize_field("action", create)?;
             }
+            Action::CallResult(ref call_result) => {
+                struc.serialize_field("type", "call_result")?;
+                struc.serialize_field("action", call_result)?;
+            }
+            Action::CreateResult(ref create_result) => {
+                struc.serialize_field("type", "create_result")?;
+                struc.serialize_field("action", create_result)?;
+            }
+            Action::InternalTransferAction(ref internal_action) => {
+                struc.serialize_field("type", "internal_transfer_action")?;
+                struc.serialize_field("action", internal_action)?;
+            }
         }
 
         struc.end()
     }
 }
 
-impl From<ExecTrace> for LocalizedTrace {
-    fn from(trace: ExecTrace) -> Self {
-        LocalizedTrace {
-            action: trace.action,
-        }
+impl LocalizedTrace {
+    pub fn from(trace: ExecTrace, network: Network) -> Result<Self, String> {
+        Ok(LocalizedTrace {
+            action: Action::try_from(trace.action, network)?,
+        })
     }
 }
 
-impl From<TransactionExecTraces> for LocalizedTransactionTrace {
-    fn from(traces: TransactionExecTraces) -> Self {
+impl LocalizedTransactionTrace {
+    pub fn from(
+        traces: TransactionExecTraces, network: Network,
+    ) -> Result<Self, String> {
         let traces: Vec<ExecTrace> = traces.into();
-        LocalizedTransactionTrace {
-            traces: traces.into_iter().map(Into::into).collect(),
-        }
+
+        Ok(LocalizedTransactionTrace {
+            traces: traces
+                .into_iter()
+                .map(|t| LocalizedTrace::from(t, network))
+                .collect::<Result<_, _>>()?,
+        })
     }
 }
 
-impl From<BlockExecTraces> for LocalizedBlockTrace {
-    fn from(traces: BlockExecTraces) -> Self {
+impl LocalizedBlockTrace {
+    pub fn from(
+        traces: BlockExecTraces, network: Network,
+    ) -> Result<Self, String> {
         let traces: Vec<TransactionExecTraces> = traces.into();
-        LocalizedBlockTrace {
-            transaction_traces: traces.into_iter().map(Into::into).collect(),
-        }
+
+        Ok(LocalizedBlockTrace {
+            transaction_traces: traces
+                .into_iter()
+                .map(|t| LocalizedTransactionTrace::from(t, network))
+                .collect::<Result<_, _>>()?,
+        })
     }
 }

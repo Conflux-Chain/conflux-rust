@@ -91,6 +91,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34fde25430d87a9388dadbe6e34d7f72a462c8b43ac8d309b42b0a8505d7e2a5"
 
 [[package]]
+name = "anyhow"
+version = "1.0.37"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee67c11feeac938fae061b232e38e0b6d94f97a9df10e6271319325ac4c56a86"
+
+[[package]]
 name = "app_dirs"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -104,9 +110,9 @@ dependencies = [
 
 [[package]]
 name = "arc-swap"
-version = "0.3.11"
+version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc4662175ead9cd84451d5c35070517777949a2ed84551764129cedb88384841"
+checksum = "dabe5a181f83789739c194cbe5a897dde195078fac08568d09221fd6137a7ba8"
 
 [[package]]
 name = "array-macro"
@@ -332,7 +338,7 @@ dependencies = [
  "crunchy",
  "lazy_static",
  "rand 0.5.6",
- "rustc-hex 2.1.0",
+ "rustc-hex",
 ]
 
 [[package]]
@@ -449,6 +455,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "cfx-addr"
+version = "0.1.0"
+dependencies = [
+ "cfx-types",
+ "lazy_static",
+ "rustc-hex",
+]
+
+[[package]]
 name = "cfx-bytes"
 version = "0.1.0"
 dependencies = [
@@ -509,6 +524,7 @@ dependencies = [
  "cfx-bytes",
  "cfx-internal-common",
  "cfx-types",
+ "delegate 0.5.0",
  "derivative",
  "error-chain",
  "fallible-iterator",
@@ -532,7 +548,7 @@ dependencies = [
  "random-crash",
  "rlp",
  "rlp_derive",
- "rustc-hex 1.0.0",
+ "rustc-hex",
  "serde",
  "serde_derive",
  "sqlite",
@@ -573,7 +589,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "1.0.0"
+version = "1.1.1"
 dependencies = [
  "bit-set",
  "bn",
@@ -588,6 +604,7 @@ dependencies = [
  "cfxkey",
  "clap",
  "criterion",
+ "dag",
  "db",
  "derivative",
  "either",
@@ -596,7 +613,6 @@ dependencies = [
  "fs_extra",
  "futures 0.3.8",
  "hashbrown 0.7.2",
- "hex 0.4.2",
  "hibitset",
  "io",
  "itertools 0.9.0",
@@ -618,7 +634,6 @@ dependencies = [
  "network",
  "num",
  "num-traits",
- "parity-bytes",
  "parity-crypto 0.3.1",
  "parity-util-mem",
  "parking_lot 0.11.1",
@@ -633,7 +648,7 @@ dependencies = [
  "rayon",
  "rlp",
  "rlp_derive",
- "rustc-hex 1.0.0",
+ "rustc-hex",
  "secret-store",
  "serde",
  "serde_derive",
@@ -684,7 +699,7 @@ dependencies = [
  "parity-wordlist",
  "quick-error",
  "rand 0.7.3",
- "rustc-hex 1.0.0",
+ "rustc-hex",
  "serde",
  "serde_derive",
  "tiny-keccak 1.5.0",
@@ -705,7 +720,7 @@ dependencies = [
  "parity-wordlist",
  "parking_lot 0.11.1",
  "rand 0.7.3",
- "rustc-hex 1.0.0",
+ "rustc-hex",
  "serde",
  "serde_derive",
  "serde_json",
@@ -757,11 +772,12 @@ dependencies = [
 
 [[package]]
 name = "client"
-version = "1.0.0"
+version = "1.1.1"
 dependencies = [
  "app_dirs",
  "bigdecimal",
  "blockgen",
+ "cfx-addr",
  "cfx-bytes",
  "cfx-internal-common",
  "cfx-parameters",
@@ -776,7 +792,7 @@ dependencies = [
  "criterion",
  "ctrlc",
  "db",
- "delegate",
+ "delegate 0.4.2",
  "dir",
  "error-chain",
  "futures 0.3.8",
@@ -809,11 +825,12 @@ dependencies = [
  "rayon",
  "rlp",
  "runtime",
- "rustc-hex 1.0.0",
+ "rustc-hex",
  "secret-store",
  "serde",
  "serde_derive",
  "serde_json",
+ "serial_test",
  "slab",
  "tempdir",
  "textwrap 0.9.0",
@@ -854,7 +871,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "1.0.0"
+version = "1.1.1"
 dependencies = [
  "app_dirs",
  "blockgen",
@@ -894,7 +911,7 @@ dependencies = [
  "rlp",
  "rpassword",
  "runtime",
- "rustc-hex 2.1.0",
+ "rustc-hex",
  "secret-store",
  "serde",
  "serde_derive",
@@ -1154,6 +1171,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "dag"
+version = "0.1.0"
+dependencies = [
+ "hibitset",
+]
+
+[[package]]
 name = "db"
 version = "0.1.0"
 dependencies = [
@@ -1165,6 +1189,17 @@ dependencies = [
 [[package]]
 name = "delegate"
 version = "0.4.2"
+dependencies = [
+ "proc-macro2 1.0.24",
+ "quote 1.0.7",
+ "syn 1.0.52",
+]
+
+[[package]]
+name = "delegate"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a57ed03a3563e9d6214c1eec5bd3b151fc21fb2052448b97692c8df30d113c8c"
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.7",
@@ -1269,7 +1304,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "15b0a4d2e39f8420210be8b27eeda28029729e2fd4291019455016c348240c38"
 dependencies = [
  "atty",
- "humantime",
+ "humantime 1.3.0",
  "log 0.4.11",
  "regex",
  "termcolor",
@@ -1282,7 +1317,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aafcde04e90a5226a6443b7aabdb016ba2f8307c847d524724bd9b346dd1a2d3"
 dependencies = [
  "atty",
- "humantime",
+ "humantime 1.3.0",
  "log 0.4.11",
  "regex",
  "termcolor",
@@ -1401,7 +1436,7 @@ dependencies = [
  "byteorder",
  "libc",
  "rand 0.7.3",
- "rustc-hex 2.1.0",
+ "rustc-hex",
  "static_assertions",
 ]
 
@@ -1413,7 +1448,7 @@ checksum = "11498d382790b7a8f2fd211780bec78619bba81cdad3a283997c0c41f836759c"
 dependencies = [
  "byteorder",
  "rand 0.7.3",
- "rustc-hex 2.1.0",
+ "rustc-hex",
  "static_assertions",
 ]
 
@@ -1740,24 +1775,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hex"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6a22814455d41612f41161581c2883c0c6a1c41852729b17d5ed88f01e153aa"
-
-[[package]]
-name = "hex"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "805026a5d0141ffc30abb3be3173848ad46a1b1664fe632428479619a3644d77"
-
-[[package]]
-name = "hex"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "644f9158b2f133fd50f5fb3242878846d9eb792e445c893805ff0e3824006e35"
-
-[[package]]
 name = "hibitset"
 version = "0.6.0"
 dependencies = [
@@ -1855,6 +1872,12 @@ checksum = "df004cfca50ef23c36850aaaa59ad52cc70d0e90243c3c7737a4dd32dc7a3c4f"
 dependencies = [
  "quick-error",
 ]
+
+[[package]]
+name = "humantime"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c1ad908cc71012b7bea4d0c53ba96a8cba9962f048fa68d143376143d863b7a"
 
 [[package]]
 name = "hyper"
@@ -2431,24 +2454,27 @@ checksum = "a94d21414c1f4a51209ad204c1776a3d0765002c76c6abcb602a6f09f1e881c7"
 
 [[package]]
 name = "log4rs"
-version = "0.9.0"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e229f32d17a1a822df4bb22ffdf1c7449d0ece700f310e87254a297be31c3b63"
+checksum = "d1572a880d1115ff867396eee7ae2bc924554225e67a0d3c85c745b3e60ca211"
 dependencies = [
- "antidote",
+ "anyhow",
  "arc-swap",
  "chrono",
+ "derivative",
  "flate2",
  "fnv",
- "humantime",
+ "humantime 2.0.1",
  "libc",
  "log 0.4.11",
  "log-mdc",
+ "parking_lot 0.11.1",
+ "regex",
  "serde",
  "serde-value",
- "serde_derive",
  "serde_json",
  "serde_yaml",
+ "thiserror",
  "thread-id",
  "typemap",
  "winapi 0.3.9",
@@ -2906,9 +2932,9 @@ checksum = "efa535d5117d3661134dbf1719b6f0ffe06f2375843b13935db186cd094105eb"
 
 [[package]]
 name = "ordered-float"
-version = "1.1.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3741934be594d77de1c8461ebcbbe866f585ea616a9753aa78f2bdc69f0e4579"
+checksum = "dacdec97876ef3ede8c50efc429220641a0b11ba0048b4b0c357bccbc47c5204"
 dependencies = [
  "num-traits",
 ]
@@ -2959,7 +2985,7 @@ dependencies = [
  "pbkdf2 0.3.0",
  "rand 0.7.3",
  "ripemd160",
- "rustc-hex 2.1.0",
+ "rustc-hex",
  "scrypt 0.2.0",
  "sha2 0.8.2",
  "subtle 2.3.0",
@@ -3655,7 +3681,7 @@ version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1190dcc8c3a512f1eef5d09bb8c84c7f39e1054e174d1795482e18f5272f2e73"
 dependencies = [
- "rustc-hex 2.1.0",
+ "rustc-hex",
 ]
 
 [[package]]
@@ -3706,12 +3732,6 @@ name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
-
-[[package]]
-name = "rustc-hex"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ceb8ce7a5e520de349e1fa172baeba4a9e8d5ef06c47471863530bc4972ee1e"
 
 [[package]]
 name = "rustc-hex"
@@ -3859,9 +3879,9 @@ dependencies = [
 
 [[package]]
 name = "serde-value"
-version = "0.5.3"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a663f873dedc4eac1a559d4c6bc0d0b2c34dc5ac4702e105014b8281489e44f"
+checksum = "f3a1a3341211875ef120e117ea7fd5228530ae7e7036a779fdc9117be6b3282c"
 dependencies = [
  "ordered-float",
  "serde",
@@ -3899,6 +3919,28 @@ dependencies = [
  "linked-hash-map",
  "serde",
  "yaml-rust 0.4.4",
+]
+
+[[package]]
+name = "serial_test"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0bccbcf40c8938196944a3da0e133e031a33f4d6b72db3bda3cc556e361905d"
+dependencies = [
+ "lazy_static",
+ "parking_lot 0.11.1",
+ "serial_test_derive",
+]
+
+[[package]]
+name = "serial_test_derive"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2acd6defeddb41eb60bb468f8825d0cfd0c2a76bc03bfd235b6a1dc4f6a1ad5"
+dependencies = [
+ "proc-macro2 1.0.24",
+ "quote 1.0.7",
+ "syn 1.0.52",
 ]
 
 [[package]]
@@ -4016,9 +4058,8 @@ name = "solidity-abi"
 version = "0.1.0"
 dependencies = [
  "cfx-types",
- "hex 0.3.2",
  "lazy_static",
- "parity-bytes",
+ "rustc-hex",
 ]
 
 [[package]]
@@ -4223,6 +4264,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d326610f408c7a4eb6f51c37c330e496b08506c9457c9d34287ecc38809fb060"
 dependencies = [
  "unicode-width",
+]
+
+[[package]]
+name = "thiserror"
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76cc616c6abf8c8928e2fdcc0dbfab37175edd8fb49a4641066ad1364fdab146"
+dependencies = [
+ "thiserror-impl",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9be73a2caec27583d0046ef3796c3794f868a5bc813db689eed00c7631275cd1"
+dependencies = [
+ "proc-macro2 1.0.24",
+ "quote 1.0.7",
+ "syn 1.0.52",
 ]
 
 [[package]]
@@ -4610,18 +4671,17 @@ dependencies = [
  "cfxkey",
  "clap",
  "db",
- "hex 0.2.0",
  "io",
  "lazy_static",
  "log 0.4.11",
  "metrics",
  "network",
- "parity-bytes",
  "parking_lot 0.11.1",
  "primitives",
  "priority-send-queue",
  "rand 0.7.3",
  "rlp",
+ "rustc-hex",
  "secret-store",
  "toml 0.4.10",
 ]
@@ -4655,7 +4715,7 @@ checksum = "9db035e67dfaf7edd9aebfe8676afcd63eed53c8a4044fed514c8cccf1835177"
 dependencies = [
  "byteorder",
  "crunchy",
- "rustc-hex 2.1.0",
+ "rustc-hex",
  "static_assertions",
 ]
 

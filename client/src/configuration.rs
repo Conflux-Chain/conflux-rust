@@ -214,7 +214,7 @@ build_config! {
         (discovery_throttling_limit_ping, (usize), 20)
         (discovery_throttling_limit_find_nodes, (usize), 10)
         (enable_discovery, (bool), true)
-        (netconf_dir, (Option<String>), Some("./net_config".to_string()))
+        (netconf_dir, (Option<String>), Some("./blockchain_data/net_config".to_string()))
         (net_key, (Option<String>), None)
         (node_table_timeout_s, (u64), 300)
         (node_table_promotion_timeout_s, (u64), 3 * 24 * 3600)
@@ -231,11 +231,10 @@ build_config! {
         // Storage Section.
         (additional_maintained_snapshot_count, (u32), 1)
         (block_cache_gc_period_ms, (u64), 5_000)
-        // FIXME: use a fixed sub-dir of conflux_data_dir instead.
-        (block_db_dir, (String), "./blockchain_db".to_string())
+        (block_db_dir, (String), "./blockchain_data/blockchain_db".to_string())
         (block_db_type, (String), "rocksdb".to_string())
         // The conflux data dir, if unspecified, is the workdir where conflux is started.
-        (conflux_data_dir, (String), "./".to_string())
+        (conflux_data_dir, (String), "./blockchain_data".to_string())
         (ledger_cache_size, (usize), DEFAULT_LEDGER_CACHE_SIZE)
         (invalid_block_hash_cache_size_in_count, (usize), DEFAULT_INVALID_BLOCK_HASH_CACHE_SIZE_IN_COUNT)
         (rocksdb_cache_size, (Option<usize>), Some(128))
@@ -250,6 +249,7 @@ build_config! {
 
         // General/Unclassified section.
         (account_provider_refresh_time_ms, (u64), 1000)
+        (check_phase_change_period_ms, (u64), 1000)
         (enable_optimistic_execution, (bool), true)
         (future_block_buffer_capacity, (usize), 32768)
         (get_logs_filter_max_limit, (Option<usize>), None)
@@ -625,6 +625,9 @@ impl Configuration {
             ),
             check_request_period: Duration::from_millis(
                 self.raw_conf.check_request_period_ms,
+            ),
+            check_phase_change_period: Duration::from_millis(
+                self.raw_conf.check_phase_change_period_ms,
             ),
             heartbeat_period_interval: Duration::from_millis(
                 self.raw_conf.heartbeat_period_interval_ms,

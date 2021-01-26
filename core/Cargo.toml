@@ -3,7 +3,7 @@ description = "Conflux core library"
 homepage = "http://www.conflux-chain.org"
 license = "GPL-3.0"
 name = "cfxcore"
-version = "1.0.0"
+version = "1.1.1"
 edition = "2018"
 
 [dependencies]
@@ -19,6 +19,7 @@ cfx-storage = { path = "storage", optional = true }
 cfx-types = { path = "../cfx_types" }
 cfx-utils = { path = "../cfx_utils" }
 clap = "2"
+dag = {path = "../util/dag"}
 derivative = "2.0.2"
 db = { path = "../db" }
 either = "1.5.3"
@@ -37,7 +38,7 @@ kvdb-rocksdb = {path="../db/src/kvdb-rocksdb"}
 lazy_static = "1.4"
 link-cut-tree = { path = "../util/link-cut-tree" }
 log = "0.4"
-log4rs = "0.9.0"
+log4rs = { version = "1.0.0", features = ["background_rotation", "gzip"] }
 lru_time_cache = "0.9.0"
 malloc_size_of = {path = "../util/malloc_size_of"}
 malloc_size_of_derive = {path = "../util/malloc_size_of_derive"}
@@ -48,7 +49,6 @@ metrics = { path = "../util/metrics" }
 network = { path = "../network" }
 num = "0.2"
 num-traits = { version = "0.2.8", default-features = false }
-parity-bytes = "0.1"
 parity-crypto = "0.3.0"
 parking_lot = "0.11"
 primal = "0.2.3"
@@ -62,8 +62,7 @@ random-crash = { path = "../util/random_crash" }
 rayon = "1.0"
 rlp = "0.4.0"
 rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
-rustc-hex = "1.0"
-hex = "0.4.2"
+rustc-hex = "2.1"
 secret-store = { path = "../secret_store" }
 serde = { version = "1.0", features = ["rc"] }
 serde_derive = "1.0"
@@ -94,3 +93,7 @@ default-features = false
 
 [features]
 default = ["cfx-storage"]
+# Unfortunately cfg test attributes doesn't work across crates,
+# we have to define a feature for test code.
+# https://users.rust-lang.org/t/cfg-test-doesnt-propagate-to-external-crates/13046
+testonly_code = []

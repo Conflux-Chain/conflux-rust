@@ -44,6 +44,7 @@ use super::{
 use crate::{
     bytes::Bytes,
     hash::keccak,
+    trace::{trace::ExecTrace, Tracer},
     vm::{
         self, ActionParams, ActionValue, CallType, ContractCreateResult,
         CreateContractAddress, GasLeft, MessageCallResult, ParamsType,
@@ -208,9 +209,11 @@ pub struct Interpreter<Cost: CostType> {
 impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
     fn exec(
         mut self: Box<Self>, context: &mut dyn vm::Context,
-    ) -> vm::ExecTrapResult<GasLeft> {
+        tracer: &mut dyn Tracer<Output = ExecTrace>,
+    ) -> vm::ExecTrapResult<GasLeft>
+    {
         loop {
-            let result = self.step(context);
+            let result = self.step(context, tracer);
             match result {
                 InterpreterResult::Continue => {}
                 InterpreterResult::Done(value) => return Ok(value),
@@ -347,7 +350,11 @@ impl<Cost: CostType> Interpreter<Cost> {
 
     /// Execute a single step on the VM.
     #[inline(always)]
-    pub fn step(&mut self, context: &mut dyn vm::Context) -> InterpreterResult {
+    pub fn step(
+        &mut self, context: &mut dyn vm::Context,
+        tracer: &mut dyn Tracer<Output = ExecTrace>,
+    ) -> InterpreterResult
+    {
         if self.done {
             return InterpreterResult::Stopped;
         }
@@ -363,7 +370,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                     .as_u256(),
             )))
         } else {
-            self.step_inner(context)
+            self.step_inner(context, tracer)
         };
 
         if let &InterpreterResult::Done(_) = &result {
@@ -377,7 +384,9 @@ impl<Cost: CostType> Interpreter<Cost> {
     #[inline(always)]
     fn step_inner(
         &mut self, context: &mut dyn vm::Context,
-    ) -> InterpreterResult {
+        tracer: &mut dyn Tracer<Output = ExecTrace>,
+    ) -> InterpreterResult
+    {
         let result = match self.resume_result.take() {
             Some(result) => result,
             None => {
@@ -481,6 +490,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                     context,
                     instruction,
                     requirements.provide_gas,
+                    tracer,
                 ) {
                     Err(x) => {
                         return InterpreterResult::Done(Err(x));
@@ -695,6 +705,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     fn exec_instruction(
         &mut self, gas: Cost, context: &mut dyn vm::Context,
         instruction: Instruction, provided: Option<Cost>,
+        tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<InstructionResult<Cost>>
     {
         trace!("exec instruction: {:?}", instruction);
@@ -991,7 +1002,7 @@ impl<Cost: CostType> Interpreter<Cost> {
             instructions::SUICIDE => {
                 let address = self.stack.pop_back();
                 let refund_address = u256_to_address(&address);
-                context.suicide(&refund_address)?;
+                context.suicide(&refund_address, tracer)?;
                 return Ok(InstructionResult::StopExecution);
             }
             instructions::LOG0
@@ -1638,10 +1649,13 @@ fn address_to_u256(value: Address) -> U256 { H256::from(value).into_uint() }
 #[cfg(test)]
 mod tests {
     use super::super::{factory::Factory, vmtype::VMType};
-    use crate::vm::{
-        self,
-        tests::{test_finalize, MockContext},
-        ActionParams, ActionValue, Exec,
+    use crate::{
+        trace,
+        vm::{
+            self,
+            tests::{test_finalize, MockContext},
+            ActionParams, ActionValue, Exec,
+        },
     };
     use cfx_types::Address;
     use rustc_hex::FromHex;
@@ -1668,6 +1682,7 @@ mod tests {
         params.value = ActionValue::Transfer(100_000.into());
         params.code = Some(Arc::new(code));
         let mut context = MockContext::new();
+        let mut tracer = trace::NoopTracer;
         context
             .balances
             .insert(Address::from_low_u64_be(5), 1_000_000_000.into());
@@ -1676,7 +1691,8 @@ mod tests {
         //let gas_left = {
         {
             let vm = interpreter(params, &context);
-            test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+            test_finalize(vm.exec(&mut context, &mut tracer).ok().unwrap())
+                .unwrap()
         };
 
         assert_eq!(context.calls.len(), 1);
@@ -1693,6 +1709,7 @@ mod tests {
         params.gas_price = 1.into();
         params.code = Some(Arc::new(code));
         let mut context = MockContext::new_spec();
+        let mut tracer = trace::NoopTracer;
         context
             .balances
             .insert(Address::from_low_u64_be(5), 1_000_000_000.into());
@@ -1700,7 +1717,7 @@ mod tests {
 
         let err = {
             let vm = interpreter(params, &context);
-            test_finalize(vm.exec(&mut context).ok().unwrap())
+            test_finalize(vm.exec(&mut context, &mut tracer).ok().unwrap())
                 .err()
                 .unwrap()
         };

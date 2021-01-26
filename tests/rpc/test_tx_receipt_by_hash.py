@@ -2,6 +2,7 @@ import eth_utils
 import sys, os
 sys.path.append("..")
 
+from conflux.address import b32_address_to_hex
 from conflux.rpc import RpcClient
 from conflux.utils import sha3 as keccak
 from test_framework.blocktools import encode_hex_0x
@@ -66,4 +67,7 @@ class TestGetTxReceiptByHash(RpcClient):
         receipt = self.get_transaction_receipt(tx.hash_hex())
 
         assert_equal(receipt['storageCollateralized'], '0x0')
-        assert_equal(receipt['storageReleased'], [{ 'address': self.GENESIS_ADDR, 'collaterals': '0x280' }])
+
+        assert_equal(len(receipt['storageReleased']), 1)
+        assert_equal(receipt['storageReleased'][0]['collaterals'], '0x280')
+        assert_equal(b32_address_to_hex(receipt['storageReleased'][0]['address']), self.GENESIS_ADDR)

@@ -34,6 +34,7 @@ production_conf = default_conflux_conf
 
 small_local_test_conf = dict(
     chain_id = DEFAULT_PY_TEST_CHAIN_ID,
+    check_phase_change_period_ms = 100,
     enable_discovery = "false",
     log_file = "'./conflux.log'",
     log_level = '"debug"',

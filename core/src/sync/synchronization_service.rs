@@ -56,6 +56,8 @@ impl SynchronizationService {
         }
     }
 
+    pub fn get_network_id(&self) -> u64 { self.network.get_network_id() }
+
     pub fn catch_up_mode(&self) -> bool {
         self.protocol_handler.catch_up_mode()
     }

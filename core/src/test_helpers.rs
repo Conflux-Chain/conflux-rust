@@ -25,7 +25,8 @@ pub fn get_state_for_genesis_write_with_factory(
         factory.clone().into(),
         &Spec::new_spec(),
         0, /* block_number */
-    );
+    )
+    .expect("Failed to initialize state");
 
     initialize_internal_contract_accounts(&mut state);
     let genesis_epoch_id = EpochId::default();
@@ -50,4 +51,5 @@ pub fn get_state_for_genesis_write_with_factory(
         &Spec::new_spec(),
         1, /* block_number */
     )
+    .expect("Failed to initialize state")
 }
