@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::Address as Base32Address;
+use super::RpcAddress;
 use cfx_addr::Network;
 use cfx_types::{H160, H256, U256, U64};
 use cfxcore::{
@@ -94,7 +94,7 @@ pub struct Block {
     /// Distance to genesis
     pub height: U256,
     /// Author's address
-    pub miner: Base32Address,
+    pub miner: RpcAddress,
     /// State root hash
     pub deferred_state_root: H256,
     /// Root hash of all receipts in this block's epoch
@@ -257,7 +257,7 @@ impl Block {
             hash: H256::from(block_hash),
             parent_hash: H256::from(b.block_header.parent_hash().clone()),
             height: b.block_header.height().into(),
-            miner: Base32Address::try_from_h160(
+            miner: RpcAddress::try_from_h160(
                 *b.block_header.author(),
                 network,
             )?,
@@ -363,7 +363,7 @@ pub struct Header {
     /// Distance to genesis
     pub height: U256,
     /// Miner's address
-    pub miner: Base32Address,
+    pub miner: RpcAddress,
     /// State root hash
     pub deferred_state_root: H256,
     /// Root hash of all receipts in this block's epoch
@@ -416,7 +416,7 @@ impl Header {
             hash: H256::from(hash),
             parent_hash: H256::from(*h.parent_hash()),
             height: h.height().into(),
-            miner: Base32Address::try_from_h160(*h.author(), network)?,
+            miner: RpcAddress::try_from_h160(*h.author(), network)?,
             deferred_state_root: H256::from(*h.deferred_state_root()),
             deferred_receipts_root: H256::from(*h.deferred_receipts_root()),
             deferred_logs_bloom_hash: H256::from(*h.deferred_logs_bloom_hash()),
@@ -439,7 +439,7 @@ impl Header {
 
 #[cfg(test)]
 mod tests {
-    use super::{Base32Address, Block, BlockTransactions, Header};
+    use super::{Block, BlockTransactions, Header, RpcAddress};
     use crate::rpc::types::Transaction;
     use cfx_addr::Network;
     use cfx_types::{H256, U256};
@@ -486,7 +486,7 @@ mod tests {
             hash: H256::default(),
             parent_hash: H256::default(),
             height: 0.into(),
-            miner: Base32Address::null(Network::Main).unwrap(),
+            miner: RpcAddress::null(Network::Main).unwrap(),
             deferred_state_root: Default::default(),
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP.into(),
             deferred_logs_bloom_hash: cfx_types::KECCAK_EMPTY_BLOOM.into(),
@@ -518,7 +518,7 @@ mod tests {
             hash: H256::default(),
             parent_hash: H256::default(),
             height: 0.into(),
-            miner: Base32Address::null(Network::Main).unwrap(),
+            miner: RpcAddress::null(Network::Main).unwrap(),
             deferred_state_root: Default::default(),
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP.into(),
             deferred_logs_bloom_hash: cfx_types::KECCAK_EMPTY_BLOOM.into(),
@@ -548,7 +548,7 @@ mod tests {
             hash: H256::default(),
             parent_hash: H256::default(),
             height: 0.into(),
-            miner: Base32Address::null(Network::Main).unwrap(),
+            miner: RpcAddress::null(Network::Main).unwrap(),
             deferred_state_root: Default::default(),
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP.into(),
             deferred_logs_bloom_hash: cfx_types::KECCAK_EMPTY_BLOOM.into(),

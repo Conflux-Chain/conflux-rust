@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{Address as Base32Address, Log};
+use crate::rpc::types::{Log, RpcAddress};
 use cfx_addr::Network;
 use cfx_types::{Bloom, H256, U256, U64};
 use cfxcore::{executive::contract_address, vm::CreateContractAddress};
@@ -17,7 +17,7 @@ use serde_derive::Serialize;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageChange {
-    pub address: Base32Address,
+    pub address: RpcAddress,
     pub collaterals: U64,
 }
 
@@ -26,7 +26,7 @@ impl StorageChange {
         sc: PrimitiveStorageChange, network: Network,
     ) -> Result<Self, String> {
         Ok(Self {
-            address: Base32Address::try_from_h160(sc.address, network)?,
+            address: RpcAddress::try_from_h160(sc.address, network)?,
             collaterals: sc.collaterals,
         })
     }
@@ -44,16 +44,16 @@ pub struct Receipt {
     /// Epoch number where this transaction was in.
     pub epoch_number: Option<U64>,
     /// Address of the sender.
-    pub from: Base32Address,
+    pub from: RpcAddress,
     /// Address of the receiver, null when it's a contract creation
     /// transaction.
-    pub to: Option<Base32Address>,
+    pub to: Option<RpcAddress>,
     /// The gas used in the execution of the transaction.
     pub gas_used: U256,
     /// The gas fee charged in the execution of the transaction.
     pub gas_fee: U256,
     /// Address of contract created if the transaction action is create.
-    pub contract_created: Option<Base32Address>,
+    pub contract_created: Option<RpcAddress>,
     /// Array of log objects, which this transaction generated.
     pub logs: Vec<Log>,
     /// Bloom filter for light clients to quickly retrieve related logs.
@@ -108,7 +108,7 @@ impl Receipt {
                 &transaction.data,
             );
             address =
-                Some(Base32Address::try_from_h160(created_address, network)?);
+                Some(RpcAddress::try_from_h160(created_address, network)?);
         }
 
         // this is an array, but it will only have at most one element:
@@ -125,13 +125,12 @@ impl Receipt {
             block_hash: transaction_index.block_hash.into(),
             gas_used: (accumulated_gas_used - prior_gas_used).into(),
             gas_fee: gas_fee.into(),
-            from: Base32Address::try_from_h160(transaction.sender, network)?,
+            from: RpcAddress::try_from_h160(transaction.sender, network)?,
             to: match &transaction.action {
                 Action::Create => None,
-                Action::Call(address) => Some(Base32Address::try_from_h160(
-                    address.clone(),
-                    network,
-                )?),
+                Action::Call(address) => {
+                    Some(RpcAddress::try_from_h160(address.clone(), network)?)
+                }
             },
             outcome_status: U64::from(outcome_status),
             contract_created: address,

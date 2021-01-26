@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{receipt::Receipt, Address as Base32Address, Bytes};
+use crate::rpc::types::{receipt::Receipt, Bytes, RpcAddress};
 use cfx_addr::Network;
 use cfx_types::{H256, U256, U64};
 use cfxkey::Error;
@@ -11,7 +11,6 @@ use primitives::{
     Transaction as PrimitiveTransaction, TransactionIndex,
     TransactionWithSignature, TransactionWithSignatureSerializePart,
 };
-use std::convert::TryInto;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,12 +19,12 @@ pub struct Transaction {
     pub nonce: U256,
     pub block_hash: Option<H256>,
     pub transaction_index: Option<U64>,
-    pub from: Base32Address,
-    pub to: Option<Base32Address>,
+    pub from: RpcAddress,
+    pub to: Option<RpcAddress>,
     pub value: U256,
     pub gas_price: U256,
     pub gas: U256,
-    pub contract_created: Option<Base32Address>,
+    pub contract_created: Option<RpcAddress>,
     pub data: Bytes,
     pub storage_limit: U256,
     pub epoch_height: U256,
@@ -51,7 +50,7 @@ impl Transaction {
             nonce: Default::default(),
             block_hash: Default::default(),
             transaction_index: Default::default(),
-            from: Base32Address::null(network)?,
+            from: RpcAddress::null(network)?,
             to: Default::default(),
             value: Default::default(),
             gas_price: Default::default(),
@@ -99,12 +98,12 @@ impl Transaction {
             transaction_index,
             status,
             contract_created,
-            from: Base32Address::try_from_h160(t.sender(), network)?,
+            from: RpcAddress::try_from_h160(t.sender(), network)?,
             to: match t.action {
                 Action::Create => None,
-                Action::Call(ref address) => Some(
-                    Base32Address::try_from_h160(address.clone(), network)?,
-                ),
+                Action::Call(ref address) => {
+                    Some(RpcAddress::try_from_h160(address.clone(), network)?)
+                }
             },
             value: t.value.into(),
             gas_price: t.gas_price.into(),
@@ -128,9 +127,7 @@ impl Transaction {
                     gas: self.gas.into(),
                     action: match self.to {
                         None => Action::Create,
-                        Some(address) => Action::Call(
-                            address.try_into().map_err(Error::Custom)?,
-                        ),
+                        Some(address) => Action::Call(address.into()),
                     },
                     value: self.value.into(),
                     storage_limit: self.storage_limit.as_u64(),

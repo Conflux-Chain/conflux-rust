@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::Address as Base32Address;
+use super::RpcAddress;
 use cfx_addr::Network;
 use cfx_types::U256;
 use primitives::SponsorInfo as PrimitiveSponsorInfo;
@@ -11,9 +11,9 @@ use primitives::SponsorInfo as PrimitiveSponsorInfo;
 #[serde(rename_all = "camelCase")]
 pub struct SponsorInfo {
     /// This is the address of the sponsor for gas cost of the contract.
-    pub sponsor_for_gas: Base32Address,
+    pub sponsor_for_gas: RpcAddress,
     /// This is the address of the sponsor for collateral of the contract.
-    pub sponsor_for_collateral: Base32Address,
+    pub sponsor_for_collateral: RpcAddress,
     /// This is the upper bound of sponsor gas cost per tx.
     pub sponsor_gas_bound: U256,
     /// This is the amount of tokens sponsor for gas cost to the contract.
@@ -25,8 +25,8 @@ pub struct SponsorInfo {
 impl SponsorInfo {
     pub fn default(network: Network) -> Result<Self, String> {
         Ok(Self {
-            sponsor_for_gas: Base32Address::null(network)?,
-            sponsor_for_collateral: Base32Address::null(network)?,
+            sponsor_for_gas: RpcAddress::null(network)?,
+            sponsor_for_collateral: RpcAddress::null(network)?,
             sponsor_gas_bound: Default::default(),
             sponsor_balance_for_gas: Default::default(),
             sponsor_balance_for_collateral: Default::default(),
@@ -37,11 +37,11 @@ impl SponsorInfo {
         sponsor_info: PrimitiveSponsorInfo, network: Network,
     ) -> Result<Self, String> {
         Ok(Self {
-            sponsor_for_gas: Base32Address::try_from_h160(
+            sponsor_for_gas: RpcAddress::try_from_h160(
                 sponsor_info.sponsor_for_gas,
                 network,
             )?,
-            sponsor_for_collateral: Base32Address::try_from_h160(
+            sponsor_for_collateral: RpcAddress::try_from_h160(
                 sponsor_info.sponsor_for_collateral,
                 network,
             )?,

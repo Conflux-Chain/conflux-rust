@@ -1,4 +1,4 @@
-use super::Address as Base32Address;
+use super::RpcAddress;
 use cfx_types::{H256, U256};
 use cfxcore::block_data_manager::BlockRewardResult;
 
@@ -6,7 +6,7 @@ use cfxcore::block_data_manager::BlockRewardResult;
 #[serde(rename_all = "camelCase")]
 pub struct RewardInfo {
     block_hash: H256,
-    author: Base32Address,
+    author: RpcAddress,
     total_reward: U256,
     base_reward: U256,
     tx_fee: U256,
@@ -14,10 +14,8 @@ pub struct RewardInfo {
 
 impl RewardInfo {
     pub fn new(
-        block_hash: H256, author: Base32Address,
-        reward_result: BlockRewardResult,
-    ) -> Self
-    {
+        block_hash: H256, author: RpcAddress, reward_result: BlockRewardResult,
+    ) -> Self {
         RewardInfo {
             block_hash: block_hash.into(),
             author,

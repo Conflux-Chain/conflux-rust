@@ -7,9 +7,8 @@ use crate::{
     rpc::{
         types::{
             address::NODE_NETWORK, errors::check_rpc_address_network,
-            Address as Base32Address, Block as RpcBlock,
-            BlockHashOrEpochNumber, Bytes,
-            CheckBalanceAgainstTransactionResponse, EpochNumber,
+            Block as RpcBlock, BlockHashOrEpochNumber, Bytes,
+            CheckBalanceAgainstTransactionResponse, EpochNumber, RpcAddress,
             Status as RpcStatus, Transaction as RpcTransaction,
             TxPoolPendingInfo, TxWithPoolInfo,
         },
@@ -43,7 +42,6 @@ use parking_lot::{Condvar, Mutex};
 use primitives::{Account, Action, SignedTransaction};
 use std::{
     collections::{BTreeMap, HashSet},
-    convert::TryInto,
     net::SocketAddr,
     sync::Arc,
     time::Duration,
@@ -353,7 +351,7 @@ impl RpcImpl {
     }
 
     pub fn next_nonce(
-        &self, address: Base32Address, num: Option<BlockHashOrEpochNumber>,
+        &self, address: RpcAddress, num: Option<BlockHashOrEpochNumber>,
     ) -> RpcResult<U256> {
         check_address_network(address.network)?;
         let consensus_graph = self.consensus_graph();
@@ -367,8 +365,7 @@ impl RpcImpl {
             address, num
         );
 
-        let address: H160 = address.try_into()?;
-        consensus_graph.next_nonce(address, num.into())
+        consensus_graph.next_nonce(address.hex_address, num.into())
     }
 }
 
@@ -635,13 +632,13 @@ impl RpcImpl {
     }
 
     pub fn txs_from_pool(
-        &self, address: Option<Base32Address>,
+        &self, address: Option<RpcAddress>,
     ) -> RpcResult<Vec<RpcTransaction>> {
         let address: Option<H160> = match address {
             None => None,
             Some(addr) => {
                 check_address_network(addr.network)?;
-                Some(addr.try_into()?)
+                Some(addr.into())
             }
         };
 
@@ -659,7 +656,7 @@ impl RpcImpl {
     }
 
     pub fn txpool_content(
-        &self, address: Option<Base32Address>,
+        &self, address: Option<RpcAddress>,
     ) -> RpcResult<
         BTreeMap<
             String,
@@ -670,7 +667,7 @@ impl RpcImpl {
             None => None,
             Some(addr) => {
                 check_address_network(addr.network)?;
-                Some(addr.try_into()?)
+                Some(addr.into())
             }
         };
 
@@ -691,7 +688,7 @@ impl RpcImpl {
     }
 
     pub fn txpool_inspect(
-        &self, address: Option<Base32Address>,
+        &self, address: Option<RpcAddress>,
     ) -> RpcResult<
         BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
     > {
@@ -699,7 +696,7 @@ impl RpcImpl {
             None => None,
             Some(addr) => {
                 check_address_network(addr.network)?;
-                Some(addr.try_into()?)
+                Some(addr.into())
             }
         };
 
@@ -739,7 +736,7 @@ impl RpcImpl {
         Ok(ret)
     }
 
-    pub fn accounts(&self) -> RpcResult<Vec<Base32Address>> {
+    pub fn accounts(&self) -> RpcResult<Vec<RpcAddress>> {
         let accounts: Vec<Address> = self.accounts.accounts().map_err(|e| {
             warn!("Could not fetch accounts. With error {:?}", e);
             RpcError::internal_error()
@@ -749,25 +746,25 @@ impl RpcImpl {
 
         Ok(accounts
             .into_iter()
-            .map(|addr| Base32Address::try_from_h160(addr, network))
+            .map(|addr| RpcAddress::try_from_h160(addr, network))
             .collect::<Result<_, _>>()?)
     }
 
-    pub fn new_account(&self, password: String) -> RpcResult<Base32Address> {
+    pub fn new_account(&self, password: String) -> RpcResult<RpcAddress> {
         let address: Address =
             self.accounts.new_account(&password.into()).map_err(|e| {
                 warn!("Could not create account. With error {:?}", e);
                 RpcError::internal_error()
             })?;
 
-        Ok(Base32Address::try_from_h160(address, *NODE_NETWORK.read())?)
+        Ok(RpcAddress::try_from_h160(address, *NODE_NETWORK.read())?)
     }
 
     pub fn unlock_account(
-        &self, address: Base32Address, password: String, duration: Option<U128>,
+        &self, address: RpcAddress, password: String, duration: Option<U128>,
     ) -> RpcResult<bool> {
         check_address_network(address.network)?;
-        let account: H160 = address.try_into()?;
+        let account: H160 = address.into();
         let store = self.accounts.clone();
 
         let duration = match duration {
@@ -807,11 +804,9 @@ impl RpcImpl {
         }
     }
 
-    pub fn lock_account(&self, address: Base32Address) -> RpcResult<bool> {
+    pub fn lock_account(&self, address: RpcAddress) -> RpcResult<bool> {
         check_address_network(address.network)?;
-        let address: H160 = address.try_into()?;
-
-        match self.accounts.lock_account(address) {
+        match self.accounts.lock_account(address.into()) {
             Ok(_) => Ok(true),
             Err(err) => {
                 warn!("Unable to lock the account. With error {:?}", err);
@@ -821,20 +816,20 @@ impl RpcImpl {
     }
 
     pub fn sign(
-        &self, data: Bytes, address: Base32Address, password: Option<String>,
+        &self, data: Bytes, address: RpcAddress, password: Option<String>,
     ) -> RpcResult<H520> {
         check_address_network(address.network)?;
-        let address: H160 = address.try_into()?;
 
         let message = eth_data_hash(data.0);
         let password = password.map(Password::from);
-        let signature = match self.accounts.sign(address, password, message) {
-            Ok(signature) => signature,
-            Err(err) => {
-                warn!("Unable to sign the message. With error {:?}", err);
-                bail!(RpcError::internal_error());
-            }
-        };
+        let signature =
+            match self.accounts.sign(address.into(), password, message) {
+                Ok(signature) => signature,
+                Err(err) => {
+                    warn!("Unable to sign the message. With error {:?}", err);
+                    bail!(RpcError::internal_error());
+                }
+            };
         Ok(H520(signature.into()))
     }
 
@@ -848,13 +843,12 @@ impl RpcImpl {
     }
 
     pub fn tx_inspect_pending(
-        &self, address: Base32Address,
+        &self, address: RpcAddress,
     ) -> RpcResult<TxPoolPendingInfo> {
         check_address_network(address.network)?;
-        let address: H160 = address.try_into()?;
 
         let mut ret = TxPoolPendingInfo::default();
-        let (deferred_txs, _) = self.tx_pool.content(Some(address));
+        let (deferred_txs, _) = self.tx_pool.content(Some(address.into()));
         let mut max_nonce: U256 = U256::from(0);
         let mut min_nonce: U256 = U256::max_value();
         for tx in deferred_txs.iter() {

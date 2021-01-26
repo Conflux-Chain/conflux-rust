@@ -27,7 +27,7 @@ mod transaction;
 
 pub use self::{
     account::Account,
-    address::Address,
+    address::RpcAddress,
     blame_info::BlameInfo,
     block::{Block, BlockTransactions, Header},
     bytes::Bytes,

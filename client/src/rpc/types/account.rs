@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::Address as Base32Address;
+use super::RpcAddress;
 use cfx_addr::Network;
 use cfx_types::{H256, U256};
 use primitives::Account as PrimitiveAccount;
@@ -16,7 +16,7 @@ pub struct Account {
     pub staking_balance: U256,
     pub collateral_for_storage: U256,
     pub accumulated_interest_return: U256,
-    pub admin: Base32Address,
+    pub admin: RpcAddress,
 }
 
 impl Account {
@@ -32,7 +32,7 @@ impl Account {
             accumulated_interest_return: account
                 .accumulated_interest_return
                 .into(),
-            admin: Base32Address::try_from_h160(account.admin, network)?,
+            admin: RpcAddress::try_from_h160(account.admin, network)?,
         })
     }
 }

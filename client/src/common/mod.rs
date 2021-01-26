@@ -437,7 +437,7 @@ pub fn initialize_not_light_node_modules(
                         panic!("mining_author has unmatching network id: network_id={},\
                          address.network={}", network.network_id(), address.network)
                     }
-                    match address.hex {
+                    match address.hex_address {
                         Some(hex_address) => return hex_address,
                         None => panic!("Invalid decoded hash size for base32 address"),
                     }
