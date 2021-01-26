@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::Address as Base32Address;
+use super::RpcAddress;
 use cfx_addr::Network;
 use cfx_bytes::Bytes;
 use cfx_types::U256;
@@ -49,8 +49,8 @@ impl Action {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Call {
-    pub from: Base32Address,
-    pub to: Base32Address,
+    pub from: RpcAddress,
+    pub to: RpcAddress,
     pub value: U256,
     pub gas: U256,
     pub input: Bytes,
@@ -60,8 +60,8 @@ pub struct Call {
 impl Call {
     fn try_from(call: VmCall, network: Network) -> Result<Self, String> {
         Ok(Self {
-            from: Base32Address::try_from_h160(call.from, network)?,
-            to: Base32Address::try_from_h160(call.to, network)?,
+            from: RpcAddress::try_from_h160(call.from, network)?,
+            to: RpcAddress::try_from_h160(call.to, network)?,
             value: call.value,
             gas: call.gas,
             input: call.input,
@@ -73,7 +73,7 @@ impl Call {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Create {
-    pub from: Base32Address,
+    pub from: RpcAddress,
     pub value: U256,
     pub gas: U256,
     pub init: Bytes,
@@ -82,7 +82,7 @@ pub struct Create {
 impl Create {
     fn try_from(create: VmCreate, network: Network) -> Result<Self, String> {
         Ok(Self {
-            from: Base32Address::try_from_h160(create.from, network)?,
+            from: RpcAddress::try_from_h160(create.from, network)?,
             value: create.value,
             gas: create.gas,
             init: create.init,
@@ -94,7 +94,7 @@ impl Create {
 #[serde(rename_all = "camelCase")]
 pub struct CreateResult {
     pub outcome: Outcome,
-    pub addr: Base32Address,
+    pub addr: RpcAddress,
     pub gas_left: U256,
     pub return_data: Bytes,
 }
@@ -105,7 +105,7 @@ impl CreateResult {
     ) -> Result<Self, String> {
         Ok(Self {
             outcome: result.outcome,
-            addr: Base32Address::try_from_h160(result.addr, network)?,
+            addr: RpcAddress::try_from_h160(result.addr, network)?,
             gas_left: result.gas_left,
             return_data: result.return_data,
         })
@@ -115,8 +115,8 @@ impl CreateResult {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InternalTransferAction {
-    pub from: Base32Address,
-    pub to: Base32Address,
+    pub from: RpcAddress,
+    pub to: RpcAddress,
     pub value: U256,
 }
 
@@ -125,8 +125,8 @@ impl InternalTransferAction {
         action: VmInternalTransferAction, network: Network,
     ) -> Result<Self, String> {
         Ok(Self {
-            from: Base32Address::try_from_h160(action.from, network)?,
-            to: Base32Address::try_from_h160(action.to, network)?,
+            from: RpcAddress::try_from_h160(action.from, network)?,
+            to: RpcAddress::try_from_h160(action.to, network)?,
             value: action.value,
         })
     }

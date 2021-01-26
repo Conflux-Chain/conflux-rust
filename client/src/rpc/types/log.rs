@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{Address as Base32Address, Bytes};
+use crate::rpc::types::{Bytes, RpcAddress};
 use cfx_addr::Network;
 use cfx_types::{H256, U256};
 use primitives::log_entry::{LocalizedLogEntry, LogEntry};
@@ -11,7 +11,7 @@ use primitives::log_entry::{LocalizedLogEntry, LogEntry};
 #[serde(rename_all = "camelCase")]
 pub struct Log {
     /// Address
-    pub address: Base32Address,
+    pub address: RpcAddress,
 
     /// Topics
     pub topics: Vec<H256>,
@@ -49,7 +49,7 @@ impl Log {
         e: LocalizedLogEntry, network: Network,
     ) -> Result<Log, String> {
         Ok(Log {
-            address: Base32Address::try_from_h160(e.entry.address, network)?,
+            address: RpcAddress::try_from_h160(e.entry.address, network)?,
             topics: e.entry.topics.into_iter().map(Into::into).collect(),
             data: e.entry.data.into(),
             block_hash: Some(e.block_hash.into()),
@@ -63,7 +63,7 @@ impl Log {
 
     pub fn try_from(e: LogEntry, network: Network) -> Result<Log, String> {
         Ok(Log {
-            address: Base32Address::try_from_h160(e.address, network)?,
+            address: RpcAddress::try_from_h160(e.address, network)?,
             topics: e.topics.into_iter().map(Into::into).collect(),
             data: e.data.into(),
             block_hash: None,
@@ -78,7 +78,7 @@ impl Log {
 
 #[cfg(test)]
 mod tests {
-    use crate::rpc::types::{Address, Log};
+    use crate::rpc::types::{Log, RpcAddress};
     use cfx_addr::Network;
     use cfx_types::{H160, H256, U256};
     use serde_json;
@@ -89,7 +89,7 @@ mod tests {
         let s = r#"{"address":"CFXTEST:TYPE.USER:AAK3WAKCPSF3CP0MFHDWHTTUG924VERHBUV9NMM3YC","topics":["0xa6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc","0x4861736852656700000000000000000000000000000000000000000000000000"],"data":"0x","blockHash":"0xed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5","epochNumber":"0x4510c","transactionHash":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionIndex":"0x0","logIndex":"0x1","transactionLogIndex":"0x1"}"#;
 
         let log = Log {
-            address: Address::try_from_h160(H160::from_str("13990122638b9132ca29c723bdf037f1a891a70c").unwrap(), Network::Test).unwrap(),
+            address: RpcAddress::try_from_h160(H160::from_str("13990122638b9132ca29c723bdf037f1a891a70c").unwrap(), Network::Test).unwrap(),
             topics: vec![
                 H256::from_str("a6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc").unwrap(),
                 H256::from_str("4861736852656700000000000000000000000000000000000000000000000000").unwrap(),
