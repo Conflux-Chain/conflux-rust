@@ -407,16 +407,24 @@ impl SynchronizationPhaseTrait for CatchUpFillBlockBodyPhase {
     }
 
     fn next(
-        &self, _io: &dyn NetworkContext,
-        _sync_handler: &SynchronizationProtocolHandler,
+        &self, io: &dyn NetworkContext,
+        sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
         if self.graph.is_fill_block_completed() {
-            self.graph.complete_filling_block_bodies();
-            SyncPhaseType::CatchUpSyncBlock
-        } else {
-            self.phase_type()
+            debug_assert!(sync_handler
+                .request_manager
+                .in_flight_blocks()
+                .is_empty());
+            if self.graph.complete_filling_block_bodies() {
+                return SyncPhaseType::CatchUpSyncBlock;
+            } else {
+                // consensus graph is reconstructed and we need to request more
+                // bodies
+                sync_handler.request_block_bodies(io)
+            }
         }
+        self.phase_type()
     }
 
     fn start(

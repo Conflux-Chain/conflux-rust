@@ -1804,10 +1804,15 @@ impl SynchronizationGraph {
     /// `BLOCK_HEADER_GRAPH_READY` blocks as `BLOCK_GRAPH_READY` and remove all
     /// other blocks. All blocks in the future can be processed normally in
     /// sync graph and consensus graph.
+    ///
+    /// If some blocks become invalid after validating their bodies, we need to
+    /// remove them and reconstruct the consensus graph. Return `false` if
+    /// there are blocks in the new consensus graph whose bodies are missing.
+    /// Return `true` if we do not need to reconstruct consensus, or all blocks
+    /// in the new consensus graph already have bodies.
     pub fn complete_filling_block_bodies(&self) -> bool {
         let mut inner = &mut *self.inner.write();
 
-        inner.locked_for_catchup = false;
         // Iterating over `hash_to_arena_indices` might be more efficient than
         // iterating over `arena`.
         let to_remove = {
@@ -1851,7 +1856,27 @@ impl SynchronizationGraph {
                 self.consensus
                     .on_new_block(&inner.arena[i].block_header.hash(), false);
             }
+            let new_missing_body_blocks: HashSet<_> = self
+                .consensus
+                .get_blocks_needing_bodies()
+                .into_iter()
+                .filter_map(|block_hash| {
+                    if !inner.hash_to_arena_indices.contains_key(&block_hash) {
+                        // This block needs body in the new consensus graph but
+                        // not in the old consensus graph.
+                        // We need to request it again.
+                        Some(block_hash)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            if !new_missing_body_blocks.is_empty() {
+                inner.missing_body_block_set = new_missing_body_blocks;
+                return false;
+            }
         }
+        inner.locked_for_catchup = false;
         self.consensus.construct_pivot_state();
         true
     }
