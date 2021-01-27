@@ -22,14 +22,17 @@ class SyncCheckpointTests(ConfluxTestFramework):
             "timer_chain_beta": "6",
             "era_epoch_count": "50",
             "chunk_size_byte": "1000",
-            "anticone_penalty_ratio": "5"
+            "anticone_penalty_ratio": "5",
+            "dev_allow_phase_change_without_peer": "false",
         }
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)
         for i in range(self.num_nodes - 1):
-            self.start_node(i)
+            self.start_node(i, phase_to_wait=None)
         connect_sample_nodes(self.nodes[:-1], self.log, latency_max=1)
+        for i in range(self.num_nodes - 1):
+            self.nodes[i].wait_for_recovery(["NormalSyncPhase"], 10)
 
     def _generate_txs(self, peer, num):
         client = RpcClient(self.nodes[peer])
