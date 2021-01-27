@@ -283,6 +283,8 @@ impl TrieProof {
                     break;
                 }
                 WalkStop::PathDiverted { .. } => {
+                    // TODO(thegaram): if the key is not found in the trie,
+                    // it might still contain other keys with that prefix
                     return (true, vec![]);
                 }
                 WalkStop::ChildNotFound { .. } => {
@@ -315,6 +317,13 @@ impl TrieProof {
                 None => {
                     // Missing node. The proof can be invalid or incomplete for
                     // the key. We do not return partial results.
+
+                    // TODO(thegaram): if a key of the subtree is contained in
+                    // two tries (e.g. delta and intermediate MPT), we will fail
+                    // because we construct the proof using `get_with_proof`
+                    // which is short-circuiting, i.e. if the key was found in
+                    // the delta, the proof will only contain the corresponding
+                    // node in the delta proof but not the intermediate proof.
                     return (false, vec![]);
                 }
             };
@@ -333,6 +342,7 @@ impl TrieProof {
                 let child_key = CompressedPathRaw::join_connected_paths(
                     &key,
                     id,
+                    // TODO(thegaram): use child_node instead
                     &node.compressed_path_ref(),
                 );
 
