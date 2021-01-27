@@ -23,7 +23,7 @@ pub trait ConsensusGraphTrait: Send + Sync {
 
     fn get_config(&self) -> &Self::ConsensusConfig;
 
-    fn on_new_block(&self, hash: &H256, update_best_info: bool);
+    fn on_new_block(&self, hash: &H256, catch_up: bool);
 
     fn update_total_weight_delta_heartbeat(&self) {}
 
@@ -86,8 +86,6 @@ pub trait ConsensusGraphTrait: Send + Sync {
     fn get_trusted_blame_block(&self, stable_hash: &H256) -> Option<H256>;
 
     fn set_initial_sequence_number(&self, initial_sn: u64);
-
-    fn update_best_info(&self);
 
     fn get_state_by_epoch_number(
         &self, epoch_number: EpochNumber,

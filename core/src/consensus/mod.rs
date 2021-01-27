@@ -264,7 +264,7 @@ impl ConsensusGraph {
             config: conf,
             node_type,
         };
-        graph.update_best_info();
+        graph.update_best_info(true);
         graph
             .txpool
             .notify_new_best_info(graph.best_info.read_recursive().clone())
@@ -1038,6 +1038,39 @@ impl ConsensusGraph {
 
         Ok(StateDb::new(state))
     }
+
+    /// This function is called after a new block appended to the
+    /// ConsensusGraph. Because BestInformation is often queried outside. We
+    /// store a version of best_info outside the inner to prevent keep
+    /// getting inner locks.
+    fn update_best_info(&self, catch_up: bool) {
+        let mut inner = self.inner.write();
+        let mut best_info = self.best_info.write();
+
+        let bounded_terminal_block_hashes = if catch_up {
+            // `bounded_terminal` is only needed for mining and serve syncing.
+            // As the computation cost is high, we do not compute it when we are
+            // catching up because we cannot mine blocks in
+            // catching-up phases. Use `best_block_hash` to
+            // represent terminals here to remain consistent.
+            vec![inner.best_block_hash()]
+        } else {
+            inner.bounded_terminal_block_hashes(self.config.referee_bound)
+        };
+        let best_epoch_number = inner.best_epoch_number();
+        BEST_EPOCH_NUMBER.update(best_epoch_number as usize);
+        *best_info = Arc::new(BestInformation {
+            chain_id: self
+                .config
+                .chain_id
+                .read()
+                .get_chain_id(best_epoch_number),
+            best_block_hash: inner.best_block_hash(),
+            best_epoch_number,
+            current_difficulty: inner.current_difficulty,
+            bounded_terminal_block_hashes,
+        });
+    }
 }
 
 impl Drop for ConsensusGraph {
@@ -1053,7 +1086,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     /// This is the main function that SynchronizationGraph calls to deliver a
     /// new block to the consensus graph.
-    fn on_new_block(&self, hash: &H256, update_best_info: bool) {
+    fn on_new_block(&self, hash: &H256, catch_up: bool) {
         let _timer =
             MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
         self.statistics.inc_consensus_graph_processed_block_count();
@@ -1064,9 +1097,8 @@ impl ConsensusGraphTrait for ConsensusGraph {
             hash,
         );
 
-        // Skip updating best info during recovery
-        if update_best_info {
-            self.update_best_info();
+        self.update_best_info(catch_up);
+        if !catch_up {
             self.txpool
                 .notify_new_best_info(self.best_info.read().clone())
                 // FIXME: propogate error.
@@ -1255,43 +1287,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn set_initial_sequence_number(&self, initial_sn: u64) {
         self.inner.write().set_initial_sequence_number(initial_sn);
-    }
-
-    /// This function is called after a new block appended to the
-    /// ConsensusGraph. Because BestInformation is often queried outside. We
-    /// store a version of best_info outside the inner to prevent keep
-    /// getting inner locks.
-    fn update_best_info(&self) {
-        let mut inner = self.inner.write();
-        let mut best_info = self.best_info.write();
-
-        let terminal_hashes = inner.terminal_hashes();
-        let best_block_hash = inner.best_block_hash();
-        let best_block_arena_index =
-            *inner.hash_to_arena_indices.get(&best_block_hash).unwrap();
-        let bounded_terminal_block_hashes =
-            if terminal_hashes.len() > self.config.referee_bound {
-                inner.best_terminals(
-                    best_block_arena_index,
-                    self.config.referee_bound,
-                )
-            } else {
-                terminal_hashes
-            };
-
-        let best_epoch_number = inner.best_epoch_number();
-        BEST_EPOCH_NUMBER.update(best_epoch_number as usize);
-        *best_info = Arc::new(BestInformation {
-            chain_id: self
-                .config
-                .chain_id
-                .read()
-                .get_chain_id(best_epoch_number),
-            best_block_hash: inner.best_block_hash(),
-            best_epoch_number,
-            current_difficulty: inner.current_difficulty,
-            bounded_terminal_block_hashes,
-        });
     }
 
     fn get_state_by_epoch_number(

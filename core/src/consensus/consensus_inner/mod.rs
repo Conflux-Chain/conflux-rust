@@ -2213,11 +2213,18 @@ impl ConsensusGraphInner {
             .and_then(|epoch_number| self.epoch_hash(epoch_number))
     }
 
-    pub fn terminal_hashes(&self) -> Vec<H256> {
-        self.terminal_hashes
-            .iter()
-            .map(|hash| hash.clone())
-            .collect()
+    pub fn bounded_terminal_block_hashes(
+        &mut self, referee_bound: usize,
+    ) -> Vec<H256> {
+        let best_block_arena_index = *self.pivot_chain.last().unwrap();
+        if self.terminal_hashes.len() > referee_bound {
+            self.best_terminals(best_block_arena_index, referee_bound)
+        } else {
+            self.terminal_hashes
+                .iter()
+                .map(|hash| hash.clone())
+                .collect()
+        }
     }
 
     pub fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
