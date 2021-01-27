@@ -1848,13 +1848,8 @@ impl SynchronizationGraph {
             // Send blocks in topological order.
             let sorted_blocks = inner.topological_sort(all_block_indices);
             for i in sorted_blocks {
-                self.consensus_unprocessed_count
-                    .fetch_add(1, Ordering::SeqCst);
-                assert!(
-                    self.new_block_hashes
-                        .send(inner.arena[i].block_header.hash()),
-                    "consensus receiver dropped"
-                );
+                self.consensus
+                    .on_new_block(&inner.arena[i].block_header.hash(), false);
             }
         }
         self.consensus.construct_pivot_state();
