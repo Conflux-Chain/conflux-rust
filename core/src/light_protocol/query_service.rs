@@ -16,6 +16,7 @@ use crate::{
     sync::SynchronizationGraph,
     ConsensusGraph, Notifications,
 };
+use cfx_addr::Network;
 use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
     internal_contract_addresses::{
@@ -996,5 +997,9 @@ impl QueryService {
         matching.reverse();
         debug!("Collected matching logs = {:?}", matching);
         Ok(matching)
+    }
+
+    pub fn get_network_type(&self) -> &Network {
+        self.network.get_network_type()
     }
 }

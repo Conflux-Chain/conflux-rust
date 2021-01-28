@@ -10,6 +10,8 @@ use primitives::Account as PrimitiveAccount;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
+    // This field isn't part of Account RLP but is helpful for debugging.
+    pub address: RpcAddress,
     pub balance: U256,
     pub nonce: U256,
     pub code_hash: H256,
@@ -24,6 +26,7 @@ impl Account {
         account: PrimitiveAccount, network: Network,
     ) -> Result<Self, String> {
         Ok(Self {
+            address: RpcAddress::try_from_h160(*account.address(), network)?,
             balance: account.balance.into(),
             nonce: account.nonce.into(),
             code_hash: account.code_hash.into(),

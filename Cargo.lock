@@ -594,6 +594,7 @@ dependencies = [
  "bit-set",
  "bn",
  "byteorder",
+ "cfx-addr",
  "cfx-bytes",
  "cfx-internal-common",
  "cfx-parameters",
@@ -2734,6 +2735,7 @@ version = "0.1.0"
 dependencies = [
  "byte-unit",
  "bytes 0.4.12",
+ "cfx-addr",
  "cfx-bytes",
  "cfx-types",
  "cfxkey",

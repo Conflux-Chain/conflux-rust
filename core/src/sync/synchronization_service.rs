@@ -23,7 +23,7 @@ use std::sync::Arc;
 #[derive(DeriveMallocSizeOf)]
 pub struct SynchronizationService {
     #[ignore_malloc_size_of = "channels are not handled in MallocSizeOf"]
-    network: Arc<NetworkService>,
+    pub network: Arc<NetworkService>,
     protocol_handler: Arc<SynchronizationProtocolHandler>,
     #[ignore_malloc_size_of = "insignificant"]
     protocol: ProtocolId,
@@ -55,8 +55,6 @@ impl SynchronizationService {
             protocol: *b"cfx",
         }
     }
-
-    pub fn get_network_id(&self) -> u64 { self.network.get_network_id() }
 
     pub fn catch_up_mode(&self) -> bool {
         self.protocol_handler.catch_up_mode()

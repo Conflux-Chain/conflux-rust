@@ -87,7 +87,7 @@ pub struct CheckBalanceAgainstTransactionResponse {
 
 impl SendTxRequest {
     pub fn check_rpc_address_network(
-        &self, param_name: &str, expected: Network,
+        &self, param_name: &str, expected: &Network,
     ) -> RpcResult<()> {
         let rpc_request_network = invalid_params_check(
             param_name,
