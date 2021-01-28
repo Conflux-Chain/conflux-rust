@@ -2,9 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{
-    address::NODE_NETWORK, errors::check_rpc_address_network,
-};
+use crate::rpc::types::errors::check_rpc_address_network;
 use cfx_types::{H160, H256, H520, U128, U256, U64};
 use cfxcore::{
     block_data_manager::BlockDataManager,
@@ -34,7 +32,7 @@ use crate::{
     rpc::{
         error_codes,
         impls::{
-            common::{self, check_address_network, RpcImpl as CommonImpl},
+            common::{self, RpcImpl as CommonImpl},
             RpcImplConfiguration,
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
@@ -51,7 +49,10 @@ use crate::{
         RpcBoxFuture, RpcResult,
     },
 };
-use cfxcore::rpc_errors::ErrorKind::LightProtocol;
+use cfx_addr::Network;
+use cfxcore::{
+    light_protocol::QueryService, rpc_errors::ErrorKind::LightProtocol,
+};
 
 // macro for reducing boilerplate for unsupported methods
 #[macro_use]
@@ -111,6 +112,15 @@ impl RpcImpl {
         }
     }
 
+    fn check_address_network(
+        network: Network, light: &QueryService,
+    ) -> RpcResult<()> {
+        invalid_params_check(
+            "address",
+            check_rpc_address_network(Some(network), light.get_network_type()),
+        )
+    }
+
     fn account(
         &self, address: RpcAddress, num: Option<EpochNumber>,
     ) -> RpcBoxFuture<RpcAccount> {
@@ -125,7 +135,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            check_address_network(address.network)?;
+            Self::check_address_network(address.network, &light)?;
             let network = address.network;
 
             let account = invalid_params_check(
@@ -162,7 +172,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            check_address_network(address.network)?;
+            Self::check_address_network(address.network, &light)?;
 
             let account = invalid_params_check(
                 "address",
@@ -192,7 +202,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            check_address_network(address.network)?;
+            Self::check_address_network(address.network, &light)?;
 
             let account = invalid_params_check(
                 "address",
@@ -224,7 +234,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            check_address_network(address.network)?;
+            Self::check_address_network(address.network, &light)?;
             let network = address.network;
 
             let account = invalid_params_check(
@@ -257,7 +267,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            check_address_network(address.network)?;
+            Self::check_address_network(address.network, &light)?;
 
             let account = invalid_params_check(
                 "address",
@@ -286,7 +296,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            check_address_network(address.network)?;
+            Self::check_address_network(address.network, &light)?;
 
             let maybe_list = invalid_params_check(
                 "address",
@@ -316,7 +326,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            check_address_network(address.network)?;
+            Self::check_address_network(address.network, &light)?;
 
             let maybe_list = invalid_params_check(
                 "address",
@@ -346,7 +356,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            check_address_network(address.network)?;
+            Self::check_address_network(address.network, &light)?;
 
             let account = invalid_params_check(
                 "address",
@@ -375,7 +385,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            check_address_network(address.network)?;
+            Self::check_address_network(address.network, &light)?;
 
             // FIMXE:
             //  We should get rid of the invalid_params_check when the
@@ -408,7 +418,7 @@ impl RpcImpl {
                         "filter.address",
                         check_rpc_address_network(
                             Some(address.network),
-                            *NODE_NETWORK.read(),
+                            light.get_network_type(),
                         ),
                     )?;
                 }
@@ -433,7 +443,9 @@ impl RpcImpl {
 
             Ok(logs
                 .into_iter()
-                .map(|l| RpcLog::try_from_localized(l, *NODE_NETWORK.read()))
+                .map(|l| {
+                    RpcLog::try_from_localized(l, *light.get_network_type())
+                })
                 .collect::<Result<_, _>>()?)
         };
 
@@ -478,7 +490,7 @@ impl RpcImpl {
         let accounts = self.accounts.clone();
 
         let fut = async move {
-            tx.check_rpc_address_network("tx", *NODE_NETWORK.read())?;
+            tx.check_rpc_address_network("tx", light.get_network_type())?;
 
             if tx.nonce.is_none() {
                 // TODO(thegaram): consider adding a light node specific tx pool
@@ -526,7 +538,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            check_address_network(address.network)?;
+            Self::check_address_network(address.network, &light)?;
 
             let root = invalid_params_check(
                 "address",
@@ -558,7 +570,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            check_address_network(address.network)?;
+            Self::check_address_network(address.network, &light)?;
 
             let maybe_entry = light
                 .get_storage(epoch_num.into(), address.into(), position)
@@ -592,7 +604,7 @@ impl RpcImpl {
             Ok(Some(RpcTransaction::from_signed(
                 &tx,
                 None,
-                *NODE_NETWORK.read(),
+                *light.get_network_type(),
             )?))
         };
 
@@ -647,7 +659,7 @@ impl RpcImpl {
                 maybe_state_root,
                 // Can not offer error_message from light node.
                 None,
-                *NODE_NETWORK.read(),
+                *light.get_network_type(),
             )?;
 
             Ok(Some(receipt))
@@ -681,7 +693,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            check_address_network(address.network)?;
+            Self::check_address_network(address.network, &light)?;
 
             let epoch = match num {
                 None => EpochNumber::LatestState,
@@ -739,7 +751,7 @@ impl RpcImpl {
 
             Ok(Some(RpcBlock::new(
                 &block,
-                *NODE_NETWORK.read(),
+                *light.get_network_type(),
                 &*inner,
                 &data_man,
                 include_txs,
@@ -793,7 +805,7 @@ impl RpcImpl {
 
             Ok(RpcBlock::new(
                 &block,
-                *NODE_NETWORK.read(),
+                *light.get_network_type(),
                 &*inner,
                 &data_man,
                 true,
@@ -847,7 +859,7 @@ impl RpcImpl {
 
             Ok(Some(RpcBlock::new(
                 &block,
-                *NODE_NETWORK.read(),
+                *light.get_network_type(),
                 &*inner,
                 &data_man,
                 include_txs,
@@ -959,8 +971,8 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            check_address_network(account_addr.network)?;
-            check_address_network(contract_addr.network)?;
+            Self::check_address_network(account_addr.network, &light)?;
+            Self::check_address_network(contract_addr.network, &light)?;
 
             let account_addr: H160 = account_addr.into();
             let contract_addr: H160 = contract_addr.into();

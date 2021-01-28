@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
+cfx-addr = { path = "../cfx_addr/rust" }
+cfx-bytes = { path = "../cfx_bytes" }
+cfx-types = { path = "../cfx_types" }
+cfxkey = { path = "../accounts/cfxkey" }
 mio = "0.6.8"
 parking_lot = "0.11"
 log = "0.4"
@@ -17,8 +21,6 @@ ipnetwork = "0.12.6"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_derive = "1.0"
-cfx-types = { path = "../cfx_types" }
-cfx-bytes = { path = "../cfx_bytes" }
 igd = "0.10"
 libc = "0.2.66"
 rand = "0.7"
@@ -28,7 +30,6 @@ enum-map = "0.4.0"
 enum-map-derive = "0.4.0"
 strum = "0.11.0"
 strum_macros = "0.11.0"
-cfxkey = { path = "../accounts/cfxkey" }
 lazy_static = "1.4"
 byte-unit = "1.1.0"
 priority-send-queue = { path = "../util/priority-send-queue" }
