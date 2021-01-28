@@ -3,9 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::{
-    address::NODE_NETWORK, call_request::rpc_call_request_network,
-    errors::check_rpc_address_network, RpcAddress, SponsorInfo,
-    TokenSupplyInfo, MAX_GAS_CALL_REQUEST,
+    call_request::rpc_call_request_network, errors::check_rpc_address_network,
+    RpcAddress, SponsorInfo, TokenSupplyInfo, MAX_GAS_CALL_REQUEST,
 };
 use blockgen::BlockGenerator;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
@@ -47,7 +46,7 @@ use crate::{
             request_rejected_in_catch_up_mode,
         },
         impls::{
-            common::{self, check_address_network, RpcImpl as CommonImpl},
+            common::{self, RpcImpl as CommonImpl},
             RpcImplConfiguration,
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
@@ -64,6 +63,7 @@ use crate::{
         RpcResult,
     },
 };
+use cfx_addr::Network;
 use cfxcore::{
     consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
     executive::revert_reason_decode,
@@ -84,7 +84,7 @@ lazy_static! {
 pub struct RpcImpl {
     config: RpcImplConfiguration,
     pub consensus: SharedConsensusGraph,
-    sync: SharedSynchronizationService,
+    pub sync: SharedSynchronizationService,
     block_gen: Arc<BlockGenerator>,
     tx_pool: SharedTransactionPool,
     maybe_txgen: Option<Arc<TransactionGenerator>>,
@@ -120,10 +120,20 @@ impl RpcImpl {
             .expect("downcast should succeed")
     }
 
+    fn check_address_network(&self, network: Network) -> RpcResult<()> {
+        invalid_params_check(
+            "address",
+            check_rpc_address_network(
+                Some(network),
+                self.sync.network.get_network_type(),
+            ),
+        )
+    }
+
     fn code(
         &self, address: RpcAddress, num: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
-        check_address_network(address.network)?;
+        self.check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState);
 
         info!(
@@ -156,7 +166,7 @@ impl RpcImpl {
     fn balance(
         &self, address: RpcAddress, num: Option<EpochNumber>,
     ) -> RpcResult<U256> {
-        check_address_network(address.network)?;
+        self.check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -174,7 +184,7 @@ impl RpcImpl {
     fn admin(
         &self, address: RpcAddress, num: Option<EpochNumber>,
     ) -> RpcResult<Option<RpcAddress>> {
-        check_address_network(address.network)?;
+        self.check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
         let network = address.network;
 
@@ -197,7 +207,7 @@ impl RpcImpl {
     fn sponsor_info(
         &self, address: RpcAddress, num: Option<EpochNumber>,
     ) -> RpcResult<SponsorInfo> {
-        check_address_network(address.network)?;
+        self.check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
         let network = address.network;
 
@@ -218,7 +228,7 @@ impl RpcImpl {
     fn staking_balance(
         &self, address: RpcAddress, num: Option<EpochNumber>,
     ) -> RpcResult<U256> {
-        check_address_network(address.network)?;
+        self.check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -236,7 +246,7 @@ impl RpcImpl {
     fn deposit_list(
         &self, address: RpcAddress, num: Option<EpochNumber>,
     ) -> RpcResult<Vec<DepositInfo>> {
-        check_address_network(address.network)?;
+        self.check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -256,7 +266,7 @@ impl RpcImpl {
     fn vote_list(
         &self, address: RpcAddress, num: Option<EpochNumber>,
     ) -> RpcResult<Vec<VoteStakeInfo>> {
-        check_address_network(address.network)?;
+        self.check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -276,7 +286,7 @@ impl RpcImpl {
     fn collateral_for_storage(
         &self, address: RpcAddress, num: Option<EpochNumber>,
     ) -> RpcResult<U256> {
-        check_address_network(address.network)?;
+        self.check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -297,7 +307,7 @@ impl RpcImpl {
     fn account(
         &self, address: RpcAddress, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<RpcAccount> {
-        check_address_network(address.network)?;
+        self.check_address_network(address.network)?;
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
         let network = address.network;
 
@@ -364,7 +374,7 @@ impl RpcImpl {
         epoch_num: Option<EpochNumber>,
     ) -> RpcResult<Option<H256>>
     {
-        check_address_network(address.network)?;
+        self.check_address_network(address.network)?;
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -426,7 +436,10 @@ impl RpcImpl {
         &self, mut tx: SendTxRequest, password: Option<String>,
     ) -> RpcResult<TransactionWithSignature> {
         let consensus_graph = self.consensus_graph();
-        tx.check_rpc_address_network("tx", *NODE_NETWORK.read())?;
+        tx.check_rpc_address_network(
+            "tx",
+            self.sync.network.get_network_type(),
+        )?;
 
         if tx.nonce.is_none() {
             let nonce = consensus_graph.next_nonce(
@@ -465,7 +478,7 @@ impl RpcImpl {
     fn storage_root(
         &self, address: RpcAddress, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<Option<StorageRoot>> {
-        check_address_network(address.network)?;
+        self.check_address_network(address.network)?;
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -542,22 +555,25 @@ impl RpcImpl {
                         block_number,
                         maybe_state_root,
                         tx_exec_error_msg,
-                        *NODE_NETWORK.read(),
+                        *self.sync.network.get_network_type(),
                     )?)
                 }
             };
             let rpc_tx = RpcTransaction::from_signed(
                 &tx,
                 Some(packed_or_executed),
-                *NODE_NETWORK.read(),
+                *self.sync.network.get_network_type(),
             )?;
 
             return Ok(Some(rpc_tx));
         }
 
         if let Some(tx) = self.tx_pool.get_transaction(&hash) {
-            let rpc_tx =
-                RpcTransaction::from_signed(&tx, None, *NODE_NETWORK.read())?;
+            let rpc_tx = RpcTransaction::from_signed(
+                &tx,
+                None,
+                *self.sync.network.get_network_type(),
+            )?;
             return Ok(Some(rpc_tx));
         }
 
@@ -640,7 +656,7 @@ impl RpcImpl {
             } else {
                 Some(tx_exec_error_msg.clone())
             },
-            *NODE_NETWORK.read(),
+            *self.sync.network.get_network_type(),
         )?;
         Ok(Some(rpc_receipt))
     }
@@ -828,7 +844,7 @@ impl RpcImpl {
                     "filter.address",
                     check_rpc_address_network(
                         Some(address.network),
-                        *NODE_NETWORK.read(),
+                        self.sync.network.get_network_type(),
                     ),
                 )?;
             }
@@ -853,7 +869,12 @@ impl RpcImpl {
             .logs(filter)?
             .iter()
             .cloned()
-            .map(|l| RpcLog::try_from_localized(l, *NODE_NETWORK.read()))
+            .map(|l| {
+                RpcLog::try_from_localized(
+                    l,
+                    *self.sync.network.get_network_type(),
+                )
+            })
             .collect::<Result<_, _>>()?)
     }
 
@@ -879,7 +900,7 @@ impl RpcImpl {
                 {
                     let author = RpcAddress::try_from_h160(
                         *block_header.author(),
-                        *NODE_NETWORK.read(),
+                        *self.sync.network.get_network_type(),
                     )?;
 
                     ret.push(RpcRewardInfo::new(b, author, reward_result));
@@ -1013,8 +1034,8 @@ impl RpcImpl {
         epoch: Option<EpochNumber>,
     ) -> RpcResult<CheckBalanceAgainstTransactionResponse>
     {
-        check_address_network(account_addr.network)?;
-        check_address_network(contract_addr.network)?;
+        self.check_address_network(account_addr.network)?;
+        self.check_address_network(contract_addr.network)?;
 
         let epoch: primitives::EpochNumber =
             epoch.unwrap_or(EpochNumber::LatestState).into();
@@ -1063,7 +1084,7 @@ impl RpcImpl {
             "request",
             check_rpc_address_network(
                 rpc_request_network,
-                *NODE_NETWORK.read(),
+                self.sync.network.get_network_type(),
             ),
         )?;
 

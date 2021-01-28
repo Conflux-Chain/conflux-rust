@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub mod known_network_ids;
-
 /// Hold all top-level components for a type of client.
 /// This struct implement ClientShutdownTrait.
 pub struct ClientComponents<BlockGenT, Rest> {
@@ -194,7 +192,12 @@ pub fn initialize_common_modules(
         }
     } else {
         match conf.raw_conf.genesis_accounts {
-            Some(ref file) => genesis::load_file(file)?,
+            Some(ref file) => genesis::load_file(file, |addr_str| {
+                parse_config_address_string(
+                    addr_str,
+                    network_config.get_network_type(),
+                )
+            })?,
             None => genesis::default(conf.is_test_or_dev_mode()),
         }
     };
@@ -297,6 +300,7 @@ pub fn initialize_common_modules(
         runtime.executor(),
         consensus.clone(),
         notifications.clone(),
+        *network.get_network_type(),
     );
     Ok((
         machine,
@@ -430,29 +434,11 @@ pub fn initialize_not_light_node_modules(
     );
 
     let maybe_author: Option<Address> =
-        conf.raw_conf.mining_author.as_ref().map(|hex_str| {
-            let base32_err = match cfx_addr_decode(hex_str) {
-                Ok(address) => {
-                    if address.network != network_id_to_known_cfx_network(network.network_id()) {
-                        panic!("mining_author has unmatching network id: network_id={},\
-                         address.network={}", network.network_id(), address.network)
-                    }
-                    match address.hex_address {
-                        Some(hex_address) => return hex_address,
-                        None => panic!("Invalid decoded hash size for base32 address"),
-                    }
-                }
-                Err(e) => e,
-            };
-            let hex_err = match parse_hex_string(hex_str) {
-                Ok(address) => return address,
-                Err(e) => e
-            };
-            // `mining_author` does not match either format
-            panic!("mining-author should be a valid base32 address or a 40-digit hex string!
-            base32_err={:?}
-            hex_err={:?}",
-            base32_err, hex_err)
+        conf.raw_conf.mining_author.as_ref().map(|addr_str| {
+            parse_config_address_string(addr_str, network.get_network_type())
+                .unwrap_or_else(|err| {
+                    panic!("Error parsing mining-author {}", err)
+                })
         });
     let blockgen = Arc::new(BlockGenerator::new(
         sync_graph,
@@ -475,7 +461,7 @@ pub fn initialize_not_light_node_modules(
             .expect("Mining thread spawn error");
     } else if let Some(author) = maybe_author {
         if !author.is_valid_address() || author.is_builtin_address() {
-            panic!("mining-author must start with 0x1 (user address) or 0x8 (contract address), otherwise you will not get mining rewards!!!");
+            panic!("mining-author must be user address or contract address, otherwise you will not get mining rewards!!!");
         }
         if blockgen.pow_config.enable_mining() {
             let bg = blockgen.clone();
@@ -741,8 +727,7 @@ pub mod delegate_convert {
 pub use crate::configuration::Configuration;
 use crate::{
     accounts::{account_provider, keys_path},
-    common::known_network_ids::network_id_to_known_cfx_network,
-    configuration::parse_hex_string,
+    configuration::parse_config_address_string,
     rpc::{
         extractor::RpcExtractor,
         impls::{
@@ -754,7 +739,6 @@ use crate::{
     GENESIS_VERSION,
 };
 use blockgen::BlockGenerator;
-use cfx_addr::cfx_addr_decode;
 use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use cfxcore::{
