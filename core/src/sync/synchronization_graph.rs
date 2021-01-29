@@ -1702,7 +1702,8 @@ impl SynchronizationGraph {
                 inner.process_invalid_blocks(&invalid_set);
                 return BlockInsertionResult::Invalid;
             } else {
-                // Download the block body in catch up.
+                debug!("Downloaded block body for {:?}", hash);
+                inner.missing_body_block_set.remove(&hash);
                 return BlockInsertionResult::AlreadyProcessed;
             }
         }
@@ -1836,11 +1837,12 @@ impl SynchronizationGraph {
         };
         inner.remove_blocks(&to_remove);
 
-        let missing_body_blocks = self.consensus.get_blocks_needing_bodies();
-        let has_skipped_bodies = missing_body_blocks.iter().any(|block_hash| {
-            !inner.hash_to_arena_indices.contains_key(block_hash)
-        });
-        if has_skipped_bodies {
+        // Check if we skip some block bodies. It's either because they are
+        // never retrieved after a long time, or they have invalid
+        // bodies.
+        let skipped_body_blocks = self.consensus.get_blocks_needing_bodies();
+        if !skipped_body_blocks.is_empty() {
+            warn!("Has invalid blocks after downloading block bodies!");
             // Some headers should not enter consensus, so we just reconstruct
             // the consensus graph with the current sync graph.
             self.consensus.reset();
@@ -1856,22 +1858,16 @@ impl SynchronizationGraph {
                 self.consensus
                     .on_new_block(&inner.arena[i].block_header.hash(), false);
             }
-            let new_missing_body_blocks: HashSet<_> = self
-                .consensus
-                .get_blocks_needing_bodies()
-                .into_iter()
-                .filter_map(|block_hash| {
-                    if !inner.hash_to_arena_indices.contains_key(&block_hash) {
-                        // This block needs body in the new consensus graph but
-                        // not in the old consensus graph.
-                        // We need to request it again.
-                        Some(block_hash)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+            let new_missing_body_blocks: HashSet<_> =
+                self.consensus.get_blocks_needing_bodies();
             if !new_missing_body_blocks.is_empty() {
+                // This should not happen if stable checkpoint is not reverted
+                // because we have downloaded all blocks in its
+                // subtree.
+                warn!(
+                    "{} new block bodies to get",
+                    new_missing_body_blocks.len()
+                );
                 inner.missing_body_block_set = new_missing_body_blocks;
                 return false;
             }

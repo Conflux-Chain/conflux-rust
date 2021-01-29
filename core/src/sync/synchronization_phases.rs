@@ -412,10 +412,6 @@ impl SynchronizationPhaseTrait for CatchUpFillBlockBodyPhase {
     ) -> SyncPhaseType
     {
         if self.graph.is_fill_block_completed() {
-            debug_assert!(sync_handler
-                .request_manager
-                .in_flight_blocks()
-                .is_empty());
             if self.graph.complete_filling_block_bodies() {
                 return SyncPhaseType::CatchUpSyncBlock;
             } else {
