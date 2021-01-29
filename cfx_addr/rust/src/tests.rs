@@ -274,6 +274,9 @@ fn verify(network: Network, data: &str, base32addr: &str) {
     assert_eq!(output, base32addr);
 
     let decoded = cfx_addr_decode(base32addr).unwrap();
-    assert_eq!(decoded.bytes, data, "decoded address mismatch");
+    assert_eq!(
+        decoded.parsed_address_bytes, data,
+        "decoded address mismatch"
+    );
     assert_eq!(decoded.network, network, "decoded network mismatch");
 }

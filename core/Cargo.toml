@@ -11,6 +11,7 @@ bit-set = "0.4"
 bn = { git = "https://github.com/paritytech/bn", default-features = false, rev="635c4cdd560bc0c8b262e6bf809dc709da8bcd7e" }
 byteorder = "1.0"
 cfxkey = { path = "../accounts/cfxkey" }
+cfx-addr = { path = "../cfx_addr/rust" }
 cfx-bytes = { path = "../cfx_bytes" }
 cfx-internal-common = { path = "internal_common" }
 cfx-parameters = { path = "parameters" }
