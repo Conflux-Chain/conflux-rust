@@ -2,18 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    common::known_network_ids::network_id_to_known_cfx_network,
-    rpc::{
-        types::{
-            address::NODE_NETWORK, errors::check_rpc_address_network,
-            Block as RpcBlock, BlockHashOrEpochNumber, Bytes,
-            CheckBalanceAgainstTransactionResponse, EpochNumber, RpcAddress,
-            Status as RpcStatus, Transaction as RpcTransaction,
-            TxPoolPendingInfo, TxWithPoolInfo,
-        },
-        RpcResult,
+use crate::rpc::{
+    types::{
+        errors::check_rpc_address_network, Block as RpcBlock,
+        BlockHashOrEpochNumber, Bytes, CheckBalanceAgainstTransactionResponse,
+        EpochNumber, RpcAddress, Status as RpcStatus,
+        Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
     },
+    RpcResult,
 };
 use bigdecimal::BigDecimal;
 use cfx_addr::Network;
@@ -47,13 +43,6 @@ use std::{
     time::Duration,
 };
 
-pub fn check_address_network(network: Network) -> RpcResult<()> {
-    invalid_params_check(
-        "address",
-        check_rpc_address_network(Some(network), *NODE_NETWORK.read()),
-    )
-}
-
 fn grouped_txs<T, F>(
     txs: Vec<Arc<SignedTransaction>>, converter: F,
 ) -> BTreeMap<String, BTreeMap<usize, Vec<T>>>
@@ -81,7 +70,7 @@ pub fn check_balance_against_transaction(
     is_sponsored: bool, gas_limit: U256, gas_price: U256, storage_limit: U256,
 ) -> CheckBalanceAgainstTransactionResponse
 {
-    let sponsor_for_gas: H160 = contract_account
+    let sponsor_for_gas = contract_account
         .as_ref()
         .map(|a| a.sponsor_info.sponsor_for_gas)
         .unwrap_or_default();
@@ -98,7 +87,7 @@ pub fn check_balance_against_transaction(
         .unwrap_or_default()
         .into();
 
-    let sponsor_for_collateral: H160 = contract_account
+    let sponsor_for_collateral = contract_account
         .as_ref()
         .map(|a| a.sponsor_info.sponsor_for_collateral)
         .unwrap_or_default();
@@ -158,8 +147,6 @@ impl RpcImpl {
         accounts: Arc<AccountProvider>,
     ) -> Self
     {
-        *NODE_NETWORK.write() =
-            network_id_to_known_cfx_network(network.network_id());
         let data_man = consensus.get_data_manager().clone();
 
         RpcImpl {
@@ -177,6 +164,16 @@ impl RpcImpl {
             .as_any()
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed")
+    }
+
+    fn check_address_network(&self, network: Network) -> RpcResult<()> {
+        invalid_params_check(
+            "address",
+            check_rpc_address_network(
+                Some(network),
+                self.network.get_network_type(),
+            ),
+        )
     }
 }
 
@@ -231,7 +228,7 @@ impl RpcImpl {
             None => Ok(None),
             Some(b) => Ok(Some(RpcBlock::new(
                 &*b,
-                *NODE_NETWORK.read(),
+                *self.network.get_network_type(),
                 inner,
                 &self.data_man,
                 include_txs,
@@ -284,7 +281,7 @@ impl RpcImpl {
             None => Ok(None),
             Some(b) => Ok(Some(RpcBlock::new(
                 &*b,
-                *NODE_NETWORK.read(),
+                *self.network.get_network_type(),
                 inner,
                 &self.data_man,
                 include_txs,
@@ -318,7 +315,7 @@ impl RpcImpl {
         debug!("Build RpcBlock {}", block.hash());
         Ok(RpcBlock::new(
             &*block,
-            *NODE_NETWORK.read(),
+            *self.network.get_network_type(),
             inner,
             &self.data_man,
             true,
@@ -353,7 +350,7 @@ impl RpcImpl {
     pub fn next_nonce(
         &self, address: RpcAddress, num: Option<BlockHashOrEpochNumber>,
     ) -> RpcResult<U256> {
-        check_address_network(address.network)?;
+        self.check_address_network(address.network)?;
         let consensus_graph = self.consensus_graph();
 
         let num = num.unwrap_or(BlockHashOrEpochNumber::EpochNumber(
@@ -410,7 +407,7 @@ impl RpcImpl {
 
             RpcBlock::new(
                 &*block,
-                *NODE_NETWORK.read(),
+                *self.network.get_network_type(),
                 inner,
                 &self.data_man,
                 true,
@@ -637,7 +634,7 @@ impl RpcImpl {
         let address: Option<H160> = match address {
             None => None,
             Some(addr) => {
-                check_address_network(addr.network)?;
+                self.check_address_network(addr.network)?;
                 Some(addr.into())
             }
         };
@@ -645,7 +642,11 @@ impl RpcImpl {
         let (ready_txs, deferred_txs) = self.tx_pool.content(address);
         let converter =
             |tx: &Arc<SignedTransaction>| -> Result<RpcTransaction, String> {
-                RpcTransaction::from_signed(&tx, None, *NODE_NETWORK.read())
+                RpcTransaction::from_signed(
+                    &tx,
+                    None,
+                    *self.network.get_network_type(),
+                )
             };
         let result = ready_txs
             .iter()
@@ -666,14 +667,14 @@ impl RpcImpl {
         let address: Option<H160> = match address {
             None => None,
             Some(addr) => {
-                check_address_network(addr.network)?;
+                self.check_address_network(addr.network)?;
                 Some(addr.into())
             }
         };
 
         let (ready_txs, deferred_txs) = self.tx_pool.content(address);
         let converter = |tx: Arc<SignedTransaction>| -> RpcTransaction {
-            RpcTransaction::from_signed(&tx, None, *NODE_NETWORK.read())
+            RpcTransaction::from_signed(&tx, None, *self.network.get_network_type())
                 .expect("transaction conversion with correct network id should not fail")
         };
 
@@ -695,7 +696,7 @@ impl RpcImpl {
         let address: Option<H160> = match address {
             None => None,
             Some(addr) => {
-                check_address_network(addr.network)?;
+                self.check_address_network(addr.network)?;
                 Some(addr.into())
             }
         };
@@ -742,28 +743,34 @@ impl RpcImpl {
             RpcError::internal_error()
         })?;
 
-        let network = *NODE_NETWORK.read();
-
         Ok(accounts
             .into_iter()
-            .map(|addr| RpcAddress::try_from_h160(addr, network))
+            .map(|addr| {
+                RpcAddress::try_from_h160(
+                    addr,
+                    *self.network.get_network_type(),
+                )
+            })
             .collect::<Result<_, _>>()?)
     }
 
     pub fn new_account(&self, password: String) -> RpcResult<RpcAddress> {
-        let address: Address =
+        let address =
             self.accounts.new_account(&password.into()).map_err(|e| {
                 warn!("Could not create account. With error {:?}", e);
                 RpcError::internal_error()
             })?;
 
-        Ok(RpcAddress::try_from_h160(address, *NODE_NETWORK.read())?)
+        Ok(RpcAddress::try_from_h160(
+            address,
+            *self.network.get_network_type(),
+        )?)
     }
 
     pub fn unlock_account(
         &self, address: RpcAddress, password: String, duration: Option<U128>,
     ) -> RpcResult<bool> {
-        check_address_network(address.network)?;
+        self.check_address_network(address.network)?;
         let account: H160 = address.into();
         let store = self.accounts.clone();
 
@@ -805,7 +812,7 @@ impl RpcImpl {
     }
 
     pub fn lock_account(&self, address: RpcAddress) -> RpcResult<bool> {
-        check_address_network(address.network)?;
+        self.check_address_network(address.network)?;
         match self.accounts.lock_account(address.into()) {
             Ok(_) => Ok(true),
             Err(err) => {
@@ -818,7 +825,7 @@ impl RpcImpl {
     pub fn sign(
         &self, data: Bytes, address: RpcAddress, password: Option<String>,
     ) -> RpcResult<H520> {
-        check_address_network(address.network)?;
+        self.check_address_network(address.network)?;
 
         let message = eth_data_hash(data.0);
         let password = password.map(Password::from);
@@ -845,7 +852,7 @@ impl RpcImpl {
     pub fn tx_inspect_pending(
         &self, address: RpcAddress,
     ) -> RpcResult<TxPoolPendingInfo> {
-        check_address_network(address.network)?;
+        self.check_address_network(address.network)?;
 
         let mut ret = TxPoolPendingInfo::default();
         let (deferred_txs, _) = self.tx_pool.content(Some(address.into()));

@@ -68,6 +68,7 @@ use crate::{
         DEFAULT_NODE_TABLE_TIMEOUT,
     },
 };
+use cfx_addr::Network;
 use ipnetwork::{IpNetwork, IpNetworkError};
 use keylib::Secret;
 use priority_send_queue::SendQueuePriority;
@@ -90,6 +91,7 @@ pub struct NetworkConfiguration {
     pub is_consortium: bool,
     /// Network identifier
     pub id: u64,
+    network_type: Network,
     /// Directory path to store general network configuration. None means
     /// nothing will be saved
     pub config_path: Option<String>,
@@ -142,9 +144,12 @@ pub struct NetworkConfiguration {
 
 impl NetworkConfiguration {
     pub fn new(id: u64, discovery_config: DiscoveryConfiguration) -> Self {
+        let network_type = Self::network_id_to_known_cfx_network(id);
+
         NetworkConfiguration {
             is_consortium: false,
             id,
+            network_type,
             config_path: Some("./net_config".to_string()),
             listen_address: None,
             public_address: None,
@@ -183,6 +188,16 @@ impl NetworkConfiguration {
             port,
         )));
         config
+    }
+
+    pub fn get_network_type(&self) -> &Network { &self.network_type }
+
+    pub fn network_id_to_known_cfx_network(id: u64) -> Network {
+        match id {
+            1 => Network::Test,
+            1029 => Network::Main,
+            n => Network::Id(n),
+        }
     }
 }
 

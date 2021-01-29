@@ -4,7 +4,6 @@
 
 use cfx_addr::{cfx_addr_decode, cfx_addr_encode, EncodingOptions, Network};
 use cfx_types::H160;
-use parking_lot::RwLock;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
 /// This is the address type used in Rpc. It deserializes user's Rpc input, or
@@ -15,10 +14,6 @@ pub struct RpcAddress {
     pub base32_address: String,
     pub hex_address: H160,
     pub network: Network,
-}
-
-lazy_static! {
-    pub static ref NODE_NETWORK: RwLock<Network> = RwLock::new(Network::Main);
 }
 
 impl RpcAddress {
