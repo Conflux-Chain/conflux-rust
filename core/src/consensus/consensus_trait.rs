@@ -92,11 +92,11 @@ pub trait ConsensusGraphTrait: Send + Sync {
     fn update_best_info(&self);
 
     fn get_state_by_epoch_number(
-        &self, epoch_number: EpochNumber,
+        &self, epoch_number: EpochNumber, rpc_param_name: &str,
     ) -> RpcResult<State>;
 
     fn get_state_db_by_epoch_number(
-        &self, epoch_number: EpochNumber,
+        &self, epoch_number: EpochNumber, rpc_param_name: &str,
     ) -> RpcResult<StateDb>;
 }
 

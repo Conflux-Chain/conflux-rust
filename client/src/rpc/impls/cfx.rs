@@ -130,6 +130,7 @@ impl RpcImpl {
         )
     }
 
+    // FIXME: unify the param name for epoch number.
     fn code(
         &self, address: RpcAddress, num: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
@@ -143,7 +144,7 @@ impl RpcImpl {
 
         let state_db = self
             .consensus
-            .get_state_db_by_epoch_number(epoch_num.clone().into())?;
+            .get_state_db_by_epoch_number(epoch_num.clone().into(), "num")?;
 
         let address = &address.hex_address;
 
@@ -174,8 +175,9 @@ impl RpcImpl {
             address, epoch_num
         );
 
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "num")?;
         let acc = state_db.get_account(&address.hex_address)?;
 
         Ok(acc.map_or(U256::zero(), |acc| acc.balance).into())
@@ -193,8 +195,9 @@ impl RpcImpl {
             address, epoch_num
         );
 
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "num")?;
 
         match state_db.get_account(&address.hex_address)? {
             None => Ok(None),
@@ -216,8 +219,9 @@ impl RpcImpl {
             address, epoch_num
         );
 
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "num")?;
 
         match state_db.get_account(&address.hex_address)? {
             None => Ok(SponsorInfo::default(network)?),
@@ -236,8 +240,9 @@ impl RpcImpl {
             address, epoch_num
         );
 
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "num")?;
         let acc = state_db.get_account(&address.hex_address)?;
 
         Ok(acc.map_or(U256::zero(), |acc| acc.staking_balance).into())
@@ -254,8 +259,9 @@ impl RpcImpl {
             address, epoch_num
         );
 
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "num")?;
 
         match state_db.get_deposit_list(&address.hex_address)? {
             None => Ok(vec![]),
@@ -274,8 +280,9 @@ impl RpcImpl {
             address, epoch_num
         );
 
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "num")?;
 
         match state_db.get_vote_list(&address.hex_address)? {
             None => Ok(vec![]),
@@ -294,8 +301,9 @@ impl RpcImpl {
             address, epoch_num
         );
 
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "num")?;
         let acc = state_db.get_account(&address.hex_address)?;
 
         Ok(acc
@@ -318,8 +326,9 @@ impl RpcImpl {
 
         let address = &address.hex_address;
 
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
 
         let account = match state_db.get_account(address)? {
             Some(t) => t,
@@ -339,8 +348,9 @@ impl RpcImpl {
     /// Returns interest rate of the given epoch
     fn interest_rate(&self, epoch_num: Option<EpochNumber>) -> RpcResult<U256> {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
 
         Ok(state_db.get_annual_interest_rate()?.into())
     }
@@ -350,8 +360,9 @@ impl RpcImpl {
         &self, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<U256> {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
 
         Ok(state_db.get_accumulate_interest_rate()?.into())
     }
@@ -361,10 +372,8 @@ impl RpcImpl {
         info!("RPC Request: cfx_sendRawTransaction len={:?}", raw.0.len());
         debug!("RawTransaction bytes={:?}", raw);
 
-        // FIXME: input parse error.
-        let tx = Rlp::new(&raw.into_vec()).as_val().map_err(|err| {
-            invalid_params("raw", format!("Error: {:?}", err))
-        })?;
+        let tx =
+            invalid_params_check("raw", Rlp::new(&raw.into_vec()).as_val())?;
 
         self.send_transaction_with_signature(tx)
     }
@@ -382,8 +391,9 @@ impl RpcImpl {
             address, position, epoch_num
         );
 
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
 
         let key = StorageKey::new_storage_key(
             &address.hex_address,
@@ -431,7 +441,6 @@ impl RpcImpl {
         }
     }
 
-    // FIXME: understand this rpc..
     fn prepare_transaction(
         &self, mut tx: SendTxRequest, password: Option<String>,
     ) -> RpcResult<TransactionWithSignature> {
@@ -442,10 +451,17 @@ impl RpcImpl {
         )?;
 
         if tx.nonce.is_none() {
+            // The address can come from invalid address space. TODO: implement
+            // the check.
+
             let nonce = consensus_graph.next_nonce(
                 tx.from.clone().into(),
                 BlockHashOrEpochNumber::EpochNumber(EpochNumber::LatestState)
                     .into_primitive(),
+                // For an invalid_params error, the name of the params should
+                // be provided. the "next_nonce" function may return
+                // invalid_params error on an unsupported epoch_number.
+                "internal EpochNumber::LatestState",
             )?;
             tx.nonce.replace(nonce.into());
             debug!("after loading nonce in latest state, tx = {:?}", tx);
@@ -488,7 +504,7 @@ impl RpcImpl {
 
         let root = self
             .consensus
-            .get_state_db_by_epoch_number(epoch_num)?
+            .get_state_db_by_epoch_number(epoch_num, "epoch_num")?
             .get_original_storage_root(&address.hex_address)?;
 
         Ok(Some(root))
@@ -1052,8 +1068,12 @@ impl RpcImpl {
             bail!(JsonRpcError::invalid_params(format!("storage_limit has to be within the range of u64 but {} supplied!", storage_limit)));
         }
 
-        let state = self.consensus.get_state_by_epoch_number(epoch.clone())?;
-        let state_db = self.consensus.get_state_db_by_epoch_number(epoch)?;
+        let state = self
+            .consensus
+            .get_state_by_epoch_number(epoch.clone(), "epoch")?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch, "epoch")?;
 
         let user_account = state_db.get_account(&account_addr)?;
         let contract_account = state_db.get_account(&contract_addr)?;
@@ -1175,7 +1195,7 @@ impl RpcImpl {
         &self, epoch: Option<EpochNumber>,
     ) -> RpcResult<TokenSupplyInfo> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
-        let state = self.consensus.get_state_by_epoch_number(epoch)?;
+        let state = self.consensus.get_state_by_epoch_number(epoch, "epoch")?;
         let total_issued = *state.total_issued_tokens();
         let total_staking = *state.total_staking_tokens();
         let total_collateral = *state.total_storage_tokens();
