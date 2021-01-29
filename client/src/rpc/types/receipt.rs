@@ -136,7 +136,7 @@ impl Receipt {
             contract_created: address,
             logs: logs
                 .into_iter()
-                .map(|l| Log::try_from(l, cfx_addr::Network::Main))
+                .map(|l| Log::try_from(l, network))
                 .collect::<Result<_, _>>()?,
             logs_bloom: log_bloom,
             state_root: maybe_state_root
