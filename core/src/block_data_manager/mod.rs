@@ -32,6 +32,7 @@ use std::{
 };
 use threadpool::ThreadPool;
 pub mod block_data_types;
+pub mod db_gc_manager;
 pub mod db_manager;
 pub mod tx_data_manager;
 use crate::{
@@ -44,6 +45,7 @@ pub use block_data_types::*;
 use cfx_internal_common::{
     EpochExecutionCommitment, StateAvailabilityBoundary, StateRootWithAuxInfo,
 };
+use db_gc_manager::GCProgress;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use std::{hash::Hash, path::Path, time::Duration};
 
@@ -136,6 +138,7 @@ pub struct BlockDataManager {
     pub storage_manager: Arc<StorageManager>,
     cache_man: Arc<Mutex<CacheManager<CacheId>>>,
     pub target_difficulty_manager: TargetDifficultyManager,
+    gc_progress: Arc<Mutex<GCProgress>>,
 
     /// This maintains the boundary height of available state and commitments
     /// (executed but not deleted or in `ExecutionTaskQueue`).
@@ -219,6 +222,7 @@ impl BlockDataManager {
             state_availability_boundary: RwLock::new(
                 StateAvailabilityBoundary::new(true_genesis.hash(), 0),
             ),
+            gc_progress: Default::default(),
         };
 
         data_man.initialize_instance_id();
@@ -1338,6 +1342,55 @@ impl BlockDataManager {
             None
         }
     }
+
+    pub fn new_checkpoint(&self, new_checkpoint: usize, best_epoch: usize) {
+        let mut gc_progress = self.gc_progress.lock();
+        gc_progress.gc_end = new_checkpoint;
+        gc_progress.last_consensus_best_epoch = best_epoch;
+        gc_progress.expected_end_consensus_best_epoch = best_epoch + self.config
+    }
+
+    pub fn database_gc(&self, best_epoch: usize) {
+        let maybe_range = self.gc_progress.lock().get_gc_range(best_epoch);
+        if let Some((start, end)) = maybe_range {
+            for epoch_number in start..end {
+                self.gc_epoch(epoch_number);
+            }
+        }
+    }
+
+    fn gc_epoch(&self, epoch_number: usize) {
+        self.gc_epoch_with_defer(
+            epoch_number,
+            self.config.additional_maintained_block_body_epoch_count,
+            |h| self.db_manager.remove_block_body_from_db(h),
+        );
+    }
+
+    fn gc_epoch_with_defer<F>(
+        &self, epoch_number: usize, maybe_defer_epochs: Option<usize>,
+        gc_func: F,
+    ) where
+        F: Fn(&H256) -> (),
+    {
+        if let Some(defer_epochs) = maybe_defer_epochs {
+            if epoch_number > defer_epochs {
+                let epoch_to_remove = epoch_number - defer_epochs;
+                match self.all_epoch_set_hashes_from_db(epoch_to_remove as u64)
+                {
+                    None => warn!(
+                        "GC epoch set is missing! epoch_to_remove: {}",
+                        epoch_to_remove
+                    ),
+                    Some(epoch_set) => {
+                        for b in epoch_set {
+                            gc_func(&b);
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -1347,9 +1400,14 @@ pub enum DbType {
 }
 
 pub struct DataManagerConfiguration {
-    persist_tx_index: bool,
-    tx_cache_index_maintain_timeout: Duration,
-    db_type: DbType,
+    pub persist_tx_index: bool,
+    pub tx_cache_index_maintain_timeout: Duration,
+    pub db_type: DbType,
+    pub additional_maintained_block_body_epoch_count: Option<usize>,
+    pub additional_maintained_execution_result_epoch_count: Option<usize>,
+    pub additional_maintained_reward_epoch_count: Option<usize>,
+    pub additional_maintained_trace_epoch_count: Option<usize>,
+    pub additional_maintained_transaction_index_epoch_count: Option<usize>,
 }
 
 impl MallocSizeOf for DataManagerConfiguration {
@@ -1366,6 +1424,11 @@ impl DataManagerConfiguration {
             persist_tx_index,
             tx_cache_index_maintain_timeout,
             db_type,
+            additional_maintained_block_body_epoch_count: None,
+            additional_maintained_execution_result_epoch_count: None,
+            additional_maintained_reward_epoch_count: None,
+            additional_maintained_trace_epoch_count: None,
+            additional_maintained_transaction_index_epoch_count: None,
         }
     }
 }

@@ -231,6 +231,11 @@ build_config! {
 
         // Storage Section.
         (additional_maintained_snapshot_count, (u32), 1)
+        (additional_maintained_block_body_epoch_count, (Option<usize>), None)
+        (additional_maintained_execution_result_epoch_count, (Option<usize>), None)
+        (additional_maintained_reward_epoch_count, (Option<usize>), None)
+        (additional_maintained_trace_epoch_count, (Option<usize>), None)
+        (additional_maintained_transaction_index_epoch_count, (Option<usize>), None)
         (block_cache_gc_period_ms, (u64), 5_000)
         (block_db_dir, (String), "./blockchain_data/blockchain_db".to_string())
         (block_db_type, (String), "rocksdb".to_string())
@@ -722,17 +727,32 @@ impl Configuration {
     }
 
     pub fn data_mananger_config(&self) -> DataManagerConfiguration {
-        DataManagerConfiguration::new(
-            self.raw_conf.persist_tx_index,
-            Duration::from_millis(
+        DataManagerConfiguration {
+            persist_tx_index: self.raw_conf.persist_tx_index,
+            tx_cache_index_maintain_timeout: Duration::from_millis(
                 self.raw_conf.tx_cache_index_maintain_timeout_ms,
             ),
-            match self.raw_conf.block_db_type.as_str() {
+            db_type: match self.raw_conf.block_db_type.as_str() {
                 "rocksdb" => DbType::Rocksdb,
                 "sqlite" => DbType::Sqlite,
                 _ => panic!("Invalid block_db_type parameter!"),
             },
-        )
+            additional_maintained_block_body_epoch_count: self
+                .raw_conf
+                .additional_maintained_block_body_epoch_count,
+            additional_maintained_execution_result_epoch_count: self
+                .raw_conf
+                .additional_maintained_execution_result_epoch_count,
+            additional_maintained_reward_epoch_count: self
+                .raw_conf
+                .additional_maintained_reward_epoch_count,
+            additional_maintained_trace_epoch_count: self
+                .raw_conf
+                .additional_maintained_trace_epoch_count,
+            additional_maintained_transaction_index_epoch_count: self
+                .raw_conf
+                .additional_maintained_transaction_index_epoch_count,
+        }
     }
 
     pub fn sync_graph_config(&self) -> SyncGraphConfig {
