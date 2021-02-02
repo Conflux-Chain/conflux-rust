@@ -19,6 +19,8 @@ class NodeReputationTests(ConfluxTestFramework):
 
         self.conf_parameters = {
             "discovery_housekeeping_timeout_ms": str(self.test_house_keeping_ms),
+            # Enable ip_limit to make node sampling robuster.
+            "subnet_quota": "4",
         }
 
     def setup_network(self):

@@ -87,7 +87,7 @@ pub struct CheckBalanceAgainstTransactionResponse {
 
 impl SendTxRequest {
     pub fn check_rpc_address_network(
-        &self, param_name: &str, expected: Network,
+        &self, param_name: &str, expected: &Network,
     ) -> RpcResult<()> {
         let rpc_request_network = invalid_params_check(
             param_name,
@@ -199,14 +199,20 @@ mod tests {
     #[test]
     fn call_request_deserialize() {
         let expected = CallRequest {
-            from: Some(RpcAddress {
-                hex_address: H160::from_low_u64_be(1),
-                network: Network::Main,
-            }),
-            to: Some(RpcAddress {
-                hex_address: H160::from_low_u64_be(2),
-                network: Network::Main,
-            }),
+            from: Some(
+                RpcAddress::try_from_h160(
+                    H160::from_low_u64_be(1),
+                    Network::Main,
+                )
+                .unwrap(),
+            ),
+            to: Some(
+                RpcAddress::try_from_h160(
+                    H160::from_low_u64_be(2),
+                    Network::Main,
+                )
+                .unwrap(),
+            ),
             gas_price: Some(U256::from(1)),
             gas: Some(U256::from(2)),
             value: Some(U256::from(3)),
@@ -216,8 +222,8 @@ mod tests {
         };
 
         let s = r#"{
-            "from":"cfx:type.builtin:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaejc4eyey6",
-            "to":"cfx:type.builtin:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaajd0wn6u9u",
+            "from":"CFX:TYPE.BUILTIN:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEJC4EYEY6",
+            "to":"CFX:TYPE.BUILTIN:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJD0WN6U9U",
             "gasPrice":"0x1",
             "gas":"0x2",
             "value":"0x3",
@@ -237,8 +243,8 @@ mod tests {
     #[test]
     fn call_request_deserialize2() {
         let expected = CallRequest {
-            from: Some(RpcAddress{ hex_address: H160::from_str("160e8dd61c5d32be8058bb8eb970870f07233155").unwrap(), network: Network::Main }),
-            to: Some(RpcAddress{ hex_address: H160::from_str("846e8dd67c5d32be8058bb8eb970870f07244567").unwrap(), network: Network::Main}),
+            from: Some(RpcAddress::try_from_h160(H160::from_str("160e8dd61c5d32be8058bb8eb970870f07233155").unwrap(),  Network::Main ).unwrap()),
+            to: Some(RpcAddress::try_from_h160(H160::from_str("846e8dd67c5d32be8058bb8eb970870f07244567").unwrap(), Network::Main).unwrap()),
             gas_price: Some(U256::from_str("9184e72a000").unwrap()),
             gas: Some(U256::from_str("76c0").unwrap()),
             value: Some(U256::from_str("9184e72a").unwrap()),
@@ -248,8 +254,8 @@ mod tests {
         };
 
         let s = r#"{
-            "from": "cfx:type.user:aana7ds0dvsxftyanc727snuu6husj3vmyc3f1ay93",
-            "to": "cfx:type.contract:accg7ds0tvsxftyanc727snuu6huskcfp6kb3nfj02",
+            "from": "CFX:TYPE.USER:AANA7DS0DVSXFTYANC727SNUU6HUSJ3VMYC3F1AY93",
+            "to": "CFX:TYPE.CONTRACT:ACCG7DS0TVSXFTYANC727SNUU6HUSKCFP6KB3NFJ02",
             "gas": "0x76c0",
             "gasPrice": "0x9184e72a000",
             "value": "0x9184e72a",
@@ -268,10 +274,13 @@ mod tests {
     #[test]
     fn call_request_deserialize_empty() {
         let expected = CallRequest {
-            from: Some(RpcAddress {
-                hex_address: H160::from_low_u64_be(1),
-                network: Network::Main,
-            }),
+            from: Some(
+                RpcAddress::try_from_h160(
+                    H160::from_low_u64_be(1),
+                    Network::Main,
+                )
+                .unwrap(),
+            ),
             to: None,
             gas_price: None,
             gas: None,
@@ -281,7 +290,7 @@ mod tests {
             nonce: None,
         };
 
-        let s = r#"{"from":"cfx:type.builtin:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaejc4eyey6"}"#;
+        let s = r#"{"from":"CFX:TYPE.BUILTIN:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEJC4EYEY6"}"#;
         let deserialized_result = serde_json::from_str::<CallRequest>(s);
         assert!(
             deserialized_result.is_ok(),

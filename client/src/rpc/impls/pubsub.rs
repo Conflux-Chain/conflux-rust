@@ -7,10 +7,9 @@ use crate::rpc::{
     helpers::{EpochQueue, SubscriberId, Subscribers},
     metadata::Metadata,
     traits::PubSub,
-    types::{
-        address::NODE_NETWORK, pubsub, Header as RpcHeader, Log as RpcLog,
-    },
+    types::{pubsub, Header as RpcHeader, Log as RpcLog},
 };
+use cfx_addr::Network;
 use cfx_parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
 use cfx_types::H256;
 use cfxcore::{
@@ -51,7 +50,7 @@ impl PubSubClient {
     /// Creates new `PubSubClient`.
     pub fn new(
         executor: Executor, consensus: SharedConsensusGraph,
-        notifications: Arc<Notifications>,
+        notifications: Arc<Notifications>, network: Network,
     ) -> Self
     {
         let heads_subscribers = Arc::new(RwLock::new(Subscribers::default()));
@@ -63,6 +62,7 @@ impl PubSubClient {
             consensus: consensus.clone(),
             data_man: consensus.get_data_manager().clone(),
             heads_subscribers: heads_subscribers.clone(),
+            network,
         });
 
         // --------- newHeads ---------
@@ -200,6 +200,7 @@ pub struct ChainNotificationHandler {
     consensus: SharedConsensusGraph,
     data_man: Arc<BlockDataManager>,
     heads_subscribers: Arc<RwLock<Subscribers<Client>>>,
+    network: Network,
 }
 
 impl ChainNotificationHandler {
@@ -236,11 +237,9 @@ impl ChainNotificationHandler {
         }
 
         let header = match self.data_man.block_header_by_hash(hash) {
-            Some(h) => RpcHeader::new(
-                &*h,
-                *NODE_NETWORK.read(),
-                self.consensus.clone(),
-            ),
+            Some(h) => {
+                RpcHeader::new(&*h, self.network, self.consensus.clone())
+            }
             None => return warn!("Unable to retrieve header for {:?}", hash),
         };
 
@@ -310,7 +309,7 @@ impl ChainNotificationHandler {
             .iter()
             .filter(|l| filter.matches(&l.entry))
             .cloned()
-            .map(|l| RpcLog::try_from_localized(l, *NODE_NETWORK.read()));
+            .map(|l| RpcLog::try_from_localized(l, self.network));
 
         // send logs in order
         // FIXME(thegaram): Sink::notify flushes after each item.

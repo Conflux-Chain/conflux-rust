@@ -53,16 +53,15 @@ lazy_static! {
     }) ();
 }
 
-// FIXME: rename to DecodedAddress.
-/// Struct containing the bytes and metadata of a Conflux address.
+/// Struct containing the raw bytes and metadata of a Conflux address.
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
-pub struct UserAddress {
-    /// Base32 address
-    pub base32: String,
+pub struct DecodedRawAddress {
+    /// Base32 address. This is included for debugging purposes.
+    pub input_base32_address: String,
     /// Address bytes
-    pub bytes: Vec<u8>,
+    pub parsed_address_bytes: Vec<u8>,
     /// The parsed address in H160 format.
-    pub hex: Option<Address>,
+    pub hex_address: Option<Address>,
     /// Network
     pub network: Network,
 }
@@ -143,7 +142,9 @@ pub fn cfx_addr_encode(
     Ok(cfx_base32_addr)
 }
 
-pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
+pub fn cfx_addr_decode(
+    addr_str: &str,
+) -> Result<DecodedRawAddress, DecodingError> {
     // FIXME: add a unit test for addr_str in capital letters.
     let has_lowercase = addr_str.chars().any(|c| c.is_lowercase());
     let has_uppercase = addr_str.chars().any(|c| c.is_uppercase());
@@ -262,10 +263,10 @@ pub fn cfx_addr_decode(addr_str: &str) -> Result<UserAddress, DecodingError> {
         hex_address = None;
     }
 
-    Ok(UserAddress {
-        base32: addr_str.to_lowercase(),
-        bytes: body.to_vec(),
-        hex: hex_address,
+    Ok(DecodedRawAddress {
+        input_base32_address: addr_str.into(),
+        parsed_address_bytes: body.to_vec(),
+        hex_address,
         network,
     })
 }

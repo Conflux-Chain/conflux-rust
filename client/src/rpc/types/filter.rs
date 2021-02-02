@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{Address as Base32Address, EpochNumber};
+use super::{EpochNumber, RpcAddress};
 use cfx_types::{H256, U64};
 use jsonrpc_core::Error as RpcError;
 use primitives::filter::Filter as PrimitiveFilter;
@@ -11,7 +11,6 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use serde_json::{from_value, Value};
-use std::convert::TryInto;
 
 const FILTER_BLOCK_HASH_LIMIT: usize = 128;
 
@@ -98,7 +97,7 @@ pub struct Filter {
     ///
     /// If None, match all.
     /// If specified, log must be produced by one of these addresses.
-    pub address: Option<VariadicValue<Base32Address>>,
+    pub address: Option<VariadicValue<RpcAddress>>,
 
     /// Search topics.
     ///
@@ -173,14 +172,10 @@ impl Filter {
         let address = match self.address {
             None => None,
             Some(VariadicValue::Null) => None,
-            Some(VariadicValue::Single(x)) => {
-                Some(vec![x.try_into().map_err(RpcError::invalid_params)?])
+            Some(VariadicValue::Single(x)) => Some(vec![x.into()]),
+            Some(VariadicValue::Multiple(xs)) => {
+                Some(xs.into_iter().map(|x| x.into()).collect())
             }
-            Some(VariadicValue::Multiple(xs)) => Some(
-                xs.into_iter()
-                    .map(|x| x.try_into().map_err(RpcError::invalid_params))
-                    .collect::<Result<Vec<_>, _>>()?,
-            ),
         };
 
         let limit = self.limit.map(|x| x.as_u64() as usize);
@@ -198,7 +193,7 @@ impl Filter {
 
 #[cfg(test)]
 mod tests {
-    use super::{super::Address, EpochNumber, Filter, VariadicValue};
+    use super::{super::RpcAddress, EpochNumber, Filter, VariadicValue};
     use cfx_addr::Network;
     use cfx_types::{H160, H256, U64};
     use primitives::{
@@ -286,8 +281,8 @@ mod tests {
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
             ]),
             address: Some(VariadicValue::Multiple(vec![
-                Address::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main).unwrap(),
-                Address::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main).unwrap(),
+                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main).unwrap(),
+                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main).unwrap(),
             ])),
             topics: Some(vec![
                 VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
@@ -338,7 +333,7 @@ mod tests {
              \"fromEpoch\":\"0x3e8\",\
              \"toEpoch\":\"latest_state\",\
              \"blockHashes\":[\"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
-             \"address\":[\"cfx:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0sfbnjm2\",\"cfx:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaejc4eyey6\"],\
+             \"address\":[\"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2\",\"CFX:TYPE.BUILTIN:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEJC4EYEY6\"],\
              \"topics\":[\
                 \"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\
                 [\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\"]\
@@ -354,8 +349,8 @@ mod tests {
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
             ]),
             address: Some(VariadicValue::Multiple(vec![
-                Address::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main).unwrap(),
-                Address::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main).unwrap(),
+                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main).unwrap(),
+                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main).unwrap(),
             ])),
             topics: Some(vec![
                 VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
@@ -382,8 +377,8 @@ mod tests {
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
             ]),
             address: Some(VariadicValue::Multiple(vec![
-                Address::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main).unwrap(),
-                Address::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main).unwrap(),
+                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main).unwrap(),
+                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main).unwrap(),
             ])),
             topics: Some(vec![
                 VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
