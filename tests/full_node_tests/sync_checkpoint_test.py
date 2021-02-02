@@ -23,6 +23,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
             "era_epoch_count": "50",
             "chunk_size_byte": "1000",
             "anticone_penalty_ratio": "5",
+            # Make sure checkpoint synchronization is triggered during phase change.
             "dev_allow_phase_change_without_peer": "false",
         }
 

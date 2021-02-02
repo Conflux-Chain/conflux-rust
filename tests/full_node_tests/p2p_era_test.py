@@ -26,6 +26,8 @@ class P2PTest(ConfluxTestFramework):
         self.conf_parameters["era_epoch_count"] = "100"
         self.conf_parameters["dev_snapshot_epoch_count"] = "25"
         self.conf_parameters["anticone_penalty_ratio"] = "10"
+        # Make sure that after cleaning the local data for a node,
+        # it goes through all the phases to download data as a normal node.
         self.conf_parameters["dev_allow_phase_change_without_peer"] = "false"
 
         self.stop_probability = 0.01
