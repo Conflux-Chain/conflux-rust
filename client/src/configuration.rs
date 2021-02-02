@@ -3,16 +3,17 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    impls::RpcImplConfiguration, HttpConfiguration, TcpConfiguration,
-    WsConfiguration,
+    impls::RpcImplConfiguration, types::RpcAddress, HttpConfiguration,
+    TcpConfiguration, WsConfiguration,
 };
+use cfx_addr::Network;
 use cfx_internal_common::{ChainIdParams, ChainIdParamsInner};
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
 };
-use cfx_types::{H256, U256};
+use cfx_types::{Address, H256, U256};
 use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
     block_parameters::*,
@@ -928,4 +929,33 @@ pub fn to_bootnodes(bootnodes: &Option<String>) -> Result<Vec<String>, String> {
 
 pub fn parse_hex_string<F: FromStr>(hex_str: &str) -> Result<F, F::Err> {
     hex_str.strip_prefix("0x").unwrap_or(hex_str).parse()
+}
+
+pub fn parse_config_address_string(
+    addr: &str, network: &Network,
+) -> Result<Address, String> {
+    let base32_err = match serde_json::from_str::<RpcAddress>(addr) {
+        Ok(address) => {
+            return if address.network != *network {
+                Err(format!(
+                    "address in configuration has unmatching network id: expected network={},\
+                     address.network={}",
+                    network,
+                    address.network
+                ))
+            } else {
+                Ok(address.into())
+            };
+        }
+        Err(e) => e,
+    };
+    let hex_err = match parse_hex_string(addr) {
+        Ok(address) => return Ok(address),
+        Err(e) => e,
+    };
+    // An address from config must be valid.
+    Err(format!("Address from configuration should be a valid base32 address or a 40-digit hex string!
+            base32_err={:?}
+            hex_err={:?}",
+           base32_err, hex_err))
 }

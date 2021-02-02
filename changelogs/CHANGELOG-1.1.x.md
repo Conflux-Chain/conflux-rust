@@ -9,6 +9,7 @@
 - Implement Execution Trace functionality. It includes detailed call/create/return/internal_transfer events being triggered by a transfer. Inspecting the trace information will enable the applications like conflux-scan to be able to track all transfers of CFX accurately. 
 - Support CIP-37 address format in `mining_author` configuration.
 - Include `networkId` in `cfx_getStatus` response.
+- Include `address` in `RpcAccount`.
 
 # 1.1.0
 

@@ -460,7 +460,9 @@ fn execute_genesis_transaction(
     }
 }
 
-pub fn load_file(path: &String) -> Result<HashMap<Address, U256>, String> {
+pub fn load_file(
+    path: &String, address_parser: impl Fn(&str) -> Result<Address, String>,
+) -> Result<HashMap<Address, U256>, String> {
     let mut content = String::new();
     let mut file = File::open(path)
         .map_err(|e| format!("failed to open file: {:?}", e))?;
@@ -474,7 +476,7 @@ pub fn load_file(path: &String) -> Result<HashMap<Address, U256>, String> {
     match account_values {
         Value::Table(table) => {
             for (key, value) in table {
-                let addr = key.parse::<Address>().map_err(|e| {
+                let addr = address_parser(&key).map_err(|e| {
                     format!(
                         "failed to parse address: value = {}, error = {:?}",
                         key, e
