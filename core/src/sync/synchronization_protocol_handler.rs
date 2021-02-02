@@ -819,7 +819,7 @@ impl SynchronizationProtocolHandler {
             .graph
             .inner
             .read()
-            .missing_body_block_set
+            .block_to_fill_set
             .difference(&in_flight_blocks)
             .copied()
             .collect();
@@ -1613,7 +1613,7 @@ impl SynchronizationProtocolHandler {
             "Catch-up mode: {}, latest epoch: {} missing_bodies: {}",
             catch_up_mode,
             self.graph.consensus.best_epoch_number(),
-            self.graph.inner.read().missing_body_block_set.len()
+            self.graph.inner.read().block_to_fill_set.len()
         );
 
         DynamicCapability::NormalPhase(!catch_up_mode)

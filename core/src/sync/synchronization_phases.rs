@@ -412,7 +412,7 @@ impl SynchronizationPhaseTrait for CatchUpFillBlockBodyPhase {
         _sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
-        if self.graph.is_block_body_completed() {
+        if self.graph.is_fill_block_completed() {
             self.graph.complete_filling_block_bodies();
             SyncPhaseType::CatchUpSyncBlock
         } else {
@@ -464,7 +464,7 @@ impl SynchronizationPhaseTrait for CatchUpFillBlockBodyPhase {
                         cur_era_stable_height,
                     );
             }
-            self.graph.inner.write().missing_body_block_set =
+            self.graph.inner.write().block_to_fill_set =
                 self.graph.consensus.get_blocks_needing_bodies();
             sync_handler.request_block_bodies(io);
         }

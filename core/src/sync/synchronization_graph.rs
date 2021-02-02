@@ -171,7 +171,7 @@ pub struct SynchronizationGraphInner {
     pub locked_for_catchup: bool,
     /// The set of blocks that we need to download block bodies in
     /// `CatchUpFillBlockBodyPhase`.
-    pub missing_body_block_set: HashSet<H256>,
+    pub block_to_fill_set: HashSet<H256>,
     machine: Arc<Machine>,
 }
 
@@ -209,7 +209,7 @@ impl SynchronizationGraphInner {
             not_ready_blocks_frontier: UnreadyBlockFrontier::new(),
             old_era_blocks_frontier: Default::default(),
             old_era_blocks_frontier_set: Default::default(),
-            missing_body_block_set: Default::default(),
+            block_to_fill_set: Default::default(),
             locked_for_catchup: false,
             machine,
         };
@@ -1626,10 +1626,7 @@ impl SynchronizationGraph {
         let inner = &mut *self.inner.write();
         if inner.locked_for_catchup {
             // Ignore received headers when we are downloading block bodies.
-            return (
-                BlockHeaderInsertionResult::AlreadyProcessedInSync,
-                Vec::new(),
-            );
+            return (BlockHeaderInsertionResult::TemporarySkipped, Vec::new());
         }
         let hash = header.hash();
 
@@ -1953,7 +1950,7 @@ impl SynchronizationGraph {
         // If we are locked for catch-up, make sure no new block will enter sync
         // graph.
         if inner.locked_for_catchup {
-            if !inner.missing_body_block_set.remove(&hash) {
+            if !inner.block_to_fill_set.remove(&hash) {
                 warn!("Receive unexpected block body, hash={:?}", hash);
             }
             if inner.arena[me].graph_status == BLOCK_INVALID {
@@ -1962,7 +1959,7 @@ impl SynchronizationGraph {
                     // We do not need to download the block body of invalid
                     // blocks.
                     inner
-                        .missing_body_block_set
+                        .block_to_fill_set
                         .remove(&inner.arena[*i].block_header.hash());
                 }
                 inner.process_invalid_blocks(&invalid_set);
@@ -2140,8 +2137,8 @@ impl SynchronizationGraph {
         self.consensus_unprocessed_count.load(Ordering::SeqCst) != 0
     }
 
-    pub fn is_block_body_completed(&self) -> bool {
-        self.inner.read().missing_body_block_set.is_empty()
+    pub fn is_fill_block_completed(&self) -> bool {
+        self.inner.read().block_to_fill_set.is_empty()
     }
 
     /// Construct the states along the pivot chain, set all
@@ -2254,6 +2251,8 @@ pub enum BlockHeaderInsertionResult {
     // The block is definitely invalid. It's not inserted to sync graph
     // and should not be requested again.
     Invalid,
+    // The header is received when we have locked sync graph.
+    TemporarySkipped,
 }
 
 impl BlockHeaderInsertionResult {
