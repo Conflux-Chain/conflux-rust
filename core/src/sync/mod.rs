@@ -25,7 +25,7 @@ pub use self::{
         SynchronizationGraphNode,
     },
     synchronization_phases::{
-        CatchUpCheckpointPhase, CatchUpRecoverBlockFromDbPhase,
+        CatchUpCheckpointPhase, CatchUpFillBlockBodyPhase,
         CatchUpRecoverBlockHeaderFromDbPhase, CatchUpSyncBlockHeaderPhase,
         CatchUpSyncBlockPhase, NormalSyncPhase, SyncPhaseType,
         SynchronizationPhaseManager, SynchronizationPhaseTrait,

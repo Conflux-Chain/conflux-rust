@@ -202,7 +202,17 @@ pub fn initialize_common_modules(
         }
     };
 
-    let consensus_conf = conf.consensus_config();
+    let mut consensus_conf = conf.consensus_config();
+    match node_type {
+        NodeType::Archive => {
+            consensus_conf.sync_state_starting_epoch = Some(0);
+        }
+        NodeType::Full | NodeType::Light => {
+            consensus_conf.sync_state_epoch_gap =
+                Some(CATCH_UP_EPOCH_LAG_THRESHOLD);
+        }
+        NodeType::Unknown => {}
+    }
     let machine = Arc::new(new_machine_with_builtin(conf.common_params()));
 
     let genesis_block = genesis_block(
@@ -367,18 +377,13 @@ pub fn initialize_not_light_node_modules(
     ));
     light_provider.register(network.clone()).unwrap();
 
-    let initial_sync_phase = match node_type {
-        NodeType::Archive => SyncPhaseType::CatchUpRecoverBlockFromDB,
-        _ => SyncPhaseType::CatchUpRecoverBlockHeaderFromDB,
-    };
-
     let sync = Arc::new(SynchronizationService::new(
         node_type,
         network.clone(),
         sync_graph.clone(),
         conf.protocol_config(),
         conf.state_sync_config(),
-        initial_sync_phase,
+        SyncPhaseType::CatchUpRecoverBlockHeaderFromDB,
         light_provider,
     ));
     sync.register().unwrap();
@@ -739,6 +744,7 @@ use crate::{
     GENESIS_VERSION,
 };
 use blockgen::BlockGenerator;
+use cfx_parameters::sync::CATCH_UP_EPOCH_LAG_THRESHOLD;
 use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use cfxcore::{

@@ -43,7 +43,7 @@ use primitives::{Block, BlockHeader, EpochId, SignedTransaction};
 use rand::{prelude::SliceRandom, Rng};
 use rlp::Rlp;
 use std::{
-    cmp,
+    cmp::{self, min},
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -84,6 +84,7 @@ const EPOCH_SYNC_MAX_GAP: u64 = 20000;
 const EPOCH_SYNC_RESTART_TIMEOUT_S: u64 = 60 * 10;
 const EPOCH_SYNC_MAX_INFLIGHT: u64 = 300;
 const EPOCH_SYNC_BATCH_SIZE: u64 = 30;
+const BLOCK_SYNC_MAX_INFLIGHT: usize = 1000;
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub enum SyncHandlerWorkType {
@@ -411,6 +412,7 @@ pub struct ProtocolConfiguration {
     pub demote_peer_for_timeout: bool,
     pub max_unprocessed_block_size: usize,
     pub max_chunk_number_in_manifest: usize,
+    pub allow_phase_change_without_peer: bool,
 }
 
 impl SynchronizationProtocolHandler {
@@ -425,7 +427,7 @@ impl SynchronizationProtocolHandler {
         let sync_state = Arc::new(SynchronizationState::new(
             protocol_config.is_consortium,
             node_type,
-            protocol_config.dev_mode || protocol_config.test_mode,
+            protocol_config.allow_phase_change_without_peer,
         ));
         let recover_public_queue = Arc::new(AsyncTaskQueue::new(
             SyncHandlerWorkType::RecoverPublic,
@@ -494,7 +496,7 @@ impl SynchronizationProtocolHandler {
         current_phase.phase_type()
             == SyncPhaseType::CatchUpRecoverBlockHeaderFromDB
             || current_phase.phase_type()
-                == SyncPhaseType::CatchUpRecoverBlockFromDB
+                == SyncPhaseType::CatchUpFillBlockBodyPhase
     }
 
     pub fn need_requesting_blocks(&self) -> bool {
@@ -715,7 +717,7 @@ impl SynchronizationProtocolHandler {
         let current_phase_type =
             self.phase_manager.get_current_phase().phase_type();
         if current_phase_type == SyncPhaseType::CatchUpRecoverBlockHeaderFromDB
-            || current_phase_type == SyncPhaseType::CatchUpRecoverBlockFromDB
+            || current_phase_type == SyncPhaseType::CatchUpFillBlockBodyPhase
         {
             return;
         }
@@ -810,6 +812,34 @@ impl SynchronizationProtocolHandler {
         }
     }
 
+    /// Request missing block bodies from random peers in batches.
+    pub fn request_block_bodies(&self, io: &dyn NetworkContext) {
+        let in_flight_blocks = self.request_manager.in_flight_blocks();
+        let to_request_blocks: Vec<_> = self
+            .graph
+            .inner
+            .read()
+            .block_to_fill_set
+            .difference(&in_flight_blocks)
+            .copied()
+            .collect();
+        let n_blocks_to_request = min(
+            BLOCK_SYNC_MAX_INFLIGHT - in_flight_blocks.len(),
+            to_request_blocks.len(),
+        );
+
+        // Use `MAX_BLOCKS_TO_SEND` as the batch size so the peer can respond
+        // with all blocks.
+        for block_chunk in to_request_blocks[0..n_blocks_to_request]
+            .chunks(MAX_BLOCKS_TO_SEND as usize)
+        {
+            self.request_blocks(io, None, block_chunk.to_vec());
+        }
+    }
+
+    // FIXME Use another function for block catch up. It should only use local
+    // epoch set and end with all consensus block retrieved, not related to
+    // median peer epoch.
     pub fn request_epochs(&self, io: &dyn NetworkContext) {
         // make sure only one thread can request new epochs at a time
         let mut latest_requested = self.latest_epoch_requested.lock();
@@ -1066,26 +1096,29 @@ impl SynchronizationProtocolHandler {
                 need_to_relay.push(hash);
             }
         }
-        let missing_dependencies = dependent_hashes
-            .difference(&received_blocks)
-            .map(Clone::clone)
-            .collect();
         let chosen_peer = PeerFilter::new(msgid::GET_BLOCKS)
             .exclude(task.failed_peer)
             .select(&self.syn);
-
         self.blocks_received(
             io,
             task.requested,
-            received_blocks,
+            received_blocks.clone(),
             !task.compact,
             chosen_peer.clone(),
             task.delay,
             self.preferred_peer_node_type_for_get_block(),
         );
-        self.request_blocks(io, chosen_peer, missing_dependencies);
-
-        self.relay_blocks(io, need_to_relay)
+        if self.graph.inner.read().locked_for_catchup {
+            self.request_block_bodies(io);
+            Ok(())
+        } else {
+            let missing_dependencies = dependent_hashes
+                .difference(&received_blocks)
+                .map(Clone::clone)
+                .collect();
+            self.request_blocks(io, chosen_peer, missing_dependencies);
+            self.relay_blocks(io, need_to_relay)
+        }
     }
 
     fn on_blocks_inner_task(
@@ -1577,9 +1610,10 @@ impl SynchronizationProtocolHandler {
             }
         }
         info!(
-            "Catch-up mode: {}, latest epoch: {}",
+            "Catch-up mode: {}, latest epoch: {} missing_bodies: {}",
             catch_up_mode,
-            self.graph.consensus.best_epoch_number()
+            self.graph.consensus.best_epoch_number(),
+            self.graph.inner.read().block_to_fill_set.len()
         );
 
         DynamicCapability::NormalPhase(!catch_up_mode)
@@ -1630,19 +1664,18 @@ impl SynchronizationProtocolHandler {
             return true;
         }
 
-        if let Some(height) = self
-            .graph
-            .block_by_hash(hash)
-            .map(|block| block.block_header.height())
-        {
-            let best_height = self.graph.consensus.best_epoch_number();
-            if height > best_height
-                || best_height - height <= LOCAL_BLOCK_INFO_QUERY_THRESHOLD
+        if !self.graph.inner.read().locked_for_catchup {
+            if let Some(height) = self.graph.data_man.block_height_by_hash(hash)
             {
+                let best_height = self.graph.consensus.best_epoch_number();
+                if height > best_height
+                    || best_height - height <= LOCAL_BLOCK_INFO_QUERY_THRESHOLD
+                {
+                    return false;
+                }
+            } else {
                 return false;
             }
-        } else {
-            return false;
         }
 
         if let Some(info) = self.graph.data_man.local_block_info_by_hash(hash) {
@@ -1664,7 +1697,10 @@ impl SynchronizationProtocolHandler {
                 return true;
             }
 
-            if info.get_instance_id() == self.graph.data_man.get_instance_id() {
+            if !self.graph.inner.read().locked_for_catchup
+                && info.get_instance_id()
+                    == self.graph.data_man.get_instance_id()
+            {
                 // This block has already entered consensus graph
                 // in this run.
                 return true;
@@ -1687,6 +1723,8 @@ impl SynchronizationProtocolHandler {
             // used.
             let mut requested = HashSet::new();
             requested.insert(block.hash());
+            // TODO: Handle inflight block bodies separately?
+            self.request_manager.set_block_inflight(block.hash());
             self.recover_public_queue.dispatch(
                 io,
                 RecoverPublicTask::new(
@@ -1736,10 +1774,9 @@ impl SynchronizationProtocolHandler {
             return Ok(());
         }
         // TODO This may not be needed now, but we should double check it.
-        let need_to_relay = self.graph.resolve_outside_dependencies(
-            false, /* recover_from_db */
-            self.insert_header_to_consensus(),
-        );
+        let need_to_relay = self
+            .graph
+            .resolve_outside_dependencies(self.insert_header_to_consensus());
         self.graph.remove_expire_blocks(timeout);
         self.relay_blocks(io, need_to_relay)
     }

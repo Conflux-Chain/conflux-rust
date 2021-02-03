@@ -67,6 +67,7 @@ fn test_mining_10_epochs() {
     let mut conf = Configuration::default();
     conf.raw_conf.mode = Some("test".to_owned());
     conf.raw_conf.initial_difficulty = Some(10_000);
+    conf.raw_conf.dev_allow_phase_change_without_peer = true;
 
     let tmp_dir = TempDir::new("conflux-test").unwrap();
     conf.raw_conf.conflux_data_dir =
@@ -89,7 +90,8 @@ fn test_mining_10_epochs() {
     conf.raw_conf.jsonrpc_http_port = Some(18001);
     conf.raw_conf.mining_author =
         Some("1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into());
-    conf.raw_conf.mining_type = Some("cpu".into());
+    // Avoid starting the mining thread in `ArchiveClient::start`.
+    conf.raw_conf.mining_type = Some("disable".into());
 
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
     let handle = ArchiveClient::start(conf, exit).unwrap();
@@ -105,6 +107,7 @@ fn test_mining_10_epochs_with_larger_pow_problem_window() {
     conf.raw_conf.mode = Some("test".to_owned());
     conf.raw_conf.initial_difficulty = Some(10_000);
     conf.raw_conf.pow_problem_window_size = 4;
+    conf.raw_conf.dev_allow_phase_change_without_peer = true;
 
     let tmp_dir = TempDir::new("conflux-test").unwrap();
     conf.raw_conf.conflux_data_dir =
@@ -127,7 +130,8 @@ fn test_mining_10_epochs_with_larger_pow_problem_window() {
     conf.raw_conf.jsonrpc_http_port = Some(18002);
     conf.raw_conf.mining_author =
         Some("1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into());
-    conf.raw_conf.mining_type = Some("cpu".into());
+    // Avoid starting the mining thread in `ArchiveClient::start`.
+    conf.raw_conf.mining_type = Some("disable".into());
 
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
     let handle = ArchiveClient::start(conf, exit).unwrap();

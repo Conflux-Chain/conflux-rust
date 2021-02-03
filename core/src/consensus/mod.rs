@@ -37,6 +37,7 @@ use crate::{
 use cfx_internal_common::ChainIdParams;
 use cfx_parameters::{
     consensus::*,
+    consensus_internal::REWARD_EPOCH_COUNT,
     rpc::{
         GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
         TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW,
@@ -113,6 +114,16 @@ pub struct ConsensusConfig {
     /// consensus from making progress under high RPC load.
     pub get_logs_epoch_batch_size: usize,
     pub get_logs_filter_max_epoch_range: Option<u64>,
+
+    /// TODO: These parameters are only utilized in catch-up now.
+    /// TODO: They should be used in data garbage collection, too.
+    /// TODO: States, receipts, and block bodies need separate parameters.
+    /// The starting epoch that we need to sync its state and start replaying
+    /// transactions.
+    pub sync_state_starting_epoch: Option<u64>,
+    /// The number of extra epochs that we want to keep
+    /// states/receipts/transactions.
+    pub sync_state_epoch_gap: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -1396,5 +1407,64 @@ impl ConsensusGraphTrait for ConsensusGraph {
         let hash =
             self.inner.read().get_pivot_hash_from_epoch_number(height)?;
         self.get_state_db_by_height_and_hash(height, &hash)
+    }
+
+    /// Return the blocks in the subtree of stable genesis and the blocks in the
+    /// `REWARD_EPOCH_COUNT` epochs before it. Block bodies of other blocks
+    /// in the consensus graph will never be needed for executions after this
+    /// stable genesis, as long as the checkpoint is not reverted.
+    fn get_blocks_needing_bodies(&self) -> HashSet<H256> {
+        let inner = self.inner.read();
+        // TODO: This may not be stable genesis with other configurations.
+        let stable_genesis = self.data_man.get_cur_consensus_era_stable_hash();
+        let mut block_set: HashSet<_> = inner
+            .get_subtree(&stable_genesis)
+            .expect("stable is in consensus")
+            .into_iter()
+            .collect();
+        // We also need the block bodies before the checkpoint to compute
+        // rewards.
+        let stable_height = self
+            .data_man
+            .block_height_by_hash(&stable_genesis)
+            .expect("stable exist");
+        let reward_start_epoch = if stable_height >= REWARD_EPOCH_COUNT {
+            stable_height - REWARD_EPOCH_COUNT + 1
+        } else {
+            1
+        };
+        for height in reward_start_epoch..=stable_height {
+            for block_hash in self
+                .data_man
+                .executed_epoch_set_hashes_from_db(height)
+                .expect("epoch sets before stable should exist")
+            {
+                block_set.insert(block_hash);
+            }
+        }
+        block_set.remove(&self.data_man.true_genesis.hash());
+        block_set
+    }
+
+    /// Check if we have downloaded all the headers to find the lowest needed
+    /// checkpoint. We can enter `CatchUpCheckpoint` if it's true.
+    fn catch_up_completed(&self, peer_median_epoch: u64) -> bool {
+        let stable_genesis_height = self
+            .data_man
+            .block_height_by_hash(
+                &self.data_man.get_cur_consensus_era_stable_hash(),
+            )
+            .expect("stable exists");
+        if let Some(target_epoch) = self.config.sync_state_starting_epoch {
+            if stable_genesis_height < target_epoch {
+                return false;
+            }
+        }
+        if let Some(gap) = self.config.sync_state_epoch_gap {
+            if self.best_epoch_number() + gap < peer_median_epoch {
+                return false;
+            }
+        }
+        true
     }
 }

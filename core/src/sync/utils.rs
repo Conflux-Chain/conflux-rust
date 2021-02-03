@@ -215,6 +215,8 @@ pub fn initialize_synchronization_graph_with_data_manager(
             referee_bound: REFEREE_DEFAULT_BOUND,
             get_logs_epoch_batch_size: 32,
             get_logs_filter_max_epoch_range: None,
+            sync_state_starting_epoch: None,
+            sync_state_epoch_gap: None,
         },
         vm.clone(),
         txpool.clone(),
