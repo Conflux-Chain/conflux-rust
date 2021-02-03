@@ -325,6 +325,14 @@ impl DBManager {
         self.remove_from_db(DBTable::Blocks, &block_reward_result_key(hash))
     }
 
+    pub fn remove_block_trace_from_db(&self, hash: &H256) {
+        self.remove_from_db(DBTable::BlockTraces, hash.as_bytes())
+    }
+
+    pub fn remove_transaction_index_from_db(&self, hash: &H256) {
+        self.remove_from_db(DBTable::Transactions, hash.as_bytes())
+    }
+
     pub fn insert_checkpoint_hashes_to_db(
         &self, checkpoint_prev: &H256, checkpoint_cur: &H256,
     ) {

@@ -1383,10 +1383,60 @@ impl BlockDataManager {
     }
 
     fn gc_epoch(&self, epoch_number: u64) {
+        // We must GC tx index before block body, otherwise we may be unable to
+        // get the transactions in this epoch.
+        if let Some(defer_epochs) = self
+            .config
+            .additional_maintained_transaction_index_epoch_count
+        {
+            if epoch_number > defer_epochs as u64 {
+                let epoch_to_remove = epoch_number - defer_epochs as u64;
+                match self.all_epoch_set_hashes_from_db(epoch_to_remove) {
+                    None => warn!(
+                        "GC epoch set is missing! epoch_to_remove: {}",
+                        epoch_to_remove
+                    ),
+                    Some(epoch_set) => {
+                        // Store all packed transactions in a set first to
+                        // deduplicate transactions for database operations.
+                        let mut transaction_set = HashSet::new();
+                        for b in epoch_set {
+                            if let Some(transactions) =
+                                self.db_manager.block_body_from_db(&b)
+                            {
+                                for tx in transactions {
+                                    transaction_set.insert(tx.hash());
+                                }
+                            }
+                        }
+                        for tx in transaction_set {
+                            self.db_manager
+                                .remove_transaction_index_from_db(&tx);
+                        }
+                    }
+                }
+            }
+        };
         self.gc_epoch_with_defer(
             epoch_number,
             self.config.additional_maintained_block_body_epoch_count,
             |h| self.db_manager.remove_block_body_from_db(h),
+        );
+        self.gc_epoch_with_defer(
+            epoch_number,
+            self.config
+                .additional_maintained_execution_result_epoch_count,
+            |h| self.db_manager.remove_block_execution_result_from_db(h),
+        );
+        self.gc_epoch_with_defer(
+            epoch_number,
+            self.config.additional_maintained_reward_epoch_count,
+            |h| self.db_manager.remove_block_reward_result_from_db(h),
+        );
+        self.gc_epoch_with_defer(
+            epoch_number,
+            self.config.additional_maintained_trace_epoch_count,
+            |h| self.db_manager.remove_block_trace_from_db(h),
         );
     }
 
