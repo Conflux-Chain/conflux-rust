@@ -29,8 +29,6 @@ pub trait ConsensusGraphTrait: Send + Sync {
 
     fn expected_difficulty(&self, parent_hash: &H256) -> U256;
 
-    fn retrieve_old_era_blocks(&self) -> Option<H256>;
-
     fn construct_pivot_state(&self);
 
     fn best_info(&self) -> Arc<BestInformation>;

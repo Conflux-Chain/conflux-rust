@@ -192,30 +192,17 @@ impl ConsensusNewBlockHandler {
             inner.terminal_hashes.remove(&inner.arena[me].hash);
         }
         // Now we are ready to cleanup outside blocks in inner data structures
-        {
-            let mut last_old_era_block_set =
-                inner.last_old_era_block_set.lock();
-            let mut old_era_block_set = inner.current_old_era_block_set.lock();
-
-            // We can delete blocks in `current_old_era_block_set` now since the
-            // checkpoint has moved forward, so put them into
-            // `last_old_era_block_set`.
-            for old_era_block_hash in old_era_block_set.drain(..) {
-                last_old_era_block_set.push_back(old_era_block_hash);
-            }
-            inner
-                .pastset_cache
-                .intersect_update(&outside_block_arena_indices);
-            for index in outside_block_arena_indices {
-                let hash = inner.arena[index].hash;
-                old_era_block_set.push_back(hash);
-                inner.hash_to_arena_indices.remove(&hash);
-                inner.terminal_hashes.remove(&hash);
-                inner.arena.remove(index);
-                // remove useless data in BlockDataManager
-                inner.data_man.remove_epoch_execution_commitment(&hash);
-                inner.data_man.remove_epoch_execution_context(&hash);
-            }
+        inner
+            .pastset_cache
+            .intersect_update(&outside_block_arena_indices);
+        for index in outside_block_arena_indices {
+            let hash = inner.arena[index].hash;
+            inner.hash_to_arena_indices.remove(&hash);
+            inner.terminal_hashes.remove(&hash);
+            inner.arena.remove(index);
+            // remove useless data in BlockDataManager
+            inner.data_man.remove_epoch_execution_commitment(&hash);
+            inner.data_man.remove_epoch_execution_context(&hash);
         }
 
         // Now we truncate the timer chain that are outside the genesis.
@@ -315,6 +302,9 @@ impl ConsensusNewBlockHandler {
             &cur_era_hash,
             &stable_era_hash,
         );
+        inner
+            .data_man
+            .new_checkpoint(new_era_height, inner.best_epoch_number());
     }
 
     pub fn compute_anticone_bruteforce(

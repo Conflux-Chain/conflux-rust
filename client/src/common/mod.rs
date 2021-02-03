@@ -274,7 +274,6 @@ pub fn initialize_common_modules(
         pow.clone(),
         sync_config,
         notifications.clone(),
-        node_type,
         machine.clone(),
     ));
 

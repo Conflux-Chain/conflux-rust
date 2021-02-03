@@ -239,6 +239,7 @@ build_config! {
         (block_cache_gc_period_ms, (u64), 5_000)
         (block_db_dir, (String), "./blockchain_data/blockchain_db".to_string())
         (block_db_type, (String), "rocksdb".to_string())
+        (checkpoint_gc_time_in_era_count, (f64), 0.5)
         // The conflux data dir, if unspecified, is the workdir where conflux is started.
         (conflux_data_dir, (String), "./blockchain_data".to_string())
         (ledger_cache_size, (usize), DEFAULT_LEDGER_CACHE_SIZE)
@@ -752,6 +753,11 @@ impl Configuration {
             additional_maintained_transaction_index_epoch_count: self
                 .raw_conf
                 .additional_maintained_transaction_index_epoch_count,
+            checkpoint_gc_time_in_epoch_count: (self
+                .raw_conf
+                .checkpoint_gc_time_in_era_count
+                * self.raw_conf.era_epoch_count as f64)
+                as usize,
         }
     }
 

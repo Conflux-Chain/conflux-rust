@@ -3,26 +3,26 @@ use std::cmp::min;
 
 #[derive(Default, DeriveMallocSizeOf)]
 pub struct GCProgress {
-    pub last_processed: usize,
-    pub gc_end: usize,
-    pub last_consensus_best_epoch: usize,
-    pub expected_end_consensus_best_epoch: usize,
+    pub next_to_process: u64,
+    pub gc_end: u64,
+    pub last_consensus_best_epoch: u64,
+    pub expected_end_consensus_best_epoch: u64,
 }
 
 impl GCProgress {
     /// Return Some((start_epoch, end_epoch)) if there are epochs to GC.
-    pub fn get_gc_range(&self, best_epoch: usize) -> Option<(usize, usize)> {
-        if self.gc_end <= self.last_processed
+    pub fn get_gc_range(&self, best_epoch: u64) -> Option<(u64, u64)> {
+        if self.gc_end <= self.next_to_process
             || best_epoch <= self.last_consensus_best_epoch
         {
             return None;
         }
         let best_epoch =
             min(best_epoch, self.expected_end_consensus_best_epoch);
-        let batch_size = (self.gc_end - self.last_processed)
+        let batch_size = (self.gc_end - self.next_to_process)
             * (best_epoch - self.last_consensus_best_epoch)
             / (self.expected_end_consensus_best_epoch
                 - self.last_consensus_best_epoch);
-        Some((self.last_processed + 1, self.last_processed + batch_size))
+        Some((self.next_to_process, self.next_to_process + batch_size))
     }
 }

@@ -1343,23 +1343,46 @@ impl BlockDataManager {
         }
     }
 
-    pub fn new_checkpoint(&self, new_checkpoint: usize, best_epoch: usize) {
-        let mut gc_progress = self.gc_progress.lock();
-        gc_progress.gc_end = new_checkpoint;
-        gc_progress.last_consensus_best_epoch = best_epoch;
-        gc_progress.expected_end_consensus_best_epoch = best_epoch + self.config
+    pub fn earliest_epoch_with_block_body(&self) -> u64 {
+        match self.config.additional_maintained_block_body_epoch_count {
+            Some(defer) => self.gc_progress.lock().gc_end - defer as u64,
+            None => 0,
+        }
     }
 
-    pub fn database_gc(&self, best_epoch: usize) {
+    pub fn earliest_epoch_with_execution_result(&self) -> u64 {
+        match self
+            .config
+            .additional_maintained_execution_result_epoch_count
+        {
+            Some(defer) => self.gc_progress.lock().gc_end - defer as u64,
+            None => 0,
+        }
+    }
+
+    pub fn new_checkpoint(
+        &self, new_checkpoint_height: u64, best_epoch_number: u64,
+    ) {
+        let mut gc_progress = self.gc_progress.lock();
+        gc_progress.gc_end = new_checkpoint_height;
+        gc_progress.last_consensus_best_epoch = best_epoch_number;
+        gc_progress.expected_end_consensus_best_epoch = best_epoch_number
+            + self.config.checkpoint_gc_time_in_epoch_count as u64;
+    }
+
+    pub fn database_gc(&self, best_epoch: u64) {
         let maybe_range = self.gc_progress.lock().get_gc_range(best_epoch);
         if let Some((start, end)) = maybe_range {
             for epoch_number in start..end {
                 self.gc_epoch(epoch_number);
             }
+            let mut gc_progress = self.gc_progress.lock();
+            gc_progress.last_consensus_best_epoch = best_epoch;
+            gc_progress.next_to_process = end;
         }
     }
 
-    fn gc_epoch(&self, epoch_number: usize) {
+    fn gc_epoch(&self, epoch_number: u64) {
         self.gc_epoch_with_defer(
             epoch_number,
             self.config.additional_maintained_block_body_epoch_count,
@@ -1368,16 +1391,12 @@ impl BlockDataManager {
     }
 
     fn gc_epoch_with_defer<F>(
-        &self, epoch_number: usize, maybe_defer_epochs: Option<usize>,
-        gc_func: F,
-    ) where
-        F: Fn(&H256) -> (),
-    {
+        &self, epoch_number: u64, maybe_defer_epochs: Option<usize>, gc_func: F,
+    ) where F: Fn(&H256) -> () {
         if let Some(defer_epochs) = maybe_defer_epochs {
-            if epoch_number > defer_epochs {
-                let epoch_to_remove = epoch_number - defer_epochs;
-                match self.all_epoch_set_hashes_from_db(epoch_to_remove as u64)
-                {
+            if epoch_number > defer_epochs as u64 {
+                let epoch_to_remove = epoch_number - defer_epochs as u64;
+                match self.all_epoch_set_hashes_from_db(epoch_to_remove) {
                     None => warn!(
                         "GC epoch set is missing! epoch_to_remove: {}",
                         epoch_to_remove
@@ -1408,6 +1427,7 @@ pub struct DataManagerConfiguration {
     pub additional_maintained_reward_epoch_count: Option<usize>,
     pub additional_maintained_trace_epoch_count: Option<usize>,
     pub additional_maintained_transaction_index_epoch_count: Option<usize>,
+    pub checkpoint_gc_time_in_epoch_count: usize,
 }
 
 impl MallocSizeOf for DataManagerConfiguration {
@@ -1429,6 +1449,7 @@ impl DataManagerConfiguration {
             additional_maintained_reward_epoch_count: None,
             additional_maintained_trace_epoch_count: None,
             additional_maintained_transaction_index_epoch_count: None,
+            checkpoint_gc_time_in_epoch_count: 1,
         }
     }
 }
