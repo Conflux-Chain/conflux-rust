@@ -1396,11 +1396,11 @@ impl BlockDataManager {
                         "GC epoch set is missing! epoch_to_remove: {}",
                         epoch_to_remove
                     ),
-                    Some(epoch_set) => {
+                    Some(epoch_blocks) => {
                         // Store all packed transactions in a set first to
                         // deduplicate transactions for database operations.
                         let mut transaction_set = HashSet::new();
-                        for b in epoch_set {
+                        for b in &epoch_blocks {
                             if let Some(transactions) =
                                 self.db_manager.block_body_from_db(&b)
                             {
@@ -1409,9 +1409,29 @@ impl BlockDataManager {
                                 }
                             }
                         }
+                        let epoch_block_set: HashSet<H256> =
+                            epoch_blocks.into_iter().collect();
                         for tx in transaction_set {
-                            self.db_manager
-                                .remove_transaction_index_from_db(&tx);
+                            if self.config.strict_tx_index_gc {
+                                // Check if this tx is actually executed in the
+                                // processed epoch.
+                                if let Some(tx_index) = self
+                                    .db_manager
+                                    .transaction_index_from_db(&tx)
+                                {
+                                    if epoch_block_set
+                                        .contains(&tx_index.block_hash)
+                                    {
+                                        self.db_manager
+                                            .remove_transaction_index_from_db(
+                                                &tx,
+                                            );
+                                    }
+                                }
+                            } else {
+                                self.db_manager
+                                    .remove_transaction_index_from_db(&tx);
+                            }
                         }
                     }
                 }
@@ -1478,6 +1498,7 @@ pub struct DataManagerConfiguration {
     pub additional_maintained_trace_epoch_count: Option<usize>,
     pub additional_maintained_transaction_index_epoch_count: Option<usize>,
     pub checkpoint_gc_time_in_epoch_count: usize,
+    pub strict_tx_index_gc: bool,
 }
 
 impl MallocSizeOf for DataManagerConfiguration {
@@ -1500,6 +1521,7 @@ impl DataManagerConfiguration {
             additional_maintained_trace_epoch_count: None,
             additional_maintained_transaction_index_epoch_count: None,
             checkpoint_gc_time_in_epoch_count: 1,
+            strict_tx_index_gc: true,
         }
     }
 }

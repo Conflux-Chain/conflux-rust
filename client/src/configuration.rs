@@ -253,6 +253,7 @@ build_config! {
         (storage_delta_mpts_node_map_vec_size, (u32), cfx_storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
         (storage_delta_mpts_slab_idle_size, (u32), cfx_storage::defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE)
         (storage_max_open_snapshots, (u16), cfx_storage::defaults::DEFAULT_MAX_OPEN_SNAPSHOTS)
+        (strict_tx_index_gc, (bool), true)
         (sync_state_starting_epoch, (Option<u64>), None)
         (sync_state_epoch_gap, (Option<u64>), None)
         (target_difficulties_cache_size_in_count, (usize), DEFAULT_TARGET_DIFFICULTIES_CACHE_SIZE_IN_COUNT)
@@ -783,6 +784,7 @@ impl Configuration {
                 .checkpoint_gc_time_in_era_count
                 * self.raw_conf.era_epoch_count as f64)
                 as usize,
+            strict_tx_index_gc: self.raw_conf.strict_tx_index_gc,
         };
 
         // By default, we do not keep the block data for additional period,
