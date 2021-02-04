@@ -3548,10 +3548,7 @@ impl ConsensusGraphInner {
             (self.data_man.state_availability_boundary.read().lower_bound
                 - self.cur_era_genesis_height) as usize;
         if start_pivot_index >= self.pivot_chain.len() {
-            // It seems that if this case happens, it is a full node and
-            // stated was synced from peers. So, `state_valid` will be recovered
-            // by `pivot_block_state_valid_map`.
-            // TODO: We may need to go through the whole logic.
+            // TODO: Handle this after refactoring `state_availability_boundary`.
             return;
         }
         let start_epoch_hash =

@@ -189,12 +189,7 @@ pub struct ConsensusGraph {
     /// Make sure that it is only modified when holding inner lock to prevent
     /// any inconsistency
     best_info: RwLock<Arc<BestInformation>>,
-    /// This HashMap stores whether the state in header is correct or not for
-    /// pivot blocks from current era genesis to first trusted blame block
-    /// after current era stable genesis.
-    /// We use `Mutex` here because other thread will only modify it once and
-    /// after that only current thread will operate this map.
-    pub pivot_block_state_valid_map: Mutex<HashMap<H256, bool>>,
+
     /// The epoch id of the remotely synchronized state.
     /// This is always `None` for archive nodes.
     pub synced_epoch_id: Mutex<Option<EpochId>>,
@@ -207,13 +202,10 @@ pub struct ConsensusGraph {
 impl MallocSizeOf for ConsensusGraph {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         let best_info_size = self.best_info.read().size_of(ops);
-        let pivot_block_state_valid_map_size =
-            self.pivot_block_state_valid_map.lock().size_of(ops);
         self.inner.read().size_of(ops)
             + self.txpool.size_of(ops)
             + self.data_man.size_of(ops)
             + best_info_size
-            + pivot_block_state_valid_map_size
     }
 }
 
@@ -268,7 +260,6 @@ impl ConsensusGraph {
             ),
             confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),
-            pivot_block_state_valid_map: Default::default(),
             synced_epoch_id: Default::default(),
             config: conf,
             node_type,
