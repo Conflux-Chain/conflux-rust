@@ -35,7 +35,6 @@ const EPOCH_EXECUTED_BLOCK_SET_SUFFIX_BYTE: u8 = 6;
 const EPOCH_SKIPPED_BLOCK_SET_SUFFIX_BYTE: u8 = 7;
 const BLOCK_REWARD_RESULT_SUFFIX_BYTE: u8 = 8;
 const BLOCK_TERMINAL_KEY: &[u8] = b"block_terminals";
-const HEADER_TERMINAL_KEY: &[u8] = b"header_terminals";
 
 #[derive(Clone, Copy, Hash, Ord, PartialOrd, Eq, PartialEq)]
 enum DBTable {
@@ -380,7 +379,7 @@ impl DBManager {
         )
     }
 
-    pub fn insert_block_terminals_to_db(&self, terminals: &Vec<H256>) {
+    pub fn insert_terminals_to_db(&self, terminals: &Vec<H256>) {
         self.insert_encodable_list(
             DBTable::Misc,
             BLOCK_TERMINAL_KEY,
@@ -388,20 +387,8 @@ impl DBManager {
         );
     }
 
-    pub fn block_terminals_from_db(&self) -> Option<Vec<H256>> {
+    pub fn terminals_from_db(&self) -> Option<Vec<H256>> {
         self.load_decodable_list(DBTable::Misc, BLOCK_TERMINAL_KEY)
-    }
-
-    pub fn insert_header_terminals_to_db(&self, terminals: &Vec<H256>) {
-        self.insert_encodable_list(
-            DBTable::Misc,
-            HEADER_TERMINAL_KEY,
-            terminals,
-        );
-    }
-
-    pub fn header_terminals_from_db(&self) -> Option<Vec<H256>> {
-        self.load_decodable_list(DBTable::Misc, HEADER_TERMINAL_KEY)
     }
 
     pub fn insert_epoch_execution_commitment_to_db(

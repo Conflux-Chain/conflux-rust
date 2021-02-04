@@ -36,9 +36,7 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{Counter, CounterUsize};
 use parking_lot::Mutex;
-use primitives::{
-    Block, BlockHeader, BlockHeaderBuilder, EpochId, SignedTransaction,
-};
+use primitives::{Block, BlockHeader, BlockHeaderBuilder, EpochId};
 use slab::Slab;
 use std::{
     cmp::{max, min},
@@ -476,9 +474,6 @@ pub struct ConsensusGraphInner {
     /// A priority that holds for every non-active partial invalid block, the
     /// timer chain stamp that will become valid
     invalid_block_queue: BinaryHeap<(i128, usize)>,
-    /// This cache is to store all passed block body parameters of non-active
-    /// blocks
-    block_body_caches: HashMap<usize, Option<Vec<Arc<SignedTransaction>>>>,
     /// It maintains the expected difficulty of the next local mined block.
     pub current_difficulty: U256,
     /// The cache to store Anticone information of each node. This could be
@@ -508,6 +503,10 @@ pub struct ConsensusGraphInner {
     /// This is a cache to record history of checking whether a block has timer
     /// block in its anticone.
     has_timer_block_in_anticone_cache: HashSet<usize>,
+
+    /// `true` before we enter `CacheUpSyncBlock`. We need to execute
+    /// transactions and process state if it's `false`.
+    header_only: bool,
 }
 
 impl MallocSizeOf for ConsensusGraphInner {
@@ -523,7 +522,6 @@ impl MallocSizeOf for ConsensusGraphInner {
             + self.weight_tree.size_of(ops)
             + self.adaptive_tree.size_of(ops)
             + self.invalid_block_queue.size_of(ops)
-            + self.block_body_caches.size_of(ops)
             + self.pow_config.size_of(ops)
             + self.data_man.size_of(ops)
             + self.anticone_cache.size_of(ops)
@@ -609,7 +607,6 @@ impl ConsensusGraphInner {
             weight_tree: SizeMinLinkCutTree::new(),
             adaptive_tree: CaterpillarMinLinkCutTree::new(),
             invalid_block_queue: BinaryHeap::new(),
-            block_body_caches: HashMap::new(),
             pow_config,
             pow,
             current_difficulty: initial_difficulty.into(),
@@ -623,6 +620,7 @@ impl ConsensusGraphInner {
             best_terminals_lca_height_cache: Default::default(),
             best_terminals_reorg_height: NULLU64,
             has_timer_block_in_anticone_cache: Default::default(),
+            header_only: true,
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph
@@ -3746,28 +3744,7 @@ impl ConsensusGraphInner {
         self.last_old_era_block_set.lock().pop_front()
     }
 
-    /// Finish block recovery and prepare for normal block processing.
-    ///
-    /// During block recovery, blocks are inserted without block body. If a
-    /// block is still inactive after recovery, its state will not be
-    /// available after `construct_pivot_state`. We need to fill its body
-    /// here so that it will be executed when it's activated.
-    pub fn finish_block_recovery(&mut self) {
-        let data_man = self.data_man.clone();
-        for (_, arena_index) in &self.invalid_block_queue {
-            let block_hash = self.arena[*arena_index].hash;
-            self.block_body_caches.entry(*arena_index).or_insert_with(
-                || data_man
-                    .block_by_hash(&block_hash, true)
-                    .map(|block| block.transactions.clone())
-                    .or_else(|| {
-                        error!("Block {:?} in ConsensusInner is missing from db",
-                               block_hash);
-                        None
-                    })
-            );
-        }
-    }
+    pub fn finish_block_recovery(&mut self) { self.header_only = false; }
 
     pub fn get_pivot_chain_and_weight(
         &self, height_range: Option<(u64, u64)>,

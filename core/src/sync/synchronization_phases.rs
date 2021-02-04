@@ -222,7 +222,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockHeaderFromDbPhase {
         let recovered = self.recovered.clone();
         let graph = self.graph.clone();
         std::thread::spawn(move || {
-            graph.recover_graph_from_db(true /* header_only */);
+            graph.recover_graph_from_db();
             recovered.store(true, AtomicOrdering::SeqCst);
             info!("finish recover header graph from db");
         });
@@ -289,7 +289,6 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
         *sync_handler.latest_epoch_requested.lock() =
             (cur_era_genesis_height, Instant::now());
 
-        sync_handler.request_initial_missed_block(io);
         sync_handler.request_epochs(io);
     }
 }
@@ -528,7 +527,6 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
         *sync_handler.latest_epoch_requested.lock() =
             (cur_era_genesis_height, Instant::now());
 
-        sync_handler.request_initial_missed_block(io);
         sync_handler.request_epochs(io);
     }
 }
