@@ -730,14 +730,19 @@ impl ConsensusNewBlockHandler {
     fn recycle_tx_in_block(
         &self, inner: &ConsensusGraphInner, arena_index: usize,
     ) {
-        let block = inner
-            .data_man
-            .block_by_hash(
-                &inner.arena[arena_index].hash,
-                true, /* update_cache */
-            )
-            .expect("Block should always found in the data manager!");
-        self.txpool.recycle_transactions(block.transactions.clone());
+        if let Some(block) = inner.data_man.block_by_hash(
+            &inner.arena[arena_index].hash,
+            true, /* update_cache */
+        ) {
+            self.txpool.recycle_transactions(block.transactions.clone());
+        } else {
+            // This should only happen for blocks in the anticone of
+            // checkpoints.
+            debug!(
+                "recycle_tx_in_block: block {:?} not in db",
+                inner.arena[arena_index].hash
+            );
+        }
     }
 
     fn should_move_stable_height(
