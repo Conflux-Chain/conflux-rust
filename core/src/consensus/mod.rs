@@ -270,7 +270,7 @@ impl ConsensusGraph {
             config: conf,
             node_type,
         };
-        graph.update_best_info(true /* catch_up */);
+        graph.update_best_info(false /* ready_for_mining */);
         graph
             .txpool
             .notify_new_best_info(graph.best_info.read_recursive().clone())
@@ -1049,21 +1049,21 @@ impl ConsensusGraph {
     /// ConsensusGraph. Because BestInformation is often queried outside. We
     /// store a version of best_info outside the inner to prevent keep
     /// getting inner locks.
-    /// If `catch_up` is `true`, the terminal information will not be needed,
-    /// so we do not compute bounded terminals in this case.
+    /// If `ready_for_mining` is `false`, the terminal information will not be
+    /// needed, so we do not compute bounded terminals in this case.
     fn update_best_info(&self, ready_for_mining: bool) {
         let mut inner = self.inner.write();
         let mut best_info = self.best_info.write();
 
         let bounded_terminal_block_hashes = if ready_for_mining {
+            inner.bounded_terminal_block_hashes(self.config.referee_bound)
+        } else {
             // `bounded_terminal` is only needed for mining and serve syncing.
             // As the computation cost is high, we do not compute it when we are
             // catching up because we cannot mine blocks in
             // catching-up phases. Use `best_block_hash` to
             // represent terminals here to remain consistent.
             vec![inner.best_block_hash()]
-        } else {
-            inner.bounded_terminal_block_hashes(self.config.referee_bound)
         };
         let best_epoch_number = inner.best_epoch_number();
         BEST_EPOCH_NUMBER.update(best_epoch_number as usize);
