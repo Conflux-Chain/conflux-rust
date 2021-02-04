@@ -1696,20 +1696,15 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn expire_block_gc(
-        &self, io: &dyn NetworkContext, timeout: u64,
+        &self, _io: &dyn NetworkContext, timeout: u64,
     ) -> Result<(), Error> {
         if self.in_recover_from_db_phase() {
             // In recover_from_db phase, this will be done at the end of
-            // recovery, and if we allow `resolve_outside_dependencies` here,
-            // it will cause inconsistency.
+            // recovery.
             return Ok(());
         }
-        // TODO This may not be needed now, but we should double check it.
-        let need_to_relay = self
-            .graph
-            .resolve_outside_dependencies(self.insert_header_to_consensus());
         self.graph.remove_expire_blocks(timeout);
-        self.relay_blocks(io, need_to_relay)
+        Ok(())
     }
 
     pub fn is_block_queue_full(&self) -> bool {
