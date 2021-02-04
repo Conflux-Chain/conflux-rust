@@ -557,6 +557,7 @@ impl SynchronizationPhaseTrait for NormalSyncPhase {
     )
     {
         info!("start phase {:?}", self.name());
+        sync_handler.graph.consensus.enter_normal_phase();
         sync_handler.request_missing_terminals(io);
     }
 }

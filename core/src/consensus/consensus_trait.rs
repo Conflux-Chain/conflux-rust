@@ -98,6 +98,8 @@ pub trait ConsensusGraphTrait: Send + Sync {
     fn get_blocks_needing_bodies(&self) -> HashSet<H256>;
 
     fn catch_up_completed(&self, peer_median_epoch: u64) -> bool;
+
+    fn enter_normal_phase(&self);
 }
 
 pub type SharedConsensusGraph =

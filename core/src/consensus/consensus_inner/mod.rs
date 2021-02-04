@@ -3555,7 +3555,8 @@ impl ConsensusGraphInner {
             (self.data_man.state_availability_boundary.read().lower_bound
                 - self.cur_era_genesis_height) as usize;
         if start_pivot_index >= self.pivot_chain.len() {
-            // TODO: Handle this after refactoring `state_availability_boundary`.
+            // TODO: Handle this after refactoring
+            // `state_availability_boundary`.
             return;
         }
         let start_epoch_hash =

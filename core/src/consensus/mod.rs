@@ -66,8 +66,11 @@ use rayon::prelude::*;
 use std::{
     any::Any,
     cmp::min,
-    collections::{HashMap, HashSet},
-    sync::Arc,
+    collections::HashSet,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     thread::sleep,
     time::Duration,
 };
@@ -189,6 +192,8 @@ pub struct ConsensusGraph {
     /// Make sure that it is only modified when holding inner lock to prevent
     /// any inconsistency
     best_info: RwLock<Arc<BestInformation>>,
+    /// Set to `true` when we enter NormalPhase
+    ready_for_mining: AtomicBool,
 
     /// The epoch id of the remotely synchronized state.
     /// This is always `None` for archive nodes.
@@ -260,6 +265,7 @@ impl ConsensusGraph {
             ),
             confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),
+            ready_for_mining: AtomicBool::new(false),
             synced_epoch_id: Default::default(),
             config: conf,
             node_type,
@@ -1045,11 +1051,11 @@ impl ConsensusGraph {
     /// getting inner locks.
     /// If `catch_up` is `true`, the terminal information will not be needed,
     /// so we do not compute bounded terminals in this case.
-    fn update_best_info(&self, catch_up: bool) {
+    fn update_best_info(&self, ready_for_mining: bool) {
         let mut inner = self.inner.write();
         let mut best_info = self.best_info.write();
 
-        let bounded_terminal_block_hashes = if catch_up {
+        let bounded_terminal_block_hashes = if ready_for_mining {
             // `bounded_terminal` is only needed for mining and serve syncing.
             // As the computation cost is high, we do not compute it when we are
             // catching up because we cannot mine blocks in
@@ -1099,8 +1105,9 @@ impl ConsensusGraphTrait for ConsensusGraph {
             hash,
         );
 
-        self.update_best_info(catch_up);
-        if !catch_up {
+        let ready_for_mining = self.ready_for_mining.load(Ordering::Relaxed);
+        self.update_best_info(ready_for_mining);
+        if ready_for_mining {
             self.txpool
                 .notify_new_best_info(self.best_info.read().clone())
                 // FIXME: propogate error.
@@ -1399,5 +1406,9 @@ impl ConsensusGraphTrait for ConsensusGraph {
             }
         }
         true
+    }
+
+    fn enter_normal_phase(&self) {
+        self.ready_for_mining.store(true, Ordering::Relaxed);
     }
 }
