@@ -347,7 +347,7 @@ class ConfluxTestFramework:
                     no_pssh=no_pssh,
                 ))
 
-    def start_node(self, i, extra_args=None, phase_to_wait=("NormalSyncPhase", "CatchUpSyncBlockPhase"), wait_time=30, *args, **kwargs):
+    def start_node(self, i, extra_args=None, phase_to_wait=["NormalSyncPhase"], wait_time=30, *args, **kwargs):
         """Start a bitcoind"""
 
         node = self.nodes[i]
@@ -370,7 +370,7 @@ class ConfluxTestFramework:
             for node in self.nodes:
                 node.wait_for_rpc_connection()
                 node.wait_for_nodeid()
-                node.wait_for_recovery(("NormalSyncPhase", "CatchUpSyncBlockPhase"), 10)
+                node.wait_for_recovery(["NormalSyncPhase"], 10)
         except:
             # If one node failed to start, stop the others
             self.stop_nodes()

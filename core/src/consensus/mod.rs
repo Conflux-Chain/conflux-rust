@@ -1410,5 +1410,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn enter_normal_phase(&self) {
         self.ready_for_mining.store(true, Ordering::Relaxed);
+        self.update_best_info(true)
     }
 }
