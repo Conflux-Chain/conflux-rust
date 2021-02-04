@@ -751,7 +751,7 @@ impl SynchronizationGraphInner {
             self.old_era_blocks_frontier_set.remove(index);
             // This include invalid blocks and blocks not received after a long
             // time.
-            self.missing_body_block_set.remove(&hash);
+            self.block_to_fill_set.remove(&hash);
 
             let parent = self.arena[*index].parent;
             if parent != NULL {
@@ -1697,13 +1697,13 @@ impl SynchronizationGraph {
                         .remove(&inner.arena[*i].block_header.hash());
                 }
                 // Invalid blocks will also be removed from
-                // `missing_body_block_set`
+                // `block_to_fill_set`
                 // in `process_invalid_blocks`.
                 inner.process_invalid_blocks(&invalid_set);
                 return BlockInsertionResult::Invalid;
             } else {
                 debug!("Downloaded block body for {:?}", hash);
-                inner.missing_body_block_set.remove(&hash);
+                inner.block_to_fill_set.remove(&hash);
                 return BlockInsertionResult::AlreadyProcessed;
             }
         }
@@ -1856,19 +1856,16 @@ impl SynchronizationGraph {
             let sorted_blocks = inner.topological_sort(all_block_indices);
             for i in sorted_blocks {
                 self.consensus
-                    .on_new_block(&inner.arena[i].block_header.hash(), false);
+                    .on_new_block(&inner.arena[i].block_header.hash());
             }
-            let new_missing_body_blocks: HashSet<_> =
+            let new_to_fill_blocks: HashSet<_> =
                 self.consensus.get_blocks_needing_bodies();
-            if !new_missing_body_blocks.is_empty() {
+            if !new_to_fill_blocks.is_empty() {
                 // This should not happen if stable checkpoint is not reverted
                 // because we have downloaded all blocks in its
                 // subtree.
-                warn!(
-                    "{} new block bodies to get",
-                    new_missing_body_blocks.len()
-                );
-                inner.missing_body_block_set = new_missing_body_blocks;
+                warn!("{} new block bodies to get", new_to_fill_blocks.len());
+                inner.block_to_fill_set = new_to_fill_blocks;
                 return false;
             }
         }
