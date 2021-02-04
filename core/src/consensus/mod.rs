@@ -1094,7 +1094,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     /// This is the main function that SynchronizationGraph calls to deliver a
     /// new block to the consensus graph.
-    fn on_new_block(&self, hash: &H256, catch_up: bool) {
+    fn on_new_block(&self, hash: &H256) {
         let _timer =
             MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
         self.statistics.inc_consensus_graph_processed_block_count();
