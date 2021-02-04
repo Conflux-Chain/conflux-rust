@@ -264,7 +264,7 @@ impl ConsensusGraph {
             config: conf,
             node_type,
         };
-        graph.update_best_info(true);
+        graph.update_best_info(true /* catch_up */);
         graph
             .txpool
             .notify_new_best_info(graph.best_info.read_recursive().clone())
@@ -1043,6 +1043,8 @@ impl ConsensusGraph {
     /// ConsensusGraph. Because BestInformation is often queried outside. We
     /// store a version of best_info outside the inner to prevent keep
     /// getting inner locks.
+    /// If `catch_up` is `true`, the terminal information will not be needed,
+    /// so we do not compute bounded terminals in this case.
     fn update_best_info(&self, catch_up: bool) {
         let mut inner = self.inner.write();
         let mut best_info = self.best_info.write();

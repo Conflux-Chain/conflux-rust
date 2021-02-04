@@ -1012,7 +1012,7 @@ impl SynchronizationGraph {
                         }
                         consensus.on_new_block(
                             &hash,
-                            true,
+                            false /* catch_up */,
                         );
                         consensus_unprocessed_count.fetch_sub(1, Ordering::SeqCst);
                     }
