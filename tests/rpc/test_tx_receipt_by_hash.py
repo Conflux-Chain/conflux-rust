@@ -9,6 +9,7 @@ from test_framework.blocktools import encode_hex_0x
 from test_framework.util import assert_equal, assert_ne
 
 CONTRACT_PATH = "../contracts/simple_storage.dat"
+NUM_TXS = 10
 
 class TestGetTxReceiptByHash(RpcClient):
     def test_simple_receipt(self):
@@ -71,3 +72,15 @@ class TestGetTxReceiptByHash(RpcClient):
         assert_equal(len(receipt['storageReleased']), 1)
         assert_equal(receipt['storageReleased'][0]['collaterals'], '0x280')
         assert_equal(b32_address_to_hex(receipt['storageReleased'][0]['address']), self.GENESIS_ADDR)
+
+    def test_get_block_receipts(self):
+        parent_hash = self.block_by_epoch("latest_mined")['hash']
+        start_nonce = self.get_nonce(self.GENESIS_ADDR)
+
+        txs = [self.new_tx(receiver=self.rand_addr(), nonce = start_nonce + ii) for ii in range(NUM_TXS)]
+        block_hash = self.generate_custom_block(parent_hash = parent_hash, referee = [], txs = txs)
+        self.generate_blocks(5)
+
+        receipts = self.node.cfx_getBlockReceipts(block_hash)
+        assert_ne(receipts, None)
+        assert_equal(len(receipts), NUM_TXS)
