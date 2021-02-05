@@ -12,7 +12,6 @@ use cfx_types::{
     address_util::AddressUtil, BigEndianHash, H256, H520, U128, U256, U64,
 };
 use cfxcore::{
-    block_data_manager::BlockExecutionResultWithEpoch,
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     state_exposer::STATE_EXPOSER,
@@ -28,9 +27,9 @@ use network::{
 };
 use parking_lot::Mutex;
 use primitives::{
-    filter::Filter, transaction::Action::Call, Account, DepositInfo,
-    SignedTransaction, StorageKey, StorageRoot, StorageValue,
-    TransactionWithSignature, VoteStakeInfo,
+    filter::Filter, transaction::Action::Call, Account, Block, BlockReceipts,
+    DepositInfo, SignedTransaction, StorageKey, StorageRoot, StorageValue,
+    TransactionIndex, TransactionWithSignature, VoteStakeInfo,
 };
 use random_crash::*;
 use rlp::Rlp;
@@ -79,6 +78,13 @@ lazy_static! {
         register_timer_with_group("rpc", "rpc:sendRawTransaction");
     static ref GET_LOGS_TIMER: Arc<dyn Timer> =
         register_timer_with_group("rpc", "rpc:getLogs");
+}
+
+struct BlockExecInfo {
+    epoch_number: u64,
+    block: Arc<Block>,
+    block_receipts: Arc<BlockReceipts>,
+    maybe_state_root: Option<H256>,
 }
 
 pub struct RpcImpl {
@@ -580,85 +586,138 @@ impl RpcImpl {
         Ok(None)
     }
 
-    fn prepare_receipt(&self, hash: H256) -> RpcResult<Option<RpcReceipt>> {
-        // Get a consistent view from ConsensusInner
+    fn get_block_execution_info(
+        &self, block_hash: &H256,
+    ) -> RpcResult<Option<BlockExecInfo>> {
         let consensus_graph = self.consensus_graph();
 
-        let maybe_results =
-            consensus_graph.get_transaction_receipt_and_block_info(&hash);
-        let (
-            BlockExecutionResultWithEpoch(epoch_hash, execution_result),
-            tx_index,
-            maybe_state_root,
-        ) = match maybe_results {
-            None => return Ok(None),
-            Some(result_tuple) => result_tuple,
-        };
+        let (pivot_hash, block_receipts, maybe_state_root) =
+            match consensus_graph.get_block_execution_info(block_hash) {
+                None => return Ok(None),
+                Some((exec_res, maybe_state_root)) => {
+                    (exec_res.0, exec_res.1.block_receipts, maybe_state_root)
+                }
+            };
 
-        let epoch_block_header = self
+        let epoch_number = self
             .consensus
             .get_data_manager()
-            .block_header_by_hash(&epoch_hash)
+            .block_header_by_hash(&pivot_hash)
             // FIXME: server error, client should request another server.
-            .ok_or("Inconsistent state")?;
-        let epoch_number = epoch_block_header.height();
+            .ok_or("Inconsistent state")?
+            .height();
+
         if epoch_number > consensus_graph.best_executed_state_epoch_number() {
             // The receipt is only visible to optimistic execution.
             return Ok(None);
         }
 
-        // Operations below will not involve the status of ConsensusInner
         let block = self
             .consensus
             .get_data_manager()
-            .block_by_hash(&tx_index.block_hash, true)
+            .block_by_hash(&block_hash, false)
             // FIXME: server error, client should request another server.
             .ok_or("Inconsistent state")?;
-        let transaction = block
-            .transactions
-            .get(tx_index.index)
-            // FIXME: server error, client should request another server.
-            .ok_or("Inconsistent state")?
-            .as_ref()
-            .clone();
-        let receipt = execution_result
-            .block_receipts
-            .receipts
-            .get(tx_index.index)
-            // FIXME: server error, client should request another server.
-            .ok_or("Inconsistent state")?
-            .clone();
-        let prior_gas_used = if tx_index.index == 0 {
-            U256::zero()
-        } else {
-            let prior_receipt = execution_result
-                .block_receipts
-                .receipts
-                .get(tx_index.index - 1)
-                // FIXME: server error, client should request another server.
-                .ok_or("Inconsistent state")?
-                .clone();
-            prior_receipt.accumulated_gas_used
+
+        if block_receipts.receipts.len() != block.transactions.len() {
+            bail!("Inconsistent state");
+        }
+
+        Ok(Some(BlockExecInfo {
+            epoch_number,
+            block,
+            block_receipts,
+            maybe_state_root,
+        }))
+    }
+
+    fn construct_rpc_receipt(
+        &self, tx_index: TransactionIndex, exec_info: &BlockExecInfo,
+    ) -> RpcResult<RpcReceipt> {
+        let id = tx_index.index;
+
+        if id >= exec_info.block.transactions.len()
+            || id >= exec_info.block_receipts.receipts.len()
+            || id >= exec_info.block_receipts.tx_execution_error_messages.len()
+        {
+            bail!("Inconsistent state");
+        }
+
+        let prior_gas_used = match id {
+            0 => U256::zero(),
+            id => {
+                exec_info.block_receipts.receipts[id - 1].accumulated_gas_used
+            }
         };
-        let tx_exec_error_msg = &execution_result
-            .block_receipts
-            .tx_execution_error_messages[tx_index.index];
-        let rpc_receipt = RpcReceipt::new(
-            transaction,
-            receipt,
+
+        let tx_exec_error_msg =
+            match &exec_info.block_receipts.tx_execution_error_messages[id] {
+                msg if msg.is_empty() => None,
+                msg => Some(msg.clone()),
+            };
+
+        let receipt = RpcReceipt::new(
+            (*exec_info.block.transactions[id]).clone(),
+            exec_info.block_receipts.receipts[id].clone(),
             tx_index,
             prior_gas_used,
-            Some(epoch_number),
-            execution_result.block_receipts.block_number,
-            maybe_state_root,
-            if tx_exec_error_msg.is_empty() {
-                None
-            } else {
-                Some(tx_exec_error_msg.clone())
-            },
+            Some(exec_info.epoch_number),
+            exec_info.block_receipts.block_number,
+            exec_info.maybe_state_root.clone(),
+            tx_exec_error_msg,
             *self.sync.network.get_network_type(),
         )?;
-        Ok(Some(rpc_receipt))
+
+        Ok(receipt)
+    }
+
+    fn prepare_receipt(&self, tx_hash: H256) -> RpcResult<Option<RpcReceipt>> {
+        // Note: `transaction_index_by_hash` might return outdated results if
+        // there was a pivot chain reorg but the tx was not re-executed yet. In
+        // this case, `block_execution_results_by_hash` will detect that the
+        // execution results do not match the current pivot view and return
+        // None. If the tx was re-executed in another block on the new pivot
+        // chain, `transaction_index_by_hash` will return the updated result.
+        let tx_index = match self
+            .consensus
+            .get_data_manager()
+            .transaction_index_by_hash(&tx_hash, false)
+        {
+            None => return Ok(None),
+            Some(tx_index) => tx_index,
+        };
+
+        let exec_info =
+            match self.get_block_execution_info(&tx_index.block_hash)? {
+                None => return Ok(None),
+                Some(res) => res,
+            };
+
+        let receipt = self.construct_rpc_receipt(tx_index, &exec_info)?;
+        Ok(Some(receipt))
+    }
+
+    fn prepare_block_receipts(
+        &self, block_hash: H256,
+    ) -> RpcResult<Option<Vec<RpcReceipt>>> {
+        let exec_info = match self.get_block_execution_info(&block_hash)? {
+            None => return Ok(None),
+            Some(res) => res,
+        };
+
+        let mut rpc_receipts = vec![];
+
+        for id in 0..exec_info.block.transactions.len() {
+            let tx_index = TransactionIndex {
+                block_hash,
+                index: id,
+            };
+
+            rpc_receipts
+                .push(self.construct_rpc_receipt(tx_index, &exec_info)?);
+        }
+
+        Ok(Some(rpc_receipts))
     }
 
     fn transaction_receipt(
@@ -1208,6 +1267,33 @@ impl RpcImpl {
         *CRASH_EXIT_CODE.lock() = crash_exit_code;
         Ok(())
     }
+
+    fn block_receipts(
+        &self, block_hash: H256,
+    ) -> RpcResult<Option<Vec<RpcReceipt>>> {
+        let block_hash: H256 = block_hash.into();
+        info!("RPC Request: cfx_getBlockReceipts({:?})", block_hash);
+        self.prepare_block_receipts(block_hash)
+    }
+
+    fn epoch_receipts(
+        &self, epoch: EpochNumber,
+    ) -> RpcResult<Option<Vec<Vec<RpcReceipt>>>> {
+        info!("RPC Request: cfx_getEpochReceipts({:?})", epoch);
+
+        let hashes = self.consensus.get_block_hashes_by_epoch(epoch.into())?;
+
+        let mut epoch_receipts = vec![];
+
+        for h in hashes {
+            epoch_receipts.push(match self.prepare_block_receipts(h)? {
+                None => return Ok(None),
+                Some(rs) => rs,
+            });
+        }
+
+        Ok(Some(epoch_receipts))
+    }
 }
 
 #[allow(dead_code)]
@@ -1379,8 +1465,10 @@ impl LocalRpc for LocalRpcImpl {
         }
 
         to self.rpc_impl {
+            fn block_receipts(&self, block_hash: H256) -> JsonRpcResult<Option<Vec<RpcReceipt>>>;
             fn current_sync_phase(&self) -> JsonRpcResult<String>;
             fn consensus_graph_state(&self) -> JsonRpcResult<ConsensusGraphStates>;
+            fn epoch_receipts(&self, epoch: EpochNumber) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
             fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
             fn send_transaction(
                 &self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<H256>;

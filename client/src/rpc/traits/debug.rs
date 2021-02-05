@@ -3,7 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::types::{
-    Bytes as RpcBytes, ConsensusGraphStates, RpcAddress, SyncGraphStates,
+    Bytes as RpcBytes, ConsensusGraphStates, EpochNumber,
+    Receipt as RpcReceipt, RpcAddress, SyncGraphStates,
     Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
 };
 use crate::rpc::types::SendTxRequest;
@@ -113,4 +114,14 @@ pub trait LocalRpc {
     fn sign_transaction(
         &self, tx: SendTxRequest, password: Option<String>,
     ) -> JsonRpcResult<String>;
+
+    #[rpc(name = "cfx_getBlockReceipts")]
+    fn block_receipts(
+        &self, block_hash: H256,
+    ) -> JsonRpcResult<Option<Vec<RpcReceipt>>>;
+
+    #[rpc(name = "cfx_getEpochReceipts")]
+    fn epoch_receipts(
+        &self, epoch: EpochNumber,
+    ) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
 }

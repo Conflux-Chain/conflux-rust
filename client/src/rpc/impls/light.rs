@@ -1149,8 +1149,10 @@ impl LocalRpc for DebugRpcImpl {
     }
 
     not_supported! {
+        fn block_receipts(&self, block_hash: H256) -> JsonRpcResult<Option<Vec<RpcReceipt>>>;
         fn consensus_graph_state(&self) -> JsonRpcResult<ConsensusGraphStates>;
         fn current_sync_phase(&self) -> JsonRpcResult<String>;
+        fn epoch_receipts(&self, epoch: EpochNumber) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
         fn sign_transaction(&self, tx: SendTxRequest, password: Option<String>) -> JsonRpcResult<String>;
         fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
     }
