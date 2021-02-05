@@ -1562,12 +1562,20 @@ impl SynchronizationProtocolHandler {
         {
             let _pm_lock = self.phase_manager_lock.lock();
             self.phase_manager.try_initialize(io, self);
-            let current_phase = self.phase_manager.get_current_phase();
-            let next_phase_type = current_phase.next(io, self);
-            if current_phase.phase_type() != next_phase_type {
-                // Phase changed
-                self.phase_manager
-                    .change_phase_to(next_phase_type, io, self);
+            loop {
+                // Allow multiple phase changes in one round.
+                let current_phase = self.phase_manager.get_current_phase();
+                let next_phase_type = current_phase.next(io, self);
+                if current_phase.phase_type() != next_phase_type {
+                    // Phase changed
+                    self.phase_manager.change_phase_to(
+                        next_phase_type,
+                        io,
+                        self,
+                    );
+                } else {
+                    break;
+                }
             }
         }
 
