@@ -544,10 +544,11 @@ impl SynchronizationPhaseTrait for NormalSyncPhase {
 
     fn next(
         &self, _io: &dyn NetworkContext,
-        _sync_handler: &SynchronizationProtocolHandler,
+        sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
         // FIXME: handle the case where we need to switch back phase
+        sync_handler.graph.consensus.enter_normal_phase();
         self.phase_type()
     }
 
@@ -557,7 +558,6 @@ impl SynchronizationPhaseTrait for NormalSyncPhase {
     )
     {
         info!("start phase {:?}", self.name());
-        sync_handler.graph.consensus.enter_normal_phase();
         sync_handler.request_missing_terminals(io);
     }
 }
