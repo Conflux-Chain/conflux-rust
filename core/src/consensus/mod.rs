@@ -1113,6 +1113,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
                 // FIXME: propogate error.
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
         }
+        debug!("Finish Consensus::on_new_block for {:?}", hash);
     }
 
     /// This function is a wrapper function for the function in the confirmation
