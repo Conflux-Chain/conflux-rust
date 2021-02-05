@@ -694,6 +694,10 @@ impl TransactionPool {
             )
             .ok();
         }
+        debug!(
+            "notify_new_best_info: {:?}",
+            self.consensus_best_info.lock()
+        );
 
         Ok(())
     }
@@ -707,6 +711,10 @@ impl TransactionPool {
         // blocks that are slightly behind the best state.
         // We do not want to stall the consensus thread.
         let consensus_best_info_clone = self.consensus_best_info.lock().clone();
+        debug!(
+            "get_best_info_with_packed_transactions: {:?}",
+            consensus_best_info_clone
+        );
 
         let parent_block_gas_limit = self
             .data_man

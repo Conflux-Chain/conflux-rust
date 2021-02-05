@@ -152,7 +152,7 @@ impl ConsensusGraphStatistics {
     }
 }
 
-#[derive(Default, DeriveMallocSizeOf)]
+#[derive(Default, Debug, DeriveMallocSizeOf)]
 pub struct BestInformation {
     pub chain_id: u32,
     pub best_block_hash: H256,
@@ -1078,6 +1078,7 @@ impl ConsensusGraph {
             current_difficulty: inner.current_difficulty,
             bounded_terminal_block_hashes,
         });
+        debug!("update_best_info to {:?}", best_info);
     }
 }
 
@@ -1105,7 +1106,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
             hash,
         );
 
-        let ready_for_mining = self.ready_for_mining.load(Ordering::Relaxed);
+        let ready_for_mining = self.ready_for_mining.load(Ordering::SeqCst);
         self.update_best_info(ready_for_mining);
         if ready_for_mining {
             self.txpool
@@ -1410,7 +1411,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
     }
 
     fn enter_normal_phase(&self) {
-        self.ready_for_mining.store(true, Ordering::Relaxed);
+        self.ready_for_mining.store(true, Ordering::SeqCst);
         self.update_best_info(true);
         self.txpool
             .notify_new_best_info(self.best_info.read_recursive().clone())

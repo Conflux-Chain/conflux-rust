@@ -748,6 +748,22 @@ impl ConsensusNewBlockHandler {
     fn should_move_stable_height(
         &self, inner: &mut ConsensusGraphInner,
     ) -> u64 {
+        if let Some(sync_state_starting_epoch) =
+            self.conf.sync_state_starting_epoch
+        {
+            if inner.header_only
+                && inner.cur_era_stable_height == sync_state_starting_epoch
+            {
+                // We want to use sync_state_starting_epoch as our stable
+                // checkpoint when we enter
+                // CatchUpCheckpointPhase, so we do not want to move forward our
+                // stable checkpoint. Since we will enter
+                // CatchUpCheckpointPhase the next time we check phase changes,
+                // it's impossible for the delayed checkpoint making to cause
+                // OOM.
+                return inner.cur_era_stable_height;
+            }
+        }
         let new_stable_height =
             inner.cur_era_stable_height + inner.inner_conf.era_epoch_count;
         // We make sure there is an additional era before the best for moving it

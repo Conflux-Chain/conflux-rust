@@ -490,7 +490,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
 
     fn next(
         &self, _io: &dyn NetworkContext,
-        _sync_handler: &SynchronizationProtocolHandler,
+        sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
         // FIXME: use target_height instead.
@@ -510,6 +510,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
             + CATCH_UP_EPOCH_LAG_THRESHOLD
             >= median_epoch
         {
+            sync_handler.graph.consensus.enter_normal_phase();
             return SyncPhaseType::Normal;
         }
 
@@ -544,11 +545,10 @@ impl SynchronizationPhaseTrait for NormalSyncPhase {
 
     fn next(
         &self, _io: &dyn NetworkContext,
-        sync_handler: &SynchronizationProtocolHandler,
+        _sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
         // FIXME: handle the case where we need to switch back phase
-        sync_handler.graph.consensus.enter_normal_phase();
         self.phase_type()
     }
 
