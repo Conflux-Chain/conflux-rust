@@ -497,6 +497,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
         let median_epoch = match self.syn.median_epoch_from_normal_peers() {
             None => {
                 return if self.syn.allow_phase_change_without_peer() {
+                    sync_handler.graph.consensus.enter_normal_phase();
                     SyncPhaseType::Normal
                 } else {
                     self.phase_type()
