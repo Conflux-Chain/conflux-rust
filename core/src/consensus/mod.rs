@@ -1418,6 +1418,8 @@ impl ConsensusGraphTrait for ConsensusGraph {
             .expect("No DB error")
     }
 
+    /// Reset the information in consensus graph with only checkpoint
+    /// information kept.
     fn reset(&self) {
         let old_consensus_inner = &mut *self.inner.write();
 
