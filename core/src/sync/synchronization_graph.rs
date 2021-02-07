@@ -17,7 +17,7 @@ use crate::{
 };
 use cfx_parameters::sync::OLD_ERA_BLOCK_GC_BATCH_SIZE;
 use cfx_types::{H256, U256};
-use dag::{Graph, RichDAG, RichTreeGraph, TreeGraph};
+use dag::{Graph, RichDAG, RichTreeGraph, TreeGraph, DAG};
 use futures::executor::block_on;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -749,6 +749,9 @@ impl SynchronizationGraphInner {
             let hash = self.arena[*index].block_header.hash();
             self.not_ready_blocks_frontier.remove(index);
             self.old_era_blocks_frontier_set.remove(index);
+            // This include invalid blocks and blocks not received after a long
+            // time.
+            self.block_to_fill_set.remove(&hash);
 
             let parent = self.arena[*index].parent;
             if parent != NULL {
@@ -1684,22 +1687,16 @@ impl SynchronizationGraph {
         // If we are locked for catch-up, make sure no new block will enter sync
         // graph.
         if inner.locked_for_catchup {
-            if !inner.block_to_fill_set.remove(&hash) {
-                warn!("Receive unexpected block body, hash={:?}", hash);
-            }
             if inner.arena[me].graph_status == BLOCK_INVALID {
                 let invalid_set = self.propagate_graph_status(inner, vec![me]);
-                for i in &invalid_set {
-                    // We do not need to download the block body of invalid
-                    // blocks.
-                    inner
-                        .block_to_fill_set
-                        .remove(&inner.arena[*i].block_header.hash());
-                }
+                // Invalid blocks will also be removed from
+                // `block_to_fill_set`
+                // in `process_invalid_blocks`.
                 inner.process_invalid_blocks(&invalid_set);
                 return BlockInsertionResult::Invalid;
             } else {
-                // Download the block body in catch up.
+                debug!("Downloaded block body for {:?}", hash);
+                inner.block_to_fill_set.remove(&hash);
                 return BlockInsertionResult::AlreadyProcessed;
             }
         }
@@ -1801,26 +1798,73 @@ impl SynchronizationGraph {
     /// `BLOCK_HEADER_GRAPH_READY` blocks as `BLOCK_GRAPH_READY` and remove all
     /// other blocks. All blocks in the future can be processed normally in
     /// sync graph and consensus graph.
-    pub fn complete_filling_block_bodies(&self) {
-        self.consensus.construct_pivot_state();
-        let mut inner = self.inner.write();
-        inner.locked_for_catchup = false;
-        let to_remove = inner
-            .arena
-            .iter_mut()
-            .filter_map(|(i, graph_node)| {
-                if graph_node.graph_status == BLOCK_HEADER_GRAPH_READY {
-                    graph_node.block_ready = true;
-                    graph_node.graph_status = BLOCK_GRAPH_READY;
-                }
-                if graph_node.graph_status != BLOCK_GRAPH_READY {
-                    Some(i)
-                } else {
-                    None
-                }
-            })
-            .collect();
+    ///
+    /// If some blocks become invalid after validating their bodies, we need to
+    /// remove them and reconstruct the consensus graph. Return `false` if
+    /// there are blocks in the new consensus graph whose bodies are missing.
+    /// Return `true` if we do not need to reconstruct consensus, or all blocks
+    /// in the new consensus graph already have bodies.
+    pub fn complete_filling_block_bodies(&self) -> bool {
+        let mut inner = &mut *self.inner.write();
+
+        // Iterating over `hash_to_arena_indices` might be more efficient than
+        // iterating over `arena`.
+        let to_remove = {
+            let arena = &mut inner.arena;
+            inner
+                .hash_to_arena_indices
+                .iter()
+                .filter_map(|(_, index)| {
+                    let graph_node = &mut arena[*index];
+                    if graph_node.graph_status == BLOCK_HEADER_GRAPH_READY {
+                        graph_node.block_ready = true;
+                        graph_node.graph_status = BLOCK_GRAPH_READY;
+                    }
+                    if graph_node.graph_status != BLOCK_GRAPH_READY {
+                        Some(*index)
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        };
         inner.remove_blocks(&to_remove);
+
+        // Check if we skip some block bodies. It's either because they are
+        // never retrieved after a long time, or they have invalid
+        // bodies.
+        let skipped_body_blocks = self.consensus.get_blocks_needing_bodies();
+        if !skipped_body_blocks.is_empty() {
+            warn!("Has invalid blocks after downloading block bodies!");
+            // Some headers should not enter consensus, so we just reconstruct
+            // the consensus graph with the current sync graph.
+            self.consensus.reset();
+
+            let all_block_indices: HashSet<_> = inner
+                .hash_to_arena_indices
+                .iter()
+                .map(|(_, i)| *i)
+                .collect();
+            // Send blocks in topological order.
+            let sorted_blocks = inner.topological_sort(all_block_indices);
+            for i in sorted_blocks {
+                self.consensus
+                    .on_new_block(&inner.arena[i].block_header.hash());
+            }
+            let new_to_fill_blocks: HashSet<_> =
+                self.consensus.get_blocks_needing_bodies();
+            if !new_to_fill_blocks.is_empty() {
+                // This should not happen if stable checkpoint is not reverted
+                // because we have downloaded all blocks in its
+                // subtree.
+                warn!("{} new block bodies to get", new_to_fill_blocks.len());
+                inner.block_to_fill_set = new_to_fill_blocks;
+                return false;
+            }
+        }
+        inner.locked_for_catchup = false;
+        self.consensus.construct_pivot_state();
+        true
     }
 }
 

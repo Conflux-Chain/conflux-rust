@@ -464,3 +464,9 @@ class RpcClient:
         signature = self.node.getnodeid(list(int_to_bytes(challenge)))
         node_id, _, _ = convert_to_nodeid(signature, challenge)
         return node_id
+
+    def current_sync_phase(self):
+        return self.node.current_sync_phase()
+
+    def get_status(self):
+        return self.node.cfx_getStatus()
