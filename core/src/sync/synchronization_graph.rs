@@ -1689,13 +1689,6 @@ impl SynchronizationGraph {
         if inner.locked_for_catchup {
             if inner.arena[me].graph_status == BLOCK_INVALID {
                 let invalid_set = self.propagate_graph_status(inner, vec![me]);
-                for i in &invalid_set {
-                    // We do not need to download the block body of invalid
-                    // blocks.
-                    inner
-                        .block_to_fill_set
-                        .remove(&inner.arena[*i].block_header.hash());
-                }
                 // Invalid blocks will also be removed from
                 // `block_to_fill_set`
                 // in `process_invalid_blocks`.
