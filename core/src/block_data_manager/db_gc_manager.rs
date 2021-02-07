@@ -1,7 +1,7 @@
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use std::cmp::min;
 
-#[derive(Default, DeriveMallocSizeOf)]
+#[derive(Default, DeriveMallocSizeOf, Debug)]
 pub struct GCProgress {
     pub next_to_process: u64,
     pub gc_end: u64,

@@ -1754,6 +1754,9 @@ impl ConsensusNewBlockHandler {
             // so we can safely ignore it in the consensus besides
             // update its sequence number in the data manager.
             if me == NULL {
+                // Block body in the anticone of a checkpoint is not needed.
+                self.data_man
+                    .remove_block_body(hash, true /* remove_db */);
                 return;
             }
             me

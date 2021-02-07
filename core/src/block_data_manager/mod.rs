@@ -1376,6 +1376,7 @@ impl BlockDataManager {
 
     pub fn database_gc(&self, best_epoch: u64) {
         let maybe_range = self.gc_progress.lock().get_gc_range(best_epoch);
+        debug!("Start database GC, range={:?}", maybe_range);
         if let Some((start, end)) = maybe_range {
             for epoch_number in start..end {
                 self.gc_epoch(epoch_number);
@@ -1384,6 +1385,7 @@ impl BlockDataManager {
             gc_progress.last_consensus_best_epoch = best_epoch;
             gc_progress.next_to_process = end;
             self.db_manager.insert_gc_progress_to_db(end);
+            debug!("Database GC progress: {:?}", gc_progress);
         }
     }
 
