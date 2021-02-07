@@ -23,7 +23,7 @@ pub trait ConsensusGraphTrait: Send + Sync {
 
     fn get_config(&self) -> &Self::ConsensusConfig;
 
-    fn on_new_block(&self, hash: &H256, update_best_info: bool);
+    fn on_new_block(&self, hash: &H256);
 
     fn update_total_weight_delta_heartbeat(&self) {}
 
@@ -87,8 +87,6 @@ pub trait ConsensusGraphTrait: Send + Sync {
 
     fn set_initial_sequence_number(&self, initial_sn: u64);
 
-    fn update_best_info(&self);
-
     fn get_state_by_epoch_number(
         &self, epoch_number: EpochNumber,
     ) -> RpcResult<State>;
@@ -100,6 +98,8 @@ pub trait ConsensusGraphTrait: Send + Sync {
     fn get_blocks_needing_bodies(&self) -> HashSet<H256>;
 
     fn catch_up_completed(&self, peer_median_epoch: u64) -> bool;
+
+    fn enter_normal_phase(&self);
 }
 
 pub type SharedConsensusGraph =
