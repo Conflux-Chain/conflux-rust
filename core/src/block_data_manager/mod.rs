@@ -190,6 +190,8 @@ impl BlockDataManager {
                 pow.clone(),
             ),
         };
+        let previous_db_progress =
+            db_manager.gc_progress_from_db().unwrap_or(0);
 
         let data_man = Self {
             block_headers: RwLock::new(HashMap::new()),
@@ -222,7 +224,9 @@ impl BlockDataManager {
             state_availability_boundary: RwLock::new(
                 StateAvailabilityBoundary::new(true_genesis.hash(), 0),
             ),
-            gc_progress: Default::default(),
+            gc_progress: Arc::new(Mutex::new(GCProgress::new(
+                previous_db_progress,
+            ))),
         };
 
         data_man.initialize_instance_id();
@@ -1379,6 +1383,7 @@ impl BlockDataManager {
             let mut gc_progress = self.gc_progress.lock();
             gc_progress.last_consensus_best_epoch = best_epoch;
             gc_progress.next_to_process = end;
+            self.db_manager.insert_gc_progress_to_db(end);
         }
     }
 
