@@ -232,6 +232,7 @@ build_config! {
 
         // Storage Section.
         (additional_maintained_snapshot_count, (u32), 1)
+        // `None` for `additional_maintained*` means the data is never garbage collected.
         (additional_maintained_block_body_epoch_count, (Option<usize>), None)
         (additional_maintained_execution_result_epoch_count, (Option<usize>), None)
         (additional_maintained_reward_epoch_count, (Option<usize>), None)
