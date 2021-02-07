@@ -678,14 +678,13 @@ impl RpcImpl {
         // execution results do not match the current pivot view and return
         // None. If the tx was re-executed in another block on the new pivot
         // chain, `transaction_index_by_hash` will return the updated result.
-        let tx_index = match self
-            .consensus
-            .get_data_manager()
-            .transaction_index_by_hash(&tx_hash, false)
-        {
-            None => return Ok(None),
-            Some(tx_index) => tx_index,
-        };
+        let tx_index =
+            match self.consensus.get_data_manager().transaction_index_by_hash(
+                &tx_hash, false, /* update_cache */
+            ) {
+                None => return Ok(None),
+                Some(tx_index) => tx_index,
+            };
 
         let exec_info =
             match self.get_block_execution_info(&tx_index.block_hash)? {
