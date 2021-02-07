@@ -1447,13 +1447,13 @@ impl BlockDataManager {
         self.gc_epoch_with_defer(
             epoch_number,
             self.config.additional_maintained_block_body_epoch_count,
-            |h| self.db_manager.remove_block_body_from_db(h),
+            |h| self.remove_block_body(h, true /* remove_db */),
         );
         self.gc_epoch_with_defer(
             epoch_number,
             self.config
                 .additional_maintained_execution_result_epoch_count,
-            |h| self.db_manager.remove_block_execution_result_from_db(h),
+            |h| self.remove_block_result(h, true /* remove_db */),
         );
         self.gc_epoch_with_defer(
             epoch_number,
