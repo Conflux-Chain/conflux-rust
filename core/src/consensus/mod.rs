@@ -66,8 +66,11 @@ use rayon::prelude::*;
 use std::{
     any::Any,
     cmp::min,
-    collections::{HashMap, HashSet},
-    sync::Arc,
+    collections::HashSet,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     thread::sleep,
     time::Duration,
 };
@@ -149,7 +152,7 @@ impl ConsensusGraphStatistics {
     }
 }
 
-#[derive(Default, DeriveMallocSizeOf)]
+#[derive(Default, Debug, DeriveMallocSizeOf)]
 pub struct BestInformation {
     pub chain_id: u32,
     pub best_block_hash: H256,
@@ -189,12 +192,9 @@ pub struct ConsensusGraph {
     /// Make sure that it is only modified when holding inner lock to prevent
     /// any inconsistency
     best_info: RwLock<Arc<BestInformation>>,
-    /// This HashMap stores whether the state in header is correct or not for
-    /// pivot blocks from current era genesis to first trusted blame block
-    /// after current era stable genesis.
-    /// We use `Mutex` here because other thread will only modify it once and
-    /// after that only current thread will operate this map.
-    pub pivot_block_state_valid_map: Mutex<HashMap<H256, bool>>,
+    /// Set to `true` when we enter NormalPhase
+    ready_for_mining: AtomicBool,
+
     /// The epoch id of the remotely synchronized state.
     /// This is always `None` for archive nodes.
     pub synced_epoch_id: Mutex<Option<EpochId>>,
@@ -207,13 +207,10 @@ pub struct ConsensusGraph {
 impl MallocSizeOf for ConsensusGraph {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         let best_info_size = self.best_info.read().size_of(ops);
-        let pivot_block_state_valid_map_size =
-            self.pivot_block_state_valid_map.lock().size_of(ops);
         self.inner.read().size_of(ops)
             + self.txpool.size_of(ops)
             + self.data_man.size_of(ops)
             + best_info_size
-            + pivot_block_state_valid_map_size
     }
 }
 
@@ -268,12 +265,12 @@ impl ConsensusGraph {
             ),
             confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),
-            pivot_block_state_valid_map: Default::default(),
+            ready_for_mining: AtomicBool::new(false),
             synced_epoch_id: Default::default(),
             config: conf,
             node_type,
         };
-        graph.update_best_info();
+        graph.update_best_info(false /* ready_for_mining */);
         graph
             .txpool
             .notify_new_best_info(graph.best_info.read_recursive().clone())
@@ -1031,6 +1028,42 @@ impl ConsensusGraph {
 
         Ok(StateDb::new(state))
     }
+
+    /// This function is called after a new block appended to the
+    /// ConsensusGraph. Because BestInformation is often queried outside. We
+    /// store a version of best_info outside the inner to prevent keep
+    /// getting inner locks.
+    /// If `ready_for_mining` is `false`, the terminal information will not be
+    /// needed, so we do not compute bounded terminals in this case.
+    fn update_best_info(&self, ready_for_mining: bool) {
+        let mut inner = self.inner.write();
+        let mut best_info = self.best_info.write();
+
+        let bounded_terminal_block_hashes = if ready_for_mining {
+            inner.bounded_terminal_block_hashes(self.config.referee_bound)
+        } else {
+            // `bounded_terminal` is only needed for mining and serve syncing.
+            // As the computation cost is high, we do not compute it when we are
+            // catching up because we cannot mine blocks in
+            // catching-up phases. Use `best_block_hash` to
+            // represent terminals here to remain consistent.
+            vec![inner.best_block_hash()]
+        };
+        let best_epoch_number = inner.best_epoch_number();
+        BEST_EPOCH_NUMBER.update(best_epoch_number as usize);
+        *best_info = Arc::new(BestInformation {
+            chain_id: self
+                .config
+                .chain_id
+                .read()
+                .get_chain_id(best_epoch_number),
+            best_block_hash: inner.best_block_hash(),
+            best_epoch_number,
+            current_difficulty: inner.current_difficulty,
+            bounded_terminal_block_hashes,
+        });
+        debug!("update_best_info to {:?}", best_info);
+    }
 }
 
 impl Drop for ConsensusGraph {
@@ -1046,7 +1079,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     /// This is the main function that SynchronizationGraph calls to deliver a
     /// new block to the consensus graph.
-    fn on_new_block(&self, hash: &H256, update_best_info: bool) {
+    fn on_new_block(&self, hash: &H256) {
         let _timer =
             MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
         self.statistics.inc_consensus_graph_processed_block_count();
@@ -1057,14 +1090,15 @@ impl ConsensusGraphTrait for ConsensusGraph {
             hash,
         );
 
-        // Skip updating best info during recovery
-        if update_best_info {
-            self.update_best_info();
+        let ready_for_mining = self.ready_for_mining.load(Ordering::SeqCst);
+        self.update_best_info(ready_for_mining);
+        if ready_for_mining {
             self.txpool
                 .notify_new_best_info(self.best_info.read().clone())
                 // FIXME: propogate error.
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
         }
+        debug!("Finish Consensus::on_new_block for {:?}", hash);
     }
 
     /// This function is a wrapper function for the function in the confirmation
@@ -1250,43 +1284,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
         self.inner.write().set_initial_sequence_number(initial_sn);
     }
 
-    /// This function is called after a new block appended to the
-    /// ConsensusGraph. Because BestInformation is often queried outside. We
-    /// store a version of best_info outside the inner to prevent keep
-    /// getting inner locks.
-    fn update_best_info(&self) {
-        let mut inner = self.inner.write();
-        let mut best_info = self.best_info.write();
-
-        let terminal_hashes = inner.terminal_hashes();
-        let best_block_hash = inner.best_block_hash();
-        let best_block_arena_index =
-            *inner.hash_to_arena_indices.get(&best_block_hash).unwrap();
-        let bounded_terminal_block_hashes =
-            if terminal_hashes.len() > self.config.referee_bound {
-                inner.best_terminals(
-                    best_block_arena_index,
-                    self.config.referee_bound,
-                )
-            } else {
-                terminal_hashes
-            };
-
-        let best_epoch_number = inner.best_epoch_number();
-        BEST_EPOCH_NUMBER.update(best_epoch_number as usize);
-        *best_info = Arc::new(BestInformation {
-            chain_id: self
-                .config
-                .chain_id
-                .read()
-                .get_chain_id(best_epoch_number),
-            best_block_hash: inner.best_block_hash(),
-            best_epoch_number,
-            current_difficulty: inner.current_difficulty,
-            bounded_terminal_block_hashes,
-        });
-    }
-
     fn get_state_by_epoch_number(
         &self, epoch_number: EpochNumber,
     ) -> RpcResult<State> {
@@ -1395,5 +1392,13 @@ impl ConsensusGraphTrait for ConsensusGraph {
             }
         }
         true
+    }
+
+    fn enter_normal_phase(&self) {
+        self.ready_for_mining.store(true, Ordering::SeqCst);
+        self.update_best_info(true);
+        self.txpool
+            .notify_new_best_info(self.best_info.read_recursive().clone())
+            .expect("No DB error")
     }
 }
