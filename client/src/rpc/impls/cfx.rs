@@ -80,11 +80,13 @@ lazy_static! {
         register_timer_with_group("rpc", "rpc:getLogs");
 }
 
+#[derive(Debug)]
 struct BlockExecInfo {
     block_receipts: Arc<BlockReceipts>,
     block: Arc<Block>,
     epoch_number: u64,
     maybe_state_root: Option<H256>,
+    pivot_hash: H256,
 }
 
 pub struct RpcImpl {
@@ -628,6 +630,7 @@ impl RpcImpl {
             block,
             epoch_number,
             maybe_state_root,
+            pivot_hash,
         }))
     }
 
@@ -697,12 +700,17 @@ impl RpcImpl {
     }
 
     fn prepare_block_receipts(
-        &self, block_hash: H256,
+        &self, block_hash: H256, maybe_pivot_hash: Option<H256>,
     ) -> RpcResult<Option<Vec<RpcReceipt>>> {
         let exec_info = match self.get_block_execution_info(&block_hash)? {
             None => return Ok(None),
             Some(res) => res,
         };
+
+        // pivot chain reorg
+        if matches!(maybe_pivot_hash, Some(h) if h != exec_info.pivot_hash) {
+            return Ok(None);
+        }
 
         let mut rpc_receipts = vec![];
 
@@ -1268,7 +1276,7 @@ impl RpcImpl {
         &self, block_hash: H256,
     ) -> RpcResult<Option<Vec<RpcReceipt>>> {
         info!("RPC Request: cfx_getBlockReceipts({:?})", block_hash);
-        self.prepare_block_receipts(block_hash.into())
+        self.prepare_block_receipts(block_hash.into(), None)
     }
 
     fn epoch_receipts(
@@ -1276,19 +1284,21 @@ impl RpcImpl {
     ) -> RpcResult<Option<Vec<Vec<RpcReceipt>>>> {
         info!("RPC Request: cfx_getEpochReceipts({:?})", epoch);
 
-        // keep read lock on ConsensusInner to ensure consistency
-        // FIXME: this seem very error prone, we can easily introduce deadlocks
-        // if we do not make sure subsequent calls are all `read_recursive`
-        let _read_guard = self.consensus_graph().inner.read();
-
         let hashes = self.consensus.get_block_hashes_by_epoch(epoch.into())?;
+        let pivot_hash = *hashes.last().ok_or("Inconsistent state")?;
+
         let mut epoch_receipts = vec![];
 
         for h in hashes {
-            epoch_receipts.push(match self.prepare_block_receipts(h)? {
-                None => return Ok(None),
-                Some(rs) => rs,
-            });
+            epoch_receipts.push(
+                match self.prepare_block_receipts(h, Some(pivot_hash))? {
+                    // if the block is not executed yet, or there was a chain
+                    // reorg during processing that might cause inconsistency,
+                    // we return `null` and expect the client to retry
+                    None => return Ok(None),
+                    Some(rs) => rs,
+                },
+            );
         }
 
         Ok(Some(epoch_receipts))
