@@ -81,9 +81,9 @@ lazy_static! {
 }
 
 struct BlockExecInfo {
-    epoch_number: u64,
-    block: Arc<Block>,
     block_receipts: Arc<BlockReceipts>,
+    block: Arc<Block>,
+    epoch_number: u64,
     maybe_state_root: Option<H256>,
 }
 
@@ -615,7 +615,7 @@ impl RpcImpl {
         let block = self
             .consensus
             .get_data_manager()
-            .block_by_hash(&block_hash, false)
+            .block_by_hash(&block_hash, false /* update_cache */)
             // FIXME: server error, client should request another server.
             .ok_or("Inconsistent state")?;
 
@@ -624,9 +624,9 @@ impl RpcImpl {
         }
 
         Ok(Some(BlockExecInfo {
-            epoch_number,
-            block,
             block_receipts,
+            block,
+            epoch_number,
             maybe_state_root,
         }))
     }
@@ -707,14 +707,11 @@ impl RpcImpl {
 
         let mut rpc_receipts = vec![];
 
-        for id in 0..exec_info.block.transactions.len() {
-            let tx_index = TransactionIndex {
-                block_hash,
-                index: id,
-            };
-
-            rpc_receipts
-                .push(self.construct_rpc_receipt(tx_index, &exec_info)?);
+        for index in 0..exec_info.block.transactions.len() {
+            rpc_receipts.push(self.construct_rpc_receipt(
+                TransactionIndex { block_hash, index },
+                &exec_info,
+            )?);
         }
 
         Ok(Some(rpc_receipts))
@@ -1271,9 +1268,8 @@ impl RpcImpl {
     fn block_receipts(
         &self, block_hash: H256,
     ) -> RpcResult<Option<Vec<RpcReceipt>>> {
-        let block_hash: H256 = block_hash.into();
         info!("RPC Request: cfx_getBlockReceipts({:?})", block_hash);
-        self.prepare_block_receipts(block_hash)
+        self.prepare_block_receipts(block_hash.into())
     }
 
     fn epoch_receipts(
@@ -1281,8 +1277,12 @@ impl RpcImpl {
     ) -> RpcResult<Option<Vec<Vec<RpcReceipt>>>> {
         info!("RPC Request: cfx_getEpochReceipts({:?})", epoch);
 
-        let hashes = self.consensus.get_block_hashes_by_epoch(epoch.into())?;
+        // keep read lock on ConsensusInner to ensure consistency
+        // FIXME: this seem very error prone, we can easily introduce deadlocks
+        // if we do not make sure subsequent calls are all `read_recursive`
+        let _read_guard = self.consensus_graph().inner.read();
 
+        let hashes = self.consensus.get_block_hashes_by_epoch(epoch.into())?;
         let mut epoch_receipts = vec![];
 
         for h in hashes {

@@ -84,3 +84,43 @@ class TestGetTxReceiptByHash(RpcClient):
         receipts = self.node.cfx_getBlockReceipts(block_hash)
         assert_ne(receipts, None)
         assert_equal(len(receipts), NUM_TXS)
+
+    def test_get_epoch_receipts(self):
+        parent_hash = self.block_by_epoch("latest_mined")['hash']
+        start_nonce = self.get_nonce(self.GENESIS_ADDR)
+
+        # generate epoch of 2 block with transactions in each block
+        # NOTE: we need `C` to ensure that the top fork is heavier
+
+        #                      ---        ---        ---
+        #                  .- | A | <--- | C | <--- | D | <--- ...
+        #           ---    |   ---        ---        ---
+        # ... <--- | P | <-*                          .
+        #           ---    |   ---                    .
+        #                  .- | B | <..................
+        #                      ---
+
+        txs = [self.new_tx(receiver=self.rand_addr(), nonce = start_nonce + ii) for ii in range(NUM_TXS)]
+        txs1 = txs[:NUM_TXS//2]
+        txs2 = txs[NUM_TXS//2:]
+
+        block_a = self.generate_custom_block(parent_hash = parent_hash, referee = [], txs = [])
+        block_b = self.generate_custom_block(parent_hash = parent_hash, referee = [], txs = txs1)
+        block_c = self.generate_custom_block(parent_hash = block_a, referee = [], txs = [])
+        block_d = self.generate_custom_block(parent_hash = block_c, referee = [block_b], txs = txs2)
+
+        # make sure transactions have been executed
+        parent_hash = block_d
+
+        for _ in range(5):
+            block = self.generate_custom_block(parent_hash = parent_hash, referee = [], txs = [])
+            parent_hash = block
+
+        # retrieve epoch receipts
+        epoch = self.block_by_hash(block_d)['height']
+        receipts = self.node.cfx_getEpochReceipts(epoch)
+
+        assert_ne(receipts, None)
+        assert_equal(len(receipts), 2)
+        assert_equal(len(receipts[0]), NUM_TXS//2)
+        assert_equal(len(receipts[1]), NUM_TXS//2)

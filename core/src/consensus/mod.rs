@@ -538,7 +538,7 @@ impl ConsensusGraph {
     ) -> Option<(BlockExecutionResultWithEpoch, Option<H256>)> {
         let results_with_epoch = self
             .inner
-            .read()
+            .read_recursive()
             .block_execution_results_by_hash(block_hash, true)?;
 
         let pivot_hash = results_with_epoch.0;
