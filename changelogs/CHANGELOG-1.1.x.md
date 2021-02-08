@@ -1,5 +1,9 @@
 # 1.1.2
 
+## Improvements
+
+- Add next fields `latestCheckpoint`, `latestConfirmed`, and `latestState` in `cfx_getStatus`.
+
 # 1.1.1
 
 ## Incompatible Changes
