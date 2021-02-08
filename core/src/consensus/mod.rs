@@ -530,34 +530,17 @@ impl ConsensusGraph {
         min(state_upper_bound, deferred_state_height)
     }
 
-    pub fn get_transaction_receipt_and_block_info(
-        &self, tx_hash: &H256,
-    ) -> Option<(
-        BlockExecutionResultWithEpoch,
-        TransactionIndex,
-        Option<H256>,
-    )> {
-        // Note: `transaction_index_by_hash` might return outdated results if
-        // there was a pivot chain reorg but the tx was not re-executed yet. In
-        // this case, `block_execution_results_by_hash` will detect that the
-        // execution results do not match the current pivot view and return
-        // None. If the tx was re-executed in another block on the new pivot
-        // chain, `transaction_index_by_hash` will return the updated result.
-        let (results_with_epoch, address) = {
-            let inner = self.inner.read();
-            let address = self.data_man.transaction_index_by_hash(
-                tx_hash, false, /* update_cache */
-            )?;
-            (
-                inner.block_execution_results_by_hash(
-                    &address.block_hash,
-                    true,
-                )?,
-                address,
-            )
-        };
-        let epoch_hash = results_with_epoch.0;
-        let maybe_state_root = match self.executor.wait_for_result(epoch_hash) {
+    pub fn get_block_execution_info(
+        &self, block_hash: &H256,
+    ) -> Option<(BlockExecutionResultWithEpoch, Option<H256>)> {
+        let results_with_epoch = self
+            .inner
+            .read_recursive()
+            .block_execution_results_by_hash(block_hash, true)?;
+
+        let pivot_hash = results_with_epoch.0;
+
+        let maybe_state_root = match self.executor.wait_for_result(pivot_hash) {
             Ok(execution_commitment) => {
                 // We already has transaction address with epoch_hash executed,
                 // so we can always get the state_root with
@@ -574,7 +557,8 @@ impl ConsensusGraph {
                 None
             }
         };
-        Some((results_with_epoch, address, maybe_state_root))
+
+        Some((results_with_epoch, maybe_state_root))
     }
 
     pub fn next_nonce(
