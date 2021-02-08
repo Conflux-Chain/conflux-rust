@@ -2,7 +2,7 @@
 
 ## Improvements
 
-- Add next fields `latestCheckpoint`, `latestConfirmed`, and `latestState` in `cfx_getStatus`.
+- Add new fields `latestCheckpoint`, `latestConfirmed`, and `latestState` in `cfx_getStatus`.
 
 # 1.1.1
 
