@@ -34,13 +34,15 @@ impl GCProgress {
         }
     }
 
-    /// Compute the GC range to make sure the GC progress is proportional to the
-    /// consensus progress.
+    /// Compute the GC base range to make sure the GC progress is proportional
+    /// to the consensus progress.
+    /// The actual GC range for each kind of data is the returned base range
+    /// minus the corresponding `additional_maintained*` offset.
     ///
     /// Return `Some((start_epoch, end_epoch))` and the range `[start_epoch,
     /// end_epoch)` will be GCed. Return `None` if there is no work to be
     /// done.
-    pub fn get_gc_range(&self, best_epoch: u64) -> Option<(u64, u64)> {
+    pub fn get_gc_base_range(&self, best_epoch: u64) -> Option<(u64, u64)> {
         if self.gc_end <= self.next_to_process
             || best_epoch <= self.last_consensus_best_epoch
         {

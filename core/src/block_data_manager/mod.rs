@@ -1375,11 +1375,11 @@ impl BlockDataManager {
     }
 
     pub fn database_gc(&self, best_epoch: u64) {
-        let maybe_range = self.gc_progress.lock().get_gc_range(best_epoch);
+        let maybe_range = self.gc_progress.lock().get_gc_base_range(best_epoch);
         debug!("Start database GC, range={:?}", maybe_range);
         if let Some((start, end)) = maybe_range {
-            for epoch_number in start..end {
-                self.gc_epoch(epoch_number);
+            for base_epoch in start..end {
+                self.gc_base_epoch(base_epoch);
             }
             let mut gc_progress = self.gc_progress.lock();
             gc_progress.last_consensus_best_epoch = best_epoch;
@@ -1389,15 +1389,18 @@ impl BlockDataManager {
         }
     }
 
-    fn gc_epoch(&self, epoch_number: u64) {
+    /// Garbage collect different types of data in the corresponding epoch based
+    /// on `base_epoch` and the `additional_maintained*` parameters of these
+    /// data types.
+    fn gc_base_epoch(&self, base_epoch: u64) {
         // We must GC tx index before block body, otherwise we may be unable to
         // get the transactions in this epoch.
         if let Some(defer_epochs) = self
             .config
             .additional_maintained_transaction_index_epoch_count
         {
-            if epoch_number > defer_epochs as u64 {
-                let epoch_to_remove = epoch_number - defer_epochs as u64;
+            if base_epoch > defer_epochs as u64 {
+                let epoch_to_remove = base_epoch - defer_epochs as u64;
                 match self.all_epoch_set_hashes_from_db(epoch_to_remove) {
                     None => warn!(
                         "GC epoch set is missing! epoch_to_remove: {}",
@@ -1445,23 +1448,23 @@ impl BlockDataManager {
             }
         };
         self.gc_epoch_with_defer(
-            epoch_number,
+            base_epoch,
             self.config.additional_maintained_block_body_epoch_count,
             |h| self.remove_block_body(h, true /* remove_db */),
         );
         self.gc_epoch_with_defer(
-            epoch_number,
+            base_epoch,
             self.config
                 .additional_maintained_execution_result_epoch_count,
             |h| self.remove_block_result(h, true /* remove_db */),
         );
         self.gc_epoch_with_defer(
-            epoch_number,
+            base_epoch,
             self.config.additional_maintained_reward_epoch_count,
             |h| self.db_manager.remove_block_reward_result_from_db(h),
         );
         self.gc_epoch_with_defer(
-            epoch_number,
+            base_epoch,
             self.config.additional_maintained_trace_epoch_count,
             |h| self.db_manager.remove_block_trace_from_db(h),
         );
