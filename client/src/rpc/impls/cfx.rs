@@ -1272,13 +1272,6 @@ impl RpcImpl {
         Ok(())
     }
 
-    fn block_receipts(
-        &self, block_hash: H256,
-    ) -> RpcResult<Option<Vec<RpcReceipt>>> {
-        info!("RPC Request: cfx_getBlockReceipts({:?})", block_hash);
-        self.prepare_block_receipts(block_hash.into(), None)
-    }
-
     fn epoch_receipts(
         &self, epoch: EpochNumber,
     ) -> RpcResult<Option<Vec<Vec<RpcReceipt>>>> {
@@ -1474,7 +1467,6 @@ impl LocalRpc for LocalRpcImpl {
         }
 
         to self.rpc_impl {
-            fn block_receipts(&self, block_hash: H256) -> JsonRpcResult<Option<Vec<RpcReceipt>>>;
             fn current_sync_phase(&self) -> JsonRpcResult<String>;
             fn consensus_graph_state(&self) -> JsonRpcResult<ConsensusGraphStates>;
             fn epoch_receipts(&self, epoch: EpochNumber) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;

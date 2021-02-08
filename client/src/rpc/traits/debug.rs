@@ -115,11 +115,6 @@ pub trait LocalRpc {
         &self, tx: SendTxRequest, password: Option<String>,
     ) -> JsonRpcResult<String>;
 
-    #[rpc(name = "cfx_getBlockReceipts")]
-    fn block_receipts(
-        &self, block_hash: H256,
-    ) -> JsonRpcResult<Option<Vec<RpcReceipt>>>;
-
     #[rpc(name = "cfx_getEpochReceipts")]
     fn epoch_receipts(
         &self, epoch: EpochNumber,
