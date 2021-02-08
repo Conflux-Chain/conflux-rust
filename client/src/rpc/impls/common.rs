@@ -528,23 +528,41 @@ impl RpcImpl {
     }
 
     pub fn get_status(&self) -> RpcResult<RpcStatus> {
+        let consensus_graph = self.consensus_graph();
+
         let best_info = self.consensus.best_info();
         let best_hash = best_info.best_block_hash;
         let epoch_number = best_info.best_epoch_number;
+        let tx_count = self.tx_pool.total_unpacked();
+
         let block_number = self
             .consensus
             .get_block_number(&best_hash)?
             .ok_or("block_number is missing for best_hash")?
             // The returned block_number of `best_hash` does not include `best_hash` itself.
             + 1;
-        let tx_count = self.tx_pool.total_unpacked();
+
+        let latest_checkpoint = consensus_graph
+            .get_height_from_epoch_number(EpochNumber::LatestCheckpoint.into())?
+            .into();
+
+        let latest_confirmed = consensus_graph
+            .get_height_from_epoch_number(EpochNumber::LatestConfirmed.into())?
+            .into();
+
+        let latest_state = consensus_graph
+            .get_height_from_epoch_number(EpochNumber::LatestState.into())?
+            .into();
 
         Ok(RpcStatus {
             best_hash: H256::from(best_hash),
-            chain_id: best_info.chain_id.into(),
-            network_id: self.network.network_id().into(),
-            epoch_number: epoch_number.into(),
             block_number: block_number.into(),
+            chain_id: best_info.chain_id.into(),
+            epoch_number: epoch_number.into(),
+            latest_checkpoint,
+            latest_confirmed,
+            latest_state,
+            network_id: self.network.network_id().into(),
             pending_tx_number: tx_count.into(),
         })
     }

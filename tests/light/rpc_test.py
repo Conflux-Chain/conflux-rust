@@ -237,6 +237,11 @@ class LightRPCTest(ConfluxTestFramework):
         self.log.info(f"Checking cfx_getStatus...")
         full = self.nodes[FULLNODE0].cfx_getStatus()
         light = self.nodes[LIGHTNODE].cfx_getStatus()
+
+        # `latestState` is not available on light nodes
+        del full['latestState']
+        del light['latestState']
+
         assert_equal(light, full)
         self.log.info(f"Pass -- cfx_getStatus")
 
@@ -553,6 +558,8 @@ class LightRPCTest(ConfluxTestFramework):
         assert_raises_rpc_error(-32000, None, self.nodes[LIGHTNODE].cfx_call, {}, "latest_checkpoint")
         assert_raises_rpc_error(-32000, None, self.nodes[LIGHTNODE].cfx_estimateGasAndCollateral, {}, "latest_checkpoint")
         assert_raises_rpc_error(-32000, None, self.nodes[LIGHTNODE].cfx_getBlockRewardInfo, "latest_checkpoint")
+        assert_raises_rpc_error(-32000, None, self.nodes[LIGHTNODE].cfx_getEpochReceipts, "latest_checkpoint")
+        assert_raises_rpc_error(-32000, None, self.nodes[LIGHTNODE].cfx_getSupplyInfo, "latest_checkpoint")
 
         self.log.info(f"Pass -- not supported APIs")
 
