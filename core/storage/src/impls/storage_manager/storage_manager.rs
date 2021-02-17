@@ -90,7 +90,7 @@ impl PersistedSnapshotInfoMap {
 // FIXME: correctly order code blocks.
 pub struct StorageManager {
     delta_db_manager: Arc<DeltaDbManager>,
-    delta_mpt_open_db_lru: Arc<OpenDeltaDbLru>,
+    delta_mpt_open_db_lru: Arc<OpenDeltaDbLru<DeltaDbManager>>,
     snapshot_manager: Box<
         dyn SnapshotManagerTrait<
                 SnapshotDb = SnapshotDb,
@@ -456,16 +456,6 @@ impl StorageManager {
         };
         // DeltaMpt already exists
         if maybe_snapshot_entry.as_ref().unwrap().1.is_some() {
-            storage_manager.delta_mpt_open_db_lru.create(
-                &snapshot_epoch_id,
-                maybe_snapshot_entry
-                    .as_ref()
-                    .unwrap()
-                    .1
-                    .as_ref()
-                    .unwrap()
-                    .get_mpt_id(),
-            )?;
             return Ok(maybe_snapshot_entry
                 .unwrap()
                 .1
@@ -473,11 +463,19 @@ impl StorageManager {
                 .unwrap()
                 .clone());
         } else {
+            let mpt_id = storage_manager.delta_mpts_id_gen.lock().allocate()?;
+            let db_result = storage_manager
+                .delta_mpt_open_db_lru
+                .create(&snapshot_epoch_id, mpt_id);
+            if db_result.is_err() {
+                storage_manager.delta_mpts_id_gen.lock().free(mpt_id);
+                db_result?;
+            }
             let arc_delta_mpt = Arc::new(DeltaMpt::new(
                 storage_manager.delta_mpt_open_db_lru.clone(),
                 snapshot_epoch_id.clone(),
                 storage_manager.clone(),
-                &mut *storage_manager.delta_mpts_id_gen.lock(),
+                mpt_id,
                 storage_manager.delta_mpts_node_memory_manager.clone(),
             )?);
 
@@ -1345,14 +1343,20 @@ impl StorageManager {
             .scan_persist_state(snapshot_info_map.get_map())?;
 
         let mut delta_mpts = HashMap::new();
-        for (snapshot_epoch_id, _delta_db) in delta_dbs {
+        for (snapshot_epoch_id, delta_db) in delta_dbs {
+            let mpt_id = self.delta_mpts_id_gen.lock().allocate()?;
+            self.delta_mpt_open_db_lru.import(
+                &snapshot_epoch_id,
+                mpt_id,
+                delta_db,
+            )?;
             delta_mpts.insert(
                 snapshot_epoch_id.clone(),
                 Arc::new(DeltaMpt::new(
                     self.delta_mpt_open_db_lru.clone(),
                     snapshot_epoch_id.clone(),
                     unsafe { shared_from_this(self) },
-                    &mut *self.delta_mpts_id_gen.lock(),
+                    mpt_id,
                     self.delta_mpts_node_memory_manager.clone(),
                 )?),
             );

@@ -25,7 +25,9 @@ mod tests;
 pub use self::{
     cow_node_ref::CowNodeRef,
     delta_mpt_iterator::DeltaMptIterator,
-    delta_mpt_open_db_manager::{ArcDeltaDbWrapper, OpenDeltaDbLru},
+    delta_mpt_open_db_manager::{
+        ArcDeltaDbWrapper, OpenDeltaDbLru, OpenableOnDemandOpenDeltaDbTrait,
+    },
     mem_optimized_trie_node::MemOptimizedTrieNode,
     node_memory_manager::{TrieNodeDeltaMpt, TrieNodeDeltaMptCell},
     node_ref::*,
@@ -73,7 +75,7 @@ pub struct MultiVersionMerklePatriciaTrie {
     node_memory_manager: Arc<DeltaMptsNodeMemoryManager>,
     /// Underlying database for DeltaMpt.
     // Opened databases are managed by a LRU cache for reducing memory use.
-    db_manager: Arc<OpenDeltaDbLru>,
+    db_manager: Arc<dyn OpenableOnDemandOpenDeltaDbTrait>,
     /// Take care of database clean-ups for DeltaMpt.
     // The variable is used in drop. Variable with non-trivial dtor shouldn't
     // trigger the compiler warning.
@@ -101,17 +103,14 @@ impl MallocSizeOf for MultiVersionMerklePatriciaTrie {
 
 impl MultiVersionMerklePatriciaTrie {
     pub fn new(
-        db_manager: Arc<OpenDeltaDbLru>, snapshot_epoch_id: EpochId,
-        storage_manager: Arc<StorageManager>,
-        delta_mpt_id_gen: &mut DeltaMptIdGen,
+        db_manager: Arc<dyn OpenableOnDemandOpenDeltaDbTrait>,
+        snapshot_epoch_id: EpochId, storage_manager: Arc<StorageManager>,
+        mpt_id: DeltaMptId,
         node_memory_manager: Arc<DeltaMptsNodeMemoryManager>,
     ) -> Result<Self>
     {
-        let mpt_id = delta_mpt_id_gen.allocate()?;
         let row_number = Self::parse_row_number(
-            db_manager
-                .create(&snapshot_epoch_id, mpt_id)?
-                .get("last_row_number".as_bytes()),
+            db_manager.open(mpt_id)?.get("last_row_number".as_bytes()),
         )
         // unwrap() on new is fine.
         .unwrap()
@@ -144,10 +143,7 @@ impl MultiVersionMerklePatriciaTrie {
     ) -> Result<AtomicCommitTransaction<Box<DeltaDbTransactionTraitObj>>> {
         Ok(AtomicCommitTransaction {
             info: self.commit_lock.lock(),
-            transaction: self
-                .db_manager
-                .open(self.mpt_id)?
-                .start_transaction_dyn(true)?,
+            transaction: self.get_arc_db()?.start_transaction_dyn(true)?,
         })
     }
 
@@ -175,7 +171,7 @@ impl MultiVersionMerklePatriciaTrie {
             //
             // FIXME: think about operations in state_manager and state, which
             // FIXME: deserve a dedicated db connection. (Of course read-only)
-            self.db_manager.open(self.mpt_id)?.get(
+            self.get_arc_db()?.get(
                 ["db_key_for_root_".as_bytes(), merkle_root.as_ref()]
                     .concat()
                     .as_slice(),
@@ -196,7 +192,7 @@ impl MultiVersionMerklePatriciaTrie {
             //
             // FIXME: think about operations in state_manager and state, which
             // FIXME: deserve a dedicated db connection. (Of course read-only)
-            self.db_manager.open(self.mpt_id)?.get(
+            self.get_arc_db()?.get(
                 ["db_key_for_epoch_id_".as_bytes(), epoch_id.as_ref()]
                     .concat()
                     .as_slice(),
@@ -225,7 +221,7 @@ impl MultiVersionMerklePatriciaTrie {
             //
             // FIXME: think about operations in state_manager and state, which
             // FIXME: deserve a dedicated db connection. (Of course read-only)
-            self.db_manager.open(self.mpt_id)?.get(
+            self.get_arc_db()?.get(
                 ["parent_epoch_id_".as_bytes(), epoch_id.as_ref()]
                     .concat()
                     .as_slice(),
@@ -332,6 +328,7 @@ impl MultiVersionMerklePatriciaTrie {
         match maybe_node {
             Some(node) => Ok(Some({
                 let arc_db = self.get_arc_db()?;
+                // To avoid compile error
                 let merkle = self
                     .node_memory_manager
                     .node_as_ref_with_cache_manager(
