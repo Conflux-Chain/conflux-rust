@@ -34,6 +34,7 @@ use cfxcore::{
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
     transaction_pool::TxPoolConfig,
+    NodeType,
 };
 use lazy_static::*;
 use metrics::MetricsConfiguration;
@@ -231,9 +232,16 @@ build_config! {
 
         // Storage Section.
         (additional_maintained_snapshot_count, (u32), 1)
+        // `None` for `additional_maintained*` means the data is never garbage collected.
+        (additional_maintained_block_body_epoch_count, (Option<usize>), None)
+        (additional_maintained_execution_result_epoch_count, (Option<usize>), None)
+        (additional_maintained_reward_epoch_count, (Option<usize>), None)
+        (additional_maintained_trace_epoch_count, (Option<usize>), None)
+        (additional_maintained_transaction_index_epoch_count, (Option<usize>), None)
         (block_cache_gc_period_ms, (u64), 5_000)
         (block_db_dir, (String), "./blockchain_data/blockchain_db".to_string())
         (block_db_type, (String), "rocksdb".to_string())
+        (checkpoint_gc_time_in_era_count, (f64), 0.5)
         // The conflux data dir, if unspecified, is the workdir where conflux is started.
         (conflux_data_dir, (String), "./blockchain_data".to_string())
         (ledger_cache_size, (usize), DEFAULT_LEDGER_CACHE_SIZE)
@@ -246,6 +254,9 @@ build_config! {
         (storage_delta_mpts_node_map_vec_size, (u32), cfx_storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
         (storage_delta_mpts_slab_idle_size, (u32), cfx_storage::defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE)
         (storage_max_open_snapshots, (u16), cfx_storage::defaults::DEFAULT_MAX_OPEN_SNAPSHOTS)
+        (strict_tx_index_gc, (bool), true)
+        (sync_state_starting_epoch, (Option<u64>), None)
+        (sync_state_epoch_gap, (Option<u64>), None)
         (target_difficulties_cache_size_in_count, (usize), DEFAULT_TARGET_DIFFICULTIES_CACHE_SIZE_IN_COUNT)
 
         // General/Unclassified section.
@@ -304,6 +315,7 @@ build_config! {
             (Vec<ProvideExtraSnapshotSyncConfig>),
             vec![ProvideExtraSnapshotSyncConfig::StableCheckpoint],
             ProvideExtraSnapshotSyncConfig::parse_config_list)
+        (node_type, (Option<NodeType>), None, NodeType::from_str)
     }
 }
 
@@ -335,6 +347,13 @@ impl Configuration {
                 config.raw_conf.jsonrpc_http_port = Some(12537);
             }
         };
+        if matches.is_present("archive") {
+            config.raw_conf.node_type = Some(NodeType::Archive);
+        } else if matches.is_present("full") {
+            config.raw_conf.node_type = Some(NodeType::Full);
+        } else if matches.is_present("light") {
+            config.raw_conf.node_type = Some(NodeType::Light);
+        }
 
         Ok(config)
     }
@@ -472,7 +491,7 @@ impl Configuration {
         } else {
             self.raw_conf.enable_optimistic_execution
         };
-        ConsensusConfig {
+        let mut conf = ConsensusConfig {
             chain_id: self.chain_id_params(),
             inner_conf: ConsensusInnerConfig {
                 adaptive_weight_beta: self.raw_conf.adaptive_weight_beta,
@@ -513,9 +532,23 @@ impl Configuration {
             referee_bound: self.raw_conf.referee_bound,
             get_logs_epoch_batch_size: self.raw_conf.get_logs_epoch_batch_size,
             get_logs_filter_max_epoch_range: self.raw_conf.get_logs_filter_max_epoch_range,
-            sync_state_starting_epoch: None,
-            sync_state_epoch_gap: None,
+            sync_state_starting_epoch: self.raw_conf.sync_state_starting_epoch,
+            sync_state_epoch_gap: self.raw_conf.sync_state_epoch_gap,
+        };
+        match self.raw_conf.node_type {
+            Some(NodeType::Archive) => {
+                if conf.sync_state_starting_epoch.is_none() {
+                    conf.sync_state_starting_epoch = Some(0);
+                }
+            }
+            _ => {
+                if conf.sync_state_epoch_gap.is_none() {
+                    conf.sync_state_epoch_gap =
+                        Some(CATCH_UP_EPOCH_LAG_THRESHOLD);
+                }
+            }
         }
+        conf
     }
 
     pub fn pow_config(&self) -> ProofOfWorkConfig {
@@ -722,17 +755,73 @@ impl Configuration {
     }
 
     pub fn data_mananger_config(&self) -> DataManagerConfiguration {
-        DataManagerConfiguration::new(
-            self.raw_conf.persist_tx_index,
-            Duration::from_millis(
+        let mut conf = DataManagerConfiguration {
+            persist_tx_index: self.raw_conf.persist_tx_index,
+            tx_cache_index_maintain_timeout: Duration::from_millis(
                 self.raw_conf.tx_cache_index_maintain_timeout_ms,
             ),
-            match self.raw_conf.block_db_type.as_str() {
+            db_type: match self.raw_conf.block_db_type.as_str() {
                 "rocksdb" => DbType::Rocksdb,
                 "sqlite" => DbType::Sqlite,
                 _ => panic!("Invalid block_db_type parameter!"),
             },
-        )
+            additional_maintained_block_body_epoch_count: self
+                .raw_conf
+                .additional_maintained_block_body_epoch_count,
+            additional_maintained_execution_result_epoch_count: self
+                .raw_conf
+                .additional_maintained_execution_result_epoch_count,
+            additional_maintained_reward_epoch_count: self
+                .raw_conf
+                .additional_maintained_reward_epoch_count,
+            additional_maintained_trace_epoch_count: self
+                .raw_conf
+                .additional_maintained_trace_epoch_count,
+            additional_maintained_transaction_index_epoch_count: self
+                .raw_conf
+                .additional_maintained_transaction_index_epoch_count,
+            checkpoint_gc_time_in_epoch_count: (self
+                .raw_conf
+                .checkpoint_gc_time_in_era_count
+                * self.raw_conf.era_epoch_count as f64)
+                as usize,
+            strict_tx_index_gc: self.raw_conf.strict_tx_index_gc,
+        };
+
+        // By default, we do not keep the block data for additional period,
+        // but `node_type = "archive"` is a shortcut for keeping all them.
+        if !matches!(self.raw_conf.node_type, Some(NodeType::Archive)) {
+            if conf.additional_maintained_block_body_epoch_count.is_none() {
+                conf.additional_maintained_block_body_epoch_count = Some(0);
+            }
+            if conf
+                .additional_maintained_execution_result_epoch_count
+                .is_none()
+            {
+                conf.additional_maintained_execution_result_epoch_count =
+                    Some(0);
+            }
+            if conf
+                .additional_maintained_transaction_index_epoch_count
+                .is_none()
+            {
+                conf.additional_maintained_transaction_index_epoch_count =
+                    Some(0);
+            }
+            if conf.additional_maintained_reward_epoch_count.is_none() {
+                conf.additional_maintained_reward_epoch_count = Some(0);
+            }
+            if conf.additional_maintained_trace_epoch_count.is_none() {
+                conf.additional_maintained_trace_epoch_count = Some(0);
+            }
+        }
+        if conf
+            .additional_maintained_transaction_index_epoch_count
+            .is_some()
+        {
+            conf.persist_tx_index = true;
+        }
+        conf
     }
 
     pub fn sync_graph_config(&self) -> SyncGraphConfig {
@@ -900,6 +989,10 @@ impl Configuration {
             params.alt_bn128_transition = 0;
         }
         params
+    }
+
+    pub fn node_type(&self) -> NodeType {
+        self.raw_conf.node_type.unwrap_or(NodeType::Full)
     }
 }
 

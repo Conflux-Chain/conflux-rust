@@ -689,11 +689,12 @@ impl State {
                 );
                 let allocator =
                     self.delta_trie.get_node_memory_manager().get_allocator();
+                let arc_db = self.delta_trie.get_arc_db()?;
                 let merkle = cow_root.get_or_compute_merkle(
                     &self.delta_trie,
                     self.owned_node_set.as_mut().unwrap(),
                     &allocator,
-                    &mut *self.delta_trie.db_owned_read()?,
+                    &mut *arc_db.to_owned_read()?,
                     &mut self.children_merkle_map,
                     0,
                 )?;
@@ -830,9 +831,12 @@ impl State {
             self.parent_epoch_id.as_ref().to_hex::<String>().as_bytes(),
         )?;
 
-        commit_transaction
-            .transaction
-            .commit(self.delta_trie.db_commit())?;
+        {
+            let arc_db = self.delta_trie.get_arc_db()?;
+            commit_transaction
+                .transaction
+                .commit(arc_db.db_ref().as_any())?;
+        }
 
         self.delta_trie.state_root_committed(
             epoch_id,

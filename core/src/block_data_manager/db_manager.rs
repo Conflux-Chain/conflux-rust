@@ -35,6 +35,7 @@ const EPOCH_EXECUTED_BLOCK_SET_SUFFIX_BYTE: u8 = 6;
 const EPOCH_SKIPPED_BLOCK_SET_SUFFIX_BYTE: u8 = 7;
 const BLOCK_REWARD_RESULT_SUFFIX_BYTE: u8 = 8;
 const BLOCK_TERMINAL_KEY: &[u8] = b"block_terminals";
+const GC_PROGRESS_KEY: &[u8] = b"gc_progress";
 
 #[derive(Clone, Copy, Hash, Ord, PartialOrd, Eq, PartialEq)]
 enum DBTable {
@@ -325,6 +326,14 @@ impl DBManager {
         self.remove_from_db(DBTable::Blocks, &block_reward_result_key(hash))
     }
 
+    pub fn remove_block_trace_from_db(&self, hash: &H256) {
+        self.remove_from_db(DBTable::BlockTraces, hash.as_bytes())
+    }
+
+    pub fn remove_transaction_index_from_db(&self, hash: &H256) {
+        self.remove_from_db(DBTable::Transactions, hash.as_bytes())
+    }
+
     pub fn insert_checkpoint_hashes_to_db(
         &self, checkpoint_prev: &H256, checkpoint_cur: &H256,
     ) {
@@ -446,6 +455,18 @@ impl DBManager {
 
     pub fn remove_epoch_execution_context_from_db(&self, hash: &H256) {
         self.remove_from_db(DBTable::Blocks, &epoch_execution_context_key(hash))
+    }
+
+    pub fn insert_gc_progress_to_db(&self, next_to_process: u64) {
+        self.insert_encodable_val(
+            DBTable::Misc,
+            GC_PROGRESS_KEY,
+            &next_to_process,
+        );
+    }
+
+    pub fn gc_progress_from_db(&self) -> Option<u64> {
+        self.load_decodable_val(DBTable::Misc, GC_PROGRESS_KEY)
     }
 
     /// The functions below are private utils used by the DBManager to access

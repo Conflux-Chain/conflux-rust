@@ -92,7 +92,7 @@ class InvalidBodySyncTest(ConfluxTestFramework):
         conn0.wait_for_status()
         connect_nodes(self.nodes, 0, 1)
 
-        self.nodes[0].wait_for_phase(["NormalSyncPhase"])
+        self.nodes[0].wait_for_phase(["NormalSyncPhase"], wait_time=120)
         wait_until(lambda: int(self.nodes[0].cfx_getStatus()["epochNumber"], 0) == CHAIN_LEN)
 
 

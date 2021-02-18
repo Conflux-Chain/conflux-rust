@@ -65,7 +65,7 @@ use primitives::{
 use rayon::prelude::*;
 use std::{
     any::Any,
-    cmp::min,
+    cmp::{max, min},
     collections::HashSet,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -199,9 +199,6 @@ pub struct ConsensusGraph {
     /// This is always `None` for archive nodes.
     pub synced_epoch_id: Mutex<Option<EpochId>>,
     pub config: ConsensusConfig,
-
-    /// The type of this node: Archive, Full, or Light.
-    node_type: NodeType,
 }
 
 impl MallocSizeOf for ConsensusGraph {
@@ -268,7 +265,6 @@ impl ConsensusGraph {
             ready_for_mining: AtomicBool::new(false),
             synced_epoch_id: Default::default(),
             config: conf,
-            node_type,
         };
         graph.update_best_info(false /* ready_for_mining */);
         graph
@@ -580,11 +576,11 @@ impl ConsensusGraph {
         Ok(state.nonce(&address)?)
     }
 
-    fn earliest_epoch_available(&self) -> u64 {
-        match self.node_type {
-            NodeType::Archive => 0,
-            _ => self.latest_checkpoint_epoch_number(),
-        }
+    fn earliest_epoch_for_log_filter(&self) -> u64 {
+        max(
+            self.data_man.earliest_epoch_with_block_body(),
+            self.data_man.earliest_epoch_with_execution_result(),
+        )
     }
 
     fn filter_block_receipts<'a>(
@@ -647,7 +643,7 @@ impl ConsensusGraph {
         }
 
         // check if epoch is still available
-        let min = self.earliest_epoch_available();
+        let min = self.earliest_epoch_for_log_filter();
 
         if epoch < min {
             return Err(FilterError::EpochAlreadyPruned { epoch, min });
@@ -796,10 +792,10 @@ impl ConsensusGraph {
             });
         }
 
-        if from_epoch < self.earliest_epoch_available() {
+        if from_epoch < self.earliest_epoch_for_log_filter() {
             return Err(FilterError::EpochAlreadyPruned {
                 epoch: from_epoch,
-                min: self.earliest_epoch_available(),
+                min: self.earliest_epoch_for_log_filter(),
             });
         }
 
@@ -1107,12 +1103,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
     fn update_total_weight_delta_heartbeat(&self) {
         self.confirmation_meter
             .update_total_weight_delta_heartbeat();
-    }
-
-    /// This function returns the set of blocks that are two eras farther from
-    /// current era. They can be safely garbage collected.
-    fn retrieve_old_era_blocks(&self) -> Option<H256> {
-        self.inner.read().pop_old_era_block_set()
     }
 
     /// construct_pivot_state() rebuild pivot chain state info from db
