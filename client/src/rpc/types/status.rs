@@ -20,4 +20,10 @@ pub struct Status {
     pub block_number: U64,
     /// The number of pending transactions
     pub pending_tx_number: U64,
+    /// The latest checkpoint epoch.
+    pub latest_checkpoint: U64,
+    /// The latest confirmed epoch.
+    pub latest_confirmed: U64,
+    /// The latest executed epoch.
+    pub latest_state: U64,
 }
