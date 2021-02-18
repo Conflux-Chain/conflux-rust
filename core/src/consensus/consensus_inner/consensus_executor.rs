@@ -547,9 +547,10 @@ impl ConsensusExecutor {
             let inner = inner_lock.read();
             let parent_opt = inner.hash_to_arena_indices.get(parent_block_hash);
             if parent_opt.is_none() {
-                return Err(
-                    "Too old parent to prepare for generation".to_owned()
-                );
+                return Err(format!(
+                    "Too old parent for generation, parent_hash={:?}",
+                    parent_block_hash
+                ));
             }
             (
                 *parent_opt.unwrap(),

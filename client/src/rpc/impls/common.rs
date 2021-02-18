@@ -527,11 +527,16 @@ impl RpcImpl {
         }
     }
 
-    pub fn get_status(&self) -> JsonRpcResult<RpcStatus> {
+    pub fn get_status(&self) -> RpcResult<RpcStatus> {
         let best_info = self.consensus.best_info();
         let best_hash = best_info.best_block_hash;
         let epoch_number = best_info.best_epoch_number;
-        let block_number = self.consensus.block_count();
+        let block_number = self
+            .consensus
+            .get_block_number(&best_hash)?
+            .ok_or("block_number is missing for best_hash")?
+            // The returned block_number of `best_hash` does not include `best_hash` itself.
+            + 1;
         let tx_count = self.tx_pool.total_unpacked();
 
         Ok(RpcStatus {

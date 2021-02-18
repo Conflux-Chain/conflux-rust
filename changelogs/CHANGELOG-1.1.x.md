@@ -1,3 +1,9 @@
+# 1.1.2
+
+## Improvements
+- Add parameters to independently configure the garbage collection time of different kinds of data (like receipts, 
+  transaction, block traces, e.t.c.).
+
 # 1.1.1
 
 ## Incompatible Changes
@@ -10,6 +16,7 @@
 - Support CIP-37 address format in `mining_author` configuration.
 - Include `networkId` in `cfx_getStatus` response.
 - Include `address` in `RpcAccount`.
+- New RPC `cfx_getSupplyinfo` to get the total CFX supply and the circulating CFX supply.
 
 # 1.1.0
 

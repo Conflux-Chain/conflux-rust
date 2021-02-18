@@ -72,7 +72,7 @@ impl PubSubClient {
         // loop asynchronously
         let handler_clone = handler.clone();
 
-        let fut = receiver.for_each(move |(hash, _)| {
+        let fut = receiver.for_each(move |hash| {
             handler_clone.notify_header(&hash);
         });
 

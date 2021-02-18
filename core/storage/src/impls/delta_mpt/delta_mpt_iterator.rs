@@ -15,7 +15,8 @@ impl DeltaMptIterator {
         match &self.maybe_root_node {
             None => {}
             Some(root_node) => {
-                let db = &mut *self.mpt.db_owned_read()?;
+                let arc_db = self.mpt.get_arc_db()?;
+                let db = &mut *arc_db.to_owned_read()?;
                 let owned_node_set = Default::default();
                 let mut cow_root_node = CowNodeRef::new(
                     root_node.clone(),
