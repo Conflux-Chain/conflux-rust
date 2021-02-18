@@ -1,5 +1,9 @@
 # 1.1.2
 
+## Improvements
+- Add parameters to independently configure the garbage collection time of different kinds of data (like receipts, 
+  transaction, block traces, e.t.c.).
+
 # 1.1.1
 
 ## Incompatible Changes

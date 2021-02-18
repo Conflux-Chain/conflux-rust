@@ -13,9 +13,8 @@ use crate::{
     statistics::SharedStatistics,
     sync::synchronization_protocol_handler::FutureBlockContainer,
     verification::*,
-    ConsensusGraph, NodeType, Notifications,
+    ConsensusGraph, Notifications,
 };
-use cfx_parameters::sync::OLD_ERA_BLOCK_GC_BATCH_SIZE;
 use cfx_types::{H256, U256};
 use dag::{Graph, RichDAG, RichTreeGraph, TreeGraph, DAG};
 use futures::executor::block_on;
@@ -865,8 +864,6 @@ pub struct SynchronizationGraph {
     /// They will be inserted into sync graph inner at their timestamp.
     pub future_blocks: FutureBlockContainer,
 
-    /// whether it is a archive node or full node
-    node_type: NodeType,
     machine: Arc<Machine>,
 }
 
@@ -897,8 +894,7 @@ impl SynchronizationGraph {
         consensus: SharedConsensusGraph,
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
         pow: Arc<PowComputer>, sync_config: SyncGraphConfig,
-        notifications: Arc<Notifications>, node_type: NodeType,
-        machine: Arc<Machine>,
+        notifications: Arc<Notifications>, machine: Arc<Machine>,
     ) -> Self
     {
         let data_man = consensus.get_data_manager().clone();
@@ -934,7 +930,6 @@ impl SynchronizationGraph {
             statistics: consensus.get_statistics().clone(),
             consensus_unprocessed_count: consensus_unprocessed_count.clone(),
             new_block_hashes: notifications.new_block_hashes.clone(),
-            node_type,
             machine,
         };
 
@@ -1054,25 +1049,6 @@ impl SynchronizationGraph {
         self.consensus
             .get_tx_pool()
             .set_to_be_propagated_transactions(transactions);
-    }
-
-    pub fn try_remove_old_era_blocks_from_disk(&self) {
-        let mut num_of_blocks_to_remove = OLD_ERA_BLOCK_GC_BATCH_SIZE;
-        while let Some(hash) = self.consensus.retrieve_old_era_blocks() {
-            // only full node should remove blocks and receipts in old eras
-            if let NodeType::Full = self.node_type {
-                // remove block body in memory cache and db
-                self.data_man
-                    .remove_block_body(&hash, true /* remove_db */);
-                self.data_man
-                    .remove_block_result(&hash, true /* remove_db */);
-            }
-            self.data_man.remove_epoch_execution_context_from_db(&hash);
-            num_of_blocks_to_remove -= 1;
-            if num_of_blocks_to_remove == 0 {
-                break;
-            }
-        }
     }
 
     /// In full/archive node, this function can be invoked during

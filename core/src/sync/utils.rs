@@ -239,7 +239,6 @@ pub fn initialize_synchronization_graph_with_data_manager(
         pow.clone(),
         sync_config,
         notifications,
-        NodeType::Archive,
         machine,
     ));
 

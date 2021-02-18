@@ -32,6 +32,7 @@ use std::{
 };
 use threadpool::ThreadPool;
 pub mod block_data_types;
+pub mod db_gc_manager;
 pub mod db_manager;
 pub mod tx_data_manager;
 use crate::{
@@ -44,6 +45,7 @@ pub use block_data_types::*;
 use cfx_internal_common::{
     EpochExecutionCommitment, StateAvailabilityBoundary, StateRootWithAuxInfo,
 };
+use db_gc_manager::GCProgress;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use std::{hash::Hash, path::Path, time::Duration};
 
@@ -136,6 +138,7 @@ pub struct BlockDataManager {
     pub storage_manager: Arc<StorageManager>,
     cache_man: Arc<Mutex<CacheManager<CacheId>>>,
     pub target_difficulty_manager: TargetDifficultyManager,
+    gc_progress: Arc<Mutex<GCProgress>>,
 
     /// This maintains the boundary height of available state and commitments
     /// (executed but not deleted or in `ExecutionTaskQueue`).
@@ -187,6 +190,8 @@ impl BlockDataManager {
                 pow.clone(),
             ),
         };
+        let previous_db_progress =
+            db_manager.gc_progress_from_db().unwrap_or(0);
 
         let data_man = Self {
             block_headers: RwLock::new(HashMap::new()),
@@ -219,6 +224,9 @@ impl BlockDataManager {
             state_availability_boundary: RwLock::new(
                 StateAvailabilityBoundary::new(true_genesis.hash(), 0),
             ),
+            gc_progress: Arc::new(Mutex::new(GCProgress::new(
+                previous_db_progress,
+            ))),
         };
 
         data_man.initialize_instance_id();
@@ -1338,6 +1346,150 @@ impl BlockDataManager {
             None
         }
     }
+
+    pub fn earliest_epoch_with_block_body(&self) -> u64 {
+        match self.config.additional_maintained_block_body_epoch_count {
+            Some(defer) => self.gc_progress.lock().gc_end - defer as u64,
+            None => 0,
+        }
+    }
+
+    pub fn earliest_epoch_with_execution_result(&self) -> u64 {
+        match self
+            .config
+            .additional_maintained_execution_result_epoch_count
+        {
+            Some(defer) => self.gc_progress.lock().gc_end - defer as u64,
+            None => 0,
+        }
+    }
+
+    pub fn new_checkpoint(
+        &self, new_checkpoint_height: u64, best_epoch_number: u64,
+    ) {
+        let mut gc_progress = self.gc_progress.lock();
+        gc_progress.gc_end = new_checkpoint_height;
+        gc_progress.last_consensus_best_epoch = best_epoch_number;
+        gc_progress.expected_end_consensus_best_epoch = best_epoch_number
+            + self.config.checkpoint_gc_time_in_epoch_count as u64;
+    }
+
+    pub fn database_gc(&self, best_epoch: u64) {
+        let maybe_range = self.gc_progress.lock().get_gc_base_range(best_epoch);
+        debug!("Start database GC, range={:?}", maybe_range);
+        if let Some((start, end)) = maybe_range {
+            for base_epoch in start..end {
+                self.gc_base_epoch(base_epoch);
+            }
+            let mut gc_progress = self.gc_progress.lock();
+            gc_progress.last_consensus_best_epoch = best_epoch;
+            gc_progress.next_to_process = end;
+            self.db_manager.insert_gc_progress_to_db(end);
+            debug!("Database GC progress: {:?}", gc_progress);
+        }
+    }
+
+    /// Garbage collect different types of data in the corresponding epoch based
+    /// on `base_epoch` and the `additional_maintained*` parameters of these
+    /// data types.
+    fn gc_base_epoch(&self, base_epoch: u64) {
+        // We must GC tx index before block body, otherwise we may be unable to
+        // get the transactions in this epoch.
+        if let Some(defer_epochs) = self
+            .config
+            .additional_maintained_transaction_index_epoch_count
+        {
+            if base_epoch > defer_epochs as u64 {
+                let epoch_to_remove = base_epoch - defer_epochs as u64;
+                match self.all_epoch_set_hashes_from_db(epoch_to_remove) {
+                    None => warn!(
+                        "GC epoch set is missing! epoch_to_remove: {}",
+                        epoch_to_remove
+                    ),
+                    Some(epoch_blocks) => {
+                        // Store all packed transactions in a set first to
+                        // deduplicate transactions for database operations.
+                        let mut transaction_set = HashSet::new();
+                        for b in &epoch_blocks {
+                            if let Some(transactions) =
+                                self.db_manager.block_body_from_db(&b)
+                            {
+                                for tx in transactions {
+                                    transaction_set.insert(tx.hash());
+                                }
+                            }
+                        }
+                        let epoch_block_set: HashSet<H256> =
+                            epoch_blocks.into_iter().collect();
+                        for tx in transaction_set {
+                            if self.config.strict_tx_index_gc {
+                                // Check if this tx is actually executed in the
+                                // processed epoch.
+                                if let Some(tx_index) = self
+                                    .db_manager
+                                    .transaction_index_from_db(&tx)
+                                {
+                                    if epoch_block_set
+                                        .contains(&tx_index.block_hash)
+                                    {
+                                        self.db_manager
+                                            .remove_transaction_index_from_db(
+                                                &tx,
+                                            );
+                                    }
+                                }
+                            } else {
+                                self.db_manager
+                                    .remove_transaction_index_from_db(&tx);
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        self.gc_epoch_with_defer(
+            base_epoch,
+            self.config.additional_maintained_block_body_epoch_count,
+            |h| self.remove_block_body(h, true /* remove_db */),
+        );
+        self.gc_epoch_with_defer(
+            base_epoch,
+            self.config
+                .additional_maintained_execution_result_epoch_count,
+            |h| self.remove_block_result(h, true /* remove_db */),
+        );
+        self.gc_epoch_with_defer(
+            base_epoch,
+            self.config.additional_maintained_reward_epoch_count,
+            |h| self.db_manager.remove_block_reward_result_from_db(h),
+        );
+        self.gc_epoch_with_defer(
+            base_epoch,
+            self.config.additional_maintained_trace_epoch_count,
+            |h| self.db_manager.remove_block_trace_from_db(h),
+        );
+    }
+
+    fn gc_epoch_with_defer<F>(
+        &self, epoch_number: u64, maybe_defer_epochs: Option<usize>, gc_func: F,
+    ) where F: Fn(&H256) -> () {
+        if let Some(defer_epochs) = maybe_defer_epochs {
+            if epoch_number > defer_epochs as u64 {
+                let epoch_to_remove = epoch_number - defer_epochs as u64;
+                match self.all_epoch_set_hashes_from_db(epoch_to_remove) {
+                    None => warn!(
+                        "GC epoch set is missing! epoch_to_remove: {}",
+                        epoch_to_remove
+                    ),
+                    Some(epoch_set) => {
+                        for b in epoch_set {
+                            gc_func(&b);
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -1347,9 +1499,16 @@ pub enum DbType {
 }
 
 pub struct DataManagerConfiguration {
-    persist_tx_index: bool,
-    tx_cache_index_maintain_timeout: Duration,
-    db_type: DbType,
+    pub persist_tx_index: bool,
+    pub tx_cache_index_maintain_timeout: Duration,
+    pub db_type: DbType,
+    pub additional_maintained_block_body_epoch_count: Option<usize>,
+    pub additional_maintained_execution_result_epoch_count: Option<usize>,
+    pub additional_maintained_reward_epoch_count: Option<usize>,
+    pub additional_maintained_trace_epoch_count: Option<usize>,
+    pub additional_maintained_transaction_index_epoch_count: Option<usize>,
+    pub checkpoint_gc_time_in_epoch_count: usize,
+    pub strict_tx_index_gc: bool,
 }
 
 impl MallocSizeOf for DataManagerConfiguration {
@@ -1366,6 +1525,13 @@ impl DataManagerConfiguration {
             persist_tx_index,
             tx_cache_index_maintain_timeout,
             db_type,
+            additional_maintained_block_body_epoch_count: None,
+            additional_maintained_execution_result_epoch_count: None,
+            additional_maintained_reward_epoch_count: None,
+            additional_maintained_trace_epoch_count: None,
+            additional_maintained_transaction_index_epoch_count: None,
+            checkpoint_gc_time_in_epoch_count: 1,
+            strict_tx_index_gc: true,
         }
     }
 }

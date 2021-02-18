@@ -35,7 +35,6 @@ use link_cut_tree::{CaterpillarMinLinkCutTree, SizeMinLinkCutTree};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{Counter, CounterUsize};
-use parking_lot::Mutex;
 use primitives::{Block, BlockHeader, BlockHeaderBuilder, EpochId};
 use slab::Slab;
 use std::{
@@ -482,16 +481,6 @@ pub struct ConsensusGraphInner {
     pastset_cache: PastSetCache,
     sequence_number_of_block_entrance: u64,
 
-    /// Blocks in the past of the current block set. They will be merged into
-    /// `last_old_era_block_set` when this checkpoint moves forward.
-    /// Note that `last_old_era_block_set` is locked before
-    /// `current_old_era_block_set`.
-    current_old_era_block_set: Mutex<VecDeque<H256>>,
-    /// Block set of each old era. It will be garbage collected by sync graph
-    /// via `pop_old_era_block_set()`. This is a helper for full nodes to
-    /// determine which blocks it can safely remove
-    last_old_era_block_set: Mutex<VecDeque<H256>>,
-
     /// This is a cache map to speed up the lca computation of terminals in the
     /// best terminals call. The basic idea is that if no major
     /// reorganization happens, then it could use the last results
@@ -526,7 +515,6 @@ impl MallocSizeOf for ConsensusGraphInner {
             + self.data_man.size_of(ops)
             + self.anticone_cache.size_of(ops)
             + self.pastset_cache.size_of(ops)
-            + self.current_old_era_block_set.lock().size_of(ops)
             + self.best_terminals_lca_height_cache.size_of(ops)
             + self.best_terminals_reorg_height.size_of(ops)
     }
@@ -615,8 +603,6 @@ impl ConsensusGraphInner {
             anticone_cache: AnticoneCache::new(),
             pastset_cache: Default::default(),
             sequence_number_of_block_entrance: 0,
-            current_old_era_block_set: Default::default(),
-            last_old_era_block_set: Default::default(),
             best_terminals_lca_height_cache: Default::default(),
             best_terminals_reorg_height: NULLU64,
             has_timer_block_in_anticone_cache: Default::default(),
@@ -3740,13 +3726,6 @@ impl ConsensusGraphInner {
         let bounded_hashes =
             queue.iter().map(|(_, b)| self.arena[*b].hash).collect();
         bounded_hashes
-    }
-
-    /// This function is used by the synchronization layer to garbage collect
-    /// `old_era_block_set`. The set contains all the blocks that should be
-    /// eliminated by full nodes
-    pub fn pop_old_era_block_set(&self) -> Option<H256> {
-        self.last_old_era_block_set.lock().pop_front()
     }
 
     pub fn finish_block_recovery(&mut self) { self.header_only = false; }
