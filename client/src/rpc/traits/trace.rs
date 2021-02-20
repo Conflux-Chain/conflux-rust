@@ -2,7 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::super::types::LocalizedBlockTrace;
+use super::super::types::{LocalizedBlockTrace, LocalizedTrace};
+use crate::rpc::types::TraceFilter;
 use cfx_types::H256;
 use jsonrpc_core::Result as JsonRpcResult;
 use jsonrpc_derive::rpc;
@@ -15,4 +16,10 @@ pub trait Trace {
     fn block_traces(
         &self, block_hash: H256,
     ) -> JsonRpcResult<Option<LocalizedBlockTrace>>;
+
+    /// Returns all traces produced at given block.
+    #[rpc(name = "trace_filter")]
+    fn filter_traces(
+        &self, filter: TraceFilter,
+    ) -> JsonRpcResult<Option<Vec<LocalizedTrace>>>;
 }

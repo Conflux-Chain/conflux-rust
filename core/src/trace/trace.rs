@@ -12,6 +12,7 @@ use malloc_size_of_derive::MallocSizeOf;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::Serialize;
+use strum_macros::EnumDiscriminants;
 
 /// Description of a _call_ action, either a `CALL` operation or a message
 /// transaction.
@@ -247,7 +248,8 @@ impl InternalTransferAction {
 }
 
 /// Description of an action that we trace; will be either a call or a create.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, EnumDiscriminants)]
+#[strum_discriminants(name(ActionType))]
 pub enum Action {
     /// It's a call action.
     Call(Call),

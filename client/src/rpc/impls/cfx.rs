@@ -27,9 +27,9 @@ use network::{
 };
 use parking_lot::Mutex;
 use primitives::{
-    filter::Filter, transaction::Action::Call, Account, Block, BlockReceipts,
-    DepositInfo, SignedTransaction, StorageKey, StorageRoot, StorageValue,
-    TransactionIndex, TransactionWithSignature, VoteStakeInfo,
+    filter::LogFilter, transaction::Action::Call, Account, Block,
+    BlockReceipts, DepositInfo, SignedTransaction, StorageKey, StorageRoot,
+    StorageValue, TransactionIndex, TransactionWithSignature, VoteStakeInfo,
 };
 use random_crash::*;
 use rlp::Rlp;
@@ -53,8 +53,8 @@ use crate::{
             sign_call, Account as RpcAccount, BlameInfo, Block as RpcBlock,
             BlockHashOrEpochNumber, Bytes, CallRequest,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
-            EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
-            Log as RpcLog, PackedOrExecuted, Receipt as RpcReceipt,
+            EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
+            LogFilter as RpcFilter, PackedOrExecuted, Receipt as RpcReceipt,
             RewardInfo as RpcRewardInfo, SendTxRequest, Status as RpcStatus,
             SyncGraphStates, Transaction as RpcTransaction, TxPoolPendingInfo,
             TxWithPoolInfo,
@@ -917,7 +917,7 @@ impl RpcImpl {
         let consensus_graph = self.consensus_graph();
 
         info!("RPC Request: cfx_getLogs({:?})", filter);
-        let mut filter: Filter = filter.into_primitive()?;
+        let mut filter: LogFilter = filter.into_primitive()?;
 
         // If max_limit is set, the value in `filter` will be modified to
         // satisfy this limitation to avoid loading too many blocks

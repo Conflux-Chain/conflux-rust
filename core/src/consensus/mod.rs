@@ -57,7 +57,7 @@ use metrics::{
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     epoch::BlockHashOrEpochNumber,
-    filter::{Filter, FilterError},
+    filter::{FilterError, LogFilter},
     log_entry::LocalizedLogEntry,
     receipt::Receipt,
     EpochId, EpochNumber, SignedTransaction, TransactionIndex,
@@ -584,7 +584,7 @@ impl ConsensusGraph {
     }
 
     fn filter_block_receipts<'a>(
-        &self, filter: &'a Filter, epoch_number: u64, block_hash: H256,
+        &self, filter: &'a LogFilter, epoch_number: u64, block_hash: H256,
         mut receipts: Vec<Receipt>, mut tx_hashes: Vec<H256>,
     ) -> impl Iterator<Item = LocalizedLogEntry> + 'a
     {
@@ -633,7 +633,7 @@ impl ConsensusGraph {
     }
 
     fn filter_block<'a>(
-        &self, filter: &'a Filter, bloom_possibilities: &'a Vec<Bloom>,
+        &self, filter: &'a LogFilter, bloom_possibilities: &'a Vec<Bloom>,
         epoch: u64, pivot_hash: H256, block_hash: H256,
     ) -> Result<impl Iterator<Item = LocalizedLogEntry> + 'a, FilterError>
     {
@@ -697,7 +697,7 @@ impl ConsensusGraph {
     }
 
     fn filter_single_epoch<'a>(
-        &'a self, filter: &'a Filter, bloom_possibilities: &'a Vec<Bloom>,
+        &'a self, filter: &'a LogFilter, bloom_possibilities: &'a Vec<Bloom>,
         epoch: u64,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError>
     {
@@ -732,7 +732,7 @@ impl ConsensusGraph {
     }
 
     fn filter_epoch_batch(
-        &self, filter: &Filter, bloom_possibilities: &Vec<Bloom>,
+        &self, filter: &LogFilter, bloom_possibilities: &Vec<Bloom>,
         epochs: Vec<u64>, consistency_check_data: &mut Option<(u64, H256)>,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError>
     {
@@ -775,7 +775,7 @@ impl ConsensusGraph {
     }
 
     pub fn get_filter_epoch_range(
-        &self, filter: &Filter,
+        &self, filter: &LogFilter,
     ) -> Result<impl Iterator<Item = u64>, FilterError> {
         // lock so that we have a consistent view
         let _inner = self.inner.read();
@@ -814,7 +814,7 @@ impl ConsensusGraph {
     }
 
     fn filter_logs_by_epochs(
-        &self, filter: Filter,
+        &self, filter: LogFilter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
         assert!(filter.block_hashes.is_none());
         let bloom_possibilities = filter.bloom_possibilities();
@@ -904,7 +904,7 @@ impl ConsensusGraph {
     }
 
     fn filter_logs_by_block_hashes(
-        &self, mut filter: Filter,
+        &self, mut filter: LogFilter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
         assert!(filter.block_hashes.is_some());
         let block_hashes = filter.block_hashes.take().unwrap();
@@ -952,7 +952,7 @@ impl ConsensusGraph {
     }
 
     pub fn logs(
-        &self, filter: Filter,
+        &self, filter: LogFilter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
         match filter.block_hashes {
             None => self.filter_logs_by_epochs(filter),

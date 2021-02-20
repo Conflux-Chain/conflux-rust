@@ -3,10 +3,18 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::types::LocalizedBlockTrace;
-use crate::rpc::traits::trace::Trace;
+use crate::rpc::{
+    traits::trace::Trace,
+    types::{
+        LocalizedTrace as RpcLocalizedTrace, TraceFilter as RpcTraceFilter,
+    },
+};
 use cfx_addr::Network;
 use cfx_types::H256;
-use cfxcore::BlockDataManager;
+use cfxcore::{
+    trace::{trace::ExecTrace, trace_filter::TraceFilter},
+    BlockDataManager,
+};
 use jsonrpc_core::{Error as RpcError, Result as JsonRpcResult};
 use std::sync::Arc;
 
@@ -35,5 +43,11 @@ impl Trace for TraceHandler {
                 ))),
             },
         }
+    }
+
+    fn filter_traces(
+        &self, rpc_filter: RpcTraceFilter,
+    ) -> JsonRpcResult<Option<Vec<RpcLocalizedTrace>>> {
+        let filter = rpc_filter.into_primitive()?;
     }
 }

@@ -140,7 +140,7 @@ impl error::Error for FilterError {
 
 /// Log event Filter.
 #[derive(Debug, PartialEq)]
-pub struct Filter {
+pub struct LogFilter {
     /// Search will be applied from this epoch number.
     pub from_epoch: EpochNumber,
 
@@ -170,14 +170,14 @@ pub struct Filter {
     pub limit: Option<usize>,
 }
 
-impl Clone for Filter {
+impl Clone for LogFilter {
     fn clone(&self) -> Self {
         let mut topics = [None, None, None, None];
         for i in 0..4 {
             topics[i] = self.topics[i].clone();
         }
 
-        Filter {
+        LogFilter {
             from_epoch: self.from_epoch.clone(),
             to_epoch: self.to_epoch.clone(),
             block_hashes: self.block_hashes.clone(),
@@ -188,9 +188,9 @@ impl Clone for Filter {
     }
 }
 
-impl Default for Filter {
+impl Default for LogFilter {
     fn default() -> Self {
-        Filter {
+        LogFilter {
             from_epoch: EpochNumber::Earliest,
             to_epoch: EpochNumber::LatestMined,
             block_hashes: None,
@@ -201,7 +201,7 @@ impl Default for Filter {
     }
 }
 
-impl Filter {
+impl LogFilter {
     /// Returns combinations of each address and topic.
     pub fn bloom_possibilities(&self) -> Vec<Bloom> {
         let blooms = match self.address {
