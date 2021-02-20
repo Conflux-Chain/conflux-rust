@@ -29,6 +29,10 @@ use crate::{
     rpc_errors::{invalid_params_check, Result as RpcResult},
     state::State,
     statistics::SharedStatistics,
+    trace::{
+        trace::{ActionType, BlockExecTraces, ExecTrace},
+        trace_filter::TraceFilter,
+    },
     transaction_pool::SharedTransactionPool,
     verification::VerificationConfig,
     vm_factory::VmFactory,
@@ -583,6 +587,10 @@ impl ConsensusGraph {
         )
     }
 
+    fn earliest_epoch_for_trace_filter(&self) -> u64 {
+        self.data_man.earliest_epoch_with_trace()
+    }
+
     fn filter_block_receipts<'a>(
         &self, filter: &'a LogFilter, epoch_number: u64, block_hash: H256,
         mut receipts: Vec<Receipt>, mut tx_hashes: Vec<H256>,
@@ -774,11 +782,11 @@ impl ConsensusGraph {
             .collect())
     }
 
-    pub fn get_filter_epoch_range(
+    pub fn get_log_filter_epoch_range(
         &self, filter: &LogFilter,
     ) -> Result<impl Iterator<Item = u64>, FilterError> {
         // lock so that we have a consistent view
-        let _inner = self.inner.read();
+        let _inner = self.inner.read_recursive();
 
         let from_epoch =
             self.get_height_from_epoch_number(filter.from_epoch.clone())?;
@@ -813,6 +821,33 @@ impl ConsensusGraph {
         return Ok((from_epoch..=to_epoch).rev());
     }
 
+    pub fn get_trace_filter_epoch_range(
+        &self, filter: &TraceFilter,
+    ) -> Result<impl Iterator<Item = u64>, FilterError> {
+        // lock so that we have a consistent view
+        let _inner = self.inner.read_recursive();
+
+        let from_epoch =
+            self.get_height_from_epoch_number(filter.from_epoch.clone())?;
+        let to_epoch =
+            self.get_height_from_epoch_number(filter.to_epoch.clone())?;
+
+        if from_epoch > to_epoch {
+            return Err(FilterError::InvalidEpochNumber {
+                from_epoch,
+                to_epoch,
+            });
+        }
+
+        if from_epoch < self.earliest_epoch_for_trace_filter() {
+            return Err(FilterError::EpochAlreadyPruned {
+                epoch: from_epoch,
+                min: self.earliest_epoch_for_trace_filter(),
+            });
+        }
+        Ok(from_epoch..=to_epoch)
+    }
+
     fn filter_logs_by_epochs(
         &self, filter: LogFilter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
@@ -826,7 +861,7 @@ impl ConsensusGraph {
 
         let mut logs = self
             // iterate over epochs in reverse order
-            .get_filter_epoch_range(&filter)?
+            .get_log_filter_epoch_range(&filter)?
             // we process epochs in each batch in parallel
             // but batches are processed one-by-one
             .chunks(self.config.get_logs_epoch_batch_size)
@@ -960,6 +995,22 @@ impl ConsensusGraph {
         }
     }
 
+    pub fn filter_traces(
+        &self, mut filter: TraceFilter,
+    ) -> Result<Vec<ExecTrace>, FilterError> {
+        let traces = match filter.block_hashes.take() {
+            None => self.filter_traces_by_epochs(&filter),
+            Some(hashes) => self.filter_traces_by_block_hashes(&filter, hashes),
+        }?;
+        // Apply `filter.after` and `filter.count` after getting all trace
+        // entries.
+        Ok(traces
+            .into_iter()
+            .skip(filter.after.unwrap_or(0))
+            .take(filter.count.unwrap_or(usize::max_value()))
+            .collect())
+    }
+
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch: EpochNumber,
     ) -> RpcResult<ExecutionOutcome> {
@@ -1059,6 +1110,60 @@ impl ConsensusGraph {
             bounded_terminal_block_hashes,
         });
         debug!("update_best_info to {:?}", best_info);
+    }
+
+    fn filter_traces_by_epochs(
+        &self, filter: &TraceFilter,
+    ) -> Result<Vec<ExecTrace>, FilterError> {
+        let block_hashes = {
+            let inner = self.inner.read();
+            let mut block_hashes = Vec::new();
+            for epoch_number in self.get_trace_filter_epoch_range(filter)? {
+                block_hashes.append(
+                    &mut inner
+                        .block_hashes_by_epoch(epoch_number)
+                        .map_err(|e| FilterError::Custom(e))?,
+                );
+            }
+            block_hashes
+        };
+        self.filter_traces_by_block_hashes(filter, block_hashes)
+    }
+
+    // TODO: We can apply some early return logic based on `filter.count`.
+    fn filter_traces_by_block_hashes(
+        &self, filter: &TraceFilter, block_hashes: Vec<H256>,
+    ) -> Result<Vec<ExecTrace>, FilterError> {
+        let block_traces = block_hashes
+            .into_par_iter()
+            .map(|h| {
+                self.data_man.block_traces_by_hash(&h).ok_or_else(|| {
+                    FilterError::BlockNotExecutedYet { block_hash: h }
+                })
+            })
+            .collect::<Result<Vec<BlockExecTraces>, FilterError>>()?;
+        Ok(self.filter_block_traces(filter, block_traces))
+    }
+
+    fn filter_block_traces(
+        &self, filter: &TraceFilter, block_traces: Vec<BlockExecTraces>,
+    ) -> Vec<ExecTrace> {
+        let mut traces = Vec::new();
+        for block_trace in block_traces {
+            for tx_trace in block_trace.0 {
+                for trace in tx_trace.0 {
+                    if let Some(action_types) = &filter.action_types {
+                        if !action_types
+                            .contains(&ActionType::from(&trace.action))
+                        {
+                            continue;
+                        }
+                    }
+                    traces.push(trace);
+                }
+            }
+        }
+        traces
     }
 }
 

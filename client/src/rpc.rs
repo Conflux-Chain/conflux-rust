@@ -147,6 +147,7 @@ pub fn setup_public_rpc_apis(
 {
     let network = *rpc.sync.network.get_network_type();
     let data_man = rpc.consensus.get_data_manager().clone();
+    let consensus = rpc.consensus.clone();
     let cfx = CfxHandler::new(common, rpc).to_delegate();
     let interceptor =
         ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc");
@@ -155,7 +156,8 @@ pub fn setup_public_rpc_apis(
     let mut handler = MetaIoHandler::default();
     handler.extend_with(RpcProxy::new(cfx, interceptor));
     if conf.raw_conf.executive_trace && conf.raw_conf.enable_tracing {
-        let trace = TraceHandler::new(data_man, network).to_delegate();
+        let trace =
+            TraceHandler::new(data_man, network, consensus).to_delegate();
         let interceptor =
             ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc");
         handler.extend_with(RpcProxy::new(trace, interceptor));
@@ -173,6 +175,7 @@ pub fn setup_debug_rpc_apis(
 {
     let network = *rpc.sync.network.get_network_type();
     let data_man = rpc.consensus.get_data_manager().clone();
+    let consensus = rpc.consensus.clone();
     let cfx = CfxHandler::new(common.clone(), rpc.clone()).to_delegate();
     let interceptor =
         ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc_local");
@@ -185,7 +188,8 @@ pub fn setup_debug_rpc_apis(
     handler.extend_with(test);
     handler.extend_with(debug);
     if conf.raw_conf.executive_trace {
-        let trace = TraceHandler::new(data_man, network).to_delegate();
+        let trace =
+            TraceHandler::new(data_man, network, consensus).to_delegate();
         let interceptor =
             ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc");
         handler.extend_with(RpcProxy::new(trace, interceptor));
