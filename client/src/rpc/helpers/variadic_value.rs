@@ -80,7 +80,6 @@ where A: Clone + Into<B> {
 mod tests {
     use super::VariadicValue;
     use serde_json;
-    use std::str::FromStr;
 
     #[test]
     fn test_serialize_variadic_value() {
