@@ -668,6 +668,8 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         ))
     }
 
+    // TODO: maybe return error for reserved address? Not sure where is the best
+    //  place to do the check.
     pub fn nonce(&self, address: &Address) -> DbResult<U256> {
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |account| *account.nonce())

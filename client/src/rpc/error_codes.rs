@@ -59,7 +59,7 @@ pub mod codes {
     pub const EXPERIMENTAL: i64 = -32071;
     /// The node is not able to serve the request due to configuration. e.g. Not
     /// mining, light node, not archive node.
-    pub const INCAPABLE: i64 = -32703;
+    pub const INCAPABLE: i64 = -32073;
 
     /* Rpc usage related error codes */
     /// When there are too many rpc requests. We limit the number of allowed rpc

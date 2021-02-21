@@ -86,11 +86,11 @@ pub trait ConsensusGraphTrait: Send + Sync {
     fn set_initial_sequence_number(&self, initial_sn: u64);
 
     fn get_state_by_epoch_number(
-        &self, epoch_number: EpochNumber,
+        &self, epoch_number: EpochNumber, rpc_param_name: &str,
     ) -> RpcResult<State>;
 
     fn get_state_db_by_epoch_number(
-        &self, epoch_number: EpochNumber,
+        &self, epoch_number: EpochNumber, rpc_param_name: &str,
     ) -> RpcResult<StateDb>;
 
     fn get_blocks_needing_bodies(&self) -> HashSet<H256>;
