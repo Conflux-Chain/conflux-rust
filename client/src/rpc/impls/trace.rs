@@ -8,15 +8,16 @@ use crate::{
     rpc::{
         traits::trace::Trace,
         types::{
-            LocalizedTrace as RpcLocalizedTrace, TraceFilter as RpcTraceFilter,
+            LocalizedTrace as RpcLocalizedTrace, LocalizedTrace,
+            TraceFilter as RpcTraceFilter, TraceFilter,
         },
-        RpcError, RpcResult,
+        RpcResult,
     },
 };
 use cfx_addr::Network;
 use cfx_types::H256;
 use cfxcore::{BlockDataManager, ConsensusGraph, SharedConsensusGraph};
-use jsonrpc_core::{Error as JsonRpcError, Result as JsonRpcResult};
+use jsonrpc_core::Result as JsonRpcResult;
 use std::sync::Arc;
 
 pub struct TraceHandler {
@@ -62,14 +63,13 @@ impl TraceHandler {
         }
     }
 
-    fn filter_traces(
+    fn filter_traces_impl(
         &self, rpc_filter: RpcTraceFilter,
-    ) -> JsonRpcResult<Option<Vec<RpcLocalizedTrace>>> {
+    ) -> RpcResult<Option<Vec<RpcLocalizedTrace>>> {
         let filter = rpc_filter.into_primitive()?;
         let consensus_graph = self.consensus_graph();
         let traces: Vec<_> = consensus_graph
-            .filter_traces(filter)
-            .map_err(|e| delegate_convert::Into::into(RpcError::from(e)))?
+            .filter_traces(filter)?
             .into_iter()
             .map(|trace| {
                 RpcLocalizedTrace::from(trace, self.network)
@@ -89,5 +89,11 @@ impl Trace for TraceHandler {
         &self, block_hash: H256,
     ) -> JsonRpcResult<Option<LocalizedBlockTrace>> {
         into_jsonrpc_result(self.block_traces_impl(block_hash))
+    }
+
+    fn filter_traces(
+        &self, filter: TraceFilter,
+    ) -> JsonRpcResult<Option<Vec<LocalizedTrace>>> {
+        into_jsonrpc_result(self.filter_traces_impl(filter))
     }
 }
