@@ -1364,6 +1364,13 @@ impl BlockDataManager {
         }
     }
 
+    pub fn earliest_epoch_with_trace(&self) -> u64 {
+        match self.config.additional_maintained_trace_epoch_count {
+            Some(defer) => self.gc_progress.lock().gc_end - defer as u64,
+            None => 0,
+        }
+    }
+
     pub fn new_checkpoint(
         &self, new_checkpoint_height: u64, best_epoch_number: u64,
     ) {

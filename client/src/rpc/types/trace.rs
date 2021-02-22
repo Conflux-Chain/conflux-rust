@@ -8,16 +8,21 @@ use cfx_bytes::Bytes;
 use cfx_types::U256;
 use cfxcore::{
     trace::trace::{
-        Action as VmAction, BlockExecTraces, Call as VmCall, CallResult,
-        Create as VmCreate, CreateResult as VmCreateResult, ExecTrace,
+        Action as VmAction, ActionType as VmActionType, BlockExecTraces,
+        Call as VmCall, CallResult, Create as VmCreate,
+        CreateResult as VmCreateResult, ExecTrace,
         InternalTransferAction as VmInternalTransferAction, Outcome,
         TransactionExecTraces,
     },
     vm::CallType,
 };
-use serde::{ser::SerializeStruct, Serialize, Serializer};
+use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
+use strum_macros::EnumDiscriminants;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, EnumDiscriminants)]
+#[strum_discriminants(name(ActionType))]
+#[strum_discriminants(derive(Hash, Serialize, Deserialize))]
+#[strum_discriminants(serde(rename_all = "snake_case", deny_unknown_fields))]
 pub enum Action {
     Call(Call),
     Create(Create),
@@ -43,6 +48,20 @@ impl Action {
                 )
             }
         })
+    }
+}
+
+impl Into<VmActionType> for ActionType {
+    fn into(self) -> VmActionType {
+        match self {
+            Self::Call => VmActionType::Call,
+            Self::Create => VmActionType::Create,
+            Self::CallResult => VmActionType::CallResult,
+            Self::CreateResult => VmActionType::CreateResult,
+            Self::InternalTransferAction => {
+                VmActionType::InternalTransferAction
+            }
+        }
     }
 }
 

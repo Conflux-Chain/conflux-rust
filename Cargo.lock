@@ -661,6 +661,8 @@ dependencies = [
  "sqlite3-sys",
  "static_assertions",
  "strfmt",
+ "strum 0.20.0",
+ "strum_macros 0.20.1",
  "tempdir",
  "threadpool",
  "throttling",
@@ -833,6 +835,8 @@ dependencies = [
  "serde_json",
  "serial_test",
  "slab",
+ "strum 0.20.0",
+ "strum_macros 0.20.1",
  "tempdir",
  "textwrap 0.9.0",
  "threadpool",
@@ -2763,8 +2767,8 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "slab",
- "strum",
- "strum_macros",
+ "strum 0.11.0",
+ "strum_macros 0.11.0",
  "throttling",
 ]
 
@@ -4148,6 +4152,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6c3a2071519ab6a48f465808c4c1ffdd00dfc8e93111d02b4fc5abab177676e"
 
 [[package]]
+name = "strum"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7318c509b5ba57f18533982607f24070a55d353e90d4cae30c467cdb2ad5ac5c"
+
+[[package]]
 name = "strum_macros"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4157,6 +4167,18 @@ dependencies = [
  "proc-macro2 0.4.30",
  "quote 0.6.13",
  "syn 0.15.44",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee8bc6b87a5112aeeab1f4a9f7ab634fe6cbefc4850006df31267f4cfb9e3149"
+dependencies = [
+ "heck",
+ "proc-macro2 1.0.24",
+ "quote 1.0.7",
+ "syn 1.0.52",
 ]
 
 [[package]]

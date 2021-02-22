@@ -5,7 +5,7 @@
 use super::super::types::{
     Account as RpcAccount, Block, Bytes, CallRequest,
     CheckBalanceAgainstTransactionResponse, EpochNumber,
-    EstimateGasAndCollateralResponse, Filter as RpcFilter, Log as RpcLog,
+    EstimateGasAndCollateralResponse, Log as RpcLog, LogFilter as RpcFilter,
     Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, SponsorInfo,
     Status as RpcStatus, TokenSupplyInfo, Transaction,
 };
