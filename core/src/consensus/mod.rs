@@ -1153,17 +1153,28 @@ impl ConsensusGraph {
         &self, filter: &TraceFilter, block_traces: Vec<BlockExecTraces>,
     ) -> Vec<ExecTrace> {
         let mut traces = Vec::new();
-        for block_trace in block_traces {
-            for tx_trace in block_trace.0 {
-                for trace in tx_trace.0 {
-                    if let Some(action_types) = &filter.action_types {
-                        if !action_types
-                            .contains(&ActionType::from(&trace.action))
-                        {
-                            continue;
+        match &filter.action_types {
+            Some(action_types) => {
+                for block_trace in block_traces {
+                    for tx_trace in block_trace.0 {
+                        for trace in tx_trace.0 {
+                            if !action_types
+                                .contains(&ActionType::from(&trace.action))
+                            {
+                                continue;
+                            }
+                            traces.push(trace);
                         }
                     }
-                    traces.push(trace);
+                }
+            }
+            None => {
+                for block_trace in block_traces {
+                    for tx_trace in block_trace.0 {
+                        for trace in tx_trace.0 {
+                            traces.push(trace);
+                        }
+                    }
                 }
             }
         }

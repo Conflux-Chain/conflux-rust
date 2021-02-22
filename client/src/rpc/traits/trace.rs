@@ -17,7 +17,7 @@ pub trait Trace {
         &self, block_hash: H256,
     ) -> JsonRpcResult<Option<LocalizedBlockTrace>>;
 
-    /// Returns all traces produced at given block.
+    /// Returns all traces matching the provided filter.
     #[rpc(name = "trace_filter")]
     fn filter_traces(
         &self, filter: TraceFilter,
