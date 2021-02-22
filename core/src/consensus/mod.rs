@@ -561,9 +561,12 @@ impl ConsensusGraph {
         Some((results_with_epoch, maybe_state_root))
     }
 
+    // TODO: maybe return error for reserved address? Not sure where is the best
+    //  place to do the check.
     pub fn next_nonce(
         &self, address: H160,
         block_hash_or_epoch_number: BlockHashOrEpochNumber,
+        rpc_param_name: &str,
     ) -> RpcResult<U256>
     {
         let epoch_number = match block_hash_or_epoch_number {
@@ -575,7 +578,8 @@ impl ConsensusGraph {
             ),
             BlockHashOrEpochNumber::EpochNumber(epoch_number) => epoch_number,
         };
-        let state = self.get_state_by_epoch_number(epoch_number)?;
+        let state =
+            self.get_state_by_epoch_number(epoch_number, rpc_param_name)?;
 
         Ok(state.nonce(&address)?)
     }
@@ -1379,11 +1383,20 @@ impl ConsensusGraphTrait for ConsensusGraph {
         self.inner.write().set_initial_sequence_number(initial_sn);
     }
 
+    // TODO: investigate why we ended up with multiple similar functions to
+    //  get state / state db by epoch number and if we can simplify the code.
     fn get_state_by_epoch_number(
-        &self, epoch_number: EpochNumber,
+        &self, epoch_number: EpochNumber, rpc_param_name: &str,
     ) -> RpcResult<State> {
-        self.validate_stated_epoch(&epoch_number)?;
-        let height = self.get_height_from_epoch_number(epoch_number)?;
+        invalid_params_check(
+            rpc_param_name,
+            self.validate_stated_epoch(&epoch_number),
+        )?;
+
+        let height = invalid_params_check(
+            rpc_param_name,
+            self.get_height_from_epoch_number(epoch_number),
+        )?;
         let (epoch_id, epoch_size) = if let Ok(v) =
             self.inner.read_recursive().block_hashes_by_epoch(height)
         {
@@ -1407,15 +1420,17 @@ impl ConsensusGraphTrait for ConsensusGraph {
         )?)
     }
 
+    // TODO: investigate why we ended up with multiple similar functions to
+    //  get state / state db by epoch number and if we can simplify the code.
     fn get_state_db_by_epoch_number(
-        &self, epoch_number: EpochNumber,
+        &self, epoch_number: EpochNumber, rpc_param_name: &str,
     ) -> RpcResult<StateDb> {
         invalid_params_check(
-            "epoch_number",
+            rpc_param_name,
             self.validate_stated_epoch(&epoch_number),
         )?;
         let height = invalid_params_check(
-            "epoch_number",
+            rpc_param_name,
             self.get_height_from_epoch_number(epoch_number),
         )?;
         let hash =

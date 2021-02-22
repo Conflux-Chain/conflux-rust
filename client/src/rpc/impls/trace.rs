@@ -4,13 +4,13 @@
 
 use super::super::types::LocalizedBlockTrace;
 use crate::{
-    common::delegate_convert,
+    common::delegate_convert::into_jsonrpc_result,
     rpc::{
         traits::trace::Trace,
         types::{
             LocalizedTrace as RpcLocalizedTrace, TraceFilter as RpcTraceFilter,
         },
-        RpcError,
+        RpcError, RpcResult,
     },
 };
 use cfx_addr::Network;
@@ -44,20 +44,20 @@ impl TraceHandler {
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed")
     }
-}
 
-impl Trace for TraceHandler {
-    fn block_traces(
+    fn block_traces_impl(
         &self, block_hash: H256,
-    ) -> JsonRpcResult<Option<LocalizedBlockTrace>> {
+    ) -> RpcResult<Option<LocalizedBlockTrace>> {
+        // Note: an alternative to `into_jsonrpc_result` is the delegate! macro.
+
         match self.data_man.block_traces_by_hash(&block_hash) {
             None => Ok(None),
             Some(t) => match LocalizedBlockTrace::from(t, self.network) {
                 Ok(t) => Ok(Some(t)),
-                Err(e) => Err(JsonRpcError::invalid_params(format!(
+                Err(e) => bail!(format!(
                     "Traces not found for block {:?}: {:?}",
                     block_hash, e
-                ))),
+                )),
             },
         }
     }
@@ -81,5 +81,13 @@ impl Trace for TraceHandler {
         } else {
             Ok(Some(traces))
         }
+    }
+}
+
+impl Trace for TraceHandler {
+    fn block_traces(
+        &self, block_hash: H256,
+    ) -> JsonRpcResult<Option<LocalizedBlockTrace>> {
+        into_jsonrpc_result(self.block_traces_impl(block_hash))
     }
 }
