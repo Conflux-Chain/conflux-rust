@@ -321,12 +321,13 @@ impl SynchronizationGraphInner {
             for child in children {
                 self.arena[child].parent = NULL;
                 self.arena[child].parent_reclaimed = true;
-                if self.arena[child].graph_status == BLOCK_GRAPH_READY {
-                    // We can only reclaim graph-ready blocks
-                    self.old_era_blocks_frontier.push_back(child);
-                    assert!(!self.old_era_blocks_frontier_set.contains(&child));
-                    self.old_era_blocks_frontier_set.insert(child);
-                }
+                // We will check `is_graph_ready_in_db` before garbage
+                // collecting the blocks in `old_era_blocks_frontier`,
+                // so we do not need to check graph-ready-related status here
+                // before inserting them.
+                self.old_era_blocks_frontier.push_back(child);
+                assert!(!self.old_era_blocks_frontier_set.contains(&child));
+                self.old_era_blocks_frontier_set.insert(child);
             }
 
             let referrers: Vec<usize> =
@@ -1263,6 +1264,13 @@ impl SynchronizationGraph {
                     continue;
                 }
 
+                // Maintain `old_era_blocks_frontier` for future garbage
+                // collection after making a checkpoint.
+                if inner.arena[index].parent_reclaimed {
+                    inner.old_era_blocks_frontier.push_back(index);
+                    inner.old_era_blocks_frontier_set.insert(index);
+                }
+
                 // Note that when called by `insert_block_header` we have to
                 // insert header here immediately instead of
                 // after the loop because its children may
@@ -1491,10 +1499,6 @@ impl SynchronizationGraph {
         &self, inner: &mut SynchronizationGraphInner, index: usize,
     ) {
         inner.arena[index].graph_status = BLOCK_GRAPH_READY;
-        if inner.arena[index].parent_reclaimed {
-            inner.old_era_blocks_frontier.push_back(index);
-            inner.old_era_blocks_frontier_set.insert(index);
-        }
 
         // maintain not_ready_blocks_frontier
         inner.not_ready_blocks_frontier.remove(&index);
