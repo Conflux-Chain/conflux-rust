@@ -72,20 +72,6 @@ fn test_mining_10_epochs() {
     let tmp_dir = TempDir::new("conflux-test").unwrap();
     conf.raw_conf.conflux_data_dir =
         tmp_dir.path().to_str().unwrap().to_string() + "/";
-    conf.raw_conf.block_db_dir = tmp_dir
-        .path()
-        .join("db")
-        .into_os_string()
-        .into_string()
-        .unwrap();
-    conf.raw_conf.netconf_dir = Some(
-        tmp_dir
-            .path()
-            .join("config")
-            .into_os_string()
-            .into_string()
-            .unwrap(),
-    );
     conf.raw_conf.tcp_port = 13001;
     conf.raw_conf.jsonrpc_http_port = Some(18001);
     conf.raw_conf.mining_author =
@@ -112,20 +98,6 @@ fn test_mining_10_epochs_with_larger_pow_problem_window() {
     let tmp_dir = TempDir::new("conflux-test").unwrap();
     conf.raw_conf.conflux_data_dir =
         tmp_dir.path().to_str().unwrap().to_string() + "/";
-    conf.raw_conf.block_db_dir = tmp_dir
-        .path()
-        .join("db")
-        .into_os_string()
-        .into_string()
-        .unwrap();
-    conf.raw_conf.netconf_dir = Some(
-        tmp_dir
-            .path()
-            .join("config")
-            .into_os_string()
-            .into_string()
-            .unwrap(),
-    );
     conf.raw_conf.tcp_port = 13002;
     conf.raw_conf.jsonrpc_http_port = Some(18002);
     conf.raw_conf.mining_author =
