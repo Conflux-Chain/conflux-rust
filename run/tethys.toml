@@ -302,6 +302,9 @@ jsonrpc_local_http_port=12539
 # `netconf_dir` is the directory to store network related persistent data, including `net_key`,
 # a list of trusted nodes and a list of untrusted nodes.
 #
+# By default, it is stored under the directory configured with `conflux_data_dir` with the directory name `net_config`.
+# If set, the directory path will not be related to `conflux_data_dir` anymore.
+#
 # netconf_dir="./blockchain_data/net_config"
 
 # `net_key` is the 256-bit private key to generate a unique node id for this node.
@@ -385,11 +388,14 @@ jsonrpc_local_http_port=12539
 #
 # block_db_type = "rocksdb"
 
-# The root directory of all data (block data, state data, log files, node database).
+# The root directory of all data (block data, state data, and node database).
 #
 # conflux_data_dir = "./blockchain_data"
 
 # The directory to store block-related data.
+#
+# By default, it is stored under the directory configured with `conflux_data_dir` with the directory name `blockchain_db`.
+# If set, the directory path will not be related to `conflux_data_dir` anymore.
 #
 # block_db_dir = "./blockchain_data/blockchain_db"
 

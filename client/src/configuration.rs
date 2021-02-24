@@ -41,12 +41,14 @@ use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
 use parking_lot::RwLock;
 use rand::Rng;
-use std::{convert::TryInto, sync::Arc};
+use std::{convert::TryInto, path::PathBuf, sync::Arc};
 use txgen::TransactionGeneratorConfig;
 
 lazy_static! {
     pub static ref CHAIN_ID: RwLock<Option<ChainIdParams>> = Default::default();
 }
+const BLOCK_DB_DIR_NAME: &str = "blockchain_db";
+const NET_CONFIG_DB_DIR_NAME: &str = "net_config";
 
 // usage:
 // ```
@@ -216,7 +218,7 @@ build_config! {
         (discovery_throttling_limit_ping, (usize), 20)
         (discovery_throttling_limit_find_nodes, (usize), 10)
         (enable_discovery, (bool), true)
-        (netconf_dir, (Option<String>), Some("./blockchain_data/net_config".to_string()))
+        (netconf_dir, (Option<String>), None)
         (net_key, (Option<String>), None)
         (node_table_timeout_s, (u64), 300)
         (node_table_promotion_timeout_s, (u64), 3 * 24 * 3600)
@@ -239,7 +241,7 @@ build_config! {
         (additional_maintained_trace_epoch_count, (Option<usize>), None)
         (additional_maintained_transaction_index_epoch_count, (Option<usize>), None)
         (block_cache_gc_period_ms, (u64), 5_000)
-        (block_db_dir, (String), "./blockchain_data/blockchain_db".to_string())
+        (block_db_dir, (Option<String>), None)
         (block_db_type, (String), "rocksdb".to_string())
         (checkpoint_gc_time_in_era_count, (f64), 0.5)
         // The conflux data dir, if unspecified, is the workdir where conflux is started.
@@ -381,9 +383,14 @@ impl Configuration {
         network_config.discovery_enabled = self.raw_conf.enable_discovery;
         network_config.boot_nodes = to_bootnodes(&self.raw_conf.bootnodes)
             .map_err(|e| format!("failed to parse bootnodes: {}", e))?;
-        if self.raw_conf.netconf_dir.is_some() {
-            network_config.config_path = self.raw_conf.netconf_dir.clone();
-        }
+        network_config.config_path = Some(match &self.raw_conf.netconf_dir {
+            Some(dir) => dir.clone(),
+            None => Path::new(&self.raw_conf.conflux_data_dir)
+                .join(NET_CONFIG_DB_DIR_NAME)
+                .into_os_string()
+                .into_string()
+                .unwrap(),
+        });
         network_config.use_secret =
             self.raw_conf.net_key.as_ref().map(|sec_str| {
                 parse_hex_string(sec_str)
@@ -445,8 +452,12 @@ impl Configuration {
         cache_config
     }
 
-    pub fn db_config(&self) -> DatabaseConfig {
-        let db_dir = &self.raw_conf.block_db_dir;
+    pub fn db_config(&self) -> (PathBuf, DatabaseConfig) {
+        let db_dir: PathBuf = match &self.raw_conf.block_db_dir {
+            Some(dir) => dir.into(),
+            None => Path::new(&self.raw_conf.conflux_data_dir)
+                .join(BLOCK_DB_DIR_NAME),
+        };
         if let Err(e) = fs::create_dir_all(&db_dir) {
             panic!("Error creating database directory: {:?}", e);
         }
@@ -456,13 +467,14 @@ impl Configuration {
                 Some(p) => db::DatabaseCompactionProfile::from_str(p).unwrap(),
                 None => db::DatabaseCompactionProfile::default(),
             };
-        db::db_config(
-            Path::new(db_dir),
+        let db_config = db::db_config(
+            &db_dir,
             self.raw_conf.rocksdb_cache_size.clone(),
             compact_profile,
             NUM_COLUMNS.clone(),
             self.raw_conf.rocksdb_disable_wal,
-        )
+        );
+        (db_dir, db_config)
     }
 
     pub fn chain_id_params(&self) -> ChainIdParams {
