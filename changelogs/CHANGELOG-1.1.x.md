@@ -11,7 +11,7 @@
   The old behavior is to be put in the hard-coded `./blockchain_data`.
 
 ### RPC Improvements
-- Add new RPC `cfx_getEpochReceipts` to allow querying receipts based on an epoch number.
+- Add new local RPC `cfx_getEpochReceipts` to allow querying receipts based on an epoch number.
 - Add new trace RPC `trace_filter` to allow querying traces based on epochs/types/offset.
 - Add new fields `latestCheckpoint`, `latestConfirmed`, and `latestState` in `cfx_getStatus`.
 - Improve some RPC error reporting.
