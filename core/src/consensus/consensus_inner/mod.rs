@@ -2390,7 +2390,7 @@ impl ConsensusGraphInner {
         }
     }
 
-    ////////////////////////////////////////////////////////////////////
+    /// Rustc 1.50.0 falsely believes there is a doc test below.
     ///                   _________ 5 __________
     ///                   |                    |
     ///  state_valid:           t    f    f    f

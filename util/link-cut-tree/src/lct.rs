@@ -525,6 +525,7 @@ impl CaterpillarMinLinkCutTreeInner {
 }
 
 impl CaterpillarLinkCutTreeTrait for CaterpillarMinLinkCutTreeInner {
+    /// Rustc 1.50.0 falsely believes there is a doc test below.
     ///            ||
     ///            V3
     ///         /  ||  \
