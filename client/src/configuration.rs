@@ -3,10 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    impls::RpcImplConfiguration, types::RpcAddress, HttpConfiguration,
-    TcpConfiguration, WsConfiguration,
+    impls::RpcImplConfiguration, HttpConfiguration, TcpConfiguration,
+    WsConfiguration,
 };
-use cfx_addr::Network;
+use cfx_addr::{cfx_addr_decode, Network};
 use cfx_internal_common::{ChainIdParams, ChainIdParamsInner};
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_storage::{
@@ -1039,7 +1039,7 @@ pub fn parse_hex_string<F: FromStr>(hex_str: &str) -> Result<F, F::Err> {
 pub fn parse_config_address_string(
     addr: &str, network: &Network,
 ) -> Result<Address, String> {
-    let base32_err = match serde_json::from_str::<RpcAddress>(addr) {
+    let base32_err = match cfx_addr_decode(addr) {
         Ok(address) => {
             return if address.network != *network {
                 Err(format!(
@@ -1049,7 +1049,9 @@ pub fn parse_config_address_string(
                     address.network
                 ))
             } else {
-                Ok(address.into())
+                return address
+                    .hex_address
+                    .ok_or("decoded address has wrong byte length".into());
             };
         }
         Err(e) => e,
@@ -1063,4 +1065,35 @@ pub fn parse_config_address_string(
             base32_err={:?}
             hex_err={:?}",
            base32_err, hex_err))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::configuration::parse_config_address_string;
+    use cfx_addr::Network;
+
+    #[test]
+    fn test_config_address_string() {
+        let addr = parse_config_address_string(
+            "0x1a2f80341409639ea6a35bbcab8299066109aa55",
+            &Network::Main,
+        )
+        .unwrap();
+        assert_eq!(
+            addr,
+            parse_config_address_string(
+                "cfx:aarc9abycue0hhzgyrr53m6cxedgccrmmyybjgh4xg",
+                &Network::Main
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            addr,
+            parse_config_address_string(
+                "cfx:type.user:aarc9abycue0hhzgyrr53m6cxedgccrmmyybjgh4xg",
+                &Network::Main
+            )
+            .unwrap()
+        );
+    }
 }
