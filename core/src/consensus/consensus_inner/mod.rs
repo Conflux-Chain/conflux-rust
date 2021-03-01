@@ -2390,7 +2390,7 @@ impl ConsensusGraphInner {
         }
     }
 
-    ////////////////////////////////////////////////////////////////////
+    /// ```text
     ///                   _________ 5 __________
     ///                   |                    |
     ///  state_valid:           t    f    f    f
@@ -2448,6 +2448,7 @@ impl ConsensusGraphInner {
     /// blame root is to be able to leverage the computed value of previous
     /// block. For example, the deferred blame root of [Bm] is exactly the
     /// keccak of [Dm] and the deferred blame root of [Bp].
+    /// ```
     fn compute_blame_and_state_with_execution_result(
         &mut self, parent: usize, state_root_hash: H256,
         receipts_root_hash: H256, logs_bloom_hash: H256,
