@@ -994,7 +994,6 @@ impl ConsensusExecutionHandler {
             ),
             self.vm.clone(),
             &spec,
-            start_block_number - 1, /* block_number */
         )
         .expect("Failed to initialize state");
 
@@ -1134,10 +1133,10 @@ impl ConsensusExecutionHandler {
                     .verification_config
                     .transaction_epoch_bound,
             };
-            let secondary_reward = state.increase_block_number();
-            assert_eq!(state.block_number(), env.number);
-
+            let secondary_reward =
+                state.bump_block_number_accumulate_interest();
             block_number += 1;
+
             last_block_hash = block.hash();
             let mut block_traces: Vec<TransactionExecTraces> =
                 Default::default();
@@ -1663,7 +1662,6 @@ impl ConsensusExecutionHandler {
             ),
             self.vm.clone(),
             &spec,
-            start_block_number - 1, /* block_number */
         )?;
         self.process_epoch_transactions(
             &spec,
@@ -1724,7 +1722,6 @@ impl ConsensusExecutionHandler {
             ),
             self.vm.clone(),
             &spec,
-            start_block_number,
         )?;
         drop(state_availability_boundary);
 
@@ -1741,7 +1738,6 @@ impl ConsensusExecutionHandler {
                 .verification_config
                 .transaction_epoch_bound,
         };
-        assert_eq!(state.block_number(), env.number);
         let mut ex = Executive::new(
             &mut state,
             &env,

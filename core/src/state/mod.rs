@@ -127,18 +127,13 @@ pub struct StateGeneric<StateDbStorage: StorageStateTrait> {
     // Environment variables.
     account_start_nonce: U256,
     contract_start_nonce: U256,
-    // This is the total number of blocks executed so far. It is the same as
-    // the `number` entry in EVM Environment.
-    block_number: u64,
     vm: VmFactory,
 }
 
 impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     pub fn new(
         db: StateDb<StateDbStorage>, vm: VmFactory, spec: &Spec,
-        block_number: u64,
-    ) -> DbResult<Self>
-    {
+    ) -> DbResult<Self> {
         let annual_interest_rate = db.get_annual_interest_rate()?;
         let accumulate_interest_rate = db.get_accumulate_interest_rate()?;
         let total_issued_tokens = db.get_total_issued_tokens()?;
@@ -205,7 +200,6 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             account_start_nonce,
             contract_start_nonce,
             staking_state,
-            block_number,
             vm,
             accounts_to_notify: Default::default(),
         })
@@ -213,10 +207,9 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
 
     pub fn contract_start_nonce(&self) -> U256 { self.contract_start_nonce }
 
-    /// Increase block number and calculate the current secondary reward.
-    pub fn increase_block_number(&mut self) -> U256 {
+    /// Calculate the current secondary reward for the next block number.
+    pub fn bump_block_number_accumulate_interest(&mut self) -> U256 {
         assert!(self.staking_state_checkpoints.get_mut().is_empty());
-        self.block_number += 1;
         //self.account_start_nonce +=
         //    ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT.into();
         self.staking_state.accumulate_interest_rate =
@@ -721,14 +714,14 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     pub fn withdrawable_staking_balance(
-        &self, address: &Address,
+        &self, address: &Address, current_block_number: u64,
     ) -> DbResult<U256> {
         self.ensure_account_loaded(
             address,
             RequireCache::VoteStakeList,
             |acc| {
                 acc.map_or(U256::zero(), |acc| {
-                    acc.withdrawable_staking_balance(self.block_number)
+                    acc.withdrawable_staking_balance(current_block_number)
                 })
             },
         )
@@ -863,7 +856,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     pub fn deposit(
-        &mut self, address: &Address, amount: &U256,
+        &mut self, address: &Address, amount: &U256, current_block_number: u64,
     ) -> DbResult<()> {
         if !amount.is_zero() {
             {
@@ -876,7 +869,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 account.deposit(
                     *amount,
                     self.staking_state.accumulate_interest_rate,
-                    self.block_number,
+                    current_block_number,
                 );
             }
             self.staking_state.total_staking_tokens += *amount;
@@ -926,7 +919,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     pub fn remove_expired_vote_stake_info(
-        &mut self, address: &Address,
+        &mut self, address: &Address, current_block_number: u64,
     ) -> DbResult<()> {
         let mut account = self.require_exists(address, false)?;
         account.cache_staking_info(
@@ -934,7 +927,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             true,  /* cache_vote_list */
             &self.db,
         )?;
-        account.remove_expired_vote_stake_info(self.block_number);
+        account.remove_expired_vote_stake_info(current_block_number);
         Ok(())
     }
 
@@ -950,8 +943,6 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     pub fn accumulate_interest_rate(&self) -> &U256 {
         &self.staking_state.accumulate_interest_rate
     }
-
-    pub fn block_number(&self) -> u64 { self.block_number }
 
     pub fn total_issued_tokens(&self) -> &U256 {
         &self.staking_state.total_issued_tokens

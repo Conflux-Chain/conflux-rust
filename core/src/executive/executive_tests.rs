@@ -886,7 +886,9 @@ fn test_deposit_withdraw_lock() {
         U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(
-        state.withdrawable_staking_balance(&sender).unwrap(),
+        state
+            .withdrawable_staking_balance(&sender, env.number)
+            .unwrap(),
         U256::from(999_999_950_000_000_000u64)
     );
     // lock 1 until 106751991167301 blocks, should succeed
@@ -918,7 +920,9 @@ fn test_deposit_withdraw_lock() {
         U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
-        state.withdrawable_staking_balance(&sender).unwrap(),
+        state
+            .withdrawable_staking_balance(&sender, env.number)
+            .unwrap(),
         U256::from(999_999_949_999_999_999u64)
     );
     // lock 2 until block_number=2
@@ -950,7 +954,9 @@ fn test_deposit_withdraw_lock() {
         U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
-        state.withdrawable_staking_balance(&sender).unwrap(),
+        state
+            .withdrawable_staking_balance(&sender, env.number)
+            .unwrap(),
         U256::from(999_999_949_999_999_998u64)
     );
     // withdraw more than withdrawable staking balance
@@ -988,7 +994,9 @@ fn test_deposit_withdraw_lock() {
         U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
-        state.withdrawable_staking_balance(&sender).unwrap(),
+        state
+            .withdrawable_staking_balance(&sender, env.number)
+            .unwrap(),
         U256::from(999_999_949_999_999_998u64)
     );
 
@@ -1015,7 +1023,9 @@ fn test_deposit_withdraw_lock() {
     );
     assert_eq!(*state.total_staking_tokens(), U256::from(2));
     assert_eq!(
-        state.withdrawable_staking_balance(&sender).unwrap(),
+        state
+            .withdrawable_staking_balance(&sender, env.number)
+            .unwrap(),
         U256::from(0)
     );
 }
@@ -1093,7 +1103,6 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
         ),
         factory.clone().into(),
         &spec,
-        1, /* block_number */
     )
     .expect("Failed to initialize state");
 
@@ -1168,7 +1177,6 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
         ),
         factory.clone().into(),
         &spec,
-        2, /* block_number */
     )
     .expect("Failed to initialize state");
 

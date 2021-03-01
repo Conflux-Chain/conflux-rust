@@ -675,6 +675,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
                 {
                     contract.execute(
                         &params,
+                        self.env,
                         &spec,
                         state,
                         &mut unconfirmed_substate,
