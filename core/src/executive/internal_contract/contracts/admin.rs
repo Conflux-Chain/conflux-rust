@@ -17,7 +17,7 @@ use crate::{
     make_solidity_function,
     state::{StateGeneric, Substate},
     trace::{trace::ExecTrace, Tracer},
-    vm,
+    vm::{self, Env},
 };
 use cfx_storage::StorageStateTrait;
 use cfx_types::{Address, U256};
@@ -40,8 +40,8 @@ impl_function_type!(SetAdmin, "non_payable_write", gas: SPEC.sstore_reset_gas);
 
 impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for SetAdmin<S> {
     fn execute_inner(
-        &self, inputs: (Address, Address), params: &ActionParams, _spec: &Spec,
-        state: &mut StateGeneric<S>, substate: &mut Substate,
+        &self, inputs: (Address, Address), params: &ActionParams, _env: &Env,
+        _spec: &Spec, state: &mut StateGeneric<S>, substate: &mut Substate,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -62,7 +62,7 @@ impl_function_type!(Destroy, "non_payable_write", gas: SPEC.sstore_reset_gas);
 
 impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for Destroy<S> {
     fn execute_inner(
-        &self, input: Address, params: &ActionParams, spec: &Spec,
+        &self, input: Address, params: &ActionParams, _env: &Env, spec: &Spec,
         state: &mut StateGeneric<S>, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
@@ -78,7 +78,7 @@ impl_function_type!(GetAdmin, "query_with_default_gas");
 
 impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for GetAdmin<S> {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _: &Spec,
+        &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut StateGeneric<S>, _: &mut Substate,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<Address>

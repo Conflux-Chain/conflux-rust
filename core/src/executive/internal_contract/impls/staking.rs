@@ -6,7 +6,7 @@ use crate::{
     consensus_internal_parameters::MINED_BLOCK_COUNT_PER_QUARTER,
     state::StateGeneric,
     trace::{trace::ExecTrace, Tracer},
-    vm::{self, ActionParams},
+    vm::{self, ActionParams, Env},
 };
 use cfx_parameters::{
     consensus::ONE_CFX_IN_DRIP,
@@ -17,8 +17,8 @@ use cfx_types::{Address, U256};
 
 /// Implementation of `deposit(uint256)`.
 pub fn deposit<S: StorageStateTrait>(
-    amount: U256, params: &ActionParams, state: &mut StateGeneric<S>,
-    tracer: &mut dyn Tracer<Output = ExecTrace>,
+    amount: U256, params: &ActionParams, env: &Env,
+    state: &mut StateGeneric<S>, tracer: &mut dyn Tracer<Output = ExecTrace>,
 ) -> vm::Result<()>
 {
     if amount < U256::from(ONE_CFX_IN_DRIP) {
@@ -31,19 +31,20 @@ pub fn deposit<S: StorageStateTrait>(
             *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             amount,
         );
-        state.deposit(&params.sender, &amount)?;
+        state.deposit(&params.sender, &amount, env.number)?;
         Ok(())
     }
 }
 
 /// Implementation of `withdraw(uint256)`.
 pub fn withdraw<S: StorageStateTrait>(
-    amount: U256, params: &ActionParams, state: &mut StateGeneric<S>,
-    tracer: &mut dyn Tracer<Output = ExecTrace>,
+    amount: U256, params: &ActionParams, env: &Env,
+    state: &mut StateGeneric<S>, tracer: &mut dyn Tracer<Output = ExecTrace>,
 ) -> vm::Result<()>
 {
-    state.remove_expired_vote_stake_info(&params.sender)?;
-    if state.withdrawable_staking_balance(&params.sender)? < amount {
+    state.remove_expired_vote_stake_info(&params.sender, env.number)?;
+    if state.withdrawable_staking_balance(&params.sender, env.number)? < amount
+    {
         Err(vm::Error::InternalContract(
             "not enough withdrawable staking balance to withdraw",
         ))
@@ -65,19 +66,19 @@ pub fn withdraw<S: StorageStateTrait>(
 
 /// Implementation of `getVoteLocked(address,uint)`.
 pub fn vote_lock<S: StorageStateTrait>(
-    amount: U256, unlock_block_number: U256, params: &ActionParams,
+    amount: U256, unlock_block_number: U256, params: &ActionParams, env: &Env,
     state: &mut StateGeneric<S>,
 ) -> vm::Result<()>
 {
     let unlock_block_number = unlock_block_number.low_u64();
-    if unlock_block_number <= state.block_number() {
+    if unlock_block_number <= env.number {
         Err(vm::Error::InternalContract("invalid unlock_block_number"))
     } else if state.staking_balance(&params.sender)? < amount {
         Err(vm::Error::InternalContract(
             "not enough staking balance to lock",
         ))
     } else {
-        state.remove_expired_vote_stake_info(&params.sender)?;
+        state.remove_expired_vote_stake_info(&params.sender, env.number)?;
         state.vote_lock(&params.sender, &amount, unlock_block_number)?;
         Ok(())
     }
@@ -85,22 +86,26 @@ pub fn vote_lock<S: StorageStateTrait>(
 
 /// Implementation of `getLockedStakingBalance(address,uint)`.
 pub fn get_locked_staking<S: StorageStateTrait>(
-    address: Address, block_number: U256, state: &mut StateGeneric<S>,
-) -> vm::Result<U256> {
+    address: Address, block_number: U256, current_block_number: u64,
+    state: &mut StateGeneric<S>,
+) -> vm::Result<U256>
+{
     let mut block_number = block_number.low_u64();
-    if block_number < state.block_number() {
-        block_number = state.block_number();
+    if block_number < current_block_number {
+        block_number = current_block_number;
     }
     Ok(state.locked_staking_balance_at_block_number(&address, block_number)?)
 }
 
 /// Implementation of `getVotePower(address,uint)`.
 pub fn get_vote_power<S: StorageStateTrait>(
-    address: Address, block_number: U256, state: &mut StateGeneric<S>,
-) -> vm::Result<U256> {
+    address: Address, block_number: U256, current_block_number: u64,
+    state: &mut StateGeneric<S>,
+) -> vm::Result<U256>
+{
     let mut block_number = block_number.low_u64();
-    if block_number < state.block_number() {
-        block_number = state.block_number();
+    if block_number < current_block_number {
+        block_number = current_block_number;
     }
 
     let three_months_locked = state.locked_staking_balance_at_block_number(

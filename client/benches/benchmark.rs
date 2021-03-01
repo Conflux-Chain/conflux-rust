@@ -84,7 +84,6 @@ fn txexe_benchmark(c: &mut Criterion) {
                 ),
                 VmFactory::new(1024 * 32),
                 &spec,
-                0, /* block_number */
             )
             .expect("Failed to initialize state");
 

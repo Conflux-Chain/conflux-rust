@@ -6,7 +6,7 @@ use super::SolidityFunctionTrait;
 use crate::{
     state::{StateGeneric, Substate},
     trace::{trace::ExecTrace, Tracer},
-    vm::{self, ActionParams, CallType, GasLeft, ReturnData, Spec},
+    vm::{self, ActionParams, CallType, Env, GasLeft, ReturnData, Spec},
 };
 use cfx_storage::StorageStateTrait;
 use cfx_types::U256;
@@ -32,7 +32,7 @@ where T: InterfaceTrait
         + ExecutionTrait<S>
 {
     fn execute(
-        &self, input: &[u8], params: &ActionParams, spec: &Spec,
+        &self, input: &[u8], params: &ActionParams, env: &Env, spec: &Spec,
         state: &mut StateGeneric<S>, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>
@@ -49,6 +49,7 @@ where T: InterfaceTrait
         self.execute_inner(
             solidity_params,
             params,
+            env,
             spec,
             state,
             substate,
@@ -89,8 +90,8 @@ pub trait ExecutionTrait<S: StorageStateTrait>:
     Send + Sync + InterfaceTrait
 {
     fn execute_inner(
-        &self, input: Self::Input, params: &ActionParams, spec: &Spec,
-        state: &mut StateGeneric<S>, substate: &mut Substate,
+        &self, input: Self::Input, params: &ActionParams, env: &Env,
+        spec: &Spec, state: &mut StateGeneric<S>, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<<Self as InterfaceTrait>::Output>;
 }

@@ -167,7 +167,6 @@ pub fn genesis_block(
         StateDb::new(storage_manager.get_state_for_genesis_write()),
         Default::default(),
         &Spec::new_spec(),
-        0, /* block_number */
     )
     .expect("Failed to initialize state");
 

@@ -17,7 +17,7 @@ use crate::{
     make_solidity_function,
     state::{StateGeneric, Substate},
     trace::{trace::ExecTrace, Tracer},
-    vm,
+    vm::{self, Env},
 };
 use cfx_storage::StorageStateTrait;
 use cfx_types::{address_util::AddressUtil, Address, U256};
@@ -56,8 +56,8 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     for SetSponsorForGas<S>
 {
     fn execute_inner(
-        &self, inputs: (Address, U256), params: &ActionParams, spec: &Spec,
-        state: &mut StateGeneric<S>, substate: &mut Substate,
+        &self, inputs: (Address, U256), params: &ActionParams, _env: &Env,
+        spec: &Spec, state: &mut StateGeneric<S>, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -76,7 +76,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     for SetSponsorForCollateral<S>
 {
     fn execute_inner(
-        &self, input: Address, params: &ActionParams, spec: &Spec,
+        &self, input: Address, params: &ActionParams, _env: &Env, spec: &Spec,
         state: &mut StateGeneric<S>, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
@@ -104,8 +104,8 @@ impl<S: StorageStateTrait + Send + Sync> UpfrontPaymentTrait<S>
 
 impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for AddPrivilege<S> {
     fn execute_inner(
-        &self, addresses: Vec<Address>, params: &ActionParams, _: &Spec,
-        state: &mut StateGeneric<S>, _: &mut Substate,
+        &self, addresses: Vec<Address>, params: &ActionParams, _env: &Env,
+        _: &Spec, state: &mut StateGeneric<S>, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -139,8 +139,8 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     for RemovePrivilege<S>
 {
     fn execute_inner(
-        &self, addresses: Vec<Address>, params: &ActionParams, _: &Spec,
-        state: &mut StateGeneric<S>, _: &mut Substate,
+        &self, addresses: Vec<Address>, params: &ActionParams, _env: &Env,
+        _: &Spec, state: &mut StateGeneric<S>, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -163,7 +163,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     for GetSponsorForGas<S>
 {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _: &Spec,
+        &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut StateGeneric<S>, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<Address>
@@ -181,7 +181,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     for GetSponsoredBalanceForGas<S>
 {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _: &Spec,
+        &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut StateGeneric<S>, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
@@ -199,7 +199,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     for GetSponsoredGasFeeUpperBound<S>
 {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _: &Spec,
+        &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut StateGeneric<S>, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
@@ -217,7 +217,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     for GetSponsorForCollateral<S>
 {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _: &Spec,
+        &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut StateGeneric<S>, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<Address>
@@ -235,7 +235,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     for GetSponsoredBalanceForCollateral<S>
 {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _: &Spec,
+        &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut StateGeneric<S>, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
@@ -254,7 +254,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
 {
     fn execute_inner(
         &self, (contract, user): (Address, Address), _: &ActionParams,
-        _: &Spec, state: &mut StateGeneric<S>, _: &mut Substate,
+        _env: &Env, _: &Spec, state: &mut StateGeneric<S>, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<bool>
     {
@@ -275,7 +275,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     for IsAllWhitelisted<S>
 {
     fn execute_inner(
-        &self, contract: Address, _: &ActionParams, _: &Spec,
+        &self, contract: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut StateGeneric<S>, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<bool>
@@ -313,8 +313,9 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
 {
     fn execute_inner(
         &self, (contract, addresses): (Address, Vec<Address>),
-        params: &ActionParams, _: &Spec, state: &mut StateGeneric<S>,
-        _: &mut Substate, _: &mut dyn Tracer<Output = ExecTrace>,
+        params: &ActionParams, _env: &Env, _: &Spec,
+        state: &mut StateGeneric<S>, _: &mut Substate,
+        _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
         if contract.is_contract_address()
@@ -348,8 +349,9 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
 {
     fn execute_inner(
         &self, (contract, addresses): (Address, Vec<Address>),
-        params: &ActionParams, _: &Spec, state: &mut StateGeneric<S>,
-        _: &mut Substate, _: &mut dyn Tracer<Output = ExecTrace>,
+        params: &ActionParams, _env: &Env, _: &Spec,
+        state: &mut StateGeneric<S>, _: &mut Substate,
+        _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
         if contract.is_contract_address()

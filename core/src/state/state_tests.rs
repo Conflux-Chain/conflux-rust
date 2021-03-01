@@ -34,7 +34,6 @@ fn get_state(
         ),
         VmFactory::default(),
         &Spec::new_spec(),
-        if epoch_id.is_zero() { 0 } else { 1 }, /* block_number */
     )
     .expect("Failed to initialize state")
 }
@@ -1632,7 +1631,10 @@ fn test_automatic_collateral_contract_account() {
         *state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
-    assert_eq!(state.increase_block_number(), U256::from(39637239));
+    assert_eq!(
+        state.bump_block_number_accumulate_interest(),
+        U256::from(39637239)
+    );
 
     // set another key to zero
     state.checkpoint();
@@ -1673,5 +1675,5 @@ fn test_automatic_collateral_contract_account() {
         U256::from(0)
     );
     assert_eq!(*state.total_storage_tokens(), U256::from(0));
-    assert_eq!(state.increase_block_number(), U256::from(0));
+    assert_eq!(state.bump_block_number_accumulate_interest(), U256::from(0));
 }

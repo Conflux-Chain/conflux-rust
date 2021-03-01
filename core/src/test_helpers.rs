@@ -24,7 +24,6 @@ pub fn get_state_for_genesis_write_with_factory(
         StateDb::new(storage_manager.get_state_for_genesis_write()),
         factory.clone().into(),
         &Spec::new_spec(),
-        0, /* block_number */
     )
     .expect("Failed to initialize state");
 
@@ -49,7 +48,6 @@ pub fn get_state_for_genesis_write_with_factory(
         ),
         factory.into(),
         &Spec::new_spec(),
-        1, /* block_number */
     )
     .expect("Failed to initialize state")
 }
