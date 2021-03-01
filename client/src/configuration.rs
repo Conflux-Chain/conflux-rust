@@ -1079,6 +1079,16 @@ mod tests {
             &Network::Main,
         )
         .unwrap();
+        // Allow omitting the leading "0x" prefix.
+        assert_eq!(
+            addr,
+            parse_config_address_string(
+                "1a2f80341409639ea6a35bbcab8299066109aa55",
+                &Network::Main
+            )
+            .unwrap()
+        );
+        // Allow CIP-37 base32 address.
         assert_eq!(
             addr,
             parse_config_address_string(
@@ -1087,6 +1097,7 @@ mod tests {
             )
             .unwrap()
         );
+        // Allow optional fields in CIP-37 base32 address.
         assert_eq!(
             addr,
             parse_config_address_string(
