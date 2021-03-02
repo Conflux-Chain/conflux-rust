@@ -1049,9 +1049,9 @@ pub fn parse_config_address_string(
                     address.network
                 ))
             } else {
-                return address
+                address
                     .hex_address
-                    .ok_or("decoded address has wrong byte length".into());
+                    .ok_or("decoded address has wrong byte length".into())
             };
         }
         Err(e) => e,
