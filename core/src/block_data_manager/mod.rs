@@ -484,9 +484,9 @@ impl BlockDataManager {
     /// remove block traces in memory cache and db
     pub fn remove_block_traces(&self, hash: &H256, remove_db: bool) {
         if remove_db {
-            self.db_manager.remove_block_header_from_db(hash);
+            self.db_manager.remove_block_trace_from_db(hash);
         }
-        self.block_headers.write().remove(hash);
+        self.block_traces.write().remove(hash);
     }
 
     pub fn block_header_by_hash(
