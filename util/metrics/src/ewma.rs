@@ -41,7 +41,8 @@ impl EWMA {
         let count = self.uncounted.swap(0, ORDER) as f64;
         let instant_rate = count / 5e9;
 
-        if self.init.compare_and_swap(false, true, ORDER) {
+        if let Err(true) = self.init.compare_exchange(false, true, ORDER, ORDER)
+        {
             let mut current_rate = f64::from_bits(self.rate.load(ORDER));
             current_rate += self.alpha * (instant_rate - current_rate);
             self.rate.store(f64::to_bits(current_rate), ORDER);

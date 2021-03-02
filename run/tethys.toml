@@ -49,10 +49,10 @@ bootnodes="cfxnode://dc79bc70833e797ba41eff5bda67c0484abca4918ef38289b5f96acd3da
 
 # `mining_author` is the address to receive mining rewards.
 # If set, `mining_type` will be "stratum" by default.
-# The value is a 40-digit hex string.
+# The value is a 40-digit hex string or a valid CIP-37 base32 address.
 # By default, the value is not set.
 #
-# mining_author="1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+# mining_author="cfx:aarc9abycue0hhzgyrr53m6cxedgccrmmyybjgh4xg"
 
 # `mining_type` controls whether the mining process goes through the
 # stratum protocol, uses CPU-mining, or disable mining.
