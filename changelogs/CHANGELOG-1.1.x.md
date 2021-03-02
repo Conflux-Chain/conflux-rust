@@ -22,6 +22,7 @@
 ## Bug Fixes
 - Fix a possible OOM error when a full node is catching up.
 - Return correct `block_number` in `cfx_getStatus`.
+- Fix a bug that makes the configuration `mining_author` require extra quotes to use a CIP-37 base32 address.
 
 # 1.1.1
 
