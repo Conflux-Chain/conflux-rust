@@ -465,7 +465,7 @@ impl BlockDataManager {
         self.block_traces
             .read()
             .get(hash)
-            .and_then(|traces_info| traces_info.get_pivot_data())
+            .and_then(|traces_info| traces_info.get_current_data())
     }
 
     /// Similar to `block_execution_result_by_hash_with_epoch`.
@@ -479,9 +479,9 @@ impl BlockDataManager {
             .write()
             .get_mut(hash)
             .and_then(|traces_info| {
-                let r = traces_info.get_receipts_at_epoch(assumed_epoch);
+                let r = traces_info.get_data_at_version(assumed_epoch);
                 if update_pivot_assumption {
-                    traces_info.set_pivot_hash(*assumed_epoch);
+                    traces_info.set_current_version(*assumed_epoch);
                 }
                 r
             })
@@ -511,7 +511,7 @@ impl BlockDataManager {
                 .write()
                 .entry(*hash)
                 .or_insert(BlockTracesInfo::default())
-                .insert_receipts_at_epoch(assumed_epoch, trace.clone());
+                .insert_current_data(assumed_epoch, trace.clone());
             self.cache_man.lock().note_used(CacheId::BlockTraces(*hash));
         }
         Some(trace)
@@ -533,7 +533,7 @@ impl BlockDataManager {
         let traces_info = block_traces
             .entry(hash)
             .or_insert(BlockTracesInfo::default());
-        traces_info.insert_receipts_at_epoch(&pivot_hash, trace);
+        traces_info.insert_current_data(&pivot_hash, trace);
 
         self.cache_man.lock().note_used(CacheId::BlockTraces(hash));
     }
@@ -621,9 +621,9 @@ impl BlockDataManager {
             .write()
             .get_mut(hash)
             .and_then(|receipt_info| {
-                let r = receipt_info.get_receipts_at_epoch(assumed_epoch);
+                let r = receipt_info.get_data_at_version(assumed_epoch);
                 if update_pivot_assumption {
-                    receipt_info.set_pivot_hash(*assumed_epoch);
+                    receipt_info.set_current_version(*assumed_epoch);
                 }
                 r
             })
@@ -658,7 +658,7 @@ impl BlockDataManager {
                 .write()
                 .entry(*hash)
                 .or_insert(BlockReceiptsInfo::default())
-                .insert_receipts_at_epoch(assumed_epoch, receipts.clone());
+                .insert_current_data(assumed_epoch, receipts.clone());
             self.cache_man
                 .lock()
                 .note_used(CacheId::BlockReceipts(*hash));
@@ -714,7 +714,7 @@ impl BlockDataManager {
         let receipt_info = block_receipts
             .entry(hash)
             .or_insert(BlockReceiptsInfo::default());
-        receipt_info.insert_receipts_at_epoch(&epoch, result.1);
+        receipt_info.insert_current_data(&epoch, result.1);
 
         self.cache_man
             .lock()
@@ -969,7 +969,7 @@ impl BlockDataManager {
     ) -> bool {
         match self.block_receipts.write().get_mut(block_hash) {
             Some(r) => {
-                r.retain_epoch(epoch);
+                r.retain_version(epoch);
                 true
             }
             None => false,

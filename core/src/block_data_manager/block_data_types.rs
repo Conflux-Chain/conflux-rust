@@ -67,12 +67,6 @@ impl Default for BlockRewardResult {
     }
 }
 
-/// The structure to maintain the `BlockExecutedResult` of blocks under
-/// different views.
-///
-/// Note that in database only the results corresponding to the current pivot
-/// chain exist. This multi-version receipts are only maintained in memory and
-/// will be garbage collected.
 #[derive(Debug, DeriveMallocSizeOf)]
 pub struct DataVersionTuple<Version, T>(pub Version, pub T);
 
@@ -95,63 +89,66 @@ impl BlockTracesWithEpoch {
     }
 }
 
+/// The structure to maintain block data under different views.
+///
+/// Note that in database only the results corresponding to the current pivot
+/// chain exist. This multi-version version are only maintained in memory and
+/// will be garbage collected.
 #[derive(Debug, SmartDefault)]
 pub struct BlockDataWithMultiVersion<Version, T> {
-    execution_info_with_epoch: Vec<DataVersionTuple<Version, T>>,
+    data_version_tuple_array: Vec<DataVersionTuple<Version, T>>,
     // The current pivot epoch that this block is executed.
     // This should be consistent with the epoch hash in database.
-    pivot_epoch: Option<Version>,
+    current_version: Option<Version>,
 }
 
 impl<Version: Copy + Eq + PartialEq, T: Clone>
     BlockDataWithMultiVersion<Version, T>
 {
-    /// Return None if we do not have a corresponding ExecutionResult in the
-    /// given `epoch`. Return `(ExecutionResult, is_on_pivot)` otherwise.
-    pub fn get_receipts_at_epoch(&self, epoch: &Version) -> Option<(T, bool)> {
-        self.pivot_epoch.as_ref().and_then(|pivot_epoch| {
-            for DataVersionTuple(e_id, data) in &self.execution_info_with_epoch
-            {
-                if *e_id == *epoch {
-                    return Some((data.clone(), epoch == pivot_epoch));
+    /// Return None if we do not have a corresponding data in the
+    /// given `version`. Return `(data, is_current)` otherwise.
+    pub fn get_data_at_version(&self, version: &Version) -> Option<(T, bool)> {
+        self.current_version.as_ref().and_then(|current_version| {
+            for DataVersionTuple(e_id, data) in &self.data_version_tuple_array {
+                if *e_id == *version {
+                    return Some((data.clone(), version == current_version));
                 }
             }
             None
         })
     }
 
-    pub fn get_pivot_data(&self) -> Option<T> {
-        self.pivot_epoch.as_ref().map(|pivot_epoch| {
-            for DataVersionTuple(e_id, data) in &self.execution_info_with_epoch
-            {
-                if *e_id == *pivot_epoch {
+    pub fn get_current_data(&self) -> Option<T> {
+        self.current_version.as_ref().map(|current_version| {
+            for DataVersionTuple(e_id, data) in &self.data_version_tuple_array {
+                if *e_id == *current_version {
                     return data.clone();
                 }
             }
-            unreachable!("The pivot data should exist if it's Some")
+            unreachable!("The current data should exist")
         })
     }
 
-    pub fn set_pivot_hash(&mut self, epoch: Version) {
-        self.pivot_epoch = Some(epoch);
+    pub fn set_current_version(&mut self, version: Version) {
+        self.current_version = Some(version);
     }
 
-    /// Insert the tx fee when the block is included in epoch `epoch`
-    pub fn insert_receipts_at_epoch(&mut self, epoch: &Version, receipts: T) {
+    /// Insert the latest data with its version
+    pub fn insert_current_data(&mut self, version: &Version, data: T) {
         // If it's inserted before, we do not need to push a duplicated entry.
-        if self.get_receipts_at_epoch(epoch).is_none() {
-            self.execution_info_with_epoch
-                .push(DataVersionTuple(*epoch, receipts));
+        if self.get_data_at_version(version).is_none() {
+            self.data_version_tuple_array
+                .push(DataVersionTuple(*version, data));
         }
-        self.pivot_epoch = Some(*epoch);
+        self.current_version = Some(*version);
     }
 
-    /// Only keep the receipts in the given `epoch`
-    /// Called after we process rewards, and other fees will not be used w.h.p.
-    pub fn retain_epoch(&mut self, epoch: &Version) {
-        self.execution_info_with_epoch
-            .retain(|DataVersionTuple(e_id, _)| e_id == epoch);
-        self.pivot_epoch = Some(*epoch);
+    /// Only keep the data in the given `version`.
+    /// Called when the data on other versions are not likely to be needed.
+    pub fn retain_version(&mut self, version: &Version) {
+        self.data_version_tuple_array
+            .retain(|DataVersionTuple(e_id, _)| e_id == version);
+        self.current_version = Some(*version);
     }
 }
 
@@ -159,7 +156,7 @@ impl<VersionIndex: MallocSizeOf, T: MallocSizeOf> MallocSizeOf
     for BlockDataWithMultiVersion<VersionIndex, T>
 {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.execution_info_with_epoch.size_of(ops)
+        self.data_version_tuple_array.size_of(ops)
     }
 }
 
