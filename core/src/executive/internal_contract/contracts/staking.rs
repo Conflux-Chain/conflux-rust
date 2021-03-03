@@ -17,7 +17,7 @@ use crate::{
     make_solidity_function,
     state::{StateGeneric, Substate},
     trace::{trace::ExecTrace, Tracer},
-    vm,
+    vm::{self, Env},
 };
 use cfx_storage::StorageStateTrait;
 use cfx_types::{Address, U256};
@@ -58,12 +58,12 @@ impl<S: StorageStateTrait + Send + Sync> UpfrontPaymentTrait<S> for Deposit<S> {
 
 impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for Deposit<S> {
     fn execute_inner(
-        &self, input: U256, params: &ActionParams, _spec: &Spec,
+        &self, input: U256, params: &ActionParams, env: &Env, _spec: &Spec,
         state: &mut StateGeneric<S>, _substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        deposit(input, params, state, tracer)
+        deposit(input, params, env, state, tracer)
     }
 }
 
@@ -87,12 +87,12 @@ impl<S: StorageStateTrait + Send + Sync> UpfrontPaymentTrait<S>
 
 impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for Withdraw<S> {
     fn execute_inner(
-        &self, input: U256, params: &ActionParams, _spec: &Spec,
+        &self, input: U256, params: &ActionParams, env: &Env, _spec: &Spec,
         state: &mut StateGeneric<S>, _substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        withdraw(input, params, state, tracer)
+        withdraw(input, params, env, state, tracer)
     }
 }
 
@@ -116,12 +116,12 @@ impl<S: StorageStateTrait + Send + Sync> UpfrontPaymentTrait<S>
 
 impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for VoteLock<S> {
     fn execute_inner(
-        &self, inputs: (U256, U256), params: &ActionParams, _spec: &Spec,
-        state: &mut StateGeneric<S>, _substate: &mut Substate,
+        &self, inputs: (U256, U256), params: &ActionParams, env: &Env,
+        _spec: &Spec, state: &mut StateGeneric<S>, _substate: &mut Substate,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        vote_lock(inputs.0, inputs.1, params, state)
+        vote_lock(inputs.0, inputs.1, params, env, state)
     }
 }
 
@@ -134,7 +134,7 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
     for GetStakingBalance<S>
 {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _spec: &Spec,
+        &self, input: Address, _: &ActionParams, _env: &Env, _spec: &Spec,
         state: &mut StateGeneric<S>, _substate: &mut Substate,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
@@ -166,11 +166,16 @@ impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
 {
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
-        _spec: &Spec, state: &mut StateGeneric<S>, _substate: &mut Substate,
-        _tracer: &mut dyn Tracer<Output = ExecTrace>,
+        env: &Env, _spec: &Spec, state: &mut StateGeneric<S>,
+        _substate: &mut Substate, _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
-        Ok(get_locked_staking(address, block_number, state)?)
+        Ok(get_locked_staking(
+            address,
+            block_number,
+            env.number,
+            state,
+        )?)
     }
 }
 
@@ -195,11 +200,11 @@ impl<S: StorageStateTrait + Send + Sync> UpfrontPaymentTrait<S>
 impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for GetVotePower<S> {
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
-        _spec: &Spec, state: &mut StateGeneric<S>, _substate: &mut Substate,
-        _tracer: &mut dyn Tracer<Output = ExecTrace>,
+        env: &Env, _spec: &Spec, state: &mut StateGeneric<S>,
+        _substate: &mut Substate, _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
-        Ok(get_vote_power(address, block_number, state)?)
+        Ok(get_vote_power(address, block_number, env.number, state)?)
     }
 }
 

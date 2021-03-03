@@ -1408,26 +1408,20 @@ impl ConsensusGraphTrait for ConsensusGraph {
             rpc_param_name,
             self.get_height_from_epoch_number(epoch_number),
         )?;
-        let (epoch_id, epoch_size) = if let Ok(v) =
+        let epoch_id = if let Ok(v) =
             self.inner.read_recursive().block_hashes_by_epoch(height)
         {
-            (v.last().expect("pivot block always exist").clone(), v.len())
+            v.last().expect("pivot block always exist").clone()
         } else {
             bail!("cannot get block hashes in the specified epoch, maybe it does not exist?");
         };
         let state_db =
             self.get_state_db_by_height_and_hash(height, &epoch_id)?;
 
-        let start_block_number = match self.data_man.get_epoch_execution_context(&epoch_id) {
-            Some(v) => v.start_block_number + epoch_size as u64,
-            None => bail!("cannot obtain the execution context. Database is potentially corrupted!"),
-        };
-
         Ok(State::new(
             state_db,
             Default::default(), /* vm */
             &Spec::new_spec(),
-            start_block_number,
         )?)
     }
 

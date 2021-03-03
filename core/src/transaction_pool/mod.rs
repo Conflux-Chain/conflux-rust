@@ -771,10 +771,6 @@ impl TransactionPool {
             ),
             Default::default(),
             &Spec::new_spec(),
-            // So far block_number is unused in txpool's state, it's fine
-            // to specify a fake number. block_number 1
-            // corresponds to the state of genesis block.
-            1, /* block_number */
         )?))
     }
 
