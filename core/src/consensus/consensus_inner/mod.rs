@@ -9,7 +9,8 @@ pub mod consensus_new_block_handler;
 
 use crate::{
     block_data_manager::{
-        BlockDataManager, BlockExecutionResultWithEpoch, EpochExecutionContext,
+        BlockDataManager, BlockExecutionResultWithEpoch, DataVersionTuple,
+        EpochExecutionContext,
     },
     consensus::{
         anticone_cache::AnticoneCache,
@@ -2252,7 +2253,7 @@ impl ConsensusGraphInner {
                         false, /* update_pivot_assumption */
                         update_cache,
                     )?;
-                Some(BlockExecutionResultWithEpoch(epoch, execution_result))
+                Some(DataVersionTuple(epoch, execution_result))
             }
             None => {
                 debug!("Block {:?} not in mem, try to read from db", hash);

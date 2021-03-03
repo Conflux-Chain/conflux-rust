@@ -5,6 +5,7 @@ use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::BlockReceipts;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
+use smart_default::SmartDefault;
 use std::sync::Arc;
 
 /// The start block number of an epoch. It equals to the past executed number of
@@ -71,81 +72,104 @@ impl Default for BlockRewardResult {
 /// Note that in database only the results corresponding to the current pivot
 /// chain exist. This multi-version receipts are only maintained in memory and
 /// will be garbage collected.
-type EpochIndex = H256;
 #[derive(Debug, DeriveMallocSizeOf)]
-pub struct BlockExecutionResultWithEpoch(
-    pub EpochIndex,
-    pub BlockExecutionResult,
-);
-#[derive(Default, Debug)]
-pub struct BlockReceiptsInfo {
-    execution_info_with_epoch: Vec<BlockExecutionResultWithEpoch>,
-    // The current pivot epoch that this block is executed.
-    // This should be consistent with the epoch hash in database.
-    pivot_epoch: EpochIndex,
+pub struct DataVersionTuple<Version, T>(pub Version, pub T);
+
+pub type BlockExecutionResultWithEpoch =
+    DataVersionTuple<H256, BlockExecutionResult>;
+
+impl BlockExecutionResultWithEpoch {
+    pub fn new(pivot_hash: H256, receipts: BlockExecutionResult) -> Self {
+        DataVersionTuple::<H256, BlockExecutionResult>(pivot_hash, receipts)
+    }
 }
 
-impl BlockReceiptsInfo {
+pub type BlockReceiptsInfo =
+    BlockDataWithMultiVersion<H256, BlockExecutionResult>;
+
+#[derive(Debug, SmartDefault)]
+pub struct BlockDataWithMultiVersion<Version, T> {
+    execution_info_with_epoch: Vec<DataVersionTuple<Version, T>>,
+    // The current pivot epoch that this block is executed.
+    // This should be consistent with the epoch hash in database.
+    pivot_epoch: Option<Version>,
+}
+
+impl<Version: Copy + Eq + PartialEq, T: Clone>
+    BlockDataWithMultiVersion<Version, T>
+{
     /// Return None if we do not have a corresponding ExecutionResult in the
     /// given `epoch`. Return `(ExecutionResult, is_on_pivot)` otherwise.
-    pub fn get_receipts_at_epoch(
-        &self, epoch: &EpochIndex,
-    ) -> Option<(BlockExecutionResult, bool)> {
-        for BlockExecutionResultWithEpoch(e_id, receipts) in
-            &self.execution_info_with_epoch
-        {
-            if *e_id == *epoch {
-                return Some((receipts.clone(), epoch == &self.pivot_epoch));
+    pub fn get_receipts_at_epoch(&self, epoch: &Version) -> Option<(T, bool)> {
+        self.pivot_epoch.as_ref().and_then(|pivot_epoch| {
+            for DataVersionTuple(e_id, data) in &self.execution_info_with_epoch
+            {
+                if *e_id == *epoch {
+                    return Some((data.clone(), epoch == pivot_epoch));
+                }
             }
-        }
-        None
+            None
+        })
     }
 
-    pub fn set_pivot_hash(&mut self, epoch: EpochIndex) {
-        self.pivot_epoch = epoch;
+    pub fn set_pivot_hash(&mut self, epoch: Version) {
+        self.pivot_epoch = Some(epoch);
     }
 
     /// Insert the tx fee when the block is included in epoch `epoch`
-    pub fn insert_receipts_at_epoch(
-        &mut self, epoch: &EpochIndex, receipts: BlockExecutionResult,
-    ) {
+    pub fn insert_receipts_at_epoch(&mut self, epoch: &Version, receipts: T) {
         // If it's inserted before, we do not need to push a duplicated entry.
         if self.get_receipts_at_epoch(epoch).is_none() {
             self.execution_info_with_epoch
-                .push(BlockExecutionResultWithEpoch(*epoch, receipts));
+                .push(DataVersionTuple(*epoch, receipts));
         }
-        self.pivot_epoch = *epoch;
+        self.pivot_epoch = Some(*epoch);
     }
 
     /// Only keep the receipts in the given `epoch`
     /// Called after we process rewards, and other fees will not be used w.h.p.
-    pub fn retain_epoch(&mut self, epoch: &EpochIndex) {
+    pub fn retain_epoch(&mut self, epoch: &Version) {
         self.execution_info_with_epoch
-            .retain(|BlockExecutionResultWithEpoch(e_id, _)| *e_id == *epoch);
-        self.pivot_epoch = *epoch;
+            .retain(|DataVersionTuple(e_id, _)| e_id == epoch);
+        self.pivot_epoch = Some(*epoch);
     }
 }
 
-impl MallocSizeOf for BlockReceiptsInfo {
+impl<VersionIndex: MallocSizeOf, T: MallocSizeOf> MallocSizeOf
+    for BlockDataWithMultiVersion<VersionIndex, T>
+{
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         self.execution_info_with_epoch.size_of(ops)
     }
 }
 
-impl Encodable for BlockExecutionResultWithEpoch {
+impl<Version: Encodable, T: Encodable> Encodable
+    for DataVersionTuple<Version, T>
+{
     fn rlp_append(&self, stream: &mut RlpStream) {
         stream.begin_list(2).append(&self.0).append(&self.1);
     }
 }
 
-impl Decodable for BlockExecutionResultWithEpoch {
-    fn decode(
-        rlp: &Rlp,
-    ) -> Result<BlockExecutionResultWithEpoch, DecoderError> {
-        Ok(BlockExecutionResultWithEpoch(
-            rlp.val_at(0)?,
-            rlp.val_at(1)?,
-        ))
+impl<Version: Decodable, T: Decodable> Decodable
+    for DataVersionTuple<Version, T>
+{
+    fn decode(rlp: &Rlp) -> Result<DataVersionTuple<Version, T>, DecoderError> {
+        Ok(DataVersionTuple(rlp.val_at(0)?, rlp.val_at(1)?))
+    }
+}
+
+impl<Version: Encodable, T: Encodable> DatabaseEncodable
+    for DataVersionTuple<Version, T>
+{
+    fn db_encode(&self) -> Vec<u8> { rlp::encode(self) }
+}
+
+impl<Version: Decodable, T: Decodable> DatabaseDecodable
+    for DataVersionTuple<Version, T>
+{
+    fn db_decode(bytes: &[u8]) -> Result<Self, DecoderError> {
+        rlp::decode(bytes)
     }
 }
 
@@ -274,5 +298,4 @@ impl_db_encoding_as_rlp!(LocalBlockInfo);
 impl_db_encoding_as_rlp!(CheckpointHashes);
 impl_db_encoding_as_rlp!(EpochExecutionContext);
 impl_db_encoding_as_rlp!(BlockRewardResult);
-impl_db_encoding_as_rlp!(BlockExecutionResultWithEpoch);
 impl_db_encoding_as_rlp!(BlamedHeaderVerifiedRoots);

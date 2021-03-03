@@ -579,7 +579,7 @@ impl BlockDataManager {
             if update_pivot_assumption && !is_on_pivot {
                 self.db_manager.insert_block_execution_result_to_db(
                     hash,
-                    &BlockExecutionResultWithEpoch(
+                    &BlockExecutionResultWithEpoch::new(
                         *assumed_epoch,
                         receipts.clone(),
                     ),
@@ -587,7 +587,7 @@ impl BlockDataManager {
             }
             return Some(receipts);
         }
-        let BlockExecutionResultWithEpoch(epoch, receipts) =
+        let DataVersionTuple(epoch, receipts) =
             self.db_manager.block_execution_result_from_db(hash)?;
         if epoch != *assumed_epoch {
             debug!(
@@ -640,7 +640,7 @@ impl BlockDataManager {
                     b.accrue_bloom(&r.log_bloom);
                     b
                 });
-        let result = BlockExecutionResultWithEpoch(
+        let result = DataVersionTuple(
             epoch,
             BlockExecutionResult {
                 block_receipts,

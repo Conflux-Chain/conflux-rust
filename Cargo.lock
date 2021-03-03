@@ -656,6 +656,7 @@ dependencies = [
  "serde_json",
  "siphasher",
  "slab",
+ "smart-default",
  "solidity-abi",
  "sqlite",
  "sqlite3-sys",
@@ -4036,6 +4037,17 @@ name = "smallvec"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7acad6f34eb9e8a259d3283d1e8c1d34d7415943d4895f65cc73813c7396fc85"
+
+[[package]]
+name = "smart-default"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "133659a15339456eeeb07572eb02a91c91e9815e9cbc89566944d2c8d3efdbf6"
+dependencies = [
+ "proc-macro2 1.0.24",
+ "quote 1.0.7",
+ "syn 1.0.52",
+]
 
 [[package]]
 name = "snappy-sys"

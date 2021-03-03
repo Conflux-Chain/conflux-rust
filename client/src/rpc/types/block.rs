@@ -6,7 +6,7 @@ use super::RpcAddress;
 use cfx_addr::Network;
 use cfx_types::{H160, H256, U256, U64};
 use cfxcore::{
-    block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
+    block_data_manager::{BlockDataManager, DataVersionTuple},
     consensus::ConsensusGraphInner,
     pow, SharedConsensusGraph,
 };
@@ -155,10 +155,7 @@ impl Block {
                         &b.hash(),
                         false, /* update_cache */
                     ) {
-                    Some(BlockExecutionResultWithEpoch(
-                        _,
-                        execution_result,
-                    )) => {
+                    Some(DataVersionTuple(_, execution_result)) => {
                         let epoch_number =
                             consensus_inner.get_block_epoch_number(&b.hash());
 
@@ -241,7 +238,7 @@ impl Block {
                     false, /* update_cache */
                 );
             match maybe_results {
-                Some(BlockExecutionResultWithEpoch(_, execution_result)) => {
+                Some(DataVersionTuple(_, execution_result)) => {
                     let receipt = execution_result
                         .block_receipts
                         .receipts

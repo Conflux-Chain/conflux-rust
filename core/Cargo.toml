@@ -84,6 +84,7 @@ tokio-timer = "0.2.13"
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 strum = "0.20"
 strum_macros = "0.20"
+smart-default = "0.6.0"
 
 [dev-dependencies]
 criterion = "0.2"
