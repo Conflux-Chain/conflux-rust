@@ -1293,6 +1293,7 @@ impl ConsensusExecutionHandler {
                 self.data_man.insert_block_traces(
                     block.hash(),
                     block_traces.into(),
+                    pivot_block.hash(),
                     on_local_pivot,
                 );
             }

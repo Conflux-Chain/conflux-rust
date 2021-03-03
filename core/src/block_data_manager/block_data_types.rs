@@ -1,3 +1,4 @@
+use crate::trace::trace::BlockExecTraces;
 use cfx_internal_common::{DatabaseDecodable, DatabaseEncodable};
 use cfx_types::{Bloom, H256, U256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
@@ -77,15 +78,22 @@ pub struct DataVersionTuple<Version, T>(pub Version, pub T);
 
 pub type BlockExecutionResultWithEpoch =
     DataVersionTuple<H256, BlockExecutionResult>;
+pub type BlockTracesWithEpoch = DataVersionTuple<H256, BlockExecTraces>;
+pub type BlockReceiptsInfo =
+    BlockDataWithMultiVersion<H256, BlockExecutionResult>;
+pub type BlockTracesInfo = BlockDataWithMultiVersion<H256, BlockExecTraces>;
 
 impl BlockExecutionResultWithEpoch {
     pub fn new(pivot_hash: H256, receipts: BlockExecutionResult) -> Self {
-        DataVersionTuple::<H256, BlockExecutionResult>(pivot_hash, receipts)
+        DataVersionTuple(pivot_hash, receipts)
     }
 }
 
-pub type BlockReceiptsInfo =
-    BlockDataWithMultiVersion<H256, BlockExecutionResult>;
+impl BlockTracesWithEpoch {
+    pub fn new(pivot_hash: H256, traces: BlockExecTraces) -> Self {
+        DataVersionTuple(pivot_hash, traces)
+    }
+}
 
 #[derive(Debug, SmartDefault)]
 pub struct BlockDataWithMultiVersion<Version, T> {
@@ -109,6 +117,18 @@ impl<Version: Copy + Eq + PartialEq, T: Clone>
                 }
             }
             None
+        })
+    }
+
+    pub fn get_pivot_data(&self) -> Option<T> {
+        self.pivot_epoch.as_ref().map(|pivot_epoch| {
+            for DataVersionTuple(e_id, data) in &self.execution_info_with_epoch
+            {
+                if *e_id == *pivot_epoch {
+                    return data.clone();
+                }
+            }
+            unreachable!("The pivot data should exist if it's Some")
         })
     }
 
