@@ -1117,7 +1117,7 @@ impl BlockDataManager {
                     return false;
                 }
                 if update_trace {
-                    // If update block traces in db if needed.
+                    // Update block traces in db if needed.
                     if self
                         .block_traces_by_hash_with_epoch(
                             h, epoch_hash,
