@@ -480,7 +480,7 @@ impl BlockDataManager {
             .get_mut(hash)
             .and_then(|traces_info| {
                 let r = traces_info.get_data_at_version(assumed_epoch);
-                if update_pivot_assumption {
+                if update_pivot_assumption && r.is_some() {
                     traces_info.set_current_version(*assumed_epoch);
                 }
                 r
@@ -622,7 +622,7 @@ impl BlockDataManager {
             .get_mut(hash)
             .and_then(|receipt_info| {
                 let r = receipt_info.get_data_at_version(assumed_epoch);
-                if update_pivot_assumption {
+                if update_pivot_assumption && r.is_some() {
                     receipt_info.set_current_version(*assumed_epoch);
                 }
                 r
@@ -1097,7 +1097,7 @@ impl BlockDataManager {
     /// Check if all executed results of an epoch exist
     pub fn epoch_executed_and_recovered(
         &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
-        on_local_pivot: bool,
+        on_local_pivot: bool, update_trace: bool,
     ) -> bool
     {
         if !self.epoch_executed(epoch_hash) {
@@ -1105,7 +1105,7 @@ impl BlockDataManager {
         }
 
         if on_local_pivot {
-            // Check if all blocks receipts are from this epoch
+            // Check if all blocks receipts and traces are from this epoch
             let mut epoch_receipts = Vec::new();
             for h in epoch_block_hashes {
                 if let Some(r) = self.block_execution_result_by_hash_with_epoch(
@@ -1115,6 +1115,19 @@ impl BlockDataManager {
                     epoch_receipts.push(r.block_receipts);
                 } else {
                     return false;
+                }
+                if update_trace {
+                    // If update block traces in db if needed.
+                    if self
+                        .block_traces_by_hash_with_epoch(
+                            h, epoch_hash,
+                            true, /* update_pivot_assumption */
+                            true, /* update_cache */
+                        )
+                        .is_none()
+                    {
+                        return false;
+                    }
                 }
             }
             // Recover tx address if we will skip pivot chain execution

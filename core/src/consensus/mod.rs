@@ -1145,19 +1145,19 @@ impl ConsensusGraph {
     fn filter_traces_single_epoch(
         &self, epoch_number: u64, assumed_pivot: H256,
     ) -> Result<Vec<BlockExecTraces>, FilterError> {
-        let epoch_hashes = self
+        let block_hashes = self
             .inner
             .read_recursive()
             .block_hashes_by_epoch(epoch_number)?;
-        if epoch_hashes.last().expect("epoch set not empty") != &assumed_pivot {
+        if block_hashes.last().expect("epoch set not empty") != &assumed_pivot {
             bail!(FilterError::PivotChainReorg {
                 epoch: epoch_number,
                 from: assumed_pivot,
-                to: *epoch_hashes.last().unwrap()
+                to: *block_hashes.last().unwrap()
             })
         }
         let mut traces = Vec::new();
-        for block_hash in epoch_hashes {
+        for block_hash in block_hashes {
             traces.push(
                 self.data_man
                     .block_traces_by_hash_with_epoch(

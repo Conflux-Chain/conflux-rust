@@ -907,6 +907,7 @@ impl ConsensusExecutionHandler {
                 &epoch_hash,
                 &epoch_block_hashes,
                 on_local_pivot,
+                self.config.executive_trace,
             )
         {
             let pivot_block_header = self
