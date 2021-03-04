@@ -3,13 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use super::CleanupMode;
-use crate::{
-    evm::{CleanDustMode, Spec},
-    state::StateGeneric,
-};
+use crate::evm::{CleanDustMode, Spec};
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::Result as DbResult;
-use cfx_storage::StorageStateTrait;
 use cfx_types::{Address, U256};
 use primitives::LogEntry;
 use std::{
@@ -189,16 +185,16 @@ impl Substate {
 
     // Let VM access storage from substate so that storage ownership can be
     // maintained without help from state.
-    pub fn storage_at<S: StorageStateTrait>(
-        &self, state: &StateGeneric<S>, address: &Address, key: &[u8],
+    pub fn storage_at(
+        &self, state: &dyn StateOpsTrait, address: &Address, key: &[u8],
     ) -> DbResult<U256> {
         state.storage_at(address, key)
     }
 
     // Let VM access storage from substate so that storage ownership can be
     // maintained without help from state.
-    pub fn set_storage<S: StorageStateTrait>(
-        &mut self, state: &mut StateGeneric<S>, address: &Address,
+    pub fn set_storage(
+        &mut self, state: &mut dyn StateOpsTrait, address: &Address,
         key: Vec<u8>, value: U256, owner: Address,
     ) -> DbResult<()>
     {
