@@ -907,6 +907,7 @@ impl ConsensusExecutionHandler {
                 &epoch_hash,
                 &epoch_block_hashes,
                 on_local_pivot,
+                self.config.executive_trace,
             )
         {
             let pivot_block_header = self
@@ -1292,6 +1293,7 @@ impl ConsensusExecutionHandler {
                 self.data_man.insert_block_traces(
                     block.hash(),
                     block_traces.into(),
+                    pivot_block.hash(),
                     on_local_pivot,
                 );
             }

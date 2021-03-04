@@ -14,7 +14,11 @@ from test_framework.util import assert_equal, connect_nodes, get_peer_addr, wait
 class RpcTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
-        self.conf_parameters = {"log_level": "\"trace\""}
+        self.conf_parameters = {
+            "log_level": "\"trace\"",
+            "executive_trace": "true",
+            "enable_tracing": "true",
+        }
 
     def setup_network(self):
         self.setup_nodes()

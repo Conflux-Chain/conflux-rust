@@ -98,7 +98,7 @@ pub struct BlockDataManager {
     compact_blocks: RwLock<HashMap<H256, CompactBlock>>,
     block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
     block_rewards: RwLock<HashMap<H256, BlockRewardResult>>,
-    block_traces: RwLock<HashMap<H256, BlockExecTraces>>,
+    block_traces: RwLock<HashMap<H256, BlockTracesInfo>>,
     transaction_indices: RwLock<HashMap<H256, TransactionIndex>>,
     local_block_info: RwLock<HashMap<H256, LocalBlockInfo>>,
     blamed_header_verified_roots:
@@ -459,26 +459,83 @@ impl BlockDataManager {
         }
     }
 
+    /// Get the traces for a single block without checking the assumed pivot
+    /// block
     pub fn block_traces_by_hash(&self, hash: &H256) -> Option<BlockExecTraces> {
-        self.get(
-            hash,
-            &self.block_traces,
-            |key| self.db_manager.block_traces_from_db(key),
-            Some(CacheId::BlockTraces(*hash)),
-        )
+        self.block_traces
+            .read()
+            .get(hash)
+            .and_then(|traces_info| traces_info.get_current_data())
+    }
+
+    /// Similar to `block_execution_result_by_hash_with_epoch`.
+    pub fn block_traces_by_hash_with_epoch(
+        &self, hash: &H256, assumed_epoch: &H256,
+        update_pivot_assumption: bool, update_cache: bool,
+    ) -> Option<BlockExecTraces>
+    {
+        if let Some((trace, is_on_pivot)) = self
+            .block_traces
+            .write()
+            .get_mut(hash)
+            .and_then(|traces_info| {
+                let r = traces_info.get_data_at_version(assumed_epoch);
+                if update_pivot_assumption && r.is_some() {
+                    traces_info.set_current_version(*assumed_epoch);
+                }
+                r
+            })
+        {
+            if update_cache {
+                self.cache_man.lock().note_used(CacheId::BlockTraces(*hash));
+            }
+            if update_pivot_assumption && !is_on_pivot {
+                self.db_manager.insert_block_traces_to_db(
+                    hash,
+                    &BlockTracesWithEpoch::new(*assumed_epoch, trace.clone()),
+                )
+            }
+            return Some(trace);
+        }
+        let DataVersionTuple(epoch, trace) =
+            self.db_manager.block_traces_from_db(hash)?;
+        if epoch != *assumed_epoch {
+            debug!(
+                "epoch from db {} does not match assumed {}",
+                epoch, assumed_epoch
+            );
+            return None;
+        }
+        if update_cache {
+            self.block_traces
+                .write()
+                .entry(*hash)
+                .or_insert(BlockTracesInfo::default())
+                .insert_current_data(assumed_epoch, trace.clone());
+            self.cache_man.lock().note_used(CacheId::BlockTraces(*hash));
+        }
+        Some(trace)
     }
 
     pub fn insert_block_traces(
-        &self, hash: H256, block_traces: BlockExecTraces, persistent: bool,
-    ) {
-        self.insert(
-            hash,
-            block_traces,
-            &self.block_traces,
-            |_, value| self.db_manager.insert_block_traces_to_db(&hash, value),
-            Some(CacheId::BlockTraces(hash)),
-            persistent,
-        )
+        &self, hash: H256, trace: BlockExecTraces, pivot_hash: H256,
+        persistent: bool,
+    )
+    {
+        if persistent {
+            self.db_manager.insert_block_traces_to_db(
+                &hash,
+                &BlockTracesWithEpoch::new(pivot_hash, trace.clone()),
+            );
+        }
+
+        let mut block_traces = self.block_traces.write();
+        let traces_info = block_traces
+            .entry(hash)
+            .or_insert(BlockTracesInfo::default());
+        traces_info.insert_current_data(&pivot_hash, trace);
+
+        self.cache_man.lock().note_used(CacheId::BlockTraces(hash));
     }
 
     /// remove block traces in memory cache and db
@@ -564,9 +621,9 @@ impl BlockDataManager {
             .write()
             .get_mut(hash)
             .and_then(|receipt_info| {
-                let r = receipt_info.get_receipts_at_epoch(assumed_epoch);
-                if update_pivot_assumption {
-                    receipt_info.set_pivot_hash(*assumed_epoch);
+                let r = receipt_info.get_data_at_version(assumed_epoch);
+                if update_pivot_assumption && r.is_some() {
+                    receipt_info.set_current_version(*assumed_epoch);
                 }
                 r
             })
@@ -579,7 +636,7 @@ impl BlockDataManager {
             if update_pivot_assumption && !is_on_pivot {
                 self.db_manager.insert_block_execution_result_to_db(
                     hash,
-                    &BlockExecutionResultWithEpoch(
+                    &BlockExecutionResultWithEpoch::new(
                         *assumed_epoch,
                         receipts.clone(),
                     ),
@@ -587,7 +644,7 @@ impl BlockDataManager {
             }
             return Some(receipts);
         }
-        let BlockExecutionResultWithEpoch(epoch, receipts) =
+        let DataVersionTuple(epoch, receipts) =
             self.db_manager.block_execution_result_from_db(hash)?;
         if epoch != *assumed_epoch {
             debug!(
@@ -601,7 +658,7 @@ impl BlockDataManager {
                 .write()
                 .entry(*hash)
                 .or_insert(BlockReceiptsInfo::default())
-                .insert_receipts_at_epoch(assumed_epoch, receipts.clone());
+                .insert_current_data(assumed_epoch, receipts.clone());
             self.cache_man
                 .lock()
                 .note_used(CacheId::BlockReceipts(*hash));
@@ -640,7 +697,7 @@ impl BlockDataManager {
                     b.accrue_bloom(&r.log_bloom);
                     b
                 });
-        let result = BlockExecutionResultWithEpoch(
+        let result = DataVersionTuple(
             epoch,
             BlockExecutionResult {
                 block_receipts,
@@ -657,7 +714,7 @@ impl BlockDataManager {
         let receipt_info = block_receipts
             .entry(hash)
             .or_insert(BlockReceiptsInfo::default());
-        receipt_info.insert_receipts_at_epoch(&epoch, result.1);
+        receipt_info.insert_current_data(&epoch, result.1);
 
         self.cache_man
             .lock()
@@ -912,7 +969,7 @@ impl BlockDataManager {
     ) -> bool {
         match self.block_receipts.write().get_mut(block_hash) {
             Some(r) => {
-                r.retain_epoch(epoch);
+                r.retain_version(epoch);
                 true
             }
             None => false,
@@ -1040,7 +1097,7 @@ impl BlockDataManager {
     /// Check if all executed results of an epoch exist
     pub fn epoch_executed_and_recovered(
         &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
-        on_local_pivot: bool,
+        on_local_pivot: bool, update_trace: bool,
     ) -> bool
     {
         if !self.epoch_executed(epoch_hash) {
@@ -1048,7 +1105,7 @@ impl BlockDataManager {
         }
 
         if on_local_pivot {
-            // Check if all blocks receipts are from this epoch
+            // Check if all blocks receipts and traces are from this epoch
             let mut epoch_receipts = Vec::new();
             for h in epoch_block_hashes {
                 if let Some(r) = self.block_execution_result_by_hash_with_epoch(
@@ -1058,6 +1115,19 @@ impl BlockDataManager {
                     epoch_receipts.push(r.block_receipts);
                 } else {
                     return false;
+                }
+                if update_trace {
+                    // Update block traces in db if needed.
+                    if self
+                        .block_traces_by_hash_with_epoch(
+                            h, epoch_hash,
+                            true, /* update_pivot_assumption */
+                            true, /* update_cache */
+                        )
+                        .is_none()
+                    {
+                        return false;
+                    }
                 }
             }
             // Recover tx address if we will skip pivot chain execution

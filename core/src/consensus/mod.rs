@@ -1119,19 +1119,57 @@ impl ConsensusGraph {
     fn filter_traces_by_epochs(
         &self, filter: &TraceFilter,
     ) -> Result<Vec<ExecTrace>, FilterError> {
-        let block_hashes = {
+        let epochs_and_pivot_hash = {
             let inner = self.inner.read();
-            let mut block_hashes = Vec::new();
+            let mut epochs_and_pivot_hash = Vec::new();
             for epoch_number in self.get_trace_filter_epoch_range(filter)? {
-                block_hashes.append(
-                    &mut inner
-                        .block_hashes_by_epoch(epoch_number)
-                        .map_err(|e| FilterError::Custom(e))?,
-                );
+                epochs_and_pivot_hash.push((
+                    epoch_number,
+                    inner.get_pivot_hash_from_epoch_number(epoch_number)?,
+                ))
             }
-            block_hashes
+            epochs_and_pivot_hash
         };
-        self.filter_traces_by_block_hashes(filter, block_hashes)
+        let block_traces = epochs_and_pivot_hash
+            .into_par_iter()
+            .map(|(epoch_number, assumed_pivot)| {
+                self.filter_traces_single_epoch(epoch_number, assumed_pivot)
+            })
+            .collect::<Result<Vec<Vec<BlockExecTraces>>, FilterError>>()?
+            .into_iter()
+            .flatten()
+            .collect();
+        Ok(self.filter_block_traces(filter, block_traces))
+    }
+
+    fn filter_traces_single_epoch(
+        &self, epoch_number: u64, assumed_pivot: H256,
+    ) -> Result<Vec<BlockExecTraces>, FilterError> {
+        let block_hashes = self
+            .inner
+            .read_recursive()
+            .block_hashes_by_epoch(epoch_number)?;
+        if block_hashes.last().expect("epoch set not empty") != &assumed_pivot {
+            bail!(FilterError::PivotChainReorg {
+                epoch: epoch_number,
+                from: assumed_pivot,
+                to: *block_hashes.last().unwrap()
+            })
+        }
+        let mut traces = Vec::new();
+        for block_hash in block_hashes {
+            traces.push(
+                self.data_man
+                    .block_traces_by_hash_with_epoch(
+                        &block_hash,
+                        &assumed_pivot,
+                        false,
+                        true,
+                    )
+                    .ok_or(FilterError::UnknownBlock { hash: block_hash })?,
+            );
+        }
+        Ok(traces)
     }
 
     // TODO: We can apply some early return logic based on `filter.count`.
