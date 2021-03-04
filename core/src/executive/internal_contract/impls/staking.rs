@@ -12,6 +12,7 @@ use cfx_parameters::{
     consensus::ONE_CFX_IN_DRIP,
     internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
 };
+use cfx_state::state_trait::StateOpsTrait;
 use cfx_storage::StorageStateTrait;
 use cfx_types::{Address, U256};
 

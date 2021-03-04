@@ -7,6 +7,7 @@ use crate::{
     trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, Spec},
 };
+use cfx_state::state_trait::*;
 use cfx_storage::StorageStateTrait;
 use cfx_types::{address_util::AddressUtil, Address};
 
@@ -61,6 +62,8 @@ pub fn suicide<S: StorageStateTrait>(
 /// Implementation of `set_admin(address,address)`.
 /// The input should consist of 20 bytes `contract_address` + 20 bytes
 /// `new_admin_address`
+// FIXME: try to get rid of ensure_account_loaded call so that
+//  the state type can be changed to StateTrait.
 pub fn set_admin<S: StorageStateTrait>(
     contract_address: Address, new_admin_address: Address,
     contract_in_creation: Option<&Address>, params: &ActionParams,

@@ -9,6 +9,10 @@ use crate::{
     test_helpers::get_state_for_genesis_write,
 };
 use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
+use cfx_state::{
+    state_trait::{CheckpointTrait, StateOpsTrait},
+    StateTrait,
+};
 use cfx_statedb::StateDb;
 use cfx_storage::{
     tests::new_state_manager_for_unit_test, StateIndex, StorageManager,

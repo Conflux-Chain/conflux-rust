@@ -16,8 +16,7 @@ use crate::{
     hash::keccak,
     machine::Machine,
     state::{
-        CallStackInfo, CleanupMode, CollateralCheckResult, StateGeneric,
-        Substate,
+        CallStackInfo, CollateralCheckResultToVmResult, StateGeneric, Substate,
     },
     trace::{self, trace::ExecTrace, Tracer},
     verification::VerificationConfig,
@@ -29,6 +28,10 @@ use crate::{
     vm_factory::VmFactory,
 };
 use cfx_parameters::staking::*;
+use cfx_state::{
+    state_trait::{CheckpointTrait, StateOpsTrait},
+    CleanupMode, CollateralCheckResult, StateTrait,
+};
 use cfx_statedb::Result as DbResult;
 use cfx_storage::{StorageState, StorageStateTrait};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256, U512, U64};
@@ -1613,6 +1616,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ExecutiveGeneric<'a, S> {
         )?)
     }
 
+    // FIXME: this implementation is not generic
     fn kill_process(
         &mut self, suicides: &HashSet<Address>,
     ) -> DbResult<Substate> {

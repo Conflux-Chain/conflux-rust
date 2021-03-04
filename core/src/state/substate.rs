@@ -7,6 +7,7 @@ use crate::{
     evm::{CleanDustMode, Spec},
     state::StateGeneric,
 };
+use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::Result as DbResult;
 use cfx_storage::StorageStateTrait;
 use cfx_types::{Address, U256};

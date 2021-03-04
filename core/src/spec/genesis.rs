@@ -9,7 +9,7 @@ use crate::{
         TransactOptions,
     },
     machine::Machine,
-    state::{CleanupMode, State, StateGeneric},
+    state::{State, StateGeneric},
     verification::{compute_receipts_root, compute_transaction_root},
     vm::{CreateContractAddress, Env},
 };
@@ -21,6 +21,7 @@ use cfx_parameters::{
         GENESIS_TOKEN_COUNT_IN_CFX, TWO_YEAR_UNLOCK_TOKEN_COUNT_IN_CFX,
     },
 };
+use cfx_state::{state_trait::*, CleanupMode};
 use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{StorageManager, StorageManagerTrait, StorageStateTrait};
 use cfx_types::{address_util::AddressUtil, Address, U256};

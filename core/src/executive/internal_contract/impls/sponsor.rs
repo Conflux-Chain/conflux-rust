@@ -8,6 +8,7 @@ use crate::{
     vm::{self, ActionParams, Spec},
 };
 use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
+use cfx_state::state_trait::StateOpsTrait;
 use cfx_storage::StorageStateTrait;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 

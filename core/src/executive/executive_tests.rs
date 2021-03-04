@@ -7,7 +7,7 @@ use crate::{
     evm::FinalizationResult,
     executive::ExecutionOutcome,
     machine::Machine,
-    state::{CleanupMode, CollateralCheckResult, State, Substate},
+    state::{CollateralCheckResultToVmResult, State, Substate},
     test_helpers::get_state_for_genesis_write,
     trace,
     vm::{
@@ -22,6 +22,10 @@ use cfx_parameters::{
         STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
     },
     staking::*,
+};
+use cfx_state::{
+    state_trait::{CheckpointTrait, StateOpsTrait},
+    CleanupMode, CollateralCheckResult, StateTrait,
 };
 use cfx_statedb::StateDb;
 use cfx_storage::{

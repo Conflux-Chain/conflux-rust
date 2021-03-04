@@ -18,6 +18,7 @@ use crate::{
 use cfx_parameters::staking::{
     code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
+use cfx_state::state_trait::StateOpsTrait;
 use cfx_storage::StorageStateTrait;
 use cfx_types::{Address, H256, U256};
 use primitives::transaction::UNSIGNED_SENDER;
@@ -458,6 +459,7 @@ mod tests {
         },
     };
     use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
+    use cfx_state::state_trait::StateOpsTrait;
     use cfx_storage::{
         new_storage_manager_for_testing, tests::FakeStateManager, StorageState,
     };

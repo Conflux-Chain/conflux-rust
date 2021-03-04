@@ -19,6 +19,7 @@ use crate::{
     trace::{trace::ExecTrace, Tracer},
     vm::{self, Env},
 };
+use cfx_state::state_trait::StateOpsTrait;
 use cfx_storage::StorageStateTrait;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 #[cfg(test)]
