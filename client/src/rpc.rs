@@ -29,6 +29,7 @@ pub mod impls;
 pub mod informant;
 mod interceptor;
 pub mod metadata;
+pub mod rpc_apis;
 mod traits;
 pub mod types;
 
