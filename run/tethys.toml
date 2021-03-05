@@ -16,7 +16,6 @@ bootnodes="cfxnode://dc79bc70833e797ba41eff5bda67c0484abca4918ef38289b5f96acd3da
 #
 # For both `test` and `dev` modes, we will
 #     * Set initial difficulty to 4
-#     * Allow calling test and debug rpc from public port
 #
 # `test` mode is for Conflux testing and debugging, we will
 #     * Add latency to peer connections
@@ -143,6 +142,13 @@ log_conf="log.yaml"
 # jsonrpc_http_port=12537
 # jsonrpc_local_tcp_port=12538
 jsonrpc_local_http_port=12539
+
+# Specify the APIs available through the public JSON-RPC interfaces (HTTP, TCP, WebSocket)
+# using a comma-delimited list of API names.
+# Possible names are: all, safe, cfx, debug, pubsub, test, trace.
+# `safe` only includes `cfx` and `pubsub`.
+#
+# public_rpc_apis = "safe"
 
 # --------------- Performance-related Network Parameters ----------------------
 
@@ -462,11 +468,6 @@ jsonrpc_local_http_port=12539
 #
 # executive_trace = false
 
-# Whether to enable tracing RPC for public access. It works only if `executive_trace`
-# is set to `true`. On the other hand, once `executive_trace` is enabled, the tracing
-# RPC is always enabled for local access.
-#
-# enable_tracing = false
 
 # -------------------- Others -------------------
 

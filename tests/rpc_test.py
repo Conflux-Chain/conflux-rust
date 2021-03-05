@@ -17,7 +17,7 @@ class RpcTest(ConfluxTestFramework):
         self.conf_parameters = {
             "log_level": "\"trace\"",
             "executive_trace": "true",
-            "enable_tracing": "true",
+            "public_rpc_apis": "\"cfx,debug,test,pubsub,trace\"",
         }
 
     def setup_network(self):
