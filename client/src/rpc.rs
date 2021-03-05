@@ -153,6 +153,7 @@ pub fn setup_public_rpc_apis(
         rpc,
         pubsub,
         &conf.raw_conf.throttling_conf,
+        "rpc",
         conf.raw_conf.public_rpc_apis.list_apis(),
     )
 }
@@ -167,13 +168,15 @@ pub fn setup_debug_rpc_apis(
         rpc,
         pubsub,
         &conf.raw_conf.throttling_conf,
+        "rpc_local",
         ApiSet::All.list_apis(),
     )
 }
 
 fn setup_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
-    throttling_conf: &Option<String>, apis: HashSet<Api>,
+    throttling_conf: &Option<String>, throttling_section: &str,
+    apis: HashSet<Api>,
 ) -> MetaIoHandler<Metadata>
 {
     let mut handler = MetaIoHandler::default();
@@ -182,8 +185,10 @@ fn setup_rpc_apis(
             Api::Cfx => {
                 let cfx =
                     CfxHandler::new(common.clone(), rpc.clone()).to_delegate();
-                let interceptor =
-                    ThrottleInterceptor::new(throttling_conf, "rpc");
+                let interceptor = ThrottleInterceptor::new(
+                    throttling_conf,
+                    throttling_section,
+                );
                 handler.extend_with(RpcProxy::new(cfx, interceptor));
             }
             Api::Debug => {
@@ -205,8 +210,10 @@ fn setup_rpc_apis(
                     rpc.consensus.clone(),
                 )
                 .to_delegate();
-                let interceptor =
-                    ThrottleInterceptor::new(throttling_conf, "rpc");
+                let interceptor = ThrottleInterceptor::new(
+                    throttling_conf,
+                    throttling_section,
+                );
                 handler.extend_with(RpcProxy::new(trace, interceptor));
             }
         }
@@ -224,6 +231,7 @@ pub fn setup_public_rpc_apis_light(
         rpc,
         pubsub,
         &conf.raw_conf.throttling_conf,
+        "rpc",
         conf.raw_conf.public_rpc_apis.list_apis(),
     )
 }
@@ -240,13 +248,15 @@ pub fn setup_debug_rpc_apis_light(
         rpc,
         pubsub,
         &conf.raw_conf.throttling_conf,
+        "rpc_local",
         light_debug_apis,
     )
 }
 
 fn setup_rpc_apis_light(
     common: Arc<CommonImpl>, rpc: Arc<LightImpl>, pubsub: PubSubClient,
-    throttling_conf: &Option<String>, apis: HashSet<Api>,
+    throttling_conf: &Option<String>, throttling_section: &str,
+    apis: HashSet<Api>,
 ) -> MetaIoHandler<Metadata>
 {
     let mut handler = MetaIoHandler::default();
@@ -255,8 +265,10 @@ fn setup_rpc_apis_light(
             Api::Cfx => {
                 let cfx = LightCfxHandler::new(common.clone(), rpc.clone())
                     .to_delegate();
-                let interceptor =
-                    ThrottleInterceptor::new(throttling_conf, "rpc");
+                let interceptor = ThrottleInterceptor::new(
+                    throttling_conf,
+                    throttling_section,
+                );
                 handler.extend_with(RpcProxy::new(cfx, interceptor));
             }
             Api::Debug => {
