@@ -22,6 +22,9 @@ class ThrottleRpcTests(ConfluxTestFramework):
             fp.write("[rpc_local]\n")
             fp.write("cfx_epochNumber=\"300,200,1,100,1\"\n")
             fp.write("cfx_gasPrice=\"5,5,2,1,0\"\n")
+            # In python tests, we will only call the local RPC interface,
+            # just add the public rpc section as a placeholder.
+            fp.write("[rpc]")
 
         self.conf_parameters["throttling_conf"] = "'{}'".format(throttle_conf)
 
