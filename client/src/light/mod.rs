@@ -93,7 +93,8 @@ impl LightClient {
             setup_debug_rpc_apis_light(
                 common_impl.clone(),
                 rpc_impl.clone(),
-                None,
+                pubsub.clone(),
+                &conf,
             ),
         )?;
 
@@ -103,13 +104,14 @@ impl LightClient {
                 setup_debug_rpc_apis_light(
                     common_impl.clone(),
                     rpc_impl.clone(),
-                    Some(pubsub.clone()),
+                    pubsub.clone(),
+                    &conf,
                 )
             } else {
                 setup_public_rpc_apis_light(
                     common_impl.clone(),
                     rpc_impl.clone(),
-                    Some(pubsub.clone()),
+                    pubsub.clone(),
                     &conf,
                 )
             },
@@ -122,13 +124,14 @@ impl LightClient {
                 setup_debug_rpc_apis_light(
                     common_impl.clone(),
                     rpc_impl.clone(),
-                    Some(pubsub),
+                    pubsub.clone(),
+                    &conf,
                 )
             } else {
                 setup_public_rpc_apis_light(
                     common_impl.clone(),
                     rpc_impl.clone(),
-                    Some(pubsub),
+                    pubsub.clone(),
                     &conf,
                 )
             },
@@ -138,9 +141,19 @@ impl LightClient {
         let rpc_http_server = super::rpc::start_http(
             conf.http_config(),
             if conf.is_test_mode() {
-                setup_debug_rpc_apis_light(common_impl, rpc_impl, None)
+                setup_debug_rpc_apis_light(
+                    common_impl,
+                    rpc_impl,
+                    pubsub.clone(),
+                    &conf,
+                )
             } else {
-                setup_public_rpc_apis_light(common_impl, rpc_impl, None, &conf)
+                setup_public_rpc_apis_light(
+                    common_impl,
+                    rpc_impl,
+                    pubsub.clone(),
+                    &conf,
+                )
             },
         )?;
 

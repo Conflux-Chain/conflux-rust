@@ -493,7 +493,7 @@ pub fn initialize_not_light_node_modules(
         setup_debug_rpc_apis(
             common_impl.clone(),
             rpc_impl.clone(),
-            None,
+            pubsub.clone(),
             &conf,
         ),
     )?;
@@ -504,14 +504,14 @@ pub fn initialize_not_light_node_modules(
             setup_debug_rpc_apis(
                 common_impl.clone(),
                 rpc_impl.clone(),
-                Some(pubsub.clone()),
+                pubsub.clone(),
                 &conf,
             )
         } else {
             setup_public_rpc_apis(
                 common_impl.clone(),
                 rpc_impl.clone(),
-                Some(pubsub.clone()),
+                pubsub.clone(),
                 &conf,
             )
         },
@@ -524,14 +524,14 @@ pub fn initialize_not_light_node_modules(
             setup_debug_rpc_apis(
                 common_impl.clone(),
                 rpc_impl.clone(),
-                Some(pubsub.clone()),
+                pubsub.clone(),
                 &conf,
             )
         } else {
             setup_public_rpc_apis(
                 common_impl.clone(),
                 rpc_impl.clone(),
-                Some(pubsub.clone()),
+                pubsub.clone(),
                 &conf,
             )
         },
@@ -541,11 +541,12 @@ pub fn initialize_not_light_node_modules(
     let rpc_http_server = super::rpc::start_http(
         conf.http_config(),
         if conf.is_test_or_dev_mode() {
-            setup_debug_rpc_apis(common_impl, rpc_impl, None, &conf)
+            setup_debug_rpc_apis(common_impl, rpc_impl, pubsub, &conf)
         } else {
-            setup_public_rpc_apis(common_impl, rpc_impl, None, &conf)
+            setup_public_rpc_apis(common_impl, rpc_impl, pubsub, &conf)
         },
     )?;
+
     Ok((
         data_man,
         pow,

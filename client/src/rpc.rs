@@ -60,9 +60,11 @@ use crate::{
     rpc::{
         error_codes::request_rejected_too_many_request_error,
         interceptor::{RpcInterceptor, RpcProxy},
+        rpc_apis::{Api, ApiSet},
     },
 };
 pub use metadata::Metadata;
+use std::collections::HashSet;
 use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
 
 #[derive(Debug, PartialEq)]
@@ -142,97 +144,138 @@ impl WsConfiguration {
 }
 
 pub fn setup_public_rpc_apis(
-    common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: Option<PubSubClient>,
+    common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
     conf: &Configuration,
 ) -> MetaIoHandler<Metadata>
 {
-    let network = *rpc.sync.network.get_network_type();
-    let data_man = rpc.consensus.get_data_manager().clone();
-    let consensus = rpc.consensus.clone();
-    let cfx = CfxHandler::new(common, rpc).to_delegate();
-    let interceptor =
-        ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc");
-
-    // extend_with maps each method in RpcImpl object into a RPC handler
-    let mut handler = MetaIoHandler::default();
-    handler.extend_with(RpcProxy::new(cfx, interceptor));
-    if conf.raw_conf.executive_trace && conf.raw_conf.enable_tracing {
-        let trace =
-            TraceHandler::new(data_man, network, consensus).to_delegate();
-        let interceptor =
-            ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc");
-        handler.extend_with(RpcProxy::new(trace, interceptor));
-    }
-    if let Some(pubsub) = pubsub {
-        handler.extend_with(pubsub.to_delegate());
-    }
-    handler
+    setup_rpc_apis(
+        common,
+        rpc,
+        pubsub,
+        &conf.raw_conf.throttling_conf,
+        conf.raw_conf.public_rpc_apis.list_apis(),
+    )
 }
 
 pub fn setup_debug_rpc_apis(
-    common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: Option<PubSubClient>,
+    common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
     conf: &Configuration,
 ) -> MetaIoHandler<Metadata>
 {
-    let network = *rpc.sync.network.get_network_type();
-    let data_man = rpc.consensus.get_data_manager().clone();
-    let consensus = rpc.consensus.clone();
-    let cfx = CfxHandler::new(common.clone(), rpc.clone()).to_delegate();
-    let interceptor =
-        ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc_local");
-    let test = TestRpcImpl::new(common.clone(), rpc.clone()).to_delegate();
-    let debug = LocalRpcImpl::new(common, rpc).to_delegate();
+    setup_rpc_apis(
+        common,
+        rpc,
+        pubsub,
+        &conf.raw_conf.throttling_conf,
+        ApiSet::All.list_apis(),
+    )
+}
 
-    // extend_with maps each method in RpcImpl object into a RPC handler
+fn setup_rpc_apis(
+    common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
+    throttling_conf: &Option<String>, apis: HashSet<Api>,
+) -> MetaIoHandler<Metadata>
+{
     let mut handler = MetaIoHandler::default();
-    handler.extend_with(RpcProxy::new(cfx, interceptor));
-    handler.extend_with(test);
-    handler.extend_with(debug);
-    if conf.raw_conf.executive_trace {
-        let trace =
-            TraceHandler::new(data_man, network, consensus).to_delegate();
-        let interceptor =
-            ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc");
-        handler.extend_with(RpcProxy::new(trace, interceptor));
-    }
-    if let Some(pubsub) = pubsub {
-        handler.extend_with(pubsub.to_delegate());
+    for api in apis {
+        match api {
+            Api::Cfx => {
+                let cfx =
+                    CfxHandler::new(common.clone(), rpc.clone()).to_delegate();
+                let interceptor =
+                    ThrottleInterceptor::new(throttling_conf, "rpc");
+                handler.extend_with(RpcProxy::new(cfx, interceptor));
+            }
+            Api::Debug => {
+                handler.extend_with(
+                    LocalRpcImpl::new(common.clone(), rpc.clone())
+                        .to_delegate(),
+                );
+            }
+            Api::Pubsub => handler.extend_with(pubsub.clone().to_delegate()),
+            Api::Test => {
+                handler.extend_with(
+                    TestRpcImpl::new(common.clone(), rpc.clone()).to_delegate(),
+                );
+            }
+            Api::Trace => {
+                let trace = TraceHandler::new(
+                    rpc.consensus.get_data_manager().clone(),
+                    *rpc.sync.network.get_network_type(),
+                    rpc.consensus.clone(),
+                )
+                .to_delegate();
+                let interceptor =
+                    ThrottleInterceptor::new(throttling_conf, "rpc");
+                handler.extend_with(RpcProxy::new(trace, interceptor));
+            }
+        }
     }
     handler
 }
 
 pub fn setup_public_rpc_apis_light(
-    common: Arc<CommonImpl>, rpc: Arc<LightImpl>, pubsub: Option<PubSubClient>,
+    common: Arc<CommonImpl>, rpc: Arc<LightImpl>, pubsub: PubSubClient,
     conf: &Configuration,
 ) -> MetaIoHandler<Metadata>
 {
-    let cfx = LightCfxHandler::new(common, rpc).to_delegate();
-    let interceptor =
-        ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc");
-
-    // extend_with maps each method in RpcImpl object into a RPC handler
-    let mut handler = MetaIoHandler::default();
-    handler.extend_with(RpcProxy::new(cfx, interceptor));
-    if let Some(pubsub) = pubsub {
-        handler.extend_with(pubsub.to_delegate());
-    }
-    handler
+    setup_rpc_apis_light(
+        common,
+        rpc,
+        pubsub,
+        &conf.raw_conf.throttling_conf,
+        conf.raw_conf.public_rpc_apis.list_apis(),
+    )
 }
 
 pub fn setup_debug_rpc_apis_light(
-    common: Arc<CommonImpl>, rpc: Arc<LightImpl>, pubsub: Option<PubSubClient>,
-) -> MetaIoHandler<Metadata> {
-    let cfx = LightCfxHandler::new(common.clone(), rpc.clone()).to_delegate();
-    let test = LightTestRpcImpl::new(common.clone(), rpc.clone()).to_delegate();
-    let debug = LightDebugRpcImpl::new(common, rpc).to_delegate();
+    common: Arc<CommonImpl>, rpc: Arc<LightImpl>, pubsub: PubSubClient,
+    conf: &Configuration,
+) -> MetaIoHandler<Metadata>
+{
+    let mut light_debug_apis = ApiSet::All.list_apis();
+    light_debug_apis.remove(&Api::Trace);
+    setup_rpc_apis_light(
+        common,
+        rpc,
+        pubsub,
+        &conf.raw_conf.throttling_conf,
+        light_debug_apis,
+    )
+}
 
-    // extend_with maps each method in RpcImpl object into a RPC handler
+fn setup_rpc_apis_light(
+    common: Arc<CommonImpl>, rpc: Arc<LightImpl>, pubsub: PubSubClient,
+    throttling_conf: &Option<String>, apis: HashSet<Api>,
+) -> MetaIoHandler<Metadata>
+{
     let mut handler = MetaIoHandler::default();
-    handler.extend_with(cfx);
-    handler.extend_with(test);
-    handler.extend_with(debug);
-    if let Some(pubsub) = pubsub {
-        handler.extend_with(pubsub.to_delegate());
+    for api in apis {
+        match api {
+            Api::Cfx => {
+                let cfx = LightCfxHandler::new(common.clone(), rpc.clone())
+                    .to_delegate();
+                let interceptor =
+                    ThrottleInterceptor::new(throttling_conf, "rpc");
+                handler.extend_with(RpcProxy::new(cfx, interceptor));
+            }
+            Api::Debug => {
+                handler.extend_with(
+                    LightDebugRpcImpl::new(common.clone(), rpc.clone())
+                        .to_delegate(),
+                );
+            }
+            Api::Pubsub => handler.extend_with(pubsub.clone().to_delegate()),
+            Api::Test => {
+                handler.extend_with(
+                    LightTestRpcImpl::new(common.clone(), rpc.clone())
+                        .to_delegate(),
+                );
+            }
+            Api::Trace => {
+                warn!("Light nodes do not support trace RPC");
+            }
+        }
     }
     handler
 }

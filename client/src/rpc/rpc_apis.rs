@@ -37,7 +37,7 @@ pub enum ApiSet {
 }
 
 impl ApiSet {
-    fn list_apis(&self) -> HashSet<Api> {
+    pub fn list_apis(&self) -> HashSet<Api> {
         match *self {
             ApiSet::List(ref apis) => apis.clone(),
             ApiSet::All => {
