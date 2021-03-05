@@ -6,7 +6,7 @@ use super::{CleanupMode, CollateralCheckResult, State, Substate};
 
 use crate::{
     spec::genesis::DEV_GENESIS_KEY_PAIR,
-    test_helpers::get_state_for_genesis_write, vm::Spec, vm_factory::VmFactory,
+    test_helpers::get_state_for_genesis_write,
 };
 use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
 use cfx_statedb::StateDb;
@@ -23,18 +23,14 @@ use std::sync::Arc;
 fn get_state(
     storage_manager: &Arc<StorageManager>, epoch_id: &EpochId,
 ) -> State {
-    State::new(
-        StateDb::new(
-            storage_manager
-                .get_state_for_next_epoch(
-                    StateIndex::new_for_test_only_delta_mpt(epoch_id),
-                )
-                .unwrap()
-                .unwrap(),
-        ),
-        VmFactory::default(),
-        &Spec::new_spec(),
-    )
+    State::new(StateDb::new(
+        storage_manager
+            .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
+                epoch_id,
+            ))
+            .unwrap()
+            .unwrap(),
+    ))
     .expect("Failed to initialize state")
 }
 

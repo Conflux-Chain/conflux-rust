@@ -7,6 +7,7 @@ use crate::{
     builtin::{builtin_factory, AltBn128PairingPricer, Linear, ModexpPricer},
     spec::CommonParams,
     vm::Spec,
+    vm_factory::VmFactory,
 };
 use cfx_types::{Address, H256};
 use primitives::BlockNumber;
@@ -16,6 +17,7 @@ pub type SpecCreationRules = dyn Fn(&mut Spec, BlockNumber) + Sync + Send;
 
 pub struct Machine {
     params: CommonParams,
+    vm: VmFactory,
     builtins: Arc<BTreeMap<Address, Builtin>>,
     spec_rules: Option<Box<SpecCreationRules>>,
 }
@@ -51,17 +53,23 @@ impl Machine {
 
     /// Builtin-contracts for the chain..
     pub fn builtins(&self) -> &BTreeMap<Address, Builtin> { &*self.builtins }
+
+    /// Get a VM factory that can execute on this state.
+    pub fn vm_factory(&self) -> VmFactory { self.vm.clone() }
 }
 
-pub fn new_machine(params: CommonParams) -> Machine {
+pub fn new_machine(params: CommonParams, vm: VmFactory) -> Machine {
     Machine {
         params,
+        vm,
         builtins: Arc::new(BTreeMap::new()),
         spec_rules: None,
     }
 }
 
-pub fn new_machine_with_builtin(params: CommonParams) -> Machine {
+pub fn new_machine_with_builtin(
+    params: CommonParams, vm: VmFactory,
+) -> Machine {
     let mut btree = BTreeMap::new();
     btree.insert(
         Address::from(H256::from_low_u64_be(1)),
@@ -129,6 +137,7 @@ pub fn new_machine_with_builtin(params: CommonParams) -> Machine {
     );
     Machine {
         params,
+        vm,
         builtins: Arc::new(btree),
         spec_rules: None,
     }

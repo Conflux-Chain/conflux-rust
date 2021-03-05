@@ -9,8 +9,8 @@ pub use self::{
 
 use self::account_entry::{AccountEntry, AccountState};
 use crate::{
-    evm::Spec, hash::KECCAK_EMPTY, transaction_pool::SharedTransactionPool,
-    vm::Error as vmError, vm_factory::VmFactory,
+    hash::KECCAK_EMPTY, transaction_pool::SharedTransactionPool,
+    vm::Error as vmError,
 };
 use cfx_bytes::Bytes;
 use cfx_internal_common::{
@@ -126,14 +126,10 @@ pub struct StateGeneric<StateDbStorage: StorageStateTrait> {
 
     // Environment variables.
     account_start_nonce: U256,
-    contract_start_nonce: U256,
-    vm: VmFactory,
 }
 
 impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
-    pub fn new(
-        db: StateDb<StateDbStorage>, vm: VmFactory, spec: &Spec,
-    ) -> DbResult<Self> {
+    pub fn new(db: StateDb<StateDbStorage>) -> DbResult<Self> {
         let annual_interest_rate = db.get_annual_interest_rate()?;
         let accumulate_interest_rate = db.get_accumulate_interest_rate()?;
         let total_issued_tokens = db.get_total_issued_tokens()?;
@@ -187,25 +183,16 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             .into();
         */
         let account_start_nonce = U256::zero();
-        let contract_start_nonce = if spec.no_empty {
-            U256::one()
-        } else {
-            U256::zero()
-        };
         Ok(StateGeneric {
             db,
             cache: Default::default(),
             staking_state_checkpoints: Default::default(),
             checkpoints: Default::default(),
             account_start_nonce,
-            contract_start_nonce,
             staking_state,
-            vm,
             accounts_to_notify: Default::default(),
         })
     }
-
-    pub fn contract_start_nonce(&self) -> U256 { self.contract_start_nonce }
 
     /// Calculate the current secondary reward for the next block number.
     pub fn bump_block_number_accumulate_interest(&mut self) -> U256 {
@@ -237,9 +224,6 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         assert!(self.staking_state_checkpoints.get_mut().is_empty());
         self.staking_state.total_issued_tokens -= v;
     }
-
-    /// Get a VM factory that can execute on this state.
-    pub fn vm_factory(&self) -> VmFactory { self.vm.clone() }
 
     /// Create a recoverable checkpoint of this state. Return the checkpoint
     /// index. The checkpoint records any old value which is alive at the

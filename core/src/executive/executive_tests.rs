@@ -4,17 +4,16 @@
 
 use super::{executive::*, internal_contract::*, Executed, ExecutionError};
 use crate::{
-    evm::{Factory, FinalizationResult, VMType},
+    evm::FinalizationResult,
     executive::ExecutionOutcome,
     machine::Machine,
     state::{CleanupMode, CollateralCheckResult, State, Substate},
-    test_helpers::{
-        get_state_for_genesis_write, get_state_for_genesis_write_with_factory,
-    },
+    test_helpers::get_state_for_genesis_write,
     trace,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
     },
+    vm_factory::VmFactory,
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::{
@@ -45,8 +44,10 @@ use std::{
 };
 
 fn make_byzantium_machine(max_depth: usize) -> Machine {
-    let mut machine =
-        crate::machine::new_machine_with_builtin(Default::default());
+    let mut machine = crate::machine::new_machine_with_builtin(
+        Default::default(),
+        VmFactory::new(1024 * 32),
+    );
     machine
         .set_spec_creation_rules(Box::new(move |s, _| s.max_depth = max_depth));
     machine
@@ -73,7 +74,6 @@ fn test_contract_address() {
 
 #[test]
 fn test_sender_balance() {
-    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
     let sender =
         Address::from_str("1f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
     let address = contract_address(
@@ -93,8 +93,7 @@ fn test_sender_balance() {
     params.code = Some(Arc::new("3331600055".from_hex().unwrap()));
     params.value = ActionValue::Transfer(U256::from(0x7));
     let storage_manager = new_state_manager_for_unit_test();
-    let mut state =
-        get_state_for_genesis_write_with_factory(&storage_manager, factory);
+    let mut state = get_state_for_genesis_write(&storage_manager);
     state
         .add_balance(
             &sender,
@@ -161,8 +160,6 @@ fn test_sender_balance() {
 
 #[test]
 fn test_create_contract_out_of_depth() {
-    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-
     // code:
     //
     // 7c 601080600c6000396000f3006000355415600957005b60203560003555 - push
@@ -208,8 +205,7 @@ fn test_create_contract_out_of_depth() {
     params.value = ActionValue::Transfer(U256::from(100));
 
     let storage_manager = new_state_manager_for_unit_test();
-    let mut state =
-        get_state_for_genesis_write_with_factory(&storage_manager, factory);
+    let mut state = get_state_for_genesis_write(&storage_manager);
     state
         .add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty)
         .unwrap();
@@ -237,8 +233,6 @@ fn test_create_contract_out_of_depth() {
 
 #[test]
 fn test_suicide_when_creation() {
-    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-
     // code:
     //
     // 33 - get caller address
@@ -267,8 +261,7 @@ fn test_suicide_when_creation() {
     params.value = ActionValue::Transfer(U256::from(0));
 
     let storage_manager = new_state_manager_for_unit_test();
-    let mut state =
-        get_state_for_genesis_write_with_factory(&storage_manager, factory);
+    let mut state = get_state_for_genesis_write(&storage_manager);
     state
         .add_balance(&sender_addr, &U256::from(100_000), CleanupMode::NoEmpty)
         .unwrap();
@@ -413,8 +406,6 @@ fn test_call_to_create() {
 
 #[test]
 fn test_revert() {
-    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-
     let contract_address =
         Address::from_str("8d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
     let sender =
@@ -424,10 +415,7 @@ fn test_revert() {
     let returns: Vec<u8> = "726576657274206d657373616765".from_hex().unwrap();
 
     let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write_with_factory(
-        &storage_manager,
-        factory.clone(),
-    );
+    let mut state = get_state_for_genesis_write(&storage_manager);
     state
         .add_balance(
             &sender,
@@ -451,7 +439,7 @@ fn test_revert() {
     params.code = Some(Arc::new(code));
     params.value = ActionValue::Transfer(U256::zero());
     let env = Env::default();
-    let machine = crate::machine::new_machine_with_builtin(Default::default());
+    let machine = make_byzantium_machine(0);
     let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
     let mut substate = Substate::new();
@@ -485,8 +473,6 @@ fn test_revert() {
 
 #[test]
 fn test_keccak() {
-    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-
     let code = "6064640fffffffff20600055".from_hex().unwrap();
 
     let sender =
@@ -512,8 +498,7 @@ fn test_keccak() {
         ActionValue::Transfer(U256::from_str("0de0b6b3a7640000").unwrap());
 
     let storage_manager = new_state_manager_for_unit_test();
-    let mut state =
-        get_state_for_genesis_write_with_factory(&storage_manager, factory);
+    let mut state = get_state_for_genesis_write(&storage_manager);
     state
         .add_balance(
             &sender,
@@ -547,8 +532,6 @@ fn test_keccak() {
 
 #[test]
 fn test_not_enough_cash() {
-    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-
     let keypair = Random.generate().unwrap();
     let t = Transaction {
         action: Action::Create,
@@ -565,8 +548,7 @@ fn test_not_enough_cash() {
     let sender = t.sender();
 
     let storage_manager = new_state_manager_for_unit_test();
-    let mut state =
-        get_state_for_genesis_write_with_factory(&storage_manager, factory);
+    let mut state = get_state_for_genesis_write(&storage_manager);
     state
         .add_balance(&sender, &U256::from(100_017), CleanupMode::NoEmpty)
         .unwrap();
@@ -611,12 +593,10 @@ fn test_not_enough_cash() {
 
 #[test]
 fn test_deposit_withdraw_lock() {
-    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
     let mut sender = Address::zero();
     sender.set_user_account_type_bits();
     let storage_manager = new_state_manager_for_unit_test();
-    let mut state =
-        get_state_for_genesis_write_with_factory(&storage_manager, factory);
+    let mut state = get_state_for_genesis_write(&storage_manager);
     let env = Env::default();
     let machine = make_byzantium_machine(0);
     let internal_contract_map = InternalContractMap::new();
@@ -1032,18 +1012,12 @@ fn test_deposit_withdraw_lock() {
 
 #[test]
 fn test_commission_privilege_all_whitelisted_across_epochs() {
-    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
     let code: Vec<u8> = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
 
     let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write_with_factory(
-        &storage_manager,
-        factory.clone(),
-    );
+    let mut state = get_state_for_genesis_write(&storage_manager);
     let mut env = Env::default();
     env.gas_limit = U256::MAX;
-    let machine = make_byzantium_machine(0);
-    let spec = machine.spec(env.number);
 
     let sender = Random.generate().unwrap();
     let address = contract_address(
@@ -1092,18 +1066,14 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
     state.commit(epoch_id, Some(&mut debug_record)).unwrap();
     debug!("{:?}", debug_record);
 
-    let mut state = State::new(
-        StateDb::new(
-            storage_manager
-                .get_state_for_next_epoch(
-                    StateIndex::new_for_test_only_delta_mpt(&epoch_id),
-                )
-                .unwrap()
-                .unwrap(),
-        ),
-        factory.clone().into(),
-        &spec,
-    )
+    let mut state = State::new(StateDb::new(
+        storage_manager
+            .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
+                &epoch_id,
+            ))
+            .unwrap()
+            .unwrap(),
+    ))
     .expect("Failed to initialize state");
 
     state.checkpoint();
@@ -1165,19 +1135,15 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
     state.discard_checkpoint();
     state.commit(epoch_id, None).unwrap();
 
-    let state = State::new(
-        StateDb::new(
-            storage_manager
-                .get_state_no_commit(
-                    StateIndex::new_for_test_only_delta_mpt(&epoch_id),
-                    /* try_open = */ false,
-                )
-                .unwrap()
-                .unwrap(),
-        ),
-        factory.clone().into(),
-        &spec,
-    )
+    let state = State::new(StateDb::new(
+        storage_manager
+            .get_state_no_commit(
+                StateIndex::new_for_test_only_delta_mpt(&epoch_id),
+                /* try_open = */ false,
+            )
+            .unwrap()
+            .unwrap(),
+    ))
     .expect("Failed to initialize state");
 
     assert_eq!(
@@ -1208,12 +1174,10 @@ fn test_commission_privilege() {
     // 60 00 - push 0
     // 55 sstore
 
-    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
     let code = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
 
     let storage_manager = new_state_manager_for_unit_test();
-    let mut state =
-        get_state_for_genesis_write_with_factory(&storage_manager, factory);
+    let mut state = get_state_for_genesis_write(&storage_manager);
     let mut env = Env::default();
     env.gas_limit = U256::MAX;
     let machine = make_byzantium_machine(0);
@@ -1583,12 +1547,10 @@ fn test_storage_commission_privilege() {
     // 55 sstore
 
     let privilege_control_address = &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
-    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
     let code = "7c601080600c6000396000f3006000355415600957005b6020356000355560005233600155".from_hex().unwrap();
 
     let storage_manager = new_state_manager_for_unit_test();
-    let mut state =
-        get_state_for_genesis_write_with_factory(&storage_manager, factory);
+    let mut state = get_state_for_genesis_write(&storage_manager);
     let mut env = Env::default();
     env.gas_limit = U256::MAX;
     let machine = make_byzantium_machine(0);

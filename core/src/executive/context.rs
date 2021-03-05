@@ -508,7 +508,10 @@ mod tests {
         fn new() -> Self {
             let storage_manager = new_storage_manager_for_testing();
             let state = get_state_for_genesis_write(&*storage_manager);
-            let machine = new_machine_with_builtin(Default::default());
+            let machine = new_machine_with_builtin(
+                Default::default(),
+                Default::default(),
+            );
             let env = get_test_env();
             let spec = machine.spec(env.number);
             let internal_contract_map = InternalContractMap::new();

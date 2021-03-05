@@ -104,7 +104,7 @@ pub fn load_secrets_file(
 pub fn initialize_internal_contract_accounts<
     S: StorageStateTrait + Send + Sync + 'static,
 >(
-    state: &mut StateGeneric<S>,
+    state: &mut StateGeneric<S>, contract_start_nonce: U256,
 ) {
     || -> DbResult<()> {
         {
@@ -113,7 +113,7 @@ pub fn initialize_internal_contract_accounts<
                     address,
                     /* No admin; admin = */ &Address::zero(),
                     /* balance = */ U256::zero(),
-                    state.contract_start_nonce(),
+                    contract_start_nonce,
                     Some(STORAGE_LAYOUT_REGULAR_V0),
                 )?;
             }
@@ -163,18 +163,18 @@ pub fn genesis_block(
     genesis_chain_id: Option<u32>,
 ) -> Block
 {
-    let mut state = State::new(
-        StateDb::new(storage_manager.get_state_for_genesis_write()),
-        Default::default(),
-        &Spec::new_spec(),
-    )
-    .expect("Failed to initialize state");
+    let mut state =
+        State::new(StateDb::new(storage_manager.get_state_for_genesis_write()))
+            .expect("Failed to initialize state");
 
     let mut genesis_block_author = test_net_version;
     genesis_block_author.set_user_account_type_bits();
 
     let mut total_balance = U256::from(0);
-    initialize_internal_contract_accounts(&mut state);
+    initialize_internal_contract_accounts(
+        &mut state,
+        Spec::new_spec().contract_start_nonce(/* block_number = */ 0),
+    );
     for (addr, balance) in genesis_accounts {
         state
             .add_balance(&addr, &balance, CleanupMode::NoEmpty)

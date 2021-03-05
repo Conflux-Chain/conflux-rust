@@ -23,7 +23,6 @@ use crate::{
     consensus::consensus_inner::{
         consensus_executor::ConsensusExecutionConfiguration, StateBlameInfo,
     },
-    evm::Spec,
     executive::ExecutionOutcome,
     pow::{PowComputer, ProofOfWorkConfig},
     rpc_errors::{invalid_params_check, Result as RpcResult},
@@ -35,7 +34,6 @@ use crate::{
     },
     transaction_pool::SharedTransactionPool,
     verification::VerificationConfig,
-    vm_factory::VmFactory,
     NodeType, Notifications,
 };
 use cfx_internal_common::ChainIdParams;
@@ -220,7 +218,7 @@ impl ConsensusGraph {
     /// other components. The execution will be skipped if bench_mode sets
     /// to true.
     pub fn with_era_genesis(
-        conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
+        conf: ConsensusConfig, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
         era_genesis_block_hash: &H256, era_stable_block_hash: &H256,
@@ -241,7 +239,6 @@ impl ConsensusGraph {
         let executor = ConsensusExecutor::start(
             txpool.clone(),
             data_man.clone(),
-            vm,
             inner.clone(),
             execution_conf,
             verification_config,
@@ -283,7 +280,7 @@ impl ConsensusGraph {
     /// in the data manager and various other components. The execution will
     /// be skipped if bench_mode sets to true.
     pub fn new(
-        conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
+        conf: ConsensusConfig, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
         notifications: Arc<Notifications>,
@@ -295,7 +292,6 @@ impl ConsensusGraph {
         let stable_hash = data_man.get_cur_consensus_era_stable_hash();
         ConsensusGraph::with_era_genesis(
             conf,
-            vm,
             txpool,
             statistics,
             data_man,
@@ -1456,11 +1452,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
         let state_db =
             self.get_state_db_by_height_and_hash(height, &epoch_id)?;
 
-        Ok(State::new(
-            state_db,
-            Default::default(), /* vm */
-            &Spec::new_spec(),
-        )?)
+        Ok(State::new(state_db)?)
     }
 
     // TODO: investigate why we ended up with multiple similar functions to

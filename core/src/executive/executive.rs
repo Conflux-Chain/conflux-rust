@@ -417,6 +417,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
     fn transfer_exec_balance_and_init_contract(
         params: &ActionParams, spec: &Spec, state: &mut StateGeneric<S>,
         substate: &mut Substate, storage_layout: Option<StorageLayout>,
+        contract_start_nonce: U256,
     ) -> vm::Result<()>
     {
         if let ActionValue::Transfer(val) = params.value {
@@ -432,7 +433,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
                 &params.address,
                 &params.original_sender,
                 val.saturating_add(prev_balance),
-                state.contract_start_nonce(),
+                contract_start_nonce,
                 storage_layout,
             )?;
         } else {
@@ -799,6 +800,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
                             state,
                             substate,
                             Some(STORAGE_LAYOUT_REGULAR_V0),
+                            spec.contract_start_nonce(self.env.number),
                         )?;
                         Ok(())
                     };
@@ -1208,7 +1210,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ExecutiveGeneric<'a, S> {
         let _address = params.address;
         let _gas = params.gas;
 
-        let vm_factory = self.state.vm_factory();
+        let vm_factory = self.machine.vm_factory();
         let result = CallCreateExecutive::new_create_raw(
             params,
             self.env,
@@ -1241,8 +1243,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ExecutiveGeneric<'a, S> {
     ) -> vm::Result<FinalizationResult>
     {
         tracer.prepare_trace_call(&params);
-        let vm_factory = self.state.vm_factory();
-
+        let vm_factory = self.machine.vm_factory();
         let result = CallCreateExecutive::new_call_raw(
             params,
             self.env,
