@@ -179,6 +179,70 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
         Ok(res)
     }
 
+    fn record_storage_and_whitelist_entries_release(
+        &mut self, address: &Address, substate: &mut Self::Substate,
+    ) -> DbResult<()> {
+        self.remove_whitelists_for_contract::<access_mode::Write>(address)?;
+
+        // Process collateral for removed storage.
+        // TODO: try to do it in a better way, e.g. first log the deletion
+        //  somewhere then apply the collateral change.
+        {
+            let mut sponsor_whitelist_control_address = self.require_exists(
+                &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+                /* require_code = */ false,
+            )?;
+            sponsor_whitelist_control_address
+                .commit_ownership_change(&self.db, substate)?;
+        }
+
+        let account_cache_read_guard = self.cache.read();
+        let maybe_account = account_cache_read_guard
+            .get(address)
+            .and_then(|acc| acc.account.as_ref());
+
+        let storage_key_value = self.db.delete_all::<access_mode::Read>(
+            StorageKey::new_storage_root_key(address),
+            None,
+        )?;
+        for (key, value) in &storage_key_value {
+            if let StorageKey::StorageKey { storage_key, .. } =
+                StorageKey::from_key_bytes::<SkipInputCheck>(&key[..])
+            {
+                // Check if the key has been touched. We use the local
+                // information to find out if collateral refund is necessary
+                // for touched keys.
+                if maybe_account.map_or(true, |acc| {
+                    acc.storage_value_write_cache().get(storage_key).is_none()
+                }) {
+                    let storage_value =
+                        rlp::decode::<StorageValue>(value.as_ref())?;
+                    let storage_owner =
+                        storage_value.owner.as_ref().unwrap_or(address);
+                    substate.record_storage_release(
+                        storage_owner,
+                        COLLATERAL_UNITS_PER_STORAGE_KEY,
+                    );
+                }
+            }
+        }
+
+        if let Some(acc) = maybe_account {
+            // The current value isn't important because it will be deleted.
+            for (key, _value) in acc.storage_value_write_cache() {
+                if let Some(storage_owner) =
+                    acc.original_ownership_at(&self.db, key)?
+                {
+                    substate.record_storage_release(
+                        &storage_owner,
+                        COLLATERAL_UNITS_PER_STORAGE_KEY,
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+
     // It's guaranteed that the second call of this method is a no-op.
     fn compute_state_root(
         &mut self, mut debug_record: Option<&mut ComputeEpochDebugRecord>,
@@ -1225,70 +1289,6 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         }
 
         Ok(storage_owner_map)
-    }
-
-    pub fn record_storage_and_whitelist_entries_release(
-        &mut self, address: &Address, substate: &mut Substate,
-    ) -> DbResult<()> {
-        self.remove_whitelists_for_contract::<access_mode::Write>(address)?;
-
-        // Process collateral for removed storage.
-        // TODO: try to do it in a better way, e.g. first log the deletion
-        //  somewhere then apply the collateral change.
-        {
-            let mut sponsor_whitelist_control_address = self.require_exists(
-                &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-                /* require_code = */ false,
-            )?;
-            sponsor_whitelist_control_address
-                .commit_ownership_change(&self.db, substate)?;
-        }
-
-        let account_cache_read_guard = self.cache.read();
-        let maybe_account = account_cache_read_guard
-            .get(address)
-            .and_then(|acc| acc.account.as_ref());
-
-        let storage_key_value = self.db.delete_all::<access_mode::Read>(
-            StorageKey::new_storage_root_key(address),
-            None,
-        )?;
-        for (key, value) in &storage_key_value {
-            if let StorageKey::StorageKey { storage_key, .. } =
-                StorageKey::from_key_bytes::<SkipInputCheck>(&key[..])
-            {
-                // Check if the key has been touched. We use the local
-                // information to find out if collateral refund is necessary
-                // for touched keys.
-                if maybe_account.map_or(true, |acc| {
-                    acc.storage_value_write_cache().get(storage_key).is_none()
-                }) {
-                    let storage_value =
-                        rlp::decode::<StorageValue>(value.as_ref())?;
-                    let storage_owner =
-                        storage_value.owner.as_ref().unwrap_or(address);
-                    substate.record_storage_release(
-                        storage_owner,
-                        COLLATERAL_UNITS_PER_STORAGE_KEY,
-                    );
-                }
-            }
-        }
-
-        if let Some(acc) = maybe_account {
-            // The current value isn't important because it will be deleted.
-            for (key, _value) in acc.storage_value_write_cache() {
-                if let Some(storage_owner) =
-                    acc.original_ownership_at(&self.db, key)?
-                {
-                    substate.record_storage_release(
-                        &storage_owner,
-                        COLLATERAL_UNITS_PER_STORAGE_KEY,
-                    );
-                }
-            }
-        }
-        Ok(())
     }
 
     /// Return whether or not the address exists.

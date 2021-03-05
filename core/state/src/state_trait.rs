@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub trait StateTrait: StateOpsTrait + CheckpointTrait {
+pub trait StateTrait: CheckpointTrait {
     type Substate;
 
     /// Collects the cache (`ownership_change` in `OverlayAccount`) of storage
@@ -25,6 +25,12 @@ pub trait StateTrait: StateOpsTrait + CheckpointTrait {
         &mut self, original_sender: &Address, storage_limit: &U256,
         substate: &mut Self::Substate,
     ) -> DbResult<CollateralCheckResult>;
+
+    // TODO: maybe we can find a better interface for doing the suicide
+    // post-processing.
+    fn record_storage_and_whitelist_entries_release(
+        &mut self, address: &Address, substate: &mut Self::Substate,
+    ) -> DbResult<()>;
 
     fn compute_state_root(
         &mut self, debug_record: Option<&mut ComputeEpochDebugRecord>,
@@ -198,7 +204,7 @@ pub trait StateOpsTrait {
     ) -> DbResult<()>;
 }
 
-pub trait CheckpointTrait {
+pub trait CheckpointTrait: StateOpsTrait {
     /// Create a recoverable checkpoint of this state. Return the checkpoint
     /// index. The checkpoint records any old value which is alive at the
     /// creation time of the checkpoint and updated after that and before

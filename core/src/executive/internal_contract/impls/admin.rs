@@ -3,12 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    state::{OverlayAccount, RequireCache, StateGeneric, Substate},
+    state::Substate,
     trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, Spec},
 };
-use cfx_state::state_trait::*;
-use cfx_storage::StorageStateTrait;
+use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{address_util::AddressUtil, Address};
 
 /// The Actual Implementation of `suicide`.
@@ -18,9 +17,9 @@ use cfx_types::{address_util::AddressUtil, Address};
 ///   2. refund sponsor balance
 ///   3. refund contract balance
 ///   4. kill the contract
-pub fn suicide<S: StorageStateTrait>(
+pub fn suicide(
     contract_address: &Address, refund_address: &Address,
-    state: &mut StateGeneric<S>, spec: &Spec, substate: &mut Substate,
+    state: &mut dyn StateOpsTrait, spec: &Spec, substate: &mut Substate,
     tracer: &mut dyn Tracer<Output = ExecTrace>,
 ) -> vm::Result<()>
 {
@@ -62,12 +61,10 @@ pub fn suicide<S: StorageStateTrait>(
 /// Implementation of `set_admin(address,address)`.
 /// The input should consist of 20 bytes `contract_address` + 20 bytes
 /// `new_admin_address`
-// FIXME: try to get rid of ensure_account_loaded call so that
-//  the state type can be changed to StateTrait.
-pub fn set_admin<S: StorageStateTrait>(
+pub fn set_admin(
     contract_address: Address, new_admin_address: Address,
     contract_in_creation: Option<&Address>, params: &ActionParams,
-    state: &mut StateGeneric<S>,
+    state: &mut dyn StateOpsTrait,
 ) -> vm::Result<()>
 {
     let requester = &params.sender;
@@ -76,20 +73,14 @@ pub fn set_admin<S: StorageStateTrait>(
          new_admin {:?}, contract_in_creation {:?}",
         requester, contract_address, new_admin_address, contract_in_creation,
     );
-    let fn_can_set_admin = |acc: &OverlayAccount| {
-        acc.is_contract()
-            // Allow set admin if requester matches or in contract creation to clear admin.
-            && (acc.admin() == requester
-                || contract_in_creation == Some(&contract_address) && new_admin_address.is_null_address())
-            // Only allow user account to be admin, if not to clear admin.
-            && (new_admin_address.is_user_account_address()
-                || new_admin_address.is_null_address())
-    };
-    if state.ensure_account_loaded(
-        &contract_address,
-        RequireCache::None,
-        |acc| acc.map_or(false, fn_can_set_admin),
-    )? {
+    if contract_address.is_contract_address()
+        && state.exists(&contract_address)?
+        && (state.admin(&contract_address)?.eq(requester)
+            || contract_in_creation == Some(&contract_address)
+                && new_admin_address.is_null_address())
+        && (new_admin_address.is_user_account_address()
+            || new_admin_address.is_null_address())
+    {
         debug!("set_admin to {:?}", new_admin_address);
         // Admin is cleared by set new_admin_address to null address.
         state.set_admin(&contract_address, &new_admin_address)?;
@@ -99,9 +90,9 @@ pub fn set_admin<S: StorageStateTrait>(
 
 /// Implementation of `destroy(address)`.
 /// The input should consist of 20 bytes `contract_address`
-pub fn destroy<S: StorageStateTrait>(
+pub fn destroy(
     contract_address: Address, params: &ActionParams,
-    state: &mut StateGeneric<S>, spec: &Spec, substate: &mut Substate,
+    state: &mut dyn StateOpsTrait, spec: &Spec, substate: &mut Substate,
     tracer: &mut dyn Tracer<Output = ExecTrace>,
 ) -> vm::Result<()>
 {

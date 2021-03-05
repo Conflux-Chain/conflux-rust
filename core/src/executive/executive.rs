@@ -15,9 +15,7 @@ use crate::{
     },
     hash::keccak,
     machine::Machine,
-    state::{
-        CallStackInfo, CollateralCheckResultToVmResult, StateGeneric, Substate,
-    },
+    state::{CallStackInfo, CollateralCheckResultToVmResult, State, Substate},
     trace::{self, trace::ExecTrace, Tracer},
     verification::VerificationConfig,
     vm::{
@@ -29,11 +27,9 @@ use crate::{
 };
 use cfx_parameters::staking::*;
 use cfx_state::{
-    state_trait::{CheckpointTrait, StateOpsTrait},
-    CleanupMode, CollateralCheckResult, StateTrait,
+    state_trait::StateOpsTrait, CleanupMode, CollateralCheckResult, StateTrait,
 };
 use cfx_statedb::Result as DbResult;
-use cfx_storage::{StorageState, StorageStateTrait};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256, U512, U64};
 use primitives::{
     receipt::StorageChange, storage::STORAGE_LAYOUT_REGULAR_V0,
@@ -196,7 +192,7 @@ enum CallCreateExecutiveKind {
     Moved,
 }
 
-pub struct CallCreateExecutive<'a, S: StorageStateTrait> {
+pub struct CallCreateExecutive<'a> {
     env: &'a Env,
     machine: &'a Machine,
     spec: &'a Spec,
@@ -207,19 +203,17 @@ pub struct CallCreateExecutive<'a, S: StorageStateTrait> {
     is_create: bool,
     gas: U256,
     kind: CallCreateExecutiveKind,
-    internal_contract_map: &'a InternalContractMap<S>,
+    internal_contract_map: &'a InternalContractMap,
 }
 
-impl<'a, S: StorageStateTrait + Send + Sync + 'static>
-    CallCreateExecutive<'a, S>
-{
+impl<'a> CallCreateExecutive<'a> {
     /// Create a new call executive using raw data.
     pub fn new_call_raw(
         params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
         stack_depth: usize, parent_static_flag: bool,
         parent_contract_in_creation: Option<Address>,
-        internal_contract_map: &'a InternalContractMap<S>,
+        internal_contract_map: &'a InternalContractMap,
         contracts_in_callstack: Rc<RefCell<CallStackInfo>>,
     ) -> Self
     {
@@ -296,7 +290,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
         params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
         stack_depth: usize, static_flag: bool,
-        internal_contract_map: &'a InternalContractMap<S>,
+        internal_contract_map: &'a InternalContractMap,
         contracts_in_callstack: Rc<RefCell<CallStackInfo>>,
     ) -> Self
     {
@@ -401,7 +395,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
     }
 
     fn transfer_exec_balance(
-        params: &ActionParams, spec: &Spec, state: &mut StateGeneric<S>,
+        params: &ActionParams, spec: &Spec, state: &mut dyn StateOpsTrait,
         substate: &mut Substate,
     ) -> DbResult<()>
     {
@@ -418,7 +412,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
     }
 
     fn transfer_exec_balance_and_init_contract(
-        params: &ActionParams, spec: &Spec, state: &mut StateGeneric<S>,
+        params: &ActionParams, spec: &Spec, state: &mut dyn StateOpsTrait,
         substate: &mut Substate, storage_layout: Option<StorageLayout>,
         contract_start_nonce: U256,
     ) -> vm::Result<()>
@@ -448,11 +442,14 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
         Ok(())
     }
 
-    fn enact_output(
+    // TODO: parameterize Substate by creating a trait for it.
+    fn enact_output<
+        /* Substate, */ State: StateTrait<Substate = Substate>,
+    >(
         mut self, output: ExecTrapResult<FinalizationResult>,
-        origin: OriginInfo, state: &mut StateGeneric<S>,
-        substate: &mut Substate, mut unconfirmed_substate: Substate,
-    ) -> ExecutiveTrapResult<'a, FinalizationResult, S>
+        origin: OriginInfo, state: &mut State, substate: &mut Substate,
+        mut unconfirmed_substate: Substate,
+    ) -> ExecutiveTrapResult<'a, FinalizationResult>
     {
         // You should avoid calling functions for self here, since `self.kind`
         // is moved temporally.
@@ -523,13 +520,12 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
     }
 
     /// Creates `Context` from `Executive`.
-    fn as_context<'any>(
-        state: &'any mut StateGeneric<S>, env: &'any Env,
-        machine: &'any Machine, spec: &'any Spec, depth: usize,
-        stack_depth: usize, static_flag: bool, origin: &'any OriginInfo,
-        substate: &'any mut Substate, output: OutputPolicy,
-        internal_contract_map: &'any InternalContractMap<S>,
-    ) -> Context<'any, S>
+    fn as_context<'any, State: StateTrait<Substate = Substate>>(
+        state: &'any mut State, env: &'any Env, machine: &'any Machine,
+        spec: &'any Spec, depth: usize, stack_depth: usize, static_flag: bool,
+        origin: &'any OriginInfo, substate: &'any mut Substate,
+        output: OutputPolicy, internal_contract_map: &'any InternalContractMap,
+    ) -> Context<'any, State>
     {
         Context::new(
             state,
@@ -549,10 +545,11 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
     /// Execute the executive. If a sub-call/create action is required, a
     /// resume trap error is returned. The caller is then expected to call
     /// `resume_call` or `resume_create` to continue the execution.
-    pub fn exec(
-        mut self, state: &mut StateGeneric<S>, substate: &mut Substate,
+    // TODO: parameterize Substate by creating a trait for it.
+    pub fn exec</* Substate, */ State: StateTrait<Substate = Substate>>(
+        mut self, state: &mut State, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
-    ) -> ExecutiveTrapResult<'a, FinalizationResult, S>
+    ) -> ExecutiveTrapResult<'a, FinalizationResult>
     {
         let kind =
             std::mem::replace(&mut self.kind, CallCreateExecutiveKind::Moved);
@@ -858,10 +855,13 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
     }
 
     /// Resume execution from a call trap previously trapped by `exec'.
-    pub fn resume_call(
-        mut self, result: vm::MessageCallResult, state: &mut StateGeneric<S>,
+    // TODO: parameterize Substate by creating a trait for it.
+    pub fn resume_call<
+        /* Substate, */ State: StateTrait<Substate = Substate>,
+    >(
+        mut self, result: vm::MessageCallResult, state: &mut State,
         substate: &mut Substate, tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> ExecutiveTrapResult<'a, FinalizationResult, S>
+    ) -> ExecutiveTrapResult<'a, FinalizationResult>
     {
         match self.kind {
             CallCreateExecutiveKind::ResumeCall(
@@ -921,11 +921,13 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
     }
 
     /// Resume execution from a create trap previously trapped by `exec`.
-    pub fn resume_create(
-        mut self, result: vm::ContractCreateResult,
-        state: &mut StateGeneric<S>, substate: &mut Substate,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> ExecutiveTrapResult<'a, FinalizationResult, S>
+    // TODO: parameterize Substate by creating a trait for it.
+    pub fn resume_create<
+        /* Substate, */ State: StateTrait<Substate = Substate>,
+    >(
+        mut self, result: vm::ContractCreateResult, state: &mut State,
+        substate: &mut Substate, tracer: &mut dyn Tracer<Output = ExecTrace>,
+    ) -> ExecutiveTrapResult<'a, FinalizationResult>
     {
         match self.kind {
             CallCreateExecutiveKind::ResumeCreate(
@@ -987,15 +989,15 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
     /// Execute and consume the current executive. This function handles resume
     /// traps and sub-level tracing. The caller is expected to handle
     /// current-level tracing.
-    pub fn consume(
-        self, state: &mut StateGeneric<S>, top_substate: &mut Substate,
+    pub fn consume<State: StateTrait<Substate = Substate>>(
+        self, state: &mut State, top_substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
     ) -> vm::Result<FinalizationResult>
     {
         let mut last_res =
             Some((false, self.gas, self.exec(state, top_substate, tracer)));
 
-        let mut callstack: Vec<(Option<Address>, CallCreateExecutive<'a, S>)> =
+        let mut callstack: Vec<(Option<Address>, CallCreateExecutive<'a>)> =
             Vec::new();
 
         loop {
@@ -1135,27 +1137,35 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static>
 }
 
 /// Trap result returned by executive.
-pub type ExecutiveTrapResult<'a, T, S> =
-    vm::TrapResult<T, CallCreateExecutive<'a, S>, CallCreateExecutive<'a, S>>;
+pub type ExecutiveTrapResult<'a, T> =
+    vm::TrapResult<T, CallCreateExecutive<'a>, CallCreateExecutive<'a>>;
 
-pub type Executive<'a> = ExecutiveGeneric<'a, StorageState>;
+pub type Executive<'a> = ExecutiveGeneric<'a, State>;
 
 /// Transaction executor.
-pub struct ExecutiveGeneric<'a, S: StorageStateTrait> {
-    pub state: &'a mut StateGeneric<S>,
+// TODO: parameterize Substate by creating a trait for it.
+pub struct ExecutiveGeneric<
+    'a,
+    //Substate,
+    State: StateTrait<Substate = Substate>,
+> {
+    pub state: &'a mut State,
     env: &'a Env,
     machine: &'a Machine,
     spec: &'a Spec,
     depth: usize,
     static_flag: bool,
-    internal_contract_map: &'a InternalContractMap<S>,
+    internal_contract_map: &'a InternalContractMap,
 }
 
-impl<'a, S: StorageStateTrait + Send + Sync + 'static> ExecutiveGeneric<'a, S> {
+// TODO: parameterize Substate by creating a trait for it.
+impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
+    ExecutiveGeneric<'a, /* SubState, */ State>
+{
     /// Basic constructor.
     pub fn new(
-        state: &'a mut StateGeneric<S>, env: &'a Env, machine: &'a Machine,
-        spec: &'a Spec, internal_contract_map: &'a InternalContractMap<S>,
+        state: &'a mut State, env: &'a Env, machine: &'a Machine,
+        spec: &'a Spec, internal_contract_map: &'a InternalContractMap,
     ) -> Self
     {
         ExecutiveGeneric {
@@ -1171,9 +1181,9 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ExecutiveGeneric<'a, S> {
 
     /// Populates executive from parent properties. Increments executive depth.
     pub fn from_parent(
-        state: &'a mut StateGeneric<S>, env: &'a Env, machine: &'a Machine,
+        state: &'a mut State, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, parent_depth: usize, static_flag: bool,
-        internal_contract_map: &'a InternalContractMap<S>,
+        internal_contract_map: &'a InternalContractMap,
     ) -> Self
     {
         ExecutiveGeneric {
@@ -1616,7 +1626,8 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ExecutiveGeneric<'a, S> {
         )?)
     }
 
-    // FIXME: this implementation is not generic
+    // TODO: maybe we can find a better interface for doing the suicide
+    // post-processing.
     fn kill_process(
         &mut self, suicides: &HashSet<Address>,
     ) -> DbResult<Substate> {
@@ -1640,6 +1651,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ExecutiveGeneric<'a, S> {
             )?;
         }
 
+        // FIXME: compilation error because type mismatch .. there is no hint.
         let res = self.state.settle_collateral_for_all(&substate)?;
         // The storage recycling process should never occupy new collateral.
         assert_eq!(res, CollateralCheckResult::Valid);

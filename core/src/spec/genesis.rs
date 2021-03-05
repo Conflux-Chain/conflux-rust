@@ -9,7 +9,7 @@ use crate::{
         TransactOptions,
     },
     machine::Machine,
-    state::{State, StateGeneric},
+    state::State,
     verification::{compute_receipts_root, compute_transaction_root},
     vm::{CreateContractAddress, Env},
 };
@@ -23,7 +23,7 @@ use cfx_parameters::{
 };
 use cfx_state::{state_trait::*, CleanupMode};
 use cfx_statedb::{Result as DbResult, StateDb};
-use cfx_storage::{StorageManager, StorageManagerTrait, StorageStateTrait};
+use cfx_storage::{StorageManager, StorageManagerTrait};
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use keylib::KeyPair;
 use primitives::{
@@ -102,14 +102,12 @@ pub fn load_secrets_file(
     Ok(accounts)
 }
 
-pub fn initialize_internal_contract_accounts<
-    S: StorageStateTrait + Send + Sync + 'static,
->(
-    state: &mut StateGeneric<S>, contract_start_nonce: U256,
+pub fn initialize_internal_contract_accounts(
+    state: &mut dyn StateOpsTrait, contract_start_nonce: U256,
 ) {
     || -> DbResult<()> {
         {
-            for address in InternalContractMap::<S>::new().keys() {
+            for address in InternalContractMap::new().keys() {
                 state.new_contract_with_admin(
                     address,
                     /* No admin; admin = */ &Address::zero(),
