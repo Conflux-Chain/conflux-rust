@@ -13,11 +13,11 @@ use self::contracts::SolFnTable;
 use crate::{
     bytes::Bytes,
     hash::keccak,
-    state::{StateGeneric, Substate},
+    state::Substate,
     trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, Env, GasLeft, Spec},
 };
-use cfx_storage::StorageStateTrait;
+use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{Address, H256};
 use std::sync::Arc;
 
@@ -28,17 +28,17 @@ lazy_static! {
 }
 
 /// Native implementation of an internal contract.
-pub trait InternalContractTrait<S: StorageStateTrait> {
+pub trait InternalContractTrait {
     /// Address of the internal contract
     fn address(&self) -> &Address;
 
     /// A hash-map for solidity function sig and execution handler.
-    fn get_func_table(&self) -> SolFnTable<S>;
+    fn get_func_table(&self) -> SolFnTable;
 
     /// execute this internal contract on the given parameters.
     fn execute(
         &self, params: &ActionParams, env: &Env, spec: &Spec,
-        state: &mut StateGeneric<S>, substate: &mut Substate,
+        state: &mut dyn StateOpsTrait, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>
     {
@@ -80,10 +80,10 @@ pub trait InternalContractTrait<S: StorageStateTrait> {
 }
 
 /// Native implementation of a solidity-interface function.
-pub trait SolidityFunctionTrait<S: StorageStateTrait>: Send + Sync {
+pub trait SolidityFunctionTrait: Send + Sync {
     fn execute(
         &self, input: &[u8], params: &ActionParams, env: &Env, spec: &Spec,
-        state: &mut StateGeneric<S>, substate: &mut Substate,
+        state: &mut dyn StateOpsTrait, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>;
 

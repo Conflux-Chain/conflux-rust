@@ -9,7 +9,7 @@ use crate::{
         TransactOptions,
     },
     machine::Machine,
-    state::{CleanupMode, State, StateGeneric},
+    state::State,
     verification::{compute_receipts_root, compute_transaction_root},
     vm::{CreateContractAddress, Env},
 };
@@ -21,8 +21,9 @@ use cfx_parameters::{
         GENESIS_TOKEN_COUNT_IN_CFX, TWO_YEAR_UNLOCK_TOKEN_COUNT_IN_CFX,
     },
 };
+use cfx_state::{state_trait::*, CleanupMode};
 use cfx_statedb::{Result as DbResult, StateDb};
-use cfx_storage::{StorageManager, StorageManagerTrait, StorageStateTrait};
+use cfx_storage::{StorageManager, StorageManagerTrait};
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use keylib::KeyPair;
 use primitives::{
@@ -101,19 +102,17 @@ pub fn load_secrets_file(
     Ok(accounts)
 }
 
-pub fn initialize_internal_contract_accounts<
-    S: StorageStateTrait + Send + Sync + 'static,
->(
-    state: &mut StateGeneric<S>,
+pub fn initialize_internal_contract_accounts(
+    state: &mut dyn StateOpsTrait, contract_start_nonce: U256,
 ) {
     || -> DbResult<()> {
         {
-            for address in InternalContractMap::<S>::new().keys() {
+            for address in InternalContractMap::new().keys() {
                 state.new_contract_with_admin(
                     address,
                     /* No admin; admin = */ &Address::zero(),
                     /* balance = */ U256::zero(),
-                    state.contract_start_nonce(),
+                    contract_start_nonce,
                     Some(STORAGE_LAYOUT_REGULAR_V0),
                 )?;
             }
@@ -163,18 +162,18 @@ pub fn genesis_block(
     genesis_chain_id: Option<u32>,
 ) -> Block
 {
-    let mut state = State::new(
-        StateDb::new(storage_manager.get_state_for_genesis_write()),
-        Default::default(),
-        &Spec::new_spec(),
-    )
-    .expect("Failed to initialize state");
+    let mut state =
+        State::new(StateDb::new(storage_manager.get_state_for_genesis_write()))
+            .expect("Failed to initialize state");
 
     let mut genesis_block_author = test_net_version;
     genesis_block_author.set_user_account_type_bits();
 
     let mut total_balance = U256::from(0);
-    initialize_internal_contract_accounts(&mut state);
+    initialize_internal_contract_accounts(
+        &mut state,
+        Spec::new_spec().contract_start_nonce(/* block_number = */ 0),
+    );
     for (addr, balance) in genesis_accounts {
         state
             .add_balance(&addr, &balance, CleanupMode::NoEmpty)

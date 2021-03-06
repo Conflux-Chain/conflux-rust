@@ -7,6 +7,7 @@ use crate::rpc::types::{
     RpcAddress, SponsorInfo, TokenSupplyInfo, MAX_GAS_CALL_REQUEST,
 };
 use blockgen::BlockGenerator;
+use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
 use cfx_types::{
     address_util::AddressUtil, BigEndianHash, H256, H520, U128, U256, U64,

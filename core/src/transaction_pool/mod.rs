@@ -17,7 +17,7 @@ extern crate rand;
 pub use self::impls::TreapMap;
 use crate::{
     block_data_manager::BlockDataManager, consensus::BestInformation,
-    machine::Machine, state::State, verification::VerificationConfig, vm::Spec,
+    machine::Machine, state::State, verification::VerificationConfig,
 };
 
 use account_cache::AccountCache;
@@ -758,20 +758,16 @@ impl TransactionPool {
     fn best_executed_state(
         data_man: &BlockDataManager, best_executed_epoch: StateIndex,
     ) -> StateDbResult<Arc<State>> {
-        Ok(Arc::new(State::new(
-            StateDb::new(
-                data_man
-                    .storage_manager
-                    .get_state_no_commit(
-                        best_executed_epoch,
-                        /* try_open = */ false,
-                    )?
-                    // Safe because the state is guaranteed to be available
-                    .unwrap(),
-            ),
-            Default::default(),
-            &Spec::new_spec(),
-        )?))
+        Ok(Arc::new(State::new(StateDb::new(
+            data_man
+                .storage_manager
+                .get_state_no_commit(
+                    best_executed_epoch,
+                    /* try_open = */ false,
+                )?
+                // Safe because the state is guaranteed to be available
+                .unwrap(),
+        ))?))
     }
 
     pub fn set_best_executed_epoch(
