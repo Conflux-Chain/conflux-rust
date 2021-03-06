@@ -75,9 +75,11 @@ pub fn set_admin(
     );
     if contract_address.is_contract_address()
         && state.exists(&contract_address)?
+        // Allow set admin if requester matches or in contract creation to clear admin.
         && (state.admin(&contract_address)?.eq(requester)
             || contract_in_creation == Some(&contract_address)
                 && new_admin_address.is_null_address())
+        // Only allow user account to be admin, if not to clear admin.
         && (new_admin_address.is_user_account_address()
             || new_admin_address.is_null_address())
     {

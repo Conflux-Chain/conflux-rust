@@ -8,10 +8,7 @@ pub use self::{
 };
 
 use self::account_entry::{AccountEntry, AccountState};
-use crate::{
-    hash::KECCAK_EMPTY, transaction_pool::SharedTransactionPool,
-    vm::Error as vmError,
-};
+use crate::{hash::KECCAK_EMPTY, transaction_pool::SharedTransactionPool};
 use cfx_bytes::Bytes;
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
@@ -73,25 +70,6 @@ struct StakingState {
     interest_rate_per_block: U256,
     // This is the accumulated interest rate.
     accumulate_interest_rate: U256,
-}
-
-// FIXME: take care of it
-pub trait CollateralCheckResultToVmResult {
-    fn into_vm_result(self) -> Result<(), vmError>;
-}
-
-impl CollateralCheckResultToVmResult for CollateralCheckResult {
-    fn into_vm_result(self) -> Result<(), vmError> {
-        match self {
-            CollateralCheckResult::ExceedStorageLimit { .. } => {
-                Err(vmError::ExceedStorageLimit)
-            }
-            CollateralCheckResult::NotEnoughBalance { required, got } => {
-                Err(vmError::NotEnoughBalanceForStorage { required, got })
-            }
-            CollateralCheckResult::Valid => Ok(()),
-        }
-    }
 }
 
 pub type State = StateGeneric<StorageState>;

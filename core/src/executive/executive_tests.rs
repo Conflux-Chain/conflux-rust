@@ -5,9 +5,9 @@
 use super::{executive::*, internal_contract::*, Executed, ExecutionError};
 use crate::{
     evm::FinalizationResult,
-    executive::ExecutionOutcome,
+    executive::{CollateralCheckResultToVmResult, ExecutionOutcome},
     machine::Machine,
-    state::{CollateralCheckResultToVmResult, State, Substate},
+    state::{State, Substate},
     test_helpers::get_state_for_genesis_write,
     trace,
     vm::{

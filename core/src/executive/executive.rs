@@ -11,11 +11,11 @@ use crate::{
     evm::{FinalizationResult, Finalize},
     executive::{
         executed::{ExecutionOutcome, ToRepackError},
-        TxDropError,
+        CollateralCheckResultToVmResult, TxDropError,
     },
     hash::keccak,
     machine::Machine,
-    state::{CallStackInfo, CollateralCheckResultToVmResult, State, Substate},
+    state::{CallStackInfo, State, Substate},
     trace::{self, trace::ExecTrace, Tracer},
     verification::VerificationConfig,
     vm::{
@@ -1651,7 +1651,6 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
             )?;
         }
 
-        // FIXME: compilation error because type mismatch .. there is no hint.
         let res = self.state.settle_collateral_for_all(&substate)?;
         // The storage recycling process should never occupy new collateral.
         assert_eq!(res, CollateralCheckResult::Valid);

@@ -25,11 +25,12 @@ use solidity_abi::{ABIDecodable, ABIEncodable};
 ///
 /// You always needs to implement `ExecutionTrait`, which is the core of the
 /// function execution.
-impl<T> SolidityFunctionTrait for T
-where T: InterfaceTrait
-        + PreExecCheckTrait
-        + UpfrontPaymentTrait
-        + ExecutionTrait
+impl<
+        T: InterfaceTrait
+            + PreExecCheckTrait
+            + UpfrontPaymentTrait
+            + ExecutionTrait,
+    > SolidityFunctionTrait for T
 {
     fn execute(
         &self, input: &[u8], params: &ActionParams, env: &Env, spec: &Spec,
