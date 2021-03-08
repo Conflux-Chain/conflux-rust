@@ -668,7 +668,6 @@ mod tests {
         false,
     )
             .unwrap()
-    .ok()
     .unwrap();
     }
 

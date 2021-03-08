@@ -77,12 +77,10 @@ fn test_load_chain() {
     let file_path = Path::new(&chain_path);
     let file = File::open(file_path)
         .map_err(|e| format!("Failed to open test-chain file {:?}", e))
-        .ok()
         .unwrap();
     let reader = BufReader::new(file);
     let rpc_blocks: Vec<RpcBlock> = serde_json::from_reader(reader)
         .map_err(|e| format!("Failed to parse blocks from json {:?}", e))
-        .ok()
         .unwrap();
     assert!(
         !rpc_blocks.is_empty(),
@@ -91,12 +89,12 @@ fn test_load_chain() {
     for rpc_block in rpc_blocks.into_iter().skip(1) {
         let primitive_block: Block = rpc_block.into_primitive().map_err(|e| {
             format!("Failed to convert from a rpc_block to primitive block {:?}", e)
-        }).ok().unwrap();
+        }).unwrap();
         handle
             .other_components
             .sync
             .on_mined_block(primitive_block)
-            .ok();
+            .unwrap();
     }
 
     let expected = get_expected_best_hash();

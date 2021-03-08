@@ -53,7 +53,7 @@ fn test_add(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(94_988));
@@ -79,7 +79,7 @@ fn test_sha3(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(94_961));
@@ -105,7 +105,7 @@ fn test_address(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(94_995));
@@ -135,7 +135,7 @@ fn test_origin(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut context, &mut tracer).unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(94_995));
@@ -169,7 +169,7 @@ fn test_selfbalance(factory: super::Factory) {
     };
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
     assert_eq!(gas_left, U256::from(94_992));
     assert_store(
@@ -197,7 +197,7 @@ fn test_sender(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(94_995));
@@ -223,7 +223,7 @@ fn test_chain_id(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(94_995));
@@ -266,7 +266,7 @@ fn test_extcodecopy(factory: super::Factory) {
     //let gas_left = {
     {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     //assert_eq!(gas_left, U256::from(79_935));
@@ -292,7 +292,7 @@ fn test_log_empty(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(99_619));
@@ -327,7 +327,7 @@ fn test_log_sender(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(98_974));
@@ -368,7 +368,7 @@ fn test_blockhash(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(94_974));
@@ -395,7 +395,7 @@ fn test_calldataload(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(94_991));
@@ -421,7 +421,7 @@ fn test_author(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(94_995));
@@ -446,7 +446,7 @@ fn test_timestamp(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(94_995));
@@ -471,7 +471,7 @@ fn test_number(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(94_995));
@@ -496,7 +496,7 @@ fn test_difficulty(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(94_995));
@@ -521,7 +521,7 @@ fn test_gas_limit(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(94_995));
@@ -544,7 +544,7 @@ fn test_mul(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_store(
@@ -567,7 +567,7 @@ fn test_sub(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_store(
@@ -590,7 +590,7 @@ fn test_div(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_store(
@@ -613,7 +613,7 @@ fn test_div_zero(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_store(
@@ -638,7 +638,7 @@ fn test_mod(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_store(
@@ -668,7 +668,7 @@ fn test_smod(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_store(
@@ -698,7 +698,7 @@ fn test_sdiv(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_store(
@@ -727,7 +727,7 @@ fn test_exp(factory: super::Factory) {
     //let gas_left = {
     {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_store(
@@ -760,7 +760,7 @@ fn test_comparison(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_store(
@@ -801,7 +801,7 @@ fn test_signed_comparison(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_store(
@@ -839,7 +839,7 @@ fn test_bitops(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_store(
@@ -887,7 +887,7 @@ fn test_addmod_mulmod(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_store(
@@ -925,7 +925,7 @@ fn test_byte(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_store(
@@ -953,7 +953,7 @@ fn test_signextend(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_store(
@@ -982,7 +982,7 @@ fn test_badinstruction_int() {
 
     let err = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap_err()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap_err()
     };
 
     match err {
@@ -1003,7 +1003,7 @@ fn test_pop(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_store(
@@ -1032,7 +1032,7 @@ fn test_extops(factory: super::Factory) {
     //let gas_left = {
     {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_store(
@@ -1081,7 +1081,7 @@ fn test_jumps(factory: super::Factory) {
     //let gas_left = {
     {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     // assert_eq!(ctx.sstore_clears, ctx.spec().sstore_refund_gas as i128);
@@ -1111,7 +1111,7 @@ fn test_subs_simple(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(0));
@@ -1130,7 +1130,7 @@ fn test_subs_two_levels(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(0));
@@ -1149,7 +1149,7 @@ fn test_subs_invalid_jump(factory: super::Factory) {
 
     let current = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap())
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap())
     };
 
     let expected =
@@ -1170,7 +1170,7 @@ fn test_subs_shallow_return_stack(factory: super::Factory) {
 
     let current = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap())
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap())
     };
 
     let expected = Result::Err(vm::Error::SubStackUnderflow {
@@ -1209,7 +1209,7 @@ fn test_subs_substack_limit(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(959_049));
@@ -1231,7 +1231,7 @@ fn test_subs_substack_out(factory: super::Factory) {
 
     let current = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap())
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap())
     };
 
     let expected = Result::Err(vm::Error::OutOfSubStack {
@@ -1253,7 +1253,7 @@ fn test_subs_sub_at_end(factory: super::Factory) {
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(0));
@@ -1271,7 +1271,7 @@ fn test_subs_walk_into_subroutine(factory: super::Factory) {
 
     let current = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap())
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap())
     };
 
     let expected = Result::Err(vm::Error::InvalidSubEntry);
@@ -1299,7 +1299,7 @@ fn test_calls(factory: super::Factory) {
     //let gas_left = {
     {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap()
     };
 
     assert_set_contains(
@@ -1347,7 +1347,7 @@ fn test_create_in_staticcall(factory: super::Factory) {
 
     let err = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
-        test_finalize(vm.exec(&mut ctx, &mut tracer).ok().unwrap()).unwrap_err()
+        test_finalize(vm.exec(&mut ctx, &mut tracer).unwrap()).unwrap_err()
     };
 
     assert_eq!(err, vm::Error::MutableCallInStaticContext);
