@@ -61,6 +61,12 @@ pub enum FilterError {
         min: u64,
     },
 
+    /// Block cannot be served as it was already pruned from db on a full node
+    // Use this when the corresponding epoch is not known.
+    BlockAlreadyPruned {
+        block_hash: H256,
+    },
+
     /// Block has not been executed yet
     BlockNotExecutedYet {
         block_hash: H256,
@@ -119,6 +125,9 @@ impl fmt::Display for FilterError {
             EpochAlreadyPruned { epoch, min } => format! {
                 "Epoch is smaller than the earliest epoch stored (epoch: {}, min: {})",
                 epoch, min,
+            },
+            BlockAlreadyPruned { block_hash } => format! {
+                "Block {:?} has been pruned from db", block_hash,
             },
             BlockNotExecutedYet { block_hash } => format! {
                 "Block {:?} is not executed yet", block_hash,

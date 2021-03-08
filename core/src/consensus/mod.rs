@@ -900,7 +900,7 @@ impl ConsensusGraph {
 
         // check if block exists
         if self.data_man.block_header_by_hash(&block_hash).is_none() {
-            return Err(FilterError::UnknownBlock { hash: block_hash });
+            bail!(FilterError::UnknownBlock { hash: block_hash });
         };
 
         // find pivot block
@@ -911,10 +911,24 @@ impl ConsensusGraph {
         {
             Some(r) => r.0,
             None => {
-                // exec results are either pruned already or block has not been
-                // executed yet
-                // TODO(thegaram): is there a way to tell these apart?
-                return Err(FilterError::BlockNotExecutedYet { block_hash });
+                match self.data_man.local_block_info_by_hash(&block_hash) {
+                    // if local block info is not available, that means this
+                    // block has never entered the consensus graph.
+                    None => {
+                        bail!(FilterError::BlockNotExecutedYet { block_hash })
+                    }
+                    // if the local block info is available, then it is very
+                    // likely that we have already executed this block and the
+                    // results are not available because they have been pruned.
+                    // NOTE: it might be possible that the block has entered
+                    // consensus graph but has not been executed yet, or that it
+                    // was not executed because it was invalid. these cases seem
+                    // rare enough to not require special handling here; we can
+                    // add more fine-grained errors in the future if necessary.
+                    Some(_) => {
+                        bail!(FilterError::BlockAlreadyPruned { block_hash })
+                    }
+                }
             }
         };
 
@@ -924,7 +938,7 @@ impl ConsensusGraph {
             None => {
                 // internal error
                 error!("Header of pivot block {:?} not found", pivot_hash);
-                return Err(FilterError::UnknownBlock { hash: pivot_hash });
+                bail!(FilterError::UnknownBlock { hash: pivot_hash });
             }
         };
 
