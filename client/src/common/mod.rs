@@ -290,7 +290,6 @@ pub fn initialize_common_modules(
             None, /* sstore_iterations */
             Some(refresh_time),
         )
-        .ok()
         .expect("failed to initialize account provider"),
     );
 
