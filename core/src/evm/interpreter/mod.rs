@@ -1691,7 +1691,8 @@ mod tests {
         //let gas_left = {
         {
             let vm = interpreter(params, &context);
-            test_finalize(vm.exec(&mut context, &mut tracer).unwrap()).unwrap()
+            test_finalize(vm.exec(&mut context, &mut tracer).ok().unwrap())
+                .unwrap()
         };
 
         assert_eq!(context.calls.len(), 1);
@@ -1716,7 +1717,7 @@ mod tests {
 
         let err = {
             let vm = interpreter(params, &context);
-            test_finalize(vm.exec(&mut context, &mut tracer).unwrap())
+            test_finalize(vm.exec(&mut context, &mut tracer).ok().unwrap())
                 .err()
                 .unwrap()
         };
