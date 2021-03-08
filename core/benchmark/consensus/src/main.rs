@@ -362,6 +362,7 @@ fn main() {
             timer_beta,
             era_epoch_count,
             pow,
+            sync.machine().vm_factory(),
         );
 
     println!("Checkpoint generated in the process. Going to test the last checkpoint recovery, genesis hash {} stable hash {}.", genesis_hash, stable_hash);
@@ -381,7 +382,7 @@ fn main() {
         }
         if genesis_idx != i {
             let h = blocks[i].hash();
-            consensus_n.on_new_block(&h, true, false);
+            consensus_n.on_new_block(&h);
         }
     }
 

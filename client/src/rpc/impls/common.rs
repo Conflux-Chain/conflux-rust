@@ -362,7 +362,10 @@ impl RpcImpl {
             address, num
         );
 
-        consensus_graph.next_nonce(address.hex_address, num.into())
+        // TODO: check if address is not in reserved address space.
+        // We pass "num" into next_nonce() function for the error reporting
+        // rpc_param_name because the user passed epoch number could be invalid.
+        consensus_graph.next_nonce(address.hex_address, num.into(), "num")
     }
 }
 
@@ -527,19 +530,42 @@ impl RpcImpl {
         }
     }
 
-    pub fn get_status(&self) -> JsonRpcResult<RpcStatus> {
+    pub fn get_status(&self) -> RpcResult<RpcStatus> {
+        let consensus_graph = self.consensus_graph();
+
         let best_info = self.consensus.best_info();
         let best_hash = best_info.best_block_hash;
         let epoch_number = best_info.best_epoch_number;
-        let block_number = self.consensus.block_count();
         let tx_count = self.tx_pool.total_unpacked();
+
+        let block_number = self
+            .consensus
+            .get_block_number(&best_hash)?
+            .ok_or("block_number is missing for best_hash")?
+            // The returned block_number of `best_hash` does not include `best_hash` itself.
+            + 1;
+
+        let latest_checkpoint = consensus_graph
+            .get_height_from_epoch_number(EpochNumber::LatestCheckpoint.into())?
+            .into();
+
+        let latest_confirmed = consensus_graph
+            .get_height_from_epoch_number(EpochNumber::LatestConfirmed.into())?
+            .into();
+
+        let latest_state = consensus_graph
+            .get_height_from_epoch_number(EpochNumber::LatestState.into())?
+            .into();
 
         Ok(RpcStatus {
             best_hash: H256::from(best_hash),
-            chain_id: best_info.chain_id.into(),
-            network_id: self.network.network_id().into(),
-            epoch_number: epoch_number.into(),
             block_number: block_number.into(),
+            chain_id: best_info.chain_id.into(),
+            epoch_number: epoch_number.into(),
+            latest_checkpoint,
+            latest_confirmed,
+            latest_state,
+            network_id: self.network.network_id().into(),
             pending_tx_number: tx_count.into(),
         })
     }
@@ -739,8 +765,7 @@ impl RpcImpl {
 
     pub fn accounts(&self) -> RpcResult<Vec<RpcAddress>> {
         let accounts: Vec<Address> = self.accounts.accounts().map_err(|e| {
-            warn!("Could not fetch accounts. With error {:?}", e);
-            RpcError::internal_error()
+            format!("Could not fetch accounts. With error {:?}", e)
         })?;
 
         Ok(accounts
@@ -757,8 +782,7 @@ impl RpcImpl {
     pub fn new_account(&self, password: String) -> RpcResult<RpcAddress> {
         let address =
             self.accounts.new_account(&password.into()).map_err(|e| {
-                warn!("Could not create account. With error {:?}", e);
-                RpcError::internal_error()
+                format!("Could not create account. With error {:?}", e)
             })?;
 
         Ok(RpcAddress::try_from_h160(

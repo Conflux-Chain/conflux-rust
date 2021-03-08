@@ -40,11 +40,11 @@ use crate::{
             Account as RpcAccount, BlameInfo, Block as RpcBlock,
             BlockHashOrEpochNumber, Bytes, CallRequest,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
-            EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
-            Log as RpcLog, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
-            RpcAddress, SendTxRequest, SponsorInfo, Status as RpcStatus,
-            SyncGraphStates, TokenSupplyInfo, Transaction as RpcTransaction,
-            TxPoolPendingInfo, TxWithPoolInfo,
+            EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
+            LogFilter as RpcFilter, Receipt as RpcReceipt,
+            RewardInfo as RpcRewardInfo, RpcAddress, SendTxRequest,
+            SponsorInfo, Status as RpcStatus, SyncGraphStates, TokenSupplyInfo,
+            Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
         },
         RpcBoxFuture, RpcResult,
     },
@@ -1151,6 +1151,7 @@ impl LocalRpc for DebugRpcImpl {
     not_supported! {
         fn consensus_graph_state(&self) -> JsonRpcResult<ConsensusGraphStates>;
         fn current_sync_phase(&self) -> JsonRpcResult<String>;
+        fn epoch_receipts(&self, epoch: EpochNumber) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
         fn sign_transaction(&self, tx: SendTxRequest, password: Option<String>) -> JsonRpcResult<String>;
         fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
     }

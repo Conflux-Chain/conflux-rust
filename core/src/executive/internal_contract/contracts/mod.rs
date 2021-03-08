@@ -18,7 +18,6 @@ use std::collections::{BTreeMap, HashMap};
 pub use self::{
     admin::AdminControl, sponsor::SponsorWhitelistControl, staking::Staking,
 };
-use cfx_storage::StorageStateTrait;
 
 use crate::evm::Spec;
 use cfx_types::Address;
@@ -28,8 +27,7 @@ lazy_static! {
     static ref SPEC: Spec = Spec::default();
 }
 
-pub(super) type SolFnTable<S> =
-    HashMap<[u8; 4], Box<dyn SolidityFunctionTrait<S>>>;
+pub(super) type SolFnTable = HashMap<[u8; 4], Box<dyn SolidityFunctionTrait>>;
 
 /// A marco to implement an internal contract.
 #[macro_export]
@@ -37,21 +35,18 @@ macro_rules! make_solidity_contract {
     ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr,$gen_table:ident); ) => {
         $(#[$attr])*
         #[derive(Copy, Clone)]
-        $visibility struct $name<S> {
-            phantom: std::marker::PhantomData<S>,
+        $visibility struct $name {
         }
 
-        impl<S> $name<S> {
+        impl $name {
             pub fn instance() -> Self {
-                Self {
-                    phantom: Default::default(),
-                }
+                Self {}
             }
         }
 
-        impl<S: cfx_storage::StorageStateTrait + Send + Sync + 'static> InternalContractTrait<S> for $name<S> {
+        impl InternalContractTrait for $name {
             fn address(&self) -> &Address { &$addr }
-            fn get_func_table(&self) -> SolFnTable<S> { $gen_table::<S>() }
+            fn get_func_table(&self) -> SolFnTable { $gen_table() }
         }
     };
 }
@@ -70,7 +65,7 @@ macro_rules! make_function_table {
 #[macro_export]
 macro_rules! check_signature {
     ($interface:ident, $signature:expr) => {
-        let f = <$interface<cfx_storage::StorageState>>::instance();
+        let f = $interface::instance();
         assert_eq!(
             f.function_sig().to_vec(),
             $signature.from_hex::<Vec<u8>>().unwrap(),
@@ -80,22 +75,22 @@ macro_rules! check_signature {
     };
 }
 
-pub struct InternalContractMap<S: StorageStateTrait> {
-    builtin: Arc<BTreeMap<Address, Box<dyn InternalContractTrait<S>>>>,
+pub struct InternalContractMap {
+    builtin: Arc<BTreeMap<Address, Box<dyn InternalContractTrait>>>,
 }
 
-impl<S: StorageStateTrait> std::ops::Deref for InternalContractMap<S> {
-    type Target = Arc<BTreeMap<Address, Box<dyn InternalContractTrait<S>>>>;
+impl std::ops::Deref for InternalContractMap {
+    type Target = Arc<BTreeMap<Address, Box<dyn InternalContractTrait>>>;
 
     fn deref(&self) -> &Self::Target { &self.builtin }
 }
 
-impl<S: StorageStateTrait + Send + Sync + 'static> InternalContractMap<S> {
+impl InternalContractMap {
     pub fn new() -> Self {
         let mut builtin = BTreeMap::new();
-        let admin = internal_contract_factory::<S>("admin");
-        let sponsor = internal_contract_factory::<S>("sponsor");
-        let staking = internal_contract_factory::<S>("staking");
+        let admin = internal_contract_factory("admin");
+        let sponsor = internal_contract_factory("sponsor");
+        let staking = internal_contract_factory("staking");
         builtin.insert(*admin.address(), admin);
         builtin.insert(*sponsor.address(), sponsor);
         builtin.insert(*staking.address(), staking);
@@ -106,21 +101,17 @@ impl<S: StorageStateTrait + Send + Sync + 'static> InternalContractMap<S> {
 
     pub fn contract(
         &self, address: &Address,
-    ) -> Option<&Box<dyn InternalContractTrait<S>>> {
+    ) -> Option<&Box<dyn InternalContractTrait>> {
         self.builtin.get(address)
     }
 }
 
 /// Built-in instruction factory.
-pub fn internal_contract_factory<
-    S: StorageStateTrait + Send + Sync + 'static,
->(
-    name: &str,
-) -> Box<dyn InternalContractTrait<S>> {
+pub fn internal_contract_factory(name: &str) -> Box<dyn InternalContractTrait> {
     match name {
-        "admin" => Box::new(<AdminControl<S>>::instance()),
-        "staking" => Box::new(<Staking<S>>::instance()),
-        "sponsor" => Box::new(<SponsorWhitelistControl<S>>::instance()),
+        "admin" => Box::new(AdminControl::instance()),
+        "staking" => Box::new(Staking::instance()),
+        "sponsor" => Box::new(SponsorWhitelistControl::instance()),
         _ => panic!("invalid internal contract name: {}", name),
     }
 }

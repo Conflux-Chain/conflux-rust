@@ -182,6 +182,19 @@ impl RequestManager {
             .len() as u64
     }
 
+    pub fn in_flight_blocks(&self) -> HashSet<H256> {
+        self.inflight_keys
+            .read(msgid::GET_BLOCKS)
+            .iter()
+            .map(|key| match key {
+                Key::Hash(h) => *h,
+                Key::Num(_) | Key::Id(_) => {
+                    unreachable!("GET_BLOCKS only has hash as key");
+                }
+            })
+            .collect()
+    }
+
     /// Send request to remote peer with delay mechanism. If failed,
     /// add the request to waiting queue to resend later.
     pub fn request_with_delay(

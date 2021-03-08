@@ -9,7 +9,7 @@ pub mod internal_contract_addresses;
 
 pub mod consensus {
     pub const DEFERRED_STATE_EPOCH_COUNT: u64 = 5;
-    pub const EPOCH_SET_PERSISTENCE_DELAY: u64 = 100;
+    pub const EPOCH_SET_PERSISTENCE_DELAY: u64 = DEFERRED_STATE_EPOCH_COUNT;
 
     pub const ADAPTIVE_WEIGHT_DEFAULT_BETA: u64 = 1000;
     pub const HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 250;
@@ -152,13 +152,6 @@ pub mod sync {
     }
     //const REQUEST_WAITING_TIME_BACKOFF: u32 = 2;
     pub const DEFAULT_CHUNK_SIZE: u64 = 256 * 1024;
-
-    /// The batch size of old-era blocks garbage-collected from database for
-    /// each BLOCK_CACHE_GC_TIMER timer trigger.
-    /// Note that the average block removing rate should be greater than the
-    /// block generation rate, otherwise `ConsensusInner.old_era_block_set`
-    /// will keep growing.
-    pub const OLD_ERA_BLOCK_GC_BATCH_SIZE: usize = 50;
 }
 
 pub mod pow {

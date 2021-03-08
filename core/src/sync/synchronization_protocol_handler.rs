@@ -43,7 +43,7 @@ use primitives::{Block, BlockHeader, EpochId, SignedTransaction};
 use rand::{prelude::SliceRandom, Rng};
 use rlp::Rlp;
 use std::{
-    cmp,
+    cmp::{self, min},
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -84,6 +84,7 @@ const EPOCH_SYNC_MAX_GAP: u64 = 20000;
 const EPOCH_SYNC_RESTART_TIMEOUT_S: u64 = 60 * 10;
 const EPOCH_SYNC_MAX_INFLIGHT: u64 = 300;
 const EPOCH_SYNC_BATCH_SIZE: u64 = 30;
+const BLOCK_SYNC_MAX_INFLIGHT: usize = 1000;
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub enum SyncHandlerWorkType {
@@ -411,6 +412,7 @@ pub struct ProtocolConfiguration {
     pub demote_peer_for_timeout: bool,
     pub max_unprocessed_block_size: usize,
     pub max_chunk_number_in_manifest: usize,
+    pub allow_phase_change_without_peer: bool,
 }
 
 impl SynchronizationProtocolHandler {
@@ -425,7 +427,7 @@ impl SynchronizationProtocolHandler {
         let sync_state = Arc::new(SynchronizationState::new(
             protocol_config.is_consortium,
             node_type,
-            protocol_config.dev_mode || protocol_config.test_mode,
+            protocol_config.allow_phase_change_without_peer,
         ));
         let recover_public_queue = Arc::new(AsyncTaskQueue::new(
             SyncHandlerWorkType::RecoverPublic,
@@ -494,7 +496,7 @@ impl SynchronizationProtocolHandler {
         current_phase.phase_type()
             == SyncPhaseType::CatchUpRecoverBlockHeaderFromDB
             || current_phase.phase_type()
-                == SyncPhaseType::CatchUpRecoverBlockFromDB
+                == SyncPhaseType::CatchUpFillBlockBodyPhase
     }
 
     pub fn need_requesting_blocks(&self) -> bool {
@@ -715,7 +717,7 @@ impl SynchronizationProtocolHandler {
         let current_phase_type =
             self.phase_manager.get_current_phase().phase_type();
         if current_phase_type == SyncPhaseType::CatchUpRecoverBlockHeaderFromDB
-            || current_phase_type == SyncPhaseType::CatchUpRecoverBlockFromDB
+            || current_phase_type == SyncPhaseType::CatchUpFillBlockBodyPhase
         {
             return;
         }
@@ -732,29 +734,6 @@ impl SynchronizationProtocolHandler {
         } else {
             self.request_missing_terminals(io);
         }
-    }
-
-    /// request missing blocked after `recover_graph_from_db` is called
-    /// should be called in `start_sync`
-    pub fn request_initial_missed_block(&self, io: &dyn NetworkContext) {
-        let to_request;
-        {
-            let mut missing_hashes =
-                self.graph.initial_missed_block_hashes.lock();
-            if missing_hashes.is_empty() {
-                return;
-            }
-            to_request = missing_hashes.drain().collect::<Vec<H256>>();
-            missing_hashes.clear();
-        }
-        let chosen_peer =
-            PeerFilter::new(msgid::GET_BLOCK_HEADERS).select(&self.syn);
-        self.request_block_headers(
-            io,
-            chosen_peer,
-            to_request,
-            true, /* ignore_db */
-        );
     }
 
     pub fn request_missing_terminals(&self, io: &dyn NetworkContext) {
@@ -810,6 +789,34 @@ impl SynchronizationProtocolHandler {
         }
     }
 
+    /// Request missing block bodies from random peers in batches.
+    pub fn request_block_bodies(&self, io: &dyn NetworkContext) {
+        let in_flight_blocks = self.request_manager.in_flight_blocks();
+        let to_request_blocks: Vec<_> = self
+            .graph
+            .inner
+            .read()
+            .block_to_fill_set
+            .difference(&in_flight_blocks)
+            .copied()
+            .collect();
+        let n_blocks_to_request = min(
+            BLOCK_SYNC_MAX_INFLIGHT - in_flight_blocks.len(),
+            to_request_blocks.len(),
+        );
+
+        // Use `MAX_BLOCKS_TO_SEND` as the batch size so the peer can respond
+        // with all blocks.
+        for block_chunk in to_request_blocks[0..n_blocks_to_request]
+            .chunks(MAX_BLOCKS_TO_SEND as usize)
+        {
+            self.request_blocks_without_check(io, None, block_chunk.to_vec());
+        }
+    }
+
+    // FIXME Use another function for block catch up. It should only use local
+    // epoch set and end with all consensus block retrieved, not related to
+    // median peer epoch.
     pub fn request_epochs(&self, io: &dyn NetworkContext) {
         // make sure only one thread can request new epochs at a time
         let mut latest_requested = self.latest_epoch_requested.lock();
@@ -1066,26 +1073,29 @@ impl SynchronizationProtocolHandler {
                 need_to_relay.push(hash);
             }
         }
-        let missing_dependencies = dependent_hashes
-            .difference(&received_blocks)
-            .map(Clone::clone)
-            .collect();
         let chosen_peer = PeerFilter::new(msgid::GET_BLOCKS)
             .exclude(task.failed_peer)
             .select(&self.syn);
-
         self.blocks_received(
             io,
             task.requested,
-            received_blocks,
+            received_blocks.clone(),
             !task.compact,
             chosen_peer.clone(),
             task.delay,
             self.preferred_peer_node_type_for_get_block(),
         );
-        self.request_blocks(io, chosen_peer, missing_dependencies);
-
-        self.relay_blocks(io, need_to_relay)
+        if self.graph.inner.read().locked_for_catchup {
+            self.request_block_bodies(io);
+            Ok(())
+        } else {
+            let missing_dependencies = dependent_hashes
+                .difference(&received_blocks)
+                .map(Clone::clone)
+                .collect();
+            self.request_blocks(io, chosen_peer, missing_dependencies);
+            self.relay_blocks(io, need_to_relay)
+        }
     }
 
     fn on_blocks_inner_task(
@@ -1540,7 +1550,12 @@ impl SynchronizationProtocolHandler {
         self.broadcast_heartbeat(io);
     }
 
-    fn cache_gc(&self) { self.graph.data_man.cache_gc() }
+    fn gc(&self) {
+        self.graph.data_man.cache_gc();
+        self.graph
+            .data_man
+            .database_gc(self.graph.consensus.best_epoch_number())
+    }
 
     fn log_statistics(&self) { self.graph.log_statistics(); }
 
@@ -1552,12 +1567,20 @@ impl SynchronizationProtocolHandler {
         {
             let _pm_lock = self.phase_manager_lock.lock();
             self.phase_manager.try_initialize(io, self);
-            let current_phase = self.phase_manager.get_current_phase();
-            let next_phase_type = current_phase.next(io, self);
-            if current_phase.phase_type() != next_phase_type {
-                // Phase changed
-                self.phase_manager
-                    .change_phase_to(next_phase_type, io, self);
+            loop {
+                // Allow multiple phase changes in one round.
+                let current_phase = self.phase_manager.get_current_phase();
+                let next_phase_type = current_phase.next(io, self);
+                if current_phase.phase_type() != next_phase_type {
+                    // Phase changed
+                    self.phase_manager.change_phase_to(
+                        next_phase_type,
+                        io,
+                        self,
+                    );
+                } else {
+                    break;
+                }
             }
         }
 
@@ -1577,9 +1600,10 @@ impl SynchronizationProtocolHandler {
             }
         }
         info!(
-            "Catch-up mode: {}, latest epoch: {}",
+            "Catch-up mode: {}, latest epoch: {} missing_bodies: {}",
             catch_up_mode,
-            self.graph.consensus.best_epoch_number()
+            self.graph.consensus.best_epoch_number(),
+            self.graph.inner.read().block_to_fill_set.len()
         );
 
         DynamicCapability::NormalPhase(!catch_up_mode)
@@ -1605,10 +1629,15 @@ impl SynchronizationProtocolHandler {
         mut hashes: Vec<H256>,
     )
     {
-        hashes.retain(|hash| !self.try_request_block_from_db(io, hash));
-        // Blocks may have been inserted into sync graph before as dependent
-        // blocks
-        hashes.retain(|h| !self.graph.contains_block(h));
+        hashes.retain(|hash| !self.already_processed(hash));
+        self.request_blocks_without_check(io, peer_id, hashes)
+    }
+
+    pub fn request_blocks_without_check(
+        &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
+        hashes: Vec<H256>,
+    )
+    {
         let preferred_node_type = self.preferred_peer_node_type_for_get_block();
         self.request_manager.request_blocks(
             io,
@@ -1623,26 +1652,9 @@ impl SynchronizationProtocolHandler {
     /// Try to get the block from db. Return `true` if the block exists in db or
     /// is inserted before. Handle the block if its seq_num is less
     /// than that of the current era genesis.
-    fn try_request_block_from_db(
-        &self, io: &dyn NetworkContext, hash: &H256,
-    ) -> bool {
+    fn already_processed(&self, hash: &H256) -> bool {
         if self.graph.contains_block(hash) {
             return true;
-        }
-
-        if let Some(height) = self
-            .graph
-            .block_by_hash(hash)
-            .map(|block| block.block_header.height())
-        {
-            let best_height = self.graph.consensus.best_epoch_number();
-            if height > best_height
-                || best_height - height <= LOCAL_BLOCK_INFO_QUERY_THRESHOLD
-            {
-                return false;
-            }
-        } else {
-            return false;
         }
 
         if let Some(info) = self.graph.data_man.local_block_info_by_hash(hash) {
@@ -1670,37 +1682,7 @@ impl SynchronizationProtocolHandler {
                 return true;
             }
         }
-
-        // FIXME: If there is no block info in db, whether we need to fetch
-        // block from db?
-        if let Some(block) = self
-            .graph
-            .data_man
-            .block_by_hash(hash, true /* update_cache */)
-        {
-            debug!("Recovered block {:?} from db", hash);
-            // Process blocks from db
-            // The parameter `failed_peer` is only used when there exist some
-            // blocks in `requested` but not in `blocks`.
-            // Here `requested` and `blocks` have the same block, so it's okay
-            // to set `failed_peer` to Default::default() since it will not be
-            // used.
-            let mut requested = HashSet::new();
-            requested.insert(block.hash());
-            self.recover_public_queue.dispatch(
-                io,
-                RecoverPublicTask::new(
-                    vec![block.as_ref().clone()],
-                    requested,
-                    Default::default(),
-                    false,
-                    None,
-                ),
-            );
-            return true;
-        } else {
-            return false;
-        }
+        return false;
     }
 
     pub fn blocks_received(
@@ -1727,21 +1709,15 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn expire_block_gc(
-        &self, io: &dyn NetworkContext, timeout: u64,
+        &self, _io: &dyn NetworkContext, timeout: u64,
     ) -> Result<(), Error> {
         if self.in_recover_from_db_phase() {
             // In recover_from_db phase, this will be done at the end of
-            // recovery, and if we allow `resolve_outside_dependencies` here,
-            // it will cause inconsistency.
+            // recovery.
             return Ok(());
         }
-        // TODO This may not be needed now, but we should double check it.
-        let need_to_relay = self.graph.resolve_outside_dependencies(
-            false, /* recover_from_db */
-            self.insert_header_to_consensus(),
-        );
         self.graph.remove_expire_blocks(timeout);
-        self.relay_blocks(io, need_to_relay)
+        Ok(())
     }
 
     pub fn is_block_queue_full(&self) -> bool {
@@ -1897,8 +1873,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                 self.send_heartbeat(io);
             }
             BLOCK_CACHE_GC_TIMER => {
-                self.cache_gc();
-                self.graph.try_remove_old_era_blocks_from_disk();
+                self.gc();
             }
             CHECK_CATCH_UP_MODE_TIMER => {
                 self.update_sync_phase(io);

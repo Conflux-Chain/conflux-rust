@@ -41,7 +41,7 @@ use futures::{
 };
 use network::{service::ProtocolVersion, NetworkContext, NetworkService};
 use primitives::{
-    filter::{Filter, FilterError},
+    filter::{FilterError, LogFilter},
     log_entry::{LocalizedLogEntry, LogEntry},
     Account, Block, BlockReceipts, CodeInfo, DepositList, EpochNumber, Receipt,
     SignedTransaction, StorageKey, StorageRoot, StorageValue, TransactionIndex,
@@ -673,7 +673,7 @@ impl QueryService {
     fn filter_receipt_logs(
         epoch: u64, block_hash: H256, transaction_index: usize,
         num_logs_remaining: &mut usize, mut logs: Vec<LogEntry>,
-        filter: Filter,
+        filter: LogFilter,
     ) -> impl Iterator<Item = LocalizedLogEntry>
     {
         let num_logs = logs.len();
@@ -700,8 +700,10 @@ impl QueryService {
 
     /// Apply filter to all receipts within a block.
     fn filter_block_receipts(
-        epoch: u64, hash: H256, block_receipts: BlockReceipts, filter: Filter,
-    ) -> impl Iterator<Item = LocalizedLogEntry> {
+        epoch: u64, hash: H256, block_receipts: BlockReceipts,
+        filter: LogFilter,
+    ) -> impl Iterator<Item = LocalizedLogEntry>
+    {
         let mut receipts = block_receipts.receipts;
         // number of receipts in this block
         let num_receipts = receipts.len();
@@ -729,7 +731,7 @@ impl QueryService {
 
     /// Apply filter to all receipts within an epoch.
     fn filter_epoch_receipts(
-        &self, epoch: u64, mut receipts: Vec<BlockReceipts>, filter: Filter,
+        &self, epoch: u64, mut receipts: Vec<BlockReceipts>, filter: LogFilter,
     ) -> Result<impl Iterator<Item = LocalizedLogEntry>, String> {
         // get epoch blocks in execution order
         let mut hashes = self
@@ -821,7 +823,7 @@ impl QueryService {
     }
 
     fn get_filter_epochs(
-        &self, filter: &Filter,
+        &self, filter: &LogFilter,
     ) -> Result<(Vec<u64>, Box<dyn Fn(H256) -> bool + Send + Sync>), FilterError>
     {
         match &filter.block_hashes {
@@ -870,7 +872,7 @@ impl QueryService {
     }
 
     pub async fn get_logs(
-        &self, filter: Filter,
+        &self, filter: LogFilter,
     ) -> Result<Vec<LocalizedLogEntry>, Error> {
         debug!("get_logs filter = {:?}", filter);
 

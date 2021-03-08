@@ -525,6 +525,7 @@ impl CaterpillarMinLinkCutTreeInner {
 }
 
 impl CaterpillarLinkCutTreeTrait for CaterpillarMinLinkCutTreeInner {
+    /// ```text
     ///            ||
     ///            V3
     ///         /  ||  \
@@ -553,6 +554,7 @@ impl CaterpillarLinkCutTreeTrait for CaterpillarMinLinkCutTreeInner {
     /// and so on upwards. The value of V1 has already integrated the
     /// caterpillar effect of V2 on it, and the delta of V1 helps maintain
     /// the integrated caterpillar effects of V3 on V2, and so on upwards.
+    /// ```
     fn caterpillar_apply(&mut self, v: usize, caterpillar_delta: i128) {
         self.access(v);
 

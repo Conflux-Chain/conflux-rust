@@ -20,7 +20,7 @@
 
 //! Pub-Sub types.
 
-use super::{Filter, Header, Log};
+use super::{Header, Log, LogFilter};
 use cfx_types::{H256, U256};
 use serde::{de::Error, Deserialize, Deserializer, Serialize};
 use serde_json::{from_value, Value};
@@ -76,7 +76,7 @@ pub enum Params {
     /// No parameters passed.
     None,
     /// Log parameters.
-    Logs(Filter),
+    Logs(LogFilter),
 }
 
 impl Default for Params {

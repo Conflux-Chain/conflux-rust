@@ -7,12 +7,12 @@ use crate::rpc::types::{
     RpcAddress, SponsorInfo, TokenSupplyInfo, MAX_GAS_CALL_REQUEST,
 };
 use blockgen::BlockGenerator;
+use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
 use cfx_types::{
     address_util::AddressUtil, BigEndianHash, H256, H520, U128, U256, U64,
 };
 use cfxcore::{
-    block_data_manager::BlockExecutionResultWithEpoch,
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     state_exposer::STATE_EXPOSER,
@@ -28,9 +28,9 @@ use network::{
 };
 use parking_lot::Mutex;
 use primitives::{
-    filter::Filter, transaction::Action::Call, Account, DepositInfo,
-    SignedTransaction, StorageKey, StorageRoot, StorageValue,
-    TransactionWithSignature, VoteStakeInfo,
+    filter::LogFilter, transaction::Action::Call, Account, Block,
+    BlockReceipts, DepositInfo, SignedTransaction, StorageKey, StorageRoot,
+    StorageValue, TransactionIndex, TransactionWithSignature, VoteStakeInfo,
 };
 use random_crash::*;
 use rlp::Rlp;
@@ -54,8 +54,8 @@ use crate::{
             sign_call, Account as RpcAccount, BlameInfo, Block as RpcBlock,
             BlockHashOrEpochNumber, Bytes, CallRequest,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
-            EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
-            Log as RpcLog, PackedOrExecuted, Receipt as RpcReceipt,
+            EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
+            LogFilter as RpcFilter, PackedOrExecuted, Receipt as RpcReceipt,
             RewardInfo as RpcRewardInfo, SendTxRequest, Status as RpcStatus,
             SyncGraphStates, Transaction as RpcTransaction, TxPoolPendingInfo,
             TxWithPoolInfo,
@@ -79,6 +79,15 @@ lazy_static! {
         register_timer_with_group("rpc", "rpc:sendRawTransaction");
     static ref GET_LOGS_TIMER: Arc<dyn Timer> =
         register_timer_with_group("rpc", "rpc:getLogs");
+}
+
+#[derive(Debug)]
+struct BlockExecInfo {
+    block_receipts: Arc<BlockReceipts>,
+    block: Arc<Block>,
+    epoch_number: u64,
+    maybe_state_root: Option<H256>,
+    pivot_hash: H256,
 }
 
 pub struct RpcImpl {
@@ -130,6 +139,7 @@ impl RpcImpl {
         )
     }
 
+    // FIXME: unify the param name for epoch number.
     fn code(
         &self, address: RpcAddress, num: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
@@ -143,7 +153,7 @@ impl RpcImpl {
 
         let state_db = self
             .consensus
-            .get_state_db_by_epoch_number(epoch_num.clone().into())?;
+            .get_state_db_by_epoch_number(epoch_num.clone().into(), "num")?;
 
         let address = &address.hex_address;
 
@@ -174,8 +184,9 @@ impl RpcImpl {
             address, epoch_num
         );
 
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "num")?;
         let acc = state_db.get_account(&address.hex_address)?;
 
         Ok(acc.map_or(U256::zero(), |acc| acc.balance).into())
@@ -193,8 +204,9 @@ impl RpcImpl {
             address, epoch_num
         );
 
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "num")?;
 
         match state_db.get_account(&address.hex_address)? {
             None => Ok(None),
@@ -216,8 +228,9 @@ impl RpcImpl {
             address, epoch_num
         );
 
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "num")?;
 
         match state_db.get_account(&address.hex_address)? {
             None => Ok(SponsorInfo::default(network)?),
@@ -236,8 +249,9 @@ impl RpcImpl {
             address, epoch_num
         );
 
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "num")?;
         let acc = state_db.get_account(&address.hex_address)?;
 
         Ok(acc.map_or(U256::zero(), |acc| acc.staking_balance).into())
@@ -254,8 +268,9 @@ impl RpcImpl {
             address, epoch_num
         );
 
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "num")?;
 
         match state_db.get_deposit_list(&address.hex_address)? {
             None => Ok(vec![]),
@@ -274,8 +289,9 @@ impl RpcImpl {
             address, epoch_num
         );
 
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "num")?;
 
         match state_db.get_vote_list(&address.hex_address)? {
             None => Ok(vec![]),
@@ -294,8 +310,9 @@ impl RpcImpl {
             address, epoch_num
         );
 
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "num")?;
         let acc = state_db.get_account(&address.hex_address)?;
 
         Ok(acc
@@ -318,8 +335,9 @@ impl RpcImpl {
 
         let address = &address.hex_address;
 
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
 
         let account = match state_db.get_account(address)? {
             Some(t) => t,
@@ -339,8 +357,9 @@ impl RpcImpl {
     /// Returns interest rate of the given epoch
     fn interest_rate(&self, epoch_num: Option<EpochNumber>) -> RpcResult<U256> {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
 
         Ok(state_db.get_annual_interest_rate()?.into())
     }
@@ -350,8 +369,9 @@ impl RpcImpl {
         &self, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<U256> {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
 
         Ok(state_db.get_accumulate_interest_rate()?.into())
     }
@@ -361,10 +381,8 @@ impl RpcImpl {
         info!("RPC Request: cfx_sendRawTransaction len={:?}", raw.0.len());
         debug!("RawTransaction bytes={:?}", raw);
 
-        // FIXME: input parse error.
-        let tx = Rlp::new(&raw.into_vec()).as_val().map_err(|err| {
-            invalid_params("raw", format!("Error: {:?}", err))
-        })?;
+        let tx =
+            invalid_params_check("raw", Rlp::new(&raw.into_vec()).as_val())?;
 
         self.send_transaction_with_signature(tx)
     }
@@ -382,8 +400,9 @@ impl RpcImpl {
             address, position, epoch_num
         );
 
-        let state_db =
-            self.consensus.get_state_db_by_epoch_number(epoch_num)?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
 
         let key = StorageKey::new_storage_key(
             &address.hex_address,
@@ -431,7 +450,6 @@ impl RpcImpl {
         }
     }
 
-    // FIXME: understand this rpc..
     fn prepare_transaction(
         &self, mut tx: SendTxRequest, password: Option<String>,
     ) -> RpcResult<TransactionWithSignature> {
@@ -442,10 +460,17 @@ impl RpcImpl {
         )?;
 
         if tx.nonce.is_none() {
+            // The address can come from invalid address space. TODO: implement
+            // the check.
+
             let nonce = consensus_graph.next_nonce(
                 tx.from.clone().into(),
                 BlockHashOrEpochNumber::EpochNumber(EpochNumber::LatestState)
                     .into_primitive(),
+                // For an invalid_params error, the name of the params should
+                // be provided. the "next_nonce" function may return
+                // invalid_params error on an unsupported epoch_number.
+                "internal EpochNumber::LatestState",
             )?;
             tx.nonce.replace(nonce.into());
             debug!("after loading nonce in latest state, tx = {:?}", tx);
@@ -488,7 +513,7 @@ impl RpcImpl {
 
         let root = self
             .consensus
-            .get_state_db_by_epoch_number(epoch_num)?
+            .get_state_db_by_epoch_number(epoch_num, "epoch_num")?
             .get_original_storage_root(&address.hex_address)?;
 
         Ok(Some(root))
@@ -580,85 +605,140 @@ impl RpcImpl {
         Ok(None)
     }
 
-    fn prepare_receipt(&self, hash: H256) -> RpcResult<Option<RpcReceipt>> {
-        // Get a consistent view from ConsensusInner
+    fn get_block_execution_info(
+        &self, block_hash: &H256,
+    ) -> RpcResult<Option<BlockExecInfo>> {
         let consensus_graph = self.consensus_graph();
 
-        let maybe_results =
-            consensus_graph.get_transaction_receipt_and_block_info(&hash);
-        let (
-            BlockExecutionResultWithEpoch(epoch_hash, execution_result),
-            tx_index,
-            maybe_state_root,
-        ) = match maybe_results {
-            None => return Ok(None),
-            Some(result_tuple) => result_tuple,
-        };
+        let (pivot_hash, block_receipts, maybe_state_root) =
+            match consensus_graph.get_block_execution_info(block_hash) {
+                None => return Ok(None),
+                Some((exec_res, maybe_state_root)) => {
+                    (exec_res.0, exec_res.1.block_receipts, maybe_state_root)
+                }
+            };
 
-        let epoch_block_header = self
+        let epoch_number = self
             .consensus
             .get_data_manager()
-            .block_header_by_hash(&epoch_hash)
+            .block_header_by_hash(&pivot_hash)
             // FIXME: server error, client should request another server.
-            .ok_or("Inconsistent state")?;
-        let epoch_number = epoch_block_header.height();
+            .ok_or("Inconsistent state")?
+            .height();
+
         if epoch_number > consensus_graph.best_executed_state_epoch_number() {
             // The receipt is only visible to optimistic execution.
             return Ok(None);
         }
 
-        // Operations below will not involve the status of ConsensusInner
         let block = self
             .consensus
             .get_data_manager()
-            .block_by_hash(&tx_index.block_hash, true)
+            .block_by_hash(&block_hash, false /* update_cache */)
             // FIXME: server error, client should request another server.
             .ok_or("Inconsistent state")?;
-        let transaction = block
-            .transactions
-            .get(tx_index.index)
-            // FIXME: server error, client should request another server.
-            .ok_or("Inconsistent state")?
-            .as_ref()
-            .clone();
-        let receipt = execution_result
-            .block_receipts
-            .receipts
-            .get(tx_index.index)
-            // FIXME: server error, client should request another server.
-            .ok_or("Inconsistent state")?
-            .clone();
-        let prior_gas_used = if tx_index.index == 0 {
-            U256::zero()
-        } else {
-            let prior_receipt = execution_result
-                .block_receipts
-                .receipts
-                .get(tx_index.index - 1)
-                // FIXME: server error, client should request another server.
-                .ok_or("Inconsistent state")?
-                .clone();
-            prior_receipt.accumulated_gas_used
+
+        if block_receipts.receipts.len() != block.transactions.len() {
+            bail!("Inconsistent state");
+        }
+
+        Ok(Some(BlockExecInfo {
+            block_receipts,
+            block,
+            epoch_number,
+            maybe_state_root,
+            pivot_hash,
+        }))
+    }
+
+    fn construct_rpc_receipt(
+        &self, tx_index: TransactionIndex, exec_info: &BlockExecInfo,
+    ) -> RpcResult<RpcReceipt> {
+        let id = tx_index.index;
+
+        if id >= exec_info.block.transactions.len()
+            || id >= exec_info.block_receipts.receipts.len()
+            || id >= exec_info.block_receipts.tx_execution_error_messages.len()
+        {
+            bail!("Inconsistent state");
+        }
+
+        let prior_gas_used = match id {
+            0 => U256::zero(),
+            id => {
+                exec_info.block_receipts.receipts[id - 1].accumulated_gas_used
+            }
         };
-        let tx_exec_error_msg = &execution_result
-            .block_receipts
-            .tx_execution_error_messages[tx_index.index];
-        let rpc_receipt = RpcReceipt::new(
-            transaction,
-            receipt,
+
+        let tx_exec_error_msg =
+            match &exec_info.block_receipts.tx_execution_error_messages[id] {
+                msg if msg.is_empty() => None,
+                msg => Some(msg.clone()),
+            };
+
+        let receipt = RpcReceipt::new(
+            (*exec_info.block.transactions[id]).clone(),
+            exec_info.block_receipts.receipts[id].clone(),
             tx_index,
             prior_gas_used,
-            Some(epoch_number),
-            execution_result.block_receipts.block_number,
-            maybe_state_root,
-            if tx_exec_error_msg.is_empty() {
-                None
-            } else {
-                Some(tx_exec_error_msg.clone())
-            },
+            Some(exec_info.epoch_number),
+            exec_info.block_receipts.block_number,
+            exec_info.maybe_state_root.clone(),
+            tx_exec_error_msg,
             *self.sync.network.get_network_type(),
         )?;
-        Ok(Some(rpc_receipt))
+
+        Ok(receipt)
+    }
+
+    fn prepare_receipt(&self, tx_hash: H256) -> RpcResult<Option<RpcReceipt>> {
+        // Note: `transaction_index_by_hash` might return outdated results if
+        // there was a pivot chain reorg but the tx was not re-executed yet. In
+        // this case, `block_execution_results_by_hash` will detect that the
+        // execution results do not match the current pivot view and return
+        // None. If the tx was re-executed in another block on the new pivot
+        // chain, `transaction_index_by_hash` will return the updated result.
+        let tx_index =
+            match self.consensus.get_data_manager().transaction_index_by_hash(
+                &tx_hash, false, /* update_cache */
+            ) {
+                None => return Ok(None),
+                Some(tx_index) => tx_index,
+            };
+
+        let exec_info =
+            match self.get_block_execution_info(&tx_index.block_hash)? {
+                None => return Ok(None),
+                Some(res) => res,
+            };
+
+        let receipt = self.construct_rpc_receipt(tx_index, &exec_info)?;
+        Ok(Some(receipt))
+    }
+
+    fn prepare_block_receipts(
+        &self, block_hash: H256, maybe_pivot_hash: Option<H256>,
+    ) -> RpcResult<Option<Vec<RpcReceipt>>> {
+        let exec_info = match self.get_block_execution_info(&block_hash)? {
+            None => return Ok(None),
+            Some(res) => res,
+        };
+
+        // pivot chain reorg
+        if matches!(maybe_pivot_hash, Some(h) if h != exec_info.pivot_hash) {
+            return Ok(None);
+        }
+
+        let mut rpc_receipts = vec![];
+
+        for index in 0..exec_info.block.transactions.len() {
+            rpc_receipts.push(self.construct_rpc_receipt(
+                TransactionIndex { block_hash, index },
+                &exec_info,
+            )?);
+        }
+
+        Ok(Some(rpc_receipts))
     }
 
     fn transaction_receipt(
@@ -854,7 +934,7 @@ impl RpcImpl {
         let consensus_graph = self.consensus_graph();
 
         info!("RPC Request: cfx_getLogs({:?})", filter);
-        let mut filter: Filter = filter.into_primitive()?;
+        let mut filter: LogFilter = filter.into_primitive()?;
 
         // If max_limit is set, the value in `filter` will be modified to
         // satisfy this limitation to avoid loading too many blocks
@@ -1052,8 +1132,12 @@ impl RpcImpl {
             bail!(JsonRpcError::invalid_params(format!("storage_limit has to be within the range of u64 but {} supplied!", storage_limit)));
         }
 
-        let state = self.consensus.get_state_by_epoch_number(epoch.clone())?;
-        let state_db = self.consensus.get_state_db_by_epoch_number(epoch)?;
+        let state = self
+            .consensus
+            .get_state_by_epoch_number(epoch.clone(), "epoch")?;
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch, "epoch")?;
 
         let user_account = state_db.get_account(&account_addr)?;
         let contract_account = state_db.get_account(&contract_addr)?;
@@ -1175,7 +1259,7 @@ impl RpcImpl {
         &self, epoch: Option<EpochNumber>,
     ) -> RpcResult<TokenSupplyInfo> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
-        let state = self.consensus.get_state_by_epoch_number(epoch)?;
+        let state = self.consensus.get_state_by_epoch_number(epoch, "epoch")?;
         let total_issued = *state.total_issued_tokens();
         let total_staking = *state.total_staking_tokens();
         let total_collateral = *state.total_storage_tokens();
@@ -1207,6 +1291,31 @@ impl RpcImpl {
         }
         *CRASH_EXIT_CODE.lock() = crash_exit_code;
         Ok(())
+    }
+
+    fn epoch_receipts(
+        &self, epoch: EpochNumber,
+    ) -> RpcResult<Option<Vec<Vec<RpcReceipt>>>> {
+        info!("RPC Request: cfx_getEpochReceipts({:?})", epoch);
+
+        let hashes = self.consensus.get_block_hashes_by_epoch(epoch.into())?;
+        let pivot_hash = *hashes.last().ok_or("Inconsistent state")?;
+
+        let mut epoch_receipts = vec![];
+
+        for h in hashes {
+            epoch_receipts.push(
+                match self.prepare_block_receipts(h, Some(pivot_hash))? {
+                    // if the block is not executed yet, or there was a chain
+                    // reorg during processing that might cause inconsistency,
+                    // we return `null` and expect the client to retry
+                    None => return Ok(None),
+                    Some(rs) => rs,
+                },
+            );
+        }
+
+        Ok(Some(epoch_receipts))
     }
 }
 
@@ -1381,6 +1490,7 @@ impl LocalRpc for LocalRpcImpl {
         to self.rpc_impl {
             fn current_sync_phase(&self) -> JsonRpcResult<String>;
             fn consensus_graph_state(&self) -> JsonRpcResult<ConsensusGraphStates>;
+            fn epoch_receipts(&self, epoch: EpochNumber) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
             fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
             fn send_transaction(
                 &self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<H256>;

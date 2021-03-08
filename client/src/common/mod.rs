@@ -152,10 +152,9 @@ pub fn initialize_common_modules(
     let network_config = conf.net_config()?;
     let cache_config = conf.cache_config();
 
-    let db_config = conf.db_config();
-    let ledger_db =
-        db::open_database(conf.raw_conf.block_db_dir.as_str(), &db_config)
-            .map_err(|e| format!("Failed to open database {:?}", e))?;
+    let (db_path, db_config) = conf.db_config();
+    let ledger_db = db::open_database(db_path.to_str().unwrap(), &db_config)
+        .map_err(|e| format!("Failed to open database {:?}", e))?;
 
     let secret_store = Arc::new(SecretStore::new());
     let storage_manager = Arc::new(
@@ -202,8 +201,19 @@ pub fn initialize_common_modules(
         }
     };
 
-    let consensus_conf = conf.consensus_config();
-    let machine = Arc::new(new_machine_with_builtin(conf.common_params()));
+    let mut consensus_conf = conf.consensus_config();
+    match node_type {
+        NodeType::Archive => {
+            consensus_conf.sync_state_starting_epoch = Some(0);
+        }
+        NodeType::Full | NodeType::Light => {
+            consensus_conf.sync_state_epoch_gap =
+                Some(CATCH_UP_EPOCH_LAG_THRESHOLD);
+        }
+        NodeType::Unknown => {}
+    }
+    let vm = VmFactory::new(1024 * 32);
+    let machine = Arc::new(new_machine_with_builtin(conf.common_params(), vm));
 
     let genesis_block = genesis_block(
         &storage_manager,
@@ -238,12 +248,10 @@ pub fn initialize_common_modules(
     ));
 
     let statistics = Arc::new(Statistics::new());
-    let vm = VmFactory::new(1024 * 32);
     let notifications = Notifications::init();
 
     let consensus = Arc::new(ConsensusGraph::new(
         consensus_conf,
-        vm,
         txpool.clone(),
         statistics,
         data_man.clone(),
@@ -264,7 +272,6 @@ pub fn initialize_common_modules(
         pow.clone(),
         sync_config,
         notifications.clone(),
-        node_type,
         machine.clone(),
     ));
 
@@ -283,7 +290,6 @@ pub fn initialize_common_modules(
             None, /* sstore_iterations */
             Some(refresh_time),
         )
-        .ok()
         .expect("failed to initialize account provider"),
     );
 
@@ -367,18 +373,13 @@ pub fn initialize_not_light_node_modules(
     ));
     light_provider.register(network.clone()).unwrap();
 
-    let initial_sync_phase = match node_type {
-        NodeType::Archive => SyncPhaseType::CatchUpRecoverBlockFromDB,
-        _ => SyncPhaseType::CatchUpRecoverBlockHeaderFromDB,
-    };
-
     let sync = Arc::new(SynchronizationService::new(
         node_type,
         network.clone(),
         sync_graph.clone(),
         conf.protocol_config(),
         conf.state_sync_config(),
-        initial_sync_phase,
+        SyncPhaseType::CatchUpRecoverBlockHeaderFromDB,
         light_provider,
     ));
     sync.register().unwrap();
@@ -490,59 +491,38 @@ pub fn initialize_not_light_node_modules(
         setup_debug_rpc_apis(
             common_impl.clone(),
             rpc_impl.clone(),
-            None,
+            pubsub.clone(),
             &conf,
         ),
     )?;
 
     let rpc_tcp_server = super::rpc::start_tcp(
         conf.tcp_config(),
-        if conf.is_test_or_dev_mode() {
-            setup_debug_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                Some(pubsub.clone()),
-                &conf,
-            )
-        } else {
-            setup_public_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                Some(pubsub.clone()),
-                &conf,
-            )
-        },
+        setup_public_rpc_apis(
+            common_impl.clone(),
+            rpc_impl.clone(),
+            pubsub.clone(),
+            &conf,
+        ),
         RpcExtractor,
     )?;
 
     let rpc_ws_server = super::rpc::start_ws(
         conf.ws_config(),
-        if conf.is_test_or_dev_mode() {
-            setup_debug_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                Some(pubsub.clone()),
-                &conf,
-            )
-        } else {
-            setup_public_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                Some(pubsub.clone()),
-                &conf,
-            )
-        },
+        setup_public_rpc_apis(
+            common_impl.clone(),
+            rpc_impl.clone(),
+            pubsub.clone(),
+            &conf,
+        ),
         RpcExtractor,
     )?;
 
     let rpc_http_server = super::rpc::start_http(
         conf.http_config(),
-        if conf.is_test_or_dev_mode() {
-            setup_debug_rpc_apis(common_impl, rpc_impl, None, &conf)
-        } else {
-            setup_public_rpc_apis(common_impl, rpc_impl, None, &conf)
-        },
+        setup_public_rpc_apis(common_impl, rpc_impl, pubsub, &conf),
     )?;
+
     Ok((
         data_man,
         pow,
@@ -739,6 +719,7 @@ use crate::{
     GENESIS_VERSION,
 };
 use blockgen::BlockGenerator;
+use cfx_parameters::sync::CATCH_UP_EPOCH_LAG_THRESHOLD;
 use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use cfxcore::{

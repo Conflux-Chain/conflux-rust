@@ -20,6 +20,8 @@
 
 //! Cost spec and other parameterisations for the EVM.
 
+use cfx_types::U256;
+
 /// Definition of the cost spec and other parameterisations for the VM.
 #[derive(Debug, Clone)]
 pub struct Spec {
@@ -292,6 +294,14 @@ impl Spec {
     pub fn wasm(&self) -> &WasmCosts {
         // *** Prefer PANIC here instead of silently breaking consensus! ***
         self.wasm.as_ref().expect("Wasm spec expected to exist while checking wasm contract. Misconfigured client?")
+    }
+
+    pub fn contract_start_nonce(&self, _block_number: u64) -> U256 {
+        if self.no_empty {
+            U256::one()
+        } else {
+            U256::zero()
+        }
     }
 }
 

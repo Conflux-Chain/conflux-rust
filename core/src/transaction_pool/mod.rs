@@ -17,7 +17,7 @@ extern crate rand;
 pub use self::impls::TreapMap;
 use crate::{
     block_data_manager::BlockDataManager, consensus::BestInformation,
-    machine::Machine, state::State, verification::VerificationConfig, vm::Spec,
+    machine::Machine, state::State, verification::VerificationConfig,
 };
 
 use account_cache::AccountCache;
@@ -694,6 +694,10 @@ impl TransactionPool {
             )
             .ok();
         }
+        debug!(
+            "notify_new_best_info: {:?}",
+            self.consensus_best_info.lock()
+        );
 
         Ok(())
     }
@@ -707,6 +711,10 @@ impl TransactionPool {
         // blocks that are slightly behind the best state.
         // We do not want to stall the consensus thread.
         let consensus_best_info_clone = self.consensus_best_info.lock().clone();
+        debug!(
+            "get_best_info_with_packed_transactions: {:?}",
+            consensus_best_info_clone
+        );
 
         let parent_block_gas_limit = self
             .data_man
@@ -750,24 +758,16 @@ impl TransactionPool {
     fn best_executed_state(
         data_man: &BlockDataManager, best_executed_epoch: StateIndex,
     ) -> StateDbResult<Arc<State>> {
-        Ok(Arc::new(State::new(
-            StateDb::new(
-                data_man
-                    .storage_manager
-                    .get_state_no_commit(
-                        best_executed_epoch,
-                        /* try_open = */ false,
-                    )?
-                    // Safe because the state is guaranteed to be available
-                    .unwrap(),
-            ),
-            Default::default(),
-            &Spec::new_spec(),
-            // So far block_number is unused in txpool's state, it's fine
-            // to specify a fake number. block_number 1
-            // corresponds to the state of genesis block.
-            1, /* block_number */
-        )?))
+        Ok(Arc::new(State::new(StateDb::new(
+            data_man
+                .storage_manager
+                .get_state_no_commit(
+                    best_executed_epoch,
+                    /* try_open = */ false,
+                )?
+                // Safe because the state is guaranteed to be available
+                .unwrap(),
+        ))?))
     }
 
     pub fn set_best_executed_epoch(

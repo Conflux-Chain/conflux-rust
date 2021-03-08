@@ -93,7 +93,7 @@ pub type SynchronizationPeers =
 pub struct SynchronizationState {
     is_consortium: bool,
     node_type: NodeType,
-    is_dev_or_test_mode: bool,
+    allow_phase_change_without_peer: bool,
     pub peers: RwLock<SynchronizationPeers>,
     pub handshaking_peers: RwLock<HashMap<NodeId, (ProtocolVersion, Instant)>>,
     pub last_sent_transaction_hashes: RwLock<HashSet<H256>>,
@@ -101,12 +101,14 @@ pub struct SynchronizationState {
 
 impl SynchronizationState {
     pub fn new(
-        is_consortium: bool, node_type: NodeType, is_dev_or_test_mode: bool,
-    ) -> Self {
+        is_consortium: bool, node_type: NodeType,
+        allow_phase_change_without_peer: bool,
+    ) -> Self
+    {
         SynchronizationState {
             is_consortium,
             node_type,
-            is_dev_or_test_mode,
+            allow_phase_change_without_peer,
             peers: Default::default(),
             handshaking_peers: Default::default(),
             last_sent_transaction_hashes: Default::default(),
@@ -195,7 +197,9 @@ impl SynchronizationState {
 
     pub fn is_full_node(&self) -> bool { self.node_type == NodeType::Full }
 
-    pub fn is_dev_or_test_mode(&self) -> bool { self.is_dev_or_test_mode }
+    pub fn allow_phase_change_without_peer(&self) -> bool {
+        self.allow_phase_change_without_peer
+    }
 
     // FIXME: median_chain_height_from_peers.
     // FIXME: it lead to more questions but these are questions on the

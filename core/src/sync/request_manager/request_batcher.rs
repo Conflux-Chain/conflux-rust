@@ -17,6 +17,7 @@ const DEFAULT_REQUEST_EPOCH_BATCH_SIZE: usize = 10;
 /// Resent requests include: `GetBlockHeaders`, `GetBlockTxn`,
 /// `GetBlockHashesByEpoch`, and `GetBlocks`. `GetBlockTxn` only includes one
 /// block so cannot be batched.
+/// TODO: Exclude failing peers for requests and batch based on peers.
 pub struct RequestBatcher {
     /// Hashes in header requests
     headers: DelayBucket<H256>,

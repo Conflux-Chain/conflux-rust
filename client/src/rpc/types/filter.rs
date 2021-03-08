@@ -3,86 +3,17 @@
 // See http://www.gnu.org/licenses/
 
 use super::{EpochNumber, RpcAddress};
+use crate::rpc::helpers::{maybe_vec_into, VariadicValue};
 use cfx_types::{H256, U64};
 use jsonrpc_core::Error as RpcError;
-use primitives::filter::Filter as PrimitiveFilter;
-use serde::{
-    de::{DeserializeOwned, Error},
-    Deserialize, Deserializer, Serialize, Serializer,
-};
-use serde_json::{from_value, Value};
+use primitives::filter::LogFilter as PrimitiveFilter;
+use serde::{Deserialize, Serialize};
 
 const FILTER_BLOCK_HASH_LIMIT: usize = 128;
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
-pub enum VariadicValue<T> {
-    /// None
-    Null,
-    /// Single
-    Single(T),
-    /// List
-    Multiple(Vec<T>),
-}
-
-impl<T> Into<Option<Vec<T>>> for VariadicValue<T> {
-    fn into(self) -> Option<Vec<T>> {
-        match self {
-            VariadicValue::Null => None,
-            VariadicValue::Single(x) => Some(vec![x]),
-            VariadicValue::Multiple(xs) => Some(xs),
-        }
-    }
-}
-
-impl<T> VariadicValue<T> {
-    pub fn iter<'a>(&'a self) -> Box<dyn std::iter::Iterator<Item = &T> + 'a> {
-        match self {
-            VariadicValue::Null => Box::new(std::iter::empty()),
-            VariadicValue::Single(x) => Box::new(std::iter::once(x)),
-            VariadicValue::Multiple(xs) => Box::new(xs.iter()),
-        }
-    }
-}
-
-impl<T> Serialize for VariadicValue<T>
-where T: Serialize
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
-        match &self {
-            &VariadicValue::Null => serializer.serialize_none(),
-            &VariadicValue::Single(x) => x.serialize(serializer),
-            &VariadicValue::Multiple(xs) => xs.serialize(serializer),
-        }
-    }
-}
-
-impl<'a, T> Deserialize<'a> for VariadicValue<T>
-where T: DeserializeOwned
-{
-    fn deserialize<D>(deserializer: D) -> Result<VariadicValue<T>, D::Error>
-    where D: Deserializer<'a> {
-        let v: Value = Deserialize::deserialize(deserializer)?;
-
-        if v.is_null() {
-            return Ok(VariadicValue::Null);
-        }
-
-        from_value(v.clone())
-            .map(VariadicValue::Single)
-            .or_else(|_| from_value(v).map(VariadicValue::Multiple))
-            .map_err(|err| {
-                D::Error::custom(format!(
-                    "Invalid variadic value type: {}",
-                    err
-                ))
-            })
-    }
-}
-
 #[derive(PartialEq, Debug, Serialize, Deserialize, Eq, Hash, Clone)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Filter {
+pub struct LogFilter {
     /// Search will be applied from this epoch number.
     pub from_epoch: Option<EpochNumber>,
 
@@ -115,13 +46,7 @@ pub struct Filter {
     pub limit: Option<U64>,
 }
 
-// helper implementing automatic Option<Vec<A>> -> Option<Vec<B>> conversion
-fn maybe_vec_into<A, B>(src: &Option<Vec<A>>) -> Option<Vec<B>>
-where A: Clone + Into<B> {
-    src.clone().map(|x| x.into_iter().map(Into::into).collect())
-}
-
-impl Filter {
+impl LogFilter {
     pub fn into_primitive(self) -> Result<PrimitiveFilter, RpcError> {
         // from_epoch, to_epoch
         let from_epoch = self
@@ -193,64 +118,19 @@ impl Filter {
 
 #[cfg(test)]
 mod tests {
-    use super::{super::RpcAddress, EpochNumber, Filter, VariadicValue};
+    use super::{super::RpcAddress, EpochNumber, LogFilter, VariadicValue};
     use cfx_addr::Network;
     use cfx_types::{H160, H256, U64};
     use primitives::{
         epoch::EpochNumber as PrimitiveEpochNumber,
-        filter::Filter as PrimitiveFilter,
+        filter::LogFilter as PrimitiveFilter,
     };
     use serde_json;
     use std::str::FromStr;
 
     #[test]
-    fn test_serialize_variadic_value() {
-        let value: VariadicValue<u64> = VariadicValue::Null;
-        let serialized_value = serde_json::to_string(&value).unwrap();
-        assert_eq!(serialized_value, "null");
-
-        let value = VariadicValue::Single(1);
-        let serialized_value = serde_json::to_string(&value).unwrap();
-        assert_eq!(serialized_value, "1");
-
-        let value = VariadicValue::Multiple(vec![1, 2, 3, 4]);
-        let serialized_value = serde_json::to_string(&value).unwrap();
-        assert_eq!(serialized_value, "[1,2,3,4]");
-
-        let value = VariadicValue::Multiple(vec![
-            VariadicValue::Null,
-            VariadicValue::Single(1),
-            VariadicValue::Multiple(vec![2, 3]),
-            VariadicValue::Single(4),
-        ]);
-        let serialized_value = serde_json::to_string(&value).unwrap();
-        assert_eq!(serialized_value, "[null,1,[2,3],4]");
-    }
-
-    #[test]
-    fn test_deserialize_variadic_value() {
-        let serialized = "null";
-        let deserialized_value: VariadicValue<u64> =
-            serde_json::from_str(serialized).unwrap();
-        assert_eq!(deserialized_value, VariadicValue::Null);
-
-        let serialized = "1";
-        let deserialized_value: VariadicValue<u64> =
-            serde_json::from_str(serialized).unwrap();
-        assert_eq!(deserialized_value, VariadicValue::Single(1));
-
-        let serialized = "[1,2,3,4]";
-        let deserialized_value: VariadicValue<u64> =
-            serde_json::from_str(serialized).unwrap();
-        assert_eq!(
-            deserialized_value,
-            VariadicValue::Multiple(vec![1, 2, 3, 4])
-        );
-    }
-
-    #[test]
     fn test_serialize_filter() {
-        let filter = Filter {
+        let filter = LogFilter {
             from_epoch: None,
             to_epoch: None,
             block_hashes: None,
@@ -273,7 +153,7 @@ mod tests {
              }"
         );
 
-        let filter = Filter {
+        let filter = LogFilter {
             from_epoch: Some(1000.into()),
             to_epoch: Some(EpochNumber::LatestState),
             block_hashes: Some(vec![
@@ -316,7 +196,7 @@ mod tests {
     fn test_deserialize_filter() {
         let serialized = "{}";
 
-        let result_filter = Filter {
+        let result_filter = LogFilter {
             from_epoch: None,
             to_epoch: None,
             block_hashes: None,
@@ -325,7 +205,7 @@ mod tests {
             limit: None,
         };
 
-        let deserialized_filter: Filter =
+        let deserialized_filter: LogFilter =
             serde_json::from_str(serialized).unwrap();
         assert_eq!(deserialized_filter, result_filter);
 
@@ -341,7 +221,7 @@ mod tests {
              \"limit\":\"0x2\"\
         }";
 
-        let result_filter = Filter {
+        let result_filter = LogFilter {
             from_epoch: Some(1000.into()),
             to_epoch: Some(EpochNumber::LatestState),
             block_hashes: Some(vec![
@@ -362,14 +242,14 @@ mod tests {
             limit: Some(U64::from(2)),
         };
 
-        let deserialized_filter: Filter =
+        let deserialized_filter: LogFilter =
             serde_json::from_str(serialized).unwrap();
         assert_eq!(deserialized_filter, result_filter);
     }
 
     #[test]
     fn test_convert_filter() {
-        let filter = Filter {
+        let filter = LogFilter {
             from_epoch: None,
             to_epoch: None,
             block_hashes: Some(vec![

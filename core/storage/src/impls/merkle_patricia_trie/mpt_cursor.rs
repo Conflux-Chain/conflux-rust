@@ -763,6 +763,7 @@ impl<Mpt> DerefMut for ReadWritePathNode<Mpt> {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.basic_node }
 }
 
+#[allow(drop_bounds)]
 pub trait PathNodeTrait<Mpt: GetReadMpt>:
     CursorLoadNodeWrapper<Mpt> + Drop + Sized
 {
