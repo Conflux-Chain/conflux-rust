@@ -121,7 +121,7 @@ class NodeReputationTests(ConfluxTestFramework):
         time.sleep((self.test_house_keeping_ms + 100) / 1000)
         peer0 = client3.get_peer(self.nodes[0].key)
         # refused during handshake or not handshaked yet
-        assert peer0 is None or len(peer0["caps"]) == 0
+        assert peer0 is None or len(peer0["protocols"]) == 0
 
 if __name__ == "__main__":
     NodeReputationTests().main()

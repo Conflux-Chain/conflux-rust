@@ -3,8 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    impls::RpcImplConfiguration, HttpConfiguration, TcpConfiguration,
-    WsConfiguration,
+    impls::RpcImplConfiguration, rpc_apis::ApiSet, HttpConfiguration,
+    TcpConfiguration, WsConfiguration,
 };
 use cfx_addr::{cfx_addr_decode, Network};
 use cfx_internal_common::{ChainIdParams, ChainIdParamsInner};
@@ -165,7 +165,6 @@ build_config! {
         (public_tcp_port, (Option<u16>), None)
         (public_address, (Option<String>), None)
         (udp_port, (Option<u16>), Some(32323))
-        (enable_tracing, (bool), false)
 
         // Network parameters section.
         (blocks_request_timeout_ms, (u64), 20_000)
@@ -318,6 +317,7 @@ build_config! {
             vec![ProvideExtraSnapshotSyncConfig::StableCheckpoint],
             ProvideExtraSnapshotSyncConfig::parse_config_list)
         (node_type, (Option<NodeType>), None, NodeType::from_str)
+        (public_rpc_apis, (ApiSet), ApiSet::Safe, ApiSet::from_str)
     }
 }
 

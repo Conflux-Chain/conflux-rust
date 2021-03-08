@@ -492,59 +492,38 @@ pub fn initialize_not_light_node_modules(
         setup_debug_rpc_apis(
             common_impl.clone(),
             rpc_impl.clone(),
-            None,
+            pubsub.clone(),
             &conf,
         ),
     )?;
 
     let rpc_tcp_server = super::rpc::start_tcp(
         conf.tcp_config(),
-        if conf.is_test_or_dev_mode() {
-            setup_debug_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                Some(pubsub.clone()),
-                &conf,
-            )
-        } else {
-            setup_public_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                Some(pubsub.clone()),
-                &conf,
-            )
-        },
+        setup_public_rpc_apis(
+            common_impl.clone(),
+            rpc_impl.clone(),
+            pubsub.clone(),
+            &conf,
+        ),
         RpcExtractor,
     )?;
 
     let rpc_ws_server = super::rpc::start_ws(
         conf.ws_config(),
-        if conf.is_test_or_dev_mode() {
-            setup_debug_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                Some(pubsub.clone()),
-                &conf,
-            )
-        } else {
-            setup_public_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                Some(pubsub.clone()),
-                &conf,
-            )
-        },
+        setup_public_rpc_apis(
+            common_impl.clone(),
+            rpc_impl.clone(),
+            pubsub.clone(),
+            &conf,
+        ),
         RpcExtractor,
     )?;
 
     let rpc_http_server = super::rpc::start_http(
         conf.http_config(),
-        if conf.is_test_or_dev_mode() {
-            setup_debug_rpc_apis(common_impl, rpc_impl, None, &conf)
-        } else {
-            setup_public_rpc_apis(common_impl, rpc_impl, None, &conf)
-        },
+        setup_public_rpc_apis(common_impl, rpc_impl, pubsub, &conf),
     )?;
+
     Ok((
         data_man,
         pow,
