@@ -13,7 +13,7 @@ use crate::{
 use cfx_statedb::StateDb;
 use cfx_types::{H256, U256};
 use primitives::{EpochId, EpochNumber, SignedTransaction};
-use std::{any::Any, sync::Arc};
+use std::{any::Any, collections::HashSet, sync::Arc};
 
 /// FIXME: redesign this trait
 pub trait ConsensusGraphTrait: Send + Sync {
@@ -23,15 +23,11 @@ pub trait ConsensusGraphTrait: Send + Sync {
 
     fn get_config(&self) -> &Self::ConsensusConfig;
 
-    fn on_new_block(
-        &self, hash: &H256, ignore_body: bool, update_best_info: bool,
-    );
+    fn on_new_block(&self, hash: &H256);
 
     fn update_total_weight_delta_heartbeat(&self) {}
 
     fn expected_difficulty(&self, parent_hash: &H256) -> U256;
-
-    fn retrieve_old_era_blocks(&self) -> Option<H256>;
 
     fn construct_pivot_state(&self);
 
@@ -89,15 +85,20 @@ pub trait ConsensusGraphTrait: Send + Sync {
 
     fn set_initial_sequence_number(&self, initial_sn: u64);
 
-    fn update_best_info(&self);
-
     fn get_state_by_epoch_number(
-        &self, epoch_number: EpochNumber,
+        &self, epoch_number: EpochNumber, rpc_param_name: &str,
     ) -> RpcResult<State>;
 
     fn get_state_db_by_epoch_number(
-        &self, epoch_number: EpochNumber,
+        &self, epoch_number: EpochNumber, rpc_param_name: &str,
     ) -> RpcResult<StateDb>;
+
+    fn get_blocks_needing_bodies(&self) -> HashSet<H256>;
+
+    fn catch_up_completed(&self, peer_median_epoch: u64) -> bool;
+
+    fn enter_normal_phase(&self);
+    fn reset(&self);
 }
 
 pub type SharedConsensusGraph =

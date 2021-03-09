@@ -655,20 +655,6 @@ pub fn kvdb_sqlite_sharded_iter_range_excl_impl<
 
 macro_rules! enable_KvdbIterIterator_for_KvdbSqliteSharded_families {
     ($ItemKeyType:ty, $ItemValueType:ty, $KeyType:ty) => {
-        impl
-            WrappedTrait<
-                dyn FallibleIterator<
-                    Item = ($ItemKeyType, $ItemValueType),
-                    Error = Error,
-                >,
-            >
-            for KvdbIterIterator<
-                ($ItemKeyType, $ItemValueType),
-                $KeyType,
-                KvdbSqliteShardedIteratorTag,
-            >
-        {
-        }
         impl<'a>
             WrappedLifetimeFamily<
                 'a,
@@ -694,6 +680,20 @@ macro_rules! enable_KvdbIterIterator_for_KvdbSqliteSharded_families {
                         -> Result<($ItemKeyType, $ItemValueType)>,
                 >,
             >;
+        }
+        impl
+            WrappedTrait<
+                dyn FallibleIterator<
+                    Item = ($ItemKeyType, $ItemValueType),
+                    Error = Error,
+                >,
+            >
+            for KvdbIterIterator<
+                ($ItemKeyType, $ItemValueType),
+                $KeyType,
+                KvdbSqliteShardedIteratorTag,
+            >
+        {
         }
     };
 }
@@ -740,16 +740,6 @@ macro_rules! make_wrap_of_KeyValueDbIterableTrait_of_KvdbSqliteSharded_families 
         }
 
         impl
-            WrappedTrait<
-                dyn KeyValueDbIterableTrait<
-                    $ItemType,
-                    [u8],
-                    KvdbSqliteShardedIteratorTag,
-                >,
-            > for $Ttype
-        {
-        }
-        impl
             WrappedLifetimeFamily<
                 '_,
                 dyn KeyValueDbIterableTrait<
@@ -760,6 +750,16 @@ macro_rules! make_wrap_of_KeyValueDbIterableTrait_of_KvdbSqliteSharded_families 
             > for $Ttype
         {
             type Out = Self;
+        }
+        impl
+            WrappedTrait<
+                dyn KeyValueDbIterableTrait<
+                    $ItemType,
+                    [u8],
+                    KvdbSqliteShardedIteratorTag,
+                >,
+            > for $Ttype
+        {
         }
     };
 }
@@ -780,7 +780,7 @@ make_wrap_of_KeyValueDbIterableTrait_of_KvdbSqliteSharded_families!(
 // FIXME: implement for more general types
 // (DerefOr...<KvdbSqliteShardedBorrow...>)
 impl<
-        ValueType: ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+        ValueType: 'static + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
         T: DerefMutPlusImplOrBorrowMutSelf<
             dyn KvdbSqliteShardedDestructureTraitWithValueType<
                 ValueType = ValueType,

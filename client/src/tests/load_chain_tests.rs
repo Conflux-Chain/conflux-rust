@@ -61,20 +61,6 @@ fn test_load_chain() {
     let tmp_dir = TempDir::new("conflux-test").unwrap();
     conf.raw_conf.conflux_data_dir =
         tmp_dir.path().to_str().unwrap().to_string() + "/";
-    conf.raw_conf.block_db_dir = tmp_dir
-        .path()
-        .join("db")
-        .into_os_string()
-        .into_string()
-        .unwrap();
-    conf.raw_conf.netconf_dir = Some(
-        tmp_dir
-            .path()
-            .join("config")
-            .into_os_string()
-            .into_string()
-            .unwrap(),
-    );
     conf.raw_conf.tcp_port = 13000;
     conf.raw_conf.jsonrpc_http_port = Some(18000);
     conf.raw_conf.chain_id = Some(10);
@@ -91,12 +77,10 @@ fn test_load_chain() {
     let file_path = Path::new(&chain_path);
     let file = File::open(file_path)
         .map_err(|e| format!("Failed to open test-chain file {:?}", e))
-        .ok()
         .unwrap();
     let reader = BufReader::new(file);
     let rpc_blocks: Vec<RpcBlock> = serde_json::from_reader(reader)
         .map_err(|e| format!("Failed to parse blocks from json {:?}", e))
-        .ok()
         .unwrap();
     assert!(
         !rpc_blocks.is_empty(),
@@ -105,12 +89,12 @@ fn test_load_chain() {
     for rpc_block in rpc_blocks.into_iter().skip(1) {
         let primitive_block: Block = rpc_block.into_primitive().map_err(|e| {
             format!("Failed to convert from a rpc_block to primitive block {:?}", e)
-        }).ok().unwrap();
+        }).unwrap();
         handle
             .other_components
             .sync
             .on_mined_block(primitive_block)
-            .ok();
+            .unwrap();
     }
 
     let expected = get_expected_best_hash();

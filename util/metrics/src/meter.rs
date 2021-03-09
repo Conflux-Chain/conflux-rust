@@ -156,7 +156,9 @@ impl Meter for StandardMeter {
     }
 
     fn stop(&self) {
-        if !self.stopped.compare_and_swap(false, true, ORDER) {
+        if let Ok(false) =
+            self.stopped.compare_exchange(false, true, ORDER, ORDER)
+        {
             ARBITER.meters.lock().remove(&self.name);
         }
     }

@@ -42,7 +42,7 @@ impl FakeSnapshotMptDb {
         for (k, node) in &expected.db {
             let maybe_got_node = self.db.get(k);
             match maybe_got_node {
-                None => panic!("key {:?} not found in resulting mpt."),
+                None => panic!("key {:?} not found in resulting mpt.", k),
                 Some(got_node) => {
                     for (child_index, child_ref) in
                         node.get_children_table_ref().iter()

@@ -999,19 +999,14 @@ impl AccountEntryProtectedMethods for OverlayAccount {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        evm::{Factory, VMType},
-        test_helpers::get_state_for_genesis_write_with_factory,
-    };
+    use crate::test_helpers::get_state_for_genesis_write;
     use cfx_storage::tests::new_state_manager_for_unit_test;
     use primitives::is_default::IsDefault;
     use std::str::FromStr;
 
     fn test_account_is_default(account: &mut OverlayAccount) {
-        let factory = Factory::new(VMType::Interpreter, 1024 * 32);
         let storage_manager = new_state_manager_for_unit_test();
-        let state =
-            get_state_for_genesis_write_with_factory(&storage_manager, factory);
+        let state = get_state_for_genesis_write(&storage_manager);
 
         assert!(account.as_account().unwrap().is_default());
 

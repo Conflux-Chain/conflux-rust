@@ -10,11 +10,13 @@ NULL_ROOT = utils.sha3(b'')
 # key value of (0, KECCAK_EMPTY).
 EMPTY_BLOCK_RECEIPT_ROOT = utils.sha3(b'n' + NULL_ROOT * 16 + b'v' + NULL_ROOT)
 
+
 def state_root(
         snapshot_root = NULL_ROOT,
         intermediate_delta_root = NULL_ROOT,
         delta_root = NULL_ROOT):
     return [snapshot_root, intermediate_delta_root, delta_root]
+
 
 def precompute_epoch_receipt_root_by_number_of_blocks():
     receipt_root_by_number_of_blocks = []
@@ -35,5 +37,14 @@ def precompute_epoch_receipt_root_by_number_of_blocks():
 
     return receipt_root_by_number_of_blocks
 
-UNINITIALIZED_STATE_ROOT = state_root()
+
+def compute_transaction_root_for_single_transaction(tx_hash):
+    node_hash = utils.sha3(b'n' + NULL_ROOT * 16 + b'v' + tx_hash)
+    path_bytes = bytearray()
+    path_bytes.extend([128 + 64 + 1, 0])
+    return utils.sha3(
+        bytes(path_bytes) + node_hash)
+
+
+UNINITIALIZED_STATE_ROOT = utils.sha3(rlp.encode(state_root()))
 EMPTY_EPOCH_RECEIPT_ROOT_BY_NUMBER_OF_BLOCKS = precompute_epoch_receipt_root_by_number_of_blocks()

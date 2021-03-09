@@ -22,12 +22,12 @@ impl fmt::Display for RcpAddressNetworkInconsistent {
 }
 
 pub fn check_rpc_address_network(
-    rpc_request_network: Option<Network>, expected: Network,
+    rpc_request_network: Option<Network>, expected: &Network,
 ) -> Result<(), UnexpectedRpcAddressNetwork> {
     if let Some(rpc_network) = rpc_request_network {
-        if rpc_network != expected {
+        if rpc_network != *expected {
             return Err(UnexpectedRpcAddressNetwork {
-                expected,
+                expected: *expected,
                 got: rpc_network,
             });
         }
