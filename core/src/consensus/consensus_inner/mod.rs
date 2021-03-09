@@ -1547,26 +1547,27 @@ impl ConsensusGraphInner {
         result
     }
 
+    /// All referees should be in the anticone of each other.
+    /// If there is a path from a referee `A` to another referee `B`, we will
+    /// treat `B` as a valid referee and ignore `A` because `A` is not the
+    /// graph terminal. This should only happen if the miner generating this
+    /// block is malicious. TODO: Explain why not `partial_invalid`?
     fn insert_referee_if_not_duplicate(
         &self, referees: &mut Vec<usize>, me: usize,
     ) {
-        // TODO: maybe consider a more vigorous mechanism
-        let mut found = false;
         for i in 0..referees.len() {
             let x = referees[i];
             let lca = self.lca(x, me);
             if lca == me {
-                found = true;
-                break;
+                // `me` is pointed by `x`
+                return;
             } else if lca == x {
-                found = true;
+                // `x` is pointed by `me`
                 referees[i] = me;
-                break;
+                return;
             }
         }
-        if !found {
-            referees.push(me);
-        }
+        referees.push(me)
     }
 
     /// Try to insert an outside era block, return it's sequence number. If both
@@ -1592,8 +1593,6 @@ impl ConsensusGraphInner {
         }
 
         if parent == NULL && referees.is_empty() {
-            // FIXME These blocks will not be garbage collected from disk if
-            // they are never referred.
             return (sn, NULL);
         }
 

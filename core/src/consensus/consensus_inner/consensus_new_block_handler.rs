@@ -79,6 +79,9 @@ impl ConsensusNewBlockHandler {
     }
 
     /// Return (old_era_block_set, new_era_block_set).
+    /// `old_era_block_set` includes the blocks in the past of
+    /// `new_era_block_arena_index`. `new_era_block_set` includes all other
+    /// blocks (the anticone and the future).
     fn compute_old_era_and_new_era_block_set(
         inner: &mut ConsensusGraphInner, new_era_block_arena_index: usize,
     ) -> (HashSet<usize>, HashSet<usize>) {
@@ -146,14 +149,14 @@ impl ConsensusNewBlockHandler {
         let new_era_pivot_index = inner.height_to_pivot_index(new_era_height);
         for v in new_era_block_arena_index_set.iter() {
             let me = *v;
+            // It is necessary to process `referees`,
+            // `blockset_in_own_view_of_epoch`, and
+            // `skipped_epoch_blocks` because `new_era_block_arena_index_set`
+            // include the blocks in the anticone of the new era
+            // genesis.
             inner.arena[me]
                 .referees
                 .retain(|v| new_era_block_arena_index_set.contains(v));
-            inner.arena[me]
-                .referrers
-                .retain(|v| new_era_block_arena_index_set.contains(v));
-            // We no longer need to consider blocks outside our era when
-            // computing blockset_in_epoch
             inner.arena[me]
                 .data
                 .blockset_in_own_view_of_epoch
