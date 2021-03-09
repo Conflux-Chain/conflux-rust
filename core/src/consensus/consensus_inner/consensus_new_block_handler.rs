@@ -26,7 +26,6 @@ use cfx_storage::{
 use cfx_types::H256;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use parking_lot::Mutex;
-use primitives::{BlockHeader, SignedTransaction};
 use std::{
     cmp::{max, min},
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
@@ -193,31 +192,17 @@ impl ConsensusNewBlockHandler {
             inner.terminal_hashes.remove(&inner.arena[me].hash);
         }
         // Now we are ready to cleanup outside blocks in inner data structures
-        {
-            let mut last_old_era_block_set =
-                inner.last_old_era_block_set.lock();
-            let mut old_era_block_set = inner.current_old_era_block_set.lock();
-
-            // We can delete blocks in `current_old_era_block_set` now since the
-            // checkpoint has moved forward, so put them into
-            // `last_old_era_block_set`.
-            for old_era_block_hash in old_era_block_set.drain(..) {
-                last_old_era_block_set.push_back(old_era_block_hash);
-            }
-            inner
-                .pastset_cache
-                .intersect_update(&outside_block_arena_indices);
-            for index in outside_block_arena_indices {
-                let hash = inner.arena[index].hash;
-                old_era_block_set.push_back(hash);
-                inner.hash_to_arena_indices.remove(&hash);
-                inner.terminal_hashes.remove(&hash);
-                inner.arena.remove(index);
-                // remove useless data in BlockDataManager
-                inner.data_man.remove_epoch_execution_commitment(&hash);
-                inner.data_man.remove_epoch_execution_context(&hash);
-                inner.block_body_caches.remove(&index);
-            }
+        inner
+            .pastset_cache
+            .intersect_update(&outside_block_arena_indices);
+        for index in outside_block_arena_indices {
+            let hash = inner.arena[index].hash;
+            inner.hash_to_arena_indices.remove(&hash);
+            inner.terminal_hashes.remove(&hash);
+            inner.arena.remove(index);
+            // remove useless data in BlockDataManager
+            inner.data_man.remove_epoch_execution_commitment(&hash);
+            inner.data_man.remove_epoch_execution_context(&hash);
         }
 
         // Now we truncate the timer chain that are outside the genesis.
@@ -317,6 +302,9 @@ impl ConsensusNewBlockHandler {
             &cur_era_hash,
             &stable_era_hash,
         );
+        inner
+            .data_man
+            .new_checkpoint(new_era_height, inner.best_epoch_number());
     }
 
     pub fn compute_anticone_bruteforce(
@@ -732,19 +720,40 @@ impl ConsensusNewBlockHandler {
     fn recycle_tx_in_block(
         &self, inner: &ConsensusGraphInner, arena_index: usize,
     ) {
-        let block = inner
-            .data_man
-            .block_by_hash(
-                &inner.arena[arena_index].hash,
-                true, /* update_cache */
-            )
-            .expect("Block should always found in the data manager!");
-        self.txpool.recycle_transactions(block.transactions.clone());
+        if let Some(block) = inner.data_man.block_by_hash(
+            &inner.arena[arena_index].hash,
+            true, /* update_cache */
+        ) {
+            self.txpool.recycle_transactions(block.transactions.clone());
+        } else {
+            // This should only happen for blocks in the anticone of
+            // checkpoints.
+            debug!(
+                "recycle_tx_in_block: block {:?} not in db",
+                inner.arena[arena_index].hash
+            );
+        }
     }
 
     fn should_move_stable_height(
         &self, inner: &mut ConsensusGraphInner,
     ) -> u64 {
+        if let Some(sync_state_starting_epoch) =
+            self.conf.sync_state_starting_epoch
+        {
+            if inner.header_only
+                && inner.cur_era_stable_height == sync_state_starting_epoch
+            {
+                // We want to use sync_state_starting_epoch as our stable
+                // checkpoint when we enter
+                // CatchUpCheckpointPhase, so we do not want to move forward our
+                // stable checkpoint. Since we will enter
+                // CatchUpCheckpointPhase the next time we check phase changes,
+                // it's impossible for the delayed checkpoint making to cause
+                // OOM.
+                return inner.cur_era_stable_height;
+            }
+        }
         let new_stable_height =
             inner.cur_era_stable_height + inner.inner_conf.era_epoch_count;
         // We make sure there is an additional era before the best for moving it
@@ -770,7 +779,7 @@ impl ConsensusNewBlockHandler {
     }
 
     fn should_form_checkpoint_at(
-        &self, inner: &mut ConsensusGraphInner, will_execute: bool,
+        &self, inner: &mut ConsensusGraphInner,
     ) -> usize {
         let stable_pivot_block =
             inner.get_pivot_block_arena_index(inner.cur_era_stable_height);
@@ -786,17 +795,7 @@ impl ConsensusNewBlockHandler {
         // FIXME: nodes will not correctly determine the safe checkpoint
         // FIXME: location to start the sync. Causing potential panic
         // FIXME: when computing `state_valid` and `blame_info`.
-        if will_execute {
-            // During the recovery phase, the state_valid for stable may
-            // temporarily not available at the start.
-            if inner.arena[stable_pivot_block].data.state_valid.is_none() {
-                self.executor
-                    .wait_for_result(inner.arena[stable_pivot_block].hash)
-                    .expect("Execution state of the pivot chain is corrupted!");
-                inner
-                    .compute_state_valid_and_blame_info(stable_pivot_block, &self.executor)
-                    .expect("Stable node should be able to compute state_valid and blame_info");
-            }
+        if !inner.header_only && !self.conf.bench_mode {
             // Stable block must have a blame vector that does not stretch
             // beyond the new genesis
             if !inner.arena[stable_pivot_block].data.state_valid.unwrap() {
@@ -885,16 +884,12 @@ impl ConsensusNewBlockHandler {
         inner.cur_era_genesis_block_arena_index
     }
 
-    fn persist_terminals(&self, inner: &ConsensusGraphInner, has_body: bool) {
+    fn persist_terminals(&self, inner: &ConsensusGraphInner) {
         let mut terminals = Vec::with_capacity(inner.terminal_hashes.len());
         for h in &inner.terminal_hashes {
             terminals.push(h.clone());
         }
-        if has_body {
-            self.data_man.insert_block_terminals_to_db(terminals);
-        } else {
-            self.data_man.insert_header_terminals_to_db(terminals);
-        }
+        self.data_man.insert_terminals_to_db(terminals);
     }
 
     fn try_clear_blockset_in_own_view_of_epoch(
@@ -1080,9 +1075,7 @@ impl ConsensusNewBlockHandler {
 
     fn activate_block(
         &self, inner: &mut ConsensusGraphInner, me: usize,
-        meter: &ConfirmationMeter,
-        block_body_opt: Option<Vec<Arc<SignedTransaction>>>,
-        queue: &mut VecDeque<usize>,
+        meter: &ConfirmationMeter, queue: &mut VecDeque<usize>,
     )
     {
         inner.arena[me].data.activated = true;
@@ -1100,19 +1093,18 @@ impl ConsensusNewBlockHandler {
         // so for these blocks, we quit here.
         if inner.arena[me].era_block == NULL {
             debug!(
-                "Updated active counters for out-of-era block in ConsensusGraph: index = {:?} hash={:?} has_body={}",
-                me, inner.arena[me].hash, block_body_opt.is_some(),
+                "Updated active counters for out-of-era block in ConsensusGraph: index = {:?} hash={:?}",
+                me, inner.arena[me].hash,
             );
             return;
         } else {
             debug!(
-                "Start activating block in ConsensusGraph: index = {:?} hash={:?} has_body={}",
-                me, inner.arena[me].hash, block_body_opt.is_some(),
+                "Start activating block in ConsensusGraph: index = {:?} hash={:?}",
+                me, inner.arena[me].hash,
             );
         }
 
         let parent = inner.arena[me].parent;
-        let has_body = block_body_opt.is_some();
         // Update terminal hashes for mining
         if parent != NULL {
             inner.terminal_hashes.remove(&inner.arena[parent].hash);
@@ -1364,7 +1356,7 @@ impl ConsensusNewBlockHandler {
                     != inner.cur_era_stable_block_hash))
             && !self.conf.bench_mode
         {
-            self.persist_terminals(inner, has_body);
+            self.persist_terminals(inner);
             if pivot_changed {
                 // If we switch to a chain without stable block,
                 // we should avoid execute unavailable states.
@@ -1440,7 +1432,7 @@ impl ConsensusNewBlockHandler {
 
                 // Ensure all blocks on the pivot chain before
                 // the new stable block to have state_valid computed
-                if has_body && !self.conf.bench_mode {
+                if !inner.header_only && !self.conf.bench_mode {
                     // FIXME: this asserion doesn't hold any more
                     // assert!(
                     //     new_stable_height
@@ -1494,10 +1486,8 @@ impl ConsensusNewBlockHandler {
             .hash
                 == inner.cur_era_stable_block_hash
         {
-            let new_checkpoint_era_genesis = self.should_form_checkpoint_at(
-                inner,
-                has_body && !self.conf.bench_mode,
-            );
+            let new_checkpoint_era_genesis =
+                self.should_form_checkpoint_at(inner);
             if new_checkpoint_era_genesis
                 != inner.cur_era_genesis_block_arena_index
             {
@@ -1525,39 +1515,6 @@ impl ConsensusNewBlockHandler {
                     inner.cur_era_genesis_height
                 );
             }
-        }
-
-        // FIXME: Now we have to pass a conservative stable_height here.
-        // FIXME: Because the storage layer does not handle the case when
-        // FIXME: this confirmed point being reverted. We have to be extra
-        // FIXME: conservatively but this will cost storage space.
-        // FIXME: Eventually, we should implement the logic to recover from
-        // FIXME: the database if such a rare reversion case happens.
-        //
-        // FIXME: we need a function to compute the deferred epoch
-        // FIXME: number. the current codebase may not be
-        // FIXME: consistent at all places.
-        let mut confirmed_height = meter.get_confirmed_epoch_num();
-        if confirmed_height < DEFERRED_STATE_EPOCH_COUNT {
-            confirmed_height = 0;
-        } else {
-            confirmed_height -= DEFERRED_STATE_EPOCH_COUNT;
-        }
-        // We can not assume that confirmed epoch are already executed,
-        // but we can assume that the deferred block are executed.
-        if block_body_opt.is_some() {
-            self.data_man
-                .storage_manager
-                .get_storage_manager()
-                .maintain_state_confirmed(
-                    inner,
-                    inner.cur_era_stable_height,
-                    self.conf.inner_conf.era_epoch_count,
-                    confirmed_height,
-                    &self.data_man.state_availability_boundary,
-                )
-                // FIXME: propogate error.
-                .expect(&concat!(file!(), ":", line!(), ":", column!()));
         }
 
         let era_genesis_height =
@@ -1593,14 +1550,53 @@ impl ConsensusNewBlockHandler {
 
         // If we are inserting header only, we will skip execution and
         // tx_pool-related operations
-        if has_body {
+        if !inner.header_only {
+            // FIXME: Now we have to pass a conservative stable_height here.
+            // FIXME: Because the storage layer does not handle the case when
+            // FIXME: this confirmed point being reverted. We have to be extra
+            // FIXME: conservatively but this will cost storage space.
+            // FIXME: Eventually, we should implement the logic to recover from
+            // FIXME: the database if such a rare reversion case happens.
+            //
+            // FIXME: we need a function to compute the deferred epoch
+            // FIXME: number. the current codebase may not be
+            // FIXME: consistent at all places.
+            let mut confirmed_height = meter.get_confirmed_epoch_num();
+            if confirmed_height < DEFERRED_STATE_EPOCH_COUNT {
+                confirmed_height = 0;
+            } else {
+                confirmed_height -= DEFERRED_STATE_EPOCH_COUNT;
+            }
+            // We can not assume that confirmed epoch are already executed,
+            // but we can assume that the deferred block are executed.
+            self.data_man
+                .storage_manager
+                .get_storage_manager()
+                .maintain_state_confirmed(
+                    inner,
+                    inner.cur_era_stable_height,
+                    self.conf.inner_conf.era_epoch_count,
+                    confirmed_height,
+                    &self.data_man.state_availability_boundary,
+                )
+                // FIXME: propogate error.
+                .expect(&concat!(file!(), ":", line!(), ":", column!()));
+
             // It's only correct to set tx stale after the block is considered
             // terminal for mining.
             // Note that we conservatively only mark those blocks inside the
             // current pivot era
             if era_block == cur_pivot_era_block {
-                self.txpool
-                    .set_tx_packed(&block_body_opt.expect("Already checked"));
+                self.txpool.set_tx_packed(
+                    &self
+                        .data_man
+                        .block_by_hash(
+                            &inner.arena[me].hash,
+                            true, /* update_cache */
+                        )
+                        .expect("Already checked")
+                        .transactions,
+                );
             }
 
             if inner.pivot_chain.len() > RECYCLE_TRANSACTION_DELAY as usize {
@@ -1708,7 +1704,7 @@ impl ConsensusNewBlockHandler {
             }
         }
 
-        self.persist_terminals(inner, has_body);
+        self.persist_terminals(inner);
         debug!(
             "Finish activating block in ConsensusGraph: index={:?} hash={:?}",
             me, inner.arena[me].hash
@@ -1718,10 +1714,17 @@ impl ConsensusNewBlockHandler {
     /// The top level function invoked by ConsensusGraph to insert a new block.
     pub fn on_new_block(
         &self, inner: &mut ConsensusGraphInner, meter: &ConfirmationMeter,
-        hash: &H256, block_header: &BlockHeader,
-        block_body_opt: Option<Vec<Arc<SignedTransaction>>>,
+        hash: &H256,
     )
     {
+        let block_header = self
+            .data_man
+            .block_header_by_hash(hash)
+            .expect("header exist for consensus");
+        debug!(
+            "insert new block into consensus: header_only={:?} block={:?}",
+            inner.header_only, &block_header
+        );
         let parent_hash = block_header.parent_hash();
         let parent_index = inner.hash_to_arena_indices.get(&parent_hash);
         let me = if parent_index.is_none()
@@ -1751,6 +1754,9 @@ impl ConsensusNewBlockHandler {
             // so we can safely ignore it in the consensus besides
             // update its sequence number in the data manager.
             if me == NULL {
+                // Block body in the anticone of a checkpoint is not needed.
+                self.data_man
+                    .remove_block_body(hash, true /* remove_db */);
                 return;
             }
             me
@@ -1758,7 +1764,6 @@ impl ConsensusNewBlockHandler {
             let (me, indices_len) = inner.insert(&block_header);
             self.statistics
                 .set_consensus_graph_inserted_block_count(indices_len);
-            inner.block_body_caches.insert(me, block_body_opt);
             self.update_lcts_initial(inner, me);
             me
         };
@@ -1809,15 +1814,7 @@ impl ConsensusNewBlockHandler {
                             me, inner.arena[me].hash
                         );
                     }
-                    let transactions =
-                        inner.block_body_caches.remove(&me).unwrap_or(None);
-                    self.activate_block(
-                        inner,
-                        me,
-                        meter,
-                        transactions,
-                        &mut queue,
-                    );
+                    self.activate_block(inner, me, meter, &mut queue);
                 }
                 // Now we are going to check all invalid blocks in the delay
                 // queue Activate them if the timer is up
@@ -1839,15 +1836,7 @@ impl ConsensusNewBlockHandler {
                         inner.arena[x].data.inactive_dependency_cnt == NULL
                     );
                     inner.arena[x].data.inactive_dependency_cnt = 0;
-                    let transactions =
-                        inner.block_body_caches.remove(&x).unwrap_or(None);
-                    self.activate_block(
-                        inner,
-                        x,
-                        meter,
-                        transactions,
-                        &mut queue,
-                    );
+                    self.activate_block(inner, x, meter, &mut queue);
                 }
             }
         } else {

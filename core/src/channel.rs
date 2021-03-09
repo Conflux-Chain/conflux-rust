@@ -110,7 +110,7 @@ impl<T: Clone> Channel<T> {
 }
 
 pub struct Notifications {
-    pub new_block_hashes: Arc<Channel<(H256, bool)>>,
+    pub new_block_hashes: Arc<Channel<H256>>,
     pub epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
     pub blame_verification_results: Arc<Channel<(u64, Option<u64>)>>, /* <height, witness> */
 }

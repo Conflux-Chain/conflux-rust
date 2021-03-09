@@ -3,9 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::types::{
-    Address as Base32Address, Bytes as RpcBytes, ConsensusGraphStates,
-    SyncGraphStates, Transaction as RpcTransaction, TxPoolPendingInfo,
-    TxWithPoolInfo,
+    Bytes as RpcBytes, ConsensusGraphStates, EpochNumber,
+    Receipt as RpcReceipt, RpcAddress, SyncGraphStates,
+    Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
 };
 use crate::rpc::types::SendTxRequest;
 use cfx_types::{H256, H520, U128};
@@ -24,7 +24,7 @@ pub trait LocalRpc {
 
     #[rpc(name = "tx_inspect_pending")]
     fn tx_inspect_pending(
-        &self, address: Base32Address,
+        &self, address: RpcAddress,
     ) -> JsonRpcResult<TxPoolPendingInfo>;
 
     #[rpc(name = "tx_inspect")]
@@ -32,14 +32,14 @@ pub trait LocalRpc {
 
     #[rpc(name = "txpool_inspect")]
     fn txpool_inspect(
-        &self, address: Option<Base32Address>,
+        &self, address: Option<RpcAddress>,
     ) -> JsonRpcResult<
         BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
     >;
 
     #[rpc(name = "txpool_content")]
     fn txpool_content(
-        &self, address: Option<Base32Address>,
+        &self, address: Option<RpcAddress>,
     ) -> JsonRpcResult<
         BTreeMap<
             String,
@@ -49,7 +49,7 @@ pub trait LocalRpc {
 
     #[rpc(name = "getTransactionsFromPool")]
     fn txs_from_pool(
-        &self, address: Option<Base32Address>,
+        &self, address: Option<RpcAddress>,
     ) -> JsonRpcResult<Vec<RpcTransaction>>;
 
     #[rpc(name = "clear_tx_pool")]
@@ -89,29 +89,34 @@ pub trait LocalRpc {
 
     /// Returns accounts list.
     #[rpc(name = "accounts")]
-    fn accounts(&self) -> JsonRpcResult<Vec<Base32Address>>;
+    fn accounts(&self) -> JsonRpcResult<Vec<RpcAddress>>;
 
     /// Create a new account
     #[rpc(name = "new_account")]
-    fn new_account(&self, password: String) -> JsonRpcResult<Base32Address>;
+    fn new_account(&self, password: String) -> JsonRpcResult<RpcAddress>;
 
     /// Unlock an account
     #[rpc(name = "unlock_account")]
     fn unlock_account(
-        &self, address: Base32Address, password: String, duration: Option<U128>,
+        &self, address: RpcAddress, password: String, duration: Option<U128>,
     ) -> JsonRpcResult<bool>;
 
     /// Lock an account
     #[rpc(name = "lock_account")]
-    fn lock_account(&self, address: Base32Address) -> JsonRpcResult<bool>;
+    fn lock_account(&self, address: RpcAddress) -> JsonRpcResult<bool>;
 
     #[rpc(name = "sign")]
     fn sign(
-        &self, data: RpcBytes, address: Base32Address, password: Option<String>,
+        &self, data: RpcBytes, address: RpcAddress, password: Option<String>,
     ) -> JsonRpcResult<H520>;
 
     #[rpc(name = "cfx_signTransaction")]
     fn sign_transaction(
         &self, tx: SendTxRequest, password: Option<String>,
     ) -> JsonRpcResult<String>;
+
+    #[rpc(name = "cfx_getEpochReceipts")]
+    fn epoch_receipts(
+        &self, epoch: EpochNumber,
+    ) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
 }

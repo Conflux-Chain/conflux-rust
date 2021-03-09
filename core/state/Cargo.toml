@@ -1,0 +1,25 @@
+[package]
+description = "Conflux core state library"
+homepage = "http://www.conflux-chain.org"
+license = "GPL-3.0"
+name = "cfx-state"
+version = "1.0.0"
+edition = "2018"
+
+[dependencies]
+cfx-internal-common = { path = "../internal_common" }
+cfx-parameters = { path = "../parameters" }
+cfx-storage = { path = "../storage" }
+cfx-statedb = { path = "../statedb" }
+cfx-types = { path = "../../cfx_types" }
+primitives = { path = "../../primitives", optional = true }
+
+[dev-dependencies]
+primitives = { path = "../../primitives", features = ["test_no_account_length_check"] }
+
+[features]
+default = ["primitives"]
+# Unfortunately cfg test attributes doesn't work across crates,
+# we have to define a feature for test code.
+# https://users.rust-lang.org/t/cfg-test-doesnt-propagate-to-external-crates/13046
+testonly_code = []

@@ -168,7 +168,15 @@ impl Epochs {
 
             let old = self.latest.load(Ordering::Relaxed);
             let new = cmp::max(old, max_epoch);
-            let res = self.latest.compare_and_swap(old, new, Ordering::Relaxed);
+            let res = self
+                .latest
+                .compare_exchange(
+                    old,
+                    new,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                )
+                .unwrap_or_else(|mismatch| mismatch);
 
             // NOTE: `latest` is only changed here and this
             // update is protected by a lock, so it should be fine

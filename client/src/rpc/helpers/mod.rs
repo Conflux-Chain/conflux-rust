@@ -5,6 +5,8 @@
 mod epoch_queue;
 mod poll_manager;
 mod subscribers;
+mod variadic_value;
 
 pub use epoch_queue::EpochQueue;
 pub use subscribers::{Id as SubscriberId, Subscribers};
+pub use variadic_value::{maybe_vec_into, VariadicValue};

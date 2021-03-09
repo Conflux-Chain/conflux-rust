@@ -1,6 +1,6 @@
 [package]
 name = "client"
-version = "1.1.1"
+version = "1.1.2"
 edition = "2018"
 
 [dependencies]
@@ -19,6 +19,7 @@ cfxkey = { path = "../accounts/cfxkey" }
 cfxcore-accounts = { path = "../accounts" }
 cfxstore = { path = "../accounts/cfxstore" }
 cfx-internal-common = { path = "../core/internal_common" }
+cfx-state = { path = "../core/state" }
 cfx-statedb = { path = "../core/statedb" }
 cfx-storage = { path = "../core/storage" }
 app_dirs = "1.2.1"
@@ -68,6 +69,8 @@ tokio-timer = "0.2.13"
 malloc_size_of = {path = "../util/malloc_size_of"}
 random-crash = { path = "../util/random_crash" }
 cfx-parameters = { path = "../core/parameters" }
+strum = "0.20"
+strum_macros = "0.20"
 
 [dev-dependencies]
 criterion = "0.2"

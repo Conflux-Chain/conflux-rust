@@ -12,6 +12,7 @@ use crate::{
 use cfx_types::{Address, U256};
 
 pub mod trace;
+pub mod trace_filter;
 
 /// This trait is used by executive to build traces.
 pub trait Tracer: Send {

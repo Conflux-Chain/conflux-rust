@@ -119,6 +119,7 @@ pub trait KeyValueDbTrait:
 
 // FIXME: Is it possible to detach SingleWriter from it, so that the
 // implementation doesn't look so ugly on KvdbSqliteTransaction?
+#[allow(drop_bounds)]
 pub trait KeyValueDbTransactionTrait:
     KeyValueDbTraitSingleWriter + Drop
 {

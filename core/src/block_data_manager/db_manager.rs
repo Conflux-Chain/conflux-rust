@@ -1,15 +1,14 @@
 use crate::{
     block_data_manager::{
         db_decode_list, db_encode_list, BlamedHeaderVerifiedRoots,
-        BlockExecutionResultWithEpoch, BlockRewardResult, CheckpointHashes,
-        EpochExecutionContext, LocalBlockInfo,
+        BlockExecutionResultWithEpoch, BlockRewardResult, BlockTracesWithEpoch,
+        CheckpointHashes, EpochExecutionContext, LocalBlockInfo,
     },
     db::{
         COL_BLAMED_HEADER_VERIFIED_ROOTS, COL_BLOCKS, COL_BLOCK_TRACES,
         COL_EPOCH_NUMBER, COL_MISC, COL_TX_INDEX,
     },
     pow::PowComputer,
-    trace::trace::BlockExecTraces,
     verification::VerificationConfig,
 };
 use byteorder::{ByteOrder, LittleEndian};
@@ -35,7 +34,7 @@ const EPOCH_EXECUTED_BLOCK_SET_SUFFIX_BYTE: u8 = 6;
 const EPOCH_SKIPPED_BLOCK_SET_SUFFIX_BYTE: u8 = 7;
 const BLOCK_REWARD_RESULT_SUFFIX_BYTE: u8 = 8;
 const BLOCK_TERMINAL_KEY: &[u8] = b"block_terminals";
-const HEADER_TERMINAL_KEY: &[u8] = b"header_terminals";
+const GC_PROGRESS_KEY: &[u8] = b"gc_progress";
 
 #[derive(Clone, Copy, Hash, Ord, PartialOrd, Eq, PartialEq)]
 enum DBTable {
@@ -142,7 +141,7 @@ impl DBManager {
 
 impl DBManager {
     pub fn insert_block_traces_to_db(
-        &self, block_hash: &H256, block_traces: &BlockExecTraces,
+        &self, block_hash: &H256, block_traces: &BlockTracesWithEpoch,
     ) {
         self.insert_encodable_val(
             DBTable::BlockTraces,
@@ -153,7 +152,7 @@ impl DBManager {
 
     pub fn block_traces_from_db(
         &self, block_hash: &H256,
-    ) -> Option<BlockExecTraces> {
+    ) -> Option<BlockTracesWithEpoch> {
         let block_traces = self
             .load_decodable_val(DBTable::BlockTraces, block_hash.as_bytes())?;
         Some(block_traces)
@@ -326,6 +325,14 @@ impl DBManager {
         self.remove_from_db(DBTable::Blocks, &block_reward_result_key(hash))
     }
 
+    pub fn remove_block_trace_from_db(&self, hash: &H256) {
+        self.remove_from_db(DBTable::BlockTraces, hash.as_bytes())
+    }
+
+    pub fn remove_transaction_index_from_db(&self, hash: &H256) {
+        self.remove_from_db(DBTable::Transactions, hash.as_bytes())
+    }
+
     pub fn insert_checkpoint_hashes_to_db(
         &self, checkpoint_prev: &H256, checkpoint_cur: &H256,
     ) {
@@ -380,7 +387,7 @@ impl DBManager {
         )
     }
 
-    pub fn insert_block_terminals_to_db(&self, terminals: &Vec<H256>) {
+    pub fn insert_terminals_to_db(&self, terminals: &Vec<H256>) {
         self.insert_encodable_list(
             DBTable::Misc,
             BLOCK_TERMINAL_KEY,
@@ -388,20 +395,8 @@ impl DBManager {
         );
     }
 
-    pub fn block_terminals_from_db(&self) -> Option<Vec<H256>> {
+    pub fn terminals_from_db(&self) -> Option<Vec<H256>> {
         self.load_decodable_list(DBTable::Misc, BLOCK_TERMINAL_KEY)
-    }
-
-    pub fn insert_header_terminals_to_db(&self, terminals: &Vec<H256>) {
-        self.insert_encodable_list(
-            DBTable::Misc,
-            HEADER_TERMINAL_KEY,
-            terminals,
-        );
-    }
-
-    pub fn header_terminals_from_db(&self) -> Option<Vec<H256>> {
-        self.load_decodable_list(DBTable::Misc, HEADER_TERMINAL_KEY)
     }
 
     pub fn insert_epoch_execution_commitment_to_db(
@@ -459,6 +454,18 @@ impl DBManager {
 
     pub fn remove_epoch_execution_context_from_db(&self, hash: &H256) {
         self.remove_from_db(DBTable::Blocks, &epoch_execution_context_key(hash))
+    }
+
+    pub fn insert_gc_progress_to_db(&self, next_to_process: u64) {
+        self.insert_encodable_val(
+            DBTable::Misc,
+            GC_PROGRESS_KEY,
+            &next_to_process,
+        );
+    }
+
+    pub fn gc_progress_from_db(&self) -> Option<u64> {
+        self.load_decodable_val(DBTable::Misc, GC_PROGRESS_KEY)
     }
 
     /// The functions below are private utils used by the DBManager to access

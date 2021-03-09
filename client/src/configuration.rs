@@ -3,16 +3,17 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    impls::RpcImplConfiguration, HttpConfiguration, TcpConfiguration,
-    WsConfiguration,
+    impls::RpcImplConfiguration, rpc_apis::ApiSet, HttpConfiguration,
+    TcpConfiguration, WsConfiguration,
 };
+use cfx_addr::{cfx_addr_decode, Network};
 use cfx_internal_common::{ChainIdParams, ChainIdParamsInner};
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
 };
-use cfx_types::{H256, U256};
+use cfx_types::{Address, H256, U256};
 use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
     block_parameters::*,
@@ -33,18 +34,21 @@ use cfxcore::{
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
     transaction_pool::TxPoolConfig,
+    NodeType,
 };
 use lazy_static::*;
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
 use parking_lot::RwLock;
 use rand::Rng;
-use std::{convert::TryInto, sync::Arc};
+use std::{convert::TryInto, path::PathBuf, sync::Arc};
 use txgen::TransactionGeneratorConfig;
 
 lazy_static! {
     pub static ref CHAIN_ID: RwLock<Option<ChainIdParams>> = Default::default();
 }
+const BLOCK_DB_DIR_NAME: &str = "blockchain_db";
+const NET_CONFIG_DB_DIR_NAME: &str = "net_config";
 
 // usage:
 // ```
@@ -161,13 +165,13 @@ build_config! {
         (public_tcp_port, (Option<u16>), None)
         (public_address, (Option<String>), None)
         (udp_port, (Option<u16>), Some(32323))
-        (enable_tracing, (bool), false)
 
         // Network parameters section.
         (blocks_request_timeout_ms, (u64), 20_000)
         (check_request_period_ms, (u64), 1_000)
         (chunk_size_byte, (u64), DEFAULT_CHUNK_SIZE)
         (demote_peer_for_timeout, (bool), false)
+        (dev_allow_phase_change_without_peer, (bool), false)
         (egress_queue_capacity, (usize), 256)
         (egress_min_throttle, (usize), 10)
         (egress_max_throttle, (usize), 64)
@@ -213,7 +217,7 @@ build_config! {
         (discovery_throttling_limit_ping, (usize), 20)
         (discovery_throttling_limit_find_nodes, (usize), 10)
         (enable_discovery, (bool), true)
-        (netconf_dir, (Option<String>), Some("./blockchain_data/net_config".to_string()))
+        (netconf_dir, (Option<String>), None)
         (net_key, (Option<String>), None)
         (node_table_timeout_s, (u64), 300)
         (node_table_promotion_timeout_s, (u64), 3 * 24 * 3600)
@@ -229,9 +233,16 @@ build_config! {
 
         // Storage Section.
         (additional_maintained_snapshot_count, (u32), 1)
+        // `None` for `additional_maintained*` means the data is never garbage collected.
+        (additional_maintained_block_body_epoch_count, (Option<usize>), None)
+        (additional_maintained_execution_result_epoch_count, (Option<usize>), None)
+        (additional_maintained_reward_epoch_count, (Option<usize>), None)
+        (additional_maintained_trace_epoch_count, (Option<usize>), None)
+        (additional_maintained_transaction_index_epoch_count, (Option<usize>), None)
         (block_cache_gc_period_ms, (u64), 5_000)
-        (block_db_dir, (String), "./blockchain_data/blockchain_db".to_string())
+        (block_db_dir, (Option<String>), None)
         (block_db_type, (String), "rocksdb".to_string())
+        (checkpoint_gc_time_in_era_count, (f64), 0.5)
         // The conflux data dir, if unspecified, is the workdir where conflux is started.
         (conflux_data_dir, (String), "./blockchain_data".to_string())
         (ledger_cache_size, (usize), DEFAULT_LEDGER_CACHE_SIZE)
@@ -244,6 +255,9 @@ build_config! {
         (storage_delta_mpts_node_map_vec_size, (u32), cfx_storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
         (storage_delta_mpts_slab_idle_size, (u32), cfx_storage::defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE)
         (storage_max_open_snapshots, (u16), cfx_storage::defaults::DEFAULT_MAX_OPEN_SNAPSHOTS)
+        (strict_tx_index_gc, (bool), true)
+        (sync_state_starting_epoch, (Option<u64>), None)
+        (sync_state_epoch_gap, (Option<u64>), None)
         (target_difficulties_cache_size_in_count, (usize), DEFAULT_TARGET_DIFFICULTIES_CACHE_SIZE_IN_COUNT)
 
         // General/Unclassified section.
@@ -302,6 +316,8 @@ build_config! {
             (Vec<ProvideExtraSnapshotSyncConfig>),
             vec![ProvideExtraSnapshotSyncConfig::StableCheckpoint],
             ProvideExtraSnapshotSyncConfig::parse_config_list)
+        (node_type, (Option<NodeType>), None, NodeType::from_str)
+        (public_rpc_apis, (ApiSet), ApiSet::Safe, ApiSet::from_str)
     }
 }
 
@@ -333,6 +349,13 @@ impl Configuration {
                 config.raw_conf.jsonrpc_http_port = Some(12537);
             }
         };
+        if matches.is_present("archive") {
+            config.raw_conf.node_type = Some(NodeType::Archive);
+        } else if matches.is_present("full") {
+            config.raw_conf.node_type = Some(NodeType::Full);
+        } else if matches.is_present("light") {
+            config.raw_conf.node_type = Some(NodeType::Light);
+        }
 
         Ok(config)
     }
@@ -360,9 +383,14 @@ impl Configuration {
         network_config.discovery_enabled = self.raw_conf.enable_discovery;
         network_config.boot_nodes = to_bootnodes(&self.raw_conf.bootnodes)
             .map_err(|e| format!("failed to parse bootnodes: {}", e))?;
-        if self.raw_conf.netconf_dir.is_some() {
-            network_config.config_path = self.raw_conf.netconf_dir.clone();
-        }
+        network_config.config_path = Some(match &self.raw_conf.netconf_dir {
+            Some(dir) => dir.clone(),
+            None => Path::new(&self.raw_conf.conflux_data_dir)
+                .join(NET_CONFIG_DB_DIR_NAME)
+                .into_os_string()
+                .into_string()
+                .unwrap(),
+        });
         network_config.use_secret =
             self.raw_conf.net_key.as_ref().map(|sec_str| {
                 parse_hex_string(sec_str)
@@ -424,8 +452,12 @@ impl Configuration {
         cache_config
     }
 
-    pub fn db_config(&self) -> DatabaseConfig {
-        let db_dir = &self.raw_conf.block_db_dir;
+    pub fn db_config(&self) -> (PathBuf, DatabaseConfig) {
+        let db_dir: PathBuf = match &self.raw_conf.block_db_dir {
+            Some(dir) => dir.into(),
+            None => Path::new(&self.raw_conf.conflux_data_dir)
+                .join(BLOCK_DB_DIR_NAME),
+        };
         if let Err(e) = fs::create_dir_all(&db_dir) {
             panic!("Error creating database directory: {:?}", e);
         }
@@ -435,13 +467,14 @@ impl Configuration {
                 Some(p) => db::DatabaseCompactionProfile::from_str(p).unwrap(),
                 None => db::DatabaseCompactionProfile::default(),
             };
-        db::db_config(
-            Path::new(db_dir),
+        let db_config = db::db_config(
+            &db_dir,
             self.raw_conf.rocksdb_cache_size.clone(),
             compact_profile,
             NUM_COLUMNS.clone(),
             self.raw_conf.rocksdb_disable_wal,
-        )
+        );
+        (db_dir, db_config)
     }
 
     pub fn chain_id_params(&self) -> ChainIdParams {
@@ -470,7 +503,7 @@ impl Configuration {
         } else {
             self.raw_conf.enable_optimistic_execution
         };
-        ConsensusConfig {
+        let mut conf = ConsensusConfig {
             chain_id: self.chain_id_params(),
             inner_conf: ConsensusInnerConfig {
                 adaptive_weight_beta: self.raw_conf.adaptive_weight_beta,
@@ -511,7 +544,23 @@ impl Configuration {
             referee_bound: self.raw_conf.referee_bound,
             get_logs_epoch_batch_size: self.raw_conf.get_logs_epoch_batch_size,
             get_logs_filter_max_epoch_range: self.raw_conf.get_logs_filter_max_epoch_range,
+            sync_state_starting_epoch: self.raw_conf.sync_state_starting_epoch,
+            sync_state_epoch_gap: self.raw_conf.sync_state_epoch_gap,
+        };
+        match self.raw_conf.node_type {
+            Some(NodeType::Archive) => {
+                if conf.sync_state_starting_epoch.is_none() {
+                    conf.sync_state_starting_epoch = Some(0);
+                }
+            }
+            _ => {
+                if conf.sync_state_epoch_gap.is_none() {
+                    conf.sync_state_epoch_gap =
+                        Some(CATCH_UP_EPOCH_LAG_THRESHOLD);
+                }
+            }
         }
+        conf
     }
 
     pub fn pow_config(&self) -> ProofOfWorkConfig {
@@ -696,6 +745,9 @@ impl Configuration {
             sync_expire_block_timeout: Duration::from_secs(
                 self.raw_conf.sync_expire_block_timeout_s,
             ),
+            allow_phase_change_without_peer: self
+                .raw_conf
+                .dev_allow_phase_change_without_peer,
         }
     }
 
@@ -715,17 +767,73 @@ impl Configuration {
     }
 
     pub fn data_mananger_config(&self) -> DataManagerConfiguration {
-        DataManagerConfiguration::new(
-            self.raw_conf.persist_tx_index,
-            Duration::from_millis(
+        let mut conf = DataManagerConfiguration {
+            persist_tx_index: self.raw_conf.persist_tx_index,
+            tx_cache_index_maintain_timeout: Duration::from_millis(
                 self.raw_conf.tx_cache_index_maintain_timeout_ms,
             ),
-            match self.raw_conf.block_db_type.as_str() {
+            db_type: match self.raw_conf.block_db_type.as_str() {
                 "rocksdb" => DbType::Rocksdb,
                 "sqlite" => DbType::Sqlite,
                 _ => panic!("Invalid block_db_type parameter!"),
             },
-        )
+            additional_maintained_block_body_epoch_count: self
+                .raw_conf
+                .additional_maintained_block_body_epoch_count,
+            additional_maintained_execution_result_epoch_count: self
+                .raw_conf
+                .additional_maintained_execution_result_epoch_count,
+            additional_maintained_reward_epoch_count: self
+                .raw_conf
+                .additional_maintained_reward_epoch_count,
+            additional_maintained_trace_epoch_count: self
+                .raw_conf
+                .additional_maintained_trace_epoch_count,
+            additional_maintained_transaction_index_epoch_count: self
+                .raw_conf
+                .additional_maintained_transaction_index_epoch_count,
+            checkpoint_gc_time_in_epoch_count: (self
+                .raw_conf
+                .checkpoint_gc_time_in_era_count
+                * self.raw_conf.era_epoch_count as f64)
+                as usize,
+            strict_tx_index_gc: self.raw_conf.strict_tx_index_gc,
+        };
+
+        // By default, we do not keep the block data for additional period,
+        // but `node_type = "archive"` is a shortcut for keeping all them.
+        if !matches!(self.raw_conf.node_type, Some(NodeType::Archive)) {
+            if conf.additional_maintained_block_body_epoch_count.is_none() {
+                conf.additional_maintained_block_body_epoch_count = Some(0);
+            }
+            if conf
+                .additional_maintained_execution_result_epoch_count
+                .is_none()
+            {
+                conf.additional_maintained_execution_result_epoch_count =
+                    Some(0);
+            }
+            if conf
+                .additional_maintained_transaction_index_epoch_count
+                .is_none()
+            {
+                conf.additional_maintained_transaction_index_epoch_count =
+                    Some(0);
+            }
+            if conf.additional_maintained_reward_epoch_count.is_none() {
+                conf.additional_maintained_reward_epoch_count = Some(0);
+            }
+            if conf.additional_maintained_trace_epoch_count.is_none() {
+                conf.additional_maintained_trace_epoch_count = Some(0);
+            }
+        }
+        if conf
+            .additional_maintained_transaction_index_epoch_count
+            .is_some()
+        {
+            conf.persist_tx_index = true;
+        }
+        conf
     }
 
     pub fn sync_graph_config(&self) -> SyncGraphConfig {
@@ -894,6 +1002,10 @@ impl Configuration {
         }
         params
     }
+
+    pub fn node_type(&self) -> NodeType {
+        self.raw_conf.node_type.unwrap_or(NodeType::Full)
+    }
 }
 
 /// Validates and formats bootnodes option.
@@ -922,4 +1034,77 @@ pub fn to_bootnodes(bootnodes: &Option<String>) -> Result<Vec<String>, String> {
 
 pub fn parse_hex_string<F: FromStr>(hex_str: &str) -> Result<F, F::Err> {
     hex_str.strip_prefix("0x").unwrap_or(hex_str).parse()
+}
+
+pub fn parse_config_address_string(
+    addr: &str, network: &Network,
+) -> Result<Address, String> {
+    let base32_err = match cfx_addr_decode(addr) {
+        Ok(address) => {
+            return if address.network != *network {
+                Err(format!(
+                    "address in configuration has unmatching network id: expected network={},\
+                     address.network={}",
+                    network,
+                    address.network
+                ))
+            } else {
+                address
+                    .hex_address
+                    .ok_or("decoded address has wrong byte length".into())
+            };
+        }
+        Err(e) => e,
+    };
+    let hex_err = match parse_hex_string(addr) {
+        Ok(address) => return Ok(address),
+        Err(e) => e,
+    };
+    // An address from config must be valid.
+    Err(format!("Address from configuration should be a valid base32 address or a 40-digit hex string!
+            base32_err={:?}
+            hex_err={:?}",
+           base32_err, hex_err))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::configuration::parse_config_address_string;
+    use cfx_addr::Network;
+
+    #[test]
+    fn test_config_address_string() {
+        let addr = parse_config_address_string(
+            "0x1a2f80341409639ea6a35bbcab8299066109aa55",
+            &Network::Main,
+        )
+        .unwrap();
+        // Allow omitting the leading "0x" prefix.
+        assert_eq!(
+            addr,
+            parse_config_address_string(
+                "1a2f80341409639ea6a35bbcab8299066109aa55",
+                &Network::Main
+            )
+            .unwrap()
+        );
+        // Allow CIP-37 base32 address.
+        assert_eq!(
+            addr,
+            parse_config_address_string(
+                "cfx:aarc9abycue0hhzgyrr53m6cxedgccrmmyybjgh4xg",
+                &Network::Main
+            )
+            .unwrap()
+        );
+        // Allow optional fields in CIP-37 base32 address.
+        assert_eq!(
+            addr,
+            parse_config_address_string(
+                "cfx:type.user:aarc9abycue0hhzgyrr53m6cxedgccrmmyybjgh4xg",
+                &Network::Main
+            )
+            .unwrap()
+        );
+    }
 }
