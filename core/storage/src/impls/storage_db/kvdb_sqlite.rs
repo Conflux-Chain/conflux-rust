@@ -79,8 +79,7 @@ impl KvdbSqliteStatements {
     pub fn make_statements(
         value_column_names: &[&str], value_column_types: &[&str],
         main_table_name: &str, with_number_key_table: bool,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         let bytes_key_table_name;
         let bytes_key_table;
         if with_number_key_table {
@@ -118,8 +117,7 @@ impl KvdbSqliteStatementsPerTable {
     pub fn make_table_statements(
         value_column_names: &[&str], value_column_types: &[&str],
         table_name: &str, create_table_sql: &str,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         let comma_value_columns_def = value_column_names
             .iter()
             .zip(value_column_types.iter())
@@ -190,8 +188,7 @@ impl<ValueType> KvdbSqlite<ValueType> {
     pub fn new(
         connection: Option<SqliteConnection>,
         statements: Arc<KvdbSqliteStatements>,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         Ok(Self {
             connection,
             statements,
@@ -199,7 +196,9 @@ impl<ValueType> KvdbSqlite<ValueType> {
         })
     }
 
-    pub fn into_connection(self) -> Option<SqliteConnection> { self.connection }
+    pub fn into_connection(self) -> Option<SqliteConnection> {
+        self.connection
+    }
 }
 
 impl<ValueType> KvdbSqlite<ValueType> {
@@ -249,8 +248,7 @@ impl<ValueType> KvdbSqlite<ValueType> {
     pub fn create_and_open<P: AsRef<Path>>(
         path: P, statements: Arc<KvdbSqliteStatements>, create_table: bool,
         unsafe_mode: bool,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         let create_result = (|statements, path| -> Result<SqliteConnection> {
             let mut connection = SqliteConnection::create_and_open(
                 path,
@@ -392,9 +390,9 @@ impl<
             + ValueRead
             + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KeyValueDbTraitTransactional for KvdbSqlite<ValueType>
-where ValueType::Type:
-        SqlBindableValue
-            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+where
+    ValueType::Type: SqlBindableValue
+        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
 {
     type TransactionType = KvdbSqliteTransaction<ValueType>;
 
@@ -411,9 +409,9 @@ where ValueType::Type:
 
 pub struct KvdbSqliteTransaction<
     ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
-> where ValueType::Type:
-        SqlBindableValue
-            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+> where
+    ValueType::Type: SqlBindableValue
+        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
 {
     db: KvdbSqlite<ValueType>,
     committed: bool,
@@ -422,9 +420,9 @@ pub struct KvdbSqliteTransaction<
 impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KvdbSqliteTransaction<ValueType>
-where ValueType::Type:
-        SqlBindableValue
-            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+where
+    ValueType::Type: SqlBindableValue
+        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
 {
     fn new(
         mut db: KvdbSqlite<ValueType>, immediate_write: bool,
@@ -456,9 +454,9 @@ where ValueType::Type:
 impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > Drop for KvdbSqliteTransaction<ValueType>
-where ValueType::Type:
-        SqlBindableValue
-            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+where
+    ValueType::Type: SqlBindableValue
+        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
 {
     fn drop(&mut self) {
         if !self.committed {
@@ -470,9 +468,9 @@ where ValueType::Type:
 impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KeyValueDbTypes for KvdbSqliteTransaction<ValueType>
-where ValueType::Type:
-        SqlBindableValue
-            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+where
+    ValueType::Type: SqlBindableValue
+        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
 {
     type ValueType = ValueType;
 }
@@ -480,9 +478,9 @@ where ValueType::Type:
 impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KeyValueDbTransactionTrait for KvdbSqliteTransaction<ValueType>
-where ValueType::Type:
-        SqlBindableValue
-            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+where
+    ValueType::Type: SqlBindableValue
+        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
 {
     fn commit(&mut self, _db: &dyn Any) -> Result<()> {
         self.committed = true;
@@ -520,23 +518,27 @@ where ValueType::Type:
 impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > Deref for KvdbSqliteTransaction<ValueType>
-where ValueType::Type:
-        SqlBindableValue
-            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+where
+    ValueType::Type: SqlBindableValue
+        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
 {
     type Target = KvdbSqlite<ValueType>;
 
-    fn deref(&self) -> &Self::Target { &self.db }
+    fn deref(&self) -> &Self::Target {
+        &self.db
+    }
 }
 
 impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > DerefMut for KvdbSqliteTransaction<ValueType>
-where ValueType::Type:
-        SqlBindableValue
-            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+where
+    ValueType::Type: SqlBindableValue
+        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
 {
-    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.db }
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.db
+    }
 }
 
 impl<ValueType: DbValueType> KeyValueDbTypes
@@ -559,8 +561,7 @@ pub fn kvdb_sqlite_iter_range_impl<
     maybe_connection: Option<&'db mut SqliteConnection>,
     statements: &KvdbSqliteStatements, lower_bound_incl: &[u8],
     upper_bound_excl: Option<&[u8]>, f: F,
-) -> Result<MappedRows<'db, F>>
-{
+) -> Result<MappedRows<'db, F>> {
     match maybe_connection {
         None => Ok(MaybeRows::default().map(f)),
         Some(conn) => match upper_bound_excl {
@@ -590,8 +591,7 @@ pub fn kvdb_sqlite_iter_range_excl_impl<
     maybe_connection: Option<&'db mut SqliteConnection>,
     statements: &KvdbSqliteStatements, lower_bound_excl: &[u8],
     upper_bound_excl: &[u8], f: F,
-) -> Result<MappedRows<'db, F>>
-{
+) -> Result<MappedRows<'db, F>> {
     match maybe_connection {
         None => Ok(MaybeRows::default().map(f)),
         Some(conn) => Ok(conn
@@ -712,9 +712,9 @@ impl<
             + KeyValueDbTypes<ValueType = ValueType>,
         ValueType: DbValueType,
     > SingleWriterImplByFamily<KvdbSqlite<ValueType>> for T
-where ValueType::Type:
-        SqlBindableValue
-            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+where
+    ValueType::Type: SqlBindableValue
+        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
 {
     fn delete_impl(
         &mut self, key: &[u8],
@@ -800,9 +800,9 @@ impl<
             + KeyValueDbTypes<ValueType = ValueType>,
         ValueType: DbValueType,
     > DbImplByFamily<KvdbSqlite<ValueType>> for T
-where ValueType::Type:
-        SqlBindableValue
-            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+where
+    ValueType::Type: SqlBindableValue
+        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
 {
     fn delete_impl(
         &self, key: &[u8],
@@ -887,8 +887,7 @@ where ValueType::Type:
     fn put_with_number_key_impl(
         &self, key: i64,
         value: &<<Self as KeyValueDbTypes>::ValueType as DbValueType>::Type,
-    ) -> Result<Option<Option<Self::ValueType>>>
-    {
+    ) -> Result<Option<Option<Self::ValueType>>> {
         let (connection, statements) = self.destructure();
         match connection {
             None => Err(Error::from(ErrorKind::DbNotExist)),
@@ -923,9 +922,9 @@ impl<ValueType> OwnedReadImplFamily for KvdbSqlite<ValueType> {
 impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > OwnedReadImplFamily for KvdbSqliteTransaction<ValueType>
-where ValueType::Type:
-        SqlBindableValue
-            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+where
+    ValueType::Type: SqlBindableValue
+        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
 {
     type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
@@ -963,9 +962,9 @@ impl<ValueType> SingleWriterImplFamily for KvdbSqlite<ValueType> {
 impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > SingleWriterImplFamily for KvdbSqliteTransaction<ValueType>
-where ValueType::Type:
-        SqlBindableValue
-            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+where
+    ValueType::Type: SqlBindableValue
+        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
 {
     type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
@@ -992,9 +991,9 @@ impl<ValueType> ReadImplFamily for KvdbSqlite<ValueType> {
 impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > ReadImplFamily for KvdbSqliteTransaction<ValueType>
-where ValueType::Type:
-        SqlBindableValue
-            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+where
+    ValueType::Type: SqlBindableValue
+        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
 {
     type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
@@ -1025,9 +1024,9 @@ impl<ValueType> DbImplFamily for KvdbSqlite<ValueType> {
 impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > DbImplFamily for KvdbSqliteTransaction<ValueType>
-where ValueType::Type:
-        SqlBindableValue
-            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+where
+    ValueType::Type: SqlBindableValue
+        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
 {
     type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
@@ -1070,9 +1069,9 @@ impl<ValueType> KvdbSqliteDestructureTrait for KvdbSqlite<ValueType> {
 impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KvdbSqliteRefDestructureTrait for KvdbSqliteTransaction<ValueType>
-where ValueType::Type:
-        SqlBindableValue
-            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+where
+    ValueType::Type: SqlBindableValue
+        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
 {
     fn destructure(
         &self,
@@ -1084,9 +1083,9 @@ where ValueType::Type:
 impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KvdbSqliteDestructureTrait for KvdbSqliteTransaction<ValueType>
-where ValueType::Type:
-        SqlBindableValue
-            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+where
+    ValueType::Type: SqlBindableValue
+        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
 {
     fn destructure_mut(
         &mut self,
@@ -1167,8 +1166,7 @@ impl<ValueType> KvdbSqliteBorrowMut<'_, ValueType> {
             Option<&'_ mut SqliteConnection>,
             &'_ KvdbSqliteStatements,
         ),
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             connection: destructure.0.map(|x| x as *mut SqliteConnection),
             statements: destructure.1,

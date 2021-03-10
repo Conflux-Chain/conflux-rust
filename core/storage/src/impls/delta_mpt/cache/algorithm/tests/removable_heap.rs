@@ -54,8 +54,7 @@ fn initialize_heap(
 fn check_and_sort_heap(
     heap: &mut RemovableHeap<u32, TrivialValueWithHeapHandle<i64, u32>>,
     capacity: u32, non_heap_size: u32,
-)
-{
+) {
     let mut heap_util = TrivialHeapValueUtil::default();
     for i in 0..capacity {
         assert_eq!(
@@ -104,8 +103,7 @@ impl<'a, HeapHandlePosT: PrimitiveNum, ValueType: Ord + Clone>
             ValueType,
             HeapHandlePosT,
         >],
-    ) -> Self
-    {
+    ) -> Self {
         Self { array }
     }
 }
@@ -152,8 +150,7 @@ fn initialize_heap_with_removals_and_updates(
 ) -> (
     RemovableHeap<u32, u32>,
     Vec<TrivialValueWithHeapHandle<i64, u32>>,
-)
-{
+) {
     let mut rng = get_rng_for_test();
     let mut values = vec![];
     let mut removal_indices = vec![];
@@ -264,8 +261,7 @@ fn check_and_sort_heap_array_pos(
     heap: &mut RemovableHeap<u32, u32>,
     values: &mut Vec<TrivialValueWithHeapHandle<i64, u32>>, size: u32,
     non_heap_size: u32,
-)
-{
+) {
     {
         let mut pos_set = HashSet::new();
         pos_set.insert(HeapHandle::default().get_pos());

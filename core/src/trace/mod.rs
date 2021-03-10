@@ -59,7 +59,9 @@ impl Tracer for NoopTracer {
     ) {
     }
 
-    fn drain(self) -> Vec<ExecTrace> { vec![] }
+    fn drain(self) -> Vec<ExecTrace> {
+        vec![]
+    }
 }
 
 /// Simple executive tracer. Traces all calls and creates.
@@ -111,5 +113,7 @@ impl Tracer for ExecutiveTracer {
         self.traces.push(trace);
     }
 
-    fn drain(self) -> Vec<ExecTrace> { self.traces }
+    fn drain(self) -> Vec<ExecTrace> {
+        self.traces
+    }
 }

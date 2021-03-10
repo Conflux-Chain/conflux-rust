@@ -38,7 +38,9 @@ pub struct Crypto {
 impl str::FromStr for Crypto {
     type Err = serde_json::error::Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> { serde_json::from_str(s) }
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_json::from_str(s)
+    }
 }
 
 impl From<Crypto> for String {
@@ -61,7 +63,9 @@ enum CryptoField {
 
 impl<'a> Deserialize<'a> for CryptoField {
     fn deserialize<D>(deserializer: D) -> Result<CryptoField, D::Error>
-    where D: Deserializer<'a> {
+    where
+        D: Deserializer<'a>,
+    {
         deserializer.deserialize_any(CryptoFieldVisitor)
     }
 }
@@ -76,7 +80,9 @@ impl<'a> Visitor<'a> for CryptoFieldVisitor {
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-    where E: Error {
+    where
+        E: Error,
+    {
         match value {
             "cipher" => Ok(CryptoField::Cipher),
             "cipherparams" => Ok(CryptoField::CipherParams),
@@ -92,7 +98,9 @@ impl<'a> Visitor<'a> for CryptoFieldVisitor {
 
 impl<'a> Deserialize<'a> for Crypto {
     fn deserialize<D>(deserializer: D) -> Result<Crypto, D::Error>
-    where D: Deserializer<'a> {
+    where
+        D: Deserializer<'a>,
+    {
         static FIELDS: &[&str] =
             &["id", "version", "crypto", "Crypto", "address"];
         deserializer.deserialize_struct("Crypto", FIELDS, CryptoVisitor)
@@ -109,7 +117,9 @@ impl<'a> Visitor<'a> for CryptoVisitor {
     }
 
     fn visit_map<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
-    where V: MapAccess<'a> {
+    where
+        V: MapAccess<'a>,
+    {
         let mut cipher = None;
         let mut cipherparams = None;
         let mut ciphertext = None;
@@ -198,7 +208,9 @@ impl<'a> Visitor<'a> for CryptoVisitor {
 
 impl Serialize for Crypto {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    where
+        S: Serializer,
+    {
         let mut crypto = serializer.serialize_struct("Crypto", 6)?;
         match self.cipher {
             Cipher::Aes128Ctr(ref params) => {

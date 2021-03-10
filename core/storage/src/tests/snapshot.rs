@@ -47,7 +47,10 @@ impl FakeSnapshotMptDb {
                     for (child_index, child_ref) in
                         node.get_children_table_ref().iter()
                     {
-                        match got_node.get_children_table_ref().get_child(child_index) {
+                        match got_node
+                            .get_children_table_ref()
+                            .get_child(child_index)
+                        {
                             None => {
                                 panic!(
                                     "Child {} not found. Expected\n\t{:?}\n\
@@ -76,7 +79,9 @@ struct FakeSnapshotMptDbIter<'a>(
 );
 
 impl SnapshotMptTraitRead for FakeSnapshotMptDb {
-    fn get_merkle_root(&self) -> MerkleHash { unimplemented!() }
+    fn get_merkle_root(&self) -> MerkleHash {
+        unimplemented!()
+    }
 
     fn load_node(
         &mut self, path: &dyn CompressedPathTrait,

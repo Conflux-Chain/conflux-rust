@@ -59,7 +59,9 @@ impl Drop for TransientDir {
 }
 
 impl KeyDirectory for TransientDir {
-    fn load(&self) -> Result<Vec<SafeAccount>, Error> { self.dir.load() }
+    fn load(&self) -> Result<Vec<SafeAccount>, Error> {
+        self.dir.load()
+    }
 
     fn update(&self, account: SafeAccount) -> Result<SafeAccount, Error> {
         self.dir.update(account)
@@ -73,5 +75,7 @@ impl KeyDirectory for TransientDir {
         self.dir.remove(account)
     }
 
-    fn unique_repr(&self) -> Result<u64, Error> { self.dir.unique_repr() }
+    fn unique_repr(&self) -> Result<u64, Error> {
+        self.dir.unique_repr()
+    }
 }

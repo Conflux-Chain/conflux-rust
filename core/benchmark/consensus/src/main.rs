@@ -11,6 +11,7 @@ use cfxcore::{
         create_simple_block, initialize_synchronization_graph,
         initialize_synchronization_graph_with_data_manager,
     },
+    vm::Spec,
 };
 use log::LevelFilter;
 use log4rs::{
@@ -73,8 +74,7 @@ fn check_results(
     hashes: &Vec<H256>, valid_indices: &HashMap<usize, i32>,
     timer_indices: &HashMap<usize, i32>,
     adaptive_indices: &HashMap<usize, i32>,
-)
-{
+) {
     let mut pending_cnt = 0;
     let consensus_read = consensus.inner.read();
     for i in start..end {
@@ -177,6 +177,7 @@ fn main() {
             timer_beta,
             era_epoch_count,
             DbType::Sqlite,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         );
 
     let mut hashes = Vec::new();

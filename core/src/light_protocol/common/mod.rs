@@ -13,7 +13,9 @@ use cfx_internal_common::ChainIdParamsInner;
 use std::{cmp, fmt::Debug};
 
 pub fn max_of_collection<I, T: Ord>(collection: I) -> Option<T>
-where I: Iterator<Item = T> {
+where
+    I: Iterator<Item = T>,
+{
     collection.fold(None, |max_so_far, x| match max_so_far {
         None => Some(x),
         Some(max_so_far) => Some(cmp::max(max_so_far, x)),

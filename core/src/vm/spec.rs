@@ -296,7 +296,17 @@ impl Spec {
         self.wasm.as_ref().expect("Wasm spec expected to exist while checking wasm contract. Misconfigured client?")
     }
 
+    pub fn account_start_nonce(&self, _block_number: u64) -> U256 {
+        /*
+        let account_start_nonce = (_block_number * ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT as u64).int();
+        */
+        U256::zero()
+    }
+
     pub fn contract_start_nonce(&self, _block_number: u64) -> U256 {
+        /*
+        let contract_start_nonce = (_block_number * ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT as u64).int();
+        */
         if self.no_empty {
             U256::one()
         } else {
@@ -306,5 +316,7 @@ impl Spec {
 }
 
 impl Default for Spec {
-    fn default() -> Self { Spec::new_spec() }
+    fn default() -> Self {
+        Spec::new_spec()
+    }
 }

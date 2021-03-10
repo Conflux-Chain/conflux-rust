@@ -25,7 +25,9 @@ impl Registry {
         self.metrics.insert(name, metric);
     }
 
-    pub fn get_all(&self) -> &HashMap<String, Arc<dyn Metric>> { &self.metrics }
+    pub fn get_all(&self) -> &HashMap<String, Arc<dyn Metric>> {
+        &self.metrics
+    }
 }
 
 #[derive(Default)]
@@ -37,8 +39,7 @@ impl GroupingRegistry {
     pub fn register(
         &mut self, group_name: String, metric_name: String,
         metric: Arc<dyn Metric>,
-    )
-    {
+    ) {
         let group_entry =
             self.groups.entry(group_name).or_insert_with(HashMap::new);
         assert!(!group_entry.contains_key(&metric_name));

@@ -4,7 +4,8 @@
 
 pub trait StateDbExt {
     fn get<T>(&self, key: StorageKey) -> Result<Option<T>>
-    where T: ::rlp::Decodable;
+    where
+        T: ::rlp::Decodable;
 
     fn set<T>(
         &mut self, key: StorageKey, value: &T,
@@ -73,7 +74,9 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
     for StateDbGeneric<StateDbStorage>
 {
     fn get<T>(&self, key: StorageKey) -> Result<Option<T>>
-    where T: ::rlp::Decodable {
+    where
+        T: ::rlp::Decodable,
+    {
         match self.get_raw(key) {
             Ok(None) => Ok(None),
             Ok(Some(raw)) => Ok(Some(::rlp::decode::<T>(raw.as_ref())?)),
@@ -139,8 +142,7 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
     fn set_annual_interest_rate(
         &mut self, interest_rate: &U256,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         let interest_rate_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             INTEREST_RATE_KEY,
@@ -160,8 +162,7 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
     fn set_accumulate_interest_rate(
         &mut self, accumulate_interest_rate: &U256,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         let acc_interest_rate_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             ACCUMULATE_INTEREST_RATE_KEY,
@@ -186,8 +187,7 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
     fn set_total_issued_tokens(
         &mut self, total_issued_tokens: &U256,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         let total_issued_tokens_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             TOTAL_TOKENS_KEY,
@@ -212,8 +212,7 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
     fn set_total_staking_tokens(
         &mut self, total_staking_tokens: &U256,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         let total_staking_tokens_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             TOTAL_BANK_TOKENS_KEY,
@@ -238,8 +237,7 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
     fn set_total_storage_tokens(
         &mut self, total_storage_tokens: &U256,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         let total_storage_tokens_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             TOTAL_STORAGE_TOKENS_KEY,

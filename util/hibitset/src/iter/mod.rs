@@ -35,7 +35,9 @@ impl<T> BitIter<T> {
 
 impl<T: BitSetLike> BitIter<T> {
     /// Allows checking if set bit is contained in underlying bit set.
-    pub fn contains(&self, i: Index) -> bool { self.set.contains(i) }
+    pub fn contains(&self, i: Index) -> bool {
+        self.set.contains(i)
+    }
 }
 
 impl<'a> BitIter<&'a mut BitSet> {
@@ -64,7 +66,8 @@ pub(crate) enum State {
 }
 
 impl<T> Iterator for BitIter<T>
-where T: BitSetLike
+where
+    T: BitSetLike,
 {
     type Item = Index;
 

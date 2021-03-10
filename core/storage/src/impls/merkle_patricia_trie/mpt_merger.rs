@@ -30,8 +30,7 @@ impl<'a> MptMerger<'a> {
     pub fn new(
         maybe_readonly_mpt: Option<&'a mut dyn SnapshotMptTraitReadAndIterate>,
         out_mpt: &'a mut dyn SnapshotMptTraitRw,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             rw_cursor: MptCursorRw::new(MergeMptsInRequest {
                 maybe_readonly_mpt,
@@ -50,7 +49,9 @@ impl<'a> MptMerger<'a> {
         };
 
         impl<'x, 'a: 'x> Merger<'x, 'a> {
-            fn merger_mut(&mut self) -> &mut MptMerger<'a> { self.merger }
+            fn merger_mut(&mut self) -> &mut MptMerger<'a> {
+                self.merger
+            }
         }
 
         impl<'x, 'a: 'x> KVInserter<MptKeyValue> for Merger<'x, 'a> {
@@ -78,8 +79,7 @@ impl<'a> MptMerger<'a> {
             Error = Error,
         >,
         mut set_keys_iter: impl FallibleIterator<Item = MptKeyValue, Error = Error>,
-    ) -> Result<MerkleHash>
-    {
+    ) -> Result<MerkleHash> {
         self.rw_cursor.load_root()?;
 
         let mut key_to_delete = delete_keys_iter.next()?;
@@ -151,7 +151,9 @@ impl GetReadMpt for MergeMptsInRequest<'_> {
 }
 
 impl GetRwMpt for MergeMptsInRequest<'_> {
-    fn get_write_mpt(&mut self) -> &mut dyn SnapshotMptTraitRw { self.out_mpt }
+    fn get_write_mpt(&mut self) -> &mut dyn SnapshotMptTraitRw {
+        self.out_mpt
+    }
 
     fn get_write_and_read_mpt(
         &mut self,
@@ -169,9 +171,13 @@ impl GetRwMpt for MergeMptsInRequest<'_> {
         )
     }
 
-    fn is_save_as_write(&self) -> bool { self.maybe_readonly_mpt.is_some() }
+    fn is_save_as_write(&self) -> bool {
+        self.maybe_readonly_mpt.is_some()
+    }
 
-    fn is_in_place_update(&self) -> bool { self.maybe_readonly_mpt.is_none() }
+    fn is_in_place_update(&self) -> bool {
+        self.maybe_readonly_mpt.is_none()
+    }
 }
 
 use crate::{

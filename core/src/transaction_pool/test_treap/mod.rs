@@ -14,7 +14,9 @@ use std::{
     ops::{Add, Sub},
 };
 
-fn get_rng_for_test() -> ChaChaRng { ChaChaRng::from_seed([123; 32]) }
+fn get_rng_for_test() -> ChaChaRng {
+    ChaChaRng::from_seed([123; 32])
+}
 
 struct MockTreapMap<K, V, W> {
     inner: BTreeMap<K, (W, V)>,
@@ -32,11 +34,17 @@ impl<
         }
     }
 
-    pub fn len(&self) -> usize { self.inner.len() }
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
 
-    pub fn _is_empty(&self) -> bool { self.inner.is_empty() }
+    pub fn _is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
 
-    pub fn contains_key(&self, key: &K) -> bool { self.inner.contains_key(key) }
+    pub fn contains_key(&self, key: &K) -> bool {
+        self.inner.contains_key(key)
+    }
 
     pub fn insert(&mut self, key: K, value: V, weight: W) -> Option<V> {
         self.inner

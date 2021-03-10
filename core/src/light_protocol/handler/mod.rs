@@ -121,8 +121,7 @@ impl Handler {
         consensus: SharedConsensusGraph, graph: Arc<SynchronizationGraph>,
         throttling_config_file: Option<String>,
         notifications: Arc<Notifications>, config: LightNodeConfiguration,
-    ) -> Self
-    {
+    ) -> Self {
         let peers = Arc::new(Peers::new());
         let request_id_allocator = Arc::new(UniqueId::new());
 
@@ -235,8 +234,7 @@ impl Handler {
     fn start_witness_worker(
         notifications: Arc<Notifications>, witnesses: Arc<Witnesses>,
         stopped: Arc<AtomicBool>, data_man: Arc<BlockDataManager>,
-    ) -> thread::JoinHandle<()>
-    {
+    ) -> thread::JoinHandle<()> {
         thread::Builder::new()
             .name("Witness Worker".into())
             .spawn(move || {
@@ -482,8 +480,7 @@ impl Handler {
     fn send_status(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         peer_protocol_version: ProtocolVersion,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         let msg: Box<dyn Message>;
 
         if peer_protocol_version == LIGHT_PROTO_V1 {
@@ -577,8 +574,7 @@ impl Handler {
     fn on_status_deprecated(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         status: StatusPongDeprecatedV1,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         debug!("on_status (v1) peer={:?} status={:?}", peer, status);
 
         self.on_status_v2(
@@ -599,8 +595,7 @@ impl Handler {
     fn on_block_hashes(
         &self, io: &dyn NetworkContext, _peer: &NodeId,
         resp: GetBlockHashesResponse,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         debug!(
             "received {} block hashes (request id = {})",
             resp.hashes.len(),
@@ -621,8 +616,7 @@ impl Handler {
     fn on_block_headers(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         resp: GetBlockHeadersResponse,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         debug!(
             "received {} block headers (request id = {})",
             resp.headers.len(),
@@ -643,8 +637,7 @@ impl Handler {
     fn on_block_txs(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         resp: GetBlockTxsResponse,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         debug!(
             "received {} block txs (request id = {})",
             resp.block_txs.len(),
@@ -707,8 +700,7 @@ impl Handler {
     fn on_receipts(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         resp: GetReceiptsResponse,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         debug!(
             "received {} receipts (request id = {})",
             resp.receipts.len(),
@@ -729,8 +721,7 @@ impl Handler {
     fn on_state_entries(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         resp: GetStateEntriesResponse,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         debug!(
             "received {} state entries (request id = {})",
             resp.entries.len(),
@@ -751,8 +742,7 @@ impl Handler {
     fn on_state_roots(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         resp: GetStateRootsResponse,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         debug!(
             "received {} state roots (request id = {})",
             resp.state_roots.len(),
@@ -773,8 +763,7 @@ impl Handler {
     fn on_storage_roots(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         resp: GetStorageRootsResponse,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         debug!(
             "received {} storage roots (request id = {})",
             resp.roots.len(),
@@ -829,8 +818,7 @@ impl Handler {
     fn on_witness_info(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         resp: GetWitnessInfoResponse,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         debug!(
             "received {} witnesses (request id = {})",
             resp.infos.len(),
@@ -988,8 +976,7 @@ impl NetworkProtocolHandler for Handler {
     fn on_peer_connected(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         peer_protocol_version: ProtocolVersion,
-    )
-    {
+    ) {
         debug!("on_peer_connected: peer={:?}", peer);
 
         match self.send_status(io, peer, peer_protocol_version) {

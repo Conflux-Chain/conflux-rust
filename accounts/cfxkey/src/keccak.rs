@@ -18,7 +18,8 @@ use tiny_keccak::Keccak;
 
 pub trait Keccak256<T> {
     fn keccak256(&self) -> T
-    where T: Sized;
+    where
+        T: Sized;
 }
 
 impl Keccak256<[u8; 32]> for [u8] {

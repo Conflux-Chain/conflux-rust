@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::evm::Spec;
+
 pub use self::{
     account_entry::{OverlayAccount, COMMISSION_PRIVILEGE_SPECIAL_KEY},
     substate::{CallStackInfo, Substate},
@@ -90,10 +92,6 @@ pub struct StateGeneric<StateDbStorage: StorageStateTrait> {
     // Checkpoint to the changes.
     staking_state_checkpoints: RwLock<Vec<StakingState>>,
     checkpoints: RwLock<Vec<HashMap<Address, Option<AccountEntry>>>>,
-
-    // TODO: move these variables away.
-    // Environment variables.
-    account_start_nonce: U256,
 }
 
 impl<StateDbStorage: StorageStateTrait> StateTrait
@@ -129,10 +127,14 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
     /// checked out. This function should only be called in post-processing
     /// of a transaction.
     fn settle_collateral_for_all(
-        &mut self, substate: &Substate,
+        &mut self, substate: &Substate, account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult> {
         for address in substate.keys_for_collateral_changed().iter() {
-            match self.settle_collateral_for_address(address, substate)? {
+            match self.settle_collateral_for_address(
+                address,
+                substate,
+                account_start_nonce,
+            )? {
                 CollateralCheckResult::Valid => {}
                 res => return Ok(res),
             }
@@ -144,11 +146,12 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
     // test cases breaks this assumption, which will be fixed in a separated PR.
     fn collect_and_settle_collateral(
         &mut self, original_sender: &Address, storage_limit: &U256,
-        substate: &mut Substate,
-    ) -> DbResult<CollateralCheckResult>
-    {
+        substate: &mut Substate, account_start_nonce: U256,
+    ) -> DbResult<CollateralCheckResult> {
         self.collect_ownership_changed(substate)?;
-        let res = match self.settle_collateral_for_all(substate)? {
+        let res = match self
+            .settle_collateral_for_all(substate, account_start_nonce)?
+        {
             CollateralCheckResult::Valid => {
                 self.check_storage_limit(original_sender, storage_limit)?
             }
@@ -260,8 +263,7 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
     fn commit(
         &mut self, epoch_id: EpochId,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> DbResult<StateRootWithAuxInfo>
-    {
+    ) -> DbResult<StateRootWithAuxInfo> {
         debug!("Commit epoch[{}]", epoch_id);
         self.compute_state_root(debug_record.as_deref_mut())?;
         Ok(self.db.commit(epoch_id, debug_record)?)
@@ -273,8 +275,6 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     /// Calculate the secondary reward for the next block number.
     fn bump_block_number_accumulate_interest(&mut self) -> U256 {
         assert!(self.staking_state_checkpoints.get_mut().is_empty());
-        //self.account_start_nonce +=
-        //    ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT.into();
         self.staking_state.accumulate_interest_rate =
             self.staking_state.accumulate_interest_rate
                 * (*INTEREST_RATE_PER_BLOCK_SCALE
@@ -304,8 +304,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     fn new_contract_with_admin(
         &mut self, contract: &Address, admin: &Address, balance: U256,
         nonce: U256, storage_layout: Option<StorageLayout>,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         Self::update_cache(
             self.cache.get_mut(),
             self.checkpoints.get_mut(),
@@ -359,8 +358,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     fn set_sponsor_for_gas(
         &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
         upper_bound: &U256,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         if *sponsor != self.sponsor_for_gas(address)?.unwrap_or_default()
             || *sponsor_balance != self.sponsor_balance_for_gas(address)?
         {
@@ -490,8 +488,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     fn add_commission_privilege(
         &mut self, contract_address: Address, contract_owner: Address,
         user: Address,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         info!("add_commission_privilege contract_address: {:?}, contract_owner: {:?}, user: {:?}", contract_address, contract_owner, user);
 
         let mut account = self.require_exists(
@@ -508,8 +505,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     fn remove_commission_privilege(
         &mut self, contract_address: Address, contract_owner: Address,
         user: Address,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         let mut account = self.require_exists(
             &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
             false,
@@ -627,19 +623,26 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         )
     }
 
-    fn clean_account(&mut self, address: &Address) -> DbResult<()> {
-        *&mut *self.require_or_new_basic_account(address)? =
+    fn clean_account(
+        &mut self, address: &Address, account_start_nonce: U256,
+    ) -> DbResult<()> {
+        *&mut *self
+            .require_or_new_basic_account(address, account_start_nonce)? =
             OverlayAccount::from_loaded(address, Default::default());
         Ok(())
     }
 
-    fn inc_nonce(&mut self, address: &Address) -> DbResult<()> {
-        self.require_or_new_basic_account(address)
+    fn inc_nonce(
+        &mut self, address: &Address, account_start_nonce: U256,
+    ) -> DbResult<()> {
+        self.require_or_new_basic_account(address, account_start_nonce)
             .map(|mut x| x.inc_nonce())
     }
 
-    fn set_nonce(&mut self, address: &Address, nonce: &U256) -> DbResult<()> {
-        self.require_or_new_basic_account(address)
+    fn set_nonce(
+        &mut self, address: &Address, nonce: &U256, account_start_nonce: U256,
+    ) -> DbResult<()> {
+        self.require_or_new_basic_account(address, account_start_nonce)
             .map(|mut x| x.set_nonce(nonce))
     }
 
@@ -660,6 +663,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
 
     fn add_balance(
         &mut self, address: &Address, by: &U256, cleanup_mode: CleanupMode,
+        account_start_nonce: U256,
     ) -> DbResult<()> {
         let exists = self.exists(address)?;
         if !address.is_valid_address() {
@@ -680,7 +684,8 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         if !by.is_zero()
             || (cleanup_mode == CleanupMode::ForceCreate && !exists)
         {
-            self.require_or_new_basic_account(address)?.add_balance(by);
+            self.require_or_new_basic_account(address, account_start_nonce)?
+                .add_balance(by);
         }
 
         if let CleanupMode::TrackTouched(set) = cleanup_mode {
@@ -693,11 +698,10 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
 
     fn transfer_balance(
         &mut self, from: &Address, to: &Address, by: &U256,
-        mut cleanup_mode: CleanupMode,
-    ) -> DbResult<()>
-    {
+        mut cleanup_mode: CleanupMode, account_start_nonce: U256,
+    ) -> DbResult<()> {
         self.sub_balance(from, by, &mut cleanup_mode)?;
-        self.add_balance(to, by, cleanup_mode)?;
+        self.add_balance(to, by, cleanup_mode, account_start_nonce)?;
         Ok(())
     }
 
@@ -956,18 +960,11 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             }
         };
 
-        /*
-        let account_start_nonce = (block_number
-            * ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT as u64)
-            .into();
-        */
-        let account_start_nonce = U256::zero();
         Ok(StateGeneric {
             db,
             cache: Default::default(),
             staking_state_checkpoints: Default::default(),
             checkpoints: Default::default(),
-            account_start_nonce,
             staking_state,
             accounts_to_notify: Default::default(),
         })
@@ -976,6 +973,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     /// Charges or refund storage collateral and update `total_storage_tokens`.
     fn settle_collateral_for_address(
         &mut self, addr: &Address, substate: &Substate,
+        account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult> {
         let (inc_collaterals, sub_collaterals) =
             substate.get_collateral_change(addr);
@@ -985,7 +983,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         );
 
         if !sub.is_zero() {
-            self.sub_collateral_for_storage(addr, &sub)?;
+            self.sub_collateral_for_storage(addr, &sub, account_start_nonce)?;
         }
         if !inc.is_zero() {
             let balance = if addr.is_contract_address() {
@@ -1060,13 +1058,13 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     fn sub_collateral_for_storage(
-        &mut self, address: &Address, by: &U256,
+        &mut self, address: &Address, by: &U256, account_start_nonce: U256,
     ) -> DbResult<()> {
         let collateral = self.collateral_for_storage(address)?;
         let refundable = if by > &collateral { &collateral } else { by };
         let burnt = *by - *refundable;
         if !refundable.is_zero() {
-            self.require_or_new_basic_account(address)?
+            self.require_or_new_basic_account(address, account_start_nonce)?
                 .sub_collateral_for_storage(refundable);
         }
         self.staking_state.total_storage_tokens -= *by;
@@ -1096,8 +1094,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     fn update_account_cache(
         require: RequireCache, account: &mut OverlayAccount,
         db: &StateDb<StateDbStorage>,
-    ) -> DbResult<bool>
-    {
+    ) -> DbResult<bool> {
         match require {
             RequireCache::None => Ok(true),
             RequireCache::Code => account.cache_code(db),
@@ -1146,8 +1143,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     pub fn recycle_storage(
         &mut self, killed_addresses: Vec<Address>,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         // TODO: Think about kill_dust and collateral refund.
         for address in &killed_addresses {
             self.db.delete_all::<access_mode::Write>(
@@ -1180,8 +1176,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     pub fn commit_and_notify(
         &mut self, epoch_id: EpochId, txpool: &SharedTransactionPool,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> DbResult<StateRootWithAuxInfo>
-    {
+    ) -> DbResult<StateRootWithAuxInfo> {
         let result = self.commit(epoch_id, debug_record)?;
 
         debug!("Notify epoch[{}]", epoch_id);
@@ -1292,12 +1287,12 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
 
     #[allow(unused)]
     pub fn exists_and_has_code_or_nonce(
-        &self, address: &Address,
+        &self, address: &Address, spec: &Spec, block_number: u64,
     ) -> DbResult<bool> {
         self.ensure_account_loaded(address, RequireCache::Code, |acc| {
             acc.map_or(false, |acc| {
                 acc.code_hash() != KECCAK_EMPTY
-                    || *acc.nonce() != self.account_start_nonce
+                    || *acc.nonce() != spec.account_start_nonce(block_number)
             })
         })
     }
@@ -1308,8 +1303,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     pub fn kill_garbage(
         &mut self, touched: &HashSet<Address>, remove_empty_touched: bool,
         min_balance: &Option<U256>, kill_contracts: bool,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         // TODO: consider both balance and staking_balance
         let to_kill: HashSet<_> = {
             self.cache
@@ -1427,8 +1421,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         cache: &mut HashMap<Address, AccountEntry>,
         checkpoints: &mut Vec<HashMap<Address, Option<AccountEntry>>>,
         address: &Address, account: AccountEntry,
-    )
-    {
+    ) {
         let is_dirty = account.is_dirty();
         let old_value = cache.insert(*address, account);
         if is_dirty {
@@ -1441,8 +1434,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     fn insert_cache_if_fresh_account(
         cache: &mut HashMap<Address, AccountEntry>, address: &Address,
         maybe_account: Option<OverlayAccount>,
-    ) -> bool
-    {
+    ) -> bool {
         if !cache.contains_key(address) {
             cache.insert(*address, AccountEntry::new_clean(maybe_account));
             true
@@ -1454,7 +1446,9 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     pub fn ensure_account_loaded<F, U>(
         &self, address: &Address, require: RequireCache, f: F,
     ) -> DbResult<U>
-    where F: Fn(Option<&OverlayAccount>) -> U {
+    where
+        F: Fn(Option<&OverlayAccount>) -> U,
+    {
         // Return immediately when there is no need to have db operation.
         if let Some(maybe_acc) = self.cache.read().get(address) {
             if let Some(account) = &maybe_acc.account {
@@ -1522,7 +1516,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     fn require_or_new_basic_account(
-        &self, address: &Address,
+        &self, address: &Address, account_start_nonce: U256,
     ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>> {
         self.require_or_set(address, false, |address| {
             if address.is_valid_address() {
@@ -1533,7 +1527,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 Ok(OverlayAccount::new_basic(
                     address,
                     U256::zero(),
-                    self.account_start_nonce.into(),
+                    account_start_nonce.into(),
                     None,
                 ))
             } else {
@@ -1548,7 +1542,9 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     fn require_or_set<F>(
         &self, address: &Address, require_code: bool, default: F,
     ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>>
-    where F: FnOnce(&Address) -> DbResult<OverlayAccount> {
+    where
+        F: FnOnce(&Address) -> DbResult<OverlayAccount>,
+    {
         let mut cache;
         if !self.cache.read().contains_key(address) {
             let account = self

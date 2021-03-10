@@ -35,7 +35,9 @@ pub trait TimeProvider {
 }
 
 impl<F: Fn() -> u64> TimeProvider for F {
-    fn now(&self) -> u64 { self() }
+    fn now(&self) -> u64 {
+        self()
+    }
 }
 
 /// Default implementation of `TimeProvider` using system time.
@@ -73,7 +75,9 @@ fn decode_time(val: &str) -> Option<time::Duration> {
     time.map(time::Duration::from_secs)
 }
 
-fn encode_time(time: time::Duration) -> String { format!("{}", time.as_secs()) }
+fn encode_time(time: time::Duration) -> String {
+    format!("{}", time.as_secs())
+}
 
 /// Manages authorization codes for `SignerUIs`
 pub struct AuthCodes<T: TimeProvider = DefaultTimeProvider> {
@@ -205,7 +209,9 @@ impl<T: TimeProvider> AuthCodes<T> {
     }
 
     /// Returns true if there are no tokens in this store
-    pub fn is_empty(&self) -> bool { self.codes.is_empty() }
+    pub fn is_empty(&self) -> bool {
+        self.codes.is_empty()
+    }
 
     /// Removes old tokens that have not been used since creation.
     pub fn clear_garbage(&mut self) {

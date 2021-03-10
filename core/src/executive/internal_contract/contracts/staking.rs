@@ -47,8 +47,7 @@ impl UpfrontPaymentTrait for Deposit {
     fn upfront_gas_payment(
         &self, _: &Self::Input, params: &ActionParams, spec: &Spec,
         state: &dyn StateOpsTrait,
-    ) -> U256
-    {
+    ) -> U256 {
         let length = state.deposit_list_length(&params.sender).unwrap_or(0);
         U256::from(2 * spec.sstore_reset_gas) * U256::from(length + 1)
     }
@@ -59,8 +58,7 @@ impl ExecutionTrait for Deposit {
         &self, input: U256, params: &ActionParams, env: &Env, _spec: &Spec,
         state: &mut dyn StateOpsTrait, _substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         deposit(input, params, env, state, tracer)
     }
 }
@@ -74,8 +72,7 @@ impl UpfrontPaymentTrait for Withdraw {
     fn upfront_gas_payment(
         &self, _input: &Self::Input, params: &ActionParams, spec: &Spec,
         state: &dyn StateOpsTrait,
-    ) -> U256
-    {
+    ) -> U256 {
         let length = state.deposit_list_length(&params.sender).unwrap_or(0);
         U256::from(2 * spec.sstore_reset_gas) * U256::from(length)
     }
@@ -86,8 +83,7 @@ impl ExecutionTrait for Withdraw {
         &self, input: U256, params: &ActionParams, env: &Env, _spec: &Spec,
         state: &mut dyn StateOpsTrait, _substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         withdraw(input, params, env, state, tracer)
     }
 }
@@ -101,8 +97,7 @@ impl UpfrontPaymentTrait for VoteLock {
     fn upfront_gas_payment(
         &self, _input: &Self::Input, params: &ActionParams, spec: &Spec,
         state: &dyn StateOpsTrait,
-    ) -> U256
-    {
+    ) -> U256 {
         let length = state.vote_stake_list_length(&params.sender).unwrap_or(0);
         U256::from(2 * spec.sstore_reset_gas) * U256::from(length)
     }
@@ -113,8 +108,7 @@ impl ExecutionTrait for VoteLock {
         &self, inputs: (U256, U256), params: &ActionParams, env: &Env,
         _spec: &Spec, state: &mut dyn StateOpsTrait, _substate: &mut Substate,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         vote_lock(inputs.0, inputs.1, params, env, state)
     }
 }
@@ -129,8 +123,7 @@ impl ExecutionTrait for GetStakingBalance {
         &self, input: Address, _: &ActionParams, _env: &Env, _spec: &Spec,
         state: &mut dyn StateOpsTrait, _substate: &mut Substate,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<U256>
-    {
+    ) -> vm::Result<U256> {
         Ok(state.staking_balance(&input)?)
     }
 }
@@ -144,8 +137,7 @@ impl UpfrontPaymentTrait for GetLockedStakingBalance {
     fn upfront_gas_payment(
         &self, (address, _): &(Address, U256), _: &ActionParams, spec: &Spec,
         state: &dyn StateOpsTrait,
-    ) -> U256
-    {
+    ) -> U256 {
         let length = state.vote_stake_list_length(address).unwrap_or(0);
         U256::from(spec.sload_gas) * U256::from(length + 1)
     }
@@ -156,8 +148,7 @@ impl ExecutionTrait for GetLockedStakingBalance {
         &self, (address, block_number): (Address, U256), _: &ActionParams,
         env: &Env, _spec: &Spec, state: &mut dyn StateOpsTrait,
         _substate: &mut Substate, _tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<U256>
-    {
+    ) -> vm::Result<U256> {
         Ok(get_locked_staking(
             address,
             block_number,
@@ -176,8 +167,7 @@ impl UpfrontPaymentTrait for GetVotePower {
     fn upfront_gas_payment(
         &self, (address, _): &(Address, U256), _: &ActionParams, spec: &Spec,
         state: &dyn StateOpsTrait,
-    ) -> U256
-    {
+    ) -> U256 {
         let length = state.vote_stake_list_length(address).unwrap_or(0);
         U256::from(spec.sload_gas) * U256::from(length + 1)
     }
@@ -188,8 +178,7 @@ impl ExecutionTrait for GetVotePower {
         &self, (address, block_number): (Address, U256), _: &ActionParams,
         env: &Env, _spec: &Spec, state: &mut dyn StateOpsTrait,
         _substate: &mut Substate, _tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<U256>
-    {
+    ) -> vm::Result<U256> {
         Ok(get_vote_power(address, block_number, env.number, state)?)
     }
 }

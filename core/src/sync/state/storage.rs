@@ -231,8 +231,7 @@ impl RangedManifest {
     pub fn load(
         snapshot_to_sync: &SnapshotSyncCandidate, start_key: Option<Vec<u8>>,
         storage_manager: &StorageManager, chunk_size: u64, max_chunks: usize,
-    ) -> Result<Option<(RangedManifest, MerkleHash)>, Error>
-    {
+    ) -> Result<Option<(RangedManifest, MerkleHash)>, Error> {
         let snapshot_epoch_id = match snapshot_to_sync {
             SnapshotSyncCandidate::FullSync {
                 snapshot_epoch_id, ..
@@ -366,8 +365,7 @@ impl Chunk {
     pub fn load(
         snapshot_epoch_id: &H256, chunk_key: &ChunkKey,
         storage_manager: &StorageManager,
-    ) -> Result<Option<Chunk>, Error>
-    {
+    ) -> Result<Option<Chunk>, Error> {
         debug!(
             "begin to load chunk, snapshot_epoch_id = {:?}, key = {:?}",
             snapshot_epoch_id, chunk_key

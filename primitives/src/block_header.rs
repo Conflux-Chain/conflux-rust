@@ -86,11 +86,15 @@ pub struct BlockHeader {
 impl Deref for BlockHeader {
     type Target = BlockHeaderRlpPart;
 
-    fn deref(&self) -> &Self::Target { &self.rlp_part }
+    fn deref(&self) -> &Self::Target {
+        &self.rlp_part
+    }
 }
 
 impl DerefMut for BlockHeader {
-    fn deref_mut(&mut self) -> &mut BlockHeaderRlpPart { &mut self.rlp_part }
+    fn deref_mut(&mut self) -> &mut BlockHeaderRlpPart {
+        &mut self.rlp_part
+    }
 }
 
 impl MallocSizeOf for BlockHeader {
@@ -100,30 +104,46 @@ impl MallocSizeOf for BlockHeader {
 }
 
 impl PartialEq for BlockHeader {
-    fn eq(&self, o: &BlockHeader) -> bool { self.rlp_part == o.rlp_part }
+    fn eq(&self, o: &BlockHeader) -> bool {
+        self.rlp_part == o.rlp_part
+    }
 }
 
 impl BlockHeader {
     /// Approximated rlp size of the block header.
-    pub fn approximated_rlp_size(&self) -> usize { self.approximated_rlp_size }
+    pub fn approximated_rlp_size(&self) -> usize {
+        self.approximated_rlp_size
+    }
 
     /// Get the parent_hash field of the header.
-    pub fn parent_hash(&self) -> &H256 { &self.parent_hash }
+    pub fn parent_hash(&self) -> &H256 {
+        &self.parent_hash
+    }
 
     /// Get the block height
-    pub fn height(&self) -> u64 { self.height }
+    pub fn height(&self) -> u64 {
+        self.height
+    }
 
     /// Get the timestamp field of the header.
-    pub fn timestamp(&self) -> u64 { self.timestamp }
+    pub fn timestamp(&self) -> u64 {
+        self.timestamp
+    }
 
     /// Get the author field of the header.
-    pub fn author(&self) -> &Address { &self.author }
+    pub fn author(&self) -> &Address {
+        &self.author
+    }
 
     /// Get the transactions root field of the header.
-    pub fn transactions_root(&self) -> &H256 { &self.transactions_root }
+    pub fn transactions_root(&self) -> &H256 {
+        &self.transactions_root
+    }
 
     /// Get the deferred state root field of the header.
-    pub fn deferred_state_root(&self) -> &H256 { &self.deferred_state_root }
+    pub fn deferred_state_root(&self) -> &H256 {
+        &self.deferred_state_root
+    }
 
     /// Get the deferred block receipts root field of the header.
     pub fn deferred_receipts_root(&self) -> &H256 {
@@ -136,28 +156,44 @@ impl BlockHeader {
     }
 
     /// Get the blame field of the header
-    pub fn blame(&self) -> u32 { self.blame }
+    pub fn blame(&self) -> u32 {
+        self.blame
+    }
 
     /// Get the difficulty field of the header.
-    pub fn difficulty(&self) -> &U256 { &self.difficulty }
+    pub fn difficulty(&self) -> &U256 {
+        &self.difficulty
+    }
 
     /// Get the adaptive field of the header
-    pub fn adaptive(&self) -> bool { self.adaptive }
+    pub fn adaptive(&self) -> bool {
+        self.adaptive
+    }
 
     /// Get the gas limit field of the header.
-    pub fn gas_limit(&self) -> &U256 { &self.gas_limit }
+    pub fn gas_limit(&self) -> &U256 {
+        &self.gas_limit
+    }
 
     /// Get the referee hashes field of the header.
-    pub fn referee_hashes(&self) -> &Vec<H256> { &self.referee_hashes }
+    pub fn referee_hashes(&self) -> &Vec<H256> {
+        &self.referee_hashes
+    }
 
     /// Get the custom data field of the header.
-    pub fn custom(&self) -> &Vec<Bytes> { &self.custom }
+    pub fn custom(&self) -> &Vec<Bytes> {
+        &self.custom
+    }
 
     /// Get the nonce field of the header.
-    pub fn nonce(&self) -> U256 { self.nonce }
+    pub fn nonce(&self) -> U256 {
+        self.nonce
+    }
 
     /// Set the nonce field of the header.
-    pub fn set_nonce(&mut self, nonce: U256) { self.nonce = nonce; }
+    pub fn set_nonce(&mut self, nonce: U256) {
+        self.nonce = nonce;
+    }
 
     /// Set the timestamp filed of the header.
     pub fn set_timestamp(&mut self, timestamp: u64) {
@@ -177,7 +213,9 @@ impl BlockHeader {
     }
 
     /// Get the hash of PoW problem.
-    pub fn problem_hash(&self) -> H256 { keccak(self.rlp_without_nonce()) }
+    pub fn problem_hash(&self) -> H256 {
+        keccak(self.rlp_without_nonce())
+    }
 
     /// Get the RLP representation of this header(except nonce).
     pub fn rlp_without_nonce(&self) -> Bytes {
@@ -533,7 +571,9 @@ impl BlockHeaderBuilder {
 }
 
 impl Encodable for BlockHeader {
-    fn rlp_append(&self, stream: &mut RlpStream) { self.stream_rlp(stream); }
+    fn rlp_append(&self, stream: &mut RlpStream) {
+        self.stream_rlp(stream);
+    }
 }
 
 impl Decodable for BlockHeader {

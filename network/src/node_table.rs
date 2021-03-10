@@ -197,13 +197,21 @@ pub enum NodeContact {
 }
 
 impl NodeContact {
-    pub fn success() -> NodeContact { NodeContact::Success(SystemTime::now()) }
+    pub fn success() -> NodeContact {
+        NodeContact::Success(SystemTime::now())
+    }
 
-    pub fn failure() -> NodeContact { NodeContact::Failure(SystemTime::now()) }
+    pub fn failure() -> NodeContact {
+        NodeContact::Failure(SystemTime::now())
+    }
 
-    pub fn demoted() -> NodeContact { NodeContact::Demoted(SystemTime::now()) }
+    pub fn demoted() -> NodeContact {
+        NodeContact::Demoted(SystemTime::now())
+    }
 
-    pub fn is_demoted(&self) -> bool { matches!(self, NodeContact::Demoted(_)) }
+    pub fn is_demoted(&self) -> bool {
+        matches!(self, NodeContact::Demoted(_))
+    }
 
     pub fn time(&self) -> SystemTime {
         match *self {
@@ -336,21 +344,27 @@ impl FromStr for Node {
 }
 
 impl PartialEq for Node {
-    fn eq(&self, other: &Self) -> bool { self.id == other.id }
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
 }
 
 impl Eq for Node {}
 
 impl Hash for Node {
     fn hash<H>(&self, state: &mut H)
-    where H: Hasher {
+    where
+        H: Hasher,
+    {
         self.id.hash(state)
     }
 }
 
 const MAX_NODES: usize = 4096;
 
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Enum, EnumIter)]
+#[derive(
+    Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Enum, EnumIter,
+)]
 enum NodeReputation {
     Success = 0,
     Unknown = 1,
@@ -361,7 +375,9 @@ enum NodeReputation {
 const NODE_REPUTATION_LEVEL_COUNT: usize = 3;
 
 impl Default for NodeReputation {
-    fn default() -> Self { NodeReputation::Unknown }
+    fn default() -> Self {
+        NodeReputation::Unknown
+    }
 }
 
 #[derive(Default, Clone, Copy)]
@@ -739,8 +755,7 @@ impl NodeTable {
     pub fn note_unsuccess_contact(
         &mut self, id: &NodeId, by_connection: bool,
         last_contact: Option<NodeContact>,
-    )
-    {
+    ) {
         let mut _index;
         if let Some(index) = self.node_index.get(id) {
             _index = *index;
@@ -827,7 +842,9 @@ impl NodeTable {
     }
 
     /// Attempt to connect to useless nodes again.
-    pub fn clear_useless(&mut self) { self.useless_nodes.clear(); }
+    pub fn clear_useless(&mut self) {
+        self.useless_nodes.clear();
+    }
 
     /// Save the (un)trusted_nodes.json file.
     pub fn save(&self) {
@@ -873,7 +890,9 @@ impl NodeTable {
 }
 
 impl Drop for NodeTable {
-    fn drop(&mut self) { self.save(); }
+    fn drop(&mut self) {
+        self.save();
+    }
 }
 
 /// Check if node url is valid

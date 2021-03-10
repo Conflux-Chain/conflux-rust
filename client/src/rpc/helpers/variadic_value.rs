@@ -35,10 +35,13 @@ impl<T> VariadicValue<T> {
 }
 
 impl<T> Serialize for VariadicValue<T>
-where T: Serialize
+where
+    T: Serialize,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    where
+        S: Serializer,
+    {
         match &self {
             &VariadicValue::Null => serializer.serialize_none(),
             &VariadicValue::Single(x) => x.serialize(serializer),
@@ -48,10 +51,13 @@ where T: Serialize
 }
 
 impl<'a, T> Deserialize<'a> for VariadicValue<T>
-where T: DeserializeOwned
+where
+    T: DeserializeOwned,
 {
     fn deserialize<D>(deserializer: D) -> Result<VariadicValue<T>, D::Error>
-    where D: Deserializer<'a> {
+    where
+        D: Deserializer<'a>,
+    {
         let v: Value = Deserialize::deserialize(deserializer)?;
 
         if v.is_null() {
@@ -72,7 +78,9 @@ where T: DeserializeOwned
 
 // helper implementing automatic Option<Vec<A>> -> Option<Vec<B>> conversion
 pub fn maybe_vec_into<A, B>(src: &Option<Vec<A>>) -> Option<Vec<B>>
-where A: Clone + Into<B> {
+where
+    A: Clone + Into<B>,
+{
     src.clone().map(|x| x.into_iter().map(Into::into).collect())
 }
 

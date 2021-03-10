@@ -46,7 +46,9 @@ impl LinkedBytes {
         answer
     }
 
-    pub fn len(&self) -> usize { self.length }
+    pub fn len(&self) -> usize {
+        self.length
+    }
 }
 
 pub fn read_abi_list<T: ABIVariable>(

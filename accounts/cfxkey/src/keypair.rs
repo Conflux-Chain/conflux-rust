@@ -77,11 +77,17 @@ impl KeyPair {
         KeyPair { secret, public }
     }
 
-    pub fn secret(&self) -> &Secret { &self.secret }
+    pub fn secret(&self) -> &Secret {
+        &self.secret
+    }
 
-    pub fn public(&self) -> &Public { &self.public }
+    pub fn public(&self) -> &Public {
+        &self.public
+    }
 
-    pub fn address(&self) -> Address { public_to_address(&self.public) }
+    pub fn address(&self) -> Address {
+        public_to_address(&self.public)
+    }
 }
 
 #[cfg(test)]

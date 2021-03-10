@@ -265,7 +265,9 @@ impl KeyValueDbTraitSingleWriter for Arc<Mutex<FakeSnapshotDb>> {
 }
 
 impl SnapshotMptTraitRead for Arc<Mutex<FakeSnapshotMptDb>> {
-    fn get_merkle_root(&self) -> MerkleHash { self.lock().get_merkle_root() }
+    fn get_merkle_root(&self) -> MerkleHash {
+        self.lock().get_merkle_root()
+    }
 
     fn load_node(
         &mut self, path: &dyn CompressedPathTrait,
@@ -415,14 +417,15 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
     type SnapshotKvdbIterTraitTag = FakeSnapshotDb;
     type SnapshotKvdbIterType = Self;
 
-    fn get_null_snapshot() -> Self { unreachable!() }
+    fn get_null_snapshot() -> Self {
+        unreachable!()
+    }
 
     fn open(
         _snapshot_path: &Path, _readonly: bool,
         _already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         _open_semaphore: &Arc<Semaphore>,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         unreachable!()
     }
 
@@ -430,12 +433,13 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
         _snapshot_path: &Path,
         _already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         _open_semaphore: &Arc<Semaphore>,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         unreachable!()
     }
 
-    fn direct_merge(&mut self) -> Result<MerkleHash> { unreachable!() }
+    fn direct_merge(&mut self) -> Result<MerkleHash> {
+        unreachable!()
+    }
 
     fn copy_and_merge(
         &mut self, _old_snapshot_db: &Self,
@@ -443,9 +447,13 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
         unreachable!()
     }
 
-    fn start_transaction(&mut self) -> Result<()> { Ok(()) }
+    fn start_transaction(&mut self) -> Result<()> {
+        Ok(())
+    }
 
-    fn commit_transaction(&mut self) -> Result<()> { Ok(()) }
+    fn commit_transaction(&mut self) -> Result<()> {
+        Ok(())
+    }
 
     fn snapshot_kv_iterator(
         &self,
@@ -467,7 +475,9 @@ struct FakeSnapshotDbManager {
 impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
     type SnapshotDb = Arc<Mutex<FakeSnapshotDb>>;
 
-    fn get_snapshot_dir(&self) -> &Path { unreachable!() }
+    fn get_snapshot_dir(&self) -> &Path {
+        unreachable!()
+    }
 
     fn get_snapshot_db_name(&self, _snapshot_epoch_id: &EpochId) -> String {
         unreachable!()
@@ -511,8 +521,7 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
     fn finalize_full_sync_snapshot<'m>(
         &self, _snapshot_epoch_id: &MerkleHash, _merkle_root: &MerkleHash,
         _snapshot_info_map_rwlock: &'m RwLock<PersistedSnapshotInfoMap>,
-    ) -> Result<RwLockWriteGuard<'m, PersistedSnapshotInfoMap>>
-    {
+    ) -> Result<RwLockWriteGuard<'m, PersistedSnapshotInfoMap>> {
         unreachable!()
     }
 }

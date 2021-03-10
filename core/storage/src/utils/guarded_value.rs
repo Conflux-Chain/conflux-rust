@@ -27,7 +27,9 @@ impl<GuardType, ValueType> GuardedValue<GuardType, ValueType> {
 
     /// It's unsafe to drop the returned guard manually, or to clone the
     /// ValueType. Extra care is needed when using this method.
-    pub fn into(self) -> (GuardType, ValueType) { (self.guard, self.value) }
+    pub fn into(self) -> (GuardType, ValueType) {
+        (self.guard, self.value)
+    }
 }
 
 impl<'a, GuardType: 'a + Deref<Target = TargetType>, TargetType>
@@ -57,13 +59,17 @@ impl<'a, GuardType: 'a + DerefMut<Target = TargetType>, TargetType>
 impl<GuardType, ValueType> AsRef<ValueType>
     for GuardedValue<GuardType, ValueType>
 {
-    fn as_ref(&self) -> &ValueType { &self.value }
+    fn as_ref(&self) -> &ValueType {
+        &self.value
+    }
 }
 
 impl<GuardType, ValueType> AsMut<ValueType>
     for GuardedValue<GuardType, ValueType>
 {
-    fn as_mut(&mut self) -> &mut ValueType { &mut self.value }
+    fn as_mut(&mut self) -> &mut ValueType {
+        &mut self.value
+    }
 }
 
 /// It's safer to directly deref to the next level target, because when the
@@ -72,13 +78,17 @@ impl<GuardType, ValueType> AsMut<ValueType>
 impl<GuardType, ValueType: Deref> Deref for GuardedValue<GuardType, ValueType> {
     type Target = ValueType::Target;
 
-    fn deref(&self) -> &Self::Target { self.value.deref() }
+    fn deref(&self) -> &Self::Target {
+        self.value.deref()
+    }
 }
 
 impl<GuardType, ValueType: DerefMut> DerefMut
     for GuardedValue<GuardType, ValueType>
 {
-    fn deref_mut(&mut self) -> &mut Self::Target { self.value.deref_mut() }
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.value.deref_mut()
+    }
 }
 
 /// Ideally, we should also deref to the next level like above. However, there
@@ -90,9 +100,13 @@ impl<GuardType, ValueType: DerefMut> DerefMut
 impl<T: ?Sized> Deref for NonCopy<T> {
     type Target = T;
 
-    fn deref(&self) -> &Self::Target { &self.0 }
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 impl<T: ?Sized> DerefMut for NonCopy<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }

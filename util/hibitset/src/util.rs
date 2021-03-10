@@ -30,7 +30,9 @@ pub trait Row: Sized + Copy {
 
     /// Bitmask of the row the bit is in.
     #[inline(always)]
-    fn mask(self, shift: usize) -> usize { 1usize << self.row(shift) }
+    fn mask(self, shift: usize) -> usize {
+        1usize << self.row(shift)
+    }
 }
 
 impl Row for Index {
@@ -40,7 +42,9 @@ impl Row for Index {
     }
 
     #[inline(always)]
-    fn offset(self, shift: usize) -> usize { self as usize / (1 << shift) }
+    fn offset(self, shift: usize) -> usize {
+        self as usize / (1 << shift)
+    }
 }
 
 /// Helper method for getting parent offsets of 3 layers at once.

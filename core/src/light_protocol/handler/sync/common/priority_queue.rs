@@ -63,7 +63,9 @@ where
 
     #[inline]
     #[allow(dead_code)]
-    pub fn contains(&self, key: &K) -> bool { self.keys.contains(key) }
+    pub fn contains(&self, key: &K) -> bool {
+        self.keys.contains(key)
+    }
 }
 
 impl<K, V> Extend<V> for PriorityQueue<K, V>
@@ -90,15 +92,21 @@ mod tests {
     }
 
     impl Item {
-        pub fn new(key: u64, value: u64) -> Item { Item { key, value } }
+        pub fn new(key: u64, value: u64) -> Item {
+            Item { key, value }
+        }
     }
 
     impl HasKey<u64> for Item {
-        fn key(&self) -> u64 { self.key }
+        fn key(&self) -> u64 {
+            self.key
+        }
     }
 
     impl Ord for Item {
-        fn cmp(&self, other: &Self) -> Ordering { self.value.cmp(&other.value) }
+        fn cmp(&self, other: &Self) -> Ordering {
+            self.value.cmp(&other.value)
+        }
     }
 
     impl PartialOrd for Item {

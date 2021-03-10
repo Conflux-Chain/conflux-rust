@@ -48,7 +48,9 @@ mod tests {
     use super::SubnetType;
     use std::{net::IpAddr, str::FromStr};
 
-    fn new_ip(ip: &'static str) -> IpAddr { IpAddr::from_str(ip).unwrap() }
+    fn new_ip(ip: &'static str) -> IpAddr {
+        IpAddr::from_str(ip).unwrap()
+    }
 
     #[test]
     fn test_subnet() {

@@ -84,7 +84,9 @@ struct CodeReader {
 
 impl CodeReader {
     /// Create new code reader - starting at position 0.
-    fn new(code: Arc<Bytes>) -> Self { CodeReader { code, position: 0 } }
+    fn new(code: Arc<Bytes>) -> Self {
+        CodeReader { code, position: 0 }
+    }
 
     /// Get `no_of_bytes` from code and convert to U256. Move PC
     fn read(&mut self, no_of_bytes: usize) -> U256 {
@@ -94,7 +96,9 @@ impl CodeReader {
         U256::from(&self.code[pos..max])
     }
 
-    fn len(&self) -> usize { self.code.len() }
+    fn len(&self) -> usize {
+        self.code.len()
+    }
 }
 
 enum InstructionResult<Gas> {
@@ -210,8 +214,7 @@ impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
     fn exec(
         mut self: Box<Self>, context: &mut dyn vm::Context,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::ExecTrapResult<GasLeft>
-    {
+    ) -> vm::ExecTrapResult<GasLeft> {
         loop {
             let result = self.step(context, tracer);
             match result {
@@ -312,8 +315,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     pub fn new(
         mut params: ActionParams, cache: Arc<SharedCache>, spec: &Spec,
         depth: usize,
-    ) -> Interpreter<Cost>
-    {
+    ) -> Interpreter<Cost> {
         let reader = CodeReader::new(
             params.code.take().expect("VM always called with code; qed"),
         );
@@ -353,8 +355,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     pub fn step(
         &mut self, context: &mut dyn vm::Context,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> InterpreterResult
-    {
+    ) -> InterpreterResult {
         if self.done {
             return InterpreterResult::Stopped;
         }
@@ -385,8 +386,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     fn step_inner(
         &mut self, context: &mut dyn vm::Context,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> InterpreterResult
-    {
+    ) -> InterpreterResult {
         let result = match self.resume_result.take() {
             Some(result) => result,
             None => {
@@ -614,8 +614,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     fn verify_instruction(
         &self, context: &dyn vm::Context, instruction: Instruction,
         info: &InstructionInfo,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         let spec = context.spec();
 
         if (instruction == instructions::DELEGATECALL
@@ -706,8 +705,7 @@ impl<Cost: CostType> Interpreter<Cost> {
         &mut self, gas: Cost, context: &mut dyn vm::Context,
         instruction: Instruction, provided: Option<Cost>,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<InstructionResult<Cost>>
-    {
+    ) -> vm::Result<InstructionResult<Cost>> {
         trace!("exec instruction: {:?}", instruction);
         match instruction {
             instructions::JUMP => {
@@ -1002,7 +1000,11 @@ impl<Cost: CostType> Interpreter<Cost> {
             instructions::SUICIDE => {
                 let address = self.stack.pop_back();
                 let refund_address = u256_to_address(&address);
-                context.suicide(&refund_address, tracer)?;
+                context.suicide(
+                    &refund_address,
+                    tracer,
+                    context.spec().account_start_nonce(context.env().number),
+                )?;
                 return Ok(InstructionResult::StopExecution);
             }
             instructions::LOG0
@@ -1302,54 +1304,55 @@ impl<Cost: CostType> Interpreter<Cost> {
             instructions::DIV => {
                 let a = self.stack.pop_back();
                 let b = self.stack.pop_back();
-                self.stack.push(
-                    if !b.is_zero() {
-                        // match b {
-                        //     ONE => a,
-                        //     TWO => a >> 1,
-                        //     TWO_POW_5 => a >> 5,
-                        //     TWO_POW_8 => a >> 8,
-                        //     TWO_POW_16 => a >> 16,
-                        //     TWO_POW_24 => a >> 24,
-                        //     TWO_POW_64 => a >> 64,
-                        //     TWO_POW_96 => a >> 96,
-                        //     TWO_POW_224 => a >> 224,
-                        //     TWO_POW_248 => a >> 248,
-                        //     _ => a / b,
-                        // }
-                        if b == ONE {
-                            a
-                        } else if b == TWO {
-                            a >> 1
-                        } else if b == TWO_POW_5 {
-                            a >> 5
-                        } else if b == TWO_POW_8 {
-                            a >> 8
-                        } else if b == TWO_POW_16 {
-                            a >> 16
-                        } else if b == TWO_POW_24 {
-                            a >> 24
-                        } else if b == TWO_POW_64 {
-                            a >> 64
-                        } else if b == TWO_POW_96 {
-                            a >> 96
-                        } else if b == TWO_POW_224 {
-                            a >> 224
-                        } else if b == TWO_POW_248 {
-                            a >> 248
-                        } else {
-                            a / b
-                        }
+                self.stack.push(if !b.is_zero() {
+                    // match b {
+                    //     ONE => a,
+                    //     TWO => a >> 1,
+                    //     TWO_POW_5 => a >> 5,
+                    //     TWO_POW_8 => a >> 8,
+                    //     TWO_POW_16 => a >> 16,
+                    //     TWO_POW_24 => a >> 24,
+                    //     TWO_POW_64 => a >> 64,
+                    //     TWO_POW_96 => a >> 96,
+                    //     TWO_POW_224 => a >> 224,
+                    //     TWO_POW_248 => a >> 248,
+                    //     _ => a / b,
+                    // }
+                    if b == ONE {
+                        a
+                    } else if b == TWO {
+                        a >> 1
+                    } else if b == TWO_POW_5 {
+                        a >> 5
+                    } else if b == TWO_POW_8 {
+                        a >> 8
+                    } else if b == TWO_POW_16 {
+                        a >> 16
+                    } else if b == TWO_POW_24 {
+                        a >> 24
+                    } else if b == TWO_POW_64 {
+                        a >> 64
+                    } else if b == TWO_POW_96 {
+                        a >> 96
+                    } else if b == TWO_POW_224 {
+                        a >> 224
+                    } else if b == TWO_POW_248 {
+                        a >> 248
                     } else {
-                        U256::zero()
-                    },
-                );
+                        a / b
+                    }
+                } else {
+                    U256::zero()
+                });
             }
             instructions::MOD => {
                 let a = self.stack.pop_back();
                 let b = self.stack.pop_back();
-                self.stack
-                    .push(if !b.is_zero() { a % b } else { U256::zero() });
+                self.stack.push(if !b.is_zero() {
+                    a % b
+                } else {
+                    U256::zero()
+                });
             }
             instructions::SDIV => {
                 let (a, sign_a) = get_and_reset_sign(self.stack.pop_back());
@@ -1357,16 +1360,14 @@ impl<Cost: CostType> Interpreter<Cost> {
 
                 // -2^255
                 let min = (U256::one() << 255) - U256::one();
-                self.stack.push(
-                    if b.is_zero() {
-                        U256::zero()
-                    } else if a == min && b == !U256::zero() {
-                        min
-                    } else {
-                        let c = a / b;
-                        set_sign(c, sign_a ^ sign_b)
-                    },
-                );
+                self.stack.push(if b.is_zero() {
+                    U256::zero()
+                } else if a == min && b == !U256::zero() {
+                    min
+                } else {
+                    let c = a / b;
+                    set_sign(c, sign_a ^ sign_b)
+                });
             }
             instructions::SMOD => {
                 let ua = self.stack.pop_back();
@@ -1374,14 +1375,12 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let (a, sign_a) = get_and_reset_sign(ua);
                 let b = get_and_reset_sign(ub).0;
 
-                self.stack.push(
-                    if !b.is_zero() {
-                        let c = a % b;
-                        set_sign(c, sign_a)
-                    } else {
-                        U256::zero()
-                    },
-                );
+                self.stack.push(if !b.is_zero() {
+                    let c = a % b;
+                    set_sign(c, sign_a)
+                } else {
+                    U256::zero()
+                });
             }
             instructions::EXP => {
                 let base = self.stack.pop_back();
@@ -1468,33 +1467,29 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let b = self.stack.pop_back();
                 let c = self.stack.pop_back();
 
-                self.stack.push(
-                    if !c.is_zero() {
-                        // upcast to 512
-                        let a5 = U512::from(a);
-                        let res = a5.overflowing_add(U512::from(b)).0;
-                        let x = res % U512::from(c);
-                        U256::try_from(x).expect("U512 % U256 fits U256; qed")
-                    } else {
-                        U256::zero()
-                    },
-                );
+                self.stack.push(if !c.is_zero() {
+                    // upcast to 512
+                    let a5 = U512::from(a);
+                    let res = a5.overflowing_add(U512::from(b)).0;
+                    let x = res % U512::from(c);
+                    U256::try_from(x).expect("U512 % U256 fits U256; qed")
+                } else {
+                    U256::zero()
+                });
             }
             instructions::MULMOD => {
                 let a = self.stack.pop_back();
                 let b = self.stack.pop_back();
                 let c = self.stack.pop_back();
 
-                self.stack.push(
-                    if !c.is_zero() {
-                        let a5 = U512::from(a);
-                        let res = a5.overflowing_mul(U512::from(b)).0;
-                        let x = res % U512::from(c);
-                        U256::try_from(x).expect("U512 % U256 fits U256; qed")
-                    } else {
-                        U256::zero()
-                    },
-                );
+                self.stack.push(if !c.is_zero() {
+                    let a5 = U512::from(a);
+                    let res = a5.overflowing_mul(U512::from(b)).0;
+                    let x = res % U512::from(c);
+                    U256::try_from(x).expect("U512 % U256 fits U256; qed")
+                } else {
+                    U256::zero()
+                });
             }
             instructions::SIGNEXTEND => {
                 let bit = self.stack.pop_back();
@@ -1504,8 +1499,11 @@ impl<Cost: CostType> Interpreter<Cost> {
 
                     let bit = number.bit(bit_position);
                     let mask = (U256::one() << bit_position) - U256::one();
-                    self.stack
-                        .push(if bit { number | !mask } else { number & mask });
+                    self.stack.push(if bit {
+                        number | !mask
+                    } else {
+                        number & mask
+                    });
                 }
             }
             instructions::SHL => {
@@ -1644,7 +1642,9 @@ fn u256_to_address(value: &U256) -> Address {
 }
 
 #[inline]
-fn address_to_u256(value: Address) -> U256 { H256::from(value).into_uint() }
+fn address_to_u256(value: Address) -> U256 {
+    H256::from(value).into_uint()
+}
 
 #[cfg(test)]
 mod tests {

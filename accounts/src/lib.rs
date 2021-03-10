@@ -175,8 +175,7 @@ impl AccountProvider {
     pub fn derive_account(
         &self, address: &Address, password: Option<Password>,
         derivation: Derivation, save: bool,
-    ) -> Result<Address, SignError>
-    {
+    ) -> Result<Address, SignError> {
         let account = self.sstore.account_ref(&address)?;
         let password = password
             .map(Ok)
@@ -491,8 +490,7 @@ impl AccountProvider {
     pub fn sign_derived(
         &self, address: &Address, password: Option<Password>,
         derivation: Derivation, message: Message,
-    ) -> Result<Signature, SignError>
-    {
+    ) -> Result<Signature, SignError> {
         let account = self.sstore.account_ref(address)?;
         let password = password
             .map(Ok)
@@ -538,8 +536,7 @@ impl AccountProvider {
     pub fn decrypt_with_token(
         &self, address: Address, token: AccountToken, shared_mac: &[u8],
         message: &[u8],
-    ) -> Result<(Vec<u8>, AccountToken), SignError>
-    {
+    ) -> Result<(Vec<u8>, AccountToken), SignError> {
         let account = self.sstore.account_ref(&address)?;
         let is_std_password = self.sstore.test_password(&account, &token)?;
 
@@ -572,8 +569,7 @@ impl AccountProvider {
     pub fn decrypt(
         &self, address: Address, password: Option<Password>, shared_mac: &[u8],
         message: &[u8],
-    ) -> Result<Vec<u8>, SignError>
-    {
+    ) -> Result<Vec<u8>, SignError> {
         let account = self.sstore.account_ref(&address)?;
         let password = password
             .map(Ok)
@@ -587,8 +583,7 @@ impl AccountProvider {
     pub fn agree(
         &self, address: Address, password: Option<Password>,
         other_public: &Public,
-    ) -> Result<Secret, SignError>
-    {
+    ) -> Result<Secret, SignError> {
         let account = self.sstore.account_ref(&address)?;
         let password = password
             .map(Ok)

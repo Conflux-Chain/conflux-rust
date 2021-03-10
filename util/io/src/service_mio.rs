@@ -59,7 +59,8 @@ lazy_static! {
 /// Messages used to communicate with the event loop from other threads.
 #[derive(Clone)]
 pub enum IoMessage<Message>
-where Message: Send + Sized
+where
+    Message: Send + Sized,
 {
     /// Shutdown the event loop
     Shutdown,
@@ -108,14 +109,16 @@ where Message: Send + Sized
 /// to the IO subsystem.
 #[derive(Clone)]
 pub struct IoContext<Message>
-where Message: Send + Sync + 'static
+where
+    Message: Send + Sync + 'static,
 {
     channel: IoChannel<Message>,
     handler: HandlerId,
 }
 
 impl<Message> IoContext<Message>
-where Message: Send + Sync + 'static
+where
+    Message: Send + Sync + 'static,
 {
     /// Create a new IO access point. Takes references to all the data that can
     /// be updated within the IO handler.
@@ -226,7 +229,9 @@ where Message: Send + Sync + 'static
     }
 
     /// Get message channel
-    pub fn channel(&self) -> IoChannel<Message> { self.channel.clone() }
+    pub fn channel(&self) -> IoChannel<Message> {
+        self.channel.clone()
+    }
 
     /// Unregister current IO handler.
     pub fn unregister_handler(&self) {
@@ -253,7 +258,8 @@ struct UserTimer {
 
 /// Root IO handler. Manages user handlers, messages and IO timers.
 pub struct IoManager<Message>
-where Message: Send + Sync
+where
+    Message: Send + Sync,
 {
     timers: Arc<RwLock<HashMap<HandlerId, UserTimer>>>,
     handlers: Arc<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>,
@@ -266,15 +272,15 @@ where Message: Send + Sync
 }
 
 impl<Message> IoManager<Message>
-where Message: Send + Sync + 'static
+where
+    Message: Send + Sync + 'static,
 {
     /// Creates a new instance and registers it with the event loop.
     pub fn start(
         event_loop: &mut EventLoop<IoManager<Message>>,
         handlers: Arc<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>,
         network_poll: Arc<Poll>,
-    ) -> Result<(), IoError>
-    {
+    ) -> Result<(), IoError> {
         let worker = crossbeam_deque::Worker::new_fifo();
         let stealer = worker.stealer();
         let num_workers = 4;
@@ -328,7 +334,8 @@ where Message: Send + Sync + 'static
 }
 
 impl<Message> Handler for IoManager<Message>
-where Message: Send + Sync + 'static
+where
+    Message: Send + Sync + 'static,
 {
     type Message = IoMessage<Message>;
     type Timeout = Token;
@@ -500,7 +507,8 @@ where Message: Send + Sync + 'static
 }
 
 enum Handlers<Message>
-where Message: Send
+where
+    Message: Send,
 {
     SharedCollection(Weak<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>),
     Single(Weak<dyn IoHandler<Message>>),
@@ -520,14 +528,16 @@ impl<Message: Send> Clone for Handlers<Message> {
 /// Allows sending messages into the event loop. All the IO handlers will get
 /// the message in the `message` callback.
 pub struct IoChannel<Message>
-where Message: Send
+where
+    Message: Send,
 {
     channel: Option<Sender<IoMessage<Message>>>,
     handlers: Handlers<Message>,
 }
 
 impl<Message> Clone for IoChannel<Message>
-where Message: Send + Sync + 'static
+where
+    Message: Send + Sync + 'static,
 {
     fn clone(&self) -> IoChannel<Message> {
         IoChannel {
@@ -538,7 +548,8 @@ where Message: Send + Sync + 'static
 }
 
 impl<Message> IoChannel<Message>
-where Message: Send + Sync + 'static
+where
+    Message: Send + Sync + 'static,
 {
     /// Send a message through the channel
     pub fn send(&self, message: Message) -> Result<(), IoError> {
@@ -608,8 +619,7 @@ where Message: Send + Sync + 'static
     fn new(
         channel: Sender<IoMessage<Message>>,
         handlers: Weak<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>,
-    ) -> IoChannel<Message>
-    {
+    ) -> IoChannel<Message> {
         IoChannel {
             channel: Some(channel),
             handlers: Handlers::SharedCollection(handlers),
@@ -620,7 +630,8 @@ where Message: Send + Sync + 'static
 /// General IO Service. Starts an event loop and dispatches IO requests.
 /// 'Message' is a notification message type
 pub struct IoService<Message>
-where Message: Send + Sync + 'static
+where
+    Message: Send + Sync + 'static,
 {
     thread: Mutex<Option<JoinHandle<()>>>,
     host_channel: Mutex<Sender<IoMessage<Message>>>,
@@ -630,7 +641,8 @@ where Message: Send + Sync + 'static
 }
 
 impl<Message> IoService<Message>
-where Message: Send + Sync + 'static
+where
+    Message: Send + Sync + 'static,
 {
     /// Starts IO event loop
     pub fn start(
@@ -695,8 +707,7 @@ where Message: Send + Sync + 'static
         &self, network_poll: Arc<Poll>, handler: Arc<dyn IoHandler<Message>>,
         main_event_loop_channel: IoChannel<Message>, max_sessions: usize,
         stop_token: usize,
-    )
-    {
+    ) {
         network_poll
             .register(
                 &self.network_poll_stopped.0,
@@ -787,7 +798,10 @@ where Message: Send + Sync + 'static
 }
 
 impl<Message> Drop for IoService<Message>
-where Message: Send + Sync
+where
+    Message: Send + Sync,
 {
-    fn drop(&mut self) { self.stop() }
+    fn drop(&mut self) {
+        self.stop()
+    }
 }

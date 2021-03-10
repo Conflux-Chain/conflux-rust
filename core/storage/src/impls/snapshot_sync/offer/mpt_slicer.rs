@@ -24,7 +24,9 @@ impl<'a> MptSlicer<'a> {
         Ok(slicer)
     }
 
-    pub fn to_proof(&self) -> TrieProof { self.cursor.to_proof() }
+    pub fn to_proof(&self) -> TrieProof {
+        self.cursor.to_proof()
+    }
 
     pub fn get_range_end_key(&self) -> Option<&[u8]> {
         // The cursor stops at the key which just exceed,the rlp_size_limit,

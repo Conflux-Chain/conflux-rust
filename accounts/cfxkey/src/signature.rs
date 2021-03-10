@@ -42,13 +42,19 @@ pub struct Signature([u8; 65]);
 
 impl Signature {
     /// Get a slice into the 'r' portion of the data.
-    pub fn r(&self) -> &[u8] { &self.0[0..32] }
+    pub fn r(&self) -> &[u8] {
+        &self.0[0..32]
+    }
 
     /// Get a slice into the 's' portion of the data.
-    pub fn s(&self) -> &[u8] { &self.0[32..64] }
+    pub fn s(&self) -> &[u8] {
+        &self.0[32..64]
+    }
 
     /// Get the recovery byte.
-    pub fn v(&self) -> u8 { self.0[64] }
+    pub fn v(&self) -> u8 {
+        self.0[64]
+    }
 
     /// Encode the signature into RSV array (V altered to be in "Electrum"
     /// notation).
@@ -113,7 +119,9 @@ impl Signature {
 // manual implementation large arrays don't have trait impls by default.
 // remove when integer generics exist
 impl PartialEq for Signature {
-    fn eq(&self, other: &Self) -> bool { &self.0[..] == &other.0[..] }
+    fn eq(&self, other: &Self) -> bool {
+        &self.0[..] == &other.0[..]
+    }
 }
 
 // manual implementation required in Rust 1.13+, see
@@ -153,41 +161,59 @@ impl FromStr for Signature {
 }
 
 impl Default for Signature {
-    fn default() -> Self { Signature([0; 65]) }
+    fn default() -> Self {
+        Signature([0; 65])
+    }
 }
 
 impl Hash for Signature {
-    fn hash<H: Hasher>(&self, state: &mut H) { H520::from(self.0).hash(state); }
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        H520::from(self.0).hash(state);
+    }
 }
 
 impl Clone for Signature {
-    fn clone(&self) -> Self { Signature(self.0) }
+    fn clone(&self) -> Self {
+        Signature(self.0)
+    }
 }
 
 impl From<[u8; 65]> for Signature {
-    fn from(s: [u8; 65]) -> Self { Signature(s) }
+    fn from(s: [u8; 65]) -> Self {
+        Signature(s)
+    }
 }
 
 impl Into<[u8; 65]> for Signature {
-    fn into(self) -> [u8; 65] { self.0 }
+    fn into(self) -> [u8; 65] {
+        self.0
+    }
 }
 
 impl From<Signature> for H520 {
-    fn from(s: Signature) -> Self { H520::from(s.0) }
+    fn from(s: Signature) -> Self {
+        H520::from(s.0)
+    }
 }
 
 impl From<H520> for Signature {
-    fn from(bytes: H520) -> Self { Signature(bytes.into()) }
+    fn from(bytes: H520) -> Self {
+        Signature(bytes.into())
+    }
 }
 
 impl Deref for Signature {
     type Target = [u8; 65];
 
-    fn deref(&self) -> &Self::Target { &self.0 }
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 impl DerefMut for Signature {
-    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 pub fn sign(secret: &Secret, message: &Message) -> Result<Signature, Error> {

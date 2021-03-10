@@ -8,7 +8,7 @@ use crate::{
     vm::{self, ActionParams, Spec},
 };
 use cfx_state::state_trait::StateOpsTrait;
-use cfx_types::{address_util::AddressUtil, Address};
+use cfx_types::{address_util::AddressUtil, Address, U256};
 
 /// The Actual Implementation of `suicide`.
 /// The contract which has non zero `collateral_for_storage` cannot suicide,
@@ -20,9 +20,8 @@ use cfx_types::{address_util::AddressUtil, Address};
 pub fn suicide(
     contract_address: &Address, refund_address: &Address,
     state: &mut dyn StateOpsTrait, spec: &Spec, substate: &mut Substate,
-    tracer: &mut dyn Tracer<Output = ExecTrace>,
-) -> vm::Result<()>
-{
+    tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
+) -> vm::Result<()> {
     substate.suicides.insert(contract_address.clone());
     let balance = state.balance(contract_address)?;
 
@@ -52,6 +51,7 @@ pub fn suicide(
             refund_address,
             &balance,
             substate.to_cleanup_mode(spec),
+            account_start_nonce,
         )?;
     }
 
@@ -65,8 +65,7 @@ pub fn set_admin(
     contract_address: Address, new_admin_address: Address,
     contract_in_creation: Option<&Address>, params: &ActionParams,
     state: &mut dyn StateOpsTrait,
-) -> vm::Result<()>
-{
+) -> vm::Result<()> {
     let requester = &params.sender;
     debug!(
         "set_admin requester {:?} contract {:?}, \
@@ -95,15 +94,22 @@ pub fn set_admin(
 pub fn destroy(
     contract_address: Address, params: &ActionParams,
     state: &mut dyn StateOpsTrait, spec: &Spec, substate: &mut Substate,
-    tracer: &mut dyn Tracer<Output = ExecTrace>,
-) -> vm::Result<()>
-{
+    tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
+) -> vm::Result<()> {
     debug!("contract_address={:?}", contract_address);
 
     let requester = &params.sender;
     let admin = state.admin(&contract_address)?;
     if admin == *requester {
-        suicide(&contract_address, &admin, state, spec, substate, tracer)
+        suicide(
+            &contract_address,
+            &admin,
+            state,
+            spec,
+            substate,
+            tracer,
+            account_start_nonce,
+        )
     } else {
         Ok(())
     }

@@ -101,8 +101,7 @@ impl RpcImpl {
         config: RpcImplConfiguration, light: Arc<LightQueryService>,
         accounts: Arc<AccountProvider>, consensus: SharedConsensusGraph,
         data_man: Arc<BlockDataManager>,
-    ) -> Self
-    {
+    ) -> Self {
         RpcImpl {
             accounts,
             config,
@@ -556,8 +555,7 @@ impl RpcImpl {
     fn storage_at(
         &self, address: RpcAddress, position: H256,
         epoch_num: Option<EpochNumber>,
-    ) -> RpcBoxFuture<Option<H256>>
-    {
+    ) -> RpcBoxFuture<Option<H256>> {
         let position: H256 = position.into();
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
 
@@ -957,8 +955,7 @@ impl RpcImpl {
         &self, account_addr: RpcAddress, contract_addr: RpcAddress,
         gas_limit: U256, gas_price: U256, storage_limit: U256,
         epoch: Option<EpochNumber>,
-    ) -> RpcBoxFuture<CheckBalanceAgainstTransactionResponse>
-    {
+    ) -> RpcBoxFuture<CheckBalanceAgainstTransactionResponse> {
         let epoch: primitives::EpochNumber =
             epoch.unwrap_or(EpochNumber::LatestState).into();
 

@@ -38,7 +38,9 @@ pub struct AtomicBitSet {
 
 impl AtomicBitSet {
     /// Creates an empty `AtomicBitSet`.
-    pub fn new() -> AtomicBitSet { Default::default() }
+    pub fn new() -> AtomicBitSet {
+        Default::default()
+    }
 
     /// Adds `id` to the `AtomicBitSet`. Returns `true` if the value was
     /// already in the set.
@@ -155,7 +157,9 @@ impl AtomicBitSet {
 
 impl BitSetLike for AtomicBitSet {
     #[inline]
-    fn layer3(&self) -> usize { self.layer3.load(Ordering::Relaxed) }
+    fn layer3(&self) -> usize {
+        self.layer3.load(Ordering::Relaxed)
+    }
 
     #[inline]
     fn layer2(&self, i: usize) -> usize {
@@ -178,12 +182,16 @@ impl BitSetLike for AtomicBitSet {
     }
 
     #[inline]
-    fn contains(&self, i: Index) -> bool { self.contains(i) }
+    fn contains(&self, i: Index) -> bool {
+        self.contains(i)
+    }
 }
 
 impl DrainableBitSet for AtomicBitSet {
     #[inline]
-    fn remove(&mut self, i: Index) -> bool { self.remove(i) }
+    fn remove(&mut self, i: Index) -> bool {
+        self.remove(i)
+    }
 }
 
 impl Default for AtomicBitSet {

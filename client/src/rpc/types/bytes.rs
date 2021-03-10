@@ -34,24 +34,34 @@ pub struct Bytes(pub Vec<u8>);
 
 impl Bytes {
     /// Simple constructor.
-    pub fn new(bytes: Vec<u8>) -> Bytes { Bytes(bytes) }
+    pub fn new(bytes: Vec<u8>) -> Bytes {
+        Bytes(bytes)
+    }
 
     /// Convert back to vector
     #[allow(dead_code)]
-    pub fn into_vec(self) -> Vec<u8> { self.0 }
+    pub fn into_vec(self) -> Vec<u8> {
+        self.0
+    }
 }
 
 impl From<Vec<u8>> for Bytes {
-    fn from(bytes: Vec<u8>) -> Bytes { Bytes(bytes) }
+    fn from(bytes: Vec<u8>) -> Bytes {
+        Bytes(bytes)
+    }
 }
 
 impl Into<Vec<u8>> for Bytes {
-    fn into(self) -> Vec<u8> { self.0 }
+    fn into(self) -> Vec<u8> {
+        self.0
+    }
 }
 
 impl Serialize for Bytes {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    where
+        S: Serializer,
+    {
         let mut serialized = "0x".to_owned();
         serialized.push_str(self.0.to_hex::<String>().as_ref());
         serializer.serialize_str(serialized.as_ref())
@@ -60,7 +70,9 @@ impl Serialize for Bytes {
 
 impl<'a> Deserialize<'a> for Bytes {
     fn deserialize<D>(deserializer: D) -> Result<Bytes, D::Error>
-    where D: Deserializer<'a> {
+    where
+        D: Deserializer<'a>,
+    {
         deserializer.deserialize_any(BytesVisitor)
     }
 }
@@ -75,7 +87,9 @@ impl<'a> Visitor<'a> for BytesVisitor {
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-    where E: Error {
+    where
+        E: Error,
+    {
         if value.len() >= 2 && &value[0..2] == "0x" && value.len() & 1 == 0 {
             Ok(Bytes::new(FromHex::from_hex(&value[2..]).map_err(|e| {
                 Error::custom(format!("Invalid hex: {}", e))
@@ -86,7 +100,9 @@ impl<'a> Visitor<'a> for BytesVisitor {
     }
 
     fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
-    where E: Error {
+    where
+        E: Error,
+    {
         self.visit_str(value.as_ref())
     }
 }

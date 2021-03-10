@@ -41,7 +41,9 @@ impl Machine {
     }
 
     /// Get the general parameters of the chain.
-    pub fn params(&self) -> &CommonParams { &self.params }
+    pub fn params(&self) -> &CommonParams {
+        &self.params
+    }
 
     pub fn spec(&self, number: BlockNumber) -> Spec {
         let mut spec = Spec::new_spec();
@@ -52,10 +54,14 @@ impl Machine {
     }
 
     /// Builtin-contracts for the chain..
-    pub fn builtins(&self) -> &BTreeMap<Address, Builtin> { &*self.builtins }
+    pub fn builtins(&self) -> &BTreeMap<Address, Builtin> {
+        &*self.builtins
+    }
 
     /// Get a VM factory that can execute on this state.
-    pub fn vm_factory(&self) -> VmFactory { self.vm.clone() }
+    pub fn vm_factory(&self) -> VmFactory {
+        self.vm.clone()
+    }
 }
 
 pub fn new_machine(params: CommonParams, vm: VmFactory) -> Machine {

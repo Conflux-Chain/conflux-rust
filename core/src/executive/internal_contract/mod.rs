@@ -40,8 +40,7 @@ pub trait InternalContractTrait {
         &self, params: &ActionParams, env: &Env, spec: &Spec,
         state: &mut dyn StateOpsTrait, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<GasLeft>
-    {
+    ) -> vm::Result<GasLeft> {
         let call_data = params
             .data
             .as_ref()
@@ -72,11 +71,17 @@ pub trait InternalContractTrait {
         )
     }
 
-    fn code(&self) -> Arc<Bytes> { INTERNAL_CONTRACT_CODE.clone() }
+    fn code(&self) -> Arc<Bytes> {
+        INTERNAL_CONTRACT_CODE.clone()
+    }
 
-    fn code_hash(&self) -> H256 { *INTERNAL_CONTRACT_CODE_HASH }
+    fn code_hash(&self) -> H256 {
+        *INTERNAL_CONTRACT_CODE_HASH
+    }
 
-    fn code_size(&self) -> usize { INTERNAL_CONTRACT_CODE.len() }
+    fn code_size(&self) -> usize {
+        INTERNAL_CONTRACT_CODE.len()
+    }
 }
 
 /// Native implementation of a solidity-interface function.

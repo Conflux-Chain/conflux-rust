@@ -64,7 +64,9 @@ impl GarbageCollector {
         }
     }
 
-    pub fn top(&self) -> Option<&GarbageCollectorNode> { self.data.get(0) }
+    pub fn top(&self) -> Option<&GarbageCollectorNode> {
+        self.data.get(0)
+    }
 
     pub fn pop(&mut self) -> Option<GarbageCollectorNode> {
         if self.is_empty() {
@@ -92,14 +94,20 @@ impl GarbageCollector {
     }
 
     #[inline]
-    pub fn is_empty(&self) -> bool { self.data.is_empty() }
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
 
     #[inline]
     #[allow(dead_code)]
-    pub fn len(&self) -> usize { self.data.len() }
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
 
     #[inline]
-    pub fn gc_size(&self) -> usize { self.gc_size }
+    pub fn gc_size(&self) -> usize {
+        self.gc_size
+    }
 
     fn update(&mut self, sender: &Address, count: usize, timestamp: u64) {
         let index = *self.mapping.get(sender).unwrap();

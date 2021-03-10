@@ -28,7 +28,9 @@ use std::{fmt, str};
 pub struct Uuid([u8; 16]);
 
 impl From<[u8; 16]> for Uuid {
-    fn from(uuid: [u8; 16]) -> Self { Uuid(uuid) }
+    fn from(uuid: [u8; 16]) -> Self {
+        Uuid(uuid)
+    }
 }
 
 impl<'a> Into<String> for &'a Uuid {
@@ -47,11 +49,15 @@ impl<'a> Into<String> for &'a Uuid {
 }
 
 impl Into<String> for Uuid {
-    fn into(self) -> String { Into::into(&self) }
+    fn into(self) -> String {
+        Into::into(&self)
+    }
 }
 
 impl Into<[u8; 16]> for Uuid {
-    fn into(self) -> [u8; 16] { self.0 }
+    fn into(self) -> [u8; 16] {
+        self.0
+    }
 }
 
 impl fmt::Display for Uuid {
@@ -104,7 +110,9 @@ impl From<&'static str> for Uuid {
 
 impl Serialize for Uuid {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    where
+        S: Serializer,
+    {
         let s: String = self.into();
         serializer.serialize_str(&s)
     }
@@ -112,7 +120,9 @@ impl Serialize for Uuid {
 
 impl<'a> Deserialize<'a> for Uuid {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: Deserializer<'a> {
+    where
+        D: Deserializer<'a>,
+    {
         deserializer.deserialize_any(UuidVisitor)
     }
 }
@@ -127,12 +137,16 @@ impl<'a> Visitor<'a> for UuidVisitor {
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-    where E: SerdeError {
+    where
+        E: SerdeError,
+    {
         value.parse().map_err(SerdeError::custom)
     }
 
     fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
-    where E: SerdeError {
+    where
+        E: SerdeError,
+    {
         self.visit_str(value.as_ref())
     }
 }

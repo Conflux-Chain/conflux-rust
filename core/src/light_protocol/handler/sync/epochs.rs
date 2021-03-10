@@ -96,8 +96,7 @@ impl Epochs {
         consensus: SharedConsensusGraph, headers: Arc<Headers>,
         peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
         config: LightNodeConfiguration,
-    ) -> Self
-    {
+    ) -> Self {
         let in_flight = RwLock::new(HashMap::new());
         let latest = AtomicU64::new(0);
         let received_count = AtomicU64::new(0);

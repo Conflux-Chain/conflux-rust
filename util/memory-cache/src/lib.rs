@@ -82,10 +82,14 @@ impl<K: Eq + Hash, V: MallocSizeOf> MemoryLruCache<K, V> {
     }
 
     /// Currently-used size of values in bytes.
-    pub fn current_size(&self) -> usize { self.cur_size }
+    pub fn current_size(&self) -> usize {
+        self.cur_size
+    }
 
     /// Get backing LRU cache instance (read only)
-    pub fn backstore(&self) -> &LruCache<K, V> { &self.inner }
+    pub fn backstore(&self) -> &LruCache<K, V> {
+        &self.inner
+    }
 }
 
 #[cfg(test)]

@@ -60,7 +60,9 @@ pub struct FileReporter {
 }
 
 impl FileReporter {
-    pub fn new(file_path: String) -> Self { FileReporter { file_path } }
+    pub fn new(file_path: String) -> Self {
+        FileReporter { file_path }
+    }
 }
 
 impl Reporter for FileReporter {
@@ -117,7 +119,9 @@ pub trait Reportable {
 }
 
 impl Reportable for CounterUsize {
-    fn get_value(&self) -> String { format!("{}", self.count()) }
+    fn get_value(&self) -> String {
+        format!("{}", self.count())
+    }
 
     fn get_value_with_group(&self, name: &String) -> String {
         format!("{}: {}", name, self.count())
@@ -125,7 +129,9 @@ impl Reportable for CounterUsize {
 }
 
 impl Reportable for GaugeUsize {
-    fn get_value(&self) -> String { format!("{}", self.value()) }
+    fn get_value(&self) -> String {
+        format!("{}", self.value())
+    }
 
     fn get_value_with_group(&self, name: &String) -> String {
         format!("{}: {}", name, self.value())

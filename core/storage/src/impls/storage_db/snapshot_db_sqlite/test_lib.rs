@@ -34,8 +34,7 @@ pub fn check_key_value_load<Value: MptValueKind>(
     snapshot_db: &SnapshotDbSqlite,
     mut kv_iter: impl FallibleIterator<Item = (Vec<u8>, Value), Error = Error>,
     check_value: bool,
-) -> Result<u64>
-{
+) -> Result<u64> {
     let mut checker_count = 0;
     let mut mpt = snapshot_db.open_snapshot_mpt_shared()?;
 

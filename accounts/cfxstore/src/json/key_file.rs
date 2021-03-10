@@ -33,13 +33,16 @@ pub struct OpaqueKeyFile {
 
 impl Serialize for OpaqueKeyFile {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    where
+        S: Serializer,
+    {
         self.key_file.serialize(serializer)
     }
 }
 
 impl<T> From<T> for OpaqueKeyFile
-where T: Into<KeyFile>
+where
+    T: Into<KeyFile>,
 {
     fn from(val: T) -> Self {
         OpaqueKeyFile {
@@ -69,7 +72,9 @@ enum KeyFileField {
 
 impl<'a> Deserialize<'a> for KeyFileField {
     fn deserialize<D>(deserializer: D) -> Result<KeyFileField, D::Error>
-    where D: Deserializer<'a> {
+    where
+        D: Deserializer<'a>,
+    {
         deserializer.deserialize_any(KeyFileFieldVisitor)
     }
 }
@@ -84,7 +89,9 @@ impl<'a> Visitor<'a> for KeyFileFieldVisitor {
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-    where E: Error {
+    where
+        E: Error,
+    {
         match value {
             "id" => Ok(KeyFileField::Id),
             "version" => Ok(KeyFileField::Version),
@@ -100,7 +107,9 @@ impl<'a> Visitor<'a> for KeyFileFieldVisitor {
 
 impl<'a> Deserialize<'a> for KeyFile {
     fn deserialize<D>(deserializer: D) -> Result<KeyFile, D::Error>
-    where D: Deserializer<'a> {
+    where
+        D: Deserializer<'a>,
+    {
         static FIELDS: &[&str] =
             &["id", "version", "crypto", "Crypto", "address"];
         deserializer.deserialize_struct("KeyFile", FIELDS, KeyFileVisitor)
@@ -108,7 +117,9 @@ impl<'a> Deserialize<'a> for KeyFile {
 }
 
 fn none_if_empty<'a, T>(v: Option<serde_json::Value>) -> Option<T>
-where T: DeserializeOwned {
+where
+    T: DeserializeOwned,
+{
     v.and_then(|v| {
         if v.is_null() {
             None
@@ -127,7 +138,9 @@ impl<'a> Visitor<'a> for KeyFileVisitor {
     }
 
     fn visit_map<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
-    where V: MapAccess<'a> {
+    where
+        V: MapAccess<'a>,
+    {
         let mut id = None;
         let mut version = None;
         let mut crypto = None;
@@ -191,12 +204,16 @@ impl<'a> Visitor<'a> for KeyFileVisitor {
 
 impl KeyFile {
     pub fn load<R>(reader: R) -> Result<Self, serde_json::Error>
-    where R: Read {
+    where
+        R: Read,
+    {
         serde_json::from_reader(reader)
     }
 
     pub fn write<W>(&self, writer: &mut W) -> Result<(), serde_json::Error>
-    where W: Write {
+    where
+        W: Write,
+    {
         serde_json::to_writer(writer, self)
     }
 }

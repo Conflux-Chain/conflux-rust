@@ -70,8 +70,7 @@ impl Transaction {
     pub fn from_signed(
         t: &SignedTransaction,
         maybe_packed_or_executed: Option<PackedOrExecuted>, network: Network,
-    ) -> Result<Transaction, String>
-    {
+    ) -> Result<Transaction, String> {
         let mut contract_created = None;
         let mut status: Option<U64> = None;
         let mut block_hash = None;

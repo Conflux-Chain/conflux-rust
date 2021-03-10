@@ -75,9 +75,13 @@ impl Handleable for SnapshotChunkRequest {
 }
 
 impl AsAny for SnapshotChunkRequest {
-    fn as_any(&self) -> &dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 impl Request for SnapshotChunkRequest {
@@ -89,9 +93,15 @@ impl Request for SnapshotChunkRequest {
 
     fn with_inflight(&mut self, _inflight_keys: &KeyContainer) {}
 
-    fn is_empty(&self) -> bool { false }
+    fn is_empty(&self) -> bool {
+        false
+    }
 
-    fn resend(&self) -> Option<Box<dyn Request>> { None }
+    fn resend(&self) -> Option<Box<dyn Request>> {
+        None
+    }
 
-    fn required_capability(&self) -> Option<DynamicCapability> { None }
+    fn required_capability(&self) -> Option<DynamicCapability> {
+        None
+    }
 }

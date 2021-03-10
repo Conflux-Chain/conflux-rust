@@ -36,8 +36,7 @@ impl MptSliceVerifier {
         maybe_left_proof: Option<&TrieProof>, left_key_bound: &[u8],
         maybe_right_proof: Option<&TrieProof>,
         maybe_right_key_bound_excl: Option<&[u8]>, merkle_root: MerkleHash,
-    ) -> Self
-    {
+    ) -> Self {
         let mut boundary_nodes = HashMap::default();
 
         if let Some(left_proof) = maybe_left_proof {
@@ -131,8 +130,7 @@ impl MptSliceVerifier {
             CompressedPathRaw,
             VanillaTrieNode<MerkleHash>,
         >,
-    ) -> HashMap<CompressedPathRaw, SnapshotMptNode>
-    {
+    ) -> HashMap<CompressedPathRaw, SnapshotMptNode> {
         let mut index_open_left_bounds =
             HashMap::<CompressedPathRaw, u8, RandomState>::default();
         let mut index_open_right_bounds_excl =
@@ -235,8 +233,7 @@ impl MptSliceVerifier {
             VanillaTrieNode<MerkleHash>,
         >,
         proof: &TrieProof, key: &[u8],
-    )
-    {
+    ) {
         let keys_and_nodes = proof.compute_snapshot_mpt_path_for_proof(key);
         for (snapshot_mpt_key, _child_index, trie_node) in keys_and_nodes {
             boundary_nodes.insert(snapshot_mpt_key, trie_node.clone());
@@ -245,7 +242,9 @@ impl MptSliceVerifier {
 }
 
 impl SnapshotMptTraitRead for SliceMptRebuilder {
-    fn get_merkle_root(&self) -> MerkleHash { self.merkle_root.clone() }
+    fn get_merkle_root(&self) -> MerkleHash {
+        self.merkle_root.clone()
+    }
 
     fn load_node(
         &mut self, path: &dyn CompressedPathTrait,
@@ -322,13 +321,19 @@ impl SnapshotMptTraitRw for SliceMptRebuilder {
 }
 
 impl GetReadMpt for SliceMptRebuilder {
-    fn get_merkle_root(&self) -> MerkleHash { self.merkle_root.clone() }
+    fn get_merkle_root(&self) -> MerkleHash {
+        self.merkle_root.clone()
+    }
 
-    fn get_read_mpt(&mut self) -> &mut dyn SnapshotMptTraitRead { self }
+    fn get_read_mpt(&mut self) -> &mut dyn SnapshotMptTraitRead {
+        self
+    }
 }
 
 impl GetRwMpt for SliceMptRebuilder {
-    fn get_write_mpt(&mut self) -> &mut dyn SnapshotMptTraitRw { self }
+    fn get_write_mpt(&mut self) -> &mut dyn SnapshotMptTraitRw {
+        self
+    }
 
     fn get_write_and_read_mpt(
         &mut self,
@@ -339,9 +344,13 @@ impl GetRwMpt for SliceMptRebuilder {
         (self, None)
     }
 
-    fn is_save_as_write(&self) -> bool { false }
+    fn is_save_as_write(&self) -> bool {
+        false
+    }
 
-    fn is_in_place_update(&self) -> bool { true }
+    fn is_in_place_update(&self) -> bool {
+        true
+    }
 }
 
 use crate::{

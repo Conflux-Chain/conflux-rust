@@ -85,9 +85,13 @@ impl<S: fmt::Display> Stack<S> for VecStack<S> {
         &self.logs[0..no_of_elems]
     }
 
-    fn push(&mut self, elem: S) { self.stack.push(elem); }
+    fn push(&mut self, elem: S) {
+        self.stack.push(elem);
+    }
 
-    fn size(&self) -> usize { self.stack.len() }
+    fn size(&self) -> usize {
+        self.stack.len()
+    }
 
     fn peek_top(&self, no_from_top: usize) -> &[S] {
         assert!(

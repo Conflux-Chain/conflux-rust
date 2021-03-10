@@ -209,23 +209,33 @@ error_chain! {
 }
 
 impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Self { Error::from_kind(ErrorKind::Io(err)) }
+    fn from(err: io::Error) -> Self {
+        Error::from_kind(ErrorKind::Io(err))
+    }
 }
 
 impl From<rlp::DecoderError> for Error {
-    fn from(_err: rlp::DecoderError) -> Self { ErrorKind::Decoder.into() }
+    fn from(_err: rlp::DecoderError) -> Self {
+        ErrorKind::Decoder.into()
+    }
 }
 
 impl From<keylib::Error> for Error {
-    fn from(_err: keylib::Error) -> Self { ErrorKind::Auth.into() }
+    fn from(_err: keylib::Error) -> Self {
+        ErrorKind::Auth.into()
+    }
 }
 
 impl From<keylib::crypto::Error> for Error {
-    fn from(_err: keylib::crypto::Error) -> Self { ErrorKind::Auth.into() }
+    fn from(_err: keylib::crypto::Error) -> Self {
+        ErrorKind::Auth.into()
+    }
 }
 
 impl From<net::AddrParseError> for Error {
-    fn from(_err: net::AddrParseError) -> Self { ErrorKind::BadAddr.into() }
+    fn from(_err: net::AddrParseError) -> Self {
+        ErrorKind::BadAddr.into()
+    }
 }
 
 #[cfg(test)]

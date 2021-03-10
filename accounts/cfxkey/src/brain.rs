@@ -22,7 +22,9 @@ use parity_wordlist;
 pub struct Brain(String);
 
 impl Brain {
-    pub fn new(s: String) -> Self { Brain(s) }
+    pub fn new(s: String) -> Self {
+        Brain(s)
+    }
 
     pub fn validate_phrase(
         phrase: &str, expected_words: usize,

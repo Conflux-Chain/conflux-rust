@@ -82,7 +82,9 @@ pub fn generation_point() -> Public {
 }
 
 /// Return secp256k1 elliptic curve order
-pub fn curve_order() -> U256 { H256::from_slice(&CURVE_ORDER).into_uint() }
+pub fn curve_order() -> U256 {
+    H256::from_slice(&CURVE_ORDER).into_uint()
+}
 
 fn to_secp256k1_public(public: &Public) -> Result<key::PublicKey, Error> {
     let public_data = {

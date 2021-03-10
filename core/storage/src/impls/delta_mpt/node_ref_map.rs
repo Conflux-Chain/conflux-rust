@@ -114,8 +114,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> NodeRefMapDeltaMpts<CacheAlgoDataT> {
     pub fn set_cache_info(
         &mut self, key: (DeltaMptId, DeltaMptDbKey),
         cache_info: CacheableNodeRefDeltaMpt<CacheAlgoDataT>,
-    )
-    {
+    ) {
         if self.node_ref_maps[key.0 as usize]
             .insert(key.1, cache_info)
             .is_none()

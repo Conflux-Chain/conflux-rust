@@ -53,8 +53,7 @@ impl PubSubClient {
     pub fn new(
         executor: Executor, consensus: SharedConsensusGraph,
         notifications: Arc<Notifications>, network: Network,
-    ) -> Self
-    {
+    ) -> Self {
         let heads_subscribers = Arc::new(RwLock::new(Subscribers::default()));
         let epochs_subscribers = Arc::new(RwLock::new(Subscribers::default()));
         let logs_subscribers = Arc::new(RwLock::new(Subscribers::default()));
@@ -434,8 +433,7 @@ impl PubSub for PubSubClient {
     fn subscribe(
         &self, _meta: Metadata, subscriber: Subscriber<pubsub::Result>,
         kind: pubsub::Kind, params: Option<pubsub::Params>,
-    )
-    {
+    ) {
         let error = match (kind, params) {
             // --------- newHeads ---------
             (pubsub::Kind::NewHeads, None) => {

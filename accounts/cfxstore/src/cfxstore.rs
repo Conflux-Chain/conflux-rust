@@ -89,8 +89,7 @@ impl SimpleSecretStore for CfxStore {
     fn insert_derived(
         &self, vault: SecretVaultRef, account_ref: &StoreAccountRef,
         password: &Password, derivation: Derivation,
-    ) -> Result<StoreAccountRef, Error>
-    {
+    ) -> Result<StoreAccountRef, Error> {
         self.store
             .insert_derived(vault, account_ref, password, derivation)
     }
@@ -98,8 +97,7 @@ impl SimpleSecretStore for CfxStore {
     fn generate_derived(
         &self, account_ref: &StoreAccountRef, password: &Password,
         derivation: Derivation,
-    ) -> Result<Address, Error>
-    {
+    ) -> Result<Address, Error> {
         self.store
             .generate_derived(account_ref, password, derivation)
     }
@@ -115,8 +113,7 @@ impl SimpleSecretStore for CfxStore {
     fn change_password(
         &self, account: &StoreAccountRef, old_password: &Password,
         new_password: &Password,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         self.store
             .change_password(account, old_password, new_password)
     }
@@ -136,16 +133,14 @@ impl SimpleSecretStore for CfxStore {
     fn sign(
         &self, account: &StoreAccountRef, password: &Password,
         message: &Message,
-    ) -> Result<Signature, Error>
-    {
+    ) -> Result<Signature, Error> {
         self.get(account)?.sign(password, message)
     }
 
     fn sign_derived(
         &self, account_ref: &StoreAccountRef, password: &Password,
         derivation: Derivation, message: &Message,
-    ) -> Result<Signature, Error>
-    {
+    ) -> Result<Signature, Error> {
         self.store
             .sign_derived(account_ref, password, derivation, message)
     }
@@ -159,8 +154,7 @@ impl SimpleSecretStore for CfxStore {
     fn decrypt(
         &self, account: &StoreAccountRef, password: &Password,
         shared_mac: &[u8], message: &[u8],
-    ) -> Result<Vec<u8>, Error>
-    {
+    ) -> Result<Vec<u8>, Error> {
         let account = self.get(account)?;
         account.decrypt(password, shared_mac, message)
     }
@@ -218,8 +212,7 @@ impl SecretStore for CfxStore {
     fn import_wallet(
         &self, vault: SecretVaultRef, json: &[u8], password: &Password,
         gen_id: bool,
-    ) -> Result<StoreAccountRef, Error>
-    {
+    ) -> Result<StoreAccountRef, Error> {
         let json_keyfile = json::KeyFile::load(json).map_err(|_| {
             Error::InvalidKeyFile("Invalid JSON format".to_owned())
         })?;
@@ -249,8 +242,7 @@ impl SecretStore for CfxStore {
         &self, new_store: &dyn SimpleSecretStore, new_vault: SecretVaultRef,
         account: &StoreAccountRef, password: &Password,
         new_password: &Password,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         let account = self.get(account)?;
         let secret = account.crypto.secret(password)?;
         new_store.insert_account(new_vault, secret, new_password)?;
@@ -500,8 +492,7 @@ impl CfxMultiStore {
     fn update(
         &self, account_ref: &StoreAccountRef, old: SafeAccount,
         new: SafeAccount,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         // save to file
         let account = match account_ref.vault {
             SecretVaultRef::Root => self.dir.update(new)?,
@@ -567,13 +558,11 @@ impl CfxMultiStore {
         match derivation {
             Derivation::Hierarchical(path) => {
                 for path_item in path {
-                    extended = extended.derive(
-                        if path_item.soft {
-                            cfxkey::Derivation::Soft(path_item.index)
-                        } else {
-                            cfxkey::Derivation::Hard(path_item.index)
-                        },
-                    )?;
+                    extended = extended.derive(if path_item.soft {
+                        cfxkey::Derivation::Soft(path_item.index)
+                    } else {
+                        cfxkey::Derivation::Hard(path_item.index)
+                    })?;
                 }
             }
             Derivation::SoftHash(h256) => {
@@ -608,8 +597,7 @@ impl SimpleSecretStore for CfxMultiStore {
     fn insert_derived(
         &self, vault: SecretVaultRef, account_ref: &StoreAccountRef,
         password: &Password, derivation: Derivation,
-    ) -> Result<StoreAccountRef, Error>
-    {
+    ) -> Result<StoreAccountRef, Error> {
         let accounts = self.get_matching(account_ref, password)?;
         if let Some(account) = accounts.first() {
             let extended =
@@ -627,8 +615,7 @@ impl SimpleSecretStore for CfxMultiStore {
     fn generate_derived(
         &self, account_ref: &StoreAccountRef, password: &Password,
         derivation: Derivation,
-    ) -> Result<Address, Error>
-    {
+    ) -> Result<Address, Error> {
         let accounts = self.get_matching(&account_ref, password)?;
         if let Some(account) = accounts.first() {
             let extended =
@@ -642,8 +629,7 @@ impl SimpleSecretStore for CfxMultiStore {
     fn sign_derived(
         &self, account_ref: &StoreAccountRef, password: &Password,
         derivation: Derivation, message: &Message,
-    ) -> Result<Signature, Error>
-    {
+    ) -> Result<Signature, Error> {
         let accounts = self.get_matching(&account_ref, password)?;
         if let Some(account) = accounts.first() {
             let extended =
@@ -693,8 +679,7 @@ impl SimpleSecretStore for CfxMultiStore {
     fn change_password(
         &self, account_ref: &StoreAccountRef, old_password: &Password,
         new_password: &Password,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         let accounts = self.get_matching(account_ref, old_password)?;
 
         if accounts.is_empty() {
@@ -727,8 +712,7 @@ impl SimpleSecretStore for CfxMultiStore {
     fn sign(
         &self, account: &StoreAccountRef, password: &Password,
         message: &Message,
-    ) -> Result<Signature, Error>
-    {
+    ) -> Result<Signature, Error> {
         let accounts = self.get_matching(account, password)?;
         match accounts.first() {
             Some(ref account) => account.sign(password, message),
@@ -739,8 +723,7 @@ impl SimpleSecretStore for CfxMultiStore {
     fn decrypt(
         &self, account: &StoreAccountRef, password: &Password,
         shared_mac: &[u8], message: &[u8],
-    ) -> Result<Vec<u8>, Error>
-    {
+    ) -> Result<Vec<u8>, Error> {
         let accounts = self.get_matching(account, password)?;
         match accounts.first() {
             Some(ref account) => account.decrypt(password, shared_mac, message),
@@ -921,7 +904,9 @@ mod tests {
         StoreAccountRef,
     };
 
-    fn keypair() -> KeyPair { Random.generate().unwrap() }
+    fn keypair() -> KeyPair {
+        Random.generate().unwrap()
+    }
 
     fn store() -> CfxStore {
         CfxStore::open(Box::new(MemoryDirectory::default()))

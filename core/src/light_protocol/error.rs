@@ -308,7 +308,9 @@ pub fn handle(
 pub struct ClonableError(Arc<Mutex<Error>>);
 
 impl Into<Error> for ClonableError {
-    fn into(self) -> Error { ErrorKind::ClonableErrorWrapper(self).into() }
+    fn into(self) -> Error {
+        ErrorKind::ClonableErrorWrapper(self).into()
+    }
 }
 
 impl From<Error> for ClonableError {

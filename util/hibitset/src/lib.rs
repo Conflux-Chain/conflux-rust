@@ -90,7 +90,9 @@ impl MallocSizeOf for BitSet {
 
 impl BitSet {
     /// Creates an empty `BitSet`.
-    pub fn new() -> BitSet { Default::default() }
+    pub fn new() -> BitSet {
+        Default::default()
+    }
 
     #[inline(always)]
     fn valid_range(max: Index) {
@@ -251,7 +253,9 @@ impl BitSet {
 
     /// Return the number of elements
     #[inline(always)]
-    pub fn len(&self) -> usize { self.num }
+    pub fn len(&self) -> usize {
+        self.num
+    }
 }
 
 /// A generic interface for [`BitSetLike`]-like types.
@@ -282,7 +286,9 @@ pub trait BitSetLike {
     }
 
     /// Returns true if this `BitSetLike` contains nothing, and false otherwise.
-    fn is_empty(&self) -> bool { self.layer3() == 0 }
+    fn is_empty(&self) -> bool {
+        self.layer3() == 0
+    }
 
     /// Return a `usize` where each bit represents if any word in layer2
     /// has been set.
@@ -305,7 +311,9 @@ pub trait BitSetLike {
 
     /// Create an iterator that will scan over the keyspace
     fn iter(self) -> BitIter<Self>
-    where Self: Sized {
+    where
+        Self: Sized,
+    {
         let layer3 = self.layer3();
 
         BitIter::new(self, [0, 0, 0, layer3], [0; LAYERS - 1])
@@ -314,7 +322,9 @@ pub trait BitSetLike {
     /// Create a parallel iterator that will scan over the keyspace
     #[cfg(feature = "parallel")]
     fn par_iter(self) -> BitParIter<Self>
-    where Self: Sized {
+    where
+        Self: Sized,
+    {
         BitParIter::new(self)
     }
 }
@@ -329,7 +339,9 @@ pub trait DrainableBitSet: BitSetLike {
     /// Create a draining iterator that will scan over the keyspace and clears
     /// it while doing so.
     fn drain<'a>(&'a mut self) -> DrainBitIter<'a, Self>
-    where Self: Sized {
+    where
+        Self: Sized,
+    {
         let layer3 = self.layer3();
 
         DrainBitIter::new(self, [0, 0, 0, layer3], [0; LAYERS - 1])
@@ -337,53 +349,80 @@ pub trait DrainableBitSet: BitSetLike {
 }
 
 impl<'a, T> BitSetLike for &'a T
-where T: BitSetLike + ?Sized
+where
+    T: BitSetLike + ?Sized,
 {
     #[inline(always)]
-    fn layer3(&self) -> usize { (*self).layer3() }
+    fn layer3(&self) -> usize {
+        (*self).layer3()
+    }
 
     #[inline(always)]
-    fn layer2(&self, i: usize) -> usize { (*self).layer2(i) }
+    fn layer2(&self, i: usize) -> usize {
+        (*self).layer2(i)
+    }
 
     #[inline(always)]
-    fn layer1(&self, i: usize) -> usize { (*self).layer1(i) }
+    fn layer1(&self, i: usize) -> usize {
+        (*self).layer1(i)
+    }
 
     #[inline(always)]
-    fn layer0(&self, i: usize) -> usize { (*self).layer0(i) }
+    fn layer0(&self, i: usize) -> usize {
+        (*self).layer0(i)
+    }
 
     #[inline(always)]
-    fn contains(&self, i: Index) -> bool { (*self).contains(i) }
+    fn contains(&self, i: Index) -> bool {
+        (*self).contains(i)
+    }
 }
 
 impl<'a, T> BitSetLike for &'a mut T
-where T: BitSetLike + ?Sized
+where
+    T: BitSetLike + ?Sized,
 {
     #[inline(always)]
-    fn layer3(&self) -> usize { (**self).layer3() }
+    fn layer3(&self) -> usize {
+        (**self).layer3()
+    }
 
     #[inline(always)]
-    fn layer2(&self, i: usize) -> usize { (**self).layer2(i) }
+    fn layer2(&self, i: usize) -> usize {
+        (**self).layer2(i)
+    }
 
     #[inline(always)]
-    fn layer1(&self, i: usize) -> usize { (**self).layer1(i) }
+    fn layer1(&self, i: usize) -> usize {
+        (**self).layer1(i)
+    }
 
     #[inline(always)]
-    fn layer0(&self, i: usize) -> usize { (**self).layer0(i) }
+    fn layer0(&self, i: usize) -> usize {
+        (**self).layer0(i)
+    }
 
     #[inline(always)]
-    fn contains(&self, i: Index) -> bool { (**self).contains(i) }
+    fn contains(&self, i: Index) -> bool {
+        (**self).contains(i)
+    }
 }
 
 impl<'a, T> DrainableBitSet for &'a mut T
-where T: DrainableBitSet
+where
+    T: DrainableBitSet,
 {
     #[inline(always)]
-    fn remove(&mut self, i: Index) -> bool { (**self).remove(i) }
+    fn remove(&mut self, i: Index) -> bool {
+        (**self).remove(i)
+    }
 }
 
 impl BitSetLike for BitSet {
     #[inline(always)]
-    fn layer3(&self) -> usize { self.layer3 }
+    fn layer3(&self) -> usize {
+        self.layer3
+    }
 
     #[inline(always)]
     fn layer2(&self, i: usize) -> usize {
@@ -401,12 +440,16 @@ impl BitSetLike for BitSet {
     }
 
     #[inline(always)]
-    fn contains(&self, i: Index) -> bool { self.contains(i) }
+    fn contains(&self, i: Index) -> bool {
+        self.contains(i)
+    }
 }
 
 impl DrainableBitSet for BitSet {
     #[inline(always)]
-    fn remove(&mut self, i: Index) -> bool { self.remove(i) }
+    fn remove(&mut self, i: Index) -> bool {
+        self.remove(i)
+    }
 }
 
 impl PartialEq for BitSet {

@@ -107,11 +107,17 @@ pub trait CostType:
 }
 
 impl CostType for U256 {
-    fn as_u256(&self) -> U256 { *self }
+    fn as_u256(&self) -> U256 {
+        *self
+    }
 
-    fn from_u256(val: U256) -> Result<Self> { Ok(val) }
+    fn from_u256(val: U256) -> Result<Self> {
+        Ok(val)
+    }
 
-    fn as_usize(&self) -> usize { self.as_u64() as usize }
+    fn as_usize(&self) -> usize {
+        self.as_u64() as usize
+    }
 
     fn overflow_add(self, other: Self) -> (Self, bool) {
         self.overflowing_add(other)
@@ -131,7 +137,9 @@ impl CostType for U256 {
 }
 
 impl CostType for usize {
-    fn as_u256(&self) -> U256 { U256::from(*self) }
+    fn as_u256(&self) -> U256 {
+        U256::from(*self)
+    }
 
     fn from_u256(val: U256) -> Result<Self> {
         let res = val.low_u64() as usize;
@@ -144,7 +152,9 @@ impl CostType for usize {
         Ok(res)
     }
 
-    fn as_usize(&self) -> usize { *self }
+    fn as_usize(&self) -> usize {
+        *self
+    }
 
     fn overflow_add(self, other: Self) -> (Self, bool) {
         self.overflowing_add(other)

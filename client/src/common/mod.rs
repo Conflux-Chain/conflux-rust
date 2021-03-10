@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfxcore::vm::Spec;
+
 /// Hold all top-level components for a type of client.
 /// This struct implement ClientShutdownTrait.
 pub struct ClientComponents<BlockGenT, Rest> {
@@ -138,8 +140,7 @@ pub fn initialize_common_modules(
         Runtime,
     ),
     String,
->
-{
+> {
     info!("Working directory: {:?}", std::env::current_dir());
 
     metrics::initialize(conf.metrics_config());
@@ -223,6 +224,7 @@ pub fn initialize_common_modules(
         machine.clone(),
         conf.raw_conf.execute_genesis, /* need_to_execute */
         conf.raw_conf.chain_id,
+        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
     );
     debug!("Initialize genesis_block={:?}", genesis_block);
 
@@ -344,8 +346,7 @@ pub fn initialize_not_light_node_modules(
         Runtime,
     ),
     String,
->
-{
+> {
     let (
         _machine,
         secret_store,
@@ -546,8 +547,7 @@ pub fn initialize_txgens(
 ) -> (
     Option<Arc<TransactionGenerator>>,
     Option<Arc<Mutex<DirectTransactionGenerator>>>,
-)
-{
+) {
     // This tx generator directly push simple transactions and erc20
     // transactions into blocks.
     let maybe_direct_txgen_with_contract = if conf.is_test_or_dev_mode() {
@@ -611,11 +611,15 @@ pub mod delegate_convert {
     }
 
     impl<T> Into<JsonRpcResult<T>> for JsonRpcResult<T> {
-        fn into(x: Self) -> JsonRpcResult<T> { x }
+        fn into(x: Self) -> JsonRpcResult<T> {
+            x
+        }
     }
 
     impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for BoxFuture<T> {
-        fn into(x: Self) -> BoxFuture<T> { x }
+        fn into(x: Self) -> BoxFuture<T> {
+            x
+        }
     }
 
     impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for RpcBoxFuture<T> {
@@ -662,7 +666,9 @@ pub mod delegate_convert {
     }
 
     impl<T> Into<JsonRpcResult<T>> for RpcResult<T> {
-        fn into(x: Self) -> JsonRpcResult<T> { into_jsonrpc_result(x) }
+        fn into(x: Self) -> JsonRpcResult<T> {
+            into_jsonrpc_result(x)
+        }
     }
 
     /// Sometimes an rpc method is implemented asynchronously, then the rpc

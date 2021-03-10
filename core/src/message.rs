@@ -33,7 +33,9 @@ macro_rules! build_msgid {
 // TODO: GetMaybeRequestId is part of Message due to the implementation of
 // TODO: Throttled. Conceptually this class isn't part of Message.
 pub trait GetMaybeRequestId {
-    fn get_request_id(&self) -> Option<RequestId> { None }
+    fn get_request_id(&self) -> Option<RequestId> {
+        None
+    }
 }
 
 pub trait SetRequestId: GetMaybeRequestId {
@@ -58,7 +60,9 @@ pub trait Message:
     Send + Sync + GetMaybeRequestId + MessageProtocolVersionBound + Encodable
 {
     // If true, message may be throttled when sent to remote peer.
-    fn is_size_sensitive(&self) -> bool { false }
+    fn is_size_sensitive(&self) -> bool {
+        false
+    }
     fn msg_id(&self) -> MsgId;
     fn push_msg_id_leb128_encoding(&self, buffer: &mut Vec<u8>) {
         let msg_id = self.msg_id();
@@ -72,7 +76,9 @@ pub trait Message:
         buffer.push(msg_id_lsb);
     }
     fn msg_name(&self) -> &'static str;
-    fn priority(&self) -> SendQueuePriority { SendQueuePriority::High }
+    fn priority(&self) -> SendQueuePriority {
+        SendQueuePriority::High
+    }
 
     fn encode(&self) -> Vec<u8> {
         let mut encoded = self.rlp_bytes();
@@ -80,7 +86,9 @@ pub trait Message:
         encoded
     }
 
-    fn throttle_token_cost(&self) -> (u64, u64) { (1, 0) }
+    fn throttle_token_cost(&self) -> (u64, u64) {
+        (1, 0)
+    }
 
     fn send(
         &self, io: &dyn NetworkContext, node_id: &NodeId,
@@ -91,8 +99,7 @@ pub trait Message:
     fn send_with_throttling(
         &self, io: &dyn NetworkContext, node_id: &NodeId,
         throttling_disabled: bool,
-    ) -> Result<(), NetworkError>
-    {
+    ) -> Result<(), NetworkError> {
         if !throttling_disabled && self.is_size_sensitive() {
             if let Err(e) = THROTTLING_SERVICE.read().check_throttling() {
                 debug!("Throttling failure: {:?}", e);
@@ -165,7 +172,9 @@ pub fn decode_msg(mut msg: &[u8]) -> Option<(MsgId, Rlp)> {
 macro_rules! mark_msg_version_bound {
     ($name:ident, $msg_ver:expr, $msg_valid_till_ver:expr) => {
         impl MessageProtocolVersionBound for $name {
-            fn version_introduced(&self) -> ProtocolVersion { $msg_ver }
+            fn version_introduced(&self) -> ProtocolVersion {
+                $msg_ver
+            }
 
             fn version_valid_till(&self) -> ProtocolVersion {
                 $msg_valid_till_ver
@@ -185,9 +194,13 @@ macro_rules! build_msg_basic {
         mark_msg_version_bound!($name, $msg_ver, $msg_valid_till_ver);
 
         impl Message for $name {
-            fn msg_id(&self) -> MsgId { $msg }
+            fn msg_id(&self) -> MsgId {
+                $msg
+            }
 
-            fn msg_name(&self) -> &'static str { $name_str }
+            fn msg_name(&self) -> &'static str {
+                $name_str
+            }
         }
     };
 }
@@ -249,7 +262,9 @@ mod test {
     }
 
     impl Encodable for TestMessage {
-        fn rlp_append(&self, s: &mut RlpStream) { s.append(&1u8); }
+        fn rlp_append(&self, s: &mut RlpStream) {
+            s.append(&1u8);
+        }
     }
 
     impl Decodable for TestMessage {
@@ -259,17 +274,25 @@ mod test {
     }
 
     impl MessageProtocolVersionBound for TestMessage {
-        fn version_introduced(&self) -> ProtocolVersion { unreachable!() }
+        fn version_introduced(&self) -> ProtocolVersion {
+            unreachable!()
+        }
 
-        fn version_valid_till(&self) -> ProtocolVersion { unreachable!() }
+        fn version_valid_till(&self) -> ProtocolVersion {
+            unreachable!()
+        }
     }
 
     impl GetMaybeRequestId for TestMessage {}
 
     impl Message for TestMessage {
-        fn msg_id(&self) -> u16 { self.msg_id }
+        fn msg_id(&self) -> u16 {
+            self.msg_id
+        }
 
-        fn msg_name(&self) -> &'static str { "TestMessageIdEncodeDecode" }
+        fn msg_name(&self) -> &'static str {
+            "TestMessageIdEncodeDecode"
+        }
     }
 
     #[test]

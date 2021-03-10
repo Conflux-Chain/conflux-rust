@@ -46,7 +46,9 @@ pub enum Status {
 }
 
 impl Default for Status {
-    fn default() -> Self { Status::Inactive }
+    fn default() -> Self {
+        Status::Inactive
+    }
 }
 
 impl Debug for Status {
@@ -85,7 +87,9 @@ struct Inner {
 }
 
 impl Default for Inner {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Inner {
@@ -104,8 +108,7 @@ impl Inner {
         active_peers: HashSet<NodeId>, trusted_blame_block: H256,
         io: &dyn NetworkContext, sync_handler: &SynchronizationProtocolHandler,
         manifest_config: SnapshotManifestConfig,
-    )
-    {
+    ) {
         if let Some(chunk_manager) = &mut self.chunk_manager {
             if chunk_manager.snapshot_candidate == sync_candidate {
                 // TODO If the chunk manager does not make progress for a long
@@ -140,8 +143,7 @@ impl Inner {
         &mut self, current_era_genesis: EpochId,
         candidates: Vec<SnapshotSyncCandidate>, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
-    )
-    {
+    ) {
         let peers = PeerFilter::new(msgid::STATE_SYNC_CANDIDATE_REQUEST)
             .select_all(&sync_handler.syn);
         if peers.is_empty() {
@@ -161,8 +163,7 @@ impl Inner {
         &self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
         candidates: Vec<SnapshotSyncCandidate>, peers: Vec<NodeId>,
-    )
-    {
+    ) {
         let request = StateSyncCandidateRequest {
             request_id: 0,
             candidates,
@@ -204,13 +205,14 @@ impl SnapshotChunkSync {
         }
     }
 
-    pub fn status(&self) -> Status { self.inner.read().status }
+    pub fn status(&self) -> Status {
+        self.inner.read().status
+    }
 
     pub fn handle_snapshot_manifest_response(
         &self, ctx: &Context, response: SnapshotManifestResponse,
         request: &SnapshotManifestRequest,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         let mut inner = &mut *self.inner.write();
 
         // status mismatch
@@ -334,8 +336,7 @@ impl SnapshotChunkSync {
         &self, peer: &NodeId,
         supported_candidates: &Vec<SnapshotSyncCandidate>,
         requested_candidates: &Vec<SnapshotSyncCandidate>,
-    )
-    {
+    ) {
         self.inner.write().sync_candidate_manager.on_peer_response(
             peer,
             supported_candidates,
@@ -359,8 +360,7 @@ impl SnapshotChunkSync {
     pub fn update_status(
         &self, current_era_genesis: EpochId, epoch_to_sync: EpochId,
         io: &dyn NetworkContext, sync_handler: &SynchronizationProtocolHandler,
-    )
-    {
+    ) {
         let mut inner = self.inner.write();
         debug!("sync state status before updating: {:?}", *inner);
         self.check_timeout(

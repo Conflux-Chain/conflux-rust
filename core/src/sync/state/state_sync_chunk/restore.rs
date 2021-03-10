@@ -63,8 +63,7 @@ impl Restorer {
     pub fn finalize_restoration(
         &mut self, state_manager: Arc<StateManager>,
         snapshot_info: SnapshotInfo,
-    ) -> StorageResult<()>
-    {
+    ) -> StorageResult<()> {
         // Release temp snapshot db so it can be renamed on Windows.
         // `self.verifier` is never unwrapped, so it's safe to set it to None,
         self.verifier = None;

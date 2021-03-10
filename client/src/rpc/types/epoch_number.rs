@@ -36,14 +36,18 @@ pub enum EpochNumber {
 
 impl<'a> Deserialize<'a> for EpochNumber {
     fn deserialize<D>(deserializer: D) -> Result<EpochNumber, D::Error>
-    where D: Deserializer<'a> {
+    where
+        D: Deserializer<'a>,
+    {
         deserializer.deserialize_any(EpochNumberVisitor)
     }
 }
 
 impl Serialize for EpochNumber {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    where
+        S: Serializer,
+    {
         match *self {
             EpochNumber::Num(ref x) => {
                 serializer.serialize_str(&format!("0x{:x}", x))
@@ -102,11 +106,15 @@ impl FromStr for EpochNumber {
 }
 
 impl Into<PrimitiveEpochNumber> for EpochNumber {
-    fn into(self) -> PrimitiveEpochNumber { self.into_primitive() }
+    fn into(self) -> PrimitiveEpochNumber {
+        self.into_primitive()
+    }
 }
 
 impl Into<EpochNumber> for u64 {
-    fn into(self) -> EpochNumber { EpochNumber::Num(U64::from(self)) }
+    fn into(self) -> EpochNumber {
+        EpochNumber::Num(U64::from(self))
+    }
 }
 
 struct EpochNumberVisitor;
@@ -122,12 +130,16 @@ impl<'a> Visitor<'a> for EpochNumberVisitor {
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-    where E: Error {
+    where
+        E: Error,
+    {
         value.parse().map_err(Error::custom)
     }
 
     fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
-    where E: Error {
+    where
+        E: Error,
+    {
         self.visit_str(value.as_ref())
     }
 }
@@ -154,21 +166,27 @@ impl BlockHashOrEpochNumber {
 }
 
 impl Into<PrimitiveBlockHashOrEpochNumber> for BlockHashOrEpochNumber {
-    fn into(self) -> PrimitiveBlockHashOrEpochNumber { self.into_primitive() }
+    fn into(self) -> PrimitiveBlockHashOrEpochNumber {
+        self.into_primitive()
+    }
 }
 
 impl<'a> Deserialize<'a> for BlockHashOrEpochNumber {
     fn deserialize<D>(
         deserializer: D,
     ) -> Result<BlockHashOrEpochNumber, D::Error>
-    where D: Deserializer<'a> {
+    where
+        D: Deserializer<'a>,
+    {
         deserializer.deserialize_any(BlockHashOrEpochNumberVisitor)
     }
 }
 
 impl Serialize for BlockHashOrEpochNumber {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    where
+        S: Serializer,
+    {
         match self {
             BlockHashOrEpochNumber::EpochNumber(epoch_number) => {
                 epoch_number.serialize(serializer)
@@ -194,7 +212,9 @@ impl<'a> Visitor<'a> for BlockHashOrEpochNumberVisitor {
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-    where E: Error {
+    where
+        E: Error,
+    {
         if value.starts_with("hash:0x") {
             Ok(BlockHashOrEpochNumber::BlockHash(
                 value[7..].parse().map_err(Error::custom)?,
@@ -207,7 +227,9 @@ impl<'a> Visitor<'a> for BlockHashOrEpochNumberVisitor {
     }
 
     fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
-    where E: Error {
+    where
+        E: Error,
+    {
         self.visit_str(value.as_ref())
     }
 }

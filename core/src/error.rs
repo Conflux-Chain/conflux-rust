@@ -121,7 +121,9 @@ impl fmt::Display for BlockError {
 }
 
 impl error::Error for BlockError {
-    fn description(&self) -> &str { "Block error" }
+    fn description(&self) -> &str {
+        "Block error"
+    }
 }
 
 error_chain! {

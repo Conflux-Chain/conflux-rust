@@ -46,7 +46,9 @@ use std::{
 fn grouped_txs<T, F>(
     txs: Vec<Arc<SignedTransaction>>, converter: F,
 ) -> BTreeMap<String, BTreeMap<usize, Vec<T>>>
-where F: Fn(Arc<SignedTransaction>) -> T {
+where
+    F: Fn(Arc<SignedTransaction>) -> T,
+{
     let mut addr_grouped_txs: BTreeMap<String, BTreeMap<usize, Vec<T>>> =
         BTreeMap::new();
 
@@ -68,8 +70,7 @@ where F: Fn(Arc<SignedTransaction>) -> T {
 pub fn check_balance_against_transaction(
     user_account: Option<Account>, contract_account: Option<Account>,
     is_sponsored: bool, gas_limit: U256, gas_price: U256, storage_limit: U256,
-) -> CheckBalanceAgainstTransactionResponse
-{
+) -> CheckBalanceAgainstTransactionResponse {
     let sponsor_for_gas = contract_account
         .as_ref()
         .map(|a| a.sponsor_info.sponsor_for_gas)
@@ -145,8 +146,7 @@ impl RpcImpl {
         exit: Arc<(Mutex<bool>, Condvar)>, consensus: SharedConsensusGraph,
         network: Arc<NetworkService>, tx_pool: SharedTransactionPool,
         accounts: Arc<AccountProvider>,
-    ) -> Self
-    {
+    ) -> Self {
         let data_man = consensus.get_data_manager().clone();
 
         RpcImpl {

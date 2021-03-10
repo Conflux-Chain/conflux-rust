@@ -72,8 +72,7 @@ impl Worker {
         bg: Arc<BlockGenerator>,
         solution_sender: mpsc::Sender<ProofOfWorkSolution>,
         problem_receiver: mpsc::Receiver<ProofOfWorkProblem>,
-    ) -> Self
-    {
+    ) -> Self {
         let bg_handle = bg;
 
         let thread = thread::Builder::new()
@@ -145,8 +144,7 @@ impl BlockGenerator {
         maybe_txgen: Option<SharedTransactionGenerator>,
         pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
         mining_author: Address,
-    ) -> Self
-    {
+    ) -> Self {
         BlockGenerator {
             pow_config,
             pow,
@@ -200,8 +198,7 @@ impl BlockGenerator {
         blame_info: StateBlameInfo, block_gas_limit: U256,
         transactions: Vec<Arc<SignedTransaction>>, difficulty: u64,
         adaptive_opt: Option<bool>,
-    ) -> Block
-    {
+    ) -> Block {
         let parent_height =
             self.graph.block_height_by_hash(&parent_hash).unwrap();
 
@@ -275,8 +272,7 @@ impl BlockGenerator {
     pub fn assemble_new_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
         difficulty: u64, adaptive: bool, block_gas_limit: u64,
-    ) -> Result<Block, String>
-    {
+    ) -> Result<Block, String> {
         let consensus_graph = self.consensus_graph();
         let state_blame_info = consensus_graph
             .force_compute_blame_and_deferred_state_for_generation(
@@ -309,8 +305,7 @@ impl BlockGenerator {
     pub fn assemble_new_block(
         &self, num_txs: usize, block_size_limit: usize,
         additional_transactions: Vec<Arc<SignedTransaction>>,
-    ) -> Block
-    {
+    ) -> Block {
         let consensus_graph = self.consensus_graph();
 
         let (best_info, block_gas_limit, transactions) =
@@ -360,8 +355,7 @@ impl BlockGenerator {
         blame_override: Option<u32>, state_root_override: Option<H256>,
         receipt_root_override: Option<H256>,
         logs_bloom_hash_override: Option<H256>,
-    ) -> Block
-    {
+    ) -> Block {
         let consensus_graph = self.consensus_graph();
 
         let (best_info, block_gas_limit, transactions) =
@@ -443,8 +437,7 @@ impl BlockGenerator {
     pub fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
         difficulty: u64, adaptive: bool,
-    ) -> Result<H256, String>
-    {
+    ) -> Result<H256, String> {
         let block = self.assemble_new_fixed_block(
             parent_hash,
             referee,
@@ -460,8 +453,7 @@ impl BlockGenerator {
     pub fn generate_block(
         &self, num_txs: usize, block_size_limit: usize,
         additional_transactions: Vec<Arc<SignedTransaction>>,
-    ) -> H256
-    {
+    ) -> H256 {
         let block = self.assemble_new_block(
             num_txs,
             block_size_limit,
@@ -477,8 +469,7 @@ impl BlockGenerator {
         additional_transactions: Vec<Arc<SignedTransaction>>,
         blame: Option<u32>, state_root: Option<H256>,
         receipts_root: Option<H256>, logs_bloom_hash: Option<H256>,
-    ) -> H256
-    {
+    ) -> H256 {
         let block = self.assemble_new_block_with_blame_info(
             num_txs,
             block_size_limit,
@@ -494,8 +485,7 @@ impl BlockGenerator {
     pub fn generate_custom_block(
         &self, transactions: Vec<Arc<SignedTransaction>>,
         adaptive: Option<bool>,
-    ) -> H256
-    {
+    ) -> H256 {
         let consensus_graph = self.consensus_graph();
         // get the best block
         let (best_info, block_gas_limit, _) = self
@@ -527,8 +517,7 @@ impl BlockGenerator {
     pub fn generate_custom_block_with_parent(
         &self, parent_hash: H256, referee: Vec<H256>,
         transactions: Vec<Arc<SignedTransaction>>, adaptive: bool,
-    ) -> Result<H256, String>
-    {
+    ) -> Result<H256, String> {
         let consensus_graph = self.consensus_graph();
         let state_blame_info = consensus_graph
             .force_compute_blame_and_deferred_state_for_generation(
@@ -552,8 +541,7 @@ impl BlockGenerator {
         &self, parent_hash: H256, referee: Vec<H256>,
         transactions: Vec<Arc<SignedTransaction>>, nonce: U256, timestamp: u64,
         adaptive: bool,
-    ) -> Result<H256, String>
-    {
+    ) -> Result<H256, String> {
         let consensus_graph = self.consensus_graph();
         let state_blame_info = consensus_graph
             .force_compute_blame_and_deferred_state_for_generation(
@@ -627,7 +615,9 @@ impl BlockGenerator {
         hash
     }
 
-    pub fn pow_config(&self) -> ProofOfWorkConfig { self.pow_config.clone() }
+    pub fn pow_config(&self) -> ProofOfWorkConfig {
+        self.pow_config.clone()
+    }
 
     /// Start num_worker new workers
     pub fn start_new_worker(
@@ -833,5 +823,7 @@ impl BlockGenerator {
 }
 
 impl Stopable for BlockGenerator {
-    fn stop(&self) { Self::stop(self) }
+    fn stop(&self) {
+        Self::stop(self)
+    }
 }

@@ -82,8 +82,7 @@ impl Witnesses {
     pub fn new(
         consensus: SharedConsensusGraph, peers: Arc<Peers<FullPeerState>>,
         request_id_allocator: Arc<UniqueId>,
-    ) -> Self
-    {
+    ) -> Self {
         let data_man = consensus.get_data_manager().clone();
         let height_of_latest_verified_header = RwLock::new(0);
         let in_flight = RwLock::new(HashSet::new());
@@ -217,8 +216,7 @@ impl Witnesses {
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         witnesses: impl Iterator<Item = WitnessInfoWithHeight>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         for item in witnesses {
             trace!("Validating witness info {:?}", item);
 

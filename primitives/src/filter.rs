@@ -144,7 +144,9 @@ impl fmt::Display for FilterError {
 }
 
 impl error::Error for FilterError {
-    fn description(&self) -> &str { "Filter error" }
+    fn description(&self) -> &str {
+        "Filter error"
+    }
 }
 
 /// Log event Filter.
@@ -265,5 +267,7 @@ impl LogFilter {
 }
 
 impl From<String> for FilterError {
-    fn from(s: String) -> Self { FilterError::Custom(s) }
+    fn from(s: String) -> Self {
+        FilterError::Custom(s)
+    }
 }

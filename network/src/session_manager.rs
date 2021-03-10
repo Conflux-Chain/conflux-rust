@@ -55,8 +55,7 @@ impl SessionManager {
     pub fn new(
         offset: usize, capacity: usize, max_ingress_sessions: usize,
         ip_limit_config: &SessionIpLimitConfig,
-    ) -> Self
-    {
+    ) -> Self {
         SessionManager {
             sessions: RwLock::new(Slab::with_capacity(capacity)),
             offset,
@@ -70,7 +69,9 @@ impl SessionManager {
     }
 
     /// Get the number of sessions in `SessionManager`.
-    pub fn count(&self) -> usize { self.sessions.read().len() }
+    pub fn count(&self) -> usize {
+        self.sessions.read().len()
+    }
 
     /// Get the session of specified index.
     pub fn get(&self, idx: usize) -> Option<Arc<RwLock<Session>>> {
@@ -146,8 +147,7 @@ impl SessionManager {
     pub fn create(
         &self, socket: TcpStream, address: SocketAddr, id: Option<&NodeId>,
         io: &IoContext<NetworkIoMessage>, host: &NetworkServiceInner,
-    ) -> Result<usize, String>
-    {
+    ) -> Result<usize, String> {
         debug!(
             "SessionManager.create: enter, address = {:?}, id = {:?}",
             address, id

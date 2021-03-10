@@ -332,7 +332,9 @@ pub struct ExecTrace {
 
 impl ExecTrace {
     /// Returns bloom of the trace.
-    pub fn bloom(&self) -> Bloom { self.action.bloom() }
+    pub fn bloom(&self) -> Bloom {
+        self.action.bloom()
+    }
 }
 
 impl Encodable for ExecTrace {
@@ -356,7 +358,9 @@ impl Decodable for ExecTrace {
 pub struct TransactionExecTraces(pub(crate) Vec<ExecTrace>);
 
 impl From<Vec<ExecTrace>> for TransactionExecTraces {
-    fn from(v: Vec<ExecTrace>) -> Self { TransactionExecTraces(v) }
+    fn from(v: Vec<ExecTrace>) -> Self {
+        TransactionExecTraces(v)
+    }
 }
 
 impl TransactionExecTraces {
@@ -369,7 +373,9 @@ impl TransactionExecTraces {
 }
 
 impl Into<Vec<ExecTrace>> for TransactionExecTraces {
-    fn into(self) -> Vec<ExecTrace> { self.0 }
+    fn into(self) -> Vec<ExecTrace> {
+        self.0
+    }
 }
 
 /// Represents all traces produced by transactions in a single block.
@@ -379,7 +385,9 @@ impl Into<Vec<ExecTrace>> for TransactionExecTraces {
 pub struct BlockExecTraces(pub(crate) Vec<TransactionExecTraces>);
 
 impl From<Vec<TransactionExecTraces>> for BlockExecTraces {
-    fn from(v: Vec<TransactionExecTraces>) -> Self { BlockExecTraces(v) }
+    fn from(v: Vec<TransactionExecTraces>) -> Self {
+        BlockExecTraces(v)
+    }
 }
 
 impl BlockExecTraces {
@@ -392,7 +400,9 @@ impl BlockExecTraces {
 }
 
 impl Into<Vec<TransactionExecTraces>> for BlockExecTraces {
-    fn into(self) -> Vec<TransactionExecTraces> { self.0 }
+    fn into(self) -> Vec<TransactionExecTraces> {
+        self.0
+    }
 }
 
 impl DatabaseDecodable for BlockExecTraces {
@@ -402,7 +412,9 @@ impl DatabaseDecodable for BlockExecTraces {
 }
 
 impl DatabaseEncodable for BlockExecTraces {
-    fn db_encode(&self) -> Bytes { rlp::encode(self) }
+    fn db_encode(&self) -> Bytes {
+        rlp::encode(self)
+    }
 }
 
 #[cfg(test)]

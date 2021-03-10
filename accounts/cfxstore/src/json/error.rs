@@ -44,5 +44,7 @@ impl fmt::Display for Error {
 }
 
 impl Into<String> for Error {
-    fn into(self) -> String { format!("{}", self) }
+    fn into(self) -> String {
+        format!("{}", self)
+    }
 }

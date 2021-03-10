@@ -40,5 +40,7 @@ impl fmt::Display for SignError {
 }
 
 impl From<SSError> for SignError {
-    fn from(e: SSError) -> Self { SignError::SStore(e) }
+    fn from(e: SSError) -> Self {
+        SignError::SStore(e)
+    }
 }

@@ -28,12 +28,16 @@ macro_rules! enable_deref_for_self {
         impl DerefPlusSelf for $type {
             type Target = Self;
 
-            fn deref(&self) -> &Self { self }
+            fn deref(&self) -> &Self {
+                self
+            }
         }
         impl DerefMutPlusSelf for $type {
             type Target = Self;
 
-            fn deref_mut(&mut self) -> &mut Self { self }
+            fn deref_mut(&mut self) -> &mut Self {
+                self
+            }
         }
     };
 }
@@ -41,13 +45,17 @@ macro_rules! enable_deref_for_self {
 impl<D: Deref<Target = T>, T: ?Sized> DerefPlusSelf for D {
     type Target = T;
 
-    fn deref(&self) -> &T { Deref::deref(self) }
+    fn deref(&self) -> &T {
+        Deref::deref(self)
+    }
 }
 
 impl<D: DerefMut<Target = T>, T: ?Sized> DerefMutPlusSelf for D {
     type Target = T;
 
-    fn deref_mut(&mut self) -> &mut T { DerefMut::deref_mut(self) }
+    fn deref_mut(&mut self) -> &mut T {
+        DerefMut::deref_mut(self)
+    }
 }
 
 /// This trait is automatically implemented for the Trait ifself, any type which
@@ -83,21 +91,29 @@ pub trait DerefMutPlusImplOrBorrowMutSelf<T: ?Sized> {
 macro_rules! enable_deref_plus_impl_or_borrow_self {
     ($trait:path) => {
         impl<'a> ImplOrBorrowSelf<dyn 'a + $trait> for dyn 'a + $trait {
-            fn borrow(&self) -> &(dyn 'a + $trait) { self }
+            fn borrow(&self) -> &(dyn 'a + $trait) {
+                self
+            }
         }
 
         impl<'a> ImplOrBorrowSelf<dyn 'a + $trait> for &(dyn 'a + $trait) {
-            fn borrow(&self) -> &(dyn 'a + $trait) { *self }
+            fn borrow(&self) -> &(dyn 'a + $trait) {
+                *self
+            }
         }
 
         impl<'a, T: 'a + $trait> ImplOrBorrowSelf<dyn 'a + $trait> for T {
-            fn borrow(&self) -> &(dyn 'a + $trait) { self }
+            fn borrow(&self) -> &(dyn 'a + $trait) {
+                self
+            }
         }
 
         impl<'a> DerefPlusImplOrBorrowSelf<dyn 'a + $trait>
             for dyn 'a + $trait
         {
-            fn borrow(&self) -> &(dyn 'a + $trait) { self }
+            fn borrow(&self) -> &(dyn 'a + $trait) {
+                self
+            }
         }
 
         impl<
@@ -116,23 +132,31 @@ macro_rules! enable_deref_plus_impl_or_borrow_self {
 macro_rules! enable_deref_mut_plus_impl_or_borrow_mut_self {
     ($trait:path) => {
         impl<'a> ImplOrBorrowMutSelf<dyn 'a + $trait> for dyn 'a + $trait {
-            fn borrow_mut(&mut self) -> &mut (dyn 'a + $trait) { self }
+            fn borrow_mut(&mut self) -> &mut (dyn 'a + $trait) {
+                self
+            }
         }
 
         impl<'a> ImplOrBorrowMutSelf<dyn 'a + $trait>
             for &mut (dyn 'a + $trait)
         {
-            fn borrow_mut(&mut self) -> &mut (dyn 'a + $trait) { *self }
+            fn borrow_mut(&mut self) -> &mut (dyn 'a + $trait) {
+                *self
+            }
         }
 
         impl<'a, T: 'a + $trait> ImplOrBorrowMutSelf<dyn 'a + $trait> for T {
-            fn borrow_mut(&mut self) -> &mut (dyn 'a + $trait) { self }
+            fn borrow_mut(&mut self) -> &mut (dyn 'a + $trait) {
+                self
+            }
         }
 
         impl<'a> DerefMutPlusImplOrBorrowMutSelf<dyn 'a + $trait>
             for dyn 'a + $trait
         {
-            fn borrow_mut(&mut self) -> &mut (dyn 'a + $trait) { self }
+            fn borrow_mut(&mut self) -> &mut (dyn 'a + $trait) {
+                self
+            }
         }
 
         impl<

@@ -63,7 +63,9 @@ pub const SYNC_PROTO_V3: ProtocolVersion = ProtocolVersion(3);
 
 pub mod random {
     use rand;
-    pub fn new() -> rand::prelude::ThreadRng { rand::thread_rng() }
+    pub fn new() -> rand::prelude::ThreadRng {
+        rand::thread_rng()
+    }
 }
 
 pub mod msg_sender {

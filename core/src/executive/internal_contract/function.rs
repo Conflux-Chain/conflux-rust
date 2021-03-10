@@ -36,8 +36,7 @@ impl<
         &self, input: &[u8], params: &ActionParams, env: &Env, spec: &Spec,
         state: &mut dyn StateOpsTrait, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<GasLeft>
-    {
+    ) -> vm::Result<GasLeft> {
         self.pre_execution_check(params, substate)?;
         let solidity_params = <T::Input as ABIDecodable>::abi_decode(&input)?;
 
@@ -72,7 +71,9 @@ impl<
         })
     }
 
-    fn name(&self) -> &'static str { return Self::NAME_AND_PARAMS; }
+    fn name(&self) -> &'static str {
+        return Self::NAME_AND_PARAMS;
+    }
 }
 
 pub trait InterfaceTrait {

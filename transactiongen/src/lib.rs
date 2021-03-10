@@ -86,8 +86,7 @@ impl TransactionGenerator {
     pub fn new(
         consensus: SharedConsensusGraph, txpool: SharedTransactionPool,
         sync: SharedSynchronizationService, secret_store: SharedSecretStore,
-    ) -> Self
-    {
+    ) -> Self {
         TransactionGenerator {
             consensus,
             txpool,
@@ -119,8 +118,7 @@ impl TransactionGenerator {
         txgen: Arc<TransactionGenerator>,
         tx_config: TransactionGeneratorConfig,
         genesis_accounts: HashMap<Address, U256>,
-    )
-    {
+    ) {
         loop {
             let account_start = txgen.account_start_index.read();
             if account_start.is_some() {
@@ -291,8 +289,7 @@ impl DirectTransactionGenerator {
     pub fn new(
         start_key_pair: KeyPair, contract_creator: &Address,
         start_balance: U256, start_erc20_balance: U256,
-    ) -> DirectTransactionGenerator
-    {
+    ) -> DirectTransactionGenerator {
         let start_address = public_to_address(start_key_pair.public());
         let info = (
             start_key_pair,
@@ -335,8 +332,7 @@ impl DirectTransactionGenerator {
     pub fn generate_transactions(
         &mut self, block_size_limit: &mut usize, mut num_txs_simple: usize,
         mut num_txs_erc20: usize, chain_id: u32,
-    ) -> Vec<Arc<SignedTransaction>>
-    {
+    ) -> Vec<Arc<SignedTransaction>> {
         let mut result = vec![];
         // Generate new address with 10% probability
         while num_txs_simple > 0 {

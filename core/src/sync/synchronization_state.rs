@@ -64,8 +64,7 @@ impl SynchronizationPeerState {
     pub fn update(
         &mut self, node_type: Option<NodeType>,
         latest_block_hashes: HashSet<H256>, best_epoch: u64,
-    ) -> bool
-    {
+    ) -> bool {
         if let Some(node_type) = node_type {
             self.node_type = node_type;
         }
@@ -103,8 +102,7 @@ impl SynchronizationState {
     pub fn new(
         is_consortium: bool, node_type: NodeType,
         allow_phase_change_without_peer: bool,
-    ) -> Self
-    {
+    ) -> Self {
         SynchronizationState {
             is_consortium,
             node_type,
@@ -115,7 +113,9 @@ impl SynchronizationState {
         }
     }
 
-    pub fn is_consortium(&self) -> bool { self.is_consortium }
+    pub fn is_consortium(&self) -> bool {
+        self.is_consortium
+    }
 
     pub fn on_status_in_handshaking(
         &self, node_id: &NodeId,
@@ -195,7 +195,9 @@ impl SynchronizationState {
         timeout_peers
     }
 
-    pub fn is_full_node(&self) -> bool { self.node_type == NodeType::Full }
+    pub fn is_full_node(&self) -> bool {
+        self.node_type == NodeType::Full
+    }
 
     pub fn allow_phase_change_without_peer(&self) -> bool {
         self.allow_phase_change_without_peer
@@ -274,7 +276,9 @@ pub struct PeerFilter<'a> {
 }
 
 impl<'a> PeerFilter<'a> {
-    pub fn new(msg_id: MsgId) -> Self { PeerFilter::default().throttle(msg_id) }
+    pub fn new(msg_id: MsgId) -> Self {
+        PeerFilter::default().throttle(msg_id)
+    }
 
     pub fn with_preferred_node_type(mut self, node_type: NodeType) -> Self {
         self.preferred_node_type = Some(node_type);

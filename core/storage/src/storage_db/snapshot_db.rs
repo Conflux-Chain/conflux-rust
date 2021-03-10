@@ -11,7 +11,9 @@ pub enum SnapshotKeptToProvideSyncStatus {
 }
 
 impl Default for SnapshotKeptToProvideSyncStatus {
-    fn default() -> Self { SnapshotKeptToProvideSyncStatus::No }
+    fn default() -> Self {
+        SnapshotKeptToProvideSyncStatus::No
+    }
 }
 
 impl Encodable for SnapshotKeptToProvideSyncStatus {

@@ -36,12 +36,16 @@ impl RpcAddress {
 }
 
 impl From<RpcAddress> for H160 {
-    fn from(x: RpcAddress) -> Self { x.hex_address }
+    fn from(x: RpcAddress) -> Self {
+        x.hex_address
+    }
 }
 
 impl<'a> Deserialize<'a> for RpcAddress {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: Deserializer<'a> {
+    where
+        D: Deserializer<'a>,
+    {
         let s: String = Deserialize::deserialize(deserializer)?;
 
         let parsed_address = cfx_addr_decode(&s).map_err(|e| {
@@ -66,7 +70,9 @@ impl<'a> Deserialize<'a> for RpcAddress {
 
 impl Serialize for RpcAddress {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    where
+        S: Serializer,
+    {
         serializer.serialize_str(&self.base32_address)
     }
 }

@@ -39,11 +39,15 @@ use keylib::{recover as ec_recover, Signature};
 pub struct Error(pub &'static str);
 
 impl From<&'static str> for Error {
-    fn from(val: &'static str) -> Self { Error(val) }
+    fn from(val: &'static str) -> Self {
+        Error(val)
+    }
 }
 
 impl Into<crate::vm::Error> for Error {
-    fn into(self) -> crate::vm::Error { crate::vm::Error::BuiltIn(self.0) }
+    fn into(self) -> crate::vm::Error {
+        crate::vm::Error::BuiltIn(self.0)
+    }
 }
 
 /// Native implementation of a built-in contract.
@@ -204,7 +208,9 @@ pub struct Builtin {
 
 impl Builtin {
     /// Simple forwarder for cost.
-    pub fn cost(&self, input: &[u8]) -> U256 { self.pricer.cost(input) }
+    pub fn cost(&self, input: &[u8]) -> U256 {
+        self.pricer.cost(input)
+    }
 
     /// Simple forwarder for execute.
     pub fn execute(
@@ -214,7 +220,9 @@ impl Builtin {
     }
 
     /// Whether the builtin is activated at the given cardinal number.
-    pub fn is_active(&self, at: u64) -> bool { at >= self.activate_at }
+    pub fn is_active(&self, at: u64) -> bool {
+        at >= self.activate_at
+    }
 
     pub fn new(
         pricer: Box<dyn Pricer>, native: Box<dyn Impl>, activate_at: u64,
@@ -880,11 +888,13 @@ mod tests {
 
         // test for potential exp len overflow
         {
-            let input: Vec<u8> = FromHex::from_hex("\
+            let input: Vec<u8> = FromHex::from_hex(
+                "\
 				00000000000000000000000000000000000000000000000000000000000000ff\
 				2a1e530000000000000000000000000000000000000000000000000000000000\
-				0000000000000000000000000000000000000000000000000000000000000000"
-            ).unwrap();
+				0000000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap();
 
             let mut output = vec![0u8; 32];
             let expected: Vec<u8> = FromHex::from_hex("0000000000000000000000000000000000000000000000000000000000000000").unwrap();
@@ -898,14 +908,16 @@ mod tests {
 
         // fermat's little theorem example.
         {
-            let input: Vec<u8> = FromHex::from_hex("\
+            let input: Vec<u8> = FromHex::from_hex(
+                "\
 				0000000000000000000000000000000000000000000000000000000000000001\
 				0000000000000000000000000000000000000000000000000000000000000020\
 				0000000000000000000000000000000000000000000000000000000000000020\
 				03\
 				fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2e\
-				fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f"
-            ).unwrap();
+				fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f",
+            )
+            .unwrap();
 
             let mut output = vec![0u8; 32];
             let expected: Vec<u8> = FromHex::from_hex("0000000000000000000000000000000000000000000000000000000000000001").unwrap();
@@ -919,13 +931,15 @@ mod tests {
 
         // zero base.
         {
-            let input: Vec<u8> = FromHex::from_hex("\
+            let input: Vec<u8> = FromHex::from_hex(
+                "\
 				0000000000000000000000000000000000000000000000000000000000000000\
 				0000000000000000000000000000000000000000000000000000000000000020\
 				0000000000000000000000000000000000000000000000000000000000000020\
 				fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2e\
-				fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f"
-            ).unwrap();
+				fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f",
+            )
+            .unwrap();
 
             let mut output = vec![0u8; 32];
             let expected: Vec<u8> = FromHex::from_hex("0000000000000000000000000000000000000000000000000000000000000000").unwrap();
@@ -939,14 +953,16 @@ mod tests {
 
         // zero-padding
         {
-            let input: Vec<u8> = FromHex::from_hex("\
+            let input: Vec<u8> = FromHex::from_hex(
+                "\
 				0000000000000000000000000000000000000000000000000000000000000001\
 				0000000000000000000000000000000000000000000000000000000000000002\
 				0000000000000000000000000000000000000000000000000000000000000020\
 				03\
 				ffff\
-				80"
-            ).unwrap();
+				80",
+            )
+            .unwrap();
 
             let mut output = vec![0u8; 32];
             let expected: Vec<u8> = FromHex::from_hex("3b01b01ac41f2d6e917c6d6a221ce793802469026d9ab7578fa2e79e4da6aaab").unwrap();
@@ -960,13 +976,15 @@ mod tests {
 
         // zero-length modulus.
         {
-            let input: Vec<u8> = FromHex::from_hex("\
+            let input: Vec<u8> = FromHex::from_hex(
+                "\
 				0000000000000000000000000000000000000000000000000000000000000001\
 				0000000000000000000000000000000000000000000000000000000000000002\
 				0000000000000000000000000000000000000000000000000000000000000000\
 				03\
-				ffff"
-            ).unwrap();
+				ffff",
+            )
+            .unwrap();
 
             let mut output = vec![];
             let expected_cost = 0;
@@ -988,18 +1006,22 @@ mod tests {
 
         // zero-points additions
         {
-            let input: Vec<u8> = FromHex::from_hex("\
+            let input: Vec<u8> = FromHex::from_hex(
+                "\
 				0000000000000000000000000000000000000000000000000000000000000000\
 				0000000000000000000000000000000000000000000000000000000000000000\
 				0000000000000000000000000000000000000000000000000000000000000000\
-				0000000000000000000000000000000000000000000000000000000000000000"
-            ).unwrap();
+				0000000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap();
 
             let mut output = vec![0u8; 64];
-            let expected: Vec<u8> = FromHex::from_hex("\
+            let expected: Vec<u8> = FromHex::from_hex(
+                "\
 				0000000000000000000000000000000000000000000000000000000000000000\
-				0000000000000000000000000000000000000000000000000000000000000000"
-            ).unwrap();
+				0000000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap();
 
             f.execute(&input[..], &mut BytesRef::Fixed(&mut output[..]))
                 .expect("Builtin should not fail");
@@ -1012,10 +1034,12 @@ mod tests {
             let input = BytesRef::Fixed(&mut empty);
 
             let mut output = vec![0u8; 64];
-            let expected: Vec<u8> = FromHex::from_hex("\
+            let expected: Vec<u8> = FromHex::from_hex(
+                "\
 				0000000000000000000000000000000000000000000000000000000000000000\
-				0000000000000000000000000000000000000000000000000000000000000000"
-            ).unwrap();
+				0000000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap();
 
             f.execute(&input[..], &mut BytesRef::Fixed(&mut output[..]))
                 .expect("Builtin should not fail");
@@ -1024,12 +1048,14 @@ mod tests {
 
         // should fail - point not on curve
         {
-            let input: Vec<u8> = FromHex::from_hex("\
+            let input: Vec<u8> = FromHex::from_hex(
+                "\
 				1111111111111111111111111111111111111111111111111111111111111111\
 				1111111111111111111111111111111111111111111111111111111111111111\
 				1111111111111111111111111111111111111111111111111111111111111111\
-				1111111111111111111111111111111111111111111111111111111111111111"
-            ).unwrap();
+				1111111111111111111111111111111111111111111111111111111111111111",
+            )
+            .unwrap();
 
             let mut output = vec![0u8; 64];
 
@@ -1049,17 +1075,21 @@ mod tests {
 
         // zero-point multiplication
         {
-            let input: Vec<u8> = FromHex::from_hex("\
+            let input: Vec<u8> = FromHex::from_hex(
+                "\
 				0000000000000000000000000000000000000000000000000000000000000000\
 				0000000000000000000000000000000000000000000000000000000000000000\
-				0200000000000000000000000000000000000000000000000000000000000000"
-            ).unwrap();
+				0200000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap();
 
             let mut output = vec![0u8; 64];
-            let expected: Vec<u8> = FromHex::from_hex("\
+            let expected: Vec<u8> = FromHex::from_hex(
+                "\
 				0000000000000000000000000000000000000000000000000000000000000000\
-				0000000000000000000000000000000000000000000000000000000000000000"
-            ).unwrap();
+				0000000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap();
 
             f.execute(&input[..], &mut BytesRef::Fixed(&mut output[..]))
                 .expect("Builtin should not fail");
@@ -1068,11 +1098,13 @@ mod tests {
 
         // should fail - point not on curve
         {
-            let input: Vec<u8> = FromHex::from_hex("\
+            let input: Vec<u8> = FromHex::from_hex(
+                "\
 				1111111111111111111111111111111111111111111111111111111111111111\
 				1111111111111111111111111111111111111111111111111111111111111111\
-				0f00000000000000000000000000000000000000000000000000000000000000"
-            ).unwrap();
+				0f00000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap();
 
             let mut output = vec![0u8; 64];
 
@@ -1133,13 +1165,14 @@ mod tests {
         // should fail - point not on curve
         error_test(
             builtin_pairing(),
-            &bytes("\
+            &bytes(
+                "\
 				1111111111111111111111111111111111111111111111111111111111111111\
 				1111111111111111111111111111111111111111111111111111111111111111\
 				1111111111111111111111111111111111111111111111111111111111111111\
 				1111111111111111111111111111111111111111111111111111111111111111\
 				1111111111111111111111111111111111111111111111111111111111111111\
-				1111111111111111111111111111111111111111111111111111111111111111"
+				1111111111111111111111111111111111111111111111111111111111111111",
             ),
             Some("not on curve"),
         );
@@ -1150,10 +1183,11 @@ mod tests {
         // should fail - input length is invalid
         error_test(
             builtin_pairing(),
-            &bytes("\
+            &bytes(
+                "\
 				1111111111111111111111111111111111111111111111111111111111111111\
 				1111111111111111111111111111111111111111111111111111111111111111\
-				111111111111111111111111111111"
+				111111111111111111111111111111",
             ),
             Some("Invalid input length"),
         );
@@ -1161,7 +1195,9 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn from_unknown_linear() { let _ = builtin_factory("foo"); }
+    fn from_unknown_linear() {
+        let _ = builtin_factory("foo");
+    }
 
     #[test]
     fn is_active() {

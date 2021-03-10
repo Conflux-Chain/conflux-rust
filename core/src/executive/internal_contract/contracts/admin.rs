@@ -42,8 +42,7 @@ impl ExecutionTrait for SetAdmin {
         &self, inputs: (Address, Address), params: &ActionParams, _env: &Env,
         _spec: &Spec, state: &mut dyn StateOpsTrait, substate: &mut Substate,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         set_admin(
             inputs.0,
             inputs.1,
@@ -64,9 +63,16 @@ impl ExecutionTrait for Destroy {
         &self, input: Address, params: &ActionParams, _env: &Env, spec: &Spec,
         state: &mut dyn StateOpsTrait, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<()>
-    {
-        destroy(input, params, state, spec, substate, tracer)
+    ) -> vm::Result<()> {
+        destroy(
+            input,
+            params,
+            state,
+            spec,
+            substate,
+            tracer,
+            spec.account_start_nonce(_env.number),
+        )
     }
 }
 
@@ -80,8 +86,7 @@ impl ExecutionTrait for GetAdmin {
         &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut dyn StateOpsTrait, _: &mut Substate,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<Address>
-    {
+    ) -> vm::Result<Address> {
         Ok(state.admin(&input)?)
     }
 }

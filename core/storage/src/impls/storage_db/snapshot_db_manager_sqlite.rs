@@ -174,8 +174,7 @@ impl SnapshotDbManagerSqlite {
     pub fn on_close(
         already_open_snapshots: &AlreadyOpenSnapshots<SnapshotDbSqlite>,
         open_semaphore: &Arc<Semaphore>, path: &Path, remove_on_close: bool,
-    )
-    {
+    ) {
         // Destroy at close.
         if remove_on_close {
             // When removal fails, we can not raise the error because this
@@ -324,8 +323,7 @@ impl SnapshotDbManagerSqlite {
     fn copy_and_merge(
         &self, temp_snapshot_db: &mut SnapshotDbSqlite,
         old_snapshot_epoch_id: &EpochId,
-    ) -> Result<MerkleHash>
-    {
+    ) -> Result<MerkleHash> {
         let snapshot_path = self.get_snapshot_db_path(old_snapshot_epoch_id);
         let maybe_old_snapshot_db = Self::open_snapshot_readonly(
             self,
@@ -347,7 +345,9 @@ impl SnapshotDbManagerSqlite {
 impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     type SnapshotDb = SnapshotDbSqlite;
 
-    fn get_snapshot_dir(&self) -> &Path { self.snapshot_path.as_path() }
+    fn get_snapshot_dir(&self) -> &Path {
+        self.snapshot_path.as_path()
+    }
 
     fn get_snapshot_db_name(&self, snapshot_epoch_id: &EpochId) -> String {
         Self::SNAPSHOT_DB_SQLITE_DIR_PREFIX.to_string()
@@ -511,8 +511,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     fn finalize_full_sync_snapshot<'m>(
         &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
         snapshot_info_map_rwlock: &'m RwLock<PersistedSnapshotInfoMap>,
-    ) -> Result<RwLockWriteGuard<'m, PersistedSnapshotInfoMap>>
-    {
+    ) -> Result<RwLockWriteGuard<'m, PersistedSnapshotInfoMap>> {
         let temp_db_path = self.get_full_sync_temp_snapshot_db_path(
             snapshot_epoch_id,
             merkle_root,

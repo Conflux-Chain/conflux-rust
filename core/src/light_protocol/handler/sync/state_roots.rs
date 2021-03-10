@@ -60,8 +60,7 @@ impl StateRoots {
     pub fn new(
         peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
         snapshot_epoch_count: u64, witnesses: Arc<Witnesses>,
-    ) -> Self
-    {
+    ) -> Self {
         let sync_manager =
             SyncManager::new(peers.clone(), msgid::GET_STATE_ROOTS);
 
@@ -125,8 +124,7 @@ impl StateRoots {
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         state_roots: impl Iterator<Item = StateRootWithEpoch>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         for StateRootWithEpoch { epoch, state_root } in state_roots {
             trace!(
                 "Validating state root {:?} with epoch {}",
@@ -244,8 +242,7 @@ impl StateRoots {
     pub fn validate_prev_snapshot_state_root(
         &self, current_epoch: u64,
         maybe_prev_snapshot_state_root: &Option<StateRoot>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         let snapshot_epoch_count = self.snapshot_epoch_count;
 
         match maybe_prev_snapshot_state_root {

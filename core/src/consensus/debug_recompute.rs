@@ -6,8 +6,7 @@ pub fn log_debug_epoch_computation(
     epoch_arena_index: usize, inner: &mut ConsensusGraphInner,
     executor: &ConsensusExecutor, block_hash: H256, block_height: u64,
     state_root: &StateRootWithAuxInfo,
-) -> ComputeEpochDebugRecord
-{
+) -> ComputeEpochDebugRecord {
     // Parent state root.
     let parent_arena_index = inner.arena[epoch_arena_index].parent;
     let parent_epoch_hash = inner.arena[parent_arena_index].hash;
@@ -87,8 +86,7 @@ pub fn log_invalid_state_root(
     deferred: usize, inner: &mut ConsensusGraphInner,
     executor: &ConsensusExecutor, block_hash: H256, block_height: u64,
     state_root: &StateRootWithAuxInfo,
-) -> std::io::Result<()>
-{
+) -> std::io::Result<()> {
     if let Some(dump_dir) =
         inner.inner_conf.debug_dump_dir_invalid_state_root.clone()
     {

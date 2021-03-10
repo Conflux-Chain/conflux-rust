@@ -354,7 +354,9 @@ enum_with_from_u8! {
 
 impl Instruction {
     /// Returns true if given instruction is `PUSHN` instruction.
-    pub fn is_push(&self) -> bool { *self >= PUSH1 && *self <= PUSH32 }
+    pub fn is_push(&self) -> bool {
+        *self >= PUSH1 && *self <= PUSH32
+    }
 
     /// Returns number of bytes to read for `PUSHN` instruction
     /// PUSH1 -> 1

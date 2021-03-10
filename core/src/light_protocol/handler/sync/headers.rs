@@ -81,7 +81,9 @@ impl PartialOrd for MissingHeader {
 }
 
 impl HasKey<H256> for MissingHeader {
-    fn key(&self) -> H256 { self.hash }
+    fn key(&self) -> H256 {
+        self.hash
+    }
 }
 
 pub struct Headers {
@@ -115,8 +117,7 @@ impl Headers {
     pub fn new(
         graph: Arc<SynchronizationGraph>, peers: Arc<Peers<FullPeerState>>,
         request_id_allocator: Arc<UniqueId>, config: LightNodeConfiguration,
-    ) -> Self
-    {
+    ) -> Self {
         let duplicate_count = AtomicU64::new(0);
         let inserted_count = AtomicU64::new(0);
         let sync_manager =
@@ -137,7 +138,9 @@ impl Headers {
     }
 
     #[inline]
-    pub fn num_waiting(&self) -> usize { self.sync_manager.num_waiting() }
+    pub fn num_waiting(&self) -> usize {
+        self.sync_manager.num_waiting()
+    }
 
     #[inline]
     pub fn print_stats(&self) {
@@ -156,7 +159,9 @@ impl Headers {
 
     #[inline]
     pub fn request<I>(&self, hashes: I, source: HashSource)
-    where I: Iterator<Item = H256> {
+    where
+        I: Iterator<Item = H256>,
+    {
         let headers = hashes
             .filter(|h| !self.graph.contains_block_header(&h))
             .map(|h| MissingHeader::new(h, source.clone()));
@@ -190,8 +195,7 @@ impl Headers {
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         headers: impl Iterator<Item = BlockHeader>,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         let mut missing = HashSet::new();
         let mut has_invalid_header = false;
 

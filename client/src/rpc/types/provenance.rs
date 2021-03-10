@@ -45,7 +45,9 @@ pub enum Origin {
 }
 
 impl Default for Origin {
-    fn default() -> Self { Origin::Unknown }
+    fn default() -> Self {
+        Origin::Unknown
+    }
 }
 
 impl fmt::Display for Origin {

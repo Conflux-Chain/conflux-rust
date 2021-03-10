@@ -20,7 +20,9 @@ pub struct FakeDbForStateTest {}
 
 // Compatible hack for KeyValueDB
 impl MallocSizeOf for FakeDbForStateTest {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
+        0
+    }
 }
 
 impl KeyValueDB for FakeDbForStateTest {
@@ -36,7 +38,9 @@ impl KeyValueDB for FakeDbForStateTest {
     fn write_buffered(&self, _transaction: DBTransaction) {}
 
     /// No-op
-    fn flush(&self) -> std::io::Result<()> { Ok(()) }
+    fn flush(&self) -> std::io::Result<()> {
+        Ok(())
+    }
 
     fn iter<'a>(
         &'a self, _col: u32,
@@ -50,7 +54,9 @@ impl KeyValueDB for FakeDbForStateTest {
         unreachable!()
     }
 
-    fn restore(&self, _new_db: &str) -> std::io::Result<()> { unreachable!() }
+    fn restore(&self, _new_db: &str) -> std::io::Result<()> {
+        unreachable!()
+    }
 }
 
 #[cfg(any(test, feature = "testonly_code"))]
@@ -101,7 +107,9 @@ impl Drop for FakeStateManager {
 impl Deref for FakeStateManager {
     type Target = Arc<StateManager>;
 
-    fn deref(&self) -> &Self::Target { self.state_manager.as_ref().unwrap() }
+    fn deref(&self) -> &Self::Target {
+        self.state_manager.as_ref().unwrap()
+    }
 }
 
 #[cfg(any(test, feature = "testonly_code"))]
@@ -234,7 +242,9 @@ fn generate_account_keys(number_of_keys: usize) -> Vec<Vec<u8>> {
 }
 
 #[cfg(test)]
-fn get_rng_for_test() -> ChaChaRng { ChaChaRng::from_seed([123; 32]) }
+fn get_rng_for_test() -> ChaChaRng {
+    ChaChaRng::from_seed([123; 32])
+}
 
 // Kept for debugging.
 #[allow(dead_code)]

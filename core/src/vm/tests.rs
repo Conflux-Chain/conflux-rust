@@ -91,7 +91,9 @@ pub fn test_finalize(res: Result<GasLeft>) -> Result<U256> {
 impl MockContext {
     /// New mock context
     #[allow(dead_code)]
-    pub fn new() -> Self { MockContext::default() }
+    pub fn new() -> Self {
+        MockContext::default()
+    }
 
     /// New mock context with byzantium spec rules
     #[allow(dead_code)]
@@ -132,7 +134,9 @@ impl Context for MockContext {
         Ok(self.balances.get(address).map_or(false, |b| !b.is_zero()))
     }
 
-    fn origin_balance(&self) -> Result<U256> { unimplemented!() }
+    fn origin_balance(&self) -> Result<U256> {
+        unimplemented!()
+    }
 
     fn balance(&self, address: &Address) -> Result<U256> {
         Ok(self.balances[address])
@@ -150,8 +154,7 @@ impl Context for MockContext {
         address: CreateContractAddress, _trap: bool,
     ) -> cfx_statedb::Result<
         ::std::result::Result<ContractCreateResult, TrapKind>,
-    >
-    {
+    > {
         self.calls.insert(MockCall {
             call_type: MockCallType::Create,
             create_scheme: Some(address),
@@ -214,9 +217,8 @@ impl Context for MockContext {
 
     fn suicide(
         &mut self, refund_address: &Address,
-        _: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> Result<()>
-    {
+        _: &mut dyn Tracer<Output = ExecTrace>, _account_start_nonce: U256,
+    ) -> Result<()> {
         if !refund_address.is_valid_address() {
             return Err(Error::InvalidAddress(*refund_address));
         }
@@ -226,19 +228,31 @@ impl Context for MockContext {
         Ok(())
     }
 
-    fn spec(&self) -> &Spec { &self.spec }
+    fn spec(&self) -> &Spec {
+        &self.spec
+    }
 
-    fn env(&self) -> &Env { &self.env }
+    fn env(&self) -> &Env {
+        &self.env
+    }
 
-    fn chain_id(&self) -> u64 { self.chain_id }
+    fn chain_id(&self) -> u64 {
+        self.chain_id
+    }
 
-    fn depth(&self) -> usize { self.depth }
+    fn depth(&self) -> usize {
+        self.depth
+    }
 
-    fn is_static(&self) -> bool { self.is_static }
+    fn is_static(&self) -> bool {
+        self.is_static
+    }
 
     // The Mock Context doesn't consider the message call and do not have
     // reentrancy check.
-    fn is_static_or_reentrancy(&self) -> bool { self.is_static }
+    fn is_static_or_reentrancy(&self) -> bool {
+        self.is_static
+    }
 
     fn add_sstore_refund(&mut self, value: usize) {
         self.sstore_clears += value as i128;

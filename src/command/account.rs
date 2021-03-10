@@ -41,7 +41,9 @@ pub struct ListAccounts {
 }
 
 impl ListAccounts {
-    pub fn new(_matches: &clap::ArgMatches) -> Self { Self { path: None } }
+    pub fn new(_matches: &clap::ArgMatches) -> Self {
+        Self { path: None }
+    }
 }
 
 #[derive(Debug, PartialEq)]

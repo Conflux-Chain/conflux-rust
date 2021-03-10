@@ -14,9 +14,13 @@ pub struct TxWithReadyInfo {
 }
 
 impl TxWithReadyInfo {
-    pub fn is_already_packed(&self) -> bool { self.packed }
+    pub fn is_already_packed(&self) -> bool {
+        self.packed
+    }
 
-    pub fn get_arc_tx(&self) -> &Arc<SignedTransaction> { &self.transaction }
+    pub fn get_arc_tx(&self) -> &Arc<SignedTransaction> {
+        &self.transaction
+    }
 
     pub fn should_replace(&self, x: &Self, force: bool) -> bool {
         if force {
@@ -37,7 +41,9 @@ impl TxWithReadyInfo {
 impl Deref for TxWithReadyInfo {
     type Target = SignedTransaction;
 
-    fn deref(&self) -> &Self::Target { &self.transaction }
+    fn deref(&self) -> &Self::Target {
+        &self.transaction
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -102,8 +108,7 @@ impl NoncePoolNode {
     pub fn insert(
         node: &mut Option<Box<NoncePoolNode>>, tx: &TxWithReadyInfo,
         priority: u64, force: bool,
-    ) -> InsertResult
-    {
+    ) -> InsertResult {
         if node.is_none() {
             *node = Some(Box::new(NoncePoolNode::new(tx, priority)));
             return InsertResult::NewAdded;
@@ -368,7 +373,9 @@ impl NoncePool {
         })
     }
 
-    pub fn is_empty(&self) -> bool { self.root.is_none() }
+    pub fn is_empty(&self) -> bool {
+        self.root.is_none()
+    }
 
     /// return the number of transactions whose nonce < `nonce`
     pub fn count_less(&self, nonce: &U256) -> usize {
@@ -425,8 +432,7 @@ mod nonce_pool_test {
     fn new_test_tx_with_ready_info(
         sender: &KeyPair, nonce: usize, gas_price: usize, value: usize,
         packed: bool,
-    ) -> TxWithReadyInfo
-    {
+    ) -> TxWithReadyInfo {
         let transaction = new_test_tx(sender, nonce, gas_price, value);
         TxWithReadyInfo {
             transaction,
@@ -593,8 +599,7 @@ mod nonce_pool_test {
     fn recalculate_readiness_with_local_info(
         nonce_pool: &BTreeMap<U256, TxWithReadyInfo>, nonce: U256,
         balance: U256,
-    ) -> Option<Arc<SignedTransaction>>
-    {
+    ) -> Option<Arc<SignedTransaction>> {
         let mut next_nonce = nonce;
         let mut balance_left = balance;
         while let Some(tx) = nonce_pool.get(&next_nonce) {

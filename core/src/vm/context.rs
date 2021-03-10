@@ -141,7 +141,7 @@ pub trait Context {
     /// Address to which funds should be refunded.
     fn suicide(
         &mut self, refund_address: &Address,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
     ) -> Result<()>;
 
     /// Returns specification.
@@ -178,8 +178,7 @@ pub trait Context {
         &mut self, _pc: usize, _instruction: u8, _gas_cost: U256,
         _mem_written: Option<(usize, usize)>,
         _store_written: Option<(U256, U256)>,
-    )
-    {
+    ) {
     }
 
     /// Trace the finalised execution of a single instruction.

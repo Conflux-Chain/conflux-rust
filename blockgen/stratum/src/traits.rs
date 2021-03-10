@@ -33,7 +33,9 @@ pub enum Error {
 }
 
 impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Self { Error::Io(err.to_string()) }
+    fn from(err: std::io::Error) -> Self {
+        Error::Io(err.to_string())
+    }
 }
 
 impl From<PushMessageError> for Error {

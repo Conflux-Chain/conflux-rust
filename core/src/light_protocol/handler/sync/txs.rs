@@ -103,8 +103,7 @@ impl Txs {
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         txs: impl Iterator<Item = SignedTransaction>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         for tx in txs {
             let hash = tx.hash();
             trace!("Validating tx {:?}", hash);

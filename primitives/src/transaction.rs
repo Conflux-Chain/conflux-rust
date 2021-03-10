@@ -163,7 +163,9 @@ impl fmt::Display for TransactionError {
 }
 
 impl error::Error for TransactionError {
-    fn description(&self) -> &str { "Transaction error" }
+    fn description(&self) -> &str {
+        "Transaction error"
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -176,7 +178,9 @@ pub enum Action {
 }
 
 impl Default for Action {
-    fn default() -> Action { Action::Create }
+    fn default() -> Action {
+        Action::Create
+    }
 }
 
 impl Decodable for Action {
@@ -317,7 +321,9 @@ pub struct TransactionWithSignatureSerializePart {
 impl Deref for TransactionWithSignatureSerializePart {
     type Target = Transaction;
 
-    fn deref(&self) -> &Self::Target { &self.unsigned }
+    fn deref(&self) -> &Self::Target {
+        &self.unsigned
+    }
 }
 
 /// Signed transaction information without verified signature.
@@ -336,7 +342,9 @@ pub struct TransactionWithSignature {
 impl Deref for TransactionWithSignature {
     type Target = TransactionWithSignatureSerializePart;
 
-    fn deref(&self) -> &Self::Target { &self.transaction }
+    fn deref(&self) -> &Self::Target {
+        &self.transaction
+    }
 }
 
 impl Decodable for TransactionWithSignature {
@@ -384,7 +392,9 @@ impl TransactionWithSignature {
     }
 
     /// Checks whether signature is empty.
-    pub fn is_unsigned(&self) -> bool { self.r.is_zero() && self.s.is_zero() }
+    pub fn is_unsigned(&self) -> bool {
+        self.r.is_zero() && self.s.is_zero()
+    }
 
     /// Construct a signature object from the sig.
     pub fn signature(&self) -> Signature {
@@ -402,7 +412,9 @@ impl TransactionWithSignature {
         }
     }
 
-    pub fn hash(&self) -> H256 { self.hash }
+    pub fn hash(&self) -> H256 {
+        self.hash
+    }
 
     /// Recovers the public key of the sender.
     pub fn recover_public(&self) -> Result<Public, keylib::Error> {
@@ -450,11 +462,15 @@ impl Decodable for SignedTransaction {
 impl Deref for SignedTransaction {
     type Target = TransactionWithSignature;
 
-    fn deref(&self) -> &Self::Target { &self.transaction }
+    fn deref(&self) -> &Self::Target {
+        &self.transaction
+    }
 }
 
 impl From<SignedTransaction> for TransactionWithSignature {
-    fn from(tx: SignedTransaction) -> Self { tx.transaction }
+    fn from(tx: SignedTransaction) -> Self {
+        tx.transaction
+    }
 }
 
 impl SignedTransaction {
@@ -490,24 +506,42 @@ impl SignedTransaction {
     }
 
     /// Returns transaction sender.
-    pub fn sender(&self) -> Address { self.sender }
+    pub fn sender(&self) -> Address {
+        self.sender
+    }
 
-    pub fn nonce(&self) -> U256 { self.transaction.nonce }
+    pub fn nonce(&self) -> U256 {
+        self.transaction.nonce
+    }
 
     /// Checks if signature is empty.
-    pub fn is_unsigned(&self) -> bool { self.transaction.is_unsigned() }
+    pub fn is_unsigned(&self) -> bool {
+        self.transaction.is_unsigned()
+    }
 
-    pub fn hash(&self) -> H256 { self.transaction.hash() }
+    pub fn hash(&self) -> H256 {
+        self.transaction.hash()
+    }
 
-    pub fn gas(&self) -> &U256 { &self.transaction.gas }
+    pub fn gas(&self) -> &U256 {
+        &self.transaction.gas
+    }
 
-    pub fn gas_price(&self) -> &U256 { &self.transaction.gas_price }
+    pub fn gas_price(&self) -> &U256 {
+        &self.transaction.gas_price
+    }
 
-    pub fn gas_limit(&self) -> &U256 { &self.transaction.gas }
+    pub fn gas_limit(&self) -> &U256 {
+        &self.transaction.gas
+    }
 
-    pub fn rlp_size(&self) -> usize { self.transaction.rlp_size() }
+    pub fn rlp_size(&self) -> usize {
+        self.transaction.rlp_size()
+    }
 
-    pub fn public(&self) -> &Option<Public> { &self.public }
+    pub fn public(&self) -> &Option<Public> {
+        &self.public
+    }
 
     pub fn verify_public(&self, skip: bool) -> Result<bool, keylib::Error> {
         if self.public.is_none() {

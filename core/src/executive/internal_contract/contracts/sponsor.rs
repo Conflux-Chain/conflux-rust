@@ -56,10 +56,16 @@ impl ExecutionTrait for SetSponsorForGas {
         &self, inputs: (Address, U256), params: &ActionParams, _env: &Env,
         spec: &Spec, state: &mut dyn StateOpsTrait, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         set_sponsor_for_gas(
-            inputs.0, inputs.1, params, spec, state, substate, tracer,
+            inputs.0,
+            inputs.1,
+            params,
+            spec,
+            state,
+            substate,
+            tracer,
+            spec.account_start_nonce(_env.number),
         )
     }
 }
@@ -74,9 +80,16 @@ impl ExecutionTrait for SetSponsorForCollateral {
         &self, input: Address, params: &ActionParams, _env: &Env, spec: &Spec,
         state: &mut dyn StateOpsTrait, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<()>
-    {
-        set_sponsor_for_collateral(input, params, spec, state, substate, tracer)
+    ) -> vm::Result<()> {
+        set_sponsor_for_collateral(
+            input,
+            params,
+            spec,
+            state,
+            substate,
+            tracer,
+            spec.account_start_nonce(_env.number),
+        )
     }
 }
 
@@ -89,8 +102,7 @@ impl UpfrontPaymentTrait for AddPrivilege {
     fn upfront_gas_payment(
         &self, input: &Vec<Address>, _: &ActionParams, spec: &Spec,
         _: &dyn StateOpsTrait,
-    ) -> U256
-    {
+    ) -> U256 {
         U256::from(spec.sstore_reset_gas) * input.len()
     }
 }
@@ -100,8 +112,7 @@ impl ExecutionTrait for AddPrivilege {
         &self, addresses: Vec<Address>, params: &ActionParams, _env: &Env,
         _: &Spec, state: &mut dyn StateOpsTrait, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         if !params.sender.is_contract_address() {
             return Err(vm::Error::InternalContract(
                 "normal account is not allowed to set commission_privilege",
@@ -120,8 +131,7 @@ impl UpfrontPaymentTrait for RemovePrivilege {
     fn upfront_gas_payment(
         &self, input: &Vec<Address>, _: &ActionParams, spec: &Spec,
         _: &dyn StateOpsTrait,
-    ) -> U256
-    {
+    ) -> U256 {
         U256::from(spec.sstore_reset_gas) * input.len()
     }
 }
@@ -131,8 +141,7 @@ impl ExecutionTrait for RemovePrivilege {
         &self, addresses: Vec<Address>, params: &ActionParams, _env: &Env,
         _: &Spec, state: &mut dyn StateOpsTrait, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         if !params.sender.is_contract_address() {
             return Err(vm::Error::InternalContract(
                 "normal account is not allowed to set commission_privilege",
@@ -153,8 +162,7 @@ impl ExecutionTrait for GetSponsorForGas {
         &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut dyn StateOpsTrait, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<Address>
-    {
+    ) -> vm::Result<Address> {
         Ok(state.sponsor_for_gas(&input)?.unwrap_or_default())
     }
 }
@@ -169,8 +177,7 @@ impl ExecutionTrait for GetSponsoredBalanceForGas {
         &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut dyn StateOpsTrait, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<U256>
-    {
+    ) -> vm::Result<U256> {
         Ok(state.sponsor_balance_for_gas(&input)?)
     }
 }
@@ -185,8 +192,7 @@ impl ExecutionTrait for GetSponsoredGasFeeUpperBound {
         &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut dyn StateOpsTrait, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<U256>
-    {
+    ) -> vm::Result<U256> {
         Ok(state.sponsor_gas_bound(&input)?)
     }
 }
@@ -201,8 +207,7 @@ impl ExecutionTrait for GetSponsorForCollateral {
         &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut dyn StateOpsTrait, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<Address>
-    {
+    ) -> vm::Result<Address> {
         Ok(state.sponsor_for_collateral(&input)?.unwrap_or_default())
     }
 }
@@ -217,8 +222,7 @@ impl ExecutionTrait for GetSponsoredBalanceForCollateral {
         &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut dyn StateOpsTrait, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<U256>
-    {
+    ) -> vm::Result<U256> {
         Ok(state.sponsor_balance_for_collateral(&input)?)
     }
 }
@@ -233,8 +237,7 @@ impl ExecutionTrait for IsWhitelisted {
         &self, (contract, user): (Address, Address), _: &ActionParams,
         _env: &Env, _: &Spec, state: &mut dyn StateOpsTrait, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<bool>
-    {
+    ) -> vm::Result<bool> {
         if contract.is_contract_address() {
             Ok(state.check_commission_privilege(&contract, &user)?)
         } else {
@@ -253,8 +256,7 @@ impl ExecutionTrait for IsAllWhitelisted {
         &self, contract: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut dyn StateOpsTrait, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<bool>
-    {
+    ) -> vm::Result<bool> {
         if contract.is_contract_address() {
             Ok(
                 state
@@ -275,8 +277,7 @@ impl UpfrontPaymentTrait for AddPrivilegeByAdmin {
     fn upfront_gas_payment(
         &self, (_contract, addresses): &(Address, Vec<Address>),
         _: &ActionParams, spec: &Spec, _: &dyn StateOpsTrait,
-    ) -> U256
-    {
+    ) -> U256 {
         U256::from(spec.sstore_reset_gas) * addresses.len()
     }
 }
@@ -287,8 +288,7 @@ impl ExecutionTrait for AddPrivilegeByAdmin {
         params: &ActionParams, _env: &Env, _: &Spec,
         state: &mut dyn StateOpsTrait, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         if contract.is_contract_address()
             && &params.sender == &state.admin(&contract)?
         {
@@ -307,8 +307,7 @@ impl UpfrontPaymentTrait for RemovePrivilegeByAdmin {
     fn upfront_gas_payment(
         &self, (_contract, addresses): &(Address, Vec<Address>),
         _: &ActionParams, spec: &Spec, _: &dyn StateOpsTrait,
-    ) -> U256
-    {
+    ) -> U256 {
         U256::from(spec.sstore_reset_gas) * addresses.len()
     }
 }
@@ -319,8 +318,7 @@ impl ExecutionTrait for RemovePrivilegeByAdmin {
         params: &ActionParams, _env: &Env, _: &Spec,
         state: &mut dyn StateOpsTrait, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         if contract.is_contract_address()
             && &params.sender == &state.admin(&contract)?
         {

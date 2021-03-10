@@ -35,11 +35,17 @@ impl<
         }
     }
 
-    pub fn size(&self) -> usize { self.inner.lock().size() }
+    pub fn size(&self) -> usize {
+        self.inner.lock().size()
+    }
 
-    pub fn make_tree(&mut self, v: usize) { self.inner.lock().make_tree(v); }
+    pub fn make_tree(&mut self, v: usize) {
+        self.inner.lock().make_tree(v);
+    }
 
-    pub fn link(&mut self, v: usize, w: usize) { self.inner.lock().link(v, w); }
+    pub fn link(&mut self, v: usize, w: usize) {
+        self.inner.lock().link(v, w);
+    }
 
     pub fn lca(&self, v: usize, w: usize) -> usize {
         self.inner.lock().lca(v, w)
@@ -73,7 +79,9 @@ impl<
         self.inner.lock().split_root(parent, v);
     }
 
-    pub fn get(&self, v: usize) -> i128 { self.inner.lock().get(v) }
+    pub fn get(&self, v: usize) -> i128 {
+        self.inner.lock().get(v)
+    }
 }
 
 /// default implementation of link cut tree, ancestor_at and caterpillar_apply

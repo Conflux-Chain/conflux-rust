@@ -35,7 +35,9 @@ impl BrainPrefix {
         }
     }
 
-    pub fn phrase(&self) -> &str { &self.last_phrase }
+    pub fn phrase(&self) -> &str {
+        &self.last_phrase
+    }
 }
 
 impl Generator for BrainPrefix {

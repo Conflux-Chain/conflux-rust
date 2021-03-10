@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-
 // Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Parity Ethereum.
 
@@ -44,7 +43,9 @@ impl str::FromStr for Id {
 }
 impl Id {
     // TODO: replace `format!` see [#10412](https://github.com/paritytech/parity-ethereum/issues/10412)
-    pub fn as_string(&self) -> String { format!("{:?}", self.0) }
+    pub fn as_string(&self) -> String {
+        format!("{:?}", self.0)
+    }
 }
 
 #[cfg(not(test))]
@@ -53,7 +54,9 @@ mod random {
 
     pub type Rng = rand::rngs::OsRng;
 
-    pub fn new() -> Rng { rand::rngs::OsRng }
+    pub fn new() -> Rng {
+        rand::rngs::OsRng
+    }
 }
 
 #[cfg(test)]
@@ -65,7 +68,9 @@ mod random {
 
     pub type Rng = XorShiftRng;
 
-    pub fn new() -> Rng { Rng::from_seed(RNG_SEED) }
+    pub fn new() -> Rng {
+        Rng::from_seed(RNG_SEED)
+    }
 }
 
 pub struct Subscribers<T> {
@@ -141,5 +146,7 @@ impl<T, V> Subscribers<(Sink<T>, V)> {
 impl<T> ops::Deref for Subscribers<T> {
     type Target = HashMap<Id, T>;
 
-    fn deref(&self) -> &Self::Target { &self.subscriptions }
+    fn deref(&self) -> &Self::Target {
+        &self.subscriptions
+    }
 }

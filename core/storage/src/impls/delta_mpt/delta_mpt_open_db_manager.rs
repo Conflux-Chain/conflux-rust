@@ -46,7 +46,9 @@ impl ArcDeltaDbWrapper {
 impl Deref for ArcDeltaDbWrapper {
     type Target = dyn DeltaDbTrait;
 
-    fn deref(&self) -> &Self::Target { self.inner.as_ref().unwrap().as_ref() }
+    fn deref(&self) -> &Self::Target {
+        self.inner.as_ref().unwrap().as_ref()
+    }
 }
 
 impl Drop for ArcDeltaDbWrapper {
@@ -95,7 +97,8 @@ pub struct OpenDeltaDbLru<DeltaDbManager: DeltaDbManagerTrait> {
 }
 
 impl<T: 'static + DeltaDbManagerTrait + Send + Sync> OpenDeltaDbLru<T>
-where T::DeltaDb: 'static + Send + Sync + DeltaDbTrait
+where
+    T::DeltaDb: 'static + Send + Sync + DeltaDbTrait,
 {
     pub fn new(delta_db_manager: Arc<T>) -> Result<Self> {
         Ok(Self {
@@ -121,8 +124,7 @@ where T::DeltaDb: 'static + Send + Sync + DeltaDbTrait
     pub fn import(
         &self, snapshot_epoch_id: &EpochId, mpt_id: DeltaMptId,
         opened_db: T::DeltaDb,
-    ) -> Result<ArcDeltaDbWrapper>
-    {
+    ) -> Result<ArcDeltaDbWrapper> {
         let mut arc_db = self
             .inner
             .lock()
@@ -139,7 +141,8 @@ where T::DeltaDb: 'static + Send + Sync + DeltaDbTrait
 
 impl<T: 'static + DeltaDbManagerTrait + Send + Sync>
     OpenableOnDemandOpenDeltaDbTrait for OpenDeltaDbLru<T>
-where T::DeltaDb: 'static + Send + Sync + DeltaDbTrait
+where
+    T::DeltaDb: 'static + Send + Sync + DeltaDbTrait,
 {
     fn open(&self, mpt_id: DeltaMptId) -> Result<ArcDeltaDbWrapper> {
         let mut arc_db = self.inner.lock().open(mpt_id).unwrap();
@@ -156,7 +159,8 @@ pub struct OpenDeltaDbLruInner<DeltaDbManager: DeltaDbManagerTrait> {
 }
 
 impl<T: DeltaDbManagerTrait + Send + Sync> OpenDeltaDbLruInner<T>
-where T::DeltaDb: 'static + Send + Sync + DeltaDbTrait
+where
+    T::DeltaDb: 'static + Send + Sync + DeltaDbTrait,
 {
     pub fn new(delta_db_manager: Arc<T>) -> Result<Self> {
         Ok(Self {
@@ -186,7 +190,8 @@ where T::DeltaDb: 'static + Send + Sync + DeltaDbTrait
 
 impl<T: DeltaDbManagerTrait + Send + Sync> OnDemandOpenDeltaDbInnerTrait
     for OpenDeltaDbLruInner<T>
-where T::DeltaDb: 'static + Send + Sync + DeltaDbTrait
+where
+    T::DeltaDb: 'static + Send + Sync + DeltaDbTrait,
 {
     fn open(&mut self, mpt_id: DeltaMptId) -> Result<ArcDeltaDbWrapper> {
         match self.cache_util.cache_data.get(&mpt_id) {
@@ -228,8 +233,7 @@ where T::DeltaDb: 'static + Send + Sync + DeltaDbTrait
     fn create(
         &mut self, snapshot_epoch_id: &EpochId, mpt_id: DeltaMptId,
         opened_db: Option<Arc<dyn DeltaDbTrait + Send + Sync>>,
-    ) -> Result<ArcDeltaDbWrapper>
-    {
+    ) -> Result<ArcDeltaDbWrapper> {
         match self.mpt_id_to_snapshot_epoch_id.get(&mpt_id) {
             Some(epoch_id) => {
                 debug_assert!(snapshot_epoch_id == epoch_id);

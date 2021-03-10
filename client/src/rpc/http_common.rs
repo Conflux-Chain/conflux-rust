@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-
 // Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Parity Ethereum.
 
@@ -36,7 +35,9 @@ pub struct MetaExtractor<T> {
 }
 
 impl<T> MetaExtractor<T> {
-    pub fn new(extractor: T) -> Self { MetaExtractor { extractor } }
+    pub fn new(extractor: T) -> Self {
+        MetaExtractor { extractor }
+    }
 }
 
 impl<M, T> http::MetaExtractor<M> for MetaExtractor<T>

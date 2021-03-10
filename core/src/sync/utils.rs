@@ -33,8 +33,7 @@ use threadpool::ThreadPool;
 pub fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: U256,
     diff: U256, block_weight: u32, adaptive: bool,
-) -> (H256, Block)
-{
+) -> (H256, Block) {
     let mut b = BlockHeaderBuilder::new();
     let mut author = Address::zero();
     author.set_user_account_type_bits();
@@ -68,8 +67,7 @@ pub fn create_simple_block_impl(
 pub fn create_simple_block(
     sync: Arc<SynchronizationGraph>, parent_hash: H256, ref_hashes: Vec<H256>,
     height: u64, block_weight: u32, adaptive: bool,
-) -> (H256, Block)
-{
+) -> (H256, Block) {
     //    sync.consensus.wait_for_generation(&parent_hash);
     // let parent_header = sync.block_header_by_hash(&parent_hash).unwrap();
     //    let exp_diff = sync.expected_difficulty(&parent_hash);
@@ -94,6 +92,7 @@ pub fn create_simple_block(
 
 pub fn initialize_data_manager(
     db_dir: &str, dbtype: DbType, pow: Arc<PowComputer>, vm: VmFactory,
+    account_start_nonce: U256,
 ) -> (Arc<BlockDataManager>, Arc<Block>) {
     let ledger_db = db::open_database(
         db_dir,
@@ -137,6 +136,7 @@ pub fn initialize_data_manager(
         machine.clone(),
         false, /* need_to_execute */
         None,
+        account_start_nonce,
     ));
 
     let data_man = Arc::new(BlockDataManager::new(
@@ -159,8 +159,7 @@ pub fn initialize_data_manager(
 pub fn initialize_synchronization_graph_with_data_manager(
     data_man: Arc<BlockDataManager>, beta: u64, h: u64, tcr: u64, tcb: u64,
     era_epoch_count: u64, pow: Arc<PowComputer>, vm: VmFactory,
-) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
-{
+) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>) {
     let machine = Arc::new(new_machine_with_builtin(Default::default(), vm));
     let verification_config = VerificationConfig::new(
         true, /* test_mode */
@@ -246,19 +245,23 @@ pub fn initialize_synchronization_graph_with_data_manager(
 /// This method is only used in tests and benchmarks.
 pub fn initialize_synchronization_graph(
     db_dir: &str, beta: u64, h: u64, tcr: u64, tcb: u64, era_epoch_count: u64,
-    dbtype: DbType,
+    dbtype: DbType, account_start_nonce: U256,
 ) -> (
     Arc<SynchronizationGraph>,
     Arc<ConsensusGraph>,
     Arc<BlockDataManager>,
     Arc<Block>,
-)
-{
+) {
     let vm = VmFactory::new(1024 * 32);
     let pow = Arc::new(PowComputer::new(true));
 
-    let (data_man, genesis_block) =
-        initialize_data_manager(db_dir, dbtype, pow.clone(), vm.clone());
+    let (data_man, genesis_block) = initialize_data_manager(
+        db_dir,
+        dbtype,
+        pow.clone(),
+        vm.clone(),
+        account_start_nonce,
+    );
 
     let (sync, consensus) = initialize_synchronization_graph_with_data_manager(
         data_man.clone(),

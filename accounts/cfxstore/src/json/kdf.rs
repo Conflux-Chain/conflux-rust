@@ -29,7 +29,9 @@ pub enum KdfSer {
 
 impl Serialize for KdfSer {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    where
+        S: Serializer,
+    {
         match *self {
             KdfSer::Pbkdf2 => serializer.serialize_str("pbkdf2"),
             KdfSer::Scrypt => serializer.serialize_str("scrypt"),
@@ -39,7 +41,9 @@ impl Serialize for KdfSer {
 
 impl<'a> Deserialize<'a> for KdfSer {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: Deserializer<'a> {
+    where
+        D: Deserializer<'a>,
+    {
         deserializer.deserialize_any(KdfSerVisitor)
     }
 }
@@ -54,7 +58,9 @@ impl<'a> Visitor<'a> for KdfSerVisitor {
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-    where E: SerdeError {
+    where
+        E: SerdeError,
+    {
         match value {
             "pbkdf2" => Ok(KdfSer::Pbkdf2),
             "scrypt" => Ok(KdfSer::Scrypt),
@@ -63,7 +69,9 @@ impl<'a> Visitor<'a> for KdfSerVisitor {
     }
 
     fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
-    where E: SerdeError {
+    where
+        E: SerdeError,
+    {
         self.visit_str(value.as_ref())
     }
 }
@@ -75,7 +83,9 @@ pub enum Prf {
 
 impl Serialize for Prf {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    where
+        S: Serializer,
+    {
         match *self {
             Prf::HmacSha256 => serializer.serialize_str("hmac-sha256"),
         }
@@ -84,7 +94,9 @@ impl Serialize for Prf {
 
 impl<'a> Deserialize<'a> for Prf {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: Deserializer<'a> {
+    where
+        D: Deserializer<'a>,
+    {
         deserializer.deserialize_any(PrfVisitor)
     }
 }
@@ -99,7 +111,9 @@ impl<'a> Visitor<'a> for PrfVisitor {
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-    where E: SerdeError {
+    where
+        E: SerdeError,
+    {
         match value {
             "hmac-sha256" => Ok(Prf::HmacSha256),
             _ => Err(SerdeError::custom(Error::InvalidPrf)),
@@ -107,7 +121,9 @@ impl<'a> Visitor<'a> for PrfVisitor {
     }
 
     fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
-    where E: SerdeError {
+    where
+        E: SerdeError,
+    {
         self.visit_str(value.as_ref())
     }
 }
@@ -137,7 +153,9 @@ pub enum KdfSerParams {
 
 impl Serialize for KdfSerParams {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    where
+        S: Serializer,
+    {
         match *self {
             KdfSerParams::Pbkdf2(ref params) => params.serialize(serializer),
             KdfSerParams::Scrypt(ref params) => params.serialize(serializer),
@@ -147,7 +165,9 @@ impl Serialize for KdfSerParams {
 
 impl<'a> Deserialize<'a> for KdfSerParams {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: Deserializer<'a> {
+    where
+        D: Deserializer<'a>,
+    {
         use serde_json::{from_value, Value};
 
         let v: Value = Deserialize::deserialize(deserializer)?;

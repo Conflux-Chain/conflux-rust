@@ -46,10 +46,10 @@ pub struct VaultKeyFileManager {
 
 impl VaultDiskDirectory {
     /// Create new vault directory with given key
-    pub fn create<P>(
-        root: P, name: &str, key: VaultKey,
-    ) -> Result<Self, Error>
-    where P: AsRef<Path> {
+    pub fn create<P>(root: P, name: &str, key: VaultKey) -> Result<Self, Error>
+    where
+        P: AsRef<Path>,
+    {
         // check that vault directory does not exists
         let vault_dir_path = make_vault_dir_path(root, name, true)?;
         if vault_dir_path.exists() {
@@ -72,7 +72,9 @@ impl VaultDiskDirectory {
 
     /// Open existing vault directory with given key
     pub fn at<P>(root: P, name: &str, key: VaultKey) -> Result<Self, Error>
-    where P: AsRef<Path> {
+    where
+        P: AsRef<Path>,
+    {
         // check that vault directory exists
         let vault_dir_path = make_vault_dir_path(root, name, true)?;
         if !vault_dir_path.is_dir() {
@@ -90,7 +92,9 @@ impl VaultDiskDirectory {
 
     /// Read vault meta without actually opening the vault
     pub fn meta_at<P>(root: P, name: &str) -> Result<String, Error>
-    where P: AsRef<Path> {
+    where
+        P: AsRef<Path>,
+    {
         // check that vault directory exists
         let vault_dir_path = make_vault_dir_path(root, name, true)?;
         if !vault_dir_path.is_dir() {
@@ -138,11 +142,17 @@ impl VaultDiskDirectory {
 }
 
 impl VaultKeyDirectory for VaultDiskDirectory {
-    fn as_key_directory(&self) -> &dyn KeyDirectory { self }
+    fn as_key_directory(&self) -> &dyn KeyDirectory {
+        self
+    }
 
-    fn name(&self) -> &str { &self.key_manager().name }
+    fn name(&self) -> &str {
+        &self.key_manager().name
+    }
 
-    fn key(&self) -> VaultKey { self.key_manager().key.clone() }
+    fn key(&self) -> VaultKey {
+        self.key_manager().key.clone()
+    }
 
     fn set_key(&self, new_key: VaultKey) -> Result<(), SetKeyError> {
         let temp_vault = VaultDiskDirectory::create_temp_vault(self, new_key)
@@ -186,7 +196,9 @@ impl VaultKeyDirectory for VaultDiskDirectory {
         temp_vault.delete().map_err(SetKeyError::NonFatalNew)
     }
 
-    fn meta(&self) -> String { self.key_manager().meta.lock().clone() }
+    fn meta(&self) -> String {
+        self.key_manager().meta.lock().clone()
+    }
 
     fn set_meta(&self, meta: &str) -> Result<(), Error> {
         let key_manager = self.key_manager();
@@ -211,7 +223,9 @@ impl KeyFileManager for VaultKeyFileManager {
     fn read<T>(
         &self, filename: Option<String>, reader: T,
     ) -> Result<SafeAccount, Error>
-    where T: io::Read {
+    where
+        T: io::Read,
+    {
         let vault_file = json::VaultKeyFile::load(reader)
             .map_err(|e| Error::Custom(format!("{:?}", e)))?;
         let mut safe_account = SafeAccount::from_vault_file(
@@ -231,7 +245,9 @@ impl KeyFileManager for VaultKeyFileManager {
     fn write<T>(
         &self, mut account: SafeAccount, writer: &mut T,
     ) -> Result<(), Error>
-    where T: io::Write {
+    where
+        T: io::Write,
+    {
         account.meta = json::remove_vault_name_from_json_meta(&account.meta)
             .map_err(|err| Error::Custom(format!("{:?}", err)))?;
 
@@ -247,7 +263,9 @@ impl KeyFileManager for VaultKeyFileManager {
 fn make_vault_dir_path<P>(
     root: P, name: &str, check_name: bool,
 ) -> Result<PathBuf, Error>
-where P: AsRef<Path> {
+where
+    P: AsRef<Path>,
+{
     // check vault name
     if check_name && !check_vault_name(name) {
         return Err(Error::InvalidVaultName);
@@ -274,7 +292,9 @@ fn check_vault_name(name: &str) -> bool {
 fn create_vault_file<P>(
     vault_dir_path: P, key: &VaultKey, meta: &str,
 ) -> Result<(), Error>
-where P: AsRef<Path> {
+where
+    P: AsRef<Path>,
+{
     let password_hash = key.password.as_bytes().keccak256();
     let crypto =
         Crypto::with_plain(&password_hash, &key.password, key.iterations)?;
@@ -309,7 +329,9 @@ where P: AsRef<Path> {
 fn read_vault_file<P>(
     vault_dir_path: P, key: Option<&VaultKey>,
 ) -> Result<String, Error>
-where P: AsRef<Path> {
+where
+    P: AsRef<Path>,
+{
     let mut vault_file_path: PathBuf = vault_dir_path.as_ref().into();
     vault_file_path.push(VAULT_FILE_NAME);
 

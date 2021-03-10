@@ -53,8 +53,7 @@ impl MallocSizeOfOps {
     pub fn new(
         size_of: VoidPtrToSizeFn,
         malloc_enclosing_size_of: Option<VoidPtrToSizeFn>,
-    ) -> Self
-    {
+    ) -> Self {
         MallocSizeOfOps {
             size_of_op: size_of,
             enclosing_size_of_op: malloc_enclosing_size_of,
@@ -134,7 +133,9 @@ impl<T: MallocSizeOf + ?Sized> MallocSizeOf for Box<T> {
 }
 
 impl MallocSizeOf for () {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
+        0
+    }
 }
 
 impl<T1, T2> MallocSizeOf for (T1, T2)
@@ -211,7 +212,8 @@ impl<T: MallocSizeOf> MallocSizeOf for std::cell::UnsafeCell<T> {
 }
 
 impl<'a, B: ?Sized + ToOwned> MallocSizeOf for std::borrow::Cow<'a, B>
-where B::Owned: MallocSizeOf
+where
+    B::Owned: MallocSizeOf,
 {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         match *self {
@@ -400,7 +402,9 @@ malloc_size_of_hash_map!(FastHashMap<K, V, S>);
 
 // PhantomData is always 0.
 impl<T> MallocSizeOf for std::marker::PhantomData<T> {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
+        0
+    }
 }
 
 impl<T: MallocSizeOf> MallocSizeOf for std::sync::Mutex<T> {
@@ -430,7 +434,8 @@ impl<T: MallocSizeOf> MallocSizeOf for parking_lot::RwLock<T> {
 macro_rules! impl_smallvec {
     ($size:expr) => {
         impl<T> MallocSizeOf for smallvec::SmallVec<[T; $size]>
-        where T: MallocSizeOf
+        where
+            T: MallocSizeOf,
         {
             fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
                 let mut n = if self.spilled() {
@@ -567,7 +572,9 @@ mod usable_size {
 
     /// No enclosing function defined.
     #[inline]
-    pub fn new_enclosing_size_fn() -> Option<VoidPtrToSizeFn> { None }
+    pub fn new_enclosing_size_fn() -> Option<VoidPtrToSizeFn> {
+        None
+    }
 }
 
 /// Get a new instance of a MallocSizeOfOps

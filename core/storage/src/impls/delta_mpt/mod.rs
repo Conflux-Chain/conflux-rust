@@ -107,8 +107,7 @@ impl MultiVersionMerklePatriciaTrie {
         snapshot_epoch_id: EpochId, storage_manager: Arc<StorageManager>,
         mpt_id: DeltaMptId,
         node_memory_manager: Arc<DeltaMptsNodeMemoryManager>,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         let row_number = Self::parse_row_number(
             db_manager.open(mpt_id)?.get("last_row_number".as_bytes()),
         )
@@ -136,7 +135,9 @@ impl MultiVersionMerklePatriciaTrie {
         })
     }
 
-    pub fn get_mpt_id(&self) -> DeltaMptId { self.mpt_id }
+    pub fn get_mpt_id(&self) -> DeltaMptId {
+        self.mpt_id
+    }
 
     pub fn start_commit(
         &self,
@@ -150,8 +151,7 @@ impl MultiVersionMerklePatriciaTrie {
     pub(super) fn state_root_committed(
         &self, epoch_id: EpochId, merkle_root: &MerkleHash,
         parent_epoch_id: EpochId, root_node: Option<NodeRefDeltaMpt>,
-    )
-    {
+    ) {
         self.set_parent_epoch(epoch_id, parent_epoch_id.clone());
         if root_node.is_some() {
             self.set_root_node_ref(
@@ -358,7 +358,9 @@ impl MultiVersionMerklePatriciaTrie {
         }
     }
 
-    pub fn log_usage(&self) { self.node_memory_manager.log_usage(); }
+    pub fn log_usage(&self) {
+        self.node_memory_manager.log_usage();
+    }
 }
 
 // Utility function.

@@ -144,7 +144,9 @@ impl Packet {
         Ok(size)
     }
 
-    fn is_send_completed(&self) -> bool { self.sending_pos >= self.data.len() }
+    fn is_send_completed(&self) -> bool {
+        self.sending_pos >= self.data.len()
+    }
 }
 
 impl Drop for Packet {
@@ -333,8 +335,7 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
     pub fn send<Message: Sync + Send + Clone + 'static>(
         &mut self, io: &IoContext<Message>, data: Vec<u8>,
         priority: SendQueuePriority,
-    ) -> Result<SendQueueStatus, Error>
-    {
+    ) -> Result<SendQueueStatus, Error> {
         if !data.is_empty() {
             let size = data.len();
             if self.assembler.is_oversized(size) {
@@ -370,7 +371,9 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
         })
     }
 
-    pub fn is_sending(&self) -> bool { self.interest.is_writable() }
+    pub fn is_sending(&self) -> bool {
+        self.interest.is_writable()
+    }
 }
 
 pub type Connection = GenericConnection<TcpStream>;
@@ -448,7 +451,9 @@ impl Connection {
         Ok(())
     }
 
-    pub fn token(&self) -> StreamToken { self.token }
+    pub fn token(&self) -> StreamToken {
+        self.token
+    }
 
     /// Get remote peer address
     pub fn remote_addr(&self) -> io::Result<SocketAddr> {
@@ -527,7 +532,9 @@ impl Default for PacketWithLenAssembler {
 
 impl PacketAssembler for PacketWithLenAssembler {
     #[inline]
-    fn is_oversized(&self, len: usize) -> bool { len > self.max_data_len }
+    fn is_oversized(&self, len: usize) -> bool {
+        len > self.max_data_len
+    }
 
     fn assemble(&self, data: &mut Vec<u8>) -> Result<(), Error> {
         if self.is_oversized(data.len()) {

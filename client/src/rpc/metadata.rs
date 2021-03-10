@@ -32,5 +32,7 @@ pub struct Metadata {
 impl jsonrpc_core::Metadata for Metadata {}
 
 impl PubSubMetadata for Metadata {
-    fn session(&self) -> Option<Arc<Session>> { self.session.clone() }
+    fn session(&self) -> Option<Arc<Session>> {
+        self.session.clone()
+    }
 }

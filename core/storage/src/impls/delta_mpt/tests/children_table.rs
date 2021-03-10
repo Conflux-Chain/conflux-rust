@@ -30,8 +30,7 @@ fn do_enumerate<
 >(
     index: u8, mut existence: [bool; CHILDREN_COUNT], mut list: Vec<u8>,
     children_table: ChildrenTableDeltaMpt, checker: &mut F,
-)
-{
+) {
     if index as usize == CHILDREN_COUNT {
         checker(existence, list, children_table)
     } else {

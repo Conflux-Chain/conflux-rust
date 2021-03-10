@@ -20,13 +20,25 @@ use timer::Timer;
 // Meters count events to produce exponentially-weighted moving average rates
 // at one-, five-, and fifteen-minutes and a mean rate.
 pub trait Meter: Send + Sync {
-    fn count(&self) -> usize { 0 }
+    fn count(&self) -> usize {
+        0
+    }
     fn mark(&self, _n: usize) {}
-    fn rate1(&self) -> f64 { 0.0 }
-    fn rate5(&self) -> f64 { 0.0 }
-    fn rate15(&self) -> f64 { 0.0 }
-    fn rate_mean(&self) -> f64 { 0.0 }
-    fn snapshot(&self) -> Arc<dyn Meter> { Arc::new(MeterSnapshot::default()) }
+    fn rate1(&self) -> f64 {
+        0.0
+    }
+    fn rate5(&self) -> f64 {
+        0.0
+    }
+    fn rate15(&self) -> f64 {
+        0.0
+    }
+    fn rate_mean(&self) -> f64 {
+        0.0
+    }
+    fn snapshot(&self) -> Arc<dyn Meter> {
+        Arc::new(MeterSnapshot::default())
+    }
     fn stop(&self) {}
 }
 
@@ -77,17 +89,29 @@ struct MeterSnapshot {
 }
 
 impl Meter for MeterSnapshot {
-    fn count(&self) -> usize { self.count }
+    fn count(&self) -> usize {
+        self.count
+    }
 
-    fn rate1(&self) -> f64 { f64::from_bits(self.rates[0]) }
+    fn rate1(&self) -> f64 {
+        f64::from_bits(self.rates[0])
+    }
 
-    fn rate5(&self) -> f64 { f64::from_bits(self.rates[1]) }
+    fn rate5(&self) -> f64 {
+        f64::from_bits(self.rates[1])
+    }
 
-    fn rate15(&self) -> f64 { f64::from_bits(self.rates[2]) }
+    fn rate15(&self) -> f64 {
+        f64::from_bits(self.rates[2])
+    }
 
-    fn rate_mean(&self) -> f64 { f64::from_bits(self.rates[3]) }
+    fn rate_mean(&self) -> f64 {
+        f64::from_bits(self.rates[3])
+    }
 
-    fn snapshot(&self) -> Arc<dyn Meter> { Arc::new(self.clone()) }
+    fn snapshot(&self) -> Arc<dyn Meter> {
+        Arc::new(self.clone())
+    }
 }
 
 pub struct StandardMeter {
@@ -124,7 +148,9 @@ impl StandardMeter {
 }
 
 impl Meter for StandardMeter {
-    fn count(&self) -> usize { self.snapshot.read().count }
+    fn count(&self) -> usize {
+        self.snapshot.read().count
+    }
 
     fn mark(&self, n: usize) {
         if self.stopped.load(ORDER) {
@@ -143,13 +169,21 @@ impl Meter for StandardMeter {
         snapshot.rates[3] = f64::to_bits(rate_mean_nano * 1e9);
     }
 
-    fn rate1(&self) -> f64 { f64::from_bits(self.snapshot.read().rates[0]) }
+    fn rate1(&self) -> f64 {
+        f64::from_bits(self.snapshot.read().rates[0])
+    }
 
-    fn rate5(&self) -> f64 { f64::from_bits(self.snapshot.read().rates[1]) }
+    fn rate5(&self) -> f64 {
+        f64::from_bits(self.snapshot.read().rates[1])
+    }
 
-    fn rate15(&self) -> f64 { f64::from_bits(self.snapshot.read().rates[2]) }
+    fn rate15(&self) -> f64 {
+        f64::from_bits(self.snapshot.read().rates[2])
+    }
 
-    fn rate_mean(&self) -> f64 { f64::from_bits(self.snapshot.read().rates[3]) }
+    fn rate_mean(&self) -> f64 {
+        f64::from_bits(self.snapshot.read().rates[3])
+    }
 
     fn snapshot(&self) -> Arc<dyn Meter> {
         Arc::new(self.snapshot.read().clone())
@@ -165,11 +199,15 @@ impl Meter for StandardMeter {
 }
 
 impl Metric for StandardMeter {
-    fn get_type(&self) -> &str { "Meter" }
+    fn get_type(&self) -> &str {
+        "Meter"
+    }
 }
 
 impl Drop for StandardMeter {
-    fn drop(&mut self) { self.stop(); }
+    fn drop(&mut self) {
+        self.stop();
+    }
 }
 
 lazy_static! {

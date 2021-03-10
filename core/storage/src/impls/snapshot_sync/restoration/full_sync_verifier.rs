@@ -24,8 +24,7 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
         number_chunks: usize, chunk_boundaries: Vec<Vec<u8>>,
         chunk_boundary_proofs: Vec<TrieProof>, merkle_root: MerkleHash,
         snapshot_db_manager: &SnapshotDbManager, epoch_id: &EpochId,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         if number_chunks != chunk_boundaries.len() + 1 {
             bail!(ErrorKind::InvalidSnapshotSyncProof)
         }
@@ -69,14 +68,15 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
         })
     }
 
-    pub fn is_completed(&self) -> bool { self.number_incomplete_chunk == 0 }
+    pub fn is_completed(&self) -> bool {
+        self.number_incomplete_chunk == 0
+    }
 
     // FIXME: multi-threading, where &mut can be dropped.
     pub fn restore_chunk<Key: Borrow<[u8]> + Debug>(
         &mut self, chunk_upper_key: &Option<Vec<u8>>, keys: &Vec<Key>,
         values: Vec<Vec<u8>>,
-    ) -> Result<bool>
-    {
+    ) -> Result<bool> {
         let chunk_index = match chunk_upper_key {
             None => self.number_chunks - 1,
             Some(upper_key) => {

@@ -16,7 +16,9 @@ pub enum MptValue<ValueType> {
 
 impl<ValueType: Serialize> Serialize for MptValue<ValueType> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    where
+        S: Serializer,
+    {
         match self {
             MptValue::None => serializer.serialize_none(),
             MptValue::Some(h) => serializer.serialize_some(h),
@@ -48,7 +50,9 @@ impl<ValueType: Default> MptValue<ValueType> {
         }
     }
 
-    pub fn take(&mut self) -> Self { std::mem::replace(self, MptValue::None) }
+    pub fn take(&mut self) -> Self {
+        std::mem::replace(self, MptValue::None)
+    }
 
     pub fn unwrap(self) -> ValueType {
         match self {

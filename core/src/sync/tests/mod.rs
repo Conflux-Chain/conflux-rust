@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::vm::Spec;
 use crate::{
     block_data_manager::DbType,
     sync::{
@@ -29,6 +30,7 @@ fn test_remove_expire_blocks() {
             1,
             50000,
             DbType::Rocksdb,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         );
         // test initialization
         {

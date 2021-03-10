@@ -41,11 +41,15 @@ pub trait ABIVariable: Sized + Default {
 }
 
 impl ABIDecodable for () {
-    fn abi_decode(_: &[u8]) -> Result<Self, ABIDecodeError> { Ok(()) }
+    fn abi_decode(_: &[u8]) -> Result<Self, ABIDecodeError> {
+        Ok(())
+    }
 }
 
 impl ABIEncodable for () {
-    fn abi_encode(&self) -> Vec<u8> { Vec::new() }
+    fn abi_encode(&self) -> Vec<u8> {
+        Vec::new()
+    }
 }
 
 impl<T: ABIVariable> ABIDecodable for T {

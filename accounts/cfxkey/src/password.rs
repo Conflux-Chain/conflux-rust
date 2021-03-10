@@ -26,9 +26,13 @@ impl fmt::Debug for Password {
 }
 
 impl Password {
-    pub fn as_bytes(&self) -> &[u8] { self.0.as_bytes() }
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
 
-    pub fn as_str(&self) -> &str { self.0.as_str() }
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
 }
 
 // Custom drop impl to zero out memory.
@@ -43,9 +47,13 @@ impl Drop for Password {
 }
 
 impl From<String> for Password {
-    fn from(s: String) -> Password { Password(s) }
+    fn from(s: String) -> Password {
+        Password(s)
+    }
 }
 
 impl<'a> From<&'a str> for Password {
-    fn from(s: &'a str) -> Password { Password::from(String::from(s)) }
+    fn from(s: &'a str) -> Password {
+        Password::from(String::from(s))
+    }
 }

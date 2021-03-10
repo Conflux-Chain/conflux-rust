@@ -75,7 +75,9 @@ impl<T> Item<T> {
 }
 
 impl<T> PartialEq for Item<T> {
-    fn eq(&self, other: &Self) -> bool { self.time.eq(&other.time) }
+    fn eq(&self, other: &Self) -> bool {
+        self.time.eq(&other.time)
+    }
 }
 
 impl<T> Eq for Item<T> {}
@@ -87,7 +89,9 @@ impl<T> PartialOrd for Item<T> {
 }
 
 impl<T> Ord for Item<T> {
-    fn cmp(&self, other: &Self) -> Ordering { other.time.cmp(&self.time) }
+    fn cmp(&self, other: &Self) -> Ordering {
+        other.time.cmp(&self.time)
+    }
 }
 
 #[cfg(test)]

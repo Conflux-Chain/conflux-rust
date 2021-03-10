@@ -16,7 +16,9 @@ pub struct Receiver<T> {
 }
 
 impl<T> Receiver<T> {
-    pub async fn recv(&mut self) -> Option<T> { self.receiver.recv().await }
+    pub async fn recv(&mut self) -> Option<T> {
+        self.receiver.recv().await
+    }
 
     pub fn try_recv(&mut self) -> Result<T, TryRecvError> {
         self.receiver.try_recv()
@@ -82,7 +84,9 @@ impl<T: Clone> Channel<T> {
         self.subscriptions.write().remove(&id).is_some()
     }
 
-    pub fn num_subscriptions(&self) -> usize { self.subscriptions.read().len() }
+    pub fn num_subscriptions(&self) -> usize {
+        self.subscriptions.read().len()
+    }
 
     pub fn send(&self, t: T) -> bool {
         let mut sent = false;

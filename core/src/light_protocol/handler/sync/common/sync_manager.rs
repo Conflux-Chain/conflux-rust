@@ -78,10 +78,14 @@ where
     }
 
     #[inline]
-    pub fn num_waiting(&self) -> usize { self.waiting.read().len() }
+    pub fn num_waiting(&self) -> usize {
+        self.waiting.read().len()
+    }
 
     #[inline]
-    pub fn num_in_flight(&self) -> usize { self.in_flight.read().len() }
+    pub fn num_in_flight(&self) -> usize {
+        self.in_flight.read().len()
+    }
 
     #[inline]
     #[allow(dead_code)]
@@ -144,7 +148,9 @@ where
 
     #[inline]
     pub fn insert_waiting<I>(&self, items: I)
-    where I: Iterator<Item = Item> {
+    where
+        I: Iterator<Item = Item>,
+    {
         let in_flight = self.in_flight.read();
         let mut waiting = self.waiting.write();
         let missing = items.filter(|item| !in_flight.contains_key(&item.key()));
@@ -154,8 +160,7 @@ where
     pub fn sync(
         &self, max_in_flight: usize, batch_size: usize,
         request: impl Fn(&NodeId, Vec<Key>) -> Result<Option<RequestId>, Error>,
-    )
-    {
+    ) {
         let _guard = match self.sync_lock.try_lock() {
             None => return,
             Some(g) => g,

@@ -36,8 +36,7 @@ impl SynchronizationService {
         protocol_config: ProtocolConfiguration,
         state_sync_config: StateSyncConfiguration,
         initial_sync_phase: SyncPhaseType, light_provider: Arc<LightProvider>,
-    ) -> Self
-    {
+    ) -> Self {
         let sync_handler = Arc::new(SynchronizationProtocolHandler::new(
             node_type,
             protocol_config,

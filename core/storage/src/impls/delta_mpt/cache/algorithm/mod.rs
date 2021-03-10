@@ -50,8 +50,7 @@ pub trait CacheStoreUtil {
     fn set_most_recently_accessed(
         &mut self, element_index: Self::ElementIndex,
         algo_data: &Self::CacheAlgoData,
-    )
-    {
+    ) {
         self.set(element_index, algo_data);
     }
 }
@@ -59,7 +58,8 @@ pub trait CacheStoreUtil {
 struct CacheAlgoDataAdapter<
     CacheStoreUtilT: CacheStoreUtil,
     CacheIndexT: CacheIndexTrait,
-> where CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait
+> where
+    CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait,
 {
     _marker_s: PhantomData<CacheStoreUtilT>,
     _marker_i: PhantomData<CacheIndexT>,
@@ -69,7 +69,8 @@ impl<
         CacheStoreUtilT: CacheStoreUtil<ElementIndex = CacheIndexT>,
         CacheIndexT: CacheIndexTrait,
     > CacheAlgoDataAdapter<CacheStoreUtilT, CacheIndexT>
-where CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait
+where
+    CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait,
 {
     fn get(
         util: &CacheStoreUtilT, index: CacheIndexT,
@@ -207,19 +208,27 @@ pub trait MyInto<X> {
 }
 
 impl MyFrom<usize> for u32 {
-    fn from(x: usize) -> Self { x as Self }
+    fn from(x: usize) -> Self {
+        x as Self
+    }
 }
 
 impl MyFrom<i32> for u32 {
-    fn from(x: i32) -> Self { x as Self }
+    fn from(x: i32) -> Self {
+        x as Self
+    }
 }
 
 impl MyInto<isize> for u32 {
-    fn into(self) -> isize { self as isize }
+    fn into(self) -> isize {
+        self as isize
+    }
 }
 
 impl MyInto<usize> for u32 {
-    fn into(self) -> usize { self as usize }
+    fn into(self) -> usize {
+        self as usize
+    }
 }
 
 impl PrimitiveNum for u32 {}
@@ -228,7 +237,8 @@ struct CacheAlgoDataSetter<
     'a,
     CacheStoreUtilT: 'a + CacheStoreUtil<ElementIndex = CacheIndexT>,
     CacheIndexT: CacheIndexTrait,
-> where CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait
+> where
+    CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait,
 {
     algo_data: CacheStoreUtilT::CacheAlgoData,
     element_index: CacheIndexT,
@@ -240,7 +250,8 @@ impl<
         CacheStoreUtilT: 'a + CacheStoreUtil<ElementIndex = CacheIndexT>,
         CacheIndexT: CacheIndexTrait,
     > Drop for CacheAlgoDataSetter<'a, CacheStoreUtilT, CacheIndexT>
-where CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait
+where
+    CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait,
 {
     fn drop(&mut self) {
         let (util, index, data) = (
@@ -257,11 +268,14 @@ impl<
         CacheStoreUtilT: 'a + CacheStoreUtil<ElementIndex = CacheIndexT>,
         CacheIndexT: CacheIndexTrait,
     > Deref for CacheAlgoDataSetter<'a, CacheStoreUtilT, CacheIndexT>
-where CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait
+where
+    CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait,
 {
     type Target = CacheStoreUtilT::CacheAlgoData;
 
-    fn deref(&self) -> &Self::Target { &self.algo_data }
+    fn deref(&self) -> &Self::Target {
+        &self.algo_data
+    }
 }
 
 impl<
@@ -269,16 +283,20 @@ impl<
         CacheStoreUtilT: 'a + CacheStoreUtil<ElementIndex = CacheIndexT>,
         CacheIndexT: CacheIndexTrait,
     > DerefMut for CacheAlgoDataSetter<'a, CacheStoreUtilT, CacheIndexT>
-where CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait
+where
+    CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait,
 {
-    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.algo_data }
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.algo_data
+    }
 }
 
 struct CacheAlgoDataSetterMostRecentlyAccessed<
     'a,
     CacheStoreUtilT: 'a + CacheStoreUtil<ElementIndex = CacheIndexT>,
     CacheIndexT: CacheIndexTrait,
-> where CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait
+> where
+    CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait,
 {
     algo_data: CacheStoreUtilT::CacheAlgoData,
     element_index: CacheIndexT,
@@ -295,7 +313,8 @@ impl<
         CacheStoreUtilT,
         CacheIndexT,
     >
-where CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait
+where
+    CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait,
 {
     fn drop(&mut self) {
         let (util, index, data) = (
@@ -317,11 +336,14 @@ impl<
         CacheStoreUtilT,
         CacheIndexT,
     >
-where CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait
+where
+    CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait,
 {
     type Target = CacheStoreUtilT::CacheAlgoData;
 
-    fn deref(&self) -> &Self::Target { &self.algo_data }
+    fn deref(&self) -> &Self::Target {
+        &self.algo_data
+    }
 }
 
 impl<
@@ -334,9 +356,12 @@ impl<
         CacheStoreUtilT,
         CacheIndexT,
     >
-where CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait
+where
+    CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait,
 {
-    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.algo_data }
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.algo_data
+    }
 }
 
 use malloc_size_of::MallocSizeOf;

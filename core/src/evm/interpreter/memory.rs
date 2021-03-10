@@ -54,7 +54,9 @@ pub fn is_valid_range(off: usize, size: usize) -> bool {
 }
 
 impl Memory for Vec<u8> {
-    fn size(&self) -> usize { self.len() }
+    fn size(&self) -> usize {
+        self.len()
+    }
 
     fn read_slice(&self, init_off_u: U256, init_size_u: U256) -> &[u8] {
         let off = init_off_u.low_u64() as usize;
@@ -99,7 +101,9 @@ impl Memory for Vec<u8> {
         self[off] = val as u8;
     }
 
-    fn resize(&mut self, new_size: usize) { self.resize(new_size, 0); }
+    fn resize(&mut self, new_size: usize) {
+        self.resize(new_size, 0);
+    }
 
     fn expand(&mut self, size: usize) {
         if size > self.len() {

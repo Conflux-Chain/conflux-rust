@@ -12,6 +12,7 @@ use crate::{
     trace,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
+        Spec,
     },
     vm_factory::VmFactory,
 };
@@ -103,10 +104,16 @@ fn test_sender_balance() {
             &sender,
             &COLLATERAL_DRIPS_PER_STORAGE_KEY,
             CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
     state
-        .add_balance(&sender, &U256::from(0x100u64), CleanupMode::NoEmpty)
+        .add_balance(
+            &sender,
+            &U256::from(0x100u64),
+            CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+        )
         .unwrap();
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -129,13 +136,21 @@ fn test_sender_balance() {
         );
         let mut tracer = trace::NoopTracer;
         let res = ex
-            .create(params.clone(), &mut substate, &mut tracer)
+            .create(
+                params.clone(),
+                &mut substate,
+                &mut tracer,
+                Spec::new_spec()
+                    .account_start_nonce(/* _block_number = */ 0),
+            )
             .unwrap();
         state
             .collect_and_settle_collateral(
                 &params.storage_owner,
                 &params.storage_limit_in_drip,
                 &mut substate,
+                Spec::new_spec()
+                    .account_start_nonce(/* _block_number = */ 0),
             )
             .unwrap()
             .into_vm_result()
@@ -211,7 +226,12 @@ fn test_create_contract_out_of_depth() {
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
     state
-        .add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty)
+        .add_balance(
+            &sender,
+            &U256::from(100),
+            CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+        )
         .unwrap();
     let env = Env::default();
     let machine = make_byzantium_machine(0);
@@ -228,7 +248,13 @@ fn test_create_contract_out_of_depth() {
             &internal_contract_map,
         );
         let mut tracer = trace::NoopTracer;
-        ex.create(params, &mut substate, &mut tracer).unwrap()
+        ex.create(
+            params,
+            &mut substate,
+            &mut tracer,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+        )
+        .unwrap()
     };
 
     assert_eq!(gas_left, U256::from(62_970));
@@ -267,7 +293,12 @@ fn test_suicide_when_creation() {
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
     state
-        .add_balance(&sender_addr, &U256::from(100_000), CleanupMode::NoEmpty)
+        .add_balance(
+            &sender_addr,
+            &U256::from(100_000),
+            CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+        )
         .unwrap();
     let env = Env::default();
     let machine = make_byzantium_machine(0);
@@ -287,7 +318,14 @@ fn test_suicide_when_creation() {
         gas_left,
         apply_state,
         return_data: _,
-    } = ex.create(params, &mut substate, &mut tracer).unwrap();
+    } = ex
+        .create(
+            params,
+            &mut substate,
+            &mut tracer,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+        )
+        .unwrap();
 
     assert_eq!(gas_left, U256::from(94_998));
     assert_eq!(apply_state, true);
@@ -362,6 +400,7 @@ fn test_call_to_create() {
             &sender,
             &(U256::from(100) + params.storage_limit_in_drip),
             CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
     assert_eq!(
@@ -385,12 +424,22 @@ fn test_call_to_create() {
             &internal_contract_map,
         );
         let mut tracer = trace::NoopTracer;
-        let res = ex.call(params.clone(), &mut substate, &mut tracer).unwrap();
+        let res = ex
+            .call(
+                params.clone(),
+                &mut substate,
+                &mut tracer,
+                Spec::new_spec()
+                    .account_start_nonce(/* _block_number = */ 0),
+            )
+            .unwrap();
         state
             .collect_and_settle_collateral(
                 &params.storage_owner,
                 &params.storage_limit_in_drip,
                 &mut substate,
+                Spec::new_spec()
+                    .account_start_nonce(/* _block_number = */ 0),
             )
             .unwrap()
             .into_vm_result()
@@ -425,6 +474,7 @@ fn test_revert() {
             &sender,
             &U256::from_str("152d02c7e14af68000000").unwrap(),
             CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
     state
@@ -462,7 +512,13 @@ fn test_revert() {
             &internal_contract_map,
         );
         let mut tracer = trace::NoopTracer;
-        ex.call(params, &mut substate, &mut tracer).unwrap()
+        ex.call(
+            params,
+            &mut substate,
+            &mut tracer,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+        )
+        .unwrap()
     };
     (&mut output)
         .copy_from_slice(&return_data[..(cmp::min(14, return_data.len()))]);
@@ -508,6 +564,7 @@ fn test_keccak() {
             &sender,
             &U256::from_str("152d02c7e14af6800000").unwrap(),
             CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
     let env = Env::default();
@@ -525,7 +582,12 @@ fn test_keccak() {
             &spec,
             &internal_contract_map,
         );
-        ex.create(params, &mut substate, &mut tracer)
+        ex.create(
+            params,
+            &mut substate,
+            &mut tracer,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+        )
     };
 
     match result {
@@ -554,7 +616,12 @@ fn test_not_enough_cash() {
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
     state
-        .add_balance(&sender, &U256::from(100_017), CleanupMode::NoEmpty)
+        .add_balance(
+            &sender,
+            &U256::from(100_017),
+            CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+        )
         .unwrap();
     let correct_cost = min(t.gas_price * t.gas, 100_017.into());
     let mut env = Env::default();
@@ -611,6 +678,7 @@ fn test_deposit_withdraw_lock() {
             &sender,
             &U256::from(2_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
     state.add_total_issued(U256::from(2_000_000_000_000_000_000u64));
@@ -644,7 +712,12 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(params.clone(), &mut substate, &mut tracer);
+    .call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+    );
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -672,7 +745,12 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(params.clone(), &mut substate, &mut tracer);
+    .call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+    );
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -689,7 +767,12 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(params.clone(), &mut substate, &mut tracer);
+    .call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+    );
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -718,7 +801,12 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(params.clone(), &mut substate, &mut tracer);
+    .call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+    );
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -751,7 +839,12 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(params.clone(), &mut substate, &mut tracer);
+    .call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+    );
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -784,7 +877,12 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(params.clone(), &mut substate, &mut tracer);
+    .call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+    );
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -812,7 +910,12 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(params.clone(), &mut substate, &mut tracer);
+    .call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+    );
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -847,7 +950,12 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(params.clone(), &mut substate, &mut tracer);
+    .call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+    );
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -885,7 +993,12 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(params.clone(), &mut substate, &mut tracer);
+    .call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+    );
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -919,7 +1032,12 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(params.clone(), &mut substate, &mut tracer);
+    .call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+    );
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -953,7 +1071,12 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(params.clone(), &mut substate, &mut tracer);
+    .call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+    );
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -994,7 +1117,12 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(params.clone(), &mut substate, &mut tracer);
+    .call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+    );
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -1051,6 +1179,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &sender.address(),
             &U256::from(1_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
 
@@ -1063,6 +1192,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &Address::default(),
             &0.into(),
             &mut Substate::new(),
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
     state.discard_checkpoint();
@@ -1111,6 +1241,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &sender.address(),
             &U256::from(1_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
     let whitelisted_caller = Address::random();
@@ -1134,6 +1265,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &Address::default(),
             &0.into(),
             &mut Substate::new(),
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
     state.discard_checkpoint();
@@ -1216,6 +1348,7 @@ fn test_commission_privilege() {
             &sender.address(),
             &U256::from(1_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
 
@@ -1258,6 +1391,7 @@ fn test_commission_privilege() {
             &caller1.address(),
             &U256::from(100_000),
             CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
     state
@@ -1265,6 +1399,7 @@ fn test_commission_privilege() {
             &caller2.address(),
             &U256::from(100_000),
             CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
     state
@@ -1272,6 +1407,7 @@ fn test_commission_privilege() {
             &caller3.address(),
             &U256::from(100_000),
             CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
     // add commission privilege to caller1 and caller2
@@ -1590,6 +1726,7 @@ fn test_storage_commission_privilege() {
             &sender.address(),
             &U256::from(2_000_000_000_000_075_000u64),
             CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
 
@@ -1666,6 +1803,7 @@ fn test_storage_commission_privilege() {
             &caller1.address(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
             CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
     state
@@ -1673,6 +1811,7 @@ fn test_storage_commission_privilege() {
             &caller2.address(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
             CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
     state
@@ -1680,6 +1819,7 @@ fn test_storage_commission_privilege() {
             &caller3.address(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
             CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
 
@@ -1698,6 +1838,7 @@ fn test_storage_commission_privilege() {
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate,
+                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -2019,6 +2160,7 @@ fn test_storage_commission_privilege() {
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate,
+                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
             )
             .unwrap(),
         CollateralCheckResult::Valid

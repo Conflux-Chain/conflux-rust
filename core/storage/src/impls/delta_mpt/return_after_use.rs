@@ -54,7 +54,9 @@ impl<'a, T> ReturnAfterUse<'a, T> {
         Self::new(&mut origin.current)
     }
 
-    pub fn get_ref(&self) -> &T { return self.current.as_ref().unwrap(); }
+    pub fn get_ref(&self) -> &T {
+        return self.current.as_ref().unwrap();
+    }
 
     pub fn get_mut(&mut self) -> &mut T {
         return self.current.as_mut().unwrap();

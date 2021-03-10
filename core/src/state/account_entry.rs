@@ -138,8 +138,7 @@ impl OverlayAccount {
     pub fn new_basic(
         address: &Address, balance: U256, nonce: U256,
         storage_layout: Option<StorageLayout>,
-    ) -> Self
-    {
+    ) -> Self {
         OverlayAccount {
             address: address.clone(),
             balance,
@@ -171,8 +170,7 @@ impl OverlayAccount {
     pub fn new_contract(
         address: &Address, balance: U256, nonce: U256,
         storage_layout: Option<StorageLayout>,
-    ) -> Self
-    {
+    ) -> Self {
         Self::new_contract_with_admin(
             address,
             balance,
@@ -187,8 +185,7 @@ impl OverlayAccount {
     pub fn new_contract_with_admin(
         address: &Address, balance: U256, nonce: U256, admin: &Address,
         storage_layout: Option<StorageLayout>,
-    ) -> Self
-    {
+    ) -> Self {
         OverlayAccount {
             address: address.clone(),
             balance,
@@ -227,19 +224,26 @@ impl OverlayAccount {
         Ok(account)
     }
 
-    pub fn is_contract(&self) -> bool { self.address.is_contract_address() }
+    pub fn is_contract(&self) -> bool {
+        self.address.is_contract_address()
+    }
 
-    pub fn address(&self) -> &Address { &self.address }
+    pub fn address(&self) -> &Address {
+        &self.address
+    }
 
-    pub fn balance(&self) -> &U256 { &self.balance }
+    pub fn balance(&self) -> &U256 {
+        &self.balance
+    }
 
-    pub fn sponsor_info(&self) -> &SponsorInfo { &self.sponsor_info }
+    pub fn sponsor_info(&self) -> &SponsorInfo {
+        &self.sponsor_info
+    }
 
     pub fn set_sponsor_for_gas(
         &mut self, sponsor: &Address, sponsor_balance: &U256,
         upper_bound: &U256,
-    )
-    {
+    ) {
         self.sponsor_info.sponsor_for_gas = *sponsor;
         self.sponsor_info.sponsor_balance_for_gas = *sponsor_balance;
         self.sponsor_info.sponsor_gas_bound = *upper_bound;
@@ -252,7 +256,9 @@ impl OverlayAccount {
         self.sponsor_info.sponsor_balance_for_collateral = *sponsor_balance;
     }
 
-    pub fn admin(&self) -> &Address { &self.admin }
+    pub fn admin(&self) -> &Address {
+        &self.admin
+    }
 
     pub fn sub_sponsor_balance_for_gas(&mut self, by: &U256) {
         assert!(self.sponsor_info.sponsor_balance_for_gas >= *by);
@@ -272,13 +278,14 @@ impl OverlayAccount {
         self.sponsor_info.sponsor_balance_for_collateral += *by;
     }
 
-    pub fn set_admin(&mut self, admin: &Address) { self.admin = admin.clone(); }
+    pub fn set_admin(&mut self, admin: &Address) {
+        self.admin = admin.clone();
+    }
 
     pub fn check_commission_privilege<StateDbStorage: StorageStateTrait>(
         &self, db: &StateDbGeneric<StateDbStorage>, contract_address: &Address,
         user: &Address,
-    ) -> DbResult<bool>
-    {
+    ) -> DbResult<bool> {
         let mut special_key = Vec::with_capacity(Address::len_bytes() * 2);
         special_key.extend_from_slice(contract_address.as_bytes());
         special_key
@@ -299,8 +306,7 @@ impl OverlayAccount {
     pub fn add_commission_privilege(
         &mut self, contract_address: Address, contract_owner: Address,
         user: Address,
-    )
-    {
+    ) {
         let mut key = Vec::with_capacity(Address::len_bytes() * 2);
         key.extend_from_slice(contract_address.as_bytes());
         key.extend_from_slice(user.as_bytes());
@@ -317,15 +323,16 @@ impl OverlayAccount {
     pub fn remove_commission_privilege(
         &mut self, contract_address: Address, contract_owner: Address,
         user: Address,
-    )
-    {
+    ) {
         let mut key = Vec::with_capacity(Address::len_bytes() * 2);
         key.extend_from_slice(contract_address.as_bytes());
         key.extend_from_slice(user.as_bytes());
         self.set_storage(key, U256::zero(), contract_owner);
     }
 
-    pub fn staking_balance(&self) -> &U256 { &self.staking_balance }
+    pub fn staking_balance(&self) -> &U256 {
+        &self.staking_balance
+    }
 
     pub fn collateral_for_storage(&self) -> &U256 {
         &self.collateral_for_storage
@@ -392,9 +399,13 @@ impl OverlayAccount {
         self.is_newly_created_contract
     }
 
-    pub fn nonce(&self) -> &U256 { &self.nonce }
+    pub fn nonce(&self) -> &U256 {
+        &self.nonce
+    }
 
-    pub fn code_hash(&self) -> H256 { self.code_hash.clone() }
+    pub fn code_hash(&self) -> H256 {
+        self.code_hash.clone()
+    }
 
     pub fn is_code_loaded(&self) -> bool {
         self.code.is_some() || self.code_hash == KECCAK_EMPTY
@@ -408,11 +419,17 @@ impl OverlayAccount {
             && self.code_hash == KECCAK_EMPTY
     }
 
-    pub fn is_basic(&self) -> bool { self.code_hash == KECCAK_EMPTY }
+    pub fn is_basic(&self) -> bool {
+        self.code_hash == KECCAK_EMPTY
+    }
 
-    pub fn set_nonce(&mut self, nonce: &U256) { self.nonce = *nonce; }
+    pub fn set_nonce(&mut self, nonce: &U256) {
+        self.nonce = *nonce;
+    }
 
-    pub fn inc_nonce(&mut self) { self.nonce = self.nonce + U256::from(1u8); }
+    pub fn inc_nonce(&mut self) {
+        self.nonce = self.nonce + U256::from(1u8);
+    }
 
     pub fn add_balance(&mut self, by: &U256) {
         self.balance = self.balance + *by;
@@ -426,8 +443,7 @@ impl OverlayAccount {
     pub fn deposit(
         &mut self, amount: U256, accumulated_interest_rate: U256,
         deposit_time: u64,
-    )
-    {
+    ) {
         assert!(self.deposit_list.is_some());
         self.sub_balance(&amount);
         self.staking_balance += amount;
@@ -557,8 +573,7 @@ impl OverlayAccount {
     pub fn cache_staking_info<StateDbStorage: StorageStateTrait>(
         &mut self, cache_deposit_list: bool, cache_vote_list: bool,
         db: &StateDbGeneric<StateDbStorage>,
-    ) -> DbResult<bool>
-    {
+    ) -> DbResult<bool> {
         if cache_deposit_list && self.deposit_list.is_none() {
             let deposit_list_opt = if self.is_newly_created_contract {
                 None
@@ -668,8 +683,7 @@ impl OverlayAccount {
         storage_owner_lv2_write_cache: &mut HashMap<Vec<u8>, Option<Address>>,
         db: &StateDbGeneric<StateDbStorage>, address: &Address, key: &[u8],
         cache_ownership: bool,
-    ) -> DbResult<U256>
-    {
+    ) -> DbResult<U256> {
         assert!(!storage_owner_lv2_write_cache.contains_key(key));
         if let Some(value) = db.get::<StorageValue>(
             StorageKey::new_storage_key(address, key.as_ref()),
@@ -796,8 +810,7 @@ impl OverlayAccount {
     pub fn commit<StateDbStorage: StorageStateTrait>(
         &mut self, state: &mut StateGeneric<StateDbStorage>, address: &Address,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         if self.is_newly_created_contract {
             state.recycle_storage(
                 vec![self.address],
@@ -917,7 +930,9 @@ pub struct AccountEntry {
 
 impl AccountEntry {
     // FIXME: remove it.
-    pub fn is_dirty(&self) -> bool { self.state == AccountState::Dirty }
+    pub fn is_dirty(&self) -> bool {
+        self.state == AccountState::Dirty
+    }
 
     pub fn overwrite_with(&mut self, other: AccountEntry) {
         self.state = other.state;

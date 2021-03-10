@@ -5,7 +5,8 @@
 use std::{cmp::Ordering, time::Instant};
 
 pub trait HasKey<Key>
-where Key: Clone
+where
+    Key: Clone,
 {
     fn key(&self) -> Key;
 }
@@ -29,13 +30,17 @@ impl<K> TimeOrdered<K> {
 }
 
 impl<K> HasKey<K> for TimeOrdered<K>
-where K: Clone
+where
+    K: Clone,
 {
-    fn key(&self) -> K { self.key.clone() }
+    fn key(&self) -> K {
+        self.key.clone()
+    }
 }
 
 impl<K> Ord for TimeOrdered<K>
-where K: Eq
+where
+    K: Eq,
 {
     fn cmp(&self, other: &Self) -> Ordering {
         self.since.cmp(&other.since).reverse()
@@ -43,7 +48,8 @@ where K: Eq
 }
 
 impl<K> PartialOrd for TimeOrdered<K>
-where K: Eq
+where
+    K: Eq,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
@@ -69,19 +75,26 @@ impl<K> KeyOrdered<K> {
 }
 
 impl<K> HasKey<K> for KeyOrdered<K>
-where K: Clone
+where
+    K: Clone,
 {
-    fn key(&self) -> K { self.key.clone() }
+    fn key(&self) -> K {
+        self.key.clone()
+    }
 }
 
 impl<K> Ord for KeyOrdered<K>
-where K: Ord
+where
+    K: Ord,
 {
-    fn cmp(&self, other: &Self) -> Ordering { self.key.cmp(&other.key) }
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.key.cmp(&other.key)
+    }
 }
 
 impl<K> PartialOrd for KeyOrdered<K>
-where K: Ord
+where
+    K: Ord,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
@@ -107,13 +120,17 @@ impl<K> KeyReverseOrdered<K> {
 }
 
 impl<K> HasKey<K> for KeyReverseOrdered<K>
-where K: Clone
+where
+    K: Clone,
 {
-    fn key(&self) -> K { self.key.clone() }
+    fn key(&self) -> K {
+        self.key.clone()
+    }
 }
 
 impl<K> Ord for KeyReverseOrdered<K>
-where K: Ord
+where
+    K: Ord,
 {
     fn cmp(&self, other: &Self) -> Ordering {
         self.key.cmp(&other.key).reverse()
@@ -121,7 +138,8 @@ where K: Ord
 }
 
 impl<K> PartialOrd for KeyReverseOrdered<K>
-where K: Ord
+where
+    K: Ord,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))

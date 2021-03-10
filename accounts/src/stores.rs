@@ -50,9 +50,13 @@ impl AddressBook {
     }
 
     /// Get the address book.
-    pub fn get(&self) -> HashMap<Address, AccountMeta> { self.cache.clone() }
+    pub fn get(&self) -> HashMap<Address, AccountMeta> {
+        self.cache.clone()
+    }
 
-    fn save(&self) { self.cache.save(AccountMeta::write) }
+    fn save(&self) {
+        self.cache.save(AccountMeta::write)
+    }
 
     /// Sets new name for given address.
     pub fn set_name(&mut self, a: Address, name: String) {
@@ -98,11 +102,15 @@ struct DiskMap<K: hash::Hash + Eq, V> {
 impl<K: hash::Hash + Eq, V> ops::Deref for DiskMap<K, V> {
     type Target = HashMap<K, V>;
 
-    fn deref(&self) -> &Self::Target { &self.cache }
+    fn deref(&self) -> &Self::Target {
+        &self.cache
+    }
 }
 
 impl<K: hash::Hash + Eq, V> ops::DerefMut for DiskMap<K, V> {
-    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.cache }
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.cache
+    }
 }
 
 impl<K: hash::Hash + Eq, V> DiskMap<K, V> {

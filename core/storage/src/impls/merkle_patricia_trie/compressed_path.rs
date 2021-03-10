@@ -6,7 +6,9 @@ pub trait CompressedPathTrait: Debug {
     fn path_slice(&self) -> &[u8];
     fn path_mask(&self) -> u8;
 
-    fn path_size(&self) -> u16 { self.path_slice().len() as u16 }
+    fn path_size(&self) -> u16 {
+        self.path_slice().len() as u16
+    }
 
     fn path_steps(&self) -> u16 {
         CompressedPathRaw::calculate_path_steps(
@@ -29,15 +31,23 @@ pub trait CompressedPathTrait: Debug {
 }
 
 impl CompressedPathTrait for [u8] {
-    fn path_slice(&self) -> &[u8] { self }
+    fn path_slice(&self) -> &[u8] {
+        self
+    }
 
-    fn path_mask(&self) -> u8 { CompressedPathRaw::NO_MISSING_NIBBLE }
+    fn path_mask(&self) -> u8 {
+        CompressedPathRaw::NO_MISSING_NIBBLE
+    }
 }
 
 impl<'a> CompressedPathTrait for &'a [u8] {
-    fn path_slice(&self) -> &[u8] { self }
+    fn path_slice(&self) -> &[u8] {
+        self
+    }
 
-    fn path_mask(&self) -> u8 { CompressedPathRaw::NO_MISSING_NIBBLE }
+    fn path_mask(&self) -> u8 {
+        CompressedPathRaw::NO_MISSING_NIBBLE
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -109,11 +119,17 @@ impl CompressedPathRaw {
 }
 
 impl<'a> CompressedPathTrait for CompressedPathRef<'a> {
-    fn path_slice(&self) -> &[u8] { self.path_slice }
+    fn path_slice(&self) -> &[u8] {
+        self.path_slice
+    }
 
-    fn path_mask(&self) -> u8 { self.path_mask }
+    fn path_mask(&self) -> u8 {
+        self.path_mask
+    }
 
-    fn path_size(&self) -> u16 { self.path_slice.len() as u16 }
+    fn path_size(&self) -> u16 {
+        self.path_slice.len() as u16
+    }
 }
 
 impl CompressedPathTrait for CompressedPathRaw {
@@ -121,7 +137,9 @@ impl CompressedPathTrait for CompressedPathRaw {
         self.path.get_slice(self.path_size as usize)
     }
 
-    fn path_mask(&self) -> u8 { self.path_mask }
+    fn path_mask(&self) -> u8 {
+        self.path_mask
+    }
 }
 
 impl<'a> From<&'a [u8]> for CompressedPathRaw {
@@ -189,10 +207,14 @@ impl CompressedPathRaw {
     }
 
     #[inline]
-    pub const fn first_nibble_mask() -> u8 { Self::BITS_0_3_MASK }
+    pub const fn first_nibble_mask() -> u8 {
+        Self::BITS_0_3_MASK
+    }
 
     #[inline]
-    pub const fn second_nibble_mask() -> u8 { Self::BITS_4_7_MASK }
+    pub const fn second_nibble_mask() -> u8 {
+        Self::BITS_4_7_MASK
+    }
 
     #[inline]
     fn calculate_path_steps(path_size: u16, path_mask: u8) -> u16 {
@@ -202,16 +224,24 @@ impl CompressedPathRaw {
     }
 
     #[inline]
-    pub fn from_first_nibble(x: u8) -> u8 { x << 4 }
+    pub fn from_first_nibble(x: u8) -> u8 {
+        x << 4
+    }
 
     #[inline]
-    pub fn first_nibble(x: u8) -> u8 { x >> 4 }
+    pub fn first_nibble(x: u8) -> u8 {
+        x >> 4
+    }
 
     #[inline]
-    pub fn clear_second_nibble(x: u8) -> u8 { x & Self::BITS_4_7_MASK }
+    pub fn clear_second_nibble(x: u8) -> u8 {
+        x & Self::BITS_4_7_MASK
+    }
 
     #[inline]
-    pub fn second_nibble(x: u8) -> u8 { x & Self::BITS_0_3_MASK }
+    pub fn second_nibble(x: u8) -> u8 {
+        x & Self::BITS_0_3_MASK
+    }
 
     #[inline]
     pub fn set_second_nibble(x: u8, second_nibble: u8) -> u8 {
@@ -361,13 +391,17 @@ impl Decodable for CompressedPathRaw {
 }
 
 impl PartialEq<Self> for CompressedPathRaw {
-    fn eq(&self, other: &Self) -> bool { self.as_ref().eq(&other.as_ref()) }
+    fn eq(&self, other: &Self) -> bool {
+        self.as_ref().eq(&other.as_ref())
+    }
 }
 
 impl Eq for CompressedPathRaw {}
 
 impl Hash for CompressedPathRaw {
-    fn hash<H: Hasher>(&self, state: &mut H) { self.as_ref().hash(state) }
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_ref().hash(state)
+    }
 }
 
 impl Debug for CompressedPathRaw {
@@ -391,11 +425,15 @@ impl<'a> PartialEq<Self> for dyn CompressedPathTrait + 'a {
 impl<'a> Eq for dyn CompressedPathTrait + 'a {}
 
 impl<'a> Hash for dyn CompressedPathTrait + 'a {
-    fn hash<H: Hasher>(&self, state: &mut H) { self.as_ref().hash(state) }
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_ref().hash(state)
+    }
 }
 
 impl<'a> Borrow<dyn CompressedPathTrait + 'a> for CompressedPathRaw {
-    fn borrow(&self) -> &(dyn CompressedPathTrait + 'a) { self }
+    fn borrow(&self) -> &(dyn CompressedPathTrait + 'a) {
+        self
+    }
 }
 
 use super::maybe_in_place_byte_array::*;

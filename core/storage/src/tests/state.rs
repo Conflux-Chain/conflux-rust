@@ -247,8 +247,7 @@ fn simulate_transactions(
     epoch: u8, prev_state_root: &StateRootWithAuxInfo, keys: &[&[u8]],
     state_manager: &FakeStateManager, read_ms: &mut u32, update_ms: &mut u32,
     write_ms: &mut u32, commit_ms: &mut u32,
-) -> StateRootWithAuxInfo
-{
+) -> StateRootWithAuxInfo {
     // Wait for snapshotting to complete. We don't calculate the time spent in
     // making snapshot.
     while state_manager

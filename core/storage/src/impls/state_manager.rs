@@ -40,7 +40,9 @@ pub struct StateManager {
 }
 
 impl Drop for StateManager {
-    fn drop(&mut self) { self.storage_manager.graceful_shutdown(); }
+    fn drop(&mut self) {
+        self.storage_manager.graceful_shutdown();
+    }
 }
 
 impl StateManager {
@@ -80,8 +82,7 @@ impl StateManager {
         maybe_delta_mpt_key_padding: Option<&DeltaMptKeyPadding>,
         epoch_id: &EpochId, delta_root: Option<NodeRefDeltaMpt>,
         maybe_height: Option<u64>, maybe_delta_trie_height: Option<u32>,
-    ) -> Result<Option<StateTrees>>
-    {
+    ) -> Result<Option<StateTrees>> {
         let intermediate_trie_root = match &maybe_intermediate_trie {
             None => None,
             Some(mpt) => {
@@ -527,8 +528,7 @@ impl StateManager {
         &self, maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
         intermediate_trie_root: Option<NodeRefDeltaMpt>,
         intermediate_epoch_id: &EpochId, new_height: u64,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         StorageManager::check_make_register_snapshot_background(
             self.storage_manager.clone(),
             intermediate_epoch_id.clone(),

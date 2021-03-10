@@ -131,7 +131,9 @@ impl SharedCache {
 }
 
 impl Default for SharedCache {
-    fn default() -> Self { SharedCache::new(DEFAULT_CACHE_SIZE) }
+    fn default() -> Self {
+        SharedCache::new(DEFAULT_CACHE_SIZE)
+    }
 }
 
 #[test]

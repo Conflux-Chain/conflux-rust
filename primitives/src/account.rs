@@ -78,7 +78,9 @@ pub struct VoteStakeInfo {
 pub struct DepositList(pub Vec<DepositInfo>);
 
 impl Encodable for DepositList {
-    fn rlp_append(&self, s: &mut RlpStream) { s.append_list(&self.0); }
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.append_list(&self.0);
+    }
 }
 
 impl Decodable for DepositList {
@@ -91,18 +93,24 @@ impl Decodable for DepositList {
 impl Deref for DepositList {
     type Target = Vec<DepositInfo>;
 
-    fn deref(&self) -> &Self::Target { &self.0 }
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 impl DerefMut for DepositList {
-    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 #[derive(Clone, Debug, Default, Ord, PartialOrd, Eq, PartialEq)]
 pub struct VoteStakeList(pub Vec<VoteStakeInfo>);
 
 impl Encodable for VoteStakeList {
-    fn rlp_append(&self, s: &mut RlpStream) { s.append_list(&self.0); }
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.append_list(&self.0);
+    }
 }
 
 impl Decodable for VoteStakeList {
@@ -115,11 +123,15 @@ impl Decodable for VoteStakeList {
 impl Deref for VoteStakeList {
     type Target = Vec<VoteStakeInfo>;
 
-    fn deref(&self) -> &Self::Target { &self.0 }
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 impl DerefMut for VoteStakeList {
-    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
@@ -130,7 +142,9 @@ pub struct CodeInfo {
 
 impl CodeInfo {
     #[inline]
-    pub fn code_size(&self) -> usize { self.code.len() }
+    pub fn code_size(&self) -> usize {
+        self.code.len()
+    }
 }
 
 impl Encodable for CodeInfo {
@@ -227,7 +241,9 @@ pub struct ContractAccount {
 }
 
 impl Account {
-    pub fn address(&self) -> &Address { &self.address_local_info }
+    pub fn address(&self) -> &Address {
+        &self.address_local_info
+    }
 
     pub fn set_address(
         &mut self, address: Address,
@@ -354,7 +370,9 @@ impl Encodable for Account {
 }
 
 impl From<DecoderError> for AccountError {
-    fn from(err: DecoderError) -> Self { AccountError::InvalidRlp(err) }
+    fn from(err: DecoderError) -> Self {
+        AccountError::InvalidRlp(err)
+    }
 }
 
 impl fmt::Display for AccountError {
@@ -379,5 +397,7 @@ impl fmt::Display for AccountError {
 }
 
 impl std::error::Error for AccountError {
-    fn description(&self) -> &str { "Account error" }
+    fn description(&self) -> &str {
+        "Account error"
+    }
 }

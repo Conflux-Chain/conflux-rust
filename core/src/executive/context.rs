@@ -62,7 +62,9 @@ impl OriginInfo {
         }
     }
 
-    pub fn recipient(&self) -> &Address { &self.address }
+    pub fn recipient(&self) -> &Address {
+        &self.address
+    }
 }
 
 /// Implementation of evm context.
@@ -89,8 +91,7 @@ impl<'a, State: StateTrait<Substate = Substate>> Context<'a, State> {
         origin: &'a OriginInfo, substate: &'a mut Substate,
         output: OutputPolicy, static_flag: bool,
         internal_contract_map: &'a InternalContractMap,
-    ) -> Self
-    {
+    ) -> Self {
         Context {
             state,
             env,
@@ -141,7 +142,9 @@ impl<'a, State: StateTrait<Substate = Substate>> ContextTrait
                 .in_reentrancy()
     }
 
-    fn is_static(&self) -> bool { self.static_flag }
+    fn is_static(&self) -> bool {
+        self.static_flag
+    }
 
     fn exists(&self, address: &Address) -> vm::Result<bool> {
         self.state.exists(address).map_err(Into::into)
@@ -174,8 +177,7 @@ impl<'a, State: StateTrait<Substate = Substate>> ContextTrait
         address_scheme: CreateContractAddress, trap: bool,
     ) -> cfx_statedb::Result<
         ::std::result::Result<ContractCreateResult, TrapKind>,
-    >
-    {
+    > {
         // create new contract address
         let (address, code_hash) = self::contract_address(
             address_scheme,
@@ -216,7 +218,10 @@ impl<'a, State: StateTrait<Substate = Substate>> ContextTrait
             if !self.spec.keep_unsigned_nonce
                 || params.sender != UNSIGNED_SENDER
             {
-                self.state.inc_nonce(&self.origin.address)?;
+                self.state.inc_nonce(
+                    &self.origin.address,
+                    self.spec.account_start_nonce(self.env.number),
+                )?;
             }
         }
 
@@ -240,6 +245,7 @@ impl<'a, State: StateTrait<Substate = Substate>> ContextTrait
             self.substate,
             self.stack_depth + 1,
             &mut tracer,
+            self.spec.account_start_nonce(self.env.number),
         );
         Ok(Ok(into_contract_create_result(
             out,
@@ -320,7 +326,9 @@ impl<'a, State: StateTrait<Substate = Substate>> ContextTrait
     fn ret(
         self, gas: &U256, data: &ReturnData, apply_state: bool,
     ) -> vm::Result<U256>
-    where Self: Sized {
+    where
+        Self: Sized,
+    {
         match self.output {
             OutputPolicy::Return => Ok(*gas),
             OutputPolicy::InitContract if apply_state => {
@@ -375,9 +383,8 @@ impl<'a, State: StateTrait<Substate = Substate>> ContextTrait
 
     fn suicide(
         &mut self, refund_address: &Address,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> vm::Result<()>
-    {
+        tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
+    ) -> vm::Result<()> {
         if self.is_static_or_reentrancy() {
             return Err(vm::Error::MutableCallInStaticContext);
         }
@@ -389,12 +396,17 @@ impl<'a, State: StateTrait<Substate = Substate>> ContextTrait
             &self.spec,
             &mut self.substate,
             tracer,
+            account_start_nonce,
         )
     }
 
-    fn spec(&self) -> &Spec { &self.spec }
+    fn spec(&self) -> &Spec {
+        &self.spec
+    }
 
-    fn env(&self) -> &Env { &self.env }
+    fn env(&self) -> &Env {
+        &self.env
+    }
 
     fn chain_id(&self) -> u64 {
         self.machine
@@ -404,7 +416,9 @@ impl<'a, State: StateTrait<Substate = Substate>> ContextTrait
             .get_chain_id(self.env.epoch_height) as u64
     }
 
-    fn depth(&self) -> usize { self.depth }
+    fn depth(&self) -> usize {
+        self.depth
+    }
 
     fn add_sstore_refund(&mut self, value: usize) {
         self.substate.sstore_clears_refund += value as i128;
@@ -425,8 +439,7 @@ impl<'a, State: StateTrait<Substate = Substate>> ContextTrait
         &mut self, _pc: usize, _instruction: u8, _gas_cost: U256,
         _mem_written: Option<(usize, usize)>,
         _store_written: Option<(U256, U256)>,
-    )
-    {
+    ) {
         // TODO
     }
 
@@ -743,7 +756,13 @@ mod tests {
                 &setup.internal_contract_map,
             );
             let mut tracer = trace::NoopTracer;
-            ctx.suicide(&refund_account, &mut tracer).unwrap();
+            ctx.suicide(
+                &refund_account,
+                &mut tracer,
+                Spec::new_spec()
+                    .account_start_nonce(/* _block_number = */ 0),
+            )
+            .unwrap();
         }
 
         assert_eq!(setup.substate.suicides.len(), 1);
@@ -843,5 +862,4 @@ mod tests {
                 .unwrap()
         );
     }
-
 }

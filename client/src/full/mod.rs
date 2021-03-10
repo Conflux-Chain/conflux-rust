@@ -33,7 +33,9 @@ pub struct FullClientExtraComponents {
 }
 
 impl MallocSizeOf for FullClientExtraComponents {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { unimplemented!() }
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
+        unimplemented!()
+    }
 }
 
 pub struct FullClient {}

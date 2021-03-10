@@ -5,9 +5,13 @@
 pub struct SliceVerifyReadWritePathNode<Mpt>(Option<ReadWritePathNode<Mpt>>);
 
 impl<Mpt> SliceVerifyReadWritePathNode<Mpt> {
-    fn take(mut self) -> ReadWritePathNode<Mpt> { self.0.take().unwrap() }
+    fn take(mut self) -> ReadWritePathNode<Mpt> {
+        self.0.take().unwrap()
+    }
 
-    pub fn as_ref(&self) -> &ReadWritePathNode<Mpt> { self.0.as_ref().unwrap() }
+    pub fn as_ref(&self) -> &ReadWritePathNode<Mpt> {
+        self.0.as_ref().unwrap()
+    }
 
     fn as_mut(&mut self) -> &mut ReadWritePathNode<Mpt> {
         self.0.as_mut().unwrap()
@@ -19,7 +23,9 @@ impl<Mpt> Drop for SliceVerifyReadWritePathNode<Mpt> {
 }
 
 impl<Mpt> TakeMpt<Mpt> for SliceVerifyReadWritePathNode<Mpt> {
-    fn take_mpt(&mut self) -> Option<Mpt> { self.as_mut().take_mpt() }
+    fn take_mpt(&mut self) -> Option<Mpt> {
+        self.as_mut().take_mpt()
+    }
 }
 
 impl<Mpt: GetReadMpt> CursorLoadNodeWrapper<Mpt>
@@ -97,8 +103,7 @@ impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for SliceVerifyReadWritePathNode<Mpt> {
     fn unmatched_child_node_for_path_diversion(
         self, new_path_db_key: CompressedPathRaw,
         new_compressed_path: CompressedPathRaw,
-    ) -> Result<ReadWritePathNode<Mpt>>
-    {
+    ) -> Result<ReadWritePathNode<Mpt>> {
         self.take().unmatched_child_node_for_path_diversion(
             new_path_db_key,
             new_compressed_path,

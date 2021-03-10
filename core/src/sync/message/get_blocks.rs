@@ -52,9 +52,13 @@ impl Decodable for GetBlocks {
 }
 
 impl AsAny for GetBlocks {
-    fn as_any(&self) -> &dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 impl Request for GetBlocks {
@@ -77,7 +81,9 @@ impl Request for GetBlocks {
         self.hashes.retain(|h| inflight_keys.insert(Key::Hash(*h)));
     }
 
-    fn is_empty(&self) -> bool { self.hashes.is_empty() }
+    fn is_empty(&self) -> bool {
+        self.hashes.is_empty()
+    }
 
     fn resend(&self) -> Option<Box<dyn Request>> {
         Some(Box::new(self.clone()))

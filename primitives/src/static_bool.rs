@@ -11,9 +11,13 @@ pub struct No {}
 pub struct Yes {}
 
 impl StaticBool for No {
-    fn value() -> bool { false }
+    fn value() -> bool {
+        false
+    }
 }
 
 impl StaticBool for Yes {
-    fn value() -> bool { true }
+    fn value() -> bool {
+        true
+    }
 }

@@ -35,8 +35,7 @@ impl TransactionDataManager {
     pub fn new(
         tx_cache_index_maintain_timeout: Duration,
         worker_pool: Arc<Mutex<ThreadPool>>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             tx_time_window: RwLock::new(TransactionCacheContainer::new(
                 tx_cache_index_maintain_timeout.as_secs(),

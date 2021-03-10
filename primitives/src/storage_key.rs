@@ -21,7 +21,9 @@ pub struct FromKeyBytesResult<ShouldCheckInput: StaticBool> {
 impl<'a> ConditionalReturnValue<'a> for FromKeyBytesResult<SkipInputCheck> {
     type Output = StorageKey<'a>;
 
-    fn from_key(k: StorageKey<'a>) -> Self::Output { k }
+    fn from_key(k: StorageKey<'a>) -> Self::Output {
+        k
+    }
 
     fn from_result(_r: Result<StorageKey<'a>, String>) -> Self::Output {
         unreachable!()
@@ -31,9 +33,13 @@ impl<'a> ConditionalReturnValue<'a> for FromKeyBytesResult<SkipInputCheck> {
 impl<'a> ConditionalReturnValue<'a> for FromKeyBytesResult<CheckInput> {
     type Output = Result<StorageKey<'a>, String>;
 
-    fn from_key(k: StorageKey<'a>) -> Self::Output { Ok(k) }
+    fn from_key(k: StorageKey<'a>) -> Self::Output {
+        Ok(k)
+    }
 
-    fn from_result(r: Result<StorageKey<'a>, String>) -> Self::Output { r }
+    fn from_result(r: Result<StorageKey<'a>, String>) -> Self::Output {
+        r
+    }
 }
 
 // The original StorageKeys unprocessed, in contrary to StorageKey which is
@@ -253,7 +259,7 @@ impl<'a> StorageKey<'a> {
     pub fn from_key_bytes<ShouldCheckInput: StaticBool>(
         mut bytes: &'a [u8],
     ) -> <FromKeyBytesResult<ShouldCheckInput> as ConditionalReturnValue<'a>>::Output
-where FromKeyBytesResult<ShouldCheckInput>: ConditionalReturnValue<'a>{
+    where FromKeyBytesResult<ShouldCheckInput>: ConditionalReturnValue<'a>{
         let key = if bytes.len() <= Self::ACCOUNT_BYTES {
             StorageKey::AccountKey(bytes)
         } else {
@@ -321,15 +327,21 @@ lazy_static! {
 impl Deref for DeltaMptKeyPadding {
     type Target = [u8; delta_mpt_storage_key::KEY_PADDING_BYTES];
 
-    fn deref(&self) -> &Self::Target { &self.0 }
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 impl DerefMut for DeltaMptKeyPadding {
-    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 impl Encodable for DeltaMptKeyPadding {
-    fn rlp_append(&self, s: &mut RlpStream) { s.append_internal(&&self[..]); }
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.append_internal(&&self[..]);
+    }
 }
 
 impl Decodable for DeltaMptKeyPadding {
@@ -400,8 +412,7 @@ mod delta_mpt_storage_key {
     fn extend_key_with_prefix(
         key: &mut Vec<u8>, address: &[u8], padding: &DeltaMptKeyPadding,
         prefix: &[u8],
-    )
-    {
+    ) {
         extend_address(key, address, padding);
         key.extend_from_slice(prefix);
     }

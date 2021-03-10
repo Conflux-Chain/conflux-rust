@@ -34,7 +34,9 @@ impl<'a> Context<'a> {
         self.io.insert_peer_node_tag(peer, key, value)
     }
 
-    pub fn node_id(&self) -> NodeId { self.node_id.clone() }
+    pub fn node_id(&self) -> NodeId {
+        self.node_id.clone()
+    }
 }
 
 // todo merge with Request and RequestContext!!!

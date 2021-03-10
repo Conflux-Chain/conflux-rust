@@ -67,7 +67,9 @@ impl str::FromStr for Crypto {
 }
 
 impl From<Crypto> for String {
-    fn from(c: Crypto) -> Self { json::Crypto::from(c).into() }
+    fn from(c: Crypto) -> Self {
+        json::Crypto::from(c).into()
+    }
 }
 
 impl Crypto {
