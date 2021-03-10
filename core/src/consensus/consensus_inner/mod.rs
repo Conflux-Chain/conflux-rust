@@ -134,7 +134,9 @@ pub struct ConsensusGraphNodeData {
     /// execute the last ``EPOCH_EXECUTED_BLOCK_BOUND'' and skip the
     /// remaining. The `skipped_epoch_blocks` also contain those blocks that
     /// are not in the same era of the pivot block.
-    skipped_epoch_blocks: Vec<usize>,
+    /// We use the block hashes instead of block arena indices here to ensure
+    /// the consistency with the database after making a checkpoint.
+    skipped_epoch_blocks: Vec<H256>,
     /// It indicates whether `blockset_in_own_view_of_epoch` and
     /// `skipped_epoch_blocks` are cleared due to its size.
     blockset_cleared: bool,
@@ -701,10 +703,7 @@ impl ConsensusGraphInner {
             .collect();
         let skipped_set_hashes = self
             .get_or_compute_skipped_epoch_blocks(arena_index)
-            .clone()
-            .iter()
-            .map(|arena_index| self.arena[*arena_index].hash)
-            .collect();
+            .clone();
         self.data_man
             .insert_executed_epoch_set_hashes_to_db(height, &epoch_set_hashes);
         self.data_man
@@ -937,36 +936,34 @@ impl ConsensusGraphInner {
             }
         }
 
-        self.arena[pivot].data.ordered_executable_epoch_blocks = self
+        let mut ordered_executable_epoch_blocks = self
             .topological_sort_with_order_indicator(filtered_blockset, |i| {
                 self.arena[i].hash
             });
-        self.arena[pivot]
-            .data
-            .ordered_executable_epoch_blocks
-            .push(pivot);
-        if self.arena[pivot].data.ordered_executable_epoch_blocks.len()
+        ordered_executable_epoch_blocks.push(pivot);
+        let skipped_epoch_block_indices = if ordered_executable_epoch_blocks
+            .len()
             > EPOCH_EXECUTED_BLOCK_BOUND
         {
-            let cut_off =
-                self.arena[pivot].data.ordered_executable_epoch_blocks.len()
-                    - EPOCH_EXECUTED_BLOCK_BOUND;
-            self.arena[pivot].data.skipped_epoch_blocks = mem::replace(
-                &mut self.arena[pivot].data.ordered_executable_epoch_blocks,
-                Default::default(),
-            );
-            self.arena[pivot].data.ordered_executable_epoch_blocks = self.arena
-                [pivot]
-                .data
-                .skipped_epoch_blocks
-                .split_off(cut_off);
+            let cut_off = ordered_executable_epoch_blocks.len()
+                - EPOCH_EXECUTED_BLOCK_BOUND;
+            let mut skipped_epoch_block_indices =
+                ordered_executable_epoch_blocks;
+            ordered_executable_epoch_blocks =
+                skipped_epoch_block_indices.split_off(cut_off);
+            skipped_epoch_block_indices.append(&mut different_era_blocks);
+            skipped_epoch_block_indices
         } else {
-            self.arena[pivot].data.skipped_epoch_blocks = Default::default();
-        }
-        self.arena[pivot]
-            .data
-            .skipped_epoch_blocks
-            .append(&mut different_era_blocks);
+            different_era_blocks
+        };
+
+        self.arena[pivot].data.skipped_epoch_blocks =
+            skipped_epoch_block_indices
+                .into_iter()
+                .map(|i| self.arena[i].hash)
+                .collect();
+        self.arena[pivot].data.ordered_executable_epoch_blocks =
+            ordered_executable_epoch_blocks;
         self.arena[pivot].data.blockset_cleared = false;
     }
 
@@ -1000,7 +997,7 @@ impl ConsensusGraphInner {
     #[inline]
     pub fn get_or_compute_skipped_epoch_blocks(
         &mut self, index: usize,
-    ) -> &Vec<usize> {
+    ) -> &Vec<H256> {
         if self.arena[index].data.blockset_cleared {
             self.compute_blockset_in_own_view_of_epoch(index);
         }
@@ -1008,9 +1005,7 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
-    pub fn get_skipped_epoch_blocks(
-        &self, index: usize,
-    ) -> Option<&Vec<usize>> {
+    pub fn get_skipped_epoch_blocks(&self, index: usize) -> Option<&Vec<H256>> {
         if self.arena[index].data.blockset_cleared {
             None
         } else {
@@ -1548,9 +1543,10 @@ impl ConsensusGraphInner {
     }
 
     /// All referees should be in the anticone of each other.
-    /// If there is a path from a referee `A` to another referee `B`, we will
-    /// treat `B` as a valid referee and ignore `A` because `A` is not the
-    /// graph terminal. This should only happen if the miner generating this
+    /// If there is a path from a referee `A` to another referee `B` by
+    /// following edges towards parent/referees, we will treat `B` as a
+    /// valid referee and ignore `A` because `A` is not the graph terminal.
+    /// This should only happen if the miner generating this
     /// block is malicious. TODO: Explain why not `partial_invalid`?
     fn insert_referee_if_not_duplicate(
         &self, referees: &mut Vec<usize>, me: usize,
@@ -2172,10 +2168,7 @@ impl ConsensusGraphInner {
                     if let Some(skipped_block_set) =
                         self.get_skipped_epoch_blocks(pivot_arena_index)
                     {
-                        return Ok(skipped_block_set
-                            .iter()
-                            .map(|index| self.arena[*index].hash)
-                            .collect());
+                        return Ok(skipped_block_set.clone());
                     }
                 }
                 e = "Skipped epoch set of the current genesis is not maintained".into();

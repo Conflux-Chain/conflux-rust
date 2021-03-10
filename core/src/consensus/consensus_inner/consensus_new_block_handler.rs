@@ -149,24 +149,16 @@ impl ConsensusNewBlockHandler {
         let new_era_pivot_index = inner.height_to_pivot_index(new_era_height);
         for v in new_era_block_arena_index_set.iter() {
             let me = *v;
-            // It is necessary to process `referees`,
-            // `blockset_in_own_view_of_epoch`, and
-            // `skipped_epoch_blocks` because `new_era_block_arena_index_set`
-            // include the blocks in the anticone of the new era
-            // genesis.
+            // It is necessary to process `referees` and
+            // `blockset_in_own_view_of_epoch` because
+            // `new_era_block_arena_index_set` include the blocks in
+            // the anticone of the new era genesis.
             inner.arena[me]
                 .referees
                 .retain(|v| new_era_block_arena_index_set.contains(v));
             inner.arena[me]
                 .data
                 .blockset_in_own_view_of_epoch
-                .retain(|v| new_era_block_arena_index_set.contains(v));
-            // FIXME: This causes inconsistency between the db and the memory.
-            // FIXME: Although it does not impact the sync process. We should
-            // consider fix it.
-            inner.arena[me]
-                .data
-                .skipped_epoch_blocks
                 .retain(|v| new_era_block_arena_index_set.contains(v));
             if !new_era_block_arena_index_set.contains(
                 &inner.arena[me].data.past_view_last_timer_block_arena_index,
@@ -721,20 +713,17 @@ impl ConsensusNewBlockHandler {
     }
 
     fn recycle_tx_in_block(
-        &self, inner: &ConsensusGraphInner, arena_index: usize,
+        &self, inner: &ConsensusGraphInner, block_hash: &H256,
     ) {
-        if let Some(block) = inner.data_man.block_by_hash(
-            &inner.arena[arena_index].hash,
-            true, /* update_cache */
-        ) {
+        if let Some(block) = inner
+            .data_man
+            .block_by_hash(block_hash, true /* update_cache */)
+        {
             self.txpool.recycle_transactions(block.transactions.clone());
         } else {
             // This should only happen for blocks in the anticone of
             // checkpoints.
-            debug!(
-                "recycle_tx_in_block: block {:?} not in db",
-                inner.arena[arena_index].hash
-            );
+            debug!("recycle_tx_in_block: block {:?} not in db", block_hash);
         }
     }
 
@@ -1611,7 +1600,7 @@ impl ConsensusNewBlockHandler {
                 let skipped_blocks = inner
                     .get_or_compute_skipped_epoch_blocks(recycle_arena_index)
                     .clone();
-                for idx in skipped_blocks {
+                for idx in &skipped_blocks {
                     self.recycle_tx_in_block(inner, idx);
                 }
             }
