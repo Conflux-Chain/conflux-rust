@@ -508,7 +508,10 @@ dependencies = [
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",
+ "hashbrown 0.7.2",
+ "parking_lot 0.11.1",
  "primitives",
+ "rlp",
 ]
 
 [[package]]
