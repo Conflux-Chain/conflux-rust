@@ -17,8 +17,8 @@ use crate::{
 use cfx_addr::Network;
 use cfx_types::H256;
 use cfxcore::{
-    trace::trace::{ExecTrace, TransactionExecTraces},
-    BlockDataManager, ConsensusGraph, SharedConsensusGraph,
+    trace::trace::ExecTrace, BlockDataManager, ConsensusGraph,
+    SharedConsensusGraph,
 };
 use jsonrpc_core::Result as JsonRpcResult;
 use std::sync::Arc;
@@ -88,46 +88,24 @@ impl TraceHandler {
 
     fn transaction_trace_impl(
         &self, tx_hash: &H256,
-    ) -> RpcResult<Option<Vec<LocalizedTrace>>> {
-        match self
-            .data_man
-            .transaction_index_by_hash(tx_hash, true /* update_cache */)
-        {
-            None => Ok(None),
-            Some(tx_index) => {
-                match self.data_man.block_traces_by_hash(&tx_index.block_hash) {
-                    None => bail!(format!(
-                        "Trace not found for transaction {:?}: tx_index={:?}",
-                        tx_hash, tx_index,
-                    )),
-                    Some(block_traces) => {
-                        let mut block_traces: Vec<TransactionExecTraces> =
-                            block_traces.into();
-                        if tx_index.index <= block_traces.len() {
-                            bail!(format!("Tx index and trace unmatch: index={} trace_len={}",
-                             tx_index.index, block_traces.len()));
-                        }
-                        let tx_traces: Vec<ExecTrace> =
-                            block_traces.swap_remove(tx_index.index).into();
-                        if tx_traces.is_empty() {
-                            Ok(None)
-                        } else {
-                            Ok(Some(
-                                tx_traces
-                                    .into_iter()
+    ) -> RpcResult<Option<Vec<RpcLocalizedTrace>>> {
+        Ok(self.data_man.transaction_index_by_hash(tx_hash, true /* update_cache */).and_then(|tx_index|
+                self.data_man.transactions_traces_by_block_hash(&tx_index.block_hash)
+                    .and_then(|traces| {
+                        traces.into_iter().nth(tx_index.index)
+                            .map(Into::<Vec<ExecTrace>>::into)
+                            .map(|traces|
+                                traces.into_iter()
                                     .map(|trace| {
                                         RpcLocalizedTrace::from(
                                             trace,
                                             self.network,
                                         ).expect("Local address conversion should succeed")
-                                    })
-                                    .collect()
-                            ))
+                                    }).collect()
+                            )
                         }
-                    }
-                }
-            }
-        }
+                    )
+        ))
     }
 }
 
