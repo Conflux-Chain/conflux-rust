@@ -2,12 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{state_trait::StateOpsTrait, CleanupMode};
-use cfx_statedb::Result as DbResult;
-use cfx_types::{Address, U256};
-use primitives::LogEntry;
-use std::{cell::RefCell, collections::HashSet, rc::Rc};
-
 pub trait SubstateTrait {
     type CallStackInfo;
     type Spec;
@@ -77,3 +71,9 @@ pub trait SubstateMngTrait: SubstateTrait {
         self, contract_in_creation: Address,
     ) -> Self;
 }
+
+use crate::{state_trait::StateOpsTrait, CleanupMode};
+use cfx_statedb::Result as DbResult;
+use cfx_types::{Address, U256};
+use primitives::LogEntry;
+use std::{cell::RefCell, collections::HashSet, rc::Rc};

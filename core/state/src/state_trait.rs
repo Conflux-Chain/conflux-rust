@@ -225,7 +225,7 @@ pub trait CheckpointTrait: StateOpsTrait {
 }
 
 use super::{CleanupMode, CollateralCheckResult};
-use crate::SubstateTrait;
+use crate::substate_trait::SubstateTrait;
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };

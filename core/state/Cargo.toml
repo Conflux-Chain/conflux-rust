@@ -12,7 +12,10 @@ cfx-parameters = { path = "../parameters" }
 cfx-storage = { path = "../storage" }
 cfx-statedb = { path = "../statedb" }
 cfx-types = { path = "../../cfx_types" }
+parking_lot = "0.11"
 primitives = { path = "../../primitives", optional = true }
+# TODO: update all rlp version.
+rlp = "0.4"
 
 [dev-dependencies]
 primitives = { path = "../../primitives", features = ["test_no_account_length_check"] }
