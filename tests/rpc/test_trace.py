@@ -44,3 +44,9 @@ class TestTrace(RpcClient):
         trace5 = self.get_block_trace(b2)
         assert_equal(len(trace5["transactionTraces"]), 1)
         assert_equal(len(trace5["transactionTraces"][0]["traces"]), 0)
+
+    def test_trace_transaction(self):
+        tx = self.new_tx()
+        tx_hash = self.send_tx(tx)
+        self.wait_for_receipt(tx_hash)
+        assert_equal(len(self.get_transaction_trace(tx_hash)), 1)
