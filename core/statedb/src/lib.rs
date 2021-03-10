@@ -69,8 +69,8 @@ mod impls {
     }
 
     pub trait StateDbCheckpointMethods {
-        /// Create a new checkpoint.
-        fn checkpoint(&mut self);
+        /// Create a new checkpoint. Returns the index of the checkpoint.
+        fn checkpoint(&mut self) -> usize;
 
         /// Discard checkpoint.
         /// This means giving up the ability to revert to the latest checkpoint.
@@ -523,9 +523,10 @@ mod impls {
     }
 
     impl<Storage: StorageStateTrait> StateDbCheckpointMethods for StateDb<Storage> {
-        fn checkpoint(&mut self) {
+        fn checkpoint(&mut self) -> usize {
             trace!("Creating checkpoint #{}", self.checkpoints.len());
             self.checkpoints.push(BTreeMap::new()); // no values are modified yet
+            self.checkpoints.len() - 1
         }
 
         fn discard_checkpoint(&mut self) {
