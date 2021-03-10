@@ -101,7 +101,8 @@ impl RequestHandler {
     pub fn send_request(
         &self, io: &dyn NetworkContext, peer: Option<NodeId>,
         request: Box<dyn Request>, delay: Option<Duration>,
-    ) -> Result<(), Box<dyn Request>> {
+    ) -> Result<(), Box<dyn Request>>
+    {
         let peer = match peer {
             Some(peer) => peer,
             None => return Err(request),
@@ -275,7 +276,8 @@ impl RequestContainer {
     pub fn append_inflight_request(
         &mut self, request_id: u64, message: RequestMessage,
         timed_req: Arc<TimedSyncRequests>,
-    ) {
+    )
+    {
         self.inflight_requests.insert(
             request_id,
             SynchronizationPeerRequest { message, timed_req },
@@ -313,7 +315,8 @@ impl RequestContainer {
         mut request_message: RequestMessage,
         requests_queue: &mut BinaryHeap<Arc<TimedSyncRequests>>,
         protocol_config: &ProtocolConfiguration,
-    ) {
+    )
+    {
         request_message.request.set_request_id(request_id);
         let res = request_message.request.send(io, &self.peer_id);
         let is_send_error = if let Err(e) = res {
@@ -350,7 +353,8 @@ impl RequestContainer {
         &mut self, io: &dyn NetworkContext,
         requests_queue: &mut BinaryHeap<Arc<TimedSyncRequests>>,
         protocol_config: &ProtocolConfiguration,
-    ) {
+    )
+    {
         trace!("send_pending_requests: len={}", self.pending_requests.len());
         while self.has_pending_requests() {
             if let Some(new_request_id) = self.get_next_request_id() {
@@ -448,17 +452,13 @@ pub trait Request:
     fn resend(&self) -> Option<Box<dyn Request>>;
 
     /// Required peer capability to send this request
-    fn required_capability(&self) -> Option<DynamicCapability> {
-        None
-    }
+    fn required_capability(&self) -> Option<DynamicCapability> { None }
 
     /// Notify the handler when the request gets timeout.
     fn notify_timeout(&mut self) {}
 
     /// Epoch-gap-limit required by this request.
-    fn preferred_node_type(&self) -> Option<NodeType> {
-        None
-    }
+    fn preferred_node_type(&self) -> Option<NodeType> { None }
 }
 
 #[derive(Debug, DeriveMallocSizeOf)]
@@ -533,7 +533,8 @@ impl TimedSyncRequests {
     pub fn from_request(
         peer_id: NodeId, request_id: u64, msg: &RequestMessage,
         conf: &ProtocolConfiguration, is_send_error: bool,
-    ) -> TimedSyncRequests {
+    ) -> TimedSyncRequests
+    {
         let timeout = if is_send_error {
             FAILED_REQUEST_RESEND_WAIT.clone()
         } else {

@@ -130,15 +130,11 @@ impl<T: std::fmt::Debug> PartialEq for PartialEqWrapper<T> {
 }
 
 impl From<DbError> for Error {
-    fn from(err: DbError) -> Self {
-        Error::StateDbError(PartialEqWrapper(err))
-    }
+    fn from(err: DbError) -> Self { Error::StateDbError(PartialEqWrapper(err)) }
 }
 
 impl From<ABIDecodeError> for Error {
-    fn from(err: ABIDecodeError) -> Self {
-        Error::InternalContract(err.0)
-    }
+    fn from(err: ABIDecodeError) -> Self { Error::InternalContract(err.0) }
 }
 
 impl fmt::Display for Error {

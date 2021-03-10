@@ -39,15 +39,11 @@ use keylib::{recover as ec_recover, Signature};
 pub struct Error(pub &'static str);
 
 impl From<&'static str> for Error {
-    fn from(val: &'static str) -> Self {
-        Error(val)
-    }
+    fn from(val: &'static str) -> Self { Error(val) }
 }
 
 impl Into<crate::vm::Error> for Error {
-    fn into(self) -> crate::vm::Error {
-        crate::vm::Error::BuiltIn(self.0)
-    }
+    fn into(self) -> crate::vm::Error { crate::vm::Error::BuiltIn(self.0) }
 }
 
 /// Native implementation of a built-in contract.
@@ -208,9 +204,7 @@ pub struct Builtin {
 
 impl Builtin {
     /// Simple forwarder for cost.
-    pub fn cost(&self, input: &[u8]) -> U256 {
-        self.pricer.cost(input)
-    }
+    pub fn cost(&self, input: &[u8]) -> U256 { self.pricer.cost(input) }
 
     /// Simple forwarder for execute.
     pub fn execute(
@@ -220,9 +214,7 @@ impl Builtin {
     }
 
     /// Whether the builtin is activated at the given cardinal number.
-    pub fn is_active(&self, at: u64) -> bool {
-        at >= self.activate_at
-    }
+    pub fn is_active(&self, at: u64) -> bool { at >= self.activate_at }
 
     pub fn new(
         pricer: Box<dyn Pricer>, native: Box<dyn Impl>, activate_at: u64,
@@ -1195,9 +1187,7 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn from_unknown_linear() {
-        let _ = builtin_factory("foo");
-    }
+    fn from_unknown_linear() { let _ = builtin_factory("foo"); }
 
     #[test]
     fn is_active() {

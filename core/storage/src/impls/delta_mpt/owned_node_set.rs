@@ -97,9 +97,7 @@ impl<'a> IntoIterator for &'a OwnedNodeSet {
     type IntoIter = Iter<'a>;
     type Item = NodeRefDeltaMpt;
 
-    fn into_iter(self) -> Iter<'a> {
-        self.iter()
-    }
+    fn into_iter(self) -> Iter<'a> { self.iter() }
 }
 
 use super::{

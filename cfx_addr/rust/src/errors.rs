@@ -34,13 +34,9 @@ impl fmt::Display for EncodingError {
 }
 
 impl Error for EncodingError {
-    fn cause(&self) -> Option<&dyn Error> {
-        None
-    }
+    fn cause(&self) -> Option<&dyn Error> { None }
 
-    fn description(&self) -> &str {
-        "invalid length"
-    }
+    fn description(&self) -> &str { "invalid length" }
 }
 
 /// Error concerning decoding of cfx_base32_addr.
@@ -142,9 +138,7 @@ impl fmt::Display for DecodingError {
 }
 
 impl Error for DecodingError {
-    fn cause(&self) -> Option<&dyn Error> {
-        None
-    }
+    fn cause(&self) -> Option<&dyn Error> { None }
 
     fn description(&self) -> &str {
         match self {

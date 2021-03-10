@@ -15,16 +15,12 @@ pub struct Index(usize);
 impl Index {
     /// Convert to usize
     #[allow(dead_code)]
-    pub fn value(&self) -> usize {
-        self.0
-    }
+    pub fn value(&self) -> usize { self.0 }
 }
 
 impl<'a> Deserialize<'a> for Index {
     fn deserialize<D>(deserializer: D) -> Result<Index, D::Error>
-    where
-        D: Deserializer<'a>,
-    {
+    where D: Deserializer<'a> {
         deserializer.deserialize_any(IndexVisitor)
     }
 }
@@ -39,9 +35,7 @@ impl<'a> Visitor<'a> for IndexVisitor {
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-    where
-        E: Error,
-    {
+    where E: Error {
         match value {
             _ if value.starts_with("0x") => {
                 usize::from_str_radix(&value[2..], 16)
@@ -56,9 +50,7 @@ impl<'a> Visitor<'a> for IndexVisitor {
     }
 
     fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
-    where
-        E: Error,
-    {
+    where E: Error {
         self.visit_str(value.as_ref())
     }
 }

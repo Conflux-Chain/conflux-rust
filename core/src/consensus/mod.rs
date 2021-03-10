@@ -165,9 +165,7 @@ pub struct BestInformation {
 }
 
 impl BestInformation {
-    pub fn best_chain_id(&self) -> u32 {
-        self.chain_id
-    }
+    pub fn best_chain_id(&self) -> u32 { self.chain_id }
 }
 
 /// ConsensusGraph is a layer on top of SynchronizationGraph. A SyncGraph
@@ -228,7 +226,8 @@ impl ConsensusGraph {
         notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, node_type: NodeType,
-    ) -> Self {
+    ) -> Self
+    {
         let inner =
             Arc::new(RwLock::new(ConsensusGraphInner::with_era_genesis(
                 pow_config,
@@ -288,7 +287,8 @@ impl ConsensusGraph {
         notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_conf: VerificationConfig, node_type: NodeType,
-    ) -> Self {
+    ) -> Self
+    {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
         let stable_hash = data_man.get_cur_consensus_era_stable_hash();
         ConsensusGraph::with_era_genesis(
@@ -331,7 +331,8 @@ impl ConsensusGraph {
     pub fn check_mining_adaptive_block(
         &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
         referees: &Vec<H256>, difficulty: &U256,
-    ) -> bool {
+    ) -> bool
+    {
         let parent_index =
             *inner.hash_to_arena_indices.get(parent_hash).expect(
                 "parent_hash is the pivot chain tip,\
@@ -563,7 +564,8 @@ impl ConsensusGraph {
         &self, address: H160,
         block_hash_or_epoch_number: BlockHashOrEpochNumber,
         rpc_param_name: &str,
-    ) -> RpcResult<U256> {
+    ) -> RpcResult<U256>
+    {
         let epoch_number = match block_hash_or_epoch_number {
             BlockHashOrEpochNumber::BlockHash(hash) => EpochNumber::Number(
                 self.inner
@@ -593,7 +595,8 @@ impl ConsensusGraph {
     fn filter_block_receipts<'a>(
         &self, filter: &'a LogFilter, epoch_number: u64, block_hash: H256,
         mut receipts: Vec<Receipt>, mut tx_hashes: Vec<H256>,
-    ) -> impl Iterator<Item = LocalizedLogEntry> + 'a {
+    ) -> impl Iterator<Item = LocalizedLogEntry> + 'a
+    {
         // sanity check
         if receipts.len() != tx_hashes.len() {
             warn!("Block ({}) has different number of receipts ({}) to transactions ({}). Database corrupt?", block_hash, receipts.len(), tx_hashes.len());
@@ -641,7 +644,8 @@ impl ConsensusGraph {
     fn filter_block<'a>(
         &self, filter: &'a LogFilter, bloom_possibilities: &'a Vec<Bloom>,
         epoch: u64, pivot_hash: H256, block_hash: H256,
-    ) -> Result<impl Iterator<Item = LocalizedLogEntry> + 'a, FilterError> {
+    ) -> Result<impl Iterator<Item = LocalizedLogEntry> + 'a, FilterError>
+    {
         // special case for genesis (for now, genesis has no logs)
         if epoch == 0 {
             return Ok(Either::Left(std::iter::empty()));
@@ -704,7 +708,8 @@ impl ConsensusGraph {
     fn filter_single_epoch<'a>(
         &'a self, filter: &'a LogFilter, bloom_possibilities: &'a Vec<Bloom>,
         epoch: u64,
-    ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
+    ) -> Result<Vec<LocalizedLogEntry>, FilterError>
+    {
         // retrieve epoch hashes and pivot hash
         let mut epoch_hashes =
             self.inner.read_recursive().block_hashes_by_epoch(epoch)?;
@@ -738,7 +743,8 @@ impl ConsensusGraph {
     fn filter_epoch_batch(
         &self, filter: &LogFilter, bloom_possibilities: &Vec<Bloom>,
         epochs: Vec<u64>, consistency_check_data: &mut Option<(u64, H256)>,
-    ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
+    ) -> Result<Vec<LocalizedLogEntry>, FilterError>
+    {
         // lock so that we have a consistent view during this batch
         let inner = self.inner.read();
 
@@ -1226,21 +1232,15 @@ impl ConsensusGraph {
 }
 
 impl Drop for ConsensusGraph {
-    fn drop(&mut self) {
-        self.executor.stop();
-    }
+    fn drop(&mut self) { self.executor.stop(); }
 }
 
 impl ConsensusGraphTrait for ConsensusGraph {
     type ConsensusConfig = ConsensusConfig;
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+    fn as_any(&self) -> &dyn Any { self }
 
-    fn get_config(&self) -> &Self::ConsensusConfig {
-        &self.config
-    }
+    fn get_config(&self) -> &Self::ConsensusConfig { &self.config }
 
     /// This is the main function that SynchronizationGraph calls to deliver a
     /// new block to the consensus graph.
@@ -1326,17 +1326,11 @@ impl ConsensusGraphTrait for ConsensusGraph {
         self.inner.read_recursive().current_era_genesis_seq_num()
     }
 
-    fn get_data_manager(&self) -> &Arc<BlockDataManager> {
-        &self.data_man
-    }
+    fn get_data_manager(&self) -> &Arc<BlockDataManager> { &self.data_man }
 
-    fn get_tx_pool(&self) -> &SharedTransactionPool {
-        &self.txpool
-    }
+    fn get_tx_pool(&self) -> &SharedTransactionPool { &self.txpool }
 
-    fn get_statistics(&self) -> &SharedStatistics {
-        &self.statistics
-    }
+    fn get_statistics(&self) -> &SharedStatistics { &self.statistics }
 
     /// Returns the total number of blocks processed in consensus graph.
     ///

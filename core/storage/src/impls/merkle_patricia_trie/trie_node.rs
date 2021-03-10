@@ -24,8 +24,7 @@ pub trait TrieNodeTrait: Default {
     /// Unsafe because it's assumed that the child_index is valid but the child
     /// doesn't exist.
     unsafe fn add_new_child_unchecked<T>(&mut self, child_index: u8, child: T)
-    where
-        ChildrenTableItem<Self::NodeRefType>:
+    where ChildrenTableItem<Self::NodeRefType>:
             WrappedCreateFrom<T, Self::NodeRefType>;
 
     /// Unsafe because it's assumed that the child_index already exists.
@@ -35,8 +34,7 @@ pub trait TrieNodeTrait: Default {
 
     /// Unsafe because it's assumed that the child_index already exists.
     unsafe fn replace_child_unchecked<T>(&mut self, child_index: u8, child: T)
-    where
-        ChildrenTableItem<Self::NodeRefType>:
+    where ChildrenTableItem<Self::NodeRefType>:
             WrappedCreateFrom<T, Self::NodeRefType>;
 
     /// Unsafe because it's assumed that the child_index already exists.
@@ -54,7 +52,8 @@ pub trait TrieNodeTrait: Default {
     fn compute_merkle(
         &self, children_merkles: MaybeMerkleTableRef,
         path_without_first_nibble: bool,
-    ) -> MerkleHash {
+    ) -> MerkleHash
+    {
         compute_merkle(
             self.compressed_path_ref(),
             path_without_first_nibble,
@@ -74,8 +73,7 @@ pub struct VanillaTrieNode<NodeRefT: NodeRefTrait> {
 }
 
 impl<NodeRefT: 'static + NodeRefTrait> Default for VanillaTrieNode<NodeRefT>
-where
-    ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>,
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
 {
     fn default() -> Self {
         Self {
@@ -89,8 +87,7 @@ where
 
 impl<'node, NodeRefT: 'static + NodeRefTrait> GetChildTrait<'node>
     for VanillaTrieNode<NodeRefT>
-where
-    ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>,
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
 {
     type ChildIdType = &'node NodeRefT;
 
@@ -101,15 +98,13 @@ where
 
 impl<'node, NodeRefT: 'static + NodeRefTrait> TrieNodeWalkTrait<'node>
     for VanillaTrieNode<NodeRefT>
-where
-    ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>,
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
 {
 }
 
 impl<NodeRefT: 'static + NodeRefTrait> TrieNodeTrait
     for VanillaTrieNode<NodeRefT>
-where
-    ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>,
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
 {
     type ChildrenTableType = VanillaChildrenTable<NodeRefT>;
     type NodeRefType = NodeRefT;
@@ -118,9 +113,7 @@ where
         self.compressed_path.as_ref()
     }
 
-    fn has_value(&self) -> bool {
-        self.mpt_value.is_some()
-    }
+    fn has_value(&self) -> bool { self.mpt_value.is_some() }
 
     fn get_children_count(&self) -> u8 {
         self.children_table.get_children_count()
@@ -139,9 +132,7 @@ where
     }
 
     unsafe fn add_new_child_unchecked<T>(&mut self, child_index: u8, child: T)
-    where
-        ChildrenTableItem<NodeRefT>: WrappedCreateFrom<T, NodeRefT>,
-    {
+    where ChildrenTableItem<NodeRefT>: WrappedCreateFrom<T, NodeRefT> {
         ChildrenTableItem::<NodeRefT>::take_from(
             self.children_table.get_child_mut_unchecked(child_index),
             child,
@@ -156,9 +147,7 @@ where
     }
 
     unsafe fn replace_child_unchecked<T>(&mut self, child_index: u8, child: T)
-    where
-        ChildrenTableItem<NodeRefT>: WrappedCreateFrom<T, NodeRefT>,
-    {
+    where ChildrenTableItem<NodeRefT>: WrappedCreateFrom<T, NodeRefT> {
         ChildrenTableItem::<NodeRefT>::take_from(
             self.children_table.get_child_mut_unchecked(child_index),
             child,
@@ -198,7 +187,8 @@ impl<NodeRefT: NodeRefTrait> VanillaTrieNode<NodeRefT> {
     pub fn new(
         merkle: MerkleHash, children_table: VanillaChildrenTable<NodeRefT>,
         maybe_value: Option<Box<[u8]>>, compressed_path: CompressedPathRaw,
-    ) -> Self {
+    ) -> Self
+    {
         let mpt_value = match maybe_value {
             None => MptValue::None,
             Some(v) => {
@@ -218,9 +208,7 @@ impl<NodeRefT: NodeRefTrait> VanillaTrieNode<NodeRefT> {
         }
     }
 
-    pub fn get_merkle(&self) -> &MerkleHash {
-        &self.merkle_hash
-    }
+    pub fn get_merkle(&self) -> &MerkleHash { &self.merkle_hash }
 
     pub fn set_merkle(&mut self, merkle: &MerkleHash) {
         self.merkle_hash = merkle.clone();
@@ -245,8 +233,7 @@ impl VanillaTrieNode<MerkleHash> {
 }
 
 impl<NodeRefT: 'static + NodeRefTrait> Encodable for VanillaTrieNode<NodeRefT>
-where
-    ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>,
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
 {
     fn rlp_append(&self, s: &mut RlpStream) {
         s.begin_unbounded_list()
@@ -264,8 +251,7 @@ where
 }
 
 impl<NodeRefT: 'static + NodeRefTrait> Decodable for VanillaTrieNode<NodeRefT>
-where
-    ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>,
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
 {
     fn decode(rlp: &Rlp) -> ::std::result::Result<Self, DecoderError> {
         let compressed_path;

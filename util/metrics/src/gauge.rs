@@ -9,9 +9,7 @@ use crate::{
 use std::sync::{atomic::AtomicUsize, Arc};
 
 pub trait Gauge<T: Default>: Send + Sync {
-    fn value(&self) -> T {
-        T::default()
-    }
+    fn value(&self) -> T { T::default() }
     fn update(&self, _value: T) {}
 }
 
@@ -59,19 +57,13 @@ macro_rules! construct_gauge {
         }
 
         impl Gauge<$data_type> for $name {
-            fn value(&self) -> usize {
-                self.value.load(ORDER)
-            }
+            fn value(&self) -> usize { self.value.load(ORDER) }
 
-            fn update(&self, value: usize) {
-                self.value.store(value, ORDER);
-            }
+            fn update(&self, value: usize) { self.value.store(value, ORDER); }
         }
 
         impl Metric for $name {
-            fn get_type(&self) -> &str {
-                "Gauge"
-            }
+            fn get_type(&self) -> &str { "Gauge" }
         }
     };
 }

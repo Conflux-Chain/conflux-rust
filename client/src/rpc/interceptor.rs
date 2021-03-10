@@ -135,9 +135,7 @@ mod tests {
     struct FooImpl;
 
     impl Foo for FooImpl {
-        fn balance(&self, id: usize) -> RpcResult<usize> {
-            Ok(id)
-        }
+        fn balance(&self, id: usize) -> RpcResult<usize> { Ok(id) }
     }
 
     #[derive(Default)]

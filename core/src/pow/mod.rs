@@ -106,7 +106,8 @@ impl ProofOfWorkConfig {
         initial_difficulty: Option<u64>, stratum_listen_addr: String,
         stratum_port: u16, stratum_secret: Option<H256>,
         pow_problem_window_size: usize,
-    ) -> Self {
+    ) -> Self
+    {
         if test_mode {
             ProofOfWorkConfig {
                 test_mode,
@@ -299,7 +300,8 @@ impl PowComputer {
 pub fn validate(
     pow: Arc<PowComputer>, problem: &ProofOfWorkProblem,
     solution: &ProofOfWorkSolution,
-) -> bool {
+) -> bool
+{
     let nonce = solution.nonce;
     let hash = pow.compute(&nonce, &problem.block_hash, problem.block_height);
     ProofOfWorkProblem::validate_hash_against_boundary(
@@ -395,9 +397,7 @@ impl TargetDifficultyCacheInner {
         }
     }
 
-    pub fn is_full(&self) -> bool {
-        self.meta.len() >= self.capacity
-    }
+    pub fn is_full(&self) -> bool { self.meta.len() >= self.capacity }
 
     pub fn evict_one(&mut self) {
         let hash = self.meta.pop_front();
@@ -459,9 +459,7 @@ impl TargetDifficultyManager {
         }
     }
 
-    pub fn get(&self, hash: &H256) -> Option<U256> {
-        self.cache.get(hash)
-    }
+    pub fn get(&self, hash: &H256) -> Option<U256> { self.cache.get(hash) }
 
     pub fn set(&self, hash: H256, difficulty: U256) {
         self.cache.set(hash, difficulty);

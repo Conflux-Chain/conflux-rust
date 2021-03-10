@@ -15,9 +15,7 @@ pub struct AccountCache {
 }
 
 impl AccountCache {
-    pub fn new(state: Arc<State>) -> Self {
-        AccountCache { state }
-    }
+    pub fn new(state: Arc<State>) -> Self { AccountCache { state } }
 
     pub fn get_nonce_and_balance(
         &self, address: &Address,

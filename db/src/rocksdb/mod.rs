@@ -31,13 +31,9 @@ pub struct SystemDB {
 }
 
 impl SystemDB {
-    pub fn key_value(&self) -> &Arc<Database> {
-        &self.key_value
-    }
+    pub fn key_value(&self) -> &Arc<Database> { &self.key_value }
 
-    pub fn new(kvdb: Arc<Database>) -> Self {
-        Self { key_value: kvdb }
-    }
+    pub fn new(kvdb: Arc<Database>) -> Self { Self { key_value: kvdb } }
 }
 
 /// db compaction profile
@@ -52,9 +48,7 @@ pub enum DatabaseCompactionProfile {
 }
 
 impl Default for DatabaseCompactionProfile {
-    fn default() -> Self {
-        DatabaseCompactionProfile::Auto
-    }
+    fn default() -> Self { DatabaseCompactionProfile::Auto }
 }
 
 impl FromStr for DatabaseCompactionProfile {
@@ -86,7 +80,8 @@ pub fn compaction_profile(
 pub fn db_config(
     path: &Path, db_cache_size: Option<usize>,
     db_compaction: DatabaseCompactionProfile, columns: u32, disable_wal: bool,
-) -> DatabaseConfig {
+) -> DatabaseConfig
+{
     let mut db_config = DatabaseConfig::with_columns(columns);
 
     db_config.memory_budget = db_cache_size;

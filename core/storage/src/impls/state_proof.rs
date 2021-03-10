@@ -40,7 +40,8 @@ impl StateProof {
     pub fn is_valid_kv(
         &self, key: &Vec<u8>, value: Option<&[u8]>, root: StateRoot,
         maybe_intermediate_padding: Option<DeltaMptKeyPadding>,
-    ) -> bool {
+    ) -> bool
+    {
         // Something is wrong when intermediate_proof exists but we are not able
         // to get a intermediate padding.
         if self.intermediate_proof.is_some()

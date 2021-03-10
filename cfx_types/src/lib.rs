@@ -42,9 +42,7 @@ pub mod address_util {
         fn is_null_address(&self) -> bool;
 
         #[inline]
-        fn address_type_bits(&self) -> u8 {
-            self.type_byte() & 0xf0
-        }
+        fn address_type_bits(&self) -> u8 { self.type_byte() & 0xf0 }
 
         #[inline]
         fn set_address_type_bits(&mut self, type_bits: u8) {
@@ -55,9 +53,7 @@ pub mod address_util {
 
         #[cfg(feature = "storage_benchmark_no_account_space_check")]
         #[inline]
-        fn is_valid_address(&self) -> bool {
-            true
-        }
+        fn is_valid_address(&self) -> bool { true }
 
         #[cfg(not(feature = "storage_benchmark_no_account_space_check"))]
         #[inline]
@@ -97,9 +93,7 @@ pub mod address_util {
 
     impl AddressUtil for Address {
         #[inline]
-        fn type_byte(&self) -> &u8 {
-            &self.as_fixed_bytes()[0]
-        }
+        fn type_byte(&self) -> &u8 { &self.as_fixed_bytes()[0] }
 
         #[inline]
         fn type_byte_mut(&mut self) -> &mut u8 {
@@ -107,21 +101,15 @@ pub mod address_util {
         }
 
         #[inline]
-        fn is_null_address(&self) -> bool {
-            self.is_zero()
-        }
+        fn is_null_address(&self) -> bool { self.is_zero() }
     }
 
     impl AddressUtil for &[u8] {
         #[inline]
-        fn type_byte(&self) -> &u8 {
-            &self[0]
-        }
+        fn type_byte(&self) -> &u8 { &self[0] }
 
         #[inline]
-        fn type_byte_mut(&mut self) -> &mut u8 {
-            unreachable!()
-        }
+        fn type_byte_mut(&mut self) -> &mut u8 { unreachable!() }
 
         #[inline]
         fn is_null_address(&self) -> bool {

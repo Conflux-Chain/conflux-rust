@@ -28,9 +28,7 @@ pub struct Secret {
 }
 
 impl Drop for Secret {
-    fn drop(&mut self) {
-        self.inner.0.zeroize()
-    }
+    fn drop(&mut self) { self.inner.0.zeroize() }
 }
 
 impl fmt::LowerHex for Secret {
@@ -210,9 +208,7 @@ impl Secret {
         Ok(key::SecretKey::from_slice(&SECP256K1, &self[..])?)
     }
 
-    pub fn to_hex(&self) -> String {
-        format!("{:x}", self.inner)
-    }
+    pub fn to_hex(&self) -> String { format!("{:x}", self.inner) }
 }
 
 impl FromStr for Secret {
@@ -226,15 +222,11 @@ impl FromStr for Secret {
 }
 
 impl From<[u8; 32]> for Secret {
-    fn from(k: [u8; 32]) -> Self {
-        Secret { inner: H256(k) }
-    }
+    fn from(k: [u8; 32]) -> Self { Secret { inner: H256(k) } }
 }
 
 impl From<H256> for Secret {
-    fn from(s: H256) -> Self {
-        s.0.into()
-    }
+    fn from(s: H256) -> Self { s.0.into() }
 }
 
 impl From<&'static str> for Secret {
@@ -256,9 +248,7 @@ impl From<key::SecretKey> for Secret {
 impl Deref for Secret {
     type Target = H256;
 
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
+    fn deref(&self) -> &Self::Target { &self.inner }
 }
 
 #[cfg(test)]

@@ -28,9 +28,7 @@ pub enum Version {
 
 impl Serialize for Version {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    where S: Serializer {
         match *self {
             Version::V3 => serializer.serialize_u64(3),
         }
@@ -39,9 +37,7 @@ impl Serialize for Version {
 
 impl<'a> Deserialize<'a> for Version {
     fn deserialize<D>(deserializer: D) -> Result<Version, D::Error>
-    where
-        D: Deserializer<'a>,
-    {
+    where D: Deserializer<'a> {
         deserializer.deserialize_any(VersionVisitor)
     }
 }
@@ -56,9 +52,7 @@ impl<'a> Visitor<'a> for VersionVisitor {
     }
 
     fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
-    where
-        E: SerdeError,
-    {
+    where E: SerdeError {
         match value {
             3 => Ok(Version::V3),
             _ => Err(SerdeError::custom(Error::UnsupportedVersion)),

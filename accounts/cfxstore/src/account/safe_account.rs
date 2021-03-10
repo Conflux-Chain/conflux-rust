@@ -66,7 +66,8 @@ impl SafeAccount {
     pub fn create(
         keypair: &KeyPair, id: [u8; 16], password: &Password, iterations: u32,
         name: String, meta: String,
-    ) -> Result<Self, crypto::Error> {
+    ) -> Result<Self, crypto::Error>
+    {
         Ok(SafeAccount {
             id,
             version: Version::V3,
@@ -92,7 +93,8 @@ impl SafeAccount {
     pub fn from_file(
         json: json::KeyFile, filename: Option<String>,
         password: &Option<Password>,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, Error>
+    {
         let crypto = Crypto::from(json.crypto);
         let address = match (password, &json.address) {
 			(None, Some(json_address)) => json_address.into(),
@@ -219,7 +221,8 @@ impl SafeAccount {
     pub fn change_password(
         &self, old_password: &Password, new_password: &Password,
         iterations: u32,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, Error>
+    {
         let secret = self.crypto.secret(old_password)?;
         let result = SafeAccount {
             id: self.id.clone(),

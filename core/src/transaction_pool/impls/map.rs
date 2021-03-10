@@ -48,17 +48,11 @@ impl<
         }
     }
 
-    pub fn len(&self) -> usize {
-        self.size
-    }
+    pub fn len(&self) -> usize { self.size }
 
-    pub fn is_empty(&self) -> bool {
-        self.size == 0
-    }
+    pub fn is_empty(&self) -> bool { self.size == 0 }
 
-    pub fn contains_key(&self, key: &K) -> bool {
-        self.get(key).is_some()
-    }
+    pub fn contains_key(&self, key: &K) -> bool { self.get(key).is_some() }
 
     pub fn insert(&mut self, key: K, value: V, weight: W) -> Option<V> {
         assert!(weight != 0.into());

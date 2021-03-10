@@ -173,7 +173,5 @@ impl AddressType {
 }
 
 impl ToString for AddressType {
-    fn to_string(&self) -> String {
-        self.to_str().into()
-    }
+    fn to_string(&self) -> String { self.to_str().into() }
 }

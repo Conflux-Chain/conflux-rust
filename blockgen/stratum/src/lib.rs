@@ -83,7 +83,8 @@ impl Stratum {
     pub fn start(
         addr: &SocketAddr, dispatcher: Arc<dyn JobDispatcher>,
         secret: Option<H256>,
-    ) -> Result<Arc<Stratum>, Error> {
+    ) -> Result<Arc<Stratum>, Error>
+    {
         let implementation = Arc::new(StratumImpl {
             dispatcher,
             workers: Arc::new(RwLock::default()),
@@ -264,9 +265,7 @@ impl Default for SocketMetadata {
 }
 
 impl SocketMetadata {
-    pub fn addr(&self) -> &SocketAddr {
-        &self.addr
-    }
+    pub fn addr(&self) -> &SocketAddr { &self.addr }
 }
 
 impl Metadata for SocketMetadata {}
@@ -310,9 +309,7 @@ mod tests {
     pub struct VoidManager;
 
     impl JobDispatcher for VoidManager {
-        fn submit(&self, _payload: Vec<String>) -> Result<(), Error> {
-            Ok(())
-        }
+        fn submit(&self, _payload: Vec<String>) -> Result<(), Error> { Ok(()) }
     }
 
     fn dummy_request(addr: &SocketAddr, data: &str) -> Vec<u8> {
@@ -364,9 +361,7 @@ mod tests {
     }
 
     impl JobDispatcher for DummyManager {
-        fn submit(&self, _payload: Vec<String>) -> Result<(), Error> {
-            Ok(())
-        }
+        fn submit(&self, _payload: Vec<String>) -> Result<(), Error> { Ok(()) }
     }
 
     fn terminated_str(origin: &'static str) -> String {

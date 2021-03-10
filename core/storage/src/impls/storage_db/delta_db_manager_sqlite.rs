@@ -43,9 +43,7 @@ impl DeltaDbManagerSqlite {
 impl DeltaDbManagerTrait for DeltaDbManagerSqlite {
     type DeltaDb = KvdbSqliteSharded<Box<[u8]>>;
 
-    fn get_delta_db_dir(&self) -> &Path {
-        self.delta_db_path.as_path()
-    }
+    fn get_delta_db_dir(&self) -> &Path { self.delta_db_path.as_path() }
 
     fn get_delta_db_name(&self, snapshot_epoch_id: &EpochId) -> String {
         Self::DELTA_DB_SQLITE_DIR_PREFIX.to_string()

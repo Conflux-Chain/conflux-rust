@@ -198,7 +198,8 @@ impl StorageManager {
     pub fn new_arc(
         /* TODO: Add node type, full node or archive node */
         storage_conf: StorageConfiguration,
-    ) -> Result<Arc<Self>> {
+    ) -> Result<Arc<Self>>
+    {
         let storage_dir = storage_conf.path_storage_dir.as_path();
         println!(
             "new StorageManager within storage_dir {}",
@@ -380,7 +381,7 @@ impl StorageManager {
         SnapshotDb = SnapshotDb,
         SnapshotDbManager = SnapshotDbManager,
     > + Send
-             + Sync) {
+                   + Sync) {
         &*self.snapshot_manager
     }
 
@@ -442,7 +443,8 @@ impl StorageManager {
             EpochId,
             (Option<Arc<DeltaMpt>>, Option<Arc<DeltaMpt>>),
         >,
-    ) -> Result<Arc<DeltaMpt>> {
+    ) -> Result<Arc<DeltaMpt>>
+    {
         // Don't hold the lock while doing db io.
         // If the DeltaMpt already exists, the empty delta db creation should
         // fail already.
@@ -519,7 +521,8 @@ impl StorageManager {
             (Option<Arc<DeltaMpt>>, Option<Arc<DeltaMpt>>),
         >,
         snapshot_epoch_id: &EpochId,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         // Release
         snapshot_associated_mpts_by_epoch.remove(snapshot_epoch_id);
         self.maybe_db_errors.take_result()
@@ -528,7 +531,8 @@ impl StorageManager {
     pub fn check_make_register_snapshot_background(
         this: Arc<Self>, snapshot_epoch_id: EpochId, height: u64,
         maybe_delta_db: Option<DeltaMptIterator>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         let this_cloned = this.clone();
         let mut in_progress_snapshotting_tasks =
             this_cloned.in_progress_snapshotting_tasks.write();
@@ -744,7 +748,8 @@ impl StorageManager {
     pub fn register_new_snapshot(
         &self, new_snapshot_info: SnapshotInfo,
         snapshot_info_map_locked: &mut PersistedSnapshotInfoMap,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         debug!("register_new_snapshot: info={:?}", new_snapshot_info);
         let snapshot_epoch_id = new_snapshot_info.get_snapshot_epoch_id();
         // Register intermediate MPT for the new snapshot.
@@ -821,7 +826,8 @@ impl StorageManager {
         &self, consensus_inner: &ConsensusInner, stable_checkpoint_height: u64,
         era_epoch_count: u64, confirmed_height: u64,
         state_availability_boundary: &RwLock<StateAvailabilityBoundary>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         let additional_state_height_gap =
             (self.storage_conf.additional_maintained_snapshot_count
                 * self.storage_conf.consensus_param.snapshot_epoch_count)
@@ -885,7 +891,8 @@ impl StorageManager {
         maintained_state_root: &StateRootWithAuxInfo,
         state_availability_boundary: &RwLock<StateAvailabilityBoundary>,
         extra_snapshots_to_keep: &dyn Fn(u64, &mut bool) -> bool,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         // Update the confirmed epoch id. Skip remaining actions when the
         // confirmed snapshot-able epoch id doesn't change
         {
@@ -1216,7 +1223,8 @@ impl StorageManager {
         &self, old_pivot_snapshots_to_remove: &[EpochId],
         non_pivot_snapshots_to_remove: &[EpochId],
         snapshot_infos_to_remove: &HashSet<EpochId>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         let mut current_snapshots_locked = self.current_snapshots.write();
         current_snapshots_locked.retain(|x| {
             !snapshot_infos_to_remove.contains(x.get_snapshot_epoch_id())
@@ -1415,7 +1423,8 @@ fn extra_snapshots_to_keep_predicate(
     storage_conf: &StorageConfiguration, stable_checkpoint_height: u64,
     era_epoch_count: u64, height: u64,
     find_epoch_nearest_multiple_of: &mut bool,
-) -> bool {
+) -> bool
+{
     for conf in &storage_conf.provide_more_snapshot_for_sync {
         match conf {
             ProvideExtraSnapshotSyncConfig::StableCheckpoint => {

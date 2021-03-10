@@ -28,13 +28,9 @@ pub struct GetCompactBlocks {
 }
 
 impl AsAny for GetCompactBlocks {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+    fn as_any(&self) -> &dyn Any { self }
 
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl Request for GetCompactBlocks {
@@ -57,9 +53,7 @@ impl Request for GetCompactBlocks {
         self.hashes.retain(|h| inflight_keys.insert(Key::Hash(*h)));
     }
 
-    fn is_empty(&self) -> bool {
-        self.hashes.is_empty()
-    }
+    fn is_empty(&self) -> bool { self.hashes.is_empty() }
 
     fn resend(&self) -> Option<Box<dyn Request>> {
         Some(Box::new(GetBlocks {

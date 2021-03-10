@@ -101,7 +101,8 @@ impl SnapshotManifestRequest {
     pub fn new(
         snapshot_sync_candidate: SnapshotSyncCandidate,
         trusted_blame_block: Option<H256>, start_chunk: Option<Vec<u8>>,
-    ) -> Self {
+    ) -> Self
+    {
         SnapshotManifestRequest {
             request_id: 0,
             snapshot_to_sync: snapshot_sync_candidate,
@@ -303,13 +304,9 @@ impl SnapshotManifestRequest {
 }
 
 impl AsAny for SnapshotManifestRequest {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+    fn as_any(&self) -> &dyn Any { self }
 
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl Request for SnapshotManifestRequest {
@@ -321,15 +318,9 @@ impl Request for SnapshotManifestRequest {
 
     fn with_inflight(&mut self, _inflight_keys: &KeyContainer) {}
 
-    fn is_empty(&self) -> bool {
-        false
-    }
+    fn is_empty(&self) -> bool { false }
 
-    fn resend(&self) -> Option<Box<dyn Request>> {
-        None
-    }
+    fn resend(&self) -> Option<Box<dyn Request>> { None }
 
-    fn required_capability(&self) -> Option<DynamicCapability> {
-        None
-    }
+    fn required_capability(&self) -> Option<DynamicCapability> { None }
 }

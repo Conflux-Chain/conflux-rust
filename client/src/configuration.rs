@@ -964,9 +964,7 @@ impl Configuration {
         }
     }
 
-    pub fn is_consortium(&self) -> bool {
-        self.raw_conf.is_consortium
-    }
+    pub fn is_consortium(&self) -> bool { self.raw_conf.is_consortium }
 
     pub fn light_node_config(&self) -> LightNodeConfiguration {
         LightNodeConfiguration {

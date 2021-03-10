@@ -83,7 +83,8 @@ impl Service {
     pub fn initialize(
         &mut self, cap_mb: usize, min_throttle_mb: usize,
         max_throttle_mb: usize,
-    ) {
+    )
+    {
         // 0 < min_throttle_mb < max_throttle_mb < cap_mb
         assert!(cap_mb > max_throttle_mb);
         assert!(max_throttle_mb > min_throttle_mb);

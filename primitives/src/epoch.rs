@@ -27,9 +27,7 @@ pub enum EpochNumber {
 }
 
 impl Into<EpochNumber> for u64 {
-    fn into(self) -> EpochNumber {
-        EpochNumber::Number(self)
-    }
+    fn into(self) -> EpochNumber { EpochNumber::Number(self) }
 }
 
 #[derive(Debug, PartialEq, Clone)]

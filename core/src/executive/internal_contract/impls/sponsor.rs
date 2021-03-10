@@ -16,7 +16,8 @@ pub fn set_sponsor_for_gas(
     contract_address: Address, upper_bound: U256, params: &ActionParams,
     spec: &Spec, state: &mut dyn StateOpsTrait, substate: &mut Substate,
     tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
-) -> vm::Result<()> {
+) -> vm::Result<()>
+{
     let sponsor = &params.sender;
 
     if !state.exists(&contract_address)? {
@@ -122,7 +123,8 @@ pub fn set_sponsor_for_collateral(
     contract_address: Address, params: &ActionParams, spec: &Spec,
     state: &mut dyn StateOpsTrait, substate: &mut Substate,
     tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
-) -> vm::Result<()> {
+) -> vm::Result<()>
+{
     let sponsor = &params.sender;
 
     if !state.exists(&contract_address)? {
@@ -206,7 +208,8 @@ pub fn set_sponsor_for_collateral(
 pub fn add_privilege(
     contract: Address, addresses: Vec<Address>, params: &ActionParams,
     state: &mut dyn StateOpsTrait,
-) -> vm::Result<()> {
+) -> vm::Result<()>
+{
     for user_addr in addresses {
         state.add_commission_privilege(
             contract,
@@ -223,7 +226,8 @@ pub fn add_privilege(
 pub fn remove_privilege(
     contract: Address, addresses: Vec<Address>, params: &ActionParams,
     state: &mut dyn StateOpsTrait,
-) -> vm::Result<()> {
+) -> vm::Result<()>
+{
     for user_addr in addresses {
         state.remove_commission_privilege(
             contract,

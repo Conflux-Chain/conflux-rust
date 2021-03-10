@@ -25,8 +25,7 @@ pub type PollId = usize;
 ///
 /// Lazily garbage collects unused polls info.
 pub struct PollManager<F, T = StandardTimer>
-where
-    T: Timer,
+where T: Timer
 {
     polls: TransientHashMap<PollId, F, T>,
     next_available_id: PollId,
@@ -40,8 +39,7 @@ impl<F> PollManager<F, StandardTimer> {
 }
 
 impl<F, T> PollManager<F, T>
-where
-    T: Timer,
+where T: Timer
 {
     pub fn new_with_timer(timer: T, lifetime: u32) -> Self {
         PollManager {
@@ -93,9 +91,7 @@ mod tests {
     }
 
     impl<'a> Timer for TestTimer<'a> {
-        fn get_time(&self) -> i64 {
-            self.time.get()
-        }
+        fn get_time(&self) -> i64 { self.time.get() }
     }
 
     #[test]

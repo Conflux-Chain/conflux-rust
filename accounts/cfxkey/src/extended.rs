@@ -32,9 +32,7 @@ pub trait Label {
 }
 
 impl Label for u32 {
-    fn len() -> usize {
-        4
-    }
+    fn len() -> usize { 4 }
 
     fn store(&self, target: &mut [u8]) {
         let bytes = self.to_be_bytes();
@@ -61,9 +59,7 @@ impl From<u32> for Derivation<u32> {
 }
 
 impl Label for H256 {
-    fn len() -> usize {
-        Self::len_bytes()
-    }
+    fn len() -> usize { Self::len_bytes() }
 
     fn store(&self, target: &mut [u8]) {
         (&mut target[0..32]).copy_from_slice(self.as_bytes());
@@ -97,9 +93,7 @@ impl ExtendedSecret {
 
     /// Derive new private key
     pub fn derive<T>(&self, index: Derivation<T>) -> ExtendedSecret
-    where
-        T: Label,
-    {
+    where T: Label {
         let (derived_key, next_chain_code) =
             derivation::private(*self.secret, self.chain_code, index);
 
@@ -109,9 +103,7 @@ impl ExtendedSecret {
     }
 
     /// Private key component of the extended key.
-    pub fn as_raw(&self) -> &Secret {
-        &self.secret
-    }
+    pub fn as_raw(&self) -> &Secret { &self.secret }
 }
 
 /// Extended public key, allows deterministic derivation of subsequent keys.
@@ -141,17 +133,13 @@ impl ExtendedPublic {
     pub fn derive<T>(
         &self, index: Derivation<T>,
     ) -> Result<Self, DerivationError>
-    where
-        T: Label,
-    {
+    where T: Label {
         let (derived_key, next_chain_code) =
             derivation::public(self.public, self.chain_code, index)?;
         Ok(ExtendedPublic::new(derived_key, next_chain_code))
     }
 
-    pub fn public(&self) -> &Public {
-        &self.public
-    }
+    pub fn public(&self) -> &Public { &self.public }
 }
 
 pub struct ExtendedKeyPair {
@@ -196,20 +184,14 @@ impl ExtendedKeyPair {
         ))
     }
 
-    pub fn secret(&self) -> &ExtendedSecret {
-        &self.secret
-    }
+    pub fn secret(&self) -> &ExtendedSecret { &self.secret }
 
-    pub fn public(&self) -> &ExtendedPublic {
-        &self.public
-    }
+    pub fn public(&self) -> &ExtendedPublic { &self.public }
 
     pub fn derive<T>(
         &self, index: Derivation<T>,
     ) -> Result<Self, DerivationError>
-    where
-        T: Label,
-    {
+    where T: Label {
         let derived = self.secret.derive(index);
 
         Ok(ExtendedKeyPair {
@@ -250,9 +232,7 @@ mod derivation {
     pub fn private<T>(
         private_key: H256, chain_code: H256, index: Derivation<T>,
     ) -> (H256, H256)
-    where
-        T: Label,
-    {
+    where T: Label {
         match index {
             Derivation::Soft(index) => {
                 private_soft(private_key, chain_code, index)
@@ -287,9 +267,7 @@ mod derivation {
     fn private_soft<T>(
         private_key: H256, chain_code: H256, index: T,
     ) -> (H256, H256)
-    where
-        T: Label,
-    {
+    where T: Label {
         let mut data = vec![0u8; 33 + T::len()];
 
         let sec_private =
@@ -313,9 +291,7 @@ mod derivation {
     fn private_hard<T>(
         private_key: H256, chain_code: H256, index: T,
     ) -> (H256, H256)
-    where
-        T: Label,
-    {
+    where T: Label {
         let mut data: Vec<u8> = vec![0u8; 33 + T::len()];
         let private: U256 = private_key.into_uint();
 
@@ -342,9 +318,7 @@ mod derivation {
     pub fn public<T>(
         public_key: H512, chain_code: H256, derivation: Derivation<T>,
     ) -> Result<(H512, H256), Error>
-    where
-        T: Label,
-    {
+    where T: Label {
         let index = match derivation {
             Derivation::Soft(index) => index,
             Derivation::Hard(_) => {
@@ -393,9 +367,7 @@ mod derivation {
         Ok((H512::from_slice(&serialized[1..65]), new_chain_code))
     }
 
-    fn sha3(slc: &[u8]) -> H256 {
-        keccak::Keccak256::keccak256(slc).into()
-    }
+    fn sha3(slc: &[u8]) -> H256 { keccak::Keccak256::keccak256(slc).into() }
 
     pub fn chain_code(secret: H256) -> H256 {
         // 10,000 rounds of sha3
@@ -445,9 +417,7 @@ mod tests {
     }
 
     fn test_extended<F>(f: F, test_private: H256)
-    where
-        F: Fn(ExtendedSecret) -> ExtendedSecret,
-    {
+    where F: Fn(ExtendedSecret) -> ExtendedSecret {
         let (private_seed, chain_code) = master_chain_basic();
         let extended_secret =
             ExtendedSecret::with_code(Secret::from(private_seed.0), chain_code);

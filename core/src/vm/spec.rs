@@ -316,7 +316,5 @@ impl Spec {
 }
 
 impl Default for Spec {
-    fn default() -> Self {
-        Spec::new_spec()
-    }
+    fn default() -> Self { Spec::new_spec() }
 }

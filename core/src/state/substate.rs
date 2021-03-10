@@ -114,9 +114,7 @@ pub struct Substate {
 
 impl Substate {
     /// Creates new substate.
-    pub fn new() -> Self {
-        Substate::default()
-    }
+    pub fn new() -> Self { Substate::default() }
 
     pub fn with_call_stack(callstack: Rc<RefCell<CallStackInfo>>) -> Self {
         let mut substate = Substate::default();
@@ -145,7 +143,8 @@ impl Substate {
     pub fn update_contract_in_creation_call(
         mut self, parent_contract_in_creation: Option<Address>,
         is_internal_contract: bool,
-    ) -> Self {
+    ) -> Self
+    {
         debug!(
             "update_contract_in_creation_call {:?}, is_internal_contract {}",
             parent_contract_in_creation, is_internal_contract
@@ -197,7 +196,8 @@ impl Substate {
     pub fn set_storage(
         &mut self, state: &mut dyn StateOpsTrait, address: &Address,
         key: Vec<u8>, value: U256, owner: Address,
-    ) -> DbResult<()> {
+    ) -> DbResult<()>
+    {
         state.set_storage(address, key, value, owner)
     }
 
@@ -298,9 +298,7 @@ mod tests {
         assert_eq!(sub_state.suicides.len(), 1);
     }
 
-    fn get_test_address(n: u8) -> Address {
-        Address::from([n; 20])
-    }
+    fn get_test_address(n: u8) -> Address { Address::from([n; 20]) }
 
     #[test]
     fn test_callstack_info() {

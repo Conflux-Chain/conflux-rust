@@ -10,8 +10,6 @@ use rand_chacha::ChaChaRng;
 
 use super::CacheIndexTrait;
 
-fn get_rng_for_test() -> ChaChaRng {
-    ChaChaRng::from_seed([123; 32])
-}
+fn get_rng_for_test() -> ChaChaRng { ChaChaRng::from_seed([123; 32]) }
 
 impl CacheIndexTrait for i32 {}

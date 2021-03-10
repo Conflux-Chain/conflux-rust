@@ -72,9 +72,7 @@ impl NodeIpLimit {
     }
 
     #[inline]
-    pub fn is_enabled(&self) -> bool {
-        self.subnet_quota > 0
-    }
+    pub fn is_enabled(&self) -> bool { self.subnet_quota > 0 }
 
     /// Get the subnet of specified node `id`.
     pub fn subnet(&self, id: &NodeId) -> Option<u32> {
@@ -212,7 +210,8 @@ impl NodeIpLimit {
     pub fn insert(
         &mut self, id: NodeId, ip: IpAddr, trusted: bool,
         evictee: Option<NodeId>,
-    ) -> bool {
+    ) -> bool
+    {
         if !self.is_enabled() {
             return true;
         }
@@ -315,9 +314,7 @@ mod tests {
     use super::{NodeDatabase, NodeId, NodeIpLimit, ValidateInsertResult};
     use std::{net::IpAddr, str::FromStr};
 
-    fn new_ip(ip: &'static str) -> IpAddr {
-        IpAddr::from_str(ip).unwrap()
-    }
+    fn new_ip(ip: &'static str) -> IpAddr { IpAddr::from_str(ip).unwrap() }
 
     #[test]
     fn test_remove() {

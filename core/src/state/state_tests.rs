@@ -3,10 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use super::{CleanupMode, CollateralCheckResult, State, Substate};
-use crate::vm::Spec;
 use crate::{
     spec::genesis::DEV_GENESIS_KEY_PAIR,
-    test_helpers::get_state_for_genesis_write,
+    test_helpers::get_state_for_genesis_write, vm::Spec,
 };
 use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
 use cfx_state::{

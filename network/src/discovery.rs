@@ -92,7 +92,8 @@ impl Discovery {
     pub fn new(
         key: &KeyPair, public: NodeEndpoint, ip_filter: IpFilter,
         config: DiscoveryConfiguration,
-    ) -> Discovery {
+    ) -> Discovery
+    {
         Discovery {
             id: key.public().clone(),
             id_hash: keccak(key.public()),
@@ -190,7 +191,8 @@ impl Discovery {
     fn send_packet(
         &mut self, uio: &UdpIoContext, packet_id: u8, address: &SocketAddr,
         payload: &[u8],
-    ) -> Result<H256, Error> {
+    ) -> Result<H256, Error>
+    {
         let packet = assemble_packet(packet_id, payload, &self.secret)?;
         let hash = H256::from_slice(&packet[1..=32]);
         self.send_to(uio, packet, address.clone());
@@ -253,7 +255,8 @@ impl Discovery {
     fn on_ping(
         &mut self, uio: &UdpIoContext, rlp: &Rlp, node_id: &NodeId,
         from: &SocketAddr, echo_hash: &[u8],
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    {
         trace!("Got Ping from {:?}", &from);
 
         if !self.ping_throttling.try_acquire(from.ip()) {
@@ -306,7 +309,8 @@ impl Discovery {
     fn on_pong(
         &mut self, uio: &UdpIoContext, rlp: &Rlp, node_id: &NodeId,
         from: &SocketAddr,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    {
         trace!("Got Pong from {:?} ; node_id={:#x}", &from, node_id);
         let _pong_to = NodeEndpoint::from_rlp(&rlp.at(0)?)?;
         let echo_hash: H256 = rlp.val_at(1)?;
@@ -345,7 +349,8 @@ impl Discovery {
     fn on_find_node(
         &mut self, uio: &UdpIoContext, rlp: &Rlp, _node: &NodeId,
         from: &SocketAddr,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    {
         trace!("Got FindNode from {:?}", &from);
 
         if !self.find_nodes_throttling.try_acquire(from.ip()) {
@@ -379,7 +384,8 @@ impl Discovery {
     fn on_neighbours(
         &mut self, uio: &UdpIoContext, rlp: &Rlp, node_id: &NodeId,
         from: &SocketAddr,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    {
         let mut entry = match self.in_flight_find_nodes.entry(*node_id) {
             Entry::Occupied(entry) => entry,
             Entry::Vacant(_) => {
@@ -515,7 +521,8 @@ impl Discovery {
     fn send_find_node(
         &mut self, uio: &UdpIoContext, node: &NodeEntry,
         tag_key: Option<String>, tag_value: Option<String>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    {
         let msg = FindNodeMessage::new(
             tag_key,
             tag_value,
@@ -574,7 +581,8 @@ impl Discovery {
     fn discover_with_nodes(
         &mut self, uio: &UdpIoContext, nodes: Vec<NodeEntry>,
         tag_key: Option<String>, tag_value: Option<String>,
-    ) -> usize {
+    ) -> usize
+    {
         let mut sent = 0;
 
         for node in nodes {
@@ -676,7 +684,8 @@ impl FindNodeMessage {
     fn new(
         tag_key: Option<String>, tag_value: Option<String>,
         expire_timestamp: u64,
-    ) -> Self {
+    ) -> Self
+    {
         FindNodeMessage {
             tag_key,
             tag_value,
@@ -687,7 +696,8 @@ impl FindNodeMessage {
     fn sample(
         &self, node_db: &NodeDatabase, ip_filter: &IpFilter,
         discover_node_count: u32,
-    ) -> Result<Vec<NodeEntry>, Error> {
+    ) -> Result<Vec<NodeEntry>, Error>
+    {
         let key = match self.tag_key {
             Some(ref key) => key,
             None => {

@@ -2,13 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::vm::Spec;
 use crate::{
     block_data_manager::DbType,
     sync::{
         utils::{create_simple_block_impl, initialize_synchronization_graph},
         SynchronizationGraphNode,
     },
+    vm::Spec,
 };
 use cfx_types::{BigEndianHash, H256, U256};
 use primitives::Block;

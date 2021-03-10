@@ -108,9 +108,7 @@ impl PhrasesIterator {
         }
     }
 
-    pub fn combinations(&self) -> u64 {
-        self.combinations
-    }
+    pub fn combinations(&self) -> u64 { self.combinations }
 
     fn current(&self) -> String {
         let mut s = self.words[0][self.indexes[0]].to_owned();

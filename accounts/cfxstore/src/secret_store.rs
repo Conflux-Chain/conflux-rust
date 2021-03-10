@@ -54,28 +54,20 @@ impl PartialOrd for StoreAccountRef {
 }
 
 impl PartialEq for StoreAccountRef {
-    fn eq(&self, other: &Self) -> bool {
-        self.address == other.address
-    }
+    fn eq(&self, other: &Self) -> bool { self.address == other.address }
 }
 impl Eq for StoreAccountRef {}
 
 impl Ord for StoreAccountRef {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.address.cmp(&other.address)
-    }
+    fn cmp(&self, other: &Self) -> Ordering { self.address.cmp(&other.address) }
 }
 
 impl Hash for StoreAccountRef {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.address.hash(state);
-    }
+    fn hash<H: Hasher>(&self, state: &mut H) { self.address.hash(state); }
 }
 
 impl ::std::borrow::Borrow<Address> for StoreAccountRef {
-    fn borrow(&self) -> &Address {
-        &self.address
-    }
+    fn borrow(&self) -> &Address { &self.address }
 }
 
 /// Simple Secret Store API

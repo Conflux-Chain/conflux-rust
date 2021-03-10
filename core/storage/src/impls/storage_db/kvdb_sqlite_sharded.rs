@@ -27,7 +27,8 @@ impl<ValueType> KvdbSqliteSharded<ValueType> {
     pub fn new(
         shard_connections: Option<Box<[SqliteConnection]>>,
         statements: Arc<KvdbSqliteStatements>,
-    ) -> Self {
+    ) -> Self
+    {
         if let Some(connections) = shard_connections.as_ref() {
             assert_valid_num_shards(connections.len() as u16);
         }
@@ -54,7 +55,8 @@ impl<'db, ValueType> KvdbSqliteShardedBorrowMut<'db, ValueType> {
     pub fn new(
         shard_connections: Option<&'db mut [SqliteConnection]>,
         statements: &'db KvdbSqliteStatements,
-    ) -> Self {
+    ) -> Self
+    {
         if let Some(connections) = shard_connections.as_ref() {
             assert_valid_num_shards(connections.len() as u16);
         }
@@ -79,7 +81,8 @@ impl<'db, ValueType> KvdbSqliteShardedBorrowShared<'db, ValueType> {
     pub fn new(
         shard_connections: Option<&'db [SqliteConnection]>,
         statements: &'db KvdbSqliteStatements,
-    ) -> Self {
+    ) -> Self
+    {
         if let Some(connections) = shard_connections.as_ref() {
             assert_valid_num_shards(connections.len() as u16);
         }
@@ -131,7 +134,8 @@ impl<ValueType> KvdbSqliteSharded<ValueType> {
     pub fn open<P: AsRef<Path>>(
         num_shards: u16, dir: P, readonly: bool,
         statements: Arc<KvdbSqliteStatements>,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    {
         assert_valid_num_shards(num_shards);
         let mut shards_connections = Vec::with_capacity(num_shards as usize);
         for i in 0..num_shards {
@@ -151,7 +155,8 @@ impl<ValueType> KvdbSqliteSharded<ValueType> {
     pub fn open_or_create<P: AsRef<Path>>(
         num_shards: u16, dir: P, statements: Arc<KvdbSqliteStatements>,
         unsafe_mode: bool,
-    ) -> Result<(bool, Self)> {
+    ) -> Result<(bool, Self)>
+    {
         if dir.as_ref().exists() {
             Ok((
                 true,
@@ -176,7 +181,8 @@ impl<ValueType> KvdbSqliteSharded<ValueType> {
     pub fn create_and_open<P: AsRef<Path>>(
         num_shards: u16, dir: P, statements: Arc<KvdbSqliteStatements>,
         create_table: bool, unsafe_mode: bool,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    {
         assert_valid_num_shards(num_shards);
         let mut shards_connections = Vec::with_capacity(num_shards as usize);
         for i in 0..num_shards {
@@ -203,7 +209,8 @@ impl<ValueType> KvdbSqliteSharded<ValueType> {
     pub fn create_table(
         connections: &mut Box<[SqliteConnection]>,
         statements: &KvdbSqliteStatements,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         for connection in connections.iter_mut() {
             KvdbSqlite::<ValueType>::create_table(connection, statements)?
         }
@@ -213,7 +220,8 @@ impl<ValueType> KvdbSqliteSharded<ValueType> {
     pub fn drop_table(
         connections: &mut Box<[SqliteConnection]>,
         statements: &KvdbSqliteStatements,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         for connection in connections.iter_mut() {
             KvdbSqlite::<ValueType>::drop_table(connection, statements)?
         }
@@ -221,9 +229,7 @@ impl<ValueType> KvdbSqliteSharded<ValueType> {
     }
 }
 
-fn assert_valid_num_shards(num_shards: u16) {
-    assert_eq!(0, 256 % num_shards)
-}
+fn assert_valid_num_shards(num_shards: u16) { assert_eq!(0, 256 % num_shards) }
 
 pub fn key_to_shard_id(key: &[u8], num_shards: usize) -> usize {
     let k_len = key.len();
@@ -374,9 +380,9 @@ impl<
             + KeyValueDbTypes<ValueType = ValueType>,
         ValueType: DbValueType,
     > SingleWriterImplByFamily<KvdbSqliteSharded<ValueType>> for T
-where
-    ValueType::Type: SqlBindableValue
-        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     fn delete_impl(
         &mut self, key: &[u8],
@@ -493,9 +499,7 @@ impl<
         }
     }
 
-    fn peek(&self) -> Option<u8> {
-        self.ordered_iter_ids.get(0).cloned()
-    }
+    fn peek(&self) -> Option<u8> { self.ordered_iter_ids.get(0).cloned() }
 
     fn kv_pop_and_push(
         &mut self, iter_id: u8, kv: Option<(Key, Value)>,
@@ -600,7 +604,8 @@ pub fn kvdb_sqlite_sharded_iter_range_impl<
     maybe_shards_connections: Option<&'db mut [SqliteConnection]>,
     statements: &KvdbSqliteStatements, lower_bound_incl: &[u8],
     upper_bound_excl: Option<&[u8]>, f: F,
-) -> Result<ShardedIterMerger<Key, Value, MappedRows<'db, F>>> {
+) -> Result<ShardedIterMerger<Key, Value, MappedRows<'db, F>>>
+{
     let mut shards_iter_merger_result = Ok(ShardedIterMerger::new());
     if let Some(shards_connections) = maybe_shards_connections {
         let shards_iter_merger = shards_iter_merger_result.as_mut().unwrap();
@@ -628,7 +633,8 @@ pub fn kvdb_sqlite_sharded_iter_range_excl_impl<
     maybe_shards_connections: Option<&'db mut [SqliteConnection]>,
     statements: &KvdbSqliteStatements, lower_bound_excl: &[u8],
     upper_bound_excl: &[u8], f: F,
-) -> Result<ShardedIterMerger<Key, Value, MappedRows<'db, F>>> {
+) -> Result<ShardedIterMerger<Key, Value, MappedRows<'db, F>>>
+{
     let mut shards_iter_merger_result = Ok(ShardedIterMerger::new());
     if let Some(shards_connections) = maybe_shards_connections {
         let shards_iter_merger = shards_iter_merger_result.as_mut().unwrap();
@@ -786,8 +792,7 @@ impl<
         [u8],
         KvdbSqliteShardedIteratorTag,
     > for T
-where
-    KvdbIterIterator<(Vec<u8>, ValueType), [u8], KvdbSqliteShardedIteratorTag>:
+where KvdbIterIterator<(Vec<u8>, ValueType), [u8], KvdbSqliteShardedIteratorTag>:
         WrappedTrait<
                 dyn FallibleIterator<
                     Item = (Vec<u8>, ValueType),
@@ -810,7 +815,7 @@ where
                             -> Result<(Vec<u8>, ValueType)>,
                     >,
                 >,
-            >,
+            >
 {
     fn iter_range(
         &mut self, lower_bound_incl: &[u8], upper_bound_excl: Option<&[u8]>,
@@ -874,9 +879,9 @@ impl<
             + ValueRead
             + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KeyValueDbTraitTransactional for KvdbSqliteSharded<ValueType>
-where
-    ValueType::Type: SqlBindableValue
-        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     type TransactionType = KvdbSqliteShardedTransaction<ValueType>;
 
@@ -893,9 +898,9 @@ where
 
 pub struct KvdbSqliteShardedTransaction<
     ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
-> where
-    ValueType::Type: SqlBindableValue
-        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
+> where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     db: KvdbSqliteSharded<ValueType>,
     committed: bool,
@@ -904,9 +909,9 @@ pub struct KvdbSqliteShardedTransaction<
 impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > Drop for KvdbSqliteShardedTransaction<ValueType>
-where
-    ValueType::Type: SqlBindableValue
-        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     fn drop(&mut self) {
         if !self.committed {
@@ -918,9 +923,9 @@ where
 impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KvdbSqliteShardedTransaction<ValueType>
-where
-    ValueType::Type: SqlBindableValue
-        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     fn new(
         mut db: KvdbSqliteSharded<ValueType>, immediate_write: bool,
@@ -938,7 +943,8 @@ where
     fn start_transaction(
         maybe_shard_connections: Option<&mut Box<[SqliteConnection]>>,
         immediate_write: bool,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         if let Some(connections) = maybe_shard_connections {
             for conn in connections.iter_mut() {
                 KvdbSqliteTransaction::<ValueType>::start_transaction(
@@ -954,9 +960,9 @@ where
 impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KeyValueDbTransactionTrait for KvdbSqliteShardedTransaction<ValueType>
-where
-    ValueType::Type: SqlBindableValue
-        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     fn commit(&mut self, _db: &dyn Any) -> Result<()> {
         self.committed = true;
@@ -994,9 +1000,9 @@ where
 impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KeyValueDbTypes for KvdbSqliteShardedTransaction<ValueType>
-where
-    ValueType::Type: SqlBindableValue
-        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     type ValueType = ValueType;
 }
@@ -1054,9 +1060,9 @@ impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KvdbSqliteShardedDestructureTrait
     for KvdbSqliteShardedTransaction<ValueType>
-where
-    ValueType::Type: SqlBindableValue
-        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     fn destructure_mut(
         &mut self,
@@ -1123,9 +1129,9 @@ impl<ValueType> ReadImplFamily for KvdbSqliteShardedBorrowMut<'_, ValueType> {
 impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > OwnedReadImplFamily for KvdbSqliteShardedTransaction<ValueType>
-where
-    ValueType::Type: SqlBindableValue
-        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     type FamilyRepresentative = KvdbSqliteSharded<ValueType>;
 }
@@ -1133,9 +1139,9 @@ where
 impl<
         ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > SingleWriterImplFamily for KvdbSqliteShardedTransaction<ValueType>
-where
-    ValueType::Type: SqlBindableValue
-        + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>,
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     type FamilyRepresentative = KvdbSqliteSharded<ValueType>;
 }

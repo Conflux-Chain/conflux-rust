@@ -51,25 +51,19 @@ macro_rules! impl_hash {
         impl ops::Deref for $name {
             type Target = [u8];
 
-            fn deref(&self) -> &Self::Target {
-                &self.0
-            }
+            fn deref(&self) -> &Self::Target { &self.0 }
         }
 
         impl Serialize for $name {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: Serializer,
-            {
+            where S: Serializer {
                 serializer.serialize_str(&self.0.to_hex::<String>())
             }
         }
 
         impl<'a> Deserialize<'a> for $name {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'a>,
-            {
+            where D: Deserializer<'a> {
                 struct HashVisitor;
 
                 impl<'b> Visitor<'b> for HashVisitor {
@@ -81,19 +75,17 @@ macro_rules! impl_hash {
                         write!(formatter, "a hex-encoded {}", stringify!($name))
                     }
 
-                    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-                    where
-                        E: SerdeError,
-                    {
+                    fn visit_str<E>(
+                        self, value: &str,
+                    ) -> Result<Self::Value, E>
+                    where E: SerdeError {
                         value.parse().map_err(SerdeError::custom)
                     }
 
                     fn visit_string<E>(
                         self, value: String,
                     ) -> Result<Self::Value, E>
-                    where
-                        E: SerdeError,
-                    {
+                    where E: SerdeError {
                         self.visit_str(value.as_ref())
                     }
                 }
@@ -128,15 +120,11 @@ macro_rules! impl_hash {
         }
 
         impl From<[u8; $size]> for $name {
-            fn from(bytes: [u8; $size]) -> Self {
-                $name(bytes)
-            }
+            fn from(bytes: [u8; $size]) -> Self { $name(bytes) }
         }
 
         impl Into<[u8; $size]> for $name {
-            fn into(self) -> [u8; $size] {
-                self.0
-            }
+            fn into(self) -> [u8; $size] { self.0 }
         }
     };
 }
@@ -155,7 +143,5 @@ impl PartialOrd for H160 {
 impl Eq for H160 {}
 
 impl Ord for H160 {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.0.cmp(&other.0)
-    }
+    fn cmp(&self, other: &Self) -> Ordering { self.0.cmp(&other.0) }
 }

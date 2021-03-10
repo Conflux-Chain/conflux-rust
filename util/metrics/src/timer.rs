@@ -77,7 +77,5 @@ impl ScopeTimer {
 }
 
 impl Drop for ScopeTimer {
-    fn drop(&mut self) {
-        self.timer.update_since(self.start)
-    }
+    fn drop(&mut self) { self.timer.update_since(self.start) }
 }

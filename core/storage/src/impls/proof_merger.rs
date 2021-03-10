@@ -24,9 +24,7 @@ impl TrieProofMerger {
         }
     }
 
-    pub fn finish(self) -> Result<TrieProof> {
-        TrieProof::new(self.nodes)
-    }
+    pub fn finish(self) -> Result<TrieProof> { TrieProof::new(self.nodes) }
 }
 
 #[derive(Debug, Default)]

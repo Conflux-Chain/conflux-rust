@@ -84,9 +84,7 @@ pub struct TxPoolConfig {
 }
 
 impl MallocSizeOf for TxPoolConfig {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
-        0
-    }
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
 
 impl Default for TxPoolConfig {
@@ -146,7 +144,8 @@ impl TransactionPool {
     pub fn new(
         config: TxPoolConfig, verification_config: VerificationConfig,
         data_man: Arc<BlockDataManager>, machine: Arc<Machine>,
-    ) -> Self {
+    ) -> Self
+    {
         let genesis_hash = data_man.true_genesis.hash();
         let inner = TransactionPoolInner::new(
             config.capacity,
@@ -177,9 +176,7 @@ impl TransactionPool {
         }
     }
 
-    pub fn machine(&self) -> Arc<Machine> {
-        self.machine.clone()
-    }
+    pub fn machine(&self) -> Arc<Machine> { self.machine.clone() }
 
     pub fn get_transaction(
         &self, tx_hash: &H256,
@@ -435,7 +432,8 @@ impl TransactionPool {
     fn verify_transaction_tx_pool(
         &self, transaction: &TransactionWithSignature, basic_check: bool,
         chain_id: u32, best_height: u64,
-    ) -> Result<(), String> {
+    ) -> Result<(), String>
+    {
         let _timer = MeterTimer::time_func(TX_POOL_VERIFY_TIMER.as_ref());
 
         if basic_check {
@@ -506,7 +504,8 @@ impl TransactionPool {
     pub fn add_transaction_with_readiness_check(
         &self, inner: &mut TransactionPoolInner, account_cache: &AccountCache,
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
-    ) -> Result<(), String> {
+    ) -> Result<(), String>
+    {
         inner.insert_transaction_with_readiness_check(
             account_cache,
             transaction,
@@ -566,7 +565,8 @@ impl TransactionPool {
     pub fn pack_transactions<'a>(
         &self, num_txs: usize, block_gas_limit: U256, block_size_limit: usize,
         mut best_epoch_height: u64,
-    ) -> Vec<Arc<SignedTransaction>> {
+    ) -> Vec<Arc<SignedTransaction>>
+    {
         let mut inner = self.inner.write_with_metric(&PACK_TRANSACTION_LOCK);
         best_epoch_height += 1;
         let transaction_epoch_bound =
@@ -705,7 +705,8 @@ impl TransactionPool {
     pub fn get_best_info_with_packed_transactions(
         &self, num_txs: usize, block_size_limit: usize,
         additional_transactions: Vec<Arc<SignedTransaction>>,
-    ) -> (Arc<BestInformation>, U256, Vec<Arc<SignedTransaction>>) {
+    ) -> (Arc<BestInformation>, U256, Vec<Arc<SignedTransaction>>)
+    {
         // We do not need to hold the lock because it is fine for us to generate
         // blocks that are slightly behind the best state.
         // We do not want to stall the consensus thread.

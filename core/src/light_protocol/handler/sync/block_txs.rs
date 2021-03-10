@@ -64,7 +64,8 @@ impl BlockTxs {
     pub fn new(
         consensus: SharedConsensusGraph, peers: Arc<Peers<FullPeerState>>,
         request_id_allocator: Arc<UniqueId>, txs: Arc<Txs>,
-    ) -> Self {
+    ) -> Self
+    {
         let ledger = LedgerInfo::new(consensus.clone());
         let sync_manager =
             SyncManager::new(peers.clone(), msgid::GET_BLOCK_TXS);
@@ -117,7 +118,8 @@ impl BlockTxs {
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         block_txs: impl Iterator<Item = BlockTxsWithHash>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         for BlockTxsWithHash { hash, block_txs } in block_txs {
             trace!("Validating block_txs {:?} with hash {}", block_txs, hash);
 

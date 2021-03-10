@@ -41,9 +41,7 @@ pub struct LightClientExtraComponents {
 }
 
 impl MallocSizeOf for LightClientExtraComponents {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
-        unimplemented!()
-    }
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { unimplemented!() }
 }
 
 pub struct LightClient {}

@@ -49,9 +49,8 @@ pub struct KvdbIterIterator<Item, KeyType: ?Sized, T: ?Sized> {
 }
 
 pub trait KeyValueDbIterableTrait<Item, KeyType: ?Sized, Tag: ?Sized>
-where
-    KvdbIterIterator<Item, KeyType, Tag>:
-        WrappedTrait<dyn FallibleIterator<Item = Item, Error = Error>>,
+where KvdbIterIterator<Item, KeyType, Tag>:
+        WrappedTrait<dyn FallibleIterator<Item = Item, Error = Error>>
 {
     fn iter_range(
         &mut self, lower_bound_incl: &KeyType,
@@ -142,9 +141,7 @@ pub trait KeyValueDbAsAnyTrait: KeyValueDbTypes {
 }
 
 impl<T: KeyValueDbTypes + Any> KeyValueDbAsAnyTrait for T {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+    fn as_any(&self) -> &dyn Any { self }
 }
 
 pub trait KeyValueDbTraitTransactional: KeyValueDbAsAnyTrait {
@@ -166,8 +163,7 @@ pub trait KeyValueDbTraitTransactionalDyn: KeyValueDbAsAnyTrait {
 }
 
 impl<T: KeyValueDbTraitTransactional> KeyValueDbTraitTransactionalDyn for T
-where
-    T::TransactionType: 'static,
+where T::TransactionType: 'static
 {
     fn start_transaction_dyn(
         &self, immediate_write: bool,
@@ -186,8 +182,7 @@ pub trait KeyValueDbToOwnedReadTrait: KeyValueDbTypes {
 }
 
 impl<T: 'static + KeyValueDbTraitMultiReader> KeyValueDbToOwnedReadTrait for T
-where
-    for<'a> &'a T: KeyValueDbTraitOwnedRead<ValueType = Self::ValueType>,
+where for<'a> &'a T: KeyValueDbTraitOwnedRead<ValueType = Self::ValueType>
 {
     fn to_owned_read(
         &self,
@@ -235,9 +230,7 @@ impl DbValueType for i64 {
 /// KeyValueDbTraitOwnedRead is naturally read without explicit locking.
 impl<
         T: OwnedReadImplFamily
-            + OwnedReadImplByFamily<
-                <T as OwnedReadImplFamily>::FamilyRepresentative,
-            >,
+            + OwnedReadImplByFamily<<T as OwnedReadImplFamily>::FamilyRepresentative>,
     > KeyValueDbTraitOwnedRead for T
 {
     fn get_mut(&mut self, key: &[u8]) -> Result<Option<Self::ValueType>> {

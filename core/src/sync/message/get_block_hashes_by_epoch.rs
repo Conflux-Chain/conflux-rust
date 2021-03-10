@@ -26,13 +26,9 @@ pub struct GetBlockHashesByEpoch {
 }
 
 impl AsAny for GetBlockHashesByEpoch {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+    fn as_any(&self) -> &dyn Any { self }
 
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl Request for GetBlockHashesByEpoch {
@@ -53,9 +49,7 @@ impl Request for GetBlockHashesByEpoch {
             .retain(|epoch| inflight_keys.insert(Key::Num(*epoch)));
     }
 
-    fn is_empty(&self) -> bool {
-        self.epochs.is_empty()
-    }
+    fn is_empty(&self) -> bool { self.epochs.is_empty() }
 
     fn resend(&self) -> Option<Box<dyn Request>> {
         Some(Box::new(self.clone()))

@@ -160,7 +160,8 @@ pub fn genesis_block(
     genesis_accounts: HashMap<Address, U256>, test_net_version: Address,
     initial_difficulty: U256, machine: Arc<Machine>, need_to_execute: bool,
     genesis_chain_id: Option<u32>, account_start_nonce: U256,
-) -> Block {
+) -> Block
+{
     let mut state =
         State::new(StateDb::new(storage_manager.get_state_for_genesis_write()))
             .expect("Failed to initialize state");

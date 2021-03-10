@@ -61,7 +61,8 @@ impl StorageRoots {
     pub fn new(
         peers: Arc<Peers<FullPeerState>>, state_roots: Arc<StateRoots>,
         request_id_allocator: Arc<UniqueId>,
-    ) -> Self {
+    ) -> Self
+    {
         let sync_manager =
             SyncManager::new(peers.clone(), msgid::GET_STORAGE_ROOTS);
 
@@ -116,7 +117,8 @@ impl StorageRoots {
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         entries: impl Iterator<Item = StorageRootWithKey>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         for StorageRootWithKey { key, root, proof } in entries {
             trace!("Validating storage root {:?} with key {:?}", root, key);
 
@@ -178,7 +180,8 @@ impl StorageRoots {
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         keys: Vec<StorageRootKey>,
-    ) -> Result<Option<RequestId>> {
+    ) -> Result<Option<RequestId>>
+    {
         if keys.is_empty() {
             return Ok(None);
         }
@@ -212,7 +215,8 @@ impl StorageRoots {
     fn validate_storage_root(
         &self, epoch: u64, address: H160, storage_root: &StorageRoot,
         proof: StorageRootProof,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         // validate state root
         let state_root = proof.state_root;
 

@@ -58,9 +58,7 @@ impl AccountMeta {
     pub fn read<R>(
         reader: R,
     ) -> Result<HashMap<Address, Self>, serde_json::Error>
-    where
-        R: ::std::io::Read,
-    {
+    where R: ::std::io::Read {
         serde_json::from_reader(reader)
     }
 
@@ -68,9 +66,7 @@ impl AccountMeta {
     pub fn write<W>(
         m: &HashMap<Address, Self>, writer: &mut W,
     ) -> Result<(), serde_json::Error>
-    where
-        W: ::std::io::Write,
-    {
+    where W: ::std::io::Write {
         serde_json::to_writer(writer, m)
     }
 }

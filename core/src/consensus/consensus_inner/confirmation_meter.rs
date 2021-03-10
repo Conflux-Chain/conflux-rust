@@ -178,7 +178,8 @@ impl ConfirmationMeter {
     fn confirmation_risk(
         &self, g_inner: &ConsensusGraphInner, w_0: i128, w_4: i128,
         epoch_num: u64,
-    ) -> f64 {
+    ) -> f64
+    {
         // Compute w_1
         let idx = g_inner.get_pivot_block_arena_index(epoch_num);
         let pivot_idx = g_inner.height_to_pivot_index(epoch_num);

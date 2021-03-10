@@ -106,9 +106,7 @@ impl Runtime {
     }
 
     /// Returns runtime executor.
-    pub fn executor(&self) -> Executor {
-        self.executor.clone()
-    }
+    pub fn executor(&self) -> Executor { self.executor.clone() }
 }
 
 #[derive(Clone)]
@@ -165,9 +163,7 @@ impl Executor {
     }
 
     /// Synchronous executor, used mostly for tests.
-    pub fn new_sync() -> Self {
-        Executor { inner: Mode::Sync }
-    }
+    pub fn new_sync() -> Self { Executor { inner: Mode::Sync } }
 
     /// Spawns a new thread for each future (use only for tests).
     pub fn new_thread_per_future() -> Self {
@@ -267,15 +263,11 @@ pub struct RuntimeHandle {
 }
 
 impl From<Runtime> for RuntimeHandle {
-    fn from(el: Runtime) -> Self {
-        el.handle
-    }
+    fn from(el: Runtime) -> Self { el.handle }
 }
 
 impl Drop for RuntimeHandle {
-    fn drop(&mut self) {
-        self.close.take().map(|v| v.send(()));
-    }
+    fn drop(&mut self) { self.close.take().map(|v| v.send(())); }
 }
 
 impl RuntimeHandle {

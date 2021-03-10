@@ -102,7 +102,8 @@ impl SendTxRequest {
     pub fn sign_with(
         self, best_epoch_height: u64, chain_id: u32, password: Option<String>,
         accounts: Arc<AccountProvider>,
-    ) -> RpcResult<TransactionWithSignature> {
+    ) -> RpcResult<TransactionWithSignature>
+    {
         let tx = PrimitiveTransaction {
             nonce: self.nonce.unwrap_or_default().into(),
             gas_price: self.gas_price.into(),

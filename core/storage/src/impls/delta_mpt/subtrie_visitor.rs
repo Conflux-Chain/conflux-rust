@@ -20,7 +20,8 @@ impl<'trie> SubTrieVisitor<'trie, 'trie> {
     pub fn new(
         trie_ref: &'trie MerklePatriciaTrie, root: NodeRefDeltaMpt,
         owned_node_set: &'trie mut Option<OwnedNodeSet>,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    {
         Ok(Self {
             trie_ref,
             db: ReturnAfterUse::new_from_value(trie_ref.get_arc_db()?),
@@ -39,9 +40,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
     fn new_visitor_for_subtree<'a>(
         &'a mut self, child_node: NodeRefDeltaMpt,
     ) -> SubTrieVisitor<'a, 'db>
-    where
-        'trie: 'a,
-    {
+    where 'trie: 'a {
         let trie_ref = self.trie_ref;
         let cow_child_node = CowNodeRef::new(
             child_node,
@@ -61,9 +60,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
         }
     }
 
-    pub fn get_trie_ref(&self) -> &'trie MerklePatriciaTrie {
-        self.trie_ref
-    }
+    pub fn get_trie_ref(&self) -> &'trie MerklePatriciaTrie { self.trie_ref }
 
     fn node_memory_manager(&self) -> &'trie DeltaMptsNodeMemoryManager {
         &self.get_trie_ref().get_node_memory_manager()
@@ -79,9 +76,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
             >,
         >,
     >
-    where
-        'trie: 'a,
-    {
+    where 'trie: 'a {
         let node_memory_manager = self.node_memory_manager();
         let cache_manager = node_memory_manager.get_cache_manager();
         let mut node_ref = self.root.node_ref.clone();

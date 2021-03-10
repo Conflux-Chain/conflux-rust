@@ -64,20 +64,15 @@ pub trait Cache<K, V> {
 }
 
 impl<K, V> Cache<K, V> for HashMap<K, V>
-where
-    K: Hash + Eq,
+where K: Hash + Eq
 {
     fn insert(&mut self, k: K, v: V) -> Option<V> {
         HashMap::insert(self, k, v)
     }
 
-    fn invalidate(&mut self, k: &K) -> Option<V> {
-        HashMap::remove(self, k)
-    }
+    fn invalidate(&mut self, k: &K) -> Option<V> { HashMap::remove(self, k) }
 
-    fn get(&self, k: &K) -> Option<&V> {
-        HashMap::get(self, k)
-    }
+    fn get(&self, k: &K) -> Option<&V> { HashMap::get(self, k) }
 }
 
 /// Should be used to get database key associated with given value.
@@ -214,8 +209,7 @@ pub trait Readable {
 
     /// Returns true if given value exists.
     fn exists<T, R>(&self, col: u32, key: &dyn Key<T, Target = R>) -> bool
-    where
-        R: Deref<Target = [u8]>;
+    where R: Deref<Target = [u8]>;
 
     /// Returns true if given value exists either in cache or in database.
     fn exists_with_cache<K, T, R, C>(
@@ -269,9 +263,7 @@ impl<KVDB: KeyValueDB + ?Sized> Readable for KVDB {
     }
 
     fn exists<T, R>(&self, col: u32, key: &dyn Key<T, Target = R>) -> bool
-    where
-        R: Deref<Target = [u8]>,
-    {
+    where R: Deref<Target = [u8]> {
         let result = self.get(col, &key.key());
 
         match result {

@@ -79,9 +79,7 @@ struct FakeSnapshotMptDbIter<'a>(
 );
 
 impl SnapshotMptTraitRead for FakeSnapshotMptDb {
-    fn get_merkle_root(&self) -> MerkleHash {
-        unimplemented!()
-    }
+    fn get_merkle_root(&self) -> MerkleHash { unimplemented!() }
 
     fn load_node(
         &mut self, path: &dyn CompressedPathTrait,

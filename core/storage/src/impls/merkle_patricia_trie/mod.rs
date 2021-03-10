@@ -37,9 +37,7 @@ pub trait KVInserter<Value> {
 }
 
 impl<Value> KVInserter<Value> for Vec<Value> {
-    fn push(&mut self, v: Value) -> Result<()> {
-        Ok((*self).push(v))
-    }
+    fn push(&mut self, v: Value) -> Result<()> { Ok((*self).push(v)) }
 }
 
 use super::errors::Result;

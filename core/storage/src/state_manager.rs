@@ -69,7 +69,8 @@ impl StateIndex {
     pub fn new_for_next_epoch(
         base_epoch_id: &EpochId, state_root: &StateRootWithAuxInfo,
         height: u64, snapshot_epoch_count: u32,
-    ) -> Self {
+    ) -> Self
+    {
         Self {
             snapshot_epoch_id: state_root.aux_info.snapshot_epoch_id,
             snapshot_merkle_root: state_root.state_root.snapshot_root,

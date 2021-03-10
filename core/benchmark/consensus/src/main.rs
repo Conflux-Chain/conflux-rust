@@ -74,7 +74,8 @@ fn check_results(
     hashes: &Vec<H256>, valid_indices: &HashMap<usize, i32>,
     timer_indices: &HashMap<usize, i32>,
     adaptive_indices: &HashMap<usize, i32>,
-) {
+)
+{
     let mut pending_cnt = 0;
     let consensus_read = consensus.inner.read();
     for i in start..end {

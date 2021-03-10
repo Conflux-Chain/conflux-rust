@@ -44,9 +44,7 @@ pub trait AsSnapshotMptTraitRead {
 }
 
 impl<T: SnapshotMptTraitRead> AsSnapshotMptTraitRead for T {
-    fn as_readonly(&mut self) -> &mut dyn SnapshotMptTraitRead {
-        self
-    }
+    fn as_readonly(&mut self) -> &mut dyn SnapshotMptTraitRead { self }
 }
 
 pub trait SnapshotMptTraitReadAndIterate: SnapshotMptTraitRead {
@@ -147,7 +145,8 @@ impl SnapshotMptNode {
     fn initial_subtree_size(
         node: &VanillaTrieNode<SubtreeMerkleWithSize>,
         full_path: &dyn CompressedPathTrait,
-    ) -> u64 {
+    ) -> u64
+    {
         let mut size = match node.value_as_slice().into_option() {
             None => 0,
             Some(value) => {
@@ -201,15 +200,11 @@ impl Decodable for SnapshotMptNode {
 impl Deref for SnapshotMptNode {
     type Target = VanillaTrieNode<SubtreeMerkleWithSize>;
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+    fn deref(&self) -> &Self::Target { &self.0 }
 }
 
 impl DerefMut for SnapshotMptNode {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
 impl Decodable for SubtreeMerkleWithSize {

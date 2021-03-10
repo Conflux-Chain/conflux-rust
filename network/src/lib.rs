@@ -190,9 +190,7 @@ impl NetworkConfiguration {
         config
     }
 
-    pub fn get_network_type(&self) -> &Network {
-        &self.network_type
-    }
+    pub fn get_network_type(&self) -> &Network { &self.network_type }
 
     pub fn network_id_to_known_cfx_network(id: u64) -> Network {
         match id {

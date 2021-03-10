@@ -16,9 +16,7 @@ pub struct NewBlock {
 }
 
 impl Encodable for NewBlock {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.append_internal(&self.block);
-    }
+    fn rlp_append(&self, s: &mut RlpStream) { s.append_internal(&self.block); }
 }
 
 impl Decodable for NewBlock {

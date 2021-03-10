@@ -119,7 +119,8 @@ pub struct EpochReceiptProof {
 pub fn compute_epoch_receipt_proof(
     epoch_receipts: &Vec<Arc<BlockReceipts>>, block_index_in_epoch: usize,
     tx_index_in_block: usize,
-) -> EpochReceiptProof {
+) -> EpochReceiptProof
+{
     let block_receipt_proof = compute_block_receipt_proof(
         &epoch_receipts[block_index_in_epoch].receipts,
         tx_index_in_block,
@@ -142,7 +143,8 @@ pub fn compute_epoch_receipt_proof(
 pub fn is_valid_tx_inclusion_proof(
     block_tx_root: MerkleHash, tx_index_in_block: usize,
     num_txs_in_block: usize, tx_hash: H256, proof: &TrieProof,
-) -> bool {
+) -> bool
+{
     let key = &into_simple_mpt_key(tx_index_in_block, num_txs_in_block);
     proof.is_valid_kv(key, Some(tx_hash.as_bytes()), &block_tx_root)
 }
@@ -158,7 +160,8 @@ pub fn is_valid_receipt_inclusion_proof(
     num_blocks_in_epoch: usize, block_index_proof: &TrieProof,
     tx_index_in_block: usize, num_txs_in_block: usize, receipt: &Receipt,
     block_receipt_proof: &TrieProof,
-) -> bool {
+) -> bool
+{
     // get block receipts root from block index trie (proof)
     // traversing along `key` also means we're validating the proof
     let key = &into_simple_mpt_key(block_index_in_epoch, num_blocks_in_epoch);
@@ -199,7 +202,8 @@ impl VerificationConfig {
     pub fn new(
         test_mode: bool, referee_bound: usize, max_block_size_in_bytes: usize,
         transaction_epoch_bound: u64, machine: Arc<Machine>,
-    ) -> Self {
+    ) -> Self
+    {
         if test_mode {
             VerificationConfig {
                 verify_timestamp: false,
@@ -452,7 +456,8 @@ impl VerificationConfig {
     pub fn check_transaction_epoch_bound(
         tx: &TransactionWithSignature, block_height: u64,
         transaction_epoch_bound: u64,
-    ) -> i8 {
+    ) -> i8
+    {
         if tx.epoch_height + transaction_epoch_bound < block_height {
             -1
         } else if tx.epoch_height > block_height + transaction_epoch_bound {
@@ -465,7 +470,8 @@ impl VerificationConfig {
     pub fn verify_transaction_epoch_height(
         tx: &TransactionWithSignature, block_height: u64,
         transaction_epoch_bound: u64,
-    ) -> Result<(), TransactionError> {
+    ) -> Result<(), TransactionError>
+    {
         if Self::check_transaction_epoch_bound(
             tx,
             block_height,

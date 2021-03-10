@@ -60,7 +60,8 @@ impl Blooms {
     pub fn new(
         peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
         witnesses: Arc<Witnesses>,
-    ) -> Self {
+    ) -> Self
+    {
         let sync_manager = SyncManager::new(peers.clone(), msgid::GET_BLOOMS);
 
         let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
@@ -112,7 +113,8 @@ impl Blooms {
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         blooms: impl Iterator<Item = BloomWithEpoch>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         for BloomWithEpoch { epoch, bloom } in blooms {
             trace!("Validating bloom {:?} with epoch {}", bloom, epoch);
 

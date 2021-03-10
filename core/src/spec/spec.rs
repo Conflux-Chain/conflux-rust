@@ -45,9 +45,7 @@ struct Spec {
 }
 
 impl Default for Spec {
-    fn default() -> Self {
-        unimplemented!()
-    }
+    fn default() -> Self { unimplemented!() }
 }
 
 #[derive(Debug)]
@@ -108,7 +106,8 @@ impl CommonParams {
     pub fn common_params(
         chain_id: ChainIdParams, anticone_penalty_ratio: u64,
         tanzanite_transition: BlockHeight,
-    ) -> Self {
+    ) -> Self
+    {
         let mut base_block_rewards = BTreeMap::new();
         base_block_rewards.insert(0, INITIAL_BASE_MINING_REWARD_IN_UCFX.into());
         base_block_rewards.insert(

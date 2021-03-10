@@ -64,9 +64,7 @@ impl DeferredPool {
         }
     }
 
-    fn clear(&mut self) {
-        self.buckets.clear()
-    }
+    fn clear(&mut self) { self.buckets.clear() }
 
     fn insert(&mut self, tx: TxWithReadyInfo, force: bool) -> InsertResult {
         // It's safe to create a new bucket, cause inserting to a empty bucket
@@ -163,9 +161,7 @@ impl ReadyAccountPool {
         }
     }
 
-    fn len(&self) -> usize {
-        self.treap.len()
-    }
+    fn len(&self) -> usize { self.treap.len() }
 
     fn get(&self, address: &Address) -> Option<Arc<SignedTransaction>> {
         self.treap.get(address).map(|tx| tx.clone())
@@ -272,21 +268,15 @@ impl TransactionPoolInner {
         self.unpacked_transaction_count = 0;
     }
 
-    pub fn total_deferred(&self) -> usize {
-        self.txs.len()
-    }
+    pub fn total_deferred(&self) -> usize { self.txs.len() }
 
     pub fn total_ready_accounts(&self) -> usize {
         self.ready_account_pool.len()
     }
 
-    pub fn total_received(&self) -> usize {
-        self.total_received_count
-    }
+    pub fn total_received(&self) -> usize { self.total_received_count }
 
-    pub fn total_unpacked(&self) -> usize {
-        self.unpacked_transaction_count
-    }
+    pub fn total_unpacked(&self) -> usize { self.unpacked_transaction_count }
 
     pub fn get(&self, tx_hash: &H256) -> Option<Arc<SignedTransaction>> {
         self.txs.get(tx_hash).map(|x| x.clone())
@@ -409,7 +399,8 @@ impl TransactionPoolInner {
         &mut self, transaction: Arc<SignedTransaction>, packed: bool,
         force: bool, state_nonce_and_balance: Option<(U256, U256)>,
         sponsored_gas: U256,
-    ) -> InsertResult {
+    ) -> InsertResult
+    {
         let _timer = MeterTimer::time_func(
             TX_POOL_INNER_WITHOUTCHECK_INSERT_TIMER.as_ref(),
         );
@@ -591,7 +582,8 @@ impl TransactionPoolInner {
         &mut self, num_txs: usize, block_gas_limit: U256,
         block_size_limit: usize, epoch_height_lower_bound: u64,
         epoch_height_upper_bound: u64,
-    ) -> Vec<Arc<SignedTransaction>> {
+    ) -> Vec<Arc<SignedTransaction>>
+    {
         let mut packed_transactions: Vec<Arc<SignedTransaction>> = Vec::new();
         if num_txs == 0 {
             return packed_transactions;
@@ -724,7 +716,8 @@ impl TransactionPoolInner {
     pub fn insert_transaction_with_readiness_check(
         &mut self, account_cache: &AccountCache,
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
-    ) -> Result<(), String> {
+    ) -> Result<(), String>
+    {
         let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
         let mut sponsored_gas = U256::from(0);
 
@@ -855,7 +848,8 @@ mod test_transaction_pool_inner {
     fn new_test_tx_with_read_info(
         sender: &KeyPair, nonce: usize, gas_price: usize, value: usize,
         packed: bool,
-    ) -> TxWithReadyInfo {
+    ) -> TxWithReadyInfo
+    {
         let transaction = new_test_tx(sender, nonce, gas_price, value);
         TxWithReadyInfo {
             transaction,

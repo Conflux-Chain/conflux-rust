@@ -30,14 +30,10 @@ impl EWMA {
     }
 
     /// Rate returns the moving average rate of events per second.
-    pub fn rate(&self) -> f64 {
-        f64::from_bits(self.rate.load(ORDER)) * 1e9
-    }
+    pub fn rate(&self) -> f64 { f64::from_bits(self.rate.load(ORDER)) * 1e9 }
 
     /// Update adds n uncounted events.
-    pub fn update(&self, n: usize) {
-        self.uncounted.fetch_add(n, ORDER);
-    }
+    pub fn update(&self, n: usize) { self.uncounted.fetch_add(n, ORDER); }
 
     /// Ticks the clock to update the moving average. It assumes it is called
     /// every 5 seconds.

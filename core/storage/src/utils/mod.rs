@@ -46,15 +46,11 @@ pub mod access_mode {
     pub struct Write {}
 
     impl AccessMode for Read {
-        fn is_read_only() -> bool {
-            return true;
-        }
+        fn is_read_only() -> bool { return true; }
     }
 
     impl AccessMode for Write {
-        fn is_read_only() -> bool {
-            return false;
-        }
+        fn is_read_only() -> bool { return false; }
     }
 }
 
@@ -67,9 +63,7 @@ pub mod access_mode {
 pub trait WrappedCreateFrom<FromType, ToType> {
     fn take(x: FromType) -> ToType;
     /// Unoptimized default implementation.
-    fn take_from(dest: &mut ToType, x: FromType) {
-        *dest = Self::take(x);
-    }
+    fn take_from(dest: &mut ToType, x: FromType) { *dest = Self::take(x); }
 }
 
 /*
@@ -80,9 +74,7 @@ impl<T> WrappedCreateFrom<T, UnsafeCell<T>> for UnsafeCell<T> {
 */
 
 impl<'x, T: Clone> WrappedCreateFrom<&'x T, UnsafeCell<T>> for UnsafeCell<T> {
-    fn take(val: &'x T) -> UnsafeCell<T> {
-        UnsafeCell::new(val.clone())
-    }
+    fn take(val: &'x T) -> UnsafeCell<T> { UnsafeCell::new(val.clone()) }
 
     fn take_from(dest: &mut UnsafeCell<T>, x: &'x T) {
         dest.get_mut().clone_from(x);
@@ -96,17 +88,11 @@ pub trait UnsafeCellExtension<T: Sized> {
 }
 
 impl<T: Sized> UnsafeCellExtension<T> for UnsafeCell<T> {
-    fn get_ref(&self) -> &T {
-        unsafe { &*self.get() }
-    }
+    fn get_ref(&self) -> &T { unsafe { &*self.get() } }
 
-    fn get_mut(&mut self) -> &mut T {
-        unsafe { &mut *self.get() }
-    }
+    fn get_mut(&mut self) -> &mut T { unsafe { &mut *self.get() } }
 
-    unsafe fn get_as_mut(&self) -> &mut T {
-        &mut *self.get()
-    }
+    unsafe fn get_as_mut(&self) -> &mut T { &mut *self.get() }
 }
 
 /// Only used by storage benchmark due to incompatibility of rlp crate version.
@@ -117,9 +103,7 @@ pub trait StateRootWithAuxInfoToFromRlpBytes {
 
 /// Only used by storage benchmark due to incompatibility of rlp crate version.
 impl StateRootWithAuxInfoToFromRlpBytes for StateRootWithAuxInfo {
-    fn to_rlp_bytes(&self) -> Vec<u8> {
-        self.rlp_bytes()
-    }
+    fn to_rlp_bytes(&self) -> Vec<u8> { self.rlp_bytes() }
 
     fn from_rlp_bytes(bytes: &[u8]) -> Result<Self> {
         Ok(Self::decode(&Rlp::new(bytes))?)

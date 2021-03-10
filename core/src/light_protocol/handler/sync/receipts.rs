@@ -59,7 +59,8 @@ impl Receipts {
     pub fn new(
         peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
         witnesses: Arc<Witnesses>,
-    ) -> Self {
+    ) -> Self
+    {
         let sync_manager = SyncManager::new(peers.clone(), msgid::GET_RECEIPTS);
 
         let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
@@ -113,7 +114,8 @@ impl Receipts {
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         receipts: impl Iterator<Item = ReceiptsWithEpoch>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         for ReceiptsWithEpoch {
             epoch,
             epoch_receipts,

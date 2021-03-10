@@ -73,7 +73,8 @@ impl<
             CacheAlgoDataT,
             CacheAlgorithmT,
         >,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         self.node_ref_map.insert(cache_index, slot)?;
         node_memory_manager.call_cache_algorithm_access(self, cache_index);
         Ok(())

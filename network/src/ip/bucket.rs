@@ -15,19 +15,13 @@ pub struct NodeBucket {
 
 impl NodeBucket {
     #[inline]
-    pub fn count(&self) -> usize {
-        self.nodes.len()
-    }
+    pub fn count(&self) -> usize { self.nodes.len() }
 
     #[inline]
-    pub fn add(&mut self, id: NodeId) -> bool {
-        self.nodes.insert(id)
-    }
+    pub fn add(&mut self, id: NodeId) -> bool { self.nodes.insert(id) }
 
     #[inline]
-    pub fn remove(&mut self, id: &NodeId) -> bool {
-        self.nodes.remove(id)
-    }
+    pub fn remove(&mut self, id: &NodeId) -> bool { self.nodes.remove(id) }
 
     #[inline]
     pub fn sample(&self, rng: &mut ThreadRng) -> Option<NodeId> {

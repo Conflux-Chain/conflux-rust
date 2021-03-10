@@ -11,7 +11,5 @@ impl ABIVariable for String {
             .map_err(|_| ABIDecodeError("Utf8 decoding error"))
     }
 
-    fn to_abi(&self) -> LinkedBytes {
-        self.as_bytes().to_vec().to_abi()
-    }
+    fn to_abi(&self) -> LinkedBytes { self.as_bytes().to_vec().to_abi() }
 }

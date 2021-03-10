@@ -494,25 +494,22 @@ impl DBManager {
             .expect("db read failure")
     }
 
-    fn insert_encodable_val<V>(&self, table: DBTable, db_key: &[u8], value: &V)
-    where
-        V: DatabaseEncodable,
-    {
+    fn insert_encodable_val<V>(
+        &self, table: DBTable, db_key: &[u8], value: &V,
+    ) where V: DatabaseEncodable {
         self.insert_to_db(table, db_key, value.db_encode())
     }
 
     fn insert_encodable_list<V>(
         &self, table: DBTable, db_key: &[u8], value: &Vec<V>,
-    ) where
-        V: DatabaseEncodable,
-    {
+    ) where V: DatabaseEncodable {
         self.insert_to_db(table, db_key, db_encode_list(value))
     }
 
-    fn load_decodable_val<V>(&self, table: DBTable, db_key: &[u8]) -> Option<V>
-    where
-        V: DatabaseDecodable,
-    {
+    fn load_decodable_val<V>(
+        &self, table: DBTable, db_key: &[u8],
+    ) -> Option<V>
+    where V: DatabaseDecodable {
         let encoded = self.load_from_db(table, db_key)?;
         Some(V::db_decode(&encoded).expect("decode succeeds"))
     }
@@ -520,9 +517,7 @@ impl DBManager {
     fn load_decodable_list<V>(
         &self, table: DBTable, db_key: &[u8],
     ) -> Option<Vec<V>>
-    where
-        V: DatabaseDecodable,
-    {
+    where V: DatabaseDecodable {
         let encoded = self.load_from_db(table, db_key)?;
         Some(db_decode_list(&encoded).expect("decode succeeds"))
     }

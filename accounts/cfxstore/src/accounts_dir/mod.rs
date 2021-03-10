@@ -56,9 +56,7 @@ pub trait KeyDirectory: Send + Sync {
     /// Remove key from directory
     fn remove(&self, account: &SafeAccount) -> Result<(), Error>;
     /// Get directory filesystem path, if available
-    fn path(&self) -> Option<&PathBuf> {
-        None
-    }
+    fn path(&self) -> Option<&PathBuf> { None }
     /// Return vault provider, if available
     fn as_vault_provider(&self) -> Option<&dyn VaultKeyDirectoryProvider> {
         None

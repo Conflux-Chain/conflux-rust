@@ -63,7 +63,8 @@ impl TokenBucket {
         default_cpu_cost: u64, max_message_tokens: u64,
         cur_message_tokens: u64, message_token_recharge_rate: u64,
         default_message_cost: u64,
-    ) -> Self {
+    ) -> Self
+    {
         assert!(cur_cpu_tokens <= max_cpu_tokens);
         assert!(cur_message_tokens <= max_message_tokens);
 
@@ -91,7 +92,8 @@ impl TokenBucket {
         max_cpu_tokens: u64, cpu_token_recharge_rate: u64,
         default_cpu_cost: u64, max_message_tokens: u64,
         message_token_recharge_rate: u64, default_message_cost: u64,
-    ) -> Self {
+    ) -> Self
+    {
         Self::new(
             max_cpu_tokens,
             max_cpu_tokens,
@@ -108,7 +110,8 @@ impl TokenBucket {
         max_cpu_tokens: u64, cpu_token_recharge_rate: u64,
         default_cpu_cost: u64, max_message_tokens: u64,
         message_token_recharge_rate: u64, default_message_cost: u64,
-    ) -> Self {
+    ) -> Self
+    {
         Self::new(
             max_cpu_tokens,
             0, /* cur_cpu_tokens */

@@ -251,7 +251,8 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         snapshot_path: &Path, readonly: bool,
         already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         open_semaphore: &Arc<Semaphore>,
-    ) -> Result<SnapshotDbSqlite> {
+    ) -> Result<SnapshotDbSqlite>
+    {
         let kvdb_sqlite_sharded = KvdbSqliteSharded::<Box<[u8]>>::open(
             Self::DB_SHARDS,
             snapshot_path,
@@ -272,7 +273,8 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         snapshot_path: &Path,
         already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         open_snapshots_semaphore: &Arc<Semaphore>,
-    ) -> Result<SnapshotDbSqlite> {
+    ) -> Result<SnapshotDbSqlite>
+    {
         fs::create_dir_all(snapshot_path)?;
         let create_result = (|| -> Result<Box<[SqliteConnection]>> {
             let kvdb_sqlite_sharded =

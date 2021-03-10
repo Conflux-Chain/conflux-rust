@@ -169,7 +169,8 @@ impl BlockDataManager {
         storage_manager: Arc<StorageManager>,
         worker_pool: Arc<Mutex<ThreadPool>>, config: DataManagerConfiguration,
         pow: Arc<PowComputer>,
-    ) -> Self {
+    ) -> Self
+    {
         let mb = 1024 * 1024;
         let max_cache_size = cache_conf.ledger_mb() * mb;
         let pref_cache_size = max_cache_size * 3 / 4;
@@ -317,9 +318,7 @@ impl BlockDataManager {
         data_man
     }
 
-    pub fn get_instance_id(&self) -> u64 {
-        *self.instance_id.lock()
-    }
+    pub fn get_instance_id(&self) -> u64 { *self.instance_id.lock() }
 
     pub fn initialize_instance_id(&self) {
         let mut my_instance_id = self.instance_id.lock();
@@ -473,7 +472,8 @@ impl BlockDataManager {
     pub fn block_traces_by_hash_with_epoch(
         &self, hash: &H256, assumed_epoch: &H256,
         update_pivot_assumption: bool, update_cache: bool,
-    ) -> Option<BlockExecTraces> {
+    ) -> Option<BlockExecTraces>
+    {
         if let Some((trace, is_on_pivot)) = self
             .block_traces
             .write()
@@ -520,7 +520,8 @@ impl BlockDataManager {
     pub fn insert_block_traces(
         &self, hash: H256, trace: BlockExecTraces, pivot_hash: H256,
         persistent: bool,
-    ) {
+    )
+    {
         if persistent {
             self.db_manager.insert_block_traces_to_db(
                 &hash,
@@ -613,7 +614,8 @@ impl BlockDataManager {
     pub fn block_execution_result_by_hash_with_epoch(
         &self, hash: &H256, assumed_epoch: &H256,
         update_pivot_assumption: bool, update_cache: bool,
-    ) -> Option<BlockExecutionResult> {
+    ) -> Option<BlockExecutionResult>
+    {
         if let Some((receipts, is_on_pivot)) = self
             .block_receipts
             .write()
@@ -685,7 +687,8 @@ impl BlockDataManager {
     pub fn insert_block_execution_result(
         &self, hash: H256, epoch: H256, block_receipts: Arc<BlockReceipts>,
         persistent: bool,
-    ) {
+    )
+    {
         let bloom =
             block_receipts
                 .receipts
@@ -1007,7 +1010,8 @@ impl BlockDataManager {
         &self, block_hash: H256,
         state_root_with_aux_info: StateRootWithAuxInfo, receipts_root: H256,
         logs_bloom_hash: H256,
-    ) {
+    )
+    {
         let commitment = EpochExecutionCommitment {
             state_root_with_aux_info,
             receipts_root,
@@ -1094,7 +1098,8 @@ impl BlockDataManager {
     pub fn epoch_executed_and_recovered(
         &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
         on_local_pivot: bool, update_trace: bool,
-    ) -> bool {
+    ) -> bool
+    {
         if !self.epoch_executed(epoch_hash) {
             return false;
         }
@@ -1192,9 +1197,7 @@ impl BlockDataManager {
         }
     }
 
-    pub fn cached_block_count(&self) -> usize {
-        self.blocks.read().len()
-    }
+    pub fn cached_block_count(&self) -> usize { self.blocks.read().len() }
 
     /// Get current cache size.
     pub fn cache_size(&self) -> CacheSize {
@@ -1304,9 +1307,7 @@ impl BlockDataManager {
         local_block_info.shrink_to_fit();
     }
 
-    pub fn cache_gc(&self) {
-        self.block_cache_gc();
-    }
+    pub fn cache_gc(&self) { self.block_cache_gc(); }
 
     pub fn set_cur_consensus_era_genesis_hash(
         &self, cur_era_hash: &H256, next_era_hash: &H256,
@@ -1548,9 +1549,7 @@ impl BlockDataManager {
 
     fn gc_epoch_with_defer<F>(
         &self, epoch_number: u64, maybe_defer_epochs: Option<usize>, gc_func: F,
-    ) where
-        F: Fn(&H256) -> (),
-    {
+    ) where F: Fn(&H256) -> () {
         if let Some(defer_epochs) = maybe_defer_epochs {
             if epoch_number > defer_epochs as u64 {
                 let epoch_to_remove = epoch_number - defer_epochs as u64;
@@ -1590,16 +1589,15 @@ pub struct DataManagerConfiguration {
 }
 
 impl MallocSizeOf for DataManagerConfiguration {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
-        0
-    }
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
 
 impl DataManagerConfiguration {
     pub fn new(
         persist_tx_index: bool, tx_cache_index_maintain_timeout: Duration,
         db_type: DbType,
-    ) -> Self {
+    ) -> Self
+    {
         Self {
             persist_tx_index,
             tx_cache_index_maintain_timeout,

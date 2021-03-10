@@ -83,9 +83,7 @@ impl Handshake {
     pub fn start<Message>(
         &mut self, io: &IoContext<Message>, host: &HostMetadata,
     ) -> Result<(), Error>
-    where
-        Message: Send + Clone + Sync + 'static,
-    {
+    where Message: Send + Clone + Sync + 'static {
         io.register_timer(self.connection.token(), HANDSHAKE_TIMEOUT)?;
 
         if !self.id.is_zero() {
@@ -98,17 +96,13 @@ impl Handshake {
     }
 
     /// Check if handshake is complete
-    pub fn done(&self) -> bool {
-        self.state == HandshakeState::StartSession
-    }
+    pub fn done(&self) -> bool { self.state == HandshakeState::StartSession }
 
     /// Readable IO handler. Drives the state change.
     pub fn readable<Message>(
         &mut self, io: &IoContext<Message>, host: &HostMetadata,
     ) -> Result<bool, Error>
-    where
-        Message: Send + Clone + Sync + 'static,
-    {
+    where Message: Send + Clone + Sync + 'static {
         trace!("handshake readable enter, state = {:?}", self.state);
 
         let data = match self.connection.readable()? {
@@ -153,9 +147,7 @@ impl Handshake {
     fn write_auth<Message>(
         &mut self, io: &IoContext<Message>, public: &Public,
     ) -> Result<(), Error>
-    where
-        Message: Send + Clone + Sync + 'static,
-    {
+    where Message: Send + Clone + Sync + 'static {
         trace!(
             "Sending handshake auth to {:?}",
             self.connection.remote_addr_str()
@@ -178,9 +170,7 @@ impl Handshake {
     fn read_auth<Message>(
         &mut self, io: &IoContext<Message>, secret: &Secret, data: &[u8],
     ) -> Result<(), Error>
-    where
-        Message: Send + Clone + Sync + 'static,
-    {
+    where Message: Send + Clone + Sync + 'static {
         trace!(
             "Received handshake auth from {:?}",
             self.connection.remote_addr_str()
@@ -207,9 +197,7 @@ impl Handshake {
     fn write_ack_of_auth<Message>(
         &mut self, io: &IoContext<Message>, remote_nonce: &[u8],
     ) -> Result<(), Error>
-    where
-        Message: Send + Clone + Sync + 'static,
-    {
+    where Message: Send + Clone + Sync + 'static {
         trace!(
             "Sending handshake ack of auth to {:?}",
             self.connection.remote_addr_str()
@@ -232,9 +220,7 @@ impl Handshake {
     fn read_node_id<Message>(
         &mut self, io: &IoContext<Message>, public: &Public, data: &[u8],
     ) -> Result<(), Error>
-    where
-        Message: Send + Clone + Sync + 'static,
-    {
+    where Message: Send + Clone + Sync + 'static {
         trace!(
             "Received handshake auth from {:?}, node id len = {}",
             self.connection.remote_addr_str(),
@@ -255,9 +241,7 @@ impl Handshake {
     fn read_ack_of_auth<Message>(
         &mut self, io: &IoContext<Message>, secret: &Secret, data: &[u8],
     ) -> Result<(), Error>
-    where
-        Message: Send + Clone + Sync + 'static,
-    {
+    where Message: Send + Clone + Sync + 'static {
         trace!(
             "Received handshake ack of auth from {:?}",
             self.connection.remote_addr_str()
@@ -287,9 +271,7 @@ impl Handshake {
     fn write_ack_of_ack<Message>(
         &mut self, io: &IoContext<Message>, remote_nonce: &[u8],
     ) -> Result<(), Error>
-    where
-        Message: Send + Clone + Sync + 'static,
-    {
+    where Message: Send + Clone + Sync + 'static {
         trace!(
             "Sending handshake ack of ack to {:?}",
             self.connection.remote_addr_str()

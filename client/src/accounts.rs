@@ -11,7 +11,8 @@ use std::{path::PathBuf, time::Duration};
 pub fn account_provider(
     dir: Option<String>, sstore_iterations: Option<u32>,
     refresh_time: Option<Duration>,
-) -> Result<AccountProvider, String> {
+) -> Result<AccountProvider, String>
+{
     let dir = match dir {
         Some(dir) => dir,
         None => keys_path(),

@@ -143,7 +143,8 @@ impl RequestManager {
         protocol_config: &ProtocolConfiguration,
         syn: Arc<SynchronizationState>,
         recover_public_queue: Arc<AsyncTaskQueue<RecoverPublicTask>>,
-    ) -> Self {
+    ) -> Self
+    {
         let received_tx_index_maintain_timeout =
             protocol_config.received_tx_index_maintain_timeout;
         let inflight_pending_tx_index_maintain_timeout =
@@ -199,7 +200,8 @@ impl RequestManager {
     pub fn request_with_delay(
         &self, io: &dyn NetworkContext, mut request: Box<dyn Request>,
         mut peer: Option<NodeId>, delay: Option<Duration>,
-    ) {
+    )
+    {
         // retain the request items that not in flight.
         request.with_inflight(&self.inflight_keys);
 
@@ -251,7 +253,8 @@ impl RequestManager {
     pub fn request_block_headers(
         &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
         hashes: Vec<H256>, delay: Option<Duration>,
-    ) {
+    )
+    {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
 
         debug!("request_block_headers: {:?}, peer {:?}", hashes, peer_id);
@@ -267,7 +270,8 @@ impl RequestManager {
     pub fn request_epoch_hashes(
         &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
         epochs: Vec<u64>, delay: Option<Duration>,
-    ) {
+    )
+    {
         let request = GetBlockHashesByEpoch {
             request_id: 0,
             epochs,
@@ -280,7 +284,8 @@ impl RequestManager {
         &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
         hashes: Vec<H256>, with_public: bool, delay: Option<Duration>,
         preferred_node_type: Option<NodeType>,
-    ) {
+    )
+    {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
         debug!("request_blocks: hashes={:?}", hashes);
 
@@ -297,7 +302,8 @@ impl RequestManager {
     pub fn request_transactions_from_digest(
         &self, io: &dyn NetworkContext, peer_id: NodeId,
         transaction_digests: &TransactionDigests,
-    ) {
+    )
+    {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TX_TIMER.as_ref());
 
         let window_index: usize = transaction_digests.window_index;
@@ -446,7 +452,8 @@ impl RequestManager {
         &self, io: &dyn NetworkContext, peer_id: NodeId,
         responded_tx_hashes: Vec<H256>, window_index: usize,
         tx_hashes_indices: &Vec<usize>,
-    ) {
+    )
+    {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TX_TIMER.as_ref());
 
         if responded_tx_hashes.is_empty() {
@@ -516,7 +523,8 @@ impl RequestManager {
     pub fn request_compact_blocks(
         &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
         hashes: Vec<H256>, delay: Option<Duration>,
-    ) {
+    )
+    {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
         debug!("request_compact_blocks: hashes={:?}", hashes);
 
@@ -531,7 +539,8 @@ impl RequestManager {
     pub fn request_blocktxn(
         &self, io: &dyn NetworkContext, peer_id: NodeId, block_hash: H256,
         index_skips: Vec<usize>, delay: Option<Duration>,
-    ) {
+    )
+    {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
 
         let request = GetBlockTxn {
@@ -590,7 +599,8 @@ impl RequestManager {
     pub fn headers_received(
         &self, io: &dyn NetworkContext, req_hashes: HashSet<H256>,
         mut received_headers: HashSet<H256>, delay: Option<Duration>,
-    ) {
+    )
+    {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
         debug!(
             "headers_received: req_hashes={:?} received_headers={:?}",
@@ -629,7 +639,8 @@ impl RequestManager {
     pub fn epochs_received(
         &self, io: &dyn NetworkContext, req_epochs: HashSet<u64>,
         mut received_epochs: HashSet<u64>, delay: Option<Duration>,
-    ) {
+    )
+    {
         debug!(
             "epochs_received: req_epochs={:?} received_epochs={:?}",
             req_epochs, received_epochs
@@ -674,7 +685,8 @@ impl RequestManager {
         mut received_blocks: HashSet<H256>, ask_full_block: bool,
         peer: Option<NodeId>, with_public: bool, delay: Option<Duration>,
         preferred_node_type_for_block_request: Option<NodeType>,
-    ) {
+    )
+    {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
         debug!(
             "blocks_received: req_hashes={:?} received_blocks={:?} peer={:?}",
@@ -744,7 +756,8 @@ impl RequestManager {
         &self, io: &dyn NetworkContext,
         get_transactions_request: &GetTransactions,
         signed_transactions: Vec<Arc<SignedTransaction>>,
-    ) {
+    )
+    {
         let mut short_id_inflight_keys =
             self.inflight_keys.write(msgid::GET_TRANSACTIONS);
         let mut tx_hash_inflight_keys = self
@@ -805,7 +818,8 @@ impl RequestManager {
     pub fn transactions_received_from_tx_hashes(
         &self, get_transactions_request: &GetTransactionsFromTxHashes,
         signed_transactions: Vec<Arc<SignedTransaction>>,
-    ) {
+    )
+    {
         let mut tx_hash_inflight_keys = self
             .inflight_keys
             .write(msgid::GET_TRANSACTIONS_FROM_TX_HASHES);

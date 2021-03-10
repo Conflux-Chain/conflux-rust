@@ -208,7 +208,5 @@ impl<K: Ord, V: Clone, W: Add<Output = W> + Sub<Output = W> + Ord + Clone>
         }
     }
 
-    pub fn sum_weight(&self) -> W {
-        self.sum_weight.clone()
-    }
+    pub fn sum_weight(&self) -> W { self.sum_weight.clone() }
 }

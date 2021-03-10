@@ -34,9 +34,7 @@ pub struct ReturnData {
 impl ::std::ops::Deref for ReturnData {
     type Target = [u8];
 
-    fn deref(&self) -> &[u8] {
-        &self.mem[self.offset..self.offset + self.size]
-    }
+    fn deref(&self) -> &[u8] { &self.mem[self.offset..self.offset + self.size] }
 }
 
 impl ReturnData {

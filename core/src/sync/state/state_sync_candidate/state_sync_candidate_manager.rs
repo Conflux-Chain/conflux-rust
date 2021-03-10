@@ -62,7 +62,8 @@ impl StateSyncCandidateManager {
     pub fn reset(
         &mut self, current_era_genesis: EpochId,
         candidates: Vec<SnapshotSyncCandidate>, peers: Vec<NodeId>,
-    ) {
+    )
+    {
         let mut candidates_map = BTreeMap::new();
         for candidate in &candidates {
             candidates_map.insert(candidate.clone(), HashSet::new());
@@ -81,7 +82,8 @@ impl StateSyncCandidateManager {
         &mut self, peer: &NodeId,
         supported_candidates: &Vec<SnapshotSyncCandidate>,
         requested_candidates: &Vec<SnapshotSyncCandidate>,
-    ) {
+    )
+    {
         if !self.pending_peers.remove(peer) {
             debug!("Receive response from unexpected peer {:?}, possibly from old requests", peer);
             return;
@@ -130,9 +132,7 @@ impl StateSyncCandidateManager {
         }
     }
 
-    pub fn pending_peers(&self) -> &HashSet<NodeId> {
-        &self.pending_peers
-    }
+    pub fn pending_peers(&self) -> &HashSet<NodeId> { &self.pending_peers }
 
     pub fn get_active_candidate_and_peers(
         &self,
@@ -191,7 +191,5 @@ impl StateSyncCandidateManager {
 }
 
 impl Default for StateSyncCandidateManager {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }

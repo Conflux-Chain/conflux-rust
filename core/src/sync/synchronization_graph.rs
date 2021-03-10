@@ -123,17 +123,11 @@ impl UnreadyBlockFrontier {
         }
     }
 
-    pub fn reset_update_state(&mut self) {
-        self.updated = false;
-    }
+    pub fn reset_update_state(&mut self) { self.updated = false; }
 
-    pub fn updated(&self) -> bool {
-        self.updated
-    }
+    pub fn updated(&self) -> bool { self.updated }
 
-    pub fn get_frontier(&self) -> &HashSet<usize> {
-        &self.frontier
-    }
+    pub fn get_frontier(&self) -> &HashSet<usize> { &self.frontier }
 
     pub fn remove(&mut self, index: &usize) -> bool {
         self.updated = true;
@@ -149,9 +143,7 @@ impl UnreadyBlockFrontier {
         self.frontier.insert(index)
     }
 
-    pub fn len(&self) -> usize {
-        self.frontier.len()
-    }
+    pub fn len(&self) -> usize { self.frontier.len() }
 }
 
 pub struct SynchronizationGraphInner {
@@ -202,7 +194,8 @@ impl SynchronizationGraphInner {
         genesis_header: Arc<BlockHeader>, pow_config: ProofOfWorkConfig,
         pow: Arc<PowComputer>, config: SyncGraphConfig,
         data_man: Arc<BlockDataManager>, machine: Arc<Machine>,
-    ) -> Self {
+    ) -> Self
+    {
         let mut inner = SynchronizationGraphInner {
             arena: Slab::new(),
             hash_to_arena_indices: HashMap::new(),
@@ -826,7 +819,8 @@ impl SynchronizationGraphInner {
     fn set_and_propagate_invalid(
         &mut self, queue: &mut VecDeque<usize>,
         invalid_set: &mut HashSet<usize>, index: usize,
-    ) {
+    )
+    {
         let children =
             mem::replace(&mut self.arena[index].children, Vec::new());
         for child in &children {
@@ -902,7 +896,8 @@ impl SynchronizationGraph {
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
         pow: Arc<PowComputer>, sync_config: SyncGraphConfig,
         notifications: Arc<Notifications>, machine: Arc<Machine>,
-    ) -> Self {
+    ) -> Self
+    {
         let data_man = consensus.get_data_manager().clone();
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
         let genesis_block_header = data_man
@@ -1025,13 +1020,9 @@ impl SynchronizationGraph {
         sync_graph
     }
 
-    pub fn is_consortium(&self) -> bool {
-        self.sync_config.is_consortium
-    }
+    pub fn is_consortium(&self) -> bool { self.sync_config.is_consortium }
 
-    pub fn machine(&self) -> Arc<Machine> {
-        self.machine.clone()
-    }
+    pub fn machine(&self) -> Arc<Machine> { self.machine.clone() }
 
     pub fn get_genesis_hash_and_height_in_current_era(&self) -> (H256, u64) {
         self.inner
@@ -1225,7 +1216,8 @@ impl SynchronizationGraph {
         frontier_index_list: Vec<usize>, need_to_verify: bool,
         header_index_to_insert: usize, insert_to_consensus: bool,
         persistent: bool,
-    ) -> (HashSet<usize>, Vec<H256>) {
+    ) -> (HashSet<usize>, Vec<H256>)
+    {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -1351,7 +1343,8 @@ impl SynchronizationGraph {
     pub fn insert_block_header(
         &self, header: &mut BlockHeader, need_to_verify: bool,
         bench_mode: bool, insert_to_consensus: bool, persistent: bool,
-    ) -> (BlockHeaderInsertionResult, Vec<H256>) {
+    ) -> (BlockHeaderInsertionResult, Vec<H256>)
+    {
         let _timer = MeterTimer::time_func(SYNC_INSERT_HEADER.as_ref());
         self.statistics.inc_sync_graph_inserted_header_count();
         let inner = &mut *self.inner.write();
@@ -1545,7 +1538,8 @@ impl SynchronizationGraph {
     fn propagate_graph_status(
         &self, inner: &mut SynchronizationGraphInner,
         frontier_index_list: Vec<usize>,
-    ) -> HashSet<usize> {
+    ) -> HashSet<usize>
+    {
         let mut queue = VecDeque::new();
         let mut invalid_set = HashSet::new();
         for index in frontier_index_list {
@@ -1587,7 +1581,8 @@ impl SynchronizationGraph {
     pub fn insert_block(
         &self, block: Block, need_to_verify: bool, persistent: bool,
         recover_from_db: bool,
-    ) -> BlockInsertionResult {
+    ) -> BlockInsertionResult
+    {
         let _timer = MeterTimer::time_func(SYNC_INSERT_BLOCK.as_ref());
         let hash = block.hash();
 
@@ -1721,9 +1716,7 @@ impl SynchronizationGraph {
         Ok(res)
     }
 
-    pub fn log_statistics(&self) {
-        self.statistics.log_statistics();
-    }
+    pub fn log_statistics(&self) { self.statistics.log_statistics(); }
 
     pub fn update_total_weight_delta_heartbeat(&self) {
         self.consensus.update_total_weight_delta_heartbeat();
@@ -1732,9 +1725,7 @@ impl SynchronizationGraph {
     /// Get the current number of blocks in the synchronization graph
     /// This only returns cached block count, and this is enough since this is
     /// only used in test.
-    pub fn block_count(&self) -> usize {
-        self.data_man.cached_block_count()
-    }
+    pub fn block_count(&self) -> usize { self.data_man.cached_block_count() }
 
     /// Remove all blocks which have not been updated for a long time. We
     /// maintain a set `not_ready_blocks_frontier` which is the root nodes in

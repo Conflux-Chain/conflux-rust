@@ -18,8 +18,7 @@ use rand::{distributions::Alphanumeric, rngs::OsRng, Rng, RngCore};
 
 pub trait Random {
     fn random() -> Self
-    where
-        Self: Sized;
+    where Self: Sized;
 }
 
 impl Random for [u8; 16] {

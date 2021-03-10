@@ -9,9 +9,7 @@ use crate::{
 use std::sync::{atomic::AtomicUsize, Arc};
 
 pub trait Counter<T: Default>: Send + Sync {
-    fn count(&self) -> T {
-        T::default()
-    }
+    fn count(&self) -> T { T::default() }
     fn dec(&self, _delta: T) {}
     fn inc(&self, _delta: T) {}
 }
@@ -60,9 +58,7 @@ macro_rules! construct_counter {
         }
 
         impl Counter<$data_type> for $name {
-            fn count(&self) -> $data_type {
-                self.value.load(ORDER)
-            }
+            fn count(&self) -> $data_type { self.value.load(ORDER) }
 
             fn dec(&self, delta: $data_type) {
                 self.value.fetch_sub(delta, ORDER);
@@ -74,9 +70,7 @@ macro_rules! construct_counter {
         }
 
         impl Metric for $name {
-            fn get_type(&self) -> &str {
-                "Counter"
-            }
+            fn get_type(&self) -> &str { "Counter" }
         }
     };
 }

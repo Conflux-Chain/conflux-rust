@@ -37,7 +37,8 @@ impl SnapshotChunkManager {
         snapshot_info: SnapshotInfo, chunk_boundaries: Vec<Vec<u8>>,
         chunk_boundary_proofs: Vec<TrieProof>, active_peers: HashSet<NodeId>,
         config: SnapshotChunkConfig,
-    ) -> StorageResult<Self> {
+    ) -> StorageResult<Self>
+    {
         let mut restorer = Restorer::new(
             *snapshot_candidate.get_snapshot_epoch_id(),
             snapshot_info.merkle_root,
@@ -179,9 +180,7 @@ impl SnapshotChunkManager {
         self.request_chunks(ctx);
     }
 
-    pub fn is_inactive(&self) -> bool {
-        self.active_peers.is_empty()
-    }
+    pub fn is_inactive(&self) -> bool { self.active_peers.is_empty() }
 
     pub fn set_active_peers(&mut self, new_active_peers: HashSet<NodeId>) {
         self.active_peers = new_active_peers;

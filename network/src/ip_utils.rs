@@ -48,35 +48,17 @@ pub trait SocketAddrExt {
     fn is_global_s(&self) -> bool;
 
     // Ipv4 specific
-    fn is_shared_space(&self) -> bool {
-        false
-    }
-    fn is_special_purpose(&self) -> bool {
-        false
-    }
-    fn is_benchmarking(&self) -> bool {
-        false
-    }
-    fn is_future_use(&self) -> bool {
-        false
-    }
+    fn is_shared_space(&self) -> bool { false }
+    fn is_special_purpose(&self) -> bool { false }
+    fn is_benchmarking(&self) -> bool { false }
+    fn is_future_use(&self) -> bool { false }
 
     // Ipv6 specific
-    fn is_unique_local_s(&self) -> bool {
-        false
-    }
-    fn is_unicast_link_local_s(&self) -> bool {
-        false
-    }
-    fn is_documentation_s(&self) -> bool {
-        false
-    }
-    fn is_global_multicast(&self) -> bool {
-        false
-    }
-    fn is_other_multicast(&self) -> bool {
-        false
-    }
+    fn is_unique_local_s(&self) -> bool { false }
+    fn is_unicast_link_local_s(&self) -> bool { false }
+    fn is_documentation_s(&self) -> bool { false }
+    fn is_global_multicast(&self) -> bool { false }
+    fn is_other_multicast(&self) -> bool { false }
 
     fn is_reserved(&self) -> bool;
     fn is_usable_public(&self) -> bool;
@@ -139,9 +121,7 @@ impl SocketAddrExt for Ipv4Addr {
         !SocketAddrExt::is_reserved(self) && !self.is_private()
     }
 
-    fn is_usable_private(&self) -> bool {
-        self.is_private()
-    }
+    fn is_usable_private(&self) -> bool { self.is_private() }
 
     fn is_within(&self, ipnet: &IpNetwork) -> bool {
         match ipnet {
@@ -176,9 +156,7 @@ impl SocketAddrExt for Ipv6Addr {
         (self.segments()[0] == 0x2001) && (self.segments()[1] == 0xdb8)
     }
 
-    fn is_global_multicast(&self) -> bool {
-        self.segments()[0] & 0x000f == 14
-    }
+    fn is_global_multicast(&self) -> bool { self.segments()[0] & 0x000f == 14 }
 
     fn is_other_multicast(&self) -> bool {
         self.is_multicast() && !self.is_global_multicast()
@@ -196,9 +174,7 @@ impl SocketAddrExt for Ipv6Addr {
         !self.is_reserved() && !self.is_unique_local_s()
     }
 
-    fn is_usable_private(&self) -> bool {
-        self.is_unique_local_s()
-    }
+    fn is_usable_private(&self) -> bool { self.is_unique_local_s() }
 
     fn is_within(&self, ipnet: &IpNetwork) -> bool {
         match ipnet {
@@ -312,14 +288,10 @@ mod getinterfaces {
 }
 
 #[cfg(not(any(windows, target_os = "android")))]
-fn get_if_addrs() -> io::Result<Vec<IpAddr>> {
-    getinterfaces::get_all()
-}
+fn get_if_addrs() -> io::Result<Vec<IpAddr>> { getinterfaces::get_all() }
 
 #[cfg(any(windows, target_os = "android"))]
-fn get_if_addrs() -> io::Result<Vec<IpAddr>> {
-    Ok(Vec::new())
-}
+fn get_if_addrs() -> io::Result<Vec<IpAddr>> { Ok(Vec::new()) }
 
 /// Select the best available public address
 pub fn select_public_address(port: u16) -> SocketAddr {
@@ -582,7 +554,8 @@ fn ipv4_properties() {
         octets: &[u8; 4], unspec: bool, loopback: bool, private: bool,
         link_local: bool, global: bool, multicast: bool, broadcast: bool,
         documentation: bool,
-    ) {
+    )
+    {
         let ip = Ipv4Addr::new(octets[0], octets[1], octets[2], octets[3]);
         assert_eq!(octets, &ip.octets());
 

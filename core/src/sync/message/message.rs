@@ -86,50 +86,32 @@ build_msg_impl! { Throttled, msgid::THROTTLED, "Throttled", SYNC_PROTO_V1, SYNC_
 impl GetMaybeRequestId for GetBlockHashesResponse {}
 mark_msg_version_bound!(GetBlockHashesResponse, SYNC_PROTO_V1, SYNC_PROTO_V3);
 impl Message for GetBlockHashesResponse {
-    fn msg_id(&self) -> MsgId {
-        msgid::GET_BLOCK_HASHES_RESPONSE
-    }
+    fn msg_id(&self) -> MsgId { msgid::GET_BLOCK_HASHES_RESPONSE }
 
-    fn msg_name(&self) -> &'static str {
-        "GetBlockHashesResponse"
-    }
+    fn msg_name(&self) -> &'static str { "GetBlockHashesResponse" }
 
-    fn priority(&self) -> SendQueuePriority {
-        SendQueuePriority::Low
-    }
+    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Low }
 }
 
 // normal priority and size-sensitive message types
 impl GetMaybeRequestId for Transactions {}
 mark_msg_version_bound!(Transactions, SYNC_PROTO_V1, SYNC_PROTO_V3);
 impl Message for Transactions {
-    fn is_size_sensitive(&self) -> bool {
-        self.transactions.len() > 1
-    }
+    fn is_size_sensitive(&self) -> bool { self.transactions.len() > 1 }
 
-    fn msg_id(&self) -> MsgId {
-        msgid::TRANSACTIONS
-    }
+    fn msg_id(&self) -> MsgId { msgid::TRANSACTIONS }
 
-    fn msg_name(&self) -> &'static str {
-        "Transactions"
-    }
+    fn msg_name(&self) -> &'static str { "Transactions" }
 }
 
 impl GetMaybeRequestId for GetBlocksResponse {}
 mark_msg_version_bound!(GetBlocksResponse, SYNC_PROTO_V1, SYNC_PROTO_V3);
 impl Message for GetBlocksResponse {
-    fn is_size_sensitive(&self) -> bool {
-        self.blocks.len() > 0
-    }
+    fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
 
-    fn msg_id(&self) -> MsgId {
-        msgid::GET_BLOCKS_RESPONSE
-    }
+    fn msg_id(&self) -> MsgId { msgid::GET_BLOCKS_RESPONSE }
 
-    fn msg_name(&self) -> &'static str {
-        "GetBlocksResponse"
-    }
+    fn msg_name(&self) -> &'static str { "GetBlocksResponse" }
 }
 
 impl GetMaybeRequestId for GetBlocksWithPublicResponse {}
@@ -139,73 +121,45 @@ mark_msg_version_bound!(
     SYNC_PROTO_V3
 );
 impl Message for GetBlocksWithPublicResponse {
-    fn is_size_sensitive(&self) -> bool {
-        self.blocks.len() > 0
-    }
+    fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
 
-    fn msg_id(&self) -> MsgId {
-        msgid::GET_BLOCKS_WITH_PUBLIC_RESPONSE
-    }
+    fn msg_id(&self) -> MsgId { msgid::GET_BLOCKS_WITH_PUBLIC_RESPONSE }
 
-    fn msg_name(&self) -> &'static str {
-        "GetBlocksWithPublicResponse"
-    }
+    fn msg_name(&self) -> &'static str { "GetBlocksWithPublicResponse" }
 }
 
 impl GetMaybeRequestId for GetBlockTxnResponse {}
 mark_msg_version_bound!(GetBlockTxnResponse, SYNC_PROTO_V1, SYNC_PROTO_V3);
 impl Message for GetBlockTxnResponse {
-    fn is_size_sensitive(&self) -> bool {
-        self.block_txn.len() > 1
-    }
+    fn is_size_sensitive(&self) -> bool { self.block_txn.len() > 1 }
 
-    fn msg_id(&self) -> MsgId {
-        msgid::GET_BLOCK_TXN_RESPONSE
-    }
+    fn msg_id(&self) -> MsgId { msgid::GET_BLOCK_TXN_RESPONSE }
 
-    fn msg_name(&self) -> &'static str {
-        "GetBlockTxnResponse"
-    }
+    fn msg_name(&self) -> &'static str { "GetBlockTxnResponse" }
 }
 
 impl GetMaybeRequestId for TransactionDigests {}
 mark_msg_version_bound!(TransactionDigests, SYNC_PROTO_V1, SYNC_PROTO_V3);
 impl Message for TransactionDigests {
-    fn is_size_sensitive(&self) -> bool {
-        self.len() > 1
-    }
+    fn is_size_sensitive(&self) -> bool { self.len() > 1 }
 
-    fn msg_id(&self) -> MsgId {
-        msgid::TRANSACTION_DIGESTS
-    }
+    fn msg_id(&self) -> MsgId { msgid::TRANSACTION_DIGESTS }
 
-    fn msg_name(&self) -> &'static str {
-        "TransactionDigests"
-    }
+    fn msg_name(&self) -> &'static str { "TransactionDigests" }
 
-    fn priority(&self) -> SendQueuePriority {
-        SendQueuePriority::Normal
-    }
+    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 }
 
 impl GetMaybeRequestId for GetTransactionsResponse {}
 mark_msg_version_bound!(GetTransactionsResponse, SYNC_PROTO_V1, SYNC_PROTO_V3);
 impl Message for GetTransactionsResponse {
-    fn is_size_sensitive(&self) -> bool {
-        self.transactions.len() > 0
-    }
+    fn is_size_sensitive(&self) -> bool { self.transactions.len() > 0 }
 
-    fn msg_id(&self) -> MsgId {
-        msgid::GET_TRANSACTIONS_RESPONSE
-    }
+    fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS_RESPONSE }
 
-    fn msg_name(&self) -> &'static str {
-        "GetTransactionsResponse"
-    }
+    fn msg_name(&self) -> &'static str { "GetTransactionsResponse" }
 
-    fn priority(&self) -> SendQueuePriority {
-        SendQueuePriority::Normal
-    }
+    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 }
 impl GetMaybeRequestId for GetTransactionsFromTxHashesResponse {}
 mark_msg_version_bound!(
@@ -214,21 +168,15 @@ mark_msg_version_bound!(
     SYNC_PROTO_V3
 );
 impl Message for GetTransactionsFromTxHashesResponse {
-    fn is_size_sensitive(&self) -> bool {
-        self.transactions.len() > 0
-    }
+    fn is_size_sensitive(&self) -> bool { self.transactions.len() > 0 }
 
     fn msg_id(&self) -> MsgId {
         msgid::GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE
     }
 
-    fn msg_name(&self) -> &'static str {
-        "GetTransactionsFromTxHashesResponse"
-    }
+    fn msg_name(&self) -> &'static str { "GetTransactionsFromTxHashesResponse" }
 
-    fn priority(&self) -> SendQueuePriority {
-        SendQueuePriority::Normal
-    }
+    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 }
 /// handle the RLP encoded message with given context `ctx`.
 /// If the message not handled, return `Ok(false)`.

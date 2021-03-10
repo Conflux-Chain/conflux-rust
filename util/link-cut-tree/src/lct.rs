@@ -233,13 +233,9 @@ macro_rules! construct_link_cut_tree {
         }
 
         impl DefaultLinkCutTreeTrait for $lct_name {
-            fn new() -> Self {
-                Self { tree: Vec::new() }
-            }
+            fn new() -> Self { Self { tree: Vec::new() } }
 
-            fn size(&self) -> usize {
-                self.tree.len()
-            }
+            fn size(&self) -> usize { self.tree.len() }
 
             fn make_tree(&mut self, v: usize) {
                 if self.tree.len() <= v {
@@ -403,9 +399,7 @@ impl MallocSizeOf for SizeMinLinkCutTreeInner {
 }
 
 impl MallocSizeOf for SizeMinNode {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
-        0
-    }
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
 
 impl MallocSizeOf for CaterpillarMinLinkCutTreeInner {
@@ -415,9 +409,7 @@ impl MallocSizeOf for CaterpillarMinLinkCutTreeInner {
 }
 
 impl MallocSizeOf for CaterpillarMinNode {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
-        0
-    }
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
 
 impl SizeMinLinkCutTreeInner {

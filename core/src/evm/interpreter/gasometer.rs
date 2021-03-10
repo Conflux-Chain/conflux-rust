@@ -121,7 +121,8 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
         &mut self, context: &dyn vm::Context, instruction: Instruction,
         info: &InstructionInfo, stack: &dyn Stack<U256>,
         current_mem_size: usize,
-    ) -> vm::Result<InstructionRequirements<Gas>> {
+    ) -> vm::Result<InstructionRequirements<Gas>>
+    {
         let spec = context.spec();
         let tier = info.tier.idx();
         let default_gas = Gas::from(spec.tier_step_gas[tier]);

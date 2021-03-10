@@ -34,13 +34,9 @@ pub struct GetBlockTxn {
 }
 
 impl AsAny for GetBlockTxn {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+    fn as_any(&self) -> &dyn Any { self }
 
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl Request for GetBlockTxn {
@@ -60,9 +56,7 @@ impl Request for GetBlockTxn {
         // reuse the inflight key of GetCompactBlocks
     }
 
-    fn is_empty(&self) -> bool {
-        false
-    }
+    fn is_empty(&self) -> bool { false }
 
     fn resend(&self) -> Option<Box<dyn Request>> {
         Some(Box::new(GetBlocks {

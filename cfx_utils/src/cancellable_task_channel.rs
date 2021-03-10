@@ -185,7 +185,8 @@ impl<T: CancelByKey> CancelableTaskSender<T> {
     fn remove_pending(
         &self, task_info_locked: &mut TaskInfo<T>, key: &T::Key,
         notify_waits: bool,
-    ) -> bool {
+    ) -> bool
+    {
         let queue = &mut *self.queue.write();
         let mut found = false;
         // Remove tasks from queue.
@@ -236,7 +237,8 @@ impl<T: CancelByKey> CancelableTaskReceiver<T> {
         &self, try_recv: bool, may_block_indefinitely: bool,
         task_guard: &mut MutexGuard<TaskInfo<T>>,
         queue_guard: &mut RwLockWriteGuard<VecDeque<Option<T>>>,
-    ) -> Result<bool, StopOr<TryRecvError>> {
+    ) -> Result<bool, StopOr<TryRecvError>>
+    {
         match self.receiver.try_recv() {
             Err(TryRecvError::Disconnected) => {
                 Err(StopOr::RecvError(TryRecvError::Disconnected))

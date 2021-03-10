@@ -102,17 +102,13 @@ impl<DbType: SnapshotMptLoadNode + ?Sized, BorrowType: BorrowMut<DbType>>
         Ok(mpt)
     }
 
-    pub fn get_merkle_root_impl(&self) -> MerkleHash {
-        self.merkle_root
-    }
+    pub fn get_merkle_root_impl(&self) -> MerkleHash { self.merkle_root }
 }
 
 impl<DbType: SnapshotMptLoadNode + ?Sized, BorrowType: BorrowMut<DbType>>
     SnapshotMptTraitRead for SnapshotMpt<DbType, BorrowType>
 {
-    fn get_merkle_root(&self) -> MerkleHash {
-        self.get_merkle_root_impl()
-    }
+    fn get_merkle_root(&self) -> MerkleHash { self.get_merkle_root_impl() }
 
     fn load_node(
         &mut self, path: &dyn CompressedPathTrait,

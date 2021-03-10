@@ -48,7 +48,8 @@ impl Block {
     pub fn new_with_rlp_size(
         block_header: BlockHeader, transactions: Vec<Arc<SignedTransaction>>,
         rlp_size: Option<usize>, rlp_size_with_public: Option<usize>,
-    ) -> Self {
+    ) -> Self
+    {
         let approximated_rlp_size = match rlp_size {
             Some(size) => size,
             None => transactions
@@ -71,14 +72,10 @@ impl Block {
         }
     }
 
-    pub fn hash(&self) -> H256 {
-        self.block_header.hash()
-    }
+    pub fn hash(&self) -> H256 { self.block_header.hash() }
 
     /// Approximated rlp size of the block.
-    pub fn approximated_rlp_size(&self) -> usize {
-        self.approximated_rlp_size
-    }
+    pub fn approximated_rlp_size(&self) -> usize { self.approximated_rlp_size }
 
     /// Approximated rlp size of block with transaction public key.
     pub fn approximated_rlp_size_with_public(&self) -> usize {
@@ -261,9 +258,7 @@ impl CompactBlock {
         self.tx_short_ids.len() / CompactBlock::SHORT_ID_SIZE_IN_BYTES
     }
 
-    pub fn hash(&self) -> H256 {
-        self.block_header.hash()
-    }
+    pub fn hash(&self) -> H256 { self.block_header.hash() }
 
     pub fn get_shortid_key(header: &BlockHeader, nonce: &u64) -> (u64, u64) {
         let mut stream = RlpStream::new();
@@ -295,9 +290,7 @@ impl CompactBlock {
         short_ids
     }
 
-    pub fn to_u16(v1: u8, v2: u8) -> u16 {
-        ((v1 as u16) << 8) + v2 as u16
-    }
+    pub fn to_u16(v1: u8, v2: u8) -> u16 { ((v1 as u16) << 8) + v2 as u16 }
 
     pub fn to_u32(v1: u8, v2: u8, v3: u8, v4: u8) -> u32 {
         ((v1 as u32) << 24)

@@ -37,13 +37,9 @@ impl MockStorage {
         }
     }
 
-    pub fn get_num_reads(&self) -> u64 {
-        self.num_reads.borrow().clone()
-    }
+    pub fn get_num_reads(&self) -> u64 { self.num_reads.borrow().clone() }
 
-    pub fn get_num_writes(&self) -> u64 {
-        self.num_writes.borrow().clone()
-    }
+    pub fn get_num_writes(&self) -> u64 { self.num_writes.borrow().clone() }
 }
 
 #[allow(unused)]
@@ -118,19 +114,13 @@ impl StorageStateTrait for MockStorage {
 type StateDbTest = StateDbGeneric<MockStorage>;
 
 // convert `key` to storage interface format
-fn storage_key(key: &'static [u8]) -> StorageKey {
-    StorageKey::AccountKey(key)
-}
+fn storage_key(key: &'static [u8]) -> StorageKey { StorageKey::AccountKey(key) }
 
 // convert `key` to raw storage format
-fn key(key: &'static [u8]) -> Vec<u8> {
-    storage_key(key).to_key_bytes()
-}
+fn key(key: &'static [u8]) -> Vec<u8> { storage_key(key).to_key_bytes() }
 
 // convert `value` to raw storage format
-fn value(value: &'static [u8]) -> StorageValue {
-    value.into()
-}
+fn value(value: &'static [u8]) -> StorageValue { value.into() }
 
 fn init_state_db() -> StateDbTest {
     let mut contents = RawStorage::new();

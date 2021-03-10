@@ -44,12 +44,9 @@ impl<T: Default + MallocSizeOf> MallocSizeOf for Peers<T> {
 }
 
 impl<T> Peers<T>
-where
-    T: Default,
+where T: Default
 {
-    pub fn new() -> Peers<T> {
-        Self::default()
-    }
+    pub fn new() -> Peers<T> { Self::default() }
 
     pub fn get(&self, peer: &NodeId) -> Option<Arc<RwLock<T>>> {
         self.0.read().get(&peer).cloned()
@@ -62,22 +59,16 @@ where
             .or_insert(Arc::new(RwLock::new(T::default())));
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.0.read().is_empty()
-    }
+    pub fn is_empty(&self) -> bool { self.0.read().is_empty() }
 
     pub fn contains(&self, peer: &NodeId) -> bool {
         self.0.read().contains_key(&peer)
     }
 
-    pub fn remove(&self, peer: &NodeId) {
-        self.0.write().remove(&peer);
-    }
+    pub fn remove(&self, peer: &NodeId) { self.0.write().remove(&peer); }
 
     pub fn all_peers_satisfying<F>(&self, mut predicate: F) -> Vec<NodeId>
-    where
-        F: FnMut(&mut T) -> bool,
-    {
+    where F: FnMut(&mut T) -> bool {
         self.0
             .read()
             .iter()
@@ -92,9 +83,7 @@ where
     }
 
     pub fn fold<B, F>(&self, init: B, f: F) -> B
-    where
-        F: FnMut(B, &Arc<RwLock<T>>) -> B,
-    {
+    where F: FnMut(B, &Arc<RwLock<T>>) -> B {
         self.0.write().values().fold(init, f)
     }
 }

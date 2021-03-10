@@ -55,13 +55,13 @@ impl<T: MallocSizeOf + Eq + Hash> MallocSizeOf for CacheManager<T> {
 }
 
 impl<T> CacheManager<T>
-where
-    T: Eq + Hash,
+where T: Eq + Hash
 {
     pub fn new(
         pref_cache_size: usize, max_cache_size: usize,
         bytes_per_cache_entry: usize,
-    ) -> Self {
+    ) -> Self
+    {
         CacheManager {
             pref_cache_size,
             max_cache_size,
@@ -93,9 +93,7 @@ where
     /// of the cache.
     pub fn collect_garbage<F>(
         &mut self, current_size: usize, mut notify_unused: F,
-    ) where
-        F: FnMut(HashSet<T>) -> usize,
-    {
+    ) where F: FnMut(HashSet<T>) -> usize {
         if current_size < self.pref_cache_size {
             self.rotate_cache_if_needed();
             return;

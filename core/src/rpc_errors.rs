@@ -32,9 +32,7 @@ pub type BoxFuture<T> = Box<
 >;
 
 impl From<JsonRpcError> for Error {
-    fn from(j: JsonRpcError) -> Self {
-        ErrorKind::JsonRpcError(j).into()
-    }
+    fn from(j: JsonRpcError) -> Self { ErrorKind::JsonRpcError(j).into() }
 }
 
 pub fn invalid_params_check<T, E: Display>(

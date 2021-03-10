@@ -80,18 +80,14 @@ pub enum Params {
 }
 
 impl Default for Params {
-    fn default() -> Self {
-        Params::None
-    }
+    fn default() -> Self { Params::None }
 }
 
 impl<'a> Deserialize<'a> for Params {
     fn deserialize<D>(
         deserializer: D,
     ) -> ::std::result::Result<Params, D::Error>
-    where
-        D: Deserializer<'a>,
-    {
+    where D: Deserializer<'a> {
         let v: Value = Deserialize::deserialize(deserializer)?;
 
         if v.is_null() {

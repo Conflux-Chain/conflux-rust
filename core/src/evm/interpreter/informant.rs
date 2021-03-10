@@ -29,9 +29,7 @@ mod inner {
 
     pub struct EvmInformant;
     impl EvmInformant {
-        pub fn new(_depth: usize) -> Self {
-            EvmInformant {}
-        }
+        pub fn new(_depth: usize) -> Self { EvmInformant {} }
 
         pub fn done(&mut self) {}
     }
@@ -98,7 +96,8 @@ mod inner {
         pub fn before_instruction<Cost: CostType>(
             &mut self, pc: usize, instruction: Instruction,
             info: &InstructionInfo, current_gas: &Cost, stack: &Stack<U256>,
-        ) {
+        )
+        {
             let time = self.last_instruction.elapsed();
             self.last_instruction = Instant::now();
 

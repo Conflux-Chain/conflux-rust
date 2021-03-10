@@ -27,9 +27,7 @@ pub enum Cipher {
 }
 
 impl From<json::Aes128Ctr> for Aes128Ctr {
-    fn from(json: json::Aes128Ctr) -> Self {
-        Aes128Ctr { iv: json.iv.into() }
-    }
+    fn from(json: json::Aes128Ctr) -> Self { Aes128Ctr { iv: json.iv.into() } }
 }
 
 impl Into<json::Aes128Ctr> for Aes128Ctr {

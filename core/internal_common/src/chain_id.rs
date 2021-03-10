@@ -7,9 +7,7 @@ pub struct ChainIdParamsDeprecated {
 
 impl ChainIdParamsDeprecated {
     /// The function return the chain_id with given parameters
-    pub fn get_chain_id(&self, _epoch_number: u64) -> u32 {
-        self.chain_id
-    }
+    pub fn get_chain_id(&self, _epoch_number: u64) -> u32 { self.chain_id }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, RlpEncodable, RlpDecodable)]

@@ -21,9 +21,7 @@ impl<T> BitParIter<T> {
     /// Default layer split amount is 3.
     ///
     /// [`.par_iter()`]: ../../trait.BitSetLike.html#method.par_iter
-    pub fn new(set: T) -> Self {
-        BitParIter(set, 3)
-    }
+    pub fn new(set: T) -> Self { BitParIter(set, 3) }
 
     /// Sets how many layers are split when forking.
     ///
@@ -56,15 +54,12 @@ impl<T> BitParIter<T> {
 }
 
 impl<T> ParallelIterator for BitParIter<T>
-where
-    T: BitSetLike + Send + Sync,
+where T: BitSetLike + Send + Sync
 {
     type Item = Index;
 
     fn drive_unindexed<C>(self, consumer: C) -> C::Result
-    where
-        C: UnindexedConsumer<Self::Item>,
-    {
+    where C: UnindexedConsumer<Self::Item> {
         bridge_unindexed(BitProducer((&self.0).iter(), self.1), consumer)
     }
 }
@@ -76,8 +71,7 @@ where
 pub struct BitProducer<'a, T: 'a + Send + Sync>(pub BitIter<&'a T>, pub u8);
 
 impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
-where
-    T: BitSetLike,
+where T: BitSetLike
 {
     type Item = Index;
 
@@ -176,9 +170,7 @@ where
     }
 
     fn fold_with<F>(self, folder: F) -> F
-    where
-        F: Folder<Self::Item>,
-    {
+    where F: Folder<Self::Item> {
         folder.consume_iter(self.0)
     }
 }
@@ -244,17 +236,11 @@ mod test_bit_producer {
     }
 
     #[test]
-    fn max_3_splitting_of_two_top_bits() {
-        test_splitting(3);
-    }
+    fn max_3_splitting_of_two_top_bits() { test_splitting(3); }
 
     #[test]
-    fn max_2_splitting_of_two_top_bits() {
-        test_splitting(2);
-    }
+    fn max_2_splitting_of_two_top_bits() { test_splitting(2); }
 
     #[test]
-    fn max_1_splitting_of_two_top_bits() {
-        test_splitting(1);
-    }
+    fn max_1_splitting_of_two_top_bits() { test_splitting(1); }
 }

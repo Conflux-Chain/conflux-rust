@@ -107,7 +107,8 @@ impl<
     pub fn new(
         cache_start_size: u32, cache_size: u32, idle_size: u32,
         _node_ref_map_vec_size: u32, cache_algorithm: CacheAlgorithmT,
-    ) -> Self {
+    ) -> Self
+    {
         let size_limit = cache_size + idle_size;
         Self {
             size_limit,
@@ -215,7 +216,8 @@ impl<
             >,
             &'a TrieNodeCell<CacheAlgoDataT>,
         >,
-    > {
+    >
+    {
         self.db_load_counter.fetch_add(1, Ordering::Relaxed);
         // We never save null node in db.
         let rlp_bytes = db.get_mut_with_number_key(db_key.into())?.unwrap();
@@ -280,7 +282,8 @@ impl<
         node_ref_map: &mut NodeRefMapDeltaMpts<CacheAlgoDataT>,
         cache_index: CacheAlgorithmT::CacheIndex,
         cache_info: CacheableNodeRefDeltaMpt<CacheAlgoDataT>,
-    ) {
+    )
+    {
         cache_algorithm
             .delete(cache_index, &mut NodeCacheUtil::new(self, node_ref_map));
 
@@ -296,7 +299,8 @@ impl<
         &self,
         cache_mut: &mut CacheManagerDeltaMpts<CacheAlgoDataT, CacheAlgorithmT>,
         evicted_cache_index: CacheAlgorithmT::CacheIndex,
-    ) {
+    )
+    {
         // Remove evicted content from cache.
         let cache_info =
             cache_mut.node_ref_map.delete(evicted_cache_index).unwrap();
@@ -312,7 +316,8 @@ impl<
         &self,
         cache_mut: &mut CacheManagerDeltaMpts<CacheAlgoDataT, CacheAlgorithmT>,
         evicted_keep_cache_algo_data_cache_index: CacheAlgorithmT::CacheIndex,
-    ) {
+    )
+    {
         // Remove evicted content from cache.
         // Safe to unwrap because it's guaranteed by cache algorithm that the
         // slot exists.
@@ -342,7 +347,8 @@ impl<
         &self,
         cache_mut: &mut CacheManagerDeltaMpts<CacheAlgoDataT, CacheAlgorithmT>,
         cache_index: CacheAlgorithmT::CacheIndex,
-    ) {
+    )
+    {
         let cache_access_result;
         {
             let mut cache_store_util =
@@ -383,7 +389,8 @@ impl<
     pub unsafe fn dirty_node_as_mut_unchecked<'a>(
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: &mut NodeRefDeltaMpt,
-    ) -> &'a mut MemOptimizedTrieNode<CacheAlgoDataT> {
+    ) -> &'a mut MemOptimizedTrieNode<CacheAlgoDataT>
+    {
         match node {
             NodeRefDeltaMpt::Committed { db_key: _ } => {
                 unreachable_unchecked();
@@ -417,7 +424,8 @@ impl<
             >,
             &'a TrieNodeCell<CacheAlgoDataT>,
         >,
-    > {
+    >
+    {
         match node {
             NodeRefDeltaMpt::Committed { ref db_key } => {
                 let mut cache_manager_mut_wrapped = Some(cache_manager.lock());
@@ -503,7 +511,8 @@ impl<
     unsafe fn get_cached_node_mut_unchecked<'a>(
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         slot: ActualSlabIndex,
-    ) -> &'a mut MemOptimizedTrieNode<CacheAlgoDataT> {
+    ) -> &'a mut MemOptimizedTrieNode<CacheAlgoDataT>
+    {
         NodeMemoryManager::<CacheAlgoDataT, CacheAlgorithmT>::get_in_memory_node_mut(
             &allocator,
             slot as usize,
@@ -530,7 +539,8 @@ impl<
             >,
             &'a TrieNodeCell<CacheAlgoDataT>,
         >,
-    > {
+    >
+    {
         match node {
             NodeRefDeltaMpt::Committed { db_key: _ } => unsafe {
                 self.load_unowned_node_cell_internal_unchecked(
@@ -574,7 +584,8 @@ impl<
             >,
             &'a MemOptimizedTrieNode<CacheAlgoDataT>,
         >,
-    > {
+    >
+    {
         self.node_cell_with_cache_manager(
             allocator,
             node,
@@ -684,7 +695,8 @@ impl<
             CacheAlgorithmT,
         >,
         node_ref_map: &'a mut NodeRefMapDeltaMpts<CacheAlgoDataT>,
-    ) -> Self {
+    ) -> Self
+    {
         NodeCacheUtil {
             node_memory_manager,
             node_ref_map,
@@ -728,7 +740,8 @@ impl<
     fn set(
         &mut self, cache_index: Self::ElementIndex,
         algo_data: &Self::CacheAlgoData,
-    ) {
+    )
+    {
         match self
             .node_ref_map
             .get_cache_info(cache_index)

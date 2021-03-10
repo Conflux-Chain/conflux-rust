@@ -193,7 +193,8 @@ impl StratumJobDispatcher {
     fn new(
         solution_sender: mpsc::Sender<ProofOfWorkSolution>,
         pow: Arc<PowComputer>, pow_window_size: usize,
-    ) -> StratumJobDispatcher {
+    ) -> StratumJobDispatcher
+    {
         StratumJobDispatcher {
             recent_problems: Mutex::new(vec![]),
             solution_sender: Mutex::new(solution_sender),
@@ -245,9 +246,7 @@ impl From<StratumServiceError> for Error {
 }
 
 impl From<AddrParseError> for Error {
-    fn from(err: AddrParseError) -> Error {
-        Error::Address(err)
-    }
+    fn from(err: AddrParseError) -> Error { Error::Address(err) }
 }
 
 impl NotifyWork for Stratum {
@@ -269,7 +268,8 @@ impl Stratum {
     pub fn start(
         options: &Options, pow: Arc<PowComputer>, pow_window_size: usize,
         solution_sender: mpsc::Sender<ProofOfWorkSolution>,
-    ) -> Result<Stratum, Error> {
+    ) -> Result<Stratum, Error>
+    {
         use std::net::IpAddr;
 
         let dispatcher = Arc::new(StratumJobDispatcher::new(

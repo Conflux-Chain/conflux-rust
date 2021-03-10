@@ -42,9 +42,7 @@ fn secret_store_open_not_existing() {
     let _ = CfxStore::open(Box::new(dir)).unwrap();
 }
 
-fn random_secret() -> Secret {
-    Random.generate().unwrap().secret().clone()
-}
+fn random_secret() -> Secret { Random.generate().unwrap().secret().clone() }
 
 #[test]
 fn secret_store_create_account() {

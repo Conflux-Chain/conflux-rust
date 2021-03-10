@@ -19,9 +19,7 @@ pub struct NewBlocks {}
 impl NewBlocks {
     /// Constructor
     #[allow(dead_code)]
-    pub fn new() -> NewBlocks {
-        NewBlocks {}
-    }
+    pub fn new() -> NewBlocks { NewBlocks {} }
 }
 
 pub trait ChainNotify: Send + Sync {

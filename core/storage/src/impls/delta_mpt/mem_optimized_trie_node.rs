@@ -179,13 +179,9 @@ impl ValueSizeFieldConverter {
 }
 
 impl SizeFieldConverterTrait<u32> for ValueSizeFieldConverter {
-    fn max_size() -> usize {
-        Self::MAX_VALUE_SIZE
-    }
+    fn max_size() -> usize { Self::MAX_VALUE_SIZE }
 
-    fn is_size_over_limit(size: usize) -> bool {
-        size > Self::MAX_VALUE_SIZE
-    }
+    fn is_size_over_limit(size: usize) -> bool { size > Self::MAX_VALUE_SIZE }
 
     fn get(size_field: &u32) -> usize {
         if *size_field == Self::VALUE_TOMBSTONE {
@@ -195,15 +191,11 @@ impl SizeFieldConverterTrait<u32> for ValueSizeFieldConverter {
         }
     }
 
-    fn set(size_field: &mut u32, size: usize) {
-        *size_field = size as u32;
-    }
+    fn set(size_field: &mut u32, size: usize) { *size_field = size as u32; }
 }
 
 impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
-    pub fn get_compressed_path_size(&self) -> u16 {
-        self.path_size
-    }
+    pub fn get_compressed_path_size(&self) -> u16 { self.path_size }
 
     pub fn copy_compressed_path<CompressedPath: CompressedPathTrait>(
         &mut self, new_path: CompressedPath,
@@ -297,9 +289,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeTrait
         )
     }
 
-    fn has_value(&self) -> bool {
-        self.value_size > 0
-    }
+    fn has_value(&self) -> bool { self.value_size > 0 }
 
     fn get_children_count(&self) -> u8 {
         self.children_table.get_children_count()
@@ -324,10 +314,8 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeTrait
     }
 
     unsafe fn add_new_child_unchecked<T>(&mut self, child_index: u8, child: T)
-    where
-        ChildrenTableItem<NodeRefDeltaMptCompact>:
-            WrappedCreateFrom<T, NodeRefDeltaMptCompact>,
-    {
+    where ChildrenTableItem<NodeRefDeltaMptCompact>:
+            WrappedCreateFrom<T, NodeRefDeltaMptCompact> {
         self.children_table = CompactedChildrenTable::insert_child_unchecked(
             self.children_table.to_ref(),
             child_index,
@@ -342,10 +330,8 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeTrait
     }
 
     unsafe fn replace_child_unchecked<T>(&mut self, child_index: u8, child: T)
-    where
-        ChildrenTableItem<NodeRefDeltaMptCompact>:
-            WrappedCreateFrom<T, NodeRefDeltaMptCompact>,
-    {
+    where ChildrenTableItem<NodeRefDeltaMptCompact>:
+            WrappedCreateFrom<T, NodeRefDeltaMptCompact> {
         self.children_table.set_child_unchecked(
             child_index,
             ChildrenTableItem::<NodeRefDeltaMptCompact>::take(child),
@@ -406,7 +392,8 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
     pub fn new(
         merkle: MerkleHash, children_table: ChildrenTableDeltaMpt,
         maybe_value: Option<Box<[u8]>>, compressed_path: CompressedPathRaw,
-    ) -> MemOptimizedTrieNode<CacheAlgoDataT> {
+    ) -> MemOptimizedTrieNode<CacheAlgoDataT>
+    {
         let mut ret = MemOptimizedTrieNode::default();
 
         ret.merkle_hash = merkle;
@@ -433,7 +420,8 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
         &self, new_value: Option<Option<Box<[u8]>>>,
         new_path: Option<CompressedPathRaw>,
         children_table: Option<ChildrenTableDeltaMpt>,
-    ) -> MemOptimizedTrieNode<CacheAlgoDataT> {
+    ) -> MemOptimizedTrieNode<CacheAlgoDataT>
+    {
         let mut ret = MemOptimizedTrieNode::default();
 
         match new_value {
@@ -528,9 +516,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
         return TrieNodeAction::Modify;
     }
 
-    pub fn get_merkle(&self) -> &MerkleHash {
-        &self.merkle_hash
-    }
+    pub fn get_merkle(&self) -> &MerkleHash { &self.merkle_hash }
 
     pub fn set_merkle(&mut self, merkle: &MerkleHash) {
         self.merkle_hash = merkle.clone();
@@ -542,9 +528,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> EntryTrait
 {
     type EntryType = MemOptimizedTrieNode<CacheAlgoDataT>;
 
-    fn from_value(value: Self) -> Self {
-        value
-    }
+    fn from_value(value: Self) -> Self { value }
 
     fn from_vacant_index(next: usize) -> Self {
         Self {
@@ -579,9 +563,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> EntryTrait
             as usize
     }
 
-    fn get_occupied_ref(&self) -> &MemOptimizedTrieNode<CacheAlgoDataT> {
-        self
-    }
+    fn get_occupied_ref(&self) -> &MemOptimizedTrieNode<CacheAlgoDataT> { self }
 
     fn get_occupied_mut(
         &mut self,

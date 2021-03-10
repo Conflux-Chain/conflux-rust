@@ -102,9 +102,7 @@ impl SocketWorker {
     }
 
     fn do_work<Message>(work: Work<Message>, channel: IoChannel<Message>)
-    where
-        Message: Send + Sync + 'static,
-    {
+    where Message: Send + Sync + 'static {
         match work.work_type {
             WorkType::Message(message) => {
                 work.handler.message(
@@ -207,9 +205,7 @@ impl Worker {
     }
 
     fn do_work<Message>(work: Work<Message>, channel: IoChannel<Message>)
-    where
-        Message: Send + Sync + 'static,
-    {
+    where Message: Send + Sync + 'static {
         match work.work_type {
             WorkType::Timeout => {
                 work.handler.timeout(

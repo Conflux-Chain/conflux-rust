@@ -73,9 +73,7 @@ pub struct LocalizedLogEntry {
 impl Deref for LocalizedLogEntry {
     type Target = LogEntry;
 
-    fn deref(&self) -> &Self::Target {
-        &self.entry
-    }
+    fn deref(&self) -> &Self::Target { &self.entry }
 }
 
 #[cfg(test)]

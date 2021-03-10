@@ -22,24 +22,16 @@ pub struct BitSetAnd<A: BitSetLike, B: BitSetLike>(pub A, pub B);
 
 impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetAnd<A, B> {
     #[inline]
-    fn layer3(&self) -> usize {
-        self.0.layer3() & self.1.layer3()
-    }
+    fn layer3(&self) -> usize { self.0.layer3() & self.1.layer3() }
 
     #[inline]
-    fn layer2(&self, i: usize) -> usize {
-        self.0.layer2(i) & self.1.layer2(i)
-    }
+    fn layer2(&self, i: usize) -> usize { self.0.layer2(i) & self.1.layer2(i) }
 
     #[inline]
-    fn layer1(&self, i: usize) -> usize {
-        self.0.layer1(i) & self.1.layer1(i)
-    }
+    fn layer1(&self, i: usize) -> usize { self.0.layer1(i) & self.1.layer1(i) }
 
     #[inline]
-    fn layer0(&self, i: usize) -> usize {
-        self.0.layer0(i) & self.1.layer0(i)
-    }
+    fn layer0(&self, i: usize) -> usize { self.0.layer0(i) & self.1.layer0(i) }
 
     #[inline]
     fn contains(&self, i: Index) -> bool {
@@ -72,24 +64,16 @@ pub struct BitSetOr<A: BitSetLike, B: BitSetLike>(pub A, pub B);
 
 impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetOr<A, B> {
     #[inline]
-    fn layer3(&self) -> usize {
-        self.0.layer3() | self.1.layer3()
-    }
+    fn layer3(&self) -> usize { self.0.layer3() | self.1.layer3() }
 
     #[inline]
-    fn layer2(&self, i: usize) -> usize {
-        self.0.layer2(i) | self.1.layer2(i)
-    }
+    fn layer2(&self, i: usize) -> usize { self.0.layer2(i) | self.1.layer2(i) }
 
     #[inline]
-    fn layer1(&self, i: usize) -> usize {
-        self.0.layer1(i) | self.1.layer1(i)
-    }
+    fn layer1(&self, i: usize) -> usize { self.0.layer1(i) | self.1.layer1(i) }
 
     #[inline]
-    fn layer0(&self, i: usize) -> usize {
-        self.0.layer0(i) | self.1.layer0(i)
-    }
+    fn layer0(&self, i: usize) -> usize { self.0.layer0(i) | self.1.layer0(i) }
 
     #[inline]
     fn contains(&self, i: Index) -> bool {
@@ -122,29 +106,19 @@ pub struct BitSetNot<A: BitSetLike>(pub A);
 
 impl<A: BitSetLike> BitSetLike for BitSetNot<A> {
     #[inline]
-    fn layer3(&self) -> usize {
-        !0
-    }
+    fn layer3(&self) -> usize { !0 }
 
     #[inline]
-    fn layer2(&self, _: usize) -> usize {
-        !0
-    }
+    fn layer2(&self, _: usize) -> usize { !0 }
 
     #[inline]
-    fn layer1(&self, _: usize) -> usize {
-        !0
-    }
+    fn layer1(&self, _: usize) -> usize { !0 }
 
     #[inline]
-    fn layer0(&self, i: usize) -> usize {
-        !self.0.layer0(i)
-    }
+    fn layer0(&self, i: usize) -> usize { !self.0.layer0(i) }
 
     #[inline]
-    fn contains(&self, i: Index) -> bool {
-        !self.0.contains(i)
-    }
+    fn contains(&self, i: Index) -> bool { !self.0.contains(i) }
 }
 
 /// `BitSetXor` takes two [`BitSetLike`] items, and merges the masks
@@ -208,29 +182,19 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetXor<A, B> {
 pub struct BitSetAll;
 impl BitSetLike for BitSetAll {
     #[inline]
-    fn layer3(&self) -> usize {
-        usize::MAX
-    }
+    fn layer3(&self) -> usize { usize::MAX }
 
     #[inline]
-    fn layer2(&self, _id: usize) -> usize {
-        usize::MAX
-    }
+    fn layer2(&self, _id: usize) -> usize { usize::MAX }
 
     #[inline]
-    fn layer1(&self, _id: usize) -> usize {
-        usize::MAX
-    }
+    fn layer1(&self, _id: usize) -> usize { usize::MAX }
 
     #[inline]
-    fn layer0(&self, _id: usize) -> usize {
-        usize::MAX
-    }
+    fn layer0(&self, _id: usize) -> usize { usize::MAX }
 
     #[inline]
-    fn contains(&self, _i: Index) -> bool {
-        true
-    }
+    fn contains(&self, _i: Index) -> bool { true }
 }
 
 macro_rules! operator {
@@ -306,9 +270,7 @@ macro_rules! iterator {
     ($bitset:ident) => {
         impl FromIterator<Index> for $bitset {
             fn from_iter<T>(iter: T) -> Self
-            where
-                T: IntoIterator<Item = Index>,
-            {
+            where T: IntoIterator<Item = Index> {
                 let mut bitset = $bitset::new();
                 for item in iter {
                     bitset.add(item);
@@ -319,9 +281,7 @@ macro_rules! iterator {
 
         impl<'a> FromIterator<&'a Index> for $bitset {
             fn from_iter<T>(iter: T) -> Self
-            where
-                T: IntoIterator<Item = &'a Index>,
-            {
+            where T: IntoIterator<Item = &'a Index> {
                 let mut bitset = $bitset::new();
                 for item in iter {
                     bitset.add(*item);
@@ -332,9 +292,7 @@ macro_rules! iterator {
 
         impl Extend<Index> for $bitset {
             fn extend<T>(&mut self, iter: T)
-            where
-                T: IntoIterator<Item = Index>,
-            {
+            where T: IntoIterator<Item = Index> {
                 for item in iter {
                     self.add(item);
                 }
@@ -343,9 +301,7 @@ macro_rules! iterator {
 
         impl<'a> Extend<&'a Index> for $bitset {
             fn extend<T>(&mut self, iter: T)
-            where
-                T: IntoIterator<Item = &'a Index>,
-            {
+            where T: IntoIterator<Item = &'a Index> {
                 for item in iter {
                     self.add(*item);
                 }

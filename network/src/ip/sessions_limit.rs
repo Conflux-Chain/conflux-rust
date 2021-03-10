@@ -7,18 +7,10 @@ use std::{
 /// SessionIpLimit is used to limits the number of sessions for a single IP
 /// address or subnet.
 pub trait SessionIpLimit: Send + Sync {
-    fn contains(&self, _ip: &IpAddr) -> bool {
-        true
-    }
-    fn is_allowed(&self, _ip: &IpAddr) -> bool {
-        true
-    }
-    fn add(&mut self, _ip: IpAddr) -> bool {
-        true
-    }
-    fn remove(&mut self, _ip: &IpAddr) -> bool {
-        true
-    }
+    fn contains(&self, _ip: &IpAddr) -> bool { true }
+    fn is_allowed(&self, _ip: &IpAddr) -> bool { true }
+    fn add(&mut self, _ip: IpAddr) -> bool { true }
+    fn remove(&mut self, _ip: &IpAddr) -> bool { true }
 }
 
 #[derive(Default, Debug, Clone, PartialEq)]
@@ -116,9 +108,7 @@ impl<T: Hash + Eq> GenericLimit<T> {
         }
     }
 
-    fn contains(&self, key: &T) -> bool {
-        self.items.contains_key(key)
-    }
+    fn contains(&self, key: &T) -> bool { self.items.contains_key(key) }
 
     fn is_allowed(&self, key: &T) -> bool {
         match self.items.get(key) {
@@ -173,21 +163,13 @@ impl SingleIpLimit {
 }
 
 impl SessionIpLimit for SingleIpLimit {
-    fn contains(&self, ip: &IpAddr) -> bool {
-        self.inner.contains(ip)
-    }
+    fn contains(&self, ip: &IpAddr) -> bool { self.inner.contains(ip) }
 
-    fn is_allowed(&self, ip: &IpAddr) -> bool {
-        self.inner.is_allowed(ip)
-    }
+    fn is_allowed(&self, ip: &IpAddr) -> bool { self.inner.is_allowed(ip) }
 
-    fn add(&mut self, ip: IpAddr) -> bool {
-        self.inner.add(ip)
-    }
+    fn add(&mut self, ip: IpAddr) -> bool { self.inner.add(ip) }
 
-    fn remove(&mut self, ip: &IpAddr) -> bool {
-        self.inner.remove(ip)
-    }
+    fn remove(&mut self, ip: &IpAddr) -> bool { self.inner.remove(ip) }
 }
 
 struct SubnetLimit {
@@ -271,9 +253,7 @@ mod tests {
     use super::{new_session_ip_limit, SessionIpLimit};
     use std::{convert::TryInto, net::IpAddr, str::FromStr};
 
-    fn new_ip(ip: &'static str) -> IpAddr {
-        IpAddr::from_str(ip).unwrap()
-    }
+    fn new_ip(ip: &'static str) -> IpAddr { IpAddr::from_str(ip).unwrap() }
 
     fn new_limit(config: &str) -> Box<dyn SessionIpLimit> {
         let config: String = config.into();

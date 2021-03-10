@@ -24,16 +24,12 @@ pub struct Bytes(Vec<u8>);
 impl ops::Deref for Bytes {
     type Target = [u8];
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+    fn deref(&self) -> &Self::Target { &self.0 }
 }
 
 impl<'a> Deserialize<'a> for Bytes {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'a>,
-    {
+    where D: Deserializer<'a> {
         let s = String::deserialize(deserializer)?;
         let data = s
             .from_hex()
@@ -44,9 +40,7 @@ impl<'a> Deserialize<'a> for Bytes {
 
 impl Serialize for Bytes {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    where S: Serializer {
         serializer.serialize_str(&self.0.to_hex::<String>())
     }
 }
@@ -54,9 +48,7 @@ impl Serialize for Bytes {
 impl str::FromStr for Bytes {
     type Err = FromHexError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.from_hex().map(Bytes)
-    }
+    fn from_str(s: &str) -> Result<Self, Self::Err> { s.from_hex().map(Bytes) }
 }
 
 impl From<&'static str> for Bytes {
@@ -68,13 +60,9 @@ impl From<&'static str> for Bytes {
 }
 
 impl From<Vec<u8>> for Bytes {
-    fn from(v: Vec<u8>) -> Self {
-        Bytes(v)
-    }
+    fn from(v: Vec<u8>) -> Self { Bytes(v) }
 }
 
 impl From<Bytes> for Vec<u8> {
-    fn from(b: Bytes) -> Self {
-        b.0
-    }
+    fn from(b: Bytes) -> Self { b.0 }
 }

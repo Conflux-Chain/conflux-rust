@@ -66,20 +66,15 @@ impl fmt::Display for IoError {
 }
 
 impl error::Error for IoError {
-    fn description(&self) -> &str {
-        "IO error"
-    }
+    fn description(&self) -> &str { "IO error" }
 }
 
 impl From<::std::io::Error> for IoError {
-    fn from(err: ::std::io::Error) -> IoError {
-        IoError::StdIo(err)
-    }
+    fn from(err: ::std::io::Error) -> IoError { IoError::StdIo(err) }
 }
 
 impl<Message> From<NotifyError<service_mio::IoMessage<Message>>> for IoError
-where
-    Message: Send,
+where Message: Send
 {
     fn from(_err: NotifyError<service_mio::IoMessage<Message>>) -> IoError {
         IoError::Mio(::std::io::Error::new(
@@ -93,8 +88,7 @@ where
 /// All the handler function are called from within IO event loop.
 /// `Message` type is used as notification data
 pub trait IoHandler<Message>: Send + Sync
-where
-    Message: Send + Sync + 'static,
+where Message: Send + Sync + 'static
 {
     /// Initialize the handler
     fn initialize(&self, _io: &IoContext<Message>) {}

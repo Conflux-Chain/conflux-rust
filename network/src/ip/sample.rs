@@ -58,9 +58,7 @@ impl<K: Hash + Eq + Clone, V> SampleHashMap<K, V> {
         Some(&self.items[index].1)
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.items.is_empty()
-    }
+    pub fn is_empty(&self) -> bool { self.items.is_empty() }
 }
 
 /// HashSet that provide sampling in O(1) complexity.
@@ -107,17 +105,11 @@ impl<T: Hash + Eq + Clone> SampleHashSet<T> {
     }
 
     #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.items.is_empty()
-    }
+    pub fn is_empty(&self) -> bool { self.items.is_empty() }
 
     #[inline]
-    pub fn len(&self) -> usize {
-        self.items.len()
-    }
+    pub fn len(&self) -> usize { self.items.len() }
 
     #[inline]
-    pub fn iter(&self) -> Iter<T> {
-        self.items.iter()
-    }
+    pub fn iter(&self) -> Iter<T> { self.items.iter() }
 }

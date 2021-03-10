@@ -12,9 +12,7 @@ pub struct EpochExecutionCommitment {
 }
 
 impl MallocSizeOf for EpochExecutionCommitment {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
-        0
-    }
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
 
 impl_db_encoding_as_rlp!(EpochExecutionCommitment);

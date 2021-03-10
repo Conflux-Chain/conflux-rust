@@ -100,7 +100,8 @@ impl Session {
         io: &IoContext<Message>, socket: TcpStream, address: SocketAddr,
         id: Option<&NodeId>, peer_header_version: u8, token: StreamToken,
         host: &NetworkServiceInner,
-    ) -> Result<Session, Error> {
+    ) -> Result<Session, Error>
+    {
         let originated = id.is_some();
 
         let mut handshake = Handshake::new(token, id, socket);
@@ -131,25 +132,15 @@ impl Session {
     }
 
     /// Get id of the remote peer
-    pub fn id(&self) -> Option<&NodeId> {
-        self.metadata.id.as_ref()
-    }
+    pub fn id(&self) -> Option<&NodeId> { self.metadata.id.as_ref() }
 
-    pub fn originated(&self) -> bool {
-        self.metadata.originated
-    }
+    pub fn originated(&self) -> bool { self.metadata.originated }
 
-    pub fn is_ready(&self) -> bool {
-        self.had_hello.is_some()
-    }
+    pub fn is_ready(&self) -> bool { self.had_hello.is_some() }
 
-    pub fn expired(&self) -> bool {
-        self.expired.is_some()
-    }
+    pub fn expired(&self) -> bool { self.expired.is_some() }
 
-    pub fn set_expired(&mut self) {
-        self.expired = Some(Instant::now());
-    }
+    pub fn set_expired(&mut self) { self.expired = Some(Instant::now()); }
 
     pub fn done(&self) -> bool {
         self.expired() && !self.connection().is_sending()
@@ -169,13 +160,9 @@ impl Session {
         }
     }
 
-    pub fn token(&self) -> StreamToken {
-        self.connection().token()
-    }
+    pub fn token(&self) -> StreamToken { self.connection().token() }
 
-    pub fn address(&self) -> SocketAddr {
-        self.address
-    }
+    pub fn address(&self) -> SocketAddr { self.address }
 
     /// Register event loop for the underlying connection.
     /// If session expired, no effect taken.
@@ -210,9 +197,7 @@ impl Session {
     fn complete_handshake<Message>(
         &mut self, io: &IoContext<Message>, host: &NetworkServiceInner,
     ) -> Result<(), Error>
-    where
-        Message: Send + Sync + Clone,
-    {
+    where Message: Send + Sync + Clone {
         let wrapper = match self.state {
             State::Handshake(ref mut h) => h,
             State::Session(_) => panic!("Unexpected session state"),
@@ -500,7 +485,8 @@ impl Session {
     pub fn check_message_protocol_version(
         &self, protocol: Option<ProtocolId>,
         min_protocol_version: ProtocolVersion, mut msg: &[u8],
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    {
         // min_protocol_version is the version when the Message is introduced.
         // peer protocol version must be higher.
         if let Some(protocol) = protocol {
@@ -530,7 +516,8 @@ impl Session {
         &mut self, io: &IoContext<Message>, protocol: Option<ProtocolId>,
         min_proto_version: ProtocolVersion, packet_id: u8, data: Vec<u8>,
         priority: SendQueuePriority,
-    ) -> Result<SendQueueStatus, Error> {
+    ) -> Result<SendQueueStatus, Error>
+    {
         self.check_message_protocol_version(
             protocol.clone(),
             min_proto_version,
@@ -544,7 +531,8 @@ impl Session {
     pub fn send_packet_immediately(
         &mut self, protocol: Option<ProtocolId>,
         min_proto_version: ProtocolVersion, packet_id: u8, data: Vec<u8>,
-    ) -> Result<usize, Error> {
+    ) -> Result<usize, Error>
+    {
         self.check_message_protocol_version(
             protocol.clone(),
             min_proto_version,
@@ -669,9 +657,7 @@ struct MovableWrapper<T> {
 }
 
 impl<T> MovableWrapper<T> {
-    fn new(item: T) -> Self {
-        MovableWrapper { item: Some(item) }
-    }
+    fn new(item: T) -> Self { MovableWrapper { item: Some(item) } }
 
     fn get(&self) -> &T {
         match self.item {
@@ -730,7 +716,8 @@ impl SessionPacket {
     fn assemble(
         id: u8, header_version: u8, protocol: Option<ProtocolId>,
         mut data: Vec<u8>,
-    ) -> Vec<u8> {
+    ) -> Vec<u8>
+    {
         let mut protocol_flag = 0;
         if let Some(protocol) = protocol {
             data.extend_from_slice(&protocol);

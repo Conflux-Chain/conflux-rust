@@ -48,9 +48,7 @@ use std::process::Command;
 type DBError = String;
 type KeyValuePair = (Box<[u8]>, Box<[u8]>);
 fn other_io_err<E>(e: E) -> io::Error
-where
-    E: Into<Box<dyn error::Error + Send + Sync>>,
-{
+where E: Into<Box<dyn error::Error + Send + Sync>> {
     io::Error::new(io::ErrorKind::Other, e)
 }
 
@@ -77,9 +75,7 @@ pub struct CompactionProfile {
 
 impl Default for CompactionProfile {
     /// Default profile suitable for most storage
-    fn default() -> CompactionProfile {
-        CompactionProfile::ssd()
-    }
+    fn default() -> CompactionProfile { CompactionProfile::ssd() }
 }
 
 /// Given output of df command return Linux rotational flag file path.
@@ -139,9 +135,7 @@ impl CompactionProfile {
 
     /// Just default for other platforms.
     #[cfg(not(target_os = "linux"))]
-    pub fn auto(_db_path: &Path) -> CompactionProfile {
-        Self::default()
-    }
+    pub fn auto(_db_path: &Path) -> CompactionProfile { Self::default() }
 
     /// Default profile suitable for SSD storage
     pub fn ssd() -> CompactionProfile {
@@ -299,9 +293,7 @@ pub struct Database {
 
 // Compatible hack for KeyValueDB
 impl ParityMallocSizeOf for Database {
-    fn size_of(&self, _ops: &mut ParityMallocSizeOfOps) -> usize {
-        0
-    }
+    fn size_of(&self, _ops: &mut ParityMallocSizeOfOps) -> usize { 0 }
 }
 
 #[inline]
@@ -462,9 +454,7 @@ impl Database {
     }
 
     /// Helper to create new transaction for this database.
-    pub fn transaction(&self) -> DBTransaction {
-        DBTransaction::new()
-    }
+    pub fn transaction(&self) -> DBTransaction { DBTransaction::new() }
 
     /// Commit transaction to database.
     pub fn write_buffered(&self, tr: DBTransaction) {
@@ -729,9 +719,7 @@ impl KeyValueDB for Database {
         Database::write(self, transaction)
     }
 
-    fn flush(&self) -> io::Result<()> {
-        Database::flush(self)
-    }
+    fn flush(&self) -> io::Result<()> { Database::flush(self) }
 
     fn iter<'a>(
         &'a self, _col: u32,

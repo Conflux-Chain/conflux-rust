@@ -141,13 +141,11 @@ for<'a> KeyValueDbIterableTrait<'a, MptKeyValue, Error, [u8]>
  */
 // Rust compiler should improve so that we don't have to write this completely
 // redundant where clause.
-where
-    KvdbIterIterator<
+where KvdbIterIterator<
         MptKeyValue,
         [u8],
         SnapshotDbType::SnapshotKvdbIterTraitTag,
-    >: WrappedTrait<dyn FallibleIterator<Item = MptKeyValue, Error = Error>>,
-{
+    >: WrappedTrait<dyn FallibleIterator<Item = MptKeyValue, Error = Error>> {
     let mut mpt_kvs: Vec<MptKeyValue> = vec![];
     let mut key_value_iter = snapshot_db.snapshot_kv_iterator().unwrap().take();
     let mut kv_iter = key_value_iter

@@ -61,39 +61,27 @@ enum Error {
 }
 
 impl From<EthkeyError> for Error {
-    fn from(err: EthkeyError) -> Self {
-        Error::Ethkey(err)
-    }
+    fn from(err: EthkeyError) -> Self { Error::Ethkey(err) }
 }
 
 impl From<FromHexError> for Error {
-    fn from(err: FromHexError) -> Self {
-        Error::FromHex(err)
-    }
+    fn from(err: FromHexError) -> Self { Error::FromHex(err) }
 }
 
 impl From<ParseIntError> for Error {
-    fn from(err: ParseIntError) -> Self {
-        Error::ParseInt(err)
-    }
+    fn from(err: ParseIntError) -> Self { Error::ParseInt(err) }
 }
 
 impl From<docopt::Error> for Error {
-    fn from(err: docopt::Error) -> Self {
-        Error::Docopt(err)
-    }
+    fn from(err: docopt::Error) -> Self { Error::Docopt(err) }
 }
 
 impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Self {
-        Error::Io(err)
-    }
+    fn from(err: io::Error) -> Self { Error::Io(err) }
 }
 
 impl From<std::fmt::Error> for Error {
-    fn from(err: std::fmt::Error) -> Self {
-        Error::Fmt(err)
-    }
+    fn from(err: std::fmt::Error) -> Self { Error::Fmt(err) }
 }
 
 impl fmt::Display for Error {

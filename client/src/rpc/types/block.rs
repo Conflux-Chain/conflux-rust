@@ -53,9 +53,7 @@ impl Serialize for BlockTransactions {
 
 impl<'a> Deserialize<'a> for BlockTransactions {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'a>,
-    {
+    where D: Deserializer<'a> {
         let value = Value::deserialize(deserializer)?;
         if let Value::Array(vec) = value {
             if vec.is_empty() {
@@ -142,7 +140,8 @@ impl Block {
         b: &PrimitiveBlock, network: Network,
         consensus_inner: &ConsensusGraphInner,
         data_man: &Arc<BlockDataManager>, include_txs: bool,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, String>
+    {
         let transactions = match include_txs {
             false => BlockTransactions::Hashes(
                 b.transactions
@@ -398,7 +397,8 @@ impl Header {
     pub fn new(
         h: &PrimitiveBlockHeader, network: Network,
         consensus: SharedConsensusGraph,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, String>
+    {
         let hash = h.hash();
 
         let epoch_number = consensus

@@ -18,7 +18,8 @@ use cfx_types::{Address, U256};
 pub fn deposit(
     amount: U256, params: &ActionParams, env: &Env,
     state: &mut dyn StateOpsTrait, tracer: &mut dyn Tracer<Output = ExecTrace>,
-) -> vm::Result<()> {
+) -> vm::Result<()>
+{
     if amount < U256::from(ONE_CFX_IN_DRIP) {
         Err(vm::Error::InternalContract("invalid deposit amount"))
     } else if state.balance(&params.sender)? < amount {
@@ -38,7 +39,8 @@ pub fn deposit(
 pub fn withdraw(
     amount: U256, params: &ActionParams, env: &Env,
     state: &mut dyn StateOpsTrait, tracer: &mut dyn Tracer<Output = ExecTrace>,
-) -> vm::Result<()> {
+) -> vm::Result<()>
+{
     state.remove_expired_vote_stake_info(&params.sender, env.number)?;
     if state.withdrawable_staking_balance(&params.sender, env.number)? < amount
     {
@@ -65,7 +67,8 @@ pub fn withdraw(
 pub fn vote_lock(
     amount: U256, unlock_block_number: U256, params: &ActionParams, env: &Env,
     state: &mut dyn StateOpsTrait,
-) -> vm::Result<()> {
+) -> vm::Result<()>
+{
     let unlock_block_number = unlock_block_number.low_u64();
     if unlock_block_number <= env.number {
         Err(vm::Error::InternalContract("invalid unlock_block_number"))
@@ -84,7 +87,8 @@ pub fn vote_lock(
 pub fn get_locked_staking(
     address: Address, block_number: U256, current_block_number: u64,
     state: &mut dyn StateOpsTrait,
-) -> vm::Result<U256> {
+) -> vm::Result<U256>
+{
     let mut block_number = block_number.low_u64();
     if block_number < current_block_number {
         block_number = current_block_number;
@@ -96,7 +100,8 @@ pub fn get_locked_staking(
 pub fn get_vote_power(
     address: Address, block_number: U256, current_block_number: u64,
     state: &mut dyn StateOpsTrait,
-) -> vm::Result<U256> {
+) -> vm::Result<U256>
+{
     let mut block_number = block_number.low_u64();
     if block_number < current_block_number {
         block_number = current_block_number;

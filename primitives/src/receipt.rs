@@ -47,7 +47,8 @@ impl Receipt {
         gas_sponsor_paid: bool, logs: Vec<LogEntry>,
         storage_sponsor_paid: bool, storage_collateralized: Vec<StorageChange>,
         storage_released: Vec<StorageChange>,
-    ) -> Self {
+    ) -> Self
+    {
         Self {
             accumulated_gas_used,
             gas_fee,
@@ -66,9 +67,7 @@ impl Receipt {
 }
 
 impl MallocSizeOf for StorageChange {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
-        0
-    }
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
 
 impl MallocSizeOf for Receipt {

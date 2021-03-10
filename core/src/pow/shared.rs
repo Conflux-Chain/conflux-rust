@@ -22,9 +22,7 @@ pub const NODE_DWORDS: usize = NODE_WORDS / 2;
 pub const NODE_WORDS: usize = NODE_BYTES / 4;
 pub const NODE_BYTES: usize = 64;
 
-pub fn stage(block_height: u64) -> u64 {
-    block_height / POW_STAGE_LENGTH
-}
+pub fn stage(block_height: u64) -> u64 { block_height / POW_STAGE_LENGTH }
 
 #[allow(dead_code)]
 static CHARS: &'static [u8] = b"0123456789abcdef";
@@ -93,9 +91,7 @@ impl Clone for Node {
 // as good as mine.
 impl Node {
     #[inline(always)]
-    pub fn as_bytes(&self) -> &NodeBytes {
-        unsafe { &self.bytes }
-    }
+    pub fn as_bytes(&self) -> &NodeBytes { unsafe { &self.bytes } }
 
     #[inline(always)]
     pub fn as_bytes_mut(&mut self) -> &mut NodeBytes {
@@ -103,9 +99,7 @@ impl Node {
     }
 
     #[inline(always)]
-    pub fn as_words(&self) -> &NodeWords {
-        unsafe { &self.words }
-    }
+    pub fn as_words(&self) -> &NodeWords { unsafe { &self.words } }
 
     #[inline(always)]
     pub fn as_words_mut(&mut self) -> &mut NodeWords {
@@ -113,9 +107,7 @@ impl Node {
     }
 
     #[inline(always)]
-    pub fn as_dwords(&self) -> &NodeDwords {
-        unsafe { &self.dwords }
-    }
+    pub fn as_dwords(&self) -> &NodeDwords { unsafe { &self.dwords } }
 
     #[inline(always)]
     pub fn as_dwords_mut(&mut self) -> &mut NodeDwords {

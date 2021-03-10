@@ -31,13 +31,9 @@ impl<PosT: PrimitiveNum> LRUHandle<PosT> {
         self.set_handle(prev_pos);
     }
 
-    pub fn is_hit(&self) -> bool {
-        self.prev_pos != PosT::from(Self::NULL_POS)
-    }
+    pub fn is_hit(&self) -> bool { self.prev_pos != PosT::from(Self::NULL_POS) }
 
-    fn set_evicted(&mut self) {
-        self.prev_pos = PosT::from(Self::NULL_POS);
-    }
+    fn set_evicted(&mut self) { self.prev_pos = PosT::from(Self::NULL_POS); }
 
     pub fn is_most_recently_accessed(&self) -> bool {
         self.prev_pos == PosT::from(Self::HEAD_POS)
@@ -47,13 +43,9 @@ impl<PosT: PrimitiveNum> LRUHandle<PosT> {
         self.prev_pos = PosT::from(Self::HEAD_POS);
     }
 
-    fn get_prev_pos(&self) -> PosT {
-        self.prev_pos
-    }
+    fn get_prev_pos(&self) -> PosT { self.prev_pos }
 
-    fn set_handle(&mut self, prev_pos: PosT) {
-        self.prev_pos = prev_pos;
-    }
+    fn set_handle(&mut self, prev_pos: PosT) { self.prev_pos = prev_pos; }
 }
 
 impl<PosT: PrimitiveNum> Default for LRUHandle<PosT> {
@@ -110,7 +102,8 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheAlgorithm
     >(
         &mut self, cache_index: CacheIndexT,
         cache_store_util: &mut CacheStoreUtilT,
-    ) -> CacheAccessResult<CacheIndexT> {
+    ) -> CacheAccessResult<CacheIndexT>
+    {
         // Not using get_mut because it borrows cache_store_util which conflicts
         // with later CacheAlgoDataAdapter calls.
         let lru_handle =
@@ -262,7 +255,8 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheAlgorithm
     >(
         &mut self, cache_index: CacheIndexT,
         cache_store_util: &mut CacheStoreUtilT,
-    ) {
+    )
+    {
         let lru_handle = cache_store_util.get(cache_index);
 
         if lru_handle.is_hit() {
@@ -366,15 +360,9 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> LRU<PosT, CacheIndexT> {
         return &mut self.get_unchecked_mut(pos).cache_index;
     }
 
-    pub fn has_space(&self) -> bool {
-        self.capacity != self.size
-    }
+    pub fn has_space(&self) -> bool { self.capacity != self.size }
 
-    pub fn is_full(&self) -> bool {
-        self.capacity == self.size
-    }
+    pub fn is_full(&self) -> bool { self.capacity == self.size }
 
-    pub fn is_empty(&self) -> bool {
-        PosT::from(0) == self.size
-    }
+    pub fn is_empty(&self) -> bool { PosT::from(0) == self.size }
 }

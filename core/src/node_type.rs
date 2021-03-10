@@ -16,9 +16,7 @@ pub enum NodeType {
 }
 
 impl Default for NodeType {
-    fn default() -> NodeType {
-        NodeType::Unknown
-    }
+    fn default() -> NodeType { NodeType::Unknown }
 }
 
 impl From<u8> for NodeType {

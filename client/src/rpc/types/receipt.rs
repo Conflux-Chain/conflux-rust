@@ -83,7 +83,8 @@ impl Receipt {
         epoch_number: Option<u64>, block_number: u64,
         maybe_state_root: Option<H256>, tx_exec_error_msg: Option<String>,
         network: Network,
-    ) -> Result<Receipt, String> {
+    ) -> Result<Receipt, String>
+    {
         let PrimitiveReceipt {
             accumulated_gas_used,
             gas_fee,

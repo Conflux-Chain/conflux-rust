@@ -90,27 +90,19 @@ impl fmt::Display for Error {
 }
 
 impl From<IoError> for Error {
-    fn from(err: IoError) -> Self {
-        Error::Io(err)
-    }
+    fn from(err: IoError) -> Self { Error::Io(err) }
 }
 
 impl From<EthKeyError> for Error {
-    fn from(err: EthKeyError) -> Self {
-        Error::EthKey(err)
-    }
+    fn from(err: EthKeyError) -> Self { Error::EthKey(err) }
 }
 
 impl From<cfxkey::crypto::Error> for Error {
-    fn from(err: cfxkey::crypto::Error) -> Self {
-        Error::EthKeyCrypto(err)
-    }
+    fn from(err: cfxkey::crypto::Error) -> Self { Error::EthKeyCrypto(err) }
 }
 
 impl From<EthCryptoError> for Error {
-    fn from(err: EthCryptoError) -> Self {
-        Error::EthCrypto(err)
-    }
+    fn from(err: EthCryptoError) -> Self { Error::EthCrypto(err) }
 }
 
 impl From<crypto::error::ScryptError> for Error {
@@ -126,7 +118,5 @@ impl From<crypto::error::SymmError> for Error {
 }
 
 impl From<DerivationError> for Error {
-    fn from(err: DerivationError) -> Self {
-        Error::Derivation(err)
-    }
+    fn from(err: DerivationError) -> Self { Error::Derivation(err) }
 }

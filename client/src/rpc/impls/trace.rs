@@ -30,7 +30,8 @@ impl TraceHandler {
     pub fn new(
         data_man: Arc<BlockDataManager>, network: Network,
         consensus: SharedConsensusGraph,
-    ) -> Self {
+    ) -> Self
+    {
         TraceHandler {
             data_man,
             consensus,

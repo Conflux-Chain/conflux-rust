@@ -91,16 +91,12 @@ pub fn remove_vault_name_from_json_meta(
 
 impl VaultKeyFile {
     pub fn load<R>(reader: R) -> Result<Self, serde_json::Error>
-    where
-        R: Read,
-    {
+    where R: Read {
         serde_json::from_reader(reader)
     }
 
     pub fn write<W>(&self, writer: &mut W) -> Result<(), serde_json::Error>
-    where
-        W: Write,
-    {
+    where W: Write {
         serde_json::to_writer(writer, self)
     }
 }

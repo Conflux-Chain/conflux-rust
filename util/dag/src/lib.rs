@@ -120,12 +120,10 @@ pub trait DAG: Graph {
     }
 
     fn topological_sort<Set>(&self, index_set: Set) -> Vec<Self::NodeIndex>
-    where
-        Set: SetLike<Self::NodeIndex>
+    where Set: SetLike<Self::NodeIndex>
             + Default
             + Clone
-            + IntoIterator<Item = Self::NodeIndex>,
-    {
+            + IntoIterator<Item = Self::NodeIndex> {
         // Any topological order will work, so just return a constant for
         // `order_indicator`.
         self.topological_sort_with_order_indicator(index_set, |_| true)
@@ -195,21 +193,13 @@ pub trait SetLike<T> {
 }
 
 impl<T: Eq + Hash> SetLike<T> for HashSet<T> {
-    fn insert(&mut self, i: T) -> bool {
-        self.insert(i)
-    }
+    fn insert(&mut self, i: T) -> bool { self.insert(i) }
 
-    fn contains(&self, i: &T) -> bool {
-        self.contains(i)
-    }
+    fn contains(&self, i: &T) -> bool { self.contains(i) }
 }
 
 impl SetLike<u32> for BitSet {
-    fn insert(&mut self, i: u32) -> bool {
-        self.add(i)
-    }
+    fn insert(&mut self, i: u32) -> bool { self.add(i) }
 
-    fn contains(&self, i: &u32) -> bool {
-        self.contains(*i)
-    }
+    fn contains(&self, i: &u32) -> bool { self.contains(*i) }
 }

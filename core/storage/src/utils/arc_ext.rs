@@ -34,21 +34,15 @@ impl<OriginT: ?Sized, T: ?Sized> ArcMapped<OriginT, T> {
         Self { origin, ptr }
     }
 
-    pub fn into_arc(self) -> Arc<OriginT> {
-        self.origin
-    }
+    pub fn into_arc(self) -> Arc<OriginT> { self.origin }
 
-    pub fn ref_arc(&self) -> &Arc<OriginT> {
-        &self.origin
-    }
+    pub fn ref_arc(&self) -> &Arc<OriginT> { &self.origin }
 }
 
 impl<OriginT: ?Sized, T: ?Sized> Deref for ArcMapped<OriginT, T> {
     type Target = T;
 
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.ptr }
-    }
+    fn deref(&self) -> &Self::Target { unsafe { &*self.ptr } }
 }
 
 /// Only use this function on object which is already managed by an Arc.

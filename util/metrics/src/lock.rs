@@ -105,13 +105,9 @@ impl<GUARD> Drop for LockGuard<GUARD> {
 impl<T, GUARD: Deref<Target = T>> Deref for LockGuard<GUARD> {
     type Target = T;
 
-    fn deref(&self) -> &T {
-        &self.raw
-    }
+    fn deref(&self) -> &T { &self.raw }
 }
 
 impl<T, GUARD: DerefMut<Target = T>> DerefMut for LockGuard<GUARD> {
-    fn deref_mut(&mut self) -> &mut T {
-        &mut self.raw
-    }
+    fn deref_mut(&mut self) -> &mut T { &mut self.raw }
 }

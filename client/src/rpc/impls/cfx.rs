@@ -108,7 +108,8 @@ impl RpcImpl {
         maybe_txgen: Option<Arc<TransactionGenerator>>,
         maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
         config: RpcImplConfiguration, accounts: Arc<AccountProvider>,
-    ) -> Self {
+    ) -> Self
+    {
         RpcImpl {
             consensus,
             sync,
@@ -389,7 +390,8 @@ impl RpcImpl {
     fn storage_at(
         &self, address: RpcAddress, position: H256,
         epoch_num: Option<EpochNumber>,
-    ) -> RpcResult<Option<H256>> {
+    ) -> RpcResult<Option<H256>>
+    {
         self.check_address_network(address.network)?;
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
 
@@ -768,7 +770,8 @@ impl RpcImpl {
     fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
         adaptive: bool, difficulty: Option<u64>,
-    ) -> RpcResult<H256> {
+    ) -> RpcResult<H256>
+    {
         info!(
             "RPC Request: generate_fixed_block({:?}, {:?}, {:?}, {:?})",
             parent_hash, referee, num_txs, difficulty
@@ -794,7 +797,8 @@ impl RpcImpl {
     fn generate_one_block_with_direct_txgen(
         &self, num_txs: usize, mut block_size_limit: usize,
         num_txs_simple: usize, num_txs_erc20: usize,
-    ) -> RpcResult<H256> {
+    ) -> RpcResult<H256>
+    {
         info!("RPC Request: generate_one_block_with_direct_txgen()");
 
         let block_gen = &self.block_gen;
@@ -826,7 +830,8 @@ impl RpcImpl {
     fn generate_custom_block(
         &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes,
         adaptive: Option<bool>,
-    ) -> RpcResult<H256> {
+    ) -> RpcResult<H256>
+    {
         info!("RPC Request: generate_custom_block()");
 
         let transactions = self.decode_raw_txs(raw_txs, 0)?;
@@ -842,7 +847,8 @@ impl RpcImpl {
     fn generate_block_with_nonce_and_timestamp(
         &self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: U256,
         timestamp: u64, adaptive: bool,
-    ) -> RpcResult<H256> {
+    ) -> RpcResult<H256>
+    {
         let transactions = self.decode_raw_txs(raw, 0)?;
         Ok(self.block_gen.generate_block_with_nonce_and_timestamp(
             parent,
@@ -889,7 +895,8 @@ impl RpcImpl {
     fn generate_block_with_fake_txs(
         &self, raw_txs_without_data: Bytes, adaptive: Option<bool>,
         tx_data_len: Option<usize>,
-    ) -> RpcResult<H256> {
+    ) -> RpcResult<H256>
+    {
         let transactions = self
             .decode_raw_txs(raw_txs_without_data, tx_data_len.unwrap_or(0))?;
         Ok(self.block_gen.generate_custom_block(transactions, adaptive))
@@ -1118,7 +1125,8 @@ impl RpcImpl {
         &self, account_addr: RpcAddress, contract_addr: RpcAddress,
         gas_limit: U256, gas_price: U256, storage_limit: U256,
         epoch: Option<EpochNumber>,
-    ) -> RpcResult<CheckBalanceAgainstTransactionResponse> {
+    ) -> RpcResult<CheckBalanceAgainstTransactionResponse>
+    {
         self.check_address_network(account_addr.network)?;
         self.check_address_network(contract_addr.network)?;
 

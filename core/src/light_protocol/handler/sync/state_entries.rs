@@ -62,7 +62,8 @@ impl StateEntries {
     pub fn new(
         peers: Arc<Peers<FullPeerState>>, state_roots: Arc<StateRoots>,
         request_id_allocator: Arc<UniqueId>,
-    ) -> Self {
+    ) -> Self
+    {
         let sync_manager =
             SyncManager::new(peers.clone(), msgid::GET_STATE_ENTRIES);
 
@@ -117,7 +118,8 @@ impl StateEntries {
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         entries: impl Iterator<Item = StateEntryWithKey>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         for StateEntryWithKey { key, entry, proof } in entries {
             trace!(
                 "Validating state entry {:?} with key {:?} and proof {:?}",
@@ -217,7 +219,8 @@ impl StateEntries {
     fn validate_state_entry(
         &self, epoch: u64, key: &Vec<u8>, value: &Option<Vec<u8>>,
         proof: StateEntryProof,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         // validate state root
         let state_root = proof.state_root;
 

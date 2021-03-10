@@ -170,9 +170,7 @@ pub struct LocalizedTrace {
 
 impl Serialize for LocalizedTrace {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    where S: Serializer {
         let mut struc = serializer.serialize_struct("LocalizedTrace", 2)?;
 
         match self.action {

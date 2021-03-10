@@ -56,9 +56,7 @@ impl Default for RateCalculator {
 }
 
 impl RateCalculator {
-    fn elapsed(&self) -> u64 {
-        self.era.elapsed().as_secs()
-    }
+    fn elapsed(&self) -> u64 { self.era.elapsed().as_secs() }
 
     pub fn tick(&mut self) -> u16 {
         if self.elapsed() >= RATE_SECONDS as u64 {
@@ -161,9 +159,7 @@ impl RpcStats {
     }
 
     /// Count request. Returns number of requests in current second.
-    pub fn count_request(&self) -> u16 {
-        self.requests.write().tick()
-    }
+    pub fn count_request(&self) -> u16 { self.requests.write().tick() }
 
     /// Add roundtrip time (microseconds)
     pub fn add_roundtrip(&self, microseconds: u128) {
@@ -176,9 +172,7 @@ impl RpcStats {
     }
 
     /// Returns requests rate
-    pub fn requests_rate(&self) -> usize {
-        self.requests.read().rate()
-    }
+    pub fn requests_rate(&self) -> usize { self.requests.read().rate() }
 
     /// Returns approximated roundtrip in microseconds
     pub fn approximated_roundtrip(&self) -> u128 {
@@ -322,7 +316,5 @@ mod tests {
         is_sync(stats);
     }
 
-    fn is_sync<F: Send + Sync>(x: F) {
-        drop(x)
-    }
+    fn is_sync<F: Send + Sync>(x: F) { drop(x) }
 }

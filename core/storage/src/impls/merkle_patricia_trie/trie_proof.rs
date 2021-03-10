@@ -26,7 +26,8 @@ impl TrieProofNode {
         children_table: VanillaChildrenTable<MerkleHash>,
         maybe_value: Option<Box<[u8]>>, compressed_path: CompressedPathRaw,
         path_without_first_nibble: bool,
-    ) -> Self {
+    ) -> Self
+    {
         let merkle = compute_merkle(
             compressed_path.as_ref(),
             path_without_first_nibble,
@@ -186,7 +187,8 @@ impl TrieProof {
     pub fn is_valid_node_merkle(
         &self, key: &[u8], node_merkle: &MptValue<MerkleHash>,
         root: &MerkleHash,
-    ) -> bool {
+    ) -> bool
+    {
         self.is_valid(key, root, |node| match node {
             None => node_merkle == &MptValue::None,
             Some(node) if node.value_as_slice().is_tombstone() => {
@@ -202,7 +204,8 @@ impl TrieProof {
     fn is_valid<'this: 'pred_param, 'pred_param>(
         &'this self, path: &[u8], root: &MerkleHash,
         pred: impl FnOnce(Option<&'pred_param TrieProofNode>) -> bool,
-    ) -> bool {
+    ) -> bool
+    {
         // empty trie
         if root == &MERKLE_NULL_NODE {
             return pred(None);
@@ -251,24 +254,16 @@ impl TrieProof {
     }
 
     #[inline]
-    pub fn number_nodes(&self) -> usize {
-        self.nodes.len()
-    }
+    pub fn number_nodes(&self) -> usize { self.nodes.len() }
 
     #[inline]
-    pub fn number_leaf_nodes(&self) -> u32 {
-        self.number_leaf_nodes
-    }
+    pub fn number_leaf_nodes(&self) -> u32 { self.number_leaf_nodes }
 
     #[inline]
-    pub fn get_proof_nodes(&self) -> &Vec<TrieProofNode> {
-        &self.nodes
-    }
+    pub fn get_proof_nodes(&self) -> &Vec<TrieProofNode> { &self.nodes }
 
     #[inline]
-    pub fn into_proof_nodes(self) -> Vec<TrieProofNode> {
-        self.nodes
-    }
+    pub fn into_proof_nodes(self) -> Vec<TrieProofNode> { self.nodes }
 
     /// Returns the (snapshot_mpt_key, child_index, trie_node) along the proof
     /// path of key.
@@ -355,9 +350,7 @@ impl TrieProof {
 }
 
 impl Encodable for TrieProof {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.append_list(&self.nodes);
-    }
+    fn rlp_append(&self, s: &mut RlpStream) { s.append_list(&self.nodes); }
 }
 
 impl Decodable for TrieProof {
@@ -375,9 +368,7 @@ impl Decodable for TrieProof {
 // FIXME: in rlp encode / decode, children_count and merkle_hash should be
 // omitted.
 impl Encodable for TrieProofNode {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.append_internal(&self.0);
-    }
+    fn rlp_append(&self, s: &mut RlpStream) { s.append_internal(&self.0); }
 }
 
 impl Decodable for TrieProofNode {
@@ -389,15 +380,11 @@ impl Decodable for TrieProofNode {
 impl Deref for TrieProofNode {
     type Target = VanillaTrieNode<MerkleHash>;
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+    fn deref(&self) -> &Self::Target { &self.0 }
 }
 
 impl DerefMut for TrieProofNode {
-    fn deref_mut(&mut self) -> &mut <Self as Deref>::Target {
-        &mut self.0
-    }
+    fn deref_mut(&mut self) -> &mut <Self as Deref>::Target { &mut self.0 }
 }
 
 use crate::{

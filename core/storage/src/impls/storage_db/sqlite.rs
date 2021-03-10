@@ -13,9 +13,7 @@ pub struct SqliteConnection {
 }
 
 impl MallocSizeOf for SqliteConnection {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
-        unimplemented!()
-    }
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { unimplemented!() }
 }
 
 pub struct SqliteConnectionInfo {
@@ -163,7 +161,8 @@ impl SqliteConnection {
     pub fn prepare<'db>(
         db: &'db mut Connection, statement_cache: &'db mut StatementCache,
         sql: &str,
-    ) -> Result<&'db mut ScopedStatement> {
+    ) -> Result<&'db mut ScopedStatement>
+    {
         // Actually safe. I don't want an unnecessary to_string() for the sql.
         // But the borrow-checker doesn't seem to understand branch very well.
         Ok(unsafe {
@@ -206,9 +205,7 @@ impl SqliteConnection {
         self.connection.get_mut()
     }
 
-    pub fn lock_db(&self) -> MutexGuard<Connection> {
-        self.connection.lock()
-    }
+    pub fn lock_db(&self) -> MutexGuard<Connection> { self.connection.lock() }
 
     pub fn lock_statement_cache(&self) -> MutexGuard<StatementCache> {
         self.cached_statements.lock()
@@ -222,13 +219,9 @@ impl SqliteConnection {
         paths
     }
 
-    fn wal_path(db_path: &str) -> String {
-        db_path.to_string() + "-wal"
-    }
+    fn wal_path(db_path: &str) -> String { db_path.to_string() + "-wal" }
 
-    fn shm_path(db_path: &str) -> String {
-        db_path.to_string() + "-shm"
-    }
+    fn shm_path(db_path: &str) -> String { db_path.to_string() + "-shm" }
 }
 
 /// Upstream didn't implement Bindable for trait object, which makes passing
@@ -247,14 +240,11 @@ pub trait SqlDerefBindable<'a> {
 }
 
 impl<'a, T: ?Sized + 'a + Deref> SqlDerefBindable<'a> for T
-where
-    &'a T::Target: Bindable,
+where &'a T::Target: Bindable
 {
     type Type = &'a T::Target;
 
-    fn as_bindable(&'a self) -> Self::Type {
-        self.deref()
-    }
+    fn as_bindable(&'a self) -> Self::Type { self.deref() }
 }
 
 impl SqlBindable for i64 {
@@ -264,8 +254,7 @@ impl SqlBindable for i64 {
 }
 
 impl<'a, T: 'a + Deref> SqlBindable for Pin<T>
-where
-    for<'x> &'x T::Target: Bindable,
+where for<'x> &'x T::Target: Bindable
 {
     fn bind(&self, statement: &mut Statement, i: usize) -> sqlite::Result<()> {
         Bindable::bind(&**self, statement, i)
@@ -273,8 +262,7 @@ where
 }
 
 impl<'a, T: 'a + ?Sized> SqlBindable for &'a T
-where
-    T: SqlDerefBindable<'a>,
+where T: SqlDerefBindable<'a>
 {
     fn bind(&self, statement: &mut Statement, i: usize) -> sqlite::Result<()> {
         Bindable::bind(self.as_bindable(), statement, i)
@@ -653,9 +641,7 @@ impl<T: 'static + SqlBindableValue + SqlBindable + Clone>
 }
 
 impl BindValueAppendImpl<()> for () {
-    fn make_bind_list(&self) -> Vec<Box<dyn SqlBindable>> {
-        vec![]
-    }
+    fn make_bind_list(&self) -> Vec<Box<dyn SqlBindable>> { vec![] }
 }
 
 impl BindValueAppendImpl<dyn SqlBindable> for [u8] {

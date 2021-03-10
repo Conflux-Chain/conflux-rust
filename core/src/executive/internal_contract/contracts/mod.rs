@@ -82,9 +82,7 @@ pub struct InternalContractMap {
 impl std::ops::Deref for InternalContractMap {
     type Target = Arc<BTreeMap<Address, Box<dyn InternalContractTrait>>>;
 
-    fn deref(&self) -> &Self::Target {
-        &self.builtin
-    }
+    fn deref(&self) -> &Self::Target { &self.builtin }
 }
 
 impl InternalContractMap {

@@ -129,21 +129,18 @@ pub trait KeyFileManager: Send + Sync {
     fn read<T>(
         &self, filename: Option<String>, reader: T,
     ) -> Result<SafeAccount, Error>
-    where
-        T: io::Read;
+    where T: io::Read;
 
     /// Write `SafeAccount` to given key file stream
     fn write<T>(
         &self, account: SafeAccount, writer: &mut T,
     ) -> Result<(), Error>
-    where
-        T: io::Write;
+    where T: io::Write;
 }
 
 /// Disk-based keys directory implementation
 pub struct DiskDirectory<T>
-where
-    T: KeyFileManager,
+where T: KeyFileManager
 {
     path: PathBuf,
     key_manager: T,
@@ -157,9 +154,7 @@ pub struct DiskKeyFileManager {
 
 impl RootDiskDirectory {
     pub fn create<P>(path: P) -> Result<Self, Error>
-    where
-        P: AsRef<Path>,
-    {
+    where P: AsRef<Path> {
         fs::create_dir_all(&path)?;
         Ok(Self::at(path))
     }
@@ -171,22 +166,17 @@ impl RootDiskDirectory {
     }
 
     pub fn at<P>(path: P) -> Self
-    where
-        P: AsRef<Path>,
-    {
+    where P: AsRef<Path> {
         DiskDirectory::new(path, DiskKeyFileManager::default())
     }
 }
 
 impl<T> DiskDirectory<T>
-where
-    T: KeyFileManager,
+where T: KeyFileManager
 {
     /// Create new disk directory instance
     pub fn new<P>(path: P, key_manager: T) -> Self
-    where
-        P: AsRef<Path>,
-    {
+    where P: AsRef<Path> {
         DiskDirectory {
             path: path.as_ref().to_path_buf(),
             key_manager,
@@ -301,14 +291,11 @@ where
     }
 
     /// Get key file manager referece
-    pub fn key_manager(&self) -> &T {
-        &self.key_manager
-    }
+    pub fn key_manager(&self) -> &T { &self.key_manager }
 }
 
 impl<T> KeyDirectory for DiskDirectory<T>
-where
-    T: KeyFileManager,
+where T: KeyFileManager
 {
     fn load(&self) -> Result<Vec<SafeAccount>, Error> {
         let accounts = self
@@ -345,9 +332,7 @@ where
         }
     }
 
-    fn path(&self) -> Option<&PathBuf> {
-        Some(&self.path)
-    }
+    fn path(&self) -> Option<&PathBuf> { Some(&self.path) }
 
     fn as_vault_provider(&self) -> Option<&dyn VaultKeyDirectoryProvider> {
         Some(self)
@@ -359,8 +344,7 @@ where
 }
 
 impl<T> VaultKeyDirectoryProvider for DiskDirectory<T>
-where
-    T: KeyFileManager,
+where T: KeyFileManager
 {
     fn create(
         &self, name: &str, key: VaultKey,
@@ -402,9 +386,7 @@ impl KeyFileManager for DiskKeyFileManager {
     fn read<T>(
         &self, filename: Option<String>, reader: T,
     ) -> Result<SafeAccount, Error>
-    where
-        T: io::Read,
-    {
+    where T: io::Read {
         let key_file = json::KeyFile::load(reader)
             .map_err(|e| Error::Custom(format!("{:?}", e)))?;
         SafeAccount::from_file(key_file, filename, &self.password)
@@ -413,9 +395,7 @@ impl KeyFileManager for DiskKeyFileManager {
     fn write<T>(
         &self, mut account: SafeAccount, writer: &mut T,
     ) -> Result<(), Error>
-    where
-        T: io::Write,
-    {
+    where T: io::Write {
         // when account is moved back to root directory from vault
         // => remove vault field from meta
         account.meta = json::remove_vault_name_from_json_meta(&account.meta)

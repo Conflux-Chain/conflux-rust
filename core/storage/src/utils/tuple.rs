@@ -20,19 +20,17 @@ pub trait TupleIndexExt: Sized {
 
     fn size(&self) -> usize;
 
-    fn get<I: TupleIndex>(&self) -> &<Self as TupleGetIndexExt<I>>::ElementType
-    where
-        Self: TupleGetIndexExt<I>,
-    {
+    fn get<I: TupleIndex>(
+        &self,
+    ) -> &<Self as TupleGetIndexExt<I>>::ElementType
+    where Self: TupleGetIndexExt<I> {
         self.get_impl()
     }
 
     fn get_mut<I: TupleIndex>(
         &mut self,
     ) -> &mut <Self as TupleGetIndexExt<I>>::ElementType
-    where
-        Self: TupleGetIndexExt<I>,
-    {
+    where Self: TupleGetIndexExt<I> {
         self.get_mut_impl()
     }
 }
@@ -91,9 +89,7 @@ pub trait TupleIterateFromTo<ElementConstrain: ElementConstrainMark + ?Sized>:
         F: IterCallFamilyTrait<Self, ElementConstrain>,
     >(
         _from: &FromIndex, _to: &ToIndex, f: F,
-    ) where
-        Self: TupleIterFromTo<FromIndex, ToIndex, ElementConstrain>,
-    {
+    ) where Self: TupleIterFromTo<FromIndex, ToIndex, ElementConstrain> {
         <Self as TupleIterFromTo<FromIndex, ToIndex, ElementConstrain>>::iterate_from_to(f);
     }
 }
@@ -242,9 +238,7 @@ pub struct ElementNoConstrain();
 impl ElementConstrainMark for ElementNoConstrain {}
 
 impl<T> ElementSatisfy<ElementNoConstrain> for T {
-    fn to_constrain_object(&self) -> &ElementNoConstrain {
-        unreachable!()
-    }
+    fn to_constrain_object(&self) -> &ElementNoConstrain { unreachable!() }
 
     fn to_constrain_object_mut(&mut self) -> &mut ElementNoConstrain {
         unreachable!()
@@ -480,14 +474,10 @@ mod test {
     impl ElementConstrainMark for dyn ElementToPrint {}
 
     impl ElementToPrint for i32 {
-        fn to_string(&self) -> String {
-            ToString::to_string(self)
-        }
+        fn to_string(&self) -> String { ToString::to_string(self) }
     }
     impl ElementToPrint for f64 {
-        fn to_string(&self) -> String {
-            ToString::to_string(self)
-        }
+        fn to_string(&self) -> String { ToString::to_string(self) }
     }
     impl ElementToPrint for Vec<u8> {
         fn to_string(&self) -> String {
@@ -614,9 +604,7 @@ mod test {
                 self.iter_counts += 1;
             }
 
-            fn finish_iter(&mut self) {
-                self.finish_called = true;
-            }
+            fn finish_iter(&mut self) { self.finish_called = true; }
         }
 
         impl Counter {

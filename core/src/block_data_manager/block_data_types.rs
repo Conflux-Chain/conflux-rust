@@ -50,9 +50,7 @@ impl Decodable for BlockExecutionResult {
     }
 }
 
-#[derive(
-    RlpEncodable, RlpDecodable, Clone, Copy, Debug, DeriveMallocSizeOf,
-)]
+#[derive(RlpEncodable, RlpDecodable, Clone, Copy, Debug, DeriveMallocSizeOf)]
 pub struct BlockRewardResult {
     pub total_reward: U256,
     pub base_reward: U256,
@@ -181,9 +179,7 @@ impl<Version: Decodable, T: Decodable> Decodable
 impl<Version: Encodable, T: Encodable> DatabaseEncodable
     for DataVersionTuple<Version, T>
 {
-    fn db_encode(&self) -> Vec<u8> {
-        rlp::encode(self)
-    }
+    fn db_encode(&self) -> Vec<u8> { rlp::encode(self) }
 }
 
 impl<Version: Decodable, T: Decodable> DatabaseDecodable
@@ -212,17 +208,11 @@ impl LocalBlockInfo {
         }
     }
 
-    pub fn get_status(&self) -> BlockStatus {
-        self.status
-    }
+    pub fn get_status(&self) -> BlockStatus { self.status }
 
-    pub fn get_seq_num(&self) -> u64 {
-        self.enter_consensus_seq_num
-    }
+    pub fn get_seq_num(&self) -> u64 { self.enter_consensus_seq_num }
 
-    pub fn get_instance_id(&self) -> u64 {
-        self.instance_id
-    }
+    pub fn get_instance_id(&self) -> u64 { self.instance_id }
 }
 
 impl Encodable for LocalBlockInfo {
@@ -269,9 +259,7 @@ impl BlockStatus {
         }
     }
 
-    pub fn to_db_status(&self) -> u8 {
-        *self as u8
-    }
+    pub fn to_db_status(&self) -> u8 { *self as u8 }
 }
 
 /// The checkpoint information stored in the database
@@ -299,15 +287,11 @@ pub struct BlamedHeaderVerifiedRoots {
 }
 
 impl MallocSizeOf for BlamedHeaderVerifiedRoots {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
-        0
-    }
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
 
 pub fn db_encode_list<T>(list: &[T]) -> Vec<u8>
-where
-    T: DatabaseEncodable,
-{
+where T: DatabaseEncodable {
     let mut rlp_stream = RlpStream::new();
     rlp_stream.begin_list(list.len());
     for e in list {
@@ -317,9 +301,7 @@ where
 }
 
 pub fn db_decode_list<T>(bytes: &[u8]) -> Result<Vec<T>, DecoderError>
-where
-    T: DatabaseDecodable,
-{
+where T: DatabaseDecodable {
     let rlp_encoded = Rlp::new(bytes);
     let mut list = Vec::new();
     for e in rlp_encoded.iter() {

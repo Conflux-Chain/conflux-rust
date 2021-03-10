@@ -58,9 +58,7 @@ impl MaybeOwnedTrieNodeAsCowCallParam {
     }
 
     /// Do not implement in a trait to keep the call private.
-    fn as_ref<'a>(&self) -> &'a TrieNodeDeltaMpt {
-        unsafe { &*self.trie_node }
-    }
+    fn as_ref<'a>(&self) -> &'a TrieNodeDeltaMpt { unsafe { &*self.trie_node } }
 }
 
 impl<'a, GuardType> GuardedValue<GuardType, MaybeOwnedTrieNode<'a>> {
@@ -97,9 +95,7 @@ impl<'a> MaybeOwnedTrieNode<'a> {
 impl<'a> Deref for MaybeOwnedTrieNode<'a> {
     type Target = TrieNodeDeltaMpt;
 
-    fn deref(&self) -> &Self::Target {
-        self.trie_node.get_ref()
-    }
+    fn deref(&self) -> &Self::Target { self.trie_node.get_ref() }
 }
 
 impl<'a> MaybeOwnedTrieNode<'a> {
@@ -114,7 +110,8 @@ impl CowNodeRef {
     pub fn new_uninitialized_node<'a>(
         allocator: AllocatorRefRefDeltaMpt<'a>,
         owned_node_set: &mut OwnedNodeSet, mpt_id: DeltaMptId,
-    ) -> Result<(Self, SlabVacantEntryDeltaMpt<'a>)> {
+    ) -> Result<(Self, SlabVacantEntryDeltaMpt<'a>)>
+    {
         let (node_ref, new_entry) =
             DeltaMptsNodeMemoryManager::new_node(allocator)?;
         owned_node_set.insert(node_ref.clone(), None);
@@ -132,7 +129,8 @@ impl CowNodeRef {
     pub fn new(
         node_ref: NodeRefDeltaMpt, owned_node_set: &OwnedNodeSet,
         mpt_id: DeltaMptId,
-    ) -> Self {
+    ) -> Self
+    {
         Self {
             owned: owned_node_set.contains(&node_ref),
             mpt_id,
@@ -161,14 +159,13 @@ impl Drop for CowNodeRef {
 }
 
 impl CowNodeRef {
-    pub fn is_owned(&self) -> bool {
-        self.owned
-    }
+    pub fn is_owned(&self) -> bool { self.owned }
 
     fn convert_to_owned<'a>(
         &mut self, allocator: AllocatorRefRefDeltaMpt<'a>,
         owned_node_set: &mut OwnedNodeSet,
-    ) -> Result<Option<SlabVacantEntryDeltaMpt<'a>>> {
+    ) -> Result<Option<SlabVacantEntryDeltaMpt<'a>>>
+    {
         if self.owned {
             Ok(None)
         } else {
@@ -204,7 +201,8 @@ impl CowNodeRef {
             Option<MutexGuard<'c, DeltaMptsCacheManager>>,
             MaybeOwnedTrieNode<'a>,
         >,
-    > {
+    >
+    {
         Ok(GuardedValue::into_wrapped(
             node_memory_manager.node_cell_with_cache_manager(
                 &allocator,
@@ -225,7 +223,8 @@ impl CowNodeRef {
     pub fn delete_node(
         mut self, node_memory_manager: &DeltaMptsNodeMemoryManager,
         owned_node_set: &mut OwnedNodeSet,
-    ) {
+    )
+    {
         if self.owned {
             node_memory_manager
                 .free_owned_node(&mut self.node_ref, self.mpt_id);
@@ -250,7 +249,8 @@ impl CowNodeRef {
         guarded_trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
         key_prefix: CompressedPathRaw, values: &mut Vec<MptKeyValue>,
         db: &mut DeltaDbOwnedReadTraitObj,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         if self.owned {
             if guarded_trie_node.as_ref().as_ref().has_value() {
                 assert!(CompressedPathRaw::has_second_nibble(
@@ -319,7 +319,8 @@ impl CowNodeRef {
         cache_manager: &mut DeltaMptsCacheManager,
         allocator_ref: AllocatorRefRefDeltaMpt,
         children_merkle_map: &mut ChildrenMerkleMap,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         for (_i, node_ref_mut) in trie_node.children_table.iter_mut() {
             let node_ref = node_ref_mut.clone();
             let mut cow_child_node =
@@ -357,7 +358,8 @@ impl CowNodeRef {
     fn set_merkle(
         &mut self, children_merkles: MaybeMerkleTableRef,
         path_without_first_nibble: bool, trie_node: &mut TrieNodeDeltaMpt,
-    ) -> MerkleHash {
+    ) -> MerkleHash
+    {
         let path_merkle = trie_node
             .compute_merkle(children_merkles, path_without_first_nibble);
         trie_node.set_merkle(&path_merkle);
@@ -397,7 +399,8 @@ impl CowNodeRef {
         db: &mut DeltaDbOwnedReadTraitObj,
         children_merkle_map: &mut ChildrenMerkleMap,
         parent_node_path_steps_plus_one: u16,
-    ) -> Result<MerkleHash> {
+    ) -> Result<MerkleHash>
+    {
         if self.owned {
             let trie_node = unsafe {
                 trie.get_node_memory_manager().dirty_node_as_mut_unchecked(
@@ -451,7 +454,8 @@ impl CowNodeRef {
         allocator_ref: AllocatorRefRefDeltaMpt,
         db: &mut DeltaDbOwnedReadTraitObj,
         children_merkle_map: &mut ChildrenMerkleMap, node_path_steps: u16,
-    ) -> Result<MaybeMerkleTable> {
+    ) -> Result<MaybeMerkleTable>
+    {
         match trie_node.children_table.get_children_count() {
             0 => Ok(None),
             _ if ENABLE_CHILDREN_MERKLES => {
@@ -514,7 +518,8 @@ impl CowNodeRef {
         children_merkle_map: &mut ChildrenMerkleMap,
         known_merkles: Option<CompactedChildrenTable<MerkleHash>>,
         node_path_steps: u16,
-    ) -> Result<MaybeMerkleTable> {
+    ) -> Result<MaybeMerkleTable>
+    {
         let known = known_merkles.is_some();
         let known_merkles = known_merkles.unwrap_or_default();
         let mut merkles = [MERKLE_NULL_NODE; CHILDREN_COUNT];
@@ -582,7 +587,8 @@ impl CowNodeRef {
         guarded_trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
         key_prefix: CompressedPathRaw, values: &mut KVInserterType,
         db: &mut DeltaDbOwnedReadTraitObj,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         if guarded_trie_node.as_ref().as_ref().has_value() {
             assert!(CompressedPathRaw::has_second_nibble(
                 key_prefix.path_mask()
@@ -638,7 +644,8 @@ impl CowNodeRef {
         cache_manager: &mut DeltaMptsCacheManager,
         allocator_ref: AllocatorRefRefDeltaMpt,
         children_merkle_map: &mut ChildrenMerkleMap,
-    ) -> Result<bool> {
+    ) -> Result<bool>
+    {
         if self.owned {
             self.commit_dirty_recurse_into_children(
                 trie,
@@ -701,7 +708,8 @@ impl CowNodeRef {
         trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
         child_node_ref: NodeRefDeltaMpt, child_index: u8,
         db: &mut DeltaDbOwnedReadTraitObj,
-    ) -> Result<CowNodeRef> {
+    ) -> Result<CowNodeRef>
+    {
         let node_memory_manager = trie.get_node_memory_manager();
         let allocator = node_memory_manager.get_allocator();
 
@@ -763,7 +771,8 @@ impl CowNodeRef {
         &mut self, node_memory_manager: &DeltaMptsNodeMemoryManager,
         owned_node_set: &mut OwnedNodeSet, path: CompressedPathRaw,
         trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         let path_to_take = Cell::new(Some(path));
 
         self.cow_modify_with_operation(
@@ -793,7 +802,8 @@ impl CowNodeRef {
         &mut self, node_memory_manager: &DeltaMptsNodeMemoryManager,
         owned_node_set: &mut OwnedNodeSet,
         trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
-    ) -> Result<Box<[u8]>> {
+    ) -> Result<Box<[u8]>>
+    {
         self.cow_modify_with_operation(
             &node_memory_manager.get_allocator(),
             owned_node_set,
@@ -816,7 +826,8 @@ impl CowNodeRef {
         &mut self, node_memory_manager: &DeltaMptsNodeMemoryManager,
         owned_node_set: &mut OwnedNodeSet,
         trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam, value: Box<[u8]>,
-    ) -> Result<MptValue<Box<[u8]>>> {
+    ) -> Result<MptValue<Box<[u8]>>>
+    {
         let value_to_take = Cell::new(Some(value));
 
         self.cow_modify_with_operation(
@@ -855,7 +866,8 @@ impl CowNodeRef {
         owned_node_set: &mut OwnedNodeSet,
         mut trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
         f_owned: FOwned, f_ref: FRef,
-    ) -> Result<OutputType> {
+    ) -> Result<OutputType>
+    {
         let copied = self.convert_to_owned(allocator, owned_node_set)?;
         match copied {
             None => unsafe {
@@ -875,7 +887,8 @@ impl CowNodeRef {
         &mut self, allocator: AllocatorRefRefDeltaMpt<'a>,
         owned_node_set: &mut OwnedNodeSet,
         mut trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
-    ) -> Result<&'a mut TrieNodeDeltaMpt> {
+    ) -> Result<&'a mut TrieNodeDeltaMpt>
+    {
         let copied = self.convert_to_owned(allocator, owned_node_set)?;
         match copied {
             None => unsafe { Ok(trie_node.as_mut().owned_as_mut_unchecked()) },

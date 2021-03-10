@@ -40,9 +40,7 @@ pub fn slow_hash_block_height(block_height: u64) -> H256 {
     SeedHashCompute::resume_compute_seedhash([0u8; 32], 0, stage(block_height))
 }
 
-fn fnv_hash(x: u32, y: u32) -> u32 {
-    return x.wrapping_mul(FNV_PRIME) ^ y;
-}
+fn fnv_hash(x: u32, y: u32) -> u32 { return x.wrapping_mul(FNV_PRIME) ^ y; }
 
 fn fnv_hash64(x: u64, y: u64) -> u64 {
     return x.wrapping_mul(FNV_PRIME as u64) ^ y;
@@ -105,9 +103,7 @@ fn as_u64_le(bytes: &[u8]) -> u64 {
         + ((bytes[7] as u64) << 56)
 }
 
-fn rotl(x: u64, b: u64) -> u64 {
-    (x << b) | (x >> (64 - b))
-}
+fn rotl(x: u64, b: u64) -> u64 { (x << b) | (x >> (64 - b)) }
 
 struct SipHasher {
     pub v0: u64,
@@ -121,9 +117,7 @@ impl SipHasher {
         SipHasher { v0, v1, v2, v3 }
     }
 
-    pub fn xor_lanes(&self) -> u64 {
-        self.v0 ^ self.v1 ^ self.v2 ^ self.v3
-    }
+    pub fn xor_lanes(&self) -> u64 { self.v0 ^ self.v1 ^ self.v2 ^ self.v3 }
 
     pub fn sip_round(&mut self) {
         self.v0 = self.v0.wrapping_add(self.v1);

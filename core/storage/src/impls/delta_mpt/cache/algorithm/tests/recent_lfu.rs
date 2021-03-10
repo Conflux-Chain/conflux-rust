@@ -64,13 +64,9 @@ impl<'a> CacheStoreUtil for CacheUtil<'a> {
 }
 
 impl<'a> CacheUtil<'a> {
-    fn prepare(&mut self, key: i32) {
-        self.most_recent_key = Some(key);
-    }
+    fn prepare(&mut self, key: i32) { self.most_recent_key = Some(key); }
 
-    fn done(&mut self, _key: i32) {
-        self.most_recent_key.take();
-    }
+    fn done(&mut self, _key: i32) { self.most_recent_key.take(); }
 }
 
 #[derive(Debug)]

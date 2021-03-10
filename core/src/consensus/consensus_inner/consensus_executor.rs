@@ -135,7 +135,8 @@ impl EpochExecutionTask {
         epoch_arena_index: usize, inner: &ConsensusGraphInner,
         reward_execution_info: Option<RewardExecutionInfo>,
         on_local_pivot: bool, force_recompute: bool,
-    ) -> Self {
+    ) -> Self
+    {
         Self {
             epoch_hash: inner.arena[epoch_arena_index].hash,
             epoch_block_hashes: inner.get_epoch_block_hashes(epoch_arena_index),
@@ -181,7 +182,8 @@ impl ConsensusExecutor {
         consensus_inner: Arc<RwLock<ConsensusGraphInner>>,
         config: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, bench_mode: bool,
-    ) -> Arc<Self> {
+    ) -> Arc<Self>
+    {
         let machine = tx_pool.machine();
         let handler = Arc::new(ConsensusExecutionHandler::new(
             tx_pool,
@@ -364,7 +366,8 @@ impl ConsensusExecutor {
     pub fn get_reward_execution_info_from_index(
         &self, inner: &mut ConsensusGraphInner,
         reward_index: Option<(usize, usize)>,
-    ) -> Option<RewardExecutionInfo> {
+    ) -> Option<RewardExecutionInfo>
+    {
         reward_index.map(
             |(pivot_arena_index, anticone_penalty_cutoff_epoch_arena_index)| {
                 // We have to wait here because blame information will determine the reward of each block.
@@ -537,7 +540,8 @@ impl ConsensusExecutor {
     pub fn get_blame_and_deferred_state_for_generation(
         &self, parent_block_hash: &H256,
         inner_lock: &RwLock<ConsensusGraphInner>,
-    ) -> Result<StateBlameInfo, String> {
+    ) -> Result<StateBlameInfo, String>
+    {
         let (parent_arena_index, last_state_block) = {
             let inner = inner_lock.read();
             let parent_opt = inner.hash_to_arena_indices.get(parent_block_hash);
@@ -599,7 +603,8 @@ impl ConsensusExecutor {
     pub fn compute_epoch(
         &self, task: EpochExecutionTask,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) {
+    )
+    {
         if !self.consensus_graph_bench_mode {
             self.handler.handle_epoch_execution(task, debug_record)
         }
@@ -794,7 +799,8 @@ impl ConsensusExecutionHandler {
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
         config: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, machine: Arc<Machine>,
-    ) -> Self {
+    ) -> Self
+    {
         ConsensusExecutionHandler {
             tx_pool,
             data_man,
@@ -835,7 +841,8 @@ impl ConsensusExecutionHandler {
     fn handle_epoch_execution(
         &self, task: EpochExecutionTask,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) {
+    )
+    {
         let _timer = MeterTimer::time_func(CONSENSIS_EXECUTION_TIMER.as_ref());
         self.compute_epoch(
             &task.epoch_hash,
@@ -884,7 +891,8 @@ impl ConsensusExecutionHandler {
         on_local_pivot: bool,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
         force_recompute: bool,
-    ) {
+    )
+    {
         // FIXME: Question: where to calculate if we should make a snapshot?
         // FIXME: Currently we make the snapshotting decision when committing
         // FIXME: a new state.
@@ -1052,7 +1060,8 @@ impl ConsensusExecutionHandler {
         &self, spec: &Spec, epoch_id: EpochId, state: &mut State,
         epoch_blocks: &Vec<Arc<Block>>, start_block_number: u64,
         on_local_pivot: bool,
-    ) -> DbResult<Vec<Arc<BlockReceipts>>> {
+    ) -> DbResult<Vec<Arc<BlockReceipts>>>
+    {
         // Prefetch accounts for transactions.
         // The return value _prefetch_join_handles is used to join all threads
         // before the exit of this function.
@@ -1321,7 +1330,8 @@ impl ConsensusExecutionHandler {
         on_local_pivot: bool,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
         account_start_nonce: U256,
-    ) {
+    )
+    {
         /// (Fee, SetOfPackingBlockHash)
         struct TxExecutionInfo(U256, BTreeSet<H256>);
 
@@ -1621,7 +1631,8 @@ impl ConsensusExecutionHandler {
     fn recompute_states(
         &self, pivot_hash: &H256, epoch_blocks: &Vec<Arc<Block>>,
         start_block_number: u64,
-    ) -> DbResult<Vec<Arc<BlockReceipts>>> {
+    ) -> DbResult<Vec<Arc<BlockReceipts>>>
+    {
         debug!(
             "Recompute receipts epoch_id={}, block_count={}",
             pivot_hash,

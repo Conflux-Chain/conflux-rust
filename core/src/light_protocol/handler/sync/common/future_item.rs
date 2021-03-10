@@ -21,13 +21,9 @@ pub enum PendingItem<Item, Err> {
 }
 
 impl<Item, Err> PendingItem<Item, Err> {
-    pub fn pending() -> Self {
-        Self::Pending(vec![])
-    }
+    pub fn pending() -> Self { Self::Pending(vec![]) }
 
-    pub fn ready(item: Item) -> Self {
-        Self::Ready(item)
-    }
+    pub fn ready(item: Item) -> Self { Self::Ready(item) }
 
     pub fn clear_error(&mut self) {
         if let Self::Error(_) = self {

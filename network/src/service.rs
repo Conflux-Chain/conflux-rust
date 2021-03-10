@@ -93,9 +93,7 @@ const DEFAULT_CHECK_SESSIONS_TIMEOUT: Duration = Duration::from_secs(10);
 pub struct ProtocolVersion(pub u8);
 
 impl MallocSizeOf for ProtocolVersion {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
-        0
-    }
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
 
 pub const MAX_DATAGRAM_SIZE: usize = 1280;
@@ -117,9 +115,7 @@ impl UdpChannel {
         }
     }
 
-    pub fn any_sends_queued(&self) -> bool {
-        !self.send_queue.is_empty()
-    }
+    pub fn any_sends_queued(&self) -> bool { !self.send_queue.is_empty() }
 
     pub fn dequeue_send(&mut self) -> Option<Datagram> {
         self.send_queue.pop_front()
@@ -171,17 +167,13 @@ impl NetworkService {
         }
     }
 
-    pub fn is_consortium(&self) -> bool {
-        self.config.is_consortium
-    }
+    pub fn is_consortium(&self) -> bool { self.config.is_consortium }
 
     pub fn get_network_type(&self) -> &Network {
         self.config.get_network_type()
     }
 
-    pub fn network_id(&self) -> u64 {
-        self.config.id
-    }
+    pub fn network_id(&self) -> u64 { self.config.id }
 
     pub fn start_io_service(&mut self) -> Result<(), Error> {
         let raw_io_service =
@@ -289,7 +281,8 @@ impl NetworkService {
     pub fn register_protocol(
         &self, handler: Arc<dyn NetworkProtocolHandler + Sync>,
         protocol: ProtocolId, version: ProtocolVersion,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    {
         self.io_service.as_ref().unwrap().send_message(
             NetworkIoMessage::AddHandler {
                 handler,
@@ -426,13 +419,9 @@ pub struct HostMetadata {
 }
 
 impl HostMetadata {
-    pub(crate) fn secret(&self) -> &Secret {
-        self.keys.secret()
-    }
+    pub(crate) fn secret(&self) -> &Secret { self.keys.secret() }
 
-    pub(crate) fn id(&self) -> &NodeId {
-        self.keys.public()
-    }
+    pub(crate) fn id(&self) -> &NodeId { self.keys.public() }
 }
 
 #[derive(Copy, Clone)]
@@ -693,9 +682,7 @@ impl NetworkServiceInner {
         }
     }
 
-    pub fn get_ip_filter(&self) -> &IpFilter {
-        &self.config.ip_filter
-    }
+    pub fn get_ip_filter(&self) -> &IpFilter { &self.config.ip_filter }
 
     fn add_boot_node(&self, id: &str) {
         match Node::from_str(id) {
@@ -776,9 +763,7 @@ impl NetworkServiceInner {
         );
     }
 
-    pub fn local_addr(&self) -> SocketAddr {
-        self.metadata.local_address
-    }
+    pub fn local_addr(&self) -> SocketAddr { self.metadata.local_address }
 
     fn drop_node(&self, local_id: NodeId) -> Result<(), Error> {
         let removed_node = self.node_db.write().remove(&local_id);
@@ -1023,7 +1008,8 @@ impl NetworkServiceInner {
     fn create_connection(
         &self, socket: TcpStream, address: SocketAddr, id: Option<&NodeId>,
         io: &IoContext<NetworkIoMessage>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    {
         match self.sessions.create(socket, address, id, io, self) {
             Ok(token) => {
                 debug!("new session created, token = {}, address = {:?}, id = {:?}", token, address, id);
@@ -1236,7 +1222,8 @@ impl NetworkServiceInner {
     fn kill_connection_by_token(
         &self, token: StreamToken, io: &IoContext<NetworkIoMessage>,
         remote: bool, op: Option<UpdateNodeOperation>, reason: &str,
-    ) {
+    )
+    {
         let mut to_disconnect: Vec<ProtocolId> = Vec::new();
         let mut failure_id = None;
         let mut deregister = false;
@@ -1310,7 +1297,8 @@ impl NetworkServiceInner {
     fn kill_connection(
         &self, node_id: &NodeId, io: &IoContext<NetworkIoMessage>,
         remote: bool, op: Option<UpdateNodeOperation>, reason: &str,
-    ) -> bool {
+    ) -> bool
+    {
         let mut to_disconnect: Vec<ProtocolId> = Vec::new();
         let mut deregister = false;
         let mut token = 0;
@@ -1874,7 +1862,8 @@ impl DelayMessageContext {
         ts: Instant, io: IoContext<NetworkIoMessage>, protocol: ProtocolId,
         session: SharedSession, peer: NodeId, msg: Vec<u8>,
         min_protocol_version: ProtocolVersion, priority: SendQueuePriority,
-    ) -> Self {
+    ) -> Self
+    {
         DelayMessageContext {
             ts,
             io,
@@ -1889,9 +1878,7 @@ impl DelayMessageContext {
 }
 
 impl Ord for DelayMessageContext {
-    fn cmp(&self, other: &Self) -> Ordering {
-        other.ts.cmp(&self.ts)
-    }
+    fn cmp(&self, other: &Self) -> Ordering { other.ts.cmp(&self.ts) }
 }
 
 impl PartialOrd for DelayMessageContext {
@@ -1903,9 +1890,7 @@ impl PartialOrd for DelayMessageContext {
 impl Eq for DelayMessageContext {}
 
 impl PartialEq for DelayMessageContext {
-    fn eq(&self, other: &Self) -> bool {
-        self.ts == other.ts
-    }
+    fn eq(&self, other: &Self) -> bool { self.ts == other.ts }
 }
 
 /// Wrapper around network service.
@@ -1922,7 +1907,8 @@ impl<'a> NetworkContext<'a> {
         io: &'a IoContext<NetworkIoMessage>,
         handler: Arc<dyn NetworkProtocolHandler + Sync>, protocol: ProtocolId,
         network_service: &'a NetworkServiceInner,
-    ) -> NetworkContext<'a> {
+    ) -> NetworkContext<'a>
+    {
         let min_supported_version = handler.minimum_supported_version();
         NetworkContext {
             io,
@@ -1939,9 +1925,7 @@ impl<'a> NetworkContext<'a> {
 }
 
 impl<'a> NetworkContextTrait for NetworkContext<'a> {
-    fn get_protocol(&self) -> ProtocolId {
-        self.protocol
-    }
+    fn get_protocol(&self) -> ProtocolId { self.protocol }
 
     fn get_peer_connection_origin(&self, node_id: &NodeId) -> Option<bool> {
         self.network_service.get_peer_connection_origin(node_id)
@@ -1951,16 +1935,15 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
         *node_id == *self.network_service.metadata.id()
     }
 
-    fn self_node_id(&self) -> NodeId {
-        *self.network_service.metadata.id()
-    }
+    fn self_node_id(&self) -> NodeId { *self.network_service.metadata.id() }
 
     /// Message is sent through this method.
     fn send(
         &self, node_id: &NodeId, msg: Vec<u8>,
         min_protocol_version: ProtocolVersion,
         version_valid_till: ProtocolVersion, priority: SendQueuePriority,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    {
         if version_valid_till < self.min_supported_version {
             bail!(ErrorKind::SendUnsupportedMessage {
                 protocol: self.protocol,
@@ -2122,15 +2105,11 @@ impl std::fmt::Display for ProtocolVersion {
 impl std::ops::Deref for ProtocolVersion {
     type Target = u8;
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+    fn deref(&self) -> &Self::Target { &self.0 }
 }
 
 impl Encodable for ProtocolVersion {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.append_internal(&self.0);
-    }
+    fn rlp_append(&self, s: &mut RlpStream) { s.append_internal(&self.0); }
 }
 
 impl Decodable for ProtocolVersion {

@@ -40,14 +40,10 @@ impl fmt::Display for VMType {
 }
 
 impl Default for VMType {
-    fn default() -> Self {
-        VMType::Interpreter
-    }
+    fn default() -> Self { VMType::Interpreter }
 }
 
 impl VMType {
     /// Return all possible VMs (Interpreter)
-    pub fn all() -> Vec<VMType> {
-        vec![VMType::Interpreter]
-    }
+    pub fn all() -> Vec<VMType> { vec![VMType::Interpreter] }
 }

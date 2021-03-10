@@ -224,7 +224,8 @@ impl TransactionDigests {
     pub fn new(
         window_index: usize, key1: u64, key2: u64, short_ids: Vec<u8>,
         tx_hashes: Vec<H256>,
-    ) -> TransactionDigests {
+    ) -> TransactionDigests
+    {
         TransactionDigests {
             window_index,
             key1,
@@ -299,28 +300,18 @@ pub struct GetTransactions {
 impl_request_id_methods!(GetTransactions);
 
 impl AsAny for GetTransactions {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+    fn as_any(&self) -> &dyn Any { self }
 
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 mark_msg_version_bound!(GetTransactions, SYNC_PROTO_V1, SYNC_PROTO_V3);
 impl Message for GetTransactions {
-    fn msg_id(&self) -> MsgId {
-        msgid::GET_TRANSACTIONS
-    }
+    fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS }
 
-    fn msg_name(&self) -> &'static str {
-        "GetTransactions"
-    }
+    fn msg_name(&self) -> &'static str { "GetTransactions" }
 
-    fn priority(&self) -> SendQueuePriority {
-        SendQueuePriority::Normal
-    }
+    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 }
 
 impl Request for GetTransactions {
@@ -367,9 +358,7 @@ impl Request for GetTransactions {
         self.tx_hashes_indices.is_empty() && self.indices.is_empty()
     }
 
-    fn resend(&self) -> Option<Box<dyn Request>> {
-        None
-    }
+    fn resend(&self) -> Option<Box<dyn Request>> { None }
 }
 
 impl Handleable for GetTransactions {
@@ -460,13 +449,9 @@ pub struct GetTransactionsFromTxHashes {
 impl_request_id_methods!(GetTransactionsFromTxHashes);
 
 impl AsAny for GetTransactionsFromTxHashes {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+    fn as_any(&self) -> &dyn Any { self }
 
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 mark_msg_version_bound!(
@@ -475,17 +460,11 @@ mark_msg_version_bound!(
     SYNC_PROTO_V3
 );
 impl Message for GetTransactionsFromTxHashes {
-    fn msg_id(&self) -> MsgId {
-        msgid::GET_TRANSACTIONS_FROM_TX_HASHES
-    }
+    fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS_FROM_TX_HASHES }
 
-    fn msg_name(&self) -> &'static str {
-        "GetTransactionsFromTxHashes"
-    }
+    fn msg_name(&self) -> &'static str { "GetTransactionsFromTxHashes" }
 
-    fn priority(&self) -> SendQueuePriority {
-        SendQueuePriority::Normal
-    }
+    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 }
 
 impl Request for GetTransactionsFromTxHashes {
@@ -513,13 +492,9 @@ impl Request for GetTransactionsFromTxHashes {
         self.tx_hashes = tx_hashes;
     }
 
-    fn is_empty(&self) -> bool {
-        self.tx_hashes.is_empty()
-    }
+    fn is_empty(&self) -> bool { self.tx_hashes.is_empty() }
 
-    fn resend(&self) -> Option<Box<dyn Request>> {
-        None
-    }
+    fn resend(&self) -> Option<Box<dyn Request>> { None }
 }
 
 impl Handleable for GetTransactionsFromTxHashes {
