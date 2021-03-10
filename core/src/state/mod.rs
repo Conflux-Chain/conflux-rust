@@ -20,6 +20,7 @@ use cfx_parameters::{
     staking::*,
 };
 use cfx_state::{
+    maybe_address,
     state_trait::{CheckpointTrait, StateOpsTrait},
     CleanupMode, CollateralCheckResult, StateTrait, SubstateTrait,
 };
@@ -343,7 +344,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     fn sponsor_for_gas(&self, address: &Address) -> DbResult<Option<Address>> {
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(None, |acc| {
-                Self::maybe_address(&acc.sponsor_info().sponsor_for_gas)
+                maybe_address(&acc.sponsor_info().sponsor_for_gas)
             })
         })
     }
@@ -353,7 +354,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     ) -> DbResult<Option<Address>> {
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(None, |acc| {
-                Self::maybe_address(&acc.sponsor_info().sponsor_for_collateral)
+                maybe_address(&acc.sponsor_info().sponsor_for_collateral)
             })
         })
     }
@@ -1055,14 +1056,6 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             ))),
         );
         Ok(())
-    }
-
-    fn maybe_address(address: &Address) -> Option<Address> {
-        if address.is_zero() {
-            None
-        } else {
-            Some(*address)
-        }
     }
 
     /// Caller should make sure that staking_balance for this account is

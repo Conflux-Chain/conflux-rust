@@ -2,13 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{Address, U256};
-pub use state_trait::StateTrait;
-use std::collections::HashSet;
-pub use substate_trait::SubstateTrait;
-
+pub(self) mod cache_object;
+pub mod state;
+pub(self) mod state_object_cache;
 pub mod state_trait;
 pub mod substate_trait;
+
+pub use state_trait::StateTrait;
+pub use substate_trait::{SubstateMngTrait, SubstateTrait};
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum CollateralCheckResult {
@@ -29,3 +30,15 @@ pub enum CleanupMode<'a> {
     /// internal Contracts.
     TrackTouched(&'a mut HashSet<Address>),
 }
+
+pub fn maybe_address(address: &Address) -> Option<Address> {
+    if address.is_zero() {
+        None
+    } else {
+        Some(*address)
+    }
+}
+
+use cfx_types::{Address, U256};
+use primitives::{is_default::IsDefault, StorageKey};
+use std::collections::HashSet;
