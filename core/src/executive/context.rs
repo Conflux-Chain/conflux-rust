@@ -243,7 +243,6 @@ impl<'a, State: StateTrait<Substate = Substate>> ContextTrait
             self.substate,
             self.stack_depth + 1,
             &mut tracer,
-            self.spec.account_start_nonce(self.env.number),
         );
         Ok(Ok(into_contract_create_result(
             out,

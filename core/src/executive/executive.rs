@@ -1234,7 +1234,6 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
         &mut self, params: ActionParams, substate: &mut Substate,
         stack_depth: usize,
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
-        account_start_nonce: U256,
     ) -> vm::Result<FinalizationResult>
     {
         tracer.prepare_trace_create(&params);
@@ -1254,7 +1253,7 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
             self.internal_contract_map,
             substate.contracts_in_callstack.clone(),
         )
-        .consume(self.state, substate, tracer, account_start_nonce);
+        .consume(self.state, substate, tracer, self.spec.account_start_nonce(self.env.number));
 
         result
     }
@@ -1262,7 +1261,6 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
     pub fn create(
         &mut self, params: ActionParams, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
-        account_start_nonce: U256,
     ) -> vm::Result<FinalizationResult>
     {
         self.create_with_stack_depth(
@@ -1270,7 +1268,6 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
             substate,
             0,
             tracer,
-            account_start_nonce,
         )
     }
 
@@ -1602,7 +1599,6 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
                     params,
                     &mut substate,
                     &mut options.tracer,
-                    self.spec.account_start_nonce(self.env.number),
                 )
             }
             Action::Call(ref address) => {

@@ -140,8 +140,6 @@ fn test_sender_balance() {
                 params.clone(),
                 &mut substate,
                 &mut tracer,
-                Spec::new_spec()
-                    .account_start_nonce(/* _block_number = */ 0),
             )
             .unwrap();
         state
@@ -252,7 +250,6 @@ fn test_create_contract_out_of_depth() {
             params,
             &mut substate,
             &mut tracer,
-            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap()
     };
@@ -323,7 +320,6 @@ fn test_suicide_when_creation() {
             params,
             &mut substate,
             &mut tracer,
-            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
 
@@ -586,7 +582,6 @@ fn test_keccak() {
             params,
             &mut substate,
             &mut tracer,
-            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
     };
 
