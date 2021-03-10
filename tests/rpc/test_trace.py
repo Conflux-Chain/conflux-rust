@@ -11,9 +11,7 @@ class TestTrace(RpcClient):
     def test_trace_after_reorg(self):
         genesis = self.best_block_hash()
         tx = create_transaction()
-        print(tx.hash_hex())
         b1 = self.generate_custom_block(parent_hash=genesis, referee=[], txs=[tx])
-        print(b1)
         self.wait_for_receipt(tx.hash_hex())
         trace1 = self.get_block_trace(b1)
         assert_equal(len(trace1["transactionTraces"]), 1)
@@ -29,11 +27,9 @@ class TestTrace(RpcClient):
         chain2_best_epoch = self.epoch_number()
 
         trace3 = self.get_block_trace(b2)
-        print("trace3", trace3)
         assert_equal(len(trace3["transactionTraces"]), 1)
         assert_equal(len(trace3["transactionTraces"][0]["traces"]), 1)
         trace2 = self.get_block_trace(b1)
-        print("trace2", trace2)
         assert_equal(len(trace2["transactionTraces"]), 1)
         assert_equal(len(trace2["transactionTraces"][0]["traces"]), 0)
         parent = b1
