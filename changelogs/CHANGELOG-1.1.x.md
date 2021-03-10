@@ -1,6 +1,7 @@
 # 1.1.3
 ## Improvements
 - Add new trace RPC `trace_transaction`.
+- Use hex encoding for the returned bytes in trace-related RPCs.
 
 # 1.1.2
 
