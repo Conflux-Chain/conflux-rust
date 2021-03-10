@@ -1,3 +1,7 @@
+# 1.1.3
+## Improvements
+- Add new trace RPC `trace_transaction`.
+
 # 1.1.2
 
 ## Improvements
