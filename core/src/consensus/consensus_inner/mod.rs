@@ -1544,8 +1544,8 @@ impl ConsensusGraphInner {
 
     /// All referees should be in the anticone of each other.
     /// If there is a path from a referee `A` to another referee `B` by
-    /// following edges towards parent/referees, we will treat `B` as a
-    /// valid referee and ignore `A` because `A` is not the graph terminal.
+    /// following edges towards parent/referees, we will treat `A` as a
+    /// valid referee and ignore `B` because `B` is not the graph terminal.
     /// This should only happen if the miner generating this
     /// block is malicious. TODO: Explain why not `partial_invalid`?
     fn insert_referee_if_not_duplicate(
@@ -1555,10 +1555,10 @@ impl ConsensusGraphInner {
             let x = referees[i];
             let lca = self.lca(x, me);
             if lca == me {
-                // `me` is pointed by `x`
+                // `me` is an ancestor of `x`
                 return;
             } else if lca == x {
-                // `x` is pointed by `me`
+                // `x` is an ancestor of `me`
                 referees[i] = me;
                 return;
             }
