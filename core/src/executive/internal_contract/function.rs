@@ -4,11 +4,11 @@
 
 use super::SolidityFunctionTrait;
 use crate::{
-    state::Substate,
+    state::{StateGeneric, Substate},
     trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, CallType, Env, GasLeft, ReturnData, Spec},
 };
-use cfx_state::state_trait::StateOpsTrait;
+use cfx_storage::StorageStateTrait;
 use cfx_types::U256;
 use solidity_abi::{ABIDecodable, ABIEncodable};
 
@@ -25,16 +25,15 @@ use solidity_abi::{ABIDecodable, ABIEncodable};
 ///
 /// You always needs to implement `ExecutionTrait`, which is the core of the
 /// function execution.
-impl<
-        T: InterfaceTrait
-            + PreExecCheckTrait
-            + UpfrontPaymentTrait
-            + ExecutionTrait,
-    > SolidityFunctionTrait for T
+impl<T, S: StorageStateTrait> SolidityFunctionTrait<S> for T
+where T: InterfaceTrait
+        + PreExecCheckTrait
+        + UpfrontPaymentTrait<S>
+        + ExecutionTrait<S>
 {
     fn execute(
         &self, input: &[u8], params: &ActionParams, env: &Env, spec: &Spec,
-        state: &mut dyn StateOpsTrait, substate: &mut Substate,
+        state: &mut StateGeneric<S>, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>
     {
@@ -87,18 +86,22 @@ pub trait PreExecCheckTrait: Send + Sync {
     ) -> vm::Result<()>;
 }
 
-pub trait ExecutionTrait: Send + Sync + InterfaceTrait {
+pub trait ExecutionTrait<S: StorageStateTrait>:
+    Send + Sync + InterfaceTrait
+{
     fn execute_inner(
         &self, input: Self::Input, params: &ActionParams, env: &Env,
-        spec: &Spec, state: &mut dyn StateOpsTrait, substate: &mut Substate,
+        spec: &Spec, state: &mut StateGeneric<S>, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<<Self as InterfaceTrait>::Output>;
 }
 
-pub trait UpfrontPaymentTrait: Send + Sync + InterfaceTrait {
+pub trait UpfrontPaymentTrait<S: StorageStateTrait>:
+    Send + Sync + InterfaceTrait
+{
     fn upfront_gas_payment(
         &self, input: &Self::Input, params: &ActionParams, spec: &Spec,
-        state: &dyn StateOpsTrait,
+        state: &StateGeneric<S>,
     ) -> U256;
 }
 
@@ -158,16 +161,19 @@ macro_rules! make_solidity_function {
     ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($input:ty, $interface:expr, $output:ty ); ) => {
         $(#[$attr])*
         #[derive(Copy, Clone)]
-        $visibility struct $name {
+        $visibility struct $name<S> {
+            phantom: std::marker::PhantomData<S>,
         }
 
-        impl $name {
+        impl<S> $name<S> {
             pub fn instance() -> Self {
-                Self {}
+                Self {
+                    phantom: Default::default(),
+                }
             }
         }
 
-        impl InterfaceTrait for $name {
+        impl<S> InterfaceTrait for $name<S> {
             type Input = $input;
             type Output = $output;
             const NAME_AND_PARAMS: &'static str = $interface;
@@ -187,14 +193,14 @@ macro_rules! impl_function_type {
         $crate::impl_function_type!(@inner, $name, false, false $(, $gas)?);
     };
     ( @inner, $name:ident, $payable:expr, $has_write_op:expr $(, $gas:expr)? ) => {
-        impl PreExecCheckConfTrait for $name {
+        impl<S: Send + Sync> PreExecCheckConfTrait for $name<S> {
             const PAYABLE: bool = $payable;
             const HAS_WRITE_OP: bool = $has_write_op;
         }
         $(
-            impl UpfrontPaymentTrait for $name {
+            impl<S: cfx_storage::StorageStateTrait + Send + Sync> UpfrontPaymentTrait<S> for $name<S> {
                 fn upfront_gas_payment(
-                    &self, _input: &Self::Input, _params: &ActionParams, _spec: &Spec, _state: &dyn StateOpsTrait,
+                    &self, _input: &Self::Input, _params: &ActionParams, _spec: &Spec, _state: &StateGeneric<S>,
                 ) -> U256 {
                     U256::from($gas)
                 }
@@ -202,14 +208,14 @@ macro_rules! impl_function_type {
         )?
     };
     ( $name:ident, "query_with_default_gas" ) => {
-        impl PreExecCheckConfTrait for $name {
+        impl<S: Send + Sync> PreExecCheckConfTrait for $name<S> {
             const PAYABLE: bool = false ;
             const HAS_WRITE_OP: bool = false;
         }
 
-        impl UpfrontPaymentTrait for $name {
+        impl<S: cfx_storage::StorageStateTrait + Send + Sync> UpfrontPaymentTrait<S> for $name<S> {
             fn upfront_gas_payment(
-                &self, _input: &Self::Input, _params: &ActionParams, spec: &Spec, _state: &dyn StateOpsTrait,
+                &self, _input: &Self::Input, _params: &ActionParams, spec: &Spec, _state: &StateGeneric<S>,
             ) -> U256 {
                 U256::from(spec.balance_gas)
             }

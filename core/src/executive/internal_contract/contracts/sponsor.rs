@@ -15,30 +15,31 @@ use crate::{
     evm::{ActionParams, Spec},
     impl_function_type, make_function_table, make_solidity_contract,
     make_solidity_function,
-    state::Substate,
+    state::{StateGeneric, Substate},
     trace::{trace::ExecTrace, Tracer},
     vm::{self, Env},
 };
-use cfx_state::state_trait::StateOpsTrait;
+use cfx_storage::StorageStateTrait;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 #[cfg(test)]
 use rustc_hex::FromHex;
 
-fn generate_fn_table() -> SolFnTable {
+fn generate_fn_table<S: StorageStateTrait + Send + Sync + 'static>(
+) -> SolFnTable<S> {
     make_function_table!(
-        SetSponsorForGas,
-        SetSponsorForCollateral,
-        AddPrivilege,
-        RemovePrivilege,
-        GetSponsorForGas,
-        GetSponsoredBalanceForGas,
-        GetSponsoredGasFeeUpperBound,
-        GetSponsorForCollateral,
-        GetSponsoredBalanceForCollateral,
-        IsWhitelisted,
-        IsAllWhitelisted,
-        AddPrivilegeByAdmin,
-        RemovePrivilegeByAdmin
+        SetSponsorForGas<S>,
+        SetSponsorForCollateral<S>,
+        AddPrivilege<S>,
+        RemovePrivilege<S>,
+        GetSponsorForGas<S>,
+        GetSponsoredBalanceForGas<S>,
+        GetSponsoredGasFeeUpperBound<S>,
+        GetSponsorForCollateral<S>,
+        GetSponsoredBalanceForCollateral<S>,
+        IsWhitelisted<S>,
+        IsAllWhitelisted<S>,
+        AddPrivilegeByAdmin<S>,
+        RemovePrivilegeByAdmin<S>
     )
 }
 
@@ -51,10 +52,12 @@ make_solidity_function! {
 }
 impl_function_type!(SetSponsorForGas, "payable_write", gas: 2 * SPEC.sstore_reset_gas);
 
-impl ExecutionTrait for SetSponsorForGas {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
+    for SetSponsorForGas<S>
+{
     fn execute_inner(
         &self, inputs: (Address, U256), params: &ActionParams, _env: &Env,
-        spec: &Spec, state: &mut dyn StateOpsTrait, substate: &mut Substate,
+        spec: &Spec, state: &mut StateGeneric<S>, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -69,10 +72,12 @@ make_solidity_function! {
 }
 impl_function_type!(SetSponsorForCollateral, "payable_write", gas: 2 * SPEC.sstore_reset_gas);
 
-impl ExecutionTrait for SetSponsorForCollateral {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
+    for SetSponsorForCollateral<S>
+{
     fn execute_inner(
         &self, input: Address, params: &ActionParams, _env: &Env, spec: &Spec,
-        state: &mut dyn StateOpsTrait, substate: &mut Substate,
+        state: &mut StateGeneric<S>, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -85,20 +90,22 @@ make_solidity_function! {
 }
 impl_function_type!(AddPrivilege, "non_payable_write");
 
-impl UpfrontPaymentTrait for AddPrivilege {
+impl<S: StorageStateTrait + Send + Sync> UpfrontPaymentTrait<S>
+    for AddPrivilege<S>
+{
     fn upfront_gas_payment(
         &self, input: &Vec<Address>, _: &ActionParams, spec: &Spec,
-        _: &dyn StateOpsTrait,
+        _: &StateGeneric<S>,
     ) -> U256
     {
         U256::from(spec.sstore_reset_gas) * input.len()
     }
 }
 
-impl ExecutionTrait for AddPrivilege {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for AddPrivilege<S> {
     fn execute_inner(
         &self, addresses: Vec<Address>, params: &ActionParams, _env: &Env,
-        _: &Spec, state: &mut dyn StateOpsTrait, _: &mut Substate,
+        _: &Spec, state: &mut StateGeneric<S>, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -116,20 +123,24 @@ make_solidity_function! {
 }
 impl_function_type!(RemovePrivilege, "non_payable_write");
 
-impl UpfrontPaymentTrait for RemovePrivilege {
+impl<S: StorageStateTrait + Send + Sync> UpfrontPaymentTrait<S>
+    for RemovePrivilege<S>
+{
     fn upfront_gas_payment(
         &self, input: &Vec<Address>, _: &ActionParams, spec: &Spec,
-        _: &dyn StateOpsTrait,
+        _: &StateGeneric<S>,
     ) -> U256
     {
         U256::from(spec.sstore_reset_gas) * input.len()
     }
 }
 
-impl ExecutionTrait for RemovePrivilege {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
+    for RemovePrivilege<S>
+{
     fn execute_inner(
         &self, addresses: Vec<Address>, params: &ActionParams, _env: &Env,
-        _: &Spec, state: &mut dyn StateOpsTrait, _: &mut Substate,
+        _: &Spec, state: &mut StateGeneric<S>, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -148,10 +159,12 @@ make_solidity_function! {
 }
 impl_function_type!(GetSponsorForGas, "query_with_default_gas");
 
-impl ExecutionTrait for GetSponsorForGas {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
+    for GetSponsorForGas<S>
+{
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
-        state: &mut dyn StateOpsTrait, _: &mut Substate,
+        state: &mut StateGeneric<S>, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<Address>
     {
@@ -164,10 +177,12 @@ make_solidity_function! {
 }
 impl_function_type!(GetSponsoredBalanceForGas, "query_with_default_gas");
 
-impl ExecutionTrait for GetSponsoredBalanceForGas {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
+    for GetSponsoredBalanceForGas<S>
+{
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
-        state: &mut dyn StateOpsTrait, _: &mut Substate,
+        state: &mut StateGeneric<S>, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
@@ -180,10 +195,12 @@ make_solidity_function! {
 }
 impl_function_type!(GetSponsoredGasFeeUpperBound, "query_with_default_gas");
 
-impl ExecutionTrait for GetSponsoredGasFeeUpperBound {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
+    for GetSponsoredGasFeeUpperBound<S>
+{
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
-        state: &mut dyn StateOpsTrait, _: &mut Substate,
+        state: &mut StateGeneric<S>, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
@@ -196,10 +213,12 @@ make_solidity_function! {
 }
 impl_function_type!(GetSponsorForCollateral, "query_with_default_gas");
 
-impl ExecutionTrait for GetSponsorForCollateral {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
+    for GetSponsorForCollateral<S>
+{
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
-        state: &mut dyn StateOpsTrait, _: &mut Substate,
+        state: &mut StateGeneric<S>, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<Address>
     {
@@ -212,10 +231,12 @@ make_solidity_function! {
 }
 impl_function_type!(GetSponsoredBalanceForCollateral, "query_with_default_gas");
 
-impl ExecutionTrait for GetSponsoredBalanceForCollateral {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
+    for GetSponsoredBalanceForCollateral<S>
+{
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
-        state: &mut dyn StateOpsTrait, _: &mut Substate,
+        state: &mut StateGeneric<S>, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
@@ -228,10 +249,12 @@ make_solidity_function! {
 }
 impl_function_type!(IsWhitelisted, "query", gas: SPEC.sload_gas);
 
-impl ExecutionTrait for IsWhitelisted {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
+    for IsWhitelisted<S>
+{
     fn execute_inner(
         &self, (contract, user): (Address, Address), _: &ActionParams,
-        _env: &Env, _: &Spec, state: &mut dyn StateOpsTrait, _: &mut Substate,
+        _env: &Env, _: &Spec, state: &mut StateGeneric<S>, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<bool>
     {
@@ -248,10 +271,12 @@ make_solidity_function! {
 }
 impl_function_type!(IsAllWhitelisted, "query", gas: SPEC.sload_gas);
 
-impl ExecutionTrait for IsAllWhitelisted {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
+    for IsAllWhitelisted<S>
+{
     fn execute_inner(
         &self, contract: Address, _: &ActionParams, _env: &Env, _: &Spec,
-        state: &mut dyn StateOpsTrait, _: &mut Substate,
+        state: &mut StateGeneric<S>, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<bool>
     {
@@ -271,21 +296,25 @@ make_solidity_function! {
 }
 impl_function_type!(AddPrivilegeByAdmin, "non_payable_write");
 
-impl UpfrontPaymentTrait for AddPrivilegeByAdmin {
+impl<S: StorageStateTrait + Send + Sync> UpfrontPaymentTrait<S>
+    for AddPrivilegeByAdmin<S>
+{
     fn upfront_gas_payment(
         &self, (_contract, addresses): &(Address, Vec<Address>),
-        _: &ActionParams, spec: &Spec, _: &dyn StateOpsTrait,
+        _: &ActionParams, spec: &Spec, _: &StateGeneric<S>,
     ) -> U256
     {
         U256::from(spec.sstore_reset_gas) * addresses.len()
     }
 }
 
-impl ExecutionTrait for AddPrivilegeByAdmin {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
+    for AddPrivilegeByAdmin<S>
+{
     fn execute_inner(
         &self, (contract, addresses): (Address, Vec<Address>),
         params: &ActionParams, _env: &Env, _: &Spec,
-        state: &mut dyn StateOpsTrait, _: &mut Substate,
+        state: &mut StateGeneric<S>, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -303,21 +332,25 @@ make_solidity_function! {
 }
 impl_function_type!(RemovePrivilegeByAdmin, "non_payable_write");
 
-impl UpfrontPaymentTrait for RemovePrivilegeByAdmin {
+impl<S: StorageStateTrait + Send + Sync> UpfrontPaymentTrait<S>
+    for RemovePrivilegeByAdmin<S>
+{
     fn upfront_gas_payment(
         &self, (_contract, addresses): &(Address, Vec<Address>),
-        _: &ActionParams, spec: &Spec, _: &dyn StateOpsTrait,
+        _: &ActionParams, spec: &Spec, _: &StateGeneric<S>,
     ) -> U256
     {
         U256::from(spec.sstore_reset_gas) * addresses.len()
     }
 }
 
-impl ExecutionTrait for RemovePrivilegeByAdmin {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S>
+    for RemovePrivilegeByAdmin<S>
+{
     fn execute_inner(
         &self, (contract, addresses): (Address, Vec<Address>),
         params: &ActionParams, _env: &Env, _: &Spec,
-        state: &mut dyn StateOpsTrait, _: &mut Substate,
+        state: &mut StateGeneric<S>, _: &mut Substate,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {

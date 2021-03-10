@@ -212,8 +212,7 @@ pub fn initialize_common_modules(
         }
         NodeType::Unknown => {}
     }
-    let vm = VmFactory::new(1024 * 32);
-    let machine = Arc::new(new_machine_with_builtin(conf.common_params(), vm));
+    let machine = Arc::new(new_machine_with_builtin(conf.common_params()));
 
     let genesis_block = genesis_block(
         &storage_manager,
@@ -248,10 +247,12 @@ pub fn initialize_common_modules(
     ));
 
     let statistics = Arc::new(Statistics::new());
+    let vm = VmFactory::new(1024 * 32);
     let notifications = Notifications::init();
 
     let consensus = Arc::new(ConsensusGraph::new(
         consensus_conf,
+        vm,
         txpool.clone(),
         statistics,
         data_man.clone(),

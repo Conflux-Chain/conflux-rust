@@ -15,17 +15,18 @@ use crate::{
     evm::{ActionParams, Spec},
     impl_function_type, make_function_table, make_solidity_contract,
     make_solidity_function,
-    state::Substate,
+    state::{StateGeneric, Substate},
     trace::{trace::ExecTrace, Tracer},
     vm::{self, Env},
 };
-use cfx_state::state_trait::StateOpsTrait;
+use cfx_storage::StorageStateTrait;
 use cfx_types::{Address, U256};
 #[cfg(test)]
 use rustc_hex::FromHex;
 
-fn generate_fn_table() -> SolFnTable {
-    make_function_table!(SetAdmin, Destroy, GetAdmin)
+fn generate_fn_table<S: StorageStateTrait + Send + Sync + 'static>(
+) -> SolFnTable<S> {
+    make_function_table!(SetAdmin<S>, Destroy<S>, GetAdmin<S>)
 }
 
 make_solidity_contract! {
@@ -37,10 +38,10 @@ make_solidity_function! {
 }
 impl_function_type!(SetAdmin, "non_payable_write", gas: SPEC.sstore_reset_gas);
 
-impl ExecutionTrait for SetAdmin {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for SetAdmin<S> {
     fn execute_inner(
         &self, inputs: (Address, Address), params: &ActionParams, _env: &Env,
-        _spec: &Spec, state: &mut dyn StateOpsTrait, substate: &mut Substate,
+        _spec: &Spec, state: &mut StateGeneric<S>, substate: &mut Substate,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -59,10 +60,10 @@ make_solidity_function! {
 }
 impl_function_type!(Destroy, "non_payable_write", gas: SPEC.sstore_reset_gas);
 
-impl ExecutionTrait for Destroy {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for Destroy<S> {
     fn execute_inner(
         &self, input: Address, params: &ActionParams, _env: &Env, spec: &Spec,
-        state: &mut dyn StateOpsTrait, substate: &mut Substate,
+        state: &mut StateGeneric<S>, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -75,10 +76,10 @@ make_solidity_function! {
 }
 impl_function_type!(GetAdmin, "query_with_default_gas");
 
-impl ExecutionTrait for GetAdmin {
+impl<S: StorageStateTrait + Send + Sync> ExecutionTrait<S> for GetAdmin<S> {
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
-        state: &mut dyn StateOpsTrait, _: &mut Substate,
+        state: &mut StateGeneric<S>, _: &mut Substate,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<Address>
     {

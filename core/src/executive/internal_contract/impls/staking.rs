@@ -4,6 +4,7 @@
 
 use crate::{
     consensus_internal_parameters::MINED_BLOCK_COUNT_PER_QUARTER,
+    state::StateGeneric,
     trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, Env},
 };
@@ -11,13 +12,13 @@ use cfx_parameters::{
     consensus::ONE_CFX_IN_DRIP,
     internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
 };
-use cfx_state::state_trait::StateOpsTrait;
+use cfx_storage::StorageStateTrait;
 use cfx_types::{Address, U256};
 
 /// Implementation of `deposit(uint256)`.
-pub fn deposit(
+pub fn deposit<S: StorageStateTrait>(
     amount: U256, params: &ActionParams, env: &Env,
-    state: &mut dyn StateOpsTrait, tracer: &mut dyn Tracer<Output = ExecTrace>,
+    state: &mut StateGeneric<S>, tracer: &mut dyn Tracer<Output = ExecTrace>,
 ) -> vm::Result<()>
 {
     if amount < U256::from(ONE_CFX_IN_DRIP) {
@@ -36,9 +37,9 @@ pub fn deposit(
 }
 
 /// Implementation of `withdraw(uint256)`.
-pub fn withdraw(
+pub fn withdraw<S: StorageStateTrait>(
     amount: U256, params: &ActionParams, env: &Env,
-    state: &mut dyn StateOpsTrait, tracer: &mut dyn Tracer<Output = ExecTrace>,
+    state: &mut StateGeneric<S>, tracer: &mut dyn Tracer<Output = ExecTrace>,
 ) -> vm::Result<()>
 {
     state.remove_expired_vote_stake_info(&params.sender, env.number)?;
@@ -64,9 +65,9 @@ pub fn withdraw(
 }
 
 /// Implementation of `getVoteLocked(address,uint)`.
-pub fn vote_lock(
+pub fn vote_lock<S: StorageStateTrait>(
     amount: U256, unlock_block_number: U256, params: &ActionParams, env: &Env,
-    state: &mut dyn StateOpsTrait,
+    state: &mut StateGeneric<S>,
 ) -> vm::Result<()>
 {
     let unlock_block_number = unlock_block_number.low_u64();
@@ -84,9 +85,9 @@ pub fn vote_lock(
 }
 
 /// Implementation of `getLockedStakingBalance(address,uint)`.
-pub fn get_locked_staking(
+pub fn get_locked_staking<S: StorageStateTrait>(
     address: Address, block_number: U256, current_block_number: u64,
-    state: &mut dyn StateOpsTrait,
+    state: &mut StateGeneric<S>,
 ) -> vm::Result<U256>
 {
     let mut block_number = block_number.low_u64();
@@ -97,9 +98,9 @@ pub fn get_locked_staking(
 }
 
 /// Implementation of `getVotePower(address,uint)`.
-pub fn get_vote_power(
+pub fn get_vote_power<S: StorageStateTrait>(
     address: Address, block_number: U256, current_block_number: u64,
-    state: &mut dyn StateOpsTrait,
+    state: &mut StateGeneric<S>,
 ) -> vm::Result<U256>
 {
     let mut block_number = block_number.low_u64();

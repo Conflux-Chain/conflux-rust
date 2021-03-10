@@ -10,24 +10,6 @@ mod internal_contract;
 #[cfg(test)]
 mod executive_tests;
 
-trait CollateralCheckResultToVmResult {
-    fn into_vm_result(self) -> Result<(), vmError>;
-}
-
-impl CollateralCheckResultToVmResult for CollateralCheckResult {
-    fn into_vm_result(self) -> Result<(), vmError> {
-        match self {
-            CollateralCheckResult::ExceedStorageLimit { .. } => {
-                Err(vmError::ExceedStorageLimit)
-            }
-            CollateralCheckResult::NotEnoughBalance { required, got } => {
-                Err(vmError::NotEnoughBalanceForStorage { required, got })
-            }
-            CollateralCheckResult::Valid => Ok(()),
-        }
-    }
-}
-
 pub use self::{
     executed::*,
     executive::{
@@ -38,5 +20,3 @@ pub use self::{
         InternalContractTrait, SolidityFunctionTrait,
     },
 };
-use crate::vm::Error as vmError;
-use cfx_state::CollateralCheckResult;
