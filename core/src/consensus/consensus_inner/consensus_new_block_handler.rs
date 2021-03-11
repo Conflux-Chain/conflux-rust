@@ -1509,18 +1509,6 @@ impl ConsensusNewBlockHandler {
             }
         }
 
-        let era_genesis_height =
-            inner.get_era_genesis_height(inner.arena[parent].height);
-        let cur_pivot_era_block = if inner
-            .pivot_index_to_height(inner.pivot_chain.len())
-            > era_genesis_height
-        {
-            inner.get_pivot_block_arena_index(era_genesis_height)
-        } else {
-            NULL
-        };
-        let era_block = inner.get_era_genesis_block_with_parent(parent);
-
         // send updated pivot chain to pubsub
         let from = capped_fork_at;
         let to = inner.pivot_index_to_height(inner.pivot_chain.len());
@@ -1573,23 +1561,6 @@ impl ConsensusNewBlockHandler {
                 )
                 // FIXME: propogate error.
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
-
-            // It's only correct to set tx stale after the block is considered
-            // terminal for mining.
-            // Note that we conservatively only mark those blocks inside the
-            // current pivot era
-            if era_block == cur_pivot_era_block {
-                self.txpool.set_tx_packed(
-                    &self
-                        .data_man
-                        .block_by_hash(
-                            &inner.arena[me].hash,
-                            true, /* update_cache */
-                        )
-                        .expect("Already checked")
-                        .transactions,
-                );
-            }
 
             if inner.pivot_chain.len() > RECYCLE_TRANSACTION_DELAY as usize {
                 let recycle_pivot_index = inner.pivot_chain.len()
@@ -2029,6 +2000,39 @@ impl ConsensusNewBlockHandler {
                         true, /* force_recompute */
                     ),
                     None,
+                );
+            }
+        }
+    }
+
+    pub fn set_block_tx_packed(
+        &self, inner: &ConsensusGraphInner, hash: &H256,
+    ) {
+        if let Some(me) = inner.hash_to_arena_indices.get(hash) {
+            let parent = inner.arena[*me].parent;
+            let era_genesis_height =
+                inner.get_era_genesis_height(inner.arena[parent].height);
+            let cur_pivot_era_block = if inner
+                .pivot_index_to_height(inner.pivot_chain.len())
+                > era_genesis_height
+            {
+                inner.get_pivot_block_arena_index(era_genesis_height)
+            } else {
+                NULL
+            };
+            let era_block = inner.get_era_genesis_block_with_parent(parent);
+
+            // It's only correct to set tx stale after the block is considered
+            // terminal for mining.
+            // Note that we conservatively only mark those blocks inside the
+            // current pivot era
+            if era_block == cur_pivot_era_block {
+                self.txpool.set_tx_packed(
+                    &self
+                        .data_man
+                        .block_by_hash(&hash, true /* update_cache */)
+                        .expect("Already checked")
+                        .transactions,
                 );
             }
         }
