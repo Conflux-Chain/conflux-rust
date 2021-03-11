@@ -466,6 +466,21 @@ impl BlockDataManager {
             .read()
             .get(hash)
             .and_then(|traces_info| traces_info.get_current_data())
+            .or_else(|| {
+                self.db_manager.block_traces_from_db(hash).map(
+                    |BlockTracesWithEpoch(pivot, traces)| {
+                        self.block_traces
+                            .write()
+                            .entry(*hash)
+                            .or_insert(BlockTracesInfo::default())
+                            .insert_current_data(&pivot, traces.clone());
+                        self.cache_man
+                            .lock()
+                            .note_used(CacheId::BlockTraces(*hash));
+                        traces
+                    },
+                )
+            })
     }
 
     /// Similar to `block_execution_result_by_hash_with_epoch`.
