@@ -39,7 +39,7 @@ use crate::{
     block_data_manager::{
         db_manager::DBManager, tx_data_manager::TransactionDataManager,
     },
-    trace::trace::BlockExecTraces,
+    trace::trace::{BlockExecTraces, TransactionExecTraces},
 };
 pub use block_data_types::*;
 use cfx_internal_common::{
@@ -466,6 +466,12 @@ impl BlockDataManager {
             .read()
             .get(hash)
             .and_then(|traces_info| traces_info.get_current_data())
+    }
+
+    pub fn transactions_traces_by_block_hash(
+        &self, hash: &H256,
+    ) -> Option<Vec<TransactionExecTraces>> {
+        self.block_traces_by_hash(hash).map(Into::into)
     }
 
     /// Similar to `block_execution_result_by_hash_with_epoch`.

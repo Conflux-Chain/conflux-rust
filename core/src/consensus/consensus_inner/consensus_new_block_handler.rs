@@ -79,6 +79,9 @@ impl ConsensusNewBlockHandler {
     }
 
     /// Return (old_era_block_set, new_era_block_set).
+    /// `old_era_block_set` includes the blocks in the past of
+    /// `new_era_block_arena_index`. `new_era_block_set` includes all other
+    /// blocks (the anticone and the future).
     fn compute_old_era_and_new_era_block_set(
         inner: &mut ConsensusGraphInner, new_era_block_arena_index: usize,
     ) -> (HashSet<usize>, HashSet<usize>) {
@@ -146,24 +149,16 @@ impl ConsensusNewBlockHandler {
         let new_era_pivot_index = inner.height_to_pivot_index(new_era_height);
         for v in new_era_block_arena_index_set.iter() {
             let me = *v;
+            // It is necessary to process `referees` and
+            // `blockset_in_own_view_of_epoch` because
+            // `new_era_block_arena_index_set` include the blocks in
+            // the anticone of the new era genesis.
             inner.arena[me]
                 .referees
                 .retain(|v| new_era_block_arena_index_set.contains(v));
             inner.arena[me]
-                .referrers
-                .retain(|v| new_era_block_arena_index_set.contains(v));
-            // We no longer need to consider blocks outside our era when
-            // computing blockset_in_epoch
-            inner.arena[me]
                 .data
                 .blockset_in_own_view_of_epoch
-                .retain(|v| new_era_block_arena_index_set.contains(v));
-            // FIXME: This causes inconsistency between the db and the memory.
-            // FIXME: Although it does not impact the sync process. We should
-            // consider fix it.
-            inner.arena[me]
-                .data
-                .skipped_epoch_blocks
                 .retain(|v| new_era_block_arena_index_set.contains(v));
             if !new_era_block_arena_index_set.contains(
                 &inner.arena[me].data.past_view_last_timer_block_arena_index,
@@ -718,20 +713,17 @@ impl ConsensusNewBlockHandler {
     }
 
     fn recycle_tx_in_block(
-        &self, inner: &ConsensusGraphInner, arena_index: usize,
+        &self, inner: &ConsensusGraphInner, block_hash: &H256,
     ) {
-        if let Some(block) = inner.data_man.block_by_hash(
-            &inner.arena[arena_index].hash,
-            true, /* update_cache */
-        ) {
+        if let Some(block) = inner
+            .data_man
+            .block_by_hash(block_hash, true /* update_cache */)
+        {
             self.txpool.recycle_transactions(block.transactions.clone());
         } else {
             // This should only happen for blocks in the anticone of
             // checkpoints.
-            debug!(
-                "recycle_tx_in_block: block {:?} not in db",
-                inner.arena[arena_index].hash
-            );
+            debug!("recycle_tx_in_block: block {:?} not in db", block_hash);
         }
     }
 
@@ -1517,18 +1509,6 @@ impl ConsensusNewBlockHandler {
             }
         }
 
-        let era_genesis_height =
-            inner.get_era_genesis_height(inner.arena[parent].height);
-        let cur_pivot_era_block = if inner
-            .pivot_index_to_height(inner.pivot_chain.len())
-            > era_genesis_height
-        {
-            inner.get_pivot_block_arena_index(era_genesis_height)
-        } else {
-            NULL
-        };
-        let era_block = inner.get_era_genesis_block_with_parent(parent);
-
         // send updated pivot chain to pubsub
         let from = capped_fork_at;
         let to = inner.pivot_index_to_height(inner.pivot_chain.len());
@@ -1582,23 +1562,6 @@ impl ConsensusNewBlockHandler {
                 // FIXME: propogate error.
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
 
-            // It's only correct to set tx stale after the block is considered
-            // terminal for mining.
-            // Note that we conservatively only mark those blocks inside the
-            // current pivot era
-            if era_block == cur_pivot_era_block {
-                self.txpool.set_tx_packed(
-                    &self
-                        .data_man
-                        .block_by_hash(
-                            &inner.arena[me].hash,
-                            true, /* update_cache */
-                        )
-                        .expect("Already checked")
-                        .transactions,
-                );
-            }
-
             if inner.pivot_chain.len() > RECYCLE_TRANSACTION_DELAY as usize {
                 let recycle_pivot_index = inner.pivot_chain.len()
                     - RECYCLE_TRANSACTION_DELAY as usize
@@ -1608,7 +1571,7 @@ impl ConsensusNewBlockHandler {
                 let skipped_blocks = inner
                     .get_or_compute_skipped_epoch_blocks(recycle_arena_index)
                     .clone();
-                for idx in skipped_blocks {
+                for idx in &skipped_blocks {
                     self.recycle_tx_in_block(inner, idx);
                 }
             }
@@ -2037,6 +2000,39 @@ impl ConsensusNewBlockHandler {
                         true, /* force_recompute */
                     ),
                     None,
+                );
+            }
+        }
+    }
+
+    pub fn set_block_tx_packed(
+        &self, inner: &ConsensusGraphInner, hash: &H256,
+    ) {
+        if let Some(me) = inner.hash_to_arena_indices.get(hash) {
+            let parent = inner.arena[*me].parent;
+            let era_genesis_height =
+                inner.get_era_genesis_height(inner.arena[parent].height);
+            let cur_pivot_era_block = if inner
+                .pivot_index_to_height(inner.pivot_chain.len())
+                > era_genesis_height
+            {
+                inner.get_pivot_block_arena_index(era_genesis_height)
+            } else {
+                NULL
+            };
+            let era_block = inner.get_era_genesis_block_with_parent(parent);
+
+            // It's only correct to set tx stale after the block is considered
+            // terminal for mining.
+            // Note that we conservatively only mark those blocks inside the
+            // current pivot era
+            if era_block == cur_pivot_era_block {
+                self.txpool.set_tx_packed(
+                    &self
+                        .data_man
+                        .block_by_hash(&hash, true /* update_cache */)
+                        .expect("Already checked")
+                        .transactions,
                 );
             }
         }

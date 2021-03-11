@@ -3,8 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use super::RpcAddress;
+use crate::rpc::types::Bytes;
 use cfx_addr::Network;
-use cfx_bytes::Bytes;
 use cfx_types::U256;
 use cfxcore::{
     trace::trace::{
@@ -83,7 +83,7 @@ impl Call {
             to: RpcAddress::try_from_h160(call.to, network)?,
             value: call.value,
             gas: call.gas,
-            input: call.input,
+            input: call.input.into(),
             call_type: call.call_type,
         })
     }
@@ -104,7 +104,7 @@ impl Create {
             from: RpcAddress::try_from_h160(create.from, network)?,
             value: create.value,
             gas: create.gas,
-            init: create.init,
+            init: create.init.into(),
         })
     }
 }
@@ -126,7 +126,7 @@ impl CreateResult {
             outcome: result.outcome,
             addr: RpcAddress::try_from_h160(result.addr, network)?,
             gas_left: result.gas_left,
-            return_data: result.return_data,
+            return_data: result.return_data.into(),
         })
     }
 }
