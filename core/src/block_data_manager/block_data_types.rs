@@ -91,9 +91,26 @@ impl BlockTracesWithEpoch {
 
 /// The structure to maintain block data under different views.
 ///
-/// Note that in database only the results corresponding to the current pivot
+/// Note that in database only the data corresponding to the current pivot
 /// chain exist. This multi-version version are only maintained in memory and
-/// will be garbage collected.
+/// will be garbage collected. When `insert_current_data()` is called, we always
+/// update the version in DB to the current version.
+/// If there is no garbage-collection, this guarantees that the version in DB is
+/// the latest, and the in-memory version is EVENTUALLY consistent with the one
+/// in DB.
+///
+/// FIXME: There is a rare case to cause inconsistency with GC:
+/// Assume a thread T1 is writing the latest data and T2 is answering
+/// RPC requests, and the in-memory data have been garbage collected.
+///
+/// T2 reads old data from DB-> T1 writes new data to DB -> T1 writes new data
+/// to memory -> in-memory data are garbage collected again -> T2 writes old
+/// data to memory successfully with `insert_data()`
+///
+/// Now the data in DB are new, but the ones in memory are old.
+/// If we lock the in-memory structure before reading from DB, or we do not
+/// update the in-memory data with the one from DB, this inconsistency can be
+/// eliminated, but the performance will be affected.
 #[derive(Debug, SmartDefault)]
 pub struct BlockDataWithMultiVersion<Version, T> {
     data_version_tuple_array: Vec<DataVersionTuple<Version, T>>,
@@ -133,7 +150,9 @@ impl<Version: Copy + Eq + PartialEq, T: Clone>
         self.current_version = Some(version);
     }
 
-    /// Insert the latest data with its version
+    /// Insert the latest data with its version.
+    /// This should be called after we update the version in the database to
+    /// ensure consistency.
     pub fn insert_current_data(&mut self, version: &Version, data: T) {
         // If it's inserted before, we do not need to push a duplicated entry.
         if self.get_data_at_version(version).is_none() {
@@ -141,6 +160,20 @@ impl<Version: Copy + Eq + PartialEq, T: Clone>
                 .push(DataVersionTuple(*version, data));
         }
         self.current_version = Some(*version);
+    }
+
+    /// Insert the data with its version and update the current version if it's
+    /// not set. This is used when `version` is not guaranteed to be the
+    /// latest.
+    pub fn insert_data(&mut self, version: &Version, data: T) {
+        // If it's inserted before, we do not need to push a duplicated entry.
+        if self.get_data_at_version(version).is_none() {
+            self.data_version_tuple_array
+                .push(DataVersionTuple(*version, data));
+        }
+        if self.current_version.is_none() {
+            self.current_version = Some(*version);
+        }
     }
 
     /// Only keep the data in the given `version`.

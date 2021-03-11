@@ -462,10 +462,27 @@ impl BlockDataManager {
     /// Get the traces for a single block without checking the assumed pivot
     /// block
     pub fn block_traces_by_hash(&self, hash: &H256) -> Option<BlockExecTraces> {
-        self.block_traces
+        let maybe_traces = self
+            .block_traces
             .read()
             .get(hash)
             .and_then(|traces_info| traces_info.get_current_data())
+            .or_else(|| {
+                self.db_manager.block_traces_from_db(hash).map(
+                    |DataVersionTuple(pivot, traces)| {
+                        self.block_traces
+                            .write()
+                            .entry(*hash)
+                            .or_insert(BlockTracesInfo::default())
+                            .insert_data(&pivot, traces.clone());
+                        traces
+                    },
+                )
+            });
+        if maybe_traces.is_some() {
+            self.cache_man.lock().note_used(CacheId::BlockTraces(*hash));
+        }
+        maybe_traces
     }
 
     pub fn transactions_traces_by_block_hash(
@@ -517,7 +534,7 @@ impl BlockDataManager {
                 .write()
                 .entry(*hash)
                 .or_insert(BlockTracesInfo::default())
-                .insert_current_data(assumed_epoch, trace.clone());
+                .insert_data(assumed_epoch, trace.clone());
             self.cache_man.lock().note_used(CacheId::BlockTraces(*hash));
         }
         Some(trace)
@@ -664,7 +681,7 @@ impl BlockDataManager {
                 .write()
                 .entry(*hash)
                 .or_insert(BlockReceiptsInfo::default())
-                .insert_current_data(assumed_epoch, receipts.clone());
+                .insert_data(assumed_epoch, receipts.clone());
             self.cache_man
                 .lock()
                 .note_used(CacheId::BlockReceipts(*hash));
