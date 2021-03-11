@@ -11,7 +11,7 @@ use jsonrpc_derive::rpc;
 /// Trace specific rpc interface.
 #[rpc(server)]
 pub trait Trace {
-    /// Returns all traces produced at given block.
+    /// Returns all traces produced at the given block.
     #[rpc(name = "trace_block")]
     fn block_traces(
         &self, block_hash: H256,
@@ -21,5 +21,11 @@ pub trait Trace {
     #[rpc(name = "trace_filter")]
     fn filter_traces(
         &self, filter: TraceFilter,
+    ) -> JsonRpcResult<Option<Vec<LocalizedTrace>>>;
+
+    /// Returns all traces produced at the given transaction.
+    #[rpc(name = "trace_transaction")]
+    fn transaction_traces(
+        &self, tx_hash: H256,
     ) -> JsonRpcResult<Option<Vec<LocalizedTrace>>>;
 }
