@@ -589,7 +589,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "1.1.2-testnet-debug"
+version = "1.1.2-testnet-debug-3"
 dependencies = [
  "bit-set",
  "bn",
@@ -776,7 +776,7 @@ dependencies = [
 
 [[package]]
 name = "client"
-version = "1.1.2-testnet-debug"
+version = "1.1.2-testnet-debug-3"
 dependencies = [
  "app_dirs",
  "bigdecimal",
@@ -877,7 +877,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "1.1.2-testnet-debug"
+version = "1.1.2-testnet-debug-3"
 dependencies = [
  "app_dirs",
  "blockgen",
