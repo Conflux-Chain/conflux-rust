@@ -35,6 +35,48 @@ pub fn maybe_address(address: &Address) -> Option<Address> {
     }
 }
 
+// TODO: Deprecate the StateDbExt in StateDb and replace it with StateDbOps.
+pub trait StateDbOps {
+    fn get_raw(&self, key: StorageKey) -> Result<Option<Arc<[u8]>>>;
+
+    fn get<T>(&self, key: StorageKey) -> Result<Option<T>>
+    where T: ::rlp::Decodable;
+
+    fn set<T>(
+        &mut self, key: StorageKey, value: &T,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> Result<()>
+    where
+        T: ::rlp::Encodable + IsDefault;
+}
+
+impl<StateDbStorage: StorageStateTrait> StateDbOps
+    for StateDbGeneric<StateDbStorage>
+{
+    fn get_raw(&self, key: StorageKey) -> Result<Option<Arc<[u8]>>> {
+        Self::get_raw(self, key)
+    }
+
+    fn get<T>(&self, key: StorageKey) -> Result<Option<T>>
+    where T: ::rlp::Decodable {
+        <Self as StateDbExt>::get(self, key)
+    }
+
+    fn set<T>(
+        &mut self, key: StorageKey, value: &T,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> Result<()>
+    where
+        T: ::rlp::Encodable + IsDefault,
+    {
+        <Self as StateDbExt>::set(self, key, value, debug_record)
+    }
+}
+
+use cfx_internal_common::debug::ComputeEpochDebugRecord;
+use cfx_statedb::{Result, StateDbExt, StateDbGeneric};
+use cfx_storage::StorageStateTrait;
 use cfx_types::{Address, U256};
+use primitives::{is_default::IsDefault, StorageKey};
 pub use state_trait::StateTrait;
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::Arc};
