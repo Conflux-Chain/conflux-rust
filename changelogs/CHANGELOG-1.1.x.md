@@ -1,8 +1,3 @@
-# 1.1.3
-## Improvements
-- Add new trace RPC `trace_transaction`.
-- Use hex encoding for the returned bytes in trace-related RPCs.
-
 # 1.1.2
 
 ## Improvements
@@ -21,6 +16,8 @@
 ### RPC Improvements
 - Add new local RPC `cfx_getEpochReceipts` to allow querying receipts based on an epoch number.
 - Add new trace RPC `trace_filter` to allow querying traces based on epochs/types/offset.
+- Add new trace RPC `trace_transaction`.
+- Use hex encoding for the returned bytes in trace-related RPCs.
 - Add new fields `latestCheckpoint`, `latestConfirmed`, and `latestState` in `cfx_getStatus`.
 - Improve some RPC error reporting.
   

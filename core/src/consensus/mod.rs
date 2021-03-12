@@ -1261,8 +1261,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
         let ready_for_mining = self.ready_for_mining.load(Ordering::SeqCst);
         self.update_best_info(ready_for_mining);
         if ready_for_mining {
-            self.new_block_handler
-                .set_block_tx_packed(&*self.inner.read(), hash);
             self.txpool
                 .notify_new_best_info(self.best_info.read().clone())
                 // FIXME: propogate error.
@@ -1566,6 +1564,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
     fn enter_normal_phase(&self) {
         self.ready_for_mining.store(true, Ordering::SeqCst);
         self.update_best_info(true);
+        self.txpool.set_ready();
         self.txpool
             .notify_new_best_info(self.best_info.read_recursive().clone())
             .expect("No DB error")
