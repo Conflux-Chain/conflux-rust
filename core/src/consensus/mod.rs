@@ -196,7 +196,7 @@ pub struct ConsensusGraph {
     /// any inconsistency
     best_info: RwLock<Arc<BestInformation>>,
     /// Set to `true` when we enter NormalPhase
-    ready_for_mining: Arc<AtomicBool>,
+    ready_for_mining: AtomicBool,
 
     /// The epoch id of the remotely synchronized state.
     /// This is always `None` for archive nodes.
@@ -247,7 +247,6 @@ impl ConsensusGraph {
         );
         let confirmation_meter = ConfirmationMeter::new();
 
-        let ready_for_mining = Arc::new(AtomicBool::new(false));
         let graph = ConsensusGraph {
             inner,
             txpool: txpool.clone(),
@@ -265,7 +264,7 @@ impl ConsensusGraph {
             ),
             confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),
-            ready_for_mining,
+            ready_for_mining: AtomicBool::new(false),
             synced_epoch_id: Default::default(),
             config: conf,
         };
