@@ -2010,6 +2010,9 @@ impl ConsensusNewBlockHandler {
     ) {
         if let Some(me) = inner.hash_to_arena_indices.get(hash) {
             let parent = inner.arena[*me].parent;
+            if parent == NULL {
+                return;
+            }
             let era_genesis_height =
                 inner.get_era_genesis_height(inner.arena[parent].height);
             let cur_pivot_era_block = if inner
