@@ -1561,20 +1561,8 @@ impl ConsensusNewBlockHandler {
                 )
                 // FIXME: propogate error.
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
-
-            if inner.pivot_chain.len() > RECYCLE_TRANSACTION_DELAY as usize {
-                let recycle_pivot_index = inner.pivot_chain.len()
-                    - RECYCLE_TRANSACTION_DELAY as usize
-                    - 1;
-                let recycle_arena_index =
-                    inner.pivot_chain[recycle_pivot_index];
-                let skipped_blocks = inner
-                    .get_or_compute_skipped_epoch_blocks(recycle_arena_index)
-                    .clone();
-                for idx in &skipped_blocks {
-                    self.recycle_tx_in_block(inner, idx);
-                }
-            }
+            self.set_block_tx_packed(inner, me);
+            self.delayed_tx_recycle_in_skipped_blocks(inner);
 
             let to_state_pos = if inner
                 .pivot_index_to_height(inner.pivot_chain.len())
@@ -2005,38 +1993,62 @@ impl ConsensusNewBlockHandler {
         }
     }
 
-    pub fn set_block_tx_packed(
-        &self, inner: &ConsensusGraphInner, hash: &H256,
-    ) {
-        if let Some(me) = inner.hash_to_arena_indices.get(hash) {
-            let parent = inner.arena[*me].parent;
-            if parent == NULL {
-                return;
-            }
-            let era_genesis_height =
-                inner.get_era_genesis_height(inner.arena[parent].height);
-            let cur_pivot_era_block = if inner
-                .pivot_index_to_height(inner.pivot_chain.len())
-                > era_genesis_height
-            {
-                inner.get_pivot_block_arena_index(era_genesis_height)
-            } else {
-                NULL
-            };
-            let era_block = inner.get_era_genesis_block_with_parent(parent);
+    fn set_block_tx_packed(&self, inner: &ConsensusGraphInner, me: usize) {
+        if !self.txpool.ready_for_mining() {
+            // Skip tx pool operation before catching up.
+            return;
+        }
+        let parent = inner.arena[me].parent;
+        if parent == NULL {
+            return;
+        }
+        let era_genesis_height =
+            inner.get_era_genesis_height(inner.arena[parent].height);
+        let cur_pivot_era_block = if inner
+            .pivot_index_to_height(inner.pivot_chain.len())
+            > era_genesis_height
+        {
+            inner.get_pivot_block_arena_index(era_genesis_height)
+        } else {
+            NULL
+        };
+        let era_block = inner.get_era_genesis_block_with_parent(parent);
 
-            // It's only correct to set tx stale after the block is considered
-            // terminal for mining.
-            // Note that we conservatively only mark those blocks inside the
-            // current pivot era
-            if era_block == cur_pivot_era_block {
-                self.txpool.set_tx_packed(
-                    &self
-                        .data_man
-                        .block_by_hash(&hash, true /* update_cache */)
-                        .expect("Already checked")
-                        .transactions,
-                );
+        // It's only correct to set tx stale after the block is considered
+        // terminal for mining.
+        // Note that we conservatively only mark those blocks inside the
+        // current pivot era
+        if era_block == cur_pivot_era_block {
+            self.txpool.set_tx_packed(
+                &self
+                    .data_man
+                    .block_by_hash(
+                        &inner.arena[me].hash,
+                        true, /* update_cache */
+                    )
+                    .expect("Already checked")
+                    .transactions,
+            );
+        }
+    }
+
+    fn delayed_tx_recycle_in_skipped_blocks(
+        &self, inner: &mut ConsensusGraphInner,
+    ) {
+        if !self.txpool.ready_for_mining() {
+            // Skip tx pool operation before catching up.
+            return;
+        }
+        if inner.pivot_chain.len() > RECYCLE_TRANSACTION_DELAY as usize {
+            let recycle_pivot_index = inner.pivot_chain.len()
+                - RECYCLE_TRANSACTION_DELAY as usize
+                - 1;
+            let recycle_arena_index = inner.pivot_chain[recycle_pivot_index];
+            let skipped_blocks = inner
+                .get_or_compute_skipped_epoch_blocks(recycle_arena_index)
+                .clone();
+            for h in &skipped_blocks {
+                self.recycle_tx_in_block(inner, h);
             }
         }
     }

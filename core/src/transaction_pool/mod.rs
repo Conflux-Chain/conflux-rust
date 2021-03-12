@@ -37,7 +37,10 @@ use std::{
     collections::hash_map::HashMap,
     mem,
     ops::DerefMut,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 use transaction_pool_inner::TransactionPoolInner;
 
@@ -115,6 +118,10 @@ pub struct TransactionPool {
     set_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
     recycle_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
     machine: Arc<Machine>,
+
+    /// If it's `false`, operations on the tx pool will be ignored to save
+    /// memory/CPU cost.
+    ready_for_mining: AtomicBool,
 }
 
 impl MallocSizeOf for TransactionPool {
@@ -173,6 +180,7 @@ impl TransactionPool {
             set_tx_requests: Mutex::new(Default::default()),
             recycle_tx_requests: Mutex::new(Default::default()),
             machine,
+            ready_for_mining: AtomicBool::new(false),
         }
     }
 
@@ -540,8 +548,8 @@ impl TransactionPool {
     pub fn recycle_transactions(
         &self, transactions: Vec<Arc<SignedTransaction>>,
     ) {
-        if transactions.is_empty() {
-            // Fast return. Also used to for bench mode.
+        if transactions.is_empty() || !self.ready_for_mining() {
+            // Fast return.
             return;
         }
 
@@ -552,8 +560,8 @@ impl TransactionPool {
     }
 
     pub fn set_tx_packed(&self, transactions: &Vec<Arc<SignedTransaction>>) {
-        if transactions.is_empty() {
-            // Fast return. Also used to for bench mode.
+        if transactions.is_empty() || !self.ready_for_mining() {
+            // Fast return.
             return;
         }
         let mut tx_req_buffer = self.set_tx_requests.lock();
@@ -782,5 +790,13 @@ impl TransactionPool {
     fn get_best_state_account_cache(&self) -> AccountCache {
         let _timer = MeterTimer::time_func(TX_POOL_GET_STATE_TIMER.as_ref());
         AccountCache::new((&*self.best_executed_state.lock()).clone())
+    }
+
+    pub fn ready_for_mining(&self) -> bool {
+        self.ready_for_mining.load(Ordering::SeqCst)
+    }
+
+    pub fn set_ready(&self) {
+        self.ready_for_mining.store(true, Ordering::SeqCst);
     }
 }
