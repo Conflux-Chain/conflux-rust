@@ -425,8 +425,6 @@ fn test_call_to_create() {
                 params.clone(),
                 &mut substate,
                 &mut tracer,
-                Spec::new_spec()
-                    .account_start_nonce(/* _block_number = */ 0),
             )
             .unwrap();
         state
@@ -512,7 +510,6 @@ fn test_revert() {
             params,
             &mut substate,
             &mut tracer,
-            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap()
     };
@@ -711,7 +708,6 @@ fn test_deposit_withdraw_lock() {
         params.clone(),
         &mut substate,
         &mut tracer,
-        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
     );
     assert!(result.is_err());
     assert_eq!(
@@ -744,7 +740,6 @@ fn test_deposit_withdraw_lock() {
         params.clone(),
         &mut substate,
         &mut tracer,
-        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
     );
     assert!(result.is_err());
     assert_eq!(
@@ -766,7 +761,6 @@ fn test_deposit_withdraw_lock() {
         params.clone(),
         &mut substate,
         &mut tracer,
-        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
     );
     assert!(result.is_ok());
     assert_eq!(
@@ -800,7 +794,6 @@ fn test_deposit_withdraw_lock() {
         params.clone(),
         &mut substate,
         &mut tracer,
-        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
     );
     assert!(result.is_err());
     assert_eq!(
@@ -838,7 +831,6 @@ fn test_deposit_withdraw_lock() {
         params.clone(),
         &mut substate,
         &mut tracer,
-        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
     );
     assert!(result.is_err());
     assert_eq!(
@@ -876,7 +868,6 @@ fn test_deposit_withdraw_lock() {
         params.clone(),
         &mut substate,
         &mut tracer,
-        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
     );
     assert!(result.is_ok());
     assert_eq!(
@@ -909,7 +900,6 @@ fn test_deposit_withdraw_lock() {
         params.clone(),
         &mut substate,
         &mut tracer,
-        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
     );
     assert!(result.is_err());
     assert_eq!(
@@ -949,7 +939,6 @@ fn test_deposit_withdraw_lock() {
         params.clone(),
         &mut substate,
         &mut tracer,
-        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
     );
     assert!(result.is_err());
     assert_eq!(
@@ -992,7 +981,6 @@ fn test_deposit_withdraw_lock() {
         params.clone(),
         &mut substate,
         &mut tracer,
-        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
     );
     assert!(result.is_ok());
     assert_eq!(
@@ -1031,7 +1019,6 @@ fn test_deposit_withdraw_lock() {
         params.clone(),
         &mut substate,
         &mut tracer,
-        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
     );
     assert!(result.is_ok());
     assert_eq!(
@@ -1070,7 +1057,6 @@ fn test_deposit_withdraw_lock() {
         params.clone(),
         &mut substate,
         &mut tracer,
-        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
     );
     assert!(result.is_err());
     assert_eq!(
@@ -1116,7 +1102,6 @@ fn test_deposit_withdraw_lock() {
         params.clone(),
         &mut substate,
         &mut tracer,
-        Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
     );
     assert!(result.is_ok());
     assert_eq!(

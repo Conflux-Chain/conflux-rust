@@ -550,7 +550,6 @@ impl<'a> CallCreateExecutive<'a> {
     pub fn exec</* Substate, */ State: StateTrait<Substate = Substate>>(
         mut self, state: &mut State, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
-        account_start_nonce: U256,
     ) -> ExecutiveTrapResult<'a, FinalizationResult>
     {
         let kind =
@@ -570,7 +569,7 @@ impl<'a> CallCreateExecutive<'a> {
                         self.spec,
                         state,
                         substate,
-                        account_start_nonce,
+                        self.spec.account_start_nonce(self.env.number),
                     )?;
 
                     Ok(FinalizationResult {
@@ -1005,13 +1004,12 @@ impl<'a> CallCreateExecutive<'a> {
     pub fn consume<State: StateTrait<Substate = Substate>>(
         self, state: &mut State, top_substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
-        account_start_nonce: U256,
     ) -> vm::Result<FinalizationResult>
     {
         let mut last_res = Some((
             false,
             self.gas,
-            self.exec(state, top_substate, tracer, account_start_nonce),
+            self.exec(state, top_substate, tracer),
         ));
 
         let mut callstack: Vec<(Option<Address>, CallCreateExecutive<'a>)> =
@@ -1030,7 +1028,7 @@ impl<'a> CallCreateExecutive<'a> {
                                 None => top_substate,
                             };
 
-                            last_res = Some((exec.is_create, exec.gas, exec.exec(state, parent_substate, tracer, account_start_nonce)));
+                            last_res = Some((exec.is_create, exec.gas, exec.exec(state, parent_substate, tracer)));
                         }
                         None => panic!("When callstack only had one item and it was executed, this function would return; callstack never reaches zero item; qed"),
                     }
@@ -1253,7 +1251,7 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
             self.internal_contract_map,
             substate.contracts_in_callstack.clone(),
         )
-        .consume(self.state, substate, tracer, self.spec.account_start_nonce(self.env.number));
+        .consume(self.state, substate, tracer);
 
         result
     }
@@ -1275,7 +1273,6 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
         &mut self, params: ActionParams, substate: &mut Substate,
         stack_depth: usize,
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
-        account_start_nonce: U256,
     ) -> vm::Result<FinalizationResult>
     {
         tracer.prepare_trace_call(&params);
@@ -1293,7 +1290,7 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
             self.internal_contract_map,
             substate.contracts_in_callstack.clone(),
         )
-        .consume(self.state, substate, tracer, account_start_nonce);
+        .consume(self.state, substate, tracer);
 
         result
     }
@@ -1301,7 +1298,6 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
     pub fn call(
         &mut self, params: ActionParams, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
-        account_start_nonce: U256,
     ) -> vm::Result<FinalizationResult>
     {
         self.call_with_stack_depth(
@@ -1309,7 +1305,6 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
             substate,
             0,
             tracer,
-            account_start_nonce,
         )
     }
 
@@ -1622,7 +1617,6 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
                     params,
                     &mut substate,
                     &mut options.tracer,
-                    self.spec.account_start_nonce(self.env.number),
                 )
             }
         };

@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::evm::Spec;
-
 pub use self::{
     account_entry::{OverlayAccount, COMMISSION_PRIVILEGE_SPECIAL_KEY},
     substate::{CallStackInfo, Substate},
@@ -1299,12 +1297,12 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
 
     #[allow(unused)]
     pub fn exists_and_has_code_or_nonce(
-        &self, address: &Address, spec: &Spec, block_number: u64,
+        &self, address: &Address, account_start_nonce: U256,
     ) -> DbResult<bool> {
         self.ensure_account_loaded(address, RequireCache::Code, |acc| {
             acc.map_or(false, |acc| {
                 acc.code_hash() != KECCAK_EMPTY
-                    || *acc.nonce() != spec.account_start_nonce(block_number)
+                    || *acc.nonce() != account_start_nonce
             })
         })
     }
