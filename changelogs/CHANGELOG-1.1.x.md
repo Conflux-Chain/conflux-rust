@@ -26,6 +26,7 @@
   
 ## Bug Fixes
 - Fix a possible OOM error when a full node is catching up.
+- Fix a possible OOM error in transaction pool when an archive node is catching up.
 - Return correct `block_number` in `cfx_getStatus`.
 - Fix a bug that makes the configuration `mining_author` require extra quotes to use a CIP-37 base32 address.
 - Fix a bug that the block traces may be incorrect if the pivot chain switches frequently.
