@@ -1557,6 +1557,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
     fn enter_normal_phase(&self) {
         self.ready_for_mining.store(true, Ordering::SeqCst);
         self.update_best_info(true);
+        self.txpool.set_ready();
         self.txpool
             .notify_new_best_info(self.best_info.read_recursive().clone())
             .expect("No DB error")

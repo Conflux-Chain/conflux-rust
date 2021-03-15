@@ -16,7 +16,10 @@ use crate::{
 };
 use cfx_addr::Network;
 use cfx_types::H256;
-use cfxcore::{BlockDataManager, ConsensusGraph, SharedConsensusGraph};
+use cfxcore::{
+    trace::trace::ExecTrace, BlockDataManager, ConsensusGraph,
+    SharedConsensusGraph,
+};
 use jsonrpc_core::Result as JsonRpcResult;
 use std::sync::Arc;
 
@@ -82,6 +85,28 @@ impl TraceHandler {
             Ok(Some(traces))
         }
     }
+
+    fn transaction_trace_impl(
+        &self, tx_hash: &H256,
+    ) -> RpcResult<Option<Vec<RpcLocalizedTrace>>> {
+        Ok(self.data_man.transaction_index_by_hash(tx_hash, true /* update_cache */).and_then(|tx_index|
+                self.data_man.transactions_traces_by_block_hash(&tx_index.block_hash)
+                    .and_then(|traces| {
+                        traces.into_iter().nth(tx_index.index)
+                            .map(Into::<Vec<ExecTrace>>::into)
+                            .map(|traces|
+                                traces.into_iter()
+                                    .map(|trace| {
+                                        RpcLocalizedTrace::from(
+                                            trace,
+                                            self.network,
+                                        ).expect("Local address conversion should succeed")
+                                    }).collect()
+                            )
+                        }
+                    )
+        ))
+    }
 }
 
 impl Trace for TraceHandler {
@@ -95,5 +120,11 @@ impl Trace for TraceHandler {
         &self, filter: TraceFilter,
     ) -> JsonRpcResult<Option<Vec<LocalizedTrace>>> {
         into_jsonrpc_result(self.filter_traces_impl(filter))
+    }
+
+    fn transaction_traces(
+        &self, tx_hash: H256,
+    ) -> JsonRpcResult<Option<Vec<LocalizedTrace>>> {
+        into_jsonrpc_result(self.transaction_trace_impl(&tx_hash))
     }
 }
