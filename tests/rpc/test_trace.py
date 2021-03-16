@@ -10,12 +10,33 @@ from test_framework.util import assert_equal, assert_raises_rpc_error
 class TestTrace(RpcClient):
     def test_trace_after_reorg(self):
         genesis = self.best_block_hash()
-        tx = create_transaction()
+        tx = self.new_tx()
         b1 = self.generate_custom_block(parent_hash=genesis, referee=[], txs=[tx])
         self.wait_for_receipt(tx.hash_hex())
+        receipt = self.get_transaction_receipt(tx.hash_hex())
         trace1 = self.get_block_trace(b1)
-        assert_equal(len(trace1["transactionTraces"]), 1)
-        assert_equal(len(trace1["transactionTraces"][0]["traces"]), 1)
+        expected_trace = {
+            'blockHash': b1,
+            'epochHash': b1,
+            'epochNumber': receipt["epochNumber"],
+            'transactionTraces': [{
+                'traces': [{
+                    'action': {
+                        'callType': 'call',
+                        'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
+                        # FIXME: This should not be 0?
+                        'gas': '0x0',
+                        'input': '0x',
+                        'to': 'NET10:TYPE.USER:AAJBAEAUCAJBAEAUCAJBAEAUCAJBAEAUCA902UEXYP',
+                        'value': '0x64'
+                    },
+                    'type': 'call'
+                }],
+                'transactionHash': tx.hash_hex(),
+                'transactionPosition': '0x0'
+            }]
+        }
+        assert_equal(trace1, expected_trace)
         chain1_best_epoch = self.epoch_number()
 
         b2 = self.generate_custom_block(parent_hash=genesis, referee=[], txs=[tx])
@@ -49,4 +70,46 @@ class TestTrace(RpcClient):
         tx = self.new_tx()
         tx_hash = self.send_tx(tx)
         self.wait_for_receipt(tx_hash)
-        assert_equal(len(self.get_transaction_trace(tx_hash)), 1)
+        receipt = self.get_transaction_receipt(tx_hash)
+        expected_trace = [{
+            'type': 'call',
+            'action': {
+                'callType': 'call',
+                'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
+                'gas': '0x0',
+                'input': '0x',
+                'to': 'NET10:TYPE.USER:AAJBAEAUCAJBAEAUCAJBAEAUCAJBAEAUCA902UEXYP',
+                'value': '0x64'
+            },
+            'blockHash': receipt["blockHash"],
+            'epochHash': receipt["blockHash"],
+            'epochNumber': receipt["epochNumber"],
+            'transactionHash': tx_hash,
+            'transactionPosition': '0x0',
+        }]
+        assert_equal(self.get_transaction_trace(tx_hash), expected_trace)
+
+    def test_filter_trace(self):
+        tx = self.new_tx()
+        tx_hash = self.send_tx(tx)
+        self.wait_for_receipt(tx_hash)
+        receipt = self.get_transaction_receipt(tx_hash)
+        block_hash = receipt["blockHash"]
+        trace = self.filter_trace({"blockHashes": [block_hash]})
+        expected_trace = [{
+            'action': {
+                'callType': 'call',
+                'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
+                'gas': '0x0',
+                'input': '0x',
+                'to': 'NET10:TYPE.USER:AAJBAEAUCAJBAEAUCAJBAEAUCAJBAEAUCA902UEXYP',
+                'value': '0x64'
+            },
+            'blockHash': block_hash,
+            'epochHash': block_hash,
+            'epochNumber': receipt["epochNumber"],
+            'transactionHash': tx_hash,
+            'transactionPosition': '0x0',
+            'type': 'call'
+        }]
+        assert_equal(trace, expected_trace)
