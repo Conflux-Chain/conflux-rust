@@ -8,7 +8,6 @@ use crate::{
         utils::{create_simple_block_impl, initialize_synchronization_graph},
         SynchronizationGraphNode,
     },
-    vm::Spec,
 };
 use cfx_types::{BigEndianHash, H256, U256};
 use primitives::Block;
@@ -30,7 +29,6 @@ fn test_remove_expire_blocks() {
             1,
             50000,
             DbType::Rocksdb,
-            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         );
         // test initialization
         {

@@ -159,7 +159,7 @@ pub fn genesis_block(
     storage_manager: &Arc<StorageManager>,
     genesis_accounts: HashMap<Address, U256>, test_net_version: Address,
     initial_difficulty: U256, machine: Arc<Machine>, need_to_execute: bool,
-    genesis_chain_id: Option<u32>, account_start_nonce: U256,
+    genesis_chain_id: Option<u32>,
 ) -> Block
 {
     let mut state =
@@ -180,7 +180,7 @@ pub fn genesis_block(
                 &addr,
                 &balance,
                 CleanupMode::NoEmpty,
-                account_start_nonce,
+                /* account_start_nonce = */ U256::zero(),
             )
             .unwrap();
         total_balance += balance;
@@ -206,7 +206,7 @@ pub fn genesis_block(
             &genesis_account_address,
             &genesis_account_init_balance,
             CleanupMode::NoEmpty,
-            account_start_nonce,
+            /* account_start_nonce = */ U256::zero(),
         )
         .unwrap();
 
@@ -389,7 +389,7 @@ pub fn genesis_block(
     }
 
     state
-        .clean_account(&genesis_account_address, account_start_nonce)
+        .clean_account(&genesis_account_address)
         .expect("Clean account failed");
 
     let state_root = state

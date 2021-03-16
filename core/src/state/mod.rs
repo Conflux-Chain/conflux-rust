@@ -627,12 +627,13 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         )
     }
 
-    fn clean_account(
-        &mut self, address: &Address, account_start_nonce: U256,
-    ) -> DbResult<()> {
-        *&mut *self
-            .require_or_new_basic_account(address, account_start_nonce)? =
-            OverlayAccount::from_loaded(address, Default::default());
+    fn clean_account(&mut self, address: &Address) -> DbResult<()> {
+        Self::update_cache(
+            self.cache.get_mut(),
+            self.checkpoints.get_mut(),
+            address,
+            AccountEntry::new_dirty(None),
+        );
         Ok(())
     }
 
@@ -1293,18 +1294,6 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 }
             }
         }
-    }
-
-    #[allow(unused)]
-    pub fn exists_and_has_code_or_nonce(
-        &self, address: &Address, account_start_nonce: U256,
-    ) -> DbResult<bool> {
-        self.ensure_account_loaded(address, RequireCache::Code, |acc| {
-            acc.map_or(false, |acc| {
-                acc.code_hash() != KECCAK_EMPTY
-                    || *acc.nonce() != account_start_nonce
-            })
-        })
     }
 
     // FIXME: rewrite this method before enable it for the first time, because

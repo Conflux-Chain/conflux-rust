@@ -94,7 +94,6 @@ pub fn create_simple_block(
 
 pub fn initialize_data_manager(
     db_dir: &str, dbtype: DbType, pow: Arc<PowComputer>, vm: VmFactory,
-    account_start_nonce: U256,
 ) -> (Arc<BlockDataManager>, Arc<Block>)
 {
     let ledger_db = db::open_database(
@@ -139,7 +138,6 @@ pub fn initialize_data_manager(
         machine.clone(),
         false, /* need_to_execute */
         None,
-        account_start_nonce,
     ));
 
     let data_man = Arc::new(BlockDataManager::new(
@@ -249,7 +247,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
 /// This method is only used in tests and benchmarks.
 pub fn initialize_synchronization_graph(
     db_dir: &str, beta: u64, h: u64, tcr: u64, tcb: u64, era_epoch_count: u64,
-    dbtype: DbType, account_start_nonce: U256,
+    dbtype: DbType,
 ) -> (
     Arc<SynchronizationGraph>,
     Arc<ConsensusGraph>,
@@ -265,7 +263,6 @@ pub fn initialize_synchronization_graph(
         dbtype,
         pow.clone(),
         vm.clone(),
-        account_start_nonce,
     );
 
     let (sync, consensus) = initialize_synchronization_graph_with_data_manager(
