@@ -628,12 +628,8 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn clean_account(&mut self, address: &Address) -> DbResult<()> {
-        Self::update_cache(
-            self.cache.get_mut(),
-            self.checkpoints.get_mut(),
-            address,
-            AccountEntry::new_dirty(None),
-        );
+        *&mut *self.require_or_new_basic_account(address, U256::zero())? =
+            OverlayAccount::from_loaded(address, Default::default());
         Ok(())
     }
 
