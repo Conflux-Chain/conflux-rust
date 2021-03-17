@@ -633,6 +633,19 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         Ok(())
     }
 
+    // TODO: This implementation will fail
+    // tests::load_chain_tests::test_load_chain. We need to figure out why.
+    //
+    // fn clean_account(&mut self, address: &Address) -> DbResult<()> {
+    //     Self::update_cache(
+    //         self.cache.get_mut(),
+    //         self.checkpoints.get_mut(),
+    //         address,
+    //         AccountEntry::new_dirty(None),
+    //     );
+    //     Ok(())
+    // }
+
     fn inc_nonce(
         &mut self, address: &Address, account_start_nonce: U256,
     ) -> DbResult<()> {
