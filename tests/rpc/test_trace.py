@@ -24,7 +24,6 @@ class TestTrace(RpcClient):
                     'action': {
                         'callType': 'call',
                         'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
-                        # FIXME: This should not be 0?
                         'gas': '0x0',
                         'input': '0x',
                         'to': 'NET10:TYPE.USER:AAJBAEAUCAJBAEAUCAJBAEAUCAJBAEAUCA902UEXYP',
