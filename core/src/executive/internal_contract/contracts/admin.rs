@@ -66,15 +66,7 @@ impl ExecutionTrait for Destroy {
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        destroy(
-            input,
-            params,
-            state,
-            spec,
-            substate,
-            tracer,
-            env,
-        )
+        destroy(input, params, state, spec, substate, tracer, env)
     }
 }
 

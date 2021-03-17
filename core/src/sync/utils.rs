@@ -94,8 +94,7 @@ pub fn create_simple_block(
 
 pub fn initialize_data_manager(
     db_dir: &str, dbtype: DbType, pow: Arc<PowComputer>, vm: VmFactory,
-) -> (Arc<BlockDataManager>, Arc<Block>)
-{
+) -> (Arc<BlockDataManager>, Arc<Block>) {
     let ledger_db = db::open_database(
         db_dir,
         &db::db_config(
@@ -258,12 +257,8 @@ pub fn initialize_synchronization_graph(
     let vm = VmFactory::new(1024 * 32);
     let pow = Arc::new(PowComputer::new(true));
 
-    let (data_man, genesis_block) = initialize_data_manager(
-        db_dir,
-        dbtype,
-        pow.clone(),
-        vm.clone(),
-    );
+    let (data_man, genesis_block) =
+        initialize_data_manager(db_dir, dbtype, pow.clone(), vm.clone());
 
     let (sync, consensus) = initialize_synchronization_graph_with_data_manager(
         data_man.clone(),

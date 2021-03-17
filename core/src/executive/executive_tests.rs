@@ -136,11 +136,7 @@ fn test_sender_balance() {
         );
         let mut tracer = trace::NoopTracer;
         let res = ex
-            .create(
-                params.clone(),
-                &mut substate,
-                &mut tracer,
-            )
+            .create(params.clone(), &mut substate, &mut tracer)
             .unwrap();
         state
             .collect_and_settle_collateral(
@@ -246,12 +242,7 @@ fn test_create_contract_out_of_depth() {
             &internal_contract_map,
         );
         let mut tracer = trace::NoopTracer;
-        ex.create(
-            params,
-            &mut substate,
-            &mut tracer,
-        )
-        .unwrap()
+        ex.create(params, &mut substate, &mut tracer).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(62_970));
@@ -315,13 +306,7 @@ fn test_suicide_when_creation() {
         gas_left,
         apply_state,
         return_data: _,
-    } = ex
-        .create(
-            params,
-            &mut substate,
-            &mut tracer,
-        )
-        .unwrap();
+    } = ex.create(params, &mut substate, &mut tracer).unwrap();
 
     assert_eq!(gas_left, U256::from(94_998));
     assert_eq!(apply_state, true);
@@ -420,13 +405,7 @@ fn test_call_to_create() {
             &internal_contract_map,
         );
         let mut tracer = trace::NoopTracer;
-        let res = ex
-            .call(
-                params.clone(),
-                &mut substate,
-                &mut tracer,
-            )
-            .unwrap();
+        let res = ex.call(params.clone(), &mut substate, &mut tracer).unwrap();
         state
             .collect_and_settle_collateral(
                 &params.storage_owner,
@@ -506,12 +485,7 @@ fn test_revert() {
             &internal_contract_map,
         );
         let mut tracer = trace::NoopTracer;
-        ex.call(
-            params,
-            &mut substate,
-            &mut tracer,
-        )
-        .unwrap()
+        ex.call(params, &mut substate, &mut tracer).unwrap()
     };
     (&mut output)
         .copy_from_slice(&return_data[..(cmp::min(14, return_data.len()))]);
@@ -575,11 +549,7 @@ fn test_keccak() {
             &spec,
             &internal_contract_map,
         );
-        ex.create(
-            params,
-            &mut substate,
-            &mut tracer,
-        )
+        ex.create(params, &mut substate, &mut tracer)
     };
 
     match result {
@@ -704,11 +674,7 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -736,11 +702,7 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -757,11 +719,7 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -790,11 +748,7 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -827,11 +781,7 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -864,11 +814,7 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -896,11 +842,7 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -935,11 +877,7 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -977,11 +915,7 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -1015,11 +949,7 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -1053,11 +983,7 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -1098,11 +1024,7 @@ fn test_deposit_withdraw_lock() {
         &spec,
         &internal_contract_map,
     )
-    .call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),

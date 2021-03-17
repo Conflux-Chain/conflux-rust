@@ -1006,11 +1006,8 @@ impl<'a> CallCreateExecutive<'a> {
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
     ) -> vm::Result<FinalizationResult>
     {
-        let mut last_res = Some((
-            false,
-            self.gas,
-            self.exec(state, top_substate, tracer),
-        ));
+        let mut last_res =
+            Some((false, self.gas, self.exec(state, top_substate, tracer)));
 
         let mut callstack: Vec<(Option<Address>, CallCreateExecutive<'a>)> =
             Vec::new();
@@ -1261,12 +1258,7 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
     ) -> vm::Result<FinalizationResult>
     {
-        self.create_with_stack_depth(
-            params,
-            substate,
-            0,
-            tracer,
-        )
+        self.create_with_stack_depth(params, substate, 0, tracer)
     }
 
     pub fn call_with_stack_depth(
@@ -1300,12 +1292,7 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
     ) -> vm::Result<FinalizationResult>
     {
-        self.call_with_stack_depth(
-            params,
-            substate,
-            0,
-            tracer,
-        )
+        self.call_with_stack_depth(params, substate, 0, tracer)
     }
 
     pub fn transact_virtual(
@@ -1590,11 +1577,7 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
                     params_type: vm::ParamsType::Embedded,
                     storage_limit_in_drip: total_storage_limit,
                 };
-                self.create(
-                    params,
-                    &mut substate,
-                    &mut options.tracer,
-                )
+                self.create(params, &mut substate, &mut options.tracer)
             }
             Action::Call(ref address) => {
                 let params = ActionParams {
@@ -1613,11 +1596,7 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
                     params_type: vm::ParamsType::Separate,
                     storage_limit_in_drip: total_storage_limit,
                 };
-                self.call(
-                    params,
-                    &mut substate,
-                    &mut options.tracer,
-                )
+                self.call(params, &mut substate, &mut options.tracer)
             }
         };
 
