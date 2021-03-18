@@ -1,3 +1,9 @@
+# 1.1.3
+
+## Improvements
+- Include `blockHash`, `epochHash`, `epochNumber`, `transaction_hash`, and `transactionPosition` for trace RPCs.
+Note that the data format returned by `trace_block` is incompatible with old versions.
+
 # 1.1.2
 
 ## Improvements
