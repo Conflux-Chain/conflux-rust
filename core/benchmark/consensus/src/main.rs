@@ -178,7 +178,6 @@ fn main() {
             timer_beta,
             era_epoch_count,
             DbType::Sqlite,
-            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         );
 
     let mut hashes = Vec::new();
