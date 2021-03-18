@@ -28,7 +28,7 @@ use parity_path::restrict_permissions_owner;
 use parking_lot::{Mutex, RwLock};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use serde::export::Formatter;
+use std::fmt::Formatter;
 use std::{
     cmp::{min, Ordering},
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},

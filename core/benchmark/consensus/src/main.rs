@@ -11,7 +11,6 @@ use cfxcore::{
         create_simple_block, initialize_synchronization_graph,
         initialize_synchronization_graph_with_data_manager,
     },
-    vm::Spec,
 };
 use log::LevelFilter;
 use log4rs::{
