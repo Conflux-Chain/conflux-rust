@@ -67,7 +67,7 @@ impl Default for BlockRewardResult {
     }
 }
 
-#[derive(Debug, DeriveMallocSizeOf)]
+#[derive(Clone, Debug, DeriveMallocSizeOf)]
 pub struct DataVersionTuple<Version, T>(pub Version, pub T);
 
 pub type BlockExecutionResultWithEpoch =
@@ -135,11 +135,11 @@ impl<Version: Copy + Eq + PartialEq, T: Clone>
         })
     }
 
-    pub fn get_current_data(&self) -> Option<T> {
+    pub fn get_current_data(&self) -> Option<DataVersionTuple<Version, T>> {
         self.current_version.as_ref().map(|current_version| {
-            for DataVersionTuple(e_id, data) in &self.data_version_tuple_array {
-                if *e_id == *current_version {
-                    return data.clone();
+            for versioned_data in &self.data_version_tuple_array {
+                if versioned_data.0 == *current_version {
+                    return versioned_data.clone();
                 }
             }
             unreachable!("The current data should exist")

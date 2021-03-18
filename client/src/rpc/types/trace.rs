@@ -5,13 +5,14 @@
 use super::RpcAddress;
 use crate::rpc::types::Bytes;
 use cfx_addr::Network;
-use cfx_types::U256;
+use cfx_types::{H256, U256, U64};
 use cfxcore::{
     trace::trace::{
         Action as VmAction, ActionType as VmActionType, BlockExecTraces,
         Call as VmCall, CallResult, Create as VmCreate,
         CreateResult as VmCreateResult, ExecTrace,
-        InternalTransferAction as VmInternalTransferAction, Outcome,
+        InternalTransferAction as VmInternalTransferAction,
+        LocalizedTrace as PrimitiveLocalizedTrace, Outcome,
         TransactionExecTraces,
     },
     vm::CallType,
@@ -32,7 +33,9 @@ pub enum Action {
 }
 
 impl Action {
-    fn try_from(action: VmAction, network: Network) -> Result<Self, String> {
+    pub fn try_from(
+        action: VmAction, network: Network,
+    ) -> Result<Self, String> {
         Ok(match action {
             VmAction::Call(x) => Action::Call(Call::try_from(x, network)?),
             VmAction::Create(x) => {
@@ -155,23 +158,43 @@ impl InternalTransferAction {
 #[serde(rename_all = "camelCase")]
 pub struct LocalizedBlockTrace {
     pub transaction_traces: Vec<LocalizedTransactionTrace>,
+    /// Epoch hash.
+    pub epoch_hash: H256,
+    /// Epoch number.
+    pub epoch_number: U256,
+    /// Block hash.
+    pub block_hash: H256,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalizedTransactionTrace {
     pub traces: Vec<LocalizedTrace>,
+    /// Transaction position.
+    pub transaction_position: U64,
+    /// Signed transaction hash.
+    pub transaction_hash: H256,
 }
 
 #[derive(Debug)]
 pub struct LocalizedTrace {
     pub action: Action,
+    /// Epoch hash.
+    pub epoch_hash: Option<H256>,
+    /// Epoch number.
+    pub epoch_number: Option<U256>,
+    /// Block hash.
+    pub block_hash: Option<H256>,
+    /// Transaction position.
+    pub transaction_position: Option<U64>,
+    /// Signed transaction hash.
+    pub transaction_hash: Option<H256>,
 }
 
 impl Serialize for LocalizedTrace {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
-        let mut struc = serializer.serialize_struct("LocalizedTrace", 2)?;
+        let mut struc = serializer.serialize_struct("LocalizedTrace", 7)?;
 
         match self.action {
             Action::Call(ref call) => {
@@ -196,44 +219,108 @@ impl Serialize for LocalizedTrace {
             }
         }
 
+        if self.epoch_hash.is_some() {
+            struc.serialize_field("epochHash", &self.epoch_hash.unwrap())?;
+        }
+        if self.epoch_number.is_some() {
+            struc
+                .serialize_field("epochNumber", &self.epoch_number.unwrap())?;
+        }
+        if self.block_hash.is_some() {
+            struc.serialize_field("blockHash", &self.block_hash.unwrap())?;
+        }
+        if self.transaction_position.is_some() {
+            struc.serialize_field(
+                "transactionPosition",
+                &self.transaction_position.unwrap(),
+            )?;
+        }
+        if self.transaction_hash.is_some() {
+            struc.serialize_field(
+                "transactionHash",
+                &self.transaction_hash.unwrap(),
+            )?;
+        }
+
         struc.end()
     }
 }
 
 impl LocalizedTrace {
-    pub fn from(trace: ExecTrace, network: Network) -> Result<Self, String> {
+    pub fn from(
+        trace: PrimitiveLocalizedTrace, network: Network,
+    ) -> Result<Self, String> {
         Ok(LocalizedTrace {
             action: Action::try_from(trace.action, network)?,
+            epoch_number: Some(trace.epoch_number),
+            epoch_hash: Some(trace.epoch_hash),
+            block_hash: Some(trace.block_hash),
+            transaction_position: Some(trace.transaction_position),
+            transaction_hash: Some(trace.transaction_hash),
         })
     }
 }
 
 impl LocalizedTransactionTrace {
     pub fn from(
-        traces: TransactionExecTraces, network: Network,
-    ) -> Result<Self, String> {
+        traces: TransactionExecTraces, transaction_hash: H256,
+        transaction_position: usize, network: Network,
+    ) -> Result<Self, String>
+    {
         let traces: Vec<ExecTrace> = traces.into();
 
         Ok(LocalizedTransactionTrace {
             traces: traces
                 .into_iter()
-                .map(|t| LocalizedTrace::from(t, network))
+                .map(|t| {
+                    Action::try_from(t.action, network).map(|action| {
+                        LocalizedTrace {
+                            action,
+                            // Set to None because the information has been
+                            // included in the outer
+                            // structs
+                            epoch_hash: None,
+                            epoch_number: None,
+                            block_hash: None,
+                            transaction_position: None,
+                            transaction_hash: None,
+                        }
+                    })
+                })
                 .collect::<Result<_, _>>()?,
+            transaction_position: transaction_position.into(),
+            transaction_hash,
         })
     }
 }
 
 impl LocalizedBlockTrace {
     pub fn from(
-        traces: BlockExecTraces, network: Network,
-    ) -> Result<Self, String> {
+        traces: BlockExecTraces, block_hash: H256, epoch_hash: H256,
+        epoch_number: u64, transaction_hashes: Vec<H256>, network: Network,
+    ) -> Result<Self, String>
+    {
         let traces: Vec<TransactionExecTraces> = traces.into();
+        if traces.len() != transaction_hashes.len() {
+            bail!("trace and tx hash list length unmatch!");
+        }
 
         Ok(LocalizedBlockTrace {
             transaction_traces: traces
                 .into_iter()
-                .map(|t| LocalizedTransactionTrace::from(t, network))
+                .enumerate()
+                .map(|(tx_pos, t)| {
+                    LocalizedTransactionTrace::from(
+                        t,
+                        transaction_hashes[tx_pos],
+                        tx_pos,
+                        network,
+                    )
+                })
                 .collect::<Result<_, _>>()?,
+            epoch_hash,
+            epoch_number: epoch_number.into(),
+            block_hash,
         })
     }
 }

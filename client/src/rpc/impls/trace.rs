@@ -8,8 +8,8 @@ use crate::{
     rpc::{
         traits::trace::Trace,
         types::{
-            LocalizedTrace as RpcLocalizedTrace, LocalizedTrace,
-            TraceFilter as RpcTraceFilter, TraceFilter,
+            Action as RpcAction, LocalizedTrace as RpcLocalizedTrace,
+            LocalizedTrace, TraceFilter as RpcTraceFilter, TraceFilter,
         },
         RpcResult,
     },
@@ -17,8 +17,8 @@ use crate::{
 use cfx_addr::Network;
 use cfx_types::H256;
 use cfxcore::{
-    trace::trace::ExecTrace, BlockDataManager, ConsensusGraph,
-    SharedConsensusGraph,
+    block_data_manager::DataVersionTuple, trace::trace::ExecTrace,
+    BlockDataManager, ConsensusGraph, SharedConsensusGraph,
 };
 use jsonrpc_core::Result as JsonRpcResult;
 use std::sync::Arc;
@@ -53,16 +53,38 @@ impl TraceHandler {
         &self, block_hash: H256,
     ) -> RpcResult<Option<LocalizedBlockTrace>> {
         // Note: an alternative to `into_jsonrpc_result` is the delegate! macro.
+        let transaction_hashes = match self
+            .data_man
+            .block_by_hash(&block_hash, true /* update_cache */)
+        {
+            None => return Ok(None),
+            Some(block) => {
+                block.transactions.iter().map(|tx| tx.hash()).collect()
+            }
+        };
 
         match self.data_man.block_traces_by_hash(&block_hash) {
             None => Ok(None),
-            Some(t) => match LocalizedBlockTrace::from(t, self.network) {
-                Ok(t) => Ok(Some(t)),
-                Err(e) => bail!(format!(
-                    "Traces not found for block {:?}: {:?}",
-                    block_hash, e
-                )),
-            },
+            Some(DataVersionTuple(pivot_hash, traces)) => {
+                let epoch_number = self
+                    .data_man
+                    .block_height_by_hash(&pivot_hash)
+                    .ok_or("pivot block missing")?;
+                match LocalizedBlockTrace::from(
+                    traces,
+                    block_hash,
+                    pivot_hash,
+                    epoch_number,
+                    transaction_hashes,
+                    self.network,
+                ) {
+                    Ok(t) => Ok(Some(t)),
+                    Err(e) => bail!(format!(
+                        "Traces not found for block {:?}: {:?}",
+                        block_hash, e
+                    )),
+                }
+            }
         }
     }
 
@@ -89,23 +111,45 @@ impl TraceHandler {
     fn transaction_trace_impl(
         &self, tx_hash: &H256,
     ) -> RpcResult<Option<Vec<RpcLocalizedTrace>>> {
-        Ok(self.data_man.transaction_index_by_hash(tx_hash, true /* update_cache */).and_then(|tx_index|
-                self.data_man.transactions_traces_by_block_hash(&tx_index.block_hash)
-                    .and_then(|traces| {
-                        traces.into_iter().nth(tx_index.index)
+        Ok(self
+            .data_man
+            .transaction_index_by_hash(tx_hash, true /* update_cache */)
+            .and_then(|tx_index| {
+                self.data_man
+                    .transactions_traces_by_block_hash(&tx_index.block_hash)
+                    .and_then(|(pivot_hash, traces)| {
+                        traces
+                            .into_iter()
+                            .nth(tx_index.index)
                             .map(Into::<Vec<ExecTrace>>::into)
-                            .map(|traces|
-                                traces.into_iter()
-                                    .map(|trace| {
-                                        RpcLocalizedTrace::from(
-                                            trace,
+                            .map(|traces| {
+                                traces
+                                    .into_iter()
+                                    .map(|trace| RpcLocalizedTrace {
+                                        action: RpcAction::try_from(
+                                            trace.action,
                                             self.network,
-                                        ).expect("Local address conversion should succeed")
-                                    }).collect()
-                            )
-                        }
-                    )
-        ))
+                                        )
+                                        .expect("local address convert error"),
+                                        epoch_hash: Some(pivot_hash),
+                                        epoch_number: Some(
+                                            self.data_man
+                                                .block_height_by_hash(
+                                                    &pivot_hash,
+                                                )
+                                                .expect("pivot block missing")
+                                                .into(),
+                                        ),
+                                        block_hash: Some(tx_index.block_hash),
+                                        transaction_position: Some(
+                                            tx_index.index.into(),
+                                        ),
+                                        transaction_hash: Some(*tx_hash),
+                                    })
+                                    .collect()
+                            })
+                    })
+            }))
     }
 }
 

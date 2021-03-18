@@ -461,7 +461,9 @@ impl BlockDataManager {
 
     /// Get the traces for a single block without checking the assumed pivot
     /// block
-    pub fn block_traces_by_hash(&self, hash: &H256) -> Option<BlockExecTraces> {
+    pub fn block_traces_by_hash(
+        &self, hash: &H256,
+    ) -> Option<BlockTracesWithEpoch> {
         let maybe_traces_in_mem = self
             .block_traces
             .read()
@@ -470,13 +472,16 @@ impl BlockDataManager {
         // Make sure the ReadLock of `block_traces` is dropped here.
         let maybe_traces = maybe_traces_in_mem.or_else(|| {
             self.db_manager.block_traces_from_db(hash).map(
-                |DataVersionTuple(pivot, traces)| {
+                |traces_with_epoch| {
                     self.block_traces
                         .write()
                         .entry(*hash)
                         .or_insert(BlockTracesInfo::default())
-                        .insert_data(&pivot, traces.clone());
-                    traces
+                        .insert_data(
+                            &traces_with_epoch.0,
+                            traces_with_epoch.1.clone(),
+                        );
+                    traces_with_epoch
                 },
             )
         });
@@ -486,10 +491,15 @@ impl BlockDataManager {
         maybe_traces
     }
 
+    /// Return `(pivot_hash, tx_traces)`.
     pub fn transactions_traces_by_block_hash(
         &self, hash: &H256,
-    ) -> Option<Vec<TransactionExecTraces>> {
-        self.block_traces_by_hash(hash).map(Into::into)
+    ) -> Option<(H256, Vec<TransactionExecTraces>)> {
+        self.block_traces_by_hash(hash).map(
+            |DataVersionTuple(pivot_hash, block_trace)| {
+                (pivot_hash, block_trace.into())
+            },
+        )
     }
 
     /// Similar to `block_execution_result_by_hash_with_epoch`.

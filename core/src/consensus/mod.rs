@@ -19,7 +19,9 @@ use super::consensus::consensus_inner::{
     consensus_new_block_handler::ConsensusNewBlockHandler,
 };
 use crate::{
-    block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
+    block_data_manager::{
+        BlockDataManager, BlockExecutionResultWithEpoch, DataVersionTuple,
+    },
     consensus::consensus_inner::{
         consensus_executor::ConsensusExecutionConfiguration, StateBlameInfo,
     },
@@ -29,7 +31,7 @@ use crate::{
     state::State,
     statistics::SharedStatistics,
     trace::{
-        trace::{ActionType, BlockExecTraces, ExecTrace},
+        trace::{ActionType, BlockExecTraces, LocalizedTrace},
         trace_filter::TraceFilter,
     },
     transaction_pool::SharedTransactionPool,
@@ -1010,7 +1012,7 @@ impl ConsensusGraph {
 
     pub fn filter_traces(
         &self, mut filter: TraceFilter,
-    ) -> Result<Vec<ExecTrace>, FilterError> {
+    ) -> Result<Vec<LocalizedTrace>, FilterError> {
         let traces = match filter.block_hashes.take() {
             None => self.filter_traces_by_epochs(&filter),
             Some(hashes) => self.filter_traces_by_block_hashes(&filter, hashes),
@@ -1127,7 +1129,7 @@ impl ConsensusGraph {
 
     fn filter_traces_by_epochs(
         &self, filter: &TraceFilter,
-    ) -> Result<Vec<ExecTrace>, FilterError> {
+    ) -> Result<Vec<LocalizedTrace>, FilterError> {
         let epochs_and_pivot_hash = {
             let inner = self.inner.read();
             let mut epochs_and_pivot_hash = Vec::new();
@@ -1144,16 +1146,17 @@ impl ConsensusGraph {
             .map(|(epoch_number, assumed_pivot)| {
                 self.filter_traces_single_epoch(epoch_number, assumed_pivot)
             })
-            .collect::<Result<Vec<Vec<BlockExecTraces>>, FilterError>>()?
+            .collect::<Result<Vec<Vec<_>>, FilterError>>()?
             .into_iter()
             .flatten()
             .collect();
-        Ok(self.filter_block_traces(filter, block_traces))
+        self.filter_block_traces(filter, block_traces)
     }
 
+    /// Return `Vec<(pivot_hash, block_hash, block_trace)>`
     fn filter_traces_single_epoch(
         &self, epoch_number: u64, assumed_pivot: H256,
-    ) -> Result<Vec<BlockExecTraces>, FilterError> {
+    ) -> Result<Vec<(H256, H256, BlockExecTraces)>, FilterError> {
         let block_hashes = self
             .inner
             .read_recursive()
@@ -1175,6 +1178,7 @@ impl ConsensusGraph {
                         false,
                         true,
                     )
+                    .map(|trace| (assumed_pivot, block_hash, trace))
                     .ok_or(FilterError::UnknownBlock { hash: block_hash })?,
             );
         }
@@ -1184,48 +1188,81 @@ impl ConsensusGraph {
     // TODO: We can apply some early return logic based on `filter.count`.
     fn filter_traces_by_block_hashes(
         &self, filter: &TraceFilter, block_hashes: Vec<H256>,
-    ) -> Result<Vec<ExecTrace>, FilterError> {
+    ) -> Result<Vec<LocalizedTrace>, FilterError> {
         let block_traces = block_hashes
             .into_par_iter()
             .map(|h| {
-                self.data_man.block_traces_by_hash(&h).ok_or_else(|| {
-                    FilterError::BlockNotExecutedYet { block_hash: h }
-                })
+                self.data_man
+                    .block_traces_by_hash(&h)
+                    .map(|DataVersionTuple(pivot_hash, trace)| {
+                        (pivot_hash, h, trace)
+                    })
+                    .ok_or_else(|| FilterError::BlockNotExecutedYet {
+                        block_hash: h,
+                    })
             })
-            .collect::<Result<Vec<BlockExecTraces>, FilterError>>()?;
-        Ok(self.filter_block_traces(filter, block_traces))
+            .collect::<Result<Vec<_>, FilterError>>()?;
+        self.filter_block_traces(filter, block_traces)
     }
 
+    /// `block_traces` is a list of tuple `(pivot_hash, block_hash,
+    /// block_trace)`.
     fn filter_block_traces(
-        &self, filter: &TraceFilter, block_traces: Vec<BlockExecTraces>,
-    ) -> Vec<ExecTrace> {
+        &self, filter: &TraceFilter,
+        block_traces: Vec<(H256, H256, BlockExecTraces)>,
+    ) -> Result<Vec<LocalizedTrace>, FilterError>
+    {
         let mut traces = Vec::new();
-        match &filter.action_types {
-            Some(action_types) => {
-                for block_trace in block_traces {
-                    for tx_trace in block_trace.0 {
-                        for trace in tx_trace.0 {
-                            if !action_types
-                                .contains(&ActionType::from(&trace.action))
-                            {
-                                continue;
-                            }
-                            traces.push(trace);
-                        }
-                    }
-                }
+        for (pivot_hash, block_hash, block_trace) in block_traces {
+            let tx_hashes: Vec<H256> = self
+                .data_man
+                .block_by_hash(&block_hash, true /* update_cache */)
+                .ok_or(FilterError::BlockAlreadyPruned { block_hash })?
+                .transactions
+                .iter()
+                .map(|tx| tx.hash())
+                .collect();
+            if tx_hashes.len() != block_trace.0.len() {
+                bail!(format!(
+                    "tx list and trace length unmatch: block_hash={:?}",
+                    block_hash
+                ));
             }
-            None => {
-                for block_trace in block_traces {
-                    for tx_trace in block_trace.0 {
-                        for trace in tx_trace.0 {
-                            traces.push(trace);
+            let epoch_number = self
+                .data_man
+                .block_height_by_hash(&pivot_hash)
+                .ok_or_else(|| {
+                    FilterError::Custom(
+                        format!(
+                            "pivot block header missing, hash={:?}",
+                            pivot_hash
+                        )
+                        .into(),
+                    )
+                })?;
+            for (tx_position, tx_trace) in block_trace.0.into_iter().enumerate()
+            {
+                for trace in tx_trace.0 {
+                    if let Some(action_types) = &filter.action_types {
+                        if !action_types
+                            .contains(&ActionType::from(&trace.action))
+                        {
+                            continue;
                         }
                     }
+                    let trace = LocalizedTrace {
+                        action: trace.action,
+                        epoch_hash: pivot_hash,
+                        epoch_number: epoch_number.into(),
+                        block_hash,
+                        transaction_position: tx_position.into(),
+                        transaction_hash: tx_hashes[tx_position],
+                    };
+                    traces.push(trace);
                 }
             }
         }
-        traces
+        Ok(traces)
     }
 }
 
