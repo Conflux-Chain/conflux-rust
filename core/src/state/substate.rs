@@ -4,7 +4,9 @@
 
 use super::CleanupMode;
 use crate::evm::{CleanDustMode, Spec};
-use cfx_state::state_trait::StateOpsTrait;
+use cfx_state::{
+    state_trait::StateOpsTrait, substate_trait::SubstateMngTrait, SubstateTrait,
+};
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, U256};
 use primitives::LogEntry;
@@ -74,7 +76,9 @@ impl CallStackInfo {
 /// A Substate object is maintained for each contract
 /// function instance in the callstack.
 #[derive(Debug, Default)]
-pub struct Substate {
+pub struct Substate
+//<>
+{
     /// Any accounts that have suicided.
     pub suicides: HashSet<Address>,
     /// Any accounts that are touched.
@@ -112,35 +116,30 @@ pub struct Substate {
     contract_in_creation: Option<Address>,
 }
 
-impl Substate {
-    /// Creates new substate.
-    pub fn new() -> Self { Substate::default() }
+impl SubstateMngTrait for Substate {
+    fn new() -> Self { Substate::default() }
 
-    pub fn with_call_stack(callstack: Rc<RefCell<CallStackInfo>>) -> Self {
+    fn with_call_stack(callstack: Rc<RefCell<Self::CallStackInfo>>) -> Self {
         let mut substate = Substate::default();
         substate.contracts_in_callstack = callstack;
         substate
     }
 
-    pub fn push_callstack(&self, contract: Address) {
-        self.contracts_in_callstack.borrow_mut().push(contract);
+    fn accrue(&mut self, s: Self) {
+        self.suicides.extend(s.suicides);
+        self.touched.extend(s.touched);
+        self.logs.extend(s.logs);
+        self.sstore_clears_refund += s.sstore_clears_refund;
+        self.contracts_created.extend(s.contracts_created);
+        for (address, amount) in s.storage_collateralized {
+            *self.storage_collateralized.entry(address).or_insert(0) += amount;
+        }
+        for (address, amount) in s.storage_released {
+            *self.storage_released.entry(address).or_insert(0) += amount;
+        }
     }
 
-    #[inline]
-    pub fn pop_callstack(&self) {
-        self.contracts_in_callstack.borrow_mut().pop();
-    }
-
-    // Returns whether we are running the contract creation code in its own
-    // frame, or within its immediate call of InternalContract.
-    // Note that if the constructor calls other contract, the return value will
-    // be None within the call.
-    pub fn contract_in_creation(&self) -> Option<&Address> {
-        debug!("contract_in_creation {:?}", self.contract_in_creation);
-        self.contract_in_creation.as_ref()
-    }
-
-    pub fn update_contract_in_creation_call(
+    fn update_contract_in_creation_call(
         mut self, parent_contract_in_creation: Option<Address>,
         is_internal_contract: bool,
     ) -> Self
@@ -158,7 +157,7 @@ impl Substate {
         self
     }
 
-    pub fn set_contract_in_creation_create(
+    fn set_contract_in_creation_create(
         mut self, contract_in_creation: Address,
     ) -> Self {
         debug!("set_contract_in_creation_call {:?}", contract_in_creation);
@@ -166,55 +165,13 @@ impl Substate {
 
         self
     }
+}
 
-    /// Merge secondary substate `s` into self, accruing each element
-    /// correspondingly.
-    pub fn accrue(&mut self, s: Substate) {
-        self.suicides.extend(s.suicides);
-        self.touched.extend(s.touched);
-        self.logs.extend(s.logs);
-        self.sstore_clears_refund += s.sstore_clears_refund;
-        self.contracts_created.extend(s.contracts_created);
-        for (address, amount) in s.storage_collateralized {
-            *self.storage_collateralized.entry(address).or_insert(0) += amount;
-        }
-        for (address, amount) in s.storage_released {
-            *self.storage_released.entry(address).or_insert(0) += amount;
-        }
-    }
+impl SubstateTrait for Substate {
+    type CallStackInfo = CallStackInfo;
+    type Spec = Spec;
 
-    // Let VM access storage from substate so that storage ownership can be
-    // maintained without help from state.
-    pub fn storage_at(
-        &self, state: &dyn StateOpsTrait, address: &Address, key: &[u8],
-    ) -> DbResult<U256> {
-        state.storage_at(address, key)
-    }
-
-    // Let VM access storage from substate so that storage ownership can be
-    // maintained without help from state.
-    pub fn set_storage(
-        &mut self, state: &mut dyn StateOpsTrait, address: &Address,
-        key: Vec<u8>, value: U256, owner: Address,
-    ) -> DbResult<()>
-    {
-        state.set_storage(address, key, value, owner)
-    }
-
-    pub fn record_storage_occupy(
-        &mut self, address: &Address, collaterals: u64,
-    ) {
-        *self.storage_collateralized.entry(*address).or_insert(0) +=
-            collaterals;
-    }
-
-    pub fn record_storage_release(
-        &mut self, address: &Address, collaterals: u64,
-    ) {
-        *self.storage_released.entry(*address).or_insert(0) += collaterals;
-    }
-
-    pub fn get_collateral_change(&self, address: &Address) -> (u64, u64) {
+    fn get_collateral_change(&self, address: &Address) -> (u64, u64) {
         let inc = self
             .storage_collateralized
             .get(address)
@@ -228,8 +185,31 @@ impl Substate {
         }
     }
 
+    // Let VM access storage from substate so that storage ownership can be
+    // maintained without help from state.
+    fn storage_at(
+        &self, state: &dyn StateOpsTrait, address: &Address, key: &[u8],
+    ) -> DbResult<U256> {
+        state.storage_at(address, key)
+    }
+
+    // Let VM access storage from substate so that storage ownership can be
+    // maintained without help from state.
+    fn set_storage(
+        &mut self, state: &mut dyn StateOpsTrait, address: &Address,
+        key: Vec<u8>, value: U256, owner: Address,
+    ) -> DbResult<()>
+    {
+        state.set_storage(address, key, value, owner)
+    }
+
+    fn record_storage_occupy(&mut self, address: &Address, collaterals: u64) {
+        *self.storage_collateralized.entry(*address).or_insert(0) +=
+            collaterals;
+    }
+
     /// Get the cleanup mode object from this.
-    pub fn to_cleanup_mode(&mut self, spec: &Spec) -> CleanupMode {
+    fn to_cleanup_mode(&mut self, spec: &Spec) -> CleanupMode {
         match (
             spec.kill_dust != CleanDustMode::Off,
             spec.no_empty,
@@ -243,6 +223,212 @@ impl Substate {
         }
     }
 
+    fn pop_callstack(&self) { self.contracts_in_callstack.borrow_mut().pop(); }
+
+    fn push_callstack(&self, contract: Address) {
+        self.contracts_in_callstack.borrow_mut().push(contract);
+    }
+
+    fn logs(&self) -> &[LogEntry] { &self.logs }
+
+    fn logs_mut(&mut self) -> &mut Vec<LogEntry> { &mut self.logs }
+
+    fn contracts_in_callstack(&self) -> &Rc<RefCell<CallStackInfo>> {
+        &self.contracts_in_callstack
+    }
+
+    fn in_reentrancy(&self) -> bool {
+        self.contracts_in_callstack
+            .borrow()
+            .first_reentrancy_depth
+            .is_some()
+    }
+
+    fn sstore_clears_refund(&self) -> i128 { self.sstore_clears_refund }
+
+    fn sstore_clears_refund_mut(&mut self) -> &mut i128 {
+        &mut self.sstore_clears_refund
+    }
+
+    fn contracts_created(&self) -> &[Address] { &self.contracts_created }
+
+    fn contracts_created_mut(&mut self) -> &mut Vec<Address> {
+        &mut self.contracts_created
+    }
+
+    fn reentrancy_happens_when_push(&self, address: &Address) -> bool {
+        self.contracts_in_callstack
+            .borrow()
+            .call_stack_recipient_addresses
+            .last()
+            != Some(address)
+            && self.contains_key(address)
+    }
+
+    fn record_storage_release(&mut self, address: &Address, collaterals: u64) {
+        *self.storage_released.entry(*address).or_insert(0) += collaterals;
+    }
+
+    fn keys_for_collateral_changed(&self) -> HashSet<&Address> {
+        let affected_address1: HashSet<_> =
+            self.storage_collateralized.keys().collect();
+        let affected_address2: HashSet<_> =
+            self.storage_released.keys().collect();
+        affected_address1
+            .union(&affected_address2)
+            .cloned()
+            .collect()
+    }
+
+    fn contains_key(&self, key: &Address) -> bool {
+        self.contracts_in_callstack
+            .borrow()
+            .address_counter
+            .contains_key(key)
+    }
+
+    fn suicides(&self) -> &HashSet<Address> { &self.suicides }
+
+    fn suicides_mut(&mut self) -> &mut HashSet<Address> { &mut self.suicides }
+
+    fn contract_in_creation(&self) -> Option<&Address> {
+        debug!("contract_in_creation {:?}", self.contract_in_creation);
+        self.contract_in_creation.as_ref()
+    }
+}
+
+impl Substate {
+    // /// Creates new substate.
+    // pub fn new() -> Self { Substate::default() }
+    //
+    // pub fn with_call_stack(callstack: Rc<RefCell<CallStackInfo>>) -> Self {
+    //     let mut substate = Substate::default();
+    //     substate.contracts_in_callstack = callstack;
+    //     substate
+    // }
+    //
+    // pub fn push_callstack(&self, contract: Address) {
+    //     self.contracts_in_callstack.borrow_mut().push(contract);
+    // }
+    //
+    // #[inline]
+    // pub fn pop_callstack(&self) {
+    //     self.contracts_in_callstack.borrow_mut().pop();
+    // }
+    //
+    // // Returns whether we are running the contract creation code in its own
+    // // frame, or within its immediate call of InternalContract.
+    // // Note that if the constructor calls other contract, the return value
+    // will // be None within the call.
+    // pub fn contract_in_creation(&self) -> Option<&Address> {
+    //     debug!("contract_in_creation {:?}", self.contract_in_creation);
+    //     self.contract_in_creation.as_ref()
+    // }
+    //
+    // pub fn update_contract_in_creation_call(
+    //     mut self, parent_contract_in_creation: Option<Address>,
+    //     is_internal_contract: bool,
+    // ) -> Self
+    // {
+    //     debug!(
+    //         "update_contract_in_creation_call {:?}, is_internal_contract {}",
+    //         parent_contract_in_creation, is_internal_contract
+    //     );
+    //     if is_internal_contract {
+    //         self.contract_in_creation = parent_contract_in_creation;
+    //     } else {
+    //         self.contract_in_creation = None;
+    //     }
+    //
+    //     self
+    // }
+    //
+    // pub fn set_contract_in_creation_create(
+    //     mut self, contract_in_creation: Address,
+    // ) -> Self {
+    //     debug!("set_contract_in_creation_call {:?}", contract_in_creation);
+    //     self.contract_in_creation = Some(contract_in_creation);
+    //
+    //     self
+    // }
+    //
+    // /// Merge secondary substate `s` into self, accruing each element
+    // /// correspondingly.
+    // pub fn accrue(&mut self, s: Substate) {
+    //     self.suicides.extend(s.suicides);
+    //     self.touched.extend(s.touched);
+    //     self.logs.extend(s.logs);
+    //     self.sstore_clears_refund += s.sstore_clears_refund;
+    //     self.contracts_created.extend(s.contracts_created);
+    //     for (address, amount) in s.storage_collateralized {
+    //         *self.storage_collateralized.entry(address).or_insert(0) +=
+    // amount;     }
+    //     for (address, amount) in s.storage_released {
+    //         *self.storage_released.entry(address).or_insert(0) += amount;
+    //     }
+    // }
+    //
+    // // Let VM access storage from substate so that storage ownership can be
+    // // maintained without help from state.
+    // pub fn storage_at(
+    //     &self, state: &dyn StateOpsTrait, address: &Address, key: &[u8],
+    // ) -> DbResult<U256> {
+    //     state.storage_at(address, key)
+    // }
+    //
+    // // Let VM access storage from substate so that storage ownership can be
+    // // maintained without help from state.
+    // pub fn set_storage(
+    //     &mut self, state: &mut dyn StateOpsTrait, address: &Address,
+    //     key: Vec<u8>, value: U256, owner: Address,
+    // ) -> DbResult<()>
+    // {
+    //     state.set_storage(address, key, value, owner)
+    // }
+    //
+    pub fn record_storage_occupy(
+        &mut self, address: &Address, collaterals: u64,
+    ) {
+        *self.storage_collateralized.entry(*address).or_insert(0) +=
+            collaterals;
+    }
+
+    //
+    pub fn record_storage_release(
+        &mut self, address: &Address, collaterals: u64,
+    ) {
+        *self.storage_released.entry(*address).or_insert(0) += collaterals;
+    }
+
+    // pub fn get_collateral_change(&self, address: &Address) -> (u64, u64) {
+    //     let inc = self
+    //         .storage_collateralized
+    //         .get(address)
+    //         .cloned()
+    //         .unwrap_or(0);
+    //     let sub = self.storage_released.get(address).cloned().unwrap_or(0);
+    //     if inc > sub {
+    //         (inc - sub, 0)
+    //     } else {
+    //         (0, sub - inc)
+    //     }
+    // }
+    //
+    // /// Get the cleanup mode object from this.
+    // pub fn to_cleanup_mode(&mut self, spec: &Spec) -> CleanupMode {
+    //     match (
+    //         spec.kill_dust != CleanDustMode::Off,
+    //         spec.no_empty,
+    //         spec.kill_empty,
+    //     ) {
+    //         (false, false, _) => CleanupMode::ForceCreate,
+    //         (false, true, false) => CleanupMode::NoEmpty,
+    //         (false, true, true) | (true, _, _) => {
+    //             CleanupMode::TrackTouched(&mut self.touched)
+    //         }
+    //     }
+    // }
+    //
     pub fn keys_for_collateral_changed(&self) -> HashSet<&Address> {
         let affected_address1: HashSet<_> =
             self.storage_collateralized.keys().collect();
@@ -258,6 +444,7 @@ impl Substate {
 #[cfg(test)]
 mod tests {
     use super::{CallStackInfo, Substate};
+    use cfx_state::SubstateTrait;
     use cfx_types::Address;
     use primitives::LogEntry;
 
@@ -278,7 +465,7 @@ mod tests {
             topics: vec![],
             data: vec![],
         });
-        sub_state.sstore_clears_refund = (15000 * 5).into();
+        *sub_state.sstore_clears_refund = (15000 * 5).into();
         sub_state.suicides.insert(Address::from_low_u64_be(10));
 
         let mut sub_state_2 = Substate::new();
@@ -290,7 +477,7 @@ mod tests {
             topics: vec![],
             data: vec![],
         });
-        sub_state_2.sstore_clears_refund = (15000 * 7).into();
+        *sub_state_2.sstore_clears_refund = (15000 * 7).into();
 
         sub_state.accrue(sub_state_2);
         assert_eq!(sub_state.contracts_created.len(), 2);

@@ -8,7 +8,9 @@ pub use self::{
 };
 
 use self::account_entry::{AccountEntry, AccountState};
-use crate::{hash::KECCAK_EMPTY, transaction_pool::SharedTransactionPool};
+use crate::{
+    hash::KECCAK_EMPTY, transaction_pool::SharedTransactionPool, vm::Spec,
+};
 use cfx_bytes::Bytes;
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
@@ -19,7 +21,7 @@ use cfx_parameters::{
 };
 use cfx_state::{
     state_trait::{CheckpointTrait, StateOpsTrait},
-    CleanupMode, CollateralCheckResult, StateTrait,
+    CleanupMode, CollateralCheckResult, StateTrait, SubstateTrait,
 };
 use cfx_statedb::{
     ErrorKind as DbErrorKind, Result as DbResult, StateDbExt,
@@ -158,7 +160,7 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
     }
 
     fn record_storage_and_whitelist_entries_release(
-        &mut self, address: &Address, substate: &mut Self::Substate,
+        &mut self, address: &Address, substate: &mut Substate,
     ) -> DbResult<()> {
         self.remove_whitelists_for_contract::<access_mode::Write>(address)?;
 
@@ -975,8 +977,13 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
 
     /// Charges or refund storage collateral and update `total_storage_tokens`.
     fn settle_collateral_for_address(
-        &mut self, addr: &Address, substate: &Substate,
-    ) -> DbResult<CollateralCheckResult> {
+        &mut self, addr: &Address,
+        substate: &dyn SubstateTrait<
+            Spec = Spec,
+            CallStackInfo = CallStackInfo,
+        >,
+    ) -> DbResult<CollateralCheckResult>
+    {
         let (inc_collaterals, sub_collaterals) =
             substate.get_collateral_change(addr);
         let (inc, sub) = (
