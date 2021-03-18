@@ -172,10 +172,17 @@ pub struct LogFilter {
     /// If specified, log must contain one of these topics.
     pub topics: Vec<Option<Vec<H256>>>,
 
+    /// Logs offset
+    ///
+    /// If None, return all logs
+    /// If specified, should skip the *last* `n` logs.
+    pub offset: Option<usize>,
+
     /// Logs limit
     ///
     /// If None, return all logs
-    /// If specified, should only return *last* `n` logs.
+    /// If specified, should only return *last* `n` logs
+    /// after the offset has been applied.
     pub limit: Option<usize>,
 }
 
@@ -192,6 +199,7 @@ impl Clone for LogFilter {
             block_hashes: self.block_hashes.clone(),
             address: self.address.clone(),
             topics: topics[..].to_vec(),
+            offset: self.offset,
             limit: self.limit,
         }
     }
@@ -205,6 +213,7 @@ impl Default for LogFilter {
             block_hashes: None,
             address: None,
             topics: vec![None, None, None, None],
+            offset: None,
             limit: None,
         }
     }
