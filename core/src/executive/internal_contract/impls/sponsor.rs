@@ -3,18 +3,22 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    state::Substate,
+    state::CallStackInfo,
     trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, Spec},
 };
 use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
-use cfx_state::state_trait::StateOpsTrait;
+use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{address_util::AddressUtil, Address, U256};
 
 /// Implementation of `set_sponsor_for_gas(address,uint256)`.
 pub fn set_sponsor_for_gas(
     contract_address: Address, upper_bound: U256, params: &ActionParams,
-    spec: &Spec, state: &mut dyn StateOpsTrait, substate: &mut Substate,
+    spec: &Spec, state: &mut dyn StateOpsTrait,
+    substate: &mut dyn SubstateTrait<
+        Spec = Spec,
+        CallStackInfo = CallStackInfo,
+    >,
     tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
 ) -> vm::Result<()>
 {
@@ -121,7 +125,11 @@ pub fn set_sponsor_for_gas(
 /// Implementation of `set_sponsor_for_collateral(address)`.
 pub fn set_sponsor_for_collateral(
     contract_address: Address, params: &ActionParams, spec: &Spec,
-    state: &mut dyn StateOpsTrait, substate: &mut Substate,
+    state: &mut dyn StateOpsTrait,
+    substate: &mut dyn SubstateTrait<
+        Spec = Spec,
+        CallStackInfo = CallStackInfo,
+    >,
     tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
 ) -> vm::Result<()>
 {

@@ -4,11 +4,11 @@
 
 use super::SolidityFunctionTrait;
 use crate::{
-    state::Substate,
+    state::CallStackInfo,
     trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, CallType, Env, GasLeft, ReturnData, Spec},
 };
-use cfx_state::state_trait::StateOpsTrait;
+use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::U256;
 use solidity_abi::{ABIDecodable, ABIEncodable};
 
@@ -34,7 +34,11 @@ impl<
 {
     fn execute(
         &self, input: &[u8], params: &ActionParams, env: &Env, spec: &Spec,
-        state: &mut dyn StateOpsTrait, substate: &mut Substate,
+        state: &mut dyn StateOpsTrait,
+        substate: &mut dyn SubstateTrait<
+            Spec = Spec,
+            CallStackInfo = CallStackInfo,
+        >,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>
     {
@@ -83,14 +87,22 @@ pub trait InterfaceTrait {
 
 pub trait PreExecCheckTrait: Send + Sync {
     fn pre_execution_check(
-        &self, params: &ActionParams, substate: &Substate,
+        &self, params: &ActionParams,
+        substate: &dyn SubstateTrait<
+            Spec = Spec,
+            CallStackInfo = CallStackInfo,
+        >,
     ) -> vm::Result<()>;
 }
 
 pub trait ExecutionTrait: Send + Sync + InterfaceTrait {
     fn execute_inner(
         &self, input: Self::Input, params: &ActionParams, env: &Env,
-        spec: &Spec, state: &mut dyn StateOpsTrait, substate: &mut Substate,
+        spec: &Spec, state: &mut dyn StateOpsTrait,
+        substate: &mut dyn SubstateTrait<
+            Spec = Spec,
+            CallStackInfo = CallStackInfo,
+        >,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<<Self as InterfaceTrait>::Output>;
 }
@@ -111,8 +123,13 @@ pub trait PreExecCheckConfTrait: Send + Sync {
 
 impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
     fn pre_execution_check(
-        &self, params: &ActionParams, substate: &Substate,
-    ) -> vm::Result<()> {
+        &self, params: &ActionParams,
+        substate: &dyn SubstateTrait<
+            Spec = Spec,
+            CallStackInfo = CallStackInfo,
+        >,
+    ) -> vm::Result<()>
+    {
         if !Self::PAYABLE && !params.value.value().is_zero() {
             return Err(vm::Error::InternalContract(
                 "should not transfer balance to Staking contract",
@@ -120,7 +137,7 @@ impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
         }
 
         if Self::HAS_WRITE_OP
-            && (substate.contracts_in_callstack.borrow().in_reentrancy()
+            && (substate.contracts_in_callstack().borrow().in_reentrancy()
                 || params.call_type == CallType::StaticCall)
         {
             return Err(vm::Error::MutableCallInStaticContext);

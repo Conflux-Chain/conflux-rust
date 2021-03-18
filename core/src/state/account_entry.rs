@@ -5,10 +5,12 @@
 use crate::{
     bytes::Bytes,
     hash::{keccak, KECCAK_EMPTY},
-    state::{AccountEntryProtectedMethods, StateGeneric, Substate},
+    state::{AccountEntryProtectedMethods, CallStackInfo, StateGeneric},
+    vm::Spec,
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::staking::COLLATERAL_UNITS_PER_STORAGE_KEY;
+use cfx_state::SubstateTrait;
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
 use cfx_storage::StorageStateTrait;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
@@ -759,8 +761,13 @@ impl OverlayAccount {
     /// execution. The second value means the number of keys released by this
     /// account in current execution.
     pub fn commit_ownership_change<StateDbStorage: StorageStateTrait>(
-        &mut self, db: &StateDbGeneric<StateDbStorage>, substate: &mut Substate,
-    ) -> DbResult<()> {
+        &mut self, db: &StateDbGeneric<StateDbStorage>,
+        substate: &mut dyn SubstateTrait<
+            CallStackInfo = CallStackInfo,
+            Spec = Spec,
+        >,
+    ) -> DbResult<()>
+    {
         let storage_owner_lv1_write_cache: Vec<_> =
             self.storage_owner_lv1_write_cache.drain().collect();
         for (k, current_owner_opt) in storage_owner_lv1_write_cache {

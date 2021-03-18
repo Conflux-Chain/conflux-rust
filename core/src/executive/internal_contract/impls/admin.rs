@@ -3,11 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    state::Substate,
+    state::CallStackInfo,
     trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, Env, Spec},
 };
-use cfx_state::state_trait::StateOpsTrait;
+use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{address_util::AddressUtil, Address, U256};
 
 /// The Actual Implementation of `suicide`.
@@ -19,11 +19,15 @@ use cfx_types::{address_util::AddressUtil, Address, U256};
 ///   4. kill the contract
 pub fn suicide(
     contract_address: &Address, refund_address: &Address,
-    state: &mut dyn StateOpsTrait, spec: &Spec, substate: &mut Substate,
+    state: &mut dyn StateOpsTrait, spec: &Spec,
+    substate: &mut dyn SubstateTrait<
+        Spec = Spec,
+        CallStackInfo = CallStackInfo,
+    >,
     tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
 ) -> vm::Result<()>
 {
-    substate.suicides.insert(contract_address.clone());
+    substate.suicides_mut().insert(contract_address.clone());
     let balance = state.balance(contract_address)?;
 
     if refund_address == contract_address || !refund_address.is_valid_address()
@@ -95,7 +99,11 @@ pub fn set_admin(
 /// The input should consist of 20 bytes `contract_address`
 pub fn destroy(
     contract_address: Address, params: &ActionParams,
-    state: &mut dyn StateOpsTrait, spec: &Spec, substate: &mut Substate,
+    state: &mut dyn StateOpsTrait, spec: &Spec,
+    substate: &mut dyn SubstateTrait<
+        Spec = Spec,
+        CallStackInfo = CallStackInfo,
+    >,
     tracer: &mut dyn Tracer<Output = ExecTrace>, env: &Env,
 ) -> vm::Result<()>
 {
