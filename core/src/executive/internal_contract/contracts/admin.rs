@@ -61,12 +61,12 @@ impl_function_type!(Destroy, "non_payable_write", gas: SPEC.sstore_reset_gas);
 
 impl ExecutionTrait for Destroy {
     fn execute_inner(
-        &self, input: Address, params: &ActionParams, _env: &Env, spec: &Spec,
+        &self, input: Address, params: &ActionParams, env: &Env, spec: &Spec,
         state: &mut dyn StateOpsTrait, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        destroy(input, params, state, spec, substate, tracer)
+        destroy(input, params, state, spec, substate, tracer, env)
     }
 }
 

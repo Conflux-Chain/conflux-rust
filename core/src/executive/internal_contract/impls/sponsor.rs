@@ -15,7 +15,7 @@ use cfx_types::{address_util::AddressUtil, Address, U256};
 pub fn set_sponsor_for_gas(
     contract_address: Address, upper_bound: U256, params: &ActionParams,
     spec: &Spec, state: &mut dyn StateOpsTrait, substate: &mut Substate,
-    tracer: &mut dyn Tracer<Output = ExecTrace>,
+    tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
@@ -77,6 +77,7 @@ pub fn set_sponsor_for_gas(
                 prev_sponsor.as_ref().unwrap(),
                 &prev_sponsor_balance,
                 substate.to_cleanup_mode(&spec),
+                account_start_nonce,
             )?;
         }
         state.sub_balance(
@@ -121,7 +122,7 @@ pub fn set_sponsor_for_gas(
 pub fn set_sponsor_for_collateral(
     contract_address: Address, params: &ActionParams, spec: &Spec,
     state: &mut dyn StateOpsTrait, substate: &mut Substate,
-    tracer: &mut dyn Tracer<Output = ExecTrace>,
+    tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
@@ -174,6 +175,7 @@ pub fn set_sponsor_for_collateral(
                 prev_sponsor.as_ref().unwrap(),
                 &(prev_sponsor_balance + collateral_for_storage),
                 substate.to_cleanup_mode(&spec),
+                account_start_nonce,
             )?;
         }
         state.sub_balance(

@@ -216,7 +216,10 @@ impl<'a, State: StateTrait<Substate = Substate>> ContextTrait
             if !self.spec.keep_unsigned_nonce
                 || params.sender != UNSIGNED_SENDER
             {
-                self.state.inc_nonce(&self.origin.address)?;
+                self.state.inc_nonce(
+                    &self.origin.address,
+                    self.spec.account_start_nonce(self.env.number),
+                )?;
             }
         }
 
@@ -375,7 +378,7 @@ impl<'a, State: StateTrait<Substate = Substate>> ContextTrait
 
     fn suicide(
         &mut self, refund_address: &Address,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
     ) -> vm::Result<()>
     {
         if self.is_static_or_reentrancy() {
@@ -389,6 +392,7 @@ impl<'a, State: StateTrait<Substate = Substate>> ContextTrait
             &self.spec,
             &mut self.substate,
             tracer,
+            account_start_nonce,
         )
     }
 
@@ -743,7 +747,13 @@ mod tests {
                 &setup.internal_contract_map,
             );
             let mut tracer = trace::NoopTracer;
-            ctx.suicide(&refund_account, &mut tracer).unwrap();
+            ctx.suicide(
+                &refund_account,
+                &mut tracer,
+                Spec::new_spec()
+                    .account_start_nonce(/* _block_number = */ 0),
+            )
+            .unwrap();
         }
 
         assert_eq!(setup.substate.suicides.len(), 1);
@@ -843,5 +853,4 @@ mod tests {
                 .unwrap()
         );
     }
-
 }

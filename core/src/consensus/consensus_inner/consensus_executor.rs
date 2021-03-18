@@ -1011,6 +1011,7 @@ impl ConsensusExecutionHandler {
                 &reward_execution_info,
                 on_local_pivot,
                 debug_record.as_deref_mut(),
+                Spec::new_spec().account_start_nonce(start_block_number),
             );
         }
 
@@ -1328,6 +1329,7 @@ impl ConsensusExecutionHandler {
         &self, state: &mut State, reward_info: &RewardExecutionInfo,
         on_local_pivot: bool,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
+        account_start_nonce: U256,
     )
     {
         /// (Fee, SetOfPackingBlockHash)
@@ -1594,7 +1596,12 @@ impl ConsensusExecutionHandler {
 
         for (address, reward) in merged_rewards {
             state
-                .add_balance(&address, &reward, CleanupMode::ForceCreate)
+                .add_balance(
+                    &address,
+                    &reward,
+                    CleanupMode::ForceCreate,
+                    account_start_nonce,
+                )
                 .unwrap();
 
             if let Some(debug_out) = &mut debug_record {

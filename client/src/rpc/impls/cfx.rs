@@ -1060,11 +1060,12 @@ impl RpcImpl {
                         revert_reason_decode(&executed.output)),
                     [b"Reverted. Execution output: ", &*executed.output].concat(),
                 ))
-            },
+            }
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
                 bail!(call_execution_error(
                     format! {"Can not estimate: transaction execution failed, \
-                     all gas will be charged (execution error: {:?})", e}.into(),
+                    all gas will be charged (execution error: {:?})", e}
+                    .into(),
                     format! {"{:?}", e}.into_bytes()
                 ))
             }

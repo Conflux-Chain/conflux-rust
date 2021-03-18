@@ -5,10 +5,10 @@
 use crate::{
     state::Substate,
     trace::{trace::ExecTrace, Tracer},
-    vm::{self, ActionParams, Spec},
+    vm::{self, ActionParams, Env, Spec},
 };
 use cfx_state::state_trait::StateOpsTrait;
-use cfx_types::{address_util::AddressUtil, Address};
+use cfx_types::{address_util::AddressUtil, Address, U256};
 
 /// The Actual Implementation of `suicide`.
 /// The contract which has non zero `collateral_for_storage` cannot suicide,
@@ -20,7 +20,7 @@ use cfx_types::{address_util::AddressUtil, Address};
 pub fn suicide(
     contract_address: &Address, refund_address: &Address,
     state: &mut dyn StateOpsTrait, spec: &Spec, substate: &mut Substate,
-    tracer: &mut dyn Tracer<Output = ExecTrace>,
+    tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     substate.suicides.insert(contract_address.clone());
@@ -52,6 +52,7 @@ pub fn suicide(
             refund_address,
             &balance,
             substate.to_cleanup_mode(spec),
+            account_start_nonce,
         )?;
     }
 
@@ -95,7 +96,7 @@ pub fn set_admin(
 pub fn destroy(
     contract_address: Address, params: &ActionParams,
     state: &mut dyn StateOpsTrait, spec: &Spec, substate: &mut Substate,
-    tracer: &mut dyn Tracer<Output = ExecTrace>,
+    tracer: &mut dyn Tracer<Output = ExecTrace>, env: &Env,
 ) -> vm::Result<()>
 {
     debug!("contract_address={:?}", contract_address);
@@ -103,7 +104,15 @@ pub fn destroy(
     let requester = &params.sender;
     let admin = state.admin(&contract_address)?;
     if admin == *requester {
-        suicide(&contract_address, &admin, state, spec, substate, tracer)
+        suicide(
+            &contract_address,
+            &admin,
+            state,
+            spec,
+            substate,
+            tracer,
+            spec.account_start_nonce(env.number),
+        )
     } else {
         Ok(())
     }

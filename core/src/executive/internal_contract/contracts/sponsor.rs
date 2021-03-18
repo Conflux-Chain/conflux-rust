@@ -59,7 +59,14 @@ impl ExecutionTrait for SetSponsorForGas {
     ) -> vm::Result<()>
     {
         set_sponsor_for_gas(
-            inputs.0, inputs.1, params, spec, state, substate, tracer,
+            inputs.0,
+            inputs.1,
+            params,
+            spec,
+            state,
+            substate,
+            tracer,
+            spec.account_start_nonce(_env.number),
         )
     }
 }
@@ -76,7 +83,15 @@ impl ExecutionTrait for SetSponsorForCollateral {
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        set_sponsor_for_collateral(input, params, spec, state, substate, tracer)
+        set_sponsor_for_collateral(
+            input,
+            params,
+            spec,
+            state,
+            substate,
+            tracer,
+            spec.account_start_nonce(_env.number),
+        )
     }
 }
 

@@ -176,7 +176,12 @@ pub fn genesis_block(
     );
     for (addr, balance) in genesis_accounts {
         state
-            .add_balance(&addr, &balance, CleanupMode::NoEmpty)
+            .add_balance(
+                &addr,
+                &balance,
+                CleanupMode::NoEmpty,
+                /* account_start_nonce = */ U256::zero(),
+            )
             .unwrap();
         total_balance += balance;
     }
@@ -201,6 +206,7 @@ pub fn genesis_block(
             &genesis_account_address,
             &genesis_account_init_balance,
             CleanupMode::NoEmpty,
+            /* account_start_nonce = */ U256::zero(),
         )
         .unwrap();
 

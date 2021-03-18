@@ -214,7 +214,7 @@ impl Context for MockContext {
 
     fn suicide(
         &mut self, refund_address: &Address,
-        _: &mut dyn Tracer<Output = ExecTrace>,
+        _: &mut dyn Tracer<Output = ExecTrace>, _account_start_nonce: U256,
     ) -> Result<()>
     {
         if !refund_address.is_valid_address() {

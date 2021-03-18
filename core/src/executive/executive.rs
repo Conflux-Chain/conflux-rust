@@ -396,7 +396,7 @@ impl<'a> CallCreateExecutive<'a> {
 
     fn transfer_exec_balance(
         params: &ActionParams, spec: &Spec, state: &mut dyn StateOpsTrait,
-        substate: &mut Substate,
+        substate: &mut Substate, account_start_nonce: U256,
     ) -> DbResult<()>
     {
         if let ActionValue::Transfer(val) = params.value {
@@ -405,6 +405,7 @@ impl<'a> CallCreateExecutive<'a> {
                 &params.address,
                 &val,
                 substate.to_cleanup_mode(&spec),
+                account_start_nonce,
             )?;
         }
 
@@ -564,7 +565,11 @@ impl<'a> CallCreateExecutive<'a> {
                         self.is_create,
                     )?;
                     Self::transfer_exec_balance(
-                        params, self.spec, state, substate,
+                        params,
+                        self.spec,
+                        state,
+                        substate,
+                        self.spec.account_start_nonce(self.env.number),
                     )?;
 
                     Ok(FinalizationResult {
@@ -590,7 +595,11 @@ impl<'a> CallCreateExecutive<'a> {
                     )?;
                     state.checkpoint();
                     Self::transfer_exec_balance(
-                        &params, self.spec, state, substate,
+                        &params,
+                        self.spec,
+                        state,
+                        substate,
+                        self.spec.account_start_nonce(self.env.number),
                     )?;
 
                     let default = [];
@@ -647,14 +656,14 @@ impl<'a> CallCreateExecutive<'a> {
                 let internal_contract_map = self.internal_contract_map;
 
                 let mut pre_inner = || {
-                    Self::check_static_flag(
-                        &params,
-                        static_flag,
-                        is_create,
-                    )?;
+                    Self::check_static_flag(&params, static_flag, is_create)?;
                     state.checkpoint();
                     Self::transfer_exec_balance(
-                        &params, spec, state, substate,
+                        &params,
+                        spec,
+                        state,
+                        substate,
+                        self.spec.account_start_nonce(self.env.number),
                     )?;
                     Ok(())
                 };
@@ -667,10 +676,9 @@ impl<'a> CallCreateExecutive<'a> {
                 let origin = OriginInfo::from(&params);
 
                 let result = if params.call_type != CallType::Call
-                    && params.call_type != CallType::StaticCall {
-                    Err(vm::Error::InternalContract(
-                        "Incorrect call type.",
-                    ))
+                    && params.call_type != CallType::StaticCall
+                {
+                    Err(vm::Error::InternalContract("Incorrect call type."))
                 } else if let Some(contract) =
                     internal_contract_map.contract(&params.code_address)
                 {
@@ -729,7 +737,11 @@ impl<'a> CallCreateExecutive<'a> {
                         )?;
                         state.checkpoint();
                         Self::transfer_exec_balance(
-                            &params, spec, state, substate,
+                            &params,
+                            spec,
+                            state,
+                            substate,
+                            self.spec.account_start_nonce(self.env.number),
                         )?;
                         Ok(())
                     };
@@ -1290,12 +1302,17 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
         let balance = self.state.balance(&sender)?;
         // Give the sender a sufficient balance.
         let needed_balance = U256::MAX / U256::from(2);
-        self.state.set_nonce(&sender, &tx.nonce)?;
+        self.state.set_nonce(
+            &sender,
+            &tx.nonce,
+            self.spec.account_start_nonce(self.env.number),
+        )?;
         if balance < needed_balance {
             self.state.add_balance(
                 &sender,
                 &(needed_balance - balance),
                 CleanupMode::NoEmpty,
+                self.spec.account_start_nonce(self.env.number),
             )?;
         }
         let options = TransactOptions::with_no_tracing();
@@ -1474,7 +1491,10 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
                     ToRepackError::SenderDoesNotExist,
                 ));
             }
-            self.state.inc_nonce(&sender)?;
+            self.state.inc_nonce(
+                &sender,
+                self.spec.account_start_nonce(self.env.number),
+            )?;
             self.state.sub_balance(
                 &sender,
                 &actual_gas_cost,
@@ -1495,7 +1515,10 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
             // account does not exist (since she may be sponsored). Transaction
             // execution is guaranteed. Note that inc_nonce() will create a
             // new account if the account does not exist.
-            self.state.inc_nonce(&sender)?;
+            self.state.inc_nonce(
+                &sender,
+                self.spec.account_start_nonce(self.env.number),
+            )?;
         }
 
         // Subtract the transaction fee from sender or contract.
@@ -1587,6 +1610,7 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
                         &sender,
                         &total_storage_limit,
                         &mut substate,
+                        self.spec.account_start_nonce(self.env.number),
                     )?
                     .into_vm_result()
                     .and(Ok(finalize_res))
@@ -1651,7 +1675,10 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
             )?;
         }
 
-        let res = self.state.settle_collateral_for_all(&substate)?;
+        let res = self.state.settle_collateral_for_all(
+            &substate,
+            self.spec.account_start_nonce(self.env.number),
+        )?;
         // The storage recycling process should never occupy new collateral.
         assert_eq!(res, CollateralCheckResult::Valid);
 
@@ -1671,6 +1698,7 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
                     sponsor_for_gas.as_ref().unwrap(),
                     &sponsor_balance_for_gas,
                     substate.to_cleanup_mode(self.spec),
+                    self.spec.account_start_nonce(self.env.number),
                 )?;
                 self.state.sub_sponsor_balance_for_gas(
                     contract_address,
@@ -1682,6 +1710,7 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
                     sponsor_for_collateral.as_ref().unwrap(),
                     &sponsor_balance_for_collateral,
                     substate.to_cleanup_mode(self.spec),
+                    self.spec.account_start_nonce(self.env.number),
                 )?;
                 self.state.sub_sponsor_balance_for_collateral(
                     contract_address,
@@ -1737,6 +1766,7 @@ impl<'a, /* Substate, */ State: StateTrait<Substate = Substate>>
                 &tx.sender(),
                 &refund_value,
                 substate.to_cleanup_mode(self.spec),
+                self.spec.account_start_nonce(self.env.number),
             )?;
         };
 
