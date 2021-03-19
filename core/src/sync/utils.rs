@@ -93,7 +93,7 @@ pub fn create_simple_block(
 }
 
 pub fn initialize_data_manager(
-    db_dir: &str, dbtype: DbType, pow: Arc<PowComputer>,
+    db_dir: &str, dbtype: DbType, pow: Arc<PowComputer>, vm: VmFactory,
 ) -> (Arc<BlockDataManager>, Arc<Block>) {
     let ledger_db = db::open_database(
         db_dir,
@@ -127,7 +127,7 @@ pub fn initialize_data_manager(
         U256::from(0),
     );
 
-    let machine = Arc::new(new_machine_with_builtin(Default::default()));
+    let machine = Arc::new(new_machine_with_builtin(Default::default(), vm));
 
     let genesis_block = Arc::new(genesis_block(
         &storage_manager,
@@ -158,10 +158,10 @@ pub fn initialize_data_manager(
 
 pub fn initialize_synchronization_graph_with_data_manager(
     data_man: Arc<BlockDataManager>, beta: u64, h: u64, tcr: u64, tcb: u64,
-    era_epoch_count: u64, pow: Arc<PowComputer>,
+    era_epoch_count: u64, pow: Arc<PowComputer>, vm: VmFactory,
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
 {
-    let machine = Arc::new(new_machine_with_builtin(Default::default()));
+    let machine = Arc::new(new_machine_with_builtin(Default::default(), vm));
     let verification_config = VerificationConfig::new(
         true, /* test_mode */
         REFEREE_DEFAULT_BOUND,
@@ -178,7 +178,6 @@ pub fn initialize_synchronization_graph_with_data_manager(
     ));
     let statistics = Arc::new(Statistics::new());
 
-    let vm = VmFactory::new(1024 * 32);
     let pow_config = ProofOfWorkConfig::new(
         true,      /* test_mode */
         false,     /* use_octopus_in_test_mode */
@@ -218,7 +217,6 @@ pub fn initialize_synchronization_graph_with_data_manager(
             sync_state_starting_epoch: None,
             sync_state_epoch_gap: None,
         },
-        vm.clone(),
         txpool.clone(),
         statistics.clone(),
         data_man.clone(),
@@ -256,10 +254,11 @@ pub fn initialize_synchronization_graph(
     Arc<Block>,
 )
 {
+    let vm = VmFactory::new(1024 * 32);
     let pow = Arc::new(PowComputer::new(true));
 
     let (data_man, genesis_block) =
-        initialize_data_manager(db_dir, dbtype, pow.clone());
+        initialize_data_manager(db_dir, dbtype, pow.clone(), vm.clone());
 
     let (sync, consensus) = initialize_synchronization_graph_with_data_manager(
         data_man.clone(),
@@ -269,6 +268,7 @@ pub fn initialize_synchronization_graph(
         tcb,
         era_epoch_count,
         pow,
+        vm,
     );
 
     (sync, consensus, data_man, genesis_block)

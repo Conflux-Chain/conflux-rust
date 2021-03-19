@@ -21,18 +21,18 @@ use crate::{
         prefetcher::{
             prefetch_accounts, ExecutionStatePrefetcher, PrefetchTaskHandle,
         },
-        CleanupMode, State,
+        State,
     },
     trace::trace::{ExecTrace, TransactionExecTraces},
     verification::{compute_receipts_root, VerificationConfig},
     vm::{Env, Error as VmErr, Spec},
-    vm_factory::VmFactory,
     SharedTransactionPool,
 };
 use cfx_internal_common::{
     debug::*, EpochExecutionCommitment, StateRootWithAuxInfo,
 };
 use cfx_parameters::consensus::*;
+use cfx_state::{state_trait::*, CleanupMode};
 use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{
     defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
@@ -179,7 +179,7 @@ pub struct ConsensusExecutor {
 impl ConsensusExecutor {
     pub fn start(
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
-        vm: VmFactory, consensus_inner: Arc<RwLock<ConsensusGraphInner>>,
+        consensus_inner: Arc<RwLock<ConsensusGraphInner>>,
         config: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, bench_mode: bool,
     ) -> Arc<Self>
@@ -188,7 +188,6 @@ impl ConsensusExecutor {
         let handler = Arc::new(ConsensusExecutionHandler::new(
             tx_pool,
             data_man.clone(),
-            vm,
             config,
             verification_config,
             machine,
@@ -789,7 +788,6 @@ impl ConsensusExecutor {
 pub struct ConsensusExecutionHandler {
     tx_pool: SharedTransactionPool,
     data_man: Arc<BlockDataManager>,
-    pub vm: VmFactory,
     config: ConsensusExecutionConfiguration,
     verification_config: VerificationConfig,
     machine: Arc<Machine>,
@@ -799,14 +797,13 @@ pub struct ConsensusExecutionHandler {
 impl ConsensusExecutionHandler {
     pub fn new(
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
-        vm: VmFactory, config: ConsensusExecutionConfiguration,
+        config: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, machine: Arc<Machine>,
     ) -> Self
     {
         ConsensusExecutionHandler {
             tx_pool,
             data_man,
-            vm,
             config,
             verification_config,
             machine,
@@ -907,6 +904,7 @@ impl ConsensusExecutionHandler {
                 &epoch_hash,
                 &epoch_block_hashes,
                 on_local_pivot,
+                self.config.executive_trace,
             )
         {
             let pivot_block_header = self
@@ -970,37 +968,31 @@ impl ConsensusExecutionHandler {
             epoch_blocks.len(),
         );
 
-        let spec = Spec::new_spec();
-        let mut state = State::new(
-            StateDb::new(
-                self.data_man
-                    .storage_manager
-                    .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
-                        pivot_block.block_header.parent_hash(),
-                        &self
-                            .data_man
-                            .get_epoch_execution_commitment(
-                                pivot_block.block_header.parent_hash(),
-                            )
-                            // Unwrapping is safe because the state exists.
-                            .unwrap()
-                            .state_root_with_aux_info,
-                        pivot_block.block_header.height() - 1,
-                        self.data_man.get_snapshot_epoch_count(),
-                    ))
-                    .expect("No db error")
-                    // Unwrapping is safe because the state exists.
-                    .expect("State exists"),
-            ),
-            self.vm.clone(),
-            &spec,
-            start_block_number - 1, /* block_number */
-        )
+        let mut state = State::new(StateDb::new(
+            self.data_man
+                .storage_manager
+                .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
+                    pivot_block.block_header.parent_hash(),
+                    &self
+                        .data_man
+                        .get_epoch_execution_commitment(
+                            pivot_block.block_header.parent_hash(),
+                        )
+                        // Unwrapping is safe because the state exists.
+                        .unwrap()
+                        .state_root_with_aux_info,
+                    pivot_block.block_header.height() - 1,
+                    self.data_man.get_snapshot_epoch_count(),
+                ))
+                .expect("No db error")
+                // Unwrapping is safe because the state exists.
+                .expect("State exists"),
+        ))
         .expect("Failed to initialize state");
 
         let epoch_receipts = self
             .process_epoch_transactions(
-                &spec,
+                &Spec::new_spec(),
                 *epoch_hash,
                 &mut state,
                 &epoch_blocks,
@@ -1134,10 +1126,10 @@ impl ConsensusExecutionHandler {
                     .verification_config
                     .transaction_epoch_bound,
             };
-            let secondary_reward = state.increase_block_number();
-            assert_eq!(state.block_number(), env.number);
-
+            let secondary_reward =
+                state.bump_block_number_accumulate_interest();
             block_number += 1;
+
             last_block_hash = block.hash();
             let mut block_traces: Vec<TransactionExecTraces> =
                 Default::default();
@@ -1293,6 +1285,7 @@ impl ConsensusExecutionHandler {
                 self.data_man.insert_block_traces(
                     block.hash(),
                     block_traces.into(),
+                    pivot_block.hash(),
                     on_local_pivot,
                 );
             }
@@ -1640,31 +1633,26 @@ impl ConsensusExecutionHandler {
         );
         let pivot_block = epoch_blocks.last().expect("Not empty");
         let spec = Spec::new_spec();
-        let mut state = State::new(
-            StateDb::new(
-                self.data_man
-                    .storage_manager
-                    .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
-                        pivot_block.block_header.parent_hash(),
-                        &self
-                            .data_man
-                            .get_epoch_execution_commitment(
-                                pivot_block.block_header.parent_hash(),
-                            )
-                            // Unwrapping is safe because the state exists.
-                            .unwrap()
-                            .state_root_with_aux_info,
-                        pivot_block.block_header.height() - 1,
-                        self.data_man.get_snapshot_epoch_count(),
-                    ))
-                    .unwrap()
-                    // Unwrapping is safe because the state exists.
-                    .unwrap(),
-            ),
-            self.vm.clone(),
-            &spec,
-            start_block_number - 1, /* block_number */
-        )?;
+        let mut state = State::new(StateDb::new(
+            self.data_man
+                .storage_manager
+                .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
+                    pivot_block.block_header.parent_hash(),
+                    &self
+                        .data_man
+                        .get_epoch_execution_commitment(
+                            pivot_block.block_header.parent_hash(),
+                        )
+                        // Unwrapping is safe because the state exists.
+                        .unwrap()
+                        .state_root_with_aux_info,
+                    pivot_block.block_header.height() - 1,
+                    self.data_man.get_snapshot_epoch_count(),
+                ))
+                .unwrap()
+                // Unwrapping is safe because the state exists.
+                .unwrap(),
+        ))?;
         self.process_epoch_transactions(
             &spec,
             *pivot_hash,
@@ -1712,20 +1700,15 @@ impl ConsensusExecutionHandler {
         let state_index = self.data_man.get_state_readonly_index(epoch_id);
         trace!("best_block_header: {:?}", best_block_header);
         let time_stamp = best_block_header.timestamp();
-        let mut state = State::new(
-            StateDb::new(
-                self.data_man
-                    .storage_manager
-                    .get_state_no_commit(
-                        state_index.unwrap(),
-                        /* try_open = */ true,
-                    )?
-                    .ok_or("state deleted")?,
-            ),
-            self.vm.clone(),
-            &spec,
-            start_block_number,
-        )?;
+        let mut state = State::new(StateDb::new(
+            self.data_man
+                .storage_manager
+                .get_state_no_commit(
+                    state_index.unwrap(),
+                    /* try_open = */ true,
+                )?
+                .ok_or("state deleted")?,
+        ))?;
         drop(state_availability_boundary);
 
         let env = Env {
@@ -1741,7 +1724,6 @@ impl ConsensusExecutionHandler {
                 .verification_config
                 .transaction_epoch_bound,
         };
-        assert_eq!(state.block_number(), env.number);
         let mut ex = Executive::new(
             &mut state,
             &env,

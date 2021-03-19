@@ -37,6 +37,7 @@ impl Default for MaybeInPlaceByteArray {
 
 /// Trait for managing construction / destruction of MaybeInPlaceByteArray.
 /// FieldsOffsetMaybeInPlaceByteArrayMemoryManager implements this trait.
+#[allow(drop_bounds)]
 pub trait MaybeInPlaceByteArrayMemoryManagerTrait: Drop {
     /// Unsafe because the size isn't set to 0.
     unsafe fn drop_value(&mut self) {

@@ -23,6 +23,7 @@ mod status;
 mod sync_graph_states;
 mod token_supply_info;
 mod trace;
+mod trace_filter;
 mod transaction;
 
 pub use self::{
@@ -37,7 +38,7 @@ pub use self::{
     },
     consensus_graph_states::ConsensusGraphStates,
     epoch_number::{BlockHashOrEpochNumber, EpochNumber},
-    filter::Filter,
+    filter::LogFilter,
     index::Index,
     log::Log,
     provenance::Origin,
@@ -47,7 +48,8 @@ pub use self::{
     status::Status,
     sync_graph_states::SyncGraphStates,
     token_supply_info::TokenSupplyInfo,
-    trace::LocalizedBlockTrace,
+    trace::{LocalizedBlockTrace, LocalizedTrace, LocalizedTransactionTrace},
+    trace_filter::TraceFilter,
     transaction::{
         PackedOrExecuted, Transaction, TxPoolPendingInfo, TxWithPoolInfo,
     },

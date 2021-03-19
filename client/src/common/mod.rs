@@ -152,10 +152,9 @@ pub fn initialize_common_modules(
     let network_config = conf.net_config()?;
     let cache_config = conf.cache_config();
 
-    let db_config = conf.db_config();
-    let ledger_db =
-        db::open_database(conf.raw_conf.block_db_dir.as_str(), &db_config)
-            .map_err(|e| format!("Failed to open database {:?}", e))?;
+    let (db_path, db_config) = conf.db_config();
+    let ledger_db = db::open_database(db_path.to_str().unwrap(), &db_config)
+        .map_err(|e| format!("Failed to open database {:?}", e))?;
 
     let secret_store = Arc::new(SecretStore::new());
     let storage_manager = Arc::new(
@@ -213,7 +212,8 @@ pub fn initialize_common_modules(
         }
         NodeType::Unknown => {}
     }
-    let machine = Arc::new(new_machine_with_builtin(conf.common_params()));
+    let vm = VmFactory::new(1024 * 32);
+    let machine = Arc::new(new_machine_with_builtin(conf.common_params(), vm));
 
     let genesis_block = genesis_block(
         &storage_manager,
@@ -248,12 +248,10 @@ pub fn initialize_common_modules(
     ));
 
     let statistics = Arc::new(Statistics::new());
-    let vm = VmFactory::new(1024 * 32);
     let notifications = Notifications::init();
 
     let consensus = Arc::new(ConsensusGraph::new(
         consensus_conf,
-        vm,
         txpool.clone(),
         statistics,
         data_man.clone(),
@@ -292,7 +290,6 @@ pub fn initialize_common_modules(
             None, /* sstore_iterations */
             Some(refresh_time),
         )
-        .ok()
         .expect("failed to initialize account provider"),
     );
 
@@ -494,59 +491,38 @@ pub fn initialize_not_light_node_modules(
         setup_debug_rpc_apis(
             common_impl.clone(),
             rpc_impl.clone(),
-            None,
+            pubsub.clone(),
             &conf,
         ),
     )?;
 
     let rpc_tcp_server = super::rpc::start_tcp(
         conf.tcp_config(),
-        if conf.is_test_or_dev_mode() {
-            setup_debug_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                Some(pubsub.clone()),
-                &conf,
-            )
-        } else {
-            setup_public_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                Some(pubsub.clone()),
-                &conf,
-            )
-        },
+        setup_public_rpc_apis(
+            common_impl.clone(),
+            rpc_impl.clone(),
+            pubsub.clone(),
+            &conf,
+        ),
         RpcExtractor,
     )?;
 
     let rpc_ws_server = super::rpc::start_ws(
         conf.ws_config(),
-        if conf.is_test_or_dev_mode() {
-            setup_debug_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                Some(pubsub.clone()),
-                &conf,
-            )
-        } else {
-            setup_public_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                Some(pubsub.clone()),
-                &conf,
-            )
-        },
+        setup_public_rpc_apis(
+            common_impl.clone(),
+            rpc_impl.clone(),
+            pubsub.clone(),
+            &conf,
+        ),
         RpcExtractor,
     )?;
 
     let rpc_http_server = super::rpc::start_http(
         conf.http_config(),
-        if conf.is_test_or_dev_mode() {
-            setup_debug_rpc_apis(common_impl, rpc_impl, None, &conf)
-        } else {
-            setup_public_rpc_apis(common_impl, rpc_impl, None, &conf)
-        },
+        setup_public_rpc_apis(common_impl, rpc_impl, pubsub, &conf),
     )?;
+
     Ok((
         data_man,
         pow,

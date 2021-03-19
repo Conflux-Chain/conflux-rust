@@ -26,7 +26,9 @@ use jsonrpc_pubsub::{
     SubscriptionId,
 };
 use parking_lot::RwLock;
-use primitives::{filter::Filter, log_entry::LocalizedLogEntry, BlockReceipts};
+use primitives::{
+    filter::LogFilter, log_entry::LocalizedLogEntry, BlockReceipts,
+};
 use runtime::Executor;
 use std::{
     sync::{Arc, Weak},
@@ -42,7 +44,7 @@ pub struct PubSubClient {
     handler: Arc<ChainNotificationHandler>,
     heads_subscribers: Arc<RwLock<Subscribers<Client>>>,
     epochs_subscribers: Arc<RwLock<Subscribers<Client>>>,
-    logs_subscribers: Arc<RwLock<Subscribers<(Client, Filter)>>>,
+    logs_subscribers: Arc<RwLock<Subscribers<(Client, LogFilter)>>>,
     epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
 }
 
@@ -292,7 +294,7 @@ impl ChainNotificationHandler {
     }
 
     async fn notify_logs(
-        &self, subscriber: &Client, filter: Filter, epoch: (u64, Vec<H256>),
+        &self, subscriber: &Client, filter: LogFilter, epoch: (u64, Vec<H256>),
     ) {
         trace!("notify_logs({:?})", epoch);
 
@@ -458,7 +460,7 @@ impl PubSub for PubSubClient {
                 let id = self
                     .logs_subscribers
                     .write()
-                    .push(subscriber, Filter::default());
+                    .push(subscriber, LogFilter::default());
 
                 self.start_logs_loop(id);
                 return;

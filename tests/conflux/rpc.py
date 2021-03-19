@@ -470,3 +470,9 @@ class RpcClient:
 
     def get_status(self):
         return self.node.cfx_getStatus()
+
+    def get_block_trace(self, block_hash: str):
+        return self.node.trace_block(block_hash)
+
+    def get_transaction_trace(self, tx_hash: str):
+        return self.node.trace_transaction(tx_hash)

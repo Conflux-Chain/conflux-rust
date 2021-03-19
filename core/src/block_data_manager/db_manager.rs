@@ -1,15 +1,14 @@
 use crate::{
     block_data_manager::{
         db_decode_list, db_encode_list, BlamedHeaderVerifiedRoots,
-        BlockExecutionResultWithEpoch, BlockRewardResult, CheckpointHashes,
-        EpochExecutionContext, LocalBlockInfo,
+        BlockExecutionResultWithEpoch, BlockRewardResult, BlockTracesWithEpoch,
+        CheckpointHashes, EpochExecutionContext, LocalBlockInfo,
     },
     db::{
         COL_BLAMED_HEADER_VERIFIED_ROOTS, COL_BLOCKS, COL_BLOCK_TRACES,
         COL_EPOCH_NUMBER, COL_MISC, COL_TX_INDEX,
     },
     pow::PowComputer,
-    trace::trace::BlockExecTraces,
     verification::VerificationConfig,
 };
 use byteorder::{ByteOrder, LittleEndian};
@@ -142,7 +141,7 @@ impl DBManager {
 
 impl DBManager {
     pub fn insert_block_traces_to_db(
-        &self, block_hash: &H256, block_traces: &BlockExecTraces,
+        &self, block_hash: &H256, block_traces: &BlockTracesWithEpoch,
     ) {
         self.insert_encodable_val(
             DBTable::BlockTraces,
@@ -153,7 +152,7 @@ impl DBManager {
 
     pub fn block_traces_from_db(
         &self, block_hash: &H256,
-    ) -> Option<BlockExecTraces> {
+    ) -> Option<BlockTracesWithEpoch> {
         let block_traces = self
             .load_decodable_val(DBTable::BlockTraces, block_hash.as_bytes())?;
         Some(block_traces)
