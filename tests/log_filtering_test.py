@@ -124,6 +124,13 @@ class LogFilteringTest(ConfluxTestFramework):
         self.assert_response_format_correct(logs)
         assert_equal(len(logs), NUM_CALLS // 2)
 
+        # apply filter with offset
+        filter = Filter(offset=hex(NUM_CALLS // 4))
+        logs = self.rpc.get_logs(filter)
+
+        self.assert_response_format_correct(logs)
+        assert_equal(len(logs), 3 * NUM_CALLS // 4)
+
         # apply filter for specific contract address
         _, contractAddr2 = self.deploy_contract(sender, priv_key, bytecode)
 
@@ -215,6 +222,39 @@ class LogFilteringTest(ConfluxTestFramework):
             assert_equal(logs[ii]["topics"][0], BAR_TOPIC)
             assert_equal(logs[ii]["topics"][1], self.address_to_topic(sender))
             assert_equal(logs[ii]["topics"][2], self.number_to_topic(NUM_CALLS // 2 + ii))
+
+        # given an offset and a limit, we should receive the corresponding logs
+        filter = Filter(block_hashes=[block_hash_1, block_hash_2], offset = hex(NUM_CALLS // 2), limit = hex(NUM_CALLS // 2), topics=[BAR_TOPIC])
+        logs = self.rpc.get_logs(filter)
+        assert_equal(len(logs), NUM_CALLS // 2)
+
+        for ii in range(0, NUM_CALLS // 2):
+            assert_equal(len(logs[ii]["topics"]), 3)
+            assert_equal(logs[ii]["topics"][0], BAR_TOPIC)
+            assert_equal(logs[ii]["topics"][1], self.address_to_topic(sender))
+            assert_equal(logs[ii]["topics"][2], self.number_to_topic(3 * NUM_CALLS + ii))
+
+        filter = Filter(from_epoch = epoch_1, to_epoch = epoch_2, offset = hex(NUM_CALLS // 2), limit = hex(NUM_CALLS // 2), topics=[BAR_TOPIC])
+        logs2 = self.rpc.get_logs(filter)
+        assert_equal(logs, logs2)
+
+        # test paging use case
+        BATCH_SIZE = 7
+
+        filter = Filter(block_hashes=[block_hash_1, block_hash_2], topics=[BAR_TOPIC])
+        all_logs = self.rpc.get_logs(filter)
+
+        collected_logs = []
+        offset = 0
+
+        while True:
+            filter = Filter(block_hashes=[block_hash_1, block_hash_2], offset = hex(offset), limit = hex(BATCH_SIZE), topics=[BAR_TOPIC])
+            logs = self.rpc.get_logs(filter)
+            if len(logs) == 0: break
+            collected_logs = logs + collected_logs
+            offset += BATCH_SIZE
+
+        assert_equal(collected_logs, all_logs)
 
         # get-logs-filter-max-epoch-range should limit the number of epochs queried.
         self.stop_node(0)

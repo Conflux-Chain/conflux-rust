@@ -896,6 +896,7 @@ impl QueryService {
         };
 
         // set maximum to number of logs returned
+        let offset = filter.offset.unwrap_or(0);
         let limit = filter.limit.unwrap_or(::std::usize::MAX);
 
         // construct a stream object for log filtering
@@ -989,6 +990,7 @@ impl QueryService {
             // --> TryStream<LocalizedLogEntry>
 
             // limit number of entries we need
+            .skip(offset)
             .take(limit)
             // --> TryStream<LocalizedLogEntry>
 
