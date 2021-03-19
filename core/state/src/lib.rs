@@ -5,8 +5,10 @@
 use cfx_types::{Address, U256};
 pub use state_trait::StateTrait;
 use std::collections::HashSet;
+pub use substate_trait::SubstateTrait;
 
 pub mod state_trait;
+pub mod substate_trait;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum CollateralCheckResult {

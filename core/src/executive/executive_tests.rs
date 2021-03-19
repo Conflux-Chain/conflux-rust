@@ -26,6 +26,7 @@ use cfx_parameters::{
 };
 use cfx_state::{
     state_trait::{CheckpointTrait, StateOpsTrait},
+    substate_trait::SubstateMngTrait,
     CleanupMode, CollateralCheckResult, StateTrait,
 };
 use cfx_statedb::StateDb;

@@ -7,7 +7,7 @@ use super::{executive::*, suicide as suicide_impl, InternalContractMap};
 use crate::{
     bytes::Bytes,
     machine::Machine,
-    state::Substate,
+    state::CallStackInfo,
     trace::{self, trace::ExecTrace, Tracer},
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
@@ -18,7 +18,7 @@ use crate::{
 use cfx_parameters::staking::{
     code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
-use cfx_state::StateTrait;
+use cfx_state::{substate_trait::SubstateMngTrait, StateTrait, SubstateTrait};
 use cfx_types::{Address, H256, U256};
 use primitives::transaction::UNSIGNED_SENDER;
 use std::sync::Arc;
@@ -66,7 +66,11 @@ impl OriginInfo {
 }
 
 /// Implementation of evm context.
-pub struct Context<'a, State: StateTrait<Substate = Substate>> {
+pub struct Context<
+    'a,
+    Substate: SubstateTrait,
+    State: StateTrait<Substate = Substate>,
+> {
     state: &'a mut State,
     env: &'a Env,
     depth: usize,
@@ -75,17 +79,22 @@ pub struct Context<'a, State: StateTrait<Substate = Substate>> {
     origin: &'a OriginInfo,
     substate: &'a mut Substate,
     machine: &'a Machine,
-    spec: &'a Spec,
+    spec: &'a Substate::Spec,
     output: OutputPolicy,
     static_flag: bool,
     internal_contract_map: &'a InternalContractMap,
 }
 
-impl<'a, State: StateTrait<Substate = Substate>> Context<'a, State> {
+impl<
+        'a,
+        Substate: SubstateTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        State: StateTrait<Substate = Substate>,
+    > Context<'a, Substate, State>
+{
     /// Basic `Context` constructor.
     pub fn new(
         state: &'a mut State, env: &'a Env, machine: &'a Machine,
-        spec: &'a Spec, depth: usize, stack_depth: usize,
+        spec: &'a Substate::Spec, depth: usize, stack_depth: usize,
         origin: &'a OriginInfo, substate: &'a mut Substate,
         output: OutputPolicy, static_flag: bool,
         internal_contract_map: &'a InternalContractMap,
@@ -107,8 +116,11 @@ impl<'a, State: StateTrait<Substate = Substate>> Context<'a, State> {
     }
 }
 
-impl<'a, State: StateTrait<Substate = Substate>> ContextTrait
-    for Context<'a, State>
+impl<
+        'a,
+        Substate: SubstateMngTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        State: StateTrait<Substate = Substate>,
+    > ContextTrait for Context<'a, Substate, State>
 {
     fn storage_at(&self, key: &Vec<u8>) -> vm::Result<U256> {
         self.substate
@@ -133,12 +145,7 @@ impl<'a, State: StateTrait<Substate = Substate>> ContextTrait
     }
 
     fn is_static_or_reentrancy(&self) -> bool {
-        self.static_flag
-            || self
-                .substate
-                .contracts_in_callstack
-                .borrow()
-                .in_reentrancy()
+        self.static_flag || self.substate.in_reentrancy()
     }
 
     fn is_static(&self) -> bool { self.static_flag }
@@ -367,7 +374,7 @@ impl<'a, State: StateTrait<Substate = Substate>> ContextTrait
         }
 
         let address = self.origin.address.clone();
-        self.substate.logs.push(LogEntry {
+        self.substate.logs_mut().push(LogEntry {
             address,
             topics,
             data: data.to_vec(),
@@ -390,7 +397,7 @@ impl<'a, State: StateTrait<Substate = Substate>> ContextTrait
             refund_address,
             self.state,
             &self.spec,
-            &mut self.substate,
+            &mut *self.substate,
             tracer,
             account_start_nonce,
         )
@@ -411,11 +418,11 @@ impl<'a, State: StateTrait<Substate = Substate>> ContextTrait
     fn depth(&self) -> usize { self.depth }
 
     fn add_sstore_refund(&mut self, value: usize) {
-        self.substate.sstore_clears_refund += value as i128;
+        *self.substate.sstore_clears_refund_mut() += value as i128;
     }
 
     fn sub_sstore_refund(&mut self, value: usize) {
-        self.substate.sstore_clears_refund -= value as i128;
+        *self.substate.sstore_clears_refund_mut() -= value as i128;
     }
 
     fn trace_next_instruction(
@@ -441,10 +448,7 @@ impl<'a, State: StateTrait<Substate = Substate>> ContextTrait
     }
 
     fn is_reentrancy(&self, _caller: &Address, callee: &Address) -> bool {
-        self.substate
-            .contracts_in_callstack
-            .borrow()
-            .reentrancy_happens_when_push(callee)
+        self.substate.reentrancy_happens_when_push(callee)
     }
 }
 
@@ -462,7 +466,9 @@ mod tests {
         },
     };
     use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
-    use cfx_state::state_trait::StateOpsTrait;
+    use cfx_state::{
+        state_trait::StateOpsTrait, substate_trait::SubstateMngTrait,
+    };
     use cfx_storage::{
         new_storage_manager_for_testing, tests::FakeStateManager,
     };

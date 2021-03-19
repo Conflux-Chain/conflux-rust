@@ -10,6 +10,7 @@ use crate::{
 use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
 use cfx_state::{
     state_trait::{CheckpointTrait, StateOpsTrait},
+    substate_trait::SubstateMngTrait,
     StateTrait,
 };
 use cfx_statedb::StateDb;
