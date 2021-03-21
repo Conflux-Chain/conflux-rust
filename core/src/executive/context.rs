@@ -225,7 +225,10 @@ impl<
             {
                 self.state.inc_nonce(
                     &self.origin.address,
-                    self.spec.account_start_nonce(self.env.number),
+                    // The sender of a CREATE call is guaranteed to exist,
+                    // therefore the start_nonce below
+                    // doesn't matter.
+                    &self.spec.contract_start_nonce(self.env.number),
                 )?;
             }
         }

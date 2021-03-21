@@ -454,7 +454,7 @@ fn checkpoint_get_storage_at() {
     state
         .inc_nonce(
             &contract_a,
-            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+            &Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
     assert_eq!(
@@ -887,7 +887,7 @@ fn check_result_of_simple_payment_to_killed_account() {
     state_0
         .require_or_new_basic_account(
             &sender_addr,
-            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+            &Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap()
         .add_balance(&ONE_CFX_IN_DRIP.into());
@@ -1099,7 +1099,7 @@ fn create_contract_fail_previous_storage() {
         state
             .require_or_new_basic_account(
                 &a,
-                Spec::new_spec()
+                &Spec::new_spec()
                     .account_start_nonce(/* _block_number = */ 0),
             )
             .unwrap(),
