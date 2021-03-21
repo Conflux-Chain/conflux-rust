@@ -3,7 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    evm::Spec,
     executive::{
         contract_address, ExecutionOutcome, Executive, InternalContractMap,
         TransactOptions,
@@ -172,7 +171,9 @@ pub fn genesis_block(
     let mut total_balance = U256::from(0);
     initialize_internal_contract_accounts(
         &mut state,
-        Spec::new_spec().contract_start_nonce(/* block_number = */ 0),
+        machine
+            .spec(/* block_number = */ 0)
+            .contract_start_nonce(/* block_number = */ 0),
     );
     for (addr, balance) in genesis_accounts {
         state
@@ -440,7 +441,6 @@ fn execute_genesis_transaction(
     transaction: &SignedTransaction, state: &mut State, machine: Arc<Machine>,
 ) {
     let env = Env::default();
-    let spec = Spec::new_spec();
     let internal_contract_map = InternalContractMap::new();
 
     let options = TransactOptions::with_no_tracing();
@@ -449,7 +449,7 @@ fn execute_genesis_transaction(
             state,
             &env,
             machine.as_ref(),
-            &spec,
+            &machine.spec(env.number),
             &internal_contract_map,
         )
         .transact(transaction, options)

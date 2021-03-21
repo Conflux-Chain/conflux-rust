@@ -7,7 +7,7 @@ use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTR
 use super::{
     super::impls::sponsor::*, ExecutionTrait, InterfaceTrait,
     InternalContractTrait, PreExecCheckConfTrait, SolFnTable,
-    SolidityFunctionTrait, UpfrontPaymentTrait, SPEC,
+    SolidityFunctionTrait, UpfrontPaymentTrait,
 };
 #[cfg(test)]
 use crate::check_signature;
@@ -49,7 +49,7 @@ make_solidity_contract! {
 make_solidity_function! {
     struct SetSponsorForGas((Address, U256), "setSponsorForGas(address,uint256)");
 }
-impl_function_type!(SetSponsorForGas, "payable_write", gas: 2 * SPEC.sstore_reset_gas);
+impl_function_type!(SetSponsorForGas, "payable_write", gas: |spec: &Spec| 2 * spec.sstore_reset_gas);
 
 impl ExecutionTrait for SetSponsorForGas {
     fn execute_inner(
@@ -78,7 +78,7 @@ impl ExecutionTrait for SetSponsorForGas {
 make_solidity_function! {
     struct SetSponsorForCollateral(Address, "setSponsorForCollateral(address)");
 }
-impl_function_type!(SetSponsorForCollateral, "payable_write", gas: 2 * SPEC.sstore_reset_gas);
+impl_function_type!(SetSponsorForCollateral, "payable_write", gas: |spec: &Spec| 2 * spec.sstore_reset_gas);
 
 impl ExecutionTrait for SetSponsorForCollateral {
     fn execute_inner(
@@ -256,7 +256,7 @@ impl ExecutionTrait for GetSponsoredBalanceForCollateral {
 make_solidity_function! {
     struct IsWhitelisted((Address,Address), "isWhitelisted(address,address)", bool);
 }
-impl_function_type!(IsWhitelisted, "query", gas: SPEC.sload_gas);
+impl_function_type!(IsWhitelisted, "query", gas: |spec: &Spec| spec.sload_gas);
 
 impl ExecutionTrait for IsWhitelisted {
     fn execute_inner(
@@ -277,7 +277,7 @@ impl ExecutionTrait for IsWhitelisted {
 make_solidity_function! {
     struct IsAllWhitelisted(Address, "isAllWhitelisted(address)", bool);
 }
-impl_function_type!(IsAllWhitelisted, "query", gas: SPEC.sload_gas);
+impl_function_type!(IsAllWhitelisted, "query", gas: |spec: &Spec| spec.sload_gas);
 
 impl ExecutionTrait for IsAllWhitelisted {
     fn execute_inner(

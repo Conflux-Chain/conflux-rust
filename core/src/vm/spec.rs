@@ -315,6 +315,7 @@ impl Spec {
     }
 }
 
+#[cfg(test)]
 impl Default for Spec {
     fn default() -> Self { Spec::new_spec() }
 }

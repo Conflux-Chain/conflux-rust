@@ -7,7 +7,7 @@ use cfx_parameters::internal_contract_addresses::ADMIN_CONTROL_CONTRACT_ADDRESS;
 use super::{
     super::impls::admin::*, ExecutionTrait, InterfaceTrait,
     InternalContractTrait, PreExecCheckConfTrait, SolFnTable,
-    SolidityFunctionTrait, UpfrontPaymentTrait, SPEC,
+    SolidityFunctionTrait, UpfrontPaymentTrait,
 };
 #[cfg(test)]
 use crate::check_signature;
@@ -35,7 +35,7 @@ make_solidity_contract! {
 make_solidity_function! {
     struct SetAdmin((Address, Address), "setAdmin(address,address)");
 }
-impl_function_type!(SetAdmin, "non_payable_write", gas: SPEC.sstore_reset_gas);
+impl_function_type!(SetAdmin, "non_payable_write", gas: |spec: &Spec| spec.sstore_reset_gas);
 
 impl ExecutionTrait for SetAdmin {
     fn execute_inner(
@@ -61,7 +61,7 @@ impl ExecutionTrait for SetAdmin {
 make_solidity_function! {
     struct Destroy(Address, "destroy(address)");
 }
-impl_function_type!(Destroy, "non_payable_write", gas: SPEC.sstore_reset_gas);
+impl_function_type!(Destroy, "non_payable_write", gas: |spec: &Spec| spec.sstore_reset_gas);
 
 impl ExecutionTrait for Destroy {
     fn execute_inner(

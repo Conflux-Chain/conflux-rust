@@ -11,7 +11,7 @@ use cfxcore::{
     executive::{Executive, InternalContractMap, TransactOptions},
     machine::new_machine_with_builtin,
     state::State,
-    vm::{Env, Spec},
+    vm::Env,
     vm_factory::VmFactory,
 };
 use cfxkey::{Generator, KeyPair, Random};
@@ -60,7 +60,6 @@ fn txexe_benchmark(c: &mut Criterion) {
         epoch_height: 0,
         transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
     };
-    let spec = Spec::new_spec();
     c.bench(
         "Execute 1 transaction",
         Benchmark::new("Execute 1 transaction", move |b| {
@@ -84,6 +83,7 @@ fn txexe_benchmark(c: &mut Criterion) {
             ))
             .expect("Failed to initialize state");
 
+            let spec = machine.spec(env.number);
             let mut ex = Executive::new(
                 &mut state,
                 &env,

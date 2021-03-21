@@ -10,6 +10,7 @@ mod error;
 mod return_data;
 mod spec;
 
+#[cfg(test)]
 pub mod tests;
 
 pub use self::{

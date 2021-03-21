@@ -756,8 +756,10 @@ mod tests {
             ctx.suicide(
                 &refund_account,
                 &mut tracer,
-                Spec::new_spec()
-                    .account_start_nonce(/* _block_number = */ 0),
+                setup
+                    .machine
+                    .spec(setup.env.number)
+                    .account_start_nonce(setup.env.number),
             )
             .unwrap();
         }

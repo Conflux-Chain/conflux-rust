@@ -19,13 +19,8 @@ pub use self::{
     admin::AdminControl, sponsor::SponsorWhitelistControl, staking::Staking,
 };
 
-use crate::evm::Spec;
 use cfx_types::Address;
 use std::sync::Arc;
-
-lazy_static! {
-    static ref SPEC: Spec = Spec::default();
-}
 
 pub(super) type SolFnTable = HashMap<[u8; 4], Box<dyn SolidityFunctionTrait>>;
 
