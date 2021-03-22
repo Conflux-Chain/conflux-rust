@@ -1599,7 +1599,7 @@ impl ConsensusExecutionHandler {
                 .add_balance(
                     &address,
                     &reward,
-                    CleanupMode::ForceCreate,
+                    CleanupMode::NoEmpty,
                     account_start_nonce,
                 )
                 .unwrap();
