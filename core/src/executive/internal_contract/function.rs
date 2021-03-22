@@ -211,9 +211,9 @@ macro_rules! impl_function_type {
         $(
             impl UpfrontPaymentTrait for $name {
                 fn upfront_gas_payment(
-                    &self, _input: &Self::Input, _params: &ActionParams, _spec: &Spec, _state: &dyn StateOpsTrait,
+                    &self, _input: &Self::Input, _params: &ActionParams, spec: &Spec, _state: &dyn StateOpsTrait,
                 ) -> U256 {
-                    U256::from($gas)
+                    U256::from($gas(spec))
                 }
             }
         )?

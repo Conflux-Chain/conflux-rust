@@ -156,12 +156,10 @@ pub trait StateOpsTrait {
     fn clean_account(&mut self, address: &Address) -> DbResult<()>;
 
     fn inc_nonce(
-        &mut self, address: &Address, account_start_nonce: U256,
+        &mut self, address: &Address, account_start_nonce: &U256,
     ) -> DbResult<()>;
 
-    fn set_nonce(
-        &mut self, address: &Address, nonce: &U256, account_start_nonce: U256,
-    ) -> DbResult<()>;
+    fn set_nonce(&mut self, address: &Address, nonce: &U256) -> DbResult<()>;
 
     fn sub_balance(
         &mut self, address: &Address, by: &U256, cleanup_mode: &mut CleanupMode,

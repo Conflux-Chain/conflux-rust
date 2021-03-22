@@ -225,7 +225,10 @@ impl<
             {
                 self.state.inc_nonce(
                     &self.origin.address,
-                    self.spec.account_start_nonce(self.env.number),
+                    // The sender of a CREATE call is guaranteed to exist,
+                    // therefore the start_nonce below
+                    // doesn't matter.
+                    &self.spec.contract_start_nonce(self.env.number),
                 )?;
             }
         }
@@ -756,8 +759,10 @@ mod tests {
             ctx.suicide(
                 &refund_account,
                 &mut tracer,
-                Spec::new_spec()
-                    .account_start_nonce(/* _block_number = */ 0),
+                setup
+                    .machine
+                    .spec(setup.env.number)
+                    .account_start_nonce(setup.env.number),
             )
             .unwrap();
         }

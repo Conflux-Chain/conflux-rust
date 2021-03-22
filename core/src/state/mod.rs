@@ -630,7 +630,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn clean_account(&mut self, address: &Address) -> DbResult<()> {
-        *&mut *self.require_or_new_basic_account(address, U256::zero())? =
+        *&mut *self.require_or_new_basic_account(address, &U256::zero())? =
             OverlayAccount::from_loaded(address, Default::default());
         Ok(())
     }
@@ -649,17 +649,15 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     // }
 
     fn inc_nonce(
-        &mut self, address: &Address, account_start_nonce: U256,
+        &mut self, address: &Address, account_start_nonce: &U256,
     ) -> DbResult<()> {
         self.require_or_new_basic_account(address, account_start_nonce)
             .map(|mut x| x.inc_nonce())
     }
 
-    fn set_nonce(
-        &mut self, address: &Address, nonce: &U256, account_start_nonce: U256,
-    ) -> DbResult<()> {
-        self.require_or_new_basic_account(address, account_start_nonce)
-            .map(|mut x| x.set_nonce(nonce))
+    fn set_nonce(&mut self, address: &Address, nonce: &U256) -> DbResult<()> {
+        self.require_or_new_basic_account(address, nonce)
+            .map(|mut x| x.set_nonce(&nonce))
     }
 
     fn sub_balance(
@@ -701,7 +699,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         if !by.is_zero()
             || (cleanup_mode == CleanupMode::ForceCreate && !exists)
         {
-            self.require_or_new_basic_account(address, account_start_nonce)?
+            self.require_or_new_basic_account(address, &account_start_nonce)?
                 .add_balance(by);
         }
 
@@ -1087,7 +1085,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         let refundable = if by > &collateral { &collateral } else { by };
         let burnt = *by - *refundable;
         if !refundable.is_zero() {
-            self.require_or_new_basic_account(address, account_start_nonce)?
+            self.require_or_new_basic_account(address, &account_start_nonce)?
                 .sub_collateral_for_storage(refundable);
         }
         self.staking_state.total_storage_tokens -= *by;
@@ -1531,7 +1529,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     fn require_or_new_basic_account(
-        &self, address: &Address, account_start_nonce: U256,
+        &self, address: &Address, account_start_nonce: &U256,
     ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>> {
         self.require_or_set(address, false, |address| {
             if address.is_valid_address() {

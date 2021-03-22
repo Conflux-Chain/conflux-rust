@@ -1317,11 +1317,7 @@ impl<
         let balance = self.state.balance(&sender)?;
         // Give the sender a sufficient balance.
         let needed_balance = U256::MAX / U256::from(2);
-        self.state.set_nonce(
-            &sender,
-            &tx.nonce,
-            self.spec.account_start_nonce(self.env.number),
-        )?;
+        self.state.set_nonce(&sender, &tx.nonce)?;
         if balance < needed_balance {
             self.state.add_balance(
                 &sender,
@@ -1508,7 +1504,7 @@ impl<
             }
             self.state.inc_nonce(
                 &sender,
-                self.spec.account_start_nonce(self.env.number),
+                &self.spec.account_start_nonce(self.env.number),
             )?;
             self.state.sub_balance(
                 &sender,
@@ -1532,7 +1528,7 @@ impl<
             // new account if the account does not exist.
             self.state.inc_nonce(
                 &sender,
-                self.spec.account_start_nonce(self.env.number),
+                &self.spec.account_start_nonce(self.env.number),
             )?;
         }
 

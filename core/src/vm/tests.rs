@@ -90,11 +90,9 @@ pub fn test_finalize(res: Result<GasLeft>) -> Result<U256> {
 
 impl MockContext {
     /// New mock context
-    #[allow(dead_code)]
     pub fn new() -> Self { MockContext::default() }
 
     /// New mock context with byzantium spec rules
-    #[allow(dead_code)]
     pub fn new_spec() -> Self {
         let mut context = MockContext::default();
         context.spec = Spec::new_spec();
@@ -102,7 +100,6 @@ impl MockContext {
     }
 
     /// Alter mock context to allow wasm
-    #[allow(dead_code)]
     pub fn with_wasm(mut self) -> Self {
         self.spec.wasm = Some(Default::default());
         self

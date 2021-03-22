@@ -51,6 +51,7 @@ pub mod verification;
 pub mod vm;
 pub mod vm_factory;
 
+#[cfg(test)]
 pub mod test_helpers;
 
 pub use crate::{
