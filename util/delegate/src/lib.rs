@@ -94,11 +94,11 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
-
+use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use std::collections::HashMap;
 use syn::{
-    self, export::TokenStream2, parse::ParseStream, spanned::Spanned, Error,
+    self, parse::ParseStream, spanned::Spanned, Error,
 };
 
 mod kw {
