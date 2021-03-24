@@ -168,30 +168,36 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     fn set_admin(
         &mut self, contract_address: &Address, admin: &Address,
     ) -> Result<()> {
-        // FIXME: implement require_exists and require_or_new_account etc.
-        let mut account =
-            self.modify_and_update_account(contract_address, None)?;
-        let result = match &mut **account.as_mut() {
-            None => {
-                Err(ErrorKind::IncompleteDatabase(*contract_address).into())
-            }
-            Some(account) => {
-                account.admin = *admin;
-                Ok(())
-            }
-        };
-        // TODO: see if we can introduce a pattern so that we don't have to
-        //  write finalize explicitly. For example a `then` method on
-        //  ModifyAndUpdate.
-        account.as_mut().finalize()?;
-
-        result
+        self.modify_and_update_account(contract_address, None)?
+            .as_mut()
+            .map_or_else(
+                || Err(ErrorKind::IncompleteDatabase(*contract_address).into()),
+                |value| {
+                    value.admin = *admin;
+                    Ok(())
+                },
+            )
     }
 
     fn sub_sponsor_balance_for_gas(
-        &mut self, _address: &Address, _by: &U256,
+        &mut self, contract_address: &Address, by: &U256,
     ) -> Result<()> {
-        unimplemented!()
+        if !by.is_zero() {
+            self.modify_and_update_account(contract_address, None)?
+                .as_mut()
+                .map_or_else(
+                    || {
+                        Err(ErrorKind::IncompleteDatabase(*contract_address)
+                            .into())
+                    },
+                    |value| {
+                        value.sponsor_info.sponsor_balance_for_gas -= *by;
+                        Ok(())
+                    },
+                )
+        } else {
+            Ok(())
+        }
     }
 
     fn add_sponsor_balance_for_gas(
