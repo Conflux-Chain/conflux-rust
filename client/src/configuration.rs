@@ -745,9 +745,11 @@ impl Configuration {
             sync_expire_block_timeout: Duration::from_secs(
                 self.raw_conf.sync_expire_block_timeout_s,
             ),
-            allow_phase_change_without_peer: self
-                .raw_conf
-                .dev_allow_phase_change_without_peer,
+            allow_phase_change_without_peer: if self.is_dev_mode() {
+                true
+            } else {
+                self.raw_conf.dev_allow_phase_change_without_peer
+            },
         }
     }
 
