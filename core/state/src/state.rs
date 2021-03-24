@@ -171,7 +171,7 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         // FIXME: implement require_exists and require_or_new_account etc.
         let mut account =
             self.modify_and_update_account(contract_address, None)?;
-        let result = match account.as_mut().deref_mut() {
+        let result = match &mut **account.as_mut() {
             None => {
                 Err(ErrorKind::IncompleteDatabase(*contract_address).into())
             }
@@ -252,8 +252,11 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         Ok(self.get_account(address)?.as_ref().map(|a| a.code_hash))
     }
 
-    fn code_size(&self, _address: &Address) -> Result<Option<usize>> {
-        unimplemented!()
+    fn code_size(&self, contract_address: &Address) -> Result<Option<usize>> {
+        Ok(self
+            .get_code(contract_address)?
+            .as_ref()
+            .map(|code_info| code_info.code.len()))
     }
 
     fn code_owner(&self, _address: &Address) -> Result<Option<Address>> {
@@ -412,6 +415,12 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         self.cache.get_account(address, &self.db)
     }
 
+    fn get_code(
+        &self, address: &Address,
+    ) -> Result<impl AsRef<NonCopy<Option<&CodeInfo>>>> {
+        self.cache.get_code(address, &self.db)
+    }
+
     fn modify_and_update_account<'a>(
         &'a mut self, address: &Address,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
@@ -448,5 +457,5 @@ use cfx_statedb::{
 };
 use cfx_storage::{utils::guarded_value::NonCopy, StorageStateTrait};
 use cfx_types::{Address, H256, U256};
-use primitives::{EpochId, SponsorInfo, StorageLayout};
-use std::{marker::PhantomData, ops::DerefMut, sync::Arc};
+use primitives::{CodeInfo, EpochId, SponsorInfo, StorageLayout};
+use std::{marker::PhantomData, sync::Arc};
