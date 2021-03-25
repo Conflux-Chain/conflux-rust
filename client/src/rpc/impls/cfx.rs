@@ -390,7 +390,7 @@ impl RpcImpl {
             // Try to pack and execute this new tx.
             for _ in 0..DEFERRED_STATE_EPOCH_COUNT {
                 self.generate_one_block(
-                    1,
+                    1, /* num_txs */
                     self.sync
                         .get_synchronization_graph()
                         .verification_config
