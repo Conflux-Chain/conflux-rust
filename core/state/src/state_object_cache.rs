@@ -9,6 +9,7 @@ pub struct StateObjectCache {
     //  all updated account for the transaction pool.
     max_cache_size: usize,
     account_cache: RwLock<HashMap<Address, Option<CachedAccount>>>,
+    code_cache: RwLock<HashMap<CodeAddress, Option<CodeInfo>>>,
     // TODO: etc.
 }
 
@@ -225,10 +226,45 @@ impl StateObjectCache {
             debug_record,
         )
     }
+
+    pub fn get_code<StateDb: StateDbOps>(
+        &self, contract_address: &Address, db: &StateDb,
+    ) -> Result<
+        GuardedValue<
+            RwLockReadGuard<HashMap<CodeAddress, Option<CodeInfo>>>,
+            NonCopy<Option<&CodeInfo>>,
+        >,
+    > {
+        let code_hash;
+        {
+            match self.get_account(contract_address, db)?.as_ref().as_ref() {
+                None => {
+                    return Ok(GuardedValue::new(
+                        self.code_cache.read(),
+                        NonCopy(None),
+                    ));
+                }
+                Some(account) => {
+                    code_hash = account.code_hash.clone();
+                    if code_hash.is_zero() {
+                        return Ok(GuardedValue::new(
+                            self.code_cache.read(),
+                            NonCopy(None),
+                        ));
+                    }
+                }
+            }
+        }
+        Self::ensure_loaded(
+            &self.code_cache,
+            &CodeAddress(*contract_address, code_hash),
+            db,
+        )
+    }
 }
 
 use crate::{
-    cache_object::{CachedAccount, CachedObject, ToHashKey},
+    cache_object::{CachedAccount, CachedObject, CodeAddress, ToHashKey},
     StateDbOps,
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
@@ -238,6 +274,7 @@ use cfx_types::Address;
 use parking_lot::{
     RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
+use primitives::CodeInfo;
 use std::{
     borrow::Borrow,
     collections::HashMap,

@@ -35,8 +35,8 @@ pub trait CachedObject: Encodable + IsDefault + Sized {
 }
 
 /// Account address and code hash.
-#[allow(unused)]
-pub struct CodeAddress(Address, H256);
+#[derive(Clone, Eq, Hash, PartialEq)]
+pub struct CodeAddress(pub Address, pub H256);
 
 pub struct CachedAccount {
     object: Account,
@@ -60,6 +60,19 @@ impl ToHashKey<Address> for Address {
     fn to_hash_key(&self) -> Self { self.clone() }
 }
 
+impl AsStorageKey for CodeAddress {
+    fn storage_key(&self) -> StorageKey {
+        StorageKey::CodeKey {
+            address_bytes: self.0.as_ref(),
+            code_hash_bytes: self.1.as_ref(),
+        }
+    }
+}
+
+impl ToHashKey<CodeAddress> for CodeAddress {
+    fn to_hash_key(&self) -> CodeAddress { self.clone() }
+}
+
 impl CachedObject for CachedAccount {
     type HashKeyType = Address;
 
@@ -67,6 +80,14 @@ impl CachedObject for CachedAccount {
         Ok(Self {
             object: Account::new_from_rlp(key.clone(), rlp)?,
         })
+    }
+}
+
+impl CachedObject for CodeInfo {
+    type HashKeyType = CodeAddress;
+
+    fn load_from_rlp(_key: &CodeAddress, rlp: &Rlp) -> Result<Self> {
+        Ok(Self::decode(rlp)?)
     }
 }
 
@@ -92,6 +113,6 @@ use crate::StateDbOps;
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_statedb::Result;
 use cfx_types::{Address, H256};
-use primitives::{is_default::IsDefault, Account, StorageKey};
-use rlp::{Encodable, Rlp, RlpStream};
+use primitives::{is_default::IsDefault, Account, CodeInfo, StorageKey};
+use rlp::{Decodable, Encodable, Rlp, RlpStream};
 use std::ops::{Deref, DerefMut};
