@@ -66,6 +66,7 @@ use crate::{
 use cfx_addr::Network;
 use cfxcore::{
     consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
+    consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
     executive::revert_reason_decode,
     spec::genesis::{
         genesis_contract_address_four_year, genesis_contract_address_two_year,
@@ -384,7 +385,20 @@ impl RpcImpl {
         let tx =
             invalid_params_check("raw", Rlp::new(&raw.into_vec()).as_val())?;
 
-        self.send_transaction_with_signature(tx)
+        let r = self.send_transaction_with_signature(tx);
+        if r.is_ok() && self.config.dev_pack_tx_immediately {
+            // Try to pack and execute this new tx.
+            for _ in 0..DEFERRED_STATE_EPOCH_COUNT {
+                self.generate_one_block(
+                    1, /* num_txs */
+                    self.sync
+                        .get_synchronization_graph()
+                        .verification_config
+                        .max_block_size_in_bytes,
+                )?;
+            }
+        }
+        r
     }
 
     fn storage_at(
