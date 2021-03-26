@@ -1,7 +1,7 @@
 # 1.1.3
 
 ## Improvements
-- Include `blockHash`, `epochHash`, `epochNumber`, `transaction_hash`, and `transactionPosition` for trace RPCs.
+- Include `blockHash`, `epochHash`, `epochNumber`, `transactionHash`, and `transactionPosition` for trace RPCs.
 Note that the data format returned by `trace_block` is incompatible with old versions.
 - Add new field `offset` in log filters used in `cfx_getLogs`.
   If specified, the response will skip the **last** `offset` logs. 
