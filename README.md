@@ -8,7 +8,7 @@ and
 [run](https://developer.conflux-chain.org/docs/conflux-doc/docs/get_started)
 Conflux.
 
-This version depends on rustc 1.47.0.
+This version depends on rustc 1.50.0.
 
 ## Contribution
 
