@@ -168,48 +168,89 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     fn set_admin(
         &mut self, contract_address: &Address, admin: &Address,
     ) -> Result<()> {
-        // FIXME: implement require_exists and require_or_new_account etc.
-        let mut account =
-            self.modify_and_update_account(contract_address, None)?;
-        let result = match &mut **account.as_mut() {
-            None => {
-                Err(ErrorKind::IncompleteDatabase(*contract_address).into())
-            }
-            Some(account) => {
-                account.admin = *admin;
-                Ok(())
-            }
-        };
-        // TODO: see if we can introduce a pattern so that we don't have to
-        //  write finalize explicitly. For example a `then` method on
-        //  ModifyAndUpdate.
-        account.as_mut().finalize()?;
-
-        result
+        self.modify_and_update_account(contract_address, None)?
+            .as_mut()
+            .map_or_else(
+                || Err(ErrorKind::IncompleteDatabase(*contract_address).into()),
+                |value| {
+                    value.admin = *admin;
+                    Ok(())
+                },
+            )
     }
 
     fn sub_sponsor_balance_for_gas(
-        &mut self, _address: &Address, _by: &U256,
+        &mut self, address: &Address, by: &U256,
     ) -> Result<()> {
-        unimplemented!()
+        if by.is_zero() {
+            Ok(())
+        } else {
+            self.modify_and_update_account(address, None)?
+                .as_mut()
+                .map_or_else(
+                    || Err(ErrorKind::IncompleteDatabase(*address).into()),
+                    |value| {
+                        value.sponsor_info.sponsor_balance_for_gas -= *by;
+                        Ok(())
+                    },
+                )
+        }
     }
 
     fn add_sponsor_balance_for_gas(
-        &mut self, _address: &Address, _by: &U256,
+        &mut self, address: &Address, by: &U256,
     ) -> Result<()> {
-        unimplemented!()
+        if by.is_zero() {
+            Ok(())
+        } else {
+            self.modify_and_update_account(address, None)?
+                .as_mut()
+                .map_or_else(
+                    || Err(ErrorKind::IncompleteDatabase(*address).into()),
+                    |value| {
+                        value.sponsor_info.sponsor_balance_for_gas += *by;
+                        Ok(())
+                    },
+                )
+        }
     }
 
     fn sub_sponsor_balance_for_collateral(
-        &mut self, _address: &Address, _by: &U256,
+        &mut self, address: &Address, by: &U256,
     ) -> Result<()> {
-        unimplemented!()
+        if by.is_zero() {
+            Ok(())
+        } else {
+            self.modify_and_update_account(address, None)?
+                .as_mut()
+                .map_or_else(
+                    || Err(ErrorKind::IncompleteDatabase(*address).into()),
+                    |value| {
+                        value.sponsor_info.sponsor_balance_for_collateral -=
+                            *by;
+                        Ok(())
+                    },
+                )
+        }
     }
 
     fn add_sponsor_balance_for_collateral(
-        &mut self, _address: &Address, _by: &U256,
+        &mut self, address: &Address, by: &U256,
     ) -> Result<()> {
-        unimplemented!()
+        if by.is_zero() {
+            Ok(())
+        } else {
+            self.modify_and_update_account(address, None)?
+                .as_mut()
+                .map_or_else(
+                    || Err(ErrorKind::IncompleteDatabase(*address).into()),
+                    |value| {
+                        value.sponsor_info.sponsor_balance_for_collateral +=
+                            *by;
+                        Ok(())
+                    },
+                )
+        }
     }
 
     fn check_commission_privilege(
@@ -326,11 +367,25 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     }
 
     fn sub_balance(
-        &mut self, _address: &Address, _by: &U256,
-        _cleanup_mode: &mut CleanupMode,
-    ) -> Result<()>
-    {
-        unimplemented!()
+        &mut self, address: &Address, by: &U256, cleanup_mode: &mut CleanupMode,
+    ) -> Result<()> {
+        if !by.is_zero() {
+            self.modify_and_update_account(address, None)?
+                .as_mut()
+                .map_or_else(
+                    || Err(ErrorKind::IncompleteDatabase(*address).into()),
+                    |value| {
+                        value.balance = value.balance - *by;
+                        Ok(())
+                    },
+                )?;
+        }
+        if let CleanupMode::TrackTouched(ref mut set) = *cleanup_mode {
+            if self.exists(address)? {
+                set.insert(*address);
+            }
+        }
+        Ok(())
     }
 
     fn add_balance(
