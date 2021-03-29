@@ -97,6 +97,31 @@ impl NoncePoolNode {
         }
     }
 
+    // return the next item with nonce >= given nonce
+    pub fn succ(&self, nonce: &U256) -> Option<&TxWithReadyInfo> {
+        match nonce.cmp(&self.tx.nonce) {
+            Ordering::Less | Ordering::Equal => {
+                let ret = if self.child[0].as_ref().is_some() {
+                    self.child[0].as_ref().unwrap().succ(nonce)
+                } else {
+                    None
+                };
+                if ret.is_none() {
+                    Some(&self.tx)
+                } else {
+                    ret
+                }
+            }
+            Ordering::Greater => {
+                if self.child[1].as_ref().is_some() {
+                    self.child[1].as_ref().unwrap().succ(nonce)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
     /// insert a new TxWithReadyInfo. if the corresponding nonce already exists,
     /// will replace with higher gas price transaction
     pub fn insert(
@@ -344,6 +369,21 @@ impl NoncePool {
     pub fn remove_lowest_nonce(&mut self) -> Option<TxWithReadyInfo> {
         let lowest_nonce = self.get_lowest_nonce().map(|x| x.clone());
         lowest_nonce.and_then(|nonce| self.remove(&nonce))
+    }
+
+    pub fn get_pending_info(
+        &self, nonce: &U256,
+    ) -> Option<(usize, Arc<SignedTransaction>)> {
+        let tx = self
+            .root
+            .as_ref()
+            .and_then(|node| node.succ(&nonce).map(|x| x.clone()));
+        if let Some(tx) = tx {
+            let pending_count = self.count_from(&(nonce));
+            Some((pending_count, tx.transaction))
+        } else {
+            None
+        }
     }
 
     /// find a transaction `tx` such that
