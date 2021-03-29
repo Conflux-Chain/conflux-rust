@@ -368,8 +368,8 @@ impl ChainNotificationHandler {
                 }
             }
 
-            // this should not happen
-            if ii > 100 {
+            // we assume that an epoch gets executed within 100 seconds
+            if ii > 1000 {
                 error!("Cannot find receipts with {:?}/{:?}", block, pivot);
                 return None;
             }

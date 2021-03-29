@@ -27,6 +27,7 @@ def flatten(l):
 class PubSubTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 3
+        self.conf_parameters["enable_optimistic_execution"] = "false"
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)
@@ -56,7 +57,7 @@ class PubSubTest(ConfluxTestFramework):
         self.nodes[FULLNODE0].wait_for_phase(["NormalSyncPhase"])
         self.nodes[FULLNODE1].wait_for_phase(["NormalSyncPhase"])
 
-    async def run_async(self):
+    async def test_forks(self):
         # Generate a chain with multiple forks like this:
         # 1 -- 2 -- 3 -- 4
         #       \-- 3 -- 4 -- 5 -- 6
@@ -136,9 +137,47 @@ class PubSubTest(ConfluxTestFramework):
 
             self.log.info(f"[{ii}] Pass")
 
+        self.log.info(f"Pass -- forks")
+
+    async def test_latest_executed(self):
+        parent = self.nodes[FULLNODE0].best_block_hash()
+
+        sub_mined = await self.pubsub[FULLNODE0].subscribe("epochs", "latest_mined")
+        sub_exec = await self.pubsub[FULLNODE0].subscribe("epochs", "latest_executed")
+
+        for _ in range(4):
+            parent = self.rpc[FULLNODE0].generate_block_with_parent(parent)
+            epoch = self.rpc[FULLNODE0].block_by_hash(parent)["height"]
+
+            msg = await sub_mined.next()
+            assert_equal(msg['epochNumber'], epoch)
+
+            # epoch received not executed yet, should timeout
+            try:
+                # do not use an overly large timeout here;
+                # if an epoch is not executed for 100s, this violates our
+                # asssumptions and the node will return invalid results.
+                msg = await sub_exec.next(timeout=2)
+                assert(False)
+            except:
+                pass
+
+        for _ in range(20):
+            parent = self.rpc[FULLNODE0].generate_block_with_parent(parent)
+            epoch = self.rpc[FULLNODE0].block_by_hash(parent)["height"]
+
+            msg = await sub_mined.next()
+            assert_equal(msg['epochNumber'], epoch)
+
+            msg = await sub_exec.next()
+            assert_equal(msg['epochNumber'], hex(int(epoch, 0) - 4))
+
+        self.log.info(f"Pass -- latest_executed")
+
     def run_test(self):
         assert(SHORT_FORK_LEN < LONG_FORK_LEN)
-        asyncio.get_event_loop().run_until_complete(self.run_async())
+        asyncio.get_event_loop().run_until_complete(self.test_forks())
+        asyncio.get_event_loop().run_until_complete(self.test_latest_executed())
 
     def generate_chain(self, parent, len):
         hashes = [parent]
