@@ -381,7 +381,7 @@ impl ChainNotificationHandler {
     // wait until the execution results corresponding to `pivot` become
     // available in the database.
     async fn wait_for_epoch(&self, pivot: &H256) -> () {
-        let _ = self.retrieve_block_receipts(&pivot, &pivot);
+        let _ = self.retrieve_block_receipts(&pivot, &pivot).await;
     }
 
     async fn retrieve_epoch_logs(
