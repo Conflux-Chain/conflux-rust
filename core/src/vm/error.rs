@@ -191,7 +191,9 @@ impl fmt::Display for Error {
             OutOfBounds => write!(f, "Out of bounds"),
             Reverted => write!(f, "Reverted by bytecode"),
             InvalidAddress(ref addr) => write!(f, "InvalidAddress: {}", addr),
-            ConflictAddress(ref addr) => write!(f, "Contract creation on an existing address: {}", addr),
+            ConflictAddress(ref addr) => {
+                write!(f, "Contract creation on an existing address: {}", addr)
+            }
         }
     }
 }

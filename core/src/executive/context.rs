@@ -11,8 +11,8 @@ use crate::{
     trace::{self, trace::ExecTrace, Tracer},
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
-        ContractCreateResult, CreateContractAddress, Env, MessageCallResult,
-        ReturnData, Spec, TrapKind, Error
+        ContractCreateResult, CreateContractAddress, Env, Error,
+        MessageCallResult, ReturnData, Spec, TrapKind,
     },
 };
 use cfx_parameters::staking::{

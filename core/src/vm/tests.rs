@@ -160,7 +160,8 @@ impl Context for MockContext {
             code_address: None,
         });
         // TODO: support traps in testing.
-        // This code is for test only. So we pick an arbitrary revert reason here.
+        // This code is for test only. So we pick an arbitrary revert reason
+        // here.
         Ok(Ok(ContractCreateResult::Failed(Error::OutOfGas)))
     }
 
