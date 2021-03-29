@@ -12,7 +12,7 @@ use crate::{
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
         ContractCreateResult, CreateContractAddress, Env, MessageCallResult,
-        ReturnData, Spec, TrapKind,
+        ReturnData, Spec, TrapKind, Error
     },
 };
 use cfx_parameters::staking::{
@@ -198,7 +198,8 @@ impl<
         // helps in future.
         if self.state.is_contract_with_code(&address)? {
             debug!("Contract address conflict!");
-            return Ok(Ok(ContractCreateResult::Failed));
+            let err = Error::ConflictAddress(address.clone());
+            return Ok(Ok(ContractCreateResult::Failed(err)));
         }
 
         // prepare the params

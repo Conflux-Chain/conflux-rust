@@ -26,6 +26,7 @@ use super::{
     error::{Result, TrapKind},
     return_data::ReturnData,
     spec::Spec,
+    Error,
 };
 use crate::trace::{trace::ExecTrace, Tracer};
 use cfx_bytes::Bytes;
@@ -39,8 +40,8 @@ pub enum ContractCreateResult {
     /// Contains an address of newly created contract and gas left.
     Created(Address, U256),
     /// Returned when contract creation failed.
-    /// VM doesn't have to know the reason.
-    Failed,
+    /// Returns the reason so block trace can record it.
+    Failed(Error),
     /// Reverted with REVERT.
     Reverted(U256, ReturnData),
 }
@@ -52,8 +53,8 @@ pub enum MessageCallResult {
     /// Contains gas left and output data.
     Success(U256, ReturnData),
     /// Returned when message call failed.
-    /// VM doesn't have to know the reason.
-    Failed,
+    /// Returns the reason so block trace can record it.
+    Failed(Error),
     /// Returned when message call was reverted.
     /// Contains gas left and output data.
     Reverted(U256, ReturnData),

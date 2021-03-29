@@ -121,7 +121,7 @@ pub fn into_message_call_result(
             apply_state: false,
         }) => Ok(vm::MessageCallResult::Reverted(gas_left, return_data)),
         Err(vm::Error::StateDbError(err)) => Err(err.0),
-        _ => Ok(vm::MessageCallResult::Failed),
+        Err(err) => Ok(vm::MessageCallResult::Failed(err)),
     }
 }
 
@@ -148,7 +148,7 @@ pub fn into_contract_create_result<
             return_data,
         }) => Ok(vm::ContractCreateResult::Reverted(gas_left, return_data)),
         Err(vm::Error::StateDbError(err)) => Err(err.0),
-        _ => Ok(vm::ContractCreateResult::Failed),
+        Err(err) => Ok(vm::ContractCreateResult::Failed(err)),
     }
 }
 
