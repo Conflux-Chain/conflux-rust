@@ -128,7 +128,7 @@ impl PubSubClient {
                 };
 
                 // wait for epoch to be executed
-                if sub_epoch == SubscriptionEpoch::LatestExecuted {
+                if sub_epoch == SubscriptionEpoch::LatestState {
                     let pivot = hashes.last().expect("empty epoch in pubsub");
                     handler.wait_for_epoch(&pivot).await;
                 }

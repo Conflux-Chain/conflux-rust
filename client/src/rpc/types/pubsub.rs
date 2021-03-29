@@ -78,7 +78,7 @@ pub enum SubscriptionEpoch {
     /// Latest epoch available.
     LatestMined,
     /// Latest epoch executed.
-    LatestExecuted,
+    LatestState,
 }
 
 /// Subscription kind.

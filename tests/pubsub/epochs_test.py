@@ -139,11 +139,11 @@ class PubSubTest(ConfluxTestFramework):
 
         self.log.info(f"Pass -- forks")
 
-    async def test_latest_executed(self):
+    async def test_latest_state(self):
         parent = self.nodes[FULLNODE0].best_block_hash()
 
         sub_mined = await self.pubsub[FULLNODE0].subscribe("epochs", "latest_mined")
-        sub_exec = await self.pubsub[FULLNODE0].subscribe("epochs", "latest_executed")
+        sub_exec = await self.pubsub[FULLNODE0].subscribe("epochs", "latest_state")
 
         for _ in range(4):
             parent = self.rpc[FULLNODE0].generate_block_with_parent(parent)
@@ -172,12 +172,12 @@ class PubSubTest(ConfluxTestFramework):
             msg = await sub_exec.next()
             assert_equal(msg['epochNumber'], hex(int(epoch, 0) - 4))
 
-        self.log.info(f"Pass -- latest_executed")
+        self.log.info(f"Pass -- latest_state")
 
     def run_test(self):
         assert(SHORT_FORK_LEN < LONG_FORK_LEN)
         asyncio.get_event_loop().run_until_complete(self.test_forks())
-        asyncio.get_event_loop().run_until_complete(self.test_latest_executed())
+        asyncio.get_event_loop().run_until_complete(self.test_latest_state())
 
     def generate_chain(self, parent, len):
         hashes = [parent]
