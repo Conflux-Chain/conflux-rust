@@ -99,8 +99,14 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
             .unwrap_or_default())
     }
 
-    fn is_contract_with_code(&self, _address: &Address) -> Result<bool> {
-        unimplemented!()
+    fn is_contract_with_code(&self, address: &Address) -> Result<bool> {
+        if !address.is_contract_address() {
+            return Ok(false);
+        }
+        Ok(self
+            .get_account(address)?
+            .as_ref()
+            .map_or(false, |a| a.code_hash != KECCAK_EMPTY))
     }
 
     fn sponsor_for_gas(&self, address: &Address) -> Result<Option<Address>> {
@@ -444,8 +450,13 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         Ok(self.get_account(address)?.as_ref().is_none())
     }
 
-    fn exists_and_not_null(&self, _address: &Address) -> Result<bool> {
-        unimplemented!()
+    fn exists_and_not_null(&self, address: &Address) -> Result<bool> {
+        Ok(self.get_account(address)?.as_ref().map_or(false, |a| {
+            a.staking_balance.is_zero()
+                && a.collateral_for_storage.is_zero()
+                && a.nonce.is_zero()
+                && a.code_hash == KECCAK_EMPTY
+        }))
     }
 
     fn storage_at(&self, _address: &Address, _key: &[u8]) -> Result<U256> {
@@ -511,6 +522,7 @@ use cfx_statedb::{
     ErrorKind, Result, StateDbCheckpointMethods, StateDbGeneric,
 };
 use cfx_storage::{utils::guarded_value::NonCopy, StorageStateTrait};
-use cfx_types::{Address, H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use keccak_hash::KECCAK_EMPTY;
 use primitives::{CodeInfo, EpochId, SponsorInfo, StorageLayout};
 use std::{marker::PhantomData, sync::Arc};
