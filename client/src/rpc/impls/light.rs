@@ -37,8 +37,8 @@ use crate::{
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
-            Account as RpcAccount, BlameInfo, Block as RpcBlock,
-            BlockHashOrEpochNumber, Bytes, CallRequest,
+            Account as RpcAccount, AccountPendingInfo, BlameInfo,
+            Block as RpcBlock, BlockHashOrEpochNumber, Bytes, CallRequest,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
             EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
             LogFilter as RpcFilter, Receipt as RpcReceipt,
@@ -309,6 +309,18 @@ impl RpcImpl {
             }
         };
 
+        Box::new(fut.boxed().compat())
+    }
+
+    pub fn account_pending_info(
+        &self, address: RpcAddress,
+    ) -> RpcBoxFuture<Option<AccountPendingInfo>> {
+        info!("RPC Request: cfx_getAccountPendingInfo({:?})", address);
+
+        let fut = async move {
+            // TODO impl light node rpc
+            Ok(None)
+        };
         Box::new(fut.boxed().compat())
     }
 
@@ -1051,6 +1063,7 @@ impl Cfx for CfxHandler {
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
             fn vote_list(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<Vec<VoteStakeInfo>>;
+            fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<Option<AccountPendingInfo>>;
         }
     }
 

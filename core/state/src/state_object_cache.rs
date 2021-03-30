@@ -20,21 +20,26 @@ pub struct ModifyAndUpdate<'a, StateDb: StateDbOps, T: CachedObject> {
     debug_record: Option<&'a mut ComputeEpochDebugRecord>,
 }
 
-impl<'a, StateDb: StateDbOps, T: CachedObject> Deref
-    for ModifyAndUpdate<'a, StateDb, T>
-{
-    type Target = Option<T>;
-
-    fn deref(&self) -> &Self::Target { &*self.value }
-}
-
-impl<'a, StateDb: StateDbOps, T: CachedObject> DerefMut
-    for ModifyAndUpdate<'a, StateDb, T>
-{
-    fn deref_mut(&mut self) -> &mut Self::Target { &mut *self.value }
-}
-
 impl<'a, StateDb: StateDbOps, T: CachedObject> ModifyAndUpdate<'a, StateDb, T> {
+    // Note: if a value exists, the ModifyAndUpdate object will be "finalized"
+    // before exit.
+    pub fn map_or_else<
+        D: FnOnce() -> Result<U>,
+        F: FnOnce(&mut T) -> Result<U>,
+        U,
+    >(
+        &mut self, default: D, f: F,
+    ) -> Result<U> {
+        match self.value {
+            None => default(),
+            Some(value) => {
+                let result = f(value);
+                self.finalize()?;
+                result
+            }
+        }
+    }
+
     pub fn finalize(&mut self) -> Result<()> {
         match self.value {
             None => {
@@ -275,9 +280,4 @@ use parking_lot::{
     RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
 use primitives::CodeInfo;
-use std::{
-    borrow::Borrow,
-    collections::HashMap,
-    hash::Hash,
-    ops::{Deref, DerefMut},
-};
+use std::{borrow::Borrow, collections::HashMap, hash::Hash};
