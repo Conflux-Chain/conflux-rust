@@ -172,6 +172,29 @@ class PubSubTest(ConfluxTestFramework):
             msg = await sub_exec.next()
             assert_equal(msg['epochNumber'], hex(int(epoch, 0) - 4))
 
+        # test short fork
+        fork_hash = parent
+
+        self.generate_chain(fork_hash, 3)
+        gen = self.generate_chain(fork_hash, 20)
+        msgs = [e async for e in sub_exec.iter()]
+
+        # we do not receive the outdated results from the old fork,
+        # we receive the hashes up to `fork_hash` and the new fork
+        hashes = flatten([m["epochHashesOrdered"] for m in msgs])
+        assert_equal(hashes[3:], [fork_hash] + gen[:-4])
+
+        # test long fork
+        fork_hash = gen[-1]
+
+        gen1 = self.generate_chain(fork_hash, 10)
+        gen2 = self.generate_chain(fork_hash, 20)
+        msgs = [e async for e in sub_exec.iter()]
+
+        # we do not receive blocks from the old fork that were not executed (gen1[-4:])
+        hashes = flatten([m["epochHashesOrdered"] for m in msgs])
+        assert_equal(hashes, gen[-4:] + gen1[:-4] + gen2[:-4])
+
         self.log.info(f"Pass -- latest_state")
 
     def run_test(self):

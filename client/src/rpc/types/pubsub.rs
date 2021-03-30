@@ -71,7 +71,7 @@ pub enum Kind {
 }
 
 /// Subscription epoch.
-#[derive(Debug, Deserialize, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Hash, Clone, Copy)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "snake_case")]
 pub enum SubscriptionEpoch {

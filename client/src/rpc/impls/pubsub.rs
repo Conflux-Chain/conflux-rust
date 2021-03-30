@@ -46,7 +46,7 @@ type Client = Sink<pubsub::Result>;
 pub struct PubSubClient {
     handler: Arc<ChainNotificationHandler>,
     heads_subscribers: Arc<RwLock<Subscribers<Client>>>,
-    epochs_subscribers: Arc<RwLock<Subscribers<(Client, SubscriptionEpoch)>>>,
+    epochs_subscribers: Arc<RwLock<Subscribers<Client>>>,
     logs_subscribers: Arc<RwLock<Subscribers<(Client, LogFilter)>>>,
     epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
 }
@@ -101,7 +101,7 @@ impl PubSubClient {
     // Start an async loop that continuously receives epoch notifications and
     // publishes the corresponding epochs to subscriber `id`, keeping their
     // original order. The loop terminates when subscriber `id` unsubscribes.
-    fn start_epoch_loop(&self, id: SubscriberId) {
+    fn start_epoch_loop(&self, id: SubscriberId, sub_epoch: SubscriptionEpoch) {
         trace!("start_epoch_loop({:?})", id);
 
         // clone everything we use in our async loop
@@ -112,19 +112,34 @@ impl PubSubClient {
         // subscribe to the `epochs_ordered` channel
         let mut receiver = epochs_ordered.subscribe();
 
+        // when subscribing to "latest_state", use a queue to make sure
+        // we only process epochs once they have been executed
+        let mut queue = EpochQueue::<Vec<H256>>::with_capacity(
+            if sub_epoch == SubscriptionEpoch::LatestState {
+                (DEFERRED_STATE_EPOCH_COUNT - 1) as usize
+            } else {
+                0
+            },
+        );
+
         // loop asynchronously
         let fut = async move {
             while let Some((epoch, hashes)) = receiver.recv().await {
                 trace!("epoch_loop({:?}): {:?}", id, (epoch, &hashes));
 
                 // retrieve subscriber
-                let (sub, sub_epoch) = match subscribers.read().get(&id) {
+                let sub = match subscribers.read().get(&id) {
                     Some(sub) => sub.clone(),
                     None => {
                         // unsubscribed, terminate loop
                         epochs_ordered.unsubscribe(receiver.id);
                         return;
                     }
+                };
+
+                let (epoch, hashes) = match queue.push((epoch, hashes)) {
+                    None => continue,
+                    Some(e) => e,
                 };
 
                 // wait for epoch to be executed
@@ -463,24 +478,19 @@ impl PubSub for PubSubClient {
             ),
             // --------- epochs ---------
             (pubsub::Kind::Epochs, None) => {
-                let id = self
-                    .epochs_subscribers
-                    .write()
-                    .push(subscriber, SubscriptionEpoch::LatestMined);
-
-                self.start_epoch_loop(id);
+                let id = self.epochs_subscribers.write().push(subscriber);
+                self.start_epoch_loop(id, SubscriptionEpoch::LatestMined);
                 return;
             }
             (pubsub::Kind::Epochs, Some(pubsub::Params::Epochs(epoch))) => {
-                let id =
-                    self.epochs_subscribers.write().push(subscriber, epoch);
-
-                self.start_epoch_loop(id);
+                let id = self.epochs_subscribers.write().push(subscriber);
+                self.start_epoch_loop(id, epoch);
                 return;
             }
-            (pubsub::Kind::Epochs, _) => {
-                error_codes::invalid_params("epochs", "Expected no parameters.")
-            }
+            (pubsub::Kind::Epochs, _) => error_codes::invalid_params(
+                "epochs",
+                "Expected epoch parameter.",
+            ),
             // --------- logs ---------
             (pubsub::Kind::Logs, None) => {
                 let id = self
