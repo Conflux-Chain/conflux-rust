@@ -126,6 +126,16 @@ impl DeferredPool {
         }
     }
 
+    fn get_pending_info(
+        &self, addr: &Address, nonce: &U256,
+    ) -> Option<(usize, Arc<SignedTransaction>)> {
+        if let Some(bucket) = self.buckets.get(addr) {
+            bucket.get_pending_info(nonce)
+        } else {
+            None
+        }
+    }
+
     fn check_tx_packed(&self, addr: Address, nonce: U256) -> bool {
         if let Some(bucket) = self.buckets.get(&addr) {
             if let Some(tx_with_ready_info) = bucket.get_tx_by_nonce(nonce) {
@@ -474,6 +484,34 @@ impl TransactionPoolInner {
         }
 
         result
+    }
+
+    pub fn get_account_pending_info(
+        &self, address: &Address,
+    ) -> Option<(U256, U256, U256, H256)> {
+        match self.deferred_pool.contain_address(address) {
+            true => {
+                let (local_nonce, _local_balance) = self
+                    .get_local_nonce_and_balance(address)
+                    .unwrap_or((U256::from(0), U256::from(0)));
+                match self.deferred_pool.get_pending_info(address, &local_nonce)
+                {
+                    Some((pending_count, pending_tx)) => Some((
+                        local_nonce,
+                        U256::from(pending_count),
+                        pending_tx.nonce(),
+                        pending_tx.hash(),
+                    )),
+                    None => Some((
+                        local_nonce,
+                        U256::from(0),
+                        U256::from(0),
+                        H256::zero(),
+                    )),
+                }
+            }
+            false => None,
+        }
     }
 
     pub fn get_local_nonce_and_balance(

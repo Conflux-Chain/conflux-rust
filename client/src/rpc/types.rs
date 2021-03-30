@@ -53,6 +53,7 @@ pub use self::{
     },
     trace_filter::TraceFilter,
     transaction::{
-        PackedOrExecuted, Transaction, TxPoolPendingInfo, TxWithPoolInfo,
+        AccountPendingInfo, PackedOrExecuted, Transaction, TxPoolPendingInfo,
+        TxWithPoolInfo,
     },
 };
