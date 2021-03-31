@@ -91,6 +91,14 @@ impl CachedObject for CodeInfo {
     }
 }
 
+impl CachedObject for VoteStakeList {
+    type HashKeyType = CodeAddress;
+
+    fn load_from_rlp(_key: &CodeAddress, rlp: &Rlp) -> Result<Self> {
+        Ok(Self::decode(rlp)?)
+    }
+}
+
 impl Deref for CachedAccount {
     type Target = Account;
 
@@ -113,6 +121,8 @@ use crate::StateDbOps;
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_statedb::Result;
 use cfx_types::{Address, H256};
-use primitives::{is_default::IsDefault, Account, CodeInfo, StorageKey};
+use primitives::{
+    is_default::IsDefault, Account, CodeInfo, StorageKey, VoteStakeList,
+};
 use rlp::{Decodable, Encodable, Rlp, RlpStream};
 use std::ops::{Deref, DerefMut};

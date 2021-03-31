@@ -10,6 +10,7 @@ pub struct StateObjectCache {
     max_cache_size: usize,
     account_cache: RwLock<HashMap<Address, Option<CachedAccount>>>,
     code_cache: RwLock<HashMap<CodeAddress, Option<CodeInfo>>>,
+    vote_stake_cache: RwLock<HashMap<CodeAddress, Option<VoteStakeList>>>,
     // TODO: etc.
 }
 
@@ -266,6 +267,41 @@ impl StateObjectCache {
             db,
         )
     }
+
+    pub fn get_vote_stake<StateDb: StateDbOps>(
+        &self, contract_address: &Address, db: &StateDb,
+    ) -> Result<
+        GuardedValue<
+            RwLockReadGuard<HashMap<CodeAddress, Option<VoteStakeList>>>,
+            NonCopy<Option<&VoteStakeList>>,
+        >,
+    > {
+        let code_hash;
+        {
+            match self.get_account(contract_address, db)?.as_ref().as_ref() {
+                None => {
+                    return Ok(GuardedValue::new(
+                        self.vote_stake_cache.read(),
+                        NonCopy(None),
+                    ));
+                }
+                Some(account) => {
+                    code_hash = account.code_hash.clone();
+                    if code_hash.is_zero() {
+                        return Ok(GuardedValue::new(
+                            self.vote_stake_cache.read(),
+                            NonCopy(None),
+                        ));
+                    }
+                }
+            }
+        }
+        Self::ensure_loaded(
+            &self.vote_stake_cache,
+            &CodeAddress(*contract_address, code_hash),
+            db,
+        )
+    }
 }
 
 use crate::{
@@ -279,5 +315,5 @@ use cfx_types::Address;
 use parking_lot::{
     RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
-use primitives::CodeInfo;
+use primitives::{CodeInfo, VoteStakeList};
 use std::{borrow::Borrow, collections::HashMap, hash::Hash};
