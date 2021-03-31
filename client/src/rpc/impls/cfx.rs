@@ -1069,8 +1069,9 @@ impl RpcImpl {
                 ExecutionError::VmError(vm::Error::Reverted),
                 executed,
             ) => {
+                let traces = executed.trace;
                 // When a revert exception happens, there is usually an error in the sub-calls. So we return the whole trace for debugging contract.
-                let error_list = executed.trace.iter()
+                let error_list = traces.iter()
                     .map(|trace|trace.action.error_desc())
                     .filter(|maybe_str| maybe_str.is_some())
                     .map(|maybe_str|maybe_str.unwrap())
@@ -1079,7 +1080,7 @@ impl RpcImpl {
                 bail!(call_execution_error(
                     format!("Estimation isn't accurate: transaction is reverted. {}. Errors: '{}'",
                         revert_reason_decode(&executed.output), error_list),
-                    [b"Reverted. Execution output: ", &*executed.output].concat(),
+                    [b"Reverted. Execution output: ", &*executed.output, &format!("Traces: {:?}", traces).into_bytes()].concat(),
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {

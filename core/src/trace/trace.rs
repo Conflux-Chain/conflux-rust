@@ -335,8 +335,11 @@ impl Action {
         return if let Some((outcome, data)) = error {
             match outcome{
                 Outcome::Success => None,
-                Outcome::Reverted =>
-                    Some(format!("Revert({})",revert_reason_decode(data))),
+                Outcome::Reverted => if data.len() > 0 {
+                    Some(format!("Revert({})",revert_reason_decode(data)))
+                } else {
+                    None
+                }
                 Outcome::Fail =>
                     Some(format!("Fail({})",String::from_utf8(data.clone()).expect("The error data should be converted from a valid string."))),
             }
