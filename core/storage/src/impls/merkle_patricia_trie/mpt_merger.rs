@@ -47,7 +47,7 @@ impl<'a> MptMerger<'a> {
 
         struct Merger<'x, 'a: 'x> {
             merger: &'x mut MptMerger<'a>,
-        };
+        }
 
         impl<'x, 'a: 'x> Merger<'x, 'a> {
             fn merger_mut(&mut self) -> &mut MptMerger<'a> { self.merger }
