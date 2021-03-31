@@ -272,7 +272,7 @@ fn hash_compute(
     struct MixBuf {
         half_mix: Node,
         compress_bytes: [u8; 32],
-    };
+    }
 
     if full_size % MIX_WORDS != 0 {
         panic!("Unaligned full size");

@@ -70,6 +70,17 @@ pub enum Kind {
     Epochs,
 }
 
+/// Subscription epoch.
+#[derive(Debug, Deserialize, PartialEq, Eq, Hash, Clone, Copy)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "snake_case")]
+pub enum SubscriptionEpoch {
+    /// Latest epoch available.
+    LatestMined,
+    /// Latest epoch executed.
+    LatestState,
+}
+
 /// Subscription kind.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Params {
@@ -77,6 +88,8 @@ pub enum Params {
     None,
     /// Log parameters.
     Logs(LogFilter),
+    /// Epoch parameters.
+    Epochs(SubscriptionEpoch),
 }
 
 impl Default for Params {
@@ -94,7 +107,13 @@ impl<'a> Deserialize<'a> for Params {
             return Ok(Params::None);
         }
 
-        from_value(v).map(Params::Logs).map_err(|e| {
+        // try to interpret as a log filter
+        if let Ok(v) = from_value(v.clone()).map(Params::Logs) {
+            return Ok(v);
+        }
+
+        // otherwise, interpret as epoch
+        from_value(v).map(Params::Epochs).map_err(|e| {
             D::Error::custom(format!("Invalid Pub-Sub parameters: {}", e))
         })
     }

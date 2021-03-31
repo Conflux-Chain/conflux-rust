@@ -101,7 +101,7 @@ build_config! {
         (debug_dump_dir_invalid_state_root, (String), "./storage_db/debug_dump_invalid_state_root/".to_string())
         // Controls block generation speed.
         // Only effective in `dev` mode
-        (dev_block_interval_ms, (u64), 250)
+        (dev_block_interval_ms, (Option<u64>), None)
         (enable_state_expose, (bool), false)
         (generate_tx, (bool), false)
         (generate_tx_period_us, (Option<u64>), Some(100_000))
@@ -883,6 +883,8 @@ impl Configuration {
     pub fn rpc_impl_config(&self) -> RpcImplConfiguration {
         RpcImplConfiguration {
             get_logs_filter_max_limit: self.raw_conf.get_logs_filter_max_limit,
+            dev_pack_tx_immediately: self.is_dev_mode()
+                && self.raw_conf.dev_block_interval_ms.is_none(),
         }
     }
 

@@ -165,3 +165,12 @@ pub struct TxPoolPendingInfo {
     pub min_nonce: U256,
     pub max_nonce: U256,
 }
+
+#[derive(Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountPendingInfo {
+    pub local_nonce: U256,
+    pub pending_count: U256,
+    pub pending_nonce: U256,
+    pub next_pending_tx: H256,
+}

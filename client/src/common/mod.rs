@@ -451,15 +451,19 @@ pub fn initialize_not_light_node_modules(
         maybe_author.clone().unwrap_or_default(),
     ));
     if conf.is_dev_mode() {
-        let bg = blockgen.clone();
-        let interval_ms = conf.raw_conf.dev_block_interval_ms;
-        info!("Start auto block generation");
-        thread::Builder::new()
-            .name("auto_mining".into())
-            .spawn(move || {
-                bg.auto_block_generation(interval_ms);
-            })
-            .expect("Mining thread spawn error");
+        // If `dev_block_interval_ms` is None, blocks are generated after
+        // receiving RPC `cfx_sendRawTransaction`.
+        if let Some(interval_ms) = conf.raw_conf.dev_block_interval_ms {
+            // Automatic block generation with fixed interval.
+            let bg = blockgen.clone();
+            info!("Start auto block generation");
+            thread::Builder::new()
+                .name("auto_mining".into())
+                .spawn(move || {
+                    bg.auto_block_generation(interval_ms);
+                })
+                .expect("Mining thread spawn error");
+        }
     } else if let Some(author) = maybe_author {
         if !author.is_valid_address() || author.is_builtin_address() {
             panic!("mining-author must be user address or contract address, otherwise you will not get mining rewards!!!");

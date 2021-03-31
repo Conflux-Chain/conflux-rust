@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::types::{
-    Account as RpcAccount, Block, Bytes, CallRequest,
+    Account as RpcAccount, AccountPendingInfo, Block, Bytes, CallRequest,
     CheckBalanceAgainstTransactionResponse, EpochNumber,
     EstimateGasAndCollateralResponse, Log as RpcLog, LogFilter as RpcFilter,
     Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, SponsorInfo,
@@ -165,6 +165,12 @@ pub trait Cfx {
     fn transaction_by_hash(
         &self, tx_hash: H256,
     ) -> BoxFuture<Option<Transaction>>;
+
+    /// Get transaction pending info by account address
+    #[rpc(name = "cfx_getAccountPendingInfo")]
+    fn account_pending_info(
+        &self, address: RpcAddress,
+    ) -> BoxFuture<Option<AccountPendingInfo>>;
 
     /// Return estimated gas and collateral usage.
     #[rpc(name = "cfx_estimateGasAndCollateral")]
