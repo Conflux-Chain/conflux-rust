@@ -113,3 +113,45 @@ impl Tracer for ExecutiveTracer {
 
     fn drain(self) -> Vec<ExecTrace> { self.traces }
 }
+
+/// An executive tracer only records errors.
+#[derive(Default)]
+pub struct ErrorTracer {
+    traces: Vec<ExecTrace>,
+}
+
+impl Tracer for ErrorTracer {
+    type Output = ExecTrace;
+
+    fn prepare_trace_call(&mut self, _: &ActionParams) {}
+
+    fn prepare_trace_call_result(&mut self, result: &MessageCallResult) {
+        if let MessageCallResult::Success(_, _) = result {
+            return;
+        }
+        let trace = ExecTrace {
+            action: Action::CallResult(CallResult::from(result)),
+        };
+        self.traces.push(trace);
+    }
+
+    fn prepare_trace_create(&mut self, _: &ActionParams) {}
+
+    fn prepare_trace_create_result(&mut self, result: &ContractCreateResult) {
+        if let ContractCreateResult::Created(_, _) = result {
+            return;
+        }
+        let trace = ExecTrace {
+            action: Action::CreateResult(CreateResult::from(result)),
+        };
+        self.traces.push(trace);
+    }
+
+    fn prepare_internal_transfer_action(
+        &mut self, _: Address, _: Address, _: U256,
+    ) {
+
+    }
+
+    fn drain(self) -> Vec<ExecTrace> { self.traces }
+}

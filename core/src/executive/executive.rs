@@ -182,6 +182,15 @@ impl TransactOptions<trace::NoopTracer> {
     }
 }
 
+impl TransactOptions<trace::ErrorTracer> {
+    /// Creates new `TransactOptions` with error tracing only.
+    pub fn with_error_tracing() -> Self {
+        TransactOptions {
+            tracer: trace::ErrorTracer::default(),
+        }
+    }
+}
+
 enum CallCreateExecutiveKind<
     Substate: SubstateMngTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
 > {
@@ -1326,7 +1335,7 @@ impl<
                 self.spec.account_start_nonce(self.env.number),
             )?;
         }
-        let options = TransactOptions::with_no_tracing();
+        let options = TransactOptions::with_tracing();
         self.transact(tx, options)
     }
 
@@ -1567,7 +1576,9 @@ impl<
                 if self.state.is_contract_with_code(&new_address)? {
                     self.state.revert_to_checkpoint();
                     return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
-                        ExecutionError::ContractAddressConflict,
+                        ExecutionError::VmError(vm::Error::ConflictAddress(
+                            new_address.clone(),
+                        )),
                         Executed::execution_error_fully_charged(tx),
                     ));
                 }

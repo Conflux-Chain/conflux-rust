@@ -4,6 +4,7 @@
 
 use crate::{
     bytes::Bytes,
+    executive::revert_reason_decode,
     vm::{ActionParams, CallType, ContractCreateResult, MessageCallResult},
 };
 use cfx_internal_common::{DatabaseDecodable, DatabaseEncodable};
@@ -317,6 +318,31 @@ impl Action {
                 internal_action.bloom()
             }
         }
+    }
+
+    pub fn error_desc(&self) -> Option<String> {
+        let error = match *self {
+            Action::Call(_)
+            | Action::Create(_)
+            | Action::InternalTransferAction(_) => None,
+            Action::CallResult(ref result) => {
+                Some((&result.outcome, &result.return_data))
+            }
+            Action::CreateResult(ref result) => {
+                Some((&result.outcome, &result.return_data))
+            }
+        };
+        return if let Some((outcome, data)) = error {
+            match outcome{
+                Outcome::Success => None,
+                Outcome::Reverted =>
+                    Some(format!("Revert({})",revert_reason_decode(data))),
+                Outcome::Fail =>
+                    Some(format!("Fail({})",String::from_utf8(data.clone()).expect("The error data should be converted from a valid string."))),
+            }
+        } else {
+            None
+        };
     }
 }
 
