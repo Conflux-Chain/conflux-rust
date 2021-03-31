@@ -350,8 +350,11 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         unimplemented!()
     }
 
-    fn deposit_list_length(&self, _address: &Address) -> Result<usize> {
-        unimplemented!()
+    fn deposit_list_length(&self, address: &Address) -> Result<usize> {
+        Ok(self
+            .get_deposit(address)?
+            .as_ref()
+            .map_or(0, |deposit_list| deposit_list.len()))
     }
 
     fn vote_stake_list_length(&self, _address: &Address) -> Result<usize> {
@@ -487,6 +490,12 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         self.cache.get_code(address, &self.db)
     }
 
+    fn get_deposit(
+        &self, address: &Address,
+    ) -> Result<impl AsRef<NonCopy<Option<&DepositList>>>> {
+        self.cache.get_deposit(address, &self.db)
+    }
+
     fn modify_and_update_account<'a>(
         &'a mut self, address: &Address,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
@@ -524,5 +533,5 @@ use cfx_statedb::{
 use cfx_storage::{utils::guarded_value::NonCopy, StorageStateTrait};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use keccak_hash::KECCAK_EMPTY;
-use primitives::{CodeInfo, EpochId, SponsorInfo, StorageLayout};
+use primitives::{CodeInfo, EpochId, SponsorInfo, StorageLayout, DepositList};
 use std::{marker::PhantomData, sync::Arc};
