@@ -38,6 +38,12 @@ pub trait CachedObject: Encodable + IsDefault + Sized {
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub struct CodeAddress(pub Address, pub H256);
 
+#[derive(Clone, Eq, Hash, PartialEq)]
+pub struct DepositListAddress(pub Address);
+
+#[derive(Clone, Eq, Hash, PartialEq)]
+pub struct VoteStakeListAddress(pub Address);
+
 pub struct CachedAccount {
     object: Account,
 }
@@ -73,6 +79,26 @@ impl ToHashKey<CodeAddress> for CodeAddress {
     fn to_hash_key(&self) -> CodeAddress { self.clone() }
 }
 
+impl AsStorageKey for DepositListAddress {
+    fn storage_key(&self) -> StorageKey {
+        StorageKey::DepositListKey(self.0.as_ref())
+    }
+}
+
+impl ToHashKey<DepositListAddress> for DepositListAddress {
+    fn to_hash_key(&self) -> Self { self.clone() }
+}
+
+impl AsStorageKey for VoteStakeListAddress {
+    fn storage_key(&self) -> StorageKey {
+        StorageKey::VoteListKey(self.0.as_ref())
+    }
+}
+
+impl ToHashKey<VoteStakeListAddress> for VoteStakeListAddress {
+    fn to_hash_key(&self) -> Self { self.clone() }
+}
+
 impl CachedObject for CachedAccount {
     type HashKeyType = Address;
 
@@ -87,6 +113,22 @@ impl CachedObject for CodeInfo {
     type HashKeyType = CodeAddress;
 
     fn load_from_rlp(_key: &CodeAddress, rlp: &Rlp) -> Result<Self> {
+        Ok(Self::decode(rlp)?)
+    }
+}
+
+impl CachedObject for DepositList {
+    type HashKeyType = DepositListAddress;
+
+    fn load_from_rlp(_key: &DepositListAddress, rlp: &Rlp) -> Result<Self> {
+        Ok(Self::decode(rlp)?)
+    }
+}
+
+impl CachedObject for VoteStakeList {
+    type HashKeyType = VoteStakeListAddress;
+
+    fn load_from_rlp(_key: &VoteStakeListAddress, rlp: &Rlp) -> Result<Self> {
         Ok(Self::decode(rlp)?)
     }
 }
@@ -113,6 +155,9 @@ use crate::StateDbOps;
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_statedb::Result;
 use cfx_types::{Address, H256};
-use primitives::{is_default::IsDefault, Account, CodeInfo, StorageKey};
+use primitives::{
+    is_default::IsDefault, Account, CodeInfo, DepositList, StorageKey,
+    VoteStakeList,
+};
 use rlp::{Decodable, Encodable, Rlp, RlpStream};
 use std::ops::{Deref, DerefMut};
