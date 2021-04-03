@@ -250,12 +250,13 @@ impl StateObjectCache {
                     ));
                 }
                 Some(account) => {
-                    code_hash = account.code_hash.clone();
-                    if code_hash.is_zero() {
+                    if KECCAK_EMPTY.eq(&account.code_hash) {
                         return Ok(GuardedValue::new(
                             self.code_cache.read(),
                             NonCopy(None),
                         ));
+                    } else {
+                        code_hash = account.code_hash.clone();
                     }
                 }
             }
@@ -276,6 +277,7 @@ use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_statedb::Result;
 use cfx_storage::utils::guarded_value::{GuardedValue, NonCopy};
 use cfx_types::Address;
+use keccak_hash::KECCAK_EMPTY;
 use parking_lot::{
     RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
