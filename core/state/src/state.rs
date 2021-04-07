@@ -292,8 +292,21 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     fn init_code(
         &mut self, address: &Address, code: Vec<u8>, owner: Address,
     ) -> Result<()> {
-        let code_address = CodeAddress(*address, keccak(&code));
-        self.modify_and_update_code(&code_address, None)?
+        let code_hash = keccak(&code);
+
+        // Update the code hash.
+        self.modify_and_update_account(address, None)?
+            .as_mut()
+            .map_or_else(
+                || Err(ErrorKind::IncompleteDatabase(*address).into()),
+                |value| {
+                    value.code_hash = code_hash;
+                    Ok(())
+                },
+            )?;
+
+        // Set the code.
+        self.require_or_set_code(&CodeAddress(*address, code_hash), None)?
             .as_mut()
             .map_or_else(
                 || Err(ErrorKind::IncompleteDatabase(*address).into()),
@@ -545,7 +558,7 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         )
     }
 
-    fn modify_and_update_code<'a>(
+    fn require_or_set_code<'a>(
         &'a mut self, code_address: &CodeAddress,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
     ) -> Result<
@@ -557,11 +570,8 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         >,
     >
     {
-        self.cache.modify_and_update_code(
-            code_address,
-            &mut self.db,
-            debug_record,
-        )
+        self.cache
+            .require_or_set_code(code_address, &mut self.db, debug_record)
     }
 }
 

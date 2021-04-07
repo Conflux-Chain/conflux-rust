@@ -236,7 +236,7 @@ impl StateObjectCache {
         )
     }
 
-    pub fn modify_and_update_code<'a, StateDb: StateDbOps>(
+    pub fn require_or_set_code<'a, StateDb: StateDbOps>(
         &'a self, code_address: &CodeAddress, db: &'a mut StateDb,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
     ) -> Result<
