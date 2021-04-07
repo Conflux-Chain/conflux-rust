@@ -290,9 +290,19 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     }
 
     fn init_code(
-        &mut self, _address: &Address, _code: Vec<u8>, _owner: Address,
+        &mut self, address: &Address, code: Vec<u8>, owner: Address,
     ) -> Result<()> {
-        unimplemented!()
+        let code_address = CodeAddress(*address, keccak(&code));
+        self.modify_and_update_code(&code_address, None)?
+            .as_mut()
+            .map_or_else(
+                || Err(ErrorKind::IncompleteDatabase(*address).into()),
+                |value| {
+                    value.owner = owner;
+                    value.code = Arc::new(code);
+                    Ok(())
+                },
+            )
     }
 
     fn code_hash(&self, contract_address: &Address) -> Result<Option<H256>> {
@@ -534,10 +544,29 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
             debug_record,
         )
     }
+
+    fn modify_and_update_code<'a>(
+        &'a mut self, code_address: &CodeAddress,
+        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
+    ) -> Result<
+        impl AsMut<
+            ModifyAndUpdate<
+                StateDbGeneric<StateDbStorage>,
+                /* TODO: Key, */ CodeInfo,
+            >,
+        >,
+    >
+    {
+        self.cache.modify_and_update_code(
+            code_address,
+            &mut self.db,
+            debug_record,
+        )
+    }
 }
 
 use crate::{
-    cache_object::CachedAccount,
+    cache_object::{CachedAccount, CodeAddress},
     maybe_address,
     state_object_cache::{ModifyAndUpdate, StateObjectCache},
     state_trait::{CheckpointTrait, StateOpsTrait},
@@ -552,7 +581,7 @@ use cfx_statedb::{
 };
 use cfx_storage::{utils::guarded_value::NonCopy, StorageStateTrait};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
-use keccak_hash::KECCAK_EMPTY;
+use keccak_hash::{keccak, KECCAK_EMPTY};
 use primitives::{
     CodeInfo, DepositList, EpochId, SponsorInfo, StorageLayout, VoteStakeList,
 };

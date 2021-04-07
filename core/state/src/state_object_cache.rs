@@ -236,6 +236,25 @@ impl StateObjectCache {
         )
     }
 
+    pub fn modify_and_update_code<'a, StateDb: StateDbOps>(
+        &'a self, code_address: &CodeAddress, db: &'a mut StateDb,
+        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
+    ) -> Result<
+        GuardedValue<
+            RwLockWriteGuard<HashMap<CodeAddress, Option<CodeInfo>>>,
+            ModifyAndUpdate<StateDb, /* TODO: Key, */ CodeInfo>,
+        >,
+    >
+    {
+        Self::require_or_set(
+            &self.code_cache,
+            code_address,
+            db,
+            |_addr| Ok(None),
+            debug_record,
+        )
+    }
+
     pub fn get_code<StateDb: StateDbOps>(
         &self, contract_address: &Address, db: &StateDb,
     ) -> Result<
