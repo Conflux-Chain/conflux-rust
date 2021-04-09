@@ -687,7 +687,33 @@ impl ConsensusNewBlockHandler {
         }
 
         // Check if `new` is in the subtree of its pos reference.
-        // let pos_pivot_decision = self.pos_verifier.get_pivot_decision(&)
+        if self
+            .pos_verifier
+            .is_enabled_at_height(inner.arena[new].height)
+        {
+            let pos_reference = self
+                .data_man
+                .pos_reference_by_hash(&inner.arena[new].hash)
+                .expect("header exist")
+                .expect("pos reference checked in sync graph");
+            let pivot_decision = self
+                .pos_verifier
+                .get_pivot_decision(&pos_reference)
+                .expect("pos validity checked in sync graph");
+            match inner.hash_to_arena_indices.get(&pivot_decision) {
+                // TODO(peilun): Double check this case.
+                None => return false,
+                Some(pivot_decision_arena_index) => {
+                    if inner.lca(new, *pivot_decision_arena_index)
+                        != pivot_decision_arena_index
+                    {
+                        // Not in the subtree of pivot_decision, mark as partial
+                        // invalid.
+                        return false;
+                    }
+                }
+            }
+        }
 
         return true;
     }

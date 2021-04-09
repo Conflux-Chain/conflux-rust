@@ -41,20 +41,17 @@ struct UnlockTransaction {
 
 pub struct PosHandler<PoS: PosInterface> {
     pos: PoS,
-    is_enabled: AtomicBool,
+    enable_height: u64,
 }
 
 impl<PoS: PosInterface> PosHandler<PoS> {
-    pub fn new(pos: PoS, enabled: bool) -> Self {
-        Self {
-            pos,
-            is_enabled: AtomicBool::new(enabled),
-        }
+    pub fn new(pos: PoS, enable_height: u64) -> Self {
+        Self { pos, enable_height }
     }
 
-    pub fn enable(&self) { self.is_enabled.store(true, Ordering::SeqCst) }
-
-    pub fn is_enabled(&self) -> bool { self.is_enabled.load(Ordering::SeqCst) }
+    pub fn is_enabled_at_height(&self, height: u64) -> bool {
+        height >= self.enable_height
+    }
 
     pub fn is_committed(&self, h: &PosBlockId) -> bool {
         self.pos.get_committed_block(h).is_some()
