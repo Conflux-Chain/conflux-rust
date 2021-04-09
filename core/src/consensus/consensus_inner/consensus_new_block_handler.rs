@@ -12,6 +12,7 @@ use crate::{
             consensus_executor::{ConsensusExecutor, EpochExecutionTask},
             ConsensusGraphInner, NULL,
         },
+        pos_handler::PosVerifier,
         ConsensusConfig,
     },
     state_exposer::{ConsensusGraphBlockState, STATE_EXPOSER},
@@ -38,6 +39,7 @@ pub struct ConsensusNewBlockHandler {
     txpool: SharedTransactionPool,
     data_man: Arc<BlockDataManager>,
     executor: Arc<ConsensusExecutor>,
+    pos_verifier: Arc<PosVerifier>,
     statistics: SharedStatistics,
 
     /// Channel used to send epochs to PubSub
@@ -59,7 +61,7 @@ impl ConsensusNewBlockHandler {
         conf: ConsensusConfig, txpool: SharedTransactionPool,
         data_man: Arc<BlockDataManager>, executor: Arc<ConsensusExecutor>,
         statistics: SharedStatistics, notifications: Arc<Notifications>,
-        node_type: NodeType,
+        node_type: NodeType, pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         let epochs_sender = notifications.epochs_ordered.clone();
@@ -67,6 +69,7 @@ impl ConsensusNewBlockHandler {
             Mutex::new(BlameVerifier::new(data_man.clone(), notifications));
 
         Self {
+            pos_verifier,
             conf,
             txpool,
             data_man,
@@ -682,6 +685,9 @@ impl ConsensusNewBlockHandler {
                 return false;
             }
         }
+
+        // Check if `new` is in the subtree of its pos reference.
+        // let pos_pivot_decision = self.pos_verifier.get_pivot_decision(&)
 
         return true;
     }
