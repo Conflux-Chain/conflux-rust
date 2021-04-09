@@ -7,7 +7,7 @@ pub mod consensus_inner;
 pub mod consensus_trait;
 pub mod debug_recompute;
 mod pastset_cache;
-mod pos_handler;
+pub mod pos_handler;
 
 pub use crate::consensus::{
     consensus_inner::{ConsensusGraphInner, ConsensusInnerConfig},

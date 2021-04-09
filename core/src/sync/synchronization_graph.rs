@@ -5,7 +5,7 @@
 use crate::{
     block_data_manager::{BlockDataManager, BlockStatus},
     channel::Channel,
-    consensus::SharedConsensusGraph,
+    consensus::{pos_handler::PosVerifier, SharedConsensusGraph},
     error::{BlockError, Error, ErrorKind},
     machine::Machine,
     pow::{PowComputer, ProofOfWorkConfig},
@@ -25,7 +25,8 @@ use metrics::{
 };
 use parking_lot::RwLock;
 use primitives::{
-    transaction::SignedTransaction, Block, BlockHeader, EpochNumber,
+    pos::PosBlockId, transaction::SignedTransaction, Block, BlockHeader,
+    EpochNumber,
 };
 use slab::Slab;
 use std::{
@@ -172,6 +173,7 @@ pub struct SynchronizationGraphInner {
     /// `CatchUpFillBlockBodyPhase`.
     pub block_to_fill_set: HashSet<H256>,
     machine: Arc<Machine>,
+    pos_verifier: Arc<PosVerifier>,
 }
 
 impl MallocSizeOf for SynchronizationGraphInner {
@@ -554,6 +556,17 @@ impl SynchronizationGraphInner {
             }
         }
 
+        // Check if the pos reference is committed.
+        if let Some(pos_reference) =
+            self.arena[index].block_header.pos_reference()
+        {
+            // TODO(lpl): Should we check if the pos reference will never be
+            // committed?
+            if !self.pos_verifier.is_committed(pos_reference) {
+                return false;
+            }
+        }
+
         // parent and referees are all header graph ready.
         true
     }
@@ -567,22 +580,29 @@ impl SynchronizationGraphInner {
             && self.arena[index].block_ready
     }
 
-    // Get parent (height, timestamp, gas_limit, difficulty)
-    // This function assumes that the parent and referee information MUST exist
-    // in memory or in disk.
+    // Get parent (height, timestamp, gas_limit, difficulty,
+    // parent_and_referee_pos_references) This function assumes that the
+    // parent and referee information MUST exist in memory or in disk.
     fn get_parent_and_referee_info(
         &self, index: usize,
-    ) -> (u64, u64, U256, U256) {
+    ) -> (u64, u64, U256, U256, Vec<Option<PosBlockId>>) {
         let parent_height;
         let parent_timestamp;
         let parent_gas_limit;
         let parent_difficulty;
+        // Since eventually all blocks should have pos_references, we do not
+        // try to avoid loading them here before PoS is enabled.
+        let mut pos_references = Vec::new();
         let parent = self.arena[index].parent;
+
+        // Get info for parent.
         if parent != NULL {
             parent_height = self.arena[parent].block_header.height();
             parent_timestamp = self.arena[parent].block_header.timestamp();
             parent_gas_limit = *self.arena[parent].block_header.gas_limit();
             parent_difficulty = *self.arena[parent].block_header.difficulty();
+            pos_references
+                .push(self.arena[parent].block_header.pos_reference().clone())
         } else {
             let parent_hash = self.arena[index].block_header.parent_hash();
             let parent_header = self
@@ -594,6 +614,29 @@ impl SynchronizationGraphInner {
             parent_timestamp = parent_header.timestamp();
             parent_gas_limit = *parent_header.gas_limit();
             parent_difficulty = *parent_header.difficulty();
+            pos_references.push(parent_header.pos_reference().clone());
+        }
+
+        // Get pos references for referees.
+        let mut referee_hash_in_mem = HashSet::new();
+        for referee in self.arena[index].referees.iter() {
+            pos_references.push(
+                self.arena[*referee].block_header.pos_reference().clone(),
+            );
+            referee_hash_in_mem
+                .insert(self.arena[*referee].block_header.hash());
+        }
+
+        for referee_hash in self.arena[index].block_header.referee_hashes() {
+            if !referee_hash_in_mem.contains(referee_hash) {
+                let referee_block = self
+                    .data_man
+                    .block_by_hash(referee_hash, true)
+                    .unwrap()
+                    .clone();
+                pos_references
+                    .push(referee_block.block_header.pos_reference().clone());
+            }
         }
 
         (
@@ -601,6 +644,7 @@ impl SynchronizationGraphInner {
             parent_timestamp,
             parent_gas_limit,
             parent_difficulty,
+            pos_references,
         )
     }
 
@@ -613,6 +657,7 @@ impl SynchronizationGraphInner {
             parent_timestamp,
             parent_gas_limit,
             parent_difficulty,
+            predecessor_pos_references,
         ) = self.get_parent_and_referee_info(index);
 
         // Verify the height and epoch numbers are correct
@@ -728,6 +773,23 @@ impl SynchronizationGraphInner {
                         found: my_diff,
                     },
                 )));
+            }
+        }
+
+        if let Some(pos_reference) =
+            self.arena[index].block_header.pos_reference()
+        {
+            let mut pred_pos_ref_list = Vec::new();
+            for maybe_pos_ref in predecessor_pos_references {
+                if let Some(pos_ref) = maybe_pos_ref {
+                    pred_pos_ref_list.push(pos_ref);
+                }
+            }
+            if !self
+                .pos_verifier
+                .verify_against_predecessors(pos_reference, &pred_pos_ref_list)
+            {
+                bail!(BlockError::InvalidPosReference);
             }
         }
 
