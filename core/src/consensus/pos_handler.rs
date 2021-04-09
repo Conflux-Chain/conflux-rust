@@ -32,6 +32,7 @@ struct PosBlock {
     unlock_txs: Vec<UnlockTransaction>,
 }
 
+#[derive(Clone)]
 struct UnlockTransaction {
     /// The node id to unlock.
     ///
@@ -87,6 +88,14 @@ impl<PoS: PosInterface> PosHandler<PoS> {
 
     pub fn get_latest_pos_reference(&self) -> PosBlockId {
         self.pos.latest_block()
+    }
+
+    pub fn get_unlock_transactions(
+        &self, h: &PosBlockId,
+    ) -> Option<Vec<UnlockTransaction>> {
+        self.pos
+            .get_committed_block(h)
+            .map(|b| b.unlock_txs.clone())
     }
 }
 

@@ -9,6 +9,7 @@ use crate::{
             consensus_new_block_handler::ConsensusNewBlockHandler,
             StateBlameInfo,
         },
+        pos_handler::PosVerifier,
         ConsensusGraphInner,
     },
     executive::{
@@ -791,6 +792,7 @@ pub struct ConsensusExecutionHandler {
     config: ConsensusExecutionConfiguration,
     verification_config: VerificationConfig,
     machine: Arc<Machine>,
+    pos_verifier: Arc<PosVerifier>,
     execution_state_prefetcher: Option<Arc<ExecutionStatePrefetcher>>,
 }
 
@@ -1014,6 +1016,27 @@ impl ConsensusExecutionHandler {
                     .spec(start_block_number)
                     .account_start_nonce(start_block_number),
             );
+        }
+
+        // TODO(peilun): Specify if we unlock before or after executing the
+        // transactions.
+        if self
+            .pos_verifier
+            .is_enabled_at_height(pivot_block.block_header.height())
+        {
+            for unlock_tx in self
+                .pos_verifier
+                .get_unlock_transactions(
+                    pivot_block
+                        .block_header
+                        .pos_reference()
+                        .as_ref()
+                        .expect("checked before sync graph insertion"),
+                )
+                .expect("checked in sync graph")
+            {
+                // FIXME(peilun): Process unlock transactions.
+            }
         }
 
         // FIXME: We may want to propagate the error up.
