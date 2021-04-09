@@ -468,6 +468,13 @@ impl BlockHeaderBuilder {
         self
     }
 
+    pub fn with_pos_reference(
+        &mut self, pos_reference: Option<PosBlockId>,
+    ) -> &mut Self {
+        self.pos_reference = pos_reference;
+        self
+    }
+
     pub fn build(&self) -> BlockHeader {
         let mut block_header = BlockHeader {
             rlp_part: BlockHeaderRlpPart {
