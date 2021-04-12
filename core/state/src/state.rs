@@ -295,8 +295,11 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         unimplemented!()
     }
 
-    fn code_hash(&self, address: &Address) -> Result<Option<H256>> {
-        Ok(self.get_account(address)?.as_ref().map(|a| a.code_hash))
+    fn code_hash(&self, contract_address: &Address) -> Result<Option<H256>> {
+        Ok(self
+            .get_account(contract_address)?
+            .as_ref()
+            .map(|a| a.code_hash))
     }
 
     fn code_size(&self, contract_address: &Address) -> Result<Option<usize>> {
@@ -306,12 +309,20 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
             .map(|code_info| code_info.code.len()))
     }
 
-    fn code_owner(&self, _address: &Address) -> Result<Option<Address>> {
-        unimplemented!()
+    fn code_owner(
+        &self, contract_address: &Address,
+    ) -> Result<Option<Address>> {
+        Ok(self
+            .get_code(contract_address)?
+            .as_ref()
+            .map(|code_info| code_info.owner))
     }
 
-    fn code(&self, _address: &Address) -> Result<Option<Arc<Vec<u8>>>> {
-        unimplemented!()
+    fn code(&self, contract_address: &Address) -> Result<Option<Arc<Vec<u8>>>> {
+        Ok(self
+            .get_code(contract_address)?
+            .as_ref()
+            .map(|code_info| code_info.code.clone()))
     }
 
     fn staking_balance(&self, address: &Address) -> Result<U256> {
@@ -350,12 +361,18 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         unimplemented!()
     }
 
-    fn deposit_list_length(&self, _address: &Address) -> Result<usize> {
-        unimplemented!()
+    fn deposit_list_length(&self, address: &Address) -> Result<usize> {
+        Ok(self
+            .get_deposit_list(address)?
+            .as_ref()
+            .map_or(0, |deposit_list| deposit_list.len()))
     }
 
-    fn vote_stake_list_length(&self, _address: &Address) -> Result<usize> {
-        unimplemented!()
+    fn vote_stake_list_length(&self, address: &Address) -> Result<usize> {
+        Ok(self
+            .get_vote_stake_list(address)?
+            .as_ref()
+            .map_or(0, |vote_stake_list| vote_stake_list.len()))
     }
 
     fn clean_account(&mut self, _address: &Address) -> Result<()> {
@@ -487,6 +504,18 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         self.cache.get_code(address, &self.db)
     }
 
+    fn get_deposit_list(
+        &self, address: &Address,
+    ) -> Result<impl AsRef<NonCopy<Option<&DepositList>>>> {
+        self.cache.get_deposit_list(address, &self.db)
+    }
+
+    fn get_vote_stake_list(
+        &self, address: &Address,
+    ) -> Result<impl AsRef<NonCopy<Option<&VoteStakeList>>>> {
+        self.cache.get_vote_stake_list(address, &self.db)
+    }
+
     fn modify_and_update_account<'a>(
         &'a mut self, address: &Address,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
@@ -524,5 +553,7 @@ use cfx_statedb::{
 use cfx_storage::{utils::guarded_value::NonCopy, StorageStateTrait};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use keccak_hash::KECCAK_EMPTY;
-use primitives::{CodeInfo, EpochId, SponsorInfo, StorageLayout};
+use primitives::{
+    CodeInfo, DepositList, EpochId, SponsorInfo, StorageLayout, VoteStakeList,
+};
 use std::{marker::PhantomData, sync::Arc};

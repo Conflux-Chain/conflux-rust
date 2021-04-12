@@ -10,6 +10,10 @@ pub struct StateObjectCache {
     max_cache_size: usize,
     account_cache: RwLock<HashMap<Address, Option<CachedAccount>>>,
     code_cache: RwLock<HashMap<CodeAddress, Option<CodeInfo>>>,
+    deposit_list_cache:
+        RwLock<HashMap<DepositListAddress, Option<DepositList>>>,
+    vote_stake_list_cache:
+        RwLock<HashMap<VoteStakeListAddress, Option<VoteStakeList>>>,
     // TODO: etc.
 }
 
@@ -250,12 +254,13 @@ impl StateObjectCache {
                     ));
                 }
                 Some(account) => {
-                    code_hash = account.code_hash.clone();
-                    if code_hash.is_zero() {
+                    if KECCAK_EMPTY.eq(&account.code_hash) {
                         return Ok(GuardedValue::new(
                             self.code_cache.read(),
                             NonCopy(None),
                         ));
+                    } else {
+                        code_hash = account.code_hash.clone();
                     }
                 }
             }
@@ -266,18 +271,54 @@ impl StateObjectCache {
             db,
         )
     }
+
+    pub fn get_deposit_list<StateDb: StateDbOps>(
+        &self, address: &Address, db: &StateDb,
+    ) -> Result<
+        GuardedValue<
+            RwLockReadGuard<HashMap<DepositListAddress, Option<DepositList>>>,
+            NonCopy<Option<&DepositList>>,
+        >,
+    > {
+        Self::ensure_loaded(
+            &self.deposit_list_cache,
+            &DepositListAddress(*address),
+            db,
+        )
+    }
+
+    pub fn get_vote_stake_list<StateDb: StateDbOps>(
+        &self, address: &Address, db: &StateDb,
+    ) -> Result<
+        GuardedValue<
+            RwLockReadGuard<
+                HashMap<VoteStakeListAddress, Option<VoteStakeList>>,
+            >,
+            NonCopy<Option<&VoteStakeList>>,
+        >,
+    > {
+        Self::ensure_loaded(
+            &self.vote_stake_list_cache,
+            &VoteStakeListAddress(*address),
+            db,
+        )
+    }
 }
 
 use crate::{
-    cache_object::{CachedAccount, CachedObject, CodeAddress, ToHashKey},
+    cache_object::{
+        CachedAccount, CachedObject, CodeAddress, DepositListAddress,
+        ToHashKey, VoteStakeListAddress,
+    },
     StateDbOps,
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_statedb::Result;
 use cfx_storage::utils::guarded_value::{GuardedValue, NonCopy};
 use cfx_types::Address;
+use keccak_hash::KECCAK_EMPTY;
 use parking_lot::{
     RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
-use primitives::CodeInfo;
+use primitives::{CodeInfo, DepositList, VoteStakeList};
 use std::{borrow::Borrow, collections::HashMap, hash::Hash};
