@@ -236,22 +236,31 @@ impl StateObjectCache {
         )
     }
 
+    // require_or_set_code(code_address, code_owner, code, db, debug_record)
+
     pub fn require_or_set_code<'a, StateDb: StateDbOps>(
-        &'a self, code_address: &CodeAddress, db: &'a mut StateDb,
+        &'a self, address: Address, code_owner: Address, code: Vec<u8>,
+        db: &'a mut StateDb,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
-    ) -> Result<
-        GuardedValue<
-            RwLockWriteGuard<HashMap<CodeAddress, Option<CodeInfo>>>,
-            ModifyAndUpdate<StateDb, /* TODO: Key, */ CodeInfo>,
-        >,
-    >
+    ) -> Result<()>
     {
+        let code_hash = keccak(&code);
+        let code_address = CodeAddress(address, code_hash);
         Self::require_or_set(
             &self.code_cache,
-            code_address,
+            &code_address,
             db,
             |_addr| Ok(None),
             debug_record,
+        )?
+        .as_mut()
+        .map_or_else(
+            || Err(ErrorKind::IncompleteDatabase(address).into()),
+            |value| {
+                value.owner = code_owner;
+                value.code = Arc::new(code);
+                Ok(())
+            },
         )
     }
 
@@ -332,12 +341,12 @@ use crate::{
     StateDbOps,
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
-use cfx_statedb::Result;
+use cfx_statedb::{ErrorKind, Result};
 use cfx_storage::utils::guarded_value::{GuardedValue, NonCopy};
 use cfx_types::Address;
-use keccak_hash::KECCAK_EMPTY;
+use keccak_hash::{keccak, KECCAK_EMPTY};
 use parking_lot::{
     RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
 use primitives::{CodeInfo, DepositList, VoteStakeList};
-use std::{borrow::Borrow, collections::HashMap, hash::Hash};
+use std::{borrow::Borrow, collections::HashMap, hash::Hash, sync::Arc};

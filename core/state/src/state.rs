@@ -306,16 +306,7 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
             )?;
 
         // Set the code.
-        self.require_or_set_code(
-            &CodeAddress(*address, code_hash),
-            || Err(ErrorKind::IncompleteDatabase(*address).into()),
-            |value| {
-                value.owner = owner;
-                value.code = Arc::new(code);
-                Ok(())
-            },
-            None,
-        )
+        self.require_or_set_code(*address, owner, code, None)
     }
 
     fn code_hash(&self, contract_address: &Address) -> Result<Option<H256>> {
@@ -558,23 +549,23 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         )
     }
 
-    fn require_or_set_code<'a, D, F>(
-        &'a mut self, code_address: &CodeAddress, default: D, func: F,
+    fn require_or_set_code<'a>(
+        &'a mut self, address: Address, code_owner: Address, code: Vec<u8>,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
     ) -> Result<()>
-    where
-        D: FnOnce() -> Result<()>,
-        F: FnOnce(&mut CodeInfo) -> Result<()>,
     {
-        self.cache
-            .require_or_set_code(code_address, &mut self.db, debug_record)?
-            .as_mut()
-            .map_or_else(default, func)
+        self.cache.require_or_set_code(
+            address,
+            code_owner,
+            code,
+            &mut self.db,
+            debug_record,
+        )
     }
 }
 
 use crate::{
-    cache_object::{CachedAccount, CodeAddress},
+    cache_object::CachedAccount,
     maybe_address,
     state_object_cache::{ModifyAndUpdate, StateObjectCache},
     state_trait::{CheckpointTrait, StateOpsTrait},
