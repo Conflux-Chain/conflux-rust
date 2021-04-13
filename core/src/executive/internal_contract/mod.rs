@@ -13,11 +13,11 @@ use self::contracts::SolFnTable;
 use crate::{
     bytes::Bytes,
     hash::keccak,
-    state::Substate,
+    state::CallStackInfo,
     trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, Env, GasLeft, Spec},
 };
-use cfx_state::state_trait::StateOpsTrait;
+use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{Address, H256};
 use std::sync::Arc;
 
@@ -38,7 +38,11 @@ pub trait InternalContractTrait {
     /// execute this internal contract on the given parameters.
     fn execute(
         &self, params: &ActionParams, env: &Env, spec: &Spec,
-        state: &mut dyn StateOpsTrait, substate: &mut Substate,
+        state: &mut dyn StateOpsTrait,
+        substate: &mut dyn SubstateTrait<
+            Spec = Spec,
+            CallStackInfo = CallStackInfo,
+        >,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>
     {
@@ -83,7 +87,11 @@ pub trait InternalContractTrait {
 pub trait SolidityFunctionTrait: Send + Sync {
     fn execute(
         &self, input: &[u8], params: &ActionParams, env: &Env, spec: &Spec,
-        state: &mut dyn StateOpsTrait, substate: &mut Substate,
+        state: &mut dyn StateOpsTrait,
+        substate: &mut dyn SubstateTrait<
+            Spec = Spec,
+            CallStackInfo = CallStackInfo,
+        >,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>;
 

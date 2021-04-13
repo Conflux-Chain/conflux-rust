@@ -25,7 +25,7 @@ use crate::{
     },
     trace::trace::{ExecTrace, TransactionExecTraces},
     verification::{compute_receipts_root, VerificationConfig},
-    vm::{Env, Error as VmErr, Spec},
+    vm::{Env, Error as VmErr},
     SharedTransactionPool,
 };
 use cfx_internal_common::{
@@ -992,7 +992,6 @@ impl ConsensusExecutionHandler {
 
         let epoch_receipts = self
             .process_epoch_transactions(
-                &Spec::new_spec(),
                 *epoch_hash,
                 &mut state,
                 &epoch_blocks,
@@ -1011,6 +1010,9 @@ impl ConsensusExecutionHandler {
                 &reward_execution_info,
                 on_local_pivot,
                 debug_record.as_deref_mut(),
+                self.machine
+                    .spec(start_block_number)
+                    .account_start_nonce(start_block_number),
             );
         }
 
@@ -1056,7 +1058,7 @@ impl ConsensusExecutionHandler {
     }
 
     fn process_epoch_transactions(
-        &self, spec: &Spec, epoch_id: EpochId, state: &mut State,
+        &self, epoch_id: EpochId, state: &mut State,
         epoch_blocks: &Vec<Arc<Block>>, start_block_number: u64,
         on_local_pivot: bool,
     ) -> DbResult<Vec<Arc<BlockReceipts>>>
@@ -1126,6 +1128,7 @@ impl ConsensusExecutionHandler {
                     .verification_config
                     .transaction_epoch_bound,
             };
+            let spec = self.machine.spec(env.number);
             let secondary_reward =
                 state.bump_block_number_accumulate_interest();
             block_number += 1;
@@ -1328,6 +1331,7 @@ impl ConsensusExecutionHandler {
         &self, state: &mut State, reward_info: &RewardExecutionInfo,
         on_local_pivot: bool,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
+        account_start_nonce: U256,
     )
     {
         /// (Fee, SetOfPackingBlockHash)
@@ -1594,7 +1598,12 @@ impl ConsensusExecutionHandler {
 
         for (address, reward) in merged_rewards {
             state
-                .add_balance(&address, &reward, CleanupMode::ForceCreate)
+                .add_balance(
+                    &address,
+                    &reward,
+                    CleanupMode::ForceCreate,
+                    account_start_nonce,
+                )
                 .unwrap();
 
             if let Some(debug_out) = &mut debug_record {
@@ -1632,7 +1641,6 @@ impl ConsensusExecutionHandler {
             epoch_blocks.len(),
         );
         let pivot_block = epoch_blocks.last().expect("Not empty");
-        let spec = Spec::new_spec();
         let mut state = State::new(StateDb::new(
             self.data_man
                 .storage_manager
@@ -1654,7 +1662,6 @@ impl ConsensusExecutionHandler {
                 .unwrap(),
         ))?;
         self.process_epoch_transactions(
-            &spec,
             *pivot_hash,
             &mut state,
             &epoch_blocks,
@@ -1666,7 +1673,6 @@ impl ConsensusExecutionHandler {
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
     ) -> RpcResult<ExecutionOutcome> {
-        let spec = Spec::new_spec();
         let internal_contract_map = InternalContractMap::new();
         let best_block_header = self.data_man.block_header_by_hash(epoch_id);
         if best_block_header.is_none() {
@@ -1724,6 +1730,7 @@ impl ConsensusExecutionHandler {
                 .verification_config
                 .transaction_epoch_bound,
         };
+        let spec = self.machine.spec(env.number);
         let mut ex = Executive::new(
             &mut state,
             &env,

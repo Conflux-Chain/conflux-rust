@@ -7,7 +7,10 @@ use crate::rpc::{
     helpers::{EpochQueue, SubscriberId, Subscribers},
     metadata::Metadata,
     traits::PubSub,
-    types::{pubsub, Header as RpcHeader, Log as RpcLog},
+    types::{
+        pubsub::{self, SubscriptionEpoch},
+        Header as RpcHeader, Log as RpcLog,
+    },
 };
 use cfx_addr::Network;
 use cfx_parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
@@ -98,7 +101,7 @@ impl PubSubClient {
     // Start an async loop that continuously receives epoch notifications and
     // publishes the corresponding epochs to subscriber `id`, keeping their
     // original order. The loop terminates when subscriber `id` unsubscribes.
-    fn start_epoch_loop(&self, id: SubscriberId) {
+    fn start_epoch_loop(&self, id: SubscriberId, sub_epoch: SubscriptionEpoch) {
         trace!("start_epoch_loop({:?})", id);
 
         // clone everything we use in our async loop
@@ -109,10 +112,20 @@ impl PubSubClient {
         // subscribe to the `epochs_ordered` channel
         let mut receiver = epochs_ordered.subscribe();
 
+        // when subscribing to "latest_state", use a queue to make sure
+        // we only process epochs once they have been executed
+        let mut queue = EpochQueue::<Vec<H256>>::with_capacity(
+            if sub_epoch == SubscriptionEpoch::LatestState {
+                (DEFERRED_STATE_EPOCH_COUNT - 1) as usize
+            } else {
+                0
+            },
+        );
+
         // loop asynchronously
         let fut = async move {
-            while let Some(epoch) = receiver.recv().await {
-                trace!("epoch_loop({:?}): {:?}", id, epoch);
+            while let Some((epoch, hashes)) = receiver.recv().await {
+                trace!("epoch_loop({:?}): {:?}", id, (epoch, &hashes));
 
                 // retrieve subscriber
                 let sub = match subscribers.read().get(&id) {
@@ -124,8 +137,19 @@ impl PubSubClient {
                     }
                 };
 
+                let (epoch, hashes) = match queue.push((epoch, hashes)) {
+                    None => continue,
+                    Some(e) => e,
+                };
+
+                // wait for epoch to be executed
+                if sub_epoch == SubscriptionEpoch::LatestState {
+                    let pivot = hashes.last().expect("empty epoch in pubsub");
+                    handler.wait_for_epoch(&pivot).await;
+                }
+
                 // publish epochs
-                handler.notify_epoch(sub, epoch).await;
+                handler.notify_epoch(sub, (epoch, hashes)).await;
             }
         };
 
@@ -359,14 +383,20 @@ impl ChainNotificationHandler {
                 }
             }
 
-            // this should not happen
-            if ii > 100 {
+            // we assume that an epoch gets executed within 100 seconds
+            if ii > 1000 {
                 error!("Cannot find receipts with {:?}/{:?}", block, pivot);
                 return None;
             }
         }
 
         unreachable!()
+    }
+
+    // wait until the execution results corresponding to `pivot` become
+    // available in the database.
+    async fn wait_for_epoch(&self, pivot: &H256) -> () {
+        let _ = self.retrieve_block_receipts(&pivot, &pivot).await;
     }
 
     async fn retrieve_epoch_logs(
@@ -449,12 +479,18 @@ impl PubSub for PubSubClient {
             // --------- epochs ---------
             (pubsub::Kind::Epochs, None) => {
                 let id = self.epochs_subscribers.write().push(subscriber);
-                self.start_epoch_loop(id);
+                self.start_epoch_loop(id, SubscriptionEpoch::LatestMined);
                 return;
             }
-            (pubsub::Kind::Epochs, _) => {
-                error_codes::invalid_params("epochs", "Expected no parameters.")
+            (pubsub::Kind::Epochs, Some(pubsub::Params::Epochs(epoch))) => {
+                let id = self.epochs_subscribers.write().push(subscriber);
+                self.start_epoch_loop(id, epoch);
+                return;
             }
+            (pubsub::Kind::Epochs, _) => error_codes::invalid_params(
+                "epochs",
+                "Expected epoch parameter.",
+            ),
             // --------- logs ---------
             (pubsub::Kind::Logs, None) => {
                 let id = self

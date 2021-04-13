@@ -3,6 +3,7 @@ import rlp
 import sys
 sys.path.append("..")
 
+from conflux.address import hex_to_b32_address
 from conflux.rpc import RpcClient
 from test_framework.util import assert_equal, assert_raises_rpc_error, assert_is_hash_string
 
@@ -224,5 +225,65 @@ class TestSendTx(RpcClient):
         assert_equal(self.txpool_status(), (4, 0))
 
         self.generate_blocks_to_state()
+        for tx in [tx0, tx1, tx2, tx3]:
+            assert_equal(self.get_transaction_receipt(tx.hash_hex()) is None, False)
+
+
+    def test_tx_pending_in_pool(self):
+        cur_nonce = self.get_nonce(self.GENESIS_ADDR)
+        addr = hex_to_b32_address(self.GENESIS_ADDR)
+
+        self.clear_tx_pool()
+
+        # enter ready queue since tx.nonce = account.nonce
+        tx0 = self.new_tx(nonce=cur_nonce)
+        assert_equal(self.send_tx(tx0), tx0.hash_hex())
+
+        # enter ready queue since tx0 in ready queue
+        tx1 = self.new_tx(nonce=cur_nonce+1)
+        assert_equal(self.send_tx(tx1), tx1.hash_hex())
+
+        # enter pending queue since tx2 not in ready queue
+        tx3 = self.new_tx(nonce=cur_nonce+3)
+        assert_equal(self.send_tx(tx3), tx3.hash_hex())
+
+        pending_info = self.node.cfx_getAccountPendingInfo(addr)
+        assert_equal(pending_info["localNonce"], hex(cur_nonce))
+        assert_equal(pending_info["pendingCount"], hex(3))
+        assert_equal(pending_info["pendingNonce"], hex(cur_nonce))
+        assert_equal(pending_info["nextPendingTx"], tx0.hash_hex())
+
+
+        # generate a block to pack above txs.
+        self.generate_blocks_to_state(num_txs=4)
+
+        pending_info = self.node.cfx_getAccountPendingInfo(addr)
+        assert_equal(pending_info["localNonce"], hex(cur_nonce+2))
+        assert_equal(pending_info["pendingCount"], hex(1))
+        assert_equal(pending_info["pendingNonce"], hex(cur_nonce+3))
+        assert_equal(pending_info["nextPendingTx"], tx3.hash_hex())
+
+        # enter the ready queue since tx1 in ready queue,
+        # and also promote the tx3 into ready queue.
+        tx2 = self.new_tx(nonce=cur_nonce+2)
+        assert_equal(self.send_tx(tx2), tx2.hash_hex())
+
+        pending_info = self.node.cfx_getAccountPendingInfo(addr)
+        assert_equal(pending_info["localNonce"], hex(cur_nonce+2))
+        assert_equal(pending_info["pendingCount"], hex(2))
+        assert_equal(pending_info["pendingNonce"], hex(cur_nonce+2))
+        assert_equal(pending_info["nextPendingTx"], tx2.hash_hex())
+
+        # generate a block to pack above txs.
+        self.generate_blocks_to_state(num_txs=4)
+
+        pending_info = self.node.cfx_getAccountPendingInfo(addr)
+        assert_equal(pending_info["localNonce"], hex(cur_nonce+4))
+        assert_equal(pending_info["pendingCount"], hex(0))
+        assert_equal(pending_info["pendingNonce"], hex(0))
+        assert_equal(pending_info["nextPendingTx"], "0x0000000000000000000000000000000000000000000000000000000000000000")
+
+
+        self.generate_blocks_to_state(num_txs=4)
         for tx in [tx0, tx1, tx2, tx3]:
             assert_equal(self.get_transaction_receipt(tx.hash_hex()) is None, False)

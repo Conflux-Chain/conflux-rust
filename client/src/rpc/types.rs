@@ -48,9 +48,12 @@ pub use self::{
     status::Status,
     sync_graph_states::SyncGraphStates,
     token_supply_info::TokenSupplyInfo,
-    trace::{LocalizedBlockTrace, LocalizedTrace, LocalizedTransactionTrace},
+    trace::{
+        Action, LocalizedBlockTrace, LocalizedTrace, LocalizedTransactionTrace,
+    },
     trace_filter::TraceFilter,
     transaction::{
-        PackedOrExecuted, Transaction, TxPoolPendingInfo, TxWithPoolInfo,
+        AccountPendingInfo, PackedOrExecuted, Transaction, TxPoolPendingInfo,
+        TxWithPoolInfo,
     },
 };

@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-
 // Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Parity Ethereum.
 
@@ -130,7 +129,6 @@ pub mod codes {
     /// Call() execution error. This is clearly an application level error code,
     /// but we keep the error code to be ethereum rpc client compatible.
     pub const CALL_EXECUTION_ERROR: i64 = -32015;
-
 }
 
 pub fn unimplemented(details: Option<String>) -> Error {

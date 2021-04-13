@@ -30,7 +30,8 @@ bootnodes="cfxnode://604deed272ec2a6f75538f0852e9cd71c616b35655ea8331b5987b3cc68
 #     * Open port 12535 for ws rpc if `jsonrpc_ws_port` is not provided.
 #     * Open port 12536 for tcp rpc if `jsonrpc_tcp_port` is not provided.
 #     * Open port 12537 for http rpc if `jsonrpc_http_port` is not provided.
-#     * generate blocks automatically without PoW
+#     * generate blocks without PoW (either after receiving a transaction or
+#       in fixed period, see ``dev_block_interval_ms'')
 #     * Skip catch-up mode even there is no peer
 #
 # mode = ""
@@ -40,7 +41,10 @@ bootnodes="cfxnode://604deed272ec2a6f75538f0852e9cd71c616b35655ea8331b5987b3cc68
 #
 # mode = "dev"
 
-# Note that ``dev_block_interval_ms'' controls the mining rate in the dev mode.
+# ``dev_block_interval_ms'' controls the mining rate in the dev mode.
+#
+# If it's not set, blocks will only be generated after receiving a transaction.
+# Otherwise, blocks are automatically generated every ``dev_block_interval_ms'' ms.
 #
 # dev_block_interval_ms = 250
 

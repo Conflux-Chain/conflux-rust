@@ -203,6 +203,12 @@ impl TransactionPool {
             .unwrap_or((0.into(), 0.into()))
     }
 
+    pub fn get_account_pending_info(
+        &self, address: &Address,
+    ) -> Option<(U256, U256, U256, H256)> {
+        self.inner.read().get_account_pending_info(address)
+    }
+
     pub fn get_state_account_info(
         &self, address: &Address,
     ) -> StateDbResult<(U256, U256)> {

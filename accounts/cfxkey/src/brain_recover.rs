@@ -173,5 +173,4 @@ mod tests {
         assert_eq!(it.next(), Some("3 test c".to_owned()));
         assert_eq!(it.next(), None);
     }
-
 }

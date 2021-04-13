@@ -51,8 +51,8 @@ use crate::{
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
-            sign_call, Account as RpcAccount, BlameInfo, Block as RpcBlock,
-            BlockHashOrEpochNumber, Bytes, CallRequest,
+            sign_call, Account as RpcAccount, AccountPendingInfo, BlameInfo,
+            Block as RpcBlock, BlockHashOrEpochNumber, Bytes, CallRequest,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
             EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
             LogFilter as RpcFilter, PackedOrExecuted, Receipt as RpcReceipt,
@@ -66,6 +66,7 @@ use crate::{
 use cfx_addr::Network;
 use cfxcore::{
     consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
+    consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
     executive::revert_reason_decode,
     spec::genesis::{
         genesis_contract_address_four_year, genesis_contract_address_two_year,
@@ -384,7 +385,20 @@ impl RpcImpl {
         let tx =
             invalid_params_check("raw", Rlp::new(&raw.into_vec()).as_val())?;
 
-        self.send_transaction_with_signature(tx)
+        let r = self.send_transaction_with_signature(tx);
+        if r.is_ok() && self.config.dev_pack_tx_immediately {
+            // Try to pack and execute this new tx.
+            for _ in 0..DEFERRED_STATE_EPOCH_COUNT {
+                self.generate_one_block(
+                    1, /* num_txs */
+                    self.sync
+                        .get_synchronization_graph()
+                        .verification_config
+                        .max_block_size_in_bytes,
+                )?;
+            }
+        }
+        r
     }
 
     fn storage_at(
@@ -537,6 +551,27 @@ impl RpcImpl {
                 txgen.set_genesis_accounts_start_index(account_start_index);
                 Ok(Bytes::new("1".into()))
             }
+        }
+    }
+
+    pub fn account_pending_info(
+        &self, address: RpcAddress,
+    ) -> RpcResult<Option<AccountPendingInfo>> {
+        info!("RPC Request: cfx_getAccountPendingInfo({:?})", address);
+
+        match self.tx_pool.get_account_pending_info(&(address.into())) {
+            None => Ok(None),
+            Some((
+                local_nonce,
+                pending_count,
+                pending_nonce,
+                next_pending_tx,
+            )) => Ok(Some(AccountPendingInfo {
+                local_nonce: local_nonce.into(),
+                pending_count: pending_count.into(),
+                pending_nonce: pending_nonce.into(),
+                next_pending_tx: next_pending_tx.into(),
+            })),
         }
     }
 
@@ -1060,11 +1095,12 @@ impl RpcImpl {
                         revert_reason_decode(&executed.output)),
                     [b"Reverted. Execution output: ", &*executed.output].concat(),
                 ))
-            },
+            }
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
                 bail!(call_execution_error(
                     format! {"Can not estimate: transaction execution failed, \
-                     all gas will be charged (execution error: {:?})", e}.into(),
+                    all gas will be charged (execution error: {:?})", e}
+                    .into(),
                     format! {"{:?}", e}.into_bytes()
                 ))
             }
@@ -1383,6 +1419,7 @@ impl Cfx for CfxHandler {
             fn storage_at(&self, addr: RpcAddress, pos: H256, epoch_number: Option<EpochNumber>)
                 -> BoxFuture<Option<H256>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
+            fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<Option<AccountPendingInfo>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
             fn storage_root(&self, address: RpcAddress, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
