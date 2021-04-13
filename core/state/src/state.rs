@@ -306,16 +306,16 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
             )?;
 
         // Set the code.
-        self.require_or_set_code(&CodeAddress(*address, code_hash), None)?
-            .as_mut()
-            .map_or_else(
-                || Err(ErrorKind::IncompleteDatabase(*address).into()),
-                |value| {
-                    value.owner = owner;
-                    value.code = Arc::new(code);
-                    Ok(())
-                },
-            )
+        self.require_or_set_code(
+            &CodeAddress(*address, code_hash),
+            || Err(ErrorKind::IncompleteDatabase(*address).into()),
+            |value| {
+                value.owner = owner;
+                value.code = Arc::new(code);
+                Ok(())
+            },
+            None,
+        )
     }
 
     fn code_hash(&self, contract_address: &Address) -> Result<Option<H256>> {
@@ -558,20 +558,18 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         )
     }
 
-    fn require_or_set_code<'a>(
-        &'a mut self, code_address: &CodeAddress,
+    fn require_or_set_code<'a, D, F>(
+        &'a mut self, code_address: &CodeAddress, default: D, func: F,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
-    ) -> Result<
-        impl AsMut<
-            ModifyAndUpdate<
-                StateDbGeneric<StateDbStorage>,
-                /* TODO: Key, */ CodeInfo,
-            >,
-        >,
-    >
+    ) -> Result<()>
+    where
+        D: FnOnce() -> Result<()>,
+        F: FnOnce(&mut CodeInfo) -> Result<()>,
     {
         self.cache
-            .require_or_set_code(code_address, &mut self.db, debug_record)
+            .require_or_set_code(code_address, &mut self.db, debug_record)?
+            .as_mut()
+            .map_or_else(default, func)
     }
 }
 
