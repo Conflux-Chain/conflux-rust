@@ -236,19 +236,15 @@ impl StateObjectCache {
         )
     }
 
-    // require_or_set_code(code_address, code_owner, code, db, debug_record)
-
     pub fn require_or_set_code<'a, StateDb: StateDbOps>(
         &'a self, address: Address, code_owner: Address, code: Vec<u8>,
         db: &'a mut StateDb,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
     ) -> Result<()>
     {
-        let code_hash = keccak(&code);
-        let code_address = CodeAddress(address, code_hash);
         Self::require_or_set(
             &self.code_cache,
-            &code_address,
+            &CodeAddress(address, keccak(&code)),
             db,
             |_addr| Ok(None),
             debug_record,
