@@ -4,7 +4,7 @@
 
 ### RPC Improvements
 - Include `blockHash`, `epochHash`, `epochNumber`, `transaction_hash`, and `transactionPosition` for trace RPCs.
-Note that the data format returned by `trace_block` is incompatible with old versions.
+  Note that the data format returned by `trace_block` is incompatible with old versions.
 - Add new field `offset` in log filters used in `cfx_getLogs`.
   If specified, the response will skip the **last** `offset` logs.
   For instance, with 10 matching logs (`0..9`) and `offset=0x1, limit=0x5`, the response will contain logs `4..8`.
@@ -13,6 +13,16 @@ Note that the data format returned by `trace_block` is incompatible with old ver
 - Add a new parameter `subscription_epoch` to the `epochs` pubsub.
   The supported values are `"latest_mined"` (default) and `"latest_state"`.
 - Add `cfx_getAccountPendingInfo` to get pending transaction info for some account for better investigating pending tx problems.
+
+### Configuration Improvements
+- Allow immediately packing sent transactions in `dev` mode by keeping `dev_block_interval_ms` unset.
+  Note that setting `dev_block_interval_ms` will disable this immediate packing and generate blocks only periodically.
+  
+### Performance Improvements
+- Optimize the state implementation for better cache performance.
+
+### Bug fix
+- Fix a bug that makes running nodes in `dev` mode not generate blocks automatically.
 
 # 1.1.2
 
