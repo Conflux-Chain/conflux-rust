@@ -61,6 +61,12 @@ pub enum FilterError {
         min: u64,
     },
 
+    /// Block cannot be served as it was already pruned from db on a full node
+    // Use this when the corresponding epoch is not known.
+    BlockAlreadyPruned {
+        block_hash: H256,
+    },
+
     /// Block has not been executed yet
     BlockNotExecutedYet {
         block_hash: H256,
@@ -120,6 +126,9 @@ impl fmt::Display for FilterError {
                 "Epoch is smaller than the earliest epoch stored (epoch: {}, min: {})",
                 epoch, min,
             },
+            BlockAlreadyPruned { block_hash } => format! {
+                "Block {:?} has been pruned from db", block_hash,
+            },
             BlockNotExecutedYet { block_hash } => format! {
                 "Block {:?} is not executed yet", block_hash,
             },
@@ -140,7 +149,7 @@ impl error::Error for FilterError {
 
 /// Log event Filter.
 #[derive(Debug, PartialEq)]
-pub struct Filter {
+pub struct LogFilter {
     /// Search will be applied from this epoch number.
     pub from_epoch: EpochNumber,
 
@@ -163,45 +172,54 @@ pub struct Filter {
     /// If specified, log must contain one of these topics.
     pub topics: Vec<Option<Vec<H256>>>,
 
+    /// Logs offset
+    ///
+    /// If None, return all logs
+    /// If specified, should skip the *last* `n` logs.
+    pub offset: Option<usize>,
+
     /// Logs limit
     ///
     /// If None, return all logs
-    /// If specified, should only return *last* `n` logs.
+    /// If specified, should only return *last* `n` logs
+    /// after the offset has been applied.
     pub limit: Option<usize>,
 }
 
-impl Clone for Filter {
+impl Clone for LogFilter {
     fn clone(&self) -> Self {
         let mut topics = [None, None, None, None];
         for i in 0..4 {
             topics[i] = self.topics[i].clone();
         }
 
-        Filter {
+        LogFilter {
             from_epoch: self.from_epoch.clone(),
             to_epoch: self.to_epoch.clone(),
             block_hashes: self.block_hashes.clone(),
             address: self.address.clone(),
             topics: topics[..].to_vec(),
+            offset: self.offset,
             limit: self.limit,
         }
     }
 }
 
-impl Default for Filter {
+impl Default for LogFilter {
     fn default() -> Self {
-        Filter {
+        LogFilter {
             from_epoch: EpochNumber::Earliest,
             to_epoch: EpochNumber::LatestMined,
             block_hashes: None,
             address: None,
             topics: vec![None, None, None, None],
+            offset: None,
             limit: None,
         }
     }
 }
 
-impl Filter {
+impl LogFilter {
     /// Returns combinations of each address and topic.
     pub fn bloom_possibilities(&self) -> Vec<Bloom> {
         let blooms = match self.address {

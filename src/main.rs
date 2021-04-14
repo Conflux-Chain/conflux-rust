@@ -8,6 +8,7 @@ mod test;
 mod command;
 
 use crate::command::rpc::RpcCommand;
+use cfxcore::NodeType;
 use clap::{crate_version, load_yaml, App, ArgMatches};
 use client::{
     archive::ArchiveClient,
@@ -153,27 +154,25 @@ Current Version: {}
     );
 
     let client_handle: Box<dyn ClientTrait>;
-    client_handle = if matches.is_present("light") {
-        //FIXME: implement light client later
-        info!("Starting light client...");
-        LightClient::start(conf, exit.clone())
-            .map_err(|e| format!("failed to start light client: {:?}", e))?
-    } else if matches.is_present("archive") {
-        info!("Starting archive client...");
-        ArchiveClient::start(conf, exit.clone())
-            .map_err(|e| format!("failed to start archive client: {:?}", e))?
-    } else if matches.is_present("full") {
-        // todo this is to test full node in python code
-        // remove this branch when starts full node by default.
-        info!("Starting full client...");
-        FullClient::start(conf, exit.clone())
-            .map_err(|e| format!("failed to start full client: {:?}", e))?
-    } else {
-        info!("Starting archive client...");
-        ArchiveClient::start(conf, exit.clone())
-            .map_err(|e| format!("failed to start archive client: {:?}", e))?
+    client_handle = match conf.node_type() {
+        NodeType::Archive => {
+            info!("Starting archive client...");
+            ArchiveClient::start(conf, exit.clone()).map_err(|e| {
+                format!("failed to start archive client: {:?}", e)
+            })?
+        }
+        NodeType::Full => {
+            info!("Starting full client...");
+            FullClient::start(conf, exit.clone())
+                .map_err(|e| format!("failed to start full client: {:?}", e))?
+        }
+        NodeType::Light => {
+            info!("Starting light client...");
+            LightClient::start(conf, exit.clone())
+                .map_err(|e| format!("failed to start light client: {:?}", e))?
+        }
+        NodeType::Unknown => return Err("Unknown node type".into()),
     };
-
     client_methods::run(client_handle, exit);
 
     Ok(())

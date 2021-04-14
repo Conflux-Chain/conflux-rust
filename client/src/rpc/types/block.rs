@@ -2,11 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::Address as Base32Address;
+use super::RpcAddress;
 use cfx_addr::Network;
 use cfx_types::{H160, H256, U256, U64};
 use cfxcore::{
-    block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
+    block_data_manager::{BlockDataManager, DataVersionTuple},
     consensus::ConsensusGraphInner,
     pow, SharedConsensusGraph,
 };
@@ -94,7 +94,7 @@ pub struct Block {
     /// Distance to genesis
     pub height: U256,
     /// Author's address
-    pub miner: Base32Address,
+    pub miner: RpcAddress,
     /// State root hash
     pub deferred_state_root: H256,
     /// Root hash of all receipts in this block's epoch
@@ -155,10 +155,7 @@ impl Block {
                         &b.hash(),
                         false, /* update_cache */
                     ) {
-                    Some(BlockExecutionResultWithEpoch(
-                        _,
-                        execution_result,
-                    )) => {
+                    Some(DataVersionTuple(_, execution_result)) => {
                         let epoch_number =
                             consensus_inner.get_block_epoch_number(&b.hash());
 
@@ -241,7 +238,7 @@ impl Block {
                     false, /* update_cache */
                 );
             match maybe_results {
-                Some(BlockExecutionResultWithEpoch(_, execution_result)) => {
+                Some(DataVersionTuple(_, execution_result)) => {
                     let receipt = execution_result
                         .block_receipts
                         .receipts
@@ -257,7 +254,7 @@ impl Block {
             hash: H256::from(block_hash),
             parent_hash: H256::from(b.block_header.parent_hash().clone()),
             height: b.block_header.height().into(),
-            miner: Base32Address::try_from_h160(
+            miner: RpcAddress::try_from_h160(
                 *b.block_header.author(),
                 network,
             )?,
@@ -363,7 +360,7 @@ pub struct Header {
     /// Distance to genesis
     pub height: U256,
     /// Miner's address
-    pub miner: Base32Address,
+    pub miner: RpcAddress,
     /// State root hash
     pub deferred_state_root: H256,
     /// Root hash of all receipts in this block's epoch
@@ -416,7 +413,7 @@ impl Header {
             hash: H256::from(hash),
             parent_hash: H256::from(*h.parent_hash()),
             height: h.height().into(),
-            miner: Base32Address::try_from_h160(*h.author(), network)?,
+            miner: RpcAddress::try_from_h160(*h.author(), network)?,
             deferred_state_root: H256::from(*h.deferred_state_root()),
             deferred_receipts_root: H256::from(*h.deferred_receipts_root()),
             deferred_logs_bloom_hash: H256::from(*h.deferred_logs_bloom_hash()),
@@ -439,7 +436,7 @@ impl Header {
 
 #[cfg(test)]
 mod tests {
-    use super::{Base32Address, Block, BlockTransactions, Header};
+    use super::{Block, BlockTransactions, Header, RpcAddress};
     use crate::rpc::types::Transaction;
     use cfx_addr::Network;
     use cfx_types::{H256, U256};
@@ -454,11 +451,17 @@ mod tests {
                 Transaction::default(Network::Main).unwrap()
             ]);
         let serialized = serde_json::to_string(&t).unwrap();
-        assert_eq!(serialized, r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"transactionIndex":null,"from":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","contractCreated":null,"data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x0","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#);
+        assert_eq!(
+            serialized,
+            r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"transactionIndex":null,"from":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","contractCreated":null,"data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x0","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#
+        );
 
         let t = BlockTransactions::Hashes(vec![H256::default()]);
         let serialized = serde_json::to_string(&t).unwrap();
-        assert_eq!(serialized, r#"["0x0000000000000000000000000000000000000000000000000000000000000000"]"#);
+        assert_eq!(
+            serialized,
+            r#"["0x0000000000000000000000000000000000000000000000000000000000000000"]"#
+        );
     }
 
     #[test]
@@ -474,7 +477,7 @@ mod tests {
         let result_block_transactions = BlockTransactions::Full(vec![
             Transaction::default(Network::Main).unwrap(),
         ]);
-        let serialized = r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"cfx:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0sfbnjm2","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x0","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#;
+        let serialized = r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x0","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#;
         let deserialized_block_transactions: BlockTransactions =
             serde_json::from_str(serialized).unwrap();
         assert_eq!(result_block_transactions, deserialized_block_transactions);
@@ -486,7 +489,7 @@ mod tests {
             hash: H256::default(),
             parent_hash: H256::default(),
             height: 0.into(),
-            miner: Base32Address::null(Network::Main).unwrap(),
+            miner: RpcAddress::null(Network::Main).unwrap(),
             deferred_state_root: Default::default(),
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP.into(),
             deferred_logs_bloom_hash: cfx_types::KECCAK_EMPTY_BLOOM.into(),
@@ -507,18 +510,21 @@ mod tests {
         };
         let serialized_block = serde_json::to_string(&block).unwrap();
 
-        assert_eq!(serialized_block, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","gasUsed":null,"timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45","custom":[]}"#);
+        assert_eq!(
+            serialized_block,
+            r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","gasUsed":null,"timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45","custom":[]}"#
+        );
     }
 
     #[test]
     #[serial] // TODO: remove
     fn test_deserialize_block() {
-        let serialized = r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"cfx:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0sfbnjm2","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":"0x0","gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"stable":null,"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45","custom":[]}"#;
+        let serialized = r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":"0x0","gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"stable":null,"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45","custom":[]}"#;
         let result_block = Block {
             hash: H256::default(),
             parent_hash: H256::default(),
             height: 0.into(),
-            miner: Base32Address::null(Network::Main).unwrap(),
+            miner: RpcAddress::null(Network::Main).unwrap(),
             deferred_state_root: Default::default(),
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP.into(),
             deferred_logs_bloom_hash: cfx_types::KECCAK_EMPTY_BLOOM.into(),
@@ -548,7 +554,7 @@ mod tests {
             hash: H256::default(),
             parent_hash: H256::default(),
             height: 0.into(),
-            miner: Base32Address::null(Network::Main).unwrap(),
+            miner: RpcAddress::null(Network::Main).unwrap(),
             deferred_state_root: Default::default(),
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP.into(),
             deferred_logs_bloom_hash: cfx_types::KECCAK_EMPTY_BLOOM.into(),
@@ -565,6 +571,9 @@ mod tests {
         };
         let serialized_header = serde_json::to_string(&header).unwrap();
 
-        assert_eq!(serialized_header, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0"}"#);
+        assert_eq!(
+            serialized_header,
+            r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0"}"#
+        );
     }
 }

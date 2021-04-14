@@ -191,7 +191,7 @@ mod test_bit_producer {
             T: Send + Sync + BitSetLike,
         {
             if d == 0 {
-                assert!(us.split().1.is_none(), trail);
+                assert!(us.split().1.is_none(), "{}", trail);
                 *c += 1;
             } else {
                 for j in 1..(i + 1) {

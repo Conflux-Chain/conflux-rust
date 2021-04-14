@@ -3,13 +3,12 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    evm::Spec,
     executive::{
         contract_address, ExecutionOutcome, Executive, InternalContractMap,
         TransactOptions,
     },
     machine::Machine,
-    state::{CleanupMode, State, StateGeneric},
+    state::State,
     verification::{compute_receipts_root, compute_transaction_root},
     vm::{CreateContractAddress, Env},
 };
@@ -21,8 +20,9 @@ use cfx_parameters::{
         GENESIS_TOKEN_COUNT_IN_CFX, TWO_YEAR_UNLOCK_TOKEN_COUNT_IN_CFX,
     },
 };
+use cfx_state::{state_trait::*, CleanupMode};
 use cfx_statedb::{Result as DbResult, StateDb};
-use cfx_storage::{StorageManager, StorageManagerTrait, StorageStateTrait};
+use cfx_storage::{StorageManager, StorageManagerTrait};
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use keylib::KeyPair;
 use primitives::{
@@ -100,19 +100,17 @@ pub fn load_secrets_file(
     Ok(accounts)
 }
 
-pub fn initialize_internal_contract_accounts<
-    S: StorageStateTrait + Send + Sync + 'static,
->(
-    state: &mut StateGeneric<S>,
+pub fn initialize_internal_contract_accounts(
+    state: &mut dyn StateOpsTrait, contract_start_nonce: U256,
 ) {
     || -> DbResult<()> {
         {
-            for address in InternalContractMap::<S>::new().keys() {
+            for address in InternalContractMap::new().keys() {
                 state.new_contract_with_admin(
                     address,
                     /* No admin; admin = */ &Address::zero(),
                     /* balance = */ U256::zero(),
-                    state.contract_start_nonce(),
+                    contract_start_nonce,
                     Some(STORAGE_LAYOUT_REGULAR_V0),
                 )?;
             }
@@ -162,22 +160,28 @@ pub fn genesis_block(
     genesis_chain_id: Option<u32>,
 ) -> Block
 {
-    let mut state = State::new(
-        StateDb::new(storage_manager.get_state_for_genesis_write()),
-        Default::default(),
-        &Spec::new_spec(),
-        0, /* block_number */
-    )
-    .expect("Failed to initialize state");
+    let mut state =
+        State::new(StateDb::new(storage_manager.get_state_for_genesis_write()))
+            .expect("Failed to initialize state");
 
     let mut genesis_block_author = test_net_version;
     genesis_block_author.set_user_account_type_bits();
 
     let mut total_balance = U256::from(0);
-    initialize_internal_contract_accounts(&mut state);
+    initialize_internal_contract_accounts(
+        &mut state,
+        machine
+            .spec(/* block_number = */ 0)
+            .contract_start_nonce(/* block_number = */ 0),
+    );
     for (addr, balance) in genesis_accounts {
         state
-            .add_balance(&addr, &balance, CleanupMode::NoEmpty)
+            .add_balance(
+                &addr,
+                &balance,
+                CleanupMode::NoEmpty,
+                /* account_start_nonce = */ U256::zero(),
+            )
             .unwrap();
         total_balance += balance;
     }
@@ -202,6 +206,7 @@ pub fn genesis_block(
             &genesis_account_address,
             &genesis_account_init_balance,
             CleanupMode::NoEmpty,
+            /* account_start_nonce = */ U256::zero(),
         )
         .unwrap();
 
@@ -435,7 +440,6 @@ fn execute_genesis_transaction(
     transaction: &SignedTransaction, state: &mut State, machine: Arc<Machine>,
 ) {
     let env = Env::default();
-    let spec = Spec::new_spec();
     let internal_contract_map = InternalContractMap::new();
 
     let options = TransactOptions::with_no_tracing();
@@ -444,7 +448,7 @@ fn execute_genesis_transaction(
             state,
             &env,
             machine.as_ref(),
-            &spec,
+            &machine.spec(env.number),
             &internal_contract_map,
         )
         .transact(transaction, options)
@@ -459,7 +463,9 @@ fn execute_genesis_transaction(
     }
 }
 
-pub fn load_file(path: &String) -> Result<HashMap<Address, U256>, String> {
+pub fn load_file(
+    path: &String, address_parser: impl Fn(&str) -> Result<Address, String>,
+) -> Result<HashMap<Address, U256>, String> {
     let mut content = String::new();
     let mut file = File::open(path)
         .map_err(|e| format!("failed to open file: {:?}", e))?;
@@ -473,7 +479,7 @@ pub fn load_file(path: &String) -> Result<HashMap<Address, U256>, String> {
     match account_values {
         Value::Table(table) => {
             for (key, value) in table {
-                let addr = key.parse::<Address>().map_err(|e| {
+                let addr = address_parser(&key).map_err(|e| {
                     format!(
                         "failed to parse address: value = {}, error = {:?}",
                         key, e

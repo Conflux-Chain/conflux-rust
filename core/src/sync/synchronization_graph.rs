@@ -13,18 +13,17 @@ use crate::{
     statistics::SharedStatistics,
     sync::synchronization_protocol_handler::FutureBlockContainer,
     verification::*,
-    ConsensusGraph, NodeType, Notifications,
+    ConsensusGraph, Notifications,
 };
-use cfx_parameters::sync::OLD_ERA_BLOCK_GC_BATCH_SIZE;
 use cfx_types::{H256, U256};
-use dag::{Graph, RichDAG, RichTreeGraph, TreeGraph};
+use dag::{Graph, RichDAG, RichTreeGraph, TreeGraph, DAG};
 use futures::executor::block_on;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
     register_meter_with_group, register_queue, Meter, MeterTimer, Queue,
 };
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use primitives::{
     transaction::SignedTransaction, Block, BlockHeader, EpochNumber,
 };
@@ -164,6 +163,14 @@ pub struct SynchronizationGraphInner {
     pub not_ready_blocks_frontier: UnreadyBlockFrontier,
     pub old_era_blocks_frontier: VecDeque<usize>,
     pub old_era_blocks_frontier_set: HashSet<usize>,
+
+    /// Set to `true` in `CatchUpCheckpointPhase` and
+    /// `CatchUpFillBlockBodyPhase` so that sync graph and consensus graph
+    /// remain unchanged for consistency.
+    pub locked_for_catchup: bool,
+    /// The set of blocks that we need to download block bodies in
+    /// `CatchUpFillBlockBodyPhase`.
+    pub block_to_fill_set: HashSet<H256>,
     machine: Arc<Machine>,
 }
 
@@ -201,6 +208,8 @@ impl SynchronizationGraphInner {
             not_ready_blocks_frontier: UnreadyBlockFrontier::new(),
             old_era_blocks_frontier: Default::default(),
             old_era_blocks_frontier_set: Default::default(),
+            block_to_fill_set: Default::default(),
+            locked_for_catchup: false,
             machine,
         };
         let genesis_hash = genesis_header.hash();
@@ -312,12 +321,13 @@ impl SynchronizationGraphInner {
             for child in children {
                 self.arena[child].parent = NULL;
                 self.arena[child].parent_reclaimed = true;
-                if self.arena[child].graph_status == BLOCK_GRAPH_READY {
-                    // We can only reclaim graph-ready blocks
-                    self.old_era_blocks_frontier.push_back(child);
-                    assert!(!self.old_era_blocks_frontier_set.contains(&child));
-                    self.old_era_blocks_frontier_set.insert(child);
-                }
+                // We will check `is_graph_ready_in_db` before garbage
+                // collecting the blocks in `old_era_blocks_frontier`,
+                // so we do not need to check graph-ready-related status here
+                // before inserting them.
+                self.old_era_blocks_frontier.push_back(child);
+                assert!(!self.old_era_blocks_frontier_set.contains(&child));
+                self.old_era_blocks_frontier_set.insert(child);
             }
 
             let referrers: Vec<usize> =
@@ -342,194 +352,6 @@ impl SynchronizationGraphInner {
         if era_genesis_in_frontier {
             self.old_era_blocks_frontier.push_front(era_genesis);
         }
-    }
-
-    // This function tries to recover graph-unready blocks to be ready
-    // again by checking whether the parent and referees of a graph-unready
-    // block are all graph-ready based on their on-disk information.
-    // There are only two cases to consider. For clarity, let's consider
-    // block `young` and block `old`. `young`->`old`, where -> can be
-    // parent or reference edge.
-    // 1) `young` and `old` both exist in synchronization graph once,
-    //    but `old` is removed out of memory by memory reclamation
-    //    mechanism for handling era forward movement, and `old` must
-    //    be already graph-ready in this case.
-
-    //    Then, if -> is parent edge,
-    //    `young`.parent == NULL && `young`.parent_reclaimed == true.
-    //    So, this predicate assures `old` to be graph-ready.
-    //
-    //    If -> is reference edge, `young`.pending_referee_count
-    //    has removed the 1 of `old`, and `old` is removed from
-    //    `young`.referees. Therefore, we do not really care about
-    //    whether `old` is graph-ready or not, and only need to
-    //    consider other edges of `young`.
-    //
-    // 2) `old` has already not existed in memory when `young`
-    //    comes to synchronization graph. In this case, `old` is
-    //    graph-ready if and only if `old`.seq_num < genesis_seq_num
-    //    or `old`.instance_id == current_instance_id.
-    //
-    // The graph-ready is header-graph-ready in phases
-    // `CatchUpRecoverBlockHeaderFromDB` or `CatchUpSyncBlockHeader`.
-    // And it is block-graph-ready for other phase.
-    fn try_recover_graph_unready_block(
-        &mut self,
-    ) -> (Vec<usize>, Vec<usize>, Vec<usize>) {
-        let mut graph_ready_blocks = Vec::new();
-        let mut header_graph_ready_blocks = Vec::new();
-        let mut invalid_blocks = Vec::new();
-
-        let data_man = self.data_man.as_ref();
-
-        // Get the sequence number of genesis block.
-        // FIXME: we may store `genesis_sequence_number` in data_man to avoid db
-        // access.
-        let genesis_hash = self.data_man.get_cur_consensus_era_genesis_hash();
-        let genesis_seq_num = self
-            .data_man
-            .local_block_info_by_hash(&genesis_hash)
-            .expect("local_block_info for genesis must exist")
-            .get_seq_num();
-
-        // This function decides graph-ready based on block info from db
-        // which is persisted after a block enters consensus graph.
-        // If the current synchronization phase is
-        // `CatchUpRecoverBlockHeaderFromDB` or `CatchUpSyncBlockHeader`, this
-        // function returns true only if the block is in `HEADER_GRAPH_READY`,
-        // because in these phases, header-graph-ready block can be sent into
-        // consensus graph.
-        // If the current synchronization phase is `CatchUpRecoverBlockFromDB`
-        // or `CatchUpSyncBlock` or `Normal`, this function returns true only if
-        // the block is in `BLOCK_GRAPH_READY`, because in these phases, only
-        // block-graph-ready block can be put into consensus graph.
-        let mut is_graph_ready =
-            |parent_or_referee_hash: &H256, index: &usize| {
-                if let Some(info) =
-                    data_man.local_block_info_by_hash(parent_or_referee_hash)
-                {
-                    if info.get_status() == BlockStatus::Invalid {
-                        invalid_blocks.push(*index);
-                        false
-                    } else {
-                        info.get_seq_num() < genesis_seq_num
-                            || info.get_instance_id()
-                                == data_man.get_instance_id()
-                    }
-                } else {
-                    false
-                }
-            };
-
-        for index in self.not_ready_blocks_frontier.get_frontier() {
-            let parent_hash = self.arena[*index].block_header.parent_hash();
-
-            // No need to recover `BLOCK_HEADER_GRAPH_READY` blocks
-            if self.arena[*index].graph_status >= BLOCK_HEADER_GRAPH_READY {
-                continue;
-            }
-
-            // check whether parent is
-            // `BLOCK_GRAPH_READY`/`BLOCK_HEADER_GRAPH_READY`
-            // 1. `parent_reclaimed==true`, during recovery, parent is not in
-            // the future of the current checkpoint.
-            // 2. parent not in memory and not invalid in disk (assume this
-            // block was `BLOCK_GRAPH_READY`/`BLOCK_HEADER_GRAPH_READY`)
-            // 3. parent in memory and status is
-            // `BLOCK_GRAPH_READY`/`BLOCK_HEADER_GRAPH_READY`
-            let (parent_block_graph_ready, parent_header_graph_ready) = {
-                if self.arena[*index].parent == NULL {
-                    if self.arena[*index].parent_reclaimed
-                        || is_graph_ready(parent_hash, index)
-                    {
-                        (true, true)
-                    } else {
-                        (false, false)
-                    }
-                } else {
-                    let parent = self.arena[*index].parent;
-                    (
-                        self.arena[parent].graph_status == BLOCK_GRAPH_READY,
-                        self.arena[parent].graph_status
-                            >= BLOCK_HEADER_GRAPH_READY,
-                    )
-                }
-            };
-
-            if !parent_block_graph_ready && !parent_header_graph_ready {
-                continue;
-            } else if self.arena[*index].parent == NULL {
-                self.arena[*index].parent_reclaimed = true;
-            }
-
-            // check whether referees are `BLOCK_GRAPH_READY` /
-            // `BLOCK_HEADER_GRAPH_READY`  1. referees which are in
-            // memory and status is BLOCK_GRAPH_READY  2. referees
-            // which are not in memory and not invalid in disk
-            // (assume these blocks are BLOCK_GRAPH_READY)
-            let mut referee_block_graph_ready = true;
-            let mut referee_header_graph_ready = true;
-            if self.arena[*index].pending_referee_count == 0 {
-                // since all relcaimed blocks are all BLOCK_GRAPH_READY, only
-                // need to check those in memory block
-                for referee in self.arena[*index].referees.iter() {
-                    referee_block_graph_ready &=
-                        self.arena[*referee].graph_status == BLOCK_GRAPH_READY;
-                    referee_header_graph_ready &= self.arena[*referee]
-                        .graph_status
-                        >= BLOCK_HEADER_GRAPH_READY;
-                }
-            } else {
-                let mut referee_hash_in_mem = HashSet::new();
-                for referee in self.arena[*index].referees.iter() {
-                    referee_block_graph_ready &=
-                        self.arena[*referee].graph_status == BLOCK_GRAPH_READY;
-                    referee_header_graph_ready &= self.arena[*referee]
-                        .graph_status
-                        >= BLOCK_HEADER_GRAPH_READY;
-                    referee_hash_in_mem
-                        .insert(self.arena[*referee].block_header.hash());
-                }
-
-                for referee_hash in
-                    self.arena[*index].block_header.referee_hashes()
-                {
-                    if !referee_hash_in_mem.contains(referee_hash)
-                        && (referee_block_graph_ready
-                            || referee_header_graph_ready)
-                    {
-                        let graph_ready = is_graph_ready(referee_hash, index);
-                        referee_block_graph_ready &= graph_ready;
-                        referee_header_graph_ready &= graph_ready;
-                    }
-                }
-            }
-
-            if parent_header_graph_ready && referee_header_graph_ready {
-                // do check
-                let r = self.verify_header_graph_ready_block(*index);
-                if r.is_err() {
-                    continue;
-                }
-                // recover all ready blocks as BLOCK_HEADER_GRAPH_READY first so
-                // that the status can be properly propagated
-                header_graph_ready_blocks.push(*index);
-            }
-
-            if parent_block_graph_ready
-                && referee_block_graph_ready
-                && self.arena[*index].block_ready
-            {
-                // recover as BLOCK_GRAPH_READY
-                graph_ready_blocks.push(*index);
-            }
-        }
-
-        (
-            graph_ready_blocks,
-            header_graph_ready_blocks,
-            invalid_blocks,
-        )
     }
 
     pub fn insert_invalid(&mut self, header: Arc<BlockHeader>) -> usize {
@@ -685,8 +507,6 @@ impl SynchronizationGraphInner {
             return false;
         }
 
-        // FIXME: we may store `genesis_sequence_number` in data_man to avoid db
-        // access.
         let genesis_hash = self.data_man.get_cur_consensus_era_genesis_hash();
         let genesis_seq_num = self
             .data_man
@@ -929,6 +749,9 @@ impl SynchronizationGraphInner {
             let hash = self.arena[*index].block_header.hash();
             self.not_ready_blocks_frontier.remove(index);
             self.old_era_blocks_frontier_set.remove(index);
+            // This include invalid blocks and blocks not received after a long
+            // time.
+            self.block_to_fill_set.remove(&hash);
 
             let parent = self.arena[*index].parent;
             if parent != NULL {
@@ -1026,7 +849,6 @@ pub struct SynchronizationGraph {
     pub consensus: SharedConsensusGraph,
     pub data_man: Arc<BlockDataManager>,
     pub pow: Arc<PowComputer>,
-    pub initial_missed_block_hashes: Mutex<HashSet<H256>>,
     pub verification_config: VerificationConfig,
     pub sync_config: SyncGraphConfig,
     pub statistics: SharedStatistics,
@@ -1037,25 +859,19 @@ pub struct SynchronizationGraph {
 
     /// Channel used to send block hashes to `ConsensusGraph` and PubSub.
     /// Each element is <block_hash, ignore_body>
-    new_block_hashes: Arc<Channel<(H256, bool)>>,
+    new_block_hashes: Arc<Channel<H256>>,
 
     /// The blocks whose timestamps are near future.
     /// They will be inserted into sync graph inner at their timestamp.
     pub future_blocks: FutureBlockContainer,
 
-    /// whether it is a archive node or full node
-    node_type: NodeType,
     machine: Arc<Machine>,
 }
 
 impl MallocSizeOf for SynchronizationGraph {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         let inner_size = self.inner.read().size_of(ops);
-        let initial_missed_block_hashes_size =
-            self.initial_missed_block_hashes.lock().size_of(ops);
-        let mut malloc_size = inner_size
-            + self.data_man.size_of(ops)
-            + initial_missed_block_hashes_size;
+        let mut malloc_size = inner_size + self.data_man.size_of(ops);
 
         // TODO: Add statistics for consortium.
         if !self.is_consortium() {
@@ -1079,8 +895,7 @@ impl SynchronizationGraph {
         consensus: SharedConsensusGraph,
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
         pow: Arc<PowComputer>, sync_config: SyncGraphConfig,
-        notifications: Arc<Notifications>, node_type: NodeType,
-        machine: Arc<Machine>,
+        notifications: Arc<Notifications>, machine: Arc<Machine>,
     ) -> Self
     {
         let data_man = consensus.get_data_manager().clone();
@@ -1110,14 +925,12 @@ impl SynchronizationGraph {
             ),
             data_man: data_man.clone(),
             pow: pow.clone(),
-            initial_missed_block_hashes: Mutex::new(HashSet::new()),
             verification_config,
             sync_config,
             consensus: consensus.clone(),
             statistics: consensus.get_statistics().clone(),
             consensus_unprocessed_count: consensus_unprocessed_count.clone(),
             new_block_hashes: notifications.new_block_hashes.clone(),
-            node_type,
             machine,
         };
 
@@ -1131,7 +944,7 @@ impl SynchronizationGraph {
                 // 1. It will almost make sure that the self mined block being processed first
                 //
                 // 2. In case of a DoS attack that a malicious player releases a large chunk of old blocks. This strategy will make the consensus to process the meaningful blocks first.
-                let mut priority_queue: BinaryHeap<(u64, H256, bool)> = BinaryHeap::new();
+                let mut priority_queue: BinaryHeap<(u64, H256)> = BinaryHeap::new();
                 let mut reverse_map : HashMap<H256, Vec<H256>> = HashMap::new();
                 let mut counter_map = HashMap::new();
 
@@ -1153,7 +966,7 @@ impl SynchronizationGraph {
 
                         match maybe_item {
                             // FIXME: We need to investigate why duplicate hash may send to the consensus worker
-                            Ok((hash, ignore_body)) => if !reverse_map.contains_key(&hash) {
+                            Ok(hash) => if !reverse_map.contains_key(&hash) {
                                 debug!("Worker thread receive: block = {}", hash);
                                 let header = data_man.block_header_by_hash(&hash).expect("Header must exist before sending to the consensus worker!");
                                 let mut cnt: usize = 0;
@@ -1171,9 +984,9 @@ impl SynchronizationGraph {
                                 reverse_map.insert(hash.clone(), Vec::new());
                                 if cnt == 0 {
                                     let epoch_number = consensus.get_block_epoch_number(parent_hash).unwrap_or(0);
-                                    priority_queue.push((epoch_number, hash, ignore_body));
+                                    priority_queue.push((epoch_number, hash));
                                 } else {
-                                    counter_map.insert(hash, (cnt, ignore_body));
+                                    counter_map.insert(hash, cnt);
                                 }
                             } else {
                                 warn!("Duplicate block = {} sent to the consensus worker", hash);
@@ -1182,25 +995,22 @@ impl SynchronizationGraph {
                             Err(TryRecvError::Closed) => break 'outer,
                         }
                     }
-                    if let Some((_, hash, ignore_body)) = priority_queue.pop() {
+                    if let Some((_, hash)) = priority_queue.pop() {
                         CONSENSUS_WORKER_QUEUE.dequeue(1);
                         let successors = reverse_map.remove(&hash).unwrap();
                         for succ in successors {
                             let cnt_tuple = counter_map.get_mut(&succ).unwrap();
-                            cnt_tuple.0 -= 1;
-                            if cnt_tuple.0 == 0 {
-                                let ignore_body = cnt_tuple.1;
+                            *cnt_tuple -= 1;
+                            if *cnt_tuple == 0 {
                                 counter_map.remove(&succ);
                                 let header_succ = data_man.block_header_by_hash(&succ).expect("Header must exist before sending to the consensus worker!");
                                 let parent_succ = header_succ.parent_hash();
                                 let epoch_number = consensus.get_block_epoch_number(parent_succ).unwrap_or(0);
-                                priority_queue.push((epoch_number, succ, ignore_body));
+                                priority_queue.push((epoch_number, succ));
                             }
                         }
                         consensus.on_new_block(
                             &hash,
-                            ignore_body,
-                            true, /* update_best_info */
                         );
                         consensus_unprocessed_count.fetch_sub(1, Ordering::SeqCst);
                     }
@@ -1242,31 +1052,11 @@ impl SynchronizationGraph {
             .set_to_be_propagated_transactions(transactions);
     }
 
-    pub fn try_remove_old_era_blocks_from_disk(&self) {
-        let mut num_of_blocks_to_remove = OLD_ERA_BLOCK_GC_BATCH_SIZE;
-        while let Some(hash) = self.consensus.retrieve_old_era_blocks() {
-            // only full node should remove blocks and receipts in old eras
-            if let NodeType::Full = self.node_type {
-                // remove block body in memory cache and db
-                self.data_man
-                    .remove_block_body(&hash, true /* remove_db */);
-                self.data_man
-                    .remove_block_result(&hash, true /* remove_db */);
-            }
-            self.data_man.remove_epoch_execution_context_from_db(&hash);
-            num_of_blocks_to_remove -= 1;
-            if num_of_blocks_to_remove == 0 {
-                break;
-            }
-        }
-    }
-
     /// In full/archive node, this function can be invoked during
-    /// CatchUpRecoverBlockHeaderFromDbPhase phase and
-    /// CatchUpRecoverBlockFromDbPhase phase.
-    /// It tries to construct the consensus graph based on block/header
+    /// CatchUpRecoverBlockHeaderFromDbPhase phase.
+    /// It tries to construct the consensus graph based on header
     /// information stored in db.
-    pub fn recover_graph_from_db(&self, header_only: bool) {
+    pub fn recover_graph_from_db(&self) {
         info!("Start fast recovery of the block DAG from database");
 
         // Recover the initial sequence number in consensus graph
@@ -1293,31 +1083,7 @@ impl SynchronizationGraph {
         );
 
         // Get terminals stored in db.
-        let terminals_opt = if header_only {
-            // Recover from both the header terminal and body terminal.
-            // If a full node crashes in the header sync phase, the header
-            // terminal should be further than the body terminal.
-            // If it crashes after entering NormalSyncPhase, the body terminal
-            // should be further than the header terminal.
-            let mut terminals = Vec::new();
-            if let Some(header_terminals) =
-                self.data_man.header_terminals_from_db()
-            {
-                terminals.extend(header_terminals);
-            }
-            if let Some(block_terminals) =
-                self.data_man.block_terminals_from_db()
-            {
-                terminals.extend(block_terminals);
-            }
-            if terminals.is_empty() {
-                None
-            } else {
-                Some(terminals)
-            }
-        } else {
-            self.data_man.block_terminals_from_db()
-        };
+        let terminals_opt = self.data_man.terminals_from_db();
         if terminals_opt.is_none() {
             return;
         }
@@ -1367,46 +1133,16 @@ impl SynchronizationGraph {
                 }
             }
 
-            // Insert headers or full blocks depending on our phase.
-            // Note that if we have headers in db for recover block phase, we
-            // will not insert the headers, so the blocks can be
-            // retrieved later.
-            let get_and_insert = |hash| {
-                if header_only {
-                    self.data_man.block_header_by_hash(hash).map(|header| {
-                        self.insert_block_header(
-                            &mut header.as_ref().clone(),
-                            true,  /* need_to_verify */
-                            false, /* bench_mode */
-                            true,  /* insert_to_consensus */
-                            false, /* persistent */
-                        );
-                        header
-                    })
-                } else {
-                    self.data_man
-                        .block_by_hash(hash, true /* update_cache */)
-                        .map(|block| {
-                            let mut header = block.block_header.clone();
-                            self.insert_block_header(
-                                &mut header,
-                                true,  /* need_to_verify */
-                                false, /* bench_mode */
-                                false, /* insert_to_consensus */
-                                false, /* persistent */
-                            );
-                            self.insert_block(
-                                block.as_ref().clone(),
-                                true,  /* need_to_verify */
-                                false, /* persistent */
-                                true,  /* recover_from_db */
-                            );
-                            Arc::new(header)
-                        })
-                }
-            };
-
-            if let Some(block_header) = get_and_insert(&hash) {
+            if let Some(block_header) =
+                self.data_man.block_header_by_hash(&hash)
+            {
+                self.insert_block_header(
+                    &mut block_header.as_ref().clone(),
+                    true,  /* need_to_verify */
+                    false, /* bench_mode */
+                    true,  /* insert_to_consensus */
+                    false, /* persistent */
+                );
                 let parent = block_header.parent_hash().clone();
                 let referees = block_header.referee_hashes().clone();
                 if !visited_blocks.contains(&parent) {
@@ -1424,30 +1160,11 @@ impl SynchronizationGraph {
             }
         }
 
-        debug!("Initial missed blocks {:?}", missed_hashes);
-        *self.initial_missed_block_hashes.lock() = missed_hashes;
-
-        // Resolve out-of-era dependencies for graph-unready blocks.
-        self.resolve_outside_dependencies(
-            true,        /* recover_from_db */
-            header_only, /* insert_header_into_consensus */
-        );
         debug!(
             "Current frontier after recover from db: {:?}",
             self.inner.read().not_ready_blocks_frontier.get_frontier()
         );
 
-        info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
-        if !header_only && !self.is_consortium() {
-            // Rebuild pivot chain state info.
-            self.consensus.construct_pivot_state();
-        }
-        self.consensus.update_best_info();
-        self.consensus
-            .get_tx_pool()
-            .notify_new_best_info(self.consensus.best_info())
-            // FIXME: propogate error.
-            .expect(&concat!(file!(), ":", line!(), ":", column!()));
         info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
     }
 
@@ -1547,6 +1264,13 @@ impl SynchronizationGraph {
                     continue;
                 }
 
+                // Maintain `old_era_blocks_frontier` for future garbage
+                // collection after making a checkpoint.
+                if inner.arena[index].parent_reclaimed {
+                    inner.old_era_blocks_frontier.push_back(index);
+                    inner.old_era_blocks_frontier_set.insert(index);
+                }
+
                 // Note that when called by `insert_block_header` we have to
                 // insert header here immediately instead of
                 // after the loop because its children may
@@ -1566,10 +1290,8 @@ impl SynchronizationGraph {
                     self.consensus_unprocessed_count
                         .fetch_add(1, Ordering::SeqCst);
                     assert!(
-                        self.new_block_hashes.send((
-                            inner.arena[index].block_header.hash(),
-                            true, /* ignore_body */
-                        )),
+                        self.new_block_hashes
+                            .send(inner.arena[index].block_header.hash(),),
                         "consensus receiver dropped"
                     );
 
@@ -1626,6 +1348,10 @@ impl SynchronizationGraph {
         let _timer = MeterTimer::time_func(SYNC_INSERT_HEADER.as_ref());
         self.statistics.inc_sync_graph_inserted_header_count();
         let inner = &mut *self.inner.write();
+        if inner.locked_for_catchup {
+            // Ignore received headers when we are downloading block bodies.
+            return (BlockHeaderInsertionResult::TemporarySkipped, Vec::new());
+        }
         let hash = header.hash();
 
         let (invalid, local_info_opt) = self.data_man.verified_invalid(&hash);
@@ -1771,14 +1497,8 @@ impl SynchronizationGraph {
 
     fn set_graph_ready(
         &self, inner: &mut SynchronizationGraphInner, index: usize,
-        recover_from_db: bool,
-    )
-    {
+    ) {
         inner.arena[index].graph_status = BLOCK_GRAPH_READY;
-        if inner.arena[index].parent_reclaimed {
-            inner.old_era_blocks_frontier.push_back(index);
-            inner.old_era_blocks_frontier_set.insert(index);
-        }
 
         // maintain not_ready_blocks_frontier
         inner.not_ready_blocks_frontier.remove(&index);
@@ -1788,46 +1508,28 @@ impl SynchronizationGraph {
 
         let h = inner.arena[index].block_header.hash();
         debug!("Block {:?} is graph ready", h);
-        // If this block is recovered from db, we need to explicitly call
-        // consensus.on_new_block since we need to call
-        // consensus.construct_pivot_state after all the blocks are inserted
-        // into consensus graph; Otherwise Consensus Worker can handle the
-        // block in order asynchronously. In addition, if this block is
-        // recovered from db, we can simply ignore body.
-        if !recover_from_db {
-            CONSENSUS_WORKER_QUEUE.enqueue(1);
+        CONSENSUS_WORKER_QUEUE.enqueue(1);
 
-            self.consensus_unprocessed_count
-                .fetch_add(1, Ordering::SeqCst);
-            assert!(
-                self.new_block_hashes.send((h, false /* ignore_body */)),
-                "consensus receiver dropped"
-            );
+        self.consensus_unprocessed_count
+            .fetch_add(1, Ordering::SeqCst);
+        assert!(self.new_block_hashes.send(h), "consensus receiver dropped");
 
-            if inner.config.enable_state_expose {
-                STATE_EXPOSER.sync_graph.lock().ready_block_vec.push(
-                    SyncGraphBlockState {
-                        block_hash: h,
-                        parent: inner.arena[index]
-                            .block_header
-                            .parent_hash()
-                            .clone(),
-                        referees: inner.arena[index]
-                            .block_header
-                            .referee_hashes()
-                            .clone(),
-                        nonce: inner.arena[index].block_header.nonce(),
-                        timestamp: inner.arena[index].block_header.timestamp(),
-                        adaptive: inner.arena[index].block_header.adaptive(),
-                    },
-                );
-            }
-        } else {
-            // best info only needs to be updated after all blocks have been
-            // inserted into consensus
-            self.consensus.on_new_block(
-                &h, true,  /* ignore_body */
-                false, /* update_best_info */
+        if inner.config.enable_state_expose {
+            STATE_EXPOSER.sync_graph.lock().ready_block_vec.push(
+                SyncGraphBlockState {
+                    block_hash: h,
+                    parent: inner.arena[index]
+                        .block_header
+                        .parent_hash()
+                        .clone(),
+                    referees: inner.arena[index]
+                        .block_header
+                        .referee_hashes()
+                        .clone(),
+                    nonce: inner.arena[index].block_header.nonce(),
+                    timestamp: inner.arena[index].block_header.timestamp(),
+                    adaptive: inner.arena[index].block_header.adaptive(),
+                },
             );
         }
     }
@@ -1835,7 +1537,7 @@ impl SynchronizationGraph {
     /// subroutine called by `insert_block` and `remove_expire_blocks`
     fn propagate_graph_status(
         &self, inner: &mut SynchronizationGraphInner,
-        frontier_index_list: Vec<usize>, recover_from_db: bool,
+        frontier_index_list: Vec<usize>,
     ) -> HashSet<usize>
     {
         let mut queue = VecDeque::new();
@@ -1855,7 +1557,7 @@ impl SynchronizationGraph {
                     index,
                 );
             } else if inner.new_to_be_block_graph_ready(index) {
-                self.set_graph_ready(inner, index, recover_from_db);
+                self.set_graph_ready(inner, index);
                 for child in &inner.arena[index].children {
                     debug_assert!(
                         inner.arena[*child].graph_status < BLOCK_GRAPH_READY
@@ -1962,8 +1664,24 @@ impl SynchronizationGraph {
             }
         }
 
-        let invalid_set =
-            self.propagate_graph_status(inner, vec![me], recover_from_db);
+        // If we are locked for catch-up, make sure no new block will enter sync
+        // graph.
+        if inner.locked_for_catchup {
+            if inner.arena[me].graph_status == BLOCK_INVALID {
+                let invalid_set = self.propagate_graph_status(inner, vec![me]);
+                // Invalid blocks will also be removed from
+                // `block_to_fill_set`
+                // in `process_invalid_blocks`.
+                inner.process_invalid_blocks(&invalid_set);
+                return BlockInsertionResult::Invalid;
+            } else {
+                debug!("Downloaded block body for {:?}", hash);
+                inner.block_to_fill_set.remove(&hash);
+                return BlockInsertionResult::AlreadyProcessed;
+            }
+        }
+
+        let invalid_set = self.propagate_graph_status(inner, vec![me]);
 
         // Post-processing invalid blocks.
         inner.process_invalid_blocks(&invalid_set);
@@ -2009,87 +1727,6 @@ impl SynchronizationGraph {
     /// only used in test.
     pub fn block_count(&self) -> usize { self.data_man.cached_block_count() }
 
-    /// Resolve outside parent or referees dependencies for blocks which
-    /// are not graph-ready.
-    /// The parameter `recover_from_db` is needed for deciding to invoke
-    /// consensus.on_new_block() in sync or async mode for the blocks that
-    /// just become graph-ready. When  `recover_from_db` is true, the
-    /// consensus.on_new_block() will be called in sync mode with
-    /// `ignore_body` being true.
-    pub fn resolve_outside_dependencies(
-        &self, recover_from_db: bool, insert_header_to_consensus: bool,
-    ) -> Vec<H256> {
-        // Maintains the set of blocks that just become block-graph-ready
-        // and may need to be relayed to peers.
-        let mut to_relay_blocks = Vec::new();
-
-        loop {
-            let inner = &mut *self.inner.write();
-            debug!(
-                "not_ready_blocks_frontier: {:?}",
-                inner.not_ready_blocks_frontier.get_frontier()
-            );
-            inner.not_ready_blocks_frontier.reset_update_state();
-            let (
-                new_graph_ready_blocks,
-                mut new_header_graph_ready_blocks,
-                invalid_blocks,
-            ) = inner.try_recover_graph_unready_block();
-            info!(
-                "Recover blocks into graph_ready {:?}",
-                new_graph_ready_blocks
-            );
-            info!(
-                "Recover blocks into header graph_ready {:?}",
-                new_header_graph_ready_blocks
-            );
-
-            for index in &new_graph_ready_blocks {
-                to_relay_blocks.push(inner.arena[*index].block_header.hash());
-            }
-
-            for index in &new_header_graph_ready_blocks {
-                inner.arena[*index].pending_referee_count = 0;
-            }
-
-            for index in &invalid_blocks {
-                // propagate_header_graph_status will also pass BLOCK_INVALID to
-                // descendants
-                inner.arena[*index].graph_status = BLOCK_INVALID;
-                new_header_graph_ready_blocks.push(*index);
-            }
-            // propagate BLOCK_HEADER_GRAPH_READY status to descendants
-            let (invalid_set, need_to_relay) = self
-                .propagate_header_graph_status(
-                    inner,
-                    new_header_graph_ready_blocks,
-                    true, /* need_to_verify */
-                    NULL, /* header_index_to_insert */
-                    insert_header_to_consensus,
-                    true, /* persistent */
-                );
-            inner.process_invalid_blocks(&invalid_set);
-            for hash in need_to_relay {
-                to_relay_blocks.push(hash);
-            }
-
-            // since in `new_to_be_block_graph_ready`, we only check
-            // graph_status and parent_reclaimed
-            // in function `propagate_graph_status` will change graph status
-            // from BLOCK_HEADER_GRAPH_READY to BLOCK_GRAPH_READY
-            let invalid_set = self.propagate_graph_status(
-                inner,
-                new_graph_ready_blocks,
-                recover_from_db,
-            );
-            assert!(invalid_set.len() == 0);
-            if !inner.not_ready_blocks_frontier.updated() {
-                break;
-            }
-        }
-        to_relay_blocks
-    }
-
     /// Remove all blocks which have not been updated for a long time. We
     /// maintain a set `not_ready_blocks_frontier` which is the root nodes in
     /// the parental tree formed by not graph ready blocks. Find all expire
@@ -2131,6 +1768,83 @@ impl SynchronizationGraph {
 
     pub fn is_consensus_worker_busy(&self) -> bool {
         self.consensus_unprocessed_count.load(Ordering::SeqCst) != 0
+    }
+
+    pub fn is_fill_block_completed(&self) -> bool {
+        self.inner.read().block_to_fill_set.is_empty()
+    }
+
+    /// Construct the states along the pivot chain, set all
+    /// `BLOCK_HEADER_GRAPH_READY` blocks as `BLOCK_GRAPH_READY` and remove all
+    /// other blocks. All blocks in the future can be processed normally in
+    /// sync graph and consensus graph.
+    ///
+    /// If some blocks become invalid after validating their bodies, we need to
+    /// remove them and reconstruct the consensus graph. Return `false` if
+    /// there are blocks in the new consensus graph whose bodies are missing.
+    /// Return `true` if we do not need to reconstruct consensus, or all blocks
+    /// in the new consensus graph already have bodies.
+    pub fn complete_filling_block_bodies(&self) -> bool {
+        let mut inner = &mut *self.inner.write();
+
+        // Iterating over `hash_to_arena_indices` might be more efficient than
+        // iterating over `arena`.
+        let to_remove = {
+            let arena = &mut inner.arena;
+            inner
+                .hash_to_arena_indices
+                .iter()
+                .filter_map(|(_, index)| {
+                    let graph_node = &mut arena[*index];
+                    if graph_node.graph_status == BLOCK_HEADER_GRAPH_READY {
+                        graph_node.block_ready = true;
+                        graph_node.graph_status = BLOCK_GRAPH_READY;
+                    }
+                    if graph_node.graph_status != BLOCK_GRAPH_READY {
+                        Some(*index)
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        };
+        inner.remove_blocks(&to_remove);
+
+        // Check if we skip some block bodies. It's either because they are
+        // never retrieved after a long time, or they have invalid
+        // bodies.
+        let skipped_body_blocks = self.consensus.get_blocks_needing_bodies();
+        if !skipped_body_blocks.is_empty() {
+            warn!("Has invalid blocks after downloading block bodies!");
+            // Some headers should not enter consensus, so we just reconstruct
+            // the consensus graph with the current sync graph.
+            self.consensus.reset();
+
+            let all_block_indices: HashSet<_> = inner
+                .hash_to_arena_indices
+                .iter()
+                .map(|(_, i)| *i)
+                .collect();
+            // Send blocks in topological order.
+            let sorted_blocks = inner.topological_sort(all_block_indices);
+            for i in sorted_blocks {
+                self.consensus
+                    .on_new_block(&inner.arena[i].block_header.hash());
+            }
+            let new_to_fill_blocks: HashSet<_> =
+                self.consensus.get_blocks_needing_bodies();
+            if !new_to_fill_blocks.is_empty() {
+                // This should not happen if stable checkpoint is not reverted
+                // because we have downloaded all blocks in its
+                // subtree.
+                warn!("{} new block bodies to get", new_to_fill_blocks.len());
+                inner.block_to_fill_set = new_to_fill_blocks;
+                return false;
+            }
+        }
+        inner.locked_for_catchup = false;
+        self.consensus.construct_pivot_state();
+        true
     }
 }
 
@@ -2217,6 +1931,8 @@ pub enum BlockHeaderInsertionResult {
     // The block is definitely invalid. It's not inserted to sync graph
     // and should not be requested again.
     Invalid,
+    // The header is received when we have locked sync graph.
+    TemporarySkipped,
 }
 
 impl BlockHeaderInsertionResult {

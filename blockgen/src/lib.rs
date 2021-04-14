@@ -616,7 +616,7 @@ impl BlockGenerator {
         );
         self.on_mined_block(block);
 
-        debug!("generate_block finished one_mined_block()");
+        debug!("generate_block finished on_mined_block()");
         // FIXME: We should add a flag to enable/disable this wait
         // Ensure that when `generate**` function returns, the block has been
         // handled by Consensus This order is assumed by some tests, and

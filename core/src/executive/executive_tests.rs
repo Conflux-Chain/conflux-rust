@@ -4,17 +4,17 @@
 
 use super::{executive::*, internal_contract::*, Executed, ExecutionError};
 use crate::{
-    evm::{Factory, FinalizationResult, VMType},
-    executive::ExecutionOutcome,
+    evm::FinalizationResult,
+    executive::{CollateralCheckResultToVmResult, ExecutionOutcome},
     machine::Machine,
-    state::{CleanupMode, CollateralCheckResult, State, Substate},
-    test_helpers::{
-        get_state_for_genesis_write, get_state_for_genesis_write_with_factory,
-    },
+    state::{State, Substate},
+    test_helpers::get_state_for_genesis_write,
     trace,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
+        Spec,
     },
+    vm_factory::VmFactory,
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::{
@@ -23,6 +23,11 @@ use cfx_parameters::{
         STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
     },
     staking::*,
+};
+use cfx_state::{
+    state_trait::{CheckpointTrait, StateOpsTrait},
+    substate_trait::SubstateMngTrait,
+    CleanupMode, CollateralCheckResult, StateTrait,
 };
 use cfx_statedb::StateDb;
 use cfx_storage::{
@@ -45,8 +50,10 @@ use std::{
 };
 
 fn make_byzantium_machine(max_depth: usize) -> Machine {
-    let mut machine =
-        crate::machine::new_machine_with_builtin(Default::default());
+    let mut machine = crate::machine::new_machine_with_builtin(
+        Default::default(),
+        VmFactory::new(1024 * 32),
+    );
     machine
         .set_spec_creation_rules(Box::new(move |s, _| s.max_depth = max_depth));
     machine
@@ -73,7 +80,6 @@ fn test_contract_address() {
 
 #[test]
 fn test_sender_balance() {
-    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
     let sender =
         Address::from_str("1f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
     let address = contract_address(
@@ -93,17 +99,22 @@ fn test_sender_balance() {
     params.code = Some(Arc::new("3331600055".from_hex().unwrap()));
     params.value = ActionValue::Transfer(U256::from(0x7));
     let storage_manager = new_state_manager_for_unit_test();
-    let mut state =
-        get_state_for_genesis_write_with_factory(&storage_manager, factory);
+    let mut state = get_state_for_genesis_write(&storage_manager);
     state
         .add_balance(
             &sender,
             &COLLATERAL_DRIPS_PER_STORAGE_KEY,
             CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
     state
-        .add_balance(&sender, &U256::from(0x100u64), CleanupMode::NoEmpty)
+        .add_balance(
+            &sender,
+            &U256::from(0x100u64),
+            CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+        )
         .unwrap();
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -133,6 +144,7 @@ fn test_sender_balance() {
                 &params.storage_owner,
                 &params.storage_limit_in_drip,
                 &mut substate,
+                spec.account_start_nonce(env.number),
             )
             .unwrap()
             .into_vm_result()
@@ -161,8 +173,6 @@ fn test_sender_balance() {
 
 #[test]
 fn test_create_contract_out_of_depth() {
-    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-
     // code:
     //
     // 7c 601080600c6000396000f3006000355415600957005b60203560003555 - push
@@ -207,16 +217,21 @@ fn test_create_contract_out_of_depth() {
     params.code = Some(Arc::new(code));
     params.value = ActionValue::Transfer(U256::from(100));
 
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state =
-        get_state_for_genesis_write_with_factory(&storage_manager, factory);
-    state
-        .add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty)
-        .unwrap();
     let env = Env::default();
     let machine = make_byzantium_machine(0);
     let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
+
+    let storage_manager = new_state_manager_for_unit_test();
+    let mut state = get_state_for_genesis_write(&storage_manager);
+    state
+        .add_balance(
+            &sender,
+            &U256::from(100),
+            CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
+        )
+        .unwrap();
     let mut substate = Substate::new();
 
     let FinalizationResult { gas_left, .. } = {
@@ -237,8 +252,6 @@ fn test_create_contract_out_of_depth() {
 
 #[test]
 fn test_suicide_when_creation() {
-    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-
     // code:
     //
     // 33 - get caller address
@@ -266,16 +279,21 @@ fn test_suicide_when_creation() {
     params.code = Some(Arc::new(code));
     params.value = ActionValue::Transfer(U256::from(0));
 
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state =
-        get_state_for_genesis_write_with_factory(&storage_manager, factory);
-    state
-        .add_balance(&sender_addr, &U256::from(100_000), CleanupMode::NoEmpty)
-        .unwrap();
     let env = Env::default();
     let machine = make_byzantium_machine(0);
     let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
+
+    let storage_manager = new_state_manager_for_unit_test();
+    let mut state = get_state_for_genesis_write(&storage_manager);
+    state
+        .add_balance(
+            &sender_addr,
+            &U256::from(100_000),
+            CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
+        )
+        .unwrap();
     let mut substate = Substate::new();
 
     let mut ex = Executive::new(
@@ -355,6 +373,11 @@ fn test_call_to_create() {
         * code_collateral_units(code_len)
         + *COLLATERAL_DRIPS_PER_STORAGE_KEY;
 
+    let env = Env::default();
+    let machine = make_byzantium_machine(5);
+    let internal_contract_map = InternalContractMap::new();
+    let spec = machine.spec(env.number);
+
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
     state
@@ -365,6 +388,7 @@ fn test_call_to_create() {
             &sender,
             &(U256::from(100) + params.storage_limit_in_drip),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     assert_eq!(
@@ -372,10 +396,6 @@ fn test_call_to_create() {
         U256::from(0)
     );
     assert_eq!(*state.total_storage_tokens(), U256::from(0));
-    let env = Env::default();
-    let machine = make_byzantium_machine(5);
-    let internal_contract_map = InternalContractMap::new();
-    let spec = machine.spec(env.number);
     let mut substate = Substate::new();
 
     let FinalizationResult { gas_left, .. } = {
@@ -394,6 +414,7 @@ fn test_call_to_create() {
                 &params.storage_owner,
                 &params.storage_limit_in_drip,
                 &mut substate,
+                spec.account_start_nonce(env.number),
             )
             .unwrap()
             .into_vm_result()
@@ -413,8 +434,6 @@ fn test_call_to_create() {
 
 #[test]
 fn test_revert() {
-    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-
     let contract_address =
         Address::from_str("8d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
     let sender =
@@ -423,16 +442,20 @@ fn test_revert() {
     let code: Vec<u8> = "6c726576657274656420646174616000557f726576657274206d657373616765000000000000000000000000000000000000600052600e6000fd".from_hex().unwrap();
     let returns: Vec<u8> = "726576657274206d657373616765".from_hex().unwrap();
 
+    let env = Env::default();
+    let machine = make_byzantium_machine(0);
+    let internal_contract_map = InternalContractMap::new();
+    let spec = machine.spec(env.number);
+    let mut substate = Substate::new();
+
     let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write_with_factory(
-        &storage_manager,
-        factory.clone(),
-    );
+    let mut state = get_state_for_genesis_write(&storage_manager);
     state
         .add_balance(
             &sender,
             &U256::from_str("152d02c7e14af68000000").unwrap(),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     state
@@ -450,12 +473,6 @@ fn test_revert() {
     params.gas = U256::from(20025);
     params.code = Some(Arc::new(code));
     params.value = ActionValue::Transfer(U256::zero());
-    let env = Env::default();
-    let machine = crate::machine::new_machine_with_builtin(Default::default());
-    let internal_contract_map = InternalContractMap::new();
-    let spec = machine.spec(env.number);
-    let mut substate = Substate::new();
-
     let mut output = [0u8; 14];
     let FinalizationResult {
         gas_left: result,
@@ -485,8 +502,6 @@ fn test_revert() {
 
 #[test]
 fn test_keccak() {
-    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-
     let code = "6064640fffffffff20600055".from_hex().unwrap();
 
     let sender =
@@ -511,20 +526,21 @@ fn test_keccak() {
     params.value =
         ActionValue::Transfer(U256::from_str("0de0b6b3a7640000").unwrap());
 
+    let env = Env::default();
+    let machine = make_byzantium_machine(0);
+    let internal_contract_map = InternalContractMap::new();
+    let spec = machine.spec(env.number);
+
     let storage_manager = new_state_manager_for_unit_test();
-    let mut state =
-        get_state_for_genesis_write_with_factory(&storage_manager, factory);
+    let mut state = get_state_for_genesis_write(&storage_manager);
     state
         .add_balance(
             &sender,
             &U256::from_str("152d02c7e14af6800000").unwrap(),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
-    let env = Env::default();
-    let machine = make_byzantium_machine(0);
-    let internal_contract_map = InternalContractMap::new();
-    let spec = machine.spec(env.number);
     let mut substate = Substate::new();
 
     let mut tracer = trace::NoopTracer;
@@ -547,8 +563,6 @@ fn test_keccak() {
 
 #[test]
 fn test_not_enough_cash() {
-    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-
     let keypair = Random.generate().unwrap();
     let t = Transaction {
         action: Action::Create,
@@ -564,18 +578,23 @@ fn test_not_enough_cash() {
     .sign(keypair.secret());
     let sender = t.sender();
 
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state =
-        get_state_for_genesis_write_with_factory(&storage_manager, factory);
-    state
-        .add_balance(&sender, &U256::from(100_017), CleanupMode::NoEmpty)
-        .unwrap();
-    let correct_cost = min(t.gas_price * t.gas, 100_017.into());
     let mut env = Env::default();
     env.gas_limit = U256::from(100_000);
     let machine = make_byzantium_machine(0);
     let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
+
+    let storage_manager = new_state_manager_for_unit_test();
+    let mut state = get_state_for_genesis_write(&storage_manager);
+    state
+        .add_balance(
+            &sender,
+            &U256::from(100_017),
+            CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
+        )
+        .unwrap();
+    let correct_cost = min(t.gas_price * t.gas, 100_017.into());
 
     let res = {
         let mut ex = Executive::new(
@@ -611,12 +630,10 @@ fn test_not_enough_cash() {
 
 #[test]
 fn test_deposit_withdraw_lock() {
-    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
     let mut sender = Address::zero();
     sender.set_user_account_type_bits();
     let storage_manager = new_state_manager_for_unit_test();
-    let mut state =
-        get_state_for_genesis_write_with_factory(&storage_manager, factory);
+    let mut state = get_state_for_genesis_write(&storage_manager);
     let env = Env::default();
     let machine = make_byzantium_machine(0);
     let internal_contract_map = InternalContractMap::new();
@@ -627,6 +644,7 @@ fn test_deposit_withdraw_lock() {
             &sender,
             &U256::from(2_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     state.add_total_issued(U256::from(2_000_000_000_000_000_000u64));
@@ -886,7 +904,9 @@ fn test_deposit_withdraw_lock() {
         U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(
-        state.withdrawable_staking_balance(&sender).unwrap(),
+        state
+            .withdrawable_staking_balance(&sender, env.number)
+            .unwrap(),
         U256::from(999_999_950_000_000_000u64)
     );
     // lock 1 until 106751991167301 blocks, should succeed
@@ -918,7 +938,9 @@ fn test_deposit_withdraw_lock() {
         U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
-        state.withdrawable_staking_balance(&sender).unwrap(),
+        state
+            .withdrawable_staking_balance(&sender, env.number)
+            .unwrap(),
         U256::from(999_999_949_999_999_999u64)
     );
     // lock 2 until block_number=2
@@ -950,7 +972,9 @@ fn test_deposit_withdraw_lock() {
         U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
-        state.withdrawable_staking_balance(&sender).unwrap(),
+        state
+            .withdrawable_staking_balance(&sender, env.number)
+            .unwrap(),
         U256::from(999_999_949_999_999_998u64)
     );
     // withdraw more than withdrawable staking balance
@@ -988,7 +1012,9 @@ fn test_deposit_withdraw_lock() {
         U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
-        state.withdrawable_staking_balance(&sender).unwrap(),
+        state
+            .withdrawable_staking_balance(&sender, env.number)
+            .unwrap(),
         U256::from(999_999_949_999_999_998u64)
     );
 
@@ -1015,24 +1041,22 @@ fn test_deposit_withdraw_lock() {
     );
     assert_eq!(*state.total_staking_tokens(), U256::from(2));
     assert_eq!(
-        state.withdrawable_staking_balance(&sender).unwrap(),
+        state
+            .withdrawable_staking_balance(&sender, env.number)
+            .unwrap(),
         U256::from(0)
     );
 }
 
 #[test]
 fn test_commission_privilege_all_whitelisted_across_epochs() {
-    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
     let code: Vec<u8> = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
 
     let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write_with_factory(
-        &storage_manager,
-        factory.clone(),
-    );
+    let mut state = get_state_for_genesis_write(&storage_manager);
+    let machine = make_byzantium_machine(0);
     let mut env = Env::default();
     env.gas_limit = U256::MAX;
-    let machine = make_byzantium_machine(0);
     let spec = machine.spec(env.number);
 
     let sender = Random.generate().unwrap();
@@ -1063,6 +1087,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &sender.address(),
             &U256::from(1_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
 
@@ -1075,6 +1100,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &Address::default(),
             &0.into(),
             &mut Substate::new(),
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     state.discard_checkpoint();
@@ -1082,19 +1108,14 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
     state.commit(epoch_id, Some(&mut debug_record)).unwrap();
     debug!("{:?}", debug_record);
 
-    let mut state = State::new(
-        StateDb::new(
-            storage_manager
-                .get_state_for_next_epoch(
-                    StateIndex::new_for_test_only_delta_mpt(&epoch_id),
-                )
-                .unwrap()
-                .unwrap(),
-        ),
-        factory.clone().into(),
-        &spec,
-        1, /* block_number */
-    )
+    let mut state = State::new(StateDb::new(
+        storage_manager
+            .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
+                &epoch_id,
+            ))
+            .unwrap()
+            .unwrap(),
+    ))
     .expect("Failed to initialize state");
 
     state.checkpoint();
@@ -1128,6 +1149,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &sender.address(),
             &U256::from(1_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     let whitelisted_caller = Address::random();
@@ -1151,25 +1173,21 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &Address::default(),
             &0.into(),
             &mut Substate::new(),
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     state.discard_checkpoint();
     state.commit(epoch_id, None).unwrap();
 
-    let state = State::new(
-        StateDb::new(
-            storage_manager
-                .get_state_no_commit(
-                    StateIndex::new_for_test_only_delta_mpt(&epoch_id),
-                    /* try_open = */ false,
-                )
-                .unwrap()
-                .unwrap(),
-        ),
-        factory.clone().into(),
-        &spec,
-        2, /* block_number */
-    )
+    let state = State::new(StateDb::new(
+        storage_manager
+            .get_state_no_commit(
+                StateIndex::new_for_test_only_delta_mpt(&epoch_id),
+                /* try_open = */ false,
+            )
+            .unwrap()
+            .unwrap(),
+    ))
     .expect("Failed to initialize state");
 
     assert_eq!(
@@ -1200,12 +1218,10 @@ fn test_commission_privilege() {
     // 60 00 - push 0
     // 55 sstore
 
-    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
     let code = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
 
     let storage_manager = new_state_manager_for_unit_test();
-    let mut state =
-        get_state_for_genesis_write_with_factory(&storage_manager, factory);
+    let mut state = get_state_for_genesis_write(&storage_manager);
     let mut env = Env::default();
     env.gas_limit = U256::MAX;
     let machine = make_byzantium_machine(0);
@@ -1240,6 +1256,7 @@ fn test_commission_privilege() {
             &sender.address(),
             &U256::from(1_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
 
@@ -1282,6 +1299,7 @@ fn test_commission_privilege() {
             &caller1.address(),
             &U256::from(100_000),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     state
@@ -1289,6 +1307,7 @@ fn test_commission_privilege() {
             &caller2.address(),
             &U256::from(100_000),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     state
@@ -1296,6 +1315,7 @@ fn test_commission_privilege() {
             &caller3.address(),
             &U256::from(100_000),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     // add commission privilege to caller1 and caller2
@@ -1575,12 +1595,10 @@ fn test_storage_commission_privilege() {
     // 55 sstore
 
     let privilege_control_address = &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
-    let factory = Factory::new(VMType::Interpreter, 1024 * 32);
     let code = "7c601080600c6000396000f3006000355415600957005b6020356000355560005233600155".from_hex().unwrap();
 
     let storage_manager = new_state_manager_for_unit_test();
-    let mut state =
-        get_state_for_genesis_write_with_factory(&storage_manager, factory);
+    let mut state = get_state_for_genesis_write(&storage_manager);
     let mut env = Env::default();
     env.gas_limit = U256::MAX;
     let machine = make_byzantium_machine(0);
@@ -1616,6 +1634,7 @@ fn test_storage_commission_privilege() {
             &sender.address(),
             &U256::from(2_000_000_000_000_075_000u64),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
 
@@ -1692,6 +1711,7 @@ fn test_storage_commission_privilege() {
             &caller1.address(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     state
@@ -1699,6 +1719,7 @@ fn test_storage_commission_privilege() {
             &caller2.address(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     state
@@ -1706,6 +1727,7 @@ fn test_storage_commission_privilege() {
             &caller3.address(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
 
@@ -1724,6 +1746,7 @@ fn test_storage_commission_privilege() {
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate,
+                spec.account_start_nonce(env.number),
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -2045,6 +2068,7 @@ fn test_storage_commission_privilege() {
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate,
+                spec.account_start_nonce(env.number),
             )
             .unwrap(),
         CollateralCheckResult::Valid

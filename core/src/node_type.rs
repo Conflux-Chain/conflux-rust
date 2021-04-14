@@ -4,6 +4,7 @@
 
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use std::str::FromStr;
 
 #[derive(Clone, Copy, Debug, PartialEq, DeriveMallocSizeOf)]
 #[repr(u8)]
@@ -37,6 +38,20 @@ impl From<&NodeType> for u8 {
             NodeType::Light => 2,
             NodeType::Unknown => 0xff,
         }
+    }
+}
+
+impl FromStr for NodeType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let node_type = match s {
+            "archive" => Self::Archive,
+            "full" => Self::Full,
+            "light" => Self::Light,
+            _ => Self::Unknown,
+        };
+        Ok(node_type)
     }
 }
 

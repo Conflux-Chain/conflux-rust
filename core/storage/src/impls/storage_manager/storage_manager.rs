@@ -89,7 +89,8 @@ impl PersistedSnapshotInfoMap {
 
 // FIXME: correctly order code blocks.
 pub struct StorageManager {
-    delta_db_manager: DeltaDbManager,
+    delta_db_manager: Arc<DeltaDbManager>,
+    delta_mpt_open_db_lru: Arc<OpenDeltaDbLru<DeltaDbManager>>,
     snapshot_manager: Box<
         dyn SnapshotManagerTrait<
                 SnapshotDb = SnapshotDb,
@@ -221,10 +222,14 @@ impl StorageManager {
             in_progress_snapshot_finish_signal_receiver,
         ) = channel();
 
+        let delta_db_manager = Arc::new(DeltaDbManager::new(
+            storage_conf.path_delta_mpts_dir.clone(),
+        )?);
         let new_storage_manager_result = Ok(Arc::new(Self {
-            delta_db_manager: DeltaDbManager::new(
-                storage_conf.path_delta_mpts_dir.clone(),
-            )?,
+            delta_db_manager: delta_db_manager.clone(),
+            delta_mpt_open_db_lru: Arc::new(OpenDeltaDbLru::new(
+                delta_db_manager.clone(),
+            )?),
             snapshot_manager: Box::new(SnapshotManager::<SnapshotDbManager> {
                 snapshot_db_manager: SnapshotDbManager::new(
                     storage_conf.path_snapshot_dir.clone(),
@@ -443,11 +448,6 @@ impl StorageManager {
         // Don't hold the lock while doing db io.
         // If the DeltaMpt already exists, the empty delta db creation should
         // fail already.
-        let db_result = storage_manager.delta_db_manager.new_empty_delta_db(
-            &storage_manager
-                .delta_db_manager
-                .get_delta_db_name(snapshot_epoch_id),
-        );
 
         let mut maybe_snapshot_entry =
             snapshot_associated_mpts_mut.get_mut(snapshot_epoch_id);
@@ -463,13 +463,19 @@ impl StorageManager {
                 .unwrap()
                 .clone());
         } else {
-            let db = Arc::new(db_result?);
-
+            let mpt_id = storage_manager.delta_mpts_id_gen.lock().allocate()?;
+            let db_result = storage_manager
+                .delta_mpt_open_db_lru
+                .create(&snapshot_epoch_id, mpt_id);
+            if db_result.is_err() {
+                storage_manager.delta_mpts_id_gen.lock().free(mpt_id);
+                db_result?;
+            }
             let arc_delta_mpt = Arc::new(DeltaMpt::new(
-                db,
+                storage_manager.delta_mpt_open_db_lru.clone(),
                 snapshot_epoch_id.clone(),
                 storage_manager.clone(),
-                &mut *storage_manager.delta_mpts_id_gen.lock(),
+                mpt_id,
                 storage_manager.delta_mpts_node_memory_manager.clone(),
             )?);
 
@@ -497,6 +503,7 @@ impl StorageManager {
         );
         self.delta_mpts_node_memory_manager
             .delete_mpt_from_cache(delta_mpt_id);
+        self.delta_mpt_open_db_lru.release(delta_mpt_id, true);
         self.delta_mpts_id_gen.lock().free(delta_mpt_id);
         self.maybe_db_errors.set_maybe_error(
             self.delta_db_manager
@@ -1337,13 +1344,19 @@ impl StorageManager {
 
         let mut delta_mpts = HashMap::new();
         for (snapshot_epoch_id, delta_db) in delta_dbs {
+            let mpt_id = self.delta_mpts_id_gen.lock().allocate()?;
+            self.delta_mpt_open_db_lru.import(
+                &snapshot_epoch_id,
+                mpt_id,
+                delta_db,
+            )?;
             delta_mpts.insert(
                 snapshot_epoch_id.clone(),
                 Arc::new(DeltaMpt::new(
-                    Arc::new(delta_db),
+                    self.delta_mpt_open_db_lru.clone(),
                     snapshot_epoch_id.clone(),
                     unsafe { shared_from_this(self) },
-                    &mut *self.delta_mpts_id_gen.lock(),
+                    mpt_id,
                     self.delta_mpts_node_memory_manager.clone(),
                 )?),
             );
@@ -1526,8 +1539,8 @@ use crate::{
     storage_dir,
     utils::{arc_ext::*, guarded_value::GuardedValue},
     DeltaMpt, DeltaMptIdGen, DeltaMptIterator, KeyValueDbTrait, KvdbSqlite,
-    ProvideExtraSnapshotSyncConfig, StateIndex, StateRootWithAuxInfo,
-    StorageConfiguration,
+    OpenDeltaDbLru, ProvideExtraSnapshotSyncConfig, StateIndex,
+    StateRootWithAuxInfo, StorageConfiguration,
 };
 use cfx_internal_common::{
     consensus_api::StateMaintenanceTrait, StateAvailabilityBoundary,

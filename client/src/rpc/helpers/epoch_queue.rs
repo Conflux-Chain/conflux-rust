@@ -22,6 +22,10 @@ impl<T> EpochQueue<T> {
     }
 
     pub fn push(&mut self, new: (u64, T)) -> Option<(u64, T)> {
+        if self.capacity == 0 {
+            return Some(new);
+        }
+
         // remove epochs from queue that are greater or equal to the new one
         while matches!(self.queue.back(), Some((e, _)) if *e >= new.0) {
             self.queue.pop_back();
@@ -53,6 +57,16 @@ impl<T> EpochQueue<T> {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_no_queue() {
+        let mut queue = EpochQueue::with_capacity(0);
+
+        assert_eq!(queue.push((0, 0)), Some((0, 0)));
+        assert_eq!(queue.push((1, 1)), Some((1, 1)));
+        assert_eq!(queue.push((2, 2)), Some((2, 2)));
+        assert_eq!(queue.push((3, 3)), Some((3, 3)));
+    }
 
     #[test]
     fn test_no_reorgs() {

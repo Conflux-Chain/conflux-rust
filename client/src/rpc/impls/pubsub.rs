@@ -8,9 +8,11 @@ use crate::rpc::{
     metadata::Metadata,
     traits::PubSub,
     types::{
-        address::NODE_NETWORK, pubsub, Header as RpcHeader, Log as RpcLog,
+        pubsub::{self, SubscriptionEpoch},
+        Header as RpcHeader, Log as RpcLog,
     },
 };
+use cfx_addr::Network;
 use cfx_parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
 use cfx_types::H256;
 use cfxcore::{
@@ -27,7 +29,9 @@ use jsonrpc_pubsub::{
     SubscriptionId,
 };
 use parking_lot::RwLock;
-use primitives::{filter::Filter, log_entry::LocalizedLogEntry, BlockReceipts};
+use primitives::{
+    filter::LogFilter, log_entry::LocalizedLogEntry, BlockReceipts,
+};
 use runtime::Executor;
 use std::{
     sync::{Arc, Weak},
@@ -43,7 +47,7 @@ pub struct PubSubClient {
     handler: Arc<ChainNotificationHandler>,
     heads_subscribers: Arc<RwLock<Subscribers<Client>>>,
     epochs_subscribers: Arc<RwLock<Subscribers<Client>>>,
-    logs_subscribers: Arc<RwLock<Subscribers<(Client, Filter)>>>,
+    logs_subscribers: Arc<RwLock<Subscribers<(Client, LogFilter)>>>,
     epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
 }
 
@@ -51,7 +55,7 @@ impl PubSubClient {
     /// Creates new `PubSubClient`.
     pub fn new(
         executor: Executor, consensus: SharedConsensusGraph,
-        notifications: Arc<Notifications>,
+        notifications: Arc<Notifications>, network: Network,
     ) -> Self
     {
         let heads_subscribers = Arc::new(RwLock::new(Subscribers::default()));
@@ -63,6 +67,7 @@ impl PubSubClient {
             consensus: consensus.clone(),
             data_man: consensus.get_data_manager().clone(),
             heads_subscribers: heads_subscribers.clone(),
+            network,
         });
 
         // --------- newHeads ---------
@@ -72,7 +77,7 @@ impl PubSubClient {
         // loop asynchronously
         let handler_clone = handler.clone();
 
-        let fut = receiver.for_each(move |(hash, _)| {
+        let fut = receiver.for_each(move |hash| {
             handler_clone.notify_header(&hash);
         });
 
@@ -96,7 +101,7 @@ impl PubSubClient {
     // Start an async loop that continuously receives epoch notifications and
     // publishes the corresponding epochs to subscriber `id`, keeping their
     // original order. The loop terminates when subscriber `id` unsubscribes.
-    fn start_epoch_loop(&self, id: SubscriberId) {
+    fn start_epoch_loop(&self, id: SubscriberId, sub_epoch: SubscriptionEpoch) {
         trace!("start_epoch_loop({:?})", id);
 
         // clone everything we use in our async loop
@@ -107,10 +112,20 @@ impl PubSubClient {
         // subscribe to the `epochs_ordered` channel
         let mut receiver = epochs_ordered.subscribe();
 
+        // when subscribing to "latest_state", use a queue to make sure
+        // we only process epochs once they have been executed
+        let mut queue = EpochQueue::<Vec<H256>>::with_capacity(
+            if sub_epoch == SubscriptionEpoch::LatestState {
+                (DEFERRED_STATE_EPOCH_COUNT - 1) as usize
+            } else {
+                0
+            },
+        );
+
         // loop asynchronously
         let fut = async move {
-            while let Some(epoch) = receiver.recv().await {
-                trace!("epoch_loop({:?}): {:?}", id, epoch);
+            while let Some((epoch, hashes)) = receiver.recv().await {
+                trace!("epoch_loop({:?}): {:?}", id, (epoch, &hashes));
 
                 // retrieve subscriber
                 let sub = match subscribers.read().get(&id) {
@@ -122,8 +137,19 @@ impl PubSubClient {
                     }
                 };
 
+                let (epoch, hashes) = match queue.push((epoch, hashes)) {
+                    None => continue,
+                    Some(e) => e,
+                };
+
+                // wait for epoch to be executed
+                if sub_epoch == SubscriptionEpoch::LatestState {
+                    let pivot = hashes.last().expect("empty epoch in pubsub");
+                    handler.wait_for_epoch(&pivot).await;
+                }
+
                 // publish epochs
-                handler.notify_epoch(sub, epoch).await;
+                handler.notify_epoch(sub, (epoch, hashes)).await;
             }
         };
 
@@ -200,6 +226,7 @@ pub struct ChainNotificationHandler {
     consensus: SharedConsensusGraph,
     data_man: Arc<BlockDataManager>,
     heads_subscribers: Arc<RwLock<Subscribers<Client>>>,
+    network: Network,
 }
 
 impl ChainNotificationHandler {
@@ -236,11 +263,9 @@ impl ChainNotificationHandler {
         }
 
         let header = match self.data_man.block_header_by_hash(hash) {
-            Some(h) => RpcHeader::new(
-                &*h,
-                *NODE_NETWORK.read(),
-                self.consensus.clone(),
-            ),
+            Some(h) => {
+                RpcHeader::new(&*h, self.network, self.consensus.clone())
+            }
             None => return warn!("Unable to retrieve header for {:?}", hash),
         };
 
@@ -293,7 +318,7 @@ impl ChainNotificationHandler {
     }
 
     async fn notify_logs(
-        &self, subscriber: &Client, filter: Filter, epoch: (u64, Vec<H256>),
+        &self, subscriber: &Client, filter: LogFilter, epoch: (u64, Vec<H256>),
     ) {
         trace!("notify_logs({:?})", epoch);
 
@@ -310,7 +335,7 @@ impl ChainNotificationHandler {
             .iter()
             .filter(|l| filter.matches(&l.entry))
             .cloned()
-            .map(|l| RpcLog::try_from_localized(l, *NODE_NETWORK.read()));
+            .map(|l| RpcLog::try_from_localized(l, self.network));
 
         // send logs in order
         // FIXME(thegaram): Sink::notify flushes after each item.
@@ -358,14 +383,20 @@ impl ChainNotificationHandler {
                 }
             }
 
-            // this should not happen
-            if ii > 100 {
+            // we assume that an epoch gets executed within 100 seconds
+            if ii > 1000 {
                 error!("Cannot find receipts with {:?}/{:?}", block, pivot);
                 return None;
             }
         }
 
         unreachable!()
+    }
+
+    // wait until the execution results corresponding to `pivot` become
+    // available in the database.
+    async fn wait_for_epoch(&self, pivot: &H256) -> () {
+        let _ = self.retrieve_block_receipts(&pivot, &pivot).await;
     }
 
     async fn retrieve_epoch_logs(
@@ -448,18 +479,24 @@ impl PubSub for PubSubClient {
             // --------- epochs ---------
             (pubsub::Kind::Epochs, None) => {
                 let id = self.epochs_subscribers.write().push(subscriber);
-                self.start_epoch_loop(id);
+                self.start_epoch_loop(id, SubscriptionEpoch::LatestMined);
                 return;
             }
-            (pubsub::Kind::Epochs, _) => {
-                error_codes::invalid_params("epochs", "Expected no parameters.")
+            (pubsub::Kind::Epochs, Some(pubsub::Params::Epochs(epoch))) => {
+                let id = self.epochs_subscribers.write().push(subscriber);
+                self.start_epoch_loop(id, epoch);
+                return;
             }
+            (pubsub::Kind::Epochs, _) => error_codes::invalid_params(
+                "epochs",
+                "Expected epoch parameter.",
+            ),
             // --------- logs ---------
             (pubsub::Kind::Logs, None) => {
                 let id = self
                     .logs_subscribers
                     .write()
-                    .push(subscriber, Filter::default());
+                    .push(subscriber, LogFilter::default());
 
                 self.start_logs_loop(id);
                 return;

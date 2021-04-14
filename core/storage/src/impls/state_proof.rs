@@ -42,6 +42,14 @@ impl StateProof {
         maybe_intermediate_padding: Option<DeltaMptKeyPadding>,
     ) -> bool
     {
+        // Something is wrong when intermediate_proof exists but we are not able
+        // to get a intermediate padding.
+        if self.intermediate_proof.is_some()
+            && maybe_intermediate_padding.is_none()
+        {
+            return false;
+        }
+
         let delta_root = &root.delta_root;
         let intermediate_root = &root.intermediate_delta_root;
         let snapshot_root = &root.snapshot_root;
@@ -95,10 +103,9 @@ impl StateProof {
         // Now check intermediate_proof since it's required. Same logic applies.
         match &self.intermediate_proof {
             Some(proof) => {
-                if maybe_intermediate_mpt_key.is_none() {
-                    return false;
-                }
                 if proof.is_valid_kv(
+                    // It's guaranteed that
+                    // maybe_intermediate_mpt_key.is_some().
                     maybe_intermediate_mpt_key.as_ref().unwrap(),
                     delta_value,
                     intermediate_root,

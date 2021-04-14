@@ -6,6 +6,7 @@ pub mod cache;
 pub mod cache_manager_delta_mpts;
 pub mod cow_node_ref;
 pub mod delta_mpt_iterator;
+pub mod delta_mpt_open_db_manager;
 mod mem_optimized_trie_node;
 pub(in super::super) mod node_memory_manager;
 mod node_ref;
@@ -24,6 +25,9 @@ mod tests;
 pub use self::{
     cow_node_ref::CowNodeRef,
     delta_mpt_iterator::DeltaMptIterator,
+    delta_mpt_open_db_manager::{
+        ArcDeltaDbWrapper, OpenDeltaDbLru, OpenableOnDemandOpenDeltaDbTrait,
+    },
     mem_optimized_trie_node::MemOptimizedTrieNode,
     node_memory_manager::{TrieNodeDeltaMpt, TrieNodeDeltaMptCell},
     node_ref::*,
@@ -70,7 +74,8 @@ pub struct MultiVersionMerklePatriciaTrie {
     /// should think more about roots in disk db.)
     node_memory_manager: Arc<DeltaMptsNodeMemoryManager>,
     /// Underlying database for DeltaMpt.
-    db: Arc<dyn DeltaDbTrait + Send + Sync>,
+    // Opened databases are managed by a LRU cache for reducing memory use.
+    db_manager: Arc<dyn OpenableOnDemandOpenDeltaDbTrait>,
     /// Take care of database clean-ups for DeltaMpt.
     // The variable is used in drop. Variable with non-trivial dtor shouldn't
     // trigger the compiler warning.
@@ -91,7 +96,6 @@ impl MallocSizeOf for MultiVersionMerklePatriciaTrie {
         size += self.root_node_by_epoch.size_of(ops);
         size += self.root_node_by_merkle_root.size_of(ops);
         size += self.node_memory_manager.size_of(ops);
-        size += self.db.size_of(ops);
         size += self.parent_epoch_by_epoch.size_of(ops);
         size
     }
@@ -99,18 +103,18 @@ impl MallocSizeOf for MultiVersionMerklePatriciaTrie {
 
 impl MultiVersionMerklePatriciaTrie {
     pub fn new(
-        kvdb: Arc<dyn DeltaDbTrait + Send + Sync>, snapshot_epoch_id: EpochId,
-        storage_manager: Arc<StorageManager>,
-        delta_mpt_id_gen: &mut DeltaMptIdGen,
+        db_manager: Arc<dyn OpenableOnDemandOpenDeltaDbTrait>,
+        snapshot_epoch_id: EpochId, storage_manager: Arc<StorageManager>,
+        mpt_id: DeltaMptId,
         node_memory_manager: Arc<DeltaMptsNodeMemoryManager>,
     ) -> Result<Self>
     {
-        let row_number =
-            Self::parse_row_number(kvdb.get("last_row_number".as_bytes()))
-                // unwrap() on new is fine.
-                .unwrap()
-                .unwrap_or_default();
-        let mpt_id = delta_mpt_id_gen.allocate()?;
+        let row_number = Self::parse_row_number(
+            db_manager.open(mpt_id)?.get("last_row_number".as_bytes()),
+        )
+        // unwrap() on new is fine.
+        .unwrap()
+        .unwrap_or_default();
 
         debug!("Created DeltaMpt with id {}", mpt_id);
 
@@ -124,7 +128,7 @@ impl MultiVersionMerklePatriciaTrie {
                 storage_manager: Arc::downgrade(&storage_manager),
                 mpt_id,
             },
-            db: kvdb,
+            db_manager,
             commit_lock: Mutex::new(AtomicCommit {
                 row_number: RowNumber { value: row_number },
             }),
@@ -139,7 +143,7 @@ impl MultiVersionMerklePatriciaTrie {
     ) -> Result<AtomicCommitTransaction<Box<DeltaDbTransactionTraitObj>>> {
         Ok(AtomicCommitTransaction {
             info: self.commit_lock.lock(),
-            transaction: self.db.start_transaction_dyn(true)?,
+            transaction: self.get_arc_db()?.start_transaction_dyn(true)?,
         })
     }
 
@@ -167,7 +171,7 @@ impl MultiVersionMerklePatriciaTrie {
             //
             // FIXME: think about operations in state_manager and state, which
             // FIXME: deserve a dedicated db connection. (Of course read-only)
-            self.db.get(
+            self.get_arc_db()?.get(
                 ["db_key_for_root_".as_bytes(), merkle_root.as_ref()]
                     .concat()
                     .as_slice(),
@@ -188,7 +192,7 @@ impl MultiVersionMerklePatriciaTrie {
             //
             // FIXME: think about operations in state_manager and state, which
             // FIXME: deserve a dedicated db connection. (Of course read-only)
-            self.db.get(
+            self.get_arc_db()?.get(
                 ["db_key_for_epoch_id_".as_bytes(), epoch_id.as_ref()]
                     .concat()
                     .as_slice(),
@@ -217,7 +221,7 @@ impl MultiVersionMerklePatriciaTrie {
             //
             // FIXME: think about operations in state_manager and state, which
             // FIXME: deserve a dedicated db connection. (Of course read-only)
-            self.db.get(
+            self.get_arc_db()?.get(
                 ["parent_epoch_id_".as_bytes(), epoch_id.as_ref()]
                     .concat()
                     .as_slice(),
@@ -322,19 +326,23 @@ impl MultiVersionMerklePatriciaTrie {
         &self, maybe_node: Option<NodeRefDeltaMpt>,
     ) -> Result<Option<MerkleHash>> {
         match maybe_node {
-            Some(node) => Ok(Some(
-                self.node_memory_manager
+            Some(node) => Ok(Some({
+                let arc_db = self.get_arc_db()?;
+                // To avoid compile error
+                let merkle = self
+                    .node_memory_manager
                     .node_as_ref_with_cache_manager(
                         &self.node_memory_manager.get_allocator(),
                         node,
                         self.node_memory_manager.get_cache_manager(),
-                        &mut *self.db_owned_read()?,
+                        &mut *arc_db.to_owned_read()?,
                         self.mpt_id,
                         &mut false,
                     )?
                     .get_merkle()
-                    .clone(),
-            )),
+                    .clone();
+                merkle
+            })),
             None => Ok(None),
         }
     }
@@ -369,13 +377,9 @@ impl MultiVersionMerklePatriciaTrie {
         })
     }
 
-    pub fn db_owned_read<'a>(
-        &'a self,
-    ) -> Result<Box<DeltaDbOwnedReadTraitObj<'a>>> {
-        self.db.to_owned_read()
+    pub fn get_arc_db(&self) -> Result<ArcDeltaDbWrapper> {
+        self.db_manager.open(self.mpt_id)
     }
-
-    pub fn db_commit(&self) -> &dyn Any { (*self.db).as_any() }
 }
 
 #[derive(Default)]
@@ -420,12 +424,10 @@ use crate::{
         delta_mpt::node_ref_map::DeltaMptId, errors::*,
         merkle_patricia_trie::*, storage_manager::storage_manager::*,
     },
-    storage_db::delta_db_manager::{
-        DeltaDbOwnedReadTraitObj, DeltaDbTrait, DeltaDbTransactionTraitObj,
-    },
+    storage_db::delta_db_manager::DeltaDbTransactionTraitObj,
 };
 use cfx_types::hexstr_to_h256;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE};
-use std::{any::Any, borrow::BorrowMut, collections::HashMap, sync::Arc};
+use std::{borrow::BorrowMut, collections::HashMap, sync::Arc};

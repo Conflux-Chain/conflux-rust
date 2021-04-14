@@ -7,11 +7,12 @@ use crate::{
     vm::{ActionParams, CallType, ContractCreateResult, MessageCallResult},
 };
 use cfx_internal_common::{DatabaseDecodable, DatabaseEncodable};
-use cfx_types::{Address, Bloom, BloomInput, U256};
+use cfx_types::{Address, Bloom, BloomInput, H256, U256, U64};
 use malloc_size_of_derive::MallocSizeOf;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::Serialize;
+use strum_macros::EnumDiscriminants;
 
 /// Description of a _call_ action, either a `CALL` operation or a message
 /// transaction.
@@ -247,7 +248,8 @@ impl InternalTransferAction {
 }
 
 /// Description of an action that we trace; will be either a call or a create.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, EnumDiscriminants)]
+#[strum_discriminants(name(ActionType))]
 pub enum Action {
     /// It's a call action.
     Call(Call),
@@ -347,6 +349,20 @@ impl Decodable for ExecTrace {
         };
         Ok(res)
     }
+}
+
+pub struct LocalizedTrace {
+    pub action: Action,
+    /// Epoch hash.
+    pub epoch_hash: H256,
+    /// Epoch number.
+    pub epoch_number: U256,
+    /// Block hash.
+    pub block_hash: H256,
+    /// Transaction position.
+    pub transaction_position: U64,
+    /// Signed transaction hash.
+    pub transaction_hash: H256,
 }
 
 /// Represents all traces produced by a single transaction.

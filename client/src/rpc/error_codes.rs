@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-
 // Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Parity Ethereum.
 
@@ -59,7 +58,7 @@ pub mod codes {
     pub const EXPERIMENTAL: i64 = -32071;
     /// The node is not able to serve the request due to configuration. e.g. Not
     /// mining, light node, not archive node.
-    pub const INCAPABLE: i64 = -32703;
+    pub const INCAPABLE: i64 = -32073;
 
     /* Rpc usage related error codes */
     /// When there are too many rpc requests. We limit the number of allowed rpc
@@ -130,7 +129,6 @@ pub mod codes {
     /// Call() execution error. This is clearly an application level error code,
     /// but we keep the error code to be ethereum rpc client compatible.
     pub const CALL_EXECUTION_ERROR: i64 = -32015;
-
 }
 
 pub fn unimplemented(details: Option<String>) -> Error {

@@ -464,3 +464,18 @@ class RpcClient:
         signature = self.node.getnodeid(list(int_to_bytes(challenge)))
         node_id, _, _ = convert_to_nodeid(signature, challenge)
         return node_id
+
+    def current_sync_phase(self):
+        return self.node.current_sync_phase()
+
+    def get_status(self):
+        return self.node.cfx_getStatus()
+
+    def get_block_trace(self, block_hash: str):
+        return self.node.trace_block(block_hash)
+
+    def get_transaction_trace(self, tx_hash: str):
+        return self.node.trace_transaction(tx_hash)
+
+    def filter_trace(self, filter: dict):
+        return self.node.trace_filter(filter)

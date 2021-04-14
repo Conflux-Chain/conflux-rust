@@ -18,6 +18,7 @@ use crate::{
     NetworkProtocolHandler, PeerInfo, ProtocolId, ProtocolInfo,
     UpdateNodeOperation, NODE_TAG_ARCHIVE, NODE_TAG_NODE_TYPE,
 };
+use cfx_addr::Network;
 use cfx_bytes::Bytes;
 use keccak_hash::keccak;
 use keylib::{sign, Generator, KeyPair, Random, Secret};
@@ -27,10 +28,10 @@ use parity_path::restrict_permissions_owner;
 use parking_lot::{Mutex, RwLock};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use serde::export::Formatter;
 use std::{
     cmp::{min, Ordering},
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
+    fmt::Formatter,
     fs,
     io::{self, Read, Write},
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
@@ -166,9 +167,11 @@ impl NetworkService {
         }
     }
 
-    pub fn get_network_id(&self) -> u64 { self.config.id }
-
     pub fn is_consortium(&self) -> bool { self.config.is_consortium }
+
+    pub fn get_network_type(&self) -> &Network {
+        self.config.get_network_type()
+    }
 
     pub fn network_id(&self) -> u64 { self.config.id }
 

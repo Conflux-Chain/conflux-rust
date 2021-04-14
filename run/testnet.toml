@@ -5,12 +5,17 @@
 
 bootnodes="cfxnode://604deed272ec2a6f75538f0852e9cd71c616b35655ea8331b5987b3cc682097da76b9c8d2e90601d818acfac54f15af08a6389af245d4149d7d7f4a952bebfb3@39.97.223.148:32323,cfxnode://77bd8823c286e6b159432607d309983eac76830ecdd2bb2b6be7bf3b8e90bbae92f980dd7c8a6c284670679090d3ebf8e43ef91755cdf2eb6caa76532400be4c@182.92.92.126:32323,cfxnode://6582f6e20cfb975ff0b1fe6cb1d97f1e85c0502d44de441f43b032d7c8b986ebbd6a52f228ca55639b49742505bcf3f541551b2485d248e041d9ff1389bb016d@59.110.70.5:32323,cfxnode://24caea3455cf5ff9bbc532c6c6ca39b7edd0ecbbf29725dccdd36b5be629f1b0967391fdd99e81f9e35eb48a85602b2cff7c4c6893b7a906cc6b832c09ae9f33@101.201.127.86:32323,cfxnode://d2d4d2421da4b3b7314b83da06a2ed803965968ebc1614ac41eec5391a136d681a1433dbb56d067ad7e6cab682f35454a87a96e65a3b7eac867eea36b5d8535b@123.57.45.90:32323,cfxnode://ba297dc48bbba48e48c2f01dd0478d3a128b49ba4eccc65d0b800677bb8cc8a72eda57395f5a4b54269ec93189127efbd8ed235836db505f00b0e4558c1c6d97@39.97.208.206:32323,cfxnode://31f9397cfe1bbbecd5667dd13a5b6629201d5bdb9709813c8ad45e21a7ff767f17eb296ee635bb6c1265293bc4ad864db4ca229ad415d31e39121bf2a52405f9@13.229.52.100:32323,cfxnode://a7052f8b9d263549f737334b3cfe4d073fbedf69a21f25754a49a5cd7e83eb998eac1b223e55ae37779c1537bdd429719d0da45637d2d65dbaa917ad2c7085f2@20.43.79.41:32323,cfxnode://869ad83c0f6d8d9f571f62e444dd9a00bb5291e05b65b2d3920db912cdaaa9f283e72a5638ec71aadeeb37f53cdf40fb041214a80d7a6748f6ba96ec62b2909f@137.135.25.219:32323"
 
+# Set the node type to Full node, Archive node, or Light node.
+# Possible values are "full", "archive", or "light".
+# The command line parameter `--full`, `--archive`, or `--light` will overwrite this parameter.
+#
+# node_type = "full"
+
 # Some preset develepment configurations.
 # It should not be set in production environment.
 #
 # For both `test` and `dev` modes, we will
 #     * Set initial difficulty to 4
-#     * Allow calling test and debug rpc from public port
 #
 # `test` mode is for Conflux testing and debugging, we will
 #     * Add latency to peer connections
@@ -25,7 +30,8 @@ bootnodes="cfxnode://604deed272ec2a6f75538f0852e9cd71c616b35655ea8331b5987b3cc68
 #     * Open port 12535 for ws rpc if `jsonrpc_ws_port` is not provided.
 #     * Open port 12536 for tcp rpc if `jsonrpc_tcp_port` is not provided.
 #     * Open port 12537 for http rpc if `jsonrpc_http_port` is not provided.
-#     * generate blocks automatically without PoW
+#     * generate blocks without PoW (either after receiving a transaction or
+#       in fixed period, see ``dev_block_interval_ms'')
 #     * Skip catch-up mode even there is no peer
 #
 # mode = ""
@@ -35,7 +41,10 @@ bootnodes="cfxnode://604deed272ec2a6f75538f0852e9cd71c616b35655ea8331b5987b3cc68
 #
 # mode = "dev"
 
-# Note that ``dev_block_interval_ms'' controls the mining rate in the dev mode.
+# ``dev_block_interval_ms'' controls the mining rate in the dev mode.
+#
+# If it's not set, blocks will only be generated after receiving a transaction.
+# Otherwise, blocks are automatically generated every ``dev_block_interval_ms'' ms.
 #
 # dev_block_interval_ms = 250
 
@@ -43,10 +52,10 @@ bootnodes="cfxnode://604deed272ec2a6f75538f0852e9cd71c616b35655ea8331b5987b3cc68
 
 # `mining_author` is the address to receive mining rewards.
 # If set, `mining_type` will be "stratum" by default.
-# The value is a 40-digit hex string.
+# The value is a 40-digit hex string or a valid CIP-37 base32 address.
 # By default, the value is not set.
 #
-# mining_author="1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+# mining_author="cfx:aarc9abycue0hhzgyrr53m6cxedgccrmmyybjgh4xg"
 
 # `mining_type` controls whether the mining process goes through the
 # stratum protocol, uses CPU-mining, or disable mining.
@@ -137,6 +146,13 @@ log_conf="log.yaml"
 # jsonrpc_http_port=12537
 # jsonrpc_local_tcp_port=12538
 jsonrpc_local_http_port=12539
+
+# Specify the APIs available through the public JSON-RPC interfaces (HTTP, TCP, WebSocket)
+# using a comma-delimited list of API names.
+# Possible names are: all, safe, cfx, debug, pubsub, test, trace.
+# `safe` only includes `cfx` and `pubsub`.
+#
+# public_rpc_apis = "safe"
 
 # --------------- Performance-related Network Parameters ----------------------
 
@@ -296,6 +312,9 @@ jsonrpc_local_http_port=12539
 # `netconf_dir` is the directory to store network related persistent data, including `net_key`,
 # a list of trusted nodes and a list of untrusted nodes.
 #
+# By default, it is stored under the directory configured with `conflux_data_dir` with the directory name `net_config`.
+# If set, the directory path will not be related to `conflux_data_dir` anymore.
+#
 # netconf_dir="./blockchain_data/net_config"
 
 # `net_key` is the 256-bit private key to generate a unique node id for this node.
@@ -359,6 +378,17 @@ jsonrpc_local_http_port=12539
 #
 # additional_maintained_snapshot_count = 0
 
+# The additional number of epochs to keep different kinds of data before the current era genesis checkpoint.
+# For full/light nodes, the default value is 0, meaning all data before the era checkpoint will be removed.
+# For archive nodes, the default behavior is keeping all these data, while setting these parameters manually
+# will overwrite the default behavior of corresponding data types and garbage collect them accordingly.
+#
+# additional_maintained_block_body_epoch_count = 0
+# additional_maintained_execution_result_epoch_count = 0
+# additional_maintained_reward_epoch_count = 0
+# additional_maintained_trace_epoch_count = 0
+# additional_maintained_transaction_index_epoch_count = 0
+
 # Time interval to evict old data from in-memory data cache.
 #
 # block_cache_gc_period_ms = 5_000
@@ -368,11 +398,14 @@ jsonrpc_local_http_port=12539
 #
 # block_db_type = "rocksdb"
 
-# The root directory of all data (block data, state data, log files, node database).
+# The root directory of all data (block data, state data, and node database).
 #
 # conflux_data_dir = "./blockchain_data"
 
 # The directory to store block-related data.
+#
+# By default, it is stored under the directory configured with `conflux_data_dir` with the directory name `blockchain_db`.
+# If set, the directory path will not be related to `conflux_data_dir` anymore.
 #
 # block_db_dir = "./blockchain_data/blockchain_db"
 
@@ -401,6 +434,24 @@ jsonrpc_local_http_port=12539
 # storage_delta_mpts_node_map_vec_size=80000000
 # storage_delta_mpts_slab_idle_size=200000
 
+# Configure if we strictly check the tx index before garbage collection.
+# Setting it to `false` will improve the performance. But if the value is `false`, it's possible that although the
+# epoch where a tx is executed should not be garbage collected, the tx index of this tx is removed because it's packed
+# in an already garbage collected epoch.
+#
+# strict_tx_index_gc = true
+
+# The epoch number where we want to download the state and start re-executing transactions.
+# For full nodes, if the value is not set, the parameter will not take effects.
+# For archive node, the default value is 0.
+#
+# sync_state_starting_epoch = 0
+
+# The number of epochs needed between our best_epoch and our neighbours' best_epoch that we want to
+# start downloading states during catching up.
+#
+# sync_state_epoch_gap = 20
+
 # ------------------ Light Node Parameters ----------------------
 
 # Header sync parameters.
@@ -421,11 +472,6 @@ jsonrpc_local_http_port=12539
 #
 # executive_trace = false
 
-# Whether to enable tracing RPC for public access. It works only if `executive_trace`
-# is set to `true`. On the other hand, once `executive_trace` is enabled, the tracing
-# RPC is always enabled for local access.
-#
-# enable_tracing = false
 
 # -------------------- Others -------------------
 

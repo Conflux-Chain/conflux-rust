@@ -11,7 +11,7 @@ use cfxcore::{
     executive::{Executive, InternalContractMap, TransactOptions},
     machine::new_machine_with_builtin,
     state::State,
-    vm::{Env, Spec},
+    vm::Env,
     vm_factory::VmFactory,
 };
 use cfxkey::{Generator, KeyPair, Random};
@@ -46,7 +46,8 @@ fn txexe_benchmark(c: &mut Criterion) {
         data: Bytes::new(),
     };
     let tx = tx.sign(kp.secret());
-    let machine = new_machine_with_builtin(Default::default());
+    let machine =
+        new_machine_with_builtin(Default::default(), VmFactory::new(1024 * 32));
     let internal_contract_map = InternalContractMap::new();
     let env = Env {
         number: 0,
@@ -59,35 +60,30 @@ fn txexe_benchmark(c: &mut Criterion) {
         epoch_height: 0,
         transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
     };
-    let spec = Spec::new_spec();
     c.bench(
         "Execute 1 transaction",
         Benchmark::new("Execute 1 transaction", move |b| {
-            let mut state = State::new(
-                StateDb::new(
-                    handler
-                        .other_components
-                        .consensus
-                        .data_man
-                        .storage_manager
-                        .get_state_for_next_epoch(
-                            // FIXME: delta height
-                            StateIndex::new_for_test_only_delta_mpt(
-                                &handler
-                                    .other_components
-                                    .consensus
-                                    .best_block_hash(),
-                            ),
-                        )
-                        .unwrap()
-                        .unwrap(),
-                ),
-                VmFactory::new(1024 * 32),
-                &spec,
-                0, /* block_number */
-            )
+            let mut state = State::new(StateDb::new(
+                handler
+                    .other_components
+                    .consensus
+                    .data_man
+                    .storage_manager
+                    .get_state_for_next_epoch(
+                        // FIXME: delta height
+                        StateIndex::new_for_test_only_delta_mpt(
+                            &handler
+                                .other_components
+                                .consensus
+                                .best_block_hash(),
+                        ),
+                    )
+                    .unwrap()
+                    .unwrap(),
+            ))
             .expect("Failed to initialize state");
 
+            let spec = machine.spec(env.number);
             let mut ex = Executive::new(
                 &mut state,
                 &env,

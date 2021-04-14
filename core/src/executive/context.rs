@@ -7,7 +7,7 @@ use super::{executive::*, suicide as suicide_impl, InternalContractMap};
 use crate::{
     bytes::Bytes,
     machine::Machine,
-    state::{StateGeneric, Substate},
+    state::CallStackInfo,
     trace::{self, trace::ExecTrace, Tracer},
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
@@ -18,7 +18,7 @@ use crate::{
 use cfx_parameters::staking::{
     code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
-use cfx_storage::StorageStateTrait;
+use cfx_state::{StateTrait, SubstateMngTrait, SubstateTrait};
 use cfx_types::{Address, H256, U256};
 use primitives::transaction::UNSIGNED_SENDER;
 use std::sync::Arc;
@@ -66,8 +66,12 @@ impl OriginInfo {
 }
 
 /// Implementation of evm context.
-pub struct Context<'a, S: StorageStateTrait> {
-    state: &'a mut StateGeneric<S>,
+pub struct Context<
+    'a,
+    Substate: SubstateTrait,
+    State: StateTrait<Substate = Substate>,
+> {
+    state: &'a mut State,
     env: &'a Env,
     depth: usize,
     // The stack_depth is never read in context, even before this commit.
@@ -75,20 +79,25 @@ pub struct Context<'a, S: StorageStateTrait> {
     origin: &'a OriginInfo,
     substate: &'a mut Substate,
     machine: &'a Machine,
-    spec: &'a Spec,
+    spec: &'a Substate::Spec,
     output: OutputPolicy,
     static_flag: bool,
-    internal_contract_map: &'a InternalContractMap<S>,
+    internal_contract_map: &'a InternalContractMap,
 }
 
-impl<'a, S: StorageStateTrait> Context<'a, S> {
+impl<
+        'a,
+        Substate: SubstateTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        State: StateTrait<Substate = Substate>,
+    > Context<'a, Substate, State>
+{
     /// Basic `Context` constructor.
     pub fn new(
-        state: &'a mut StateGeneric<S>, env: &'a Env, machine: &'a Machine,
-        spec: &'a Spec, depth: usize, stack_depth: usize,
+        state: &'a mut State, env: &'a Env, machine: &'a Machine,
+        spec: &'a Substate::Spec, depth: usize, stack_depth: usize,
         origin: &'a OriginInfo, substate: &'a mut Substate,
         output: OutputPolicy, static_flag: bool,
-        internal_contract_map: &'a InternalContractMap<S>,
+        internal_contract_map: &'a InternalContractMap,
     ) -> Self
     {
         Context {
@@ -107,8 +116,11 @@ impl<'a, S: StorageStateTrait> Context<'a, S> {
     }
 }
 
-impl<'a, S: StorageStateTrait + Send + Sync + 'static> ContextTrait
-    for Context<'a, S>
+impl<
+        'a,
+        Substate: SubstateMngTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        State: StateTrait<Substate = Substate>,
+    > ContextTrait for Context<'a, Substate, State>
 {
     fn storage_at(&self, key: &Vec<u8>) -> vm::Result<U256> {
         self.substate
@@ -133,12 +145,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ContextTrait
     }
 
     fn is_static_or_reentrancy(&self) -> bool {
-        self.static_flag
-            || self
-                .substate
-                .contracts_in_callstack
-                .borrow()
-                .in_reentrancy()
+        self.static_flag || self.substate.in_reentrancy()
     }
 
     fn is_static(&self) -> bool { self.static_flag }
@@ -216,7 +223,13 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ContextTrait
             if !self.spec.keep_unsigned_nonce
                 || params.sender != UNSIGNED_SENDER
             {
-                self.state.inc_nonce(&self.origin.address)?;
+                self.state.inc_nonce(
+                    &self.origin.address,
+                    // The sender of a CREATE call is guaranteed to exist,
+                    // therefore the start_nonce below
+                    // doesn't matter.
+                    &self.spec.contract_start_nonce(self.env.number),
+                )?;
             }
         }
 
@@ -364,7 +377,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ContextTrait
         }
 
         let address = self.origin.address.clone();
-        self.substate.logs.push(LogEntry {
+        self.substate.logs_mut().push(LogEntry {
             address,
             topics,
             data: data.to_vec(),
@@ -375,7 +388,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ContextTrait
 
     fn suicide(
         &mut self, refund_address: &Address,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
     ) -> vm::Result<()>
     {
         if self.is_static_or_reentrancy() {
@@ -385,10 +398,11 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ContextTrait
         suicide_impl(
             &self.origin.address,
             refund_address,
-            &mut self.state,
+            self.state,
             &self.spec,
-            &mut self.substate,
+            &mut *self.substate,
             tracer,
+            account_start_nonce,
         )
     }
 
@@ -407,11 +421,11 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ContextTrait
     fn depth(&self) -> usize { self.depth }
 
     fn add_sstore_refund(&mut self, value: usize) {
-        self.substate.sstore_clears_refund += value as i128;
+        *self.substate.sstore_clears_refund_mut() += value as i128;
     }
 
     fn sub_sstore_refund(&mut self, value: usize) {
-        self.substate.sstore_clears_refund -= value as i128;
+        *self.substate.sstore_clears_refund_mut() -= value as i128;
     }
 
     fn trace_next_instruction(
@@ -437,10 +451,7 @@ impl<'a, S: StorageStateTrait + Send + Sync + 'static> ContextTrait
     }
 
     fn is_reentrancy(&self, _caller: &Address, callee: &Address) -> bool {
-        self.substate
-            .contracts_in_callstack
-            .borrow()
-            .reentrancy_happens_when_push(callee)
+        self.substate.reentrancy_happens_when_push(callee)
     }
 }
 
@@ -458,8 +469,11 @@ mod tests {
         },
     };
     use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
+    use cfx_state::{
+        state_trait::StateOpsTrait, substate_trait::SubstateMngTrait,
+    };
     use cfx_storage::{
-        new_storage_manager_for_testing, tests::FakeStateManager, StorageState,
+        new_storage_manager_for_testing, tests::FakeStateManager,
     };
     use cfx_types::{address_util::AddressUtil, Address, H256, U256};
     use std::str::FromStr;
@@ -498,7 +512,7 @@ mod tests {
         storage_manager: FakeStateManager,
         state: State,
         machine: Machine,
-        internal_contract_map: InternalContractMap<StorageState>,
+        internal_contract_map: InternalContractMap,
         spec: Spec,
         substate: Substate,
         env: Env,
@@ -508,7 +522,10 @@ mod tests {
         fn new() -> Self {
             let storage_manager = new_storage_manager_for_testing();
             let state = get_state_for_genesis_write(&*storage_manager);
-            let machine = new_machine_with_builtin(Default::default());
+            let machine = new_machine_with_builtin(
+                Default::default(),
+                Default::default(),
+            );
             let env = get_test_env();
             let spec = machine.spec(env.number);
             let internal_contract_map = InternalContractMap::new();
@@ -664,7 +681,6 @@ mod tests {
         false,
     )
             .unwrap()
-    .ok()
     .unwrap();
     }
 
@@ -740,7 +756,15 @@ mod tests {
                 &setup.internal_contract_map,
             );
             let mut tracer = trace::NoopTracer;
-            ctx.suicide(&refund_account, &mut tracer).unwrap();
+            ctx.suicide(
+                &refund_account,
+                &mut tracer,
+                setup
+                    .machine
+                    .spec(setup.env.number)
+                    .account_start_nonce(setup.env.number),
+            )
+            .unwrap();
         }
 
         assert_eq!(setup.substate.suicides.len(), 1);
@@ -840,5 +864,4 @@ mod tests {
                 .unwrap()
         );
     }
-
 }

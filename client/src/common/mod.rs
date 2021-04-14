@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub mod known_network_ids;
-
 /// Hold all top-level components for a type of client.
 /// This struct implement ClientShutdownTrait.
 pub struct ClientComponents<BlockGenT, Rest> {
@@ -154,10 +152,9 @@ pub fn initialize_common_modules(
     let network_config = conf.net_config()?;
     let cache_config = conf.cache_config();
 
-    let db_config = conf.db_config();
-    let ledger_db =
-        db::open_database(conf.raw_conf.block_db_dir.as_str(), &db_config)
-            .map_err(|e| format!("Failed to open database {:?}", e))?;
+    let (db_path, db_config) = conf.db_config();
+    let ledger_db = db::open_database(db_path.to_str().unwrap(), &db_config)
+        .map_err(|e| format!("Failed to open database {:?}", e))?;
 
     let secret_store = Arc::new(SecretStore::new());
     let storage_manager = Arc::new(
@@ -194,13 +191,29 @@ pub fn initialize_common_modules(
         }
     } else {
         match conf.raw_conf.genesis_accounts {
-            Some(ref file) => genesis::load_file(file)?,
+            Some(ref file) => genesis::load_file(file, |addr_str| {
+                parse_config_address_string(
+                    addr_str,
+                    network_config.get_network_type(),
+                )
+            })?,
             None => genesis::default(conf.is_test_or_dev_mode()),
         }
     };
 
-    let consensus_conf = conf.consensus_config();
-    let machine = Arc::new(new_machine_with_builtin(conf.common_params()));
+    let mut consensus_conf = conf.consensus_config();
+    match node_type {
+        NodeType::Archive => {
+            consensus_conf.sync_state_starting_epoch = Some(0);
+        }
+        NodeType::Full | NodeType::Light => {
+            consensus_conf.sync_state_epoch_gap =
+                Some(CATCH_UP_EPOCH_LAG_THRESHOLD);
+        }
+        NodeType::Unknown => {}
+    }
+    let vm = VmFactory::new(1024 * 32);
+    let machine = Arc::new(new_machine_with_builtin(conf.common_params(), vm));
 
     let genesis_block = genesis_block(
         &storage_manager,
@@ -235,12 +248,10 @@ pub fn initialize_common_modules(
     ));
 
     let statistics = Arc::new(Statistics::new());
-    let vm = VmFactory::new(1024 * 32);
     let notifications = Notifications::init();
 
     let consensus = Arc::new(ConsensusGraph::new(
         consensus_conf,
-        vm,
         txpool.clone(),
         statistics,
         data_man.clone(),
@@ -261,7 +272,6 @@ pub fn initialize_common_modules(
         pow.clone(),
         sync_config,
         notifications.clone(),
-        node_type,
         machine.clone(),
     ));
 
@@ -280,7 +290,6 @@ pub fn initialize_common_modules(
             None, /* sstore_iterations */
             Some(refresh_time),
         )
-        .ok()
         .expect("failed to initialize account provider"),
     );
 
@@ -297,6 +306,7 @@ pub fn initialize_common_modules(
         runtime.executor(),
         consensus.clone(),
         notifications.clone(),
+        *network.get_network_type(),
     );
     Ok((
         machine,
@@ -363,18 +373,13 @@ pub fn initialize_not_light_node_modules(
     ));
     light_provider.register(network.clone()).unwrap();
 
-    let initial_sync_phase = match node_type {
-        NodeType::Archive => SyncPhaseType::CatchUpRecoverBlockFromDB,
-        _ => SyncPhaseType::CatchUpRecoverBlockHeaderFromDB,
-    };
-
     let sync = Arc::new(SynchronizationService::new(
         node_type,
         network.clone(),
         sync_graph.clone(),
         conf.protocol_config(),
         conf.state_sync_config(),
-        initial_sync_phase,
+        SyncPhaseType::CatchUpRecoverBlockHeaderFromDB,
         light_provider,
     ));
     sync.register().unwrap();
@@ -430,9 +435,11 @@ pub fn initialize_not_light_node_modules(
     );
 
     let maybe_author: Option<Address> =
-        conf.raw_conf.mining_author.as_ref().map(|hex_str| {
-            parse_hex_string(hex_str)
-                .expect("mining-author should be 40-digit hex string")
+        conf.raw_conf.mining_author.as_ref().map(|addr_str| {
+            parse_config_address_string(addr_str, network.get_network_type())
+                .unwrap_or_else(|err| {
+                    panic!("Error parsing mining-author {}", err)
+                })
         });
     let blockgen = Arc::new(BlockGenerator::new(
         sync_graph,
@@ -444,18 +451,22 @@ pub fn initialize_not_light_node_modules(
         maybe_author.clone().unwrap_or_default(),
     ));
     if conf.is_dev_mode() {
-        let bg = blockgen.clone();
-        let interval_ms = conf.raw_conf.dev_block_interval_ms;
-        info!("Start auto block generation");
-        thread::Builder::new()
-            .name("auto_mining".into())
-            .spawn(move || {
-                bg.auto_block_generation(interval_ms);
-            })
-            .expect("Mining thread spawn error");
+        // If `dev_block_interval_ms` is None, blocks are generated after
+        // receiving RPC `cfx_sendRawTransaction`.
+        if let Some(interval_ms) = conf.raw_conf.dev_block_interval_ms {
+            // Automatic block generation with fixed interval.
+            let bg = blockgen.clone();
+            info!("Start auto block generation");
+            thread::Builder::new()
+                .name("auto_mining".into())
+                .spawn(move || {
+                    bg.auto_block_generation(interval_ms);
+                })
+                .expect("Mining thread spawn error");
+        }
     } else if let Some(author) = maybe_author {
         if !author.is_valid_address() || author.is_builtin_address() {
-            panic!("mining-author must start with 0x1 (user address) or 0x8 (contract address), otherwise you will not get mining rewards!!!");
+            panic!("mining-author must be user address or contract address, otherwise you will not get mining rewards!!!");
         }
         if blockgen.pow_config.enable_mining() {
             let bg = blockgen.clone();
@@ -484,59 +495,38 @@ pub fn initialize_not_light_node_modules(
         setup_debug_rpc_apis(
             common_impl.clone(),
             rpc_impl.clone(),
-            None,
+            pubsub.clone(),
             &conf,
         ),
     )?;
 
     let rpc_tcp_server = super::rpc::start_tcp(
         conf.tcp_config(),
-        if conf.is_test_or_dev_mode() {
-            setup_debug_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                Some(pubsub.clone()),
-                &conf,
-            )
-        } else {
-            setup_public_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                Some(pubsub.clone()),
-                &conf,
-            )
-        },
+        setup_public_rpc_apis(
+            common_impl.clone(),
+            rpc_impl.clone(),
+            pubsub.clone(),
+            &conf,
+        ),
         RpcExtractor,
     )?;
 
     let rpc_ws_server = super::rpc::start_ws(
         conf.ws_config(),
-        if conf.is_test_or_dev_mode() {
-            setup_debug_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                Some(pubsub.clone()),
-                &conf,
-            )
-        } else {
-            setup_public_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                Some(pubsub.clone()),
-                &conf,
-            )
-        },
+        setup_public_rpc_apis(
+            common_impl.clone(),
+            rpc_impl.clone(),
+            pubsub.clone(),
+            &conf,
+        ),
         RpcExtractor,
     )?;
 
     let rpc_http_server = super::rpc::start_http(
         conf.http_config(),
-        if conf.is_test_or_dev_mode() {
-            setup_debug_rpc_apis(common_impl, rpc_impl, None, &conf)
-        } else {
-            setup_public_rpc_apis(common_impl, rpc_impl, None, &conf)
-        },
+        setup_public_rpc_apis(common_impl, rpc_impl, pubsub, &conf),
     )?;
+
     Ok((
         data_man,
         pow,
@@ -721,7 +711,7 @@ pub mod delegate_convert {
 pub use crate::configuration::Configuration;
 use crate::{
     accounts::{account_provider, keys_path},
-    configuration::parse_hex_string,
+    configuration::parse_config_address_string,
     rpc::{
         extractor::RpcExtractor,
         impls::{
@@ -733,6 +723,7 @@ use crate::{
     GENESIS_VERSION,
 };
 use blockgen::BlockGenerator;
+use cfx_parameters::sync::CATCH_UP_EPOCH_LAG_THRESHOLD;
 use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use cfxcore::{

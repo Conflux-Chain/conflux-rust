@@ -19,30 +19,36 @@ use super::consensus::consensus_inner::{
     consensus_new_block_handler::ConsensusNewBlockHandler,
 };
 use crate::{
-    block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
+    block_data_manager::{
+        BlockDataManager, BlockExecutionResultWithEpoch, DataVersionTuple,
+    },
     consensus::consensus_inner::{
         consensus_executor::ConsensusExecutionConfiguration, StateBlameInfo,
     },
-    evm::Spec,
     executive::ExecutionOutcome,
     pow::{PowComputer, ProofOfWorkConfig},
     rpc_errors::{invalid_params_check, Result as RpcResult},
     state::State,
     statistics::SharedStatistics,
+    trace::{
+        trace::{ActionType, BlockExecTraces, LocalizedTrace},
+        trace_filter::TraceFilter,
+    },
     transaction_pool::SharedTransactionPool,
     verification::VerificationConfig,
-    vm_factory::VmFactory,
     NodeType, Notifications,
 };
 use cfx_internal_common::ChainIdParams;
 use cfx_parameters::{
     consensus::*,
+    consensus_internal::REWARD_EPOCH_COUNT,
     rpc::{
         GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
         TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW,
         TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM,
     },
 };
+use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::StateDb;
 use cfx_storage::state_manager::StateManagerTrait;
 use cfx_types::{Bloom, H160, H256, U256};
@@ -56,7 +62,7 @@ use metrics::{
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     epoch::BlockHashOrEpochNumber,
-    filter::{Filter, FilterError},
+    filter::{FilterError, LogFilter},
     log_entry::LocalizedLogEntry,
     receipt::Receipt,
     EpochId, EpochNumber, SignedTransaction, TransactionIndex,
@@ -64,9 +70,12 @@ use primitives::{
 use rayon::prelude::*;
 use std::{
     any::Any,
-    cmp::min,
-    collections::{HashMap, HashSet},
-    sync::Arc,
+    cmp::{max, min},
+    collections::HashSet,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     thread::sleep,
     time::Duration,
 };
@@ -113,6 +122,16 @@ pub struct ConsensusConfig {
     /// consensus from making progress under high RPC load.
     pub get_logs_epoch_batch_size: usize,
     pub get_logs_filter_max_epoch_range: Option<u64>,
+
+    /// TODO: These parameters are only utilized in catch-up now.
+    /// TODO: They should be used in data garbage collection, too.
+    /// TODO: States, receipts, and block bodies need separate parameters.
+    /// The starting epoch that we need to sync its state and start replaying
+    /// transactions.
+    pub sync_state_starting_epoch: Option<u64>,
+    /// The number of extra epochs that we want to keep
+    /// states/receipts/transactions.
+    pub sync_state_epoch_gap: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -138,7 +157,7 @@ impl ConsensusGraphStatistics {
     }
 }
 
-#[derive(Default, DeriveMallocSizeOf)]
+#[derive(Default, Debug, DeriveMallocSizeOf)]
 pub struct BestInformation {
     pub chain_id: u32,
     pub best_block_hash: H256,
@@ -178,31 +197,22 @@ pub struct ConsensusGraph {
     /// Make sure that it is only modified when holding inner lock to prevent
     /// any inconsistency
     best_info: RwLock<Arc<BestInformation>>,
-    /// This HashMap stores whether the state in header is correct or not for
-    /// pivot blocks from current era genesis to first trusted blame block
-    /// after current era stable genesis.
-    /// We use `Mutex` here because other thread will only modify it once and
-    /// after that only current thread will operate this map.
-    pub pivot_block_state_valid_map: Mutex<HashMap<H256, bool>>,
+    /// Set to `true` when we enter NormalPhase
+    ready_for_mining: AtomicBool,
+
     /// The epoch id of the remotely synchronized state.
     /// This is always `None` for archive nodes.
     pub synced_epoch_id: Mutex<Option<EpochId>>,
     pub config: ConsensusConfig,
-
-    /// The type of this node: Archive, Full, or Light.
-    node_type: NodeType,
 }
 
 impl MallocSizeOf for ConsensusGraph {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         let best_info_size = self.best_info.read().size_of(ops);
-        let pivot_block_state_valid_map_size =
-            self.pivot_block_state_valid_map.lock().size_of(ops);
         self.inner.read().size_of(ops)
             + self.txpool.size_of(ops)
             + self.data_man.size_of(ops)
             + best_info_size
-            + pivot_block_state_valid_map_size
     }
 }
 
@@ -211,7 +221,7 @@ impl ConsensusGraph {
     /// other components. The execution will be skipped if bench_mode sets
     /// to true.
     pub fn with_era_genesis(
-        conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
+        conf: ConsensusConfig, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
         era_genesis_block_hash: &H256, era_stable_block_hash: &H256,
@@ -232,7 +242,6 @@ impl ConsensusGraph {
         let executor = ConsensusExecutor::start(
             txpool.clone(),
             data_man.clone(),
-            vm,
             inner.clone(),
             execution_conf,
             verification_config,
@@ -257,12 +266,11 @@ impl ConsensusGraph {
             ),
             confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),
-            pivot_block_state_valid_map: Default::default(),
+            ready_for_mining: AtomicBool::new(false),
             synced_epoch_id: Default::default(),
             config: conf,
-            node_type,
         };
-        graph.update_best_info();
+        graph.update_best_info(false /* ready_for_mining */);
         graph
             .txpool
             .notify_new_best_info(graph.best_info.read_recursive().clone())
@@ -275,7 +283,7 @@ impl ConsensusGraph {
     /// in the data manager and various other components. The execution will
     /// be skipped if bench_mode sets to true.
     pub fn new(
-        conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
+        conf: ConsensusConfig, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
         notifications: Arc<Notifications>,
@@ -287,7 +295,6 @@ impl ConsensusGraph {
         let stable_hash = data_man.get_cur_consensus_era_stable_hash();
         ConsensusGraph::with_era_genesis(
             conf,
-            vm,
             txpool,
             statistics,
             data_man,
@@ -522,34 +529,17 @@ impl ConsensusGraph {
         min(state_upper_bound, deferred_state_height)
     }
 
-    pub fn get_transaction_receipt_and_block_info(
-        &self, tx_hash: &H256,
-    ) -> Option<(
-        BlockExecutionResultWithEpoch,
-        TransactionIndex,
-        Option<H256>,
-    )> {
-        // Note: `transaction_index_by_hash` might return outdated results if
-        // there was a pivot chain reorg but the tx was not re-executed yet. In
-        // this case, `block_execution_results_by_hash` will detect that the
-        // execution results do not match the current pivot view and return
-        // None. If the tx was re-executed in another block on the new pivot
-        // chain, `transaction_index_by_hash` will return the updated result.
-        let (results_with_epoch, address) = {
-            let inner = self.inner.read();
-            let address = self.data_man.transaction_index_by_hash(
-                tx_hash, false, /* update_cache */
-            )?;
-            (
-                inner.block_execution_results_by_hash(
-                    &address.block_hash,
-                    true,
-                )?,
-                address,
-            )
-        };
-        let epoch_hash = results_with_epoch.0;
-        let maybe_state_root = match self.executor.wait_for_result(epoch_hash) {
+    pub fn get_block_execution_info(
+        &self, block_hash: &H256,
+    ) -> Option<(BlockExecutionResultWithEpoch, Option<H256>)> {
+        let results_with_epoch = self
+            .inner
+            .read_recursive()
+            .block_execution_results_by_hash(block_hash, true)?;
+
+        let pivot_hash = results_with_epoch.0;
+
+        let maybe_state_root = match self.executor.wait_for_result(pivot_hash) {
             Ok(execution_commitment) => {
                 // We already has transaction address with epoch_hash executed,
                 // so we can always get the state_root with
@@ -566,12 +556,16 @@ impl ConsensusGraph {
                 None
             }
         };
-        Some((results_with_epoch, address, maybe_state_root))
+
+        Some((results_with_epoch, maybe_state_root))
     }
 
+    // TODO: maybe return error for reserved address? Not sure where is the best
+    //  place to do the check.
     pub fn next_nonce(
         &self, address: H160,
         block_hash_or_epoch_number: BlockHashOrEpochNumber,
+        rpc_param_name: &str,
     ) -> RpcResult<U256>
     {
         let epoch_number = match block_hash_or_epoch_number {
@@ -583,20 +577,25 @@ impl ConsensusGraph {
             ),
             BlockHashOrEpochNumber::EpochNumber(epoch_number) => epoch_number,
         };
-        let state = self.get_state_by_epoch_number(epoch_number)?;
+        let state =
+            self.get_state_by_epoch_number(epoch_number, rpc_param_name)?;
 
         Ok(state.nonce(&address)?)
     }
 
-    fn earliest_epoch_available(&self) -> u64 {
-        match self.node_type {
-            NodeType::Archive => 0,
-            _ => self.latest_checkpoint_epoch_number(),
-        }
+    fn earliest_epoch_for_log_filter(&self) -> u64 {
+        max(
+            self.data_man.earliest_epoch_with_block_body(),
+            self.data_man.earliest_epoch_with_execution_result(),
+        )
+    }
+
+    fn earliest_epoch_for_trace_filter(&self) -> u64 {
+        self.data_man.earliest_epoch_with_trace()
     }
 
     fn filter_block_receipts<'a>(
-        &self, filter: &'a Filter, epoch_number: u64, block_hash: H256,
+        &self, filter: &'a LogFilter, epoch_number: u64, block_hash: H256,
         mut receipts: Vec<Receipt>, mut tx_hashes: Vec<H256>,
     ) -> impl Iterator<Item = LocalizedLogEntry> + 'a
     {
@@ -641,11 +640,10 @@ impl ConsensusGraph {
                 })
             })
             .filter(move |log_entry| filter.matches(&log_entry.entry))
-            .take(filter.limit.unwrap_or(::std::usize::MAX))
     }
 
     fn filter_block<'a>(
-        &self, filter: &'a Filter, bloom_possibilities: &'a Vec<Bloom>,
+        &self, filter: &'a LogFilter, bloom_possibilities: &'a Vec<Bloom>,
         epoch: u64, pivot_hash: H256, block_hash: H256,
     ) -> Result<impl Iterator<Item = LocalizedLogEntry> + 'a, FilterError>
     {
@@ -655,7 +653,7 @@ impl ConsensusGraph {
         }
 
         // check if epoch is still available
-        let min = self.earliest_epoch_available();
+        let min = self.earliest_epoch_for_log_filter();
 
         if epoch < min {
             return Err(FilterError::EpochAlreadyPruned { epoch, min });
@@ -709,7 +707,7 @@ impl ConsensusGraph {
     }
 
     fn filter_single_epoch<'a>(
-        &'a self, filter: &'a Filter, bloom_possibilities: &'a Vec<Bloom>,
+        &'a self, filter: &'a LogFilter, bloom_possibilities: &'a Vec<Bloom>,
         epoch: u64,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError>
     {
@@ -739,12 +737,11 @@ impl ConsensusGraph {
                 Ok(it) => Either::Left(it.map(Ok)),
                 Err(e) => Either::Right(std::iter::once(Err(e))),
             })
-            .take(filter.limit.unwrap_or(::std::usize::MAX))
             .collect()
     }
 
     fn filter_epoch_batch(
-        &self, filter: &Filter, bloom_possibilities: &Vec<Bloom>,
+        &self, filter: &LogFilter, bloom_possibilities: &Vec<Bloom>,
         epochs: Vec<u64>, consistency_check_data: &mut Option<(u64, H256)>,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError>
     {
@@ -779,18 +776,14 @@ impl ConsensusGraph {
             .map(|e| self.filter_single_epoch(filter, bloom_possibilities, e))
             .collect::<Result<Vec<Vec<LocalizedLogEntry>>, FilterError>>()?; // short-circuit on error
 
-        Ok(epoch_batch_logs
-            .into_iter()
-            .flatten()
-            .take(filter.limit.unwrap_or(::std::usize::MAX))
-            .collect())
+        Ok(epoch_batch_logs.into_iter().flatten().collect())
     }
 
-    pub fn get_filter_epoch_range(
-        &self, filter: &Filter,
+    pub fn get_log_filter_epoch_range(
+        &self, filter: &LogFilter,
     ) -> Result<impl Iterator<Item = u64>, FilterError> {
         // lock so that we have a consistent view
-        let _inner = self.inner.read();
+        let _inner = self.inner.read_recursive();
 
         let from_epoch =
             self.get_height_from_epoch_number(filter.from_epoch.clone())?;
@@ -804,10 +797,10 @@ impl ConsensusGraph {
             });
         }
 
-        if from_epoch < self.earliest_epoch_available() {
+        if from_epoch < self.earliest_epoch_for_log_filter() {
             return Err(FilterError::EpochAlreadyPruned {
                 epoch: from_epoch,
-                min: self.earliest_epoch_available(),
+                min: self.earliest_epoch_for_log_filter(),
             });
         }
 
@@ -825,11 +818,40 @@ impl ConsensusGraph {
         return Ok((from_epoch..=to_epoch).rev());
     }
 
+    pub fn get_trace_filter_epoch_range(
+        &self, filter: &TraceFilter,
+    ) -> Result<impl Iterator<Item = u64>, FilterError> {
+        // lock so that we have a consistent view
+        let _inner = self.inner.read_recursive();
+
+        let from_epoch =
+            self.get_height_from_epoch_number(filter.from_epoch.clone())?;
+        let to_epoch =
+            self.get_height_from_epoch_number(filter.to_epoch.clone())?;
+
+        if from_epoch > to_epoch {
+            return Err(FilterError::InvalidEpochNumber {
+                from_epoch,
+                to_epoch,
+            });
+        }
+
+        if from_epoch < self.earliest_epoch_for_trace_filter() {
+            return Err(FilterError::EpochAlreadyPruned {
+                epoch: from_epoch,
+                min: self.earliest_epoch_for_trace_filter(),
+            });
+        }
+        Ok(from_epoch..=to_epoch)
+    }
+
     fn filter_logs_by_epochs(
-        &self, filter: Filter,
+        &self, filter: LogFilter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
         assert!(filter.block_hashes.is_none());
         let bloom_possibilities = filter.bloom_possibilities();
+
+        let offset = filter.offset.unwrap_or(0);
         let limit = filter.limit.unwrap_or(::std::usize::MAX);
 
         // we store the last epoch processed and the corresponding pivot hash so
@@ -838,7 +860,7 @@ impl ConsensusGraph {
 
         let mut logs = self
             // iterate over epochs in reverse order
-            .get_filter_epoch_range(&filter)?
+            .get_log_filter_epoch_range(&filter)?
             // we process epochs in each batch in parallel
             // but batches are processed one-by-one
             .chunks(self.config.get_logs_epoch_batch_size)
@@ -857,6 +879,7 @@ impl ConsensusGraph {
                 Err(e) => Either::Right(std::iter::once(Err(e))),
             })
             // take as many as we need
+            .skip(offset)
             .take(limit)
             // short-circuit on error
             .collect::<Result<Vec<LocalizedLogEntry>, FilterError>>()?;
@@ -876,7 +899,7 @@ impl ConsensusGraph {
 
         // check if block exists
         if self.data_man.block_header_by_hash(&block_hash).is_none() {
-            return Err(FilterError::UnknownBlock { hash: block_hash });
+            bail!(FilterError::UnknownBlock { hash: block_hash });
         };
 
         // find pivot block
@@ -887,10 +910,24 @@ impl ConsensusGraph {
         {
             Some(r) => r.0,
             None => {
-                // exec results are either pruned already or block has not been
-                // executed yet
-                // TODO(thegaram): is there a way to tell these apart?
-                return Err(FilterError::BlockNotExecutedYet { block_hash });
+                match self.data_man.local_block_info_by_hash(&block_hash) {
+                    // if local block info is not available, that means this
+                    // block has never entered the consensus graph.
+                    None => {
+                        bail!(FilterError::BlockNotExecutedYet { block_hash })
+                    }
+                    // if the local block info is available, then it is very
+                    // likely that we have already executed this block and the
+                    // results are not available because they have been pruned.
+                    // NOTE: it might be possible that the block has entered
+                    // consensus graph but has not been executed yet, or that it
+                    // was not executed because it was invalid. these cases seem
+                    // rare enough to not require special handling here; we can
+                    // add more fine-grained errors in the future if necessary.
+                    Some(_) => {
+                        bail!(FilterError::BlockAlreadyPruned { block_hash })
+                    }
+                }
             }
         };
 
@@ -900,7 +937,7 @@ impl ConsensusGraph {
             None => {
                 // internal error
                 error!("Header of pivot block {:?} not found", pivot_hash);
-                return Err(FilterError::UnknownBlock { hash: pivot_hash });
+                bail!(FilterError::UnknownBlock { hash: pivot_hash });
             }
         };
 
@@ -916,7 +953,7 @@ impl ConsensusGraph {
     }
 
     fn filter_logs_by_block_hashes(
-        &self, mut filter: Filter,
+        &self, mut filter: LogFilter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
         assert!(filter.block_hashes.is_some());
         let block_hashes = filter.block_hashes.take().unwrap();
@@ -955,6 +992,7 @@ impl ConsensusGraph {
                 Err(e) => Either::Right(std::iter::once(Err(e))),
             })
             // take as many as we need
+            .skip(filter.offset.unwrap_or(0))
             .take(filter.limit.unwrap_or(::std::usize::MAX))
             // short-circuit on error
             .collect::<Result<Vec<_>, _>>()?;
@@ -964,12 +1002,28 @@ impl ConsensusGraph {
     }
 
     pub fn logs(
-        &self, filter: Filter,
+        &self, filter: LogFilter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
         match filter.block_hashes {
             None => self.filter_logs_by_epochs(filter),
             Some(_) => self.filter_logs_by_block_hashes(filter),
         }
+    }
+
+    pub fn filter_traces(
+        &self, mut filter: TraceFilter,
+    ) -> Result<Vec<LocalizedTrace>, FilterError> {
+        let traces = match filter.block_hashes.take() {
+            None => self.filter_traces_by_epochs(&filter),
+            Some(hashes) => self.filter_traces_by_block_hashes(&filter, hashes),
+        }?;
+        // Apply `filter.after` and `filter.count` after getting all trace
+        // entries.
+        Ok(traces
+            .into_iter()
+            .skip(filter.after.unwrap_or(0))
+            .take(filter.count.unwrap_or(usize::max_value()))
+            .collect())
     }
 
     pub fn call_virtual(
@@ -1036,6 +1090,180 @@ impl ConsensusGraph {
 
         Ok(StateDb::new(state))
     }
+
+    /// This function is called after a new block appended to the
+    /// ConsensusGraph. Because BestInformation is often queried outside. We
+    /// store a version of best_info outside the inner to prevent keep
+    /// getting inner locks.
+    /// If `ready_for_mining` is `false`, the terminal information will not be
+    /// needed, so we do not compute bounded terminals in this case.
+    fn update_best_info(&self, ready_for_mining: bool) {
+        let mut inner = self.inner.write();
+        let mut best_info = self.best_info.write();
+
+        let bounded_terminal_block_hashes = if ready_for_mining {
+            inner.bounded_terminal_block_hashes(self.config.referee_bound)
+        } else {
+            // `bounded_terminal` is only needed for mining and serve syncing.
+            // As the computation cost is high, we do not compute it when we are
+            // catching up because we cannot mine blocks in
+            // catching-up phases. Use `best_block_hash` to
+            // represent terminals here to remain consistent.
+            vec![inner.best_block_hash()]
+        };
+        let best_epoch_number = inner.best_epoch_number();
+        BEST_EPOCH_NUMBER.update(best_epoch_number as usize);
+        *best_info = Arc::new(BestInformation {
+            chain_id: self
+                .config
+                .chain_id
+                .read()
+                .get_chain_id(best_epoch_number),
+            best_block_hash: inner.best_block_hash(),
+            best_epoch_number,
+            current_difficulty: inner.current_difficulty,
+            bounded_terminal_block_hashes,
+        });
+        debug!("update_best_info to {:?}", best_info);
+    }
+
+    fn filter_traces_by_epochs(
+        &self, filter: &TraceFilter,
+    ) -> Result<Vec<LocalizedTrace>, FilterError> {
+        let epochs_and_pivot_hash = {
+            let inner = self.inner.read();
+            let mut epochs_and_pivot_hash = Vec::new();
+            for epoch_number in self.get_trace_filter_epoch_range(filter)? {
+                epochs_and_pivot_hash.push((
+                    epoch_number,
+                    inner.get_pivot_hash_from_epoch_number(epoch_number)?,
+                ))
+            }
+            epochs_and_pivot_hash
+        };
+        let block_traces = epochs_and_pivot_hash
+            .into_par_iter()
+            .map(|(epoch_number, assumed_pivot)| {
+                self.filter_traces_single_epoch(epoch_number, assumed_pivot)
+            })
+            .collect::<Result<Vec<Vec<_>>, FilterError>>()?
+            .into_iter()
+            .flatten()
+            .collect();
+        self.filter_block_traces(filter, block_traces)
+    }
+
+    /// Return `Vec<(pivot_hash, block_hash, block_trace)>`
+    fn filter_traces_single_epoch(
+        &self, epoch_number: u64, assumed_pivot: H256,
+    ) -> Result<Vec<(H256, H256, BlockExecTraces)>, FilterError> {
+        let block_hashes = self
+            .inner
+            .read_recursive()
+            .block_hashes_by_epoch(epoch_number)?;
+        if block_hashes.last().expect("epoch set not empty") != &assumed_pivot {
+            bail!(FilterError::PivotChainReorg {
+                epoch: epoch_number,
+                from: assumed_pivot,
+                to: *block_hashes.last().unwrap()
+            })
+        }
+        let mut traces = Vec::new();
+        for block_hash in block_hashes {
+            traces.push(
+                self.data_man
+                    .block_traces_by_hash_with_epoch(
+                        &block_hash,
+                        &assumed_pivot,
+                        false,
+                        true,
+                    )
+                    .map(|trace| (assumed_pivot, block_hash, trace))
+                    .ok_or(FilterError::UnknownBlock { hash: block_hash })?,
+            );
+        }
+        Ok(traces)
+    }
+
+    // TODO: We can apply some early return logic based on `filter.count`.
+    fn filter_traces_by_block_hashes(
+        &self, filter: &TraceFilter, block_hashes: Vec<H256>,
+    ) -> Result<Vec<LocalizedTrace>, FilterError> {
+        let block_traces = block_hashes
+            .into_par_iter()
+            .map(|h| {
+                self.data_man
+                    .block_traces_by_hash(&h)
+                    .map(|DataVersionTuple(pivot_hash, trace)| {
+                        (pivot_hash, h, trace)
+                    })
+                    .ok_or_else(|| FilterError::BlockNotExecutedYet {
+                        block_hash: h,
+                    })
+            })
+            .collect::<Result<Vec<_>, FilterError>>()?;
+        self.filter_block_traces(filter, block_traces)
+    }
+
+    /// `block_traces` is a list of tuple `(pivot_hash, block_hash,
+    /// block_trace)`.
+    fn filter_block_traces(
+        &self, filter: &TraceFilter,
+        block_traces: Vec<(H256, H256, BlockExecTraces)>,
+    ) -> Result<Vec<LocalizedTrace>, FilterError>
+    {
+        let mut traces = Vec::new();
+        for (pivot_hash, block_hash, block_trace) in block_traces {
+            let tx_hashes: Vec<H256> = self
+                .data_man
+                .block_by_hash(&block_hash, true /* update_cache */)
+                .ok_or(FilterError::BlockAlreadyPruned { block_hash })?
+                .transactions
+                .iter()
+                .map(|tx| tx.hash())
+                .collect();
+            if tx_hashes.len() != block_trace.0.len() {
+                bail!(format!(
+                    "tx list and trace length unmatch: block_hash={:?}",
+                    block_hash
+                ));
+            }
+            let epoch_number = self
+                .data_man
+                .block_height_by_hash(&pivot_hash)
+                .ok_or_else(|| {
+                    FilterError::Custom(
+                        format!(
+                            "pivot block header missing, hash={:?}",
+                            pivot_hash
+                        )
+                        .into(),
+                    )
+                })?;
+            for (tx_position, tx_trace) in block_trace.0.into_iter().enumerate()
+            {
+                for trace in tx_trace.0 {
+                    if let Some(action_types) = &filter.action_types {
+                        if !action_types
+                            .contains(&ActionType::from(&trace.action))
+                        {
+                            continue;
+                        }
+                    }
+                    let trace = LocalizedTrace {
+                        action: trace.action,
+                        epoch_hash: pivot_hash,
+                        epoch_number: epoch_number.into(),
+                        block_hash,
+                        transaction_position: tx_position.into(),
+                        transaction_hash: tx_hashes[tx_position],
+                    };
+                    traces.push(trace);
+                }
+            }
+        }
+        Ok(traces)
+    }
 }
 
 impl Drop for ConsensusGraph {
@@ -1051,87 +1279,26 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     /// This is the main function that SynchronizationGraph calls to deliver a
     /// new block to the consensus graph.
-    fn on_new_block(
-        &self, hash: &H256, ignore_body: bool, update_best_info: bool,
-    ) {
+    fn on_new_block(&self, hash: &H256) {
         let _timer =
             MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
         self.statistics.inc_consensus_graph_processed_block_count();
 
-        let block_opt = if ignore_body {
-            None
-        } else {
-            self.data_man.block_by_hash(hash, true /* update_cache */)
-        };
+        self.new_block_handler.on_new_block(
+            &mut *self.inner.write(),
+            &self.confirmation_meter,
+            hash,
+        );
 
-        let header_opt = if ignore_body {
-            self.data_man.block_header_by_hash(hash)
-        } else {
-            None
-        };
-
-        {
-            let inner = &mut *self.inner.write();
-            if !ignore_body {
-                let block = block_opt.unwrap();
-                debug!(
-                    "insert new block into consensus: block_header={:?} tx_count={}, block_size={}",
-                    block.block_header,
-                    block.transactions.len(),
-                    block.size(),
-                );
-                self.new_block_handler.on_new_block(
-                    inner,
-                    &self.confirmation_meter,
-                    hash,
-                    &block.block_header,
-                    Some(block.transactions.clone()),
-                );
-            } else {
-                // This `ignore_body` case will only be used when
-                // 1. archive node is in `CatchUpRecoverBlockFromDB` phase
-                // 2. full node is in `CatchUpRecoverBlockHeaderFromDB`,
-                // `CatchUpSyncBlockHeader` or `CatchUpRecoverBlockFromDB` phase
-                let header = header_opt.unwrap();
-                debug!(
-                    "insert new block_header into consensus: block_header={:?}",
-                    header
-                );
-                self.new_block_handler.on_new_block(
-                    inner,
-                    &self.confirmation_meter,
-                    hash,
-                    header.as_ref(),
-                    None,
-                );
-            }
-
-            // for full node, we should recover state_valid for pivot block
-            let mut pivot_block_state_valid_map =
-                self.pivot_block_state_valid_map.lock();
-            if !pivot_block_state_valid_map.is_empty()
-                && pivot_block_state_valid_map.contains_key(&hash)
-            {
-                let arena_index =
-                    *inner.hash_to_arena_indices.get(&hash).unwrap();
-                trace!(
-                    "Restore state_valid: hash={:?} height={}",
-                    hash,
-                    inner.arena[arena_index].height
-                );
-                inner.arena[arena_index].data.state_valid =
-                    pivot_block_state_valid_map.remove(&hash);
-            }
-        }
-
-        // Skip updating best info during recovery
-        if update_best_info {
-            self.update_best_info();
+        let ready_for_mining = self.ready_for_mining.load(Ordering::SeqCst);
+        self.update_best_info(ready_for_mining);
+        if ready_for_mining {
             self.txpool
                 .notify_new_best_info(self.best_info.read().clone())
                 // FIXME: propogate error.
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
         }
+        debug!("Finish Consensus::on_new_block for {:?}", hash);
     }
 
     /// This function is a wrapper function for the function in the confirmation
@@ -1140,12 +1307,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
     fn update_total_weight_delta_heartbeat(&self) {
         self.confirmation_meter
             .update_total_weight_delta_heartbeat();
-    }
-
-    /// This function returns the set of blocks that are two eras farther from
-    /// current era. They can be safely garbage collected.
-    fn retrieve_old_era_blocks(&self) -> Option<H256> {
-        self.inner.read().pop_old_era_block_set()
     }
 
     /// construct_pivot_state() rebuild pivot chain state info from db
@@ -1317,84 +1478,146 @@ impl ConsensusGraphTrait for ConsensusGraph {
         self.inner.write().set_initial_sequence_number(initial_sn);
     }
 
-    /// This function is called after a new block appended to the
-    /// ConsensusGraph. Because BestInformation is often queried outside. We
-    /// store a version of best_info outside the inner to prevent keep
-    /// getting inner locks.
-    fn update_best_info(&self) {
-        let mut inner = self.inner.write();
-        let mut best_info = self.best_info.write();
-
-        let terminal_hashes = inner.terminal_hashes();
-        let best_block_hash = inner.best_block_hash();
-        let best_block_arena_index =
-            *inner.hash_to_arena_indices.get(&best_block_hash).unwrap();
-        let bounded_terminal_block_hashes =
-            if terminal_hashes.len() > self.config.referee_bound {
-                inner.best_terminals(
-                    best_block_arena_index,
-                    self.config.referee_bound,
-                )
-            } else {
-                terminal_hashes
-            };
-
-        let best_epoch_number = inner.best_epoch_number();
-        BEST_EPOCH_NUMBER.update(best_epoch_number as usize);
-        *best_info = Arc::new(BestInformation {
-            chain_id: self
-                .config
-                .chain_id
-                .read()
-                .get_chain_id(best_epoch_number),
-            best_block_hash: inner.best_block_hash(),
-            best_epoch_number,
-            current_difficulty: inner.current_difficulty,
-            bounded_terminal_block_hashes,
-        });
-    }
-
+    // TODO: investigate why we ended up with multiple similar functions to
+    //  get state / state db by epoch number and if we can simplify the code.
     fn get_state_by_epoch_number(
-        &self, epoch_number: EpochNumber,
+        &self, epoch_number: EpochNumber, rpc_param_name: &str,
     ) -> RpcResult<State> {
-        self.validate_stated_epoch(&epoch_number)?;
-        let height = self.get_height_from_epoch_number(epoch_number)?;
-        let (epoch_id, epoch_size) = if let Ok(v) =
+        invalid_params_check(
+            rpc_param_name,
+            self.validate_stated_epoch(&epoch_number),
+        )?;
+
+        let height = invalid_params_check(
+            rpc_param_name,
+            self.get_height_from_epoch_number(epoch_number),
+        )?;
+        let epoch_id = if let Ok(v) =
             self.inner.read_recursive().block_hashes_by_epoch(height)
         {
-            (v.last().expect("pivot block always exist").clone(), v.len())
+            v.last().expect("pivot block always exist").clone()
         } else {
             bail!("cannot get block hashes in the specified epoch, maybe it does not exist?");
         };
         let state_db =
             self.get_state_db_by_height_and_hash(height, &epoch_id)?;
 
-        let start_block_number = match self.data_man.get_epoch_execution_context(&epoch_id) {
-            Some(v) => v.start_block_number + epoch_size as u64,
-            None => bail!("cannot obtain the execution context. Database is potentially corrupted!"),
-        };
-
-        Ok(State::new(
-            state_db,
-            Default::default(), /* vm */
-            &Spec::new_spec(),
-            start_block_number,
-        )?)
+        Ok(State::new(state_db)?)
     }
 
+    // TODO: investigate why we ended up with multiple similar functions to
+    //  get state / state db by epoch number and if we can simplify the code.
     fn get_state_db_by_epoch_number(
-        &self, epoch_number: EpochNumber,
+        &self, epoch_number: EpochNumber, rpc_param_name: &str,
     ) -> RpcResult<StateDb> {
         invalid_params_check(
-            "epoch_number",
+            rpc_param_name,
             self.validate_stated_epoch(&epoch_number),
         )?;
         let height = invalid_params_check(
-            "epoch_number",
+            rpc_param_name,
             self.get_height_from_epoch_number(epoch_number),
         )?;
         let hash =
             self.inner.read().get_pivot_hash_from_epoch_number(height)?;
         self.get_state_db_by_height_and_hash(height, &hash)
+    }
+
+    /// Return the blocks without bodies in the subtree of stable genesis and
+    /// the blocks in the `REWARD_EPOCH_COUNT` epochs before it. Block
+    /// bodies of other blocks in the consensus graph will never be needed
+    /// for executions after this stable genesis, as long as the checkpoint
+    /// is not reverted.
+    fn get_blocks_needing_bodies(&self) -> HashSet<H256> {
+        let inner = self.inner.read();
+        // TODO: This may not be stable genesis with other configurations.
+        let stable_genesis = self.data_man.get_cur_consensus_era_stable_hash();
+        let mut missing_body_blocks = HashSet::new();
+        for block_hash in inner
+            .get_subtree(&stable_genesis)
+            .expect("stable is in consensus")
+        {
+            if self.data_man.block_by_hash(&block_hash, false).is_none() {
+                missing_body_blocks.insert(block_hash);
+            }
+        }
+        // We also need the block bodies before the checkpoint to compute
+        // rewards.
+        let stable_height = self
+            .data_man
+            .block_height_by_hash(&stable_genesis)
+            .expect("stable exist");
+        let reward_start_epoch = if stable_height >= REWARD_EPOCH_COUNT {
+            stable_height - REWARD_EPOCH_COUNT + 1
+        } else {
+            1
+        };
+        for height in reward_start_epoch..=stable_height {
+            for block_hash in self
+                .data_man
+                .executed_epoch_set_hashes_from_db(height)
+                .expect("epoch sets before stable should exist")
+            {
+                if self.data_man.block_by_hash(&block_hash, false).is_none() {
+                    missing_body_blocks.insert(block_hash);
+                }
+            }
+        }
+        missing_body_blocks.remove(&self.data_man.true_genesis.hash());
+        missing_body_blocks
+    }
+
+    /// Check if we have downloaded all the headers to find the lowest needed
+    /// checkpoint. We can enter `CatchUpCheckpoint` if it's true.
+    fn catch_up_completed(&self, peer_median_epoch: u64) -> bool {
+        let stable_genesis_height = self
+            .data_man
+            .block_height_by_hash(
+                &self.data_man.get_cur_consensus_era_stable_hash(),
+            )
+            .expect("stable exists");
+        if let Some(target_epoch) = self.config.sync_state_starting_epoch {
+            if stable_genesis_height < target_epoch {
+                return false;
+            }
+        }
+        if let Some(gap) = self.config.sync_state_epoch_gap {
+            if self.best_epoch_number() + gap < peer_median_epoch {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn enter_normal_phase(&self) {
+        self.ready_for_mining.store(true, Ordering::SeqCst);
+        self.update_best_info(true);
+        self.txpool.set_ready();
+        self.txpool
+            .notify_new_best_info(self.best_info.read_recursive().clone())
+            .expect("No DB error")
+    }
+
+    /// Reset the information in consensus graph with only checkpoint
+    /// information kept.
+    fn reset(&self) {
+        let old_consensus_inner = &mut *self.inner.write();
+
+        let cur_era_genesis_hash =
+            self.data_man.get_cur_consensus_era_genesis_hash();
+        let cur_era_stable_hash =
+            self.data_man.get_cur_consensus_era_stable_hash();
+        let new_consensus_inner = ConsensusGraphInner::with_era_genesis(
+            old_consensus_inner.pow_config.clone(),
+            old_consensus_inner.pow.clone(),
+            self.data_man.clone(),
+            old_consensus_inner.inner_conf.clone(),
+            &cur_era_genesis_hash,
+            &cur_era_stable_hash,
+        );
+        *old_consensus_inner = new_consensus_inner;
+        debug!("Build new consensus graph for sync-recovery with identified genesis {} stable block {}", cur_era_genesis_hash, cur_era_stable_hash);
+
+        self.confirmation_meter.clear();
     }
 }
