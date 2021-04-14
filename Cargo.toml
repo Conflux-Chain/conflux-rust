@@ -1,6 +1,6 @@
 [package]
 name = "conflux"
-version = "1.1.1-devnet"
+version = "1.1.3-devnet"
 edition = "2018"
 build = "build.rs"
 
