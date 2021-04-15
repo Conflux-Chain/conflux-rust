@@ -14,6 +14,16 @@
   The supported values are `"latest_mined"` (default) and `"latest_state"`.
 - Add `cfx_getAccountPendingInfo` to get pending transaction info for some account for better investigating pending tx problems.
 
+### Configuration Improvements
+- Allow immediately packing sent transactions in `dev` mode by keeping `dev_block_interval_ms` unset.
+  Note that setting `dev_block_interval_ms` will disable this immediate packing and generate blocks only periodically.
+  
+### Performance Improvements
+- Optimize the state implementation for better cache performance.
+
+### Bug fix
+- Fix a bug that makes running nodes in `dev` mode not generate blocks automatically.
+
 # 1.1.2
 
 ## Improvements
