@@ -524,6 +524,17 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         self.cache.get_deposit_list(address, &self.db)
     }
 
+    #[allow(dead_code)]
+    fn get_commission_privilege(
+        &self, contract_address: &Address, account_address: &Address,
+    ) -> Result<impl AsRef<NonCopy<Option<&bool>>>> {
+        self.cache.get_commission_privilege(
+            contract_address,
+            account_address,
+            &self.db,
+        )
+    }
+
     fn get_vote_stake_list(
         &self, address: &Address,
     ) -> Result<impl AsRef<NonCopy<Option<&VoteStakeList>>>> {

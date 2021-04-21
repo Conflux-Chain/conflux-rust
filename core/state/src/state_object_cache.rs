@@ -14,6 +14,8 @@ pub struct StateObjectCache {
         RwLock<HashMap<DepositListAddress, Option<DepositList>>>,
     vote_stake_list_cache:
         RwLock<HashMap<VoteStakeListAddress, Option<VoteStakeList>>>,
+    commission_privilege_cache:
+        RwLock<HashMap<CommissionPrivilegeAddress, Option<bool>>>,
     // TODO: etc.
 }
 
@@ -296,6 +298,24 @@ impl StateObjectCache {
         )
     }
 
+    #[allow(dead_code)]
+    pub fn get_commission_privilege<StateDb: StateDbOps>(
+        &self, contract_address: &Address, account_address: &Address,
+        db: &StateDb,
+    ) -> Result<
+        GuardedValue<
+            RwLockReadGuard<HashMap<CommissionPrivilegeAddress, Option<bool>>>,
+            NonCopy<Option<&bool>>,
+        >,
+    >
+    {
+        Self::ensure_loaded(
+            &self.commission_privilege_cache,
+            &CommissionPrivilegeAddress(*contract_address, *account_address),
+            db,
+        )
+    }
+
     pub fn get_deposit_list<StateDb: StateDbOps>(
         &self, address: &Address, db: &StateDb,
     ) -> Result<
@@ -331,8 +351,8 @@ impl StateObjectCache {
 
 use crate::{
     cache_object::{
-        CachedAccount, CachedObject, CodeAddress, DepositListAddress,
-        ToHashKey, VoteStakeListAddress,
+        CachedAccount, CachedObject, CodeAddress, CommissionPrivilegeAddress,
+        DepositListAddress, ToHashKey, VoteStakeListAddress,
     },
     StateDbOps,
 };
