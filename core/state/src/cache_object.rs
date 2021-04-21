@@ -44,9 +44,6 @@ pub struct DepositListAddress(pub Address);
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub struct VoteStakeListAddress(pub Address);
 
-#[derive(Clone, Eq, Hash, PartialEq)]
-pub struct CommissionPrivilegeAddress(pub Address, pub Address);
-
 pub struct CachedAccount {
     object: Account,
 }
@@ -82,19 +79,6 @@ impl ToHashKey<CodeAddress> for CodeAddress {
     fn to_hash_key(&self) -> CodeAddress { self.clone() }
 }
 
-impl AsStorageKey for CommissionPrivilegeAddress {
-    fn storage_key(&self) -> StorageKey {
-        StorageKey::CommissionPrivilegeKey {
-            contract_address_bytes: self.0.as_ref(),
-            account_address_bytes: self.1.as_ref(),
-        }
-    }
-}
-
-impl ToHashKey<CommissionPrivilegeAddress> for CommissionPrivilegeAddress {
-    fn to_hash_key(&self) -> CommissionPrivilegeAddress { self.clone() }
-}
-
 impl AsStorageKey for DepositListAddress {
     fn storage_key(&self) -> StorageKey {
         StorageKey::DepositListKey(self.0.as_ref())
@@ -122,16 +106,6 @@ impl CachedObject for CachedAccount {
         Ok(Self {
             object: Account::new_from_rlp(key.clone(), rlp)?,
         })
-    }
-}
-
-impl CachedObject for bool {
-    type HashKeyType = CommissionPrivilegeAddress;
-
-    fn load_from_rlp(
-        _key: &CommissionPrivilegeAddress, rlp: &Rlp,
-    ) -> Result<Self> {
-        Ok(Self::decode(rlp)?)
     }
 }
 
