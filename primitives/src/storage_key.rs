@@ -51,10 +51,6 @@ pub enum StorageKey<'a> {
         address_bytes: &'a [u8],
         code_hash_bytes: &'a [u8],
     },
-    CommissionPrivilegeKey {
-        contract_address_bytes: &'a [u8],
-        account_address_bytes: &'a [u8],
-    },
     DepositListKey(&'a [u8]),
     VoteListKey(&'a [u8]),
 }
@@ -88,15 +84,6 @@ impl<'a> StorageKey<'a> {
         }
     }
 
-    pub fn new_commission_privilege_key(
-        contract_address: &'a Address, account_address: &'a Address,
-    ) -> Self {
-        StorageKey::CommissionPrivilegeKey {
-            contract_address_bytes: &contract_address.0,
-            account_address_bytes: &account_address.0,
-        }
-    }
-
     pub fn new_deposit_list_key(address: &'a Address) -> Self {
         StorageKey::DepositListKey(&address.0)
     }
@@ -112,8 +99,6 @@ impl<'a> StorageKey<'a> {
     const CODE_HASH_BYTES: usize = 32;
     const CODE_HASH_PREFIX: &'static [u8] = b"code";
     const CODE_HASH_PREFIX_LEN: usize = 4;
-    const COMMISSION_PRIVILEGE_PREFIX: &'static [u8] = b"commission_privilege";
-    const COMMISSION_PRIVILEGE_PREFIX_LEN: usize = 20;
     const DEPOSIT_LIST_LEN: usize = 7;
     const DEPOSIT_LIST_PREFIX: &'static [u8] = b"deposit";
     const STORAGE_PREFIX: &'static [u8] = b"data";
@@ -171,14 +156,6 @@ impl<'a> StorageKey<'a> {
             } => delta_mpt_storage_key::new_code_key(
                 address_bytes,
                 code_hash_bytes,
-                padding,
-            ),
-            StorageKey::CommissionPrivilegeKey {
-                contract_address_bytes,
-                account_address_bytes,
-            } => delta_mpt_storage_key::new_commission_privilege_key(
-                contract_address_bytes,
-                account_address_bytes,
                 padding,
             ),
             StorageKey::DepositListKey(address_bytes) => {
@@ -246,20 +223,6 @@ impl<'a> StorageKey<'a> {
                 key.extend_from_slice(address_bytes);
                 key.extend_from_slice(Self::CODE_HASH_PREFIX);
                 key.extend_from_slice(code_hash_bytes);
-
-                key
-            }
-            StorageKey::CommissionPrivilegeKey {
-                contract_address_bytes,
-                account_address_bytes,
-            } => {
-                let mut key = Vec::with_capacity(
-                    Self::ACCOUNT_BYTES * 2
-                        + Self::COMMISSION_PRIVILEGE_PREFIX_LEN,
-                );
-                key.extend_from_slice(contract_address_bytes);
-                key.extend_from_slice(Self::COMMISSION_PRIVILEGE_PREFIX);
-                key.extend_from_slice(account_address_bytes);
 
                 key
             }
@@ -530,27 +493,6 @@ mod delta_mpt_storage_key {
         key
     }
 
-    pub fn new_commission_privilege_key(
-        contract_address: &[u8], account_address: &[u8],
-        padding: &DeltaMptKeyPadding,
-    ) -> Vec<u8>
-    {
-        let mut key = Vec::with_capacity(
-            ACCOUNT_KEYPART_BYTES
-                + StorageKey::COMMISSION_PRIVILEGE_PREFIX_LEN
-                + StorageKey::ACCOUNT_BYTES,
-        );
-        extend_key_with_prefix(
-            &mut key,
-            contract_address,
-            padding,
-            &StorageKey::COMMISSION_PRIVILEGE_PREFIX,
-        );
-        key.extend_from_slice(account_address);
-
-        key
-    }
-
     pub fn new_deposit_list_key(
         address: &[u8], padding: &DeltaMptKeyPadding,
     ) -> Vec<u8> {
@@ -642,15 +584,6 @@ mod delta_mpt_storage_key {
                     StorageKey::DepositListKey(address_bytes)
                 } else if remaining_bytes.starts_with(Self::VOTE_LIST_PREFIX) {
                     StorageKey::VoteListKey(address_bytes)
-                } else if remaining_bytes
-                    .starts_with(Self::COMMISSION_PRIVILEGE_PREFIX)
-                {
-                    let bytes = &remaining_bytes
-                        [Self::COMMISSION_PRIVILEGE_PREFIX_LEN..];
-                    StorageKey::CommissionPrivilegeKey {
-                        contract_address_bytes: address_bytes,
-                        account_address_bytes: bytes,
-                    }
                 } else {
                     if cfg!(debug_assertions) {
                         unreachable!(
@@ -755,26 +688,6 @@ mod tests {
                 .unwrap();
 
         let key = StorageKey::new_code_key(&address, &code_hash);
-        let bytes = key.to_delta_mpt_key_bytes(&padding);
-        let key2 = StorageKey::from_delta_mpt_key(&bytes[..]);
-        assert_eq!(key, key2);
-    }
-
-    #[test]
-    fn test_delta_mpt_commission_privilege_key() {
-        let padding = DeltaMptKeyPadding([0; KEY_PADDING_BYTES]);
-
-        let contract_address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6"
-            .parse::<Address>()
-            .unwrap();
-        let account_address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec7"
-            .parse::<Address>()
-            .unwrap();
-
-        let key = StorageKey::new_commission_privilege_key(
-            &contract_address,
-            &account_address,
-        );
         let bytes = key.to_delta_mpt_key_bytes(&padding);
         let key2 = StorageKey::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
