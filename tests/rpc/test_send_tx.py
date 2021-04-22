@@ -253,6 +253,10 @@ class TestSendTx(RpcClient):
         assert_equal(pending_info["pendingNonce"], hex(cur_nonce))
         assert_equal(pending_info["nextPendingTx"], tx0.hash_hex())
 
+        pending_txs, pending_reason = self.node.cfx_getAccountPendingTransactions(addr)
+        assert_equal(len(pending_txs), 3)
+        assert_equal(pending_reason, "ready")
+
 
         # generate a block to pack above txs.
         self.generate_blocks_to_state(num_txs=4)

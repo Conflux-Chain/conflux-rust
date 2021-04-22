@@ -14,6 +14,7 @@ use primitives::{
     Account, Action, SignedTransaction, TransactionWithSignature,
 };
 use rlp::*;
+use serde::Serialize;
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -136,6 +137,25 @@ impl DeferredPool {
         }
     }
 
+    fn get_pending_transactions(
+        &self, addr: &Address, nonce: &U256, balance: &U256,
+    ) -> (Vec<Arc<SignedTransaction>>, Option<PendingReason>) {
+        match self.buckets.get(addr) {
+            Some(bucket) => {
+                let pending_txs = bucket.get_pending_transactions(nonce);
+                let pending_reason = pending_txs.first().and_then(|tx| {
+                    bucket.check_pending_reason_with_local_info(
+                        *nonce,
+                        *balance,
+                        tx.as_ref(),
+                    )
+                });
+                (pending_txs, pending_reason)
+            }
+            None => (Vec::new(), None),
+        }
+    }
+
     fn check_tx_packed(&self, addr: Address, nonce: U256) -> bool {
         if let Some(bucket) = self.buckets.get(&addr) {
             if let Some(tx_with_ready_info) = bucket.get_tx_by_nonce(nonce) {
@@ -235,15 +255,55 @@ impl ReadyAccountPool {
     }
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TransactionStatus {
+    Packed,
+    Ready,
+    Pending(PendingReason),
+}
+
+// impl Serialize for TransactionStatus {
+//     fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S
+// as Serializer>::Error> where         S: Serializer {
+//         match self {
+//             Self::Packed => serializer.serialize_str("packed"),
+//             Self::Ready => serializer.serialize_str("ready"),
+//             Self::Pending(None) => serializer.serialize_str("pending"),
+//             Self::Pending(Some(PendingReason::FutureNonce((tx_nonce,
+// expected_nonce)))) => {                 serializer.serialize_str()
+//             }
+//         }
+//     }
+// }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PendingReason {
+    FutureNonce,
+    NotEnoughCash,
+}
+
 #[derive(DeriveMallocSizeOf)]
 pub struct TransactionPoolInner {
     capacity: usize,
     total_received_count: usize,
     unpacked_transaction_count: usize,
+    /// Tracks all transactions in the transaction pool by account and nonce.
+    /// Packed and executed transactions will eventually be garbage collected.
     deferred_pool: DeferredPool,
+    /// Tracks the first unpacked ready transaction for accounts.
+    /// Updated together with `ready_nonces_and_balances`.
+    /// Also updated after transaction packing.
     ready_account_pool: ReadyAccountPool,
+    /// The cache of the latest nonce and balance in the state.
+    /// Updated with the storage data after a block is processed in consensus
+    /// (set_tx_packed), after epoch execution, or during transaction
+    /// insertion.
     ready_nonces_and_balances: HashMap<Address, (U256, U256)>,
     garbage_collector: GarbageCollector,
+    /// Keeps all transactions in the transaction pool.
+    /// It should contain the same transaction set as `deferred_pool`.
     txs: HashMap<H256, Arc<SignedTransaction>>,
     tx_sponsored_gas_map: HashMap<H256, U256>,
 }
@@ -511,6 +571,55 @@ impl TransactionPoolInner {
                 }
             }
             false => None,
+        }
+    }
+
+    pub fn get_account_pending_transactions(
+        &self, address: &Address, maybe_start_nonce: Option<U256>,
+        maybe_limit: Option<usize>,
+    ) -> (Vec<Arc<SignedTransaction>>, Option<TransactionStatus>)
+    {
+        match self.deferred_pool.contain_address(address) {
+            true => {
+                let (local_nonce, local_balance) = self
+                    .get_local_nonce_and_balance(address)
+                    .unwrap_or((U256::from(0), U256::from(0)));
+                let start_nonce = maybe_start_nonce.unwrap_or(local_nonce);
+                let (pending_txs, pending_reason) =
+                    self.deferred_pool.get_pending_transactions(
+                        address,
+                        &start_nonce,
+                        &local_balance,
+                    );
+                if pending_txs.is_empty() {
+                    return (Vec::new(), None);
+                }
+                let first_tx_status = match pending_reason {
+                    None => {
+                        // Sanity check with `ready_account_pool`.
+                        match self.ready_account_pool.get(address) {
+                            None => {
+                                error!("Ready tx not in ready_account_pool: tx={:?}", pending_txs.first());
+                            }
+                            Some(ready_tx) => {
+                                let first_tx =
+                                    pending_txs.first().expect("not empty");
+                                if ready_tx.hash() != first_tx.hash() {
+                                    error!("ready_account_pool and deferred_pool are inconsistent! ready_tx={:?} first_pending={:?}", ready_tx.hash(), first_tx.hash());
+                                }
+                            }
+                        }
+                        TransactionStatus::Ready
+                    }
+                    Some(reason) => TransactionStatus::Pending(reason),
+                };
+                let limit = maybe_limit.unwrap_or(usize::MAX);
+                (
+                    pending_txs.into_iter().take(limit).collect(),
+                    Some(first_tx_status),
+                )
+            }
+            false => (Vec::new(), None),
         }
     }
 

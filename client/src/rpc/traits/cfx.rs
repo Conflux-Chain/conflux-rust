@@ -11,6 +11,7 @@ use super::super::types::{
 };
 use crate::rpc::types::{BlockHashOrEpochNumber, RpcAddress};
 use cfx_types::{H256, U256, U64};
+use cfxcore::transaction_pool::TransactionStatus;
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
 use jsonrpc_derive::rpc;
 use primitives::{DepositInfo, StorageRoot, VoteStakeInfo};
@@ -171,6 +172,13 @@ pub trait Cfx {
     fn account_pending_info(
         &self, address: RpcAddress,
     ) -> BoxFuture<Option<AccountPendingInfo>>;
+
+    /// Get transaction pending info by account address
+    #[rpc(name = "cfx_getAccountPendingTransactions")]
+    fn account_pending_transactions(
+        &self, address: RpcAddress, maybe_start_nonce: Option<U256>,
+        maybe_limit: Option<U64>,
+    ) -> BoxFuture<(Vec<Transaction>, Option<TransactionStatus>)>;
 
     /// Return estimated gas and collateral usage.
     #[rpc(name = "cfx_estimateGasAndCollateral")]

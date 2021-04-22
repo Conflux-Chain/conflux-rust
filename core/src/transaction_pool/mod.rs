@@ -14,7 +14,7 @@ mod transaction_pool_inner;
 
 extern crate rand;
 
-pub use self::impls::TreapMap;
+pub use self::{impls::TreapMap, transaction_pool_inner::TransactionStatus};
 use crate::{
     block_data_manager::BlockDataManager, consensus::BestInformation,
     machine::Machine, state::State, verification::VerificationConfig,
@@ -207,6 +207,18 @@ impl TransactionPool {
         &self, address: &Address,
     ) -> Option<(U256, U256, U256, H256)> {
         self.inner.read().get_account_pending_info(address)
+    }
+
+    pub fn get_account_pending_transactions(
+        &self, address: &Address, maybe_start_nonce: Option<U256>,
+        maybe_limit: Option<usize>,
+    ) -> (Vec<Arc<SignedTransaction>>, Option<TransactionStatus>)
+    {
+        self.inner.read().get_account_pending_transactions(
+            address,
+            maybe_start_nonce,
+            maybe_limit,
+        )
     }
 
     pub fn get_state_account_info(

@@ -52,6 +52,7 @@ use crate::{
 use cfx_addr::Network;
 use cfxcore::{
     light_protocol::QueryService, rpc_errors::ErrorKind::LightProtocol,
+    transaction_pool::TransactionStatus,
 };
 
 // macro for reducing boilerplate for unsupported methods
@@ -1073,6 +1074,7 @@ impl Cfx for CfxHandler {
         fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> JsonRpcResult<EstimateGasAndCollateralResponse>;
         fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
         fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
+        fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<(Vec<RpcTransaction>, Option<TransactionStatus>)>;
     }
 }
 
