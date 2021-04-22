@@ -1206,10 +1206,10 @@ use crate::{
 };
 use fallible_iterator::FallibleIterator;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
-use serde::export::PhantomData;
 use sqlite::Statement;
 use std::{
     any::Any,
+    marker::PhantomData,
     path::{Path, PathBuf},
     sync::Arc,
 };

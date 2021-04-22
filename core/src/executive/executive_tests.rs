@@ -12,6 +12,7 @@ use crate::{
     trace,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
+        Spec,
     },
     vm_factory::VmFactory,
 };
@@ -25,6 +26,7 @@ use cfx_parameters::{
 };
 use cfx_state::{
     state_trait::{CheckpointTrait, StateOpsTrait},
+    substate_trait::SubstateMngTrait,
     CleanupMode, CollateralCheckResult, StateTrait,
 };
 use cfx_statedb::StateDb;
@@ -103,10 +105,16 @@ fn test_sender_balance() {
             &sender,
             &COLLATERAL_DRIPS_PER_STORAGE_KEY,
             CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
         )
         .unwrap();
     state
-        .add_balance(&sender, &U256::from(0x100u64), CleanupMode::NoEmpty)
+        .add_balance(
+            &sender,
+            &U256::from(0x100u64),
+            CleanupMode::NoEmpty,
+            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+        )
         .unwrap();
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -136,6 +144,7 @@ fn test_sender_balance() {
                 &params.storage_owner,
                 &params.storage_limit_in_drip,
                 &mut substate,
+                spec.account_start_nonce(env.number),
             )
             .unwrap()
             .into_vm_result()
@@ -208,15 +217,21 @@ fn test_create_contract_out_of_depth() {
     params.code = Some(Arc::new(code));
     params.value = ActionValue::Transfer(U256::from(100));
 
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
-    state
-        .add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty)
-        .unwrap();
     let env = Env::default();
     let machine = make_byzantium_machine(0);
     let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
+
+    let storage_manager = new_state_manager_for_unit_test();
+    let mut state = get_state_for_genesis_write(&storage_manager);
+    state
+        .add_balance(
+            &sender,
+            &U256::from(100),
+            CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
+        )
+        .unwrap();
     let mut substate = Substate::new();
 
     let FinalizationResult { gas_left, .. } = {
@@ -264,15 +279,21 @@ fn test_suicide_when_creation() {
     params.code = Some(Arc::new(code));
     params.value = ActionValue::Transfer(U256::from(0));
 
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
-    state
-        .add_balance(&sender_addr, &U256::from(100_000), CleanupMode::NoEmpty)
-        .unwrap();
     let env = Env::default();
     let machine = make_byzantium_machine(0);
     let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
+
+    let storage_manager = new_state_manager_for_unit_test();
+    let mut state = get_state_for_genesis_write(&storage_manager);
+    state
+        .add_balance(
+            &sender_addr,
+            &U256::from(100_000),
+            CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
+        )
+        .unwrap();
     let mut substate = Substate::new();
 
     let mut ex = Executive::new(
@@ -352,6 +373,11 @@ fn test_call_to_create() {
         * code_collateral_units(code_len)
         + *COLLATERAL_DRIPS_PER_STORAGE_KEY;
 
+    let env = Env::default();
+    let machine = make_byzantium_machine(5);
+    let internal_contract_map = InternalContractMap::new();
+    let spec = machine.spec(env.number);
+
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
     state
@@ -362,6 +388,7 @@ fn test_call_to_create() {
             &sender,
             &(U256::from(100) + params.storage_limit_in_drip),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     assert_eq!(
@@ -369,10 +396,6 @@ fn test_call_to_create() {
         U256::from(0)
     );
     assert_eq!(*state.total_storage_tokens(), U256::from(0));
-    let env = Env::default();
-    let machine = make_byzantium_machine(5);
-    let internal_contract_map = InternalContractMap::new();
-    let spec = machine.spec(env.number);
     let mut substate = Substate::new();
 
     let FinalizationResult { gas_left, .. } = {
@@ -391,6 +414,7 @@ fn test_call_to_create() {
                 &params.storage_owner,
                 &params.storage_limit_in_drip,
                 &mut substate,
+                spec.account_start_nonce(env.number),
             )
             .unwrap()
             .into_vm_result()
@@ -418,6 +442,12 @@ fn test_revert() {
     let code: Vec<u8> = "6c726576657274656420646174616000557f726576657274206d657373616765000000000000000000000000000000000000600052600e6000fd".from_hex().unwrap();
     let returns: Vec<u8> = "726576657274206d657373616765".from_hex().unwrap();
 
+    let env = Env::default();
+    let machine = make_byzantium_machine(0);
+    let internal_contract_map = InternalContractMap::new();
+    let spec = machine.spec(env.number);
+    let mut substate = Substate::new();
+
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
     state
@@ -425,6 +455,7 @@ fn test_revert() {
             &sender,
             &U256::from_str("152d02c7e14af68000000").unwrap(),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     state
@@ -442,12 +473,6 @@ fn test_revert() {
     params.gas = U256::from(20025);
     params.code = Some(Arc::new(code));
     params.value = ActionValue::Transfer(U256::zero());
-    let env = Env::default();
-    let machine = make_byzantium_machine(0);
-    let internal_contract_map = InternalContractMap::new();
-    let spec = machine.spec(env.number);
-    let mut substate = Substate::new();
-
     let mut output = [0u8; 14];
     let FinalizationResult {
         gas_left: result,
@@ -501,6 +526,11 @@ fn test_keccak() {
     params.value =
         ActionValue::Transfer(U256::from_str("0de0b6b3a7640000").unwrap());
 
+    let env = Env::default();
+    let machine = make_byzantium_machine(0);
+    let internal_contract_map = InternalContractMap::new();
+    let spec = machine.spec(env.number);
+
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
     state
@@ -508,12 +538,9 @@ fn test_keccak() {
             &sender,
             &U256::from_str("152d02c7e14af6800000").unwrap(),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
-    let env = Env::default();
-    let machine = make_byzantium_machine(0);
-    let internal_contract_map = InternalContractMap::new();
-    let spec = machine.spec(env.number);
     let mut substate = Substate::new();
 
     let mut tracer = trace::NoopTracer;
@@ -551,17 +578,23 @@ fn test_not_enough_cash() {
     .sign(keypair.secret());
     let sender = t.sender();
 
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
-    state
-        .add_balance(&sender, &U256::from(100_017), CleanupMode::NoEmpty)
-        .unwrap();
-    let correct_cost = min(t.gas_price * t.gas, 100_017.into());
     let mut env = Env::default();
     env.gas_limit = U256::from(100_000);
     let machine = make_byzantium_machine(0);
     let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
+
+    let storage_manager = new_state_manager_for_unit_test();
+    let mut state = get_state_for_genesis_write(&storage_manager);
+    state
+        .add_balance(
+            &sender,
+            &U256::from(100_017),
+            CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
+        )
+        .unwrap();
+    let correct_cost = min(t.gas_price * t.gas, 100_017.into());
 
     let res = {
         let mut ex = Executive::new(
@@ -611,6 +644,7 @@ fn test_deposit_withdraw_lock() {
             &sender,
             &U256::from(2_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     state.add_total_issued(U256::from(2_000_000_000_000_000_000u64));
@@ -1020,8 +1054,10 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
 
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
+    let machine = make_byzantium_machine(0);
     let mut env = Env::default();
     env.gas_limit = U256::MAX;
+    let spec = machine.spec(env.number);
 
     let sender = Random.generate().unwrap();
     let address = contract_address(
@@ -1051,6 +1087,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &sender.address(),
             &U256::from(1_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
 
@@ -1063,6 +1100,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &Address::default(),
             &0.into(),
             &mut Substate::new(),
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     state.discard_checkpoint();
@@ -1111,6 +1149,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &sender.address(),
             &U256::from(1_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     let whitelisted_caller = Address::random();
@@ -1134,6 +1173,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &Address::default(),
             &0.into(),
             &mut Substate::new(),
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     state.discard_checkpoint();
@@ -1216,6 +1256,7 @@ fn test_commission_privilege() {
             &sender.address(),
             &U256::from(1_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
 
@@ -1258,6 +1299,7 @@ fn test_commission_privilege() {
             &caller1.address(),
             &U256::from(100_000),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     state
@@ -1265,6 +1307,7 @@ fn test_commission_privilege() {
             &caller2.address(),
             &U256::from(100_000),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     state
@@ -1272,6 +1315,7 @@ fn test_commission_privilege() {
             &caller3.address(),
             &U256::from(100_000),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     // add commission privilege to caller1 and caller2
@@ -1590,6 +1634,7 @@ fn test_storage_commission_privilege() {
             &sender.address(),
             &U256::from(2_000_000_000_000_075_000u64),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
 
@@ -1666,6 +1711,7 @@ fn test_storage_commission_privilege() {
             &caller1.address(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     state
@@ -1673,6 +1719,7 @@ fn test_storage_commission_privilege() {
             &caller2.address(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
     state
@@ -1680,6 +1727,7 @@ fn test_storage_commission_privilege() {
             &caller3.address(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
             CleanupMode::NoEmpty,
+            spec.account_start_nonce(env.number),
         )
         .unwrap();
 
@@ -1698,6 +1746,7 @@ fn test_storage_commission_privilege() {
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate,
+                spec.account_start_nonce(env.number),
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -2019,6 +2068,7 @@ fn test_storage_commission_privilege() {
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate,
+                spec.account_start_nonce(env.number),
             )
             .unwrap(),
         CollateralCheckResult::Valid

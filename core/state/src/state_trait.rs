@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 pub trait StateTrait: CheckpointTrait {
-    type Substate;
+    type Substate: SubstateTrait;
 
     /// Collects the cache (`ownership_change` in `OverlayAccount`) of storage
     /// change and write to substate.
@@ -17,13 +17,13 @@ pub trait StateTrait: CheckpointTrait {
     /// checked out. This function should only be called in post-processing
     /// of a transaction.
     fn settle_collateral_for_all(
-        &mut self, substate: &Self::Substate,
+        &mut self, substate: &Self::Substate, account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult>;
 
     // FIXME: add doc string.
     fn collect_and_settle_collateral(
         &mut self, original_sender: &Address, storage_limit: &U256,
-        substate: &mut Self::Substate,
+        substate: &mut Self::Substate, account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult>;
 
     // TODO: maybe we can find a better interface for doing the suicide
@@ -155,7 +155,9 @@ pub trait StateOpsTrait {
 
     fn clean_account(&mut self, address: &Address) -> DbResult<()>;
 
-    fn inc_nonce(&mut self, address: &Address) -> DbResult<()>;
+    fn inc_nonce(
+        &mut self, address: &Address, account_start_nonce: &U256,
+    ) -> DbResult<()>;
 
     fn set_nonce(&mut self, address: &Address, nonce: &U256) -> DbResult<()>;
 
@@ -165,10 +167,11 @@ pub trait StateOpsTrait {
 
     fn add_balance(
         &mut self, address: &Address, by: &U256, cleanup_mode: CleanupMode,
+        account_start_nonce: U256,
     ) -> DbResult<()>;
     fn transfer_balance(
         &mut self, from: &Address, to: &Address, by: &U256,
-        cleanup_mode: CleanupMode,
+        cleanup_mode: CleanupMode, account_start_nonce: U256,
     ) -> DbResult<()>;
 
     fn deposit(
@@ -222,6 +225,7 @@ pub trait CheckpointTrait: StateOpsTrait {
 }
 
 use super::{CleanupMode, CollateralCheckResult};
+use crate::substate_trait::SubstateTrait;
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };

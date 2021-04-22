@@ -90,11 +90,9 @@ pub fn test_finalize(res: Result<GasLeft>) -> Result<U256> {
 
 impl MockContext {
     /// New mock context
-    #[allow(dead_code)]
     pub fn new() -> Self { MockContext::default() }
 
     /// New mock context with byzantium spec rules
-    #[allow(dead_code)]
     pub fn new_spec() -> Self {
         let mut context = MockContext::default();
         context.spec = Spec::new_spec();
@@ -102,7 +100,6 @@ impl MockContext {
     }
 
     /// Alter mock context to allow wasm
-    #[allow(dead_code)]
     pub fn with_wasm(mut self) -> Self {
         self.spec.wasm = Some(Default::default());
         self
@@ -214,7 +211,7 @@ impl Context for MockContext {
 
     fn suicide(
         &mut self, refund_address: &Address,
-        _: &mut dyn Tracer<Output = ExecTrace>,
+        _: &mut dyn Tracer<Output = ExecTrace>, _account_start_nonce: U256,
     ) -> Result<()>
     {
         if !refund_address.is_valid_address() {

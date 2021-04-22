@@ -3,19 +3,23 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    state::Substate,
+    state::CallStackInfo,
     trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, Spec},
 };
 use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
-use cfx_state::state_trait::StateOpsTrait;
+use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{address_util::AddressUtil, Address, U256};
 
 /// Implementation of `set_sponsor_for_gas(address,uint256)`.
 pub fn set_sponsor_for_gas(
     contract_address: Address, upper_bound: U256, params: &ActionParams,
-    spec: &Spec, state: &mut dyn StateOpsTrait, substate: &mut Substate,
-    tracer: &mut dyn Tracer<Output = ExecTrace>,
+    spec: &Spec, state: &mut dyn StateOpsTrait,
+    substate: &mut dyn SubstateTrait<
+        Spec = Spec,
+        CallStackInfo = CallStackInfo,
+    >,
+    tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
@@ -77,6 +81,7 @@ pub fn set_sponsor_for_gas(
                 prev_sponsor.as_ref().unwrap(),
                 &prev_sponsor_balance,
                 substate.to_cleanup_mode(&spec),
+                account_start_nonce,
             )?;
         }
         state.sub_balance(
@@ -120,8 +125,12 @@ pub fn set_sponsor_for_gas(
 /// Implementation of `set_sponsor_for_collateral(address)`.
 pub fn set_sponsor_for_collateral(
     contract_address: Address, params: &ActionParams, spec: &Spec,
-    state: &mut dyn StateOpsTrait, substate: &mut Substate,
-    tracer: &mut dyn Tracer<Output = ExecTrace>,
+    state: &mut dyn StateOpsTrait,
+    substate: &mut dyn SubstateTrait<
+        Spec = Spec,
+        CallStackInfo = CallStackInfo,
+    >,
+    tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
@@ -174,6 +183,7 @@ pub fn set_sponsor_for_collateral(
                 prev_sponsor.as_ref().unwrap(),
                 &(prev_sponsor_balance + collateral_for_storage),
                 substate.to_cleanup_mode(&spec),
+                account_start_nonce,
             )?;
         }
         state.sub_balance(

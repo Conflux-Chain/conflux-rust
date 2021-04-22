@@ -476,3 +476,6 @@ class RpcClient:
 
     def get_transaction_trace(self, tx_hash: str):
         return self.node.trace_transaction(tx_hash)
+
+    def filter_trace(self, filter: dict):
+        return self.node.trace_filter(filter)

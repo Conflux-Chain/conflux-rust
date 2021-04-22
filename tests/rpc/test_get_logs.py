@@ -59,6 +59,10 @@ class TestGetLogs(RpcClient):
         filter = Filter(topics=[NULL_H256] * 5)
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
+        # invalid `offset` type
+        filter = Filter(offset=1)
+        assert_raises_rpc_error(None, None, self.get_logs, filter)
+
         # invalid `limit` type
         filter = Filter(limit=1)
         assert_raises_rpc_error(None, None, self.get_logs, filter)
@@ -111,6 +115,7 @@ class TestGetLogs(RpcClient):
             block_hashes = [self.blocks[0]],
             address=[NULL_H160],
             topics=[NULL_H256, [NULL_H256, NULL_H256]],
+            offset="0x0",
             limit="0x1"
         )
         logs = self.get_logs(filter)
