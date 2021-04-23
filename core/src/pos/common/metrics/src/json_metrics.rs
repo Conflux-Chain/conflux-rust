@@ -10,7 +10,9 @@ pub fn get_json_metrics() -> HashMap<String, String> {
     json_metrics
 }
 
-fn add_revision_hash(mut json_metrics: HashMap<String, String>) -> HashMap<String, String> {
+fn add_revision_hash(
+    mut json_metrics: HashMap<String, String>,
+) -> HashMap<String, String> {
     json_metrics.insert("revision".to_string(), env!("GIT_REV").to_string());
     json_metrics
 }

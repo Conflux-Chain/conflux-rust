@@ -10,7 +10,9 @@ use crate::{
     transaction::Version,
     trusted_state::{TrustedState, TrustedStateChange},
     validator_signer::ValidatorSigner,
-    validator_verifier::{random_validator_verifier, ValidatorConsensusInfo, ValidatorVerifier},
+    validator_verifier::{
+        random_validator_verifier, ValidatorConsensusInfo, ValidatorVerifier,
+    },
     waypoint::Waypoint,
 };
 use diem_crypto::{ed25519::Ed25519Signature, hash::HashValue};
@@ -22,17 +24,20 @@ use proptest::{
 use std::{collections::BTreeMap, convert::TryFrom};
 
 // hack strategy to generate a length from `impl Into<SizeRange>`
-fn arb_length(size_range: impl Into<SizeRange>) -> impl Strategy<Value = usize> {
+fn arb_length(
+    size_range: impl Into<SizeRange>,
+) -> impl Strategy<Value = usize> {
     vec(Just(()), size_range).prop_map(|vec| vec.len())
 }
 
 /// For `n` epoch changes, we sample `n+1` validator sets of variable size
-/// `validators_per_epoch`. The `+1` is for the initial validator set in the first
-/// epoch.
+/// `validators_per_epoch`. The `+1` is for the initial validator set in the
+/// first epoch.
 fn arb_validator_sets(
     epoch_changes: impl Into<SizeRange>,
     validators_per_epoch: impl Into<SizeRange>,
-) -> impl Strategy<Value = Vec<Vec<ValidatorSigner>>> {
+) -> impl Strategy<Value = Vec<Vec<ValidatorSigner>>>
+{
     vec(arb_length(validators_per_epoch), epoch_changes.into() + 1).prop_map(
         |validators_per_epoch_vec| {
             validators_per_epoch_vec
@@ -42,8 +47,11 @@ fn arb_validator_sets(
                     let voting_power = None;
                     // human readable incrementing account addresses
                     let int_account_addrs = true;
-                    let (signers, _verifier) =
-                        random_validator_verifier(num_validators, voting_power, int_account_addrs);
+                    let (signers, _verifier) = random_validator_verifier(
+                        num_validators,
+                        voting_power,
+                        int_account_addrs,
+                    );
                     signers
                 })
                 .collect::<Vec<_>>()
@@ -62,7 +70,10 @@ fn into_epoch_state(epoch: u64, signers: &[ValidatorSigner]) -> EpochState {
                 .map(|signer| {
                     (
                         signer.author(),
-                        ValidatorConsensusInfo::new(signer.public_key(), 1 /* voting power */),
+                        ValidatorConsensusInfo::new(
+                            signer.public_key(),
+                            1, /* voting power */
+                        ),
                     )
                 })
                 .collect(),
@@ -70,11 +81,10 @@ fn into_epoch_state(epoch: u64, signers: &[ValidatorSigner]) -> EpochState {
     }
 }
 
-/// Create all signatures for a `LedgerInfoWithSignatures` given a set of signers
-/// and a `LedgerInfo`.
+/// Create all signatures for a `LedgerInfoWithSignatures` given a set of
+/// signers and a `LedgerInfo`.
 fn sign_ledger_info(
-    signers: &[ValidatorSigner],
-    ledger_info: &LedgerInfo,
+    signers: &[ValidatorSigner], ledger_info: &LedgerInfo,
 ) -> BTreeMap<AccountAddress, Ed25519Signature> {
     signers
         .iter()
@@ -83,9 +93,7 @@ fn sign_ledger_info(
 }
 
 fn new_mock_ledger_info(
-    epoch: u64,
-    version: Version,
-    next_epoch_state: Option<EpochState>,
+    epoch: u64, version: Version, next_epoch_state: Option<EpochState>,
 ) -> LedgerInfo {
     LedgerInfo::new(
         BlockInfo::new(
@@ -123,7 +131,8 @@ fn arb_update_proof(
         // The latest ledger info inside the last epoch
         LedgerInfoWithSignatures,
     ),
-> {
+>
+{
     // helpful diagram:
     //
     // input:
@@ -137,8 +146,8 @@ fn arb_update_proof(
     // let S_i = ith set of validators
     // let L_i = ith ledger info
     // S_i -> L_i => ith validators sign ith ledger info
-    // L_i -> S_i+1 => ith ledger info contains i+1'th validators for epoch change
-    // L_n+1 = a ledger info inside the nth epoch (contains S = None)
+    // L_i -> S_i+1 => ith ledger info contains i+1'th validators for epoch
+    // change L_n+1 = a ledger info inside the nth epoch (contains S = None)
     //
     // base case: n = 0 => no epoch changes
     //
@@ -162,7 +171,8 @@ fn arb_update_proof(
     // sample n, the number of epoch changes
     arb_length(epoch_changes).prop_flat_map(move |epoch_changes| {
         (
-            // sample the validator sets, including the signers for the first epoch
+            // sample the validator sets, including the signers for the first
+            // epoch
             arb_validator_sets(epoch_changes, validators_per_epoch.clone()),
             // generate n version deltas
             vec(arb_length(version_delta.clone()), epoch_changes),
@@ -189,8 +199,13 @@ fn arb_update_proof(
                     .zip(version_deltas)
                     .map(|((curr_vset, next_vset), version_delta)| {
                         let next_vset = into_epoch_state(epoch + 1, next_vset);
-                        let ledger_info = new_mock_ledger_info(epoch, version, Some(next_vset));
-                        let signatures = sign_ledger_info(&curr_vset[..], &ledger_info);
+                        let ledger_info = new_mock_ledger_info(
+                            epoch,
+                            version,
+                            Some(next_vset),
+                        );
+                        let signatures =
+                            sign_ledger_info(&curr_vset[..], &ledger_info);
 
                         epoch += 1;
                         version += version_delta as u64;
@@ -202,10 +217,15 @@ fn arb_update_proof(
                 // this will always succeed, since
                 // n >= 0, |vsets| = n + 1 ==> |vsets| >= 1
                 let last_vset = vsets.last().unwrap();
-                let latest_ledger_info = new_mock_ledger_info(epoch, version, None);
-                let signatures = sign_ledger_info(&last_vset[..], &latest_ledger_info);
+                let latest_ledger_info =
+                    new_mock_ledger_info(epoch, version, None);
+                let signatures =
+                    sign_ledger_info(&last_vset[..], &latest_ledger_info);
                 let latest_ledger_info_with_sigs =
-                    LedgerInfoWithSignatures::new(latest_ledger_info, signatures);
+                    LedgerInfoWithSignatures::new(
+                        latest_ledger_info,
+                        signatures,
+                    );
                 (vsets, ledger_infos_with_sigs, latest_ledger_info_with_sigs)
             })
     })

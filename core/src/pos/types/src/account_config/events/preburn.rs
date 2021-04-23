@@ -1,7 +1,9 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{account_address::AccountAddress, account_config::DIEM_MODULE_NAME};
+use crate::{
+    account_address::AccountAddress, account_config::DIEM_MODULE_NAME,
+};
 use anyhow::Result;
 use move_core_types::{
     identifier::{IdentStr, Identifier},
@@ -19,19 +21,13 @@ pub struct PreburnEvent {
 
 impl PreburnEvent {
     /// Get the amount preburned
-    pub fn amount(&self) -> u64 {
-        self.amount
-    }
+    pub fn amount(&self) -> u64 { self.amount }
 
     /// Return the code for the currency that was preburned
-    pub fn currency_code(&self) -> &IdentStr {
-        &self.currency_code
-    }
+    pub fn currency_code(&self) -> &IdentStr { &self.currency_code }
 
     /// Return the address whose Preburn now holds the funds
-    pub fn preburn_address(&self) -> AccountAddress {
-        self.preburn_address
-    }
+    pub fn preburn_address(&self) -> AccountAddress { self.preburn_address }
 
     pub fn try_from_bytes(bytes: &[u8]) -> Result<Self> {
         bcs::from_bytes(bytes).map_err(Into::into)

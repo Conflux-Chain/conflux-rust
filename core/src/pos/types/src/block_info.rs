@@ -1,7 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{epoch_state::EpochState, on_chain_config::ValidatorSet, transaction::Version};
+use crate::{
+    epoch_state::EpochState, on_chain_config::ValidatorSet,
+    transaction::Version,
+};
 use diem_crypto::hash::HashValue;
 #[cfg(any(test, feature = "fuzzing"))]
 use diem_crypto::hash::ACCUMULATOR_PLACEHOLDER_HASH;
@@ -10,8 +13,8 @@ use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
-/// The round of a block is a consensus-internal counter, which starts with 0 and increases
-/// monotonically.
+/// The round of a block is a consensus-internal counter, which starts with 0
+/// and increases monotonically.
 pub type Round = u64;
 
 // Constants for the initial genesis block.
@@ -26,9 +29,11 @@ pub const GENESIS_TIMESTAMP_USECS: u64 = 0;
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct BlockInfo {
-    /// Epoch number corresponds to the set of validators that are active for this block.
+    /// Epoch number corresponds to the set of validators that are active for
+    /// this block.
     epoch: u64,
-    /// The consensus protocol is executed in rounds, which monotonically increase per epoch.
+    /// The consensus protocol is executed in rounds, which monotonically
+    /// increase per epoch.
     round: Round,
     /// The identifier (hash) of the block.
     id: HashValue,
@@ -44,14 +49,11 @@ pub struct BlockInfo {
 
 impl BlockInfo {
     pub fn new(
-        epoch: u64,
-        round: Round,
-        id: HashValue,
-        executed_state_id: HashValue,
-        version: Version,
-        timestamp_usecs: u64,
+        epoch: u64, round: Round, id: HashValue, executed_state_id: HashValue,
+        version: Version, timestamp_usecs: u64,
         next_epoch_state: Option<EpochState>,
-    ) -> Self {
+    ) -> Self
+    {
         Self {
             epoch,
             round,
@@ -91,14 +93,18 @@ impl BlockInfo {
     /// Create a new genesis block. The genesis block is effectively the
     /// blockchain state after executing the initial genesis transaction.
     ///
-    /// * `genesis_state_root_hash` - the state tree root hash after executing the
+    /// * `genesis_state_root_hash` - the state tree root hash after executing
+    ///   the
     /// initial genesis transaction.
     ///
-    /// * `validator_set` - the initial validator set, configured when generating
+    /// * `validator_set` - the initial validator set, configured when
+    ///   generating
     /// the genesis transaction itself and emitted after executing the genesis
     /// transaction. Using this genesis block means transitioning to a new epoch
     /// (GENESIS_EPOCH + 1) with this `validator_set`.
-    pub fn genesis(genesis_state_root_hash: HashValue, validator_set: ValidatorSet) -> Self {
+    pub fn genesis(
+        genesis_state_root_hash: HashValue, validator_set: ValidatorSet,
+    ) -> Self {
         Self {
             epoch: GENESIS_EPOCH,
             round: GENESIS_ROUND,
@@ -126,37 +132,25 @@ impl BlockInfo {
         self.next_epoch_state().map_or(self.epoch(), |e| e.epoch)
     }
 
-    pub fn epoch(&self) -> u64 {
-        self.epoch
-    }
+    pub fn epoch(&self) -> u64 { self.epoch }
 
-    pub fn executed_state_id(&self) -> HashValue {
-        self.executed_state_id
-    }
+    pub fn executed_state_id(&self) -> HashValue { self.executed_state_id }
 
     pub fn has_reconfiguration(&self) -> bool {
         self.next_epoch_state.is_some()
     }
 
-    pub fn id(&self) -> HashValue {
-        self.id
-    }
+    pub fn id(&self) -> HashValue { self.id }
 
     pub fn next_epoch_state(&self) -> Option<&EpochState> {
         self.next_epoch_state.as_ref()
     }
 
-    pub fn round(&self) -> Round {
-        self.round
-    }
+    pub fn round(&self) -> Round { self.round }
 
-    pub fn timestamp_usecs(&self) -> u64 {
-        self.timestamp_usecs
-    }
+    pub fn timestamp_usecs(&self) -> u64 { self.timestamp_usecs }
 
-    pub fn version(&self) -> Version {
-        self.version
-    }
+    pub fn version(&self) -> Version { self.version }
 }
 
 impl Display for BlockInfo {

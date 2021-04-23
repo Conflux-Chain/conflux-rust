@@ -8,23 +8,31 @@ use crate::proof::{
     TestAccumulatorInternalNode,
 };
 use diem_crypto::{
-    hash::{CryptoHash, TestOnlyHash, TestOnlyHasher, ACCUMULATOR_PLACEHOLDER_HASH},
+    hash::{
+        CryptoHash, TestOnlyHash, TestOnlyHasher, ACCUMULATOR_PLACEHOLDER_HASH,
+    },
     HashValue,
 };
 use proptest::{collection::vec, prelude::*};
 use std::collections::HashMap;
 
-fn compute_parent_hash(left_hash: HashValue, right_hash: HashValue) -> HashValue {
-    if left_hash == *ACCUMULATOR_PLACEHOLDER_HASH && right_hash == *ACCUMULATOR_PLACEHOLDER_HASH {
+fn compute_parent_hash(
+    left_hash: HashValue, right_hash: HashValue,
+) -> HashValue {
+    if left_hash == *ACCUMULATOR_PLACEHOLDER_HASH
+        && right_hash == *ACCUMULATOR_PLACEHOLDER_HASH
+    {
         *ACCUMULATOR_PLACEHOLDER_HASH
     } else {
         TestAccumulatorInternalNode::new(left_hash, right_hash).hash()
     }
 }
 
-/// Given a list of leaves, constructs the smallest accumulator that has all the leaves and
-/// computes the hash of every node in the tree.
-fn compute_hashes_for_all_positions(leaves: &[HashValue]) -> HashMap<Position, HashValue> {
+/// Given a list of leaves, constructs the smallest accumulator that has all the
+/// leaves and computes the hash of every node in the tree.
+fn compute_hashes_for_all_positions(
+    leaves: &[HashValue],
+) -> HashMap<Position, HashValue> {
     if leaves.is_empty() {
         return HashMap::new();
     }
@@ -47,8 +55,10 @@ fn compute_hashes_for_all_positions(leaves: &[HashValue]) -> HashMap<Position, H
             let parent_hash = compute_parent_hash(left_hash, right_hash);
             parent_leaves.push(parent_hash);
 
-            let left_pos = Position::from_level_and_pos(current_level, index as u64);
-            let right_pos = Position::from_level_and_pos(current_level, index as u64 + 1);
+            let left_pos =
+                Position::from_level_and_pos(current_level, index as u64);
+            let right_pos =
+                Position::from_level_and_pos(current_level, index as u64 + 1);
             assert_eq!(position_to_hash.insert(left_pos, left_hash), None);
             assert_eq!(position_to_hash.insert(right_pos, right_hash), None);
         }
@@ -88,7 +98,8 @@ fn create_leaves(nums: std::ops::Range<usize>) -> Vec<HashValue> {
 
 #[test]
 fn test_accumulator_append() {
-    // expected_root_hashes[i] is the root hash of an accumulator that has the first i leaves.
+    // expected_root_hashes[i] is the root hash of an accumulator that has the
+    // first i leaves.
     let expected_root_hashes: Vec<HashValue> = (0..100)
         .map(|x| {
             let leaves = create_leaves(0..x);
@@ -100,7 +111,8 @@ fn test_accumulator_append() {
     let mut accumulator = InMemoryAccumulator::<TestOnlyHasher>::default();
     // Append the leaves one at a time and check the root hashes match.
     for (i, (leaf, expected_root_hash)) in
-        itertools::zip_eq(leaves.into_iter(), expected_root_hashes.into_iter()).enumerate()
+        itertools::zip_eq(leaves.into_iter(), expected_root_hashes.into_iter())
+            .enumerate()
     {
         assert_eq!(accumulator.root_hash(), expected_root_hash);
         assert_eq!(accumulator.num_leaves(), i as LeafCount);

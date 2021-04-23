@@ -46,10 +46,10 @@ pub struct GeneralMetadataV0 {
 
 impl GeneralMetadataV0 {
     pub fn new(
-        to_subaddress: Option<Vec<u8>>,
-        from_subaddress: Option<Vec<u8>>,
+        to_subaddress: Option<Vec<u8>>, from_subaddress: Option<Vec<u8>>,
         referenced_event: Option<u64>,
-    ) -> Self {
+    ) -> Self
+    {
         GeneralMetadataV0 {
             to_subaddress,
             from_subaddress,
@@ -57,17 +57,11 @@ impl GeneralMetadataV0 {
         }
     }
 
-    pub fn to_subaddress(&self) -> &Option<Vec<u8>> {
-        &self.to_subaddress
-    }
+    pub fn to_subaddress(&self) -> &Option<Vec<u8>> { &self.to_subaddress }
 
-    pub fn from_subaddress(&self) -> &Option<Vec<u8>> {
-        &self.from_subaddress
-    }
+    pub fn from_subaddress(&self) -> &Option<Vec<u8>> { &self.from_subaddress }
 
-    pub fn referenced_event(&self) -> &Option<u64> {
-        &self.referenced_event
-    }
+    pub fn referenced_event(&self) -> &Option<u64> { &self.referenced_event }
 }
 
 /// List of supported transaction metadata format versions for transactions
@@ -81,7 +75,8 @@ pub enum TravelRuleMetadata {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TravelRuleMetadataV0 {
     /// Off-chain reference_id.  Used when off-chain APIs are used.
-    /// Specifies the off-chain reference ID that was agreed upon in off-chain APIs.
+    /// Specifies the off-chain reference ID that was agreed upon in off-chain
+    /// APIs.
     off_chain_reference_id: Option<String>,
 }
 
@@ -93,7 +88,8 @@ pub struct UnstructuredBytesMetadata {
     metadata: Option<Vec<u8>>,
 }
 
-/// List of supported transaction metadata format versions for refund transaction
+/// List of supported transaction metadata format versions for refund
+/// transaction
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum RefundMetadata {
     RefundMetadataV0(RefundMetadataV0),
@@ -116,7 +112,8 @@ pub enum RefundReason {
     UserInitiatedFullRefund,
 }
 
-/// List of supported transaction metadata format versions for coin trade transaction
+/// List of supported transaction metadata format versions for coin trade
+/// transaction
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum CoinTradeMetadata {
     CoinTradeMetadataV0(CoinTradeMetadataV0),

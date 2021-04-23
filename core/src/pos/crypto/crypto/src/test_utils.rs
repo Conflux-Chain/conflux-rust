@@ -13,8 +13,7 @@ pub const TEST_SEED: [u8; 32] = [0u8; 32];
 #[cfg_attr(feature = "cloneable-private-keys", derive(Clone))]
 #[derive(Serialize, Deserialize, PartialEq, Eq)]
 pub struct KeyPair<S, P>
-where
-    for<'a> P: From<&'a S>,
+where for<'a> P: From<&'a S>
 {
     /// the private key component
     pub private_key: S,
@@ -23,8 +22,7 @@ where
 }
 
 impl<S, P> From<S> for KeyPair<S, P>
-where
-    for<'a> P: From<&'a S>,
+where for<'a> P: From<&'a S>
 {
     fn from(private_key: S) -> Self {
         KeyPair {
@@ -40,9 +38,7 @@ where
     for<'a> P: From<&'a S>,
 {
     fn generate<R>(rng: &mut R) -> Self
-    where
-        R: ::rand::RngCore + ::rand::CryptoRng,
-    {
+    where R: ::rand::RngCore + ::rand::CryptoRng {
         let private_key = S::generate(rng);
         private_key.into()
     }
@@ -55,9 +51,7 @@ where
     for<'a> P: From<&'a S>,
 {
     fn generate<R>(rng: &mut R) -> Self
-    where
-        R: ::rand::RngCore + ::rand::CryptoRng,
-    {
+    where R: ::rand::RngCore + ::rand::CryptoRng {
         let private_key = S::generate(rng);
         let public_key = (&private_key).into();
         (private_key, public_key)
@@ -83,13 +77,15 @@ use rand::{rngs::StdRng, SeedableRng};
 
 /// Produces a uniformly random keypair from a seed
 #[cfg(any(test, feature = "fuzzing"))]
-pub fn uniform_keypair_strategy<Priv, Pub>() -> impl Strategy<Value = KeyPair<Priv, Pub>>
+pub fn uniform_keypair_strategy<Priv, Pub>(
+) -> impl Strategy<Value = KeyPair<Priv, Pub>>
 where
     Pub: Serialize + for<'a> From<&'a Priv>,
     Priv: Serialize + Uniform,
 {
-    // The no_shrink is because keypairs should be fixed -- shrinking would cause a different
-    // keypair to be generated, which appears to not be very useful.
+    // The no_shrink is because keypairs should be fixed -- shrinking would
+    // cause a different keypair to be generated, which appears to not be
+    // very useful.
     any::<[u8; 32]>()
         .prop_map(|seed| {
             let mut rng = StdRng::from_seed(seed);
@@ -104,7 +100,8 @@ where
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TestDiemCrypto(pub String);
 
-// the following block is macro expanded from derive(CryptoHasher, BCSCryptoHash)
+// the following block is macro expanded from derive(CryptoHasher,
+// BCSCryptoHash)
 
 /// Cryptographic hasher for an BCS-serializable #item
 #[cfg(any(test, feature = "fuzzing"))]
@@ -114,9 +111,9 @@ impl ::core::clone::Clone for TestDiemCryptoHasher {
     #[inline]
     fn clone(&self) -> TestDiemCryptoHasher {
         match *self {
-            TestDiemCryptoHasher(ref __self_0_0) => {
-                TestDiemCryptoHasher(::core::clone::Clone::clone(&(*__self_0_0)))
-            }
+            TestDiemCryptoHasher(ref __self_0_0) => TestDiemCryptoHasher(
+                ::core::clone::Clone::clone(&(*__self_0_0)),
+            ),
         }
     }
 }
@@ -126,19 +123,19 @@ static TEST_DIEM_CRYPTO_SEED: crate::_once_cell::sync::OnceCell<[u8; 32]> =
 #[cfg(any(test, feature = "fuzzing"))]
 impl TestDiemCryptoHasher {
     fn new() -> Self {
-        let name = crate::_serde_name::trace_name::<TestDiemCrypto>()
-            .expect("The `CryptoHasher` macro only applies to structs and enums");
+        let name = crate::_serde_name::trace_name::<TestDiemCrypto>().expect(
+            "The `CryptoHasher` macro only applies to structs and enums",
+        );
         TestDiemCryptoHasher(crate::hash::DefaultHasher::new(&name.as_bytes()))
     }
 }
 #[cfg(any(test, feature = "fuzzing"))]
-static TEST_DIEM_CRYPTO_HASHER: crate::_once_cell::sync::Lazy<TestDiemCryptoHasher> =
-    crate::_once_cell::sync::Lazy::new(TestDiemCryptoHasher::new);
+static TEST_DIEM_CRYPTO_HASHER: crate::_once_cell::sync::Lazy<
+    TestDiemCryptoHasher,
+> = crate::_once_cell::sync::Lazy::new(TestDiemCryptoHasher::new);
 #[cfg(any(test, feature = "fuzzing"))]
 impl std::default::Default for TestDiemCryptoHasher {
-    fn default() -> Self {
-        TEST_DIEM_CRYPTO_HASHER.clone()
-    }
+    fn default() -> Self { TEST_DIEM_CRYPTO_HASHER.clone() }
 }
 #[cfg(any(test, feature = "fuzzing"))]
 impl crate::hash::CryptoHasher for TestDiemCryptoHasher {
@@ -150,12 +147,10 @@ impl crate::hash::CryptoHasher for TestDiemCryptoHasher {
             crate::hash::DefaultHasher::prefixed_hash(&name)
         })
     }
-    fn update(&mut self, bytes: &[u8]) {
-        self.0.update(bytes);
-    }
-    fn finish(self) -> crate::hash::HashValue {
-        self.0.finish()
-    }
+
+    fn update(&mut self, bytes: &[u8]) { self.0.update(bytes); }
+
+    fn finish(self) -> crate::hash::HashValue { self.0.finish() }
 }
 #[cfg(any(test, feature = "fuzzing"))]
 impl std::io::Write for TestDiemCryptoHasher {
@@ -163,13 +158,13 @@ impl std::io::Write for TestDiemCryptoHasher {
         self.0.update(bytes);
         Ok(bytes.len())
     }
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
+
+    fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
 }
 #[cfg(any(test, feature = "fuzzing"))]
 impl crate::hash::CryptoHash for TestDiemCrypto {
     type Hasher = TestDiemCryptoHasher;
+
     fn hash(&self) -> crate::hash::HashValue {
         use crate::hash::CryptoHasher;
         let mut state = Self::Hasher::default();

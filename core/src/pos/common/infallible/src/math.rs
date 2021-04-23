@@ -7,7 +7,7 @@
 /// # Examples
 ///
 /// ```
-///# use crate::diem_infallible::checked;
+/// # use crate::diem_infallible::checked;
 /// let a: i64 = 1;
 /// let b: i64 = 2;
 /// let c: i64 = 3;
@@ -104,7 +104,5 @@ impl std::fmt::Display for ArithmeticError {
 }
 
 impl std::error::Error for ArithmeticError {
-    fn description(&self) -> &str {
-        &self.0
-    }
+    fn description(&self) -> &str { &self.0 }
 }

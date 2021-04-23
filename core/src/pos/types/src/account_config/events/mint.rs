@@ -18,14 +18,10 @@ pub struct MintEvent {
 
 impl MintEvent {
     /// Get the amount minted
-    pub fn amount(&self) -> u64 {
-        self.amount
-    }
+    pub fn amount(&self) -> u64 { self.amount }
 
     /// Return the code for the currency that was minted
-    pub fn currency_code(&self) -> &IdentStr {
-        &self.currency_code
-    }
+    pub fn currency_code(&self) -> &IdentStr { &self.currency_code }
 
     pub fn try_from_bytes(bytes: &[u8]) -> Result<Self> {
         bcs::from_bytes(bytes).map_err(Into::into)

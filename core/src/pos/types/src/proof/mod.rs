@@ -17,8 +17,9 @@ use crate::{
 use anyhow::{ensure, Result};
 use diem_crypto::{
     hash::{
-        CryptoHash, CryptoHasher, EventAccumulatorHasher, SparseMerkleInternalHasher,
-        TestOnlyHasher, TransactionAccumulatorHasher,
+        CryptoHash, CryptoHasher, EventAccumulatorHasher,
+        SparseMerkleInternalHasher, TestOnlyHasher,
+        TransactionAccumulatorHasher,
     },
     HashValue,
 };
@@ -29,22 +30,24 @@ use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
 pub use self::definition::{
-    AccountStateProof, AccumulatorConsistencyProof, AccumulatorExtensionProof, AccumulatorProof,
-    AccumulatorRangeProof, EventAccumulatorProof, EventProof, SparseMerkleProof,
-    SparseMerkleRangeProof, TransactionAccumulatorProof, TransactionAccumulatorRangeProof,
-    TransactionInfoWithProof, TransactionListProof,
+    AccountStateProof, AccumulatorConsistencyProof, AccumulatorExtensionProof,
+    AccumulatorProof, AccumulatorRangeProof, EventAccumulatorProof, EventProof,
+    SparseMerkleProof, SparseMerkleRangeProof, TransactionAccumulatorProof,
+    TransactionAccumulatorRangeProof, TransactionInfoWithProof,
+    TransactionListProof,
 };
 
 #[cfg(any(test, feature = "fuzzing"))]
 pub use self::definition::{TestAccumulatorProof, TestAccumulatorRangeProof};
 
-/// Verifies that a given `transaction_info` exists in the ledger using provided proof.
+/// Verifies that a given `transaction_info` exists in the ledger using provided
+/// proof.
 fn verify_transaction_info(
-    ledger_info: &LedgerInfo,
-    transaction_version: Version,
+    ledger_info: &LedgerInfo, transaction_version: Version,
     transaction_info: &TransactionInfo,
     ledger_info_to_transaction_info_proof: &TransactionAccumulatorProof,
-) -> Result<()> {
+) -> Result<()>
+{
     ensure!(
         transaction_version <= ledger_info.version(),
         "Transaction version {} is newer than LedgerInfo version {}.",
@@ -89,12 +92,17 @@ impl<H: CryptoHasher> CryptoHash for MerkleTreeInternalNode<H> {
     }
 }
 
-pub type SparseMerkleInternalNode = MerkleTreeInternalNode<SparseMerkleInternalHasher>;
-pub type TransactionAccumulatorInternalNode = MerkleTreeInternalNode<TransactionAccumulatorHasher>;
-pub type EventAccumulatorInternalNode = MerkleTreeInternalNode<EventAccumulatorHasher>;
+pub type SparseMerkleInternalNode =
+    MerkleTreeInternalNode<SparseMerkleInternalHasher>;
+pub type TransactionAccumulatorInternalNode =
+    MerkleTreeInternalNode<TransactionAccumulatorHasher>;
+pub type EventAccumulatorInternalNode =
+    MerkleTreeInternalNode<EventAccumulatorHasher>;
 pub type TestAccumulatorInternalNode = MerkleTreeInternalNode<TestOnlyHasher>;
 
-#[derive(Clone, Copy, CryptoHasher, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, CryptoHasher, Debug, Eq, PartialEq, Serialize, Deserialize,
+)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct SparseMerkleLeafNode {
     key: HashValue,
@@ -106,13 +114,9 @@ impl SparseMerkleLeafNode {
         SparseMerkleLeafNode { key, value_hash }
     }
 
-    pub fn key(&self) -> HashValue {
-        self.key
-    }
+    pub fn key(&self) -> HashValue { self.key }
 
-    pub fn value_hash(&self) -> HashValue {
-        self.value_hash
-    }
+    pub fn value_hash(&self) -> HashValue { self.value_hash }
 }
 
 impl CryptoHash for SparseMerkleLeafNode {

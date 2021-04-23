@@ -16,21 +16,13 @@ pub struct Credential {
 }
 
 impl Credential {
-    pub fn human_name(&self) -> &str {
-        &self.human_name
-    }
+    pub fn human_name(&self) -> &str { &self.human_name }
 
-    pub fn base_url(&self) -> &str {
-        &self.base_url
-    }
+    pub fn base_url(&self) -> &str { &self.base_url }
 
-    pub fn expiration_date(&self) -> u64 {
-        self.expiration_date
-    }
+    pub fn expiration_date(&self) -> u64 { self.expiration_date }
 
-    pub fn compliance_public_key(&self) -> &[u8] {
-        &self.compliance_public_key
-    }
+    pub fn compliance_public_key(&self) -> &[u8] { &self.compliance_public_key }
 
     pub fn compliance_key_rotation_events(&self) -> &EventHandle {
         &self.compliance_key_rotation_events

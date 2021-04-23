@@ -23,9 +23,7 @@ impl fmt::Display for RegisteredCurrencies {
 }
 
 impl RegisteredCurrencies {
-    pub fn currency_codes(&self) -> &[Identifier] {
-        &self.currency_codes
-    }
+    pub fn currency_codes(&self) -> &[Identifier] { &self.currency_codes }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         bcs::from_bytes(bytes).map_err(Into::into)

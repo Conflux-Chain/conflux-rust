@@ -6,26 +6,19 @@
 //! # Derive macros for crypto operations
 //! This crate contains four types of derive macros:
 //!
-//! - the `SilentDebug` and SilentDisplay macros are meant to be used on private key types, and
-//!   elide their input for confidentiality.
+//! - the `SilentDebug` and SilentDisplay macros are meant to be used on private
+//!   key types, and elide their input for confidentiality.
 //! - the `Deref` macro helps derive the canonical instances on new types.
-//! - the derive macros for `diem_crypto::traits`, namely `ValidCryptoMaterial`, `PublicKey`, `PrivateKey`,
-//!   `VerifyingKey`, `SigningKey` and `Signature` are meant to be derived on simple unions of types
-//!   implementing these traits.
-//! - the derive macro for `diem_crypto::hash::CryptoHasher`, which defines
-//!   the domain-separation hasher structures described in `diem_crypto::hash`
-//!   (look there for details). This derive macro has for sole difference that it
-//!   automatically picks a unique salt for you, using the Serde name. For a container `Foo`,
-//!   this is usually equivalent to:
-//!   ```ignore
-//!   define_hasher! {
-//!    (
-//!         FooHasher,
-//!         FOO_HASHER,
-//!         b"Foo"
-//!     )
-//!   }
-//!   ```
+//! - the derive macros for `diem_crypto::traits`, namely `ValidCryptoMaterial`,
+//!   `PublicKey`, `PrivateKey`, `VerifyingKey`, `SigningKey` and `Signature`
+//!   are meant to be derived on simple unions of types implementing these
+//!   traits.
+//! - the derive macro for `diem_crypto::hash::CryptoHasher`, which defines the
+//!   domain-separation hasher structures described in `diem_crypto::hash` (look
+//!   there for details). This derive macro has for sole difference that it
+//!   automatically picks a unique salt for you, using the Serde name. For a
+//!   container `Foo`, this is usually equivalent to: ```ignore define_hasher! {
+//!   ( FooHasher, FOO_HASHER, b"Foo" ) } ```
 //!
 //! # Unions of Signing Traits, in detail
 //!
@@ -37,15 +30,19 @@
 //! canonical signature, signing & verifying key types, and verifies all
 //! expected properties by trivial dispatch).
 //!
-//! The macros below let you define this type of union trivially under two conditions:
-//! - that the variant tags for the enum have the same name, i.e. if the BLS variant for the
-//!   `SignatureUnion` is `SignatureUnion::BLS(BLS12381Signature)`, then the variant of the
+//! The macros below let you define this type of union trivially under two
+//! conditions:
+//! - that the variant tags for the enum have the same name, i.e. if the BLS
+//!   variant for the `SignatureUnion` is
+//!   `SignatureUnion::BLS(BLS12381Signature)`, then the variant of the
 //!   `PublicKeyUnion` for BLS must also be `PublicKeyUnion::BLS`,
-//! - that you specify the associated types `PrivateKeyType`, `SignatureType` and `PublicKeyType`
-//!   for each of the three unions. `PrivateKeyType` provides the value for the
-//!   `VerifyingKeyMaterial` and `PublicKeyMaterial` associated types, `PublicKeyType` provides the
-//!   valid for the `SigningKeyMaterial` and `PrivateKeyMaterial` associated types and
-//!   `SignatureType` provides the value for the `SignatureMaterial` associated type.
+//! - that you specify the associated types `PrivateKeyType`, `SignatureType`
+//!   and `PublicKeyType` for each of the three unions. `PrivateKeyType`
+//!   provides the value for the `VerifyingKeyMaterial` and `PublicKeyMaterial`
+//!   associated types, `PublicKeyType` provides the valid for the
+//!   `SigningKeyMaterial` and `PrivateKeyMaterial` associated types and
+//!   `SignatureType` provides the value for the `SignatureMaterial` associated
+//!   type.
 //!
 //! ## Example
 //!
@@ -210,7 +207,8 @@ pub fn derive_deref(input: TokenStream) -> TokenStream {
     let (field_ty, field_access) = parse_newtype_fields(&item);
 
     let name = &item.ident;
-    let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
+    let (impl_generics, ty_generics, where_clause) =
+        item.generics.split_for_impl();
 
     quote!(
         impl #impl_generics ::std::ops::Deref for #name #ty_generics
@@ -232,7 +230,9 @@ pub fn derive_enum_valid_crypto_material(input: TokenStream) -> TokenStream {
 
     let name = &ast.ident;
     match ast.data {
-        Data::Enum(ref variants) => impl_enum_valid_crypto_material(name, variants),
+        Data::Enum(ref variants) => {
+            impl_enum_valid_crypto_material(name, variants)
+        }
         Data::Struct(_) | Data::Union(_) => {
             panic!("#[derive(ValidCryptoMaterial)] is only defined for enums")
         }
@@ -244,9 +244,12 @@ pub fn derive_enum_publickey(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
 
     let name = &ast.ident;
-    let private_key_type = get_type_from_attrs(&ast.attrs, "PrivateKeyType").unwrap();
+    let private_key_type =
+        get_type_from_attrs(&ast.attrs, "PrivateKeyType").unwrap();
     match ast.data {
-        Data::Enum(ref variants) => impl_enum_publickey(name, private_key_type, variants),
+        Data::Enum(ref variants) => {
+            impl_enum_publickey(name, private_key_type, variants)
+        }
         Data::Struct(_) | Data::Union(_) => {
             panic!("#[derive(PublicKey)] is only defined for enums")
         }
@@ -258,9 +261,12 @@ pub fn derive_enum_privatekey(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
 
     let name = &ast.ident;
-    let public_key_type = get_type_from_attrs(&ast.attrs, "PublicKeyType").unwrap();
+    let public_key_type =
+        get_type_from_attrs(&ast.attrs, "PublicKeyType").unwrap();
     match ast.data {
-        Data::Enum(ref variants) => impl_enum_privatekey(name, public_key_type, variants),
+        Data::Enum(ref variants) => {
+            impl_enum_privatekey(name, public_key_type, variants)
+        }
         Data::Struct(_) | Data::Union(_) => {
             panic!("#[derive(PrivateKey)] is only defined for enums")
         }
@@ -272,12 +278,17 @@ pub fn derive_enum_verifyingkey(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
 
     let name = &ast.ident;
-    let private_key_type = get_type_from_attrs(&ast.attrs, "PrivateKeyType").unwrap();
-    let signature_type = get_type_from_attrs(&ast.attrs, "SignatureType").unwrap();
+    let private_key_type =
+        get_type_from_attrs(&ast.attrs, "PrivateKeyType").unwrap();
+    let signature_type =
+        get_type_from_attrs(&ast.attrs, "SignatureType").unwrap();
     match ast.data {
-        Data::Enum(ref variants) => {
-            impl_enum_verifyingkey(name, private_key_type, signature_type, variants)
-        }
+        Data::Enum(ref variants) => impl_enum_verifyingkey(
+            name,
+            private_key_type,
+            signature_type,
+            variants,
+        ),
         Data::Struct(_) | Data::Union(_) => {
             panic!("#[derive(PrivateKey)] is only defined for enums")
         }
@@ -289,12 +300,17 @@ pub fn derive_enum_signingkey(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
 
     let name = &ast.ident;
-    let public_key_type = get_type_from_attrs(&ast.attrs, "PublicKeyType").unwrap();
-    let signature_type = get_type_from_attrs(&ast.attrs, "SignatureType").unwrap();
+    let public_key_type =
+        get_type_from_attrs(&ast.attrs, "PublicKeyType").unwrap();
+    let signature_type =
+        get_type_from_attrs(&ast.attrs, "SignatureType").unwrap();
     match ast.data {
-        Data::Enum(ref variants) => {
-            impl_enum_signingkey(name, public_key_type, signature_type, variants)
-        }
+        Data::Enum(ref variants) => impl_enum_signingkey(
+            name,
+            public_key_type,
+            signature_type,
+            variants,
+        ),
         Data::Struct(_) | Data::Union(_) => {
             panic!("#[derive(PrivateKey)] is only defined for enums")
         }
@@ -306,12 +322,17 @@ pub fn derive_enum_signature(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
 
     let name = &ast.ident;
-    let public_key_type = get_type_from_attrs(&ast.attrs, "PublicKeyType").unwrap();
-    let private_key_type = get_type_from_attrs(&ast.attrs, "PrivateKeyType").unwrap();
+    let public_key_type =
+        get_type_from_attrs(&ast.attrs, "PublicKeyType").unwrap();
+    let private_key_type =
+        get_type_from_attrs(&ast.attrs, "PrivateKeyType").unwrap();
     match ast.data {
-        Data::Enum(ref variants) => {
-            impl_enum_signature(name, public_key_type, private_key_type, variants)
-        }
+        Data::Enum(ref variants) => impl_enum_signature(
+            name,
+            public_key_type,
+            private_key_type,
+            variants,
+        ),
         Data::Struct(_) | Data::Union(_) => {
             panic!("#[derive(PrivateKey)] is only defined for enums")
         }
@@ -413,7 +434,8 @@ pub fn hasher_dispatch(input: TokenStream) -> TokenStream {
 pub fn bcs_crypto_hash_dispatch(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     let name = &ast.ident;
-    let hasher_name = Ident::new(&format!("{}Hasher", &name.to_string()), Span::call_site());
+    let hasher_name =
+        Ident::new(&format!("{}Hasher", &name.to_string()), Span::call_site());
     let error_msg = syn::LitStr::new(
         &format!("BCS serialization of {} should not fail", name.to_string()),
         Span::call_site(),

@@ -14,14 +14,10 @@ pub struct BaseUrlRotationEvent {
 
 impl BaseUrlRotationEvent {
     /// Get the new base url
-    pub fn new_base_url(&self) -> &[u8] {
-        &self.new_base_url
-    }
+    pub fn new_base_url(&self) -> &[u8] { &self.new_base_url }
 
     /// Get the (blockchain) time in seconds when the url was rotated
-    pub fn time_rotated_seconds(&self) -> u64 {
-        self.time_rotated_seconds
-    }
+    pub fn time_rotated_seconds(&self) -> u64 { self.time_rotated_seconds }
 
     pub fn try_from_bytes(bytes: &[u8]) -> Result<Self> {
         bcs::from_bytes(bytes).map_err(Into::into)

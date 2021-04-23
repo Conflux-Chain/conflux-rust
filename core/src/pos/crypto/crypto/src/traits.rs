@@ -1,10 +1,11 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module provides a generic set of traits for dealing with cryptographic primitives.
+//! This module provides a generic set of traits for dealing with cryptographic
+//! primitives.
 //!
-//! For examples on how to use these traits, see the implementations of the [`ed25519`] or
-//! [`bls12381`] modules.
+//! For examples on how to use these traits, see the implementations of the
+//! [`ed25519`] or [`bls12381`] modules.
 
 use crate::hash::CryptoHash;
 use anyhow::Result;
@@ -14,12 +15,13 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::{fmt::Debug, hash::Hash};
 use thiserror::Error;
 
-/// An error type for key and signature validation issues, see [`ValidCryptoMaterial`][ValidCryptoMaterial].
+/// An error type for key and signature validation issues, see
+/// [`ValidCryptoMaterial`][ValidCryptoMaterial].
 ///
 /// This enum reflects there are two interesting causes of validation
-/// failure for the ingestion of key or signature material: deserialization errors
-/// (often, due to mangled material or curve equation failure for ECC) and
-/// validation errors (material recognizable but unacceptable for use,
+/// failure for the ingestion of key or signature material: deserialization
+/// errors (often, due to mangled material or curve equation failure for ECC)
+/// and validation errors (material recognizable but unacceptable for use,
 /// e.g. unsafe).
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
 #[error("{:?}", self)]
@@ -32,7 +34,8 @@ pub enum CryptoMaterialError {
     ValidationError,
     /// Key, threshold or signature material does not have the expected size.
     WrongLengthError,
-    /// Part of the signature or key is not canonical resulting to malleability issues.
+    /// Part of the signature or key is not canonical resulting to malleability
+    /// issues.
     CanonicalRepresentationError,
     /// A curve point (i.e., a public key) lies on a small group.
     SmallSubgroupError,
@@ -42,7 +45,8 @@ pub enum CryptoMaterialError {
     BitVecError(String),
 }
 
-/// The serialized length of the data that enables macro derived serialization and deserialization.
+/// The serialized length of the data that enables macro derived serialization
+/// and deserialization.
 pub trait Length {
     /// The serialized length of the data
     fn length(&self) -> usize;
@@ -66,16 +70,20 @@ pub trait ValidCryptoMaterial:
     fn to_bytes(&self) -> Vec<u8>;
 }
 
-/// An extension to to/from Strings for [`ValidCryptoMaterial`][ValidCryptoMaterial].
+/// An extension to to/from Strings for
+/// [`ValidCryptoMaterial`][ValidCryptoMaterial].
 ///
 /// Relies on [`hex`][::hex] for string encoding / decoding.
 /// No required fields, provides a default implementation.
 pub trait ValidCryptoMaterialStringExt: ValidCryptoMaterial {
     /// When trying to convert from bytes, we simply decode the string into
     /// bytes before checking if we can convert.
-    fn from_encoded_string(encoded_str: &str) -> std::result::Result<Self, CryptoMaterialError> {
+    fn from_encoded_string(
+        encoded_str: &str,
+    ) -> std::result::Result<Self, CryptoMaterialError> {
         let bytes_out = ::hex::decode(encoded_str);
-        // We defer to `try_from` to make sure we only produce valid crypto materials.
+        // We defer to `try_from` to make sure we only produce valid crypto
+        // materials.
         bytes_out
             // We reinterpret a failure to serialize: key is mangled someway.
             .or(Err(CryptoMaterialError::DeserializationError))
@@ -99,9 +107,7 @@ pub trait PrivateKey: Sized {
     type PublicKeyMaterial: PublicKey<PrivateKeyMaterial = Self>;
 
     /// Returns the associated public key
-    fn public_key(&self) -> Self::PublicKeyMaterial {
-        self.into()
-    }
+    fn public_key(&self) -> Self::PublicKeyMaterial { self.into() }
 }
 
 /// A type family of valid keys that know how to sign.
@@ -109,8 +115,8 @@ pub trait PrivateKey: Sized {
 /// This trait has a requirement on a `pub(crate)` marker trait meant to
 /// specifically limit its implementations to the present crate.
 ///
-/// A trait for a [`ValidCryptoMaterial`][ValidCryptoMaterial] which knows how to sign a
-/// message, and return an associated `Signature` type.
+/// A trait for a [`ValidCryptoMaterial`][ValidCryptoMaterial] which knows how
+/// to sign a message, and return an associated `Signature` type.
 pub trait SigningKey:
     PrivateKey<PublicKeyMaterial = <Self as SigningKey>::VerifyingKeyMaterial>
     + ValidCryptoMaterial
@@ -125,18 +131,19 @@ pub trait SigningKey:
     /// that we know how to serialize. There is no pre-hashing into a
     /// `HashValue` to be done by the caller.
     ///
-    /// Note: this assumes serialization is unfaillible. See diem_common::bcs::ser
-    /// for a discussion of this assumption.
-    fn sign<T: CryptoHash + Serialize>(&self, message: &T) -> Self::SignatureMaterial;
+    /// Note: this assumes serialization is unfaillible. See
+    /// diem_common::bcs::ser for a discussion of this assumption.
+    fn sign<T: CryptoHash + Serialize>(
+        &self, message: &T,
+    ) -> Self::SignatureMaterial;
 
     /// Signs a non-hash input message. For testing only.
     #[cfg(any(test, feature = "fuzzing"))]
-    fn sign_arbitrary_message(&self, message: &[u8]) -> Self::SignatureMaterial;
+    fn sign_arbitrary_message(&self, message: &[u8])
+        -> Self::SignatureMaterial;
 
     /// Returns the associated verifying key
-    fn verifying_key(&self) -> Self::VerifyingKeyMaterial {
-        self.public_key()
-    }
+    fn verifying_key(&self) -> Self::VerifyingKeyMaterial { self.public_key() }
 }
 
 /// A type for key material that can be publicly shared, and in asymmetric
@@ -178,19 +185,17 @@ pub trait VerifyingKey:
     /// The associated signature type for this verifying key.
     type SignatureMaterial: Signature<VerifyingKeyMaterial = Self>;
 
-    /// We provide the striaghtfoward implementation which dispatches to the signature.
+    /// We provide the striaghtfoward implementation which dispatches to the
+    /// signature.
     fn verify_struct_signature<T: CryptoHash + Serialize>(
-        &self,
-        message: &T,
-        signature: &Self::SignatureMaterial,
+        &self, message: &T, signature: &Self::SignatureMaterial,
     ) -> Result<()> {
         signature.verify(message, self)
     }
 
     /// We provide the implementation which dispatches to the signature.
     fn batch_verify<T: CryptoHash + Serialize>(
-        message: &T,
-        keys_and_signatures: Vec<(Self, Self::SignatureMaterial)>,
+        message: &T, keys_and_signatures: Vec<(Self, Self::SignatureMaterial)>,
     ) -> Result<()> {
         Self::SignatureMaterial::batch_verify(message, keys_and_signatures)
     }
@@ -228,16 +233,12 @@ pub trait Signature:
     /// Verification for a struct we unabmiguously know how to serialize and
     /// that we have a domain separation prefix for.
     fn verify<T: CryptoHash + Serialize>(
-        &self,
-        message: &T,
-        public_key: &Self::VerifyingKeyMaterial,
+        &self, message: &T, public_key: &Self::VerifyingKeyMaterial,
     ) -> Result<()>;
 
     /// Native verification function.
     fn verify_arbitrary_msg(
-        &self,
-        message: &[u8],
-        public_key: &Self::VerifyingKeyMaterial,
+        &self, message: &[u8], public_key: &Self::VerifyingKeyMaterial,
     ) -> Result<()>;
 
     /// Convert the signature into a byte representation.
@@ -249,7 +250,8 @@ pub trait Signature:
     fn batch_verify<T: CryptoHash + Serialize>(
         message: &T,
         keys_and_signatures: Vec<(Self::VerifyingKeyMaterial, Self)>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         for (key, signature) in keys_and_signatures {
             signature.verify(message, &key)?
         }
@@ -260,19 +262,17 @@ pub trait Signature:
 /// A type family for schemes which know how to generate key material from
 /// a cryptographically-secure [`CryptoRng`][::rand::CryptoRng].
 pub trait Uniform {
-    /// Generate key material from an RNG. This should generally not be used for production
-    /// purposes even with a good source of randomness. When possible use hardware crypto to generate and
-    /// store private keys.
+    /// Generate key material from an RNG. This should generally not be used for
+    /// production purposes even with a good source of randomness. When
+    /// possible use hardware crypto to generate and store private keys.
     fn generate<R>(rng: &mut R) -> Self
-    where
-        R: RngCore + CryptoRng;
+    where R: RngCore + CryptoRng;
 
     /// Generate a random key using the shared TEST_SEED
     fn generate_for_testing() -> Self
-    where
-        Self: Sized,
-    {
-        let mut rng: StdRng = SeedableRng::from_seed(crate::test_utils::TEST_SEED);
+    where Self: Sized {
+        let mut rng: StdRng =
+            SeedableRng::from_seed(crate::test_utils::TEST_SEED);
         Self::generate(&mut rng)
     }
 }

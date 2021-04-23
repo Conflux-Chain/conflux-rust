@@ -14,38 +14,36 @@ use std::{
     str::FromStr,
 };
 
-/// A struct that represents a globally unique id for an Event stream that a user can listen to.
-/// By design, the lower part of EventKey is the same as account address.
+/// A struct that represents a globally unique id for an Event stream that a
+/// user can listen to. By design, the lower part of EventKey is the same as
+/// account address.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct EventKey([u8; EventKey::LENGTH]);
 
 impl EventKey {
-    /// Construct a new EventKey from a byte array slice.
-    pub fn new(key: [u8; Self::LENGTH]) -> Self {
-        EventKey(key)
-    }
-
     /// The number of bytes in an EventKey.
     pub const LENGTH: usize = AccountAddress::LENGTH + 8;
 
+    /// Construct a new EventKey from a byte array slice.
+    pub fn new(key: [u8; Self::LENGTH]) -> Self { EventKey(key) }
+
     /// Get the byte representation of the event key.
-    pub fn as_bytes(&self) -> &[u8] {
-        &self.0
-    }
+    pub fn as_bytes(&self) -> &[u8] { &self.0 }
 
     /// Convert event key into a byte array.
-    pub fn to_vec(&self) -> Vec<u8> {
-        self.0.to_vec()
-    }
+    pub fn to_vec(&self) -> Vec<u8> { self.0.to_vec() }
 
     /// Get the account address part in this event key
     pub fn get_creator_address(&self) -> AccountAddress {
-        AccountAddress::try_from(&self.0[EventKey::LENGTH - AccountAddress::LENGTH..])
-            .expect("get_creator_address failed")
+        AccountAddress::try_from(
+            &self.0[EventKey::LENGTH - AccountAddress::LENGTH..],
+        )
+        .expect("get_creator_address failed")
     }
 
-    /// If this is the `ith` EventKey` created by `get_creator_address()`, return `i`
+    /// If this is the `ith` EventKey` created by `get_creator_address()`,
+    /// return `i`
     pub fn get_creation_number(&self) -> u64 {
         u64::from_le_bytes(self.0[0..8].try_into().unwrap())
     }
@@ -67,13 +65,17 @@ impl EventKey {
         EventKey(output_bytes)
     }
 
-    pub fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<Self, EventKeyParseError> {
+    pub fn from_hex<T: AsRef<[u8]>>(
+        hex: T,
+    ) -> Result<Self, EventKeyParseError> {
         <[u8; Self::LENGTH]>::from_hex(hex)
             .map_err(|_| EventKeyParseError)
             .map(Self)
     }
 
-    pub fn from_bytes<T: AsRef<[u8]>>(bytes: T) -> Result<Self, EventKeyParseError> {
+    pub fn from_bytes<T: AsRef<[u8]>>(
+        bytes: T,
+    ) -> Result<Self, EventKeyParseError> {
         <[u8; Self::LENGTH]>::try_from(bytes.as_ref())
             .map_err(|_| EventKeyParseError)
             .map(Self)
@@ -89,38 +91,33 @@ impl FromStr for EventKey {
 }
 
 impl From<EventKey> for [u8; EventKey::LENGTH] {
-    fn from(event_key: EventKey) -> Self {
-        event_key.0
-    }
+    fn from(event_key: EventKey) -> Self { event_key.0 }
 }
 
 impl From<&EventKey> for [u8; EventKey::LENGTH] {
-    fn from(event_key: &EventKey) -> Self {
-        event_key.0
-    }
+    fn from(event_key: &EventKey) -> Self { event_key.0 }
 }
 
 impl ser::Serialize for EventKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: ser::Serializer,
-    {
+    where S: ser::Serializer {
         if serializer.is_human_readable() {
             self.to_string().serialize(serializer)
         } else {
-            // In order to preserve the Serde data model and help analysis tools,
-            // make sure to wrap our value in a container with the same name
-            // as the original type.
-            serializer.serialize_newtype_struct("EventKey", serde_bytes::Bytes::new(&self.0))
+            // In order to preserve the Serde data model and help analysis
+            // tools, make sure to wrap our value in a container
+            // with the same name as the original type.
+            serializer.serialize_newtype_struct(
+                "EventKey",
+                serde_bytes::Bytes::new(&self.0),
+            )
         }
     }
 }
 
 impl<'de> de::Deserialize<'de> for EventKey {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: de::Deserializer<'de>,
-    {
+    where D: de::Deserializer<'de> {
         use serde::de::Error;
 
         if deserializer.is_human_readable() {
@@ -163,30 +160,23 @@ impl std::error::Error for EventKeyParseError {}
 pub struct EventHandle {
     /// Number of events in the event stream.
     count: u64,
-    /// The associated globally unique key that is used as the key to the EventStore.
+    /// The associated globally unique key that is used as the key to the
+    /// EventStore.
     key: EventKey,
 }
 
 impl EventHandle {
     /// Constructs a new Event Handle
-    pub fn new(key: EventKey, count: u64) -> Self {
-        EventHandle { key, count }
-    }
+    pub fn new(key: EventKey, count: u64) -> Self { EventHandle { key, count } }
 
     /// Return the key to where this event is stored in EventStore.
-    pub fn key(&self) -> &EventKey {
-        &self.key
-    }
+    pub fn key(&self) -> &EventKey { &self.key }
 
     /// Return the counter for the handle
-    pub fn count(&self) -> u64 {
-        self.count
-    }
+    pub fn count(&self) -> u64 { self.count }
 
     #[cfg(any(test, feature = "fuzzing"))]
-    pub fn count_mut(&mut self) -> &mut u64 {
-        &mut self.count
-    }
+    pub fn count_mut(&mut self) -> &mut u64 { &mut self.count }
 
     #[cfg(any(test, feature = "fuzzing"))]
     /// Create a random event handle for testing

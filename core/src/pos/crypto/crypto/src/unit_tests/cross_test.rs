@@ -6,13 +6,16 @@
 use crate as diem_crypto;
 use crate::{
     ed25519::{Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature},
-    multi_ed25519::{MultiEd25519PrivateKey, MultiEd25519PublicKey, MultiEd25519Signature},
+    multi_ed25519::{
+        MultiEd25519PrivateKey, MultiEd25519PublicKey, MultiEd25519Signature,
+    },
     test_utils::{random_serializable_struct, uniform_keypair_strategy},
     traits::*,
 };
 
 use diem_crypto_derive::{
-    PrivateKey, PublicKey, Signature, SigningKey, SilentDebug, ValidCryptoMaterial, VerifyingKey,
+    PrivateKey, PublicKey, Signature, SigningKey, SilentDebug,
+    ValidCryptoMaterial, VerifyingKey,
 };
 use proptest::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -45,7 +48,14 @@ enum PublicK {
     MultiEd(MultiEd25519PublicKey),
 }
 
-#[derive(Serialize, Deserialize, SilentDebug, ValidCryptoMaterial, PrivateKey, SigningKey)]
+#[derive(
+    Serialize,
+    Deserialize,
+    SilentDebug,
+    ValidCryptoMaterial,
+    PrivateKey,
+    SigningKey,
+)]
 #[PublicKeyType = "PublicK"]
 #[SignatureType = "Sig"]
 enum PrivateK {

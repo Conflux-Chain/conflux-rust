@@ -42,19 +42,22 @@ pub const TEST_SHARED_VAL_NETADDR_KEY_VERSION: KeyVersion = 0;
 /// Note: modifying this salt is a backwards-incompatible protocol change.
 ///
 /// For readers, the HKDF salt is equal to the following hex string:
-/// `"7ffda2ae982a2ebfab2a4da62f76fe33592c85e02445b875f02ded51a520ba2a"` which is
-/// also equal to the hash value `SHA3-256(b"DIEM_ENCRYPTED_NETWORK_ADDRESS_SALT")`.
+/// `"7ffda2ae982a2ebfab2a4da62f76fe33592c85e02445b875f02ded51a520ba2a"` which
+/// is also equal to the hash value
+/// `SHA3-256(b"DIEM_ENCRYPTED_NETWORK_ADDRESS_SALT")`.
 ///
 /// ```
-/// use diem_types::network_address::encrypted::HKDF_SALT;
 /// use diem_crypto::hash::HashValue;
+/// use diem_types::network_address::encrypted::HKDF_SALT;
 ///
-/// let derived_salt = HashValue::sha3_256_of(b"DIEM_ENCRYPTED_NETWORK_ADDRESS_SALT");
+/// let derived_salt =
+///     HashValue::sha3_256_of(b"DIEM_ENCRYPTED_NETWORK_ADDRESS_SALT");
 /// assert_eq!(HKDF_SALT.as_ref(), derived_salt.as_ref());
 /// ```
 pub const HKDF_SALT: [u8; 32] = [
-    0x7f, 0xfd, 0xa2, 0xae, 0x98, 0x2a, 0x2e, 0xbf, 0xab, 0x2a, 0x4d, 0xa6, 0x2f, 0x76, 0xfe, 0x33,
-    0x59, 0x2c, 0x85, 0xe0, 0x24, 0x45, 0xb8, 0x75, 0xf0, 0x2d, 0xed, 0x51, 0xa5, 0x20, 0xba, 0x2a,
+    0x7f, 0xfd, 0xa2, 0xae, 0x98, 0x2a, 0x2e, 0xbf, 0xab, 0x2a, 0x4d, 0xa6,
+    0x2f, 0x76, 0xfe, 0x33, 0x59, 0x2c, 0x85, 0xe0, 0x24, 0x45, 0xb8, 0x75,
+    0xf0, 0x2d, 0xed, 0x51, 0xa5, 0x20, 0xba, 0x2a,
 ];
 
 /// An encrypted [`NetworkAddress`].
@@ -62,14 +65,14 @@ pub const HKDF_SALT: [u8; 32] = [
 /// ### Threat Model
 ///
 /// Encrypting the on-chain network addresses is purely a defense-in-depth
-/// mitigation to minimize attack surface and reduce DDoS attacks on the validators
-/// by restricting the visibility of their public-facing network addresses only
-/// to other validators.
+/// mitigation to minimize attack surface and reduce DDoS attacks on the
+/// validators by restricting the visibility of their public-facing network
+/// addresses only to other validators.
 ///
 /// These encrypted network addresses are intended to be stored on-chain under
 /// each validator's advertised network addresses in their [`ValidatorConfig`]s.
-/// All validators share the secret `shared_val_netaddr_key`, though each validator's addresses
-/// are encrypted using a per-validator `derived_key`.
+/// All validators share the secret `shared_val_netaddr_key`, though each
+/// validator's addresses are encrypted using a per-validator `derived_key`.
 ///
 /// ### Account Key
 ///
@@ -84,13 +87,15 @@ pub const HKDF_SALT: [u8; 32] = [
 ///
 /// where `HKDF-SHA3-256::extract_and_expand` is
 /// [HKDF extract-and-expand](https://tools.ietf.org/html/rfc5869) with SHA3-256,
-/// [`HKDF_SALT`] is a constant salt for application separation, `shared_val_netaddr_key` is the
-/// shared secret distributed amongst all the validators, and `account_address`
-/// is the specific validator's [`AccountAddress`].
+/// [`HKDF_SALT`] is a constant salt for application separation,
+/// `shared_val_netaddr_key` is the shared secret distributed amongst all the
+/// validators, and `account_address` is the specific validator's
+/// [`AccountAddress`].
 ///
 /// We use per-validator `derived_key`s to limit the "blast radius" of
 /// nonce reuse to each validator, i.e., a validator that accidentally reuses a
-/// nonce will only leak information about their network addresses or `derived_key`.
+/// nonce will only leak information about their network addresses or
+/// `derived_key`.
 ///
 /// ### Encryption
 ///
@@ -149,13 +154,11 @@ impl EncNetworkAddress {
     ///
     /// encrypt will panic if `addr` length > 64 GiB.
     pub fn encrypt(
-        addr: NetworkAddress,
-        shared_val_netaddr_key: &Key,
-        key_version: KeyVersion,
-        account: &AccountAddress,
-        seq_num: u64,
+        addr: NetworkAddress, shared_val_netaddr_key: &Key,
+        key_version: KeyVersion, account: &AccountAddress, seq_num: u64,
         addr_idx: u32,
-    ) -> Result<Self, ParseError> {
+    ) -> Result<Self, ParseError>
+    {
         // unpack the NetworkAddress into its base Vec<u8>
         let mut addr_vec: Vec<u8> = bcs::to_bytes(&addr)?;
 
@@ -169,12 +172,13 @@ impl EncNetworkAddress {
         //
         // ex: seq_num = 0x1234, addr_idx = 0x04
         //     ==> nonce_slice == &[0, 0, 0, 0, 0, 0, 0x12, 0x34, 0, 0, 0, 0x4]
-        let nonce = (((seq_num as u128) << 32) | (addr_idx as u128)).to_be_bytes();
+        let nonce =
+            (((seq_num as u128) << 32) | (addr_idx as u128)).to_be_bytes();
         let nonce_slice = &nonce[mem::size_of::<u128>() - AES_GCM_NONCE_LEN..];
         let nonce_slice = GenericArray::from_slice(nonce_slice);
 
-        // the key_version is in-the-clear, so we include it in the integrity check
-        // using the "associated data"
+        // the key_version is in-the-clear, so we include it in the integrity
+        // check using the "associated data"
         let ad_buf = key_version.to_be_bytes();
         let ad_slice = &ad_buf[..];
 
@@ -196,11 +200,10 @@ impl EncNetworkAddress {
     }
 
     pub fn decrypt(
-        self,
-        shared_val_netaddr_key: &Key,
-        account: &AccountAddress,
+        self, shared_val_netaddr_key: &Key, account: &AccountAddress,
         addr_idx: u32,
-    ) -> Result<NetworkAddress, ParseError> {
+    ) -> Result<NetworkAddress, ParseError>
+    {
         let key_version = self.key_version;
         let seq_num = self.seq_num;
         let mut enc_addr = self.enc_addr;
@@ -221,24 +224,32 @@ impl EncNetworkAddress {
         //
         // ex: seq_num = 0x1234, addr_idx = 0x04
         //     ==> nonce_slice == &[0, 0, 0, 0, 0, 0, 0x12, 0x34, 0, 0, 0, 0x4]
-        let nonce = (((seq_num as u128) << 32) | (addr_idx as u128)).to_be_bytes();
+        let nonce =
+            (((seq_num as u128) << 32) | (addr_idx as u128)).to_be_bytes();
         let nonce_slice = &nonce[mem::size_of::<u128>() - AES_GCM_NONCE_LEN..];
         let nonce_slice = GenericArray::from_slice(nonce_slice);
 
-        // the key_version is in-the-clear, so we include it in the integrity check
-        // using the "additonal data"
+        // the key_version is in-the-clear, so we include it in the integrity
+        // check using the "additonal data"
         let ad_buf = key_version.to_be_bytes();
         let ad_slice = &ad_buf[..];
 
         // split buffer into separate ciphertext and authentication tag slices
         let auth_tag_offset = enc_addr.len() - AES_GCM_TAG_LEN;
-        let (enc_addr_slice, auth_tag_slice) = enc_addr.split_at_mut(auth_tag_offset);
+        let (enc_addr_slice, auth_tag_slice) =
+            enc_addr.split_at_mut(auth_tag_offset);
         let auth_tag_slice = GenericArray::from_slice(auth_tag_slice);
 
-        aead.decrypt_in_place_detached(nonce_slice, ad_slice, enc_addr_slice, auth_tag_slice)
-            .map_err(|_| ParseError::DecryptError)?;
+        aead.decrypt_in_place_detached(
+            nonce_slice,
+            ad_slice,
+            enc_addr_slice,
+            auth_tag_slice,
+        )
+        .map_err(|_| ParseError::DecryptError)?;
 
-        // remove the auth tag suffix, leaving just the decrypted network address
+        // remove the auth tag suffix, leaving just the decrypted network
+        // address
         enc_addr.truncate(auth_tag_offset);
 
         bcs::from_bytes(&enc_addr).map_err(|e| e.into())
@@ -246,7 +257,9 @@ impl EncNetworkAddress {
 
     /// Given the shared `shared_val_netaddr_key`, derive the per-validator
     /// `derived_key`.
-    fn derive_key(shared_val_netaddr_key: &Key, account: &AccountAddress) -> Vec<u8> {
+    fn derive_key(
+        shared_val_netaddr_key: &Key, account: &AccountAddress,
+    ) -> Vec<u8> {
         let salt = Some(HKDF_SALT.as_ref());
         let info = Some(account.as_ref());
         Hkdf::<Sha3_256>::extract_then_expand(salt, shared_val_netaddr_key, info, KEY_LEN).expect(
@@ -255,13 +268,9 @@ impl EncNetworkAddress {
         )
     }
 
-    pub fn key_version(&self) -> KeyVersion {
-        self.key_version
-    }
+    pub fn key_version(&self) -> KeyVersion { self.key_version }
 
-    pub fn seq_num(&self) -> u64 {
-        self.seq_num
-    }
+    pub fn seq_num(&self) -> u64 { self.seq_num }
 }
 
 #[cfg(any(test, feature = "fuzzing"))]
@@ -300,8 +309,8 @@ impl Arbitrary for EncNetworkAddress {
 mod test {
     use super::*;
 
-    // Ensure that modifying the ciphertext or associated data causes a decryption
-    // error.
+    // Ensure that modifying the ciphertext or associated data causes a
+    // decryption error.
     #[test]
     fn expect_decryption_failures() {
         let shared_val_netaddr_key = TEST_SHARED_VAL_NETADDR_KEY;
@@ -359,7 +368,8 @@ mod test {
             .unwrap_err();
 
         // modifying the account address should cause decryption failure
-        let malicious_account = AccountAddress::new([0x33; AccountAddress::LENGTH]);
+        let malicious_account =
+            AccountAddress::new([0x33; AccountAddress::LENGTH]);
         enc_addr
             .clone()
             .decrypt(&shared_val_netaddr_key, &malicious_account, addr_idx)

@@ -10,9 +10,7 @@ pub struct FreezingBit {
 }
 
 impl FreezingBit {
-    pub fn is_frozen(&self) -> bool {
-        self.is_frozen
-    }
+    pub fn is_frozen(&self) -> bool { self.is_frozen }
 }
 
 impl MoveResource for FreezingBit {

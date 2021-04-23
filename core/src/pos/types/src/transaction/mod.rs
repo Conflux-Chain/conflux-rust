@@ -9,9 +9,14 @@ use crate::{
     chain_id::ChainId,
     contract_event::ContractEvent,
     ledger_info::LedgerInfo,
-    proof::{accumulator::InMemoryAccumulator, TransactionInfoWithProof, TransactionListProof},
+    proof::{
+        accumulator::InMemoryAccumulator, TransactionInfoWithProof,
+        TransactionListProof,
+    },
     transaction::authenticator::TransactionAuthenticator,
-    vm_status::{DiscardedVMStatus, KeptVMStatus, StatusCode, StatusType, VMStatus},
+    vm_status::{
+        DiscardedVMStatus, KeptVMStatus, StatusCode, StatusType, VMStatus,
+    },
     write_set::WriteSet,
 };
 use anyhow::{ensure, format_err, Error, Result};
@@ -30,8 +35,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     convert::TryFrom,
-    fmt,
-    fmt::{Display, Formatter},
+    fmt::{self, Display, Formatter},
 };
 
 pub mod authenticator;
@@ -45,28 +49,40 @@ mod transaction_argument;
 pub use change_set::ChangeSet;
 pub use module::Module;
 pub use script::{
-    ArgumentABI, Script, ScriptABI, ScriptFunction, ScriptFunctionABI, TransactionScriptABI,
-    TypeArgumentABI,
+    ArgumentABI, Script, ScriptABI, ScriptFunction, ScriptFunctionABI,
+    TransactionScriptABI, TypeArgumentABI,
 };
 
 use std::ops::Deref;
-pub use transaction_argument::{parse_transaction_argument, TransactionArgument};
+pub use transaction_argument::{
+    parse_transaction_argument, TransactionArgument,
+};
 
 pub type Version = u64; // Height - also used for MVCC in StateDB
 
-// In StateDB, things readable by the genesis transaction are under this version.
+// In StateDB, things readable by the genesis transaction are under this
+// version.
 pub const PRE_GENESIS_VERSION: Version = u64::max_value();
 
 /// RawTransaction is the portion of a transaction that a client signs.
 #[derive(
-    Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, CryptoHasher, BCSCryptoHash,
+    Clone,
+    Debug,
+    Hash,
+    Eq,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    CryptoHasher,
+    BCSCryptoHash,
 )]
 pub struct RawTransaction {
     /// Sender's address.
     sender: AccountAddress,
 
-    /// Sequence number of this transaction. This must match the sequence number
-    /// stored in the sender's account at the time the transaction executes.
+    /// Sequence number of this transaction. This must match the sequence
+    /// number stored in the sender's account at the time the transaction
+    /// executes.
     sequence_number: u64,
 
     /// The transaction payload, e.g., a script to execute.
@@ -78,8 +94,9 @@ pub struct RawTransaction {
     /// Price to be paid per gas unit.
     gas_unit_price: u64,
 
-    /// The currency code, e.g., "XUS", used to pay for gas. The `max_gas_amount`
-    /// and `gas_unit_price` values refer to units of this currency.
+    /// The currency code, e.g., "XUS", used to pay for gas. The
+    /// `max_gas_amount` and `gas_unit_price` values refer to units of this
+    /// currency.
     gas_currency_code: String,
 
     /// Expiration timestamp for this transaction, represented
@@ -96,18 +113,15 @@ pub struct RawTransaction {
 impl RawTransaction {
     /// Create a new `RawTransaction` with a payload.
     ///
-    /// It can be either to publish a module, to execute a script, or to issue a writeset
-    /// transaction.
+    /// It can be either to publish a module, to execute a script, or to issue a
+    /// writeset transaction.
     pub fn new(
-        sender: AccountAddress,
-        sequence_number: u64,
-        payload: TransactionPayload,
-        max_gas_amount: u64,
-        gas_unit_price: u64,
-        gas_currency_code: String,
-        expiration_timestamp_secs: u64,
+        sender: AccountAddress, sequence_number: u64,
+        payload: TransactionPayload, max_gas_amount: u64, gas_unit_price: u64,
+        gas_currency_code: String, expiration_timestamp_secs: u64,
         chain_id: ChainId,
-    ) -> Self {
+    ) -> Self
+    {
         RawTransaction {
             sender,
             sequence_number,
@@ -122,17 +136,14 @@ impl RawTransaction {
 
     /// Create a new `RawTransaction` with a script.
     ///
-    /// A script transaction contains only code to execute. No publishing is allowed in scripts.
+    /// A script transaction contains only code to execute. No publishing is
+    /// allowed in scripts.
     pub fn new_script(
-        sender: AccountAddress,
-        sequence_number: u64,
-        script: Script,
-        max_gas_amount: u64,
-        gas_unit_price: u64,
-        gas_currency_code: String,
-        expiration_timestamp_secs: u64,
-        chain_id: ChainId,
-    ) -> Self {
+        sender: AccountAddress, sequence_number: u64, script: Script,
+        max_gas_amount: u64, gas_unit_price: u64, gas_currency_code: String,
+        expiration_timestamp_secs: u64, chain_id: ChainId,
+    ) -> Self
+    {
         RawTransaction {
             sender,
             sequence_number,
@@ -147,17 +158,15 @@ impl RawTransaction {
 
     /// Create a new `RawTransaction` with a script function.
     ///
-    /// A script transaction contains only code to execute. No publishing is allowed in scripts.
+    /// A script transaction contains only code to execute. No publishing is
+    /// allowed in scripts.
     pub fn new_script_function(
-        sender: AccountAddress,
-        sequence_number: u64,
-        script_function: ScriptFunction,
-        max_gas_amount: u64,
-        gas_unit_price: u64,
-        gas_currency_code: String,
-        expiration_timestamp_secs: u64,
-        chain_id: ChainId,
-    ) -> Self {
+        sender: AccountAddress, sequence_number: u64,
+        script_function: ScriptFunction, max_gas_amount: u64,
+        gas_unit_price: u64, gas_currency_code: String,
+        expiration_timestamp_secs: u64, chain_id: ChainId,
+    ) -> Self
+    {
         RawTransaction {
             sender,
             sequence_number,
@@ -172,18 +181,14 @@ impl RawTransaction {
 
     /// Create a new `RawTransaction` with a module to publish.
     ///
-    /// A module transaction is the only way to publish code. Only one module per transaction
-    /// can be published.
+    /// A module transaction is the only way to publish code. Only one module
+    /// per transaction can be published.
     pub fn new_module(
-        sender: AccountAddress,
-        sequence_number: u64,
-        module: Module,
-        max_gas_amount: u64,
-        gas_unit_price: u64,
-        gas_currency_code: String,
-        expiration_timestamp_secs: u64,
-        chain_id: ChainId,
-    ) -> Self {
+        sender: AccountAddress, sequence_number: u64, module: Module,
+        max_gas_amount: u64, gas_unit_price: u64, gas_currency_code: String,
+        expiration_timestamp_secs: u64, chain_id: ChainId,
+    ) -> Self
+    {
         RawTransaction {
             sender,
             sequence_number,
@@ -197,11 +202,10 @@ impl RawTransaction {
     }
 
     pub fn new_write_set(
-        sender: AccountAddress,
-        sequence_number: u64,
-        write_set: WriteSet,
+        sender: AccountAddress, sequence_number: u64, write_set: WriteSet,
         chain_id: ChainId,
-    ) -> Self {
+    ) -> Self
+    {
         Self::new_change_set(
             sender,
             sequence_number,
@@ -211,32 +215,33 @@ impl RawTransaction {
     }
 
     pub fn new_change_set(
-        sender: AccountAddress,
-        sequence_number: u64,
-        change_set: ChangeSet,
+        sender: AccountAddress, sequence_number: u64, change_set: ChangeSet,
         chain_id: ChainId,
-    ) -> Self {
+    ) -> Self
+    {
         RawTransaction {
             sender,
             sequence_number,
-            payload: TransactionPayload::WriteSet(WriteSetPayload::Direct(change_set)),
-            // Since write-set transactions bypass the VM, these fields aren't relevant.
+            payload: TransactionPayload::WriteSet(WriteSetPayload::Direct(
+                change_set,
+            )),
+            // Since write-set transactions bypass the VM, these fields aren't
+            // relevant.
             max_gas_amount: 0,
             gas_unit_price: 0,
             gas_currency_code: XUS_NAME.to_owned(),
-            // Write-set transactions are special and important and shouldn't expire.
+            // Write-set transactions are special and important and shouldn't
+            // expire.
             expiration_timestamp_secs: u64::max_value(),
             chain_id,
         }
     }
 
     pub fn new_writeset_script(
-        sender: AccountAddress,
-        sequence_number: u64,
-        script: Script,
-        signer: AccountAddress,
-        chain_id: ChainId,
-    ) -> Self {
+        sender: AccountAddress, sequence_number: u64, script: Script,
+        signer: AccountAddress, chain_id: ChainId,
+    ) -> Self
+    {
         RawTransaction {
             sender,
             sequence_number,
@@ -244,24 +249,25 @@ impl RawTransaction {
                 execute_as: signer,
                 script,
             }),
-            // Since write-set transactions bypass the VM, these fields aren't relevant.
+            // Since write-set transactions bypass the VM, these fields aren't
+            // relevant.
             max_gas_amount: 0,
             gas_unit_price: 0,
             gas_currency_code: XUS_NAME.to_owned(),
-            // Write-set transactions are special and important and shouldn't expire.
+            // Write-set transactions are special and important and shouldn't
+            // expire.
             expiration_timestamp_secs: u64::max_value(),
             chain_id,
         }
     }
 
-    /// Signs the given `RawTransaction`. Note that this consumes the `RawTransaction` and turns it
-    /// into a `SignatureCheckedTransaction`.
+    /// Signs the given `RawTransaction`. Note that this consumes the
+    /// `RawTransaction` and turns it into a `SignatureCheckedTransaction`.
     ///
-    /// For a transaction that has just been signed, its signature is expected to be valid.
+    /// For a transaction that has just been signed, its signature is expected
+    /// to be valid.
     pub fn sign(
-        self,
-        private_key: &Ed25519PrivateKey,
-        public_key: Ed25519PublicKey,
+        self, private_key: &Ed25519PrivateKey, public_key: Ed25519PublicKey,
     ) -> Result<SignatureCheckedTransaction> {
         let signature = private_key.sign(&self);
         Ok(SignatureCheckedTransaction(SignedTransaction::new(
@@ -271,21 +277,23 @@ impl RawTransaction {
 
     #[cfg(any(test, feature = "fuzzing"))]
     pub fn multi_sign_for_testing(
-        self,
-        private_key: &Ed25519PrivateKey,
-        public_key: Ed25519PublicKey,
+        self, private_key: &Ed25519PrivateKey, public_key: Ed25519PublicKey,
     ) -> Result<SignatureCheckedTransaction> {
         let signature = private_key.sign(&self);
         Ok(SignatureCheckedTransaction(
-            SignedTransaction::new_multisig(self, public_key.into(), signature.into()),
+            SignedTransaction::new_multisig(
+                self,
+                public_key.into(),
+                signature.into(),
+            ),
         ))
     }
 
-    pub fn into_payload(self) -> TransactionPayload {
-        self.payload
-    }
+    pub fn into_payload(self) -> TransactionPayload { self.payload }
 
-    pub fn format_for_client(&self, get_transaction_name: impl Fn(&[u8]) -> String) -> String {
+    pub fn format_for_client(
+        &self, get_transaction_name: impl Fn(&[u8]) -> String,
+    ) -> String {
         let (code, args) = match &self.payload {
             TransactionPayload::WriteSet(_) => ("genesis".to_string(), vec![]),
             TransactionPayload::Script(script) => (
@@ -296,7 +304,9 @@ impl RawTransaction {
                 format!("{}::{}", script_fn.module(), script_fn.function()),
                 script_fn.args().to_vec(),
             ),
-            TransactionPayload::Module(_) => ("module publishing".to_string(), vec![]),
+            TransactionPayload::Module(_) => {
+                ("module publishing".to_string(), vec![])
+            }
         };
         let mut f_args: String = "".to_string();
         for arg in args {
@@ -328,10 +338,9 @@ impl RawTransaction {
             self.chain_id,
         )
     }
+
     /// Return the sender of this transaction.
-    pub fn sender(&self) -> AccountAddress {
-        self.sender
-    }
+    pub fn sender(&self) -> AccountAddress { self.sender }
 }
 
 /// Different kinds of transactions.
@@ -343,22 +352,30 @@ pub enum TransactionPayload {
     Script(Script),
     /// A transaction that publishes code.
     Module(Module),
-    /// A transaction that executes an existing script function published on-chain.
+    /// A transaction that executes an existing script function published
+    /// on-chain.
     ScriptFunction(ScriptFunction),
 }
 
 impl TransactionPayload {
     pub fn should_trigger_reconfiguration_by_default(&self) -> bool {
         match self {
-            Self::WriteSet(ws) => ws.should_trigger_reconfiguration_by_default(),
-            Self::Script(_) | Self::ScriptFunction(_) | Self::Module(_) => false,
+            Self::WriteSet(ws) => {
+                ws.should_trigger_reconfiguration_by_default()
+            }
+            Self::Script(_) | Self::ScriptFunction(_) | Self::Module(_) => {
+                false
+            }
         }
     }
 
     pub fn into_script_function(self) -> ScriptFunction {
         match self {
             Self::ScriptFunction(f) => f,
-            payload => panic!("Expected ScriptFunction(_) payload, found: {:#?}", payload),
+            payload => panic!(
+                "Expected ScriptFunction(_) payload, found: {:#?}",
+                payload
+            ),
         }
     }
 }
@@ -388,12 +405,13 @@ impl WriteSetPayload {
 
 /// A transaction that has been signed.
 ///
-/// A `SignedTransaction` is a single transaction that can be atomically executed. Clients submit
-/// these to validator nodes, and the validator and executor submits these to the VM.
+/// A `SignedTransaction` is a single transaction that can be atomically
+/// executed. Clients submit these to validator nodes, and the validator and
+/// executor submits these to the VM.
 ///
-/// **IMPORTANT:** The signature of a `SignedTransaction` is not guaranteed to be verified. For a
-/// transaction whose signature is statically guaranteed to be verified, see
-/// [`SignatureCheckedTransaction`].
+/// **IMPORTANT:** The signature of a `SignedTransaction` is not guaranteed to
+/// be verified. For a transaction whose signature is statically guaranteed to
+/// be verified, see [`SignatureCheckedTransaction`].
 #[derive(Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct SignedTransaction {
     /// The raw transaction
@@ -410,9 +428,7 @@ pub struct SignatureCheckedTransaction(SignedTransaction);
 
 impl SignatureCheckedTransaction {
     /// Returns the `SignedTransaction` within.
-    pub fn into_inner(self) -> SignedTransaction {
-        self.0
-    }
+    pub fn into_inner(self) -> SignedTransaction { self.0 }
 
     /// Returns the `RawTransaction` within.
     pub fn into_raw_transaction(self) -> RawTransaction {
@@ -423,9 +439,7 @@ impl SignatureCheckedTransaction {
 impl Deref for SignatureCheckedTransaction {
     type Target = SignedTransaction;
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+    fn deref(&self) -> &Self::Target { &self.0 }
 }
 
 impl fmt::Debug for SignedTransaction {
@@ -444,11 +458,12 @@ impl fmt::Debug for SignedTransaction {
 
 impl SignedTransaction {
     pub fn new(
-        raw_txn: RawTransaction,
-        public_key: Ed25519PublicKey,
+        raw_txn: RawTransaction, public_key: Ed25519PublicKey,
         signature: Ed25519Signature,
-    ) -> SignedTransaction {
-        let authenticator = TransactionAuthenticator::ed25519(public_key, signature);
+    ) -> SignedTransaction
+    {
+        let authenticator =
+            TransactionAuthenticator::ed25519(public_key, signature);
         SignedTransaction {
             raw_txn,
             authenticator,
@@ -456,11 +471,12 @@ impl SignedTransaction {
     }
 
     pub fn new_multisig(
-        raw_txn: RawTransaction,
-        public_key: MultiEd25519PublicKey,
+        raw_txn: RawTransaction, public_key: MultiEd25519PublicKey,
         signature: MultiEd25519Signature,
-    ) -> SignedTransaction {
-        let authenticator = TransactionAuthenticator::multi_ed25519(public_key, signature);
+    ) -> SignedTransaction
+    {
+        let authenticator =
+            TransactionAuthenticator::multi_ed25519(public_key, signature);
         SignedTransaction {
             raw_txn,
             authenticator,
@@ -471,37 +487,21 @@ impl SignedTransaction {
         self.authenticator.clone()
     }
 
-    pub fn sender(&self) -> AccountAddress {
-        self.raw_txn.sender
-    }
+    pub fn sender(&self) -> AccountAddress { self.raw_txn.sender }
 
-    pub fn into_raw_transaction(self) -> RawTransaction {
-        self.raw_txn
-    }
+    pub fn into_raw_transaction(self) -> RawTransaction { self.raw_txn }
 
-    pub fn sequence_number(&self) -> u64 {
-        self.raw_txn.sequence_number
-    }
+    pub fn sequence_number(&self) -> u64 { self.raw_txn.sequence_number }
 
-    pub fn chain_id(&self) -> ChainId {
-        self.raw_txn.chain_id
-    }
+    pub fn chain_id(&self) -> ChainId { self.raw_txn.chain_id }
 
-    pub fn payload(&self) -> &TransactionPayload {
-        &self.raw_txn.payload
-    }
+    pub fn payload(&self) -> &TransactionPayload { &self.raw_txn.payload }
 
-    pub fn max_gas_amount(&self) -> u64 {
-        self.raw_txn.max_gas_amount
-    }
+    pub fn max_gas_amount(&self) -> u64 { self.raw_txn.max_gas_amount }
 
-    pub fn gas_unit_price(&self) -> u64 {
-        self.raw_txn.gas_unit_price
-    }
+    pub fn gas_unit_price(&self) -> u64 { self.raw_txn.gas_unit_price }
 
-    pub fn gas_currency_code(&self) -> &str {
-        &self.raw_txn.gas_currency_code
-    }
+    pub fn gas_currency_code(&self) -> &str { &self.raw_txn.gas_currency_code }
 
     pub fn expiration_timestamp_secs(&self) -> u64 {
         self.raw_txn.expiration_timestamp_secs
@@ -513,14 +513,16 @@ impl SignedTransaction {
             .len()
     }
 
-    /// Checks that the signature of given transaction. Returns `Ok(SignatureCheckedTransaction)` if
-    /// the signature is valid.
+    /// Checks that the signature of given transaction. Returns
+    /// `Ok(SignatureCheckedTransaction)` if the signature is valid.
     pub fn check_signature(self) -> Result<SignatureCheckedTransaction> {
         self.authenticator.verify(&self.raw_txn)?;
         Ok(SignatureCheckedTransaction(self))
     }
 
-    pub fn format_for_client(&self, get_transaction_name: impl Fn(&[u8]) -> String) -> String {
+    pub fn format_for_client(
+        &self, get_transaction_name: impl Fn(&[u8]) -> String,
+    ) -> String {
         format!(
             "SignedTransaction {{ \n \
              raw_txn: {}, \n \
@@ -543,11 +545,10 @@ pub struct TransactionWithProof {
 
 impl TransactionWithProof {
     pub fn new(
-        version: Version,
-        transaction: Transaction,
-        events: Option<Vec<ContractEvent>>,
-        proof: TransactionInfoWithProof,
-    ) -> Self {
+        version: Version, transaction: Transaction,
+        events: Option<Vec<ContractEvent>>, proof: TransactionInfoWithProof,
+    ) -> Self
+    {
         Self {
             version,
             transaction,
@@ -555,22 +556,22 @@ impl TransactionWithProof {
             proof,
         }
     }
+
     /// Verifies the transaction with the proof, both carried by `self`.
     ///
     /// A few things are ensured if no error is raised:
     ///   1. This transaction exists in the ledger represented by `ledger_info`.
     ///   2. This transaction is a `UserTransaction`.
-    ///   3. And this user transaction has the same `version`, `sender`, and `sequence_number` as
-    ///      indicated by the parameter list. If any of these parameter is unknown to the call site
-    ///      that is supposed to be informed via this struct, get it from the struct itself, such
+    ///   3. And this user transaction has the same `version`, `sender`, and
+    /// `sequence_number` as      indicated by the parameter list. If any of
+    /// these parameter is unknown to the call site      that is supposed to
+    /// be informed via this struct, get it from the struct itself, such
     ///      as version and sender.
     pub fn verify_user_txn(
-        &self,
-        ledger_info: &LedgerInfo,
-        version: Version,
-        sender: AccountAddress,
-        sequence_number: u64,
-    ) -> Result<()> {
+        &self, ledger_info: &LedgerInfo, version: Version,
+        sender: AccountAddress, sequence_number: u64,
+    ) -> Result<()>
+    {
         let signed_transaction = self.transaction.as_signed_user_txn()?;
 
         ensure!(
@@ -601,12 +602,16 @@ impl TransactionWithProof {
         );
 
         if let Some(events) = &self.events {
-            let event_hashes: Vec<_> = events.iter().map(ContractEvent::hash).collect();
+            let event_hashes: Vec<_> =
+                events.iter().map(ContractEvent::hash).collect();
             let event_root_hash =
-                InMemoryAccumulator::<EventAccumulatorHasher>::from_leaves(&event_hashes[..])
-                    .root_hash();
+                InMemoryAccumulator::<EventAccumulatorHasher>::from_leaves(
+                    &event_hashes[..],
+                )
+                .root_hash();
             ensure!(
-                event_root_hash == self.proof.transaction_info().event_root_hash,
+                event_root_hash
+                    == self.proof.transaction_info().event_root_hash,
                 "Event root hash ({}) not expected ({}).",
                 event_root_hash,
                 self.proof.transaction_info().event_root_hash,
@@ -617,9 +622,10 @@ impl TransactionWithProof {
     }
 }
 
-/// The status of executing a transaction. The VM decides whether or not we should `Keep` the
-/// transaction output or `Discard` it based upon the execution of the transaction. We wrap these
-/// decisions around a `VMStatus` that provides more detail on the final execution state of the VM.
+/// The status of executing a transaction. The VM decides whether or not we
+/// should `Keep` the transaction output or `Discard` it based upon the
+/// execution of the transaction. We wrap these decisions around a `VMStatus`
+/// that provides more detail on the final execution state of the VM.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum TransactionStatus {
     /// Discard the transaction output
@@ -637,7 +643,9 @@ impl TransactionStatus {
         match self {
             TransactionStatus::Keep(status) => Ok(status.clone()),
             TransactionStatus::Discard(code) => Err(*code),
-            TransactionStatus::Retry => Err(StatusCode::UNKNOWN_VALIDATION_STATUS),
+            TransactionStatus::Retry => {
+                Err(StatusCode::UNKNOWN_VALIDATION_STATUS)
+            }
         }
     }
 
@@ -682,10 +690,12 @@ impl GovernanceRole {
         }
     }
 
-    /// The higher the number that is returned, the greater priority assigned to a transaction sent
-    /// from an account with that role in mempool. All transactions sent from an account with role
-    /// priority N are ranked higher than all transactions sent from accounts with role priorities < N.
-    /// Transactions from accounts with equal priority are ranked base on other characteristics (e.g., gas price).
+    /// The higher the number that is returned, the greater priority assigned to
+    /// a transaction sent from an account with that role in mempool. All
+    /// transactions sent from an account with role priority N are ranked
+    /// higher than all transactions sent from accounts with role priorities <
+    /// N. Transactions from accounts with equal priority are ranked base on
+    /// other characteristics (e.g., gas price).
     pub fn priority(&self) -> u64 {
         use GovernanceRole::*;
         match self {
@@ -700,12 +710,14 @@ impl GovernanceRole {
 /// The result of running the transaction through the VM validator.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VMValidatorResult {
-    /// Result of the validation: `None` if the transaction was successfully validated
-    /// or `Some(DiscardedVMStatus)` if the transaction should be discarded.
+    /// Result of the validation: `None` if the transaction was successfully
+    /// validated or `Some(DiscardedVMStatus)` if the transaction should be
+    /// discarded.
     status: Option<DiscardedVMStatus>,
 
-    /// Score for ranking the transaction priority (e.g., based on the gas price).
-    /// Only used when the status is `None`. Higher values indicate a higher priority.
+    /// Score for ranking the transaction priority (e.g., based on the gas
+    /// price). Only used when the status is `None`. Higher values indicate
+    /// a higher priority.
     score: u64,
 
     /// The account role for the transaction sender, so that certain
@@ -716,17 +728,19 @@ pub struct VMValidatorResult {
 
 impl VMValidatorResult {
     pub fn new(
-        vm_status: Option<DiscardedVMStatus>,
-        score: u64,
+        vm_status: Option<DiscardedVMStatus>, score: u64,
         governance_role: GovernanceRole,
-    ) -> Self {
+    ) -> Self
+    {
         debug_assert!(
             match vm_status {
                 None => true,
-                Some(status) =>
+                Some(status) => {
                     status.status_type() == StatusType::Unknown
                         || status.status_type() == StatusType::Validation
-                        || status.status_type() == StatusType::InvariantViolation,
+                        || status.status_type()
+                            == StatusType::InvariantViolation
+                }
             },
             "Unexpected discarded status: {:?}",
             vm_status
@@ -738,17 +752,11 @@ impl VMValidatorResult {
         }
     }
 
-    pub fn status(&self) -> Option<DiscardedVMStatus> {
-        self.status
-    }
+    pub fn status(&self) -> Option<DiscardedVMStatus> { self.status }
 
-    pub fn score(&self) -> u64 {
-        self.score
-    }
+    pub fn score(&self) -> u64 { self.score }
 
-    pub fn governance_role(&self) -> GovernanceRole {
-        self.governance_role
-    }
+    pub fn governance_role(&self) -> GovernanceRole { self.governance_role }
 }
 
 /// The output of executing a transaction.
@@ -769,11 +777,10 @@ pub struct TransactionOutput {
 
 impl TransactionOutput {
     pub fn new(
-        write_set: WriteSet,
-        events: Vec<ContractEvent>,
-        gas_used: u64,
+        write_set: WriteSet, events: Vec<ContractEvent>, gas_used: u64,
         status: TransactionStatus,
-    ) -> Self {
+    ) -> Self
+    {
         TransactionOutput {
             write_set,
             events,
@@ -786,57 +793,59 @@ impl TransactionOutput {
         (self.write_set, self.events)
     }
 
-    pub fn write_set(&self) -> &WriteSet {
-        &self.write_set
-    }
+    pub fn write_set(&self) -> &WriteSet { &self.write_set }
 
-    pub fn events(&self) -> &[ContractEvent] {
-        &self.events
-    }
+    pub fn events(&self) -> &[ContractEvent] { &self.events }
 
-    pub fn gas_used(&self) -> u64 {
-        self.gas_used
-    }
+    pub fn gas_used(&self) -> u64 { self.gas_used }
 
-    pub fn status(&self) -> &TransactionStatus {
-        &self.status
-    }
+    pub fn status(&self) -> &TransactionStatus { &self.status }
 }
 
-/// `TransactionInfo` is the object we store in the transaction accumulator. It consists of the
-/// transaction as well as the execution result of this transaction.
-#[derive(Clone, CryptoHasher, BCSCryptoHash, Debug, Eq, PartialEq, Serialize, Deserialize)]
+/// `TransactionInfo` is the object we store in the transaction accumulator. It
+/// consists of the transaction as well as the execution result of this
+/// transaction.
+#[derive(
+    Clone,
+    CryptoHasher,
+    BCSCryptoHash,
+    Debug,
+    Eq,
+    PartialEq,
+    Serialize,
+    Deserialize,
+)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct TransactionInfo {
     /// The hash of this transaction.
     transaction_hash: HashValue,
 
-    /// The root hash of Sparse Merkle Tree describing the world state at the end of this
-    /// transaction.
+    /// The root hash of Sparse Merkle Tree describing the world state at the
+    /// end of this transaction.
     state_root_hash: HashValue,
 
-    /// The root hash of Merkle Accumulator storing all events emitted during this transaction.
+    /// The root hash of Merkle Accumulator storing all events emitted during
+    /// this transaction.
     event_root_hash: HashValue,
 
     /// The amount of gas used.
     gas_used: u64,
 
-    /// The vm status. If it is not `Executed`, this will provide the general error class. Execution
-    /// failures and Move abort's recieve more detailed information. But other errors are generally
-    /// categorized with no status code or other information
+    /// The vm status. If it is not `Executed`, this will provide the general
+    /// error class. Execution failures and Move abort's recieve more
+    /// detailed information. But other errors are generally categorized
+    /// with no status code or other information
     status: KeptVMStatus,
 }
 
 impl TransactionInfo {
-    /// Constructs a new `TransactionInfo` object using transaction hash, state root hash and event
-    /// root hash.
+    /// Constructs a new `TransactionInfo` object using transaction hash, state
+    /// root hash and event root hash.
     pub fn new(
-        transaction_hash: HashValue,
-        state_root_hash: HashValue,
-        event_root_hash: HashValue,
-        gas_used: u64,
-        status: KeptVMStatus,
-    ) -> TransactionInfo {
+        transaction_hash: HashValue, state_root_hash: HashValue,
+        event_root_hash: HashValue, gas_used: u64, status: KeptVMStatus,
+    ) -> TransactionInfo
+    {
         TransactionInfo {
             transaction_hash,
             state_root_hash,
@@ -847,30 +856,20 @@ impl TransactionInfo {
     }
 
     /// Returns the hash of this transaction.
-    pub fn transaction_hash(&self) -> HashValue {
-        self.transaction_hash
-    }
+    pub fn transaction_hash(&self) -> HashValue { self.transaction_hash }
 
-    /// Returns root hash of Sparse Merkle Tree describing the world state at the end of this
-    /// transaction.
-    pub fn state_root_hash(&self) -> HashValue {
-        self.state_root_hash
-    }
+    /// Returns root hash of Sparse Merkle Tree describing the world state at
+    /// the end of this transaction.
+    pub fn state_root_hash(&self) -> HashValue { self.state_root_hash }
 
-    /// Returns the root hash of Merkle Accumulator storing all events emitted during this
-    /// transaction.
-    pub fn event_root_hash(&self) -> HashValue {
-        self.event_root_hash
-    }
+    /// Returns the root hash of Merkle Accumulator storing all events emitted
+    /// during this transaction.
+    pub fn event_root_hash(&self) -> HashValue { self.event_root_hash }
 
     /// Returns the amount of gas used by this transaction.
-    pub fn gas_used(&self) -> u64 {
-        self.gas_used
-    }
+    pub fn gas_used(&self) -> u64 { self.gas_used }
 
-    pub fn status(&self) -> &KeptVMStatus {
-        &self.status
-    }
+    pub fn status(&self) -> &KeptVMStatus { &self.status }
 }
 
 impl Display for TransactionInfo {
@@ -896,10 +895,9 @@ impl TransactionToCommit {
     pub fn new(
         transaction: Transaction,
         account_states: HashMap<AccountAddress, AccountStateBlob>,
-        events: Vec<ContractEvent>,
-        gas_used: u64,
-        status: KeptVMStatus,
-    ) -> Self {
+        events: Vec<ContractEvent>, gas_used: u64, status: KeptVMStatus,
+    ) -> Self
+    {
         TransactionToCommit {
             transaction,
             account_states,
@@ -909,32 +907,25 @@ impl TransactionToCommit {
         }
     }
 
-    pub fn transaction(&self) -> &Transaction {
-        &self.transaction
-    }
+    pub fn transaction(&self) -> &Transaction { &self.transaction }
 
     pub fn account_states(&self) -> &HashMap<AccountAddress, AccountStateBlob> {
         &self.account_states
     }
 
-    pub fn events(&self) -> &[ContractEvent] {
-        &self.events
-    }
+    pub fn events(&self) -> &[ContractEvent] { &self.events }
 
-    pub fn gas_used(&self) -> u64 {
-        self.gas_used
-    }
+    pub fn gas_used(&self) -> u64 { self.gas_used }
 
-    pub fn status(&self) -> &KeptVMStatus {
-        &self.status
-    }
+    pub fn status(&self) -> &KeptVMStatus { &self.status }
 }
 
 /// The list may have three states:
 /// 1. The list is empty. Both proofs must be `None`.
-/// 2. The list has only 1 transaction/transaction_info. Then `proof_of_first_transaction`
-/// must exist and `proof_of_last_transaction` must be `None`.
-/// 3. The list has 2+ transactions/transaction_infos. The both proofs must exist.
+/// 2. The list has only 1 transaction/transaction_info. Then
+/// `proof_of_first_transaction` must exist and `proof_of_last_transaction` must
+/// be `None`. 3. The list has 2+ transactions/transaction_infos. The both
+/// proofs must exist.
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct TransactionListWithProof {
     pub transactions: Vec<Transaction>,
@@ -950,7 +941,8 @@ impl TransactionListWithProof {
         events: Option<Vec<Vec<ContractEvent>>>,
         first_transaction_version: Option<Version>,
         proof: TransactionListProof,
-    ) -> Self {
+    ) -> Self
+    {
         Self {
             transactions,
             events,
@@ -967,15 +959,15 @@ impl TransactionListWithProof {
     /// Verifies the transaction list with the proofs, both carried on `self`.
     ///
     /// Two things are ensured if no error is raised:
-    ///   1. All the transactions exist on the ledger represented by `ledger_info`.
-    ///   2. And the transactions in the list has consecutive versions starting from
-    /// `first_transaction_version`. When `first_transaction_version` is None, ensures the list is
-    /// empty.
+    ///   1. All the transactions exist on the ledger represented by
+    /// `ledger_info`.   2. And the transactions in the list has consecutive
+    /// versions starting from `first_transaction_version`. When
+    /// `first_transaction_version` is None, ensures the list is empty.
     pub fn verify(
-        &self,
-        ledger_info: &LedgerInfo,
+        &self, ledger_info: &LedgerInfo,
         first_transaction_version: Option<Version>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         ensure!(
             self.first_transaction_version == first_transaction_version,
             "First transaction version ({}) not expected ({}).",
@@ -983,9 +975,13 @@ impl TransactionListWithProof {
             Self::display_option_version(first_transaction_version),
         );
 
-        let txn_hashes: Vec<_> = self.transactions.iter().map(CryptoHash::hash).collect();
-        self.proof
-            .verify(ledger_info, self.first_transaction_version, &txn_hashes)?;
+        let txn_hashes: Vec<_> =
+            self.transactions.iter().map(CryptoHash::hash).collect();
+        self.proof.verify(
+            ledger_info,
+            self.first_transaction_version,
+            &txn_hashes,
+        )?;
 
         // Verify the events if they exist.
         if let Some(event_lists) = &self.events {
@@ -1014,13 +1010,9 @@ impl TransactionListWithProof {
         Ok(())
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.transactions.is_empty()
-    }
+    pub fn is_empty(&self) -> bool { self.transactions.is_empty() }
 
-    pub fn len(&self) -> usize {
-        self.transactions.len()
-    }
+    pub fn len(&self) -> usize { self.transactions.len() }
 
     fn display_option_version(version: Option<Version>) -> String {
         match version {
@@ -1030,25 +1022,37 @@ impl TransactionListWithProof {
     }
 }
 
-/// `Transaction` will be the transaction type used internally in the diem node to represent the
-/// transaction to be processed and persisted.
+/// `Transaction` will be the transaction type used internally in the diem node
+/// to represent the transaction to be processed and persisted.
 ///
-/// We suppress the clippy warning here as we would expect most of the transaction to be user
-/// transaction.
+/// We suppress the clippy warning here as we would expect most of the
+/// transaction to be user transaction.
 #[allow(clippy::large_enum_variant)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, CryptoHasher, BCSCryptoHash)]
+#[derive(
+    Clone,
+    Debug,
+    Eq,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    CryptoHasher,
+    BCSCryptoHash,
+)]
 pub enum Transaction {
-    /// Transaction submitted by the user. e.g: P2P payment transaction, publishing module
-    /// transaction, etc.
-    /// TODO: We need to rename SignedTransaction to SignedUserTransaction, as well as all the other
-    ///       transaction types we had in our codebase.
+    /// Transaction submitted by the user. e.g: P2P payment transaction,
+    /// publishing module transaction, etc.
+    /// TODO: We need to rename SignedTransaction to SignedUserTransaction, as
+    /// well as all the other       transaction types we had in our
+    /// codebase.
     UserTransaction(SignedTransaction),
 
-    /// Transaction that applies a WriteSet to the current storage, it's applied manually via db-bootstrapper.
+    /// Transaction that applies a WriteSet to the current storage, it's
+    /// applied manually via db-bootstrapper.
     GenesisTransaction(WriteSetPayload),
 
-    /// Transaction to update the block metadata resource at the beginning of a block.
+    /// Transaction to update the block metadata resource at the beginning of a
+    /// block.
     BlockMetadata(BlockMetadata),
 }
 
@@ -1060,15 +1064,21 @@ impl Transaction {
         }
     }
 
-    pub fn format_for_client(&self, get_transaction_name: impl Fn(&[u8]) -> String) -> String {
+    pub fn format_for_client(
+        &self, get_transaction_name: impl Fn(&[u8]) -> String,
+    ) -> String {
         match self {
             Transaction::UserTransaction(user_txn) => {
                 user_txn.format_for_client(get_transaction_name)
             }
             // TODO: display proper information for client
-            Transaction::GenesisTransaction(_write_set) => String::from("genesis"),
+            Transaction::GenesisTransaction(_write_set) => {
+                String::from("genesis")
+            }
             // TODO: display proper information for client
-            Transaction::BlockMetadata(_block_metadata) => String::from("block_metadata"),
+            Transaction::BlockMetadata(_block_metadata) => {
+                String::from("block_metadata")
+            }
         }
     }
 }

@@ -7,7 +7,8 @@ use prometheus::{register_int_counter, IntCounter};
 
 /// Count of the struct logs submitted by macro
 pub static STRUCT_LOG_COUNT: Lazy<IntCounter> = Lazy::new(|| {
-    register_int_counter!("diem_struct_log_count", "Count of the struct logs.").unwrap()
+    register_int_counter!("diem_struct_log_count", "Count of the struct logs.")
+        .unwrap()
 });
 
 /// Count of struct logs processed, but not necessarily sent

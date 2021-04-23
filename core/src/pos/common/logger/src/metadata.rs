@@ -4,7 +4,8 @@
 use serde::{Deserialize, Serialize};
 use std::{fmt, str::FromStr};
 
-/// Associated metadata with every log to identify what kind of log and where it came from
+/// Associated metadata with every log to identify what kind of log and where it
+/// came from
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Metadata {
     /// The level of verbosity of the event
@@ -28,13 +29,10 @@ pub struct Metadata {
 
 impl Metadata {
     pub const fn new(
-        level: Level,
-        target: &'static str,
-        module_path: &'static str,
-        file: &'static str,
-        line: u32,
-        location: &'static str,
-    ) -> Self {
+        level: Level, target: &'static str, module_path: &'static str,
+        file: &'static str, line: u32, location: &'static str,
+    ) -> Self
+    {
         Self {
             level,
             target,
@@ -45,40 +43,38 @@ impl Metadata {
         }
     }
 
-    pub fn enabled(&self) -> bool {
-        crate::logger::enabled(self)
-    }
+    pub fn enabled(&self) -> bool { crate::logger::enabled(self) }
 
-    pub fn level(&self) -> Level {
-        self.level
-    }
+    pub fn level(&self) -> Level { self.level }
 
-    pub fn target(&self) -> &'static str {
-        self.target
-    }
+    pub fn target(&self) -> &'static str { self.target }
 
-    pub fn module_path(&self) -> &'static str {
-        self.module_path
-    }
+    pub fn module_path(&self) -> &'static str { self.module_path }
 
-    pub fn file(&self) -> &'static str {
-        self.file
-    }
+    pub fn file(&self) -> &'static str { self.file }
 
-    pub fn line(&self) -> u32 {
-        self.line
-    }
+    pub fn line(&self) -> u32 { self.line }
 
-    pub fn location(&self) -> &'static str {
-        self.location
-    }
+    pub fn location(&self) -> &'static str { self.location }
 }
 
 static LOG_LEVEL_NAMES: &[&str] = &["ERROR", "WARN", "INFO", "DEBUG", "TRACE"];
 
-/// Logging levels, used for stratifying logs, and disabling less important ones for performance reasons
+/// Logging levels, used for stratifying logs, and disabling less important ones
+/// for performance reasons
 #[repr(usize)]
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash, Serialize, Deserialize)]
+#[derive(
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Debug,
+    Hash,
+    Serialize,
+    Deserialize,
+)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum Level {
     /// The "error" level.
@@ -124,6 +120,7 @@ pub struct LevelParseError;
 
 impl FromStr for Level {
     type Err = LevelParseError;
+
     fn from_str(level: &str) -> Result<Level, Self::Err> {
         LOG_LEVEL_NAMES
             .iter()

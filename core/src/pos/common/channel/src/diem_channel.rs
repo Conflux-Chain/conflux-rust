@@ -1,11 +1,11 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! diem_channel provides an mpsc channel which has two ends `diem_channel::Receiver`
-//! and `diem_channel::Sender` similar to existing mpsc data structures.
-//! What makes it different from existing mpsc channels is that we have full control
-//! over how the internal queueing in the channel happens and how we schedule messages
-//! to be sent out from this channel.
+//! diem_channel provides an mpsc channel which has two ends
+//! `diem_channel::Receiver` and `diem_channel::Sender` similar to existing mpsc
+//! data structures. What makes it different from existing mpsc channels is that
+//! we have full control over how the internal queueing in the channel happens
+//! and how we schedule messages to be sent out from this channel.
 //! Internally, it uses the `PerKeyQueue` to store messages
 use crate::message_queues::{PerKeyQueue, QueueStyle};
 use anyhow::{ensure, Result};
@@ -28,21 +28,22 @@ use std::{
 #[derive(Debug)]
 struct SharedState<K: Eq + Hash + Clone, M> {
     /// The internal queue of messages in this channel.
-    internal_queue: PerKeyQueue<K, (M, Option<oneshot::Sender<ElementStatus<M>>>)>,
-    /// The `Receiver` registers its `Waker` in this slot when the queue is empty.
-    /// `Sender`s will try to wake the `Receiver` (if any) when they push a new
-    /// item onto the queue. The last live `Sender` will also wake the `Receiver`
-    /// as it's tearing down so the `Receiver` can gracefully drain and shutdown
-    /// the channel.
+    internal_queue:
+        PerKeyQueue<K, (M, Option<oneshot::Sender<ElementStatus<M>>>)>,
+    /// The `Receiver` registers its `Waker` in this slot when the queue is
+    /// empty. `Sender`s will try to wake the `Receiver` (if any) when they
+    /// push a new item onto the queue. The last live `Sender` will also
+    /// wake the `Receiver` as it's tearing down so the `Receiver` can
+    /// gracefully drain and shutdown the channel.
     waker: Option<Waker>,
-    /// The number of active senders. When this value reaches 0, all senders have
-    /// been dropped.
+    /// The number of active senders. When this value reaches 0, all senders
+    /// have been dropped.
     num_senders: usize,
     /// A boolean which tracks whether the receiver has dropped.
     receiver_dropped: bool,
     /// A boolean which tracks whether the stream has terminated. A stream is
-    /// considered terminated when sender has dropped and we have drained everything
-    /// inside our internal queue.
+    /// considered terminated when sender has dropped and we have drained
+    /// everything inside our internal queue.
     stream_terminated: bool,
 }
 
@@ -52,9 +53,10 @@ pub struct Sender<K: Eq + Hash + Clone, M> {
     shared_state: Arc<Mutex<SharedState<K, M>>>,
 }
 
-/// The status of an element inserted into a diem_channel. If the element is successfully
-/// dequeued, ElementStatus::Dequeued is sent to the sender. If it is dropped
-/// ElementStatus::Dropped is sent to the sender along with the dropped element.
+/// The status of an element inserted into a diem_channel. If the element is
+/// successfully dequeued, ElementStatus::Dequeued is sent to the sender. If it
+/// is dropped ElementStatus::Dropped is sent to the sender along with the
+/// dropped element.
 pub enum ElementStatus<M> {
     Dequeued,
     Dropped(M),
@@ -71,7 +73,9 @@ impl<M: PartialEq> PartialEq for ElementStatus<M> {
 }
 
 impl<M: Debug> Debug for ElementStatus<M> {
-    fn fmt(&self, f: &mut Formatter) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(
+        &self, f: &mut Formatter,
+    ) -> std::result::Result<(), std::fmt::Error> {
         match self {
             ElementStatus::Dequeued => write!(f, "Dequeued"),
             ElementStatus::Dropped(v) => write!(f, "Dropped({:?})", v),
@@ -86,24 +90,27 @@ impl<K: Eq + Hash + Clone, M> Sender<K, M> {
         self.push_with_feedback(key, message, None)
     }
 
-    /// Same as `push`, but this function also accepts a oneshot::Sender over which the sender can
-    /// be notified when the message eventually gets delivered or dropped.
+    /// Same as `push`, but this function also accepts a oneshot::Sender over
+    /// which the sender can be notified when the message eventually gets
+    /// delivered or dropped.
     pub fn push_with_feedback(
-        &mut self,
-        key: K,
-        message: M,
+        &mut self, key: K, message: M,
         status_ch: Option<oneshot::Sender<ElementStatus<M>>>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         let mut shared_state = self.shared_state.lock();
         ensure!(!shared_state.receiver_dropped, "Channel is closed");
         debug_assert!(shared_state.num_senders > 0);
 
-        let dropped = shared_state.internal_queue.push(key, (message, status_ch));
-        // If this or an existing message had to be dropped because of the queue being full, we
-        // notify the corresponding status channel if it was registered.
+        let dropped =
+            shared_state.internal_queue.push(key, (message, status_ch));
+        // If this or an existing message had to be dropped because of the queue
+        // being full, we notify the corresponding status channel if it
+        // was registered.
         if let Some((dropped_val, Some(dropped_status_ch))) = dropped {
             // Ignore errors.
-            let _err = dropped_status_ch.send(ElementStatus::Dropped(dropped_val));
+            let _err =
+                dropped_status_ch.send(ElementStatus::Dropped(dropped_val));
         }
         if let Some(w) = shared_state.waker.take() {
             w.wake();
@@ -145,8 +152,9 @@ pub struct Receiver<K: Eq + Hash + Clone, M> {
 }
 
 impl<K: Eq + Hash + Clone, M> Receiver<K, M> {
-    /// Removes all the previously sent transactions that have not been consumed yet and cleans up
-    /// the internal queue structure (GC of the previous keys).
+    /// Removes all the previously sent transactions that have not been consumed
+    /// yet and cleans up the internal queue structure (GC of the previous
+    /// keys).
     pub fn clear(&mut self) {
         let mut shared_state = self.shared_state.lock();
         shared_state.internal_queue.clear();
@@ -163,10 +171,14 @@ impl<K: Eq + Hash + Clone, M> Drop for Receiver<K, M> {
 
 impl<K: Eq + Hash + Clone, M> Stream for Receiver<K, M> {
     type Item = M;
-    /// poll_next checks whether there is something ready for consumption from the internal
-    /// queue. If there is, then it returns immediately. If the internal_queue is empty,
-    /// it sets the waker passed to it by the scheduler/executor and returns Pending
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+
+    /// poll_next checks whether there is something ready for consumption from
+    /// the internal queue. If there is, then it returns immediately. If the
+    /// internal_queue is empty, it sets the waker passed to it by the
+    /// scheduler/executor and returns Pending
+    fn poll_next(
+        self: Pin<&mut Self>, cx: &mut Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
         let mut shared_state = self.shared_state.lock();
         if let Some((val, status_ch)) = shared_state.internal_queue.pop() {
             if let Some(status_ch) = status_ch {
@@ -192,14 +204,20 @@ impl<K: Eq + Hash + Clone, M> FusedStream for Receiver<K, M> {
 
 /// Create a new Diem Channel and returns the two ends of the channel.
 pub fn new<K: Eq + Hash + Clone, M>(
-    queue_style: QueueStyle,
-    max_queue_size_per_key: usize,
+    queue_style: QueueStyle, max_queue_size_per_key: usize,
     counters: Option<&'static IntCounterVec>,
-) -> (Sender<K, M>, Receiver<K, M>) {
-    let max_queue_size_per_key =
-        NonZeroUsize!(max_queue_size_per_key, "diem_channel cannot be of size 0");
+) -> (Sender<K, M>, Receiver<K, M>)
+{
+    let max_queue_size_per_key = NonZeroUsize!(
+        max_queue_size_per_key,
+        "diem_channel cannot be of size 0"
+    );
     let shared_state = Arc::new(Mutex::new(SharedState {
-        internal_queue: PerKeyQueue::new(queue_style, max_queue_size_per_key, counters),
+        internal_queue: PerKeyQueue::new(
+            queue_style,
+            max_queue_size_per_key,
+            counters,
+        ),
         waker: None,
         num_senders: 1,
         receiver_dropped: false,

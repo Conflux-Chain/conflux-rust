@@ -5,13 +5,13 @@
 //! # Instrumenting with Logs
 //! ## Basic instrumenting with Logs
 //!
-//! A set of logging macros (`info!`, `error!`, `warn!`, `debug!`, and `trace!`) is provided for
-//! emitting logs at different levels. All of these macros support the addition of providing
-//! structured data along with a formatted text message.  For guidelines on which level to use,
-//! see the [coding guidelines](https://developers.diem.com/docs/core/coding-guidelines#logging).
+//! A set of logging macros (`info!`, `error!`, `warn!`, `debug!`, and `trace!`)
+//! is provided for emitting logs at different levels. All of these macros
+//! support the addition of providing structured data along with a formatted
+//! text message.  For guidelines on which level to use, see the [coding guidelines](https://developers.diem.com/docs/core/coding-guidelines#logging).
 //!
-//! The below examples do no type checking for structured log fields, and instead just serialize
-//! whatever is given.
+//! The below examples do no type checking for structured log fields, and
+//! instead just serialize whatever is given.
 //! ```
 //! use diem_logger::info;
 //!
@@ -41,14 +41,16 @@
 //!
 //! ### Note
 //!
-//! Arguments used in a formatted message are **not** captured and included as structured data.
-//! Everything after the format string literal e.g. `"hello {}"` are only used in the format string.
+//! Arguments used in a formatted message are **not** captured and included as
+//! structured data. Everything after the format string literal e.g. `"hello
+//! {}"` are only used in the format string.
 //!
 //! ## Preferred instrumenting with Logs (Typed Schemas)
 //!
-//! The `Schema` trait can be used to implement typed logging schemas. This can either be
-//! implemented by hand or derived using the `Schema` derive proc-macro, implementing the `Schema`
-//! trait for the struct as well as providing setters for all fields.
+//! The `Schema` trait can be used to implement typed logging schemas. This can
+//! either be implemented by hand or derived using the `Schema` derive
+//! proc-macro, implementing the `Schema` trait for the struct as well as
+//! providing setters for all fields.
 //!
 //! ```
 //! use diem_logger::{info, Schema};
@@ -65,39 +67,50 @@
 //!     c: Option<&'a str>,
 //! }
 //!
-//! let log = LogSchema { a: 5, b: None, c: None };
+//! let log = LogSchema {
+//!     a: 5,
+//!     b: None,
+//!     c: None,
+//! };
 //!
 //! // Automatic setters are named based on the field names, and handle `Option`
 //! // None fields will be ignored
 //! info!(log.c("radiant"));
 //! // => '{"level":"info", "data": { "a": 5, "c": "radiant"}}'
 //!
-//!
 //! #[derive(Schema)]
 //! struct OtherSchema<'a> {
-//!   val: Option<&'a str>
+//!     val: Option<&'a str>,
 //! }
 //!
-//! let log = LogSchema { a: 5, b: None, c: None };
+//! let log = LogSchema {
+//!     a: 5,
+//!     b: None,
+//!     c: None,
+//! };
 //! let other = OtherSchema { val: None };
 //!
 //! // Schemas can be combined
 //! info!(
-//!   other.val("awesome"), // First schema
-//!   log // Second schema has fields added to it all
+//!     other.val("awesome"), // First schema
+//!     log                   // Second schema has fields added to it all
 //! );
 //! // => '{"level":"info", "data": { "a": 5, "val":"awesome"}}'
 //!
-//! let log = LogSchema { a: 5, b: None, c: None };
+//! let log = LogSchema {
+//!     a: 5,
+//!     b: None,
+//!     c: None,
+//! };
 //! let other = OtherSchema { val: None };
 //!
 //! // Schemas can be combined with one off fields and messages like above
 //! info!(
-//!    other.val("awesome"), // First schema
-//!    log, // Second schema has fields added to it all
-//!    new_field = "new", // Basic structured fields
-//!    "Message: {}", // Format messages
-//!    "Some message" // Format message fields (not added to indexed fields)
+//!     other.val("awesome"), // First schema
+//!     log,                  // Second schema has fields added to it all
+//!     new_field = "new",    // Basic structured fields
+//!     "Message: {}",        // Format messages
+//!     "Some message" // Format message fields (not added to indexed fields)
 //! );
 //! // => {"level":"info", "message": "Message: Some message",
 //! //     "data": { "a": 5, "val":"awesome", "new_field": "new"}}'
@@ -105,25 +118,32 @@
 //!
 //! ## Sampling logs
 //!
-//! Sometimes logging a large amount of data is expensive.  In order to log information only part
-//! of the time, we've added a `sample!` macro that's configurable on how often we want to execute some code.
+//! Sometimes logging a large amount of data is expensive.  In order to log
+//! information only part of the time, we've added a `sample!` macro that's
+//! configurable on how often we want to execute some code.
 //!
 //! `SampleRate` determines how often the sampled statement will occur.
 //!
 //! ```
-//! use diem_logger::{info, sample, sample::{SampleRate, Sampling}};
+//! use diem_logger::{
+//!     info,
+//!     sample::{self, SampleRate, Sampling},
+//! };
 //! use std::time::Duration;
 //!
 //! // Sampled based on frequency of events, log only every 2 logs
 //! sample!(SampleRate::Frequency(2), info!("Long log"));
 //!
 //! // Sampled based on time passed, log at most once a minute
-//! sample!(SampleRate::Duration(Duration::from_secs(60)), info!("Long log"));
+//! sample!(
+//!     SampleRate::Duration(Duration::from_secs(60)),
+//!     info!("Long log")
+//! );
 //! ```
 //! # Configuration
 //!
-//! In order for logs to be captured and emitted a Logger needs to be instantiated. This can be
-//! done by using the `Logger` type:
+//! In order for logs to be captured and emitted a Logger needs to be
+//! instantiated. This can be done by using the `Logger` type:
 //!
 //! ```
 //! use diem_logger::{Level, Logger};
@@ -137,8 +157,8 @@ pub mod prelude {
     pub use crate::{
         debug,
         diem_logger::FileWriter,
-        error, event, info, sample,
-        sample::{SampleRate, Sampling},
+        error, event, info,
+        sample::{self, SampleRate, Sampling},
         security::SecurityEvent,
         trace, warn,
     };

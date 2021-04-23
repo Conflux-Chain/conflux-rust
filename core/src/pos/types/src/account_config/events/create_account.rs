@@ -13,13 +13,9 @@ pub struct CreateAccountEvent {
 }
 
 impl CreateAccountEvent {
-    pub fn created(&self) -> AccountAddress {
-        self.created
-    }
+    pub fn created(&self) -> AccountAddress { self.created }
 
-    pub fn role_id(&self) -> u64 {
-        self.role_id
-    }
+    pub fn role_id(&self) -> u64 { self.role_id }
 
     pub fn try_from_bytes(bytes: &[u8]) -> Result<Self> {
         bcs::from_bytes(bytes).map_err(Into::into)

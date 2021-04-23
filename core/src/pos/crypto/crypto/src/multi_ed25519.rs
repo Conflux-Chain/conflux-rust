@@ -1,22 +1,25 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module provides an API for the accountable threshold multi-sig PureEdDSA signature scheme
-//! over the ed25519 twisted Edwards curve as defined in [RFC8032](https://tools.ietf.org/html/rfc8032).
+//! This module provides an API for the accountable threshold multi-sig
+//! PureEdDSA signature scheme over the ed25519 twisted Edwards curve as defined in [RFC8032](https://tools.ietf.org/html/rfc8032).
 //!
 //! Signature verification also checks and rejects non-canonical signatures.
 
 use crate::{
     ed25519::{
-        Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature, ED25519_PRIVATE_KEY_LENGTH,
-        ED25519_PUBLIC_KEY_LENGTH, ED25519_SIGNATURE_LENGTH,
+        Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature,
+        ED25519_PRIVATE_KEY_LENGTH, ED25519_PUBLIC_KEY_LENGTH,
+        ED25519_SIGNATURE_LENGTH,
     },
     hash::{CryptoHash, CryptoHasher},
     traits::*,
 };
 use anyhow::{anyhow, Result};
 use core::convert::TryFrom;
-use diem_crypto_derive::{DeserializeKey, SerializeKey, SilentDebug, SilentDisplay};
+use diem_crypto_derive::{
+    DeserializeKey, SerializeKey, SilentDebug, SilentDisplay,
+};
 use mirai_annotations::*;
 use rand::Rng;
 use serde::Serialize;
@@ -25,8 +28,11 @@ use std::{convert::TryInto, fmt};
 const MAX_NUM_OF_KEYS: usize = 32;
 const BITMAP_NUM_OF_BYTES: usize = 4;
 
-/// Vector of private keys in the multi-key Ed25519 structure along with the threshold.
-#[derive(DeserializeKey, Eq, PartialEq, SilentDisplay, SilentDebug, SerializeKey)]
+/// Vector of private keys in the multi-key Ed25519 structure along with the
+/// threshold.
+#[derive(
+    DeserializeKey, Eq, PartialEq, SilentDisplay, SilentDebug, SerializeKey,
+)]
 pub struct MultiEd25519PrivateKey {
     private_keys: Vec<Ed25519PrivateKey>,
     threshold: u8,
@@ -35,7 +41,8 @@ pub struct MultiEd25519PrivateKey {
 #[cfg(feature = "assert-private-keys-not-cloneable")]
 static_assertions::assert_not_impl_any!(MultiEd25519PrivateKey: Clone);
 
-/// Vector of public keys in the multi-key Ed25519 structure along with the threshold.
+/// Vector of public keys in the multi-key Ed25519 structure along with the
+/// threshold.
 #[derive(Clone, DeserializeKey, Eq, PartialEq, SerializeKey)]
 pub struct MultiEd25519PublicKey {
     public_keys: Vec<Ed25519PublicKey>,
@@ -47,11 +54,12 @@ use crate::tags::ValidatedPublicKeyTag;
 #[cfg(not(mirai))]
 struct ValidatedPublicKeyTag {}
 
-/// Vector of the multi-key signatures along with a 32bit [u8; 4] bitmap required to map signatures
-/// with their corresponding public keys.
+/// Vector of the multi-key signatures along with a 32bit [u8; 4] bitmap
+/// required to map signatures with their corresponding public keys.
 ///
-/// Note that bits are read from left to right. For instance, in the following bitmap
-/// [0b0001_0000, 0b0000_0000, 0b0000_0000, 0b0000_0001], the 3rd and 31st positions are set.
+/// Note that bits are read from left to right. For instance, in the following
+/// bitmap [0b0001_0000, 0b0000_0000, 0b0000_0000, 0b0000_0001], the 3rd and
+/// 31st positions are set.
 #[derive(Clone, DeserializeKey, Eq, PartialEq, SerializeKey)]
 pub struct MultiEd25519Signature {
     signatures: Vec<Ed25519Signature>,
@@ -61,8 +69,7 @@ pub struct MultiEd25519Signature {
 impl MultiEd25519PrivateKey {
     /// Construct a new MultiEd25519PrivateKey.
     pub fn new(
-        private_keys: Vec<Ed25519PrivateKey>,
-        threshold: u8,
+        private_keys: Vec<Ed25519PrivateKey>, threshold: u8,
     ) -> std::result::Result<Self, CryptoMaterialError> {
         let num_of_keys = private_keys.len();
         if threshold == 0 || num_of_keys < threshold as usize {
@@ -90,8 +97,7 @@ impl MultiEd25519PublicKey {
     /// b) public_keys.len() should be equal to or larger than threshold.
     /// c) support up to MAX_NUM_OF_KEYS public keys.
     pub fn new(
-        public_keys: Vec<Ed25519PublicKey>,
-        threshold: u8,
+        public_keys: Vec<Ed25519PublicKey>, threshold: u8,
     ) -> std::result::Result<Self, CryptoMaterialError> {
         let num_of_keys = public_keys.len();
         if threshold == 0 || num_of_keys < threshold as usize {
@@ -107,14 +113,10 @@ impl MultiEd25519PublicKey {
     }
 
     /// Getter public_keys
-    pub fn public_keys(&self) -> &Vec<Ed25519PublicKey> {
-        &self.public_keys
-    }
+    pub fn public_keys(&self) -> &Vec<Ed25519PublicKey> { &self.public_keys }
 
     /// Getter threshold
-    pub fn threshold(&self) -> &u8 {
-        &self.threshold
-    }
+    pub fn threshold(&self) -> &u8 { &self.threshold }
 
     /// Serialize a MultiEd25519PublicKey.
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -126,11 +128,15 @@ impl MultiEd25519PublicKey {
 // PrivateKey Traits //
 ///////////////////////
 
-/// Convenient method to create a MultiEd25519PrivateKey from a single Ed25519PrivateKey.
+/// Convenient method to create a MultiEd25519PrivateKey from a single
+/// Ed25519PrivateKey.
 impl From<&Ed25519PrivateKey> for MultiEd25519PrivateKey {
     fn from(ed_private_key: &Ed25519PrivateKey) -> Self {
         MultiEd25519PrivateKey {
-            private_keys: vec![Ed25519PrivateKey::try_from(&ed_private_key.to_bytes()[..]).unwrap()],
+            private_keys: vec![Ed25519PrivateKey::try_from(
+                &ed_private_key.to_bytes()[..],
+            )
+            .unwrap()],
             threshold: 1u8,
         }
     }
@@ -141,10 +147,12 @@ impl PrivateKey for MultiEd25519PrivateKey {
 }
 
 impl SigningKey for MultiEd25519PrivateKey {
-    type VerifyingKeyMaterial = MultiEd25519PublicKey;
     type SignatureMaterial = MultiEd25519Signature;
+    type VerifyingKeyMaterial = MultiEd25519PublicKey;
 
-    fn sign<T: CryptoHash + Serialize>(&self, message: &T) -> MultiEd25519Signature {
+    fn sign<T: CryptoHash + Serialize>(
+        &self, message: &T,
+    ) -> MultiEd25519Signature {
         let mut bitmap = [0u8; BITMAP_NUM_OF_BYTES];
         let signatures: Vec<Ed25519Signature> = self
             .private_keys
@@ -162,7 +170,8 @@ impl SigningKey for MultiEd25519PrivateKey {
 
     #[cfg(any(test, feature = "fuzzing"))]
     fn sign_arbitrary_message(&self, message: &[u8]) -> MultiEd25519Signature {
-        let mut signatures: Vec<Ed25519Signature> = Vec::with_capacity(self.threshold as usize);
+        let mut signatures: Vec<Ed25519Signature> =
+            Vec::with_capacity(self.threshold as usize);
         let mut bitmap = [0u8; BITMAP_NUM_OF_BYTES];
         signatures.extend(
             self.private_keys
@@ -181,11 +190,10 @@ impl SigningKey for MultiEd25519PrivateKey {
 // Generating a random K out-of N key for testing.
 impl Uniform for MultiEd25519PrivateKey {
     fn generate<R>(rng: &mut R) -> Self
-    where
-        R: ::rand::RngCore + ::rand::CryptoRng,
-    {
+    where R: ::rand::RngCore + ::rand::CryptoRng {
         let num_of_keys = rng.gen_range(1..=MAX_NUM_OF_KEYS);
-        let mut private_keys: Vec<Ed25519PrivateKey> = Vec::with_capacity(num_of_keys);
+        let mut private_keys: Vec<Ed25519PrivateKey> =
+            Vec::with_capacity(num_of_keys);
         for _ in 0..num_of_keys {
             private_keys.push(
                 Ed25519PrivateKey::try_from(
@@ -205,12 +213,16 @@ impl Uniform for MultiEd25519PrivateKey {
 impl TryFrom<&[u8]> for MultiEd25519PrivateKey {
     type Error = CryptoMaterialError;
 
-    /// Deserialize an Ed25519PrivateKey. This method will also check for key and threshold validity.
-    fn try_from(bytes: &[u8]) -> std::result::Result<MultiEd25519PrivateKey, CryptoMaterialError> {
+    /// Deserialize an Ed25519PrivateKey. This method will also check for key
+    /// and threshold validity.
+    fn try_from(
+        bytes: &[u8],
+    ) -> std::result::Result<MultiEd25519PrivateKey, CryptoMaterialError> {
         if bytes.is_empty() {
             return Err(CryptoMaterialError::WrongLengthError);
         }
-        let threshold = check_and_get_threshold(bytes, ED25519_PRIVATE_KEY_LENGTH)?;
+        let threshold =
+            check_and_get_threshold(bytes, ED25519_PRIVATE_KEY_LENGTH)?;
 
         let private_keys: Result<Vec<Ed25519PrivateKey>, _> = bytes
             .chunks_exact(ED25519_PRIVATE_KEY_LENGTH)
@@ -231,9 +243,7 @@ impl Length for MultiEd25519PrivateKey {
 }
 
 impl ValidCryptoMaterial for MultiEd25519PrivateKey {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_bytes()
-    }
+    fn to_bytes(&self) -> Vec<u8> { self.to_bytes() }
 }
 
 impl Genesis for MultiEd25519PrivateKey {
@@ -241,7 +251,9 @@ impl Genesis for MultiEd25519PrivateKey {
         let mut buf = [0u8; ED25519_PRIVATE_KEY_LENGTH];
         buf[ED25519_PRIVATE_KEY_LENGTH - 1] = 1u8;
         MultiEd25519PrivateKey {
-            private_keys: vec![Ed25519PrivateKey::try_from(buf.as_ref()).unwrap()],
+            private_keys: vec![
+                Ed25519PrivateKey::try_from(buf.as_ref()).unwrap()
+            ],
             threshold: 1u8,
         }
     }
@@ -251,7 +263,8 @@ impl Genesis for MultiEd25519PrivateKey {
 // PublicKey Traits //
 //////////////////////
 
-/// Convenient method to create a MultiEd25519PublicKey from a single Ed25519PublicKey.
+/// Convenient method to create a MultiEd25519PublicKey from a single
+/// Ed25519PublicKey.
 impl From<Ed25519PublicKey> for MultiEd25519PublicKey {
     fn from(ed_public_key: Ed25519PublicKey) -> Self {
         MultiEd25519PublicKey {
@@ -261,7 +274,8 @@ impl From<Ed25519PublicKey> for MultiEd25519PublicKey {
     }
 }
 
-/// Implementing From<&PrivateKey<...>> allows to derive a public key in a more elegant fashion.
+/// Implementing From<&PrivateKey<...>> allows to derive a public key in a more
+/// elegant fashion.
 impl From<&MultiEd25519PrivateKey> for MultiEd25519PublicKey {
     fn from(private_key: &MultiEd25519PrivateKey) -> Self {
         let public_keys = private_key
@@ -292,13 +306,17 @@ impl std::hash::Hash for MultiEd25519PublicKey {
 impl TryFrom<&[u8]> for MultiEd25519PublicKey {
     type Error = CryptoMaterialError;
 
-    /// Deserialize a MultiEd25519PublicKey. This method will also check for key and threshold
-    /// validity, and will only deserialize keys that are safe against small subgroup attacks.
-    fn try_from(bytes: &[u8]) -> std::result::Result<MultiEd25519PublicKey, CryptoMaterialError> {
+    /// Deserialize a MultiEd25519PublicKey. This method will also check for key
+    /// and threshold validity, and will only deserialize keys that are safe
+    /// against small subgroup attacks.
+    fn try_from(
+        bytes: &[u8],
+    ) -> std::result::Result<MultiEd25519PublicKey, CryptoMaterialError> {
         if bytes.is_empty() {
             return Err(CryptoMaterialError::WrongLengthError);
         }
-        let threshold = check_and_get_threshold(bytes, ED25519_PUBLIC_KEY_LENGTH)?;
+        let threshold =
+            check_and_get_threshold(bytes, ED25519_PUBLIC_KEY_LENGTH)?;
         let public_keys: Result<Vec<Ed25519PublicKey>, _> = bytes
             .chunks_exact(ED25519_PUBLIC_KEY_LENGTH)
             .map(Ed25519PublicKey::try_from)
@@ -317,8 +335,8 @@ impl TryFrom<&[u8]> for MultiEd25519PublicKey {
 /// We deduce VerifyingKey from pointing to the signature material
 /// we get the ability to do `pubkey.validate(msg, signature)`
 impl VerifyingKey for MultiEd25519PublicKey {
-    type SigningKeyMaterial = MultiEd25519PrivateKey;
     type SignatureMaterial = MultiEd25519Signature;
+    type SigningKeyMaterial = MultiEd25519PrivateKey;
 }
 
 impl fmt::Display for MultiEd25519PublicKey {
@@ -340,9 +358,7 @@ impl Length for MultiEd25519PublicKey {
 }
 
 impl ValidCryptoMaterial for MultiEd25519PublicKey {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_bytes()
-    }
+    fn to_bytes(&self) -> Vec<u8> { self.to_bytes() }
 }
 
 impl MultiEd25519Signature {
@@ -361,11 +377,13 @@ impl MultiEd25519Signature {
         let mut bitmap = [0u8; BITMAP_NUM_OF_BYTES];
 
         // Check if all indexes are unique and < MAX_NUM_OF_KEYS
-        let (sigs, indexes): (Vec<_>, Vec<_>) = sorted_signatures.iter().cloned().unzip();
+        let (sigs, indexes): (Vec<_>, Vec<_>) =
+            sorted_signatures.iter().cloned().unzip();
         for i in indexes {
             // If an index is out of range.
             if i < MAX_NUM_OF_KEYS as u8 {
-                // if an index has been set already (thus, there is a duplicate).
+                // if an index has been set already (thus, there is a
+                // duplicate).
                 if bitmap_get_bit(bitmap, i as usize) {
                     return Err(CryptoMaterialError::BitVecError(
                         "Duplicate signature index".to_string(),
@@ -386,16 +404,13 @@ impl MultiEd25519Signature {
     }
 
     /// Getter signatures.
-    pub fn signatures(&self) -> &Vec<Ed25519Signature> {
-        &self.signatures
-    }
+    pub fn signatures(&self) -> &Vec<Ed25519Signature> { &self.signatures }
 
     /// Getter bitmap.
-    pub fn bitmap(&self) -> &[u8; BITMAP_NUM_OF_BYTES] {
-        &self.bitmap
-    }
+    pub fn bitmap(&self) -> &[u8; BITMAP_NUM_OF_BYTES] { &self.bitmap }
 
-    /// Serialize a MultiEd25519Signature in the form of sig0||sig1||..sigN||bitmap.
+    /// Serialize a MultiEd25519Signature in the form of
+    /// sig0||sig1||..sigN||bitmap.
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes: Vec<u8> = self
             .signatures
@@ -414,9 +429,11 @@ impl MultiEd25519Signature {
 impl TryFrom<&[u8]> for MultiEd25519Signature {
     type Error = CryptoMaterialError;
 
-    /// Deserialize a MultiEd25519Signature. This method will also check for malleable signatures
-    /// and bitmap validity.
-    fn try_from(bytes: &[u8]) -> std::result::Result<MultiEd25519Signature, CryptoMaterialError> {
+    /// Deserialize a MultiEd25519Signature. This method will also check for
+    /// malleable signatures and bitmap validity.
+    fn try_from(
+        bytes: &[u8],
+    ) -> std::result::Result<MultiEd25519Signature, CryptoMaterialError> {
         let length = bytes.len();
         let bitmap_num_of_bytes = length % ED25519_SIGNATURE_LENGTH;
         let num_of_sigs = length / ED25519_SIGNATURE_LENGTH;
@@ -440,7 +457,8 @@ impl TryFrom<&[u8]> for MultiEd25519Signature {
             .chunks_exact(ED25519_SIGNATURE_LENGTH)
             .map(Ed25519Signature::try_from)
             .collect();
-        signatures.map(|signatures| MultiEd25519Signature { signatures, bitmap })
+        signatures
+            .map(|signatures| MultiEd25519Signature { signatures, bitmap })
     }
 }
 
@@ -471,21 +489,18 @@ impl fmt::Debug for MultiEd25519Signature {
 }
 
 impl ValidCryptoMaterial for MultiEd25519Signature {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_bytes()
-    }
+    fn to_bytes(&self) -> Vec<u8> { self.to_bytes() }
 }
 
 impl Signature for MultiEd25519Signature {
-    type VerifyingKeyMaterial = MultiEd25519PublicKey;
     type SigningKeyMaterial = MultiEd25519PrivateKey;
+    type VerifyingKeyMaterial = MultiEd25519PublicKey;
 
     fn verify<T: CryptoHash + Serialize>(
-        &self,
-        message: &T,
-        public_key: &MultiEd25519PublicKey,
+        &self, message: &T, public_key: &MultiEd25519PublicKey,
     ) -> Result<()> {
-        // Public keys should be validated to be safe against small subgroup attacks, etc.
+        // Public keys should be validated to be safe against small subgroup
+        // attacks, etc.
         precondition!(has_tag!(public_key, ValidatedPublicKeyTag));
         let mut bytes = <T as CryptoHash>::Hasher::seed().to_vec();
         bcs::serialize_into(&mut bytes, &message)
@@ -493,22 +508,23 @@ impl Signature for MultiEd25519Signature {
         Self::verify_arbitrary_msg(self, &bytes, public_key)
     }
 
-    /// Checks that `self` is valid for an arbitrary &[u8] `message` using `public_key`.
-    /// Outside of this crate, this particular function should only be used for native signature
-    /// verification in Move.
+    /// Checks that `self` is valid for an arbitrary &[u8] `message` using
+    /// `public_key`. Outside of this crate, this particular function should
+    /// only be used for native signature verification in Move.
     fn verify_arbitrary_msg(
-        &self,
-        message: &[u8],
-        public_key: &MultiEd25519PublicKey,
+        &self, message: &[u8], public_key: &MultiEd25519PublicKey,
     ) -> Result<()> {
-        // Public keys should be validated to be safe against small subgroup attacks, etc.
+        // Public keys should be validated to be safe against small subgroup
+        // attacks, etc.
         precondition!(has_tag!(public_key, ValidatedPublicKeyTag));
         match bitmap_last_set_bit(self.bitmap) {
             Some(last_bit) if last_bit as usize <= public_key.length() => (),
             _ => {
                 return Err(anyhow!(
                     "{}",
-                    CryptoMaterialError::BitVecError("Signature index is out of range".to_string())
+                    CryptoMaterialError::BitVecError(
+                        "Signature index is out of range".to_string()
+                    )
                 ))
             }
         };
@@ -526,15 +542,16 @@ impl Signature for MultiEd25519Signature {
             while !bitmap_get_bit(self.bitmap, bitmap_index) {
                 bitmap_index += 1;
             }
-            sig.verify_arbitrary_msg(message, &public_key.public_keys[bitmap_index as usize])?;
+            sig.verify_arbitrary_msg(
+                message,
+                &public_key.public_keys[bitmap_index as usize],
+            )?;
             bitmap_index += 1;
         }
         Ok(())
     }
 
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_bytes()
-    }
+    fn to_bytes(&self) -> Vec<u8> { self.to_bytes() }
 }
 
 impl From<Ed25519Signature> for MultiEd25519Signature {
@@ -563,8 +580,7 @@ fn to_bytes<T: ValidCryptoMaterial>(keys: &[T], threshold: u8) -> Vec<u8> {
 
 // Helper method to get threshold from a serialized MultiEd25519 key payload.
 fn check_and_get_threshold(
-    bytes: &[u8],
-    key_size: usize,
+    bytes: &[u8], key_size: usize,
 ) -> std::result::Result<u8, CryptoMaterialError> {
     let payload_length = bytes.len();
     if bytes.is_empty() {
@@ -574,7 +590,10 @@ fn check_and_get_threshold(
     let num_of_keys = payload_length / key_size;
     let threshold_byte = bytes[bytes.len() - 1];
 
-    if num_of_keys == 0 || num_of_keys > MAX_NUM_OF_KEYS || threshold_num_of_bytes != 1 {
+    if num_of_keys == 0
+        || num_of_keys > MAX_NUM_OF_KEYS
+        || threshold_num_of_bytes != 1
+    {
         Err(CryptoMaterialError::WrongLengthError)
     } else if threshold_byte == 0 || threshold_byte > num_of_keys as u8 {
         Err(CryptoMaterialError::ValidationError)
@@ -585,7 +604,8 @@ fn check_and_get_threshold(
 
 fn bitmap_set_bit(input: &mut [u8; BITMAP_NUM_OF_BYTES], index: usize) {
     let bucket = index / 8;
-    // It's always invoked with index < 32, thus there is no need to check range.
+    // It's always invoked with index < 32, thus there is no need to check
+    // range.
     let bucket_pos = index - (bucket * 8);
     input[bucket] |= 128 >> bucket_pos as u8;
 }
@@ -593,7 +613,8 @@ fn bitmap_set_bit(input: &mut [u8; BITMAP_NUM_OF_BYTES], index: usize) {
 // Helper method to get the input's bit at index.
 fn bitmap_get_bit(input: [u8; BITMAP_NUM_OF_BYTES], index: usize) -> bool {
     let bucket = index / 8;
-    // It's always invoked with index < 32, thus there is no need to check range.
+    // It's always invoked with index < 32, thus there is no need to check
+    // range.
     let bucket_pos = index - (bucket * 8);
     (input[bucket] & (128 >> bucket_pos as u8)) != 0
 }
@@ -610,7 +631,10 @@ fn bitmap_last_set_bit(input: [u8; BITMAP_NUM_OF_BYTES]) -> Option<u8> {
         .rev()
         .enumerate()
         .find(|(_, byte)| byte != &&0u8)
-        .map(|(i, byte)| (8 * (BITMAP_NUM_OF_BYTES - i) - byte.trailing_zeros() as usize - 1) as u8)
+        .map(|(i, byte)| {
+            (8 * (BITMAP_NUM_OF_BYTES - i) - byte.trailing_zeros() as usize - 1)
+                as u8
+        })
 }
 
 #[test]

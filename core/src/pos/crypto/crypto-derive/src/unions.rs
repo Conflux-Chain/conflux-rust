@@ -5,9 +5,13 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{DataEnum, Ident};
 
-pub fn parse_newtype_fields(item: &syn::DeriveInput) -> (syn::Type, proc_macro2::TokenStream) {
+pub fn parse_newtype_fields(
+    item: &syn::DeriveInput,
+) -> (syn::Type, proc_macro2::TokenStream) {
     let fields = match item.data {
-        syn::Data::Struct(ref body) => body.fields.iter().collect::<Vec<&syn::Field>>(),
+        syn::Data::Struct(ref body) => {
+            body.fields.iter().collect::<Vec<&syn::Field>>()
+        }
         _ => vec![],
     };
 
@@ -15,7 +19,8 @@ pub fn parse_newtype_fields(item: &syn::DeriveInput) -> (syn::Type, proc_macro2:
         1 => Some(fields[0].ty.clone()),
         _ => None,
     };
-    let field_ty = field_ty.expect("#[derive(Deref)] can only be used on structs with one field.");
+    let field_ty = field_ty
+        .expect("#[derive(Deref)] can only be used on structs with one field.");
 
     let field_name = match fields[0].ident {
         Some(ref ident) => quote!(#ident),
@@ -23,12 +28,16 @@ pub fn parse_newtype_fields(item: &syn::DeriveInput) -> (syn::Type, proc_macro2:
     };
 
     match field_ty {
-        syn::Type::Reference(syn::TypeReference { elem, .. }) => (*elem, quote!(self.#field_name)),
+        syn::Type::Reference(syn::TypeReference { elem, .. }) => {
+            (*elem, quote!(self.#field_name))
+        }
         x => (x, quote!(&self.#field_name)),
     }
 }
 
-pub fn impl_enum_tryfrom(name: &Ident, variants: &DataEnum) -> proc_macro2::TokenStream {
+pub fn impl_enum_tryfrom(
+    name: &Ident, variants: &DataEnum,
+) -> proc_macro2::TokenStream {
     // the TryFrom dispatch
     let mut try_iter = variants.variants.iter();
     let first_variant = try_iter
@@ -68,7 +77,9 @@ pub fn impl_enum_tryfrom(name: &Ident, variants: &DataEnum) -> proc_macro2::Toke
     }
 }
 
-fn match_enum_to_bytes(name: &Ident, variants: &DataEnum) -> proc_macro2::TokenStream {
+fn match_enum_to_bytes(
+    name: &Ident, variants: &DataEnum,
+) -> proc_macro2::TokenStream {
     // the ValidCryptoMaterial dispatch proper
     let mut match_arms = quote! {};
     for variant in variants.variants.iter() {
@@ -81,7 +92,9 @@ fn match_enum_to_bytes(name: &Ident, variants: &DataEnum) -> proc_macro2::TokenS
     match_arms
 }
 
-pub fn impl_enum_valid_crypto_material(name: &Ident, variants: &DataEnum) -> TokenStream {
+pub fn impl_enum_valid_crypto_material(
+    name: &Ident, variants: &DataEnum,
+) -> TokenStream {
     let mut try_from = impl_enum_tryfrom(name, variants);
 
     let to_bytes_arms = match_enum_to_bytes(name, variants);
@@ -99,7 +112,9 @@ pub fn impl_enum_valid_crypto_material(name: &Ident, variants: &DataEnum) -> Tok
     try_from.into()
 }
 
-pub fn get_type_from_attrs(attrs: &[syn::Attribute], attr_name: &str) -> syn::Result<syn::LitStr> {
+pub fn get_type_from_attrs(
+    attrs: &[syn::Attribute], attr_name: &str,
+) -> syn::Result<syn::LitStr> {
     attrs
         .iter()
         .find(|attr| attr.path.is_ident(attr_name))
@@ -117,7 +132,8 @@ pub fn get_type_from_attrs(attrs: &[syn::Attribute], attr_name: &str) -> syn::Re
                     } else {
                         Err(syn::Error::new_spanned(
                             meta,
-                            &format!("Could not parse {} attribute", attr_name)[..],
+                            &format!("Could not parse {} attribute", attr_name)
+                                [..],
                         ))
                     }
                 }
@@ -130,9 +146,7 @@ pub fn get_type_from_attrs(attrs: &[syn::Attribute], attr_name: &str) -> syn::Re
 }
 
 pub fn impl_enum_publickey(
-    name: &Ident,
-    private_key_type: syn::LitStr,
-    variants: &DataEnum,
+    name: &Ident, private_key_type: syn::LitStr, variants: &DataEnum,
 ) -> TokenStream {
     let pkt: syn::Type = private_key_type.parse().unwrap();
     let mut from_match_arms = quote! {};
@@ -161,9 +175,7 @@ pub fn impl_enum_publickey(
 }
 
 pub fn impl_enum_privatekey(
-    name: &Ident,
-    public_key_type: syn::LitStr,
-    _variants: &DataEnum,
+    name: &Ident, public_key_type: syn::LitStr, _variants: &DataEnum,
 ) -> TokenStream {
     let pkt: syn::Type = public_key_type.parse().unwrap();
     let res = quote! {
@@ -175,11 +187,10 @@ pub fn impl_enum_privatekey(
 }
 
 pub fn impl_enum_verifyingkey(
-    name: &Ident,
-    private_key_type: syn::LitStr,
-    signature_type: syn::LitStr,
+    name: &Ident, private_key_type: syn::LitStr, signature_type: syn::LitStr,
     _variants: &DataEnum,
-) -> TokenStream {
+) -> TokenStream
+{
     let pkt: syn::Type = private_key_type.parse().unwrap();
     let st: syn::Type = signature_type.parse().unwrap();
     let res = quote! {
@@ -193,11 +204,10 @@ pub fn impl_enum_verifyingkey(
 }
 
 pub fn impl_enum_signingkey(
-    name: &Ident,
-    public_key_type: syn::LitStr,
-    signature_type: syn::LitStr,
+    name: &Ident, public_key_type: syn::LitStr, signature_type: syn::LitStr,
     variants: &DataEnum,
-) -> TokenStream {
+) -> TokenStream
+{
     let pkt: syn::Type = public_key_type.parse().unwrap();
     let st: syn::Type = signature_type.parse().unwrap();
 
@@ -237,11 +247,10 @@ pub fn impl_enum_signingkey(
 }
 
 pub fn impl_enum_signature(
-    name: &Ident,
-    public_key_type: syn::LitStr,
-    private_key_type: syn::LitStr,
+    name: &Ident, public_key_type: syn::LitStr, private_key_type: syn::LitStr,
     variants: &DataEnum,
-) -> TokenStream {
+) -> TokenStream
+{
     let priv_kt: syn::Type = private_key_type.parse().unwrap();
     let pub_kt: syn::Type = public_key_type.parse().unwrap();
     let mut res = impl_enum_tryfrom(name, variants);

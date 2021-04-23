@@ -1,7 +1,9 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::account_config::constants::{from_currency_code_string, CORE_CODE_ADDRESS};
+use crate::account_config::constants::{
+    from_currency_code_string, CORE_CODE_ADDRESS,
+};
 use move_core_types::{
     identifier::Identifier,
     language_storage::{ModuleId, StructTag, TypeTag},
@@ -20,9 +22,11 @@ pub fn xus_tag() -> TypeTag {
     })
 }
 
-pub static XDX_MODULE: Lazy<ModuleId> =
-    Lazy::new(|| ModuleId::new(CORE_CODE_ADDRESS, Identifier::new(XDX_NAME).unwrap()));
-pub static XDX_STRUCT_NAME: Lazy<Identifier> = Lazy::new(|| Identifier::new(XDX_NAME).unwrap());
+pub static XDX_MODULE: Lazy<ModuleId> = Lazy::new(|| {
+    ModuleId::new(CORE_CODE_ADDRESS, Identifier::new(XDX_NAME).unwrap())
+});
+pub static XDX_STRUCT_NAME: Lazy<Identifier> =
+    Lazy::new(|| Identifier::new(XDX_NAME).unwrap());
 
 pub fn xdx_type_tag() -> TypeTag {
     TypeTag::Struct(StructTag {
@@ -33,8 +37,8 @@ pub fn xdx_type_tag() -> TypeTag {
     })
 }
 
-/// Return `Some(struct_name)` if `t` is a `StructTag` representing one of the current Diem coin
-/// types (XDX, XUS), `None` otherwise.
+/// Return `Some(struct_name)` if `t` is a `StructTag` representing one of the
+/// current Diem coin types (XDX, XUS), `None` otherwise.
 pub fn coin_name(t: &TypeTag) -> Option<String> {
     match t {
         TypeTag::Struct(StructTag {

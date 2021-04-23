@@ -6,8 +6,9 @@ use crate::{
     account_config::XUS_NAME,
     chain_id::ChainId,
     transaction::{
-        metadata, GovernanceRole, RawTransaction, Script, SignedTransaction, Transaction,
-        TransactionInfo, TransactionListWithProof, TransactionPayload, TransactionWithProof,
+        metadata, GovernanceRole, RawTransaction, Script, SignedTransaction,
+        Transaction, TransactionInfo, TransactionListWithProof,
+        TransactionPayload, TransactionWithProof,
     },
 };
 use bcs::test_helpers::assert_canonical_encode_decode;
@@ -61,8 +62,11 @@ fn test_general_metadata_constructor_and_setters() {
     let raw_from_subaddr = b"from_subaddr".to_vec();
     let from_subaddress = Some(raw_from_subaddr.clone());
     let referenced_event = Some(1337);
-    let general_metadata =
-        metadata::GeneralMetadataV0::new(to_subaddress, from_subaddress, referenced_event);
+    let general_metadata = metadata::GeneralMetadataV0::new(
+        to_subaddress,
+        from_subaddress,
+        referenced_event,
+    );
 
     assert!(
         general_metadata

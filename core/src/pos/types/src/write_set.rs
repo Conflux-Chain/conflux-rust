@@ -1,8 +1,9 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! For each transaction the VM executes, the VM will output a `WriteSet` that contains each access
-//! path it updates. For each access path, the VM can either give its new value or delete it.
+//! For each transaction the VM executes, the VM will output a `WriteSet` that
+//! contains each access path it updates. For each access path, the VM can
+//! either give its new value or delete it.
 
 use crate::access_path::AccessPath;
 use anyhow::Result;
@@ -40,17 +41,16 @@ impl std::fmt::Debug for WriteOp {
     }
 }
 
-/// `WriteSet` contains all access paths that one transaction modifies. Each of them is a `WriteOp`
-/// where `Value(val)` means that serialized representation should be updated to `val`, and
-/// `Deletion` means that we are going to delete this access path.
+/// `WriteSet` contains all access paths that one transaction modifies. Each of
+/// them is a `WriteOp` where `Value(val)` means that serialized representation
+/// should be updated to `val`, and `Deletion` means that we are going to delete
+/// this access path.
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct WriteSet(WriteSetMut);
 
 impl WriteSet {
     #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
+    pub fn is_empty(&self) -> bool { self.0.is_empty() }
 
     #[inline]
     pub fn iter(&self) -> ::std::slice::Iter<'_, (AccessPath, WriteOp)> {
@@ -58,14 +58,13 @@ impl WriteSet {
     }
 
     #[inline]
-    pub fn into_mut(self) -> WriteSetMut {
-        self.0
-    }
+    pub fn into_mut(self) -> WriteSetMut { self.0 }
 }
 
 /// A mutable version of `WriteSet`.
 ///
-/// This is separate because it goes through validation before becoming an immutable `WriteSet`.
+/// This is separate because it goes through validation before becoming an
+/// immutable `WriteSet`.
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct WriteSetMut {
     write_set: Vec<(AccessPath, WriteOp)>,
@@ -81,9 +80,7 @@ impl WriteSetMut {
     }
 
     #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.write_set.is_empty()
-    }
+    pub fn is_empty(&self) -> bool { self.write_set.is_empty() }
 
     pub fn freeze(self) -> Result<WriteSet> {
         // TODO: add structural validation
@@ -92,7 +89,9 @@ impl WriteSetMut {
 }
 
 impl ::std::iter::FromIterator<(AccessPath, WriteOp)> for WriteSetMut {
-    fn from_iter<I: IntoIterator<Item = (AccessPath, WriteOp)>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = (AccessPath, WriteOp)>>(
+        iter: I,
+    ) -> Self {
         let mut ws = WriteSetMut::default();
         for write in iter {
             ws.push((write.0, write.1));
@@ -102,19 +101,15 @@ impl ::std::iter::FromIterator<(AccessPath, WriteOp)> for WriteSetMut {
 }
 
 impl<'a> IntoIterator for &'a WriteSet {
-    type Item = &'a (AccessPath, WriteOp);
     type IntoIter = ::std::slice::Iter<'a, (AccessPath, WriteOp)>;
+    type Item = &'a (AccessPath, WriteOp);
 
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.write_set.iter()
-    }
+    fn into_iter(self) -> Self::IntoIter { self.0.write_set.iter() }
 }
 
 impl ::std::iter::IntoIterator for WriteSet {
-    type Item = (AccessPath, WriteOp);
     type IntoIter = ::std::vec::IntoIter<(AccessPath, WriteOp)>;
+    type Item = (AccessPath, WriteOp);
 
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.write_set.into_iter()
-    }
+    fn into_iter(self) -> Self::IntoIter { self.0.write_set.into_iter() }
 }

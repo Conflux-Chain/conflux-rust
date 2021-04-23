@@ -5,9 +5,9 @@ use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, AngleBracketedGenericArguments, Attribute, Data, DataStruct, DeriveInput,
-    Fields, FieldsNamed, GenericArgument, Meta, MetaList, NestedMeta, Path, PathArguments,
-    PathSegment, Type, TypePath,
+    parse_macro_input, AngleBracketedGenericArguments, Attribute, Data,
+    DataStruct, DeriveInput, Fields, FieldsNamed, GenericArgument, Meta,
+    MetaList, NestedMeta, Path, PathArguments, PathSegment, Type, TypePath,
 };
 
 #[proc_macro_derive(Schema, attributes(schema))]
@@ -22,7 +22,8 @@ pub fn derive(input: TokenStream) -> TokenStream {
         }) => named,
         _ => panic!("derive(Schema) only supports structs with named fields"),
     };
-    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let (impl_generics, ty_generics, where_clause) =
+        input.generics.split_for_impl();
 
     let fields: Vec<StructField> = fields
         .iter()
@@ -131,9 +132,9 @@ fn extract_internal_type(ty: &Type) -> Option<&Type> {
         if let Some(PathSegment { ident, arguments }) = segments.first() {
             // Extract the inner type if it is "Option"
             if ident == "Option" {
-                if let PathArguments::AngleBracketed(AngleBracketedGenericArguments {
-                    args, ..
-                }) = arguments
+                if let PathArguments::AngleBracketed(
+                    AngleBracketedGenericArguments { args, .. },
+                ) = arguments
                 {
                     if let Some(GenericArgument::Type(ty)) = args.first() {
                         return Some(ty);
@@ -148,18 +149,28 @@ fn extract_internal_type(ty: &Type) -> Option<&Type> {
 
 fn extract_attr(attrs: &[Attribute]) -> Option<ValueType> {
     for attr in attrs {
-        if let Meta::List(MetaList { path, nested, .. }) = attr.parse_meta().unwrap() {
+        if let Meta::List(MetaList { path, nested, .. }) =
+            attr.parse_meta().unwrap()
+        {
             for segment in path.segments {
                 // Only handle schema attrs
                 if segment.ident == "schema" {
                     for meta in &nested {
-                        let path = if let NestedMeta::Meta(Meta::Path(path)) = meta {
-                            path
-                        } else {
-                            panic!("unsupported schema attribute");
-                        };
+                        let path =
+                            if let NestedMeta::Meta(Meta::Path(path)) = meta {
+                                path
+                            } else {
+                                panic!("unsupported schema attribute");
+                            };
 
-                        match path.segments.first().unwrap().ident.to_string().as_ref() {
+                        match path
+                            .segments
+                            .first()
+                            .unwrap()
+                            .ident
+                            .to_string()
+                            .as_ref()
+                        {
                             "debug" => return Some(ValueType::Debug),
                             "display" => return Some(ValueType::Display),
                             "serde" => return Some(ValueType::Serde),

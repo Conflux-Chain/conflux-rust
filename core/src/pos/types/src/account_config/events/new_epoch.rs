@@ -13,9 +13,7 @@ pub struct NewEpochEvent {
 }
 
 impl NewEpochEvent {
-    pub fn epoch(&self) -> u64 {
-        self.epoch
-    }
+    pub fn epoch(&self) -> u64 { self.epoch }
 
     pub fn try_from_bytes(bytes: &[u8]) -> Result<Self> {
         bcs::from_bytes(bytes).map_err(Into::into)

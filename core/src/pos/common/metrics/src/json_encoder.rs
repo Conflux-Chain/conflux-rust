@@ -9,18 +9,20 @@ use std::{collections::HashMap, io::Write};
 
 const JSON_FORMAT: &str = "application/json";
 
-/// An implementation of an [`Encoder`](::Encoder) that converts a `MetricFamily` proto message
-/// into `fbagent` json
+/// An implementation of an [`Encoder`](::Encoder) that converts a
+/// `MetricFamily` proto message into `fbagent` json
 ///
-/// This implementation converts metric{dimensions,...} -> value to a flat string with a value.
-/// e.g., "requests{method="GET", service="accounts"} -> 8 into
-/// requests.GET.account -> 8
+/// This implementation converts metric{dimensions,...} -> value to a flat
+/// string with a value. e.g., "requests{method="GET", service="accounts"} -> 8
+/// into requests.GET.account -> 8
 /// For now, it ignores timestamps (if set on the metric)
 #[derive(Debug, Default)]
 pub struct JsonEncoder;
 
 impl Encoder for JsonEncoder {
-    fn encode<W: Write>(&self, metric_familys: &[MetricFamily], writer: &mut W) -> Result<()> {
+    fn encode<W: Write>(
+        &self, metric_familys: &[MetricFamily], writer: &mut W,
+    ) -> Result<()> {
         let mut export_me: HashMap<String, f64> = HashMap::new();
 
         for mf in metric_familys {
@@ -45,11 +47,17 @@ impl Encoder for JsonEncoder {
                         // write the sum and counts
                         let h = m.get_histogram();
                         export_me.insert(
-                            flatten_metric_with_labels(&format!("{}_count", name), m),
+                            flatten_metric_with_labels(
+                                &format!("{}_count", name),
+                                m,
+                            ),
                             h.get_sample_count() as f64,
                         );
                         export_me.insert(
-                            flatten_metric_with_labels(&format!("{}_sum", name), m),
+                            flatten_metric_with_labels(
+                                &format!("{}_sum", name),
+                                m,
+                            ),
                             h.get_sample_sum(),
                         );
                     }
@@ -60,13 +68,12 @@ impl Encoder for JsonEncoder {
             }
         }
 
-        writer.write_all(serde_json::to_string(&export_me).unwrap().as_bytes())?;
+        writer
+            .write_all(serde_json::to_string(&export_me).unwrap().as_bytes())?;
         Ok(())
     }
 
-    fn format_type(&self) -> &str {
-        JSON_FORMAT
-    }
+    fn format_type(&self) -> &str { JSON_FORMAT }
 }
 
 /**
@@ -127,8 +134,10 @@ mod tests {
             &["label_me"],
         )
         .unwrap();
-        let res =
-            flatten_metric_with_labels("counter_2", &counter.with_label_values(&[""]).metric());
+        let res = flatten_metric_with_labels(
+            "counter_2",
+            &counter.with_label_values(&[""]).metric(),
+        );
         assert_eq!("counter_2", res.as_str());
 
         let res = flatten_metric_with_labels(
@@ -142,8 +151,10 @@ mod tests {
             &["label_me", "label_me_too"],
         )
         .unwrap();
-        let res =
-            flatten_metric_with_labels("counter_3", &counter.with_label_values(&["", ""]).metric());
+        let res = flatten_metric_with_labels(
+            "counter_3",
+            &counter.with_label_values(&["", ""]).metric(),
+        );
         assert_eq!("counter_3", res.as_str());
 
         let res = flatten_metric_with_labels(

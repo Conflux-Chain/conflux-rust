@@ -4,8 +4,9 @@
 use crate::{
     account_state_blob::AccountStateBlob,
     proof::{
-        AccountStateProof, AccumulatorConsistencyProof, EventProof, SparseMerkleRangeProof,
-        TestAccumulatorProof, TestAccumulatorRangeProof, TransactionInfoWithProof,
+        AccountStateProof, AccumulatorConsistencyProof, EventProof,
+        SparseMerkleRangeProof, TestAccumulatorProof,
+        TestAccumulatorRangeProof, TransactionInfoWithProof,
         TransactionListProof,
     },
 };

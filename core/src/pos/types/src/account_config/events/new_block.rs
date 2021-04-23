@@ -16,17 +16,11 @@ pub struct NewBlockEvent {
 }
 
 impl NewBlockEvent {
-    pub fn round(&self) -> u64 {
-        self.round
-    }
+    pub fn round(&self) -> u64 { self.round }
 
-    pub fn proposer(&self) -> AccountAddress {
-        self.proposer
-    }
+    pub fn proposer(&self) -> AccountAddress { self.proposer }
 
-    pub fn proposed_time(&self) -> u64 {
-        self.time_micro_seconds
-    }
+    pub fn proposed_time(&self) -> u64 { self.time_micro_seconds }
 
     pub fn try_from_bytes(bytes: &[u8]) -> Result<Self> {
         bcs::from_bytes(bytes).map_err(Into::into)
@@ -34,11 +28,10 @@ impl NewBlockEvent {
 
     #[cfg(any(test, feature = "fuzzing"))]
     pub fn new(
-        round: u64,
-        proposer: AccountAddress,
-        previous_block_votes: Vec<AccountAddress>,
-        time_micro_seconds: u64,
-    ) -> Self {
+        round: u64, proposer: AccountAddress,
+        previous_block_votes: Vec<AccountAddress>, time_micro_seconds: u64,
+    ) -> Self
+    {
         Self {
             round,
             proposer,

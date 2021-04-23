@@ -4,8 +4,9 @@
 use crate as diem_crypto;
 use crate::{
     ed25519::{
-        Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature, ED25519_PRIVATE_KEY_LENGTH,
-        ED25519_PUBLIC_KEY_LENGTH, ED25519_SIGNATURE_LENGTH,
+        Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature,
+        ED25519_PRIVATE_KEY_LENGTH, ED25519_PUBLIC_KEY_LENGTH,
+        ED25519_SIGNATURE_LENGTH,
     },
     test_utils::{random_serializable_struct, uniform_keypair_strategy},
     traits::*,
@@ -442,7 +443,8 @@ proptest! {
 fn test_publickey_smallorder() {
     for torsion_point in &EIGHT_TORSION {
         let serialized: &[u8] = torsion_point;
-        // We expect from_bytes_unchecked to pass, as it does not validate the key.
+        // We expect from_bytes_unchecked to pass, as it does not validate the
+        // key.
         assert!(Ed25519PublicKey::from_bytes_unchecked(serialized).is_ok());
         // from_bytes will fail on invalid key.
         assert_eq!(
@@ -461,41 +463,45 @@ fn test_publickey_smallorder() {
 // Thus E[8] is the points indexed by `0,2,4,6`, and
 // E[2] is the points indexed by `0,4`.
 //
-// The following byte arrays have been ported from curve25519-dalek /backend/serial/u64/constants.rs
-// and they represent the serialised version of the CompressedEdwardsY points.
+// The following byte arrays have been ported from curve25519-dalek
+// /backend/serial/u64/constants.rs and they represent the serialised version of
+// the CompressedEdwardsY points.
 
 const EIGHT_TORSION: [[u8; 32]; 8] = [
     [
-        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0,
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
     ],
     [
-        199, 23, 106, 112, 61, 77, 216, 79, 186, 60, 11, 118, 13, 16, 103, 15, 42, 32, 83, 250, 44,
-        57, 204, 198, 78, 199, 253, 119, 146, 172, 3, 122,
+        199, 23, 106, 112, 61, 77, 216, 79, 186, 60, 11, 118, 13, 16, 103, 15,
+        42, 32, 83, 250, 44, 57, 204, 198, 78, 199, 253, 119, 146, 172, 3, 122,
     ],
     [
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 128,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 128,
     ],
     [
-        38, 232, 149, 143, 194, 178, 39, 176, 69, 195, 244, 137, 242, 239, 152, 240, 213, 223, 172,
-        5, 211, 198, 51, 57, 177, 56, 2, 136, 109, 83, 252, 5,
+        38, 232, 149, 143, 194, 178, 39, 176, 69, 195, 244, 137, 242, 239, 152,
+        240, 213, 223, 172, 5, 211, 198, 51, 57, 177, 56, 2, 136, 109, 83, 252,
+        5,
     ],
     [
-        236, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 127,
+        236, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+        255, 255, 255, 127,
     ],
     [
-        38, 232, 149, 143, 194, 178, 39, 176, 69, 195, 244, 137, 242, 239, 152, 240, 213, 223, 172,
-        5, 211, 198, 51, 57, 177, 56, 2, 136, 109, 83, 252, 133,
+        38, 232, 149, 143, 194, 178, 39, 176, 69, 195, 244, 137, 242, 239, 152,
+        240, 213, 223, 172, 5, 211, 198, 51, 57, 177, 56, 2, 136, 109, 83, 252,
+        133,
     ],
     [
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
     ],
     [
-        199, 23, 106, 112, 61, 77, 216, 79, 186, 60, 11, 118, 13, 16, 103, 15, 42, 32, 83, 250, 44,
-        57, 204, 198, 78, 199, 253, 119, 146, 172, 3, 250,
+        199, 23, 106, 112, 61, 77, 216, 79, 186, 60, 11, 118, 13, 16, 103, 15,
+        42, 32, 83, 250, 44, 57, 204, 198, 78, 199, 253, 119, 146, 172, 3, 250,
     ],
 ];
 
@@ -503,7 +509,8 @@ const EIGHT_TORSION: [[u8; 32]; 8] = [
 /// ℤ/ℓℤ as 5 52-bit limbs.
 struct Scalar52(pub [u64; 5]);
 
-/// `L` is the order of base point, i.e. 2^252 + 27742317777372353535851937790883648493
+/// `L` is the order of base point, i.e. 2^252 +
+/// 27742317777372353535851937790883648493
 const L: Scalar52 = Scalar52([
     0x0002_631a_5cf5_d3ed,
     0x000d_ea2f_79cd_6581,
@@ -514,9 +521,7 @@ const L: Scalar52 = Scalar52([
 
 impl Scalar52 {
     /// Return the zero scalar
-    fn zero() -> Scalar52 {
-        Scalar52([0, 0, 0, 0, 0])
-    }
+    fn zero() -> Scalar52 { Scalar52([0, 0, 0, 0, 0]) }
 
     /// Unpack a 32 byte / 256 bit scalar into 5 52-bit limbs.
     fn from_bytes(bytes: &[u8; 32]) -> Scalar52 {
@@ -598,13 +603,10 @@ impl Scalar52 {
 
 impl Index<usize> for Scalar52 {
     type Output = u64;
-    fn index(&self, _index: usize) -> &u64 {
-        &(self.0[_index])
-    }
+
+    fn index(&self, _index: usize) -> &u64 { &(self.0[_index]) }
 }
 
 impl IndexMut<usize> for Scalar52 {
-    fn index_mut(&mut self, _index: usize) -> &mut u64 {
-        &mut (self.0[_index])
-    }
+    fn index_mut(&mut self, _index: usize) -> &mut u64 { &mut (self.0[_index]) }
 }

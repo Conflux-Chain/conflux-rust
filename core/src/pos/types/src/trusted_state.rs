@@ -14,22 +14,22 @@ use std::{convert::TryFrom, sync::Arc};
 /// verified version and the latest verified validator set.
 #[derive(Clone, Debug)]
 pub struct TrustedState {
-    /// The latest verified state is from either a waypoint or a ledger info, either
-    /// inside an epoch or the epoch change ledger info.
+    /// The latest verified state is from either a waypoint or a ledger info,
+    /// either inside an epoch or the epoch change ledger info.
     verified_state: Waypoint,
     /// The current verifier. If we're starting up fresh, this is probably a
-    /// waypoint from our config. Otherwise, this is generated from the validator
-    /// set in the last known epoch change ledger info.
+    /// waypoint from our config. Otherwise, this is generated from the
+    /// validator set in the last known epoch change ledger info.
     verifier: Arc<dyn Verifier>,
 }
 
 /// `TrustedStateChange` is the result of attempting to ratchet to a new trusted
-/// state. In order to reduce redundant error checking, `TrustedStateChange` also
-/// contains references to relevant items used to ratchet us.
+/// state. In order to reduce redundant error checking, `TrustedStateChange`
+/// also contains references to relevant items used to ratchet us.
 #[derive(Clone, Debug)]
 pub enum TrustedStateChange<'a> {
-    /// We have a newer `TrustedState` but it's still in the same epoch, so only
-    /// the latest trusted version changed.
+    /// We have a newer `TrustedState` but it's still in the same epoch, so
+    /// only the latest trusted version changed.
     Version { new_state: TrustedState },
     /// We have a newer `TrustedState` and there was at least one epoch change,
     /// so we have a newer trusted version and a newer trusted validator set.
@@ -37,7 +37,8 @@ pub enum TrustedStateChange<'a> {
         new_state: TrustedState,
         latest_epoch_change_li: &'a LedgerInfoWithSignatures,
     },
-    /// The latest ledger info is at the same version as the trusted state and matches the hash.
+    /// The latest ledger info is at the same version as the trusted state and
+    /// matches the hash.
     NoChange,
 }
 
@@ -66,24 +67,25 @@ impl TrustedState {
     ///
     /// + If there is a new epoch and the server provides a correct proof, we
     /// ratchet our trusted version forward, update our verifier to contain
-    /// the new validator set, and return `Ok(TrustedStateChange::Epoch { .. })`.
+    /// the new validator set, and return `Ok(TrustedStateChange::Epoch { ..
+    /// })`.
     pub fn verify_and_ratchet<'a>(
-        &self,
-        latest_li: &'a LedgerInfoWithSignatures,
+        &self, latest_li: &'a LedgerInfoWithSignatures,
         epoch_change_proof: &'a EpochChangeProof,
-    ) -> Result<TrustedStateChange<'a>> {
+    ) -> Result<TrustedStateChange<'a>>
+    {
         let res_version = latest_li.ledger_info().version();
         ensure!(
             res_version >= self.latest_version(),
             "The target latest ledger info is stale and behind our current trusted version",
         );
 
-        if self
-            .verifier
-            .epoch_change_verification_required(latest_li.ledger_info().next_block_epoch())
-        {
+        if self.verifier.epoch_change_verification_required(
+            latest_li.ledger_info().next_block_epoch(),
+        ) {
             // Verify the EpochChangeProof to move us into the latest epoch.
-            let epoch_change_li = epoch_change_proof.verify(self.verifier.as_ref())?;
+            let epoch_change_li =
+                epoch_change_proof.verify(self.verifier.as_ref())?;
             let new_epoch_state = epoch_change_li
                 .ledger_info()
                 .next_epoch_state()
@@ -94,8 +96,9 @@ impl TrustedState {
                     )
                 })?;
 
-            // If the latest ledger info is in the same epoch as the new verifier, verify it and
-            // use it as latest state, otherwise fallback to the epoch change ledger info.
+            // If the latest ledger info is in the same epoch as the new
+            // verifier, verify it and use it as latest state,
+            // otherwise fallback to the epoch change ledger info.
             let new_epoch = new_epoch_state.epoch;
             let new_verifier = Arc::new(new_epoch_state);
 
@@ -104,12 +107,15 @@ impl TrustedState {
             } else if latest_li.ledger_info().epoch() == new_epoch {
                 new_verifier.verify(latest_li)?;
                 latest_li
-            } else if latest_li.ledger_info().epoch() > new_epoch && epoch_change_proof.more {
+            } else if latest_li.ledger_info().epoch() > new_epoch
+                && epoch_change_proof.more
+            {
                 epoch_change_li
             } else {
                 bail!("Inconsistent epoch change proof and latest ledger info");
             };
-            let verified_state = Waypoint::new_any(verified_ledger_info.ledger_info());
+            let verified_state =
+                Waypoint::new_any(verified_ledger_info.ledger_info());
 
             let new_state = TrustedState {
                 verified_state,
@@ -144,9 +150,7 @@ impl TrustedState {
         }
     }
 
-    pub fn latest_version(&self) -> Version {
-        self.verified_state.version()
-    }
+    pub fn latest_version(&self) -> Version { self.verified_state.version() }
 }
 
 impl From<Waypoint> for TrustedState {

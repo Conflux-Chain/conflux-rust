@@ -12,8 +12,8 @@ use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt};
 
-/// EpochState represents a trusted validator set to validate messages from the specific epoch,
-/// it could be updated with EpochChangeProof.
+/// EpochState represents a trusted validator set to validate messages from the
+/// specific epoch, it could be updated with EpochChangeProof.
 #[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct EpochState {
@@ -31,7 +31,9 @@ impl EpochState {
 }
 
 impl Verifier for EpochState {
-    fn verify(&self, ledger_info: &LedgerInfoWithSignatures) -> anyhow::Result<()> {
+    fn verify(
+        &self, ledger_info: &LedgerInfoWithSignatures,
+    ) -> anyhow::Result<()> {
         ensure!(
             self.epoch == ledger_info.ledger_info().epoch(),
             "LedgerInfo has unexpected epoch {}, expected {}",

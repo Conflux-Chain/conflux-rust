@@ -12,9 +12,7 @@ pub struct Mutex<T>(StdMutex<T>);
 
 impl<T> Mutex<T> {
     /// creates mutex
-    pub fn new(t: T) -> Self {
-        Self(StdMutex::new(t))
-    }
+    pub fn new(t: T) -> Self { Self(StdMutex::new(t)) }
 
     /// lock the mutex
     pub fn lock(&self) -> MutexGuard<'_, T> {

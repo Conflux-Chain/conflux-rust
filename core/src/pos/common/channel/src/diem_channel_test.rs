@@ -1,7 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{diem_channel, diem_channel::ElementStatus, message_queues::QueueStyle};
+use crate::{
+    diem_channel::{self, ElementStatus},
+    message_queues::QueueStyle,
+};
 use diem_types::account_address::AccountAddress;
 use futures::{
     channel::oneshot,
@@ -14,7 +17,8 @@ use tokio::{runtime::Runtime, time::sleep};
 
 #[test]
 fn test_send_recv_order() {
-    let (mut sender, mut receiver) = diem_channel::new(QueueStyle::FIFO, 10, None);
+    let (mut sender, mut receiver) =
+        diem_channel::new(QueueStyle::FIFO, 10, None);
     sender.push(0, 0).unwrap();
     sender.push(0, 1).unwrap();
     sender.push(0, 2).unwrap();
@@ -33,14 +37,16 @@ fn test_send_recv_order() {
 
 #[test]
 fn test_empty() {
-    let (_, mut receiver) = diem_channel::new::<u8, u8>(QueueStyle::FIFO, 10, None);
+    let (_, mut receiver) =
+        diem_channel::new::<u8, u8>(QueueStyle::FIFO, 10, None);
     // Ensures that there is no other value which is ready
     assert_eq!(receiver.select_next_some().now_or_never(), None);
 }
 
 #[test]
 fn test_waker() {
-    let (mut sender, mut receiver) = diem_channel::new(QueueStyle::FIFO, 10, None);
+    let (mut sender, mut receiver) =
+        diem_channel::new(QueueStyle::FIFO, 10, None);
     // Ensures that there is no other value which is ready
     assert_eq!(receiver.select_next_some().now_or_never(), None);
     let f1 = async move {
@@ -62,7 +68,8 @@ fn test_waker() {
 
 #[test]
 fn test_sender_clone() {
-    let (mut sender, mut receiver) = diem_channel::new(QueueStyle::FIFO, 5, None);
+    let (mut sender, mut receiver) =
+        diem_channel::new(QueueStyle::FIFO, 5, None);
     // Ensures that there is no other value which is ready
     assert_eq!(receiver.select_next_some().now_or_never(), None);
 
@@ -88,17 +95,19 @@ fn test_sender_clone() {
 }
 
 fn test_multiple_validators_helper(
-    queue_style: QueueStyle,
-    num_messages_per_validator: usize,
+    queue_style: QueueStyle, num_messages_per_validator: usize,
     expected_last_message: usize,
-) {
+)
+{
     let (mut sender, mut receiver) = diem_channel::new(queue_style, 1, None);
     let num_validators = 128;
     for message in 0..num_messages_per_validator {
         for validator in 0..num_validators {
             sender
                 .push(
-                    AccountAddress::new([validator as u8; AccountAddress::LENGTH]),
+                    AccountAddress::new(
+                        [validator as u8; AccountAddress::LENGTH],
+                    ),
                     (validator, message),
                 )
                 .unwrap();
@@ -127,7 +136,8 @@ fn test_multiple_validators_lifo() {
 
 #[test]
 fn test_feedback_on_drop() {
-    let (mut sender, mut receiver) = diem_channel::new(QueueStyle::FIFO, 3, None);
+    let (mut sender, mut receiver) =
+        diem_channel::new(QueueStyle::FIFO, 3, None);
     sender.push(0, 'a').unwrap();
     sender.push(0, 'b').unwrap();
     let (c_status_tx, c_status_rx) = oneshot::channel();
@@ -143,7 +153,8 @@ fn test_feedback_on_drop() {
         assert_eq!(receiver.select_next_some().await, 'a');
         assert_eq!(receiver.select_next_some().await, 'b');
         assert_eq!(receiver.select_next_some().await, 'c');
-        // Ensure that we receive confirmation about 'd' being dropped and 'c' being delivered.
+        // Ensure that we receive confirmation about 'd' being dropped and 'c'
+        // being delivered.
         assert_eq!(ElementStatus::Dropped('d'), d_status_rx.await.unwrap());
         assert_eq!(ElementStatus::Dequeued, c_status_rx.await.unwrap());
         // Ensures that there is no other value which is ready

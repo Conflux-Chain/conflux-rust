@@ -1,14 +1,16 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module implements an in-memory Merkle Accumulator that is similar to what we use in
-//! storage. This accumulator will only store a small portion of the tree -- for any subtree that
-//! is full, we store only the root. Also we only store the frozen nodes, therefore this structure
-//! will always store up to `Log(n)` number of nodes, where `n` is the total number of leaves in
+//! This module implements an in-memory Merkle Accumulator that is similar to
+//! what we use in storage. This accumulator will only store a small portion of
+//! the tree -- for any subtree that is full, we store only the root. Also we
+//! only store the frozen nodes, therefore this structure will always store up
+//! to `Log(n)` number of nodes, where `n` is the total number of leaves in
 //! the tree.
 //!
-//! This accumulator is immutable once constructed. If we append new leaves to the tree we will
-//! obtain a new accumulator instance and the old one remains unchanged.
+//! This accumulator is immutable once constructed. If we append new leaves to
+//! the tree we will obtain a new accumulator instance and the old one remains
+//! unchanged.
 
 #[cfg(test)]
 mod accumulator_test;
@@ -24,10 +26,10 @@ use std::marker::PhantomData;
 
 /// The Accumulator implementation.
 pub struct InMemoryAccumulator<H> {
-    /// Represents the roots of all the full subtrees from left to right in this accumulator. For
-    /// example, if we have the following accumulator, this vector will have two hashes that
-    /// correspond to `X` and `e`.
-    /// ```text
+    /// Represents the roots of all the full subtrees from left to right in
+    /// this accumulator. For example, if we have the following
+    /// accumulator, this vector will have two hashes that correspond to
+    /// `X` and `e`. ```text
     ///                 root
     ///                /    \
     ///              /        \
@@ -51,12 +53,14 @@ pub struct InMemoryAccumulator<H> {
 }
 
 impl<H> InMemoryAccumulator<H>
-where
-    H: CryptoHasher,
+where H: CryptoHasher
 {
-    /// Constructs a new accumulator with roots of existing frozen subtrees. Returns error if the
-    /// number of frozen subtree roots does not match the number of leaves.
-    pub fn new(frozen_subtree_roots: Vec<HashValue>, num_leaves: LeafCount) -> Result<Self> {
+    /// Constructs a new accumulator with roots of existing frozen subtrees.
+    /// Returns error if the number of frozen subtree roots does not match
+    /// the number of leaves.
+    pub fn new(
+        frozen_subtree_roots: Vec<HashValue>, num_leaves: LeafCount,
+    ) -> Result<Self> {
         ensure!(
             frozen_subtree_roots.len() == num_leaves.count_ones() as usize,
             "The number of frozen subtrees does not match the number of leaves. \
@@ -65,7 +69,8 @@ where
             num_leaves,
         );
 
-        let root_hash = Self::compute_root_hash(&frozen_subtree_roots, num_leaves);
+        let root_hash =
+            Self::compute_root_hash(&frozen_subtree_roots, num_leaves);
 
         Ok(Self {
             frozen_subtree_roots,
@@ -80,9 +85,9 @@ where
         Self::default().append(leaves)
     }
 
-    /// Appends a list of new leaves to an existing accumulator. Since the accumulator is
-    /// immutable, the existing one remains unchanged and a new one representing the result is
-    /// returned.
+    /// Appends a list of new leaves to an existing accumulator. Since the
+    /// accumulator is immutable, the existing one remains unchanged and a
+    /// new one representing the result is returned.
     pub fn append(&self, leaves: &[HashValue]) -> Self {
         let mut frozen_subtree_roots = self.frozen_subtree_roots.clone();
         let mut num_leaves = self.num_leaves;
@@ -96,17 +101,18 @@ where
         )
     }
 
-    /// Appends one leaf. This will update `frozen_subtree_roots` to store new frozen root nodes
-    /// and remove old nodes if they are now part of a larger frozen subtree.
+    /// Appends one leaf. This will update `frozen_subtree_roots` to store new
+    /// frozen root nodes and remove old nodes if they are now part of a
+    /// larger frozen subtree.
     fn append_one(
         frozen_subtree_roots: &mut Vec<HashValue>,
-        num_existing_leaves: LeafCount,
-        leaf: HashValue,
-    ) {
-        // For example, this accumulator originally had N = 7 leaves. Appending a leaf is like
-        // adding one to this number N: 0b0111 + 1 = 0b1000. Every time we carry a bit to the left
-        // we merge the rightmost two subtrees and compute their parent.
-        // ```text
+        num_existing_leaves: LeafCount, leaf: HashValue,
+    )
+    {
+        // For example, this accumulator originally had N = 7 leaves. Appending
+        // a leaf is like adding one to this number N: 0b0111 + 1 =
+        // 0b1000. Every time we carry a bit to the left we merge the
+        // rightmost two subtrees and compute their parent. ```text
         //       A
         //     /   \
         //    /     \
@@ -118,25 +124,31 @@ where
         // First just append the leaf.
         frozen_subtree_roots.push(leaf);
 
-        // Next, merge the last two subtrees into one. If `num_existing_leaves` has N trailing
-        // ones, the carry will happen N times.
+        // Next, merge the last two subtrees into one. If `num_existing_leaves`
+        // has N trailing ones, the carry will happen N times.
         let num_trailing_ones = (!num_existing_leaves).trailing_zeros();
 
         for _i in 0..num_trailing_ones {
-            let right_hash = frozen_subtree_roots.pop().expect("Invalid accumulator.");
-            let left_hash = frozen_subtree_roots.pop().expect("Invalid accumulator.");
-            let parent_hash = MerkleTreeInternalNode::<H>::new(left_hash, right_hash).hash();
+            let right_hash =
+                frozen_subtree_roots.pop().expect("Invalid accumulator.");
+            let left_hash =
+                frozen_subtree_roots.pop().expect("Invalid accumulator.");
+            let parent_hash =
+                MerkleTreeInternalNode::<H>::new(left_hash, right_hash).hash();
             frozen_subtree_roots.push(parent_hash);
         }
     }
 
-    /// Appends a list of new subtrees to the existing accumulator. This is similar to
-    /// [`append`](Accumulator::append) except that the new leaves themselves are not known and
-    /// they are represented by `subtrees`. As an example, given the following accumulator that
-    /// currently has 10 leaves, the frozen subtree roots and the new subtrees are annotated below.
-    /// Note that in this case `subtrees[0]` represents two new leaves `A` and `B`, `subtrees[1]`
-    /// represents four new leaves `C`, `D`, `E` and `F`, `subtrees[2]` represents four new leaves
-    /// `G`, `H`, `I` and `J`, and the last `subtrees[3]` represents one new leaf `K`.
+    /// Appends a list of new subtrees to the existing accumulator. This is
+    /// similar to [`append`](Accumulator::append) except that the new
+    /// leaves themselves are not known and they are represented by
+    /// `subtrees`. As an example, given the following accumulator that
+    /// currently has 10 leaves, the frozen subtree roots and the new subtrees
+    /// are annotated below. Note that in this case `subtrees[0]` represents
+    /// two new leaves `A` and `B`, `subtrees[1]` represents four new leaves
+    /// `C`, `D`, `E` and `F`, `subtrees[2]` represents four new leaves `G`,
+    /// `H`, `I` and `J`, and the last `subtrees[3]` represents one new leaf
+    /// `K`.
     ///
     /// ```text
     ///                                                                           new_root
@@ -173,9 +185,7 @@ where
     ///               o o o o o o o o                         o o           A B   C D E F      G H I J  K (subtrees[3]) placeholder
     /// ```
     pub fn append_subtrees(
-        &self,
-        subtrees: &[HashValue],
-        num_new_leaves: LeafCount,
+        &self, subtrees: &[HashValue], num_new_leaves: LeafCount,
     ) -> Result<Self> {
         ensure!(
             num_new_leaves <= MAX_ACCUMULATOR_LEAVES - self.num_leaves,
@@ -193,13 +203,16 @@ where
         let mut remaining_new_leaves = num_new_leaves;
         let mut subtree_iter = subtrees.iter();
 
-        // Check if we want to combine a new subtree with the rightmost frozen subtree. To do that
-        // this new subtree needs to represent `rightmost_frozen_subtree_size` leaves, so we need
-        // to have at least this many new leaves remaining.
-        let mut rightmost_frozen_subtree_size = 1 << current_num_leaves.trailing_zeros();
+        // Check if we want to combine a new subtree with the rightmost frozen
+        // subtree. To do that this new subtree needs to represent
+        // `rightmost_frozen_subtree_size` leaves, so we need to have at
+        // least this many new leaves remaining.
+        let mut rightmost_frozen_subtree_size =
+            1 << current_num_leaves.trailing_zeros();
         while remaining_new_leaves >= rightmost_frozen_subtree_size {
-            // Note that after combining the rightmost frozen subtree of size X with a new subtree,
-            // we obtain a subtree of size 2X. If there was already a frozen subtree of size 2X, we
+            // Note that after combining the rightmost frozen subtree of size X
+            // with a new subtree, we obtain a subtree of size 2X.
+            // If there was already a frozen subtree of size 2X, we
             // need to carry this process further.
             let mut mask = rightmost_frozen_subtree_size;
             let mut current_hash = *subtree_iter
@@ -209,7 +222,9 @@ where
                 let left_hash = current_subtree_roots
                     .pop()
                     .expect("This frozen subtree must exist.");
-                current_hash = MerkleTreeInternalNode::<H>::new(left_hash, current_hash).hash();
+                current_hash =
+                    MerkleTreeInternalNode::<H>::new(left_hash, current_hash)
+                        .hash();
                 mask <<= 1;
             }
             current_subtree_roots.push(current_hash);
@@ -219,8 +234,9 @@ where
             rightmost_frozen_subtree_size = mask;
         }
 
-        // Now all the new subtrees are smaller than the rightmost frozen subtree. We just append
-        // all of them. Note that if the number of new subtrees does not actually match the number
+        // Now all the new subtrees are smaller than the rightmost frozen
+        // subtree. We just append all of them. Note that if the number
+        // of new subtrees does not actually match the number
         // of new leaves, `Self::new` below will raise an error.
         current_num_leaves += remaining_new_leaves;
         current_subtree_roots.extend(subtree_iter);
@@ -229,9 +245,7 @@ where
     }
 
     /// Returns the root hash of the accumulator.
-    pub fn root_hash(&self) -> HashValue {
-        self.root_hash
-    }
+    pub fn root_hash(&self) -> HashValue { self.root_hash }
 
     pub fn version(&self) -> u64 {
         if self.num_leaves() == 0 {
@@ -241,17 +255,19 @@ where
         }
     }
 
-    /// Computes the root hash of an accumulator given the frozen subtree roots and the number of
-    /// leaves in this accumulator.
-    fn compute_root_hash(frozen_subtree_roots: &[HashValue], num_leaves: LeafCount) -> HashValue {
+    /// Computes the root hash of an accumulator given the frozen subtree roots
+    /// and the number of leaves in this accumulator.
+    fn compute_root_hash(
+        frozen_subtree_roots: &[HashValue], num_leaves: LeafCount,
+    ) -> HashValue {
         match frozen_subtree_roots.len() {
             0 => return *ACCUMULATOR_PLACEHOLDER_HASH,
             1 => return frozen_subtree_roots[0],
             _ => (),
         }
 
-        // The trailing zeros do not matter since anything below the lowest frozen subtree is
-        // already represented by the subtree roots.
+        // The trailing zeros do not matter since anything below the lowest
+        // frozen subtree is already represented by the subtree roots.
         let mut bitmap = num_leaves >> num_leaves.trailing_zeros();
         let mut current_hash = *ACCUMULATOR_PLACEHOLDER_HASH;
         let mut frozen_subtree_iter = frozen_subtree_roots.iter().rev();
@@ -265,7 +281,10 @@ where
                     current_hash,
                 )
             } else {
-                MerkleTreeInternalNode::<H>::new(current_hash, *ACCUMULATOR_PLACEHOLDER_HASH)
+                MerkleTreeInternalNode::<H>::new(
+                    current_hash,
+                    *ACCUMULATOR_PLACEHOLDER_HASH,
+                )
             }
             .hash();
             bitmap >>= 1;
@@ -280,12 +299,11 @@ where
     }
 
     /// Returns the total number of leaves in this accumulator.
-    pub fn num_leaves(&self) -> LeafCount {
-        self.num_leaves
-    }
+    pub fn num_leaves(&self) -> LeafCount { self.num_leaves }
 }
 
-// We manually implement Debug because H (CryptoHasher) does not implement Debug.
+// We manually implement Debug because H (CryptoHasher) does not implement
+// Debug.
 impl<H> std::fmt::Debug for InMemoryAccumulator<H> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
@@ -297,10 +315,10 @@ impl<H> std::fmt::Debug for InMemoryAccumulator<H> {
 }
 
 impl<H> Default for InMemoryAccumulator<H>
-where
-    H: CryptoHasher,
+where H: CryptoHasher
 {
     fn default() -> Self {
-        Self::new(vec![], 0).expect("Constructing empty accumulator should work.")
+        Self::new(vec![], 0)
+            .expect("Constructing empty accumulator should work.")
     }
 }

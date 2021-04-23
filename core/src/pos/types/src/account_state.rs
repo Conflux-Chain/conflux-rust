@@ -5,17 +5,20 @@ use crate::{
     access_path::Path,
     account_address::AccountAddress,
     account_config::{
-        type_tag_for_currency_code, AccountResource, AccountRole, BalanceResource, ChainIdResource,
-        ChildVASP, Credential, CurrencyInfoResource, DesignatedDealer, DesignatedDealerPreburns,
+        type_tag_for_currency_code, AccountResource, AccountRole,
+        BalanceResource, ChainIdResource, ChildVASP, Credential,
+        CurrencyInfoResource, DesignatedDealer, DesignatedDealerPreburns,
         FreezingBit, ParentVASP, PreburnQueueResource, PreburnResource,
     },
     block_metadata::DiemBlockResource,
     diem_timestamp::DiemTimestampResource,
     on_chain_config::{
-        ConfigurationResource, DiemVersion, OnChainConfig, RegisteredCurrencies,
-        VMPublishingOption, ValidatorSet,
+        ConfigurationResource, DiemVersion, OnChainConfig,
+        RegisteredCurrencies, VMPublishingOption, ValidatorSet,
     },
-    validator_config::{ValidatorConfigResource, ValidatorOperatorConfigResource},
+    validator_config::{
+        ValidatorConfigResource, ValidatorOperatorConfigResource,
+    },
 };
 use anyhow::{format_err, Error, Result};
 use move_core_types::{identifier::Identifier, move_resource::MoveResource};
@@ -28,8 +31,9 @@ pub struct AccountState(BTreeMap<Vec<u8>, Vec<u8>>);
 impl AccountState {
     // By design and do not remove
     pub fn get_account_address(&self) -> Result<Option<AccountAddress>> {
-        self.get_account_resource()
-            .map(|opt_ar| opt_ar.map(|ar| ar.sent_events().key().get_creator_address()))
+        self.get_account_resource().map(|opt_ar| {
+            opt_ar.map(|ar| ar.sent_events().key().get_creator_address())
+        })
     }
 
     pub fn get_account_resource(&self) -> Result<Option<AccountResource>> {
@@ -37,52 +41,62 @@ impl AccountState {
     }
 
     pub fn get_balance_resources(
-        &self,
-        currency_codes: &[Identifier],
+        &self, currency_codes: &[Identifier],
     ) -> Result<BTreeMap<Identifier, BalanceResource>> {
         currency_codes
             .iter()
             .filter_map(|currency_code| {
-                let currency_type_tag = type_tag_for_currency_code(currency_code.to_owned());
-                // TODO: update this to use BalanceResource::resource_path once that takes type
-                // parameters
-                self.get_resource_impl(&BalanceResource::access_path_for(currency_type_tag))
-                    .transpose()
-                    .map(|balance| balance.map(|b| (currency_code.to_owned(), b)))
+                let currency_type_tag =
+                    type_tag_for_currency_code(currency_code.to_owned());
+                // TODO: update this to use BalanceResource::resource_path once
+                // that takes type parameters
+                self.get_resource_impl(&BalanceResource::access_path_for(
+                    currency_type_tag,
+                ))
+                .transpose()
+                .map(|balance| balance.map(|b| (currency_code.to_owned(), b)))
             })
             .collect()
     }
 
     pub fn get_preburn_balances(
-        &self,
-        currency_codes: &[Identifier],
+        &self, currency_codes: &[Identifier],
     ) -> Result<BTreeMap<Identifier, PreburnResource>> {
         currency_codes
             .iter()
             .filter_map(|currency_code| {
-                let currency_type_tag = type_tag_for_currency_code(currency_code.to_owned());
-                // TODO: update this to use PreburnResource::resource_path once that takes type
-                // parameters
-                self.get_resource_impl(&PreburnResource::access_path_for(currency_type_tag))
-                    .transpose()
-                    .map(|preburn_balance| preburn_balance.map(|b| (currency_code.to_owned(), b)))
+                let currency_type_tag =
+                    type_tag_for_currency_code(currency_code.to_owned());
+                // TODO: update this to use PreburnResource::resource_path once
+                // that takes type parameters
+                self.get_resource_impl(&PreburnResource::access_path_for(
+                    currency_type_tag,
+                ))
+                .transpose()
+                .map(|preburn_balance| {
+                    preburn_balance.map(|b| (currency_code.to_owned(), b))
+                })
             })
             .collect()
     }
 
     pub fn get_preburn_queue_balances(
-        &self,
-        currency_codes: &[Identifier],
+        &self, currency_codes: &[Identifier],
     ) -> Result<BTreeMap<Identifier, PreburnQueueResource>> {
         currency_codes
             .iter()
             .filter_map(|currency_code| {
-                let currency_type_tag = type_tag_for_currency_code(currency_code.to_owned());
-                // TODO: update this to use PreburnQueueResource::resource_path once that takes type
-                // parameters
-                self.get_resource_impl(&PreburnQueueResource::access_path_for(currency_type_tag))
-                    .transpose()
-                    .map(|preburn_balance| preburn_balance.map(|b| (currency_code.to_owned(), b)))
+                let currency_type_tag =
+                    type_tag_for_currency_code(currency_code.to_owned());
+                // TODO: update this to use PreburnQueueResource::resource_path
+                // once that takes type parameters
+                self.get_resource_impl(&PreburnQueueResource::access_path_for(
+                    currency_type_tag,
+                ))
+                .transpose()
+                .map(|preburn_balance| {
+                    preburn_balance.map(|b| (currency_code.to_owned(), b))
+                })
             })
             .collect()
     }
@@ -91,15 +105,21 @@ impl AccountState {
         self.get_resource::<ChainIdResource>()
     }
 
-    pub fn get_configuration_resource(&self) -> Result<Option<ConfigurationResource>> {
+    pub fn get_configuration_resource(
+        &self,
+    ) -> Result<Option<ConfigurationResource>> {
         self.get_resource::<ConfigurationResource>()
     }
 
-    pub fn get_diem_timestamp_resource(&self) -> Result<Option<DiemTimestampResource>> {
+    pub fn get_diem_timestamp_resource(
+        &self,
+    ) -> Result<Option<DiemTimestampResource>> {
         self.get_resource::<DiemTimestampResource>()
     }
 
-    pub fn get_validator_config_resource(&self) -> Result<Option<ValidatorConfigResource>> {
+    pub fn get_validator_config_resource(
+        &self,
+    ) -> Result<Option<ValidatorConfigResource>> {
         self.get_resource::<ValidatorConfigResource>()
     }
 
@@ -113,7 +133,9 @@ impl AccountState {
         self.get_resource::<FreezingBit>()
     }
 
-    pub fn get_account_role(&self, currency_codes: &[Identifier]) -> Result<Option<AccountRole>> {
+    pub fn get_account_role(
+        &self, currency_codes: &[Identifier],
+    ) -> Result<Option<AccountRole>> {
         if self.0.contains_key(&ParentVASP::resource_path()) {
             match (
                 self.get_resource::<ParentVASP>(),
@@ -140,14 +162,17 @@ impl AccountState {
                     Ok(preburn_queues),
                     Ok(Some(designated_dealer)),
                 ) => {
-                    let preburn_balances =
-                        if preburn_balances.is_empty() && !preburn_queues.is_empty() {
-                            DesignatedDealerPreburns::PreburnQueue(preburn_queues)
-                        } else if !preburn_balances.is_empty() && preburn_queues.is_empty() {
-                            DesignatedDealerPreburns::Preburn(preburn_balances)
-                        } else {
-                            return Ok(None);
-                        };
+                    let preburn_balances = if preburn_balances.is_empty()
+                        && !preburn_queues.is_empty()
+                    {
+                        DesignatedDealerPreburns::PreburnQueue(preburn_queues)
+                    } else if !preburn_balances.is_empty()
+                        && preburn_queues.is_empty()
+                    {
+                        DesignatedDealerPreburns::Preburn(preburn_balances)
+                    } else {
+                        return Ok(None);
+                    };
                     Ok(Some(AccountRole::DesignatedDealer {
                         dd_credential,
                         preburn_balances,
@@ -170,7 +195,9 @@ impl AccountState {
         self.get_config::<DiemVersion>()
     }
 
-    pub fn get_vm_publishing_option(&self) -> Result<Option<VMPublishingOption>> {
+    pub fn get_vm_publishing_option(
+        &self,
+    ) -> Result<Option<VMPublishingOption>> {
         self.0
             .get(&VMPublishingOption::CONFIG_ID.access_path().path)
             .map(|bytes| VMPublishingOption::deserialize_into_config(bytes))
@@ -178,17 +205,25 @@ impl AccountState {
             .map_err(Into::into)
     }
 
-    pub fn get_registered_currency_info_resources(&self) -> Result<Vec<CurrencyInfoResource>> {
+    pub fn get_registered_currency_info_resources(
+        &self,
+    ) -> Result<Vec<CurrencyInfoResource>> {
         let currencies: Option<RegisteredCurrencies> = self.get_config()?;
         match currencies {
             Some(currencies) => {
                 let codes = currencies.currency_codes();
                 let mut resources = vec![];
                 for code in codes {
-                    let access_path = CurrencyInfoResource::resource_path_for(code.clone());
+                    let access_path =
+                        CurrencyInfoResource::resource_path_for(code.clone());
                     let info: CurrencyInfoResource = self
                         .get_resource_impl(&access_path.path)?
-                        .ok_or_else(|| format_err!("currency info resource not found: {}", code))?;
+                        .ok_or_else(|| {
+                            format_err!(
+                                "currency info resource not found: {}",
+                                code
+                            )
+                        })?;
                     resources.push(info);
                 }
                 Ok(resources)
@@ -201,11 +236,11 @@ impl AccountState {
         self.get_resource::<DiemBlockResource>()
     }
 
-    pub fn get(&self, key: &[u8]) -> Option<&Vec<u8>> {
-        self.0.get(key)
-    }
+    pub fn get(&self, key: &[u8]) -> Option<&Vec<u8>> { self.0.get(key) }
 
-    pub fn get_resource_impl<T: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<T>> {
+    pub fn get_resource_impl<T: DeserializeOwned>(
+        &self, key: &[u8],
+    ) -> Result<Option<T>> {
         self.0
             .get(key)
             .map(|bytes| bcs::from_bytes(bytes))
@@ -221,7 +256,9 @@ impl AccountState {
         self.0.remove(key)
     }
 
-    pub fn iter(&self) -> impl std::iter::Iterator<Item = (&Vec<u8>, &Vec<u8>)> {
+    pub fn iter(
+        &self,
+    ) -> impl std::iter::Iterator<Item = (&Vec<u8>, &Vec<u8>)> {
         self.0.iter()
     }
 
@@ -229,18 +266,20 @@ impl AccountState {
         self.get_resource_impl(&T::CONFIG_ID.access_path().path)
     }
 
-    pub fn get_resource<T: MoveResource + DeserializeOwned>(&self) -> Result<Option<T>> {
+    pub fn get_resource<T: MoveResource + DeserializeOwned>(
+        &self,
+    ) -> Result<Option<T>> {
         self.get_resource_impl(&T::struct_tag().access_vector())
     }
 
     /// Return an iterator over the module values stored under this account
     pub fn get_modules(&self) -> impl Iterator<Item = &Vec<u8>> {
-        self.0.iter().filter_map(
-            |(k, v)| match Path::try_from(k).expect("Invalid access path") {
+        self.0.iter().filter_map(|(k, v)| {
+            match Path::try_from(k).expect("Invalid access path") {
                 Path::Code(_) => Some(v),
                 Path::Resource(_) => None,
-            },
-        )
+            }
+        })
     }
 }
 
@@ -275,7 +314,10 @@ impl fmt::Debug for AccountState {
              ValidatorConfig {{ {} }} \n \
              ValidatorSet {{ {} }} \n \
              }}",
-            account_resource_str, diem_timestamp_str, validator_config_str, validator_set_str,
+            account_resource_str,
+            diem_timestamp_str,
+            validator_config_str,
+            validator_set_str,
         )
     }
 }
@@ -284,8 +326,12 @@ impl TryFrom<(&AccountResource, &BalanceResource)> for AccountState {
     type Error = Error;
 
     fn try_from(
-        (account_resource, balance_resource): (&AccountResource, &BalanceResource),
-    ) -> Result<Self> {
+        (account_resource, balance_resource): (
+            &AccountResource,
+            &BalanceResource,
+        ),
+    ) -> Result<Self>
+    {
         let mut btree_map: BTreeMap<Vec<u8>, Vec<u8>> = BTreeMap::new();
         btree_map.insert(
             AccountResource::resource_path(),

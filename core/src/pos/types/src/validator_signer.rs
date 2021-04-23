@@ -12,9 +12,9 @@ use rand::{rngs::StdRng, SeedableRng};
 use serde::ser::Serialize;
 use std::convert::TryFrom;
 
-/// ValidatorSigner associates an author with public and private keys with helpers for signing and
-/// validating. This struct can be used for all signing operations including block and network
-/// signing, respectively.
+/// ValidatorSigner associates an author with public and private keys with
+/// helpers for signing and validating. This struct can be used for all signing
+/// operations including block and network signing, respectively.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Clone))]
 pub struct ValidatorSigner {
@@ -31,25 +31,24 @@ impl ValidatorSigner {
     }
 
     /// Constructs a signature for `message` using `private_key`.
-    pub fn sign<T: Serialize + CryptoHash>(&self, message: &T) -> Ed25519Signature {
+    pub fn sign<T: Serialize + CryptoHash>(
+        &self, message: &T,
+    ) -> Ed25519Signature {
         self.private_key.sign(message)
     }
 
     /// Returns the author associated with this signer.
-    pub fn author(&self) -> AccountAddress {
-        self.author
-    }
+    pub fn author(&self) -> AccountAddress { self.author }
 
     /// Returns the public key associated with this signer.
     pub fn public_key(&self) -> Ed25519PublicKey {
         self.private_key.public_key()
     }
 
-    /// Returns the private key associated with this signer. Only available for testing purposes.
+    /// Returns the private key associated with this signer. Only available for
+    /// testing purposes.
     #[cfg(any(test, feature = "fuzzing"))]
-    pub fn private_key(&self) -> &Ed25519PrivateKey {
-        &self.private_key
-    }
+    pub fn private_key(&self) -> &Ed25519PrivateKey { &self.private_key }
 }
 
 impl ValidatorSigner {
@@ -58,15 +57,16 @@ impl ValidatorSigner {
     /// This takes an optional seed, which it initializes to
     /// `test_utils::TEST_SEED` if passed `None`
     pub fn random(opt_rng_seed: impl for<'a> Into<Option<[u8; 32]>>) -> Self {
-        let mut rng = StdRng::from_seed(opt_rng_seed.into().unwrap_or(TEST_SEED));
+        let mut rng =
+            StdRng::from_seed(opt_rng_seed.into().unwrap_or(TEST_SEED));
         Self::new(
             AccountAddress::random(),
             Ed25519PrivateKey::generate(&mut rng),
         )
     }
 
-    /// For test only - makes signer with nicely looking account address that has specified integer
-    /// as fist byte, and rest are zeroes
+    /// For test only - makes signer with nicely looking account address that
+    /// has specified integer as fist byte, and rest are zeroes
     pub fn from_int(num: u8) -> Self {
         let mut address = [0; AccountAddress::LENGTH];
         address[0] = num;
@@ -94,8 +94,9 @@ pub mod proptests {
     pub fn signer_strategy(
         signing_key_strategy: impl Strategy<Value = Ed25519PrivateKey>,
     ) -> impl Strategy<Value = ValidatorSigner> {
-        signing_key_strategy
-            .prop_map(|signing_key| ValidatorSigner::new(AccountAddress::random(), signing_key))
+        signing_key_strategy.prop_map(|signing_key| {
+            ValidatorSigner::new(AccountAddress::random(), signing_key)
+        })
     }
 
     #[allow(clippy::redundant_closure)]
@@ -114,7 +115,9 @@ pub mod proptests {
         ]
     }
 
-    fn select_keypair(keys: Vec<Ed25519PrivateKey>) -> impl Strategy<Value = Ed25519PrivateKey> {
+    fn select_keypair(
+        keys: Vec<Ed25519PrivateKey>,
+    ) -> impl Strategy<Value = Ed25519PrivateKey> {
         sample::select(keys)
     }
 

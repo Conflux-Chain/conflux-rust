@@ -40,12 +40,13 @@ impl OnChainConfig for VMConfig {
     const IDENTIFIER: &'static str = "DiemVMConfig";
 
     fn deserialize_into_config(bytes: &[u8]) -> Result<Self> {
-        let raw_vm_config = bcs::from_bytes::<VMConfigInner>(&bytes).map_err(|e| {
-            format_err!(
+        let raw_vm_config =
+            bcs::from_bytes::<VMConfigInner>(&bytes).map_err(|e| {
+                format_err!(
                 "Failed first round of deserialization for VMConfigInner: {}",
                 e
             )
-        })?;
+            })?;
         let gas_schedule = raw_vm_config.gas_schedule.as_cost_table()?;
         Ok(VMConfig { gas_schedule })
     }

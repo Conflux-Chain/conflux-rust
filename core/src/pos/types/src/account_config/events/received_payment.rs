@@ -3,7 +3,9 @@
 
 use crate::{
     account_address::AccountAddress,
-    account_config::{constants::ACCOUNT_MODULE_NAME, resources::AccountResource},
+    account_config::{
+        constants::ACCOUNT_MODULE_NAME, resources::AccountResource,
+    },
 };
 use anyhow::Result;
 use move_core_types::{
@@ -36,24 +38,16 @@ impl ReceivedPaymentEvent {
     }
 
     /// Get the receiver of this transaction event.
-    pub fn sender(&self) -> AccountAddress {
-        self.sender
-    }
+    pub fn sender(&self) -> AccountAddress { self.sender }
 
     /// Get the amount sent or received
-    pub fn amount(&self) -> u64 {
-        self.amount
-    }
+    pub fn amount(&self) -> u64 { self.amount }
 
     /// Get the metadata associated with this event
-    pub fn metadata(&self) -> &[u8] {
-        &self.metadata
-    }
+    pub fn metadata(&self) -> &[u8] { &self.metadata }
 
     /// Return the currency code that the payment was made in.
-    pub fn currency_code(&self) -> &IdentStr {
-        &self.currency_code
-    }
+    pub fn currency_code(&self) -> &IdentStr { &self.currency_code }
 }
 
 impl MoveResource for ReceivedPaymentEvent {

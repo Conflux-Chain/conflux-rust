@@ -4,11 +4,14 @@
 use super::super::*;
 use assert_approx_eq::assert_approx_eq;
 use once_cell::sync::Lazy;
-use prometheus::{core::Collector, proto::MetricFamily, Counter, IntCounter, Opts, Registry};
+use prometheus::{
+    core::Collector, proto::MetricFamily, Counter, IntCounter, Opts, Registry,
+};
 use rusty_fork::rusty_fork_test;
 
-pub static INT_COUNTER: Lazy<IntCounter> =
-    Lazy::new(|| register_int_counter!("INT_COUNTER", "An integer counter").unwrap());
+pub static INT_COUNTER: Lazy<IntCounter> = Lazy::new(|| {
+    register_int_counter!("INT_COUNTER", "An integer counter").unwrap()
+});
 
 rusty_fork_test! {
 #[test]
@@ -26,8 +29,9 @@ fn gather_metrics_test() {
 }
 }
 
-// To test if the placeholder static metrics registered in Registry, a counter type metric,
-// has been successfully published to prometheus and the result gathered reflect the value change.
+// To test if the placeholder static metrics registered in Registry, a counter
+// type metric, has been successfully published to prometheus and the result
+// gathered reflect the value change.
 #[test]
 fn publish_metrics_test() {
     let counter_opts = Opts::new("diem_test_counter", "diem test counter help");

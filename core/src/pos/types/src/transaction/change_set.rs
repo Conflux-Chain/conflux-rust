@@ -19,11 +19,7 @@ impl ChangeSet {
         (self.write_set, self.events)
     }
 
-    pub fn write_set(&self) -> &WriteSet {
-        &self.write_set
-    }
+    pub fn write_set(&self) -> &WriteSet { &self.write_set }
 
-    pub fn events(&self) -> &[ContractEvent] {
-        &self.events
-    }
+    pub fn events(&self) -> &[ContractEvent] { &self.events }
 }

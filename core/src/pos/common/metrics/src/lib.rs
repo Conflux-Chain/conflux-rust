@@ -60,9 +60,10 @@ mod unit_tests;
 
 // Re-export counter types from prometheus crate
 pub use diem_metrics_core::{
-    register_histogram, register_histogram_vec, register_int_counter, register_int_counter_vec,
-    register_int_gauge, register_int_gauge_vec, Histogram, HistogramTimer, HistogramVec,
-    IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
+    register_histogram, register_histogram_vec, register_int_counter,
+    register_int_counter_vec, register_int_gauge, register_int_gauge_vec,
+    Histogram, HistogramTimer, HistogramVec, IntCounter, IntCounterVec,
+    IntGauge, IntGaugeVec,
 };
 
 use anyhow::Result;
@@ -105,7 +106,8 @@ pub fn gather_metrics() -> Vec<prometheus::proto::MetricFamily> {
     let mut total: u64 = 0;
     let mut families_over_1000: u64 = 0;
 
-    // Take metrics of metric gathering so we know possible overhead of this process
+    // Take metrics of metric gathering so we know possible overhead of this
+    // process
     for metric_family in &metric_families {
         let family_count = metric_family.get_metric().len();
         if family_count > 1000 {
@@ -122,7 +124,8 @@ pub fn gather_metrics() -> Vec<prometheus::proto::MetricFamily> {
         total = total.saturating_add(family_count as u64);
     }
 
-    // These metrics will be reported on the next pull, rather than create a new family
+    // These metrics will be reported on the next pull, rather than create a new
+    // family
     NUM_METRICS.with_label_values(&["total"]).inc_by(total);
     NUM_METRICS
         .with_label_values(&["families_over_1000"])
@@ -186,13 +189,12 @@ pub fn get_all_metrics() -> HashMap<String, String> {
 // Launches a background thread which will periodically collect metrics
 // every interval and write them to the provided file
 pub fn dump_all_metrics_to_file_periodically<P: AsRef<Path>>(
-    dir_path: &P,
-    file_name: &str,
-    interval: u64,
+    dir_path: &P, file_name: &str, interval: u64,
 ) {
     let mut file = get_metrics_file(dir_path, file_name);
     thread::spawn(move || loop {
-        let mut buffer = get_all_metrics_as_serialized_string().expect("Error gathering metrics");
+        let mut buffer = get_all_metrics_as_serialized_string()
+            .expect("Error gathering metrics");
         if !buffer.is_empty() {
             buffer.push(b'\n');
             file.write_all(&buffer).expect("Error writing metrics");
@@ -206,7 +208,7 @@ pub fn dump_all_metrics_to_file_periodically<P: AsRef<Path>>(
 /// It assumes a OpMetrics defined as OP_COUNTERS in crate::counters;
 #[macro_export]
 macro_rules! monitor {
-    ( $name:literal, $fn:expr ) => {{
+    ($name:literal, $fn:expr) => {{
         use crate::counters::OP_COUNTERS;
         let _timer = OP_COUNTERS.timer($name);
         let gauge = OP_COUNTERS.gauge(concat!($name, "_running"));

@@ -12,9 +12,7 @@ pub struct RwLock<T>(StdRwLock<T>);
 
 impl<T> RwLock<T> {
     /// creates a read-write lock
-    pub fn new(t: T) -> Self {
-        Self(StdRwLock::new(t))
-    }
+    pub fn new(t: T) -> Self { Self(StdRwLock::new(t)) }
 
     /// lock the rwlock in read mode
     pub fn read(&self) -> RwLockReadGuard<'_, T> {

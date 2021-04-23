@@ -5,7 +5,8 @@ use crate::compat;
 use digest::Digest;
 use proptest::{collection::vec, prelude::*};
 
-// sanity check our compatibility layer by testing some basic SHA3-256 test vectors.
+// sanity check our compatibility layer by testing some basic SHA3-256 test
+// vectors.
 #[test]
 fn check_basic_sha3_256_test_vectors() {
     let one_million_a = vec![b'a'; 1_000_000];

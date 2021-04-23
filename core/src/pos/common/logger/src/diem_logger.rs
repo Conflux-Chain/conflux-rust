@@ -1,13 +1,14 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Implementation of writing logs to both local printers (e.g. stdout) and remote loggers
-//! (e.g. Logstash)
+//! Implementation of writing logs to both local printers (e.g. stdout) and
+//! remote loggers (e.g. Logstash)
 
 use crate::{
     counters::{
-        PROCESSED_STRUCT_LOG_COUNT, SENT_STRUCT_LOG_BYTES, SENT_STRUCT_LOG_COUNT,
-        STRUCT_LOG_PARSE_ERROR_COUNT, STRUCT_LOG_QUEUE_ERROR_COUNT, STRUCT_LOG_SEND_ERROR_COUNT,
+        PROCESSED_STRUCT_LOG_COUNT, SENT_STRUCT_LOG_BYTES,
+        SENT_STRUCT_LOG_COUNT, STRUCT_LOG_PARSE_ERROR_COUNT,
+        STRUCT_LOG_QUEUE_ERROR_COUNT, STRUCT_LOG_SEND_ERROR_COUNT,
     },
     logger::Logger,
     struct_log::TcpWriter,
@@ -30,7 +31,8 @@ use std::{
 };
 
 const RUST_LOG: &str = "RUST_LOG";
-/// Default size of log write channel, if the channel is full, logs will be dropped
+/// Default size of log write channel, if the channel is full, logs will be
+/// dropped
 pub const CHANNEL_SIZE: usize = 10000;
 const NUM_SEND_RETRIES: u8 = 1;
 
@@ -58,17 +60,26 @@ impl LogEntry {
     fn new(event: &Event, thread_name: Option<&str>) -> Self {
         use crate::{Key, Value, Visitor};
 
-        struct JsonVisitor<'a>(&'a mut BTreeMap<&'static str, serde_json::Value>);
+        struct JsonVisitor<'a>(
+            &'a mut BTreeMap<&'static str, serde_json::Value>,
+        );
 
         impl<'a> Visitor for JsonVisitor<'a> {
             fn visit_pair(&mut self, key: Key, value: Value<'_>) {
                 let v = match value {
-                    Value::Debug(d) => serde_json::Value::String(format!("{:?}", d)),
-                    Value::Display(d) => serde_json::Value::String(d.to_string()),
+                    Value::Debug(d) => {
+                        serde_json::Value::String(format!("{:?}", d))
+                    }
+                    Value::Display(d) => {
+                        serde_json::Value::String(d.to_string())
+                    }
                     Value::Serde(s) => match serde_json::to_value(s) {
                         Ok(value) => value,
                         Err(e) => {
-                            eprintln!("error serializing structured log: {}", e);
+                            eprintln!(
+                                "error serializing structured log: {}",
+                                e
+                            );
                             return;
                         }
                     },
@@ -95,7 +106,8 @@ impl LogEntry {
                 let mut backtrace = Backtrace::new();
                 let mut frames = backtrace.frames().to_vec();
                 if frames.len() > 3 {
-                    frames.drain(0..3); // Remove the first 3 unnecessary frames to simplify backtrace
+                    frames.drain(0..3); // Remove the first 3 unnecessary frames to simplify
+                                        // backtrace
                 }
                 backtrace = frames.into();
                 Some(format!("{:?}", backtrace))
@@ -119,33 +131,21 @@ impl LogEntry {
         }
     }
 
-    pub fn metadata(&self) -> &Metadata {
-        &self.metadata
-    }
+    pub fn metadata(&self) -> &Metadata { &self.metadata }
 
-    pub fn thread_name(&self) -> Option<&str> {
-        self.thread_name.as_deref()
-    }
+    pub fn thread_name(&self) -> Option<&str> { self.thread_name.as_deref() }
 
-    pub fn backtrace(&self) -> Option<&str> {
-        self.backtrace.as_deref()
-    }
+    pub fn backtrace(&self) -> Option<&str> { self.backtrace.as_deref() }
 
-    pub fn hostname(&self) -> Option<&str> {
-        self.hostname.as_deref()
-    }
+    pub fn hostname(&self) -> Option<&str> { self.hostname.as_deref() }
 
-    pub fn timestamp(&self) -> &str {
-        self.timestamp.as_str()
-    }
+    pub fn timestamp(&self) -> &str { self.timestamp.as_str() }
 
     pub fn data(&self) -> &BTreeMap<&'static str, serde_json::Value> {
         &self.data
     }
 
-    pub fn message(&self) -> Option<&str> {
-        self.message.as_deref()
-    }
+    pub fn message(&self) -> Option<&str> { self.message.as_deref() }
 }
 
 /// A builder for a `DiemLogger`, configures what, where, and how to write logs.
@@ -200,7 +200,9 @@ impl DiemLoggerBuilder {
         self
     }
 
-    pub fn printer(&mut self, printer: Box<dyn Writer + Send + Sync + 'static>) -> &mut Self {
+    pub fn printer(
+        &mut self, printer: Box<dyn Writer + Send + Sync + 'static>,
+    ) -> &mut Self {
         self.printer = Some(printer);
         self
     }
@@ -211,16 +213,13 @@ impl DiemLoggerBuilder {
     }
 
     pub fn custom_format(
-        &mut self,
-        format: fn(&LogEntry) -> Result<String, fmt::Error>,
+        &mut self, format: fn(&LogEntry) -> Result<String, fmt::Error>,
     ) -> &mut Self {
         self.custom_format = Some(format);
         self
     }
 
-    pub fn init(&mut self) {
-        self.build();
-    }
+    pub fn init(&mut self) { self.build(); }
 
     pub fn build(&mut self) -> Arc<DiemLogger> {
         let filter = {
@@ -294,7 +293,8 @@ struct DiemFilter {
 
 impl DiemFilter {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        self.local_filter.enabled(metadata) || self.remote_filter.enabled(metadata)
+        self.local_filter.enabled(metadata)
+            || self.remote_filter.enabled(metadata)
     }
 }
 
@@ -306,14 +306,10 @@ pub struct DiemLogger {
 }
 
 impl DiemLogger {
-    pub fn builder() -> DiemLoggerBuilder {
-        DiemLoggerBuilder::new()
-    }
+    pub fn builder() -> DiemLoggerBuilder { DiemLoggerBuilder::new() }
 
     #[allow(clippy::new_ret_no_self)]
-    pub fn new() -> DiemLoggerBuilder {
-        Self::builder()
-    }
+    pub fn new() -> DiemLoggerBuilder { Self::builder() }
 
     pub fn init_for_testing() {
         if env::var(RUST_LOG).is_err() {
@@ -341,7 +337,8 @@ impl DiemLogger {
         }
 
         if let Some(sender) = &self.sender {
-            if let Err(e) = sender.try_send(LoggerServiceEvent::LogEntry(entry)) {
+            if let Err(e) = sender.try_send(LoggerServiceEvent::LogEntry(entry))
+            {
                 STRUCT_LOG_QUEUE_ERROR_COUNT.inc();
                 eprintln!("Failed to send structured log: {}", e);
             }
@@ -376,8 +373,8 @@ enum LoggerServiceEvent {
     Flush(SyncSender<()>),
 }
 
-/// A service for running a log listener, that will continually export logs through a local printer
-/// or to a `DiemLogger` for external logging.
+/// A service for running a log listener, that will continually export logs
+/// through a local printer or to a `DiemLogger` for external logging.
 struct LoggerService {
     receiver: Receiver<LoggerServiceEvent>,
     address: Option<String>,
@@ -402,7 +399,8 @@ impl LoggerService {
                             .local_filter
                             .enabled(&entry.metadata)
                         {
-                            let s = (self.facade.formatter)(&entry).expect("Unable to format");
+                            let s = (self.facade.formatter)(&entry)
+                                .expect("Unable to format");
                             printer.write(s)
                         }
                     }
@@ -420,18 +418,20 @@ impl LoggerService {
                     }
                 }
                 LoggerServiceEvent::Flush(sender) => {
-                    // This is just to notify the other side, the logger doesn't actually care if
-                    // the listener is still listening
+                    // This is just to notify the other side, the logger doesn't
+                    // actually care if the listener is
+                    // still listening
                     let _ = sender.send(());
                 }
             }
         }
     }
 
-    /// Writes a log line into json_lines logstash format, which has a newline at the end
+    /// Writes a log line into json_lines logstash format, which has a newline
+    /// at the end
     fn write_to_logstash(stream: &mut TcpWriter, mut entry: LogEntry) {
-        // XXX Temporary hack to ensure that log lines don't show up empty in kibana when the
-        // "message" field isn't set.
+        // XXX Temporary hack to ensure that log lines don't show up empty in
+        // kibana when the "message" field isn't set.
         if entry.message.is_none() {
             entry.message = Some(serde_json::to_string(&entry.data).unwrap());
         }
@@ -448,7 +448,8 @@ impl LoggerService {
         let message_length = bytes.len();
 
         // Attempt to write the log up to NUM_SEND_RETRIES + 1, and then drop it
-        // Each `write_all` call will attempt to open a connection if one isn't open
+        // Each `write_all` call will attempt to open a connection if one isn't
+        // open
         let mut result = stream.write_all(bytes);
         for _ in 0..NUM_SEND_RETRIES {
             if result.is_ok() {
@@ -518,7 +519,8 @@ impl Writer for FileWriter {
 /// Converts a record into a string representation:
 /// UNIX_TIMESTAMP LOG_LEVEL [thread_name] FILE:LINE MESSAGE JSON_DATA
 /// Example:
-/// 2020-03-07 05:03:03 INFO [thread_name] common/diem-logger/src/lib.rs:261 Hello { "world": true }
+/// 2020-03-07 05:03:03 INFO [thread_name] common/diem-logger/src/lib.rs:261
+/// Hello { "world": true }
 fn default_format(entry: &LogEntry) -> Result<String, fmt::Error> {
     use std::fmt::Write;
 
@@ -551,8 +553,8 @@ fn default_format(entry: &LogEntry) -> Result<String, fmt::Error> {
 mod tests {
     use super::LogEntry;
     use crate::{
-        debug, error, info, logger::Logger, trace, warn, Event, Key, KeyValue, Level, Metadata,
-        Schema, Value, Visitor,
+        debug, error, info, logger::Logger, trace, warn, Event, Key, KeyValue,
+        Level, Metadata, Schema, Value, Visitor,
     };
     use chrono::{DateTime, Utc};
     use serde_json::Value as JsonValue;
@@ -611,7 +613,8 @@ mod tests {
         receiver
     }
 
-    // TODO: Find a better mechanism for testing that allows setting the logger not globally
+    // TODO: Find a better mechanism for testing that allows setting the logger
+    // not globally
     #[test]
     fn basic() {
         let receiver = set_test_logger();
@@ -674,7 +677,8 @@ mod tests {
         assert!(entry.backtrace.is_some());
 
         // Test all log levels work properly
-        // Tracing should be skipped because the Logger was setup to skip Tracing events
+        // Tracing should be skipped because the Logger was setup to skip
+        // Tracing events
         trace!("trace");
         debug!("debug");
         info!("info");

@@ -3,7 +3,9 @@
 
 use crate::{
     access_path::AccessPath,
-    account_config::constants::{xus_tag, ACCOUNT_MODULE_NAME, CORE_CODE_ADDRESS},
+    account_config::constants::{
+        xus_tag, ACCOUNT_MODULE_NAME, CORE_CODE_ADDRESS,
+    },
 };
 use move_core_types::{
     language_storage::{StructTag, TypeTag},
@@ -21,15 +23,12 @@ pub struct BalanceResource {
 }
 
 impl BalanceResource {
-    pub fn new(coin: u64) -> Self {
-        Self { coin }
-    }
+    pub fn new(coin: u64) -> Self { Self { coin } }
 
-    pub fn coin(&self) -> u64 {
-        self.coin
-    }
+    pub fn coin(&self) -> u64 { self.coin }
 
-    // TODO/XXX: remove this once the MoveResource trait allows type arguments to `struct_tag`.
+    // TODO/XXX: remove this once the MoveResource trait allows type arguments
+    // to `struct_tag`.
     pub fn struct_tag_for_currency(currency_typetag: TypeTag) -> StructTag {
         StructTag {
             address: CORE_CODE_ADDRESS,
@@ -39,9 +38,12 @@ impl BalanceResource {
         }
     }
 
-    // TODO: remove this once the MoveResource trait allows type arguments to `resource_path`.
+    // TODO: remove this once the MoveResource trait allows type arguments to
+    // `resource_path`.
     pub fn access_path_for(currency_typetag: TypeTag) -> Vec<u8> {
-        AccessPath::resource_access_vec(BalanceResource::struct_tag_for_currency(currency_typetag))
+        AccessPath::resource_access_vec(
+            BalanceResource::struct_tag_for_currency(currency_typetag),
+        )
     }
 }
 
@@ -49,7 +51,5 @@ impl MoveResource for BalanceResource {
     const MODULE_NAME: &'static str = ACCOUNT_MODULE_NAME;
     const STRUCT_NAME: &'static str = "Balance";
 
-    fn type_params() -> Vec<TypeTag> {
-        vec![xus_tag()]
-    }
+    fn type_params() -> Vec<TypeTag> { vec![xus_tag()] }
 }

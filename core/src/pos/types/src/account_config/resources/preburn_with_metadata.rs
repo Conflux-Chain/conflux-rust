@@ -29,15 +29,12 @@ impl PreburnWithMetadataResource {
         Self { preburn, metadata }
     }
 
-    pub fn preburn(&self) -> &PreburnResource {
-        &self.preburn
-    }
+    pub fn preburn(&self) -> &PreburnResource { &self.preburn }
 
-    pub fn metadata(&self) -> &[u8] {
-        &self.metadata
-    }
+    pub fn metadata(&self) -> &[u8] { &self.metadata }
 
-    // TODO/XXX: remove this once the MoveResource trait allows type arguments to `struct_tag`.
+    // TODO/XXX: remove this once the MoveResource trait allows type arguments
+    // to `struct_tag`.
     pub fn struct_tag_for_currency(currency_typetag: TypeTag) -> StructTag {
         StructTag {
             address: CORE_CODE_ADDRESS,
@@ -47,11 +44,14 @@ impl PreburnWithMetadataResource {
         }
     }
 
-    // TODO: remove this once the MoveResource trait allows type arguments to `resource_path`.
+    // TODO: remove this once the MoveResource trait allows type arguments to
+    // `resource_path`.
     pub fn access_path_for(currency_typetag: TypeTag) -> Vec<u8> {
-        AccessPath::resource_access_vec(PreburnWithMetadataResource::struct_tag_for_currency(
-            currency_typetag,
-        ))
+        AccessPath::resource_access_vec(
+            PreburnWithMetadataResource::struct_tag_for_currency(
+                currency_typetag,
+            ),
+        )
     }
 }
 
@@ -59,7 +59,5 @@ impl MoveResource for PreburnWithMetadataResource {
     const MODULE_NAME: &'static str = DIEM_MODULE_NAME;
     const STRUCT_NAME: &'static str = "PreburnWithMetadata";
 
-    fn type_params() -> Vec<TypeTag> {
-        vec![xus_tag()]
-    }
+    fn type_params() -> Vec<TypeTag> { vec![xus_tag()] }
 }

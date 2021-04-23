@@ -8,7 +8,8 @@ use diem_crypto::{
     hash::CryptoHash,
     multi_ed25519::{MultiEd25519PublicKey, MultiEd25519Signature},
     traits::Signature,
-    CryptoMaterialError, HashValue, ValidCryptoMaterial, ValidCryptoMaterialStringExt,
+    CryptoMaterialError, HashValue, ValidCryptoMaterial,
+    ValidCryptoMaterialStringExt,
 };
 use diem_crypto_derive::{CryptoHasher, DeserializeKey, SerializeKey};
 #[cfg(any(test, feature = "fuzzing"))]
@@ -17,17 +18,19 @@ use rand::{rngs::OsRng, Rng};
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt, str::FromStr};
 
-/// A `TransactionAuthenticator` is an an abstraction of a signature scheme. It must know:
-/// (1) How to check its signature against a message and public key
-/// (2) How to convert its public key into an `AuthenticationKeyPreimage` structured as
-/// (public_key | signaure_scheme_id).
-/// Each on-chain `DiemAccount` must store an `AuthenticationKey` (computed via a sha3 hash of an
-/// `AuthenticationKeyPreimage`).
-/// Each transaction submitted to the Diem blockchain contains a `TransactionAuthenticator`. During
-/// transaction execution, the executor will check if the `TransactionAuthenticator`'s signature on
-/// the transaction hash is well-formed (1) and whether the sha3 hash of the
-/// `TransactionAuthenticator`'s `AuthenticationKeyPreimage` matches the `AuthenticationKey` stored
-/// under the transaction's sender account address (2).
+/// A `TransactionAuthenticator` is an an abstraction of a signature scheme. It
+/// must know: (1) How to check its signature against a message and public key
+/// (2) How to convert its public key into an `AuthenticationKeyPreimage`
+/// structured as (public_key | signaure_scheme_id).
+/// Each on-chain `DiemAccount` must store an `AuthenticationKey` (computed via
+/// a sha3 hash of an `AuthenticationKeyPreimage`).
+/// Each transaction submitted to the Diem blockchain contains a
+/// `TransactionAuthenticator`. During transaction execution, the executor will
+/// check if the `TransactionAuthenticator`'s signature on the transaction hash
+/// is well-formed (1) and whether the sha3 hash of the
+/// `TransactionAuthenticator`'s `AuthenticationKeyPreimage` matches the
+/// `AuthenticationKey` stored under the transaction's sender account address
+/// (2).
 
 // TODO: in the future, can tie these to the TransactionAuthenticator enum directly with https://github.com/rust-lang/rust/issues/60553
 #[derive(Debug)]
@@ -73,7 +76,9 @@ impl TransactionAuthenticator {
     }
 
     /// Create a single-signature ed25519 authenticator
-    pub fn ed25519(public_key: Ed25519PublicKey, signature: Ed25519Signature) -> Self {
+    pub fn ed25519(
+        public_key: Ed25519PublicKey, signature: Ed25519Signature,
+    ) -> Self {
         Self::Ed25519 {
             public_key,
             signature,
@@ -82,8 +87,7 @@ impl TransactionAuthenticator {
 
     /// Create a multisignature ed25519 authenticator
     pub fn multi_ed25519(
-        public_key: MultiEd25519PublicKey,
-        signature: MultiEd25519Signature,
+        public_key: MultiEd25519PublicKey, signature: MultiEd25519Signature,
     ) -> Self {
         Self::MultiEd25519 {
             public_key,
@@ -91,7 +95,8 @@ impl TransactionAuthenticator {
         }
     }
 
-    /// Return Ok if the authenticator's public key matches its signature, Err otherwise
+    /// Return Ok if the authenticator's public key matches its signature, Err
+    /// otherwise
     pub fn verify<T: Serialize + CryptoHash>(&self, message: &T) -> Result<()> {
         match self {
             Self::Ed25519 {
@@ -109,7 +114,9 @@ impl TransactionAuthenticator {
     pub fn public_key_bytes(&self) -> Vec<u8> {
         match self {
             Self::Ed25519 { public_key, .. } => public_key.to_bytes().to_vec(),
-            Self::MultiEd25519 { public_key, .. } => public_key.to_bytes().to_vec(),
+            Self::MultiEd25519 { public_key, .. } => {
+                public_key.to_bytes().to_vec()
+            }
         }
     }
 
@@ -117,23 +124,27 @@ impl TransactionAuthenticator {
     pub fn signature_bytes(&self) -> Vec<u8> {
         match self {
             Self::Ed25519 { signature, .. } => signature.to_bytes().to_vec(),
-            Self::MultiEd25519 { signature, .. } => signature.to_bytes().to_vec(),
+            Self::MultiEd25519 { signature, .. } => {
+                signature.to_bytes().to_vec()
+            }
         }
     }
 
-    /// Return an authentication key preimage derived from `self`'s public key and scheme id
+    /// Return an authentication key preimage derived from `self`'s public key
+    /// and scheme id
     pub fn authentication_key_preimage(&self) -> AuthenticationKeyPreimage {
         AuthenticationKeyPreimage::new(self.public_key_bytes(), self.scheme())
     }
 
-    /// Return an authentication key derived from `self`'s public key and scheme id
+    /// Return an authentication key derived from `self`'s public key and scheme
+    /// id
     pub fn authentication_key(&self) -> AuthenticationKey {
         AuthenticationKey::from_preimage(&self.authentication_key_preimage())
     }
 }
 
-/// A struct that represents an account authentication key. An account's address is the last 16
-/// bytes of authentication key used to create it
+/// A struct that represents an account authentication key. An account's address
+/// is the last 16 bytes of authentication key used to create it
 #[derive(
     Clone,
     Copy,
@@ -151,16 +162,16 @@ impl TransactionAuthenticator {
 pub struct AuthenticationKey([u8; AuthenticationKey::LENGTH]);
 
 impl AuthenticationKey {
-    /// Create an authentication key from `bytes`
-    pub const fn new(bytes: [u8; Self::LENGTH]) -> Self {
-        Self(bytes)
-    }
-
     /// The number of bytes in an authentication key.
     pub const LENGTH: usize = 32;
 
+    /// Create an authentication key from `bytes`
+    pub const fn new(bytes: [u8; Self::LENGTH]) -> Self { Self(bytes) }
+
     /// Create an authentication key from a preimage by taking its sha3 hash
-    pub fn from_preimage(preimage: &AuthenticationKeyPreimage) -> AuthenticationKey {
+    pub fn from_preimage(
+        preimage: &AuthenticationKeyPreimage,
+    ) -> AuthenticationKey {
         AuthenticationKey::new(*HashValue::sha3_256_of(&preimage.0).as_ref())
     }
 
@@ -171,11 +182,13 @@ impl AuthenticationKey {
 
     /// Create an authentication key from a MultiEd25519 public key
     pub fn multi_ed25519(public_key: &MultiEd25519PublicKey) -> Self {
-        Self::from_preimage(&AuthenticationKeyPreimage::multi_ed25519(public_key))
+        Self::from_preimage(&AuthenticationKeyPreimage::multi_ed25519(
+            public_key,
+        ))
     }
 
-    /// Return an address derived from the last `AccountAddress::LENGTH` bytes of this
-    /// authentication key.
+    /// Return an address derived from the last `AccountAddress::LENGTH` bytes
+    /// of this authentication key.
     pub fn derived_address(&self) -> AccountAddress {
         // keep only last 16 bytes
         let mut array = [0u8; AccountAddress::LENGTH];
@@ -191,9 +204,7 @@ impl AuthenticationKey {
     }
 
     /// Construct a vector from this authentication key
-    pub fn to_vec(&self) -> Vec<u8> {
-        self.0.to_vec()
-    }
+    pub fn to_vec(&self) -> Vec<u8> { self.0.to_vec() }
 
     /// Create a random authentication key. For testing only
     pub fn random() -> Self {
@@ -204,9 +215,7 @@ impl AuthenticationKey {
 }
 
 impl ValidCryptoMaterial for AuthenticationKey {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_vec()
-    }
+    fn to_bytes(&self) -> Vec<u8> { self.to_vec() }
 }
 
 /// A value that can be hashed to produce an authentication key
@@ -225,14 +234,14 @@ impl AuthenticationKeyPreimage {
     }
 
     /// Construct a preimage from a MultiEd25519 public key
-    pub fn multi_ed25519(public_key: &MultiEd25519PublicKey) -> AuthenticationKeyPreimage {
+    pub fn multi_ed25519(
+        public_key: &MultiEd25519PublicKey,
+    ) -> AuthenticationKeyPreimage {
         Self::new(public_key.to_bytes(), Scheme::MultiEd25519)
     }
 
     /// Construct a vector from this authentication key
-    pub fn into_vec(self) -> Vec<u8> {
-        self.0
-    }
+    pub fn into_vec(self) -> Vec<u8> { self.0 }
 }
 
 impl fmt::Display for TransactionAuthenticator {
@@ -250,7 +259,9 @@ impl fmt::Display for TransactionAuthenticator {
 impl TryFrom<&[u8]> for AuthenticationKey {
     type Error = CryptoMaterialError;
 
-    fn try_from(bytes: &[u8]) -> std::result::Result<AuthenticationKey, CryptoMaterialError> {
+    fn try_from(
+        bytes: &[u8],
+    ) -> std::result::Result<AuthenticationKey, CryptoMaterialError> {
         if bytes.len() != Self::LENGTH {
             return Err(CryptoMaterialError::WrongLengthError);
         }
@@ -263,7 +274,9 @@ impl TryFrom<&[u8]> for AuthenticationKey {
 impl TryFrom<Vec<u8>> for AuthenticationKey {
     type Error = CryptoMaterialError;
 
-    fn try_from(bytes: Vec<u8>) -> std::result::Result<AuthenticationKey, CryptoMaterialError> {
+    fn try_from(
+        bytes: Vec<u8>,
+    ) -> std::result::Result<AuthenticationKey, CryptoMaterialError> {
         AuthenticationKey::try_from(&bytes[..])
     }
 }
@@ -283,9 +296,7 @@ impl FromStr for AuthenticationKey {
 }
 
 impl AsRef<[u8]> for AuthenticationKey {
-    fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
+    fn as_ref(&self) -> &[u8] { &self.0 }
 }
 
 impl fmt::LowerHex for AuthenticationKey {

@@ -81,7 +81,8 @@ fn error_trait_object() {
 
     impl ::std::error::Error for OurError {}
 
-    let debug_error = ::std::io::Error::new(::std::io::ErrorKind::Other, "This is an error");
+    let debug_error =
+        ::std::io::Error::new(::std::io::ErrorKind::Other, "This is an error");
     let display_error = OurError;
     let t = Test::default()
         .debug_error(&debug_error)

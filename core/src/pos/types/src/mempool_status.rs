@@ -10,7 +10,8 @@ use proptest::prelude::*;
 use proptest_derive::Arbitrary;
 use std::{convert::TryFrom, fmt};
 
-/// A `MempoolStatus` is represented as a required status code that is semantic coupled with an optional sub status and message.
+/// A `MempoolStatus` is represented as a required status code that is semantic
+/// coupled with an optional sub status and message.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
@@ -73,9 +74,7 @@ impl TryFrom<u64> for MempoolStatusCode {
 }
 
 impl From<MempoolStatusCode> for u64 {
-    fn from(status: MempoolStatusCode) -> u64 {
-        status as u64
-    }
+    fn from(status: MempoolStatusCode) -> u64 { status as u64 }
 }
 
 impl fmt::Display for MempoolStatusCode {

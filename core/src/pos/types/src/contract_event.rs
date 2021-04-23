@@ -3,9 +3,10 @@
 
 use crate::{
     account_config::{
-        AdminTransactionEvent, BaseUrlRotationEvent, BurnEvent, CancelBurnEvent,
-        ComplianceKeyRotationEvent, CreateAccountEvent, MintEvent, NewBlockEvent, NewEpochEvent,
-        PreburnEvent, ReceivedMintEvent, ReceivedPaymentEvent, SentPaymentEvent,
+        AdminTransactionEvent, BaseUrlRotationEvent, BurnEvent,
+        CancelBurnEvent, ComplianceKeyRotationEvent, CreateAccountEvent,
+        MintEvent, NewBlockEvent, NewEpochEvent, PreburnEvent,
+        ReceivedMintEvent, ReceivedPaymentEvent, SentPaymentEvent,
         ToXDXExchangeRateUpdateEvent,
     },
     event::EventKey,
@@ -24,18 +25,26 @@ use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, ops::Deref};
 
 /// Support versioning of the data structure.
-#[derive(Hash, Clone, Eq, PartialEq, Serialize, Deserialize, CryptoHasher, BCSCryptoHash)]
+#[derive(
+    Hash,
+    Clone,
+    Eq,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    CryptoHasher,
+    BCSCryptoHash,
+)]
 pub enum ContractEvent {
     V0(ContractEventV0),
 }
 
 impl ContractEvent {
     pub fn new(
-        key: EventKey,
-        sequence_number: u64,
-        type_tag: TypeTag,
+        key: EventKey, sequence_number: u64, type_tag: TypeTag,
         event_data: Vec<u8>,
-    ) -> Self {
+    ) -> Self
+    {
         ContractEvent::V0(ContractEventV0::new(
             key,
             sequence_number,
@@ -45,8 +54,8 @@ impl ContractEvent {
     }
 }
 
-// Temporary hack to avoid massive changes, it won't work when new variant comes and needs proper
-// dispatch at that time.
+// Temporary hack to avoid massive changes, it won't work when new variant comes
+// and needs proper dispatch at that time.
 impl Deref for ContractEvent {
     type Target = ContractEventV0;
 
@@ -73,11 +82,10 @@ pub struct ContractEventV0 {
 
 impl ContractEventV0 {
     pub fn new(
-        key: EventKey,
-        sequence_number: u64,
-        type_tag: TypeTag,
+        key: EventKey, sequence_number: u64, type_tag: TypeTag,
         event_data: Vec<u8>,
-    ) -> Self {
+    ) -> Self
+    {
         Self {
             key,
             sequence_number,
@@ -86,21 +94,13 @@ impl ContractEventV0 {
         }
     }
 
-    pub fn key(&self) -> &EventKey {
-        &self.key
-    }
+    pub fn key(&self) -> &EventKey { &self.key }
 
-    pub fn sequence_number(&self) -> u64 {
-        self.sequence_number
-    }
+    pub fn sequence_number(&self) -> u64 { self.sequence_number }
 
-    pub fn event_data(&self) -> &[u8] {
-        &self.event_data
-    }
+    pub fn event_data(&self) -> &[u8] { &self.event_data }
 
-    pub fn type_tag(&self) -> &TypeTag {
-        &self.type_tag
-    }
+    pub fn type_tag(&self) -> &TypeTag { &self.type_tag }
 }
 
 impl TryFrom<&ContractEvent> for SentPaymentEvent {
@@ -118,7 +118,8 @@ impl TryFrom<&ContractEvent> for ReceivedPaymentEvent {
     type Error = Error;
 
     fn try_from(event: &ContractEvent) -> Result<Self> {
-        if event.type_tag != TypeTag::Struct(ReceivedPaymentEvent::struct_tag()) {
+        if event.type_tag != TypeTag::Struct(ReceivedPaymentEvent::struct_tag())
+        {
             anyhow::bail!("Expected Received Payment")
         }
         Self::try_from_bytes(&event.event_data)
@@ -129,7 +130,9 @@ impl TryFrom<&ContractEvent> for ToXDXExchangeRateUpdateEvent {
     type Error = Error;
 
     fn try_from(event: &ContractEvent) -> Result<Self> {
-        if event.type_tag != TypeTag::Struct(ToXDXExchangeRateUpdateEvent::struct_tag()) {
+        if event.type_tag
+            != TypeTag::Struct(ToXDXExchangeRateUpdateEvent::struct_tag())
+        {
             anyhow::bail!("Expected ToXDXExchangeRateUpdateEvent")
         }
         Self::try_from_bytes(&event.event_data)
@@ -226,6 +229,7 @@ impl TryFrom<&ContractEvent> for NewEpochEvent {
 
 impl TryFrom<&ContractEvent> for ComplianceKeyRotationEvent {
     type Error = Error;
+
     fn try_from(event: &ContractEvent) -> Result<Self> {
         if event.type_tag != TypeTag::Struct(Self::struct_tag()) {
             anyhow::bail!("Expected ComplianceKeyRotationEvent")
@@ -236,6 +240,7 @@ impl TryFrom<&ContractEvent> for ComplianceKeyRotationEvent {
 
 impl TryFrom<&ContractEvent> for BaseUrlRotationEvent {
     type Error = Error;
+
     fn try_from(event: &ContractEvent) -> Result<Self> {
         if event.type_tag != TypeTag::Struct(Self::struct_tag()) {
             anyhow::bail!("Expected BaseUrlRotationEvent")
@@ -246,6 +251,7 @@ impl TryFrom<&ContractEvent> for BaseUrlRotationEvent {
 
 impl TryFrom<&ContractEvent> for CreateAccountEvent {
     type Error = Error;
+
     fn try_from(event: &ContractEvent) -> Result<Self> {
         if event.type_tag != TypeTag::Struct(Self::struct_tag()) {
             anyhow::bail!("Expected CreateAccountEvent")
@@ -310,11 +316,10 @@ impl std::fmt::Display for EventWithProof {
 impl EventWithProof {
     /// Constructor.
     pub fn new(
-        transaction_version: Version,
-        event_index: u64,
-        event: ContractEvent,
+        transaction_version: Version, event_index: u64, event: ContractEvent,
         proof: EventProof,
-    ) -> Self {
+    ) -> Self
+    {
         Self {
             transaction_version,
             event_index,
@@ -327,19 +332,17 @@ impl EventWithProof {
     ///
     /// Two things are ensured if no error is raised:
     ///   1. This event exists in the ledger represented by `ledger_info`.
-    ///   2. And this event has the same `event_key`, `sequence_number`, `transaction_version`,
-    /// and `event_index` as indicated in the parameter list. If any of these parameter is unknown
-    /// to the call site and is supposed to be informed by this struct, get it from the struct
-    /// itself, such as: `event_with_proof.event.access_path()`, `event_with_proof.event_index()`,
-    /// etc.
+    ///   2. And this event has the same `event_key`, `sequence_number`,
+    /// `transaction_version`, and `event_index` as indicated in the
+    /// parameter list. If any of these parameter is unknown to the call
+    /// site and is supposed to be informed by this struct, get it from the
+    /// struct itself, such as: `event_with_proof.event.access_path()`,
+    /// `event_with_proof.event_index()`, etc.
     pub fn verify(
-        &self,
-        ledger_info: &LedgerInfo,
-        event_key: &EventKey,
-        sequence_number: u64,
-        transaction_version: Version,
-        event_index: u64,
-    ) -> Result<()> {
+        &self, ledger_info: &LedgerInfo, event_key: &EventKey,
+        sequence_number: u64, transaction_version: Version, event_index: u64,
+    ) -> Result<()>
+    {
         ensure!(
             self.event.key() == event_key,
             "Event key ({}) not expected ({}).",

@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::account_config::resources::{
-    ChildVASP, Credential, DesignatedDealer, DesignatedDealerPreburns, ParentVASP,
+    ChildVASP, Credential, DesignatedDealer, DesignatedDealerPreburns,
+    ParentVASP,
 };
 use serde::{Deserialize, Serialize};
 
-/// A enum that captures the collection of role-specific resources stored under each account type
+/// A enum that captures the collection of role-specific resources stored under
+/// each account type
 #[derive(Debug, Serialize, Deserialize)]
 pub enum AccountRole {
     ParentVASP {

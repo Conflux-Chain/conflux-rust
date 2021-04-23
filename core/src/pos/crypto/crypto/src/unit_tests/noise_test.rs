@@ -4,7 +4,10 @@
 use std::{fs::File, io::BufReader, path::PathBuf};
 
 use crate::{
-    noise::{handshake_init_msg_len, handshake_resp_msg_len, NoiseConfig, MAX_SIZE_NOISE_MSG},
+    noise::{
+        handshake_init_msg_len, handshake_resp_msg_len, NoiseConfig,
+        MAX_SIZE_NOISE_MSG,
+    },
     test_utils::TEST_SEED,
     x25519, Uniform as _,
 };
@@ -28,7 +31,8 @@ fn simple_handshake() {
         // initiator sends first message
         let prologue = b"prologue";
         let payload1 = b"payload1";
-        let mut first_message = vec![0u8; handshake_init_msg_len(payload1.len())];
+        let mut first_message =
+            vec![0u8; handshake_init_msg_len(payload1.len())];
         let initiator_state = initiator
             .initiate_connection(
                 &mut rng,
@@ -40,7 +44,8 @@ fn simple_handshake() {
             .unwrap();
 
         let payload2 = b"payload2";
-        let mut second_message = vec![0u8; handshake_resp_msg_len(payload2.len())];
+        let mut second_message =
+            vec![0u8; handshake_resp_msg_len(payload2.len())];
 
         // responder parses the first message and responds
         let mut responder_session = if i == 0 {
@@ -133,21 +138,23 @@ fn test_vectors() {
         ciphertext: String,
     }
 
-    // EphemeralRng is used to get deterministic ephemeral keys based on test vectors
+    // EphemeralRng is used to get deterministic ephemeral keys based on test
+    // vectors
     struct EphemeralRng {
         ephemeral: Vec<u8>,
     }
     impl rand::RngCore for EphemeralRng {
-        fn next_u32(&mut self) -> u32 {
-            unreachable!()
-        }
-        fn next_u64(&mut self) -> u64 {
-            unreachable!()
-        }
+        fn next_u32(&mut self) -> u32 { unreachable!() }
+
+        fn next_u64(&mut self) -> u64 { unreachable!() }
+
         fn fill_bytes(&mut self, dest: &mut [u8]) {
             dest.copy_from_slice(&self.ephemeral);
         }
-        fn try_fill_bytes(&mut self, _dest: &mut [u8]) -> Result<(), rand::Error> {
+
+        fn try_fill_bytes(
+            &mut self, _dest: &mut [u8],
+        ) -> Result<(), rand::Error> {
             unreachable!()
         }
     }
@@ -158,11 +165,13 @@ fn test_vectors() {
     test_vectors_path.push("test_vectors");
     test_vectors_path.push("noise_cacophony.txt");
     let test_vectors_path = test_vectors_path.to_str().unwrap();
-    let test_vectors_file = File::open(test_vectors_path).expect("missing noise test vectors");
+    let test_vectors_file =
+        File::open(test_vectors_path).expect("missing noise test vectors");
     let test_vectors: TestVectors =
         serde_json::from_reader(BufReader::new(test_vectors_file)).unwrap();
 
-    // only go through Noise_IK_25519_AESGCM_SHA256 test vectors (don't exist for SHA-3)
+    // only go through Noise_IK_25519_AESGCM_SHA256 test vectors (don't exist
+    // for SHA-3)
     let test_vector = test_vectors
         .vectors
         .iter()
@@ -171,13 +180,15 @@ fn test_vectors() {
 
     // initiate peers with test vector
     use crate::traits::ValidCryptoMaterialStringExt;
-    let initiator_private =
-        x25519::PrivateKey::from_encoded_string(&test_vector.init_static.as_ref().unwrap())
-            .unwrap();
+    let initiator_private = x25519::PrivateKey::from_encoded_string(
+        &test_vector.init_static.as_ref().unwrap(),
+    )
+    .unwrap();
     let initiator_public = initiator_private.public_key();
-    let responder_private =
-        x25519::PrivateKey::from_encoded_string(&test_vector.resp_static.as_ref().unwrap())
-            .unwrap();
+    let responder_private = x25519::PrivateKey::from_encoded_string(
+        &test_vector.resp_static.as_ref().unwrap(),
+    )
+    .unwrap();
     let responder_public = responder_private.public_key();
 
     let initiator = NoiseConfig::new(initiator_private);
@@ -187,7 +198,8 @@ fn test_vectors() {
     for i in 0..2 {
         // assert public keys
         let init_remote_static =
-            hex::decode(test_vector.init_remote_static.as_ref().unwrap()).unwrap();
+            hex::decode(test_vector.init_remote_static.as_ref().unwrap())
+                .unwrap();
         assert_eq!(responder_public.as_slice(), init_remote_static.as_slice());
 
         // go through handshake test messages
@@ -202,7 +214,8 @@ fn test_vectors() {
         let mut rng = EphemeralRng {
             ephemeral: init_ephemeral,
         };
-        let mut first_message = vec![0u8; handshake_init_msg_len(payload1.len())];
+        let mut first_message =
+            vec![0u8; handshake_init_msg_len(payload1.len())];
         let initiator_state = initiator
             .initiate_connection(
                 &mut rng,
@@ -220,11 +233,13 @@ fn test_vectors() {
         let expected_ciphertext = hex::decode(&message.ciphertext).unwrap();
 
         // responder part
-        let resp_ephemeral = hex::decode(test_vector.resp_ephemeral.as_ref().unwrap()).unwrap();
+        let resp_ephemeral =
+            hex::decode(test_vector.resp_ephemeral.as_ref().unwrap()).unwrap();
         let mut rng = EphemeralRng {
             ephemeral: resp_ephemeral,
         };
-        let mut second_message = vec![0u8; handshake_resp_msg_len(payload2.len())];
+        let mut second_message =
+            vec![0u8; handshake_resp_msg_len(payload2.len())];
 
         let mut responder_session = if i == 0 {
             let (received_payload, responder_session) = responder
@@ -332,7 +347,8 @@ fn wrong_buffer_sizes() {
     for i in 0..2 {
         // initiator sends first message with buffer too small (should fail)
         let payload = b"payload";
-        let mut first_message_bad = vec![0u8; handshake_init_msg_len(payload.len()) - 1];
+        let mut first_message_bad =
+            vec![0u8; handshake_init_msg_len(payload.len()) - 1];
         let res = initiator.initiate_connection(
             &mut rng,
             b"",
@@ -345,7 +361,8 @@ fn wrong_buffer_sizes() {
 
         // try again with payload too large (should fail)
         let mut large_buffer = vec![0u8; MAX_SIZE_NOISE_MSG + 3];
-        let payload_too_large = vec![1u8; MAX_SIZE_NOISE_MSG - handshake_init_msg_len(0) + 1];
+        let payload_too_large =
+            vec![1u8; MAX_SIZE_NOISE_MSG - handshake_init_msg_len(0) + 1];
         let res = initiator.initiate_connection(
             &mut rng,
             b"",
@@ -357,7 +374,8 @@ fn wrong_buffer_sizes() {
         assert!(matches!(res, Err(_)));
 
         // try again with buffer too large (should work)
-        let mut first_message_good = vec![0u8; handshake_init_msg_len(payload.len()) + 1];
+        let mut first_message_good =
+            vec![0u8; handshake_init_msg_len(payload.len()) + 1];
         let initiator_state = initiator
             .initiate_connection(
                 &mut rng,
@@ -369,8 +387,10 @@ fn wrong_buffer_sizes() {
             .unwrap();
 
         // responder parses the first message and responds
-        let mut second_message_small = vec![0u8; handshake_resp_msg_len(payload.len()) - 1];
-        let mut second_message_large = vec![0u8; handshake_resp_msg_len(payload.len()) + 1];
+        let mut second_message_small =
+            vec![0u8; handshake_resp_msg_len(payload.len()) - 1];
+        let mut second_message_large =
+            vec![0u8; handshake_resp_msg_len(payload.len()) + 1];
 
         let (mut responder_session, second_message_large) = if i == 0 {
             // with buffer too small (shouldn't work)
@@ -408,7 +428,8 @@ fn wrong_buffer_sizes() {
 
             // with payload too large (should fail)
             let mut large_buffer = vec![0u8; MAX_SIZE_NOISE_MSG + 3];
-            let payload_too_large = vec![1u8; MAX_SIZE_NOISE_MSG - handshake_resp_msg_len(0) + 1];
+            let payload_too_large =
+                vec![1u8; MAX_SIZE_NOISE_MSG - handshake_resp_msg_len(0) + 1];
             let res = responder.respond_to_client_and_finalize(
                 &mut rng,
                 b"",
@@ -433,7 +454,8 @@ fn wrong_buffer_sizes() {
             (responder_session, second_message_large)
         } else {
             // with first message too large
-            let res = responder.parse_client_init_message(b"", &first_message_good);
+            let res =
+                responder.parse_client_init_message(b"", &first_message_good);
 
             assert!(matches!(res, Err(_)));
 
@@ -455,7 +477,10 @@ fn wrong_buffer_sizes() {
 
             // with first message of correct length
             let (_, handshake_state, _) = responder
-                .parse_client_init_message(b"", &first_message_good[..first_message_good.len() - 1])
+                .parse_client_init_message(
+                    b"",
+                    &first_message_good[..first_message_good.len() - 1],
+                )
                 .unwrap();
 
             // write to buffer to small (should fail)
@@ -470,7 +495,8 @@ fn wrong_buffer_sizes() {
 
             // with payload too large (should fail)
             let mut large_buffer = vec![0u8; MAX_SIZE_NOISE_MSG + 3];
-            let payload_too_large = vec![1u8; MAX_SIZE_NOISE_MSG - handshake_resp_msg_len(0) + 1];
+            let payload_too_large =
+                vec![1u8; MAX_SIZE_NOISE_MSG - handshake_resp_msg_len(0) + 1];
             let res = responder.respond_to_client(
                 &mut rng,
                 handshake_state.clone(),
@@ -494,7 +520,10 @@ fn wrong_buffer_sizes() {
         };
 
         // initiator parses the response too large (should fail)
-        let res = initiator.finalize_connection(initiator_state.clone(), &second_message_large);
+        let res = initiator.finalize_connection(
+            initiator_state.clone(),
+            &second_message_large,
+        );
 
         assert!(matches!(res, Err(_)));
 

@@ -21,9 +21,7 @@ pub enum LevelFilter {
 
 impl LevelFilter {
     /// Returns the most verbose logging level filter.
-    pub fn max() -> Self {
-        LevelFilter::Trace
-    }
+    pub fn max() -> Self { LevelFilter::Trace }
 }
 
 impl FromStr for LevelFilter {
@@ -59,9 +57,7 @@ pub struct Builder {
 }
 
 impl Builder {
-    pub fn new() -> Self {
-        Default::default()
-    }
+    pub fn new() -> Self { Default::default() }
 
     /// Populates the filter builder from an environment variable
     pub fn with_env(&mut self, env: &str) -> &mut Self {
@@ -73,7 +69,9 @@ impl Builder {
     }
 
     /// Adds a directive to the filter for a specific module.
-    pub fn filter_module(&mut self, module: &str, level: LevelFilter) -> &mut Self {
+    pub fn filter_module(
+        &mut self, module: &str, level: LevelFilter,
+    ) -> &mut Self {
         self.filter(Some(module), level)
     }
 
@@ -86,7 +84,9 @@ impl Builder {
     ///
     /// The given module (if any) will log at most the specified level provided.
     /// If no module is provided then the filter will apply to all log messages.
-    pub fn filter(&mut self, module: Option<&str>, level: LevelFilter) -> &mut Self {
+    pub fn filter(
+        &mut self, module: Option<&str>, level: LevelFilter,
+    ) -> &mut Self {
         self.directives.push(Directive::new(module, level));
         self
     }
@@ -122,30 +122,33 @@ impl Builder {
     }
 }
 
-/// A logging filter to determine which logs to keep or remove based on `Directive`s
+/// A logging filter to determine which logs to keep or remove based on
+/// `Directive`s
 #[derive(Debug)]
 pub struct Filter {
     directives: Vec<Directive>,
 }
 
 impl Filter {
-    pub fn builder() -> Builder {
-        Builder::new()
-    }
+    pub fn builder() -> Builder { Builder::new() }
 
     pub fn enabled(&self, metadata: &Metadata) -> bool {
         // Search for the longest match, the vector is assumed to be pre-sorted.
         for directive in self.directives.iter().rev() {
             match &directive.name {
                 Some(name) if !metadata.module_path().starts_with(name) => {}
-                Some(..) | None => return LevelFilter::from(metadata.level()) <= directive.level,
+                Some(..) | None => {
+                    return LevelFilter::from(metadata.level())
+                        <= directive.level
+                }
             }
         }
         false
     }
 }
 
-/// A `Filter` directive for which logs to keep based on a module `name` based filter
+/// A `Filter` directive for which logs to keep based on a module `name` based
+/// filter
 #[derive(Debug)]
 struct Directive {
     name: Option<String>,
@@ -168,10 +171,12 @@ impl FromStr for Directive {
         let mut parts = s.split('=').map(str::trim);
         let (name, level) = match (parts.next(), parts.next(), parts.next()) {
             // Only a level or module is provided, e.g. 'debug' or 'crate::foo'
-            (Some(level_or_module), None, None) => match level_or_module.parse() {
-                Ok(level) => (None, level),
-                Err(_) => (Some(level_or_module), LevelFilter::max()),
-            },
+            (Some(level_or_module), None, None) => {
+                match level_or_module.parse() {
+                    Ok(level) => (None, level),
+                    Err(_) => (Some(level_or_module), LevelFilter::max()),
+                }
+            }
             // Only a name is provided, e.g. 'crate='
             (Some(name), Some(""), None) => (Some(name), LevelFilter::max()),
             // Both a name and level is provided, e.g. 'crate=debug'

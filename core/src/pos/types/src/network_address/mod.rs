@@ -32,8 +32,9 @@ const MAX_DNS_NAME_SIZE: usize = 255;
 /// ## Overview
 ///
 /// Diem `NetworkAddress` is a compact, efficient, self-describing and
-/// future-proof network address represented as a stack of protocols. Essentially
-/// libp2p's [multiaddr] but using [`bcs`] to describe the binary format.
+/// future-proof network address represented as a stack of protocols.
+/// Essentially libp2p's [multiaddr] but using [`bcs`] to describe the binary
+/// format.
 ///
 /// Most validators will advertise a network address like:
 ///
@@ -60,19 +61,19 @@ const MAX_DNS_NAME_SIZE: usize = 255;
 /// transport protocol to use; in this sense, the secure transport protocol is
 /// "pre-negotiated" by the dialier selecting which advertised protocol to use.
 ///
-/// Each network address is encoded with the length of the encoded `NetworkAddress`
-/// and then the serialized protocol slices to allow for transparent upgradeability.
-/// For example, if the current software cannot decode a `NetworkAddress` within
-/// a `Vec<NetworkAddress>` it can still decode the underlying `Vec<u8>` and
-/// retrieve the remaining `Vec<NetworkAddress>`.
+/// Each network address is encoded with the length of the encoded
+/// `NetworkAddress` and then the serialized protocol slices to allow for
+/// transparent upgradeability. For example, if the current software cannot
+/// decode a `NetworkAddress` within a `Vec<NetworkAddress>` it can still decode
+/// the underlying `Vec<u8>` and retrieve the remaining `Vec<NetworkAddress>`.
 ///
 /// ## Transport
 ///
 /// In addition, `NetworkAddress` is integrated with the DiemNet concept of a
 /// [`Transport`], which takes a `NetworkAddress` when dialing and peels off
 /// [`Protocol`]s to establish a connection and perform initial handshakes.
-/// Similarly, the [`Transport`] takes `NetworkAddress` to listen on, which tells
-/// it what protocols to expect on the socket.
+/// Similarly, the [`Transport`] takes `NetworkAddress` to listen on, which
+/// tells it what protocols to expect on the socket.
 ///
 /// ## Example
 ///
@@ -94,9 +95,9 @@ const MAX_DNS_NAME_SIZE: usize = 255;
 /// //               \  '-- uvarint number of protocols
 /// //                '-- length of encoded network address
 ///
-/// use diem_types::network_address::NetworkAddress;
 /// use bcs;
-/// use std::{str::FromStr, convert::TryFrom};
+/// use diem_types::network_address::NetworkAddress;
+/// use std::{convert::TryFrom, str::FromStr};
 ///
 /// let addr = NetworkAddress::from_str("/ip4/10.0.0.16/tcp/80").unwrap();
 /// let actual_ser_addr = bcs::to_bytes(&addr).unwrap();
@@ -200,13 +201,9 @@ pub struct EmptyError;
 ////////////////////
 
 impl NetworkAddress {
-    fn new(protocols: Vec<Protocol>) -> Self {
-        Self(protocols)
-    }
+    fn new(protocols: Vec<Protocol>) -> Self { Self(protocols) }
 
-    pub fn as_slice(&self) -> &[Protocol] {
-        self.0.as_slice()
-    }
+    pub fn as_slice(&self) -> &[Protocol] { self.0.as_slice() }
 
     pub fn push(mut self, proto: Protocol) -> Self {
         self.0.push(proto);
@@ -220,13 +217,10 @@ impl NetworkAddress {
 
     /// See [`EncNetworkAddress::encrypt`].
     pub fn encrypt(
-        self,
-        shared_val_netaddr_key: &Key,
-        key_version: KeyVersion,
-        account: &AccountAddress,
-        seq_num: u64,
-        addr_idx: u32,
-    ) -> Result<EncNetworkAddress, ParseError> {
+        self, shared_val_netaddr_key: &Key, key_version: KeyVersion,
+        account: &AccountAddress, seq_num: u64, addr_idx: u32,
+    ) -> Result<EncNetworkAddress, ParseError>
+    {
         EncNetworkAddress::encrypt(
             self,
             shared_val_netaddr_key,
@@ -258,9 +252,7 @@ impl NetworkAddress {
     /// ```
     // TODO(philiphayes): use handshake version enum
     pub fn append_prod_protos(
-        self,
-        network_pubkey: x25519::PublicKey,
-        handshake_version: u8,
+        self, network_pubkey: x25519::PublicKey, handshake_version: u8,
     ) -> Self {
         self.push(Protocol::NoiseIK(network_pubkey))
             .push(Protocol::Handshake(handshake_version))
@@ -305,9 +297,9 @@ impl NetworkAddress {
         })
     }
 
-    /// A temporary, hacky function to parse out the first `/ln-noise-ik/<pubkey>` from
-    /// a `NetworkAddress`. We can remove this soon, when we move to the interim
-    /// "monolithic" transport model.
+    /// A temporary, hacky function to parse out the first
+    /// `/ln-noise-ik/<pubkey>` from a `NetworkAddress`. We can remove this
+    /// soon, when we move to the interim "monolithic" transport model.
     pub fn find_noise_proto(&self) -> Option<x25519::PublicKey> {
         self.0.iter().find_map(|proto| match proto {
             Protocol::NoiseIK(pubkey) => Some(*pubkey),
@@ -317,10 +309,10 @@ impl NetworkAddress {
 
     /// A function to rotate public keys for `NoiseIK` protocols
     pub fn rotate_noise_public_key(
-        &mut self,
-        to_replace: &x25519::PublicKey,
+        &mut self, to_replace: &x25519::PublicKey,
         new_public_key: &x25519::PublicKey,
-    ) {
+    )
+    {
         for protocol in self.0.iter_mut() {
             // Replace the public key in any Noise protocols that match the key
             if let Protocol::NoiseIK(public_key) = protocol {
@@ -332,18 +324,14 @@ impl NetworkAddress {
     }
 
     #[cfg(any(test, feature = "fuzzing"))]
-    pub fn mock() -> Self {
-        NetworkAddress::new(vec![Protocol::Memory(1234)])
-    }
+    pub fn mock() -> Self { NetworkAddress::new(vec![Protocol::Memory(1234)]) }
 }
 
 impl IntoIterator for NetworkAddress {
-    type Item = Protocol;
     type IntoIter = std::vec::IntoIter<Self::Item>;
+    type Item = Protocol;
 
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
+    fn into_iter(self) -> Self::IntoIter { self.0.into_iter() }
 }
 
 impl FromStr for NetworkAddress {
@@ -377,7 +365,9 @@ impl ToSocketAddrs for NetworkAddress {
     fn to_socket_addrs(&self) -> Result<Self::Iter, std::io::Error> {
         if let Some(((ipaddr, port), _)) = parse_ip_tcp(self.as_slice()) {
             Ok(vec![SocketAddr::new(ipaddr, port)].into_iter())
-        } else if let Some(((ip_filter, dns_name, port), _)) = parse_dns_tcp(self.as_slice()) {
+        } else if let Some(((ip_filter, dns_name, port), _)) =
+            parse_dns_tcp(self.as_slice())
+        {
             format!("{}:{}", dns_name, port).to_socket_addrs().map(|v| {
                 v.filter(|addr| ip_filter.matches(addr.ip()))
                     .collect::<Vec<_>>()
@@ -432,9 +422,7 @@ impl fmt::Debug for NetworkAddress {
 
 impl Serialize for NetworkAddress {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    where S: Serializer {
         if serializer.is_human_readable() {
             serializer.serialize_str(&self.to_string())
         } else {
@@ -451,9 +439,7 @@ impl Serialize for NetworkAddress {
 
 impl<'de> Deserialize<'de> for NetworkAddress {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         if deserializer.is_human_readable() {
             let s = <String>::deserialize(deserializer)?;
             NetworkAddress::from_str(s.as_str()).map_err(de::Error::custom)
@@ -464,7 +450,9 @@ impl<'de> Deserialize<'de> for NetworkAddress {
 
             Wrapper::deserialize(deserializer)
                 .and_then(|v| bcs::from_bytes(&v.0).map_err(de::Error::custom))
-                .and_then(|v: Vec<Protocol>| NetworkAddress::try_from(v).map_err(de::Error::custom))
+                .and_then(|v: Vec<Protocol>| {
+                    NetworkAddress::try_from(v).map_err(de::Error::custom)
+                })
         }
     }
 }
@@ -485,19 +473,31 @@ impl Arbitrary for NetworkAddress {
 pub fn arb_diemnet_addr() -> impl Strategy<Value = NetworkAddress> {
     let arb_transport_protos = prop_oneof![
         any::<u16>().prop_map(|port| vec![Protocol::Memory(port)]),
-        any::<(Ipv4Addr, u16)>()
-            .prop_map(|(addr, port)| vec![Protocol::Ip4(addr), Protocol::Tcp(port)]),
-        any::<(Ipv6Addr, u16)>()
-            .prop_map(|(addr, port)| vec![Protocol::Ip6(addr), Protocol::Tcp(port)]),
-        any::<(DnsName, u16)>()
-            .prop_map(|(name, port)| vec![Protocol::Dns(name), Protocol::Tcp(port)]),
-        any::<(DnsName, u16)>()
-            .prop_map(|(name, port)| vec![Protocol::Dns4(name), Protocol::Tcp(port)]),
-        any::<(DnsName, u16)>()
-            .prop_map(|(name, port)| vec![Protocol::Dns6(name), Protocol::Tcp(port)]),
+        any::<(Ipv4Addr, u16)>().prop_map(|(addr, port)| vec![
+            Protocol::Ip4(addr),
+            Protocol::Tcp(port)
+        ]),
+        any::<(Ipv6Addr, u16)>().prop_map(|(addr, port)| vec![
+            Protocol::Ip6(addr),
+            Protocol::Tcp(port)
+        ]),
+        any::<(DnsName, u16)>().prop_map(|(name, port)| vec![
+            Protocol::Dns(name),
+            Protocol::Tcp(port)
+        ]),
+        any::<(DnsName, u16)>().prop_map(|(name, port)| vec![
+            Protocol::Dns4(name),
+            Protocol::Tcp(port)
+        ]),
+        any::<(DnsName, u16)>().prop_map(|(name, port)| vec![
+            Protocol::Dns6(name),
+            Protocol::Tcp(port)
+        ]),
     ];
-    let arb_diemnet_protos = any::<(x25519::PublicKey, u8)>()
-        .prop_map(|(pubkey, hs)| vec![Protocol::NoiseIK(pubkey), Protocol::Handshake(hs)]);
+    let arb_diemnet_protos =
+        any::<(x25519::PublicKey, u8)>().prop_map(|(pubkey, hs)| {
+            vec![Protocol::NoiseIK(pubkey), Protocol::Handshake(hs)]
+        });
 
     (arb_transport_protos, arb_diemnet_protos).prop_map(
         |(mut transport_protos, mut diemnet_protos)| {
@@ -534,7 +534,9 @@ impl fmt::Display for Protocol {
     }
 }
 
-fn parse_one<'a, T>(args: &mut impl Iterator<Item = &'a str>) -> Result<T, ParseError>
+fn parse_one<'a, T>(
+    args: &mut impl Iterator<Item = &'a str>,
+) -> Result<T, ParseError>
 where
     T: FromStr,
     T::Err: Into<ParseError>,
@@ -545,8 +547,7 @@ where
 
 impl Protocol {
     fn parse<'a>(
-        protocol_type: &str,
-        args: &mut impl Iterator<Item = &'a str>,
+        protocol_type: &str, args: &mut impl Iterator<Item = &'a str>,
     ) -> Result<Protocol, ParseError> {
         let protocol = match protocol_type {
             "ip4" => Protocol::Ip4(parse_one(args)?),
@@ -556,11 +557,17 @@ impl Protocol {
             "dns6" => Protocol::Dns6(parse_one(args)?),
             "tcp" => Protocol::Tcp(parse_one(args)?),
             "memory" => Protocol::Memory(parse_one(args)?),
-            "ln-noise-ik" => Protocol::NoiseIK(x25519::PublicKey::from_encoded_string(
-                args.next().ok_or(ParseError::UnexpectedEnd)?,
-            )?),
+            "ln-noise-ik" => {
+                Protocol::NoiseIK(x25519::PublicKey::from_encoded_string(
+                    args.next().ok_or(ParseError::UnexpectedEnd)?,
+                )?)
+            }
             "ln-handshake" => Protocol::Handshake(parse_one(args)?),
-            unknown => return Err(ParseError::UnknownProtocolType(unknown.to_string())),
+            unknown => {
+                return Err(ParseError::UnknownProtocolType(
+                    unknown.to_string(),
+                ))
+            }
         };
         Ok(protocol)
     }
@@ -594,15 +601,11 @@ impl DnsName {
 }
 
 impl From<DnsName> for String {
-    fn from(dns_name: DnsName) -> String {
-        dns_name.0
-    }
+    fn from(dns_name: DnsName) -> String { dns_name.0 }
 }
 
 impl AsRef<str> for DnsName {
-    fn as_ref(&self) -> &str {
-        self.0.as_ref()
-    }
+    fn as_ref(&self) -> &str { self.0.as_ref() }
 }
 
 impl TryFrom<String> for DnsName {
@@ -622,16 +625,12 @@ impl FromStr for DnsName {
 }
 
 impl fmt::Display for DnsName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { self.0.fmt(f) }
 }
 
 impl<'de> Deserialize<'de> for DnsName {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         #[derive(Deserialize)]
         #[serde(rename = "DnsName")]
         struct DeserializeWrapper(String);
@@ -683,7 +682,9 @@ pub fn parse_memory(protos: &[Protocol]) -> Option<(u16, &[Protocol])> {
 
 /// parse the `&[Protocol]` into the `"/ip4/<addr>/tcp/<port>"` or
 /// `"/ip6/<addr>/tcp/<port>"` prefix and unparsed `&[Protocol]` suffix.
-pub fn parse_ip_tcp(protos: &[Protocol]) -> Option<((IpAddr, u16), &[Protocol])> {
+pub fn parse_ip_tcp(
+    protos: &[Protocol],
+) -> Option<((IpAddr, u16), &[Protocol])> {
     use Protocol::*;
 
     if protos.len() < 2 {
@@ -718,7 +719,9 @@ impl IpFilter {
 /// parse the `&[Protocol]` into the `"/dns/<domain>/tcp/<port>"`,
 /// `"/dns4/<domain>/tcp/<port>"`, or `"/dns6/<domain>/tcp/<port>"` prefix and
 /// unparsed `&[Protocol]` suffix.
-pub fn parse_dns_tcp(protos: &[Protocol]) -> Option<((IpFilter, &DnsName, u16), &[Protocol])> {
+pub fn parse_dns_tcp(
+    protos: &[Protocol],
+) -> Option<((IpFilter, &DnsName, u16), &[Protocol])> {
     use Protocol::*;
 
     if protos.len() < 2 {
@@ -728,8 +731,12 @@ pub fn parse_dns_tcp(protos: &[Protocol]) -> Option<((IpFilter, &DnsName, u16), 
     let (prefix, suffix) = protos.split_at(2);
     match prefix {
         [Dns(name), Tcp(port)] => Some(((IpFilter::Any, name, *port), suffix)),
-        [Dns4(name), Tcp(port)] => Some(((IpFilter::OnlyIp4, name, *port), suffix)),
-        [Dns6(name), Tcp(port)] => Some(((IpFilter::OnlyIp6, name, *port), suffix)),
+        [Dns4(name), Tcp(port)] => {
+            Some(((IpFilter::OnlyIp4, name, *port), suffix))
+        }
+        [Dns6(name), Tcp(port)] => {
+            Some(((IpFilter::OnlyIp6, name, *port), suffix))
+        }
         _ => None,
     }
 }
@@ -754,7 +761,9 @@ pub fn parse_tcp(protos: &[Protocol]) -> Option<((String, u16), &[Protocol])> {
 
 /// parse the `&[Protocol]` into the `"/ln-noise-ik/<pubkey>"` prefix and
 /// unparsed `&[Protocol]` suffix.
-pub fn parse_noise_ik(protos: &[Protocol]) -> Option<(&x25519::PublicKey, &[Protocol])> {
+pub fn parse_noise_ik(
+    protos: &[Protocol],
+) -> Option<(&x25519::PublicKey, &[Protocol])> {
     match protos.split_first() {
         Some((Protocol::NoiseIK(pubkey), suffix)) => Some((pubkey, suffix)),
         _ => None,
@@ -765,7 +774,9 @@ pub fn parse_noise_ik(protos: &[Protocol]) -> Option<(&x25519::PublicKey, &[Prot
 /// unparsed `&[Protocol]` suffix.
 pub fn parse_handshake(protos: &[Protocol]) -> Option<(u8, &[Protocol])> {
     match protos.split_first() {
-        Some((Protocol::Handshake(version), suffix)) => Some((*version, suffix)),
+        Some((Protocol::Handshake(version), suffix)) => {
+            Some((*version, suffix))
+        }
         _ => None,
     }
 }
@@ -831,8 +842,10 @@ mod test {
     fn test_network_address_parse_success() {
         use super::Protocol::*;
 
-        let pubkey_str = "080e287879c918794170e258bfaddd75acac5b3e350419044655e4983a487120";
-        let pubkey = x25519::PublicKey::from_encoded_string(pubkey_str).unwrap();
+        let pubkey_str =
+            "080e287879c918794170e258bfaddd75acac5b3e350419044655e4983a487120";
+        let pubkey =
+            x25519::PublicKey::from_encoded_string(pubkey_str).unwrap();
         let noise_addr_str = format!(
             "/dns/example.com/tcp/1234/ln-noise-ik/{}/ln-handshake/5",
             pubkey_str
@@ -879,9 +892,16 @@ mod test {
 
         for (addr_str, expected_address) in &test_cases {
             let actual_address = NetworkAddress::from_str(addr_str)
-                .map_err(|err| format_err!("failed to parse: input: '{}', err: {}", addr_str, err))
+                .map_err(|err| {
+                    format_err!(
+                        "failed to parse: input: '{}', err: {}",
+                        addr_str,
+                        err
+                    )
+                })
                 .unwrap();
-            let expected_address = NetworkAddress::new(expected_address.clone());
+            let expected_address =
+                NetworkAddress::new(expected_address.clone());
             assert_eq!(actual_address, expected_address);
         }
     }
@@ -949,7 +969,8 @@ mod test {
             ((IpAddr::from_str("::1").unwrap(), 123), expected_suffix)
         );
 
-        let addr = NetworkAddress::from_str("/ip6/::1/tcp/123/memory/999").unwrap();
+        let addr =
+            NetworkAddress::from_str("/ip6/::1/tcp/123/memory/999").unwrap();
         let expected_suffix: &[Protocol] = &[Protocol::Memory(999)];
         assert_eq!(
             parse_ip_tcp(addr.as_slice()).unwrap(),
@@ -963,28 +984,33 @@ mod test {
     #[test]
     fn test_parse_dns_tcp() {
         let dns_name = DnsName::from_str("example.com").unwrap();
-        let addr = NetworkAddress::from_str("/dns/example.com/tcp/123").unwrap();
+        let addr =
+            NetworkAddress::from_str("/dns/example.com/tcp/123").unwrap();
         let expected_suffix: &[Protocol] = &[];
         assert_eq!(
             parse_dns_tcp(addr.as_slice()).unwrap(),
             ((IpFilter::Any, &dns_name, 123), expected_suffix)
         );
 
-        let addr = NetworkAddress::from_str("/dns4/example.com/tcp/123").unwrap();
+        let addr =
+            NetworkAddress::from_str("/dns4/example.com/tcp/123").unwrap();
         let expected_suffix: &[Protocol] = &[];
         assert_eq!(
             parse_dns_tcp(addr.as_slice()).unwrap(),
             ((IpFilter::OnlyIp4, &dns_name, 123), expected_suffix)
         );
 
-        let addr = NetworkAddress::from_str("/dns6/example.com/tcp/123").unwrap();
+        let addr =
+            NetworkAddress::from_str("/dns6/example.com/tcp/123").unwrap();
         let expected_suffix: &[Protocol] = &[];
         assert_eq!(
             parse_dns_tcp(addr.as_slice()).unwrap(),
             ((IpFilter::OnlyIp6, &dns_name, 123), expected_suffix)
         );
 
-        let addr = NetworkAddress::from_str("/dns/example.com/tcp/123/memory/44").unwrap();
+        let addr =
+            NetworkAddress::from_str("/dns/example.com/tcp/123/memory/44")
+                .unwrap();
         let expected_suffix: &[Protocol] = &[Protocol::Memory(44)];
         assert_eq!(
             parse_dns_tcp(addr.as_slice()).unwrap(),
@@ -997,17 +1023,24 @@ mod test {
 
     #[test]
     fn test_parse_noise_ik() {
-        let pubkey_str = "080e287879c918794170e258bfaddd75acac5b3e350419044655e4983a487120";
-        let pubkey = x25519::PublicKey::from_encoded_string(pubkey_str).unwrap();
-        let addr = NetworkAddress::from_str(&format!("/ln-noise-ik/{}", pubkey_str)).unwrap();
+        let pubkey_str =
+            "080e287879c918794170e258bfaddd75acac5b3e350419044655e4983a487120";
+        let pubkey =
+            x25519::PublicKey::from_encoded_string(pubkey_str).unwrap();
+        let addr =
+            NetworkAddress::from_str(&format!("/ln-noise-ik/{}", pubkey_str))
+                .unwrap();
         let expected_suffix: &[Protocol] = &[];
         assert_eq!(
             parse_noise_ik(addr.as_slice()).unwrap(),
             (&pubkey, expected_suffix)
         );
 
-        let addr =
-            NetworkAddress::from_str(&format!("/ln-noise-ik/{}/tcp/999", pubkey_str)).unwrap();
+        let addr = NetworkAddress::from_str(&format!(
+            "/ln-noise-ik/{}/tcp/999",
+            pubkey_str
+        ))
+        .unwrap();
         let expected_suffix: &[Protocol] = &[Protocol::Tcp(999)];
         assert_eq!(
             parse_noise_ik(addr.as_slice()).unwrap(),

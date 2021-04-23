@@ -15,10 +15,10 @@ pub struct Event<'a> {
 
 impl<'a> Event<'a> {
     fn new(
-        metadata: &'a Metadata,
-        message: Option<fmt::Arguments<'a>>,
+        metadata: &'a Metadata, message: Option<fmt::Arguments<'a>>,
         keys_and_values: &'a [&'a dyn Schema],
-    ) -> Self {
+    ) -> Self
+    {
         Self {
             metadata,
             message,
@@ -27,21 +27,17 @@ impl<'a> Event<'a> {
     }
 
     pub fn dispatch(
-        metadata: &'a Metadata,
-        message: Option<fmt::Arguments<'a>>,
+        metadata: &'a Metadata, message: Option<fmt::Arguments<'a>>,
         keys_and_values: &'a [&'a dyn Schema],
-    ) {
+    )
+    {
         let event = Event::new(metadata, message, keys_and_values);
         crate::logger::dispatch(&event)
     }
 
-    pub fn metadata(&self) -> &'a Metadata {
-        &self.metadata
-    }
+    pub fn metadata(&self) -> &'a Metadata { &self.metadata }
 
-    pub fn message(&self) -> Option<fmt::Arguments<'a>> {
-        self.message
-    }
+    pub fn message(&self) -> Option<fmt::Arguments<'a>> { self.message }
 
     pub fn keys_and_values(&self) -> &'a [&'a dyn Schema] {
         &self.keys_and_values.0

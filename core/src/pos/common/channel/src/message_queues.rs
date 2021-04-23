@@ -18,7 +18,8 @@ const POPS_PER_GC: u32 = 50;
 ///
 /// With LIFO, oldest messages are dropped.
 /// With FIFO, newest messages are dropped.
-/// With KLAST, oldest messages are dropped, but remaining are retrieved in FIFO order
+/// With KLAST, oldest messages are dropped, but remaining are retrieved in FIFO
+/// order
 #[derive(Clone, Copy, Debug)]
 pub enum QueueStyle {
     LIFO,
@@ -70,10 +71,10 @@ impl<K: Eq + Hash + Clone, T> PerKeyQueue<K, T> {
     /// Create a new PerKeyQueue with the provided QueueStyle and
     /// max_queue_size_per_key
     pub(crate) fn new(
-        queue_style: QueueStyle,
-        max_queue_size_per_key: NonZeroUsize,
+        queue_style: QueueStyle, max_queue_size_per_key: NonZeroUsize,
         counters: Option<&'static IntCounterVec>,
-    ) -> Self {
+    ) -> Self
+    {
         Self {
             queue_style,
             max_queue_size: max_queue_size_per_key,
@@ -102,7 +103,8 @@ impl<K: Eq + Hash + Clone, T> PerKeyQueue<K, T> {
 
     /// push a message to the appropriate queue in per_key_queue
     /// add the key to round_robin_queue if it didnt already exist.
-    /// Returns Some(T) if the new or an existing element was dropped. Returns None otherwise.
+    /// Returns Some(T) if the new or an existing element was dropped. Returns
+    /// None otherwise.
     pub(crate) fn push(&mut self, key: K, message: T) -> Option<T> {
         if let Some(c) = self.counters.as_ref() {
             c.with_label_values(&["enqueued"]).inc();
@@ -165,14 +167,14 @@ impl<K: Eq + Hash + Clone, T> PerKeyQueue<K, T> {
                 c.with_label_values(&["dequeued"]).inc();
             }
 
-            // Remove empty per-key-queues every `POPS_PER_GC` successful dequeue
-            // operations.
+            // Remove empty per-key-queues every `POPS_PER_GC` successful
+            // dequeue operations.
             //
             // diem-channel never removes keys from its PerKeyQueue (without
             // this logic). This works fine for the validator network, where we
             // have a bounded set of peers that almost never changes; however,
-            // this does not work for servicing public clients, where we can have
-            // large and frequent connection churn.
+            // this does not work for servicing public clients, where we can
+            // have large and frequent connection churn.
             //
             // Periodically removing these empty queues prevents us from causing
             // an effective memory leak when we have lots of transient peers in
@@ -199,7 +201,8 @@ impl<K: Eq + Hash + Clone, T> PerKeyQueue<K, T> {
         self.per_key_queue.retain(|_key, queue| !queue.is_empty());
     }
 
-    /// Clears all the pending messages and cleans up the queue from the previous metadata.
+    /// Clears all the pending messages and cleans up the queue from the
+    /// previous metadata.
     pub(crate) fn clear(&mut self) {
         self.per_key_queue.clear();
         self.round_robin_queue.clear();

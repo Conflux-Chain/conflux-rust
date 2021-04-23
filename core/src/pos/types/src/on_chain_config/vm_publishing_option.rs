@@ -6,12 +6,12 @@ use anyhow::{format_err, Result};
 use diem_crypto::HashValue;
 use serde::{Deserialize, Serialize};
 
-/// Defines and holds the publishing policies for the VM. There are three possible configurations:
-/// 1. No module publishing, only allowlisted scripts are allowed.
-/// 2. No module publishing, custom scripts are allowed.
+/// Defines and holds the publishing policies for the VM. There are three
+/// possible configurations: 1. No module publishing, only allowlisted scripts
+/// are allowed. 2. No module publishing, custom scripts are allowed.
 /// 3. Both module publishing and custom scripts are allowed.
-/// We represent these as an enum instead of a struct since allowlisting and module/script
-/// publishing are mutually exclusive options.
+/// We represent these as an enum instead of a struct since allowlisting and
+/// module/script publishing are mutually exclusive options.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct VMPublishingOption {
     pub script_allow_list: Vec<HashValue>,
@@ -40,13 +40,9 @@ impl VMPublishingOption {
         }
     }
 
-    pub fn is_open_module(&self) -> bool {
-        self.is_open_module
-    }
+    pub fn is_open_module(&self) -> bool { self.is_open_module }
 
-    pub fn is_open_script(&self) -> bool {
-        self.script_allow_list.is_empty()
-    }
+    pub fn is_open_script(&self) -> bool { self.script_allow_list.is_empty() }
 }
 
 impl OnChainConfig for VMPublishingOption {

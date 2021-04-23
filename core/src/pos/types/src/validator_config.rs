@@ -48,7 +48,8 @@ impl ValidatorConfig {
         consensus_public_key: Ed25519PublicKey,
         validator_network_addresses: Vec<u8>,
         fullnode_network_addresses: Vec<u8>,
-    ) -> Self {
+    ) -> Self
+    {
         ValidatorConfig {
             consensus_public_key,
             validator_network_addresses,
@@ -56,11 +57,15 @@ impl ValidatorConfig {
         }
     }
 
-    pub fn fullnode_network_addresses(&self) -> Result<Vec<NetworkAddress>, bcs::Error> {
+    pub fn fullnode_network_addresses(
+        &self,
+    ) -> Result<Vec<NetworkAddress>, bcs::Error> {
         bcs::from_bytes(&self.fullnode_network_addresses)
     }
 
-    pub fn validator_network_addresses(&self) -> Result<Vec<EncNetworkAddress>, bcs::Error> {
+    pub fn validator_network_addresses(
+        &self,
+    ) -> Result<Vec<EncNetworkAddress>, bcs::Error> {
         bcs::from_bytes(&self.validator_network_addresses)
     }
 }

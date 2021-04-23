@@ -4,13 +4,14 @@
 //! An abstraction of x25519 elliptic curve keys required for
 //! [Diffie-Hellman key exchange](https://en.wikipedia.org/wiki/Diffie%E2%80%93Hellman_key_exchange)
 //! in the Diem project.
-//! Ideally, only `x25519::PrivateKey` and `x25519::PublicKey` should be used throughout the
-//! codebase, until the bytes are actually used in cryptographic operations.
+//! Ideally, only `x25519::PrivateKey` and `x25519::PublicKey` should be used
+//! throughout the codebase, until the bytes are actually used in cryptographic
+//! operations.
 //!
 //! # Examples
 //!
 //! ```
-//! use diem_crypto::{x25519, Uniform, test_utils::TEST_SEED};
+//! use diem_crypto::{test_utils::TEST_SEED, x25519, Uniform};
 //! use rand::{rngs::StdRng, SeedableRng};
 //!
 //! // Derive an X25519 private key for testing.
@@ -21,9 +22,11 @@
 //! // Deserialize an hexadecimal private or public key
 //! use diem_crypto::traits::ValidCryptoMaterialStringExt;
 //! # fn main() -> Result<(), diem_crypto::traits::CryptoMaterialError> {
-//! let private_key = "404acc8ec6a0f18df7359a6ee7823f19dd95616b10fed8bdb0de030e891b945a";
+//! let private_key =
+//!     "404acc8ec6a0f18df7359a6ee7823f19dd95616b10fed8bdb0de030e891b945a";
 //! let private_key = x25519::PrivateKey::from_encoded_string(&private_key)?;
-//! let public_key = "080e287879c918794170e258bfaddd75acac5b3e350419044655e4983a487120";
+//! let public_key =
+//!     "080e287879c918794170e258bfaddd75acac5b3e350419044655e4983a487120";
 //! let public_key = x25519::PublicKey::from_encoded_string(&public_key)?;
 //! # Ok(())
 //! # }
@@ -31,10 +34,15 @@
 //!
 
 use crate::{
-    traits::{self, CryptoMaterialError, ValidCryptoMaterial, ValidCryptoMaterialStringExt},
+    traits::{
+        self, CryptoMaterialError, ValidCryptoMaterial,
+        ValidCryptoMaterialStringExt,
+    },
     x25519,
 };
-use diem_crypto_derive::{DeserializeKey, SerializeKey, SilentDebug, SilentDisplay};
+use diem_crypto_derive::{
+    DeserializeKey, SerializeKey, SilentDebug, SilentDisplay,
+};
 use rand::{CryptoRng, RngCore};
 use std::convert::{TryFrom, TryInto};
 
@@ -72,7 +80,16 @@ pub struct PrivateKey(x25519_dalek::StaticSecret);
 
 /// This type should be used to deserialize a received public key
 #[derive(
-    Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, SerializeKey, DeserializeKey,
+    Default,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    SerializeKey,
+    DeserializeKey,
 )]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct PublicKey([u8; PUBLIC_KEY_SIZE]);
@@ -90,8 +107,11 @@ impl PrivateKey {
     }
 
     /// To perform a key exchange with another public key
-    pub fn diffie_hellman(&self, remote_public_key: &PublicKey) -> [u8; SHARED_SECRET_SIZE] {
-        let remote_public_key = x25519_dalek::PublicKey::from(remote_public_key.0);
+    pub fn diffie_hellman(
+        &self, remote_public_key: &PublicKey,
+    ) -> [u8; SHARED_SECRET_SIZE] {
+        let remote_public_key =
+            x25519_dalek::PublicKey::from(remote_public_key.0);
         let shared_secret = self.0.diffie_hellman(&remote_public_key);
         shared_secret.as_bytes().to_owned()
     }
@@ -104,19 +124,24 @@ impl PrivateKey {
     /// non-canonical scalar in the X25519 sense (and thus cannot correspond to
     /// a X25519 valid key without bit-mangling).
     ///
-    /// This is meant to compensate for the poor key storage capabilities of some
-    /// key management solutions, and NOT to promote double usage of keys under
-    /// several schemes, which would lead to BAD vulnerabilities.
-    pub fn from_ed25519_private_bytes(private_slice: &[u8]) -> Result<Self, CryptoMaterialError> {
-        let ed25519_secretkey = ed25519_dalek::SecretKey::from_bytes(private_slice)
-            .map_err(|_| CryptoMaterialError::DeserializationError)?;
-        let expanded_key = ed25519_dalek::ExpandedSecretKey::from(&ed25519_secretkey);
+    /// This is meant to compensate for the poor key storage capabilities of
+    /// some key management solutions, and NOT to promote double usage of
+    /// keys under several schemes, which would lead to BAD vulnerabilities.
+    pub fn from_ed25519_private_bytes(
+        private_slice: &[u8],
+    ) -> Result<Self, CryptoMaterialError> {
+        let ed25519_secretkey =
+            ed25519_dalek::SecretKey::from_bytes(private_slice)
+                .map_err(|_| CryptoMaterialError::DeserializationError)?;
+        let expanded_key =
+            ed25519_dalek::ExpandedSecretKey::from(&ed25519_secretkey);
 
         let mut expanded_keypart = [0u8; 32];
         expanded_keypart.copy_from_slice(&expanded_key.to_bytes()[..32]);
         let potential_x25519 = x25519::PrivateKey::from(expanded_keypart);
 
-        // This checks for x25519 clamping & reduction, which is an RFC requirement
+        // This checks for x25519 clamping & reduction, which is an RFC
+        // requirement
         if potential_x25519.to_bytes()[..] != expanded_key.to_bytes()[..32] {
             Err(CryptoMaterialError::DeserializationError)
         } else {
@@ -127,20 +152,23 @@ impl PrivateKey {
 
 impl PublicKey {
     /// Obtain a slice reference to the underlying bytearray
-    pub fn as_slice(&self) -> &[u8] {
-        &self.0
-    }
+    pub fn as_slice(&self) -> &[u8] { &self.0 }
 
     /// Deserialize an X25119 PublicKey from its representation as an
     /// Ed25519PublicKey, following the XEdDSA approach. This is meant to
     /// compensate for the poor key storage capabilities of key management
     /// solutions, and NOT to promote double usage of keys under several
     /// schemes, which would lead to BAD vulnerabilities.
-    pub fn from_ed25519_public_bytes(ed25519_bytes: &[u8]) -> Result<Self, CryptoMaterialError> {
+    pub fn from_ed25519_public_bytes(
+        ed25519_bytes: &[u8],
+    ) -> Result<Self, CryptoMaterialError> {
         if ed25519_bytes.len() != 32 {
             return Err(CryptoMaterialError::DeserializationError);
         }
-        let ed_point = curve25519_dalek::edwards::CompressedEdwardsY::from_slice(ed25519_bytes)
+        let ed_point =
+            curve25519_dalek::edwards::CompressedEdwardsY::from_slice(
+                ed25519_bytes,
+            )
             .decompress()
             .ok_or(CryptoMaterialError::DeserializationError)?;
 
@@ -178,25 +206,19 @@ impl traits::PrivateKey for PrivateKey {
 
 impl traits::Uniform for PrivateKey {
     fn generate<R>(rng: &mut R) -> Self
-    where
-        R: RngCore + CryptoRng,
-    {
+    where R: RngCore + CryptoRng {
         Self(x25519_dalek::StaticSecret::new(rng))
     }
 }
 
 // TODO: should this be gated under test flag? (mimoo)
 impl traits::ValidCryptoMaterial for PrivateKey {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.0.to_bytes().to_vec()
-    }
+    fn to_bytes(&self) -> Vec<u8> { self.0.to_bytes().to_vec() }
 }
 
 #[cfg(any(test, feature = "fuzzing"))]
 impl PartialEq for PrivateKey {
-    fn eq(&self, other: &Self) -> bool {
-        self.to_bytes() == other.to_bytes()
-    }
+    fn eq(&self, other: &Self) -> bool { self.to_bytes() == other.to_bytes() }
 }
 
 #[cfg(any(test, feature = "fuzzing"))]
@@ -215,9 +237,7 @@ impl proptest::arbitrary::Arbitrary for PrivateKey {
 // public key part
 
 impl From<&PrivateKey> for PublicKey {
-    fn from(private_key: &PrivateKey) -> Self {
-        private_key.public_key()
-    }
+    fn from(private_key: &PrivateKey) -> Self { private_key.public_key() }
 }
 
 impl std::convert::From<[u8; PUBLIC_KEY_SIZE]> for PublicKey {
@@ -242,9 +262,7 @@ impl traits::PublicKey for PublicKey {
 }
 
 impl traits::ValidCryptoMaterial for PublicKey {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.0.to_vec()
-    }
+    fn to_bytes(&self) -> Vec<u8> { self.0.to_vec() }
 }
 
 impl std::fmt::Display for PublicKey {
@@ -266,6 +284,7 @@ use proptest::prelude::*;
 
 /// Produces a uniformly random ed25519 keypair from a seed
 #[cfg(any(test, feature = "fuzzing"))]
-pub fn keypair_strategy() -> impl Strategy<Value = KeyPair<PrivateKey, PublicKey>> {
+pub fn keypair_strategy(
+) -> impl Strategy<Value = KeyPair<PrivateKey, PublicKey>> {
     test_utils::uniform_keypair_strategy::<PrivateKey, PublicKey>()
 }

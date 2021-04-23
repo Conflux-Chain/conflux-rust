@@ -3,7 +3,9 @@
 
 use crate::{
     account_address::AccountAddress,
-    account_config::{constants::ACCOUNT_MODULE_NAME, resources::AccountResource},
+    account_config::{
+        constants::ACCOUNT_MODULE_NAME, resources::AccountResource,
+    },
 };
 use anyhow::Result;
 use move_core_types::{
@@ -31,13 +33,13 @@ pub struct SentPaymentEvent {
 }
 
 impl SentPaymentEvent {
-    // TODO: should only be used for diem client testing and be removed eventually
+    // TODO: should only be used for diem client testing and be removed
+    // eventually
     pub fn new(
-        amount: u64,
-        currency_code: Identifier,
-        receiver: AccountAddress,
+        amount: u64, currency_code: Identifier, receiver: AccountAddress,
         metadata: Vec<u8>,
-    ) -> Self {
+    ) -> Self
+    {
         Self {
             amount,
             currency_code,
@@ -51,24 +53,16 @@ impl SentPaymentEvent {
     }
 
     /// Get the sender of this transaction event.
-    pub fn receiver(&self) -> AccountAddress {
-        self.receiver
-    }
+    pub fn receiver(&self) -> AccountAddress { self.receiver }
 
     /// Get the amount sent or received
-    pub fn amount(&self) -> u64 {
-        self.amount
-    }
+    pub fn amount(&self) -> u64 { self.amount }
 
     /// Get the metadata associated with this event
-    pub fn metadata(&self) -> &[u8] {
-        &self.metadata
-    }
+    pub fn metadata(&self) -> &[u8] { &self.metadata }
 
     /// Return the currency currency_code symbol that the payment was made in.
-    pub fn currency_code(&self) -> &IdentStr {
-        &self.currency_code
-    }
+    pub fn currency_code(&self) -> &IdentStr { &self.currency_code }
 }
 
 impl MoveResource for SentPaymentEvent {

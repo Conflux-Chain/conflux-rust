@@ -1,7 +1,8 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Periodic sampling for logs, metrics, and other use cases through a simple macro
+//! Periodic sampling for logs, metrics, and other use cases through a simple
+//! macro
 
 use std::{
     sync::atomic::{AtomicU64, Ordering},
@@ -11,18 +12,19 @@ use std::{
 /// The rate at which a `sample!` macro will run it's given function
 #[derive(Debug)]
 pub enum SampleRate {
-    /// Only sample a single time during a window of time. This rate only has a resolution in
-    /// seconds.
+    /// Only sample a single time during a window of time. This rate only has a
+    /// resolution in seconds.
     Duration(Duration),
-    /// Sample based on the frequency of the event. The provided u64 is the inverse of the
-    /// frequency (1/x), for example Frequency(2) means that 1 out of every 2 events will be
-    /// sampled (1/2).
+    /// Sample based on the frequency of the event. The provided u64 is the
+    /// inverse of the frequency (1/x), for example Frequency(2) means that
+    /// 1 out of every 2 events will be sampled (1/2).
     Frequency(u64),
     /// Always Sample
     Always,
 }
 
-/// An internal struct that can be checked if a sample is ready for the `sample!` macro
+/// An internal struct that can be checked if a sample is ready for the
+/// `sample!` macro
 pub struct Sampling {
     rate: SampleRate,
     state: AtomicU64,
@@ -38,8 +40,12 @@ impl Sampling {
 
     pub fn sample(&self) -> bool {
         match &self.rate {
-            SampleRate::Duration(rate) => Self::sample_duration(rate, &self.state),
-            SampleRate::Frequency(rate) => Self::sample_frequency(*rate, &self.state),
+            SampleRate::Duration(rate) => {
+                Self::sample_duration(rate, &self.state)
+            }
+            SampleRate::Frequency(rate) => {
+                Self::sample_frequency(*rate, &self.state)
+            }
             SampleRate::Always => true,
         }
     }
@@ -79,8 +85,8 @@ impl Sampling {
     }
 }
 
-/// Samples a given function at a `SampleRate`, useful for periodically emitting logs or metrics on
-/// high throughput pieces of code.
+/// Samples a given function at a `SampleRate`, useful for periodically emitting
+/// logs or metrics on high throughput pieces of code.
 #[macro_export]
 macro_rules! sample {
     ($sample_rate:expr, $($args:expr)+ ,) => {
@@ -131,7 +137,8 @@ mod tests {
     #[test]
     fn duration() {
         // Duration
-        let sampling = Sampling::new(SampleRate::Duration(Duration::from_secs(1)));
+        let sampling =
+            Sampling::new(SampleRate::Duration(Duration::from_secs(1)));
         let mut v = Vec::new();
         for i in 0..5 {
             if sampling.sample() {

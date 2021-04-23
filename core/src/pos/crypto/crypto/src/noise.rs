@@ -4,11 +4,13 @@
 //! Noise is a [protocol framework](https://noiseprotocol.org/) which we use in Diem to
 //! encrypt and authenticate communications between nodes of the network.
 //!
-//! This file implements a stripped-down version of Noise_IK_25519_AESGCM_SHA256.
-//! This means that only the parts that we care about (the IK handshake) are implemented.
+//! This file implements a stripped-down version of
+//! Noise_IK_25519_AESGCM_SHA256. This means that only the parts that we care
+//! about (the IK handshake) are implemented.
 //!
-//! Note that to benefit from hardware support for AES, you must build this crate with the following
-//! flags: `RUSTFLAGS="-Ctarget-cpu=skylake -Ctarget-feature=+aes,+sse2,+sse4.1,+ssse3"`.
+//! Note that to benefit from hardware support for AES, you must build this
+//! crate with the following flags: `RUSTFLAGS="-Ctarget-cpu=skylake
+//! -Ctarget-feature=+aes,+sse2,+sse4.1,+ssse3"`.
 //!
 //! Usage example:
 //!
@@ -127,22 +129,27 @@ const _: [(); 32] = [(); HashValue::LENGTH];
 // ------
 //
 
-/// A NoiseError enum represents the different types of error that noise can return to users of the crate
+/// A NoiseError enum represents the different types of error that noise can
+/// return to users of the crate
 #[derive(Debug, Error)]
 pub enum NoiseError {
     /// the received message is too short to contain the expected data
-    #[error("noise: the received message is too short to contain the expected data")]
+    #[error(
+        "noise: the received message is too short to contain the expected data"
+    )]
     MsgTooShort,
 
     /// HKDF has failed (in practice there is no reason for HKDF to fail)
     #[error("noise: HKDF has failed")]
     Hkdf,
 
-    /// encryption has failed (in practice there is no reason for encryption to fail)
+    /// encryption has failed (in practice there is no reason for encryption to
+    /// fail)
     #[error("noise: encryption has failed")]
     Encrypt,
 
-    /// could not decrypt the received data (most likely the data was tampered with
+    /// could not decrypt the received data (most likely the data was tampered
+    /// with
     #[error("noise: could not decrypt the received data")]
     Decrypt,
 
@@ -166,7 +173,8 @@ pub enum NoiseError {
     #[error("noise: the response buffer passed as argument is too small")]
     ResponseBufferTooSmall,
 
-    /// the nonce exceeds the maximum u64 value (in practice this should not happen)
+    /// the nonce exceeds the maximum u64 value (in practice this should not
+    /// happen)
     #[error("noise: the nonce exceeds the maximum u64 value")]
     NonceOverflow,
 }
@@ -176,13 +184,18 @@ pub enum NoiseError {
 // -------
 //
 
-fn hash(data: &[u8]) -> Vec<u8> {
-    sha2::Sha256::digest(data).to_vec()
-}
+fn hash(data: &[u8]) -> Vec<u8> { sha2::Sha256::digest(data).to_vec() }
 
-fn hkdf(ck: &[u8], dh_output: Option<&[u8]>) -> Result<(Vec<u8>, Vec<u8>), NoiseError> {
+fn hkdf(
+    ck: &[u8], dh_output: Option<&[u8]>,
+) -> Result<(Vec<u8>, Vec<u8>), NoiseError> {
     let dh_output = dh_output.unwrap_or_else(|| &[]);
-    let hkdf_output = Hkdf::<sha2::Sha256>::extract_then_expand(Some(ck), dh_output, None, 64);
+    let hkdf_output = Hkdf::<sha2::Sha256>::extract_then_expand(
+        Some(ck),
+        dh_output,
+        None,
+        64,
+    );
 
     let hkdf_output = hkdf_output.map_err(|_| NoiseError::Hkdf)?;
     let (k1, k2) = hkdf_output.split_at(32);
@@ -212,7 +225,8 @@ pub struct NoiseConfig {
     public_key: x25519::PublicKey,
 }
 
-/// Refer to the Noise protocol framework specification in order to understand these fields.
+/// Refer to the Noise protocol framework specification in order to understand
+/// these fields.
 #[cfg_attr(test, derive(Clone))]
 pub struct InitiatorHandshakeState {
     /// rolling hash
@@ -225,7 +239,8 @@ pub struct InitiatorHandshakeState {
     rs: x25519::PublicKey,
 }
 
-/// Refer to the Noise protocol framework specification in order to understand these fields.
+/// Refer to the Noise protocol framework specification in order to understand
+/// these fields.
 #[cfg_attr(test, derive(Clone))]
 pub struct ResponderHandshakeState {
     /// rolling hash
@@ -239,9 +254,11 @@ pub struct ResponderHandshakeState {
 }
 
 impl NoiseConfig {
-    /// A peer must create a NoiseConfig through this function before being able to connect with other peers.
+    /// A peer must create a NoiseConfig through this function before being able
+    /// to connect with other peers.
     pub fn new(private_key: x25519::PrivateKey) -> Self {
-        // we could take a public key as argument, and it would be faster, but this is cleaner
+        // we could take a public key as argument, and it would be faster, but
+        // this is cleaner
         let public_key = private_key.public_key();
         Self {
             private_key,
@@ -250,23 +267,20 @@ impl NoiseConfig {
     }
 
     /// Handy getter to access the configuration's public key
-    pub fn public_key(&self) -> x25519::PublicKey {
-        self.public_key
-    }
+    pub fn public_key(&self) -> x25519::PublicKey { self.public_key }
 
     //
     // Initiator
     // ---------
 
-    /// An initiator can use this function to initiate a handshake with a known responder.
+    /// An initiator can use this function to initiate a handshake with a known
+    /// responder.
     pub fn initiate_connection(
-        &self,
-        rng: &mut (impl rand::RngCore + rand::CryptoRng),
-        prologue: &[u8],
-        remote_public: x25519::PublicKey,
-        payload: Option<&[u8]>,
-        response_buffer: &mut [u8],
-    ) -> Result<InitiatorHandshakeState, NoiseError> {
+        &self, rng: &mut (impl rand::RngCore + rand::CryptoRng),
+        prologue: &[u8], remote_public: x25519::PublicKey,
+        payload: Option<&[u8]>, response_buffer: &mut [u8],
+    ) -> Result<InitiatorHandshakeState, NoiseError>
+    {
         // checks
         let payload_len = payload.map(<[u8]>::len).unwrap_or(0);
         let buffer_size_required = handshake_init_msg_len(payload_len);
@@ -341,12 +355,13 @@ impl NoiseConfig {
         Ok(handshake_state)
     }
 
-    /// A client can call this to finalize a connection, after receiving an answer from a server.
+    /// A client can call this to finalize a connection, after receiving an
+    /// answer from a server.
     pub fn finalize_connection(
-        &self,
-        handshake_state: InitiatorHandshakeState,
+        &self, handshake_state: InitiatorHandshakeState,
         received_message: &[u8],
-    ) -> Result<(Vec<u8>, NoiseSession), NoiseError> {
+    ) -> Result<(Vec<u8>, NoiseSession), NoiseError>
+    {
         // checks
         if received_message.len() > MAX_SIZE_NOISE_MSG {
             return Err(NoiseError::ReceivedMsgTooLarge);
@@ -403,19 +418,19 @@ impl NoiseConfig {
     // Responder
     // ---------
     // There are two ways to use this API:
-    // - either use `parse_client_init_message()` followed by `respond_to_client()`
+    // - either use `parse_client_init_message()` followed by
+    //   `respond_to_client()`
     // - or use the all-in-one `respond_to_client_and_finalize()`
     //
     // the reason for the first deconstructed API is that we might want to do
     // some validation of the received initiator's public key which might
     //
 
-    /// A responder can accept a connection by first parsing an initiator message.
-    /// The function respond_to_client is usually called after this to respond to the initiator.
+    /// A responder can accept a connection by first parsing an initiator
+    /// message. The function respond_to_client is usually called after this
+    /// to respond to the initiator.
     pub fn parse_client_init_message(
-        &self,
-        prologue: &[u8],
-        received_message: &[u8],
+        &self, prologue: &[u8], received_message: &[u8],
     ) -> Result<
         (
             x25519::PublicKey,       // initiator's public key
@@ -450,7 +465,8 @@ impl NoiseConfig {
         let k = mix_key(&mut ck, &dh_output)?;
 
         // <- s
-        let mut encrypted_remote_static = [0u8; x25519::PUBLIC_KEY_SIZE + AES_GCM_TAGLEN];
+        let mut encrypted_remote_static =
+            [0u8; x25519::PUBLIC_KEY_SIZE + AES_GCM_TAGLEN];
         cursor
             .read_exact(&mut encrypted_remote_static)
             .map_err(|_| NoiseError::MsgTooShort)?;
@@ -494,15 +510,14 @@ impl NoiseConfig {
         Ok((rs, handshake_state, received_payload))
     }
 
-    /// A responder can respond to an initiator by calling this function with the state obtained,
-    /// after calling parse_client_init_message
+    /// A responder can respond to an initiator by calling this function with
+    /// the state obtained, after calling parse_client_init_message
     pub fn respond_to_client(
-        &self,
-        rng: &mut (impl rand::RngCore + rand::CryptoRng),
-        handshake_state: ResponderHandshakeState,
-        payload: Option<&[u8]>,
+        &self, rng: &mut (impl rand::RngCore + rand::CryptoRng),
+        handshake_state: ResponderHandshakeState, payload: Option<&[u8]>,
         response_buffer: &mut [u8],
-    ) -> Result<NoiseSession, NoiseError> {
+    ) -> Result<NoiseSession, NoiseError>
+    {
         // checks
         let payload_len = payload.map(<[u8]>::len).unwrap_or(0);
         let buffer_size_required = handshake_resp_msg_len(payload_len);
@@ -563,14 +578,11 @@ impl NoiseConfig {
         Ok(session)
     }
 
-    /// This function is a one-call that replaces calling the two functions parse_client_init_message
-    /// and respond_to_client consecutively
+    /// This function is a one-call that replaces calling the two functions
+    /// parse_client_init_message and respond_to_client consecutively
     pub fn respond_to_client_and_finalize(
-        &self,
-        rng: &mut (impl rand::RngCore + rand::CryptoRng),
-        prologue: &[u8],
-        received_message: &[u8],
-        payload: Option<&[u8]>,
+        &self, rng: &mut (impl rand::RngCore + rand::CryptoRng),
+        prologue: &[u8], received_message: &[u8], payload: Option<&[u8]>,
         response_buffer: &mut [u8],
     ) -> Result<
         (
@@ -578,10 +590,16 @@ impl NoiseConfig {
             NoiseSession, // The created session
         ),
         NoiseError,
-    > {
+    >
+    {
         let (_, handshake_state, received_payload) =
             self.parse_client_init_message(prologue, received_message)?;
-        let session = self.respond_to_client(rng, handshake_state, payload, response_buffer)?;
+        let session = self.respond_to_client(
+            rng,
+            handshake_state,
+            payload,
+            response_buffer,
+        )?;
         Ok((received_payload, session))
     }
 }
@@ -590,7 +608,8 @@ impl NoiseConfig {
 // Post-Handshake
 // --------------
 
-/// A NoiseSession is produced after a successful Noise handshake, and can be use to encrypt and decrypt messages to the other peer.
+/// A NoiseSession is produced after a successful Noise handshake, and can be
+/// use to encrypt and decrypt messages to the other peer.
 #[cfg_attr(test, derive(Clone))]
 pub struct NoiseSession {
     /// a session can be marked as invalid if it has seen a decryption failure
@@ -608,7 +627,11 @@ pub struct NoiseSession {
 }
 
 impl NoiseSession {
-    fn new(write_key: Vec<u8>, read_key: Vec<u8>, remote_public_key: x25519::PublicKey) -> Self {
+    fn new(
+        write_key: Vec<u8>, read_key: Vec<u8>,
+        remote_public_key: x25519::PublicKey,
+    ) -> Self
+    {
         Self {
             valid: true,
             remote_public_key,
@@ -635,8 +658,11 @@ impl NoiseSession {
     }
 
     /// encrypts a message for the other peers (post-handshake)
-    /// the function encrypts in place, and returns the authentication tag as result
-    pub fn write_message_in_place(&mut self, message: &mut [u8]) -> Result<Vec<u8>, NoiseError> {
+    /// the function encrypts in place, and returns the authentication tag as
+    /// result
+    pub fn write_message_in_place(
+        &mut self, message: &mut [u8],
+    ) -> Result<Vec<u8>, NoiseError> {
         // checks
         if !self.valid {
             return Err(NoiseError::SessionClosed);
@@ -666,10 +692,10 @@ impl NoiseSession {
     }
 
     /// decrypts a message from the other peer (post-handshake)
-    /// the function decrypts in place, and returns a subslice without the auth tag
+    /// the function decrypts in place, and returns a subslice without the auth
+    /// tag
     pub fn read_message_in_place<'a>(
-        &mut self,
-        message: &'a mut [u8],
+        &mut self, message: &'a mut [u8],
     ) -> Result<&'a [u8], NoiseError> {
         // checks
         if !self.valid {
@@ -691,7 +717,8 @@ impl NoiseSession {
         nonce.extend_from_slice(&self.read_nonce.to_be_bytes());
         let nonce = GenericArray::from_slice(&nonce);
 
-        let (buffer, authentication_tag) = message.split_at_mut(message.len() - AES_GCM_TAGLEN);
+        let (buffer, authentication_tag) =
+            message.split_at_mut(message.len() - AES_GCM_TAGLEN);
         let authentication_tag = GenericArray::from_slice(authentication_tag);
         aead.decrypt_in_place_detached(nonce, b"", buffer, authentication_tag)
             .map_err(|_| {

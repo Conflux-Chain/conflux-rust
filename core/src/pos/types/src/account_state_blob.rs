@@ -46,9 +46,7 @@ impl fmt::Debug for AccountStateBlob {
 }
 
 impl AsRef<[u8]> for AccountStateBlob {
-    fn as_ref(&self) -> &[u8] {
-        &self.blob
-    }
+    fn as_ref(&self) -> &[u8] { &self.blob }
 }
 
 impl From<&AccountStateBlob> for Vec<u8> {
@@ -64,9 +62,7 @@ impl From<AccountStateBlob> for Vec<u8> {
 }
 
 impl From<Vec<u8>> for AccountStateBlob {
-    fn from(blob: Vec<u8>) -> AccountStateBlob {
-        AccountStateBlob { blob }
-    }
+    fn from(blob: Vec<u8>) -> AccountStateBlob { AccountStateBlob { blob } }
 }
 
 impl TryFrom<&AccountState> for AccountStateBlob {
@@ -91,8 +87,12 @@ impl TryFrom<(&AccountResource, &BalanceResource)> for AccountStateBlob {
     type Error = Error;
 
     fn try_from(
-        (account_resource, balance_resource): (&AccountResource, &BalanceResource),
-    ) -> Result<Self> {
+        (account_resource, balance_resource): (
+            &AccountResource,
+            &BalanceResource,
+        ),
+    ) -> Result<Self>
+    {
         Self::try_from(&AccountState::try_from((
             account_resource,
             balance_resource,
@@ -130,11 +130,11 @@ prop_compose! {
 #[cfg(any(test, feature = "fuzzing"))]
 impl Arbitrary for AccountStateBlob {
     type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
     fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
         account_state_blob_strategy().boxed()
     }
-
-    type Strategy = BoxedStrategy<Self>;
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -151,7 +151,11 @@ pub struct AccountStateWithProof {
 
 impl AccountStateWithProof {
     /// Constructor.
-    pub fn new(version: Version, blob: Option<AccountStateBlob>, proof: AccountStateProof) -> Self {
+    pub fn new(
+        version: Version, blob: Option<AccountStateBlob>,
+        proof: AccountStateProof,
+    ) -> Self
+    {
         Self {
             version,
             blob,
@@ -159,19 +163,20 @@ impl AccountStateWithProof {
         }
     }
 
-    /// Verifies the the account state blob with the proof, both carried by `self`.
+    /// Verifies the the account state blob with the proof, both carried by
+    /// `self`.
     ///
     /// Two things are ensured if no error is raised:
-    ///   1. This account state exists in the ledger represented by `ledger_info`.
-    ///   2. It belongs to account of `address` and is seen at the time the transaction at version
-    /// `state_version` is just committed. To make sure this is the latest state, pass in
+    ///   1. This account state exists in the ledger represented by
+    /// `ledger_info`.   2. It belongs to account of `address` and is seen
+    /// at the time the transaction at version `state_version` is just
+    /// committed. To make sure this is the latest state, pass in
     /// `ledger_info.version()` as `state_version`.
     pub fn verify(
-        &self,
-        ledger_info: &LedgerInfo,
-        version: Version,
+        &self, ledger_info: &LedgerInfo, version: Version,
         address: AccountAddress,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         ensure!(
             self.version == version,
             "State version ({}) is not expected ({}).",
@@ -179,8 +184,12 @@ impl AccountStateWithProof {
             version,
         );
 
-        self.proof
-            .verify(ledger_info, version, address.hash(), self.blob.as_ref())
+        self.proof.verify(
+            ledger_info,
+            version,
+            address.hash(),
+            self.blob.as_ref(),
+        )
     }
 }
 

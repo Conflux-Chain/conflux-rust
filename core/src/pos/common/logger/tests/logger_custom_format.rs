@@ -11,9 +11,7 @@ struct VecWriter {
 }
 
 impl Writer for VecWriter {
-    fn write(&self, log: String) {
-        self.logs.write().push(log)
-    }
+    fn write(&self, log: String) { self.logs.write().push(log) }
 }
 
 #[test]
@@ -32,7 +30,11 @@ fn test_custom_formatter() {
                 write!(w, " {}", message)?;
             }
             if !entry.data().is_empty() {
-                write!(w, " {}", serde_json::to_string(&entry.data()).unwrap())?;
+                write!(
+                    w,
+                    " {}",
+                    serde_json::to_string(&entry.data()).unwrap()
+                )?;
             }
             Ok(w)
         })

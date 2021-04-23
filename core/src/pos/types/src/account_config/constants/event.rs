@@ -8,7 +8,8 @@ use move_core_types::{
 };
 use once_cell::sync::Lazy;
 
-static EVENT_MODULE_NAME: Lazy<Identifier> = Lazy::new(|| Identifier::new("Event").unwrap());
+static EVENT_MODULE_NAME: Lazy<Identifier> =
+    Lazy::new(|| Identifier::new("Event").unwrap());
 pub static EVENT_MODULE: Lazy<ModuleId> =
     Lazy::new(|| ModuleId::new(CORE_CODE_ADDRESS, EVENT_MODULE_NAME.clone()));
 
@@ -17,9 +18,7 @@ static EVENT_HANDLE_STRUCT_NAME: Lazy<Identifier> =
 static EVENT_HANDLE_GENERATOR_STRUCT_NAME: Lazy<Identifier> =
     Lazy::new(|| Identifier::new("EventHandleGenerator").unwrap());
 
-pub fn event_module_name() -> &'static IdentStr {
-    &*EVENT_MODULE_NAME
-}
+pub fn event_module_name() -> &'static IdentStr { &*EVENT_MODULE_NAME }
 
 pub fn event_handle_generator_struct_name() -> &'static IdentStr {
     &*EVENT_HANDLE_GENERATOR_STRUCT_NAME

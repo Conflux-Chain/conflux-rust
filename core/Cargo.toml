@@ -20,6 +20,7 @@ cfx-state = { path = "state" }
 cfx-storage = { path = "storage", optional = true }
 cfx-types = { path = "../cfx_types" }
 cfx-utils = { path = "../cfx_utils" }
+channel = { path = "./src/pos/common/channel"}
 clap = "2"
 dag = {path = "../util/dag"}
 derivative = "2.0.2"
@@ -86,6 +87,10 @@ unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git",
 strum = "0.20"
 strum_macros = "0.20"
 smart-default = "0.6.0"
+diem-types = { path = "./src/pos/types" }
+consensus-types = { path = "./src/pos/consensus/consensus-types" }
+safety-rules = { path = "./src/pos/consensus/safety-rules" }
+
 
 [dev-dependencies]
 criterion = "0.2"

@@ -41,13 +41,9 @@ impl ValidatorSet {
         }
     }
 
-    pub fn payload(&self) -> &[ValidatorInfo] {
-        &self.payload
-    }
+    pub fn payload(&self) -> &[ValidatorInfo] { &self.payload }
 
-    pub fn empty() -> Self {
-        ValidatorSet::new(Vec::new())
-    }
+    pub fn empty() -> Self { ValidatorSet::new(Vec::new()) }
 }
 
 impl OnChainConfig for ValidatorSet {
@@ -56,10 +52,8 @@ impl OnChainConfig for ValidatorSet {
 }
 
 impl IntoIterator for ValidatorSet {
-    type Item = ValidatorInfo;
     type IntoIter = vec::IntoIter<Self::Item>;
+    type Item = ValidatorInfo;
 
-    fn into_iter(self) -> Self::IntoIter {
-        self.payload.into_iter()
-    }
+    fn into_iter(self) -> Self::IntoIter { self.payload.into_iter() }
 }

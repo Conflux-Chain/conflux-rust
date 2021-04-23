@@ -19,13 +19,15 @@ use std::{
 // The delimiter between the version and the hash.
 const WAYPOINT_DELIMITER: char = ':';
 
-/// Waypoint keeps information about the LedgerInfo on a given version, which provides an
-/// off-chain mechanism to verify the sync process right after the restart.
-/// At high level, a trusted waypoint verifies the LedgerInfo for a certain epoch change.
-/// For more information, please refer to the Waypoints documentation.
+/// Waypoint keeps information about the LedgerInfo on a given version, which
+/// provides an off-chain mechanism to verify the sync process right after the
+/// restart. At high level, a trusted waypoint verifies the LedgerInfo for a
+/// certain epoch change. For more information, please refer to the Waypoints
+/// documentation.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Waypoint {
-    /// The version of the reconfiguration transaction that is being approved by this waypoint.
+    /// The version of the reconfiguration transaction that is being approved
+    /// by this waypoint.
     version: Version,
     /// The hash of the chosen fields of LedgerInfo.
     value: HashValue,
@@ -47,13 +49,9 @@ impl Waypoint {
         Ok(Self::new_any(ledger_info))
     }
 
-    pub fn version(&self) -> Version {
-        self.version
-    }
+    pub fn version(&self) -> Version { self.version }
 
-    pub fn value(&self) -> HashValue {
-        self.value
-    }
+    pub fn value(&self) -> HashValue { self.value }
 
     /// Errors in case the given ledger info does not match the waypoint.
     pub fn verify(&self, ledger_info: &LedgerInfo) -> Result<()> {
@@ -81,9 +79,7 @@ impl Verifier for Waypoint {
         self.verify(ledger_info.ledger_info())
     }
 
-    fn epoch_change_verification_required(&self, _epoch: u64) -> bool {
-        true
-    }
+    fn epoch_change_verification_required(&self, _epoch: u64) -> bool { true }
 
     fn is_ledger_info_stale(&self, ledger_info: &LedgerInfo) -> bool {
         ledger_info.version() < self.version()
@@ -109,20 +105,20 @@ impl FromStr for Waypoint {
         let mut split = s.split(WAYPOINT_DELIMITER);
         let version = split
             .next()
-            .ok_or_else(|| format_err!("Failed to parse waypoint string {}", s))?
+            .ok_or_else(|| {
+                format_err!("Failed to parse waypoint string {}", s)
+            })?
             .parse::<Version>()?;
-        let value = HashValue::from_hex(
-            split
-                .next()
-                .ok_or_else(|| format_err!("Failed to parse waypoint string {}", s))?,
-        )?;
+        let value = HashValue::from_hex(split.next().ok_or_else(|| {
+            format_err!("Failed to parse waypoint string {}", s)
+        })?)?;
         Ok(Self { version, value })
     }
 }
 
 /// Keeps the fields of LedgerInfo that are hashed for generating a waypoint.
-/// Note that not all the fields of LedgerInfo are included: some consensus-related fields
-/// might not be the same for all the participants.
+/// Note that not all the fields of LedgerInfo are included: some
+/// consensus-related fields might not be the same for all the participants.
 #[derive(Deserialize, Serialize, CryptoHasher, BCSCryptoHash)]
 struct Ledger2WaypointConverter {
     epoch: u64,
@@ -146,16 +142,14 @@ impl Ledger2WaypointConverter {
 
 impl<'de> Deserialize<'de> for Waypoint {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         if deserializer.is_human_readable() {
             let s = <String>::deserialize(deserializer)?;
             Waypoint::from_str(&s).map_err(D::Error::custom)
         } else {
-            // In order to preserve the Serde data model and help analysis tools,
-            // make sure to wrap our value in a container with the same name
-            // as the original type.
+            // In order to preserve the Serde data model and help analysis
+            // tools, make sure to wrap our value in a container
+            // with the same name as the original type.
             #[derive(::serde::Deserialize)]
             #[serde(rename = "Waypoint")]
             struct Value(Version, HashValue);
@@ -170,15 +164,18 @@ impl<'de> Deserialize<'de> for Waypoint {
 }
 
 impl Serialize for Waypoint {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    fn serialize<S>(
+        &self, serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error>
+    where S: Serializer {
         if serializer.is_human_readable() {
             self.to_string().serialize(serializer)
         } else {
             // See comment in deserialize.
-            serializer.serialize_newtype_struct("Waypoint", &(self.version, self.value))
+            serializer.serialize_newtype_struct(
+                "Waypoint",
+                &(self.version, self.value),
+            )
         }
     }
 }

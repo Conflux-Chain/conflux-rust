@@ -1,22 +1,25 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! All proofs generated in this module are not valid proofs. They are only for the purpose of
-//! testing conversion between Rust and Protobuf.
+//! All proofs generated in this module are not valid proofs. They are only for
+//! the purpose of testing conversion between Rust and Protobuf.
 
 use crate::proof::{
-    definition::MAX_ACCUMULATOR_PROOF_DEPTH, AccumulatorConsistencyProof, AccumulatorProof,
-    AccumulatorRangeProof, SparseMerkleLeafNode, SparseMerkleProof, SparseMerkleRangeProof,
+    definition::MAX_ACCUMULATOR_PROOF_DEPTH, AccumulatorConsistencyProof,
+    AccumulatorProof, AccumulatorRangeProof, SparseMerkleLeafNode,
+    SparseMerkleProof, SparseMerkleRangeProof,
 };
 use diem_crypto::{
     hash::{
-        CryptoHash, CryptoHasher, ACCUMULATOR_PLACEHOLDER_HASH, SPARSE_MERKLE_PLACEHOLDER_HASH,
+        CryptoHash, CryptoHasher, ACCUMULATOR_PLACEHOLDER_HASH,
+        SPARSE_MERKLE_PLACEHOLDER_HASH,
     },
     HashValue,
 };
 use proptest::{collection::vec, prelude::*};
 
-fn arb_non_placeholder_accumulator_sibling() -> impl Strategy<Value = HashValue> {
+fn arb_non_placeholder_accumulator_sibling() -> impl Strategy<Value = HashValue>
+{
     any::<HashValue>().prop_filter("Filter out placeholder sibling.", |x| {
         *x != *ACCUMULATOR_PLACEHOLDER_HASH
     })
@@ -29,7 +32,8 @@ fn arb_accumulator_sibling() -> impl Strategy<Value = HashValue> {
     ]
 }
 
-fn arb_non_placeholder_sparse_merkle_sibling() -> impl Strategy<Value = HashValue> {
+fn arb_non_placeholder_sparse_merkle_sibling(
+) -> impl Strategy<Value = HashValue> {
     any::<HashValue>().prop_filter("Filter out placeholder sibling.", |x| {
         *x != *SPARSE_MERKLE_PLACEHOLDER_HASH
     })
@@ -43,8 +47,7 @@ fn arb_sparse_merkle_sibling() -> impl Strategy<Value = HashValue> {
 }
 
 impl<H> Arbitrary for AccumulatorProof<H>
-where
-    H: CryptoHasher + 'static,
+where H: CryptoHasher + 'static
 {
     type Parameters = ();
     type Strategy = BoxedStrategy<Self>;
@@ -72,8 +75,7 @@ where
 }
 
 impl<V> Arbitrary for SparseMerkleProof<V>
-where
-    V: std::fmt::Debug + CryptoHash,
+where V: std::fmt::Debug + CryptoHash
 {
     type Parameters = ();
     type Strategy = BoxedStrategy<Self>;
@@ -117,8 +119,7 @@ impl Arbitrary for AccumulatorConsistencyProof {
 }
 
 impl<H> Arbitrary for AccumulatorRangeProof<H>
-where
-    H: CryptoHasher,
+where H: CryptoHasher
 {
     type Parameters = ();
     type Strategy = BoxedStrategy<Self>;

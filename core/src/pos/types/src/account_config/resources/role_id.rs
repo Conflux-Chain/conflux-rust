@@ -10,9 +10,7 @@ pub struct RoleId {
 }
 
 impl RoleId {
-    pub fn role_id(&self) -> u64 {
-        self.role_id
-    }
+    pub fn role_id(&self) -> u64 { self.role_id }
 }
 
 impl MoveResource for RoleId {

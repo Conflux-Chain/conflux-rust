@@ -8,10 +8,11 @@
 //! queued items. While there is only one [`channel::Receiver`], there can be
 //! many [`channel::Sender`]s, which are also cheap to clone.
 //!
-//! This channel differs from our other channel implementation, [`channel::diem_channel`],
-//! in that it is just a single queue (vs. different queues for different keys)
-//! with backpressure (senders will block if the queue is full instead of evicting
-//! another item in the queue) that only implements FIFO (vs. LIFO or KLAST).
+//! This channel differs from our other channel implementation,
+//! [`channel::diem_channel`], in that it is just a single queue (vs. different
+//! queues for different keys) with backpressure (senders will block if the
+//! queue is full instead of evicting another item in the queue) that only
+//! implements FIFO (vs. LIFO or KLAST).
 
 use diem_metrics::IntGauge;
 use futures::{
@@ -56,12 +57,14 @@ impl<T> Clone for Sender<T> {
     }
 }
 
-/// `Sender` implements `Sink` in the same way as `mpsc::Sender`, but it increments the
-/// associated `IntGauge` when it sends a message successfully.
+/// `Sender` implements `Sink` in the same way as `mpsc::Sender`, but it
+/// increments the associated `IntGauge` when it sends a message successfully.
 impl<T> Sink<T> for Sender<T> {
     type Error = mpsc::SendError;
 
-    fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        mut self: Pin<&mut Self>, cx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         (*self).inner.poll_ready(cx)
     }
 
@@ -69,11 +72,15 @@ impl<T> Sink<T> for Sender<T> {
         (*self).inner.start_send(msg).map(|_| self.gauge.inc())
     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_flush(
+        mut self: Pin<&mut Self>, cx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         Pin::new(&mut self.inner).poll_flush(cx)
     }
 
-    fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_close(
+        mut self: Pin<&mut Self>, cx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         Pin::new(&mut self.inner).poll_close(cx)
     }
 }
@@ -89,20 +96,19 @@ impl<T> Sender<T> {
 }
 
 impl<T> FusedStream for Receiver<T>
-where
-    T: std::fmt::Debug,
+where T: std::fmt::Debug
 {
-    fn is_terminated(&self) -> bool {
-        self.inner.is_terminated()
-    }
+    fn is_terminated(&self) -> bool { self.inner.is_terminated() }
 }
 
-/// `Receiver` implements `Stream` in the same way as `mpsc::Stream`, but it decrements the
-/// associated `IntGauge` when it gets polled successfully.
+/// `Receiver` implements `Stream` in the same way as `mpsc::Stream`, but it
+/// decrements the associated `IntGauge` when it gets polled successfully.
 impl<T> Stream for Receiver<T> {
     type Item = T;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(
+        mut self: Pin<&mut Self>, cx: &mut Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
         let next = Pin::new(&mut self.inner).poll_next(cx);
         if let Poll::Ready(Some(_)) = next {
             self.gauge.dec();

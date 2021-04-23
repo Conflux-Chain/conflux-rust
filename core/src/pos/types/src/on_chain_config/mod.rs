@@ -31,8 +31,8 @@ pub use self::{
 };
 
 /// To register an on-chain config in Rust:
-/// 1. Implement the `OnChainConfig` trait for the Rust representation of the config
-/// 2. Add the config's `ConfigID` to `ON_CHAIN_CONFIG_REGISTRY`
+/// 1. Implement the `OnChainConfig` trait for the Rust representation of the
+/// config 2. Add the config's `ConfigID` to `ON_CHAIN_CONFIG_REGISTRY`
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ConfigID(&'static str, &'static str);
@@ -40,13 +40,15 @@ pub struct ConfigID(&'static str, &'static str);
 const CONFIG_ADDRESS_STR: &str = "0xA550C18";
 
 pub fn config_address() -> AccountAddress {
-    AccountAddress::from_hex_literal(CONFIG_ADDRESS_STR).expect("failed to get address")
+    AccountAddress::from_hex_literal(CONFIG_ADDRESS_STR)
+        .expect("failed to get address")
 }
 
 impl ConfigID {
     pub fn access_path(self) -> AccessPath {
         access_path_for_config(
-            AccountAddress::from_hex_literal(self.0).expect("failed to get address"),
+            AccountAddress::from_hex_literal(self.0)
+                .expect("failed to get address"),
             Identifier::new(self.1).expect("failed to get Identifier"),
         )
     }
@@ -62,7 +64,8 @@ impl fmt::Display for ConfigID {
     }
 }
 
-/// State sync will panic if the value of any config in this registry is uninitialized
+/// State sync will panic if the value of any config in this registry is
+/// uninitialized
 pub const ON_CHAIN_CONFIG_REGISTRY: &[ConfigID] = &[
     VMConfig::CONFIG_ID,
     VMPublishingOption::CONFIG_ID,
@@ -82,21 +85,16 @@ impl OnChainConfigPayload {
         Self { epoch, configs }
     }
 
-    pub fn epoch(&self) -> u64 {
-        self.epoch
-    }
+    pub fn epoch(&self) -> u64 { self.epoch }
 
     pub fn get<T: OnChainConfig>(&self) -> Result<T> {
-        let bytes = self
-            .configs
-            .get(&T::CONFIG_ID)
-            .ok_or_else(|| format_err!("[on-chain cfg] config not in payload"))?;
+        let bytes = self.configs.get(&T::CONFIG_ID).ok_or_else(|| {
+            format_err!("[on-chain cfg] config not in payload")
+        })?;
         T::deserialize_into_config(bytes)
     }
 
-    pub fn configs(&self) -> &HashMap<ConfigID, Vec<u8>> {
-        &self.configs
-    }
+    pub fn configs(&self) -> &HashMap<ConfigID, Vec<u8>> { &self.configs }
 }
 
 impl fmt::Display for OnChainConfigPayload {
@@ -113,13 +111,14 @@ impl fmt::Display for OnChainConfigPayload {
     }
 }
 
-/// Trait to be implemented by a storage type from which to read on-chain configs
+/// Trait to be implemented by a storage type from which to read on-chain
+/// configs
 pub trait ConfigStorage {
     fn fetch_config(&self, access_path: AccessPath) -> Option<Vec<u8>>;
 }
 
-/// Trait to be implemented by a Rust struct representation of an on-chain config
-/// that is stored in storage as a serialized byte array
+/// Trait to be implemented by a Rust struct representation of an on-chain
+/// config that is stored in storage as a serialized byte array
 pub trait OnChainConfig: Send + Sync + DeserializeOwned {
     // diem_root_address
     const ADDRESS: &'static str = CONFIG_ADDRESS_STR;
@@ -127,29 +126,32 @@ pub trait OnChainConfig: Send + Sync + DeserializeOwned {
     const CONFIG_ID: ConfigID = ConfigID(Self::ADDRESS, Self::IDENTIFIER);
 
     // Single-round BCS deserialization from bytes to `Self`
-    // This is the expected deserialization pattern for most Rust representations,
-    // but sometimes `deserialize_into_config` may need an extra customized round of deserialization
-    // (e.g. enums like `VMPublishingOption`)
-    // In the override, we can reuse this default logic via this function
-    // Note: we cannot directly call the default `deserialize_into_config` implementation
-    // in its override - this will just refer to the override implementation itself
+    // This is the expected deserialization pattern for most Rust
+    // representations, but sometimes `deserialize_into_config` may need an
+    // extra customized round of deserialization (e.g. enums like
+    // `VMPublishingOption`) In the override, we can reuse this default
+    // logic via this function Note: we cannot directly call the default
+    // `deserialize_into_config` implementation in its override - this will
+    // just refer to the override implementation itself
     fn deserialize_default_impl(bytes: &[u8]) -> Result<Self> {
-        bcs::from_bytes::<Self>(&bytes)
-            .map_err(|e| format_err!("[on-chain config] Failed to deserialize into config: {}", e))
+        bcs::from_bytes::<Self>(&bytes).map_err(|e| {
+            format_err!(
+                "[on-chain config] Failed to deserialize into config: {}",
+                e
+            )
+        })
     }
 
     // Function for deserializing bytes to `Self`
-    // It will by default try one round of BCS deserialization directly to `Self`
-    // The implementation for the concrete type should override this function if this
-    // logic needs to be customized
+    // It will by default try one round of BCS deserialization directly to
+    // `Self` The implementation for the concrete type should override this
+    // function if this logic needs to be customized
     fn deserialize_into_config(bytes: &[u8]) -> Result<Self> {
         Self::deserialize_default_impl(bytes)
     }
 
     fn fetch_config<T>(storage: &T) -> Option<Self>
-    where
-        T: ConfigStorage,
-    {
+    where T: ConfigStorage {
         storage
             .fetch_config(Self::CONFIG_ID.access_path())
             .and_then(|bytes| Self::deserialize_into_config(&bytes).ok())
@@ -160,7 +162,9 @@ pub fn new_epoch_event_key() -> EventKey {
     EventKey::new_from_address(&config_address(), 4)
 }
 
-pub fn access_path_for_config(address: AccountAddress, config_name: Identifier) -> AccessPath {
+pub fn access_path_for_config(
+    address: AccountAddress, config_name: Identifier,
+) -> AccessPath {
     AccessPath::new(
         address,
         AccessPath::resource_access_vec(StructTag {
@@ -185,17 +189,13 @@ pub struct ConfigurationResource {
 }
 
 impl ConfigurationResource {
-    pub fn epoch(&self) -> u64 {
-        self.epoch
-    }
+    pub fn epoch(&self) -> u64 { self.epoch }
 
     pub fn last_reconfiguration_time(&self) -> u64 {
         self.last_reconfiguration_time
     }
 
-    pub fn events(&self) -> &EventHandle {
-        &self.events
-    }
+    pub fn events(&self) -> &EventHandle { &self.events }
 
     #[cfg(feature = "fuzzing")]
     pub fn bump_epoch_for_test(&self) -> Self {
@@ -218,7 +218,10 @@ impl Default for ConfigurationResource {
         Self {
             epoch: 0,
             last_reconfiguration_time: 0,
-            events: EventHandle::new_from_address(&crate::account_config::diem_root_address(), 16),
+            events: EventHandle::new_from_address(
+                &crate::account_config::diem_root_address(),
+                16,
+            ),
         }
     }
 }

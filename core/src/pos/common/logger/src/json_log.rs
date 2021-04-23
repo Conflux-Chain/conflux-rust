@@ -52,8 +52,8 @@ impl JsonLogEntry {
 /// Sends event to event stream.
 ///
 /// Note that this method acquires global lock for brief moment.
-/// This means that very hot threads can not use this method concurrently, otherwise they
-/// will contend for same lock.
+/// This means that very hot threads can not use this method concurrently,
+/// otherwise they will contend for same lock.
 // TODO: if we use events more often we should rewrite it to be non-blocking
 pub fn send_json_log(entry: JsonLogEntry) {
     let mut queue = JSON_LOG_ENTRY_QUEUE.lock();

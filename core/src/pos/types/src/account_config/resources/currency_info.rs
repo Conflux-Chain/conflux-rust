@@ -3,7 +3,9 @@
 
 use crate::{
     access_path::AccessPath,
-    account_config::constants::{diem_root_address, type_tag_for_currency_code, CORE_CODE_ADDRESS},
+    account_config::constants::{
+        diem_root_address, type_tag_for_currency_code, CORE_CODE_ADDRESS,
+    },
     event::EventHandle,
 };
 use anyhow::Result;
@@ -39,20 +41,14 @@ impl MoveResource for CurrencyInfoResource {
 
 impl CurrencyInfoResource {
     pub fn new(
-        total_value: u128,
-        preburn_value: u64,
-        to_xdx_exchange_rate: u64,
-        is_synthetic: bool,
-        scaling_factor: u64,
-        fractional_part: u64,
-        currency_code: Identifier,
-        can_mint: bool,
-        mint_events: EventHandle,
-        burn_events: EventHandle,
-        preburn_events: EventHandle,
+        total_value: u128, preburn_value: u64, to_xdx_exchange_rate: u64,
+        is_synthetic: bool, scaling_factor: u64, fractional_part: u64,
+        currency_code: Identifier, can_mint: bool, mint_events: EventHandle,
+        burn_events: EventHandle, preburn_events: EventHandle,
         cancel_burn_events: EventHandle,
         exchange_rate_update_events: EventHandle,
-    ) -> Self {
+    ) -> Self
+    {
         Self {
             total_value,
             preburn_value,
@@ -70,29 +66,20 @@ impl CurrencyInfoResource {
         }
     }
 
-    pub fn currency_code(&self) -> &IdentStr {
-        &self.currency_code
-    }
+    pub fn currency_code(&self) -> &IdentStr { &self.currency_code }
 
-    pub fn scaling_factor(&self) -> u64 {
-        self.scaling_factor
-    }
+    pub fn scaling_factor(&self) -> u64 { self.scaling_factor }
 
-    pub fn total_value(&self) -> u128 {
-        self.total_value
-    }
+    pub fn total_value(&self) -> u128 { self.total_value }
 
-    pub fn preburn_value(&self) -> u64 {
-        self.preburn_value
-    }
+    pub fn preburn_value(&self) -> u64 { self.preburn_value }
 
-    pub fn fractional_part(&self) -> u64 {
-        self.fractional_part
-    }
+    pub fn fractional_part(&self) -> u64 { self.fractional_part }
 
     pub fn exchange_rate(&self) -> f32 {
-        // Exchange rates are represented as 32|32 fixed-point numbers on-chain, so we divide by the scaling
-        // factor (2^32) of the number to arrive at the floating point representation of the number.
+        // Exchange rates are represented as 32|32 fixed-point numbers on-chain,
+        // so we divide by the scaling factor (2^32) of the number to
+        // arrive at the floating point representation of the number.
         (self.to_xdx_exchange_rate as f32) / 2f32.powf(32f32)
     }
 
@@ -121,17 +108,11 @@ impl CurrencyInfoResource {
         bcs::from_bytes(bytes).map_err(Into::into)
     }
 
-    pub fn mint_events(&self) -> &EventHandle {
-        &self.mint_events
-    }
+    pub fn mint_events(&self) -> &EventHandle { &self.mint_events }
 
-    pub fn burn_events(&self) -> &EventHandle {
-        &self.burn_events
-    }
+    pub fn burn_events(&self) -> &EventHandle { &self.burn_events }
 
-    pub fn preburn_events(&self) -> &EventHandle {
-        &self.preburn_events
-    }
+    pub fn preburn_events(&self) -> &EventHandle { &self.preburn_events }
 
     pub fn cancel_burn_events(&self) -> &EventHandle {
         &self.cancel_burn_events

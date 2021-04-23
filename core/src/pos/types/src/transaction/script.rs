@@ -1,7 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{serde_helper::vec_bytes, transaction::transaction_argument::TransactionArgument};
+use crate::{
+    serde_helper::vec_bytes,
+    transaction::transaction_argument::TransactionArgument,
+};
 use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
@@ -19,7 +22,9 @@ pub struct Script {
 }
 
 impl Script {
-    pub fn new(code: Vec<u8>, ty_args: Vec<TypeTag>, args: Vec<TransactionArgument>) -> Self {
+    pub fn new(
+        code: Vec<u8>, ty_args: Vec<TypeTag>, args: Vec<TransactionArgument>,
+    ) -> Self {
         Script {
             code,
             ty_args,
@@ -27,17 +32,11 @@ impl Script {
         }
     }
 
-    pub fn code(&self) -> &[u8] {
-        &self.code
-    }
+    pub fn code(&self) -> &[u8] { &self.code }
 
-    pub fn ty_args(&self) -> &[TypeTag] {
-        &self.ty_args
-    }
+    pub fn ty_args(&self) -> &[TypeTag] { &self.ty_args }
 
-    pub fn args(&self) -> &[TransactionArgument] {
-        &self.args
-    }
+    pub fn args(&self) -> &[TransactionArgument] { &self.args }
 
     pub fn into_inner(self) -> (Vec<u8>, Vec<TransactionArgument>) {
         (self.code, self.args)
@@ -109,12 +108,10 @@ pub struct TypeArgumentABI {
 
 impl TransactionScriptABI {
     pub fn new(
-        name: String,
-        doc: String,
-        code: Vec<u8>,
-        ty_args: Vec<TypeArgumentABI>,
-        args: Vec<ArgumentABI>,
-    ) -> Self {
+        name: String, doc: String, code: Vec<u8>,
+        ty_args: Vec<TypeArgumentABI>, args: Vec<ArgumentABI>,
+    ) -> Self
+    {
         Self {
             name,
             doc,
@@ -124,35 +121,23 @@ impl TransactionScriptABI {
         }
     }
 
-    pub fn name(&self) -> &str {
-        &self.name
-    }
+    pub fn name(&self) -> &str { &self.name }
 
-    pub fn doc(&self) -> &str {
-        &self.doc
-    }
+    pub fn doc(&self) -> &str { &self.doc }
 
-    pub fn code(&self) -> &[u8] {
-        &self.code
-    }
+    pub fn code(&self) -> &[u8] { &self.code }
 
-    pub fn ty_args(&self) -> &[TypeArgumentABI] {
-        &self.ty_args
-    }
+    pub fn ty_args(&self) -> &[TypeArgumentABI] { &self.ty_args }
 
-    pub fn args(&self) -> &[ArgumentABI] {
-        &self.args
-    }
+    pub fn args(&self) -> &[ArgumentABI] { &self.args }
 }
 
 impl ScriptFunctionABI {
     pub fn new(
-        name: String,
-        module_name: ModuleId,
-        doc: String,
-        ty_args: Vec<TypeArgumentABI>,
-        args: Vec<ArgumentABI>,
-    ) -> Self {
+        name: String, module_name: ModuleId, doc: String,
+        ty_args: Vec<TypeArgumentABI>, args: Vec<ArgumentABI>,
+    ) -> Self
+    {
         Self {
             name,
             module_name,
@@ -162,25 +147,15 @@ impl ScriptFunctionABI {
         }
     }
 
-    pub fn name(&self) -> &str {
-        &self.name
-    }
+    pub fn name(&self) -> &str { &self.name }
 
-    pub fn module_name(&self) -> &ModuleId {
-        &self.module_name
-    }
+    pub fn module_name(&self) -> &ModuleId { &self.module_name }
 
-    pub fn doc(&self) -> &str {
-        &self.doc
-    }
+    pub fn doc(&self) -> &str { &self.doc }
 
-    pub fn ty_args(&self) -> &[TypeArgumentABI] {
-        &self.ty_args
-    }
+    pub fn ty_args(&self) -> &[TypeArgumentABI] { &self.ty_args }
 
-    pub fn args(&self) -> &[ArgumentABI] {
-        &self.args
-    }
+    pub fn args(&self) -> &[ArgumentABI] { &self.args }
 }
 
 impl ScriptABI {
@@ -226,23 +201,15 @@ impl ArgumentABI {
         Self { name, type_tag }
     }
 
-    pub fn name(&self) -> &str {
-        &self.name
-    }
+    pub fn name(&self) -> &str { &self.name }
 
-    pub fn type_tag(&self) -> &TypeTag {
-        &self.type_tag
-    }
+    pub fn type_tag(&self) -> &TypeTag { &self.type_tag }
 }
 
 impl TypeArgumentABI {
-    pub fn new(name: String) -> Self {
-        Self { name }
-    }
+    pub fn new(name: String) -> Self { Self { name } }
 
-    pub fn name(&self) -> &str {
-        &self.name
-    }
+    pub fn name(&self) -> &str { &self.name }
 }
 
 /// Call a Move script function.
@@ -257,11 +224,10 @@ pub struct ScriptFunction {
 
 impl ScriptFunction {
     pub fn new(
-        module: ModuleId,
-        function: Identifier,
-        ty_args: Vec<TypeTag>,
+        module: ModuleId, function: Identifier, ty_args: Vec<TypeTag>,
         args: Vec<Vec<u8>>,
-    ) -> Self {
+    ) -> Self
+    {
         ScriptFunction {
             module,
             function,
@@ -270,19 +236,11 @@ impl ScriptFunction {
         }
     }
 
-    pub fn module(&self) -> &ModuleId {
-        &self.module
-    }
+    pub fn module(&self) -> &ModuleId { &self.module }
 
-    pub fn function(&self) -> &IdentStr {
-        &self.function
-    }
+    pub fn function(&self) -> &IdentStr { &self.function }
 
-    pub fn ty_args(&self) -> &[TypeTag] {
-        &self.ty_args
-    }
+    pub fn ty_args(&self) -> &[TypeTag] { &self.ty_args }
 
-    pub fn args(&self) -> &[Vec<u8>] {
-        &self.args
-    }
+    pub fn args(&self) -> &[Vec<u8>] { &self.args }
 }

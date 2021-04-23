@@ -15,10 +15,12 @@ use cfxkey::{
     Signature as EthkeySignature, SECP256K1,
 };
 use core::convert::TryFrom;
-use diem_crypto_derive::{DeserializeKey, SerializeKey, SilentDebug, SilentDisplay};
+use diem_crypto_derive::{
+    DeserializeKey, SerializeKey, SilentDebug, SilentDisplay,
+};
 use mirai_annotations::*;
 use secp256k1::key;
-use serde::{Serialize};
+use serde::Serialize;
 
 /// The length of the Secp256k1PrivateKey
 pub const SECP256K1_PRIVATE_KEY_LENGTH: usize = 32;
@@ -168,11 +170,14 @@ impl Secp256k1Signature {
         Self(signature)
     }
 
-    /// Checks that `self` is valid for an arbitrary &[u8] `message` using `public_key`.
-    /// Outside of this crate, this particular function should only be used for native signature
-    /// verification in move
-    fn verify_arbitrary_msg(&self, message: &[u8], public_key: &Secp256k1PublicKey) -> Result<()> {
-        // Public keys should be validated to be safe against small subgroup attacks, etc.
+    /// Checks that `self` is valid for an arbitrary &[u8] `message` using
+    /// `public_key`. Outside of this crate, this particular function should
+    /// only be used for native signature verification in move
+    fn verify_arbitrary_msg(
+        &self, message: &[u8], public_key: &Secp256k1PublicKey,
+    ) -> Result<()> {
+        // Public keys should be validated to be safe against small subgroup
+        // attacks, etc.
         precondition!(has_tag!(public_key, ValidatedPublicKeyTag));
         Secp256k1Signature::check_malleability(&self.to_bytes())?;
         let msg = H256::from_slice(message.to_vec().as_slice());
@@ -197,7 +202,9 @@ impl SigningKey for Secp256k1PrivateKey {
     type SignatureMaterial = Secp256k1Signature;
     type VerifyingKeyMaterial = Secp256k1PublicKey;
 
-    fn sign<T: CryptoHash + Serialize>(&self, message: &T) -> Secp256k1Signature {
+    fn sign<T: CryptoHash + Serialize>(
+        &self, message: &T,
+    ) -> Secp256k1Signature {
         let mut bytes = <T::Hasher as CryptoHasher>::seed().to_vec();
         bcs::serialize_into(&mut bytes, &message)
             .map_err(|_| CryptoMaterialError::SerializationError)
@@ -213,9 +220,7 @@ impl SigningKey for Secp256k1PrivateKey {
 
 impl Uniform for Secp256k1PrivateKey {
     fn generate<R>(_rng: &mut R) -> Self
-        where
-            R: ::rand::RngCore + ::rand::CryptoRng,
-    {
+    where R: ::rand::RngCore + ::rand::CryptoRng {
         let key_pair = EthkeyRandom
             .generate()
             .expect("Error generating random key pair");
@@ -251,15 +256,11 @@ impl TryFrom<&[u8]> for Secp256k1PrivateKey {
 }
 
 impl Length for Secp256k1PrivateKey {
-    fn length(&self) -> usize {
-        SECP256K1_PRIVATE_KEY_LENGTH
-    }
+    fn length(&self) -> usize { SECP256K1_PRIVATE_KEY_LENGTH }
 }
 
 impl ValidCryptoMaterial for Secp256k1PrivateKey {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_bytes().to_vec()
-    }
+    fn to_bytes(&self) -> Vec<u8> { self.to_bytes().to_vec() }
 }
 
 impl Genesis for Secp256k1PrivateKey {
@@ -346,15 +347,11 @@ impl TryFrom<&[u8]> for Secp256k1PublicKey {
 }
 
 impl Length for Secp256k1PublicKey {
-    fn length(&self) -> usize {
-        SECP256K1_PUBLIC_KEY_LENGTH
-    }
+    fn length(&self) -> usize { SECP256K1_PUBLIC_KEY_LENGTH }
 }
 
 impl ValidCryptoMaterial for Secp256k1PublicKey {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.0.as_bytes().to_vec()
-    }
+    fn to_bytes(&self) -> Vec<u8> { self.0.as_bytes().to_vec() }
 }
 
 //////////////////////
@@ -366,14 +363,14 @@ impl Signature for Secp256k1Signature {
     type VerifyingKeyMaterial = Secp256k1PublicKey;
 
     /// Verifies that the provided signature is valid for the provided
-    /// message, according to the RFC8032 algorithm. This strict verification performs the
-    /// recommended check of 5.1.7 §3, on top of the required RFC8032 verifications.
+    /// message, according to the RFC8032 algorithm. This strict verification
+    /// performs the recommended check of 5.1.7 §3, on top of the required
+    /// RFC8032 verifications.
     fn verify<T: CryptoHash + Serialize>(
-        &self,
-        message: &T,
-        public_key: &Secp256k1PublicKey,
+        &self, message: &T, public_key: &Secp256k1PublicKey,
     ) -> Result<()> {
-        // Public keys should be validated to be safe against small subgroup attacks, etc.
+        // Public keys should be validated to be safe against small subgroup
+        // attacks, etc.
         precondition!(has_tag!(public_key, ValidatedPublicKeyTag));
         let mut bytes = <T::Hasher as CryptoHasher>::seed().to_vec();
         bcs::serialize_into(&mut bytes, &message)
@@ -381,10 +378,12 @@ impl Signature for Secp256k1Signature {
         Secp256k1Signature::verify_arbitrary_msg(self, &bytes, public_key)
     }
 
-    /// Checks that `self` is valid for an arbitrary &[u8] `message` using `public_key`.
-    /// Outside of this crate, this particular function should only be used for native signature
-    /// verification in move
-    fn verify_arbitrary_msg(&self, message: &[u8], public_key: &Secp256k1PublicKey) -> Result<()> {
+    /// Checks that `self` is valid for an arbitrary &[u8] `message` using
+    /// `public_key`. Outside of this crate, this particular function should
+    /// only be used for native signature verification in move
+    fn verify_arbitrary_msg(
+        &self, message: &[u8], public_key: &Secp256k1PublicKey,
+    ) -> Result<()> {
         Secp256k1Signature::verify_arbitrary_msg(self, message, public_key)
     }
 
@@ -392,15 +391,11 @@ impl Signature for Secp256k1Signature {
 }
 
 impl Length for Secp256k1Signature {
-    fn length(&self) -> usize {
-        SECP256K1_SIGNATURE_LENGTH
-    }
+    fn length(&self) -> usize { SECP256K1_SIGNATURE_LENGTH }
 }
 
 impl ValidCryptoMaterial for Secp256k1Signature {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_bytes().to_vec()
-    }
+    fn to_bytes(&self) -> Vec<u8> { self.to_bytes().to_vec() }
 }
 
 impl std::hash::Hash for Secp256k1Signature {
@@ -456,8 +451,7 @@ pub mod compat {
         _opt_rng: T,
     ) -> (Secp256k1PrivateKey, Secp256k1PublicKey)
     where T: Into<Option<&'a mut StdRng>> + Sized {
-        <(Secp256k1PrivateKey, Secp256k1PublicKey)>::generate_for_testing(
-        )
+        <(Secp256k1PrivateKey, Secp256k1PublicKey)>::generate_for_testing()
     }
 
     /// Used to produce keypairs from a seed for testing purposes

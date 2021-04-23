@@ -12,9 +12,10 @@ use digest::{
 use tiny_keccak::{Hasher, Sha3};
 
 /// A wrapper for [`tiny_keccak::Sha3::v256`] that
-/// implements RustCrypto [`digest`] traits [`BlockInput`], [`Update`], [`Reset`],
-/// and [`FixedOutput`]. Consequently, this wrapper can be used in RustCrypto
-/// APIs that require a hash function (usually something that impls [`Digest`]).
+/// implements RustCrypto [`digest`] traits [`BlockInput`], [`Update`],
+/// [`Reset`], and [`FixedOutput`]. Consequently, this wrapper can be used in
+/// RustCrypto APIs that require a hash function (usually something that impls
+/// [`Digest`]).
 #[derive(Clone)]
 pub struct Sha3_256(Sha3);
 
@@ -23,9 +24,7 @@ static_assertions::assert_impl_all!(Sha3_256: Digest);
 
 impl Default for Sha3_256 {
     #[inline]
-    fn default() -> Self {
-        Self(Sha3::v256())
-    }
+    fn default() -> Self { Self(Sha3::v256()) }
 }
 
 impl BlockInput for Sha3_256 {
@@ -41,9 +40,7 @@ impl Update for Sha3_256 {
 
 impl Reset for Sha3_256 {
     #[inline]
-    fn reset(&mut self) {
-        *self = Self::default();
-    }
+    fn reset(&mut self) { *self = Self::default(); }
 }
 
 impl FixedOutput for Sha3_256 {
@@ -55,7 +52,9 @@ impl FixedOutput for Sha3_256 {
     }
 
     #[inline]
-    fn finalize_into_reset(&mut self, out: &mut GenericArray<u8, Self::OutputSize>) {
+    fn finalize_into_reset(
+        &mut self, out: &mut GenericArray<u8, Self::OutputSize>,
+    ) {
         self.clone().finalize_into(out);
         Reset::reset(self)
     }

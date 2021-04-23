@@ -11,15 +11,14 @@ use chrono::Utc;
 use diem_crypto::{ed25519::*, test_utils::KeyPair, traits::SigningKey};
 
 pub fn create_unsigned_txn(
-    payload: TransactionPayload,
-    sender_address: AccountAddress,
-    sender_sequence_number: u64,
-    max_gas_amount: u64,
-    gas_unit_price: u64,
+    payload: TransactionPayload, sender_address: AccountAddress,
+    sender_sequence_number: u64, max_gas_amount: u64, gas_unit_price: u64,
     gas_currency_code: String,
-    txn_expiration_duration_secs: i64, // for compatibility with UTC's timestamp.
+    txn_expiration_duration_secs: i64, /* for compatibility with UTC's
+                                        * timestamp. */
     chain_id: ChainId,
-) -> RawTransaction {
+) -> RawTransaction
+{
     RawTransaction::new(
         sender_address,
         sender_sequence_number,
@@ -38,16 +37,14 @@ pub trait TransactionSigner {
 
 /// Craft a transaction request.
 pub fn create_user_txn<T: TransactionSigner + ?Sized>(
-    signer: &T,
-    payload: TransactionPayload,
-    sender_address: AccountAddress,
-    sender_sequence_number: u64,
-    max_gas_amount: u64,
-    gas_unit_price: u64,
+    signer: &T, payload: TransactionPayload, sender_address: AccountAddress,
+    sender_sequence_number: u64, max_gas_amount: u64, gas_unit_price: u64,
     gas_currency_code: String,
-    txn_expiration_duration_secs: i64, // for compatibility with UTC's timestamp.
+    txn_expiration_duration_secs: i64, /* for compatibility with UTC's
+                                        * timestamp. */
     chain_id: ChainId,
-) -> Result<SignedTransaction> {
+) -> Result<SignedTransaction>
+{
     let raw_txn = create_unsigned_txn(
         payload,
         sender_address,

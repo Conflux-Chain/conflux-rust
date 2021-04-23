@@ -11,13 +11,9 @@ pub struct Module {
 }
 
 impl Module {
-    pub fn new(code: Vec<u8>) -> Module {
-        Module { code }
-    }
+    pub fn new(code: Vec<u8>) -> Module { Module { code } }
 
-    pub fn code(&self) -> &[u8] {
-        &self.code
-    }
+    pub fn code(&self) -> &[u8] { &self.code }
 }
 
 impl fmt::Debug for Module {

@@ -11,9 +11,7 @@ pub struct ChainIdResource {
 }
 
 impl ChainIdResource {
-    pub fn chain_id(&self) -> ChainId {
-        ChainId::new(self.chain_id)
-    }
+    pub fn chain_id(&self) -> ChainId { ChainId::new(self.chain_id) }
 }
 
 impl MoveResource for ChainIdResource {

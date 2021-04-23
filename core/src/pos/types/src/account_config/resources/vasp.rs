@@ -13,9 +13,7 @@ pub struct ParentVASP {
 }
 
 impl ParentVASP {
-    pub fn num_children(&self) -> u64 {
-        self.num_children
-    }
+    pub fn num_children(&self) -> u64 { self.num_children }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -25,9 +23,7 @@ pub struct ChildVASP {
 }
 
 impl ChildVASP {
-    pub fn parent_vasp_addr(&self) -> AccountAddress {
-        self.parent_vasp_addr
-    }
+    pub fn parent_vasp_addr(&self) -> AccountAddress { self.parent_vasp_addr }
 }
 
 impl MoveResource for ParentVASP {
