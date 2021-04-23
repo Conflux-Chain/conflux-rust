@@ -260,9 +260,12 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     }
 
     fn check_commission_privilege(
-        &self, _contract_address: &Address, _user: &Address,
+        &self, contract_address: &Address, user_address: &Address,
     ) -> Result<bool> {
-        unimplemented!()
+        Ok(self
+            .get_commission_privilege(contract_address, user_address)?
+            .as_ref()
+            .map_or(false, |value| !value.is_zero()))
     }
 
     fn add_commission_privilege(
@@ -528,6 +531,16 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         &self, address: &Address,
     ) -> Result<impl AsRef<NonCopy<Option<&VoteStakeList>>>> {
         self.cache.get_vote_stake_list(address, &self.db)
+    }
+
+    fn get_commission_privilege(
+        &self, contract_address: &Address, user_address: &Address,
+    ) -> Result<impl AsRef<NonCopy<Option<&U256>>>> {
+        self.cache.get_commission_privilege(
+            contract_address,
+            user_address,
+            &self.db,
+        )
     }
 
     fn modify_and_update_account<'a>(

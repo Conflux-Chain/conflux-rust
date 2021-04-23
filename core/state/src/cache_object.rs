@@ -38,6 +38,21 @@ pub trait CachedObject: Encodable + IsDefault + Sized {
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub struct CodeAddress(pub Address, pub H256);
 
+/// Contract address and user address.
+#[derive(Clone, Eq, Hash, PartialEq)]
+pub struct CommissionPrivilegeAddress(pub Address, pub Address, pub Vec<u8>);
+
+impl CommissionPrivilegeAddress {
+    pub fn new(
+        contract_address: Address, user_address: Address,
+    ) -> CommissionPrivilegeAddress {
+        let mut key = Vec::with_capacity(Address::len_bytes() * 2);
+        key.extend_from_slice(contract_address.as_ref());
+        key.extend_from_slice(user_address.as_ref());
+        CommissionPrivilegeAddress(contract_address, user_address, key)
+    }
+}
+
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub struct DepositListAddress(pub Address);
 
@@ -79,6 +94,19 @@ impl ToHashKey<CodeAddress> for CodeAddress {
     fn to_hash_key(&self) -> CodeAddress { self.clone() }
 }
 
+impl AsStorageKey for CommissionPrivilegeAddress {
+    fn storage_key(&self) -> StorageKey {
+        StorageKey::StorageKey {
+            address_bytes: SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS.as_ref(),
+            storage_key: self.2.as_ref(),
+        }
+    }
+}
+
+impl ToHashKey<CommissionPrivilegeAddress> for CommissionPrivilegeAddress {
+    fn to_hash_key(&self) -> Self { self.clone() }
+}
+
 impl AsStorageKey for DepositListAddress {
     fn storage_key(&self) -> StorageKey {
         StorageKey::DepositListKey(self.0.as_ref())
@@ -113,6 +141,16 @@ impl CachedObject for CodeInfo {
     type HashKeyType = CodeAddress;
 
     fn load_from_rlp(_key: &CodeAddress, rlp: &Rlp) -> Result<Self> {
+        Ok(Self::decode(rlp)?)
+    }
+}
+
+impl CachedObject for U256 {
+    type HashKeyType = CommissionPrivilegeAddress;
+
+    fn load_from_rlp(
+        _key: &CommissionPrivilegeAddress, rlp: &Rlp,
+    ) -> Result<Self> {
         Ok(Self::decode(rlp)?)
     }
 }
@@ -154,10 +192,12 @@ impl IsDefault for CachedAccount {
 use crate::StateDbOps;
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_statedb::Result;
-use cfx_types::{Address, H256};
+use cfx_types::{Address, H256, U256};
 use primitives::{
     is_default::IsDefault, Account, CodeInfo, DepositList, StorageKey,
     VoteStakeList,
 };
 use rlp::{Decodable, Encodable, Rlp, RlpStream};
 use std::ops::{Deref, DerefMut};
+
+use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
