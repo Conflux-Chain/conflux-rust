@@ -559,6 +559,7 @@ impl RpcImpl {
         &self, address: RpcAddress,
     ) -> RpcResult<Option<AccountPendingInfo>> {
         info!("RPC Request: cfx_getAccountPendingInfo({:?})", address);
+        self.check_address_network(address.network)?;
 
         match self.tx_pool.get_account_pending_info(&(address.into())) {
             None => Ok(None),
@@ -581,7 +582,9 @@ impl RpcImpl {
         maybe_limit: Option<U64>,
     ) -> RpcResult<AccountPendingTransactions>
     {
-        info!("RPC Request: cfx_getAccountPendingInfo({:?})", address);
+        info!("RPC Request: cfx_getAccountPendingTransactions(addr={:?}, start_nonce={:?}, limit={:?})",
+              address, maybe_start_nonce, maybe_limit);
+        self.check_address_network(address.network)?;
 
         let (pending_txs, tx_status, pending_count) =
             self.tx_pool.get_account_pending_transactions(

@@ -535,28 +535,19 @@ impl TransactionPoolInner {
     pub fn get_account_pending_info(
         &self, address: &Address,
     ) -> Option<(U256, U256, U256, H256)> {
-        match self.deferred_pool.contain_address(address) {
-            true => {
-                let (local_nonce, _local_balance) = self
-                    .get_local_nonce_and_balance(address)
-                    .unwrap_or((U256::from(0), U256::from(0)));
-                match self.deferred_pool.get_pending_info(address, &local_nonce)
-                {
-                    Some((pending_count, pending_tx)) => Some((
-                        local_nonce,
-                        U256::from(pending_count),
-                        pending_tx.nonce(),
-                        pending_tx.hash(),
-                    )),
-                    None => Some((
-                        local_nonce,
-                        U256::from(0),
-                        U256::from(0),
-                        H256::zero(),
-                    )),
-                }
+        let (local_nonce, _local_balance) = self
+            .get_local_nonce_and_balance(address)
+            .unwrap_or((U256::from(0), U256::from(0)));
+        match self.deferred_pool.get_pending_info(address, &local_nonce) {
+            Some((pending_count, pending_tx)) => Some((
+                local_nonce,
+                U256::from(pending_count),
+                pending_tx.nonce(),
+                pending_tx.hash(),
+            )),
+            None => {
+                Some((local_nonce, U256::from(0), U256::from(0), H256::zero()))
             }
-            false => None,
         }
     }
 
@@ -569,50 +560,44 @@ impl TransactionPoolInner {
         usize,
     )
     {
-        match self.deferred_pool.contain_address(address) {
-            true => {
-                let (local_nonce, local_balance) = self
-                    .get_local_nonce_and_balance(address)
-                    .unwrap_or((U256::from(0), U256::from(0)));
-                let start_nonce = maybe_start_nonce.unwrap_or(local_nonce);
-                let (pending_txs, pending_reason) =
-                    self.deferred_pool.get_pending_transactions(
-                        address,
-                        &start_nonce,
-                        &local_balance,
-                    );
-                if pending_txs.is_empty() {
-                    return (Vec::new(), None, 0);
-                }
-                let first_tx_status = match pending_reason {
-                    None => {
-                        // Sanity check with `ready_account_pool`.
-                        match self.ready_account_pool.get(address) {
-                            None => {
-                                error!("Ready tx not in ready_account_pool: tx={:?}", pending_txs.first());
-                            }
-                            Some(ready_tx) => {
-                                let first_tx =
-                                    pending_txs.first().expect("not empty");
-                                if ready_tx.hash() != first_tx.hash() {
-                                    error!("ready_account_pool and deferred_pool are inconsistent! ready_tx={:?} first_pending={:?}", ready_tx.hash(), first_tx.hash());
-                                }
-                            }
-                        }
-                        TransactionStatus::Ready
-                    }
-                    Some(reason) => TransactionStatus::Pending(reason),
-                };
-                let pending_count = pending_txs.len();
-                let limit = maybe_limit.unwrap_or(usize::MAX);
-                (
-                    pending_txs.into_iter().take(limit).collect(),
-                    Some(first_tx_status),
-                    pending_count,
-                )
-            }
-            false => (Vec::new(), None, 0),
+        let (local_nonce, local_balance) = self
+            .get_local_nonce_and_balance(address)
+            .unwrap_or((U256::from(0), U256::from(0)));
+        let start_nonce = maybe_start_nonce.unwrap_or(local_nonce);
+        let (pending_txs, pending_reason) = self
+            .deferred_pool
+            .get_pending_transactions(address, &start_nonce, &local_balance);
+        if pending_txs.is_empty() {
+            return (Vec::new(), None, 0);
         }
+        let first_tx_status = match pending_reason {
+            None => {
+                // Sanity check with `ready_account_pool`.
+                match self.ready_account_pool.get(address) {
+                    None => {
+                        error!(
+                            "Ready tx not in ready_account_pool: tx={:?}",
+                            pending_txs.first()
+                        );
+                    }
+                    Some(ready_tx) => {
+                        let first_tx = pending_txs.first().expect("not empty");
+                        if ready_tx.hash() != first_tx.hash() {
+                            error!("ready_account_pool and deferred_pool are inconsistent! ready_tx={:?} first_pending={:?}", ready_tx.hash(), first_tx.hash());
+                        }
+                    }
+                }
+                TransactionStatus::Ready
+            }
+            Some(reason) => TransactionStatus::Pending(reason),
+        };
+        let pending_count = pending_txs.len();
+        let limit = maybe_limit.unwrap_or(usize::MAX);
+        (
+            pending_txs.into_iter().take(limit).collect(),
+            Some(first_tx_status),
+            pending_count,
+        )
     }
 
     pub fn get_local_nonce_and_balance(
