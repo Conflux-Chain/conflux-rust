@@ -5,6 +5,7 @@
 use crate::rpc::types::{receipt::Receipt, Bytes, RpcAddress};
 use cfx_addr::Network;
 use cfx_types::{H256, U256, U64};
+use cfxcore::transaction_pool::TransactionStatus;
 use cfxkey::Error;
 use primitives::{
     transaction::Action, SignedTransaction,
@@ -173,4 +174,11 @@ pub struct AccountPendingInfo {
     pub pending_count: U256,
     pub pending_nonce: U256,
     pub next_pending_tx: H256,
+}
+
+#[derive(Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountPendingTransactions {
+    pub pending_transactions: Vec<Transaction>,
+    pub first_tx_status: Option<TransactionStatus>,
 }

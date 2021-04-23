@@ -9,9 +9,10 @@ use super::super::types::{
     Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, SponsorInfo,
     Status as RpcStatus, TokenSupplyInfo, Transaction,
 };
-use crate::rpc::types::{BlockHashOrEpochNumber, RpcAddress};
+use crate::rpc::types::{
+    AccountPendingTransactions, BlockHashOrEpochNumber, RpcAddress,
+};
 use cfx_types::{H256, U256, U64};
-use cfxcore::transaction_pool::TransactionStatus;
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
 use jsonrpc_derive::rpc;
 use primitives::{DepositInfo, StorageRoot, VoteStakeInfo};
@@ -178,7 +179,7 @@ pub trait Cfx {
     fn account_pending_transactions(
         &self, address: RpcAddress, maybe_start_nonce: Option<U256>,
         maybe_limit: Option<U64>,
-    ) -> BoxFuture<(Vec<Transaction>, Option<TransactionStatus>)>;
+    ) -> BoxFuture<AccountPendingTransactions>;
 
     /// Return estimated gas and collateral usage.
     #[rpc(name = "cfx_estimateGasAndCollateral")]

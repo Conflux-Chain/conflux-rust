@@ -1,6 +1,9 @@
 import eth_utils
 import rlp
 import sys
+
+from conflux.config import default_config
+
 sys.path.append("..")
 
 from conflux.address import hex_to_b32_address
@@ -253,9 +256,11 @@ class TestSendTx(RpcClient):
         assert_equal(pending_info["pendingNonce"], hex(cur_nonce))
         assert_equal(pending_info["nextPendingTx"], tx0.hash_hex())
 
-        pending_txs, pending_reason = self.node.cfx_getAccountPendingTransactions(addr)
+        r = self.node.cfx_getAccountPendingTransactions(addr)
+        pending_txs = r["pendingTransactions"]
+        tx_status = r["firstTxStatus"]
         assert_equal(len(pending_txs), 3)
-        assert_equal(pending_reason, "ready")
+        assert_equal(tx_status, "ready")
 
 
         # generate a block to pack above txs.
@@ -266,6 +271,12 @@ class TestSendTx(RpcClient):
         assert_equal(pending_info["pendingCount"], hex(1))
         assert_equal(pending_info["pendingNonce"], hex(cur_nonce+3))
         assert_equal(pending_info["nextPendingTx"], tx3.hash_hex())
+
+        r = self.node.cfx_getAccountPendingTransactions(addr)
+        pending_txs = r["pendingTransactions"]
+        tx_status = r["firstTxStatus"]
+        assert_equal(len(pending_txs), 1)
+        assert_equal(tx_status, {'pending': 'futureNonce'})
 
         # enter the ready queue since tx1 in ready queue,
         # and also promote the tx3 into ready queue.
@@ -287,7 +298,15 @@ class TestSendTx(RpcClient):
         assert_equal(pending_info["pendingNonce"], hex(0))
         assert_equal(pending_info["nextPendingTx"], "0x0000000000000000000000000000000000000000000000000000000000000000")
 
-
         self.generate_blocks_to_state(num_txs=4)
         for tx in [tx0, tx1, tx2, tx3]:
             assert_equal(self.get_transaction_receipt(tx.hash_hex()) is None, False)
+
+        tx4 = self.new_tx(nonce=cur_nonce + 4, value=default_config["TOTAL_COIN"])
+        assert_equal(self.send_tx(tx4), tx4.hash_hex())
+        r = self.node.cfx_getAccountPendingTransactions(addr)
+        pending_txs = r["pendingTransactions"]
+        tx_status = r["firstTxStatus"]
+        print(r)
+        assert_equal(len(pending_txs), 1)
+        assert_equal(tx_status, {'pending': 'notEnoughCash'})
