@@ -583,7 +583,7 @@ impl RpcImpl {
     {
         info!("RPC Request: cfx_getAccountPendingInfo({:?})", address);
 
-        let (pending_txs, tx_status) =
+        let (pending_txs, tx_status, pending_count) =
             self.tx_pool.get_account_pending_transactions(
                 &(address.into()),
                 maybe_start_nonce,
@@ -601,6 +601,7 @@ impl RpcImpl {
                 })
                 .collect::<Result<Vec<RpcTransaction>, String>>()?,
             first_tx_status: tx_status,
+            pending_count: pending_count.into(),
         })
     }
 

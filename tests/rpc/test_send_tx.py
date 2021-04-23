@@ -307,6 +307,5 @@ class TestSendTx(RpcClient):
         r = self.node.cfx_getAccountPendingTransactions(addr)
         pending_txs = r["pendingTransactions"]
         tx_status = r["firstTxStatus"]
-        print(r)
         assert_equal(len(pending_txs), 1)
         assert_equal(tx_status, {'pending': 'notEnoughCash'})

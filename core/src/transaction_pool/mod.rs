@@ -209,10 +209,15 @@ impl TransactionPool {
         self.inner.read().get_account_pending_info(address)
     }
 
+    /// Return `(pending_txs, first_tx_status, pending_count)`.
     pub fn get_account_pending_transactions(
         &self, address: &Address, maybe_start_nonce: Option<U256>,
         maybe_limit: Option<usize>,
-    ) -> (Vec<Arc<SignedTransaction>>, Option<TransactionStatus>)
+    ) -> (
+        Vec<Arc<SignedTransaction>>,
+        Option<TransactionStatus>,
+        usize,
+    )
     {
         self.inner.read().get_account_pending_transactions(
             address,

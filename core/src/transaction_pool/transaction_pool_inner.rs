@@ -263,20 +263,6 @@ pub enum TransactionStatus {
     Pending(PendingReason),
 }
 
-// impl Serialize for TransactionStatus {
-//     fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S
-// as Serializer>::Error> where         S: Serializer {
-//         match self {
-//             Self::Packed => serializer.serialize_str("packed"),
-//             Self::Ready => serializer.serialize_str("ready"),
-//             Self::Pending(None) => serializer.serialize_str("pending"),
-//             Self::Pending(Some(PendingReason::FutureNonce((tx_nonce,
-// expected_nonce)))) => {                 serializer.serialize_str()
-//             }
-//         }
-//     }
-// }
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PendingReason {
@@ -577,7 +563,11 @@ impl TransactionPoolInner {
     pub fn get_account_pending_transactions(
         &self, address: &Address, maybe_start_nonce: Option<U256>,
         maybe_limit: Option<usize>,
-    ) -> (Vec<Arc<SignedTransaction>>, Option<TransactionStatus>)
+    ) -> (
+        Vec<Arc<SignedTransaction>>,
+        Option<TransactionStatus>,
+        usize,
+    )
     {
         match self.deferred_pool.contain_address(address) {
             true => {
@@ -592,7 +582,7 @@ impl TransactionPoolInner {
                         &local_balance,
                     );
                 if pending_txs.is_empty() {
-                    return (Vec::new(), None);
+                    return (Vec::new(), None, 0);
                 }
                 let first_tx_status = match pending_reason {
                     None => {
@@ -613,13 +603,15 @@ impl TransactionPoolInner {
                     }
                     Some(reason) => TransactionStatus::Pending(reason),
                 };
+                let pending_count = pending_txs.len();
                 let limit = maybe_limit.unwrap_or(usize::MAX);
                 (
                     pending_txs.into_iter().take(limit).collect(),
                     Some(first_tx_status),
+                    pending_count,
                 )
             }
-            false => (Vec::new(), None),
+            false => (Vec::new(), None, 0),
         }
     }
 

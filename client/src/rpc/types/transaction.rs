@@ -181,4 +181,5 @@ pub struct AccountPendingInfo {
 pub struct AccountPendingTransactions {
     pub pending_transactions: Vec<Transaction>,
     pub first_tx_status: Option<TransactionStatus>,
+    pub pending_count: U64,
 }
