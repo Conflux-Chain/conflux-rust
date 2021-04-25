@@ -196,6 +196,7 @@ impl SynchronizationGraphInner {
         genesis_header: Arc<BlockHeader>, pow_config: ProofOfWorkConfig,
         pow: Arc<PowComputer>, config: SyncGraphConfig,
         data_man: Arc<BlockDataManager>, machine: Arc<Machine>,
+        pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         let mut inner = SynchronizationGraphInner {
@@ -213,6 +214,7 @@ impl SynchronizationGraphInner {
             block_to_fill_set: Default::default(),
             locked_for_catchup: false,
             machine,
+            pos_verifier,
         };
         let genesis_hash = genesis_header.hash();
         let genesis_block_index = inner.insert(genesis_header);
@@ -958,6 +960,7 @@ impl SynchronizationGraph {
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
         pow: Arc<PowComputer>, sync_config: SyncGraphConfig,
         notifications: Arc<Notifications>, machine: Arc<Machine>,
+        pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         let data_man = consensus.get_data_manager().clone();
@@ -978,6 +981,7 @@ impl SynchronizationGraph {
                 sync_config,
                 data_man.clone(),
                 machine.clone(),
+                pos_verifier,
             ),
         ));
         let sync_graph = SynchronizationGraph {

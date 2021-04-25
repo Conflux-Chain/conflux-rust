@@ -3,6 +3,7 @@ use crate::{
     cache_config::CacheConfig,
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
+        pos_handler::{PosConfiguration, PosConnection, PosVerifier},
         ConsensusConfig, ConsensusInnerConfig,
     },
     db::NUM_COLUMNS,
@@ -162,12 +163,16 @@ pub fn initialize_synchronization_graph_with_data_manager(
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
 {
     let machine = Arc::new(new_machine_with_builtin(Default::default(), vm));
+    let pos_connection = PosConnection::new(PosConfiguration {});
+    let pos_verifier = Arc::new(PosVerifier::new(pos_connection, 0));
+
     let verification_config = VerificationConfig::new(
         true, /* test_mode */
         REFEREE_DEFAULT_BOUND,
         MAX_BLOCK_SIZE_IN_BYTES,
         TRANSACTION_DEFAULT_EPOCH_BOUND,
         machine.clone(),
+        pos_verifier.clone(),
     );
 
     let txpool = Arc::new(TransactionPool::new(
@@ -228,6 +233,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         },
         verification_config.clone(),
         NodeType::Archive,
+        pos_verifier.clone(),
     ));
 
     let sync = Arc::new(SynchronizationGraph::new(
@@ -238,6 +244,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         sync_config,
         notifications,
         machine,
+        pos_verifier.clone(),
     ));
 
     (sync, consensus)

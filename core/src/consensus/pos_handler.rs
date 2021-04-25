@@ -1,6 +1,5 @@
 use cfx_types::H256;
 use primitives::pos::{NodeId, PosBlockId};
-use std::sync::atomic::{AtomicBool, Ordering};
 
 pub type PosVerifier = PosHandler<PosConnection>;
 
@@ -10,7 +9,7 @@ pub type PosVerifier = PosHandler<PosConnection>;
 /// We assume the PoS service will be always available after `initialize()`
 /// returns, so all the other interfaces will panic if the PoS service is not
 /// ready.
-trait PosInterface {
+pub trait PosInterface {
     /// Wait for initialization.
     fn initialize(&self) -> Result<(), String>;
 
@@ -24,7 +23,8 @@ trait PosInterface {
     fn latest_block(&self) -> PosBlockId;
 }
 
-struct PosBlock {
+#[allow(unused)]
+pub struct PosBlock {
     hash: PosBlockId,
     parent: PosBlockId,
     round: u64,
@@ -33,7 +33,7 @@ struct PosBlock {
 }
 
 #[derive(Clone)]
-struct UnlockTransaction {
+pub struct UnlockTransaction {
     /// The node id to unlock.
     ///
     /// The management contract should unlock the corresponding account.
@@ -47,6 +47,8 @@ pub struct PosHandler<PoS: PosInterface> {
 
 impl<PoS: PosInterface> PosHandler<PoS> {
     pub fn new(pos: PoS, enable_height: u64) -> Self {
+        // TODO(lpl): Check if we want to wait here.
+        pos.initialize().expect("PoS handler initialization error");
         Self { pos, enable_height }
     }
 
@@ -104,7 +106,7 @@ pub struct PosConnection {
 }
 
 impl PosConnection {
-    pub fn new() -> Self {
+    pub fn new(_conf: PosConfiguration) -> Self {
         Self {
             // pos_storage,
         }
@@ -114,7 +116,7 @@ impl PosConnection {
 impl PosInterface for PosConnection {
     fn initialize(&self) -> Result<(), String> { todo!() }
 
-    fn get_committed_block(&self, h: &PosBlockId) -> Option<PosBlock> {
+    fn get_committed_block(&self, _h: &PosBlockId) -> Option<PosBlock> {
         /*
         self.pos_storage.get_ledger_block(h).expect("pos storage err").into()
          */
@@ -123,3 +125,5 @@ impl PosInterface for PosConnection {
 
     fn latest_block(&self) -> PosBlockId { todo!() }
 }
+
+pub struct PosConfiguration {}

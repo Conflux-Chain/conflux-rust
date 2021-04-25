@@ -24,6 +24,7 @@ use cfxcore::{
     },
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
+        pos_handler::{PosConfiguration, PosVerifier},
         ConsensusConfig, ConsensusInnerConfig,
     },
     consensus_internal_parameters::*,
@@ -593,7 +594,7 @@ impl Configuration {
     }
 
     pub fn verification_config(
-        &self, machine: Arc<Machine>,
+        &self, machine: Arc<Machine>, pos_verifier: Arc<PosVerifier>,
     ) -> VerificationConfig {
         VerificationConfig::new(
             self.is_test_mode(),
@@ -601,6 +602,7 @@ impl Configuration {
             self.raw_conf.max_block_size_in_bytes,
             self.raw_conf.transaction_epoch_bound,
             machine,
+            pos_verifier,
         )
     }
 
@@ -992,6 +994,8 @@ impl Configuration {
                 .ln_num_waiting_headers_threshold,
         }
     }
+
+    pub fn pos_config(&self) -> PosConfiguration { PosConfiguration {} }
 
     pub fn common_params(&self) -> CommonParams {
         let mut params = CommonParams::common_params(

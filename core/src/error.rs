@@ -121,6 +121,9 @@ impl fmt::Display for BlockError {
                     expected_custom_prefix, header_custom
                 )
             }
+            MissingPosReference => "Missing PoS reference".into(),
+            UnexpectedPosReference => "Should not have PoS reference".into(),
+            InvalidPosReference => "The PoS reference is invalid".into(),
         };
 
         f.write_fmt(format_args!("Block error ({})", msg))

@@ -127,6 +127,7 @@ pub fn initialize_common_modules(
         HashMap<Address, U256>,
         Arc<BlockDataManager>,
         Arc<PowComputer>,
+        Arc<PosVerifier>,
         Arc<TransactionPool>,
         Arc<ConsensusGraph>,
         Arc<SynchronizationGraph>,
@@ -239,7 +240,12 @@ pub fn initialize_common_modules(
         pow.clone(),
     ));
 
-    let verification_config = conf.verification_config(machine.clone());
+    let pos_connection = PosConnection::new(conf.pos_config());
+    // FIXME(lpl): Set CIP height.
+    let pos_verifier = Arc::new(PosVerifier::new(pos_connection, 0));
+
+    let verification_config =
+        conf.verification_config(machine.clone(), pos_verifier.clone());
     let txpool = Arc::new(TransactionPool::new(
         conf.txpool_config(),
         verification_config.clone(),
@@ -259,8 +265,9 @@ pub fn initialize_common_modules(
         pow.clone(),
         notifications.clone(),
         conf.execution_config(),
-        conf.verification_config(machine.clone()),
+        verification_config.clone(),
         node_type,
+        pos_verifier.clone(),
     ));
 
     let sync_config = conf.sync_graph_config();
@@ -273,6 +280,7 @@ pub fn initialize_common_modules(
         sync_config,
         notifications.clone(),
         machine.clone(),
+        pos_verifier.clone(),
     ));
 
     let network = {
@@ -314,6 +322,7 @@ pub fn initialize_common_modules(
         genesis_accounts,
         data_man,
         pow,
+        pos_verifier,
         txpool,
         consensus,
         sync_graph,
@@ -352,6 +361,7 @@ pub fn initialize_not_light_node_modules(
         genesis_accounts,
         data_man,
         pow,
+        pos_verifier,
         txpool,
         consensus,
         sync_graph,
@@ -449,6 +459,7 @@ pub fn initialize_not_light_node_modules(
         conf.pow_config(),
         pow.clone(),
         maybe_author.clone().unwrap_or_default(),
+        pos_verifier,
     ));
     if conf.is_dev_mode() {
         // If `dev_block_interval_ms` is None, blocks are generated after
@@ -728,6 +739,7 @@ use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use cfxcore::{
     block_data_manager::BlockDataManager,
+    consensus::pos_handler::{PosConnection, PosVerifier},
     machine::{new_machine_with_builtin, Machine},
     pow::PowComputer,
     spec::genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},

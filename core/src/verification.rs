@@ -204,6 +204,7 @@ impl VerificationConfig {
     pub fn new(
         test_mode: bool, referee_bound: usize, max_block_size_in_bytes: usize,
         transaction_epoch_bound: u64, machine: Arc<Machine>,
+        pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         if test_mode {
@@ -214,6 +215,7 @@ impl VerificationConfig {
                 transaction_epoch_bound,
                 vm_spec: vm::Spec::new_spec(),
                 machine,
+                pos_verifier,
             }
         } else {
             VerificationConfig {
@@ -223,6 +225,7 @@ impl VerificationConfig {
                 transaction_epoch_bound,
                 vm_spec: vm::Spec::new_spec(),
                 machine,
+                pos_verifier,
             }
         }
     }

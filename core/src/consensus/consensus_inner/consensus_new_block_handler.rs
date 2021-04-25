@@ -705,7 +705,7 @@ impl ConsensusNewBlockHandler {
                 None => return false,
                 Some(pivot_decision_arena_index) => {
                     if inner.lca(new, *pivot_decision_arena_index)
-                        != pivot_decision_arena_index
+                        != *pivot_decision_arena_index
                     {
                         // Not in the subtree of pivot_decision, mark as partial
                         // invalid.

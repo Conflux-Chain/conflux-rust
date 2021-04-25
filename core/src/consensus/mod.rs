@@ -23,8 +23,11 @@ use crate::{
     block_data_manager::{
         BlockDataManager, BlockExecutionResultWithEpoch, DataVersionTuple,
     },
-    consensus::consensus_inner::{
-        consensus_executor::ConsensusExecutionConfiguration, StateBlameInfo,
+    consensus::{
+        consensus_inner::{
+            consensus_executor::ConsensusExecutionConfiguration, StateBlameInfo,
+        },
+        pos_handler::PosVerifier,
     },
     executive::ExecutionOutcome,
     pow::{PowComputer, ProofOfWorkConfig},
@@ -229,6 +232,7 @@ impl ConsensusGraph {
         notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, node_type: NodeType,
+        pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         let inner =
@@ -247,6 +251,7 @@ impl ConsensusGraph {
             execution_conf,
             verification_config,
             conf.bench_mode,
+            pos_verifier.clone(),
         );
         let confirmation_meter = ConfirmationMeter::new();
 
@@ -264,6 +269,7 @@ impl ConsensusGraph {
                 statistics,
                 notifications,
                 node_type,
+                pos_verifier,
             ),
             confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),
@@ -290,6 +296,7 @@ impl ConsensusGraph {
         notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_conf: VerificationConfig, node_type: NodeType,
+        pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
@@ -307,6 +314,7 @@ impl ConsensusGraph {
             execution_conf,
             verification_conf,
             node_type,
+            pos_verifier,
         )
     }
 

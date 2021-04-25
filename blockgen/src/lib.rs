@@ -147,7 +147,7 @@ impl BlockGenerator {
         sync: SharedSynchronizationService,
         maybe_txgen: Option<SharedTransactionGenerator>,
         pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
-        mining_author: Address,
+        mining_author: Address, pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         BlockGenerator {
@@ -161,6 +161,7 @@ impl BlockGenerator {
             state: RwLock::new(MiningState::Start),
             workers: Mutex::new(Vec::new()),
             stratum: RwLock::new(None),
+            pos_verifier,
         }
     }
 
@@ -306,6 +307,7 @@ impl BlockGenerator {
             transactions,
             difficulty,
             Some(adaptive),
+            self.get_pos_reference(&parent_hash),
         ))
     }
 
@@ -415,6 +417,7 @@ impl BlockGenerator {
             transactions,
             0,
             None,
+            self.get_pos_reference(&best_block_hash),
         )
     }
 
@@ -532,6 +535,7 @@ impl BlockGenerator {
             transactions,
             0,
             adaptive,
+            self.get_pos_reference(&best_block_hash),
         );
 
         self.generate_block_impl(block)
@@ -556,6 +560,7 @@ impl BlockGenerator {
             transactions,
             0,
             Some(adaptive),
+            self.get_pos_reference(&parent_hash),
         );
 
         Ok(self.generate_block_impl(block))
@@ -581,6 +586,7 @@ impl BlockGenerator {
             transactions,
             0,
             Some(adaptive),
+            self.get_pos_reference(&parent_hash),
         );
         block.block_header.set_nonce(nonce);
         block.block_header.set_timestamp(timestamp);
@@ -841,6 +847,19 @@ impl BlockGenerator {
                 );
             }
             thread::sleep(interval);
+        }
+    }
+
+    /// Get the latest pos reference according to parent height.
+    ///
+    /// Return `None` if parent block is missing in `BlockDataManager`, but this
+    /// should not happen in the current usage.
+    fn get_pos_reference(&self, parent_hash: &H256) -> Option<PosBlockId> {
+        let height = self.graph.data_man.block_height_by_hash(parent_hash)? + 1;
+        if self.pos_verifier.is_enabled_at_height(height) {
+            Some(self.pos_verifier.get_latest_pos_reference())
+        } else {
+            None
         }
     }
 }

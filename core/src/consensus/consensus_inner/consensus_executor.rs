@@ -183,6 +183,7 @@ impl ConsensusExecutor {
         consensus_inner: Arc<RwLock<ConsensusGraphInner>>,
         config: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, bench_mode: bool,
+        pos_verifier: Arc<PosVerifier>,
     ) -> Arc<Self>
     {
         let machine = tx_pool.machine();
@@ -192,6 +193,7 @@ impl ConsensusExecutor {
             config,
             verification_config,
             machine,
+            pos_verifier,
         ));
         let (sender, receiver) = channel();
 
@@ -801,6 +803,7 @@ impl ConsensusExecutionHandler {
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
         config: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, machine: Arc<Machine>,
+        pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         ConsensusExecutionHandler {
@@ -809,6 +812,7 @@ impl ConsensusExecutionHandler {
             config,
             verification_config,
             machine,
+            pos_verifier,
             execution_state_prefetcher: if DEFAULT_EXECUTION_PREFETCH_THREADS
                 > 0
             {
@@ -1024,7 +1028,7 @@ impl ConsensusExecutionHandler {
             .pos_verifier
             .is_enabled_at_height(pivot_block.block_header.height())
         {
-            for unlock_tx in self
+            for _unlock_tx in self
                 .pos_verifier
                 .get_unlock_transactions(
                     pivot_block
