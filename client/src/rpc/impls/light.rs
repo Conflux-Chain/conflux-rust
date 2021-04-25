@@ -37,8 +37,9 @@ use crate::{
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
-            Account as RpcAccount, AccountPendingInfo, BlameInfo,
-            Block as RpcBlock, BlockHashOrEpochNumber, Bytes, CallRequest,
+            Account as RpcAccount, AccountPendingInfo,
+            AccountPendingTransactions, BlameInfo, Block as RpcBlock,
+            BlockHashOrEpochNumber, Bytes, CallRequest,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
             EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
             LogFilter as RpcFilter, Receipt as RpcReceipt,
@@ -1073,6 +1074,7 @@ impl Cfx for CfxHandler {
         fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> JsonRpcResult<EstimateGasAndCollateralResponse>;
         fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
         fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
+        fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
     }
 }
 

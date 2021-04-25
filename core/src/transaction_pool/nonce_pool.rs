@@ -1,3 +1,4 @@
+use crate::transaction_pool::transaction_pool_inner::PendingReason;
 use cfx_types::U256;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -246,7 +247,7 @@ impl NoncePoolNode {
         }
     }
 
-    /// find a transaction `tx` where `tx.nonce >= nonce`
+    /// find an unpacked transaction `tx` where `tx.nonce >= nonce`
     /// and `tx.nonce` is minimum
     pub fn query(
         node: &Option<Box<NoncePoolNode>>, nonce: &U256,
@@ -386,6 +387,28 @@ impl NoncePool {
         }
     }
 
+    /// Return unpacked transactions from `nonce`.
+    pub fn get_pending_transactions(
+        &self, nonce: &U256,
+    ) -> Vec<Arc<SignedTransaction>> {
+        let mut pending_txs = Vec::new();
+        let mut maybe_tx_info = self
+            .root
+            .as_ref()
+            .and_then(|node| node.succ(&nonce).map(|x| x.clone()));
+        // TODO: More efficient traversal of Treap.
+        while let Some(tx_info) = maybe_tx_info {
+            if !tx_info.packed {
+                pending_txs.push(tx_info.transaction.clone());
+            }
+            maybe_tx_info = self.root.as_ref().and_then(|node| {
+                node.succ(&(tx_info.transaction.nonce + U256::from(1)))
+                    .map(|x| x.clone())
+            });
+        }
+        pending_txs
+    }
+
     /// find a transaction `tx` such that
     ///   1. all nonce in `[nonce, tx.nonce]` exists
     ///   2. tx.packed is false and tx.nonce is minimum
@@ -408,6 +431,32 @@ impl NoncePool {
         })
     }
 
+    pub fn check_pending_reason_with_local_info(
+        &self, nonce: U256, balance: U256, pending_tx: &SignedTransaction,
+    ) -> Option<PendingReason> {
+        let a = if nonce == U256::from(0) {
+            (0, U256::from(0))
+        } else {
+            NoncePoolNode::rank(&self.root, &(nonce - 1))
+        };
+        let b = NoncePoolNode::rank(&self.root, &pending_tx.nonce);
+        // 1. b.1 - a.1 means the sum of cost of transactions in `[nonce,
+        // tx.nonce]`
+        // 2. b.0 - a.0 means number of transactions in `[nonce, tx.nonce]`
+
+        // The expected nonce is just an estimation by assuming all packed
+        // transactions will be executed successfully.
+        let expected_nonce = nonce + U256::from(b.0 - a.0 - 1);
+        if expected_nonce != pending_tx.nonce {
+            return Some(PendingReason::FutureNonce);
+        }
+        let expected_balance = b.1 - a.1;
+        if expected_balance > balance {
+            return Some(PendingReason::NotEnoughCash);
+        }
+        None
+    }
+
     pub fn is_empty(&self) -> bool { self.root.is_none() }
 
     /// return the number of transactions whose nonce < `nonce`
@@ -420,7 +469,6 @@ impl NoncePool {
     }
 
     /// return the number of transactions whose nonce >= `nonce`
-    #[allow(dead_code)]
     pub fn count_from(&self, nonce: &U256) -> usize {
         NoncePoolNode::size(&self.root).0 as usize - self.count_less(nonce)
     }
