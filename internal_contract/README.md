@@ -63,8 +63,9 @@ Consider you have deployed a contract whose address is `contract_addr`. The admi
 ```javascript
 const PRIVATE_KEY = '0xxxxxxx';
 const cfx = new Conflux({
-  url: 'http://test.confluxrpc.org',
+  url: 'https://test.confluxrpc.com',
   logger: console,
+  networkId: 1,
 });
 const account = cfx.wallet.addPrivateKey(PRIVATE_KEY); // create account instance
 
@@ -173,8 +174,9 @@ After deploying the contract and the address is `contract_addr`, if someone want
 ```javascript
 const PRIVATE_KEY = '0xxxxxxx';
 const cfx = new Conflux({
-  url: 'http://test.confluxrpc.org',
+  url: 'https://test.confluxrpc.com',
   logger: console,
+  networkId: 1,
 });
 const account = cfx.wallet.addPrivateKey(PRIVATE_KEY); // create account instance
 
@@ -247,8 +249,9 @@ At any time, each locked Drip will be assigned a *vote power* from 0 to 1 accord
 ```javascript
 const PRIVATE_KEY = '0xxxxxxx';
 const cfx = new Conflux({
-  url: 'http://test.confluxrpc.org',
+  url: 'http://test.confluxrpc.com',
   logger: console,
+  networkId: 1,
 });
 const account = cfx.wallet.addPrivateKey(PRIVATE_KEY); // create account instance
 
