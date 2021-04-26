@@ -1027,7 +1027,17 @@ impl ConsensusExecutionHandler {
         if self
             .pos_verifier
             .is_enabled_at_height(pivot_block.block_header.height())
+            && *pivot_block.block_header.pos_reference()
+                != self
+                    .data_man
+                    .block_header_by_hash(
+                        &pivot_block.block_header.parent_hash(),
+                    ) // `None` only for genesis.
+                    .and_then(|parent| parent.pos_reference().clone())
         {
+            // The pos_reference is continuous, so after seeing a new
+            // pos_reference, we only need to process the new
+            // unlock_txs in it.
             for _unlock_tx in self
                 .pos_verifier
                 .get_unlock_transactions(
