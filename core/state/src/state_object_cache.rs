@@ -14,8 +14,9 @@ pub struct StateObjectCache {
         RwLock<HashMap<DepositListAddress, Option<DepositList>>>,
     vote_stake_list_cache:
         RwLock<HashMap<VoteStakeListAddress, Option<VoteStakeList>>>,
-    commission_privilege_cache:
-        RwLock<HashMap<CommissionPrivilegeAddress, Option<U256>>>,
+    commission_privilege_cache: RwLock<
+        HashMap<CommissionPrivilegeAddress, Option<CachedCommissionPrivilege>>,
+    >,
     // TODO: etc.
 }
 
@@ -334,8 +335,13 @@ impl StateObjectCache {
         &self, contract_address: &Address, user_address: &Address, db: &StateDb,
     ) -> Result<
         GuardedValue<
-            RwLockReadGuard<HashMap<CommissionPrivilegeAddress, Option<U256>>>,
-            NonCopy<Option<&U256>>,
+            RwLockReadGuard<
+                HashMap<
+                    CommissionPrivilegeAddress,
+                    Option<CachedCommissionPrivilege>,
+                >,
+            >,
+            NonCopy<Option<&CachedCommissionPrivilege>>,
         >,
     > {
         Self::ensure_loaded(
@@ -348,8 +354,9 @@ impl StateObjectCache {
 
 use crate::{
     cache_object::{
-        CachedAccount, CachedObject, CodeAddress, CommissionPrivilegeAddress,
-        DepositListAddress, ToHashKey, VoteStakeListAddress,
+        CachedAccount, CachedCommissionPrivilege, CachedObject, CodeAddress,
+        CommissionPrivilegeAddress, DepositListAddress, ToHashKey,
+        VoteStakeListAddress,
     },
     StateDbOps,
 };
@@ -363,5 +370,3 @@ use parking_lot::{
 };
 use primitives::{CodeInfo, DepositList, VoteStakeList};
 use std::{borrow::Borrow, collections::HashMap, hash::Hash, sync::Arc};
-
-use cfx_types::U256;

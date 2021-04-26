@@ -40,7 +40,7 @@ pub struct CodeAddress(pub Address, pub H256);
 
 /// Contract address and user address.
 #[derive(Clone, Eq, Hash, PartialEq)]
-pub struct CommissionPrivilegeAddress(pub Address, pub Address, pub Vec<u8>);
+pub struct CommissionPrivilegeAddress(pub Vec<u8>);
 
 impl CommissionPrivilegeAddress {
     pub fn new(
@@ -49,7 +49,7 @@ impl CommissionPrivilegeAddress {
         let mut key = Vec::with_capacity(Address::len_bytes() * 2);
         key.extend_from_slice(contract_address.as_ref());
         key.extend_from_slice(user_address.as_ref());
-        CommissionPrivilegeAddress(contract_address, user_address, key)
+        CommissionPrivilegeAddress(key)
     }
 }
 
@@ -61,6 +61,14 @@ pub struct VoteStakeListAddress(pub Address);
 
 pub struct CachedAccount {
     object: Account,
+}
+
+pub struct CachedCommissionPrivilege {
+    has_privilege: bool,
+}
+
+impl CachedCommissionPrivilege {
+    pub fn has_privilege(&self) -> bool { self.has_privilege }
 }
 
 pub trait ToHashKey<K> {
@@ -98,7 +106,7 @@ impl AsStorageKey for CommissionPrivilegeAddress {
     fn storage_key(&self) -> StorageKey {
         StorageKey::StorageKey {
             address_bytes: SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS.as_ref(),
-            storage_key: self.2.as_ref(),
+            storage_key: self.0.as_ref(),
         }
     }
 }
@@ -145,13 +153,15 @@ impl CachedObject for CodeInfo {
     }
 }
 
-impl CachedObject for U256 {
+impl CachedObject for CachedCommissionPrivilege {
     type HashKeyType = CommissionPrivilegeAddress;
 
     fn load_from_rlp(
         _key: &CommissionPrivilegeAddress, rlp: &Rlp,
     ) -> Result<Self> {
-        Ok(Self::decode(rlp)?)
+        Ok(Self {
+            has_privilege: bool::decode(rlp)?,
+        })
     }
 }
 
@@ -189,10 +199,30 @@ impl IsDefault for CachedAccount {
     fn is_default(&self) -> bool { self.object.is_default() }
 }
 
+impl Deref for CachedCommissionPrivilege {
+    type Target = bool;
+
+    fn deref(&self) -> &Self::Target { &self.has_privilege }
+}
+
+impl DerefMut for CachedCommissionPrivilege {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.has_privilege }
+}
+
+impl Encodable for CachedCommissionPrivilege {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.append_internal(&self.has_privilege);
+    }
+}
+
+impl IsDefault for CachedCommissionPrivilege {
+    fn is_default(&self) -> bool { self.has_privilege.is_default() }
+}
+
 use crate::StateDbOps;
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_statedb::Result;
-use cfx_types::{Address, H256, U256};
+use cfx_types::{Address, H256};
 use primitives::{
     is_default::IsDefault, Account, CodeInfo, DepositList, StorageKey,
     VoteStakeList,

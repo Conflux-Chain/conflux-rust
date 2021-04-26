@@ -265,7 +265,7 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         Ok(self
             .get_commission_privilege(contract_address, user_address)?
             .as_ref()
-            .map_or(false, |value| !value.is_zero()))
+            .map_or(false, |value| value.has_privilege()))
     }
 
     fn add_commission_privilege(
@@ -535,7 +535,7 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
 
     fn get_commission_privilege(
         &self, contract_address: &Address, user_address: &Address,
-    ) -> Result<impl AsRef<NonCopy<Option<&U256>>>> {
+    ) -> Result<impl AsRef<NonCopy<Option<&CachedCommissionPrivilege>>>> {
         self.cache.get_commission_privilege(
             contract_address,
             user_address,
@@ -578,7 +578,7 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
 }
 
 use crate::{
-    cache_object::CachedAccount,
+    cache_object::{CachedAccount, CachedCommissionPrivilege},
     maybe_address,
     state_object_cache::{ModifyAndUpdate, StateObjectCache},
     state_trait::{CheckpointTrait, StateOpsTrait},
