@@ -8,8 +8,10 @@ use cfx_types::Address;
 
 /// An executive tracer only records errors during EVM unwind.
 ///
-/// - Which errors will be retained?
-
+/// When the first error happens, `ErrorUnwind` tries to maintain a list for
+/// error description and code address for triggering error. However, if the
+/// tracer met a successful result or a sub-call/create, it will regard this
+/// error as "caught" and clear the error list.
 #[derive(Default)]
 pub struct ErrorUnwind {
     callstack: Vec<Address>,
@@ -67,7 +69,7 @@ impl ErrorUnwind {
         match outcome {
             Outcome::Success => None,
             Outcome::Reverted => Some(format!(
-                "Vm reverted, {}",
+                "Vm reverted. {}",
                 revert_reason_decode(return_data)
             )),
             Outcome::Fail => Some(
