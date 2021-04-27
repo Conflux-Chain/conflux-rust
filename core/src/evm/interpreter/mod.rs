@@ -268,7 +268,7 @@ impl<Cost: 'static + CostType> vm::ResumeCall for Interpreter<Cost> {
                         ),
                     ));
                 }
-                MessageCallResult::Failed => {
+                MessageCallResult::Failed(_) => {
                     this.stack.push(U256::zero());
                     this.resume_result = Some(InstructionResult::Ok);
                 }
@@ -298,7 +298,7 @@ impl<Cost: 'static + CostType> vm::ResumeCreate for Interpreter<Cost> {
                         .expect("Gas left cannot be greater."),
                 ));
             }
-            ContractCreateResult::Failed => {
+            ContractCreateResult::Failed(_) => {
                 self.stack.push(U256::zero());
                 self.resume_result = Some(InstructionResult::Ok);
             }
@@ -809,7 +809,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                                 .expect("Gas left cannot be greater."),
                         ))
                     }
-                    Ok(ContractCreateResult::Failed) => {
+                    Ok(ContractCreateResult::Failed(_)) => {
                         self.stack.push(U256::zero());
                         Ok(InstructionResult::Ok)
                     }
@@ -967,7 +967,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                             ),
                         ))
                     }
-                    Ok(MessageCallResult::Failed) => {
+                    Ok(MessageCallResult::Failed(_)) => {
                         self.stack.push(U256::zero());
                         Ok(InstructionResult::Ok)
                     }

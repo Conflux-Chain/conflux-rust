@@ -1,3 +1,12 @@
+# 1.1.4 
+
+## Improvements
+
+## RPC Improvements
+- Add a new parameter `subscription_epoch` to the `epochs` pubsub.
+  The supported values are `"latest_mined"` (default) and `"latest_state"`.
+- Add `cfx_getAccountPendingInfo` to get pending transaction info for some account for better investigating pending tx problems.
+
 # 1.1.3
 
 ## Improvements
