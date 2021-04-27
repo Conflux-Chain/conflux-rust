@@ -10,7 +10,8 @@ use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
 use cfx_types::{
-    address_util::AddressUtil, BigEndianHash, H256, H520, U128, U256, U64,
+    address_util::AddressUtil, Address, BigEndianHash, H256, H520, U128, U256,
+    U64,
 };
 use cfxcore::{
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
@@ -1124,12 +1125,15 @@ impl RpcImpl {
                 ExecutionError::VmError(vm::Error::Reverted),
                 executed,
             ) => {
-                let errors = ErrorUnwind::from_traces(executed.trace).errors;
+                let network_type = *self.sync.network.get_network_type();
 
                 // When a revert exception happens, there is usually an error in the sub-calls.
                 // So we return the trace information for debugging contract.
-                let errors = errors.iter()
-                    .map(|(addr,error)| format!("{} {}",addr,error))
+                let errors = ErrorUnwind::from_traces(executed.trace).errors.iter()
+                    .map(|(addr,error)| {
+                        let cip37_addr = RpcAddress::try_from_h160(addr.clone(),network_type).unwrap().base32_address;
+                        format!("{} {}", cip37_addr, error)
+                    })
                     .collect::<Vec<String>>();
 
                 // Decode revert error
