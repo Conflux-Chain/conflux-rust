@@ -17,9 +17,8 @@ diem-logger = { path = "../../common/logger" }
 diem-metrics = { path = "../../common/metrics" }
 
 [dependencies.rocksdb]
-version = "0.15.0"
-default-features = false
-features = ["lz4"]
+git = "https://github.com/Conflux-Chain/rust-rocksdb.git"
+rev = "e62343e63be38284556b6610d75833217e3360b4"
 
 [dev-dependencies]
 byteorder = "1.4.3"
