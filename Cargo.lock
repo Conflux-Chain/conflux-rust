@@ -583,7 +583,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "1.1.2"
+version = "1.1.4"
 dependencies = [
  "bit-set",
  "bn",
@@ -771,7 +771,7 @@ dependencies = [
 
 [[package]]
 name = "client"
-version = "1.1.2"
+version = "1.1.4"
 dependencies = [
  "app_dirs",
  "bigdecimal",
@@ -864,7 +864,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "1.1.2"
+version = "1.1.4"
 dependencies = [
  "app_dirs",
  "blockgen",
