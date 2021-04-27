@@ -60,11 +60,13 @@ impl<PoS: PosInterface> PosHandler<PoS> {
         self.pos.get_committed_block(h).is_some()
     }
 
-    /// Check if `me` is equal to or extends the predecessors.
+    /// Check if `me` is equal to or extends `preds` (parent and referees).
     ///
-    /// Since committed PoS blocks form a chain, we only need to check if the
-    /// round of `me` is no less than the predecessors.
-    /// Return `false` if `me` or `preds` contain non-existent PoS blocks.
+    /// Since committed PoS blocks form a chain, and no pos block should be
+    /// skipped, we only need to check if the round of `me` is equal to or plus
+    /// one compared with the predecessors' rounds.
+    ///
+    /// Return `false` if `me` or `preds` contains non-existent PoS blocks.
     pub fn verify_against_predecessors(
         &self, me: &PosBlockId, preds: &Vec<PosBlockId>,
     ) -> bool {
@@ -77,7 +79,7 @@ impl<PoS: PosInterface> PosHandler<PoS> {
                 None => return false,
                 Some(b) => b.round,
             };
-            if me_round < p_round {
+            if me_round < p_round || me_round > p_round + 1 {
                 return false;
             }
         }
