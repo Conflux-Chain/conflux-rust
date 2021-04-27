@@ -107,8 +107,6 @@ pub enum ExecutionError {
         /// Maximum storage limit cost.
         max_storage_limit_cost: U256,
     },
-    /// Contract already exists in the specified address.
-    ContractAddressConflict,
     VmError(vm::Error),
 }
 
