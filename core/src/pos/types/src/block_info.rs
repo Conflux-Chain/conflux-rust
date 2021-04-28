@@ -2,9 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    account_config,
     epoch_state::EpochState, on_chain_config::ValidatorSet,
     transaction::Version,
+    event::EventKey,
 };
+use anyhow::{Error, Result};
+use cfx_types::H256;
 use diem_crypto::hash::HashValue;
 #[cfg(any(test, feature = "fuzzing"))]
 use diem_crypto::hash::ACCUMULATOR_PLACEHOLDER_HASH;
@@ -166,5 +170,25 @@ impl Display for BlockInfo {
             self.timestamp_usecs(),
             self.next_epoch_state.as_ref().map_or("None".to_string(), |epoch_state| format!("{}", epoch_state)),
         )
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PivotBlockDecision {
+    pub height: u64,
+    pub block_hash: H256,
+    pub parent_hash: H256,
+}
+
+impl PivotBlockDecision {
+    pub fn pivot_select_event_key() -> EventKey {
+        EventKey::new_from_address(
+            &account_config::pivot_chain_select_address(),
+            2,
+        )
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        bcs::from_bytes(bytes).map_err(Into::into)
     }
 }

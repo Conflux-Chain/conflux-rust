@@ -7,6 +7,7 @@ use crate::{
     light_protocol::{LIGHT_PROTO_V1, LIGHT_PROTO_V2},
     message::{GetMaybeRequestId, Message, MessageProtocolVersionBound, MsgId},
 };
+use rlp::Encodable;
 use network::service::ProtocolVersion;
 
 // generate `pub mod msgid`

@@ -77,7 +77,7 @@ impl PersistentSafetyStorage {
         // checks again below, because it is just too strange to have a
         // partially configured storage.
         if let Err(diem_secure_storage::Error::KeyAlreadyExists(_)) = result {
-            warn!("Attempted to re-initialize existing storage");
+            diem_warn!("Attempted to re-initialize existing storage");
             return Ok(());
         }
 
@@ -176,7 +176,7 @@ impl PersistentSafetyStorage {
     pub fn set_waypoint(&mut self, waypoint: &Waypoint) -> Result<(), Error> {
         let _timer = counters::start_timer("set", WAYPOINT);
         self.internal_store.set(WAYPOINT, waypoint)?;
-        info!(logging::SafetyLogSchema::new(
+        diem_info!(logging::SafetyLogSchema::new(
             LogEntry::Waypoint,
             LogEvent::Update
         )

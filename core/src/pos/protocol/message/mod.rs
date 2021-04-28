@@ -10,14 +10,20 @@ pub mod proposal;
 pub mod sync_info;
 pub mod vote;
 
+use super::HSB_PROTOCOL_VERSION;
+
 use crate::message::{
     GetMaybeRequestId, Message, MsgId, RequestId, SetRequestId,
+    MessageProtocolVersionBound
 };
 
-use crate::pos::consensus::consensus_types::{
-    common::Payload, membership_retrieval::MembershipRetrievalRequest,
-    proposal_msg::ProposalMsg, sync_info::SyncInfo, vote_msg::VoteMsg,
+use consensus_types::{
+    epoch_retrieval::EpochRetrievalRequest,
+    proposal_msg::ProposalMsg,
+    sync_info::SyncInfo,
+    vote_msg::VoteMsg,
 };
+use network::{service::ProtocolVersion};
 use block_retrieval::BlockRetrievalRpcRequest;
 use block_retrieval_response::BlockRetrievalRpcResponse;
 use diem_types::epoch_change::EpochChangeProof;
@@ -47,7 +53,7 @@ macro_rules! build_msg_impl_with_serde_serialization {
             fn encode(&self) -> Vec<u8> {
                 let mut encoded =
                     bcs::to_bytes(self).expect("Failed to serialize.");
-                encoded.push(self.msg_id());
+                encoded.push(self.msg_id() as u8);
                 encoded
             }
         }
@@ -56,9 +62,9 @@ macro_rules! build_msg_impl_with_serde_serialization {
 
 macro_rules! build_msg_impl_with_serde_serialization_generic {
     ($name:ident, $msg:expr, $name_str:literal) => {
-        impl<T: Payload> GetMaybeRequestId for $name<T> {}
+        impl GetMaybeRequestId for $name {}
 
-        impl<T: Payload> Message for $name<T> {
+        impl Message for $name {
             fn msg_id(&self) -> MsgId { $msg }
 
             fn msg_name(&self) -> &'static str { $name_str }
@@ -66,7 +72,7 @@ macro_rules! build_msg_impl_with_serde_serialization_generic {
             fn encode(&self) -> Vec<u8> {
                 let mut encoded =
                     bcs::to_bytes(self).expect("Failed to serialize.");
-                encoded.push(self.msg_id());
+                encoded.push(self.msg_id() as u8);
                 encoded
             }
         }
@@ -83,7 +89,7 @@ macro_rules! build_msg_impl_with_request_id_and_serde_serialization {
             fn encode(&self) -> Vec<u8> {
                 let mut encoded =
                     bcs::to_bytes(self).expect("Failed to serialize.");
-                encoded.push(self.msg_id());
+                encoded.push(self.msg_id() as u8);
                 encoded
             }
         }
@@ -93,9 +99,16 @@ macro_rules! build_msg_impl_with_request_id_and_serde_serialization {
 }
 
 build_msg_impl_with_serde_serialization_generic! {ProposalMsg, msgid::PROPOSAL, "ProposalMessage"}
+mark_msg_version_bound!(ProposalMsg, HSB_PROTOCOL_VERSION, HSB_PROTOCOL_VERSION);
 build_msg_impl_with_serde_serialization_generic! {BlockRetrievalRpcResponse, msgid::BLOCK_RETRIEVAL_RESPONSE, "BlockRetrievalResponseMessage"}
+mark_msg_version_bound!(BlockRetrievalRpcResponse, HSB_PROTOCOL_VERSION, HSB_PROTOCOL_VERSION);
 build_msg_impl_with_serde_serialization! {VoteMsg, msgid::VOTE, "VoteMessage"}
+mark_msg_version_bound!(VoteMsg, HSB_PROTOCOL_VERSION, HSB_PROTOCOL_VERSION);
 build_msg_impl_with_serde_serialization! {SyncInfo, msgid::SYNC_INFO, "SyncInfoMessage"}
-build_msg_impl_with_serde_serialization! {ValidatorChangeProof, msgid::EPOCH_CHANGE, "EpochChangeMessage"}
-build_msg_impl_with_serde_serialization! {MembershipRetrievalRequest, msgid::EPOCH_RETRIEVAL, "EpochRetrievalMessage"}
+mark_msg_version_bound!(SyncInfo, HSB_PROTOCOL_VERSION, HSB_PROTOCOL_VERSION);
+build_msg_impl_with_serde_serialization! {EpochChangeProof, msgid::EPOCH_CHANGE, "EpochChangeMessage"}
+mark_msg_version_bound!(EpochChangeProof, HSB_PROTOCOL_VERSION, HSB_PROTOCOL_VERSION);
+build_msg_impl_with_serde_serialization! {EpochRetrievalRequest, msgid::EPOCH_RETRIEVAL, "EpochRetrievalMessage"}
+mark_msg_version_bound!(EpochRetrievalRequest, HSB_PROTOCOL_VERSION, HSB_PROTOCOL_VERSION);
 build_msg_impl_with_request_id_and_serde_serialization! {BlockRetrievalRpcRequest, msgid::BLOCK_RETRIEVAL, "BlockRetrievalMessage"}
+mark_msg_version_bound!(BlockRetrievalRpcRequest, HSB_PROTOCOL_VERSION, HSB_PROTOCOL_VERSION);

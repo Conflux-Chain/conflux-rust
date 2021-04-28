@@ -2,20 +2,20 @@
 // TreeGraph is free software and distributed under Apache License 2.0.
 // See https://www.apache.org/licenses/LICENSE-2.0
 
-use super::super::sync_protocol::{Context, Handleable, RpcResponse};
 use crate::{
     message::RequestId,
     pos::{
         consensus::{
-            chained_bft::network::IncomingBlockRetrievalRequest,
-            consensus_types::{
-                block_retrieval::BlockRetrievalRequest, common::Payload,
-            },
+            network::IncomingBlockRetrievalRequest,
         },
-        protocol::request_manager::{AsAny, Request},
+        protocol::{
+            request_manager::{AsAny, Request},
+            sync_protocol::{Context, Handleable, RpcResponse},
+        },
     },
     sync::{Error, ProtocolConfiguration},
 };
+use consensus_types::block_retrieval::BlockRetrievalRequest;
 use diem_types::account_address::AccountAddress;
 use futures::channel::oneshot;
 use serde::{Deserialize, Serialize};
@@ -61,8 +61,8 @@ impl Request for BlockRetrievalRpcRequest {
     }
 }
 
-impl<P: Payload> Handleable<P> for BlockRetrievalRpcRequest {
-    fn handle(self, ctx: &Context<P>) -> Result<(), Error> {
+impl Handleable for BlockRetrievalRpcRequest {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
         let peer_address = AccountAddress::new(ctx.peer_hash.into());
         let req = self.request;
         debug!(
@@ -77,7 +77,7 @@ impl<P: Payload> Handleable<P> for BlockRetrievalRpcRequest {
         };
         ctx.manager
             .network_task
-            .block_request_tx
+            .block_retrieval_tx
             .push(peer_address, req_with_callback)?;
         Ok(())
     }

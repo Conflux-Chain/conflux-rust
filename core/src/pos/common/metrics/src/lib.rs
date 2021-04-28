@@ -92,7 +92,7 @@ fn get_metrics_file<P: AsRef<Path>>(dir_path: &P, file_name: &str) -> File {
 
     let metrics_file_path = dir_path.as_ref().join(file_name);
 
-    info!("Using metrics file {}", metrics_file_path.display());
+    diem_info!("Using metrics file {}", metrics_file_path.display());
 
     OpenOptions::new()
         .append(true)
@@ -113,7 +113,7 @@ pub fn gather_metrics() -> Vec<prometheus::proto::MetricFamily> {
         if family_count > 1000 {
             families_over_1000 = families_over_1000.saturating_add(1);
             let name = metric_family.get_name();
-            warn!(
+            diem_warn!(
                 count = family_count,
                 metric_family = name,
                 "Metric Family '{}' over 1000 dimensions '{}'",
@@ -209,7 +209,7 @@ pub fn dump_all_metrics_to_file_periodically<P: AsRef<Path>>(
 #[macro_export]
 macro_rules! monitor {
     ($name:literal, $fn:expr) => {{
-        use crate::counters::OP_COUNTERS;
+        use super::counters::OP_COUNTERS;
         let _timer = OP_COUNTERS.timer($name);
         let gauge = OP_COUNTERS.gauge(concat!($name, "_running"));
         gauge.inc();

@@ -92,7 +92,7 @@ pub async fn sync_and_load(
         .map(|file_handle| (file_handle.file_handle_hash(), file_handle))
         .collect();
     let remote_hashes: HashSet<_> = remote_file_handle_by_hash.keys().cloned().collect();
-    info!("Metadata files listed.");
+    diem_info!("Metadata files listed.");
     NUM_META_FILES.set(remote_hashes.len() as i64);
 
     // Sync local cache with remote metadata files.
@@ -161,7 +161,7 @@ pub async fn sync_and_load(
                 .into_iter(),
         )
     }
-    info!(
+    diem_info!(
         "Metadata cache loaded in {:.2} seconds.",
         timer.elapsed().as_secs_f64()
     );

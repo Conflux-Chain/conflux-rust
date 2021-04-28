@@ -225,7 +225,7 @@ impl TransactionRestoreController {
                 chunk.txn_infos.truncate(num_to_replay);
 
                 // replay in batches
-                info!("Replaying transactions {} to {}.", first_to_replay, last);
+                diem_info!("Replaying transactions {} to {}.", first_to_replay, last);
                 #[cfg(not(test))]
                 const BATCH_SIZE: usize = 10000;
                 #[cfg(test)]
@@ -312,7 +312,7 @@ pub struct PreheatedTransactionRestore {
 impl PreheatedTransactionRestore {
     pub async fn run(self) -> Result<()> {
         let name = self.controller.name();
-        info!(
+        diem_info!(
             "{} started. Manifest: {}",
             name, self.controller.manifest_handle
         );
@@ -320,7 +320,7 @@ impl PreheatedTransactionRestore {
             .run_impl()
             .await
             .map_err(|e| anyhow!("{} failed: {}", name, e))?;
-        info!("{} succeeded.", name);
+        diem_info!("{} succeeded.", name);
         Ok(res)
     }
 
@@ -356,7 +356,7 @@ impl PreheatedTransactionRestore {
         }
 
         if self.controller.target_version < preheat_data.manifest.last_version {
-            warn!(
+            diem_warn!(
                 "Transactions newer than target version {} ignored.",
                 self.controller.target_version,
             )
@@ -430,7 +430,7 @@ impl TransactionRestoreBatchController {
         while let Some(preheated_txn_restore) = futs_stream.next().await {
             let v = preheated_txn_restore.get_last_version();
             preheated_txn_restore.run().await?;
-            debug!(
+            diem_debug!(
                 "Accumulative TPS: {:.0}",
                 (v? + 1) as f64 / timer.elapsed().as_secs_f64()
             );

@@ -7,6 +7,7 @@ pub mod request_manager;
 pub mod sync_protocol;
 
 use network::ProtocolId;
+use network::service::ProtocolVersion;
 
 pub const HSB_PROTOCOL_ID: ProtocolId = *b"hsb"; // HotStuff Synchronization Protocol
-pub const HSB_PROTOCOL_VERSION: u8 = 1;
+pub const HSB_PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion(1);

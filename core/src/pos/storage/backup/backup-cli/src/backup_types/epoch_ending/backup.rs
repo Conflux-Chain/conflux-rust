@@ -55,7 +55,7 @@ impl EpochEndingBackupController {
     }
 
     pub async fn run(self) -> Result<FileHandle> {
-        info!(
+        diem_info!(
             "Epoch ending backup started, starting from epoch {}, unill epoch {} (excluded).",
             start_epoch = self.start_epoch,
             end_epoch = self.end_epoch,
@@ -64,7 +64,7 @@ impl EpochEndingBackupController {
             .run_impl()
             .await
             .map_err(|e| anyhow!("Epoch ending backup failed: {}", e))?;
-        info!("Epoch ending backup succeeded. Manifest: {}", ret);
+        diem_info!("Epoch ending backup succeeded. Manifest: {}", ret);
         Ok(ret)
     }
 }

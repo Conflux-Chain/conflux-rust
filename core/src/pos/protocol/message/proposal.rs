@@ -2,11 +2,10 @@
 // TreeGraph is free software and distributed under Apache License 2.0.
 // See https://www.apache.org/licenses/LICENSE-2.0
 
-use super::super::sync_protocol::{Context, Handleable};
 use crate::{
-    pos::consensus::consensus_types::{
-        common::Payload,
-        proposal_msg::{ProposalMsg, ProposalUncheckedSignatures},
+    pos::{
+        protocol::sync_protocol::{Context, Handleable},
+        consensus::network_interface::ConsensusMsg
     },
     sync::Error,
 };
@@ -14,22 +13,23 @@ use crate::{
 use diem_types::{
     account_address::AccountAddress, transaction::SignedTransaction,
 };
+use consensus_types::proposal_msg::ProposalMsg;
+use std::mem::discriminant;
 
-pub type ProposalMsgWithTransactions = ProposalMsg<Vec<SignedTransaction>>;
-
-impl<P: Payload> Handleable<P> for ProposalUncheckedSignatures<P> {
-    fn handle(self, ctx: &Context<P>) -> Result<(), Error> {
+impl Handleable for ProposalMsg {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_proposal, msg={:?}", self.0);
 
         let peer_address = AccountAddress::new(ctx.peer_hash.into());
 
-        if self.membership_id() != ctx.manager.network_task.membership_id() {
+        /*
+        if self.epoch_id() != ctx.manager.network_task.epoch_id() {
             ctx.manager
                 .network_task
-                .different_membership_tx
-                .push(peer_address, (self.membership_id(), peer_address))?;
+                .different_epoch_tx
+                .push(peer_address, (self.epoch_id(), peer_address))?;
             return Ok(());
-        }
+        }*/
 
         ensure!(
             self.author() == Some(peer_address),
@@ -38,14 +38,15 @@ impl<P: Payload> Handleable<P> for ProposalUncheckedSignatures<P> {
 
         let proposal = self
             .validate_signatures(
-                &ctx.manager.network_task.membership_info.read().verifier,
+                &ctx.manager.network_task.epoch_info.read().verifier,
             )?
             .verify_well_formed()?;
 
+        let msg = ConsensusMsg::ProposalMsg(Box::new(proposal));
         ctx.manager
             .network_task
-            .proposal_tx
-            .push(peer_address, proposal)?;
+            .consensus_messages_tx
+            .push((peer_address, discriminant(&msg)), (peer_address, msg))?;
         Ok(())
     }
 }

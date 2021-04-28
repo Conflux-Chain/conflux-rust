@@ -27,6 +27,7 @@ use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::service::ProtocolVersion;
 use primitives::{EpochNumber, StateRoot};
 use rlp_derive::{RlpDecodable, RlpEncodable};
+use rlp::Encodable;
 use std::{any::Any, time::Duration};
 
 #[derive(Debug, Clone, RlpDecodable, RlpEncodable, DeriveMallocSizeOf)]

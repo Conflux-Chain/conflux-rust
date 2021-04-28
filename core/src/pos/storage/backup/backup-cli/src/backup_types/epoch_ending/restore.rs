@@ -188,7 +188,7 @@ impl PreheatedEpochEndingRestore {
         previous_epoch_ending_ledger_info: Option<&LedgerInfo>,
     ) -> Result<Vec<LedgerInfo>> {
         let name = self.controller.name();
-        info!(
+        diem_info!(
             "{} started. Manifest: {}",
             name, self.controller.manifest_handle
         );
@@ -196,7 +196,7 @@ impl PreheatedEpochEndingRestore {
             .run_impl(previous_epoch_ending_ledger_info)
             .await
             .map_err(|e| anyhow!("{} failed: {}", name, e))?;
-        info!("{} succeeded.", name);
+        diem_info!("{} succeeded.", name);
         Ok(res)
     }
 }
@@ -317,7 +317,7 @@ impl EpochHistoryRestoreController {
 
     pub async fn run(self) -> Result<EpochHistory> {
         let name = self.name();
-        info!(
+        diem_info!(
             "{} started. Trying epoch endings starting from epoch 0, {} in total.",
             name,
             self.manifest_handles.len(),
@@ -326,7 +326,7 @@ impl EpochHistoryRestoreController {
             .run_impl()
             .await
             .map_err(|e| anyhow!("{} failed: {}", name, e))?;
-        info!("{} succeeded.", name);
+        diem_info!("{} succeeded.", name);
         Ok(res)
     }
 }
@@ -390,7 +390,7 @@ impl EpochHistoryRestoreController {
             previous_li = epoch_endings.last();
         }
 
-        info!(
+        diem_info!(
             "Epoch history recovered in {:.2} seconds",
             timer.elapsed().as_secs_f64()
         );

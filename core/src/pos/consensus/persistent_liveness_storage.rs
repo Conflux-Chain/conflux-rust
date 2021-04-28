@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use super::{
     consensusdb::ConsensusDB, epoch_manager::LivenessStorageData,
     error::DbError,
 };
@@ -13,7 +13,6 @@ use consensus_types::{
 use diem_config::config::NodeConfig;
 use diem_crypto::HashValue;
 use diem_logger::prelude::*;
-use diem_trace::prelude::*;
 use diem_types::{
     block_info::Round, epoch_change::EpochChangeProof, ledger_info::LedgerInfo,
     transaction::Version,
@@ -87,7 +86,7 @@ impl LedgerRecoveryData {
     fn find_root(
         &self, blocks: &mut Vec<Block>, quorum_certs: &mut Vec<QuorumCert>,
     ) -> Result<RootInfo> {
-        info!(
+        diem_info!(
             "The last committed block id as recorded in storage: {}",
             self.storage_ledger
         );
@@ -132,7 +131,7 @@ impl LedgerRecoveryData {
             .ok_or_else(|| format_err!("No LI found for root: {}", root_id))?
             .clone();
 
-        info!("Consensus root block is {}", root_block);
+        diem_info!("Consensus root block is {}", root_block);
 
         Ok(RootInfo(root_block, root_quorum_cert, root_ledger_info))
     }
@@ -299,10 +298,6 @@ impl PersistentLivenessStorage for StorageWriteProxy {
     fn save_tree(
         &self, blocks: Vec<Block>, quorum_certs: Vec<QuorumCert>,
     ) -> Result<()> {
-        let mut trace_batch = vec![];
-        for block in blocks.iter() {
-            trace_code_block!("consensusdb::save_tree", {"block", block.id()}, trace_batch);
-        }
         Ok(self
             .db
             .save_blocks_and_quorum_certificates(blocks, quorum_certs)?)
@@ -333,7 +328,7 @@ impl PersistentLivenessStorage for StorageWriteProxy {
     }
 
     fn start(&self) -> LivenessStorageData {
-        info!("Start consensus recovery.");
+        diem_info!("Start consensus recovery.");
         let raw_data = self
             .db
             .get_data()
@@ -352,7 +347,7 @@ impl PersistentLivenessStorage for StorageWriteProxy {
         let quorum_certs: Vec<_> = raw_data.3;
         let blocks_repr: Vec<String> =
             blocks.iter().map(|b| format!("\n\t{}", b)).collect();
-        info!(
+        diem_info!(
             "The following blocks were restored from ConsensusDB : {}",
             blocks_repr.concat()
         );
@@ -360,7 +355,7 @@ impl PersistentLivenessStorage for StorageWriteProxy {
             .iter()
             .map(|qc| format!("\n\t{}", qc))
             .collect();
-        info!(
+        diem_info!(
             "The following quorum certs were restored from ConsensusDB: {}",
             qc_repr.concat()
         );
@@ -406,7 +401,7 @@ impl PersistentLivenessStorage for StorageWriteProxy {
                         .delete_highest_timeout_certificate()
                         .expect("unable to cleanup highest timeout cert");
                 }
-                info!(
+                diem_info!(
                     "Starting up the consensus state machine with recovery data - [last_vote {}], [highest timeout certificate: {}]",
                     initial_data.last_vote.as_ref().map_or("None".to_string(), |v| v.to_string()),
                     initial_data.highest_timeout_certificate.as_ref().map_or("None".to_string(), |v| v.to_string()),
@@ -415,7 +410,7 @@ impl PersistentLivenessStorage for StorageWriteProxy {
                 LivenessStorageData::RecoveryData(initial_data)
             }
             Err(e) => {
-                error!(error = ?e, "Failed to construct recovery data");
+                diem_error!(error = ?e, "Failed to construct recovery data");
                 LivenessStorageData::LedgerRecoveryData(ledger_recovery_data)
             }
         }

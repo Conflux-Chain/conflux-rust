@@ -184,14 +184,14 @@ impl Worker {
 
                     // Try to purge the log.
                     if let Err(e) = self.maybe_purge_index() {
-                        warn!(
+                        diem_warn!(
                             error = ?e,
                             "Failed purging state node index, ignored.",
                         );
                     }
                 }
                 Err(e) => {
-                    error!(
+                    diem_error!(
                         error = ?e,
                         "Error pruning stale state nodes.",
                     );
@@ -210,7 +210,7 @@ impl Worker {
         loop {
             match self.get_least_readable_version() {
                 Ok(least_readable_version) => {
-                    info!(
+                    diem_info!(
                         least_readable_version = least_readable_version,
                         "[state pruner worker] initialized."
                     );
@@ -219,7 +219,7 @@ impl Worker {
                     return;
                 }
                 Err(e) => {
-                    error!(
+                    diem_error!(
                         error = ?e,
                         "[state pruner worker] Error on first seek. Retrying in 1 second.",
                     );

@@ -127,7 +127,7 @@ struct CoordinatorRunOpt {
 #[tokio::main]
 async fn main() -> Result<()> {
     main_impl().await.map_err(|e| {
-        error!("main_impl() failed: {}", e);
+        diem_error!("main_impl() failed: {}", e);
         e
     })
 }

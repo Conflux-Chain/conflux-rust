@@ -5,19 +5,9 @@
 use super::{HSB_PROTOCOL_ID, HSB_PROTOCOL_VERSION};
 use crate::{
     message::{GetMaybeRequestId, Message, MsgId},
-    network::{
-        NetworkContext, NetworkProtocolHandler, NetworkService,
-        UpdateNodeOperation,
-    },
     pos::{
         consensus::{
-            chained_bft::network::NetworkTask,
-            consensus_types::{
-                common::Payload,
-                proposal_msg::{ProposalMsg, ProposalUncheckedSignatures},
-                sync_info::SyncInfo,
-                vote_msg::VoteMsg,
-            },
+            network::NetworkTask
         },
         protocol::{
             message::{block_retrieval::BlockRetrievalRpcRequest, msgid},
@@ -31,19 +21,31 @@ use crate::{
 
 use crate::{
     pos::{
-        consensus::consensus_types::membership_retrieval::MembershipRetrievalRequest,
         protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
     },
     sync::ProtocolConfiguration,
 };
+use consensus_types::{
+    epoch_retrieval::EpochRetrievalRequest,
+    sync_info::SyncInfo,
+    vote_msg::VoteMsg,
+    proposal_msg::ProposalMsg,
+};
 use cfx_types::H256;
-use diem_types::validator_change::ValidatorChangeProof;
+use diem_types::epoch_change::EpochChangeProof;
 use io::TimerToken;
 use keccak_hash::keccak;
-use network::node_table::NodeId;
+use network::{
+    node_table::NodeId,
+    NetworkContext,
+    NetworkProtocolHandler,
+    NetworkService,
+    UpdateNodeOperation,
+};
 use parking_lot::RwLock;
 use serde::Deserialize;
 use std::{cmp::Eq, collections::HashMap, fmt::Debug, hash::Hash, sync::Arc};
+use network::service::ProtocolVersion;
 
 #[derive(Default)]
 pub struct PeerState {
@@ -111,14 +113,14 @@ where
     }
 }
 
-pub struct Context<'a, P> {
+pub struct Context<'a> {
     pub io: &'a dyn NetworkContext,
     pub peer: NodeId,
     pub peer_hash: H256,
-    pub manager: &'a HotStuffSynchronizationProtocol<P>,
+    pub manager: &'a HotStuffSynchronizationProtocol,
 }
 
-impl<'a, P: Payload> Context<'a, P> {
+impl<'a> Context<'a> {
     pub fn match_request(
         &self, request_id: u64,
     ) -> Result<RequestMessage, Error> {
@@ -133,17 +135,17 @@ impl<'a, P: Payload> Context<'a, P> {
     }
 }
 
-pub struct HotStuffSynchronizationProtocol<P> {
+pub struct HotStuffSynchronizationProtocol {
     pub protocol_config: ProtocolConfiguration,
     pub own_node_hash: H256,
     pub peers: Arc<Peers<PeerState, H256>>,
     pub request_manager: Arc<RequestManager>,
-    pub network_task: NetworkTask<P>,
+    pub network_task: NetworkTask,
 }
 
-impl<P: Payload> HotStuffSynchronizationProtocol<P> {
+impl HotStuffSynchronizationProtocol {
     pub fn new(
-        own_node_hash: H256, network_task: NetworkTask<P>,
+        own_node_hash: H256, network_task: NetworkTask,
         protocol_config: ProtocolConfiguration,
     ) -> Self
     {
@@ -159,7 +161,7 @@ impl<P: Payload> HotStuffSynchronizationProtocol<P> {
 
     pub fn with_peers(
         protocol_config: ProtocolConfiguration, own_node_hash: H256,
-        network_task: NetworkTask<P>, peers: Arc<Peers<PeerState, H256>>,
+        network_task: NetworkTask, peers: Arc<Peers<PeerState, H256>>,
     ) -> Self
     {
         let request_manager = Arc::new(RequestManager::new(&protocol_config));
@@ -176,7 +178,7 @@ impl<P: Payload> HotStuffSynchronizationProtocol<P> {
         self: Arc<Self>, network: Arc<NetworkService>,
     ) -> Result<(), String> {
         network
-            .register_protocol(self, HSB_PROTOCOL_ID, &[HSB_PROTOCOL_VERSION])
+            .register_protocol(self, HSB_PROTOCOL_ID, HSB_PROTOCOL_VERSION)
             .map_err(|e| {
                 format!(
                     "failed to register HotStuffSynchronizationProtocol: {:?}",
@@ -379,52 +381,34 @@ impl<P: Payload> HotStuffSynchronizationProtocol<P> {
     }
 }
 
-pub fn handle_serialized_message<P>(
-    id: MsgId, ctx: &Context<P>, msg: &[u8],
-) -> Result<bool, Error>
-where P: Payload {
+pub fn handle_serialized_message(
+    id: MsgId, ctx: &Context, msg: &[u8],
+) -> Result<bool, Error> {
     match id {
-        msgid::PROPOSAL => {
-            let msg: ProposalMsg<P> = bcs::from_bytes(msg)?;
-            let msg_id = msg.msg_id();
-            let msg_name = msg.msg_name();
-            let req_id = msg.get_request_id();
-
-            let proposal = ProposalUncheckedSignatures(msg);
-
-            // FIXME: add throttling.
-
-            if let Err(e) = proposal.handle(ctx) {
-                info!(
-                    "failed to handle sync protocol message, peer = {}, id = {}, name = {}, request_id = {:?}, error_kind = {:?}",
-                    ctx.peer, msg_id, msg_name, req_id, e.0,
-                );
-                return Err(e);
-            }
-        }
-        msgid::VOTE => handle_message::<VoteMsg, P>(ctx, msg)?,
-        msgid::SYNC_INFO => handle_message::<SyncInfo, P>(ctx, msg)?,
+        msgid::PROPOSAL => handle_message::<ProposalMsg>(ctx, msg)?,
+        msgid::VOTE => handle_message::<VoteMsg>(ctx, msg)?,
+        msgid::SYNC_INFO => handle_message::<SyncInfo>(ctx, msg)?,
         msgid::BLOCK_RETRIEVAL => {
-            handle_message::<BlockRetrievalRpcRequest, P>(ctx, msg)?
+            handle_message::<BlockRetrievalRpcRequest>(ctx, msg)?
         }
         msgid::BLOCK_RETRIEVAL_RESPONSE => {
-            handle_message::<BlockRetrievalRpcResponse<P>, P>(ctx, msg)?
+            handle_message::<BlockRetrievalRpcResponse>(ctx, msg)?
         }
         msgid::EPOCH_RETRIEVAL => {
-            handle_message::<MembershipRetrievalRequest, P>(ctx, msg)?
+            handle_message::<EpochRetrievalRequest>(ctx, msg)?
         }
         msgid::EPOCH_CHANGE => {
-            handle_message::<ValidatorChangeProof, P>(ctx, msg)?
+            handle_message::<EpochChangeProof>(ctx, msg)?
         }
         _ => return Ok(false),
     }
     Ok(true)
 }
 
-fn handle_message<'a, M, P>(
-    ctx: &Context<P>, msg: &'a [u8],
+fn handle_message<'a, M>(
+    ctx: &Context, msg: &'a [u8],
 ) -> Result<(), Error>
-where M: Deserialize<'a> + Handleable<P> + Message {
+where M: Deserialize<'a> + Handleable + Message {
     let msg: M = bcs::from_bytes(msg)?;
     let msg_id = msg.msg_id();
     let msg_name = msg.msg_name();
@@ -449,7 +433,11 @@ where M: Deserialize<'a> + Handleable<P> + Message {
     Ok(())
 }
 
-impl<P: Payload> NetworkProtocolHandler for HotStuffSynchronizationProtocol<P> {
+impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
+    fn minimum_supported_version(&self) -> ProtocolVersion {
+        todo!()
+    }
+
     fn initialize(&self, io: &dyn NetworkContext) {
         io.register_timer(
             CHECK_RPC_REQUEST_TIMER,
@@ -478,7 +466,8 @@ impl<P: Payload> NetworkProtocolHandler for HotStuffSynchronizationProtocol<P> {
             .unwrap_or_else(|e| self.handle_error(io, peer, msg_id.into(), e));
     }
 
-    fn on_peer_connected(&self, io: &dyn NetworkContext, peer: &NodeId) {
+    fn on_peer_connected(&self, io: &dyn NetworkContext, peer: &NodeId, peer_protocol_version: ProtocolVersion) {
+        // TODO: maintain peer protocol version
         let new_originated = io.get_peer_connection_origin(peer);
         if new_originated.is_none() {
             debug!("Peer does not exist when just connected");
@@ -563,10 +552,18 @@ impl<P: Payload> NetworkProtocolHandler for HotStuffSynchronizationProtocol<P> {
             _ => warn!("hsb protocol: unknown timer {} triggered.", timer),
         }
     }
+
+    fn send_local_message(&self, _io: &dyn NetworkContext, _message: Vec<u8>) {
+        todo!()
+    }
+
+    fn on_work_dispatch(&self, _io: &dyn NetworkContext, _work_type: u8) {
+        todo!()
+    }
 }
 
-pub trait Handleable<P> {
-    fn handle(self, ctx: &Context<P>) -> Result<(), Error>;
+pub trait Handleable {
+    fn handle(self, ctx: &Context) -> Result<(), Error>;
 }
 
 pub trait RpcResponse: Send + Sync + Debug + AsAny {}

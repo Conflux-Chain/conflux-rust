@@ -68,7 +68,7 @@ pub(crate) fn gen_seed_peers<
         .filter_map(|validator_info| {
             to_seed_peer(validator_info, role, &to_addresses).map_or_else(
                 |error| {
-                    warn!(
+                    diem_warn!(
                         "Unable to generate seed for validator {} {}",
                         validator_info.account_address(),
                         error

@@ -155,12 +155,12 @@
 
 pub mod prelude {
     pub use crate::{
-        debug,
+        debug as diem_debug,
         diem_logger::FileWriter,
-        error, event, info,
+        error as diem_error, event, info as diem_info,
         sample::{self, SampleRate, Sampling},
         security::SecurityEvent,
-        trace, warn,
+        trace as diem_trace, warn as diem_warn,
     };
 }
 pub mod json_log;

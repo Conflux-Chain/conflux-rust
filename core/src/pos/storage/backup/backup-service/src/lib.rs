@@ -29,7 +29,7 @@ pub fn start_backup_service(address: SocketAddr, db: Arc<DiemDB>) -> Runtime {
     let _guard = runtime.enter();
     let server = warp::serve(routes).bind(address);
     runtime.handle().spawn(server);
-    info!("Backup service spawned.");
+    diem_info!("Backup service spawned.");
     runtime
 }
 

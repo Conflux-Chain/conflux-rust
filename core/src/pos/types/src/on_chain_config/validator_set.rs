@@ -1,12 +1,14 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{on_chain_config::OnChainConfig, validator_info::ValidatorInfo};
+use crate::{on_chain_config::OnChainConfig, validator_info::ValidatorInfo, account_config};
+use anyhow::Result;
 
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{fmt, iter::IntoIterator, vec};
+use crate::event::EventKey;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
@@ -44,6 +46,10 @@ impl ValidatorSet {
     pub fn payload(&self) -> &[ValidatorInfo] { &self.payload }
 
     pub fn empty() -> Self { ValidatorSet::new(Vec::new()) }
+
+    pub fn change_event_key() -> EventKey {
+        EventKey::new_from_address(&account_config::validator_set_address(), 2)
+    }
 }
 
 impl OnChainConfig for ValidatorSet {
@@ -56,4 +62,16 @@ impl IntoIterator for ValidatorSet {
     type Item = ValidatorInfo;
 
     fn into_iter(self) -> Self::IntoIter { self.payload.into_iter() }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NextValidatorSetProposal {
+    pub this_membership_id: u64,
+    pub next_validator_set: ValidatorSet,
+}
+
+impl NextValidatorSetProposal {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        bcs::from_bytes(bytes).map_err(Into::into)
+    }
 }

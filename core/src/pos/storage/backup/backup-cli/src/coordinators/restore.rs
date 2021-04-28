@@ -54,19 +54,19 @@ impl RestoreCoordinator {
     }
 
     pub async fn run(self) -> Result<()> {
-        info!("Restore coordinator started.");
+        diem_info!("Restore coordinator started.");
         COORDINATOR_START_TS.set(unix_timestamp_sec());
 
         let ret = self.run_impl().await;
 
         if let Err(e) = &ret {
-            error!(
+            diem_error!(
                 error = ?e,
                 "Restore coordinator failed."
             );
             COORDINATOR_FAIL_TS.set(unix_timestamp_sec());
         } else {
-            info!("Restore coordinator exiting with success.");
+            diem_info!("Restore coordinator exiting with success.");
             COORDINATOR_SUCC_TS.set(unix_timestamp_sec());
         }
 
@@ -94,18 +94,18 @@ impl RestoreCoordinator {
             None => 0,
         };
         COORDINATOR_TARGET_VERSION.set(actual_target_version as i64);
-        info!("Planned to restore to version {}.", actual_target_version);
+        diem_info!("Planned to restore to version {}.", actual_target_version);
         let txn_resume_point = match self.global_opt.run_mode.as_ref() {
             RestoreRunMode::Restore { restore_handler } => {
                 restore_handler.get_next_expected_transaction_version()?
             }
             RestoreRunMode::Verify => {
-                info!("This is a dry run.");
+                diem_info!("This is a dry run.");
                 0
             }
         };
         if txn_resume_point > 0 {
-            warn!(
+            diem_warn!(
                 "DB has existing transactions, will skip transaction backups before version {}",
                 txn_resume_point
             );
@@ -170,7 +170,7 @@ impl RestoreCoordinator {
             if b.last_version > self.target_version() {
                 Ok(self.target_version())
             } else {
-                warn!(
+                diem_warn!(
                     "Can't find transaction backup containing the target version, \
                     will restore as much as possible"
                 );

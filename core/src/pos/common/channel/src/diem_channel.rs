@@ -86,7 +86,7 @@ impl<M: Debug> Debug for ElementStatus<M> {
 impl<K: Eq + Hash + Clone, M> Sender<K, M> {
     /// This adds the message into the internal queue data structure. This is a
     /// synchronous call.
-    pub fn push(&mut self, key: K, message: M) -> Result<()> {
+    pub fn push(&self, key: K, message: M) -> Result<()> {
         self.push_with_feedback(key, message, None)
     }
 
@@ -94,7 +94,7 @@ impl<K: Eq + Hash + Clone, M> Sender<K, M> {
     /// which the sender can be notified when the message eventually gets
     /// delivered or dropped.
     pub fn push_with_feedback(
-        &mut self, key: K, message: M,
+        &self, key: K, message: M,
         status_ch: Option<oneshot::Sender<ElementStatus<M>>>,
     ) -> Result<()>
     {

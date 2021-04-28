@@ -69,11 +69,11 @@ impl StateSnapshotRestoreController {
 
     pub async fn run(self) -> Result<()> {
         let name = self.name();
-        info!("{} started. Manifest: {}", name, self.manifest_handle);
+        diem_info!("{} started. Manifest: {}", name, self.manifest_handle);
         self.run_impl()
             .await
             .map_err(|e| anyhow!("{} failed: {}", name, e))?;
-        info!("{} succeeded.", name);
+        diem_info!("{} succeeded.", name);
         Ok(())
     }
 }
@@ -85,7 +85,7 @@ impl StateSnapshotRestoreController {
 
     async fn run_impl(self) -> Result<()> {
         if self.version > self.target_version {
-            warn!(
+            diem_warn!(
                 "Trying to restore state snapshot to version {}, which is newer than the target version {}, skipping.",
                 self.version,
                 self.target_version,

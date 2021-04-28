@@ -18,7 +18,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use tg_parameters::sync::REQUEST_START_WAITING_TIME;
+use cfx_parameters::sync::REQUEST_START_WAITING_TIME;
 
 pub mod request_handler;
 

@@ -293,7 +293,7 @@ impl DB {
         name: &'static str,
         inner: rocksdb::DB,
     ) -> DB {
-        info!(rocksdb_name = name, "Opened RocksDB.");
+        diem_info!(rocksdb_name = name, "Opened RocksDB.");
         DB {
             name,
             inner,

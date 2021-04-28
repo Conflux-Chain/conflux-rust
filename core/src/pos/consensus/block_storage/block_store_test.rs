@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use crate::pos::consensus::{
     block_storage::{block_store::sync_manager::NeedFetchResult, BlockReader},
     pending_votes::{PendingVotes, VoteReceptionResult},
     test_utils::{build_empty_tree, build_simple_tree, TreeInserter},

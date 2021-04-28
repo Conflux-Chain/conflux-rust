@@ -166,7 +166,7 @@ impl RocksdbPropertyReporter {
         let (send, recv) = mpsc::channel();
         let join_handle = Some(thread::spawn(move || loop {
             if let Err(e) = update_rocksdb_properties(&db) {
-                warn!(
+                diem_warn!(
                     error = ?e,
                     "Updating rocksdb property failed."
                 );
@@ -266,7 +266,7 @@ impl DiemDB {
                 path.clone(),
                 "diemdb_ro",
                 Self::column_families(),
-                &rocksdb_opts,
+                rocksdb_opts,
             )?
         } else {
             rocksdb_opts.create_if_missing(true);
@@ -275,40 +275,17 @@ impl DiemDB {
                 path.clone(),
                 "diemdb",
                 Self::column_families(),
-                &rocksdb_opts,
+                rocksdb_opts,
             )?
         };
 
         let ret = Self::new_with_db(db, prune_window);
-        info!(
+        diem_info!(
             path = path,
             time_ms = %instant.elapsed().as_millis(),
             "Opened DiemDB.",
         );
         Ok(ret)
-    }
-
-    pub fn open_as_secondary<P: AsRef<Path> + Clone>(
-        db_root_path: P,
-        secondary_path: P,
-        mut rocksdb_config: RocksdbConfig,
-    ) -> Result<Self> {
-        let primary_path = db_root_path.as_ref().join("diemdb");
-        let secondary_path = secondary_path.as_ref().to_path_buf();
-        // Secondary needs `max_open_files = -1` per https://github.com/facebook/rocksdb/wiki/Secondary-instance
-        rocksdb_config.max_open_files = -1;
-        let rocksdb_opts = gen_rocksdb_options(&rocksdb_config);
-
-        Ok(Self::new_with_db(
-            DB::open_as_secondary(
-                primary_path,
-                secondary_path,
-                "diemdb_sec",
-                Self::column_families(),
-                &rocksdb_opts,
-            )?,
-            None, // prune_window
-        ))
     }
 
     /// This opens db in non-readonly mode, without the pruner.
@@ -876,7 +853,7 @@ impl DbReader for DiemDB {
                 ),
             };
 
-            info!(
+            diem_info!(
                 num_transactions = tree_state.num_transactions,
                 state_root_hash = %tree_state.account_state_root_hash,
                 description = tree_state.describe(),
@@ -1050,7 +1027,7 @@ where
     let res_type = match &res {
         Ok(_) => "Ok",
         Err(e) => {
-            warn!(
+            diem_warn!(
                 api_name = api_name,
                 error = ?e,
                 "DiemDB API returned error."

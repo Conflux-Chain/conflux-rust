@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{error::StateSyncError, state_replication::StateComputer};
+use super::{error::StateSyncError, state_replication::StateComputer};
 use anyhow::Result;
 use consensus_types::block::Block;
 use diem_crypto::HashValue;
@@ -9,33 +9,37 @@ use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_metrics::monitor;
 use diem_types::ledger_info::LedgerInfoWithSignatures;
-use execution_correctness::ExecutionCorrectness;
 use executor_types::{Error as ExecutionError, StateComputeResult};
 use fail::fail_point;
-use state_sync::client::StateSyncClient;
+//use state_sync::client::StateSyncClient;
 use std::boxed::Box;
+use crate::pos::consensus::executor::Executor;
+use std::sync::Arc;
 
 /// Basic communication with the Execution module;
 /// implements StateComputer traits.
 pub struct ExecutionProxy {
-    execution_correctness_client:
-        Mutex<Box<dyn ExecutionCorrectness + Send + Sync>>,
-    synchronizer: StateSyncClient,
+    //execution_correctness_client:
+    //    Mutex<Box<dyn ExecutionCorrectness + Send + Sync>>,
+    //synchronizer: StateSyncClient,
+    executor: Arc<Executor>,
 }
 
 impl ExecutionProxy {
     pub fn new(
-        execution_correctness_client: Box<
+        /*execution_correctness_client: Box<
             dyn ExecutionCorrectness + Send + Sync,
         >,
-        synchronizer: StateSyncClient,
+        synchronizer: StateSyncClient,*/
+        executor: Arc<Executor>
     ) -> Self
     {
         Self {
-            execution_correctness_client: Mutex::new(
+            /*execution_correctness_client: Mutex::new(
                 execution_correctness_client,
             ),
-            synchronizer,
+            //synchronizer,*/
+            executor: executor,
         }
     }
 }
@@ -55,19 +59,21 @@ impl StateComputer for ExecutionProxy {
                 error: "Injected error in compute".into(),
             })
         });
-        debug!(
+        diem_debug!(
             block_id = block.id(),
             parent_id = block.parent_id(),
             "Executing block",
         );
 
         // TODO: figure out error handling for the prologue txn
-        monitor!(
+        /*monitor!(
             "execute_block",
-            self.execution_correctness_client
-                .lock()
+            self.executor
                 .execute_block(block.clone(), parent_block_id)
-        )
+        )*/
+        Err(ExecutionError::InternalError {
+            error: "TODO".parse().unwrap(),
+        })
     }
 
     /// Send a successful commit. A future is fulfilled when the state is
@@ -77,10 +83,9 @@ impl StateComputer for ExecutionProxy {
         finality_proof: LedgerInfoWithSignatures,
     ) -> Result<(), ExecutionError>
     {
-        let (committed_txns, reconfig_events) = monitor!(
+        /*let (committed_txns, reconfig_events) = monitor!(
             "commit_block",
-            self.execution_correctness_client
-                .lock()
+            self.executor
                 .commit_blocks(block_ids, finality_proof)?
         );
         if let Err(e) = monitor!(
@@ -89,8 +94,8 @@ impl StateComputer for ExecutionProxy {
                 .commit(committed_txns, reconfig_events)
                 .await
         ) {
-            error!(error = ?e, "Failed to notify state synchronizer");
-        }
+            diem_error!(error = ?e, "Failed to notify state synchronizer");
+        }*/
         Ok(())
     }
 
@@ -107,15 +112,16 @@ impl StateComputer for ExecutionProxy {
         // ChunkExecutor may be not up to date so it is required to
         // reset the cache of ChunkExecutor in State Sync when requested
         // to sync.
-        let res = monitor!("sync_to", self.synchronizer.sync_to(target).await);
+        //let res = monitor!("sync_to", self.synchronizer.sync_to(target).await);
         // Similarily, after the state synchronization, we have to reset the
         // cache of BlockExecutor to guarantee the latest committed
         // state is up to date.
-        self.execution_correctness_client.lock().reset()?;
+        //self.executor.reset()?;
 
-        res.map_err(|error| {
+        /*res.map_err(|error| {
             let anyhow_error: anyhow::Error = error.into();
             anyhow_error.into()
-        })
+        })*/
+        Ok(())
     }
 }

@@ -6,7 +6,7 @@
 use anyhow::Result;
 use diem_crypto::HashValue;
 use diem_infallible::Mutex;
-use diem_logger::warn;
+use diem_logger::warn as diem_warn;
 use diem_secure_net::NetworkClient;
 use diem_types::{
     account_address::AccountAddress,
@@ -46,7 +46,7 @@ impl StorageClient {
         let input_message = bcs::to_bytes(&input)?;
         let result = loop {
             match self.process_one_message(&input_message) {
-                Err(err) => warn!(
+                Err(err) => diem_warn!(
                     error = ?err,
                     request = ?input,
                     "Failed to communicate with storage service.",

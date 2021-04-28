@@ -52,7 +52,7 @@ impl TransactionBackupController {
     }
 
     pub async fn run(self) -> Result<FileHandle> {
-        info!(
+        diem_info!(
             "Transaction backup started, starting from version {}, for {} transactions in total.",
             self.start_version, self.num_transactions,
         );
@@ -60,7 +60,7 @@ impl TransactionBackupController {
             .run_impl()
             .await
             .map_err(|e| anyhow!("Transaction backup failed: {}", e))?;
-        info!("Transaction backup succeeded. Manifest: {}", ret);
+        diem_info!("Transaction backup succeeded. Manifest: {}", ret);
         Ok(ret)
     }
 }

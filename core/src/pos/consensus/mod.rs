@@ -17,10 +17,11 @@ mod consensusdb;
 mod counters;
 mod epoch_manager;
 mod error;
+mod executor;
 mod liveness;
 mod logging;
 mod metrics_safety_rules;
-mod network;
+pub(crate) mod network;
 #[cfg(test)]
 mod network_tests;
 mod pending_votes;

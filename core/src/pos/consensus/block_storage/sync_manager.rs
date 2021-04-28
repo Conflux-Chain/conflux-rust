@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use crate::pos::consensus::{
     block_storage::{BlockReader, BlockStore},
     logging::{LogEvent, LogSchema},
     network::NetworkSender,
@@ -186,7 +186,7 @@ impl BlockStore {
             )
             .await?
             .take();
-        debug!(
+        diem_debug!(
             LogSchema::new(LogEvent::CommitViaSync).round(self.root().round()),
             committed_round = root.0.round(),
             block_id = root.0.id(),
@@ -212,7 +212,7 @@ impl BlockStore {
         state_computer: Arc<dyn StateComputer>,
     ) -> anyhow::Result<RecoveryData>
     {
-        debug!(
+        diem_debug!(
             LogSchema::new(LogEvent::StateSync)
                 .remote_peer(retriever.preferred_peer),
             "Start state sync with peer to block: {}",
@@ -298,7 +298,7 @@ impl BlockRetriever {
             let peer = self.pick_peer(attempt, &mut peers);
             attempt += 1;
 
-            debug!(
+            diem_debug!(
                 LogSchema::new(LogEvent::RetrieveBlock).remote_peer(peer),
                 block_id = block_id,
                 "Fetching block, attempt {}",
@@ -320,7 +320,7 @@ impl BlockRetriever {
                 }
             }) {
                 result @ Ok(_) => return result,
-                Err(e) => warn!(
+                Err(e) => diem_warn!(
                     remote_peer = peer,
                     block_id = block_id,
                     error = ?e, "Failed to fetch block, trying another peer",
@@ -346,7 +346,7 @@ impl BlockRetriever {
             return self.preferred_peer;
         }
 
-        let peer_idx = thread_rng().gen_range(0..peers.len());
+        let peer_idx = thread_rng().gen_range(0, peers.len());
         *peers.remove(peer_idx)
     }
 }

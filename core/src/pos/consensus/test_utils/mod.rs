@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::block_storage::{BlockReader, BlockStore};
+use crate::pos::consensus::block_storage::{BlockReader, BlockStore};
 use consensus_types::{
     block::{block_test_utils::certificate_for_genesis, Block},
     common::Round,

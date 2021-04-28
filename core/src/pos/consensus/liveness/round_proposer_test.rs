@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::liveness::{
+use crate::pos::consensus::liveness::{
     proposer_election::ProposerElection, round_proposer_election::RoundProposer,
 };
 use consensus_types::block::{

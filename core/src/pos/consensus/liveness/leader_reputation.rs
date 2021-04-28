@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use crate::pos::consensus::{
     counters::{COMMITTED_PROPOSALS_IN_WINDOW, COMMITTED_VOTES_IN_WINDOW},
     liveness::proposer_election::{next, ProposerElection},
 };
@@ -77,7 +77,7 @@ impl MetadataBackend for DiemDBBackend {
             || known_version == self.diem_db.get_latest_version().unwrap_or(0))
         {
             if let Err(e) = self.refresh_window(target_round) {
-                error!(
+                diem_error!(
                     error = ?e, "[leader reputation] Fail to refresh window",
                 );
                 return vec![];
@@ -235,7 +235,7 @@ impl ProposerElection for LeaderReputation {
                         .get(&author)
                         .map_or(false, |id| *id != block.id())
                     {
-                        error!(
+                        diem_error!(
                             SecurityEvent::InvalidConsensusProposal,
                             "Multiple proposals from {} for round {}",
                             author,

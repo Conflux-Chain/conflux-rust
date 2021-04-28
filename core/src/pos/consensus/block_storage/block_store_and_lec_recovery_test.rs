@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use crate::pos::consensus::{
     block_storage::{block_store::BlockStore, BlockReader},
     persistent_liveness_storage::{
         LedgerRecoveryData, RecoveryData, RootMetadata,

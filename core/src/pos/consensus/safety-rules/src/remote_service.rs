@@ -9,7 +9,7 @@ use crate::{
     },
     Error, SafetyRules, TSafetyRules,
 };
-use diem_logger::warn;
+use diem_logger::warn as diem_warn;
 use diem_secure_net::{NetworkClient, NetworkServer};
 use std::net::SocketAddr;
 
@@ -42,7 +42,7 @@ pub fn execute(
         export_consensus_key,
     );
     if let Err(e) = safety_rules.consensus_state() {
-        warn!("Unable to print consensus state: {}", e);
+        diem_warn!("Unable to print consensus state: {}", e);
     }
 
     let mut serializer_service = SerializerService::new(safety_rules);
@@ -53,7 +53,7 @@ pub fn execute(
         if let Err(e) =
             process_one_message(&mut network_server, &mut serializer_service)
         {
-            warn!("Failed to process message: {}", e);
+            diem_warn!("Failed to process message: {}", e);
         }
     }
 }
@@ -89,7 +89,7 @@ impl TSerializerClient for RemoteClient {
         let input_message = bcs::to_bytes(&input)?;
         loop {
             match self.process_one_message(&input_message) {
-                Err(err) => warn!(
+                Err(err) => diem_warn!(
                     "Failed to communicate with SafetyRules service: {}",
                     err
                 ),

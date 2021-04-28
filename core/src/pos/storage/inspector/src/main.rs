@@ -6,7 +6,7 @@
 use anyhow::Result;
 use compiled_stdlib::name_for_script;
 use diem_config::config::RocksdbConfig;
-use diem_logger::info;
+use diem_logger::info as diem_info;
 use diemdb::DiemDB;
 use std::path::PathBuf;
 use storage_interface::DbReader;
@@ -49,21 +49,21 @@ fn print_head(db: &DiemDB) -> Result<()> {
         .expect("StartupInfo is empty, database is empty.");
 
     let version = si.latest_ledger_info.ledger_info().version();
-    info!("Version: {}", version);
+    diem_info!("Version: {}", version);
 
-    info!(
+    diem_info!(
         "The latest ledger info: {}",
         si.latest_ledger_info.ledger_info()
     );
 
-    info!("Signatures: {:?}", si.latest_ledger_info.signatures());
+    diem_info!("Signatures: {:?}", si.latest_ledger_info.signatures());
 
-    info!("Current EpochState: {}", si.get_epoch_state());
+    diem_info!("Current EpochState: {}", si.get_epoch_state());
 
     let backup = db.get_backup_handler();
     let iter = backup.get_account_iter(version)?;
     let num_account_state = iter.count();
-    info!("Total Accounts: {}", num_account_state);
+    diem_info!("Total Accounts: {}", num_account_state);
 
     print_txn(db, version);
 
@@ -92,14 +92,14 @@ fn print_account(db: &DiemDB, addr: AccountAddress) {
                 println!("Account {}: {:?}", addr, r);
             }
             Err(e) => {
-                info!(
+                diem_info!(
                     "Account {} exists, but have no AccountResource: {}.",
                     addr, e
                 );
             }
         }
     } else {
-        info!("Account {} doesn't exists", addr);
+        diem_info!("Account {} doesn't exists", addr);
     }
 }
 
@@ -149,7 +149,7 @@ fn list_accounts(db: &DiemDB) {
             Err(x) => println!("Got err iterating through AccountStateBlobs {:?}", x),
         }
     }
-    info!("Total Accounts: {}", num_account);
+    diem_info!("Total Accounts: {}", num_account);
 }
 
 fn main() {
@@ -160,12 +160,12 @@ fn main() {
     let p = opt.db.as_path();
 
     if !p.is_dir() {
-        info!("Invalid Directory {:?}!", p);
+        diem_info!("Invalid Directory {:?}!", p);
         std::process::exit(-1);
     }
 
     let log_dir = tempfile::tempdir().expect("Unable to get temp dir");
-    info!("Opening DB at: {:?}, log at {:?}", p, log_dir.path());
+    diem_info!("Opening DB at: {:?}, log at {:?}", p, log_dir.path());
 
     let db = DiemDB::open(
         p,
@@ -174,7 +174,7 @@ fn main() {
         RocksdbConfig::default(),
     )
     .expect("Unable to open DiemDB");
-    info!("DB opened successfully.");
+    diem_info!("DB opened successfully.");
 
     if let Some(cmd) = opt.cmd {
         match cmd {

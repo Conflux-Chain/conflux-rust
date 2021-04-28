@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use super::{
     network::{NetworkReceivers, NetworkSender},
     network_interface::{
         ConsensusMsg, ConsensusNetworkEvents, ConsensusNetworkSender,
@@ -516,7 +516,7 @@ impl DropConfigRound {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::network::NetworkTask;
+    use super::network::NetworkTask;
     use bytes::Bytes;
     use consensus_types::block_retrieval::{
         BlockRetrievalRequest, BlockRetrievalResponse, BlockRetrievalStatus,

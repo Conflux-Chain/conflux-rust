@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use crate::pos::consensus::{
     liveness::round_state::{
         ExponentialTimeInterval, NewRoundEvent, NewRoundReason, RoundState,
         RoundTimeInterval,

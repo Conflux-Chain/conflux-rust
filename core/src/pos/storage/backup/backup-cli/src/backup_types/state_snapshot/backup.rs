@@ -55,7 +55,7 @@ impl StateSnapshotBackupController {
     }
 
     pub async fn run(self) -> Result<FileHandle> {
-        info!(
+        diem_info!(
             "State snapshot backup started, for version {}.",
             self.version,
         );
@@ -63,7 +63,7 @@ impl StateSnapshotBackupController {
             .run_impl()
             .await
             .map_err(|e| anyhow!("State snapshot backup failed: {}", e))?;
-        info!("State snapshot backup succeeded. Manifest: {}", ret);
+        diem_info!("State snapshot backup succeeded. Manifest: {}", ret);
         Ok(ret)
     }
 

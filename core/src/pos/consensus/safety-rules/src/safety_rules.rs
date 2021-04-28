@@ -160,7 +160,7 @@ impl SafetyRules {
         let updated = match two_chain_round.cmp(&preferred_round) {
             Ordering::Greater => {
                 safety_data.preferred_round = two_chain_round;
-                info!(SafetyLogSchema::new(
+                diem_info!(SafetyLogSchema::new(
                     LogEntry::PreferredRound,
                     LogEvent::Update
                 )
@@ -168,7 +168,7 @@ impl SafetyRules {
                 true
             }
             Ordering::Less => {
-                trace!(
+                diem_trace!(
                 "2-chain round {} is lower than preferred round {} but 1-chain round {} is higher.",
                 two_chain_round, preferred_round, one_chain_round
             );
@@ -217,7 +217,7 @@ impl SafetyRules {
         }
 
         safety_data.last_voted_round = round;
-        info!(
+        diem_info!(
             SafetyLogSchema::new(LogEntry::LastVotedRound, LogEvent::Update)
                 .last_voted_round(safety_data.last_voted_round)
         );
@@ -241,7 +241,7 @@ impl SafetyRules {
         let waypoint = self.persistent_storage.waypoint()?;
         let safety_data = self.persistent_storage.safety_data()?;
 
-        info!(SafetyLogSchema::new(LogEntry::State, LogEvent::Update)
+        diem_info!(SafetyLogSchema::new(LogEntry::State, LogEvent::Update)
             .author(self.persistent_storage.author()?)
             .epoch(safety_data.epoch)
             .last_voted_round(safety_data.last_voted_round)
@@ -286,7 +286,7 @@ impl SafetyRules {
                 None,
             ))?;
 
-            info!(SafetyLogSchema::new(LogEntry::Epoch, LogEvent::Update)
+            diem_info!(SafetyLogSchema::new(LogEntry::Epoch, LogEvent::Update)
                 .epoch(epoch_state.epoch));
         }
         self.epoch_state = Some(epoch_state.clone());
@@ -298,7 +298,7 @@ impl SafetyRules {
             Some(expected_key) => {
                 let current_key = self.signer().ok().map(|s| s.public_key());
                 if current_key == Some(expected_key.clone()) {
-                    debug!(
+                    diem_debug!(
                         SafetyLogSchema::new(
                             LogEntry::KeyReconciliation,
                             LogEvent::Success
@@ -341,7 +341,7 @@ impl SafetyRules {
             }
         };
         initialize_result.map_err(|error| {
-            info!(SafetyLogSchema::new(
+            diem_info!(SafetyLogSchema::new(
                 LogEntry::KeyReconciliation,
                 LogEvent::Error
             )
@@ -516,16 +516,16 @@ where
     L: for<'a> Fn(SafetyLogSchema<'a>) -> SafetyLogSchema<'a>,
 {
     let _timer = counters::start_timer("internal", log_entry.as_str());
-    debug!(log_cb(SafetyLogSchema::new(log_entry, LogEvent::Request)));
+    diem_debug!(log_cb(SafetyLogSchema::new(log_entry, LogEvent::Request)));
     counters::increment_query(log_entry.as_str(), "request");
     callback()
         .map(|v| {
-            info!(log_cb(SafetyLogSchema::new(log_entry, LogEvent::Success)));
+            diem_info!(log_cb(SafetyLogSchema::new(log_entry, LogEvent::Success)));
             counters::increment_query(log_entry.as_str(), "success");
             v
         })
         .map_err(|err| {
-            error!(log_cb(SafetyLogSchema::new(log_entry, LogEvent::Error))
+            diem_error!(log_cb(SafetyLogSchema::new(log_entry, LogEvent::Error))
                 .error(&err));
             counters::increment_query(log_entry.as_str(), "error");
             err

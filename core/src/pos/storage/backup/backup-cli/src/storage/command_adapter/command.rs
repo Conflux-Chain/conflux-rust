@@ -63,7 +63,7 @@ pub(super) struct SpawnedCommand {
 
 impl SpawnedCommand {
     pub fn spawn(command: Command) -> Result<Self> {
-        debug!("Spawning {:?}", command);
+        diem_debug!("Spawning {:?}", command);
 
         let mut cmd = tokio::process::Command::new("bash");
         cmd.args(&["-c", &command.cmd_str]);

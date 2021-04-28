@@ -100,7 +100,7 @@ impl PendingVotes {
                 }
             } else {
                 // we have seen a different vote for the same round
-                error!(
+                diem_error!(
                     SecurityEvent::ConsensusEquivocatingVote,
                     remote_peer = vote.author(),
                     vote = vote,
@@ -157,7 +157,7 @@ impl PendingVotes {
 
             // error
             Err(error) => {
-                error!(
+                diem_error!(
                     "MUST_FIX: vote received could not be added: {}, vote: {}",
                     error, vote
                 );
@@ -199,7 +199,7 @@ impl PendingVotes {
 
                 // error
                 Err(error) => {
-                    error!(
+                    diem_error!(
                         "MUST_FIX: timeout vote received could not be added: {}, vote: {}",
                         error, vote
                     );

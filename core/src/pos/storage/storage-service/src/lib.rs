@@ -83,13 +83,13 @@ impl StorageService {
             NetworkServer::new("storage", config.storage.address, config.storage.timeout_ms);
         let ret = thread::spawn(move || loop {
             if let Err(e) = self.process_one_message(&mut network_server) {
-                warn!(
+                diem_warn!(
                     error = ?e,
                     "Failed to process message.",
                 );
             }
         });
-        info!("StorageService spawned.");
+        diem_info!("StorageService spawned.");
         ret
     }
 

@@ -41,7 +41,7 @@ impl SystemStore {
             if let Some(counters) = self.db.get::<LedgerCountersSchema>(&base_version)? {
                 counters
             } else {
-                warn!(
+                diem_warn!(
                     base_version = base_version,
                     "Base version ledger counters not found. Assuming zeros.",
                 );

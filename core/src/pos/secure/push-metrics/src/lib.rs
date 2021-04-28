@@ -11,7 +11,7 @@ pub use diem_metrics_core::{
     IntGauge, IntGaugeVec,
 };
 
-use diem_logger::{error, info};
+use diem_logger::{error as diem_error, info as diem_info};
 use diem_metrics_core::{Encoder, TextEncoder};
 use std::{
     env,
@@ -38,13 +38,13 @@ impl MetricsPusher {
         if let Err(e) =
             TextEncoder::new().encode(&diem_metrics_core::gather(), &mut buffer)
         {
-            error!("Failed to encode push metrics: {}.", e.to_string());
+            diem_error!("Failed to encode push metrics: {}.", e.to_string());
         } else {
             let response = ureq::post(&push_metrics_endpoint)
                 .timeout_connect(10_000)
                 .send_bytes(&buffer);
             if let Some(error) = response.synthetic_error() {
-                error!(
+                diem_error!(
                     "Failed to push metrics to {}. Error: {}",
                     push_metrics_endpoint, error
                 );
@@ -75,7 +75,7 @@ impl MetricsPusher {
         let push_metrics_endpoint = match env::var("PUSH_METRICS_ENDPOINT") {
             Ok(s) => s,
             Err(_) => {
-                info!("PUSH_METRICS_ENDPOINT env var is not set. Skipping sending metrics.");
+                diem_info!("PUSH_METRICS_ENDPOINT env var is not set. Skipping sending metrics.");
                 return None;
             }
         };
@@ -84,7 +84,7 @@ impl MetricsPusher {
                 Ok(s) => match s.parse::<u64>() {
                     Ok(i) => i,
                     Err(_) => {
-                        error!(
+                        diem_error!(
                             "Invalid value for PUSH_METRICS_FREQUENCY_SECS: {}",
                             s
                         );
@@ -93,7 +93,7 @@ impl MetricsPusher {
                 },
                 Err(_) => DEFAULT_PUSH_FREQUENCY_SECS,
             };
-        info!(
+        diem_info!(
             "Starting push metrics loop. Sending metrics to {} with a frequency of {} seconds",
             push_metrics_endpoint, push_metrics_frequency_secs
         );
@@ -121,13 +121,13 @@ impl MetricsPusher {
     pub fn join(&mut self) {
         if let Some(worker_thread) = self.worker_thread.take() {
             if let Err(e) = self.quit_sender.send(()) {
-                error!(
+                diem_error!(
                     "Failed to send quit signal to metric pushing worker thread: {:?}",
                     e
                 );
             }
             if let Err(e) = worker_thread.join() {
-                error!("Failed to join metric pushing worker thread: {:?}", e);
+                diem_error!("Failed to join metric pushing worker thread: {:?}", e);
             }
         }
     }

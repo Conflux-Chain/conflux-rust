@@ -5,7 +5,7 @@
 mod consensusdb_test;
 mod schema;
 
-use crate::{
+use crate::pos::consensus::{
     consensusdb::schema::{
         block::BlockSchema,
         quorum_certificate::QCSchema,
@@ -39,10 +39,10 @@ impl ConsensusDB {
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
-        let db = DB::open(path.clone(), "consensus", column_families, &opts)
+        let db = DB::open(path.clone(), "consensus", column_families, opts)
             .expect("ConsensusDB open failed; unable to continue");
 
-        info!(
+        diem_info!(
             "Opened ConsensusDB at {:?} in {} ms",
             path,
             instant.elapsed().as_millis()

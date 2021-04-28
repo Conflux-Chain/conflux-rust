@@ -142,7 +142,7 @@ impl BackupCoordinator {
             )
             .boxed_local();
 
-        info!("Backup coordinator started.");
+        diem_info!("Backup coordinator started.");
         let mut all_work = stream::select_all(vec![
             watch_db_state,
             backup_epoch_endings,
@@ -165,7 +165,7 @@ impl BackupCoordinator {
             Ok(s) => {
                 HEARTBEAT_TS.set(unix_timestamp_sec());
                 if s.is_none() {
-                    warn!("DB not bootstrapped.");
+                    diem_warn!("DB not bootstrapped.");
                 } else {
                     db_state_broadcast
                         .send(s)
@@ -173,7 +173,7 @@ impl BackupCoordinator {
                         .unwrap()
                 }
             }
-            Err(e) => warn!(
+            Err(e) => diem_warn!(
                 "Failed pulling DbState from local Diem node: {}. Will keep trying.",
                 e
             ),
@@ -304,7 +304,7 @@ impl BackupCoordinator {
                 let db_state = *rx.borrow();
                 if let Some(db_state) = db_state {
                     let next_state = worker(self, s, db_state).await.unwrap_or_else(|e| {
-                        warn!("backup failed: {}. Keep trying with state {:?}.", e, s);
+                        diem_warn!("backup failed: {}. Keep trying with state {:?}.", e, s);
                         s
                     });
                     Some(((), (next_state, rx)))

@@ -3,7 +3,13 @@
 
 //! Interface between Consensus and Network layers.
 
-use crate::counters;
+use crate::pos::{
+    consensus::counters,
+    protocol::{
+        sync_protocol::HotStuffSynchronizationProtocol,
+        HSB_PROTOCOL_ID,
+    }
+};
 use channel::message_queues::QueueStyle;
 use consensus_types::{
     block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse},
@@ -14,18 +20,10 @@ use consensus_types::{
 };
 use diem_metrics::IntCounterVec;
 use diem_types::{epoch_change::EpochChangeProof, PeerId};
-use network::{
-    constants::NETWORK_CHANNEL_SIZE,
-    error::NetworkError,
-    peer_manager::{ConnectionRequestSender, PeerManagerRequestSender},
-    protocols::{
-        network::{NetworkEvents, NetworkSender, NewNetworkSender},
-        rpc::error::RpcError,
-    },
-    ProtocolId,
-};
+use network::NetworkService;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use std::sync::Arc;
 
 /// Network type for consensus
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -58,7 +56,7 @@ pub enum ConsensusMsg {
 /// the raw `Bytes` direct-send and rpc messages are deserialized into
 /// `ConsensusMessage` types. `ConsensusNetworkEvents` is a thin wrapper around
 /// an `channel::Receiver<PeerManagerNotification>`.
-pub type ConsensusNetworkEvents = NetworkEvents<ConsensusMsg>;
+//pub type ConsensusNetworkEvents = NetworkEvents<ConsensusMsg>;
 
 /// The interface from Consensus to Networking layer.
 ///
@@ -70,74 +68,6 @@ pub type ConsensusNetworkEvents = NetworkEvents<ConsensusMsg>;
 /// requires the `ConsensusNetworkSender` to be `Clone` and `Send`.
 #[derive(Clone)]
 pub struct ConsensusNetworkSender {
-    network_sender: NetworkSender<ConsensusMsg>,
-}
-
-/// Configuration for the network endpoints to support consensus.
-pub fn network_endpoint_config() -> (
-    Vec<ProtocolId>,
-    Vec<ProtocolId>,
-    QueueStyle,
-    usize,
-    Option<&'static IntCounterVec>,
-) {
-    (
-        vec![ProtocolId::ConsensusRpc],
-        vec![ProtocolId::ConsensusDirectSend],
-        QueueStyle::LIFO,
-        NETWORK_CHANNEL_SIZE,
-        Some(&counters::PENDING_CONSENSUS_NETWORK_EVENTS),
-    )
-}
-
-impl NewNetworkSender for ConsensusNetworkSender {
-    /// Returns a Sender that only sends for the
-    /// `CONSENSUS_DIRECT_SEND_PROTOCOL` and `CONSENSUS_RPC_PROTOCOL`
-    /// ProtocolId.
-    fn new(
-        peer_mgr_reqs_tx: PeerManagerRequestSender,
-        connection_reqs_tx: ConnectionRequestSender,
-    ) -> Self
-    {
-        Self {
-            network_sender: NetworkSender::new(
-                peer_mgr_reqs_tx,
-                connection_reqs_tx,
-            ),
-        }
-    }
-}
-
-impl ConsensusNetworkSender {
-    /// Send a single message to the destination peer using the
-    /// `CONSENSUS_DIRECT_SEND_PROTOCOL` ProtocolId.
-    pub fn send_to(
-        &mut self, recipient: PeerId, message: ConsensusMsg,
-    ) -> Result<(), NetworkError> {
-        let protocol = ProtocolId::ConsensusDirectSend;
-        self.network_sender.send_to(recipient, protocol, message)
-    }
-
-    /// Send a single message to the destination peers using the
-    /// `CONSENSUS_DIRECT_SEND_PROTOCOL` ProtocolId.
-    pub fn send_to_many(
-        &mut self, recipients: impl Iterator<Item = PeerId>,
-        message: ConsensusMsg,
-    ) -> Result<(), NetworkError>
-    {
-        let protocol = ProtocolId::ConsensusDirectSend;
-        self.network_sender
-            .send_to_many(recipients, protocol, message)
-    }
-
-    /// Send a RPC to the destination peer using the `CONSENSUS_RPC_PROTOCOL`
-    /// ProtocolId.
-    pub async fn send_rpc(
-        &mut self, recipient: PeerId, message: ConsensusMsg, timeout: Duration,
-    ) -> Result<ConsensusMsg, RpcError> {
-        let protocol = ProtocolId::ConsensusRpc;
-        self.network_sender
-            .send_rpc(recipient, protocol, message, timeout)
-            .await
-    }
+    pub network: Arc<NetworkService>,
+    pub protocol_handler: Arc<HotStuffSynchronizationProtocol>,
 }

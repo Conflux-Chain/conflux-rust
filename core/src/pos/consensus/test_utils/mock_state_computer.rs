@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use crate::pos::consensus::{
     error::StateSyncError, state_replication::StateComputer,
     test_utils::mock_storage::MockStorage,
 };
@@ -86,7 +86,7 @@ impl StateComputer for MockStateComputer {
     async fn sync_to(
         &self, commit: LedgerInfoWithSignatures,
     ) -> Result<(), StateSyncError> {
-        debug!(
+        diem_debug!(
             "{}Fake sync{} to block id {}",
             Fg(Blue),
             Fg(Reset),

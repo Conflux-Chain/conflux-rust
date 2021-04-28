@@ -5,8 +5,8 @@ use diem_logger::prelude::*;
 use futures::{Future, FutureExt, SinkExt};
 use std::{pin::Pin, thread, time::Duration};
 
-use crate::counters;
-use tokio::{runtime::Handle, time::sleep};
+use crate::pos::consensus::counters;
+use tokio::{runtime::Handle};
 
 /// Time service is an abstraction for operations that depend on time
 /// It supports implementations that can simulated time or depend on actual time
@@ -39,7 +39,7 @@ pub trait TimeService: Send + Sync {
         {
             wait_duration += Duration::from_millis(1);
             if wait_duration > Duration::from_secs(10) {
-                error!(
+                diem_error!(
                     "[TimeService] long wait time {} seconds required",
                     wait_duration.as_secs()
                 );
@@ -89,7 +89,7 @@ where T: Send + 'static
         let message = self.message.take().unwrap();
         let r = async move {
             if let Err(e) = sender.send(message).await {
-                error!("Error on send: {:?}", e);
+                diem_error!("Error on send: {:?}", e);
             };
         };
         r.boxed()
@@ -112,7 +112,7 @@ impl ClockTimeService {
 impl TimeService for ClockTimeService {
     fn run_after(&self, timeout: Duration, mut t: Box<dyn ScheduledTask>) {
         let task = async move {
-            sleep(timeout).await;
+            std::thread::sleep(timeout);
             t.run().await;
         };
         self.executor.spawn(task);

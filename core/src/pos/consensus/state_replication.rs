@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::error::{MempoolError, StateSyncError};
+use super::error::{MempoolError, StateSyncError};
 use anyhow::Result;
 use consensus_types::{block::Block, common::Payload};
 use diem_crypto::HashValue;
@@ -24,9 +24,6 @@ pub trait TxnManager: Send + Sync {
     async fn notify(
         &self, block: &Block, compute_result: &StateComputeResult,
     ) -> Result<(), MempoolError>;
-
-    /// Helper to trace transactions after block is generated
-    fn trace_transactions(&self, _block: &Block) {}
 }
 
 /// While Consensus is managing proposed blocks, `StateComputer` is managing the

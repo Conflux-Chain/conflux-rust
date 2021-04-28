@@ -2,16 +2,15 @@
 // TreeGraph is free software and distributed under Apache License 2.0.
 // See https://www.apache.org/licenses/LICENSE-2.0
 
-use super::super::sync_protocol::{Context, Handleable};
 use crate::{
-    pos::consensus::consensus_types::{common::Payload, vote_msg::VoteMsg},
+    pos::protocol::sync_protocol::{Context, Handleable},
     sync::Error,
 };
+use consensus_types::vote_msg::VoteMsg;
 use diem_types::account_address::AccountAddress;
-use libra_logger::prelude::{security_log, SecurityEvent};
 
-impl<P: Payload> Handleable<P> for VoteMsg {
-    fn handle(self, ctx: &Context<P>) -> Result<(), Error> {
+impl Handleable for VoteMsg {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_vote, msg={:?}", &self);
 
         let peer_address = AccountAddress::new(ctx.peer_hash.into());
@@ -21,22 +20,15 @@ impl<P: Payload> Handleable<P> for VoteMsg {
             "vote received must be from the sending peer"
         );
 
-        if self.membership_id() != ctx.manager.network_task.membership_id() {
+        if self.epoch_id() != ctx.manager.network_task.epoch_id() {
             ctx.manager
                 .network_task
-                .different_membership_tx
-                .push(peer_address, (self.membership_id(), peer_address))?;
+                .different_epoch_tx
+                .push(peer_address, (self.epoch_id(), peer_address))?;
             return Ok(());
         }
 
-        self.verify(&ctx.manager.network_task.membership_info.read().verifier)
-            .map_err(|e| {
-                security_log(SecurityEvent::InvalidConsensusVote)
-                    .error(&e)
-                    .data(&self)
-                    .log();
-                e
-            })?;
+        self.verify(&ctx.manager.network_task.epoch_info.read().verifier)?;
         ctx.manager.network_task.vote_tx.push(peer_address, self)?;
         Ok(())
     }

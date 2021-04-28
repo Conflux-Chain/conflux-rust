@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use crate::pos::consensus::{
     block_storage::{
         block_tree::BlockTree,
         tracing::{observe_block, BlockStage},
@@ -23,7 +23,6 @@ use consensus_types::{
 use diem_crypto::HashValue;
 use diem_infallible::RwLock;
 use diem_logger::prelude::*;
-use diem_trace::prelude::*;
 use diem_types::{
     ledger_info::LedgerInfoWithSignatures, transaction::TransactionStatus,
 };
@@ -227,9 +226,6 @@ impl BlockStore {
         let blocks_to_commit = self
             .path_from_root(block_id_to_commit)
             .unwrap_or_else(Vec::new);
-        for block in &blocks_to_commit {
-            end_trace!("commit", {"block", block.id()});
-        }
 
         self.state_computer
             .commit(
@@ -241,7 +237,7 @@ impl BlockStore {
         update_counters_for_committed_blocks(&blocks_to_commit);
         let current_round = self.root().round();
         let committed_round = block_to_commit.round();
-        debug!(
+        diem_debug!(
             LogSchema::new(LogEvent::CommitViaBlock).round(current_round),
             committed_round = committed_round,
             block_id = block_to_commit.id(),
@@ -281,7 +277,7 @@ impl BlockStore {
         if let Err(e) = self.storage.prune_tree(to_remove) {
             // it's fine to fail here, the next restart will try to clean up
             // dangling blocks again.
-            error!(error = ?e, "Fail to delete block from consensus db");
+            diem_error!(error = ?e, "Fail to delete block from consensus db");
         }
         // Unwrap the new tree and replace the existing tree.
         *self.inner.write() = Arc::try_unwrap(inner)
@@ -300,7 +296,7 @@ impl BlockStore {
             let finality_proof =
                 self.highest_commit_cert().ledger_info().clone();
             if let Err(e) = self.commit(finality_proof).await {
-                error!(error = ?e, "Commit error during rebuild");
+                diem_error!(error = ?e, "Commit error during rebuild");
             }
         }
     }
@@ -356,8 +352,6 @@ impl BlockStore {
     fn execute_block(
         &self, block: Block,
     ) -> anyhow::Result<ExecutedBlock, Error> {
-        trace_code_block!("block_store::execute_block", {"block", block.id()});
-
         // Although NIL blocks don't have a payload, we still send a
         // T::default() to compute because we may inject a block
         // prologue transaction.
@@ -446,7 +440,7 @@ impl BlockStore {
             // restart will clean up dangling blocks, and we need to
             // prune the tree to keep the root consistent with
             // executor.
-            error!(error = ?e, "fail to delete block");
+            diem_error!(error = ?e, "fail to delete block");
         }
         self.inner
             .write()

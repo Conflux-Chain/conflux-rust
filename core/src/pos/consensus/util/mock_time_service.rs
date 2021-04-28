@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::util::time_service::{ScheduledTask, TimeService};
+use crate::pos::consensus::util::time_service::{ScheduledTask, TimeService};
 use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use std::{sync::Arc, time::Duration};
@@ -33,7 +33,7 @@ impl TimeService for SimulatedTimeService {
         let now = inner.now;
         let deadline = now + timeout;
         if deadline > inner.time_limit {
-            debug!(
+            diem_debug!(
                 "sched for deadline: {}, now: {}, limit: {}",
                 deadline.as_millis(),
                 now.as_millis(),
@@ -41,7 +41,7 @@ impl TimeService for SimulatedTimeService {
             );
             inner.pending.push((deadline, t));
         } else {
-            debug!(
+            diem_debug!(
                 "exec deadline: {}, now: {}",
                 deadline.as_millis(),
                 now.as_millis()

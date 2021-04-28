@@ -90,7 +90,7 @@ where
     send_size_prefixed_bcs_bytes_impl(iter_res, &mut sender)
         .await
         .unwrap_or_else(|e| {
-            warn!("Failed writing to output http body: {:?}", e);
+            diem_warn!("Failed writing to output http body: {:?}", e);
             sender.abort()
         });
 }
@@ -118,7 +118,7 @@ pub(super) fn unwrap_or_500(result: Result<Box<dyn Reply>>) -> Box<dyn Reply> {
     match result {
         Ok(resp) => resp,
         Err(e) => {
-            warn!("Request handler exception: {:#}", e);
+            diem_warn!("Request handler exception: {:#}", e);
             Box::new(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
@@ -126,6 +126,6 @@ pub(super) fn unwrap_or_500(result: Result<Box<dyn Reply>>) -> Box<dyn Reply> {
 
 /// Return 400 on any rejections (parameter parsing errors).
 pub(super) async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
-    warn!("bad request: {:?}", err);
+    diem_warn!("bad request: {:?}", err);
     Ok(warp::http::StatusCode::BAD_REQUEST)
 }

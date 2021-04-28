@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use crate::pos::consensus::{
     counters,
     pending_votes::{PendingVotes, VoteReceptionResult},
     util::time_service::{SendTask, TimeService},
@@ -229,7 +229,7 @@ impl RoundState {
         if round != self.current_round {
             return false;
         }
-        warn!(round = round, "Local timeout");
+        diem_warn!(round = round, "Local timeout");
         counters::TIMEOUT_COUNT.inc();
         self.setup_timeout();
         true
@@ -263,7 +263,7 @@ impl RoundState {
                 reason: new_round_reason,
                 timeout,
             };
-            debug!(
+            diem_debug!(
                 round = new_round,
                 "Starting new round: {}", new_round_event
             );
@@ -297,7 +297,7 @@ impl RoundState {
     fn setup_timeout(&mut self) -> Duration {
         let timeout_sender = self.timeout_sender.clone();
         let timeout = self.setup_deadline();
-        trace!(
+        diem_trace!(
             "Scheduling timeout of {} ms for round {}",
             timeout.as_millis(),
             self.current_round
@@ -327,13 +327,13 @@ impl RoundState {
             .time_interval
             .get_round_duration(round_index_after_committed_round);
         let now = self.time_service.get_current_timestamp();
-        debug!(
+        diem_debug!(
             round = self.current_round,
             "{:?} passed since the previous deadline.",
             now.checked_sub(self.current_round_deadline)
                 .map_or("0 ms".to_string(), |v| format!("{:?}", v))
         );
-        debug!(
+        diem_debug!(
             round = self.current_round,
             "Set round deadline to {:?} from now", timeout
         );

@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::counters;
+use crate::pos::consensus::counters;
 use diem_infallible::duration_since_epoch;
 use std::time::Duration;
 

@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::persistent_liveness_storage::PersistentLivenessStorage;
+use super::persistent_liveness_storage::PersistentLivenessStorage;
 use consensus_types::{
     block::Block, block_data::BlockData, timeout::Timeout, vote::Vote,
     vote_proposal::MaybeSignedVoteProposal,

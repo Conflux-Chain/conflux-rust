@@ -43,13 +43,13 @@ impl VerifyCoordinator {
     }
 
     pub async fn run(self) -> Result<()> {
-        info!("Verify coordinator started.");
+        diem_info!("Verify coordinator started.");
         VERIFY_COORDINATOR_START_TS.set(unix_timestamp_sec());
 
         let ret = self.run_impl().await;
 
         if let Err(e) = &ret {
-            error!(
+            diem_error!(
                 error = ?e,
                 "Verify coordinator failed."
             );

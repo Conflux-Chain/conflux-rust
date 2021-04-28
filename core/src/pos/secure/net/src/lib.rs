@@ -17,7 +17,7 @@
 //! Internally both the client and server leverage a NetworkStream that
 //! communications in blocks where a block is a length prefixed array of bytes.
 
-use diem_logger::{info, trace, warn, Schema};
+use diem_logger::{info as diem_info, trace as diem_trace, warn as diem_warn, Schema};
 use diem_secure_push_metrics::{register_int_counter_vec, IntCounterVec};
 use once_cell::sync::Lazy;
 use serde::Serialize;
@@ -183,7 +183,7 @@ impl NetworkClient {
         let result = stream.read();
         if let Err(err) = &result {
             self.increment_counter(Method::Read, MethodResult::Failure);
-            warn!(SecureNetLogSchema::new(
+            diem_warn!(SecureNetLogSchema::new(
                 self.service,
                 NetworkMode::Client,
                 LogEvent::DisconnectedPeerOnRead,
@@ -200,7 +200,7 @@ impl NetworkClient {
 
     /// Shutdown the internal network stream
     pub fn shutdown(&mut self) -> Result<(), Error> {
-        info!(SecureNetLogSchema::new(
+        diem_info!(SecureNetLogSchema::new(
             self.service,
             NetworkMode::Client,
             LogEvent::Shutdown,
@@ -218,7 +218,7 @@ impl NetworkClient {
         let result = stream.write(data);
         if let Err(err) = &result {
             self.increment_counter(Method::Write, MethodResult::Failure);
-            warn!(SecureNetLogSchema::new(
+            diem_warn!(SecureNetLogSchema::new(
                 self.service,
                 NetworkMode::Client,
                 LogEvent::DisconnectedPeerOnWrite,
@@ -236,7 +236,7 @@ impl NetworkClient {
     fn server(&mut self) -> Result<&mut NetworkStream, Error> {
         if self.stream.is_none() {
             self.increment_counter(Method::Connect, MethodResult::Query);
-            info!(SecureNetLogSchema::new(
+            diem_info!(SecureNetLogSchema::new(
                 self.service,
                 NetworkMode::Client,
                 LogEvent::ConnectionAttempt,
@@ -249,7 +249,7 @@ impl NetworkClient {
             let sleeptime = time::Duration::from_millis(100);
             while let Err(err) = stream {
                 self.increment_counter(Method::Connect, MethodResult::Failure);
-                warn!(SecureNetLogSchema::new(
+                diem_warn!(SecureNetLogSchema::new(
                     self.service,
                     NetworkMode::Client,
                     LogEvent::ConnectionFailed,
@@ -266,7 +266,7 @@ impl NetworkClient {
             self.stream =
                 Some(NetworkStream::new(stream, self.server, self.timeout_ms));
             self.increment_counter(Method::Connect, MethodResult::Success);
-            info!(SecureNetLogSchema::new(
+            diem_info!(SecureNetLogSchema::new(
                 self.service,
                 NetworkMode::Client,
                 LogEvent::ConnectionSuccessful,
@@ -315,7 +315,7 @@ impl NetworkServer {
 
         if let Err((remote, err)) = &result {
             self.increment_counter(Method::Read, MethodResult::Failure);
-            warn!(SecureNetLogSchema::new(
+            diem_warn!(SecureNetLogSchema::new(
                 self.service,
                 NetworkMode::Server,
                 LogEvent::DisconnectedPeerOnRead,
@@ -333,7 +333,7 @@ impl NetworkServer {
 
     /// Shutdown the internal network stream
     pub fn shutdown(&mut self) -> Result<(), Error> {
-        info!(SecureNetLogSchema::new(
+        diem_info!(SecureNetLogSchema::new(
             self.service,
             NetworkMode::Server,
             LogEvent::Shutdown,
@@ -357,7 +357,7 @@ impl NetworkServer {
 
         if let Err((remote, err)) = &result {
             self.increment_counter(Method::Write, MethodResult::Failure);
-            warn!(SecureNetLogSchema::new(
+            diem_warn!(SecureNetLogSchema::new(
                 self.service,
                 NetworkMode::Server,
                 LogEvent::DisconnectedPeerOnWrite,
@@ -376,7 +376,7 @@ impl NetworkServer {
     fn client(&mut self) -> Result<&mut NetworkStream, Error> {
         if self.stream.is_none() {
             self.increment_counter(Method::Connect, MethodResult::Query);
-            info!(SecureNetLogSchema::new(
+            diem_info!(SecureNetLogSchema::new(
                 self.service,
                 NetworkMode::Server,
                 LogEvent::ConnectionAttempt,
@@ -393,7 +393,7 @@ impl NetworkServer {
                         MethodResult::Failure,
                     );
                     let err = err.into();
-                    warn!(SecureNetLogSchema::new(
+                    diem_warn!(SecureNetLogSchema::new(
                         self.service,
                         NetworkMode::Server,
                         LogEvent::ConnectionSuccessful,
@@ -404,7 +404,7 @@ impl NetworkServer {
             };
 
             self.increment_counter(Method::Connect, MethodResult::Success);
-            info!(SecureNetLogSchema::new(
+            diem_info!(SecureNetLogSchema::new(
                 self.service,
                 NetworkMode::Server,
                 LogEvent::ConnectionSuccessful,
@@ -450,19 +450,19 @@ impl NetworkStream {
         }
 
         loop {
-            trace!("Attempting to read from stream");
+            diem_trace!("Attempting to read from stream");
             let read = self.stream.read(&mut self.temp_buffer)?;
-            trace!("Read {} bytes from stream", read);
+            diem_trace!("Read {} bytes from stream", read);
             if read == 0 {
                 return Err(Error::RemoteStreamClosed);
             }
             self.buffer.extend(self.temp_buffer[..read].to_vec());
             let result = self.read_buffer();
             if !result.is_empty() {
-                trace!("Found a message in the stream");
+                diem_trace!("Found a message in the stream");
                 return Ok(result);
             }
-            trace!("Did not find a message yet, reading again");
+            diem_trace!("Did not find a message yet, reading again");
         }
     }
 
@@ -478,11 +478,11 @@ impl NetworkStream {
             return Err(Error::DataTooLarge(data.len()));
         }
         let data_len = data.len() as u32;
-        trace!("Attempting to write length, {},  to the stream", data_len);
+        diem_trace!("Attempting to write length, {},  to the stream", data_len);
         self.write_all(&data_len.to_le_bytes())?;
-        trace!("Attempting to write data, {},  to the stream", data_len);
+        diem_trace!("Attempting to write data, {},  to the stream", data_len);
         self.write_all(data)?;
-        trace!(
+        diem_trace!(
             "Successfully wrote length, {}, and data to the stream",
             data_len
         );

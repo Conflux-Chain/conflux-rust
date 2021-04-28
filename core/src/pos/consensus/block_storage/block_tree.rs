@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::counters;
+use crate::pos::consensus::counters;
 use anyhow::bail;
 use consensus_types::{
     executed_block::ExecutedBlock, quorum_cert::QuorumCert,
@@ -196,7 +196,7 @@ impl BlockTree {
     ) -> anyhow::Result<Arc<ExecutedBlock>> {
         let block_id = block.id();
         if let Some(existing_block) = self.get_block(&block_id) {
-            debug!("Already had block {:?} for id {:?} when trying to add another block {:?} for the same id",
+            diem_debug!("Already had block {:?} for id {:?} when trying to add another block {:?} for the same id",
                        existing_block,
                        block_id,
                        block);
