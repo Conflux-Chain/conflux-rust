@@ -249,7 +249,7 @@ At any time, each locked Drip will be assigned a *vote power* from 0 to 1 accord
 ```javascript
 const PRIVATE_KEY = '0xxxxxxx';
 const cfx = new Conflux({
-  url: 'http://test.confluxrpc.com',
+  url: 'https://test.confluxrpc.com',
   logger: console,
   networkId: 1,
 });
