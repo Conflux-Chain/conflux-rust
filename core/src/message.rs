@@ -55,7 +55,7 @@ pub trait MessageProtocolVersionBound {
 }
 
 pub trait Message:
-    Send + Sync + GetMaybeRequestId + MessageProtocolVersionBound + Encodable
+    Send + Sync + GetMaybeRequestId + MessageProtocolVersionBound
 {
     // If true, message may be throttled when sent to remote peer.
     fn is_size_sensitive(&self) -> bool { false }
@@ -74,11 +74,7 @@ pub trait Message:
     fn msg_name(&self) -> &'static str;
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::High }
 
-    fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes();
-        self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
-    }
+    fn encode(&self) -> Vec<u8>;
 
     fn throttle_token_cost(&self) -> (u64, u64) { (1, 0) }
 
@@ -188,6 +184,12 @@ macro_rules! build_msg_basic {
             fn msg_id(&self) -> MsgId { $msg }
 
             fn msg_name(&self) -> &'static str { $name_str }
+
+            fn encode(&self) -> Vec<u8> {
+                let mut encoded = self.rlp_bytes();
+                self.push_msg_id_leb128_encoding(&mut encoded);
+                encoded
+            }
         }
     };
 }
