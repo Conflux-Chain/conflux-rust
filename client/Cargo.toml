@@ -71,6 +71,9 @@ random-crash = { path = "../util/random_crash" }
 cfx-parameters = { path = "../core/parameters" }
 strum = "0.20"
 strum_macros = "0.20"
+diemdb = { path = "../core/src/pos/storage/diemdb" }
+storage-interface = { path = "../core/src/pos/storage/storage-interface" }
+
 
 [dev-dependencies]
 criterion = "0.2"

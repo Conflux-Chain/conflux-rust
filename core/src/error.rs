@@ -53,6 +53,13 @@ pub enum BlockError {
     DuplicateParentOrRefereeHashes(H256),
     /// The value in `custom` does not match the specification.
     InvalidCustom(Vec<Bytes>, Vec<Bytes>),
+    /// Should have a PoS reference but it's not set.
+    MissingPosReference,
+    /// Should not have a PoS reference but it's set.
+    UnexpectedPosReference,
+    /// The PoS reference violates the validity rule (it should extend the PoS
+    /// reference of the parent and referees).
+    InvalidPosReference,
 }
 
 impl fmt::Display for BlockError {
@@ -114,6 +121,9 @@ impl fmt::Display for BlockError {
                     expected_custom_prefix, header_custom
                 )
             }
+            MissingPosReference => "Missing PoS reference".into(),
+            UnexpectedPosReference => "Should not have PoS reference".into(),
+            InvalidPosReference => "The PoS reference is invalid".into(),
         };
 
         f.write_fmt(format_args!("Block error ({})", msg))

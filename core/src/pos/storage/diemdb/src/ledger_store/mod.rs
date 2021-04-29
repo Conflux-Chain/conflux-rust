@@ -9,6 +9,7 @@ use crate::{
     errors::DiemDbError,
     schema::{
         epoch_by_version::EpochByVersionSchema, ledger_info::LedgerInfoSchema,
+        ledger_info_by_block::LedgerInfoByBlockSchema,
         transaction_accumulator::TransactionAccumulatorSchema,
         transaction_info::TransactionInfoSchema,
     },
@@ -397,10 +398,29 @@ impl LedgerStore {
                 &ledger_info.epoch(),
             )?;
         }
+        cs.batch.put::<LedgerInfoByBlockSchema>(
+            &ledger_info.consensus_block_id(),
+            ledger_info_with_sigs,
+        )?;
         cs.batch.put::<LedgerInfoSchema>(
             &ledger_info.epoch(),
             ledger_info_with_sigs,
         )
+    }
+
+    /// Read LedgerInfo by block id from the database.
+    pub fn get_block_ledger_info(
+        &self, consensus_block_id: &HashValue,
+    ) -> Result<LedgerInfoWithSignatures> {
+        self.db
+            .get::<LedgerInfoByBlockSchema>(consensus_block_id)?
+            .ok_or_else(|| {
+                DiemDbError::NotFound(format!(
+                    "LedgerInfo of block {}",
+                    consensus_block_id
+                ))
+                .into()
+            })
     }
 
     pub fn get_root_hash(&self, version: Version) -> Result<HashValue> {

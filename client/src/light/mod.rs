@@ -60,6 +60,7 @@ impl LightClient {
             _genesis_accounts,
             data_man,
             pow,
+            _pos_verifier,
             txpool,
             consensus,
             sync_graph,

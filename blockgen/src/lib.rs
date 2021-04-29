@@ -10,16 +10,18 @@ use crate::miner::{
 use cfx_parameters::consensus::GENESIS_GAS_LIMIT;
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
-    block_parameters::*, consensus::consensus_inner::StateBlameInfo, pow::*,
-    verification::compute_transaction_root, ConsensusGraph,
-    ConsensusGraphTrait, SharedSynchronizationGraph,
+    block_parameters::*,
+    consensus::{consensus_inner::StateBlameInfo, pos_handler::PosVerifier},
+    pow::*,
+    verification::compute_transaction_root,
+    ConsensusGraph, ConsensusGraphTrait, SharedSynchronizationGraph,
     SharedSynchronizationService, SharedTransactionPool, Stopable,
 };
 use lazy_static::lazy_static;
 use log::{debug, trace, warn};
 use metrics::{Gauge, GaugeUsize};
 use parking_lot::{Mutex, RwLock};
-use primitives::*;
+use primitives::{pos::PosBlockId, *};
 use std::{
     cmp::max,
     collections::HashSet,
@@ -60,6 +62,7 @@ pub struct BlockGenerator {
     state: RwLock<MiningState>,
     workers: Mutex<Vec<(Worker, mpsc::Sender<ProofOfWorkProblem>)>>,
     pub stratum: RwLock<Option<Stratum>>,
+    pos_verifier: Arc<PosVerifier>,
 }
 
 pub struct Worker {
@@ -144,7 +147,7 @@ impl BlockGenerator {
         sync: SharedSynchronizationService,
         maybe_txgen: Option<SharedTransactionGenerator>,
         pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
-        mining_author: Address,
+        mining_author: Address, pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         BlockGenerator {
@@ -158,6 +161,7 @@ impl BlockGenerator {
             state: RwLock::new(MiningState::Start),
             workers: Mutex::new(Vec::new()),
             stratum: RwLock::new(None),
+            pos_verifier,
         }
     }
 
@@ -199,7 +203,7 @@ impl BlockGenerator {
         &self, parent_hash: H256, mut referees: Vec<H256>,
         blame_info: StateBlameInfo, block_gas_limit: U256,
         transactions: Vec<Arc<SignedTransaction>>, difficulty: u64,
-        adaptive_opt: Option<bool>,
+        adaptive_opt: Option<bool>, maybe_pos_reference: Option<PosBlockId>,
     ) -> Block
     {
         let parent_height =
@@ -265,6 +269,7 @@ impl BlockGenerator {
             .with_nonce(U256::zero())
             .with_gas_limit(block_gas_limit)
             .with_custom(custom)
+            .with_pos_reference(maybe_pos_reference)
             .build();
 
         Block::new(block_header, transactions)
@@ -302,6 +307,7 @@ impl BlockGenerator {
             transactions,
             difficulty,
             Some(adaptive),
+            self.get_pos_reference(&parent_hash),
         ))
     }
 
@@ -339,6 +345,14 @@ impl BlockGenerator {
         let best_block_hash = best_info.best_block_hash.clone();
         let mut referee = best_info.bounded_terminal_block_hashes.clone();
         referee.retain(|r| *r != best_block_hash);
+        let maybe_pos_reference = if self
+            .pos_verifier
+            .is_enabled_at_height(best_info.best_epoch_number + 1)
+        {
+            Some(self.pos_verifier.get_latest_pos_reference())
+        } else {
+            None
+        };
 
         self.assemble_new_block_impl(
             best_block_hash,
@@ -348,6 +362,7 @@ impl BlockGenerator {
             transactions,
             0,
             None,
+            maybe_pos_reference,
         )
     }
 
@@ -402,6 +417,7 @@ impl BlockGenerator {
             transactions,
             0,
             None,
+            self.get_pos_reference(&best_block_hash),
         )
     }
 
@@ -519,6 +535,7 @@ impl BlockGenerator {
             transactions,
             0,
             adaptive,
+            self.get_pos_reference(&best_block_hash),
         );
 
         self.generate_block_impl(block)
@@ -543,6 +560,7 @@ impl BlockGenerator {
             transactions,
             0,
             Some(adaptive),
+            self.get_pos_reference(&parent_hash),
         );
 
         Ok(self.generate_block_impl(block))
@@ -568,6 +586,7 @@ impl BlockGenerator {
             transactions,
             0,
             Some(adaptive),
+            self.get_pos_reference(&parent_hash),
         );
         block.block_header.set_nonce(nonce);
         block.block_header.set_timestamp(timestamp);
@@ -828,6 +847,19 @@ impl BlockGenerator {
                 );
             }
             thread::sleep(interval);
+        }
+    }
+
+    /// Get the latest pos reference according to parent height.
+    ///
+    /// Return `None` if parent block is missing in `BlockDataManager`, but this
+    /// should not happen in the current usage.
+    fn get_pos_reference(&self, parent_hash: &H256) -> Option<PosBlockId> {
+        let height = self.graph.data_man.block_height_by_hash(parent_hash)? + 1;
+        if self.pos_verifier.is_enabled_at_height(height) {
+            Some(self.pos_verifier.get_latest_pos_reference())
+        } else {
+            None
         }
     }
 }

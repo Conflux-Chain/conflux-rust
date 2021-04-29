@@ -89,7 +89,9 @@ use std::{
     thread::{self, JoinHandle},
     time::{Duration, Instant},
 };
-use storage_interface::{DbReader, DbWriter, Order, StartupInfo, TreeState};
+use storage_interface::{
+    DBReaderForPoW, DbReader, DbWriter, Order, StartupInfo, TreeState,
+};
 
 const MAX_LIMIT: u64 = 1000;
 
@@ -1028,6 +1030,20 @@ impl DbWriter for DiemDB {
 
             Ok(())
         })
+    }
+}
+
+impl DBReaderForPoW for DiemDB {
+    fn get_latest_ledger_info_option(
+        &self,
+    ) -> Option<LedgerInfoWithSignatures> {
+        self.ledger_store.get_latest_ledger_info_option()
+    }
+
+    fn get_block_ledger_info(
+        &self, consensus_block_id: &HashValue,
+    ) -> Result<LedgerInfoWithSignatures> {
+        self.ledger_store.get_block_ledger_info(consensus_block_id)
     }
 }
 
