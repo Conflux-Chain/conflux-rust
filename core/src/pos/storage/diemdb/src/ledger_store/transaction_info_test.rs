@@ -7,12 +7,10 @@ use diem_temppath::TempPath;
 use proptest::{collection::vec, prelude::*};
 
 fn verify(
-    store: &LedgerStore,
-    txn_infos: &[TransactionInfo],
-    first_version: Version,
-    ledger_version: Version,
-    root_hash: HashValue,
-) {
+    store: &LedgerStore, txn_infos: &[TransactionInfo], first_version: Version,
+    ledger_version: Version, root_hash: HashValue,
+)
+{
     txn_infos
         .iter()
         .enumerate()
@@ -23,7 +21,10 @@ fn verify(
                 .get_transaction_info_with_proof(version, ledger_version)
                 .unwrap();
 
-            assert_eq!(txn_info_with_proof.transaction_info(), expected_txn_info);
+            assert_eq!(
+                txn_info_with_proof.transaction_info(),
+                expected_txn_info
+            );
             txn_info_with_proof
                 .ledger_info_to_transaction_info_proof()
                 .verify(
@@ -35,7 +36,9 @@ fn verify(
         })
 }
 
-fn save(store: &LedgerStore, first_version: Version, txn_infos: &[TransactionInfo]) -> HashValue {
+fn save(
+    store: &LedgerStore, first_version: Version, txn_infos: &[TransactionInfo],
+) -> HashValue {
     let mut cs = ChangeSet::new();
     let root_hash = store
         .put_transaction_infos(first_version, &txn_infos, &mut cs)

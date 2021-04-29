@@ -5,7 +5,9 @@ mod proof_test;
 mod write_test;
 
 use super::*;
-use crate::test_helpers::{arb_hash_batch, test_get_frozen_subtree_hashes_impl};
+use crate::test_helpers::{
+    arb_hash_batch, test_get_frozen_subtree_hashes_impl,
+};
 use proptest::prelude::*;
 
 proptest! {

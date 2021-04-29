@@ -1,8 +1,9 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! This file defines system store APIs that operates data not part of the Diem core data
-//! structures but information with regard to system running status, statistics, etc.
+//! This file defines system store APIs that operates data not part of the Diem
+//! core data structures but information with regard to system running status,
+//! statistics, etc.
 
 use crate::{
     change_set::ChangeSet, ledger_counters::LedgerCounters,
@@ -20,25 +21,24 @@ pub(crate) struct SystemStore {
 }
 
 impl SystemStore {
-    pub fn new(db: Arc<DB>) -> Self {
-        Self { db }
-    }
+    pub fn new(db: Arc<DB>) -> Self { Self { db } }
 
     /// Increase ledger counters.
     ///
-    /// The base values are read out of db, to which the `diff` is combined to, and the result is
-    /// stored to the db, keyed by `last_version`.
+    /// The base values are read out of db, to which the `diff` is combined to,
+    /// and the result is stored to the db, keyed by `last_version`.
     pub fn bump_ledger_counters(
-        &self,
-        first_version: Version,
-        last_version: Version,
+        &self, first_version: Version, last_version: Version,
         cs: &mut ChangeSet,
-    ) -> Result<LedgerCounters> {
+    ) -> Result<LedgerCounters>
+    {
         assert!(first_version <= last_version);
 
         let mut counters = if first_version > 0 {
             let base_version = first_version - 1;
-            if let Some(counters) = self.db.get::<LedgerCountersSchema>(&base_version)? {
+            if let Some(counters) =
+                self.db.get::<LedgerCountersSchema>(&base_version)?
+            {
                 counters
             } else {
                 diem_warn!(

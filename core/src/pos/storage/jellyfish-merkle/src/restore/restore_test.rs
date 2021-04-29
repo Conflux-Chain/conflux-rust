@@ -92,10 +92,8 @@ proptest! {
 }
 
 fn assert_success<V>(
-    db: &MockTreeStore<V>,
-    expected_root_hash: HashValue,
-    btree: &BTreeMap<HashValue, V>,
-    version: Version,
+    db: &MockTreeStore<V>, expected_root_hash: HashValue,
+    btree: &BTreeMap<HashValue, V>, version: Version,
 ) where
     V: crate::TestValue,
 {
@@ -109,20 +107,23 @@ fn assert_success<V>(
 }
 
 fn restore_without_interruption<V>(
-    btree: &BTreeMap<HashValue, V>,
-    target_version: Version,
-    target_db: &Arc<MockTreeStore<V>>,
-    try_resume: bool,
+    btree: &BTreeMap<HashValue, V>, target_version: Version,
+    target_db: &Arc<MockTreeStore<V>>, try_resume: bool,
 ) where
     V: crate::TestValue,
 {
-    let (db, source_version) = init_mock_db(&btree.iter().map(|(k, v)| (*k, v.clone())).collect());
+    let (db, source_version) =
+        init_mock_db(&btree.iter().map(|(k, v)| (*k, v.clone())).collect());
     let tree = JellyfishMerkleTree::new(&db);
     let expected_root_hash = tree.get_root_hash(source_version).unwrap();
 
     let mut restore = if try_resume {
-        JellyfishMerkleRestore::new(Arc::clone(target_db), target_version, expected_root_hash)
-            .unwrap()
+        JellyfishMerkleRestore::new(
+            Arc::clone(target_db),
+            target_version,
+            expected_root_hash,
+        )
+        .unwrap()
     } else {
         JellyfishMerkleRestore::new_overwrite(
             Arc::clone(target_db),

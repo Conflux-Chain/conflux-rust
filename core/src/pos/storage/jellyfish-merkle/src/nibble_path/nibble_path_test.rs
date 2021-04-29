@@ -35,9 +35,7 @@ fn test_create_nibble_path_failure() {
 
 #[test]
 #[should_panic(expected = "Should have odd number of nibbles.")]
-fn test_empty_nibble_path() {
-    NibblePath::new_odd(vec![]);
-}
+fn test_empty_nibble_path() { NibblePath::new_odd(vec![]); }
 
 #[test]
 fn test_get_nibble() {

@@ -3,8 +3,8 @@
 
 use crate::{
     change_set::ChangeSet, event_store::EventStore, ledger_store::LedgerStore,
-    schema::transaction_accumulator::TransactionAccumulatorSchema, state_store::StateStore,
-    transaction_store::TransactionStore, DiemDB,
+    schema::transaction_accumulator::TransactionAccumulatorSchema,
+    state_store::StateStore, transaction_store::TransactionStore, DiemDB,
 };
 use anyhow::{ensure, Result};
 use diem_crypto::{hash::SPARSE_MERKLE_PLACEHOLDER_HASH, HashValue};
@@ -33,13 +33,11 @@ pub struct RestoreHandler {
 
 impl RestoreHandler {
     pub(crate) fn new(
-        db: Arc<DB>,
-        diemdb: Arc<DiemDB>,
-        ledger_store: Arc<LedgerStore>,
-        transaction_store: Arc<TransactionStore>,
-        state_store: Arc<StateStore>,
+        db: Arc<DB>, diemdb: Arc<DiemDB>, ledger_store: Arc<LedgerStore>,
+        transaction_store: Arc<TransactionStore>, state_store: Arc<StateStore>,
         event_store: Arc<EventStore>,
-    ) -> Self {
+    ) -> Self
+    {
         Self {
             db,
             diemdb,
@@ -51,9 +49,7 @@ impl RestoreHandler {
     }
 
     pub fn get_state_restore_receiver(
-        &self,
-        version: Version,
-        expected_root_hash: HashValue,
+        &self, version: Version, expected_root_hash: HashValue,
     ) -> Result<JellyfishMerkleRestore<AccountStateBlob>> {
         JellyfishMerkleRestore::new_overwrite(
             Arc::clone(&self.state_store),
@@ -62,7 +58,9 @@ impl RestoreHandler {
         )
     }
 
-    pub fn save_ledger_infos(&self, ledger_infos: &[LedgerInfoWithSignatures]) -> Result<()> {
+    pub fn save_ledger_infos(
+        &self, ledger_infos: &[LedgerInfoWithSignatures],
+    ) -> Result<()> {
         ensure!(!ledger_infos.is_empty(), "No LedgerInfos to save.");
 
         let mut cs = ChangeSet::new();
@@ -73,7 +71,9 @@ impl RestoreHandler {
         self.db.write_schemas(cs.batch)?;
 
         if let Some(li) = self.ledger_store.get_latest_ledger_info_option() {
-            if li.ledger_info().epoch() > ledger_infos.last().unwrap().ledger_info().epoch() {
+            if li.ledger_info().epoch()
+                > ledger_infos.last().unwrap().ledger_info().epoch()
+            {
                 // No need to update latest ledger info.
                 return Ok(());
             }
@@ -85,12 +85,11 @@ impl RestoreHandler {
     }
 
     pub fn confirm_or_save_frozen_subtrees(
-        &self,
-        num_leaves: LeafCount,
-        frozen_subtrees: &[HashValue],
+        &self, num_leaves: LeafCount, frozen_subtrees: &[HashValue],
     ) -> Result<()> {
         let mut cs = ChangeSet::new();
-        let positions: Vec<_> = FrozenSubTreeIterator::new(num_leaves).collect();
+        let positions: Vec<_> =
+            FrozenSubTreeIterator::new(num_leaves).collect();
 
         ensure!(
             positions.len() == frozen_subtrees.len(),
@@ -120,26 +119,35 @@ impl RestoreHandler {
     }
 
     pub fn save_transactions(
-        &self,
-        first_version: Version,
-        txns: &[Transaction],
-        txn_infos: &[TransactionInfo],
-        events: &[Vec<ContractEvent>],
-    ) -> Result<()> {
+        &self, first_version: Version, txns: &[Transaction],
+        txn_infos: &[TransactionInfo], events: &[Vec<ContractEvent>],
+    ) -> Result<()>
+    {
         let mut cs = ChangeSet::new();
         for (idx, txn) in txns.iter().enumerate() {
-            self.transaction_store
-                .put_transaction(first_version + idx as Version, txn, &mut cs)?;
+            self.transaction_store.put_transaction(
+                first_version + idx as Version,
+                txn,
+                &mut cs,
+            )?;
         }
-        self.ledger_store
-            .put_transaction_infos(first_version, txn_infos, &mut cs)?;
-        self.event_store
-            .put_events_multiple_versions(first_version, events, &mut cs)?;
+        self.ledger_store.put_transaction_infos(
+            first_version,
+            txn_infos,
+            &mut cs,
+        )?;
+        self.event_store.put_events_multiple_versions(
+            first_version,
+            events,
+            &mut cs,
+        )?;
 
         self.db.write_schemas(cs.batch)
     }
 
-    pub fn get_tree_state(&self, num_transactions: LeafCount) -> Result<TreeState> {
+    pub fn get_tree_state(
+        &self, num_transactions: LeafCount,
+    ) -> Result<TreeState> {
         let frozen_subtrees = self
             .ledger_store
             .get_frozen_subtree_hashes(num_transactions)?;

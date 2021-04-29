@@ -12,9 +12,8 @@ use diem_types::ledger_info::LedgerInfoWithSignatures;
 use executor_types::{Error as ExecutionError, StateComputeResult};
 use fail::fail_point;
 //use state_sync::client::StateSyncClient;
-use std::boxed::Box;
 use crate::pos::consensus::executor::Executor;
-use std::sync::Arc;
+use std::{boxed::Box, sync::Arc};
 
 /// Basic communication with the Execution module;
 /// implements StateComputer traits.
@@ -31,7 +30,7 @@ impl ExecutionProxy {
             dyn ExecutionCorrectness + Send + Sync,
         >,
         synchronizer: StateSyncClient,*/
-        executor: Arc<Executor>
+        executor: Arc<Executor>,
     ) -> Self
     {
         Self {
@@ -39,7 +38,7 @@ impl ExecutionProxy {
                 execution_correctness_client,
             ),
             //synchronizer,*/
-            executor: executor,
+            executor,
         }
     }
 }
@@ -112,8 +111,9 @@ impl StateComputer for ExecutionProxy {
         // ChunkExecutor may be not up to date so it is required to
         // reset the cache of ChunkExecutor in State Sync when requested
         // to sync.
-        //let res = monitor!("sync_to", self.synchronizer.sync_to(target).await);
-        // Similarily, after the state synchronization, we have to reset the
+        //let res = monitor!("sync_to",
+        // self.synchronizer.sync_to(target).await); Similarily, after
+        // the state synchronization, we have to reset the
         // cache of BlockExecutor to guarantee the latest committed
         // state is up to date.
         //self.executor.reset()?;

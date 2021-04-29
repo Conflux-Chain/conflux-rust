@@ -5,9 +5,7 @@
 use crate::{
     message::RequestId,
     pos::{
-        consensus::{
-            network::IncomingBlockRetrievalRequest,
-        },
+        consensus::network::IncomingBlockRetrievalRequest,
         protocol::{
             request_manager::{AsAny, Request},
             sync_protocol::{Context, Handleable, RpcResponse},

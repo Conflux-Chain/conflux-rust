@@ -94,7 +94,8 @@ pub struct EpochManager {
 
 impl EpochManager {
     pub fn new(
-        node_config: &NodeConfig, time_service: Arc<dyn TimeService>,
+        node_config: &NodeConfig,
+        time_service: Arc<dyn TimeService>,
         //self_sender: channel::Sender<Event<ConsensusMsg>>,
         network_sender: ConsensusNetworkSender,
         timeout_sender: channel::Sender<Round>,
@@ -202,7 +203,8 @@ impl EpochManager {
             LogSchema::new(LogEvent::ReceiveEpochRetrieval)
                 .remote_peer(peer_id)
                 .epoch(self.epoch()),
-            "[EpochManager] receive {}", request,
+            "[EpochManager] receive {}",
+            request,
         );
         let proof = self
             .storage
@@ -471,7 +473,8 @@ impl EpochManager {
                     LogSchema::new(LogEvent::ReceiveEpochChangeProof)
                         .remote_peer(peer_id)
                         .epoch(self.epoch()),
-                    "Proof from epoch {}", msg_epoch,
+                    "Proof from epoch {}",
+                    msg_epoch,
                 );
                 if msg_epoch == self.epoch() {
                     monitor!(

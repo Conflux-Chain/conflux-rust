@@ -5,15 +5,17 @@ use super::*;
 use crate::{change_set::ChangeSet, state_store::StateStore, DiemDB};
 use diem_crypto::HashValue;
 use diem_temppath::TempPath;
-use diem_types::{account_address::AccountAddress, account_state_blob::AccountStateBlob};
+use diem_types::{
+    account_address::AccountAddress, account_state_blob::AccountStateBlob,
+};
 use std::collections::HashMap;
 
 fn put_account_state_set(
-    db: &DB,
-    state_store: &StateStore,
+    db: &DB, state_store: &StateStore,
     account_state_set: Vec<(AccountAddress, AccountStateBlob)>,
     version: Version,
-) -> HashValue {
+) -> HashValue
+{
     let mut cs = ChangeSet::new();
     let root = state_store
         .put_account_state_sets(
@@ -28,11 +30,10 @@ fn put_account_state_set(
 }
 
 fn verify_state_in_store(
-    state_store: &StateStore,
-    address: AccountAddress,
-    expected_value: Option<&AccountStateBlob>,
-    version: Version,
-) {
+    state_store: &StateStore, address: AccountAddress,
+    expected_value: Option<&AccountStateBlob>, version: Version,
+)
+{
     let (value, _proof) = state_store
         .get_account_state_with_proof_by_version(address, version)
         .unwrap();
@@ -49,7 +50,8 @@ fn test_pruner() {
     let tmp_dir = TempPath::new();
     let db = DiemDB::new_for_test(&tmp_dir).db;
     let state_store = &StateStore::new(Arc::clone(&db));
-    let pruner = Pruner::new(Arc::clone(&db), 0 /* historical_versions_to_keep */);
+    let pruner =
+        Pruner::new(Arc::clone(&db), 0 /* historical_versions_to_keep */);
 
     let _root0 = put_account_state_set(
         &db,
@@ -148,7 +150,8 @@ fn test_worker_quit_eagerly() {
             })
             .unwrap();
         command_sender.send(Command::Quit).unwrap();
-        // Worker quits immediately although `Command::Quit` is not the first command sent.
+        // Worker quits immediately although `Command::Quit` is not the first
+        // command sent.
         worker.work();
         verify_state_in_store(state_store, address, Some(&value0), 0);
         verify_state_in_store(state_store, address, Some(&value1), 1);

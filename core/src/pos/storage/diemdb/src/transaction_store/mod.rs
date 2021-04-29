@@ -1,12 +1,16 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! This file defines transaction store APIs that are related to committed signed transactions.
+//! This file defines transaction store APIs that are related to committed
+//! signed transactions.
 
 use crate::{
     change_set::ChangeSet,
     errors::DiemDbError,
-    schema::{transaction::TransactionSchema, transaction_by_account::TransactionByAccountSchema},
+    schema::{
+        transaction::TransactionSchema,
+        transaction_by_account::TransactionByAccountSchema,
+    },
 };
 use anyhow::{ensure, format_err, Result};
 use diem_types::{
@@ -23,17 +27,15 @@ pub(crate) struct TransactionStore {
 }
 
 impl TransactionStore {
-    pub fn new(db: Arc<DB>) -> Self {
-        Self { db }
-    }
+    pub fn new(db: Arc<DB>) -> Self { Self { db } }
 
-    /// Gets the version of a transaction by the sender `address` and `sequence_number`.
+    /// Gets the version of a transaction by the sender `address` and
+    /// `sequence_number`.
     pub fn lookup_transaction_by_account(
-        &self,
-        address: AccountAddress,
-        sequence_number: u64,
+        &self, address: AccountAddress, sequence_number: u64,
         ledger_version: Version,
-    ) -> Result<Option<Version>> {
+    ) -> Result<Option<Version>>
+    {
         if let Some(version) = self
             .db
             .get::<TransactionByAccountSchema>(&(address, sequence_number))?
@@ -48,16 +50,15 @@ impl TransactionStore {
 
     /// Get signed transaction given `version`
     pub fn get_transaction(&self, version: Version) -> Result<Transaction> {
-        self.db
-            .get::<TransactionSchema>(&version)?
-            .ok_or_else(|| DiemDbError::NotFound(format!("Txn {}", version)).into())
+        self.db.get::<TransactionSchema>(&version)?.ok_or_else(|| {
+            DiemDbError::NotFound(format!("Txn {}", version)).into()
+        })
     }
 
-    /// Gets an iterator that yields `num_transactions` transactions starting from `start_version`.
+    /// Gets an iterator that yields `num_transactions` transactions starting
+    /// from `start_version`.
     pub fn get_transaction_iter(
-        &self,
-        start_version: Version,
-        num_transactions: usize,
+        &self, start_version: Version, num_transactions: usize,
     ) -> Result<TransactionIter> {
         let mut iter = self.db.iter::<TransactionSchema>(Default::default())?;
         iter.seek(&start_version)?;
@@ -66,22 +67,27 @@ impl TransactionStore {
             expected_next_version: start_version,
             end_version: start_version
                 .checked_add(num_transactions as u64)
-                .ok_or_else(|| format_err!("Too many transactions requested."))?,
+                .ok_or_else(|| {
+                    format_err!("Too many transactions requested.")
+                })?,
         })
     }
 
-    /// Returns the block metadata carried on the block metadata transaction at or preceding
-    /// `version`, together with the version of the block metadata transaction.
-    /// Returns None if there's no such transaction at or preceding `version` (it's likely the genesis
-    /// version 0).
-    pub fn get_block_metadata(&self, version: Version) -> Result<Option<(Version, BlockMetadata)>> {
+    /// Returns the block metadata carried on the block metadata transaction at
+    /// or preceding `version`, together with the version of the block
+    /// metadata transaction. Returns None if there's no such transaction at
+    /// or preceding `version` (it's likely the genesis version 0).
+    pub fn get_block_metadata(
+        &self, version: Version,
+    ) -> Result<Option<(Version, BlockMetadata)>> {
         // Maximum TPS from benchmark is around 1000.
         const MAX_VERSIONS_TO_SEARCH: usize = 1000 * 3;
 
-        // Linear search via `DB::rev_iter()` here, NOT expecting performance hit, due to the fact
-        // that the iterator caches data block and that there are limited number of transactions in
-        // each block.
-        let mut iter = self.db.rev_iter::<TransactionSchema>(Default::default())?;
+        // Linear search via `DB::rev_iter()` here, NOT expecting performance
+        // hit, due to the fact that the iterator caches data block and
+        // that there are limited number of transactions in each block.
+        let mut iter =
+            self.db.rev_iter::<TransactionSchema>(Default::default())?;
         iter.seek(&version)?;
         for res in iter.take(MAX_VERSIONS_TO_SEARCH) {
             let (v, txn) = res?;
@@ -92,15 +98,16 @@ impl TransactionStore {
             }
         }
 
-        Err(DiemDbError::NotFound(format!("BlockMetadata preceding version {}", version)).into())
+        Err(DiemDbError::NotFound(format!(
+            "BlockMetadata preceding version {}",
+            version
+        ))
+        .into())
     }
 
     /// Save signed transaction at `version`
     pub fn put_transaction(
-        &self,
-        version: Version,
-        transaction: &Transaction,
-        cs: &mut ChangeSet,
+        &self, version: Version, transaction: &Transaction, cs: &mut ChangeSet,
     ) -> Result<()> {
         if let Transaction::UserTransaction(txn) = transaction {
             cs.batch.put::<TransactionByAccountSchema>(
@@ -145,9 +152,7 @@ impl<'a> TransactionIter<'a> {
 impl<'a> Iterator for TransactionIter<'a> {
     type Item = Result<Transaction>;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        self.next_impl().transpose()
-    }
+    fn next(&mut self) -> Option<Self::Item> { self.next_impl().transpose() }
 }
 
 #[cfg(test)]

@@ -1,7 +1,8 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module defines physical storage schema for LedgerInfoWithSignatures structure.
+//! This module defines physical storage schema for LedgerInfoWithSignatures
+//! structure.
 //!
 //! Serialized LedgerInfoWithSignatures identified by `epoch`.
 //! ```text
@@ -9,8 +10,8 @@
 //! | epoch | ledger_info_with_signatures bytes |
 //! ```
 //!
-//! `epoch` is serialized in big endian so that records in RocksDB will be in order of their
-//! numeric value.
+//! `epoch` is serialized in big endian so that records in RocksDB will be in
+//! order of their numeric value.
 
 use crate::schema::ensure_slice_len_eq;
 use anyhow::Result;
@@ -31,9 +32,7 @@ define_schema!(
 );
 
 impl KeyCodec<LedgerInfoSchema> for u64 {
-    fn encode_key(&self) -> Result<Vec<u8>> {
-        Ok(self.to_be_bytes().to_vec())
-    }
+    fn encode_key(&self) -> Result<Vec<u8>> { Ok(self.to_be_bytes().to_vec()) }
 
     fn decode_key(mut data: &[u8]) -> Result<Self> {
         ensure_slice_len_eq(data, size_of::<Self>())?;

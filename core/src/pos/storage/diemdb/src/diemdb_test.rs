@@ -23,7 +23,9 @@ use diem_types::{
 use proptest::prelude::*;
 use std::collections::HashMap;
 
-fn verify_epochs(db: &DiemDB, ledger_infos_with_sigs: &[LedgerInfoWithSignatures]) {
+fn verify_epochs(
+    db: &DiemDB, ledger_infos_with_sigs: &[LedgerInfoWithSignatures],
+) {
     const LIMIT: usize = 2;
     let mut actual_epoch_change_lis = Vec::new();
     let latest_epoch = ledger_infos_with_sigs
@@ -76,13 +78,17 @@ fn verify_epochs(db: &DiemDB, ledger_infos_with_sigs: &[LedgerInfoWithSignatures
     }
 }
 
-pub fn test_save_blocks_impl(input: Vec<(Vec<TransactionToCommit>, LedgerInfoWithSignatures)>) {
+pub fn test_save_blocks_impl(
+    input: Vec<(Vec<TransactionToCommit>, LedgerInfoWithSignatures)>,
+) {
     let tmp_dir = TempPath::new();
     let db = DiemDB::new_for_test(&tmp_dir);
 
     let num_batches = input.len();
     let mut cur_ver = 0;
-    for (batch_idx, (txns_to_commit, ledger_info_with_sigs)) in input.iter().enumerate() {
+    for (batch_idx, (txns_to_commit, ledger_info_with_sigs)) in
+        input.iter().enumerate()
+    {
         db.save_transactions(
             &txns_to_commit,
             cur_ver, /* first_version */
@@ -124,17 +130,22 @@ pub fn test_save_blocks_impl(input: Vec<(Vec<TransactionToCommit>, LedgerInfoWit
         &first_batch_ledger_info,
         true, /* is_latest */
     );
-    let (_, ledger_infos_with_sigs): (Vec<_>, Vec<_>) = input.iter().cloned().unzip();
+    let (_, ledger_infos_with_sigs): (Vec<_>, Vec<_>) =
+        input.iter().cloned().unzip();
     verify_epochs(&db, &ledger_infos_with_sigs);
 }
 
-fn test_sync_transactions_impl(input: Vec<(Vec<TransactionToCommit>, LedgerInfoWithSignatures)>) {
+fn test_sync_transactions_impl(
+    input: Vec<(Vec<TransactionToCommit>, LedgerInfoWithSignatures)>,
+) {
     let tmp_dir = TempPath::new();
     let db = DiemDB::new_for_test(&tmp_dir);
 
     let num_batches = input.len();
     let mut cur_ver = 0;
-    for (batch_idx, (txns_to_commit, ledger_info_with_sigs)) in input.into_iter().enumerate() {
+    for (batch_idx, (txns_to_commit, ledger_info_with_sigs)) in
+        input.into_iter().enumerate()
+    {
         // if batch has more than 2 transactions, save them in two batches
         let batch1_len = txns_to_commit.len() / 2;
         if batch1_len > 0 {
@@ -164,14 +175,10 @@ fn test_sync_transactions_impl(input: Vec<(Vec<TransactionToCommit>, LedgerInfoW
 }
 
 fn get_events_by_event_key(
-    db: &DiemDB,
-    ledger_info: &LedgerInfo,
-    event_key: &EventKey,
-    first_seq_num: u64,
-    last_seq_num: u64,
-    order: Order,
-    is_latest: bool,
-) -> Result<Vec<ContractEvent>> {
+    db: &DiemDB, ledger_info: &LedgerInfo, event_key: &EventKey,
+    first_seq_num: u64, last_seq_num: u64, order: Order, is_latest: bool,
+) -> Result<Vec<ContractEvent>>
+{
     const LIMIT: u64 = 3;
 
     let mut cursor = if order == Order::Ascending {
@@ -203,19 +210,20 @@ fn get_events_by_event_key(
             (cursor + 1 - num_events..=cursor).rev().collect()
         };
 
-        let events: Vec<_> = itertools::zip_eq(events_with_proof, expected_seq_nums)
-            .map(|(e, seq_num)| {
-                e.verify(
-                    ledger_info,
-                    &event_key,
-                    seq_num,
-                    e.transaction_version,
-                    e.event_index,
-                )
-                .unwrap();
-                e.event
-            })
-            .collect();
+        let events: Vec<_> =
+            itertools::zip_eq(events_with_proof, expected_seq_nums)
+                .map(|(e, seq_num)| {
+                    e.verify(
+                        ledger_info,
+                        &event_key,
+                        seq_num,
+                        e.transaction_version,
+                        e.event_index,
+                    )
+                    .unwrap();
+                    e.event
+                })
+                .collect();
 
         let num_results = events.len() as u64;
         if num_results == 0 {
@@ -259,11 +267,10 @@ fn get_events_by_event_key(
 }
 
 fn verify_events_by_event_key(
-    db: &DiemDB,
-    events: Vec<(EventKey, Vec<ContractEvent>)>,
-    ledger_info: &LedgerInfo,
-    is_latest: bool,
-) {
+    db: &DiemDB, events: Vec<(EventKey, Vec<ContractEvent>)>,
+    ledger_info: &LedgerInfo, is_latest: bool,
+)
+{
     events
         .into_iter()
         .map(|(access_path, events)| {
@@ -271,7 +278,8 @@ fn verify_events_by_event_key(
                 .first()
                 .expect("Shouldn't be empty")
                 .sequence_number();
-            let last_seq = events.last().expect("Shouldn't be empty").sequence_number();
+            let last_seq =
+                events.last().expect("Shouldn't be empty").sequence_number();
 
             let traversed = get_events_by_event_key(
                 db,
@@ -305,7 +313,8 @@ fn verify_events_by_event_key(
 fn group_events_by_event_key(
     txns_to_commit: &[TransactionToCommit],
 ) -> Vec<(EventKey, Vec<ContractEvent>)> {
-    let mut event_key_to_events: HashMap<EventKey, Vec<ContractEvent>> = HashMap::new();
+    let mut event_key_to_events: HashMap<EventKey, Vec<ContractEvent>> =
+        HashMap::new();
     for txn in txns_to_commit {
         for event in txn.events() {
             event_key_to_events
@@ -318,12 +327,11 @@ fn group_events_by_event_key(
 }
 
 fn verify_committed_transactions(
-    db: &DiemDB,
-    txns_to_commit: &[TransactionToCommit],
-    first_version: Version,
-    ledger_info_with_sigs: &LedgerInfoWithSignatures,
+    db: &DiemDB, txns_to_commit: &[TransactionToCommit],
+    first_version: Version, ledger_info_with_sigs: &LedgerInfoWithSignatures,
     is_latest: bool,
-) {
+)
+{
     let ledger_info = ledger_info_with_sigs.ledger_info();
     let ledger_version = ledger_info.version();
     assert_eq!(
@@ -347,19 +355,39 @@ fn verify_committed_transactions(
             .get_transaction_with_proof(cur_ver, ledger_version, true)
             .unwrap();
         txn_with_proof
-            .verify_user_txn(ledger_info, cur_ver, txn.sender(), txn.sequence_number())
+            .verify_user_txn(
+                ledger_info,
+                cur_ver,
+                txn.sender(),
+                txn.sequence_number(),
+            )
             .unwrap();
 
         let txn_with_proof = db
-            .get_txn_by_account(txn.sender(), txn.sequence_number(), ledger_version, true)
+            .get_txn_by_account(
+                txn.sender(),
+                txn.sequence_number(),
+                ledger_version,
+                true,
+            )
             .unwrap()
             .expect("Should exist.");
         txn_with_proof
-            .verify_user_txn(ledger_info, cur_ver, txn.sender(), txn.sequence_number())
+            .verify_user_txn(
+                ledger_info,
+                cur_ver,
+                txn.sender(),
+                txn.sequence_number(),
+            )
             .unwrap();
 
         let txn_list_with_proof = db
-            .get_transactions(cur_ver, 1, ledger_version, true /* fetch_events */)
+            .get_transactions(
+                cur_ver,
+                1,
+                ledger_version,
+                true, /* fetch_events */
+            )
             .unwrap();
         txn_list_with_proof
             .verify(ledger_info, Some(cur_ver))
@@ -370,7 +398,10 @@ fn verify_committed_transactions(
             let account_state_with_proof = db
                 .get_account_state_with_proof(*addr, cur_ver, ledger_version)
                 .unwrap();
-            assert_eq!(account_state_with_proof.blob, Some(expected_blob.clone()));
+            assert_eq!(
+                account_state_with_proof.blob,
+                Some(expected_blob.clone())
+            );
             account_state_with_proof
                 .verify(ledger_info, cur_ver, *addr)
                 .unwrap();
@@ -485,7 +516,9 @@ fn test_get_latest_tree_state() {
     );
 }
 
-fn put_transaction_info(db: &DiemDB, version: Version, txn_info: &TransactionInfo) {
+fn put_transaction_info(
+    db: &DiemDB, version: Version, txn_info: &TransactionInfo,
+) {
     let mut cs = ChangeSet::new();
     db.ledger_store
         .put_transaction_infos(version, &[txn_info.clone()], &mut cs)

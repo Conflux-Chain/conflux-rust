@@ -3,8 +3,8 @@
 
 use super::*;
 use crate::test_helpers::{
-    arb_hash_batch, arb_list_of_hash_batches, test_append_empty_impl, test_append_many_impl,
-    MockHashStore, TestAccumulator,
+    arb_hash_batch, arb_list_of_hash_batches, test_append_empty_impl,
+    test_append_many_impl, MockHashStore, TestAccumulator,
 };
 use diem_crypto::hash::ACCUMULATOR_PLACEHOLDER_HASH;
 use diem_types::proof::definition::LeafCount;
@@ -27,7 +27,8 @@ fn test_append_one() {
     for v in 0..100 {
         let hash = HashValue::random();
         let (root_hash, writes) =
-            TestAccumulator::append(&store, leaves.len() as LeafCount, &[hash]).unwrap();
+            TestAccumulator::append(&store, leaves.len() as LeafCount, &[hash])
+                .unwrap();
         store.put_many(&writes);
 
         leaves.push(hash);

@@ -1,14 +1,17 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{on_chain_config::OnChainConfig, validator_info::ValidatorInfo, account_config};
+use crate::{
+    account_config, on_chain_config::OnChainConfig,
+    validator_info::ValidatorInfo,
+};
 use anyhow::Result;
 
+use crate::event::EventKey;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{fmt, iter::IntoIterator, vec};
-use crate::event::EventKey;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]

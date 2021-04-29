@@ -6,9 +6,8 @@
 use crate::pos::{
     consensus::counters,
     protocol::{
-        sync_protocol::HotStuffSynchronizationProtocol,
-        HSB_PROTOCOL_ID,
-    }
+        sync_protocol::HotStuffSynchronizationProtocol, HSB_PROTOCOL_ID,
+    },
 };
 use channel::message_queues::QueueStyle;
 use consensus_types::{
@@ -22,8 +21,7 @@ use diem_metrics::IntCounterVec;
 use diem_types::{epoch_change::EpochChangeProof, PeerId};
 use network::NetworkService;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 /// Network type for consensus
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -68,6 +66,8 @@ pub enum ConsensusMsg {
 /// requires the `ConsensusNetworkSender` to be `Clone` and `Send`.
 #[derive(Clone)]
 pub struct ConsensusNetworkSender {
+    /// network service
     pub network: Arc<NetworkService>,
+    /// hotstuff protoal handler
     pub protocol_handler: Arc<HotStuffSynchronizationProtocol>,
 }

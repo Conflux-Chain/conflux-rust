@@ -13,20 +13,18 @@ pub mod vote;
 use super::HSB_PROTOCOL_VERSION;
 
 use crate::message::{
-    GetMaybeRequestId, Message, MsgId, RequestId, SetRequestId,
-    MessageProtocolVersionBound
+    GetMaybeRequestId, Message, MessageProtocolVersionBound, MsgId, RequestId,
+    SetRequestId,
 };
 
-use consensus_types::{
-    epoch_retrieval::EpochRetrievalRequest,
-    proposal_msg::ProposalMsg,
-    sync_info::SyncInfo,
-    vote_msg::VoteMsg,
-};
-use network::{service::ProtocolVersion};
 use block_retrieval::BlockRetrievalRpcRequest;
 use block_retrieval_response::BlockRetrievalRpcResponse;
+use consensus_types::{
+    epoch_retrieval::EpochRetrievalRequest, proposal_msg::ProposalMsg,
+    sync_info::SyncInfo, vote_msg::VoteMsg,
+};
 use diem_types::epoch_change::EpochChangeProof;
+use network::service::ProtocolVersion;
 
 // FIXME: A temporary workaround by avoiding msg_id overlapping
 // with SynchronizationProtocolHandler msg_id.
@@ -99,16 +97,36 @@ macro_rules! build_msg_impl_with_request_id_and_serde_serialization {
 }
 
 build_msg_impl_with_serde_serialization_generic! {ProposalMsg, msgid::PROPOSAL, "ProposalMessage"}
-mark_msg_version_bound!(ProposalMsg, HSB_PROTOCOL_VERSION, HSB_PROTOCOL_VERSION);
+mark_msg_version_bound!(
+    ProposalMsg,
+    HSB_PROTOCOL_VERSION,
+    HSB_PROTOCOL_VERSION
+);
 build_msg_impl_with_serde_serialization_generic! {BlockRetrievalRpcResponse, msgid::BLOCK_RETRIEVAL_RESPONSE, "BlockRetrievalResponseMessage"}
-mark_msg_version_bound!(BlockRetrievalRpcResponse, HSB_PROTOCOL_VERSION, HSB_PROTOCOL_VERSION);
+mark_msg_version_bound!(
+    BlockRetrievalRpcResponse,
+    HSB_PROTOCOL_VERSION,
+    HSB_PROTOCOL_VERSION
+);
 build_msg_impl_with_serde_serialization! {VoteMsg, msgid::VOTE, "VoteMessage"}
 mark_msg_version_bound!(VoteMsg, HSB_PROTOCOL_VERSION, HSB_PROTOCOL_VERSION);
 build_msg_impl_with_serde_serialization! {SyncInfo, msgid::SYNC_INFO, "SyncInfoMessage"}
 mark_msg_version_bound!(SyncInfo, HSB_PROTOCOL_VERSION, HSB_PROTOCOL_VERSION);
 build_msg_impl_with_serde_serialization! {EpochChangeProof, msgid::EPOCH_CHANGE, "EpochChangeMessage"}
-mark_msg_version_bound!(EpochChangeProof, HSB_PROTOCOL_VERSION, HSB_PROTOCOL_VERSION);
+mark_msg_version_bound!(
+    EpochChangeProof,
+    HSB_PROTOCOL_VERSION,
+    HSB_PROTOCOL_VERSION
+);
 build_msg_impl_with_serde_serialization! {EpochRetrievalRequest, msgid::EPOCH_RETRIEVAL, "EpochRetrievalMessage"}
-mark_msg_version_bound!(EpochRetrievalRequest, HSB_PROTOCOL_VERSION, HSB_PROTOCOL_VERSION);
+mark_msg_version_bound!(
+    EpochRetrievalRequest,
+    HSB_PROTOCOL_VERSION,
+    HSB_PROTOCOL_VERSION
+);
 build_msg_impl_with_request_id_and_serde_serialization! {BlockRetrievalRpcRequest, msgid::BLOCK_RETRIEVAL, "BlockRetrievalMessage"}
-mark_msg_version_bound!(BlockRetrievalRpcRequest, HSB_PROTOCOL_VERSION, HSB_PROTOCOL_VERSION);
+mark_msg_version_bound!(
+    BlockRetrievalRpcRequest,
+    HSB_PROTOCOL_VERSION,
+    HSB_PROTOCOL_VERSION
+);

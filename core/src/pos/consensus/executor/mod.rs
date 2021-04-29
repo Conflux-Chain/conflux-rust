@@ -11,26 +11,21 @@ use diem_crypto::{
 use diem_types::{
     block_info::{BlockInfo, PivotBlockDecision, Round},
     contract_event::ContractEvent,
-    validator_verifier::ValidatorVerifier,
-    on_chain_config::{ValidatorSet, NextValidatorSetProposal},
-    ledger_info::{
-        LedgerInfo,
-        LedgerInfoWithSignatures,
-    },
+    ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
+    on_chain_config::{NextValidatorSetProposal, ValidatorSet},
     transaction::{
         Transaction, TransactionOutput, TransactionPayload, TransactionStatus,
         WriteSetPayload,
     },
-    validator_verifier::VerifyError,
-    vm_status::{StatusCode, VMStatus},
+    validator_verifier::{ValidatorVerifier, VerifyError},
+    vm_status::{KeptVMStatus, StatusCode, VMStatus},
     write_set::WriteSet,
 };
-use storage_interface::DbReader;
 use diemdb::DiemDB;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc};
-use diem_types::vm_status::KeptVMStatus;
+use storage_interface::DbReader;
 
 const GENESIS_MEMBERSHIP_ID: u64 = 0;
 const GENESIS_ROUND: Round = 0;
@@ -159,7 +154,7 @@ impl Executor {
             /*validators: RwLock::new(Some(
                 (&config.consensus.consensus_peers.get_validator_set()).into(),
             )),*/
-            validators: RwLock::new(None)
+            validators: RwLock::new(None),
         };
 
         if executor
@@ -209,7 +204,7 @@ impl Executor {
                 HashValue::zero(),
                 0,
                 0,
-                None
+                None,
             ),
             HashValue::zero(),
         );
@@ -221,7 +216,7 @@ impl Executor {
             vec![(genesis_txns, Arc::new(output))],
             ledger_info_with_sigs,
         )
-            .expect("Failed to commit genesis block.");
+        .expect("Failed to commit genesis block.");
         info!("GENESIS transaction is committed.")
     }
 
@@ -308,18 +303,17 @@ impl Executor {
                     vm_outputs.push(output);
                      */
                 }
-                _ => {}
-                /*
-                Transaction::WriteSet(change_set) => {
-                    let events = change_set.events().to_vec();
-                    ensure!(
-                        events.len() == 1,
-                        "One transaction can contain exactly 1 event."
-                    );
+                _ => {} /*
+                        Transaction::WriteSet(change_set) => {
+                            let events = change_set.events().to_vec();
+                            ensure!(
+                                events.len() == 1,
+                                "One transaction can contain exactly 1 event."
+                            );
 
-                    let output = Self::gen_output(events);
-                    vm_outputs.push(output);
-                }*/
+                            let output = Self::gen_output(events);
+                            vm_outputs.push(output);
+                        }*/
             }
         }
 
@@ -337,7 +331,7 @@ impl Executor {
             last_pivot,
             current_membership_id,
         )
-            .map_err(|err| format_err!("Failed to execute block: {}", err))?;
+        .map_err(|err| format_err!("Failed to execute block: {}", err))?;
 
         Ok(output)
     }

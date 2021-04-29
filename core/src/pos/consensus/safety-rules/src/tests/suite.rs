@@ -53,7 +53,7 @@ fn make_proposal_with_parent(
 
 pub type Callback = Box<
     dyn Fn(
-        
+        /* prevent cargo format failing */
     ) -> (
         Box<dyn TSafetyRules + Send + Sync>,
         ValidatorSigner,

@@ -3,11 +3,15 @@
 // See https://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
-    pos::protocol::sync_protocol::{Context, Handleable},
+    pos::{
+        consensus::network_interface::ConsensusMsg,
+        protocol::sync_protocol::{Context, Handleable},
+    },
     sync::Error,
 };
 use consensus_types::vote_msg::VoteMsg;
 use diem_types::account_address::AccountAddress;
+use std::mem::discriminant;
 
 impl Handleable for VoteMsg {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
@@ -15,21 +19,17 @@ impl Handleable for VoteMsg {
 
         let peer_address = AccountAddress::new(ctx.peer_hash.into());
 
-        ensure!(
+        /*ensure!(
             self.vote().author() == peer_address,
             "vote received must be from the sending peer"
-        );
+        );*/
 
-        if self.epoch_id() != ctx.manager.network_task.epoch_id() {
-            ctx.manager
-                .network_task
-                .different_epoch_tx
-                .push(peer_address, (self.epoch_id(), peer_address))?;
-            return Ok(());
-        }
-
-        self.verify(&ctx.manager.network_task.epoch_info.read().verifier)?;
-        ctx.manager.network_task.vote_tx.push(peer_address, self)?;
+        //self.verify(&ctx.manager.network_task.epoch_info.read().verifier)?;
+        let msg = ConsensusMsg::VoteMsg(Box::new(self));
+        ctx.manager
+            .network_task
+            .consensus_messages_tx
+            .push((peer_address, discriminant(&msg)), (peer_address, msg))?;
         Ok(())
     }
 }

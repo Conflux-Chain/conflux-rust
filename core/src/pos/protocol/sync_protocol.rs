@@ -6,9 +6,7 @@ use super::{HSB_PROTOCOL_ID, HSB_PROTOCOL_VERSION};
 use crate::{
     message::{GetMaybeRequestId, Message, MsgId},
     pos::{
-        consensus::{
-            network::NetworkTask
-        },
+        consensus::network::NetworkTask,
         protocol::{
             message::{block_retrieval::BlockRetrievalRpcRequest, msgid},
             request_manager::{
@@ -20,32 +18,24 @@ use crate::{
 };
 
 use crate::{
-    pos::{
-        protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
-    },
+    pos::protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
     sync::ProtocolConfiguration,
 };
-use consensus_types::{
-    epoch_retrieval::EpochRetrievalRequest,
-    sync_info::SyncInfo,
-    vote_msg::VoteMsg,
-    proposal_msg::ProposalMsg,
-};
 use cfx_types::H256;
+use consensus_types::{
+    epoch_retrieval::EpochRetrievalRequest, proposal_msg::ProposalMsg,
+    sync_info::SyncInfo, vote_msg::VoteMsg,
+};
 use diem_types::epoch_change::EpochChangeProof;
 use io::TimerToken;
 use keccak_hash::keccak;
 use network::{
-    node_table::NodeId,
-    NetworkContext,
-    NetworkProtocolHandler,
-    NetworkService,
-    UpdateNodeOperation,
+    node_table::NodeId, service::ProtocolVersion, NetworkContext,
+    NetworkProtocolHandler, NetworkService, UpdateNodeOperation,
 };
 use parking_lot::RwLock;
 use serde::Deserialize;
 use std::{cmp::Eq, collections::HashMap, fmt::Debug, hash::Hash, sync::Arc};
-use network::service::ProtocolVersion;
 
 #[derive(Default)]
 pub struct PeerState {
@@ -308,6 +298,12 @@ impl HotStuffSynchronizationProtocol {
                 network::ErrorKind::__Nonexhaustive {} => {
                     op = Some(UpdateNodeOperation::Failure)
                 }
+                network::ErrorKind::MessageDeprecated { .. } => {
+                    op = Some(UpdateNodeOperation::Failure)
+                }
+                network::ErrorKind::SendUnsupportedMessage { .. } => {
+                    op = Some(UpdateNodeOperation::Failure)
+                }
             },
             ErrorKind::Storage(_) => {}
             ErrorKind::Msg(_) => op = Some(UpdateNodeOperation::Failure),
@@ -397,17 +393,13 @@ pub fn handle_serialized_message(
         msgid::EPOCH_RETRIEVAL => {
             handle_message::<EpochRetrievalRequest>(ctx, msg)?
         }
-        msgid::EPOCH_CHANGE => {
-            handle_message::<EpochChangeProof>(ctx, msg)?
-        }
+        msgid::EPOCH_CHANGE => handle_message::<EpochChangeProof>(ctx, msg)?,
         _ => return Ok(false),
     }
     Ok(true)
 }
 
-fn handle_message<'a, M>(
-    ctx: &Context, msg: &'a [u8],
-) -> Result<(), Error>
+fn handle_message<'a, M>(ctx: &Context, msg: &'a [u8]) -> Result<(), Error>
 where M: Deserialize<'a> + Handleable + Message {
     let msg: M = bcs::from_bytes(msg)?;
     let msg_id = msg.msg_id();
@@ -434,9 +426,7 @@ where M: Deserialize<'a> + Handleable + Message {
 }
 
 impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
-    fn minimum_supported_version(&self) -> ProtocolVersion {
-        todo!()
-    }
+    fn minimum_supported_version(&self) -> ProtocolVersion { todo!() }
 
     fn initialize(&self, io: &dyn NetworkContext) {
         io.register_timer(
@@ -466,7 +456,11 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
             .unwrap_or_else(|e| self.handle_error(io, peer, msg_id.into(), e));
     }
 
-    fn on_peer_connected(&self, io: &dyn NetworkContext, peer: &NodeId, peer_protocol_version: ProtocolVersion) {
+    fn on_peer_connected(
+        &self, io: &dyn NetworkContext, peer: &NodeId,
+        peer_protocol_version: ProtocolVersion,
+    )
+    {
         // TODO: maintain peer protocol version
         let new_originated = io.get_peer_connection_origin(peer);
         if new_originated.is_none() {

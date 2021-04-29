@@ -9,8 +9,8 @@
 //! | version | txn_info bytes |
 //! ```
 //!
-//! `Version` is serialized in big endian so that records in RocksDB will be in order of it's
-//! numeric value.
+//! `Version` is serialized in big endian so that records in RocksDB will be in
+//! order of it's numeric value.
 
 use crate::schema::{ensure_slice_len_eq, TRANSACTION_INFO_CF_NAME};
 use anyhow::Result;
@@ -30,9 +30,7 @@ define_schema!(
 );
 
 impl KeyCodec<TransactionInfoSchema> for Version {
-    fn encode_key(&self) -> Result<Vec<u8>> {
-        Ok(self.to_be_bytes().to_vec())
-    }
+    fn encode_key(&self) -> Result<Vec<u8>> { Ok(self.to_be_bytes().to_vec()) }
 
     fn decode_key(mut data: &[u8]) -> Result<Self> {
         ensure_slice_len_eq(data, size_of::<Version>())?;

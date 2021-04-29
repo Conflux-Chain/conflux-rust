@@ -11,7 +11,8 @@ use diem_types::{
 use proptest::{collection::vec, prelude::*};
 use std::path::Path;
 
-fn arb_ledger_infos_with_sigs() -> impl Strategy<Value = Vec<LedgerInfoWithSignatures>> {
+fn arb_ledger_infos_with_sigs(
+) -> impl Strategy<Value = Vec<LedgerInfoWithSignatures>> {
     (
         any_with::<AccountInfoUniverse>(3),
         vec((any::<LedgerInfoWithSignaturesGen>(), 1..10usize), 1..10),
@@ -40,7 +41,9 @@ fn get_last_epoch(ledger_infos_with_sigs: &[LedgerInfoWithSignatures]) -> u64 {
     ledger_infos_with_sigs.last().unwrap().ledger_info().epoch()
 }
 
-fn get_last_version(ledger_infos_with_sigs: &[LedgerInfoWithSignatures]) -> Version {
+fn get_last_version(
+    ledger_infos_with_sigs: &[LedgerInfoWithSignatures],
+) -> Version {
     ledger_infos_with_sigs
         .last()
         .unwrap()
@@ -176,7 +179,11 @@ proptest! {
     }
 }
 
-fn set_up(path: &impl AsRef<Path>, ledger_infos_with_sigs: &[LedgerInfoWithSignatures]) -> DiemDB {
+fn set_up(
+    path: &impl AsRef<Path>,
+    ledger_infos_with_sigs: &[LedgerInfoWithSignatures],
+) -> DiemDB
+{
     let db = DiemDB::new_for_test(path);
     let store = &db.ledger_store;
 
@@ -188,7 +195,8 @@ fn set_up(path: &impl AsRef<Path>, ledger_infos_with_sigs: &[LedgerInfoWithSigna
         .collect::<Result<Vec<_>>>()
         .unwrap();
     store.db.write_schemas(cs.batch).unwrap();
-    store.set_latest_ledger_info(ledger_infos_with_sigs.last().unwrap().clone());
+    store
+        .set_latest_ledger_info(ledger_infos_with_sigs.last().unwrap().clone());
 
     db
 }

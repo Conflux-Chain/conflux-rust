@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use diem_infallible::RwLock;
-use diem_logger::{info as diem_info, DiemLogger, Writer};
+use diem_logger::{info, DiemLogger, Writer};
 use std::sync::Arc;
 
 #[derive(Default)]

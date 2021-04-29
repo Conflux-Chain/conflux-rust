@@ -41,9 +41,7 @@ impl KeyCodec<TransactionAccumulatorSchema> for Position {
 }
 
 impl ValueCodec<TransactionAccumulatorSchema> for HashValue {
-    fn encode_value(&self) -> Result<Vec<u8>> {
-        Ok(self.to_vec())
-    }
+    fn encode_value(&self) -> Result<Vec<u8>> { Ok(self.to_vec()) }
 
     fn decode_value(data: &[u8]) -> Result<Self> {
         Self::from_slice(data).map_err(Into::into)

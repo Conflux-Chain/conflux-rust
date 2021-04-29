@@ -10,10 +10,10 @@ use schemadb::{
     ColumnFamilyName, SchemaBatch, DB, DEFAULT_CF_NAME,
 };
 
-// Creating two schemas that share exactly the same structure but are stored in different column
-// families. Also note that the key and value are of the same type `TestField`. By implementing
-// both the `KeyCodec<>` and `ValueCodec<>` traits for both schemas, we are able to use it
-// everywhere.
+// Creating two schemas that share exactly the same structure but are stored in
+// different column families. Also note that the key and value are of the same
+// type `TestField`. By implementing both the `KeyCodec<>` and `ValueCodec<>`
+// traits for both schemas, we are able to use it everywhere.
 define_schema!(TestSchema1, TestField, TestField, "TestCF1");
 define_schema!(TestSchema2, TestField, TestField, "TestCF2");
 
@@ -21,9 +21,7 @@ define_schema!(TestSchema2, TestField, TestField, "TestCF2");
 struct TestField(u32);
 
 impl TestField {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.0.to_le_bytes().to_vec()
-    }
+    fn to_bytes(&self) -> Vec<u8> { self.0.to_le_bytes().to_vec() }
 
     fn from_bytes(data: &[u8]) -> Result<Self> {
         let mut reader = std::io::Cursor::new(data);
@@ -32,43 +30,27 @@ impl TestField {
 }
 
 impl KeyCodec<TestSchema1> for TestField {
-    fn encode_key(&self) -> Result<Vec<u8>> {
-        Ok(self.to_bytes())
-    }
+    fn encode_key(&self) -> Result<Vec<u8>> { Ok(self.to_bytes()) }
 
-    fn decode_key(data: &[u8]) -> Result<Self> {
-        Self::from_bytes(data)
-    }
+    fn decode_key(data: &[u8]) -> Result<Self> { Self::from_bytes(data) }
 }
 
 impl ValueCodec<TestSchema1> for TestField {
-    fn encode_value(&self) -> Result<Vec<u8>> {
-        Ok(self.to_bytes())
-    }
+    fn encode_value(&self) -> Result<Vec<u8>> { Ok(self.to_bytes()) }
 
-    fn decode_value(data: &[u8]) -> Result<Self> {
-        Self::from_bytes(data)
-    }
+    fn decode_value(data: &[u8]) -> Result<Self> { Self::from_bytes(data) }
 }
 
 impl KeyCodec<TestSchema2> for TestField {
-    fn encode_key(&self) -> Result<Vec<u8>> {
-        Ok(self.to_bytes())
-    }
+    fn encode_key(&self) -> Result<Vec<u8>> { Ok(self.to_bytes()) }
 
-    fn decode_key(data: &[u8]) -> Result<Self> {
-        Self::from_bytes(data)
-    }
+    fn decode_key(data: &[u8]) -> Result<Self> { Self::from_bytes(data) }
 }
 
 impl ValueCodec<TestSchema2> for TestField {
-    fn encode_value(&self) -> Result<Vec<u8>> {
-        Ok(self.to_bytes())
-    }
+    fn encode_value(&self) -> Result<Vec<u8>> { Ok(self.to_bytes()) }
 
-    fn decode_value(data: &[u8]) -> Result<Self> {
-        Self::from_bytes(data)
-    }
+    fn decode_value(data: &[u8]) -> Result<Self> { Self::from_bytes(data) }
 }
 
 fn get_column_families() -> Vec<ColumnFamilyName> {
@@ -83,7 +65,8 @@ fn open_db(dir: &diem_temppath::TempPath) -> DB {
     let mut db_opts = rocksdb::Options::default();
     db_opts.create_if_missing(true);
     db_opts.create_missing_column_families(true);
-    DB::open(&dir.path(), "test", get_column_families(), &db_opts).expect("Failed to open DB.")
+    DB::open(&dir.path(), "test", get_column_families(), &db_opts)
+        .expect("Failed to open DB.")
 }
 
 fn open_db_read_only(dir: &diem_temppath::TempPath) -> DB {
@@ -116,9 +99,7 @@ impl TestDB {
 impl std::ops::Deref for TestDB {
     type Target = DB;
 
-    fn deref(&self) -> &Self::Target {
-        &self.db
-    }
+    fn deref(&self) -> &Self::Target { &self.db }
 }
 
 #[test]

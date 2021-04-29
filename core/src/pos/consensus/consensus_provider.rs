@@ -2,13 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    counters,
-    epoch_manager::EpochManager,
-    network::NetworkTask,
-    network_interface::{ConsensusNetworkSender},
+    counters, epoch_manager::EpochManager, network::NetworkTask,
+    network_interface::ConsensusNetworkSender,
     persistent_liveness_storage::StorageWriteProxy,
-    state_computer::ExecutionProxy,
-    txn_manager::MempoolProxy,
+    state_computer::ExecutionProxy, txn_manager::MempoolProxy,
     util::time_service::ClockTimeService,
 };
 use channel::diem_channel;
@@ -19,15 +16,16 @@ use diem_types::on_chain_config::OnChainConfigPayload;
 //use execution_correctness::ExecutionCorrectnessManager;
 use futures::channel::mpsc;
 //use state_sync::client::StateSyncClient;
+use crate::pos::consensus::executor::Executor;
 use std::sync::Arc;
 use storage_interface::DbReader;
 use tokio::runtime::{self, Runtime};
-use crate::pos::consensus::executor::Executor;
 
 /// Helper function to start consensus based on configuration and return the
 /// runtime
 pub fn start_consensus(
-    node_config: &NodeConfig, network_sender: ConsensusNetworkSender,
+    node_config: &NodeConfig,
+    network_sender: ConsensusNetworkSender,
     //network_events: ConsensusNetworkEvents,
     //state_sync_client: StateSyncClient,
     //consensus_to_mempool_sender: mpsc::Sender<ConsensusRequest>,
@@ -51,9 +49,8 @@ pub fn start_consensus(
     //let execution_correctness_manager =
     //    ExecutionCorrectnessManager::new(node_config);
     let state_computer = Arc::new(ExecutionProxy::new(
-        executor
-        //execution_correctness_manager.client(),
-        //state_sync_client,
+        executor, /*execution_correctness_manager.client(),
+                  *state_sync_client, */
     ));
     let time_service =
         Arc::new(ClockTimeService::new(runtime.handle().clone()));
@@ -75,8 +72,7 @@ pub fn start_consensus(
         reconfig_events,
     );
 
-    let (network_task, network_receiver) =
-        NetworkTask::new(
+    let (network_task, network_receiver) = NetworkTask::new(
             //network_events,
             //self_receiver
         );

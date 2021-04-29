@@ -6,6 +6,7 @@ use crate::{
     pos::protocol::sync_protocol::RpcResponse,
     sync::{Error, ErrorKind, ProtocolConfiguration},
 };
+use cfx_parameters::sync::REQUEST_START_WAITING_TIME;
 use futures::{channel::oneshot, future::Future};
 use network::{node_table::NodeId, NetworkContext};
 use parking_lot::Mutex;
@@ -18,7 +19,6 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use cfx_parameters::sync::REQUEST_START_WAITING_TIME;
 
 pub mod request_handler;
 

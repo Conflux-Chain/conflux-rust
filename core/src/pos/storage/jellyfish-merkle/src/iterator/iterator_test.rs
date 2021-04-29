@@ -21,9 +21,7 @@ fn test_iterator_same_version() {
 }
 
 #[test]
-fn test_iterator_multiple_versions() {
-    test_n_leaves_multiple_versions(50);
-}
+fn test_iterator_multiple_versions() { test_n_leaves_multiple_versions(50); }
 
 fn test_n_leaves_same_version(n: usize) {
     let db = Arc::new(MockTreeStore::default());
@@ -39,7 +37,10 @@ fn test_n_leaves_same_version(n: usize) {
     }
 
     let (_root_hash, batch) = tree
-        .put_value_set(btree.clone().into_iter().collect(), 0 /* version */)
+        .put_value_set(
+            btree.clone().into_iter().collect(),
+            0, /* version */
+        )
         .unwrap();
     db.write_tree_update_batch(batch).unwrap();
 
@@ -65,13 +66,16 @@ fn test_n_leaves_multiple_versions(n: usize) {
     }
 }
 
-fn run_tests<V>(db: Arc<MockTreeStore<V>>, btree: &BTreeMap<HashValue, V>, version: Version)
-where
-    V: crate::TestValue,
-{
+fn run_tests<V>(
+    db: Arc<MockTreeStore<V>>, btree: &BTreeMap<HashValue, V>, version: Version,
+) where V: crate::TestValue {
     {
-        let iter =
-            JellyfishMerkleIterator::new(Arc::clone(&db), version, HashValue::zero()).unwrap();
+        let iter = JellyfishMerkleIterator::new(
+            Arc::clone(&db),
+            version,
+            HashValue::zero(),
+        )
+        .unwrap();
         assert_eq!(
             iter.collect::<Result<Vec<_>>>().unwrap(),
             btree.clone().into_iter().collect::<Vec<_>>(),
@@ -82,7 +86,9 @@ where
         let ith_key = *btree.keys().nth(i).unwrap();
 
         {
-            let iter = JellyfishMerkleIterator::new(Arc::clone(&db), version, ith_key).unwrap();
+            let iter =
+                JellyfishMerkleIterator::new(Arc::clone(&db), version, ith_key)
+                    .unwrap();
             assert_eq!(
                 iter.collect::<Result<Vec<_>>>().unwrap(),
                 btree.clone().into_iter().skip(i).collect::<Vec<_>>(),
@@ -91,8 +97,12 @@ where
 
         {
             let ith_key_plus_one = plus_one(ith_key);
-            let iter =
-                JellyfishMerkleIterator::new(Arc::clone(&db), version, ith_key_plus_one).unwrap();
+            let iter = JellyfishMerkleIterator::new(
+                Arc::clone(&db),
+                version,
+                ith_key_plus_one,
+            )
+            .unwrap();
             assert_eq!(
                 iter.collect::<Result<Vec<_>>>().unwrap(),
                 btree.clone().into_iter().skip(i + 1).collect::<Vec<_>>(),

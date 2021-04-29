@@ -9,16 +9,24 @@ use diem_temppath::TempPath;
 use diem_types::{
     block_info::BlockInfo,
     ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
-    proptest_types::{AccountInfoUniverse, LedgerInfoGen, TransactionToCommitGen},
+    proptest_types::{
+        AccountInfoUniverse, LedgerInfoGen, TransactionToCommitGen,
+    },
     validator_signer::ValidatorSigner,
 };
 use proptest::{collection::vec, prelude::*};
 
 fn to_blocks_to_commit(
-    partial_blocks: Vec<(Vec<TransactionToCommit>, LedgerInfo, Vec<ValidatorSigner>)>,
-) -> Result<Vec<(Vec<TransactionToCommit>, LedgerInfoWithSignatures)>> {
-    // Use temporary DiemDB and STORE LEVEL APIs to calculate hashes on a per transaction basis.
-    // Result is used to test the batch PUBLIC API for saving everything, i.e. `save_transactions()`
+    partial_blocks: Vec<(
+        Vec<TransactionToCommit>,
+        LedgerInfo,
+        Vec<ValidatorSigner>,
+    )>,
+) -> Result<Vec<(Vec<TransactionToCommit>, LedgerInfoWithSignatures)>>
+{
+    // Use temporary DiemDB and STORE LEVEL APIs to calculate hashes on a per
+    // transaction basis. Result is used to test the batch PUBLIC API for
+    // saving everything, i.e. `save_transactions()`
     let tmp_dir = TempPath::new();
     let db = DiemDB::new_for_test(&tmp_dir);
 
@@ -36,9 +44,11 @@ fn to_blocks_to_commit(
                     cur_ver,
                     &mut cs,
                 )?[0];
-                let event_root_hash =
-                    db.event_store
-                        .put_events(cur_ver, txn_to_commit.events(), &mut cs)?;
+                let event_root_hash = db.event_store.put_events(
+                    cur_ver,
+                    txn_to_commit.events(),
+                    &mut cs,
+                )?;
 
                 let txn_info = TransactionInfo::new(
                     txn_hash,
@@ -47,9 +57,11 @@ fn to_blocks_to_commit(
                     txn_to_commit.gas_used(),
                     txn_to_commit.status().clone(),
                 );
-                let txn_accu_hash =
-                    db.ledger_store
-                        .put_transaction_infos(cur_ver, &[txn_info], &mut cs)?;
+                let txn_accu_hash = db.ledger_store.put_transaction_infos(
+                    cur_ver,
+                    &[txn_info],
+                    &mut cs,
+                )?;
                 db.db.write_schemas(cs.batch)?;
 
                 cur_ver += 1;
@@ -67,13 +79,16 @@ fn to_blocks_to_commit(
                 partial_ledger_info.timestamp_usecs(),
                 partial_ledger_info.next_epoch_state().cloned(),
             );
-            let ledger_info =
-                LedgerInfo::new(block_info, partial_ledger_info.consensus_data_hash());
+            let ledger_info = LedgerInfo::new(
+                block_info,
+                partial_ledger_info.consensus_data_hash(),
+            );
             let signatures = validator_set
                 .iter()
                 .map(|signer| (signer.author(), signer.sign(&ledger_info)))
                 .collect();
-            let ledger_info_with_sigs = LedgerInfoWithSignatures::new(ledger_info, signatures);
+            let ledger_info_with_sigs =
+                LedgerInfoWithSignatures::new(ledger_info, signatures);
             Ok((txns_to_commit, ledger_info_with_sigs))
         })
         .collect::<Result<Vec<_>>>()?;
@@ -130,7 +145,8 @@ prop_compose! {
 }
 
 pub fn arb_blocks_to_commit(
-) -> impl Strategy<Value = Vec<(Vec<TransactionToCommit>, LedgerInfoWithSignatures)>> {
+) -> impl Strategy<Value = Vec<(Vec<TransactionToCommit>, LedgerInfoWithSignatures)>>
+{
     arb_blocks_to_commit_impl(
         5,  /* num_accounts */
         2,  /* max_txn_per_block */
@@ -138,8 +154,8 @@ pub fn arb_blocks_to_commit(
     )
 }
 
-pub fn arb_mock_genesis() -> impl Strategy<Value = (TransactionToCommit, LedgerInfoWithSignatures)>
-{
+pub fn arb_mock_genesis(
+) -> impl Strategy<Value = (TransactionToCommit, LedgerInfoWithSignatures)> {
     arb_blocks_to_commit_impl(
         1, /* num_accounts */
         1, /* max_txn_per_block */

@@ -6,7 +6,7 @@ use futures::{Future, FutureExt, SinkExt};
 use std::{pin::Pin, thread, time::Duration};
 
 use crate::pos::consensus::counters;
-use tokio::{runtime::Handle};
+use tokio::runtime::Handle;
 
 /// Time service is an abstraction for operations that depend on time
 /// It supports implementations that can simulated time or depend on actual time

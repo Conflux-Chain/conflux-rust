@@ -1,12 +1,13 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module defines the physical storage schema for information related to outdated state
-//! Jellyfish Merkle tree nodes, which are ready to be pruned after being old enough.
+//! This module defines the physical storage schema for information related to
+//! outdated state Jellyfish Merkle tree nodes, which are ready to be pruned
+//! after being old enough.
 //!
 //! An index entry in this data set has 2 pieces of information:
-//!     1. The version since which a node (in another data set) becomes stale, meaning,
-//! replaced by an updated node.
+//!     1. The version since which a node (in another data set) becomes stale,
+//! meaning, replaced by an updated node.
 //!     2. The node_key to identify the stale node.
 //!
 //! ```text
@@ -14,10 +15,12 @@
 //! | stale_since_vesrion | node_key |
 //! ```
 //!
-//! `stale_since_version` is serialized in big endian so that records in RocksDB will be in order of
-//! its numeric value.
+//! `stale_since_version` is serialized in big endian so that records in RocksDB
+//! will be in order of its numeric value.
 
-use crate::schema::{ensure_slice_len_eq, ensure_slice_len_gt, STALE_NODE_INDEX_CF_NAME};
+use crate::schema::{
+    ensure_slice_len_eq, ensure_slice_len_gt, STALE_NODE_INDEX_CF_NAME,
+};
 use anyhow::Result;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use diem_jellyfish_merkle::{node_type::NodeKey, StaleNodeIndex};
@@ -48,7 +51,8 @@ impl KeyCodec<StaleNodeIndexSchema> for StaleNodeIndex {
         const VERSION_SIZE: usize = size_of::<Version>();
 
         ensure_slice_len_gt(data, VERSION_SIZE)?;
-        let stale_since_version = (&data[..VERSION_SIZE]).read_u64::<BigEndian>()?;
+        let stale_since_version =
+            (&data[..VERSION_SIZE]).read_u64::<BigEndian>()?;
         let node_key = NodeKey::decode(&data[VERSION_SIZE..])?;
 
         Ok(Self {
@@ -59,9 +63,7 @@ impl KeyCodec<StaleNodeIndexSchema> for StaleNodeIndex {
 }
 
 impl ValueCodec<StaleNodeIndexSchema> for () {
-    fn encode_value(&self) -> Result<Vec<u8>> {
-        Ok(Vec::new())
-    }
+    fn encode_value(&self) -> Result<Vec<u8>> { Ok(Vec::new()) }
 
     fn decode_value(data: &[u8]) -> Result<Self> {
         ensure_slice_len_eq(data, 0)?;

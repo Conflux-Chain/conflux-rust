@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    deserialize_u64_varint, serialize_u64_varint, Child, Children, InternalNode, NodeDecodeError,
-    NodeKey,
+    deserialize_u64_varint, serialize_u64_varint, Child, Children,
+    InternalNode, NodeDecodeError, NodeKey,
 };
 use crate::{nibble_path::NibblePath, test_helper::ValueBlob};
 use diem_crypto::{
@@ -35,12 +35,10 @@ fn random_63nibbles_node_key() -> NodeKey {
     NodeKey::new(0 /* version */, NibblePath::new_odd(bytes))
 }
 
-// Generate a pair of leaf node key and account key with a passed-in 63-nibble node key and the last
-// nibble to be appended.
+// Generate a pair of leaf node key and account key with a passed-in 63-nibble
+// node key and the last nibble to be appended.
 fn gen_leaf_keys(
-    version: Version,
-    nibble_path: &NibblePath,
-    nibble: Nibble,
+    version: Version, nibble_path: &NibblePath, nibble: Nibble,
 ) -> (NodeKey, HashValue) {
     assert_eq!(nibble_path.num_nibbles(), 63);
     let mut np = nibble_path.clone();
@@ -53,9 +51,11 @@ fn gen_leaf_keys(
 fn test_encode_decode() {
     let internal_node_key = random_63nibbles_node_key();
 
-    let leaf1_keys = gen_leaf_keys(0, internal_node_key.nibble_path(), Nibble::from(1));
+    let leaf1_keys =
+        gen_leaf_keys(0, internal_node_key.nibble_path(), Nibble::from(1));
     let leaf1_node = Node::new_leaf(leaf1_keys.1, ValueBlob::from(vec![0x00]));
-    let leaf2_keys = gen_leaf_keys(0, internal_node_key.nibble_path(), Nibble::from(2));
+    let leaf2_keys =
+        gen_leaf_keys(0, internal_node_key.nibble_path(), Nibble::from(2));
     let leaf2_node = Node::new_leaf(leaf2_keys.1, ValueBlob::from(vec![0x01]));
 
     let mut children = Children::default();
@@ -484,7 +484,8 @@ fn test_internal_hash_and_proof() {
 
         for i in 0..4 {
             assert_eq!(
-                internal_node.get_child_with_siblings(&internal_node_key, i.into()),
+                internal_node
+                    .get_child_with_siblings(&internal_node_key, i.into()),
                 (None, vec![hash_x6, hash_x2])
             );
         }
@@ -516,7 +517,8 @@ fn test_internal_hash_and_proof() {
         );
         for i in 6..8 {
             assert_eq!(
-                internal_node.get_child_with_siblings(&internal_node_key, i.into()),
+                internal_node
+                    .get_child_with_siblings(&internal_node_key, i.into()),
                 (
                     None,
                     vec![hash_x6, *SPARSE_MERKLE_PLACEHOLDER_HASH, hash_x1]
@@ -526,14 +528,16 @@ fn test_internal_hash_and_proof() {
 
         for i in 8..12 {
             assert_eq!(
-                internal_node.get_child_with_siblings(&internal_node_key, i.into()),
+                internal_node
+                    .get_child_with_siblings(&internal_node_key, i.into()),
                 (None, vec![hash_x3, hash_x5])
             );
         }
 
         for i in 12..14 {
             assert_eq!(
-                internal_node.get_child_with_siblings(&internal_node_key, i.into()),
+                internal_node
+                    .get_child_with_siblings(&internal_node_key, i.into()),
                 (
                     None,
                     vec![hash_x3, *SPARSE_MERKLE_PLACEHOLDER_HASH, hash_x4]
@@ -541,7 +545,8 @@ fn test_internal_hash_and_proof() {
             );
         }
         assert_eq!(
-            internal_node.get_child_with_siblings(&internal_node_key, 14.into()),
+            internal_node
+                .get_child_with_siblings(&internal_node_key, 14.into()),
             (
                 None,
                 vec![
@@ -643,7 +648,8 @@ fn test_internal_hash_and_proof() {
 
         for i in 2..4 {
             assert_eq!(
-                internal_node.get_child_with_siblings(&internal_node_key, i.into()),
+                internal_node
+                    .get_child_with_siblings(&internal_node_key, i.into()),
                 (
                     None,
                     vec![*SPARSE_MERKLE_PLACEHOLDER_HASH, hash_x4, hash_x1]
@@ -653,7 +659,8 @@ fn test_internal_hash_and_proof() {
 
         for i in 4..6 {
             assert_eq!(
-                internal_node.get_child_with_siblings(&internal_node_key, i.into()),
+                internal_node
+                    .get_child_with_siblings(&internal_node_key, i.into()),
                 (
                     None,
                     vec![*SPARSE_MERKLE_PLACEHOLDER_HASH, hash_x2, hash_x3]
@@ -689,7 +696,8 @@ fn test_internal_hash_and_proof() {
 
         for i in 8..16 {
             assert_eq!(
-                internal_node.get_child_with_siblings(&internal_node_key, i.into()),
+                internal_node
+                    .get_child_with_siblings(&internal_node_key, i.into()),
                 (None, vec![hash_x5])
             );
         }
@@ -713,12 +721,12 @@ impl BinaryTreeNode {
     }
 
     fn new_internal(
-        first_child_index: u8,
-        num_children: u8,
-        left: BinaryTreeNode,
+        first_child_index: u8, num_children: u8, left: BinaryTreeNode,
         right: BinaryTreeNode,
-    ) -> Self {
-        let hash = SparseMerkleInternalNode::new(left.hash(), right.hash()).hash();
+    ) -> Self
+    {
+        let hash =
+            SparseMerkleInternalNode::new(left.hash(), right.hash()).hash();
 
         Self::Internal(BinaryTreeInternalNode {
             begin: first_child_index,
@@ -738,13 +746,14 @@ impl BinaryTreeNode {
     }
 }
 
-/// An internal node in a binary tree corresponding to a `InternalNode` being tested.
+/// An internal node in a binary tree corresponding to a `InternalNode` being
+/// tested.
 ///
-/// To describe its position in the binary tree, we use a range of level 0 (children level)
-/// positions expressed by (`begin`, `width`)
+/// To describe its position in the binary tree, we use a range of level 0
+/// (children level) positions expressed by (`begin`, `width`)
 ///
-/// For example, in the below graph, node A has (begin:0, width:4), while node B has
-/// (begin:2, width: 2):
+/// For example, in the below graph, node A has (begin:0, width:4), while node B
+/// has (begin:2, width: 2):
 ///            ...
 ///         /
 ///       [A]    ...
@@ -769,11 +778,13 @@ impl BinaryTreeInternalNode {
     }
 }
 
-/// A child node, corresponding to one that is in the corresponding `InternalNode` being tested.
+/// A child node, corresponding to one that is in the corresponding
+/// `InternalNode` being tested.
 ///
 /// `index` is its key in `InternalNode::children`.
-/// N.B. when `is_leaf` is true, in the binary tree represented by a `NaiveInternalNode`, the child
-/// node will be brought up to the root of the highest subtree that has only that leaf.
+/// N.B. when `is_leaf` is true, in the binary tree represented by a
+/// `NaiveInternalNode`, the child node will be brought up to the root of the
+/// highest subtree that has only that leaf.
 #[derive(Clone, Copy)]
 struct BinaryTreeChildNode {
     version: Version,
@@ -793,7 +804,9 @@ impl NaiveInternalNode {
         }
     }
 
-    fn node_for_subtree(begin: u8, width: u8, children: &Children) -> BinaryTreeNode {
+    fn node_for_subtree(
+        begin: u8, width: u8, children: &Children,
+    ) -> BinaryTreeNode {
         if width == 1 {
             return children
                 .get(&begin.into())
@@ -804,7 +817,8 @@ impl NaiveInternalNode {
 
         let half_width = width / 2;
         let left = Self::node_for_subtree(begin, half_width, children);
-        let right = Self::node_for_subtree(begin + half_width, half_width, children);
+        let right =
+            Self::node_for_subtree(begin + half_width, half_width, children);
 
         match (&left, &right) {
             (BinaryTreeNode::Null, BinaryTreeNode::Null) => {
@@ -823,9 +837,7 @@ impl NaiveInternalNode {
     }
 
     fn get_child_with_siblings(
-        &self,
-        node_key: &NodeKey,
-        n: u8,
+        &self, node_key: &NodeKey, n: u8,
     ) -> (Option<NodeKey>, Vec<HashValue>) {
         let mut current_node = Rc::clone(&self.root);
         let mut siblings = Vec::new();
@@ -843,7 +855,10 @@ impl NaiveInternalNode {
                 }
                 BinaryTreeNode::Child(node) => {
                     return (
-                        Some(node_key.gen_child_node_key(node.version, node.index.into())),
+                        Some(node_key.gen_child_node_key(
+                            node.version,
+                            node.index.into(),
+                        )),
                         siblings,
                     )
                 }

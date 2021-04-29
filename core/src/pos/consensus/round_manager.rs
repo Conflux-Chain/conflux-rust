@@ -411,7 +411,8 @@ impl RoundManager {
         });
         diem_debug!(
             self.new_log(LogEvent::ReceiveSyncInfo).remote_peer(peer),
-            "{}", sync_info
+            "{}",
+            sync_info
         );
         // To avoid a ping-pong cycle between two peers that move forward
         // together.
@@ -464,7 +465,8 @@ impl RoundManager {
                         self.proposal_generator.generate_nil_block(round)?;
                     diem_debug!(
                         self.new_log(LogEvent::VoteNIL),
-                        "Planning to vote for a NIL block {}", nil_block
+                        "Planning to vote for a NIL block {}",
+                        nil_block
                     );
                     counters::VOTE_NIL_COUNT.inc();
                     let nil_vote = self.execute_and_vote(nil_block).await?;
@@ -554,7 +556,11 @@ impl RoundManager {
         let recipients = self
             .proposer_election
             .get_valid_proposer(proposal_round + 1);
-        diem_debug!(self.new_log(LogEvent::Vote).remote_peer(author), "{}", vote);
+        diem_debug!(
+            self.new_log(LogEvent::Vote).remote_peer(author),
+            "{}",
+            vote
+        );
 
         self.round_state.record_vote(vote.clone());
         let vote_msg = VoteMsg::new(vote, self.block_store.sync_info());
@@ -768,9 +774,9 @@ impl RoundManager {
         bcs::to_bytes(&ConsensusMsg::BlockRetrievalResponse(response))
             .and_then(|bytes| {
                 /*request
-                    .response_sender
-                    .send(Ok(bytes.into()))
-                    .map_err(|e| bcs::Error::Custom(format!("{:?}", e)))*/
+                .response_sender
+                .send(Ok(bytes.into()))
+                .map_err(|e| bcs::Error::Custom(format!("{:?}", e)))*/
                 Ok(())
             })
             .context("[RoundManager] Failed to process block retrieval")

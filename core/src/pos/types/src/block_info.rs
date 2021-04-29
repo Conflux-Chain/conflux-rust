@@ -2,10 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    account_config,
-    epoch_state::EpochState, on_chain_config::ValidatorSet,
-    transaction::Version,
-    event::EventKey,
+    account_config, epoch_state::EpochState, event::EventKey,
+    on_chain_config::ValidatorSet, transaction::Version,
 };
 use anyhow::{Error, Result};
 use cfx_types::H256;

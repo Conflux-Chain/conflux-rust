@@ -1,7 +1,8 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Add an associated constant to an enum describing the number of variants it has.
+//! Add an associated constant to an enum describing the number of variants it
+//! has.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -11,16 +12,18 @@ extern crate proc_macro;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use syn::{
-    parse_macro_input, spanned::Spanned, Attribute, Data, DeriveInput, Error, Lit, Meta,
-    MetaNameValue, Result,
+    parse_macro_input, spanned::Spanned, Attribute, Data, DeriveInput, Error,
+    Lit, Meta, MetaNameValue, Result,
 };
 
 /// Derives an associated constant with the number of variants this enum has.
 ///
-/// The default constant name is `NUM_VARIANTS`. This can be customized with `#[num_variants =
-/// "FOO")]`.
+/// The default constant name is `NUM_VARIANTS`. This can be customized with
+/// `#[num_variants = "FOO")]`.
 #[proc_macro_derive(NumVariants, attributes(num_variants))]
-pub fn derive_num_variants(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn derive_num_variants(
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     match derive_num_variants_impl(input) {
         Ok(token_stream) => proc_macro::TokenStream::from(token_stream),
@@ -33,7 +36,8 @@ fn derive_num_variants_impl(input: DeriveInput) -> Result<TokenStream> {
     let const_name = compute_const_name(input.attrs)?;
 
     let name = input.ident;
-    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let (impl_generics, ty_generics, where_clause) =
+        input.generics.split_for_impl();
     let num_variants = compute_num_variants(&input.data, input_span)?;
 
     let expanded = quote! {

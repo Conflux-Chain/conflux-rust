@@ -37,7 +37,8 @@ pub struct MempoolProxy {
 impl MempoolProxy {
     pub fn new(
         //consensus_to_mempool_sender: mpsc::Sender<ConsensusRequest>,
-        poll_count: u64, mempool_txn_pull_timeout_ms: u64,
+        poll_count: u64,
+        mempool_txn_pull_timeout_ms: u64,
         mempool_executed_txn_timeout_ms: u64,
     ) -> Self
     {
@@ -54,8 +55,10 @@ impl MempoolProxy {
     }
 
     async fn pull_internal(
-        &self, max_size: u64, //exclude_txns: Vec<TransactionExclusion>,
-    ) -> Result<Payload, MempoolError> {
+        &self,
+        max_size: u64, //exclude_txns: Vec<TransactionExclusion>,
+    ) -> Result<Payload, MempoolError>
+    {
         Ok(vec![])
         /*
         let (callback, callback_rcv) = oneshot::channel();
@@ -117,8 +120,9 @@ impl TxnManager for MempoolProxy {
         let mut count = self.poll_count;
         let txns = loop {
             count -= 1;
-            let txns =
-                self.pull_internal(max_size, /*exclude_txns.clone()*/).await?;
+            let txns = self
+                .pull_internal(max_size /* exclude_txns.clone() */)
+                .await?;
             if txns.is_empty() && no_pending_txns && count > 0 {
                 std::thread::sleep(Duration::from_millis(NO_TXN_DELAY));
                 continue;

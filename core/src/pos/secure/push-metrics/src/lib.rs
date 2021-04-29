@@ -46,7 +46,8 @@ impl MetricsPusher {
             if let Some(error) = response.synthetic_error() {
                 diem_error!(
                     "Failed to push metrics to {}. Error: {}",
-                    push_metrics_endpoint, error
+                    push_metrics_endpoint,
+                    error
                 );
             }
         }
@@ -127,7 +128,10 @@ impl MetricsPusher {
                 );
             }
             if let Err(e) = worker_thread.join() {
-                diem_error!("Failed to join metric pushing worker thread: {:?}", e);
+                diem_error!(
+                    "Failed to join metric pushing worker thread: {:?}",
+                    e
+                );
             }
         }
     }

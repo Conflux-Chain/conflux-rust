@@ -26,6 +26,11 @@ pub(crate) enum LedgerCounter {
 }
 
 impl LedgerCounter {
+    const STR_EVENTS_CREATED: &'static str = "events_created";
+    const STR_NEW_STATE_LEAVES: &'static str = "new_state_leaves";
+    const STR_NEW_STATE_NODES: &'static str = "new_state_nodes";
+    const STR_STALE_STATE_LEAVES: &'static str = "stale_state_leaves";
+    const STR_STALE_STATE_NODES: &'static str = "stale_state_nodes";
     const VARIANTS: [LedgerCounter; LedgerCounter::NUM_VARIANTS] = [
         LedgerCounter::EventsCreated,
         LedgerCounter::NewStateLeaves,
@@ -33,12 +38,6 @@ impl LedgerCounter {
         LedgerCounter::NewStateNodes,
         LedgerCounter::StaleStateNodes,
     ];
-
-    const STR_EVENTS_CREATED: &'static str = "events_created";
-    const STR_NEW_STATE_LEAVES: &'static str = "new_state_leaves";
-    const STR_STALE_STATE_LEAVES: &'static str = "stale_state_leaves";
-    const STR_NEW_STATE_NODES: &'static str = "new_state_nodes";
-    const STR_STALE_STATE_NODES: &'static str = "stale_state_nodes";
 
     pub fn name(self) -> &'static str {
         match self {
@@ -103,7 +102,8 @@ impl LedgerCounterBumps {
 
     /// Makes the bump of a certain counter bigger.
     ///
-    /// If a bump has not already been recorded for the counter, assumes current value of 0.
+    /// If a bump has not already been recorded for the counter, assumes current
+    /// value of 0.
     pub fn bump(&mut self, counter: LedgerCounter, by: usize) -> &mut Self {
         self.bumps.inc(counter, by);
 

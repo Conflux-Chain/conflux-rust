@@ -1,10 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module implements `JellyfishMerkleIterator`. Initialized with a version and a key, the
-//! iterator generates all the key-value pairs in this version of the tree, starting from the
-//! smallest key that is greater or equal to the given key, by performing a depth first traversal
-//! on the tree.
+//! This module implements `JellyfishMerkleIterator`. Initialized with a version
+//! and a key, the iterator generates all the key-value pairs in this version of
+//! the tree, starting from the smallest key that is greater or equal to the
+//! given key, by performing a depth first traversal on the tree.
 
 #[cfg(test)]
 mod iterator_test;
@@ -20,8 +20,9 @@ use diem_nibble::Nibble;
 use diem_types::transaction::Version;
 use std::{marker::PhantomData, sync::Arc};
 
-/// `NodeVisitInfo` keeps track of the status of an internal node during the iteration process. It
-/// indicates which ones of its children have been visited.
+/// `NodeVisitInfo` keeps track of the status of an internal node during the
+/// iteration process. It indicates which ones of its children have been
+/// visited.
 #[derive(Debug)]
 struct NodeVisitInfo {
     /// The key to this node.
@@ -34,15 +35,17 @@ struct NodeVisitInfo {
     /// `self.node.generate_bitmaps().0` and cached here.
     children_bitmap: u16,
 
-    /// This integer always has exactly one 1-bit. The position of the 1-bit (from LSB) indicates
-    /// the next child to visit in the iteration process. All the ones on the left have already
-    /// been visited. All the chilren on the right (including this one) have not been visited yet.
+    /// This integer always has exactly one 1-bit. The position of the 1-bit
+    /// (from LSB) indicates the next child to visit in the iteration
+    /// process. All the ones on the left have already been visited. All
+    /// the chilren on the right (including this one) have not been visited
+    /// yet.
     next_child_to_visit: u16,
 }
 
 impl NodeVisitInfo {
-    /// Constructs a new `NodeVisitInfo` with given node key and node. `next_child_to_visit` will
-    /// be set to the leftmost child.
+    /// Constructs a new `NodeVisitInfo` with given node key and node.
+    /// `next_child_to_visit` will be set to the leftmost child.
     fn new(node_key: NodeKey, node: InternalNode) -> Self {
         let (children_bitmap, _) = node.generate_bitmaps();
         Self {
@@ -53,13 +56,11 @@ impl NodeVisitInfo {
         }
     }
 
-    /// Same as `new` but points `next_child_to_visit` to a specific location. If the child
-    /// corresponding to `next_child_to_visit` does not exist, set it to the next one on the
-    /// right.
+    /// Same as `new` but points `next_child_to_visit` to a specific location.
+    /// If the child corresponding to `next_child_to_visit` does not exist,
+    /// set it to the next one on the right.
     fn new_next_child_to_visit(
-        node_key: NodeKey,
-        node: InternalNode,
-        next_child_to_visit: Nibble,
+        node_key: NodeKey, node: InternalNode, next_child_to_visit: Nibble,
     ) -> Self {
         let (children_bitmap, _) = node.generate_bitmaps();
         let mut next_child_to_visit = 1 << u8::from(next_child_to_visit);
@@ -76,8 +77,12 @@ impl NodeVisitInfo {
 
     /// Whether the next child to visit is the rightmost one.
     fn is_rightmost(&self) -> bool {
-        assert!(self.next_child_to_visit.leading_zeros() >= self.children_bitmap.leading_zeros());
-        self.next_child_to_visit.leading_zeros() == self.children_bitmap.leading_zeros()
+        assert!(
+            self.next_child_to_visit.leading_zeros()
+                >= self.children_bitmap.leading_zeros()
+        );
+        self.next_child_to_visit.leading_zeros()
+            == self.children_bitmap.leading_zeros()
     }
 
     /// Advances `next_child_to_visit` to the next child on the right.
@@ -101,9 +106,9 @@ pub struct JellyfishMerkleIterator<R, V> {
     /// The stack used for depth first traversal.
     parent_stack: Vec<NodeVisitInfo>,
 
-    /// Whether the iteration has finished. Usually this can be determined by checking whether
-    /// `self.parent_stack` is empty. But in case of a tree with a single leaf, we need this
-    /// additional bit.
+    /// Whether the iteration has finished. Usually this can be determined by
+    /// checking whether `self.parent_stack` is empty. But in case of a
+    /// tree with a single leaf, we need this additional bit.
     done: bool,
 
     phantom_value: PhantomData<V>,
@@ -114,10 +119,12 @@ where
     R: TreeReader<V>,
     V: crate::Value,
 {
-    /// Constructs a new iterator. This puts the internal state in the correct position, so the
-    /// following `next` call will yield the smallest key that is greater or equal to
-    /// `starting_key`.
-    pub fn new(reader: Arc<R>, version: Version, starting_key: HashValue) -> Result<Self> {
+    /// Constructs a new iterator. This puts the internal state in the correct
+    /// position, so the following `next` call will yield the smallest key
+    /// that is greater or equal to `starting_key`.
+    pub fn new(
+        reader: Arc<R>, version: Version, starting_key: HashValue,
+    ) -> Result<Self> {
         let mut parent_stack = vec![];
         let mut done = false;
 
@@ -125,31 +132,42 @@ where
         let nibble_path = NibblePath::new(starting_key.to_vec());
         let mut nibble_iter = nibble_path.nibbles();
 
-        while let Node::Internal(internal_node) = reader.get_node(&current_node_key)? {
-            let child_index = nibble_iter.next().expect("Should have enough nibbles.");
+        while let Node::Internal(internal_node) =
+            reader.get_node(&current_node_key)?
+        {
+            let child_index =
+                nibble_iter.next().expect("Should have enough nibbles.");
             match internal_node.child(child_index) {
                 Some(child) => {
-                    // If this child exists, we just push the node onto stack and repeat.
+                    // If this child exists, we just push the node onto stack
+                    // and repeat.
                     parent_stack.push(NodeVisitInfo::new_next_child_to_visit(
                         current_node_key.clone(),
                         internal_node.clone(),
                         child_index,
                     ));
-                    current_node_key =
-                        current_node_key.gen_child_node_key(child.version, child_index);
+                    current_node_key = current_node_key
+                        .gen_child_node_key(child.version, child_index);
                 }
                 None => {
                     let (bitmap, _) = internal_node.generate_bitmaps();
-                    if u32::from(u8::from(child_index)) < 15 - bitmap.leading_zeros() {
-                        // If this child does not exist and there's another child on the right, we
-                        // set the child on the right to be the next one to visit.
-                        parent_stack.push(NodeVisitInfo::new_next_child_to_visit(
-                            current_node_key,
-                            internal_node,
-                            child_index,
-                        ));
+                    if u32::from(u8::from(child_index))
+                        < 15 - bitmap.leading_zeros()
+                    {
+                        // If this child does not exist and there's another
+                        // child on the right, we
+                        // set the child on the right to be the next one to
+                        // visit.
+                        parent_stack.push(
+                            NodeVisitInfo::new_next_child_to_visit(
+                                current_node_key,
+                                internal_node,
+                                child_index,
+                            ),
+                        );
                     } else {
-                        // Otherwise we have done visiting this node. Go backward and clean up the
+                        // Otherwise we have done visiting this node. Go
+                        // backward and clean up the
                         // stack.
                         Self::cleanup_stack(&mut parent_stack);
                     }
@@ -165,7 +183,9 @@ where
         }
 
         match reader.get_node(&current_node_key)? {
-            Node::Internal(_) => unreachable!("Should have reached the bottom of the tree."),
+            Node::Internal(_) => {
+                unreachable!("Should have reached the bottom of the tree.")
+            }
             Node::Leaf(leaf_node) => {
                 if leaf_node.account_key() < starting_key {
                     Self::cleanup_stack(&mut parent_stack);
@@ -214,19 +234,27 @@ where
             let root_node_key = NodeKey::new_empty_path(self.version);
             match self.reader.get_node(&root_node_key) {
                 Ok(Node::Leaf(leaf_node)) => {
-                    // This means the entire tree has a single leaf node. The key of this leaf node
-                    // is greater or equal to `starting_key` (otherwise we would have set `done` to
-                    // true in `new`). Return the node and mark `self.done` so next time we return
+                    // This means the entire tree has a single leaf node. The
+                    // key of this leaf node is greater or
+                    // equal to `starting_key` (otherwise we would have set
+                    // `done` to true in `new`). Return the
+                    // node and mark `self.done` so next time we return
                     // None.
                     self.done = true;
-                    return Some(Ok((leaf_node.account_key(), leaf_node.value().clone())));
+                    return Some(Ok((
+                        leaf_node.account_key(),
+                        leaf_node.value().clone(),
+                    )));
                 }
                 Ok(Node::Internal(_)) => {
-                    // This means `starting_key` is bigger than every key in this tree, or we have
-                    // iterated past the last key.
+                    // This means `starting_key` is bigger than every key in
+                    // this tree, or we have iterated past
+                    // the last key.
                     return None;
                 }
-                Ok(Node::Null) => unreachable!("We would have set done to true in new."),
+                Ok(Node::Null) => {
+                    unreachable!("We would have set done to true in new.")
+                }
                 Err(err) => return Some(Err(err)),
             }
         }
@@ -236,8 +264,10 @@ where
                 .parent_stack
                 .last()
                 .expect("We have checked that self.parent_stack is not empty.");
-            let child_index =
-                Nibble::from(last_visited_node_info.next_child_to_visit.trailing_zeros() as u8);
+            let child_index = Nibble::from(
+                last_visited_node_info.next_child_to_visit.trailing_zeros()
+                    as u8,
+            );
             let node_key = last_visited_node_info.node_key.gen_child_node_key(
                 last_visited_node_info
                     .node
@@ -248,15 +278,21 @@ where
             );
             match self.reader.get_node(&node_key) {
                 Ok(Node::Internal(internal_node)) => {
-                    let visit_info = NodeVisitInfo::new(node_key, internal_node);
+                    let visit_info =
+                        NodeVisitInfo::new(node_key, internal_node);
                     self.parent_stack.push(visit_info);
                 }
                 Ok(Node::Leaf(leaf_node)) => {
-                    let ret = (leaf_node.account_key(), leaf_node.value().clone());
+                    let ret =
+                        (leaf_node.account_key(), leaf_node.value().clone());
                     Self::cleanup_stack(&mut self.parent_stack);
                     return Some(Ok(ret));
                 }
-                Ok(Node::Null) => return Some(Err(format_err!("Should not reach a null node."))),
+                Ok(Node::Null) => {
+                    return Some(Err(format_err!(
+                        "Should not reach a null node."
+                    )))
+                }
                 Err(err) => return Some(Err(err)),
             }
         }

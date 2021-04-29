@@ -22,7 +22,9 @@ use proptest::{
 use rand::Rng;
 use std::collections::HashMap;
 
-fn save(store: &EventStore, version: Version, events: &[ContractEvent]) -> HashValue {
+fn save(
+    store: &EventStore, version: Version, events: &[ContractEvent],
+) -> HashValue {
     let mut cs = ChangeSet::new();
     let root_hash = store.put_events(version, events, &mut cs).unwrap();
     assert_eq!(
@@ -119,9 +121,7 @@ proptest! {
 }
 
 fn traverse_events_by_key(
-    store: &EventStore,
-    event_key: &EventKey,
-    ledger_version: Version,
+    store: &EventStore, event_key: &EventKey, ledger_version: Version,
 ) -> Vec<ContractEvent> {
     const LIMIT: u64 = 3;
 
@@ -213,9 +213,13 @@ fn test_index_get_impl(event_batches: Vec<Vec<ContractEvent>>) {
         .enumerate()
         .for_each(|(ver, batch)| {
             batch.into_iter().for_each(|e| {
-                let mut events_and_versions =
-                    events_by_event_key.entry(*e.key()).or_insert_with(Vec::new);
-                assert_eq!(events_and_versions.len() as u64, e.sequence_number());
+                let mut events_and_versions = events_by_event_key
+                    .entry(*e.key())
+                    .or_insert_with(Vec::new);
+                assert_eq!(
+                    events_and_versions.len() as u64,
+                    e.sequence_number()
+                );
                 events_and_versions.push((e, ver as Version));
             })
         });
@@ -260,7 +264,8 @@ fn test_index_get_impl(event_batches: Vec<Vec<ContractEvent>>) {
                 .into_iter()
                 .map(|(e, _)| e)
                 .collect::<Vec<_>>();
-            let traversed = traverse_events_by_key(&store, &path, ledger_version_plus_one);
+            let traversed =
+                traverse_events_by_key(&store, &path, ledger_version_plus_one);
             assert_eq!(events, traversed);
         });
 }
@@ -300,7 +305,9 @@ prop_compose! {
     }
 }
 
-fn test_get_last_version_before_timestamp_impl(new_block_events: Vec<(Version, ContractEvent)>) {
+fn test_get_last_version_before_timestamp_impl(
+    new_block_events: Vec<(Version, ContractEvent)>,
+) {
     let tmp_dir = TempPath::new();
     let db = DiemDB::new_for_test(&tmp_dir);
     let store = &db.event_store;
@@ -340,7 +347,10 @@ fn test_get_last_version_before_timestamp_impl(new_block_events: Vec<(Version, C
         }
         assert_eq!(
             store
-                .get_last_version_before_timestamp((last_block_ts + ts + 1) / 2, ledger_version)
+                .get_last_version_before_timestamp(
+                    (last_block_ts + ts + 1) / 2,
+                    ledger_version
+                )
                 .unwrap(),
             version - 1,
         );

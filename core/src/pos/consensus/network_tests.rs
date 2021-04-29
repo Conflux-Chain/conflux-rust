@@ -515,8 +515,7 @@ impl DropConfigRound {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use super::network::NetworkTask;
+    use super::{network::NetworkTask, *};
     use bytes::Bytes;
     use consensus_types::block_retrieval::{
         BlockRetrievalRequest, BlockRetrievalResponse, BlockRetrievalStatus,

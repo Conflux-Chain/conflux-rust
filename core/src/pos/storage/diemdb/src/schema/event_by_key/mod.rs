@@ -1,9 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module defines physical storage schema for an event index via which a ContractEvent (
-//! represented by a <txn_version, event_idx> tuple so that it can be fetched from `EventSchema`)
-//! can be found by <access_path, sequence_num> tuple.
+//! This module defines physical storage schema for an event index via which a
+//! ContractEvent ( represented by a <txn_version, event_idx> tuple so that it
+//! can be fetched from `EventSchema`) can be found by <access_path,
+//! sequence_num> tuple.
 //!
 //! ```text
 //! |<---------key------->|<----value---->|
@@ -53,7 +54,8 @@ impl ValueCodec<EventByKeySchema> for Value {
     fn encode_value(&self) -> Result<Vec<u8>> {
         let (version, index) = *self;
 
-        let mut encoded = Vec::with_capacity(size_of::<Version>() + size_of::<Index>());
+        let mut encoded =
+            Vec::with_capacity(size_of::<Version>() + size_of::<Index>());
         encoded.write_u64::<BigEndian>(version)?;
         encoded.write_u64::<BigEndian>(index)?;
 

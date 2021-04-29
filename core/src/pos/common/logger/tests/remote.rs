@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use diem_logger::{error as diem_error, DiemLogger};
+use diem_logger::{error, DiemLogger};
 use serde::Deserialize;
 use std::{
     io::{BufRead, BufReader},

@@ -3,20 +3,22 @@
 
 #![forbid(unsafe_code)]
 
-//! This module implements [`JellyfishMerkleTree`] backed by storage module. The tree itself doesn't
-//! persist anything, but realizes the logic of R/W only. The write path will produce all the
-//! intermediate results in a batch for storage layer to commit and the read path will return
-//! results directly. The public APIs are only [`new`], [`put_value_sets`], [`put_value_set`] and
-//! [`get_with_proof`]. After each put with a `value_set` based on a known version, the tree will
-//! return a new root hash with a [`TreeUpdateBatch`] containing all the new nodes and indices of
-//! stale nodes.
+//! This module implements [`JellyfishMerkleTree`] backed by storage module. The
+//! tree itself doesn't persist anything, but realizes the logic of R/W only.
+//! The write path will produce all the intermediate results in a batch for
+//! storage layer to commit and the read path will return results directly. The
+//! public APIs are only [`new`], [`put_value_sets`], [`put_value_set`] and
+//! [`get_with_proof`]. After each put with a `value_set` based on a known
+//! version, the tree will return a new root hash with a [`TreeUpdateBatch`]
+//! containing all the new nodes and indices of stale nodes.
 //!
-//! A Jellyfish Merkle Tree itself logically is a 256-bit sparse Merkle tree with an optimization
-//! that any subtree containing 0 or 1 leaf node will be replaced by that leaf node or a placeholder
-//! node with default hash value. With this optimization we can save CPU by avoiding hashing on
-//! many sparse levels in the tree. Physically, the tree is structurally similar to the modified
-//! Patricia Merkle tree of Ethereum but with some modifications. A standard Jellyfish Merkle tree
-//! will look like the following figure:
+//! A Jellyfish Merkle Tree itself logically is a 256-bit sparse Merkle tree
+//! with an optimization that any subtree containing 0 or 1 leaf node will be
+//! replaced by that leaf node or a placeholder node with default hash value.
+//! With this optimization we can save CPU by avoiding hashing on many sparse
+//! levels in the tree. Physically, the tree is structurally similar to the
+//! modified Patricia Merkle tree of Ethereum but with some modifications. A
+//! standard Jellyfish Merkle tree will look like the following figure:
 //!
 //! ```text
 //!                                    .──────────────────────.
@@ -34,12 +36,12 @@
 //!  ╱                                                                                          ╲
 //! ;                                                                                            :
 //! ;                                                                                            :
-//!;                                                                                              :
-//!│                                                                                              │
-//!+──────────────────────────────────────────────────────────────────────────────────────────────+
+//! ;                                                                                              :
+//! │                                                                                              │
+//! +──────────────────────────────────────────────────────────────────────────────────────────────+
 //! .''.  .''.  .''.  .''.  .''.  .''.  .''.  .''.  .''.  .''.  .''.  .''.  .''.  .''.  .''.  .''.
-//!/    \/    \/    \/    \/    \/    \/    \/    \/    \/    \/    \/    \/    \/    \/    \/    \
-//!+----++----++----++----++----++----++----++----++----++----++----++----++----++----++----++----+
+//! /    \/    \/    \/    \/    \/    \/    \/    \/    \/    \/    \/    \/    \/    \/    \/    \
+//! +----++----++----++----++----++----++----++----++----++----++----++----++----++----++----++----+
 //! (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (
 //!  )  )  )  )  )  )  )  )  )  )  )  )  )  )  )  )  )  )  )  )  )  )  )  )  )  )  )  )  )  )  )  )
 //! (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (
@@ -53,11 +55,13 @@
 //! ■: the [`Value`] type this tree stores.
 //! ```
 //!
-//! A Jellyfish Merkle Tree consists of [`InternalNode`] and [`LeafNode`]. [`InternalNode`] is like
-//! branch node in ethereum patricia merkle with 16 children to represent a 4-level binary tree and
-//! [`LeafNode`] is similar to that in patricia merkle too. In the above figure, each `bell` in the
-//! jellyfish is an [`InternalNode`] while each tentacle is a [`LeafNode`]. It is noted that
-//! Jellyfish merkle doesn't have a counterpart for `extension` node of ethereum patricia merkle.
+//! A Jellyfish Merkle Tree consists of [`InternalNode`] and [`LeafNode`].
+//! [`InternalNode`] is like branch node in ethereum patricia merkle with 16
+//! children to represent a 4-level binary tree and [`LeafNode`] is similar to
+//! that in patricia merkle too. In the above figure, each `bell` in the
+//! jellyfish is an [`InternalNode`] while each tentacle is a [`LeafNode`]. It
+//! is noted that Jellyfish merkle doesn't have a counterpart for `extension`
+//! node of ethereum patricia merkle.
 //!
 //! [`JellyfishMerkleTree`]: struct.JellyfishMerkleTree.html
 //! [`new`]: struct.JellyfishMerkleTree.html#method.new
@@ -124,8 +128,8 @@ pub trait TreeReader<V> {
     /// Gets node given a node key. Returns `None` if the node does not exist.
     fn get_node_option(&self, node_key: &NodeKey) -> Result<Option<Node<V>>>;
 
-    /// Gets the rightmost leaf. Note that this assumes we are in the process of restoring the tree
-    /// and all nodes are at the same version.
+    /// Gets the rightmost leaf. Note that this assumes we are in the process of
+    /// restoring the tree and all nodes are at the same version.
     fn get_rightmost_leaf(&self) -> Result<Option<(NodeKey, LeafNode<V>)>>;
 }
 
@@ -134,28 +138,30 @@ pub trait TreeWriter<V> {
     fn write_node_batch(&self, node_batch: &NodeBatch<V>) -> Result<()>;
 }
 
-/// `Value` defines the types of data that can be stored in a Jellyfish Merkle tree.
+/// `Value` defines the types of data that can be stored in a Jellyfish Merkle
+/// tree.
 pub trait Value: Clone + CryptoHash + Serialize + DeserializeOwned {}
 
-/// `TestValue` defines the types of data that can be stored in a Jellyfish Merkle tree and used in
-/// tests.
+/// `TestValue` defines the types of data that can be stored in a Jellyfish
+/// Merkle tree and used in tests.
 #[cfg(any(test, feature = "fuzzing"))]
 pub trait TestValue:
     Value + Arbitrary + Clone + std::fmt::Debug + Eq + PartialEq + 'static
 {
 }
 
-// This crate still depends on types for a few things, therefore we implement `Value` and
-// `TestValue` for `AccountStateBlob` here. Ideally the module that defines the specific value like
-// `AccountStateBlob` should import the `Value` trait and implement it there.
+// This crate still depends on types for a few things, therefore we implement
+// `Value` and `TestValue` for `AccountStateBlob` here. Ideally the module that
+// defines the specific value like `AccountStateBlob` should import the `Value`
+// trait and implement it there.
 impl Value for diem_types::account_state_blob::AccountStateBlob {}
 #[cfg(any(test, feature = "fuzzing"))]
 impl TestValue for diem_types::account_state_blob::AccountStateBlob {}
 
 /// Node batch that will be written into db atomically with other batches.
 pub type NodeBatch<V> = BTreeMap<NodeKey, Node<V>>;
-/// [`StaleNodeIndex`](struct.StaleNodeIndex.html) batch that will be written into db atomically
-/// with other batches.
+/// [`StaleNodeIndex`](struct.StaleNodeIndex.html) batch that will be written
+/// into db atomically with other batches.
 pub type StaleNodeIndexBatch = BTreeSet<StaleNodeIndex>;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -172,15 +178,16 @@ pub struct NodeStats {
 pub struct StaleNodeIndex {
     /// The version since when the node is overwritten and becomes stale.
     pub stale_since_version: Version,
-    /// The [`NodeKey`](node_type/struct.NodeKey.html) identifying the node associated with this
-    /// record.
+    /// The [`NodeKey`](node_type/struct.NodeKey.html) identifying the node
+    /// associated with this record.
     pub node_key: NodeKey,
 }
 
 /// This is a wrapper of [`NodeBatch`](type.NodeBatch.html),
-/// [`StaleNodeIndexBatch`](type.StaleNodeIndexBatch.html) and some stats of nodes that represents
-/// the incremental updates of a tree and pruning indices after applying a write set,
-/// which is a vector of `hashed_account_address` and `new_value` pairs.
+/// [`StaleNodeIndexBatch`](type.StaleNodeIndexBatch.html) and some stats of
+/// nodes that represents the incremental updates of a tree and pruning indices
+/// after applying a write set, which is a vector of `hashed_account_address`
+/// and `new_value` pairs.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TreeUpdateBatch<V> {
     pub node_batch: NodeBatch<V>,
@@ -199,7 +206,8 @@ where
     R: 'a + TreeReader<V>,
     V: Value,
 {
-    /// Creates a `JellyfishMerkleTree` backed by the given [`TreeReader`](trait.TreeReader.html).
+    /// Creates a `JellyfishMerkleTree` backed by the given
+    /// [`TreeReader`](trait.TreeReader.html).
     pub fn new(reader: &'a R) -> Self {
         Self {
             reader,
@@ -208,15 +216,14 @@ where
     }
 
     /// This is a convenient function that calls
-    /// [`put_value_sets`](struct.JellyfishMerkleTree.html#method.put_value_sets) with a single
-    /// `keyed_value_set`.
+    /// [`put_value_sets`](struct.JellyfishMerkleTree.html#method.
+    /// put_value_sets) with a single `keyed_value_set`.
     #[cfg(any(test, feature = "fuzzing"))]
     pub fn put_value_set(
-        &self,
-        value_set: Vec<(HashValue, V)>,
-        version: Version,
+        &self, value_set: Vec<(HashValue, V)>, version: Version,
     ) -> Result<(HashValue, TreeUpdateBatch<V>)> {
-        let (root_hashes, tree_update_batch) = self.put_value_sets(vec![value_set], version)?;
+        let (root_hashes, tree_update_batch) =
+            self.put_value_sets(vec![value_set], version)?;
         assert_eq!(
             root_hashes.len(),
             1,
@@ -225,9 +232,9 @@ where
         Ok((root_hashes[0], tree_update_batch))
     }
 
-    /// Returns the new nodes and values in a batch after applying `value_set`. For
-    /// example, if after transaction `T_i` the committed state of tree in the persistent storage
-    /// looks like the following structure:
+    /// Returns the new nodes and values in a batch after applying `value_set`.
+    /// For example, if after transaction `T_i` the committed state of tree
+    /// in the persistent storage looks like the following structure:
     ///
     /// ```text
     ///              S_i
@@ -241,10 +248,12 @@ where
     ///        storage (disk)
     /// ```
     ///
-    /// where `A` and `B` denote the states of two adjacent accounts, and `x` is a sibling subtree
-    /// of the path from root to A and B in the tree. Then a `value_set` produced by the next
-    /// transaction `T_{i+1}` modifies other accounts `C` and `D` exist in the subtree under `x`, a
-    /// new partial tree will be constructed in memory and the structure will be:
+    /// where `A` and `B` denote the states of two adjacent accounts, and `x` is
+    /// a sibling subtree of the path from root to A and B in the tree. Then
+    /// a `value_set` produced by the next transaction `T_{i+1}` modifies
+    /// other accounts `C` and `D` exist in the subtree under `x`, a
+    /// new partial tree will be constructed in memory and the structure will
+    /// be:
     ///
     /// ```text
     ///                 S_i      |      S_{i+1}
@@ -259,17 +268,17 @@ where
     ///           storage (disk) |    cache (memory)
     /// ```
     ///
-    /// With this design, we are able to query the global state in persistent storage and
-    /// generate the proposed tree delta based on a specific root hash and `value_set`. For
-    /// example, if we want to execute another transaction `T_{i+1}'`, we can use the tree `S_i` in
-    /// storage and apply the `value_set` of transaction `T_{i+1}`. Then if the storage commits
-    /// the returned batch, the state `S_{i+1}` is ready to be read from the tree by calling
-    /// [`get_with_proof`](struct.JellyfishMerkleTree.html#method.get_with_proof). Anything inside
-    /// the batch is not reachable from public interfaces before being committed.
+    /// With this design, we are able to query the global state in persistent
+    /// storage and generate the proposed tree delta based on a specific
+    /// root hash and `value_set`. For example, if we want to execute
+    /// another transaction `T_{i+1}'`, we can use the tree `S_i` in storage
+    /// and apply the `value_set` of transaction `T_{i+1}`. Then if the storage
+    /// commits the returned batch, the state `S_{i+1}` is ready to be read
+    /// from the tree by calling [`get_with_proof`](struct.
+    /// JellyfishMerkleTree.html#method.get_with_proof). Anything inside the
+    /// batch is not reachable from public interfaces before being committed.
     pub fn put_value_sets(
-        &self,
-        value_sets: Vec<Vec<(HashValue, V)>>,
-        first_version: Version,
+        &self, value_sets: Vec<Vec<(HashValue, V)>>, first_version: Version,
     ) -> Result<(Vec<HashValue>, TreeUpdateBatch<V>)> {
         let mut tree_cache = TreeCache::new(self.reader, first_version)?;
         for (idx, value_set) in value_sets.into_iter().enumerate() {
@@ -278,10 +287,11 @@ where
                 "Transactions that output empty write set should not be included.",
             );
             let version = first_version + idx as u64;
-            value_set
-                .into_iter()
-                .try_for_each(|(key, value)| Self::put(key, value, version, &mut tree_cache))?;
-            // Freezes the current cache to make all contents in the current cache immutable.
+            value_set.into_iter().try_for_each(|(key, value)| {
+                Self::put(key, value, version, &mut tree_cache)
+            })?;
+            // Freezes the current cache to make all contents in the current
+            // cache immutable.
             tree_cache.freeze();
         }
 
@@ -289,15 +299,15 @@ where
     }
 
     fn put(
-        key: HashValue,
-        value: V,
-        version: Version,
+        key: HashValue, value: V, version: Version,
         tree_cache: &mut TreeCache<R, V>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         let nibble_path = NibblePath::new(key.to_vec());
 
-        // Get the root node. If this is the first operation, it would get the root node from the
-        // underlying db. Otherwise it most likely would come from `cache`.
+        // Get the root node. If this is the first operation, it would get the
+        // root node from the underlying db. Otherwise it most likely
+        // would come from `cache`.
         let root_node_key = tree_cache.get_root_node_key();
         let mut nibble_iter = nibble_path.nibbles();
 
@@ -314,17 +324,16 @@ where
         Ok(())
     }
 
-    /// Helper function for recursive insertion into the subtree that starts from the current
-    /// [`NodeKey`](node_type/struct.NodeKey.html). Returns the newly inserted node.
-    /// It is safe to use recursion here because the max depth is limited by the key length which
-    /// for this tree is the length of the hash of account addresses.
+    /// Helper function for recursive insertion into the subtree that starts
+    /// from the current [`NodeKey`](node_type/struct.NodeKey.html). Returns
+    /// the newly inserted node. It is safe to use recursion here because
+    /// the max depth is limited by the key length which for this tree is
+    /// the length of the hash of account addresses.
     fn insert_at(
-        node_key: NodeKey,
-        version: Version,
-        nibble_iter: &mut NibbleIterator,
-        value: V,
-        tree_cache: &mut TreeCache<R, V>,
-    ) -> Result<(NodeKey, Node<V>)> {
+        node_key: NodeKey, version: Version, nibble_iter: &mut NibbleIterator,
+        value: V, tree_cache: &mut TreeCache<R, V>,
+    ) -> Result<(NodeKey, Node<V>)>
+    {
         let node = tree_cache.get_node(&node_key)?;
         match node {
             Node::Internal(internal_node) => Self::insert_at_internal_node(
@@ -364,75 +373,95 @@ where
         }
     }
 
-    /// Helper function for recursive insertion into the subtree that starts from the current
-    /// `internal_node`. Returns the newly inserted node with its
-    /// [`NodeKey`](node_type/struct.NodeKey.html).
+    /// Helper function for recursive insertion into the subtree that starts
+    /// from the current `internal_node`. Returns the newly inserted node
+    /// with its [`NodeKey`](node_type/struct.NodeKey.html).
     fn insert_at_internal_node(
-        mut node_key: NodeKey,
-        internal_node: InternalNode,
-        version: Version,
-        nibble_iter: &mut NibbleIterator,
-        value: V,
+        mut node_key: NodeKey, internal_node: InternalNode, version: Version,
+        nibble_iter: &mut NibbleIterator, value: V,
         tree_cache: &mut TreeCache<R, V>,
-    ) -> Result<(NodeKey, Node<V>)> {
-        // We always delete the existing internal node here because it will not be referenced anyway
-        // since this version.
+    ) -> Result<(NodeKey, Node<V>)>
+    {
+        // We always delete the existing internal node here because it will not
+        // be referenced anyway since this version.
         tree_cache.delete_node(&node_key, false /* is_leaf */);
 
         // Find the next node to visit following the next nibble as index.
         let child_index = nibble_iter.next().expect("Ran out of nibbles");
 
-        // Traverse downwards from this internal node recursively to get the `node_key` of the child
-        // node at `child_index`.
+        // Traverse downwards from this internal node recursively to get the
+        // `node_key` of the child node at `child_index`.
         let (_, new_child_node) = match internal_node.child(child_index) {
             Some(child) => {
-                let child_node_key = node_key.gen_child_node_key(child.version, child_index);
-                Self::insert_at(child_node_key, version, nibble_iter, value, tree_cache)?
+                let child_node_key =
+                    node_key.gen_child_node_key(child.version, child_index);
+                Self::insert_at(
+                    child_node_key,
+                    version,
+                    nibble_iter,
+                    value,
+                    tree_cache,
+                )?
             }
             None => {
-                let new_child_node_key = node_key.gen_child_node_key(version, child_index);
-                Self::create_leaf_node(new_child_node_key, nibble_iter, value, tree_cache)?
+                let new_child_node_key =
+                    node_key.gen_child_node_key(version, child_index);
+                Self::create_leaf_node(
+                    new_child_node_key,
+                    nibble_iter,
+                    value,
+                    tree_cache,
+                )?
             }
         };
 
-        // Reuse the current `InternalNode` in memory to create a new internal node.
+        // Reuse the current `InternalNode` in memory to create a new internal
+        // node.
         let mut children: Children = internal_node.into();
         children.insert(
             child_index,
-            Child::new(new_child_node.hash(), version, new_child_node.is_leaf()),
+            Child::new(
+                new_child_node.hash(),
+                version,
+                new_child_node.is_leaf(),
+            ),
         );
         let new_internal_node = InternalNode::new(children);
 
         node_key.set_version(version);
 
         // Cache this new internal node.
-        tree_cache.put_node(node_key.clone(), new_internal_node.clone().into())?;
+        tree_cache
+            .put_node(node_key.clone(), new_internal_node.clone().into())?;
         Ok((node_key, new_internal_node.into()))
     }
 
-    /// Helper function for recursive insertion into the subtree that starts from the
-    /// `existing_leaf_node`. Returns the newly inserted node with its
-    /// [`NodeKey`](node_type/struct.NodeKey.html).
+    /// Helper function for recursive insertion into the subtree that starts
+    /// from the `existing_leaf_node`. Returns the newly inserted node with
+    /// its [`NodeKey`](node_type/struct.NodeKey.html).
     fn insert_at_leaf_node(
-        mut node_key: NodeKey,
-        existing_leaf_node: LeafNode<V>,
-        version: Version,
-        nibble_iter: &mut NibbleIterator,
-        value: V,
+        mut node_key: NodeKey, existing_leaf_node: LeafNode<V>,
+        version: Version, nibble_iter: &mut NibbleIterator, value: V,
         tree_cache: &mut TreeCache<R, V>,
-    ) -> Result<(NodeKey, Node<V>)> {
-        // We are on a leaf node but trying to insert another node, so we may diverge.
-        // We always delete the existing leaf node here because it will not be referenced anyway
-        // since this version.
+    ) -> Result<(NodeKey, Node<V>)>
+    {
+        // We are on a leaf node but trying to insert another node, so we may
+        // diverge. We always delete the existing leaf node here because
+        // it will not be referenced anyway since this version.
         tree_cache.delete_node(&node_key, true /* is_leaf */);
 
-        // 1. Make sure that the existing leaf nibble_path has the same prefix as the already
-        // visited part of the nibble iter of the incoming key and advances the existing leaf
-        // nibble iterator by the length of that prefix.
+        // 1. Make sure that the existing leaf nibble_path has the same prefix
+        // as the already visited part of the nibble iter of the
+        // incoming key and advances the existing leaf nibble iterator
+        // by the length of that prefix.
         let mut visited_nibble_iter = nibble_iter.visited_nibbles();
-        let existing_leaf_nibble_path = NibblePath::new(existing_leaf_node.account_key().to_vec());
+        let existing_leaf_nibble_path =
+            NibblePath::new(existing_leaf_node.account_key().to_vec());
         let mut existing_leaf_nibble_iter = existing_leaf_nibble_path.nibbles();
-        skip_common_prefix(&mut visited_nibble_iter, &mut existing_leaf_nibble_iter);
+        skip_common_prefix(
+            &mut visited_nibble_iter,
+            &mut existing_leaf_nibble_iter,
+        );
 
         // TODO(lightmark): Change this to corrupted error.
         assert!(
@@ -441,31 +470,43 @@ where
             existing_leaf_nibble_iter.visited_nibbles().num_nibbles()
         );
 
-        // 2. Determine the extra part of the common prefix that extends from the position where
-        // step 1 ends between this leaf node and the incoming key.
+        // 2. Determine the extra part of the common prefix that extends from
+        // the position where step 1 ends between this leaf node and the
+        // incoming key.
         let mut existing_leaf_nibble_iter_below_internal =
             existing_leaf_nibble_iter.remaining_nibbles();
-        let num_common_nibbles_below_internal =
-            skip_common_prefix(nibble_iter, &mut existing_leaf_nibble_iter_below_internal);
-        let mut common_nibble_path = nibble_iter.visited_nibbles().collect::<NibblePath>();
+        let num_common_nibbles_below_internal = skip_common_prefix(
+            nibble_iter,
+            &mut existing_leaf_nibble_iter_below_internal,
+        );
+        let mut common_nibble_path =
+            nibble_iter.visited_nibbles().collect::<NibblePath>();
 
-        // 2.1. Both are finished. That means the incoming key already exists in the tree and we
-        // just need to update its value.
+        // 2.1. Both are finished. That means the incoming key already exists in
+        // the tree and we just need to update its value.
         if nibble_iter.is_finished() {
             assert!(existing_leaf_nibble_iter_below_internal.is_finished());
-            // The new leaf node will have the same nibble_path with a new version as node_key.
+            // The new leaf node will have the same nibble_path with a new
+            // version as node_key.
             node_key.set_version(version);
             // Create the new leaf node with the same address but the new value.
-            return Self::create_leaf_node(node_key, nibble_iter, value, tree_cache);
+            return Self::create_leaf_node(
+                node_key,
+                nibble_iter,
+                value,
+                tree_cache,
+            );
         }
 
-        // 2.2. both are unfinished(They have keys with same length so it's impossible to have one
-        // finished and the other not). This means the incoming key forks at some point between the
-        // position where step 1 ends and the last nibble, inclusive. Then create a seris of
-        // internal nodes the number of which equals to the length of the extra part of the
-        // common prefix in step 2, a new leaf node for the incoming key, and update the
-        // [`NodeKey`] of existing leaf node. We create new internal nodes in a bottom-up
-        // order.
+        // 2.2. both are unfinished(They have keys with same length so it's
+        // impossible to have one finished and the other not). This
+        // means the incoming key forks at some point between the
+        // position where step 1 ends and the last nibble, inclusive. Then
+        // create a seris of internal nodes the number of which equals
+        // to the length of the extra part of the common prefix in step
+        // 2, a new leaf node for the incoming key, and update the
+        // [`NodeKey`] of existing leaf node. We create new internal nodes in a
+        // bottom-up order.
         let existing_leaf_index = existing_leaf_nibble_iter_below_internal
             .next()
             .expect("Ran out of nibbles");
@@ -475,7 +516,11 @@ where
         let mut children = Children::new();
         children.insert(
             existing_leaf_index,
-            Child::new(existing_leaf_node.hash(), version, true /* is_leaf */),
+            Child::new(
+                existing_leaf_node.hash(),
+                version,
+                true, /* is_leaf */
+            ),
         );
         node_key = NodeKey::new(version, common_nibble_path.clone());
         tree_cache.put_node(
@@ -499,14 +544,18 @@ where
         tree_cache.put_node(node_key.clone(), internal_node.into())?;
 
         for _i in 0..num_common_nibbles_below_internal {
-            let nibble = common_nibble_path
-                .pop()
-                .expect("Common nibble_path below internal node ran out of nibble");
+            let nibble = common_nibble_path.pop().expect(
+                "Common nibble_path below internal node ran out of nibble",
+            );
             node_key = NodeKey::new(version, common_nibble_path.clone());
             let mut children = Children::new();
             children.insert(
                 nibble,
-                Child::new(next_internal_node.hash(), version, false /* is_leaf */),
+                Child::new(
+                    next_internal_node.hash(),
+                    version,
+                    false, /* is_leaf */
+                ),
             );
             let internal_node = InternalNode::new(children);
             next_internal_node = internal_node.clone();
@@ -516,15 +565,15 @@ where
         Ok((node_key, next_internal_node.into()))
     }
 
-    /// Helper function for creating leaf nodes. Returns the newly created leaf node.
+    /// Helper function for creating leaf nodes. Returns the newly created leaf
+    /// node.
     fn create_leaf_node(
-        node_key: NodeKey,
-        nibble_iter: &NibbleIterator,
-        value: V,
+        node_key: NodeKey, nibble_iter: &NibbleIterator, value: V,
         tree_cache: &mut TreeCache<R, V>,
-    ) -> Result<(NodeKey, Node<V>)> {
-        // Get the underlying bytes of nibble_iter which must be a key, i.e., hashed account address
-        // with `HashValue::LENGTH` bytes.
+    ) -> Result<(NodeKey, Node<V>)>
+    {
+        // Get the underlying bytes of nibble_iter which must be a key, i.e.,
+        // hashed account address with `HashValue::LENGTH` bytes.
         let new_leaf_node = Node::new_leaf(
             HashValue::from_slice(nibble_iter.get_nibble_path().bytes())
                 .expect("LeafNode must have full nibble path."),
@@ -537,9 +586,7 @@ where
 
     /// Returns the value (if applicable) and the corresponding merkle proof.
     pub fn get_with_proof(
-        &self,
-        key: HashValue,
-        version: Version,
+        &self, key: HashValue, version: Version,
     ) -> Result<(Option<V>, SparseMerkleProof<V>)> {
         // Empty tree just returns proof with no sibling hash.
         let mut next_node_key = NodeKey::new_empty_path(version);
@@ -547,23 +594,27 @@ where
         let nibble_path = NibblePath::new(key.to_vec());
         let mut nibble_iter = nibble_path.nibbles();
 
-        // We limit the number of loops here deliberately to avoid potential cyclic graph bugs
-        // in the tree structure.
+        // We limit the number of loops here deliberately to avoid potential
+        // cyclic graph bugs in the tree structure.
         for nibble_depth in 0..=ROOT_NIBBLE_HEIGHT {
-            let next_node = self.reader.get_node(&next_node_key).map_err(|err| {
-                if nibble_depth == 0 {
-                    MissingRootError { version }.into()
-                } else {
-                    err
-                }
-            })?;
+            let next_node =
+                self.reader.get_node(&next_node_key).map_err(|err| {
+                    if nibble_depth == 0 {
+                        MissingRootError { version }.into()
+                    } else {
+                        err
+                    }
+                })?;
             match next_node {
                 Node::Internal(internal_node) => {
                     let queried_child_index = nibble_iter
                         .next()
                         .ok_or_else(|| format_err!("ran out of nibbles"))?;
                     let (child_node_key, mut siblings_in_internal) =
-                        internal_node.get_child_with_siblings(&next_node_key, queried_child_index);
+                        internal_node.get_child_with_siblings(
+                            &next_node_key,
+                            queried_child_index,
+                        );
                     siblings.append(&mut siblings_in_internal);
                     next_node_key = match child_node_key {
                         Some(node_key) => node_key,
@@ -593,7 +644,10 @@ where
                 }
                 Node::Null => {
                     if nibble_depth == 0 {
-                        return Ok((None, SparseMerkleProof::new(None, vec![])));
+                        return Ok((
+                            None,
+                            SparseMerkleProof::new(None, vec![]),
+                        ));
                     } else {
                         bail!(
                             "Non-root null node exists with node key {:?}",
@@ -606,13 +660,13 @@ where
         bail!("Jellyfish Merkle tree has cyclic graph inside.");
     }
 
-    /// Gets the proof that shows a list of keys up to `rightmost_key_to_prove` exist at `version`.
+    /// Gets the proof that shows a list of keys up to `rightmost_key_to_prove`
+    /// exist at `version`.
     pub fn get_range_proof(
-        &self,
-        rightmost_key_to_prove: HashValue,
-        version: Version,
+        &self, rightmost_key_to_prove: HashValue, version: Version,
     ) -> Result<SparseMerkleRangeProof> {
-        let (account, proof) = self.get_with_proof(rightmost_key_to_prove, version)?;
+        let (account, proof) =
+            self.get_with_proof(rightmost_key_to_prove, version)?;
         ensure!(account.is_some(), "rightmost_key_to_prove must exist.");
 
         let siblings = proof
@@ -639,11 +693,14 @@ where
     }
 
     pub fn get_root_hash(&self, version: Version) -> Result<HashValue> {
-        self.get_root_hash_option(version)?
-            .ok_or_else(|| format_err!("Root node not found for version {}.", version))
+        self.get_root_hash_option(version)?.ok_or_else(|| {
+            format_err!("Root node not found for version {}.", version)
+        })
     }
 
-    pub fn get_root_hash_option(&self, version: Version) -> Result<Option<HashValue>> {
+    pub fn get_root_hash_option(
+        &self, version: Version,
+    ) -> Result<Option<HashValue>> {
         let root_node_key = NodeKey::new_empty_path(version);
         Ok(self
             .reader
@@ -661,11 +718,13 @@ impl NibbleExt for HashValue {
     /// Returns the `index`-th nibble.
     fn get_nibble(&self, index: usize) -> Nibble {
         mirai_annotations::precondition!(index < HashValue::LENGTH);
-        Nibble::from(if index % 2 == 0 {
-            self[index / 2] >> 4
-        } else {
-            self[index / 2] & 0x0F
-        })
+        Nibble::from(
+            if index % 2 == 0 {
+                self[index / 2] >> 4
+            } else {
+                self[index / 2] & 0x0F
+            },
+        )
     }
 
     /// Returns the length of common prefix of `self` and `other` in nibbles.

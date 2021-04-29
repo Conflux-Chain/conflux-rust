@@ -14,11 +14,10 @@ use proptest::{collection::hash_map, prelude::*};
 fn put_account_state_set(
     store: &StateStore,
     account_state_set: Vec<(AccountAddress, AccountStateBlob)>,
-    version: Version,
-    expected_new_nodes: usize,
-    expected_stale_nodes: usize,
+    version: Version, expected_new_nodes: usize, expected_stale_nodes: usize,
     expected_stale_leaves: usize,
-) -> HashValue {
+) -> HashValue
+{
     let mut cs = ChangeSet::new();
     let expected_new_leaves = account_state_set.len();
     let root = store
@@ -48,11 +47,10 @@ fn put_account_state_set(
 }
 
 fn prune_stale_indices(
-    store: &StateStore,
-    least_readable_version: Version,
-    target_least_readable_version: Version,
-    limit: usize,
-) {
+    store: &StateStore, least_readable_version: Version,
+    target_least_readable_version: Version, limit: usize,
+)
+{
     pruner::prune_state(
         Arc::clone(&store.db),
         least_readable_version,
@@ -63,12 +61,11 @@ fn prune_stale_indices(
 }
 
 fn verify_state_in_store(
-    store: &StateStore,
-    address: AccountAddress,
-    expected_value: Option<&AccountStateBlob>,
-    version: Version,
+    store: &StateStore, address: AccountAddress,
+    expected_value: Option<&AccountStateBlob>, version: Version,
     root: HashValue,
-) {
+)
+{
     let (value, proof) = store
         .get_account_state_with_proof_by_version(address, version)
         .unwrap();
@@ -113,8 +110,8 @@ fn test_state_store_reader_writer() {
     verify_state_in_store(store, address2, None, 0, root);
     verify_state_in_store(store, address3, None, 0, root);
 
-    // Insert address 1 with updated value1, address2 with value 2 and address3 with value3 and
-    // verify new states.
+    // Insert address 1 with updated value1, address2 with value 2 and address3
+    // with value3 and verify new states.
     root = put_account_state_set(
         store,
         vec![
@@ -363,12 +360,21 @@ proptest! {
 }
 
 // Initializes the state store by inserting one key at each version.
-fn init_store(store: &StateStore, input: impl Iterator<Item = (AccountAddress, AccountStateBlob)>) {
+fn init_store(
+    store: &StateStore,
+    input: impl Iterator<Item = (AccountAddress, AccountStateBlob)>,
+)
+{
     for (i, (key, value)) in input.enumerate() {
         let mut cs = ChangeSet::new();
-        let account_state_set: HashMap<_, _> = std::iter::once((key, value)).collect();
+        let account_state_set: HashMap<_, _> =
+            std::iter::once((key, value)).collect();
         store
-            .put_account_state_sets(vec![account_state_set], i as Version, &mut cs)
+            .put_account_state_sets(
+                vec![account_state_set],
+                i as Version,
+                &mut cs,
+            )
             .unwrap();
         store.db.write_schemas(cs.batch).unwrap();
     }

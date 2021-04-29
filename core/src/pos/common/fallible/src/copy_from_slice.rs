@@ -4,10 +4,10 @@
 use thiserror::Error;
 
 /// A fallible wrapper around [`std::vec::Vec::copy_from_slice`]
-pub fn copy_slice_to_vec<T>(slice: &[T], vec: &mut [T]) -> Result<(), CopySliceError>
-where
-    T: Copy,
-{
+pub fn copy_slice_to_vec<T>(
+    slice: &[T], vec: &mut [T],
+) -> Result<(), CopySliceError>
+where T: Copy {
     if slice.len() != vec.len() {
         return Err(CopySliceError);
     }

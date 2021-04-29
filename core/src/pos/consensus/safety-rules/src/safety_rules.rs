@@ -217,10 +217,11 @@ impl SafetyRules {
         }
 
         safety_data.last_voted_round = round;
-        diem_info!(
-            SafetyLogSchema::new(LogEntry::LastVotedRound, LogEvent::Update)
-                .last_voted_round(safety_data.last_voted_round)
-        );
+        diem_info!(SafetyLogSchema::new(
+            LogEntry::LastVotedRound,
+            LogEvent::Update
+        )
+        .last_voted_round(safety_data.last_voted_round));
 
         Ok(())
     }
@@ -520,13 +521,19 @@ where
     counters::increment_query(log_entry.as_str(), "request");
     callback()
         .map(|v| {
-            diem_info!(log_cb(SafetyLogSchema::new(log_entry, LogEvent::Success)));
+            diem_info!(log_cb(SafetyLogSchema::new(
+                log_entry,
+                LogEvent::Success
+            )));
             counters::increment_query(log_entry.as_str(), "success");
             v
         })
         .map_err(|err| {
-            diem_error!(log_cb(SafetyLogSchema::new(log_entry, LogEvent::Error))
-                .error(&err));
+            diem_error!(log_cb(SafetyLogSchema::new(
+                log_entry,
+                LogEvent::Error
+            ))
+            .error(&err));
             counters::increment_query(log_entry.as_str(), "error");
             err
         })

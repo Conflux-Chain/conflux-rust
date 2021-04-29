@@ -25,7 +25,7 @@ mod vm_publishing_option;
 pub use self::{
     diem_version::{DiemVersion, DIEM_MAX_KNOWN_VERSION, DIEM_VERSION_2},
     registered_currencies::RegisteredCurrencies,
-    validator_set::{ValidatorSet, NextValidatorSetProposal},
+    validator_set::{NextValidatorSetProposal, ValidatorSet},
     vm_config::VMConfig,
     vm_publishing_option::VMPublishingOption,
 };

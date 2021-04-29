@@ -4,9 +4,7 @@
 use super::{
     counters,
     logging::LogEvent,
-    network_interface::{
-        ConsensusMsg, ConsensusNetworkSender,
-    },
+    network_interface::{ConsensusMsg, ConsensusNetworkSender},
 };
 use anyhow::{anyhow, ensure};
 use bytes::Bytes;
@@ -27,17 +25,21 @@ use diem_types::{
 };
 use futures::{channel::oneshot, stream::select, SinkExt, Stream, StreamExt};
 //use network::protocols::{network::Event, rpc::error::RpcError};
+use crate::message::RequestId;
+use consensus_types::block_retrieval::BlockRetrievalStatus;
+use network::node_table::NodeId;
 use std::{
     mem::{discriminant, Discriminant},
     time::Duration,
 };
-use consensus_types::block_retrieval::BlockRetrievalStatus;
 
 /// The block retrieval request is used internally for implementing RPC: the
 /// callback is executed for carrying the response
 #[derive(Debug)]
 pub struct IncomingBlockRetrievalRequest {
     pub req: BlockRetrievalRequest,
+    pub peer_id: NodeId,
+    pub request_id: RequestId,
     //pub response_sender: oneshot::Sender<Result<Bytes, RpcError>>,
 }
 
@@ -82,8 +84,10 @@ impl NetworkSender {
         timeout: Duration,
     ) -> anyhow::Result<BlockRetrievalResponse>
     {
-        Ok(BlockRetrievalResponse::new(BlockRetrievalStatus::Succeeded,
-            vec![]))
+        Ok(BlockRetrievalResponse::new(
+            BlockRetrievalStatus::Succeeded,
+            vec![],
+        ))
         /*
         ensure!(from != self.author, "Retrieve block from self");
         let msg = ConsensusMsg::BlockRetrievalRequest(Box::new(
@@ -217,10 +221,8 @@ pub struct NetworkTask {
 impl NetworkTask {
     /// Establishes the initial connections with the peers and returns the
     /// receivers.
-    pub fn new(
-        //network_events: ConsensusNetworkEvents,
-    ) -> (NetworkTask, NetworkReceivers)
-    {
+    pub fn new(//network_events: ConsensusNetworkEvents,
+    ) -> (NetworkTask, NetworkReceivers) {
         let (consensus_messages_tx, consensus_messages) = diem_channel::new(
             QueueStyle::LIFO,
             1,

@@ -159,7 +159,8 @@ impl PendingVotes {
             Err(error) => {
                 diem_error!(
                     "MUST_FIX: vote received could not be added: {}, vote: {}",
-                    error, vote
+                    error,
+                    vote
                 );
                 return VoteReceptionResult::ErrorAddingVote(error);
             }

@@ -3,9 +3,9 @@
 
 //! This module defines physical storage schema for the event accumulator.
 //!
-//! Each version has its own event accumulator and a hash value is stored on each position within an
-//! accumulator. See `storage/accumulator/lib.rs` for details.
-//! ```text
+//! Each version has its own event accumulator and a hash value is stored on
+//! each position within an accumulator. See `storage/accumulator/lib.rs` for
+//! details. ```text
 //! |<--------key------->|<-value->|
 //! | version | position |  hash   |
 //! ```
@@ -34,7 +34,8 @@ impl KeyCodec<EventAccumulatorSchema> for Key {
     fn encode_key(&self) -> Result<Vec<u8>> {
         let (version, position) = self;
 
-        let mut encoded_key = Vec::with_capacity(size_of::<Version>() + size_of::<u64>());
+        let mut encoded_key =
+            Vec::with_capacity(size_of::<Version>() + size_of::<u64>());
         encoded_key.write_u64::<BigEndian>(*version)?;
         encoded_key.write_u64::<BigEndian>(position.to_inorder_index())?;
         Ok(encoded_key)
@@ -52,9 +53,7 @@ impl KeyCodec<EventAccumulatorSchema> for Key {
 }
 
 impl ValueCodec<EventAccumulatorSchema> for HashValue {
-    fn encode_value(&self) -> Result<Vec<u8>> {
-        Ok(self.to_vec())
-    }
+    fn encode_value(&self) -> Result<Vec<u8>> { Ok(self.to_vec()) }
 
     fn decode_value(data: &[u8]) -> Result<Self> {
         Self::from_slice(data).map_err(Into::into)

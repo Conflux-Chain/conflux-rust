@@ -4,14 +4,10 @@
 
 use crate::{
     message::RequestId,
-    pos::{
-        protocol::{
-            sync_protocol::{
-                Context, Handleable, RpcResponse,
-            },
-            message::block_retrieval::BlockRetrievalRpcRequest,
-            request_manager::AsAny,
-        },
+    pos::protocol::{
+        message::block_retrieval::BlockRetrievalRpcRequest,
+        request_manager::AsAny,
+        sync_protocol::{Context, Handleable, RpcResponse},
     },
     sync::Error,
 };
@@ -22,9 +18,7 @@ use std::any::Any;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct BlockRetrievalRpcResponse {
     pub request_id: RequestId,
-    #[serde(bound(
-        deserialize = "BlockRetrievalResponse: Deserialize<'de>"
-    ))]
+    #[serde(bound(deserialize = "BlockRetrievalResponse: Deserialize<'de>"))]
     pub response: BlockRetrievalResponse,
 }
 

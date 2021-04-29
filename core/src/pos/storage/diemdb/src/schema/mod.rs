@@ -1,10 +1,11 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module defines representation of Diem core data structures at physical level via schemas
-//! that implement [`schemadb::schema::Schema`].
+//! This module defines representation of Diem core data structures at physical
+//! level via schemas that implement [`schemadb::schema::Schema`].
 //!
-//! All schemas are `pub(crate)` so not shown in rustdoc, refer to the source code to see details.
+//! All schemas are `pub(crate)` so not shown in rustdoc, refer to the source
+//! code to see details.
 
 pub(crate) mod epoch_by_version;
 pub(crate) mod event;
@@ -28,12 +29,15 @@ pub const EVENT_ACCUMULATOR_CF_NAME: ColumnFamilyName = "event_accumulator";
 pub const EVENT_BY_KEY_CF_NAME: ColumnFamilyName = "event_by_key";
 pub const EVENT_BY_VERSION_CF_NAME: ColumnFamilyName = "event_by_version";
 pub const EVENT_CF_NAME: ColumnFamilyName = "event";
-pub const JELLYFISH_MERKLE_NODE_CF_NAME: ColumnFamilyName = "jellyfish_merkle_node";
+pub const JELLYFISH_MERKLE_NODE_CF_NAME: ColumnFamilyName =
+    "jellyfish_merkle_node";
 pub const LEDGER_COUNTERS_CF_NAME: ColumnFamilyName = "ledger_counters";
 pub const STALE_NODE_INDEX_CF_NAME: ColumnFamilyName = "stale_node_index";
 pub const TRANSACTION_CF_NAME: ColumnFamilyName = "transaction";
-pub const TRANSACTION_ACCUMULATOR_CF_NAME: ColumnFamilyName = "transaction_accumulator";
-pub const TRANSACTION_BY_ACCOUNT_CF_NAME: ColumnFamilyName = "transaction_by_account";
+pub const TRANSACTION_ACCUMULATOR_CF_NAME: ColumnFamilyName =
+    "transaction_accumulator";
+pub const TRANSACTION_BY_ACCOUNT_CF_NAME: ColumnFamilyName =
+    "transaction_by_account";
 pub const TRANSACTION_INFO_CF_NAME: ColumnFamilyName = "transaction_info";
 
 fn ensure_slice_len_eq(data: &[u8], len: usize) -> Result<()> {
@@ -70,18 +74,33 @@ pub mod fuzzing {
     pub fn fuzz_decode(data: &[u8]) {
         #[allow(unused_must_use)]
         {
-            decode_key_value!(super::epoch_by_version::EpochByVersionSchema, data);
+            decode_key_value!(
+                super::epoch_by_version::EpochByVersionSchema,
+                data
+            );
             decode_key_value!(super::event::EventSchema, data);
-            decode_key_value!(super::event_accumulator::EventAccumulatorSchema, data);
+            decode_key_value!(
+                super::event_accumulator::EventAccumulatorSchema,
+                data
+            );
             decode_key_value!(super::event_by_key::EventByKeySchema, data);
-            decode_key_value!(super::event_by_version::EventByVersionSchema, data);
+            decode_key_value!(
+                super::event_by_version::EventByVersionSchema,
+                data
+            );
             decode_key_value!(
                 super::jellyfish_merkle_node::JellyfishMerkleNodeSchema,
                 data
             );
-            decode_key_value!(super::ledger_counters::LedgerCountersSchema, data);
+            decode_key_value!(
+                super::ledger_counters::LedgerCountersSchema,
+                data
+            );
             decode_key_value!(super::ledger_info::LedgerInfoSchema, data);
-            decode_key_value!(super::stale_node_index::StaleNodeIndexSchema, data);
+            decode_key_value!(
+                super::stale_node_index::StaleNodeIndexSchema,
+                data
+            );
             decode_key_value!(super::transaction::TransactionSchema, data);
             decode_key_value!(
                 super::transaction_accumulator::TransactionAccumulatorSchema,
@@ -91,7 +110,10 @@ pub mod fuzzing {
                 super::transaction_by_account::TransactionByAccountSchema,
                 data
             );
-            decode_key_value!(super::transaction_info::TransactionInfoSchema, data);
+            decode_key_value!(
+                super::transaction_info::TransactionInfoSchema,
+                data
+            );
         }
     }
 }

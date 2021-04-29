@@ -10,7 +10,18 @@ use proptest::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Hash,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+)]
 pub struct Nibble(u8);
 
 impl From<u8> for Nibble {
@@ -21,9 +32,7 @@ impl From<u8> for Nibble {
 }
 
 impl From<Nibble> for u8 {
-    fn from(nibble: Nibble) -> Self {
-        nibble.0
-    }
+    fn from(nibble: Nibble) -> Self { nibble.0 }
 }
 
 impl fmt::LowerHex for Nibble {

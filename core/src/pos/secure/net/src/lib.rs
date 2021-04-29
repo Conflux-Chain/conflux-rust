@@ -17,7 +17,9 @@
 //! Internally both the client and server leverage a NetworkStream that
 //! communications in blocks where a block is a length prefixed array of bytes.
 
-use diem_logger::{info as diem_info, trace as diem_trace, warn as diem_warn, Schema};
+use diem_logger::{
+    info as diem_info, trace as diem_trace, warn as diem_warn, Schema,
+};
 use diem_secure_push_metrics::{register_int_counter_vec, IntCounterVec};
 use once_cell::sync::Lazy;
 use serde::Serialize;

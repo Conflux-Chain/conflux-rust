@@ -24,7 +24,8 @@ pub struct SubscriptionService<T, U> {
 
 impl<T: Clone, U> SubscriptionService<T, U> {
     /// Constructs an subscription object for `items`
-    /// Returns the subscription object, and the receiving end of a channel that subscription will be sent to
+    /// Returns the subscription object, and the receiving end of a channel that
+    /// subscription will be sent to
     pub fn subscribe(name: &str, items: T) -> (Self, Receiver<(), U>) {
         let (sender, receiver) = diem_channel::new(QueueStyle::LIFO, 1, None);
         (
@@ -41,15 +42,15 @@ impl<T: Clone, U> SubscriptionService<T, U> {
         self.sender.push((), payload)
     }
 
-    pub fn subscribed_items(&self) -> T {
-        self.subscribed_items.clone()
-    }
+    pub fn subscribed_items(&self) -> T { self.subscribed_items.clone() }
 }
 
-/// A subscription service for on-chain reconfiguration notifications from state sync
-/// This is declared/implemented here instead of in `types/on_chain_config` because
-/// when `subscription_service` crate is a dependency of `types`, the build-dev fails
-pub type ReconfigSubscription = SubscriptionService<SubscriptionBundle, OnChainConfigPayload>;
+/// A subscription service for on-chain reconfiguration notifications from state
+/// sync This is declared/implemented here instead of in `types/on_chain_config`
+/// because when `subscription_service` crate is a dependency of `types`, the
+/// build-dev fails
+pub type ReconfigSubscription =
+    SubscriptionService<SubscriptionBundle, OnChainConfigPayload>;
 
 #[derive(Clone)]
 pub struct SubscriptionBundle {
@@ -67,13 +68,12 @@ impl SubscriptionBundle {
 }
 
 impl ReconfigSubscription {
-    // Creates a subscription service named `name` that subscribes to changes in configs specified in `configs`
-    // and emission of events specified in `events`
-    // Returns (subscription service, endpoint that listens to the service)
+    // Creates a subscription service named `name` that subscribes to changes in
+    // configs specified in `configs` and emission of events specified in
+    // `events` Returns (subscription service, endpoint that listens to the
+    // service)
     pub fn subscribe_all(
-        name: &str,
-        configs: Vec<ConfigID>,
-        events: Vec<EventKey>,
+        name: &str, configs: Vec<ConfigID>, events: Vec<EventKey>,
     ) -> (Self, Receiver<(), OnChainConfigPayload>) {
         let bundle = SubscriptionBundle::new(configs, events);
         Self::subscribe(name, bundle)

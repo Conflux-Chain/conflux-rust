@@ -440,7 +440,7 @@ pub mod compat {
     use proptest::{prelude::*, strategy::Strategy};
 
     use crate::Uniform;
-    use rand::{rngs::StdRng};
+    use rand::{rngs::StdRng, SeedableRng};
 
     /// Generate an arbitrary key pair, with possible Rng input
     ///

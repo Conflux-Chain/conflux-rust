@@ -3,12 +3,15 @@
 // See https://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
-    pos::protocol::sync_protocol::{Context, Handleable},
+    pos::{
+        consensus::network_interface::ConsensusMsg,
+        protocol::sync_protocol::{Context, Handleable},
+    },
     sync::Error,
 };
 use consensus_types::sync_info::SyncInfo;
 use diem_types::account_address::AccountAddress;
-use std::cmp::Ordering;
+use std::{cmp::Ordering, mem::discriminant};
 
 impl Handleable for SyncInfo {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
@@ -16,25 +19,11 @@ impl Handleable for SyncInfo {
 
         let peer_address = AccountAddress::new(ctx.peer_hash.into());
 
-        match self
-            .epoch_id()
-            .cmp(&ctx.manager.network_task.epoch_id())
-        {
-            Ordering::Equal => {
-                // SyncInfo verification is postponed to the moment it's
-                // actually used.
-                ctx.manager
-                    .network_task
-                    .sync_info_tx
-                    .push(peer_address, (self, peer_address))?
-            }
-            Ordering::Less | Ordering::Greater => ctx
-                .manager
-                .network_task
-                .different_epoch_tx
-                .push(peer_address, (self.epoch_id(), peer_address))?,
-        }
-
+        let msg = ConsensusMsg::SyncInfo(Box::new(self));
+        ctx.manager
+            .network_task
+            .consensus_messages_tx
+            .push((peer_address, discriminant(&msg)), (peer_address, msg))?;
         Ok(())
     }
 }

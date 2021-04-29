@@ -1,9 +1,9 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module defines physical storage schema for nodes in the state Jellyfish Merkle Tree.
-//! Node is identified by [NodeKey](jellyfish-merkle::node_type::NodeKey).
-//! ```text
+//! This module defines physical storage schema for nodes in the state Jellyfish
+//! Merkle Tree. Node is identified by
+//! [NodeKey](jellyfish-merkle::node_type::NodeKey). ```text
 //! |<----key--->|<-----value----->|
 //! |  node_key  | serialized_node |
 //! ```
@@ -29,28 +29,21 @@ define_schema!(
 );
 
 impl KeyCodec<JellyfishMerkleNodeSchema> for NodeKey {
-    fn encode_key(&self) -> Result<Vec<u8>> {
-        self.encode()
-    }
+    fn encode_key(&self) -> Result<Vec<u8>> { self.encode() }
 
-    fn decode_key(data: &[u8]) -> Result<Self> {
-        Self::decode(data)
-    }
+    fn decode_key(data: &[u8]) -> Result<Self> { Self::decode(data) }
 }
 
 impl ValueCodec<JellyfishMerkleNodeSchema> for Node {
-    fn encode_value(&self) -> Result<Vec<u8>> {
-        self.encode()
-    }
+    fn encode_value(&self) -> Result<Vec<u8>> { self.encode() }
 
-    fn decode_value(data: &[u8]) -> Result<Self> {
-        Self::decode(data)
-    }
+    fn decode_value(data: &[u8]) -> Result<Self> { Self::decode(data) }
 }
 
 impl SeekKeyCodec<JellyfishMerkleNodeSchema> for (Version, u8) {
     fn encode_seek_key(&self) -> Result<Vec<u8>> {
-        let mut out = Vec::with_capacity(size_of::<Version>() + size_of::<u8>());
+        let mut out =
+            Vec::with_capacity(size_of::<Version>() + size_of::<u8>());
         out.write_u64::<BigEndian>(self.0)?;
         out.write_u8(self.1)?;
         Ok(out)

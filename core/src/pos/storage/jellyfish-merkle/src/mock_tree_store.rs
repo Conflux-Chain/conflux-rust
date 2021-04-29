@@ -25,8 +25,7 @@ impl<V> Default for MockTreeStore<V> {
 }
 
 impl<V> TreeReader<V> for MockTreeStore<V>
-where
-    V: crate::TestValue,
+where V: crate::TestValue
 {
     fn get_node_option(&self, node_key: &NodeKey) -> Result<Option<Node<V>>> {
         Ok(self.data.read().0.get(node_key).cloned())
@@ -39,7 +38,8 @@ where
         for (key, value) in locked.0.iter() {
             if let Node::Leaf(leaf_node) = value {
                 if node_key_and_node.is_none()
-                    || leaf_node.account_key() > node_key_and_node.as_ref().unwrap().1.account_key()
+                    || leaf_node.account_key()
+                        > node_key_and_node.as_ref().unwrap().1.account_key()
                 {
                     node_key_and_node.replace((key.clone(), leaf_node.clone()));
                 }
@@ -51,8 +51,7 @@ where
 }
 
 impl<V> TreeWriter<V> for MockTreeStore<V>
-where
-    V: crate::TestValue,
+where V: crate::TestValue
 {
     fn write_node_batch(&self, node_batch: &NodeBatch<V>) -> Result<()> {
         let mut locked = self.data.write();
@@ -67,8 +66,7 @@ where
 }
 
 impl<V> MockTreeStore<V>
-where
-    V: crate::TestValue,
+where V: crate::TestValue
 {
     pub fn new(allow_overwrite: bool) -> Self {
         Self {
@@ -93,7 +91,9 @@ where
         Ok(())
     }
 
-    pub fn write_tree_update_batch(&self, batch: TreeUpdateBatch<V>) -> Result<()> {
+    pub fn write_tree_update_batch(
+        &self, batch: TreeUpdateBatch<V>,
+    ) -> Result<()> {
         batch
             .node_batch
             .into_iter()
@@ -107,11 +107,13 @@ where
         Ok(())
     }
 
-    pub fn purge_stale_nodes(&self, least_readable_version: Version) -> Result<()> {
+    pub fn purge_stale_nodes(
+        &self, least_readable_version: Version,
+    ) -> Result<()> {
         let mut wlocked = self.data.write();
 
-        // Only records retired before or at `least_readable_version` can be purged in order
-        // to keep that version still readable.
+        // Only records retired before or at `least_readable_version` can be
+        // purged in order to keep that version still readable.
         let to_prune = wlocked
             .1
             .iter()
@@ -128,7 +130,5 @@ where
         Ok(())
     }
 
-    pub fn num_nodes(&self) -> usize {
-        self.data.read().0.len()
-    }
+    pub fn num_nodes(&self) -> usize { self.data.read().0.len() }
 }

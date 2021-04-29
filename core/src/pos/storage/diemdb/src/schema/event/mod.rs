@@ -3,8 +3,8 @@
 
 //! This module defines physical storage schema for the contract events.
 //!
-//! An event is keyed by the version of the transaction it belongs to and the index of it among all
-//! events yielded by the same transaction.
+//! An event is keyed by the version of the transaction it belongs to and the
+//! index of it among all events yielded by the same transaction.
 //! ```text
 //! |<-------key----->|<---value--->|
 //! | version | index | event bytes |
@@ -29,7 +29,8 @@ impl KeyCodec<EventSchema> for Key {
     fn encode_key(&self) -> Result<Vec<u8>> {
         let (version, index) = *self;
 
-        let mut encoded_key = Vec::with_capacity(size_of::<Version>() + size_of::<Index>());
+        let mut encoded_key =
+            Vec::with_capacity(size_of::<Version>() + size_of::<Index>());
         encoded_key.write_u64::<BigEndian>(version)?;
         encoded_key.write_u64::<BigEndian>(index)?;
         Ok(encoded_key)

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use diem_metrics::{
-    register_histogram_vec, register_int_counter, register_int_gauge, register_int_gauge_vec,
-    HistogramVec, IntCounter, IntGauge, IntGaugeVec,
+    register_histogram_vec, register_int_counter, register_int_gauge,
+    register_int_gauge_vec, HistogramVec, IntCounter, IntGauge, IntGaugeVec,
 };
 use once_cell::sync::Lazy;
 
@@ -52,53 +52,61 @@ pub static DIEM_STORAGE_NEXT_BLOCK_EPOCH: Lazy<IntGauge> = Lazy::new(|| {
 });
 
 pub static DIEM_STORAGE_PRUNE_WINDOW: Lazy<IntGauge> = Lazy::new(|| {
-    register_int_gauge!("diem_storage_prune_window", "Diem storage prune window").unwrap()
-});
-
-pub static DIEM_STORAGE_PRUNER_LEAST_READABLE_STATE_VERSION: Lazy<IntGauge> = Lazy::new(|| {
     register_int_gauge!(
-        "diem_storage_pruner_least_readable_state_version",
-        "Diem storage pruner least readable state version"
+        "diem_storage_prune_window",
+        "Diem storage prune window"
     )
     .unwrap()
 });
 
-pub static DIEM_STORAGE_API_LATENCY_SECONDS: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!(
-        // metric name
-        "diem_storage_api_latency_seconds",
-        // metric description
-        "Diem storage api latency in seconds",
-        // metric labels (dimensions)
-        &["api_name", "result"]
-    )
-    .unwrap()
-});
+pub static DIEM_STORAGE_PRUNER_LEAST_READABLE_STATE_VERSION: Lazy<IntGauge> =
+    Lazy::new(|| {
+        register_int_gauge!(
+            "diem_storage_pruner_least_readable_state_version",
+            "Diem storage pruner least readable state version"
+        )
+        .unwrap()
+    });
 
-pub static DIEM_STORAGE_OTHER_TIMERS_SECONDS: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!(
-        // metric name
-        "diem_storage_other_timers_seconds",
-        // metric description
-        "Various timers below public API level.",
-        // metric labels (dimensions)
-        &["name"]
-    )
-    .unwrap()
-});
+pub static DIEM_STORAGE_API_LATENCY_SECONDS: Lazy<HistogramVec> =
+    Lazy::new(|| {
+        register_histogram_vec!(
+            // metric name
+            "diem_storage_api_latency_seconds",
+            // metric description
+            "Diem storage api latency in seconds",
+            // metric labels (dimensions)
+            &["api_name", "result"]
+        )
+        .unwrap()
+    });
+
+pub static DIEM_STORAGE_OTHER_TIMERS_SECONDS: Lazy<HistogramVec> =
+    Lazy::new(|| {
+        register_histogram_vec!(
+            // metric name
+            "diem_storage_other_timers_seconds",
+            // metric description
+            "Various timers below public API level.",
+            // metric labels (dimensions)
+            &["name"]
+        )
+        .unwrap()
+    });
 
 /// Rocksdb metrics
-pub static DIEM_STORAGE_ROCKSDB_PROPERTIES: Lazy<IntGaugeVec> = Lazy::new(|| {
-    register_int_gauge_vec!(
-        // metric name
-        "diem_rocksdb_properties",
-        // metric description
-        "rocksdb integer properties",
-        // metric labels (dimensions)
-        &["cf_name", "property_name",]
-    )
-    .unwrap()
-});
+pub static DIEM_STORAGE_ROCKSDB_PROPERTIES: Lazy<IntGaugeVec> =
+    Lazy::new(|| {
+        register_int_gauge_vec!(
+            // metric name
+            "diem_rocksdb_properties",
+            // metric description
+            "rocksdb integer properties",
+            // metric labels (dimensions)
+            &["cf_name", "property_name",]
+        )
+        .unwrap()
+    });
 
 // Backup progress gauges:
 
@@ -118,18 +126,20 @@ pub(crate) static BACKUP_TXN_VERSION: Lazy<IntGauge> = Lazy::new(|| {
     .unwrap()
 });
 
-pub(crate) static BACKUP_STATE_SNAPSHOT_VERSION: Lazy<IntGauge> = Lazy::new(|| {
-    register_int_gauge!(
-        "diem_backup_handler_state_snapshot_version",
-        "Version of requested state snapshot backup."
-    )
-    .unwrap()
-});
+pub(crate) static BACKUP_STATE_SNAPSHOT_VERSION: Lazy<IntGauge> =
+    Lazy::new(|| {
+        register_int_gauge!(
+            "diem_backup_handler_state_snapshot_version",
+            "Version of requested state snapshot backup."
+        )
+        .unwrap()
+    });
 
-pub(crate) static BACKUP_STATE_SNAPSHOT_LEAF_IDX: Lazy<IntGauge> = Lazy::new(|| {
-    register_int_gauge!(
-        "diem_backup_handler_state_snapshot_leaf_index",
-        "Index of current leaf index returned in a state snapshot backup."
-    )
-    .unwrap()
-});
+pub(crate) static BACKUP_STATE_SNAPSHOT_LEAF_IDX: Lazy<IntGauge> =
+    Lazy::new(|| {
+        register_int_gauge!(
+            "diem_backup_handler_state_snapshot_leaf_index",
+            "Index of current leaf index returned in a state snapshot backup."
+        )
+        .unwrap()
+    });

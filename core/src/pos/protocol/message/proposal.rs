@@ -4,45 +4,30 @@
 
 use crate::{
     pos::{
+        consensus::network_interface::ConsensusMsg,
         protocol::sync_protocol::{Context, Handleable},
-        consensus::network_interface::ConsensusMsg
     },
     sync::Error,
 };
 
+use consensus_types::proposal_msg::ProposalMsg;
 use diem_types::{
     account_address::AccountAddress, transaction::SignedTransaction,
 };
-use consensus_types::proposal_msg::ProposalMsg;
 use std::mem::discriminant;
 
 impl Handleable for ProposalMsg {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        debug!("on_proposal, msg={:?}", self.0);
+        debug!("on_proposal, msg={:?}", &self);
 
         let peer_address = AccountAddress::new(ctx.peer_hash.into());
 
-        /*
-        if self.epoch_id() != ctx.manager.network_task.epoch_id() {
-            ctx.manager
-                .network_task
-                .different_epoch_tx
-                .push(peer_address, (self.epoch_id(), peer_address))?;
-            return Ok(());
-        }*/
-
-        ensure!(
+        /*ensure!(
             self.author() == Some(peer_address),
             "proposal received must be from the sending peer"
-        );
+        );*/
 
-        let proposal = self
-            .validate_signatures(
-                &ctx.manager.network_task.epoch_info.read().verifier,
-            )?
-            .verify_well_formed()?;
-
-        let msg = ConsensusMsg::ProposalMsg(Box::new(proposal));
+        let msg = ConsensusMsg::ProposalMsg(Box::new(self));
         ctx.manager
             .network_task
             .consensus_messages_tx

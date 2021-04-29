@@ -265,7 +265,8 @@ impl RoundState {
             };
             diem_debug!(
                 round = new_round,
-                "Starting new round: {}", new_round_event
+                "Starting new round: {}",
+                new_round_event
             );
             return Some(new_round_event);
         }
@@ -335,7 +336,8 @@ impl RoundState {
         );
         diem_debug!(
             round = self.current_round,
-            "Set round deadline to {:?} from now", timeout
+            "Set round deadline to {:?} from now",
+            timeout
         );
         self.current_round_deadline = now + timeout;
         timeout
