@@ -240,7 +240,11 @@ pub fn initialize_common_modules(
         pow.clone(),
     ));
 
-    let pos_connection = PosConnection::new(conf.pos_config());
+    // FIXME(lpl): Pass in DiemDB.
+    let pos_connection = PosConnection::new(
+        Arc::new(FakeDiemDB {}) as Arc<dyn DBReaderForPoW>,
+        conf.pos_config(),
+    );
     // FIXME(lpl): Set CIP height.
     let pos_verifier = Arc::new(PosVerifier::new(pos_connection, 0));
 
@@ -739,7 +743,7 @@ use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use cfxcore::{
     block_data_manager::BlockDataManager,
-    consensus::pos_handler::{PosConnection, PosVerifier},
+    consensus::pos_handler::{FakeDiemDB, PosConnection, PosVerifier},
     machine::{new_machine_with_builtin, Machine},
     pow::PowComputer,
     spec::genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
@@ -768,5 +772,6 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+use storage_interface::DBReaderForPoW;
 use threadpool::ThreadPool;
 use txgen::{DirectTransactionGenerator, TransactionGenerator};

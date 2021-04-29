@@ -492,3 +492,12 @@ impl SaveTransactionsRequest {
         }
     }
 }
+
+pub trait DBReaderForPoW: Send + Sync {
+    fn get_latest_ledger_info_option(&self)
+        -> Option<LedgerInfoWithSignatures>;
+
+    fn get_block_ledger_info(
+        &self, consensus_block_id: &HashValue,
+    ) -> Result<LedgerInfoWithSignatures>;
+}

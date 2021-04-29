@@ -1,7 +1,8 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module defines physical storage schema for LedgerInfoWithSignatures structure.
+//! This module defines physical storage schema for LedgerInfoWithSignatures
+//! structure.
 //!
 //! Serialized LedgerInfoWithSignatures identified by `epoch`.
 //! ```text
@@ -9,12 +10,13 @@
 //! | epoch | ledger_info_with_signatures bytes |
 //! ```
 //!
-//! `epoch` is serialized in big endian so that records in RocksDB will be in order of their
-//! numeric value.
+//! `epoch` is serialized in big endian so that records in RocksDB will be in
+//! order of their numeric value.
 
 use crate::schema::ensure_slice_len_eq;
 use anyhow::Result;
 use byteorder::{BigEndian, ReadBytesExt};
+use diem_crypto::hash::HashValue;
 use diem_types::ledger_info::LedgerInfoWithSignatures;
 use schemadb::{
     define_schema,
@@ -22,8 +24,6 @@ use schemadb::{
     DEFAULT_CF_NAME,
 };
 use std::mem::size_of;
-use diem_crypto::hash::HashValue;
-
 
 define_schema!(
     LedgerInfoByBlockSchema,
@@ -33,16 +33,14 @@ define_schema!(
 );
 
 impl KeyCodec<LedgerInfoByBlockSchema> for HashValue {
-    fn encode_value(&self) -> Result<Vec<u8>> {
-        Ok(self.to_vec())
-    }
+    fn encode_key(&self) -> Result<Vec<u8>> { Ok(self.to_vec()) }
 
-    fn decode_value(data: &[u8]) -> Result<Self> {
+    fn decode_key(data: &[u8]) -> Result<Self> {
         Self::from_slice(data).map_err(Into::into)
     }
 }
 
-impl ValueCodec<LedgerInfoSchema> for LedgerInfoWithSignatures {
+impl ValueCodec<LedgerInfoByBlockSchema> for LedgerInfoWithSignatures {
     fn encode_value(&self) -> Result<Vec<u8>> {
         bcs::to_bytes(self).map_err(Into::into)
     }

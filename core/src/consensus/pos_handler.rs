@@ -1,6 +1,9 @@
 use cfx_types::H256;
+use diem_crypto::HashValue;
+use diem_types::ledger_info::LedgerInfoWithSignatures;
 use primitives::pos::{NodeId, PosBlockId};
 use std::sync::Arc;
+use storage_interface::DBReaderForPoW;
 
 pub type PosVerifier = PosHandler<PosConnection>;
 
@@ -104,11 +107,13 @@ impl<PoS: PosInterface> PosHandler<PoS> {
 }
 
 pub struct PosConnection {
-    pos_storage: Arc<LedgerStore>,
+    pos_storage: Arc<dyn DBReaderForPoW>,
 }
 
 impl PosConnection {
-    pub fn new(pos_storage: Arc<LedgerStore>, _conf: PosConfiguration) -> Self {
+    pub fn new(
+        pos_storage: Arc<dyn DBReaderForPoW>, _conf: PosConfiguration,
+    ) -> Self {
         Self { pos_storage }
     }
 }
@@ -116,22 +121,54 @@ impl PosConnection {
 impl PosInterface for PosConnection {
     fn initialize(&self) -> Result<(), String> { todo!() }
 
-    fn get_committed_block(&self, _h: &PosBlockId) -> Option<PosBlock> {
-        let ledger_info = self.pos_storage.get_block_ledger_info(h).ok()?;
+    fn get_committed_block(&self, h: &PosBlockId) -> Option<PosBlock> {
+        let ledger_info = self
+            .pos_storage
+            .get_block_ledger_info(&h256_to_diem_hash(h))
+            .ok()?;
         Some(PosBlock {
-            hash: ledger_info.id(),
-            round: ledger_info.round(),
-            pivot_decision: ledger_info.pivot_decision(),
-            unlock_txs: ledger_info.unlock_txs,
+            hash: diem_hash_to_h256(
+                &ledger_info.ledger_info().consensus_block_id(),
+            ),
+            round: ledger_info.ledger_info().round(),
+            pivot_decision: Default::default(), /* TODO(lpl):
+                                                 * ledger_info.
+                                                 * pivot_decision(), */
+            unlock_txs: Default::default(), /* TODO(lpl):
+                                             * ledger_info.unlock_txs, */
         })
     }
 
     fn latest_block(&self) -> PosBlockId {
-        self.pos_storage
-            .get_latest_ledger_info_option()
-            .expect("Initialized")
-            .id()
+        diem_hash_to_h256(
+            &self
+                .pos_storage
+                .get_latest_ledger_info_option()
+                .expect("Initialized")
+                .ledger_info()
+                .consensus_block_id(),
+        )
     }
 }
 
 pub struct PosConfiguration {}
+
+fn diem_hash_to_h256(h: &HashValue) -> PosBlockId { H256::from(h.as_ref()) }
+fn h256_to_diem_hash(h: &PosBlockId) -> HashValue {
+    HashValue::new(h.to_fixed_bytes())
+}
+
+pub struct FakeDiemDB {}
+impl DBReaderForPoW for FakeDiemDB {
+    fn get_latest_ledger_info_option(
+        &self,
+    ) -> Option<LedgerInfoWithSignatures> {
+        todo!()
+    }
+
+    fn get_block_ledger_info(
+        &self, _consensus_block_id: &HashValue,
+    ) -> anyhow::Result<LedgerInfoWithSignatures> {
+        todo!()
+    }
+}

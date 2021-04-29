@@ -5,7 +5,7 @@ use crate::{
     account_config, epoch_state::EpochState, event::EventKey,
     on_chain_config::ValidatorSet, transaction::Version,
 };
-use anyhow::{Error, Result};
+use anyhow::Result;
 use cfx_types::H256;
 use diem_crypto::hash::HashValue;
 #[cfg(any(test, feature = "fuzzing"))]

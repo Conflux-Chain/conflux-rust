@@ -9,6 +9,7 @@ use crate::{
     errors::DiemDbError,
     schema::{
         epoch_by_version::EpochByVersionSchema, ledger_info::LedgerInfoSchema,
+        ledger_info_by_block::LedgerInfoByBlockSchema,
         transaction_accumulator::TransactionAccumulatorSchema,
         transaction_info::TransactionInfoSchema,
     },
@@ -418,6 +419,7 @@ impl LedgerStore {
                     "LedgerInfo of block {}",
                     consensus_block_id
                 ))
+                .into()
             })
     }
 
