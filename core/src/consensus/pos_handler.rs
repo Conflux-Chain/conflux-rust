@@ -1,5 +1,6 @@
 use cfx_types::H256;
 use primitives::pos::{NodeId, PosBlockId};
+use std::sync::Arc;
 
 pub type PosVerifier = PosHandler<PosConnection>;
 
@@ -26,7 +27,6 @@ pub trait PosInterface {
 #[allow(unused)]
 pub struct PosBlock {
     hash: PosBlockId,
-    parent: PosBlockId,
     round: u64,
     pivot_decision: H256,
     unlock_txs: Vec<UnlockTransaction>,
@@ -104,14 +104,12 @@ impl<PoS: PosInterface> PosHandler<PoS> {
 }
 
 pub struct PosConnection {
-    // pos_storage: Arc<dyn PersistentStorage<PosTransaction>>,
+    pos_storage: Arc<LedgerStore>,
 }
 
 impl PosConnection {
-    pub fn new(_conf: PosConfiguration) -> Self {
-        Self {
-            // pos_storage,
-        }
+    pub fn new(pos_storage: Arc<LedgerStore>, _conf: PosConfiguration) -> Self {
+        Self { pos_storage }
     }
 }
 
@@ -119,13 +117,21 @@ impl PosInterface for PosConnection {
     fn initialize(&self) -> Result<(), String> { todo!() }
 
     fn get_committed_block(&self, _h: &PosBlockId) -> Option<PosBlock> {
-        /*
-        self.pos_storage.get_ledger_block(h).expect("pos storage err").into()
-         */
-        todo!()
+        let ledger_info = self.pos_storage.get_block_ledger_info(h).ok()?;
+        Some(PosBlock {
+            hash: ledger_info.id(),
+            round: ledger_info.round(),
+            pivot_decision: ledger_info.pivot_decision(),
+            unlock_txs: ledger_info.unlock_txs,
+        })
     }
 
-    fn latest_block(&self) -> PosBlockId { todo!() }
+    fn latest_block(&self) -> PosBlockId {
+        self.pos_storage
+            .get_latest_ledger_info_option()
+            .expect("Initialized")
+            .id()
+    }
 }
 
 pub struct PosConfiguration {}
