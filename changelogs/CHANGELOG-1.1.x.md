@@ -2,6 +2,9 @@
 
 ### Bug fix
 - Fix a bug that causes repacking useless transactions.
+### RPC Improvements
+- Make VM tracer records reasons for a fail execution. 
+- Make `estimate_gas_and_collateral` return an error stack in case an error happens in sub-call.  
 
 # 1.1.3
 
