@@ -15,6 +15,7 @@ use consensus_types::{
 
 use diem_infallible::Mutex;
 use std::sync::Arc;
+use crate::pos::pow_handler::{PowHandler, PowInterface};
 
 #[cfg(test)]
 #[path = "proposal_generator_test.rs"]
@@ -44,13 +45,15 @@ pub struct ProposalGenerator {
     max_block_size: u64,
     // Last round that a proposal was generated
     last_round_generated: Mutex<Round>,
+    // Handle the interaction with PoW consensus.
+    pow_handler: Arc<PowHandler>,
 }
 
 impl ProposalGenerator {
     pub fn new(
         author: Author, block_store: Arc<dyn BlockReader + Send + Sync>,
         txn_manager: Arc<dyn TxnManager>, time_service: Arc<dyn TimeService>,
-        max_block_size: u64,
+        max_block_size: u64, pow_handler: Arc<PowHandler>,
     ) -> Self
     {
         Self {
@@ -60,6 +63,7 @@ impl ProposalGenerator {
             time_service,
             max_block_size,
             last_round_generated: Mutex::new(0),
+            pow_handler
         }
     }
 
@@ -96,6 +100,7 @@ impl ProposalGenerator {
 
         let hqc = self.ensure_highest_quorum_cert(round)?;
 
+        /* TODO(lpl): Handle reconfiguraiton.
         let (payload, timestamp) = if hqc
             .certified_block()
             .has_reconfiguration()
@@ -142,6 +147,37 @@ impl ProposalGenerator {
 
             (payload, timestamp.as_micros() as u64)
         };
+        */
+
+
+        let pivot_decision = match self.pow_handler.next_pivot_decision().await {
+            Some(res) => res,
+            None => {
+                // TODO(lpl): Handle the error from outside.
+                bail!("No new pivot decision to propose");
+            }
+        };
+
+        let event_data = lcs::to_bytes(&pivot_decision)?;
+        let event = ContractEvent::new(
+            PivotBlockDecision::pivot_select_event_key(),
+            0, /* sequence_number */
+            TypeTag::ByteArray,
+            event_data,
+        );
+
+        let change_set = ChangeSet::new(WriteSet::default(), vec![event]);
+        let raw_tx = RawTransaction::new_change_set(
+            self.author,
+            0,
+            change_set,
+            false, /* is_admin_type */
+        );
+        let signed_tx = raw_tx
+            .sign(self.key_pair.secret(), self.key_pair.public().clone())?
+            .into_inner();
+
+        let txns = self.txn_transformer.convert(signed_tx);
 
         // create block proposal
         Ok(BlockData::new_proposal(

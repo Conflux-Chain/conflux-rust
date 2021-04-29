@@ -9,7 +9,7 @@ pub const POS_TERM_EPOCHS: u64 = 60;
 
 pub trait PowInterface {
     // TODO(lpl): Wait for new pivot decision.
-    async fn latest_pivot_decision(&self) -> H256;
+    async fn next_pivot_decision(&self, parent_decision: &H256) -> Option<H256>;
 
     async fn validate_proposal_pivot_decision(
         &self, parent_decision: &H256, me_decision: &H256,
@@ -25,7 +25,7 @@ pub struct PowHandler {
 }
 
 impl PowHandler {
-    fn latest_pivot_decision_impl(&self) -> Option<H256> {
+    fn next_pivot_decision_impl(&self, parent_decision: &H256) -> Option<H256> {
         let inner = self.pow_consensus.inner.read();
         let best_epoch = inner.best_epoch_number();
         if best_epoch >= POS_TERM_EPOCHS {
@@ -56,7 +56,7 @@ impl PowHandler {
 }
 
 impl PowInterface for PowHandler {
-    async fn latest_pivot_decision(&self) -> H256 {
+    async fn next_pivot_decision(&self, parent_decision: &H256) -> Option<H256> {
         let (callback, cb_receiver) = oneshot::channel();
         self.executor.spawn(async {
             let r = self.latest_pivot_decision_impl();
