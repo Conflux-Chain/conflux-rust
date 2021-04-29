@@ -3767,6 +3767,24 @@ impl ConsensusGraphInner {
         }
         Some(subtree)
     }
+
+    pub fn is_ancestor_of(&self, ancestor_hash: &H256, me_hash: &H256) -> bool {
+        match (self.hash_to_arena_indices.get(ancestor_hash), self.hash_to_arena_indices.get(me_hash)) {
+            (Some(ancestor), Some(me)) => {
+                // Both in memory. Just use Link-Cut-Tree.
+                self.ancestor_at(*me, self.arena[*ancestor].height) == *ancestor
+            }
+            // TODO(lpl): Check if it's possible to go beyond checkpoint.
+            (_, Some(me)) => {
+                // Only `me` is in memory. Use in-memory data first, then loop with header parent.
+                todo!()
+            }
+            (_, _) => {
+                // Even `me` is not in memory. Have to loop with parent.
+                todo!()
+            }
+        }
+    }
 }
 
 impl Graph for ConsensusGraphInner {
