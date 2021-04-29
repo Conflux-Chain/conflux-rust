@@ -2,10 +2,9 @@
 
 ## Improvements
 
-## RPC Improvements
-- Add a new parameter `subscription_epoch` to the `epochs` pubsub.
-  The supported values are `"latest_mined"` (default) and `"latest_state"`.
-- Add `cfx_getAccountPendingInfo` to get pending transaction info for some account for better investigating pending tx problems.
+### RPC Improvements
+- Make VM tracer records reasons for a fail execution. 
+- Make `estimate_gas_and_collateral` return an error stack in case an error happens in sub-call.  
 
 # 1.1.3
 
