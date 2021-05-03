@@ -331,6 +331,27 @@ impl StateObjectCache {
         )
     }
 
+    pub fn modify_and_update_vote_stake_list<'a, StateDb: StateDbOps>(
+        &'a self, address: &Address, db: &'a mut StateDb,
+        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
+    ) -> Result<
+        GuardedValue<
+            RwLockWriteGuard<
+                HashMap<VoteStakeListAddress, Option<VoteStakeList>>,
+            >,
+            ModifyAndUpdate<StateDb, /* TODO: Key, */ VoteStakeList>,
+        >,
+    >
+    {
+        Self::require_or_set(
+            &self.vote_stake_list_cache,
+            &VoteStakeListAddress(*address),
+            db,
+            |_addr| Ok(None),
+            debug_record,
+        )
+    }
+
     pub fn get_commission_privilege<StateDb: StateDbOps>(
         &self, contract_address: &Address, user_address: &Address, db: &StateDb,
     ) -> Result<

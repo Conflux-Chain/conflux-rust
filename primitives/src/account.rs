@@ -122,6 +122,82 @@ impl DerefMut for VoteStakeList {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
+impl VoteStakeList {
+    pub fn withdrawable_staking_balance(
+        &self, staking_balance: U256, block_number: u64,
+    ) -> U256 {
+        if !self.is_empty() {
+            // Find first index whose `unlock_block_number` is greater than
+            // timestamp and all entries before the index could be
+            // ignored.
+            let idx = self
+                .binary_search_by(|vote_info| {
+                    vote_info.unlock_block_number.cmp(&(block_number + 1))
+                })
+                .unwrap_or_else(|x| x);
+            if idx == self.len() {
+                staking_balance
+            } else {
+                staking_balance - self[idx].amount
+            }
+        } else {
+            staking_balance
+        }
+    }
+
+    pub fn remove_expired_vote_stake_info(&mut self, block_number: u64) {
+        if !self.is_empty() && self[0].unlock_block_number <= block_number {
+            // Find first index whose `unlock_block_number` is greater than
+            // timestamp and all entries before the index could be
+            // removed.
+            let idx = self
+                .binary_search_by(|vote_info| {
+                    vote_info.unlock_block_number.cmp(&(block_number + 1))
+                })
+                .unwrap_or_else(|x| x);
+            *self = VoteStakeList(self.split_off(idx));
+        }
+    }
+
+    pub fn vote_lock(&mut self, amount: U256, unlock_block_number: u64) {
+        let mut updated = false;
+        let mut updated_index = 0;
+        match self.binary_search_by(|vote_info| {
+            vote_info.unlock_block_number.cmp(&unlock_block_number)
+        }) {
+            Ok(index) => {
+                if amount > self[index].amount {
+                    self[index].amount = amount;
+                    updated = true;
+                    updated_index = index;
+                }
+            }
+            Err(index) => {
+                if index >= self.len() || self[index].amount < amount {
+                    self.insert(
+                        index,
+                        VoteStakeInfo {
+                            amount,
+                            unlock_block_number,
+                        },
+                    );
+                    updated = true;
+                    updated_index = index;
+                }
+            }
+        }
+        if updated {
+            let rest = self.split_off(updated_index);
+            while !self.is_empty()
+                && self.last().unwrap().amount <= rest[0].amount
+            {
+                self.pop();
+            }
+            self.extend_from_slice(&rest);
+        }
+    }
+}
+
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub struct CodeInfo {
     pub code: Arc<Bytes>,
