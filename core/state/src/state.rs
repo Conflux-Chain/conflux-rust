@@ -269,19 +269,43 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     }
 
     fn add_commission_privilege(
-        &mut self, _contract_address: Address, _contract_owner: Address,
-        _user: Address,
+        &mut self, contract_address: Address, _contract_owner: Address,
+        user: Address,
     ) -> Result<()>
     {
-        unimplemented!()
+        self.modify_and_update_commission_privilege(
+            &contract_address,
+            &user,
+            None,
+        )?
+        .as_mut()
+        .map_or_else(
+            || Err(ErrorKind::IncompleteDatabase(contract_address).into()),
+            |value| {
+                value.add_privilege();
+                Ok(())
+            },
+        )
     }
 
     fn remove_commission_privilege(
-        &mut self, _contract_address: Address, _contract_owner: Address,
-        _user: Address,
+        &mut self, contract_address: Address, _contract_owner: Address,
+        user: Address,
     ) -> Result<()>
     {
-        unimplemented!()
+        self.modify_and_update_commission_privilege(
+            &contract_address,
+            &user,
+            None,
+        )?
+        .as_mut()
+        .map_or_else(
+            || Err(ErrorKind::IncompleteDatabase(contract_address).into()),
+            |value| {
+                value.remove_privilege();
+                Ok(())
+            },
+        )
     }
 
     fn nonce(&self, address: &Address) -> Result<U256> {
@@ -540,6 +564,26 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
             contract_address,
             user_address,
             &self.db,
+        )
+    }
+
+    fn modify_and_update_commission_privilege<'a>(
+        &'a mut self, contract_address: &Address, user_address: &Address,
+        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
+    ) -> Result<
+        impl AsMut<
+            ModifyAndUpdate<
+                StateDbGeneric<StateDbStorage>,
+                /* TODO: Key, */ CachedCommissionPrivilege,
+            >,
+        >,
+    >
+    {
+        self.cache.modify_and_update_commission_privilege(
+            contract_address,
+            user_address,
+            &mut self.db,
+            debug_record,
         )
     }
 

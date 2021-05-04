@@ -68,7 +68,15 @@ pub struct CachedCommissionPrivilege {
 }
 
 impl CachedCommissionPrivilege {
+    pub fn new(has_privilege: bool) -> CachedCommissionPrivilege {
+        CachedCommissionPrivilege { has_privilege }
+    }
+
     pub fn has_privilege(&self) -> bool { self.has_privilege }
+
+    pub fn add_privilege(&mut self) { self.has_privilege = true; }
+
+    pub fn remove_privilege(&mut self) { self.has_privilege = false; }
 }
 
 pub trait ToHashKey<K> {
