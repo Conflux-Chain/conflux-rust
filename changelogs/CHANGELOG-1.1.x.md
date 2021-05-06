@@ -1,3 +1,8 @@
+# 1.1.4
+
+### Bug fix
+- Fix a bug that causes repacking useless transactions.
+
 # 1.1.3
 
 ## Improvements
