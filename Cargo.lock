@@ -800,6 +800,7 @@ dependencies = [
  "diemdb",
  "either",
  "error-chain",
+ "executor",
  "executor-types",
  "fail",
  "fallible",
@@ -2114,6 +2115,33 @@ dependencies = [
  "impl-serde 0.3.1",
  "primitive-types 0.7.3",
  "uint",
+]
+
+[[package]]
+name = "executor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "consensus-types",
+ "diem-crypto",
+ "diem-infallible",
+ "diem-logger",
+ "diem-metrics",
+ "diem-secure-net",
+ "diem-state-view",
+ "diem-types",
+ "executor-types",
+ "fail",
+ "itertools 0.10.0",
+ "move-core-types",
+ "once_cell",
+ "proptest",
+ "rand 0.8.3",
+ "scratchpad",
+ "serde",
+ "serde_json",
+ "storage-interface",
 ]
 
 [[package]]
