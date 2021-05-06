@@ -70,22 +70,35 @@ struct NoncePoolNode {
 }
 
 impl NoncePoolNode {
-    pub fn new(tx: &TxWithReadyInfo, priority: u64) -> Self {
+    fn calc_tx_cost(tx: &TxWithReadyInfo) -> U256 {
         let estimate_gas_u512 =
             (tx.gas - tx.sponsored_gas).full_mul(tx.gas_price);
+        // normally, the value <= 2^128
         let estimate_gas = if estimate_gas_u512 > U512::from(U128::max_value())
         {
             U256::from(U128::max_value())
         } else {
             (tx.gas - tx.sponsored_gas) * tx.gas_price
         };
+        // normally, the value <= 2^192
+        if tx.value > U256::from(u64::MAX) * U256::from(U128::max_value()) {
+            U256::from(u64::MAX) * U256::from(U128::max_value())
+                + estimate_gas
+                + U256::from(tx.storage_limit - tx.sponsored_storage)
+                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+        } else {
+            tx.value
+                + estimate_gas
+                + U256::from(tx.storage_limit - tx.sponsored_storage)
+                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+        }
+    }
+
+    pub fn new(tx: &TxWithReadyInfo, priority: u64) -> Self {
         NoncePoolNode {
             tx: tx.clone(),
             subtree_unpacked: 1 - tx.packed as u32,
-            subtree_cost: tx.value
-                + estimate_gas
-                + U256::from(tx.storage_limit - tx.sponsored_storage)
-                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT,
+            subtree_cost: Self::calc_tx_cost(tx),
             subtree_size: 1,
             priority,
             child: [None, None],
@@ -245,9 +258,7 @@ impl NoncePoolNode {
                 } else {
                     let mut ret = NoncePoolNode::size(&node.child[0]);
                     ret.0 += 1;
-                    ret.1 += node.tx.value
-                        + (node.tx.gas - node.tx.sponsored_gas)
-                            * node.tx.gas_price;
+                    ret.1 += Self::calc_tx_cost(&node.tx);
                     if cmp == Ordering::Greater {
                         let tmp = NoncePoolNode::rank(&node.child[1], nonce);
                         ret.0 += tmp.0;
@@ -311,8 +322,7 @@ impl NoncePoolNode {
     /// update subtree info: cost_sum, size, unpacked
     fn update(&mut self) {
         self.subtree_unpacked = 1 - self.tx.packed as u32;
-        self.subtree_cost = self.tx.value
-            + (self.tx.gas - self.tx.sponsored_gas) * self.tx.gas_price;
+        self.subtree_cost = Self::calc_tx_cost(&self.tx);
         self.subtree_size = 1;
         for i in 0..2 {
             if self.child[i as usize].is_some() {
@@ -497,7 +507,9 @@ impl NoncePool {
 #[cfg(test)]
 mod nonce_pool_test {
     use super::{InsertResult, NoncePool, TxWithReadyInfo};
-    use cfx_types::{Address, U256};
+    use crate::transaction_pool::nonce_pool::NoncePoolNode;
+    use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+    use cfx_types::{Address, U128, U256};
     use keylib::{Generator, KeyPair, Random};
     use primitives::{Action, SignedTransaction, Transaction};
     use rand::{RngCore, SeedableRng};
@@ -505,16 +517,18 @@ mod nonce_pool_test {
     use std::{collections::BTreeMap, sync::Arc};
 
     fn new_test_tx(
-        sender: &KeyPair, nonce: usize, gas_price: usize, value: usize,
-    ) -> Arc<SignedTransaction> {
+        sender: &KeyPair, nonce: U256, gas: U256, gas_price: U256, value: U256,
+        storage_limit: u64,
+    ) -> Arc<SignedTransaction>
+    {
         Arc::new(
             Transaction {
-                nonce: U256::from(nonce),
-                gas_price: U256::from(gas_price),
-                gas: U256::from(50000),
+                nonce,
+                gas_price,
+                gas,
                 action: Action::Call(Address::random()),
-                value: U256::from(value),
-                storage_limit: 0,
+                value,
+                storage_limit,
                 epoch_height: 0,
                 chain_id: 0,
                 data: Vec::new(),
@@ -524,17 +538,160 @@ mod nonce_pool_test {
     }
 
     fn new_test_tx_with_ready_info(
-        sender: &KeyPair, nonce: usize, gas_price: usize, value: usize,
-        packed: bool,
+        sender: &KeyPair, nonce: U256, gas: U256, gas_price: U256, value: U256,
+        storage_limit: u64, packed: bool,
     ) -> TxWithReadyInfo
     {
-        let transaction = new_test_tx(sender, nonce, gas_price, value);
+        let transaction =
+            new_test_tx(sender, nonce, gas, gas_price, value, storage_limit);
         TxWithReadyInfo {
             transaction,
             packed,
-            sponsored_gas: U256::from(0),
-            sponsored_storage: 0,
+            sponsored_gas: gas / U256::from(2),
+            sponsored_storage: storage_limit / 2,
         }
+    }
+
+    #[test]
+    fn test_tx_cost() {
+        let me = Random.generate().unwrap();
+        let value_max = U256::from(u64::MAX) * U256::from(U128::max_value());
+        let gas_fee_max = U256::from(U128::max_value());
+        // normal case without storage limit
+        let tx = new_test_tx_with_ready_info(
+            &me,
+            0.into(),
+            50000.into(),
+            10.into(),
+            10000.into(),
+            0,
+            false,
+        );
+        assert_eq!(
+            NoncePoolNode::calc_tx_cost(&tx),
+            U256::from(10 * 50000 / 2 + 10000)
+        );
+        // normal case with storage limit
+        let tx = new_test_tx_with_ready_info(
+            &me,
+            0.into(),
+            50000.into(),
+            10.into(),
+            10000.into(),
+            5000,
+            false,
+        );
+        assert_eq!(
+            NoncePoolNode::calc_tx_cost(&tx),
+            U256::from(10 * 50000 / 2 + 10000)
+                + U256::from(5000 / 2) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+        );
+        // very large tx value, not fit the range
+        let tx = new_test_tx_with_ready_info(
+            &me,
+            0.into(),
+            50000.into(),
+            10.into(),
+            value_max + U256::from(1),
+            0,
+            false,
+        );
+        assert_eq!(
+            NoncePoolNode::calc_tx_cost(&tx),
+            U256::from(10 * 50000 / 2) + value_max
+        );
+        // very large tx value, fit the range, #1
+        let tx = new_test_tx_with_ready_info(
+            &me,
+            0.into(),
+            50000.into(),
+            10.into(),
+            value_max,
+            0,
+            false,
+        );
+        assert_eq!(
+            NoncePoolNode::calc_tx_cost(&tx),
+            U256::from(10 * 50000 / 2) + value_max
+        );
+        // very large tx value, fit the range, #1
+        let tx = new_test_tx_with_ready_info(
+            &me,
+            0.into(),
+            50000.into(),
+            10.into(),
+            value_max - U256::from(1),
+            0,
+            false,
+        );
+        assert_eq!(
+            NoncePoolNode::calc_tx_cost(&tx),
+            U256::from(10 * 50000 / 2) + value_max - U256::from(1)
+        );
+        // very large gas fee, not fit the range, #1
+        let tx = new_test_tx_with_ready_info(
+            &me,
+            0.into(),
+            U256::from(U128::max_value()),
+            U256::max_value(),
+            10000.into(),
+            5000,
+            false,
+        );
+        assert_eq!(
+            NoncePoolNode::calc_tx_cost(&tx),
+            gas_fee_max
+                + U256::from(10000)
+                + U256::from(5000 / 2) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+        );
+        // very large gas fee, not fit the range, #2
+        let tx = new_test_tx_with_ready_info(
+            &me,
+            0.into(),
+            U256::from(2) * (gas_fee_max + U256::from(1)),
+            U256::from(1),
+            10000.into(),
+            5000,
+            false,
+        );
+        assert_eq!(
+            NoncePoolNode::calc_tx_cost(&tx),
+            gas_fee_max
+                + U256::from(10000)
+                + U256::from(5000 / 2) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+        );
+        // very large gas fee, fit the range, #1
+        let tx = new_test_tx_with_ready_info(
+            &me,
+            0.into(),
+            U256::from(2) * gas_fee_max,
+            U256::from(1),
+            10000.into(),
+            5000,
+            false,
+        );
+        assert_eq!(
+            NoncePoolNode::calc_tx_cost(&tx),
+            gas_fee_max
+                + U256::from(10000)
+                + U256::from(5000 / 2) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+        );
+        // very large gas fee, fit the range, #2
+        let tx = new_test_tx_with_ready_info(
+            &me,
+            0.into(),
+            U256::from(2) * (gas_fee_max - U256::from(1)),
+            U256::from(1),
+            10000.into(),
+            5000,
+            false,
+        );
+        assert_eq!(
+            NoncePoolNode::calc_tx_cost(&tx),
+            gas_fee_max - U256::from(1)
+                + U256::from(10000)
+                + U256::from(5000 / 2) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+        );
     }
 
     #[test]
@@ -544,12 +701,24 @@ mod nonce_pool_test {
         let mut tx2 = Vec::new();
         for i in 0..10 {
             tx1.push(new_test_tx_with_ready_info(
-                &me, i as usize, 10, 10000, false,
+                &me,
+                i.into(),
+                50000.into(),
+                10.into(),
+                10000.into(),
+                5000,
+                false,
             ));
         }
         for i in 0..10 {
             tx2.push(new_test_tx_with_ready_info(
-                &me, i as usize, 10, 10000, false,
+                &me,
+                i.into(),
+                50000.into(),
+                10.into(),
+                10000.into(),
+                50000,
+                false,
             ));
         }
         let mut nonce_pool = NoncePool::new();
@@ -589,19 +758,37 @@ mod nonce_pool_test {
     fn test_readiness() {
         let me = Random.generate().unwrap();
         let mut tx = Vec::new();
+        let value = U256::from(10000);
+        let gas_price = U256::from(10);
+        let storage_limit = 5000;
+        let gas = U256::from(50000);
+        let storage_per_tx =
+            U256::from(storage_limit / 2) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
         for i in 5..10 {
             if i <= 7 {
                 tx.push(new_test_tx_with_ready_info(
-                    &me, i as usize, 10, 10000, true,
+                    &me,
+                    i.into(),
+                    gas * U256::from(2),
+                    gas_price,
+                    value,
+                    storage_limit,
+                    true,
                 ));
             } else {
                 tx.push(new_test_tx_with_ready_info(
-                    &me, i as usize, 10, 10000, false,
+                    &me,
+                    i.into(),
+                    gas * U256::from(2),
+                    gas_price,
+                    value,
+                    storage_limit,
+                    false,
                 ));
             }
         }
-        let gas = 50000;
-        let exact_cost = 4 * (gas * 10 + 10000);
+        let exact_cost = U256::from(4)
+            * (gas * gas_price + U256::from(value) + storage_per_tx);
         let mut nonce_pool = NoncePool::new();
 
         for i in vec![0, 1, 3, 4] {
@@ -617,24 +804,18 @@ mod nonce_pool_test {
 
         assert_eq!(nonce_pool.get_tx_by_nonce(7.into()), None);
         assert_eq!(
-            nonce_pool.recalculate_readiness_with_local_info(
-                4.into(),
-                exact_cost.into(),
-            ),
+            nonce_pool
+                .recalculate_readiness_with_local_info(4.into(), exact_cost,),
             None
         );
         assert_eq!(
-            nonce_pool.recalculate_readiness_with_local_info(
-                5.into(),
-                exact_cost.into(),
-            ),
+            nonce_pool
+                .recalculate_readiness_with_local_info(5.into(), exact_cost,),
             None
         );
         assert_eq!(
-            nonce_pool.recalculate_readiness_with_local_info(
-                7.into(),
-                exact_cost.into(),
-            ),
+            nonce_pool
+                .recalculate_readiness_with_local_info(7.into(), exact_cost,),
             None
         );
         assert_eq!(
@@ -642,51 +823,39 @@ mod nonce_pool_test {
             InsertResult::NewAdded
         );
         assert_eq!(
-            nonce_pool.recalculate_readiness_with_local_info(
-                4.into(),
-                exact_cost.into(),
-            ),
+            nonce_pool
+                .recalculate_readiness_with_local_info(4.into(), exact_cost,),
             None
         );
         assert_eq!(
-            nonce_pool.recalculate_readiness_with_local_info(
-                5.into(),
-                exact_cost.into(),
-            ),
+            nonce_pool
+                .recalculate_readiness_with_local_info(5.into(), exact_cost,),
             Some(tx[3].transaction.clone())
         );
         assert_eq!(
-            nonce_pool.recalculate_readiness_with_local_info(
-                7.into(),
-                exact_cost.into(),
-            ),
+            nonce_pool
+                .recalculate_readiness_with_local_info(7.into(), exact_cost,),
             Some(tx[3].transaction.clone())
         );
         assert_eq!(
-            nonce_pool.recalculate_readiness_with_local_info(
-                8.into(),
-                exact_cost.into(),
-            ),
+            nonce_pool
+                .recalculate_readiness_with_local_info(8.into(), exact_cost,),
             Some(tx[3].transaction.clone())
         );
         assert_eq!(
-            nonce_pool.recalculate_readiness_with_local_info(
-                9.into(),
-                exact_cost.into(),
-            ),
+            nonce_pool
+                .recalculate_readiness_with_local_info(9.into(), exact_cost,),
             Some(tx[4].transaction.clone())
         );
         assert_eq!(
-            nonce_pool.recalculate_readiness_with_local_info(
-                10.into(),
-                exact_cost.into(),
-            ),
+            nonce_pool
+                .recalculate_readiness_with_local_info(10.into(), exact_cost,),
             None
         );
         assert_eq!(
             nonce_pool.recalculate_readiness_with_local_info(
                 5.into(),
-                (exact_cost - 1).into(),
+                exact_cost - U256::from(1),
             ),
             None
         );
@@ -700,7 +869,7 @@ mod nonce_pool_test {
         let mut next_nonce = nonce;
         let mut balance_left = balance;
         while let Some(tx) = nonce_pool.get(&next_nonce) {
-            let cost = tx.value + tx.gas_price * (tx.gas - tx.sponsored_gas);
+            let cost = NoncePoolNode::calc_tx_cost(tx);
             if balance_left < cost {
                 return None;
             }
@@ -719,13 +888,21 @@ mod nonce_pool_test {
         let me = Random.generate().unwrap();
         let mut rng = XorShiftRng::from_entropy();
         let mut tx = Vec::new();
+        let storage_limit = 5000;
+        let gas_price = U256::from(10);
+        let gas = U256::from(50000);
+        let value = U256::from(10000);
         let count = 100000;
+        let storage_per_tx =
+            U256::from(storage_limit / 2) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
         for i in 0..count {
             tx.push(new_test_tx_with_ready_info(
                 &me,
-                i as usize,
-                10,
-                10000,
+                i.into(),
+                gas * U256::from(2),
+                gas_price,
+                value,
+                storage_limit,
                 rng.next_u64() % 2 == 1,
             ));
         }
@@ -749,9 +926,9 @@ mod nonce_pool_test {
             }
         }
 
-        let gas = 50000;
         for i in 0..count * 2 {
-            let balance = rng.next_u64() % 100 * (gas * 10 + 10000);
+            let balance = U256::from(rng.next_u64() % 100)
+                * (gas * gas_price + U256::from(value) + storage_per_tx);
             let mut nonce: usize = rng.next_u64() as usize % count;
             if i < count {
                 nonce = i;
@@ -797,7 +974,8 @@ mod nonce_pool_test {
         }
 
         for i in 0..count * 2 {
-            let balance = rng.next_u64() % 100 * (gas * 10 + 10000);
+            let balance = U256::from(rng.next_u64() % 100)
+                * (gas * gas_price + U256::from(value) + storage_per_tx);
             let mut nonce: usize = rng.next_u64() as usize % count;
             if i < count {
                 nonce = i;
@@ -805,13 +983,13 @@ mod nonce_pool_test {
             let expected = recalculate_readiness_with_local_info(
                 &mock_nonce_pool,
                 nonce.into(),
-                balance.into(),
+                balance,
             );
             assert_eq!(
                 expected,
                 nonce_pool.recalculate_readiness_with_local_info(
                     nonce.into(),
-                    balance.into(),
+                    balance,
                 )
             );
         }
