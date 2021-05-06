@@ -13,9 +13,7 @@ use crate::rpc::{
 };
 use bigdecimal::BigDecimal;
 use cfx_addr::Network;
-use cfx_parameters::{
-    consensus::ONE_CFX_IN_DRIP, staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
-};
+use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_types::{Address, H160, H256, H520, U128, U256, U512, U64};
 use cfxcore::{
     rpc_errors::invalid_params_check, BlockDataManager, ConsensusGraph,
@@ -649,7 +647,8 @@ impl RpcImpl {
                 })?;
             let required_balance = tx.value
                 + tx.gas * tx.gas_price
-                + tx.storage_limit * ONE_CFX_IN_DRIP / 1024;
+                + U256::from(tx.storage_limit)
+                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
             ret.local_balance_enough = local_balance > required_balance;
             ret.state_balance_enough = state_balance > required_balance;
             ret.local_balance = local_balance;
