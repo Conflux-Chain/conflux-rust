@@ -23,6 +23,7 @@
 
 ### Bug fix
 - Fix a bug that makes running nodes in `dev` mode not generate blocks automatically.
+- Fix a bug that causes repacking useless transactions.
 
 # 1.1.2
 

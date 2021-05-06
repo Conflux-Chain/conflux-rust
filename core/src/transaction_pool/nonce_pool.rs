@@ -1,5 +1,6 @@
 use crate::transaction_pool::transaction_pool_inner::PendingReason;
-use cfx_types::U256;
+use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+use cfx_types::{U128, U256, U512};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::SignedTransaction;
@@ -12,6 +13,7 @@ pub struct TxWithReadyInfo {
     pub transaction: Arc<SignedTransaction>,
     pub packed: bool,
     pub sponsored_gas: U256,
+    pub sponsored_storage: u64,
 }
 
 impl TxWithReadyInfo {
@@ -69,10 +71,21 @@ struct NoncePoolNode {
 
 impl NoncePoolNode {
     pub fn new(tx: &TxWithReadyInfo, priority: u64) -> Self {
+        let estimate_gas_u512 =
+            (tx.gas - tx.sponsored_gas).full_mul(tx.gas_price);
+        let estimate_gas = if estimate_gas_u512 > U512::from(U128::max_value())
+        {
+            U256::from(U128::max_value())
+        } else {
+            (tx.gas - tx.sponsored_gas) * tx.gas_price
+        };
         NoncePoolNode {
             tx: tx.clone(),
             subtree_unpacked: 1 - tx.packed as u32,
-            subtree_cost: tx.value + (tx.gas - tx.sponsored_gas) * tx.gas_price,
+            subtree_cost: tx.value
+                + estimate_gas
+                + U256::from(tx.storage_limit - tx.sponsored_storage)
+                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT,
             subtree_size: 1,
             priority,
             child: [None, None],
@@ -520,6 +533,7 @@ mod nonce_pool_test {
             transaction,
             packed,
             sponsored_gas: U256::from(0),
+            sponsored_storage: 0,
         }
     }
 
