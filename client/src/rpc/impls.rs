@@ -9,6 +9,11 @@ pub struct RpcImplConfiguration {
     /// receiving a new tx through RPC calling to pack and execute this
     /// transaction.
     pub dev_pack_tx_immediately: bool,
+
+    // maximum response payload size allowed
+    // note: currently we only handle this for `cfx_getEpochReceipts`,
+    // other APIs will disconnect on oversized response
+    pub max_payload_bytes: usize,
 }
 
 pub mod cfx;

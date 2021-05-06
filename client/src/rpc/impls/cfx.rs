@@ -75,6 +75,7 @@ use cfxcore::{
 };
 use lazy_static::lazy_static;
 use metrics::{register_timer_with_group, ScopeTimer, Timer};
+use serde::Serialize;
 
 lazy_static! {
     static ref SEND_RAW_TX_TIMER: Arc<dyn Timer> =
@@ -1362,6 +1363,32 @@ impl RpcImpl {
         Ok(())
     }
 
+    // estimate response size, return error if it is too large
+    // note: this is a potentially expensive check
+    fn check_response_size<T: Serialize>(&self, response: &T) -> RpcResult<()> {
+        // account for the enclosing JSON object
+        // {"jsonrpc":"2.0","id":1,"result": ... }
+        // note: this is a rough estimation
+        let max_size = self.config.max_payload_bytes - 50;
+
+        let payload_size = serde_json::to_vec(&response)
+            .map_err(|_e| "Unexpected serialization error")?
+            .len();
+
+        if payload_size > max_size {
+            // TODO(thegaram): should we define a new error type?
+            bail!(invalid_params(
+                "epoch",
+                format!(
+                    "Oversized payload: size = {}, max = {}",
+                    payload_size, max_size
+                )
+            ));
+        }
+
+        Ok(())
+    }
+
     fn epoch_receipts(
         &self, epoch: EpochNumber,
     ) -> RpcResult<Option<Vec<Vec<RpcReceipt>>>> {
@@ -1383,6 +1410,10 @@ impl RpcImpl {
                 },
             );
         }
+
+        // TODO(thegaram): we should only do this on WS, not on HTTP
+        // how to treat these differently?
+        self.check_response_size(&epoch_receipts)?;
 
         Ok(Some(epoch_receipts))
     }
