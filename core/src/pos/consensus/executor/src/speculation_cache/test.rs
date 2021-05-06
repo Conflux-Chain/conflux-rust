@@ -11,7 +11,9 @@ fn id(index: u64) -> HashValue {
     HashValue::new(buf)
 }
 
-fn gen_block(id: HashValue) -> (HashValue, Vec<Transaction>, ProcessedVMOutput) {
+fn gen_block(
+    id: HashValue,
+) -> (HashValue, Vec<Transaction>, ProcessedVMOutput) {
     (
         id,
         vec![],
@@ -39,6 +41,7 @@ fn gen_ledger_info(block_id: HashValue, reconfig: bool) -> LedgerInfo {
 }
 
 fn create_cache() -> SpeculationCache {
+    // 
     //    * ---> 1 ---> 2
     //    |      |
     //    |      └----> 3 ---> 4

@@ -16,10 +16,10 @@ use diem_types::on_chain_config::OnChainConfigPayload;
 //use execution_correctness::ExecutionCorrectnessManager;
 use futures::channel::mpsc;
 //use state_sync::client::StateSyncClient;
+use executor_types::BlockExecutor;
 use std::sync::Arc;
 use storage_interface::DbReader;
 use tokio::runtime::{self, Runtime};
-use executor_types::BlockExecutor;
 
 /// Helper function to start consensus based on configuration and return the
 /// runtime

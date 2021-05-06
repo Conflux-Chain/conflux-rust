@@ -9,11 +9,13 @@ use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_metrics::monitor;
 use diem_types::ledger_info::LedgerInfoWithSignatures;
-use executor_types::{Error as ExecutionError, StateComputeResult, BlockExecutor};
+use executor_types::{
+    BlockExecutor, Error as ExecutionError, StateComputeResult,
+};
 use fail::fail_point;
 //use state_sync::client::StateSyncClient;
-use std::{boxed::Box, sync::Arc};
 use diem_types::transaction::Transaction;
+use std::{boxed::Box, sync::Arc};
 
 /// Basic communication with the Execution module;
 /// implements StateComputer traits.
@@ -68,8 +70,10 @@ impl StateComputer for ExecutionProxy {
         // TODO: figure out error handling for the prologue txn
         monitor!(
             "execute_block",
-            self.executor.lock()
-                .execute_block(id_and_transactions_from_block(block), parent_block_id)
+            self.executor.lock().execute_block(
+                id_and_transactions_from_block(block),
+                parent_block_id
+            )
         )
     }
 
@@ -124,7 +128,9 @@ impl StateComputer for ExecutionProxy {
     }
 }
 
-fn id_and_transactions_from_block(block: &Block) -> (HashValue, Vec<Transaction>) {
+fn id_and_transactions_from_block(
+    block: &Block,
+) -> (HashValue, Vec<Transaction>) {
     let id = block.id();
     let mut transactions = vec![Transaction::BlockMetadata(block.into())];
     transactions.extend(
