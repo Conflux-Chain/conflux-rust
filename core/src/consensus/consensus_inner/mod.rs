@@ -18,6 +18,7 @@ use crate::{
         debug_recompute::log_invalid_state_root, pastset_cache::PastSetCache,
         MaybeExecutedTxExtraInfo, TransactionInfo,
     },
+    pos::pow_handler::POS_TERM_EPOCHS,
     pow::{target_difficulty, PowComputer, ProofOfWorkConfig},
     state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
     verification::VerificationConfig,
@@ -45,7 +46,6 @@ use std::{
     mem,
     sync::Arc,
 };
-use crate::pos::pow_handler::POS_TERM_EPOCHS;
 lazy_static! {
     static ref INVALID_BLAME_OR_STATE_ROOT_COUNTER: Arc<dyn Counter<usize>> =
         CounterUsize::register_with_group(
@@ -3769,18 +3769,26 @@ impl ConsensusGraphInner {
         Some(subtree)
     }
 
-    pub fn get_next_pivot_decision(&self, parent_decision_hash: &H256) -> Option<H256> {
+    pub fn get_next_pivot_decision(
+        &self, parent_decision_hash: &H256,
+    ) -> Option<H256> {
         match self.hash_to_arena_indices.get(parent_decision_hash) {
-            None => {todo!()}
+            None => todo!(),
             Some(parent_decision) => {
-                let parent_decision_height = self.arena[*parent_decision].height;
+                let parent_decision_height =
+                    self.arena[*parent_decision].height;
                 assert_eq!(parent_decision_height % POS_TERM_EPOCHS, 0);
-                if self.get_pivot_block_arena_index(parent_decision_height) == *parent_decision {
-                    let new_decision_height = self.best_epoch_number() / POS_TERM_EPOCHS * POS_TERM_EPOCHS;
+                if self.get_pivot_block_arena_index(parent_decision_height)
+                    == *parent_decision
+                {
+                    let new_decision_height = self.best_epoch_number()
+                        / POS_TERM_EPOCHS
+                        * POS_TERM_EPOCHS;
                     if new_decision_height == parent_decision_height {
                         None
                     } else {
-                        let new_decision_arena_index = self.get_pivot_block_arena_index(new_decision_height);
+                        let new_decision_arena_index = self
+                            .get_pivot_block_arena_index(new_decision_height);
                         Some(self.arena[new_decision_arena_index].hash)
                     }
                 } else {

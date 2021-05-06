@@ -17,7 +17,7 @@ fn gen_block(
     (
         id,
         vec![],
-        ProcessedVMOutput::new(vec![], ExecutedTrees::new_empty(), None),
+        ProcessedVMOutput::new(vec![], ExecutedTrees::new_empty(), None, None),
     )
 }
 

@@ -158,6 +158,8 @@ pub fn calculate_genesis<V: VMExecutor>(
                 genesis_version,
                 timestamp_usecs,
                 Some(next_epoch_state.clone()),
+                // TODO(lpl): Check genesis pivot decision
+                None,
             ),
             HashValue::zero(), /* consensus_data_hash */
         ),

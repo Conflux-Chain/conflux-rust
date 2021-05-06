@@ -13,9 +13,18 @@ use consensus_types::{
     quorum_cert::QuorumCert,
 };
 
+use crate::pos::pow_handler::PowHandler;
 use diem_infallible::Mutex;
 use std::sync::Arc;
-use crate::pos::pow_handler::{PowHandler, PowInterface};
+use cfx_types::H256;
+use diem_types::contract_event::ContractEvent;
+use diem_types::block_info::PivotBlockDecision;
+use diem_types::transaction::{ChangeSet, RawTransaction};
+use diem_types::write_set::WriteSet;
+use diem_types::chain_id::ChainId;
+use move_core_types::language_storage::TypeTag;
+use diem_crypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};
+use diem_crypto::PrivateKey;
 
 #[cfg(test)]
 #[path = "proposal_generator_test.rs"]
@@ -47,13 +56,17 @@ pub struct ProposalGenerator {
     last_round_generated: Mutex<Round>,
     // Handle the interaction with PoW consensus.
     pow_handler: Arc<PowHandler>,
+    // FIXME(lpl): Where to put them?
+    private_key: Ed25519PrivateKey,
+    public_key: Ed25519PublicKey,
 }
 
 impl ProposalGenerator {
     pub fn new(
         author: Author, block_store: Arc<dyn BlockReader + Send + Sync>,
         txn_manager: Arc<dyn TxnManager>, time_service: Arc<dyn TimeService>,
-        max_block_size: u64, pow_handler: Arc<PowHandler>,
+        max_block_size: u64, pow_handler: Arc<PowHandler>, private_key: Ed25519PrivateKey,
+        public_key: Ed25519PublicKey,
     ) -> Self
     {
         Self {
@@ -63,7 +76,9 @@ impl ProposalGenerator {
             time_service,
             max_block_size,
             last_round_generated: Mutex::new(0),
-            pow_handler
+            pow_handler,
+            private_key,
+            public_key
         }
     }
 
@@ -100,7 +115,7 @@ impl ProposalGenerator {
 
         let hqc = self.ensure_highest_quorum_cert(round)?;
 
-        /* TODO(lpl): Handle reconfiguraiton.
+        // TODO(lpl): Handle reconfiguraiton.
         let (payload, timestamp) = if hqc
             .certified_block()
             .has_reconfiguration()
@@ -139,45 +154,54 @@ impl ProposalGenerator {
             // it.
             let timestamp = self.time_service.get_current_timestamp();
 
-            let payload = self
+            let mut payload = self
                 .txn_manager
                 .pull_txns(self.max_block_size, exclude_payload)
                 .await
                 .context("Fail to retrieve txn")?;
 
+            let parent_block = if let Some(p) = pending_blocks.last() {
+                p.clone()
+            } else {
+                self.block_store.root()
+            };
+
+            let pivot_decision = if let Some(parent_decision) = parent_block.block_info().pivot_decision() {
+                match self.pow_handler.next_pivot_decision(parent_decision.block_hash).await
+                {
+                    Some(res) => res,
+                    None => {
+                        // TODO(lpl): Handle the error from outside.
+                        bail!("No new pivot decision to propose");
+                    }
+                }
+            } else {
+                // FIXME(lpl): Return the first pow block.
+                H256::default()
+            };
+
+            let event_data = bcs::to_bytes(&pivot_decision)?;
+            let event = ContractEvent::new(
+                PivotBlockDecision::pivot_select_event_key(),
+                0, /* sequence_number */
+                TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
+                event_data,
+            );
+
+            let change_set = ChangeSet::new(WriteSet::default(), vec![event]);
+            let raw_tx = RawTransaction::new_change_set(
+                self.author,
+                0,
+                change_set,
+                ChainId::default(), // FIXME(lpl): Set chain id.
+            );
+            let signed_tx = raw_tx
+                .sign(&self.private_key, self.public_key.clone())?
+                .into_inner();
+            payload.push(signed_tx);
+
             (payload, timestamp.as_micros() as u64)
         };
-        */
-
-
-        let pivot_decision = match self.pow_handler.next_pivot_decision().await {
-            Some(res) => res,
-            None => {
-                // TODO(lpl): Handle the error from outside.
-                bail!("No new pivot decision to propose");
-            }
-        };
-
-        let event_data = lcs::to_bytes(&pivot_decision)?;
-        let event = ContractEvent::new(
-            PivotBlockDecision::pivot_select_event_key(),
-            0, /* sequence_number */
-            TypeTag::ByteArray,
-            event_data,
-        );
-
-        let change_set = ChangeSet::new(WriteSet::default(), vec![event]);
-        let raw_tx = RawTransaction::new_change_set(
-            self.author,
-            0,
-            change_set,
-            false, /* is_admin_type */
-        );
-        let signed_tx = raw_tx
-            .sign(self.key_pair.secret(), self.key_pair.public().clone())?
-            .into_inner();
-
-        let txns = self.txn_transformer.convert(signed_tx);
 
         // create block proposal
         Ok(BlockData::new_proposal(

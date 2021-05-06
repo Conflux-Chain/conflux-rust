@@ -49,6 +49,7 @@ use diem_types::{
 use futures::{select, StreamExt};
 use safety_rules::SafetyRulesManager;
 use std::{cmp::Ordering, sync::Arc, time::Duration};
+use crate::pos::pow_handler::PowHandler;
 
 /// RecoveryManager is used to process events in order to sync up with peer if
 /// we can't recover from local consensusdb RoundManager is used for normal
@@ -90,6 +91,8 @@ pub struct EpochManager {
     safety_rules_manager: SafetyRulesManager,
     processor: Option<RoundProcessor>,
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
+    // Conflux PoW handler
+    pow_handler: Arc<PowHandler>,
 }
 
 impl EpochManager {
@@ -103,6 +106,7 @@ impl EpochManager {
         state_computer: Arc<dyn StateComputer>,
         storage: Arc<dyn PersistentLivenessStorage>,
         reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
+        pow_handler: Arc<PowHandler>,
     ) -> Self
     {
         let author = node_config.validator_network.as_ref().unwrap().peer_id();
@@ -122,6 +126,7 @@ impl EpochManager {
             safety_rules_manager,
             processor: None,
             reconfig_events,
+            pow_handler
         }
     }
 
@@ -332,6 +337,9 @@ impl EpochManager {
         }
 
         diem_info!(epoch = epoch, "Create ProposalGenerator");
+        // TODO(lpl): Decide key management.
+        let public_key = epoch_state.verifier.get_public_key(&self.author).expect("public key exist");
+        let private_key = self.config.safety_rules.test.as_ref().expect("use privat key in test").consensus_key.as_ref().expect("private key exist").private_key();
         // txn manager is required both by proposal generator (to pull the
         // proposers) and by event processor (to update their status).
         let proposal_generator = ProposalGenerator::new(
@@ -340,6 +348,9 @@ impl EpochManager {
             self.txn_manager.clone(),
             self.time_service.clone(),
             self.config.max_block_size,
+            self.pow_handler.clone(),
+            private_key,
+            public_key,
         );
 
         diem_info!(epoch = epoch, "Create RoundState");

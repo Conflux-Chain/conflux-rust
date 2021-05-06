@@ -20,6 +20,8 @@ use executor_types::BlockExecutor;
 use std::sync::Arc;
 use storage_interface::DbReader;
 use tokio::runtime::{self, Runtime};
+use crate::ConsensusGraph;
+use crate::pos::pow_handler::PowHandler;
 
 /// Helper function to start consensus based on configuration and return the
 /// runtime
@@ -32,6 +34,7 @@ pub fn start_consensus(
     diem_db: Arc<dyn DbReader>,
     executor: Box<dyn BlockExecutor>,
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
+    pow_consensus: Arc<ConsensusGraph>,
 ) -> Runtime
 {
     let runtime = runtime::Builder::new()
@@ -59,6 +62,10 @@ pub fn start_consensus(
         channel::new(1_024, &counters::PENDING_ROUND_TIMEOUTS);
     //let (self_sender, self_receiver) =
     //    channel::new(1_024, &counters::PENDING_SELF_MESSAGES);
+    let pow_handler = Arc::new(PowHandler::new(
+        runtime.handle().clone(),
+        pow_consensus,
+    ));
 
     let epoch_mgr = EpochManager::new(
         node_config,
@@ -70,6 +77,7 @@ pub fn start_consensus(
         state_computer,
         storage,
         reconfig_events,
+        pow_handler,
     );
 
     let (network_task, network_receiver) = NetworkTask::new(

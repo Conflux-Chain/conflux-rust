@@ -27,6 +27,7 @@ use scratchpad::ProofRead;
 use serde::{Deserialize, Serialize};
 use std::{cmp::max, collections::HashMap, sync::Arc};
 use storage_interface::TreeState;
+use diem_types::block_info::PivotBlockDecision;
 
 type SparseMerkleProof = diem_types::proof::SparseMerkleProof<AccountStateBlob>;
 type SparseMerkleTree = scratchpad::SparseMerkleTree<AccountStateBlob>;
@@ -134,6 +135,9 @@ pub struct StateComputeResult {
 
     /// The signature of the VoteProposal corresponding to this block.
     signature: Option<Ed25519Signature>,
+
+    /// Tracks the last pivot selection of a proposed block
+    pivot_decision: Option<PivotBlockDecision>,
 }
 
 impl StateComputeResult {
@@ -143,6 +147,7 @@ impl StateComputeResult {
         parent_num_leaves: u64, epoch_state: Option<EpochState>,
         compute_status: Vec<TransactionStatus>,
         transaction_info_hashes: Vec<HashValue>,
+        pivot_decision: Option<PivotBlockDecision>
     ) -> Self
     {
         Self {
@@ -155,6 +160,7 @@ impl StateComputeResult {
             compute_status,
             transaction_info_hashes,
             signature: None,
+            pivot_decision
         }
     }
 }
@@ -198,6 +204,10 @@ impl StateComputeResult {
 
     pub fn parent_frozen_subtree_roots(&self) -> &Vec<HashValue> {
         &self.parent_frozen_subtree_roots
+    }
+
+    pub fn pivot_decision(&self) -> &Option<PivotBlockDecision> {
+        &self.pivot_decision
     }
 
     pub fn has_reconfiguration(&self) -> bool { self.epoch_state.is_some() }

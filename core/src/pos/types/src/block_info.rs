@@ -47,13 +47,16 @@ pub struct BlockInfo {
     timestamp_usecs: u64,
     /// An optional field containing the next epoch info
     next_epoch_state: Option<EpochState>,
+    /// The last pivot block selection after executing this block.
+    /// None means choosing TreeGraph genesis as the first pivot block.
+    pivot: Option<PivotBlockDecision>,
 }
 
 impl BlockInfo {
     pub fn new(
         epoch: u64, round: Round, id: HashValue, executed_state_id: HashValue,
         version: Version, timestamp_usecs: u64,
-        next_epoch_state: Option<EpochState>,
+        next_epoch_state: Option<EpochState>, pivot: Option<PivotBlockDecision>,
     ) -> Self
     {
         Self {
@@ -64,6 +67,7 @@ impl BlockInfo {
             version,
             timestamp_usecs,
             next_epoch_state,
+            pivot
         }
     }
 
@@ -76,6 +80,7 @@ impl BlockInfo {
             version: 0,
             timestamp_usecs: 0,
             next_epoch_state: None,
+            pivot: None
         }
     }
 
@@ -89,6 +94,7 @@ impl BlockInfo {
             version: 0,
             timestamp_usecs: 0,
             next_epoch_state: None,
+            pivot: None
         }
     }
 
@@ -118,6 +124,7 @@ impl BlockInfo {
                 epoch: 1,
                 verifier: (&validator_set).into(),
             }),
+            pivot: None
         }
     }
 
@@ -153,6 +160,8 @@ impl BlockInfo {
     pub fn timestamp_usecs(&self) -> u64 { self.timestamp_usecs }
 
     pub fn version(&self) -> Version { self.version }
+
+    pub fn pivot_decision(&self) -> Option<&PivotBlockDecision> { self.pivot.as_ref() }
 }
 
 impl Display for BlockInfo {
@@ -175,7 +184,6 @@ impl Display for BlockInfo {
 pub struct PivotBlockDecision {
     pub height: u64,
     pub block_hash: H256,
-    pub parent_hash: H256,
 }
 
 impl PivotBlockDecision {

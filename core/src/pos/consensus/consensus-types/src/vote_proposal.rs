@@ -12,6 +12,7 @@ use std::{
     fmt::{Display, Formatter},
     ops::Deref,
 };
+use diem_types::block_info::PivotBlockDecision;
 
 /// This structure contains all the information needed by safety rules to
 /// evaluate a proposal / block for correctness / safety and to produce a Vote.
@@ -26,6 +27,8 @@ pub struct VoteProposal {
     block: Block,
     /// An optional field containing the next epoch info.
     next_epoch_state: Option<EpochState>,
+    /// The pivot decision after `block` is executed.
+    pivot_decision: Option<PivotBlockDecision>,
 }
 
 impl VoteProposal {
@@ -34,12 +37,14 @@ impl VoteProposal {
             TransactionAccumulatorHasher,
         >,
         block: Block, next_epoch_state: Option<EpochState>,
+        pivot_decision: Option<PivotBlockDecision>
     ) -> Self
     {
         Self {
             accumulator_extension_proof,
             block,
             next_epoch_state,
+            pivot_decision
         }
     }
 
@@ -53,6 +58,10 @@ impl VoteProposal {
 
     pub fn next_epoch_state(&self) -> Option<&EpochState> {
         self.next_epoch_state.as_ref()
+    }
+
+    pub fn pivot_decision(&self) -> &Option<PivotBlockDecision> {
+        &self.pivot_decision
     }
 }
 

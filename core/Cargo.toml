@@ -113,6 +113,8 @@ subscription-service = { path = "./src/pos/common/subscription-service" }
 fail = "0.4.0"
 anyhow = "1.0.38"
 once_cell = "1.7.2"
+move-core-types = { path = "./src/pos/types/move-core-types"}
+
 
 
 [dev-dependencies]

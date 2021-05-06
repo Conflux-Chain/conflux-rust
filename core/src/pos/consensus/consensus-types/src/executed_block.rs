@@ -72,6 +72,7 @@ impl ExecutedBlock {
             self.compute_result().root_hash(),
             self.compute_result().version(),
             self.compute_result().epoch_state().clone(),
+            self.compute_result().pivot_decision().clone(),
         )
     }
 
@@ -81,6 +82,7 @@ impl ExecutedBlock {
                 self.compute_result().extension_proof(),
                 self.block.clone(),
                 self.compute_result().epoch_state().clone(),
+                self.compute_result().pivot_decision().clone(),
             ),
             signature: self.compute_result().signature().clone(),
         }

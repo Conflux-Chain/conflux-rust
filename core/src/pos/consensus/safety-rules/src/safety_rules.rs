@@ -33,6 +33,7 @@ use diem_types::{
 };
 use serde::Serialize;
 use std::cmp::Ordering;
+use diem_types::transaction::{RawTransaction, SignedTransaction};
 
 /// @TODO consider a cache of verified QCs to cut down on verification costs
 pub struct SafetyRules {
@@ -107,6 +108,7 @@ impl SafetyRules {
                 new_tree.root_hash(),
                 new_tree.version(),
                 vote_proposal.next_epoch_state().cloned(),
+                vote_proposal.pivot_decision().clone(),
             ),
             proposed_block.quorum_cert().certified_block().clone(),
         ))

@@ -18,6 +18,7 @@ use diem_types::{
 use mirai_annotations::debug_checked_verify_eq;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt::{self, Display, Formatter};
+use diem_types::block_info::PivotBlockDecision;
 
 #[path = "block_test_utils.rs"]
 #[cfg(any(test, feature = "fuzzing"))]
@@ -92,7 +93,7 @@ impl Block {
 
     pub fn gen_block_info(
         &self, executed_state_id: HashValue, version: Version,
-        next_epoch_state: Option<EpochState>,
+        next_epoch_state: Option<EpochState>, pivot: Option<PivotBlockDecision>
     ) -> BlockInfo
     {
         BlockInfo::new(
@@ -103,6 +104,7 @@ impl Block {
             version,
             self.timestamp_usecs(),
             next_epoch_state,
+            pivot,
         )
     }
 

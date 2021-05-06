@@ -8,6 +8,7 @@ use consensus_types::{
 };
 use diem_crypto::ed25519::Ed25519Signature;
 use diem_types::epoch_change::EpochChangeProof;
+use diem_types::transaction::{RawTransaction, SignedTransaction};
 
 /// Interface for SafetyRules
 pub trait TSafetyRules {

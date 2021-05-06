@@ -499,6 +499,8 @@ pub enum StatusCode {
     BAD_TRANSACTION_FEE_CURRENCY = 25,
     // The feature requested is intended for a future Diem version instead of the current one
     FEATURE_UNDER_GATING = 26,
+    // The transaction is not expected for Conflux PoS chain
+    CFX_UNEXPECTED_TX = 27,
 
     // When a code module/script is published it is verified. These are the
     // possible errors that can arise from the verification process.
