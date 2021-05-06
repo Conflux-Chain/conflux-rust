@@ -102,6 +102,7 @@ diem-metrics = { path = "./src/pos/common/metrics" }
 diem-secure-storage = { path = "./src/pos/secure/storage" }
 diem-types = { path = "./src/pos/types" }
 executor-types = { path = "./src/pos/types/executor-types" }
+executor = {path = "./src/pos/consensus/executor"}
 consensus-types = { path = "./src/pos/consensus/consensus-types" }
 safety-rules = { path = "./src/pos/consensus/safety-rules" }
 diemdb = { path = "./src/pos/storage/diemdb" }

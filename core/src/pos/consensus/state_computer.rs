@@ -9,11 +9,11 @@ use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_metrics::monitor;
 use diem_types::ledger_info::LedgerInfoWithSignatures;
-use executor_types::{Error as ExecutionError, StateComputeResult};
+use executor_types::{Error as ExecutionError, StateComputeResult, BlockExecutor};
 use fail::fail_point;
 //use state_sync::client::StateSyncClient;
-use crate::pos::consensus::executor::Executor;
 use std::{boxed::Box, sync::Arc};
+use diem_types::transaction::Transaction;
 
 /// Basic communication with the Execution module;
 /// implements StateComputer traits.
@@ -21,7 +21,8 @@ pub struct ExecutionProxy {
     //execution_correctness_client:
     //    Mutex<Box<dyn ExecutionCorrectness + Send + Sync>>,
     //synchronizer: StateSyncClient,
-    executor: Arc<Executor>,
+    // TODO(lpl): Use Mutex or Arc?
+    executor: Mutex<Box<dyn BlockExecutor>>,
 }
 
 impl ExecutionProxy {
@@ -30,7 +31,7 @@ impl ExecutionProxy {
             dyn ExecutionCorrectness + Send + Sync,
         >,
         synchronizer: StateSyncClient,*/
-        executor: Arc<Executor>,
+        executor: Box<dyn BlockExecutor>,
     ) -> Self
     {
         Self {
@@ -38,7 +39,7 @@ impl ExecutionProxy {
                 execution_correctness_client,
             ),
             //synchronizer,*/
-            executor,
+            executor: Mutex::new(executor),
         }
     }
 }
@@ -65,14 +66,11 @@ impl StateComputer for ExecutionProxy {
         );
 
         // TODO: figure out error handling for the prologue txn
-        /*monitor!(
+        monitor!(
             "execute_block",
-            self.executor
-                .execute_block(block.clone(), parent_block_id)
-        )*/
-        Err(ExecutionError::InternalError {
-            error: "TODO".parse().unwrap(),
-        })
+            self.executor.lock()
+                .execute_block(id_and_transactions_from_block(block), parent_block_id)
+        )
     }
 
     /// Send a successful commit. A future is fulfilled when the state is
@@ -124,4 +122,17 @@ impl StateComputer for ExecutionProxy {
         })*/
         Ok(())
     }
+}
+
+fn id_and_transactions_from_block(block: &Block) -> (HashValue, Vec<Transaction>) {
+    let id = block.id();
+    let mut transactions = vec![Transaction::BlockMetadata(block.into())];
+    transactions.extend(
+        block
+            .payload()
+            .unwrap_or(&vec![])
+            .iter()
+            .map(|txn| Transaction::UserTransaction(txn.clone())),
+    );
+    (id, transactions)
 }
