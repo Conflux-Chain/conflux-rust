@@ -1146,7 +1146,7 @@ impl RpcImpl {
 
                 // Try to fetch the innermost error.
                 let innermost_error = if errors.len()>0{
-                    format!("{} at {}.", errors[0].1, errors[0].0)
+                    format!("Innermost error is at {}: {}.", errors[0].0, errors[0].1)
                 }else{
                     String::default()
                 };
