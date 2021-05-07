@@ -28,8 +28,12 @@ use diem_crypto::{
 };
 use diem_logger::prelude::*;
 use diem_types::{
-    block_info::BlockInfo, epoch_change::EpochChangeProof,
-    epoch_state::EpochState, ledger_info::LedgerInfo, waypoint::Waypoint,
+    block_info::BlockInfo,
+    epoch_change::EpochChangeProof,
+    epoch_state::EpochState,
+    ledger_info::LedgerInfo,
+    transaction::{RawTransaction, SignedTransaction},
+    waypoint::Waypoint,
 };
 use serde::Serialize;
 use std::cmp::Ordering;
@@ -107,6 +111,7 @@ impl SafetyRules {
                 new_tree.root_hash(),
                 new_tree.version(),
                 vote_proposal.next_epoch_state().cloned(),
+                vote_proposal.pivot_decision().clone(),
             ),
             proposed_block.quorum_cert().certified_block().clone(),
         ))

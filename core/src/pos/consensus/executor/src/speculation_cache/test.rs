@@ -17,7 +17,7 @@ fn gen_block(
     (
         id,
         vec![],
-        ProcessedVMOutput::new(vec![], ExecutedTrees::new_empty(), None),
+        ProcessedVMOutput::new(vec![], ExecutedTrees::new_empty(), None, None),
     )
 }
 
@@ -41,7 +41,7 @@ fn gen_ledger_info(block_id: HashValue, reconfig: bool) -> LedgerInfo {
 }
 
 fn create_cache() -> SpeculationCache {
-    // 
+    //
     //    * ---> 1 ---> 2
     //    |      |
     //    |      └----> 3 ---> 4

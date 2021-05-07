@@ -159,6 +159,8 @@ impl BlockStore {
             None,                     /* epoch_state */
             vec![],                   /* compute_status */
             vec![],                   /* txn_infos */
+            // TODO(lpl): Should this be None?
+            None,
         );
 
         let executed_root_block = ExecutedBlock::new(

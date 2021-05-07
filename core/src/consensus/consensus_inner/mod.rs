@@ -18,6 +18,7 @@ use crate::{
         debug_recompute::log_invalid_state_root, pastset_cache::PastSetCache,
         MaybeExecutedTxExtraInfo, TransactionInfo,
     },
+    pos::pow_handler::POS_TERM_EPOCHS,
     pow::{target_difficulty, PowComputer, ProofOfWorkConfig},
     state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
     verification::VerificationConfig,
@@ -3766,6 +3767,57 @@ impl ConsensusGraphInner {
             }
         }
         Some(subtree)
+    }
+
+    pub fn get_next_pivot_decision(
+        &self, parent_decision_hash: &H256,
+    ) -> Option<H256> {
+        match self.hash_to_arena_indices.get(parent_decision_hash) {
+            None => todo!(),
+            Some(parent_decision) => {
+                let parent_decision_height =
+                    self.arena[*parent_decision].height;
+                assert_eq!(parent_decision_height % POS_TERM_EPOCHS, 0);
+                if self.get_pivot_block_arena_index(parent_decision_height)
+                    == *parent_decision
+                {
+                    let new_decision_height = self.best_epoch_number()
+                        / POS_TERM_EPOCHS
+                        * POS_TERM_EPOCHS;
+                    if new_decision_height == parent_decision_height {
+                        None
+                    } else {
+                        let new_decision_arena_index = self
+                            .get_pivot_block_arena_index(new_decision_height);
+                        Some(self.arena[new_decision_arena_index].hash)
+                    }
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    pub fn is_ancestor_of(&self, ancestor_hash: &H256, me_hash: &H256) -> bool {
+        match (
+            self.hash_to_arena_indices.get(ancestor_hash),
+            self.hash_to_arena_indices.get(me_hash),
+        ) {
+            (Some(ancestor), Some(me)) => {
+                // Both in memory. Just use Link-Cut-Tree.
+                self.ancestor_at(*me, self.arena[*ancestor].height) == *ancestor
+            }
+            // TODO(lpl): Check if it's possible to go beyond checkpoint.
+            (_, Some(me)) => {
+                // Only `me` is in memory. Use in-memory data first, then loop
+                // with header parent.
+                todo!()
+            }
+            (_, _) => {
+                // Even `me` is not in memory. Have to loop with parent.
+                todo!()
+            }
+        }
     }
 }
 

@@ -827,6 +827,7 @@ dependencies = [
  "memory-cache",
  "metrics",
  "mirai-annotations",
+ "move-core-types",
  "network",
  "num",
  "num-derive",

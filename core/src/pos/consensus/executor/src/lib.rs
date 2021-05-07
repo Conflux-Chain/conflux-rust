@@ -36,6 +36,7 @@ use diem_types::{
     account_address::{AccountAddress, HashAccountAddress},
     account_state::AccountState,
     account_state_blob::AccountStateBlob,
+    block_info::PivotBlockDecision,
     contract_event::ContractEvent,
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
@@ -290,6 +291,22 @@ where V: VMExecutor
 
         let proof_reader = ProofReader::new(account_to_proof);
         let new_epoch_event_key = on_chain_config::new_epoch_event_key();
+        let pivot_select_event_key =
+            PivotBlockDecision::pivot_select_event_key();
+
+        // Find the next pivot block.
+        let mut pivot_decision = None;
+        for vm_output in vm_outputs.clone().into_iter() {
+            for event in vm_output.events() {
+                // check for pivot block selection.
+                if *event.key() == pivot_select_event_key {
+                    pivot_decision = Some(PivotBlockDecision::from_bytes(
+                        event.event_data(),
+                    )?);
+                    break;
+                }
+            }
+        }
 
         let new_epoch_marker = vm_outputs
             .iter()
@@ -449,6 +466,8 @@ where V: VMExecutor
                 Arc::new(current_transaction_accumulator),
             ),
             next_epoch_state,
+            // TODO(lpl): Check if we need to assert it's Some.
+            pivot_decision,
         ))
     }
 
@@ -801,6 +820,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 vec![],
                 parent_output.executed_trees().clone(),
                 parent_output.epoch_state().clone(),
+                parent_output.pivot_block().clone(),
             );
 
             let parent_accu = parent_output.executed_trees().txn_accumulator();

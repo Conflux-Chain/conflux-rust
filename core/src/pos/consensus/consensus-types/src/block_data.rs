@@ -132,6 +132,8 @@ impl BlockData {
             ledger_info.version(),
             ledger_info.timestamp_usecs(),
             None,
+            // TODO(lpl): Check if it's None.
+            None,
         );
 
         // Genesis carries a placeholder quorum certificate to its parent id

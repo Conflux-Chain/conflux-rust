@@ -7,6 +7,7 @@ use diem_crypto::{hash::EventAccumulatorHasher, HashValue};
 use diem_types::{
     account_address::AccountAddress,
     account_state_blob::AccountStateBlob,
+    block_info::PivotBlockDecision,
     contract_event::ContractEvent,
     epoch_state::EpochState,
     proof::accumulator::InMemoryAccumulator,
@@ -99,18 +100,23 @@ pub struct ProcessedVMOutput {
     /// If set, this is the new epoch info that should be changed to if this
     /// block is committed.
     epoch_state: Option<EpochState>,
+
+    /// If set, this is the selected pivot block in current transaction.
+    pivot_block: Option<PivotBlockDecision>,
 }
 
 impl ProcessedVMOutput {
     pub fn new(
         transaction_data: Vec<TransactionData>, executed_trees: ExecutedTrees,
         epoch_state: Option<EpochState>,
+        pivot_block: Option<PivotBlockDecision>,
     ) -> Self
     {
         ProcessedVMOutput {
             transaction_data,
             executed_trees,
             epoch_state,
+            pivot_block,
         }
     }
 
@@ -125,6 +131,10 @@ impl ProcessedVMOutput {
     pub fn version(&self) -> Option<Version> { self.executed_trees().version() }
 
     pub fn epoch_state(&self) -> &Option<EpochState> { &self.epoch_state }
+
+    pub fn pivot_block(&self) -> &Option<PivotBlockDecision> {
+        &self.pivot_block
+    }
 
     pub fn has_reconfiguration(&self) -> bool { self.epoch_state.is_some() }
 
@@ -154,6 +164,7 @@ impl ProcessedVMOutput {
                 .iter()
                 .filter_map(|x| x.txn_info_hash())
                 .collect(),
+            self.pivot_block().clone(),
         )
     }
 }

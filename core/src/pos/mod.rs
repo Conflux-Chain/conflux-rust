@@ -4,4 +4,5 @@
 
 #[allow(missing_docs)]
 pub mod consensus;
+pub mod pow_handler;
 pub mod protocol;
