@@ -72,6 +72,7 @@ use cfxcore::{
     spec::genesis::{
         genesis_contract_address_four_year, genesis_contract_address_two_year,
     },
+    trace::ErrorUnwind,
 };
 use lazy_static::lazy_static;
 use metrics::{register_timer_with_group, ScopeTimer, Timer};
@@ -1123,10 +1124,36 @@ impl RpcImpl {
                 ExecutionError::VmError(vm::Error::Reverted),
                 executed,
             ) => {
+                let network_type = *self.sync.network.get_network_type();
+
+                // When a revert exception happens, there is usually an error in the sub-calls.
+                // So we return the trace information for debugging contract.
+                let errors = ErrorUnwind::from_traces(executed.trace).errors.iter()
+                    .map(|(addr,error)| {
+                        let cip37_addr = RpcAddress::try_from_h160(addr.clone(),network_type).unwrap().base32_address;
+                        format!("{} {}", cip37_addr, error)
+                    })
+                    .collect::<Vec<String>>();
+
+                // Decode revert error
+                let revert_error = revert_reason_decode(&executed.output);
+                let revert_error = if !revert_error.is_empty() {
+                    format!(": {}.",revert_error)
+                }else{
+                    format!(".")
+                };
+
+                // Try to fetch the innermost error.
+                let innermost_error = if errors.len()>0{
+                    format!("Triggered from {}.", errors[0])
+                }else{
+                    String::default()
+                };
+
                 bail!(call_execution_error(
-                    format!("Estimation isn't accurate: transaction is reverted. Execution output {}",
-                        revert_reason_decode(&executed.output)),
-                    [b"Reverted. Execution output: ", &*executed.output].concat(),
+                    format!("Estimation isn't accurate: transaction is reverted{}{}",
+                        revert_error, innermost_error),
+                    errors.join("\n").into_bytes(),
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
