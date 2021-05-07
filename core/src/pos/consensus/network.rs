@@ -6,7 +6,7 @@ use super::{
     logging::LogEvent,
     network_interface::{ConsensusMsg, ConsensusNetworkSender},
 };
-use anyhow::{anyhow, ensure};
+use anyhow::{anyhow, bail, ensure, format_err};
 use bytes::Bytes;
 use channel::{self, diem_channel, message_queues::QueueStyle};
 use consensus_types::{
@@ -25,9 +25,16 @@ use diem_types::{
 };
 use futures::{channel::oneshot, stream::select, SinkExt, Stream, StreamExt};
 //use network::protocols::{network::Event, rpc::error::RpcError};
-use crate::message::RequestId;
+use crate::{
+    message::RequestId,
+    pos::protocol::message::{
+        block_retrieval::BlockRetrievalRpcRequest,
+        block_retrieval_response::BlockRetrievalRpcResponse,
+    },
+};
+use cfx_types::H256;
 use consensus_types::block_retrieval::BlockRetrievalStatus;
-use network::node_table::NodeId;
+use network::{node_table::NodeId, NetworkProtocolHandler};
 use std::{
     mem::{discriminant, Discriminant},
     time::Duration,
@@ -40,7 +47,6 @@ pub struct IncomingBlockRetrievalRequest {
     pub req: BlockRetrievalRequest,
     pub peer_id: NodeId,
     pub request_id: RequestId,
-    //pub response_sender: oneshot::Sender<Result<Bytes, RpcError>>,
 }
 
 /// Just a convenience struct to keep all the network proxy receiving queues in
@@ -84,24 +90,44 @@ impl NetworkSender {
         timeout: Duration,
     ) -> anyhow::Result<BlockRetrievalResponse>
     {
-        Ok(BlockRetrievalResponse::new(
-            BlockRetrievalStatus::Succeeded,
-            vec![],
-        ))
-        /*
         ensure!(from != self.author, "Retrieve block from self");
-        let msg = ConsensusMsg::BlockRetrievalRequest(Box::new(
-            retrieval_request.clone(),
-        ));
-        let response_msg = monitor!(
-            "block_retrieval",
-            self.network_sender.send_rpc(from, msg, timeout).await?
-        );
-        let response = match response_msg {
-            ConsensusMsg::BlockRetrievalResponse(resp) => *resp,
-            _ => return Err(anyhow!("Invalid response to request")),
+
+        let peer_hash = H256::from_slice(from.to_vec().as_slice());
+        let peer_state =
+            self.network_sender.protocol_handler.peers.get(&peer_hash);
+        if peer_state.is_none() {
+            bail!("peer not found");
+        }
+        let peer_state = peer_state.unwrap();
+        let peer_id = peer_state.read().get_id().clone();
+
+        let request = BlockRetrievalRpcRequest {
+            request_id: 0,
+            request: retrieval_request.clone(),
+            is_empty: false,
+            response_tx: None,
+            timeout,
         };
+
+        let rpc_response = monitor!(
+            "block_retrieval",
+            self.network_sender
+                .send_rpc(Some(peer_id), Box::new(request))
+                .await
+                .map_err(|_| { format_err!("rpc call failed") })?
+        );
+        let response = match rpc_response
+            .as_any()
+            .downcast_ref::<BlockRetrievalRpcResponse>()
+        {
+            Some(r) => r.clone(),
+            None => {
+                bail!("response downcast failed");
+            }
+        };
+
         response
+            .response
             .verify(
                 retrieval_request.block_id(),
                 retrieval_request.num_blocks(),
@@ -109,14 +135,13 @@ impl NetworkSender {
             )
             .map_err(|e| {
                 diem_error!(
-                    //SecurityEvent::InvalidRetrievedBlock,
                     request_block_response = response,
                     error = ?e,
                 );
                 e
             })?;
 
-        Ok(response)*/
+        Ok(response.response)
     }
 
     /// Tries to send the given msg to all the participants.
@@ -127,11 +152,13 @@ impl NetworkSender {
     /// about when the message is delivered to the recipients, as well as
     /// there is no indication about the network failures.
     pub async fn broadcast(&mut self, msg: ConsensusMsg) {
-        // Directly send the message to ourself without going through network.
-        //let self_msg = Event::Message(self.author, msg.clone());
-        //if let Err(err) = self.self_sender.send(self_msg).await {
-        //    diem_error!("Error broadcasting to self: {:?}", err);
-        //}
+        if let Err(err) = self
+            .network_sender
+            .send_self_msg(self.author, msg.clone())
+            .await
+        {
+            diem_error!("Error broadcasting to self: {:?}", err);
+        }
 
         // Get the list of validators excluding our own account address. Note
         // the ordering is not important in this case.
@@ -142,11 +169,11 @@ impl NetworkSender {
             .filter(|author| author != &self_author);
 
         // Broadcast message over direct-send to all other validators.
-        /*if let Err(err) =
-            self.network_sender.send_to_many(other_validators, msg)
+        if let Err(err) =
+            self.network_sender.send_to_many(other_validators, &msg)
         {
             diem_error!(error = ?err, "Error broadcasting message");
-        }*/
+        }
     }
 
     /// Sends the vote to the chosen recipients (typically that would be the
@@ -161,22 +188,22 @@ impl NetworkSender {
     /// there is no indication about the network failures.
     pub async fn send_vote(&self, vote_msg: VoteMsg, recipients: Vec<Author>) {
         let mut network_sender = self.network_sender.clone();
-        //let mut self_sender = self.self_sender.clone();
         let msg = ConsensusMsg::VoteMsg(Box::new(vote_msg));
         for peer in recipients {
             if self.author == peer {
-                //let self_msg = Event::Message(self.author, msg.clone());
-                //if let Err(err) = self_sender.send(self_msg).await {
-                //    diem_error!(error = ?err, "Error delivering a self vote");
-                //}
+                if let Err(err) =
+                    network_sender.send_self_msg(self.author, msg.clone()).await
+                {
+                    diem_error!(error = ?err, "Error delivering a self vote");
+                }
                 continue;
             }
-            /*if let Err(e) = network_sender.send_to(peer, msg.clone()) {
+            if let Err(e) = network_sender.send_to(peer, &msg) {
                 diem_error!(
                     remote_peer = peer,
                     error = ?e, "Failed to send a vote to peer",
                 );
-            }*/
+            }
         }
     }
 
@@ -186,26 +213,29 @@ impl NetworkSender {
     /// or sent out).
     pub fn send_sync_info(&self, sync_info: SyncInfo, recipient: Author) {
         let msg = ConsensusMsg::SyncInfo(Box::new(sync_info));
-        /*let mut network_sender = self.network_sender.clone();
-        if let Err(e) = network_sender.send_to(recipient, msg) {
+        let mut network_sender = self.network_sender.clone();
+        if let Err(e) = network_sender.send_to(recipient, &msg) {
             diem_warn!(
                 remote_peer = recipient,
                 error = "Failed to send a sync info msg to peer {:?}",
                 "{:?}",
                 e
             );
-        }*/
+        }
     }
 
     pub async fn notify_epoch_change(&mut self, proof: EpochChangeProof) {
         let msg = ConsensusMsg::EpochChangeProof(Box::new(proof));
-        /*let self_msg = Event::Message(self.author, msg);
-        if let Err(e) = self.self_sender.send(self_msg).await {
+        let network_sender = self.network_sender.clone();
+        if let Err(e) =
+            network_sender.send_self_msg(self.author, msg.clone()).await
+        {
             diem_warn!(
                 error = "Failed to notify to self an epoch change",
-                "{:?}", e
+                "{:?}",
+                e
             );
-        }*/
+        }
     }
 }
 
@@ -221,8 +251,7 @@ pub struct NetworkTask {
 impl NetworkTask {
     /// Establishes the initial connections with the peers and returns the
     /// receivers.
-    pub fn new(//network_events: ConsensusNetworkEvents,
-    ) -> (NetworkTask, NetworkReceivers) {
+    pub fn new() -> (NetworkTask, NetworkReceivers) {
         let (consensus_messages_tx, consensus_messages) = diem_channel::new(
             QueueStyle::LIFO,
             1,
@@ -233,7 +262,6 @@ impl NetworkTask {
             1,
             Some(&counters::BLOCK_RETRIEVAL_CHANNEL_MSGS),
         );
-        //let all_events = Box::new(select(network_events, self_receiver));
         (
             NetworkTask {
                 consensus_messages_tx,
@@ -246,68 +274,5 @@ impl NetworkTask {
         )
     }
 
-    pub async fn start(mut self) {
-        /*while let Some(message) = self.all_events.next().await {
-            match message {
-                Event::Message(peer_id, msg) => {
-                    if let Err(e) = self
-                        .consensus_messages_tx
-                        .push((peer_id, discriminant(&msg)), (peer_id, msg))
-                    {
-                        diem_warn!(
-                            remote_peer = peer_id,
-                            error = ?e, "Error pushing consensus msg",
-                        );
-                    }
-                }
-                Event::RpcRequest(peer_id, msg, callback) => match msg {
-                    ConsensusMsg::BlockRetrievalRequest(request) => {
-                        diem_debug!(
-                            remote_peer = peer_id,
-                            event = LogEvent::ReceiveBlockRetrieval,
-                            "{}",
-                            request
-                        );
-                        if request.num_blocks() > MAX_BLOCKS_PER_REQUEST {
-                            diem_warn!(
-                                remote_peer = peer_id,
-                                "Ignore block retrieval with too many blocks: {}",
-                                request.num_blocks()
-                            );
-                            continue;
-                        }
-                        let req_with_callback = IncomingBlockRetrievalRequest {
-                            req: *request,
-                            response_sender: callback,
-                        };
-                        if let Err(e) = self
-                            .block_retrieval_tx
-                            .push(peer_id, req_with_callback)
-                        {
-                            diem_warn!(error = ?e, "diem channel closed");
-                        }
-                    }
-                    _ => {
-                        diem_warn!(
-                            remote_peer = peer_id,
-                            "Unexpected msg: {:?}", msg
-                        );
-                        continue;
-                    }
-                },
-                Event::NewPeer(metadata) => {
-                    diem_debug!(
-                        remote_peer = metadata.remote_peer_id,
-                        "Peer connected"
-                    );
-                }
-                Event::LostPeer(metadata) => {
-                    diem_debug!(
-                        remote_peer = metadata.remote_peer_id,
-                        "Peer disconnected"
-                    );
-                }
-            }
-        }*/
-    }
+    pub async fn start(self) {}
 }
