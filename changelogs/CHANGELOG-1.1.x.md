@@ -1,15 +1,22 @@
 # 1.1.4
 
-## Bug fixes
-- Fix a bug that causes repacking useless transactions.
-### RPC Improvements
-- Make VM tracer records reasons for a fail execution. 
-- Make `estimate_gas_and_collateral` return an error stack in case an error happens in sub-call.  
-
 ## Improvements
+
+### RPC Improvements
+- Add a new RPC `cfx_getAccountPendingTransactions` to get pending transactions of a given account.
+- Make VM tracer records reasons for a fail execution. 
+- Make `cfx_estimateGasAndCollateral` return an error stack in case an error happens in sub-call.
+- Use random miner address in virtual calls (`cfx_call` and `cfx_estimateGasAndCollateral`) 
+    instead of a special null address.
 
 ### Configuration Improvements
 - Allow setting maximum WebSocket response payload size using `jsonrpc_ws_max_payload_bytes`. The default is 30MB.
+
+## Bug fix
+- Fix a bug that causes repacking useless transactions.
+- Fix a bug that causes the configuration `sync_state_starting_epoch` not effective on archive nodes.
+- Fix a bug that may make `cfx_getStatus` return unexpected error.
+
 
 # 1.1.3
 
@@ -30,7 +37,6 @@
 ### Configuration Improvements
 - Allow immediately packing sent transactions in `dev` mode by keeping `dev_block_interval_ms` unset.
   Note that setting `dev_block_interval_ms` will disable this immediate packing and generate blocks only periodically.
-  
 ### Performance Improvements
 - Optimize the state implementation for better cache performance.
 
@@ -59,10 +65,8 @@
 - Use hex encoding for the returned bytes in trace-related RPCs.
 - Add new fields `latestCheckpoint`, `latestConfirmed`, and `latestState` in `cfx_getStatus`.
 - Improve some RPC error reporting.
-  
 ### Performance Optimization
 - Reduce the memory usage for maintaining more snapshots with the configuration `additional_maintained_snapshot_count`.
-  
 ## Bug Fixes
 - Fix a possible OOM error when a full node is catching up.
 - Fix a possible OOM error in transaction pool when an archive node is catching up.
