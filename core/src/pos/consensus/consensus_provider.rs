@@ -21,6 +21,7 @@ use executor_types::BlockExecutor;
 use std::sync::Arc;
 use storage_interface::DbReader;
 use tokio::runtime::{self, Runtime};
+use pow_types::PowInterface;
 
 /// Helper function to start consensus based on configuration and return the
 /// runtime
@@ -74,7 +75,7 @@ pub fn start_consensus(
         state_computer,
         storage,
         reconfig_events,
-        pow_handler,
+        pow_handler as Arc<dyn PowInterface>,
     );
 
     let (network_task, network_receiver) = NetworkTask::new(

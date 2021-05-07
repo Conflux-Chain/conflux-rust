@@ -50,6 +50,7 @@ use diem_types::{
 use futures::{select, StreamExt};
 use safety_rules::SafetyRulesManager;
 use std::{cmp::Ordering, sync::Arc, time::Duration};
+use pow_types::PowInterface;
 
 /// RecoveryManager is used to process events in order to sync up with peer if
 /// we can't recover from local consensusdb RoundManager is used for normal
@@ -92,7 +93,7 @@ pub struct EpochManager {
     processor: Option<RoundProcessor>,
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
     // Conflux PoW handler
-    pow_handler: Arc<PowHandler>,
+    pow_handler: Arc<dyn PowInterface>,
 }
 
 impl EpochManager {
@@ -106,7 +107,7 @@ impl EpochManager {
         state_computer: Arc<dyn StateComputer>,
         storage: Arc<dyn PersistentLivenessStorage>,
         reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
-        pow_handler: Arc<PowHandler>,
+        pow_handler: Arc<dyn PowInterface>,
     ) -> Self
     {
         let author = node_config.validator_network.as_ref().unwrap().peer_id();

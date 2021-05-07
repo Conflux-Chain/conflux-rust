@@ -63,6 +63,7 @@ use std::{
 use storage_interface::{
     state_view::VerifiedStateView, DbReaderWriter, TreeState,
 };
+use pow_types::PowInterface;
 
 type SparseMerkleProof = diem_types::proof::SparseMerkleProof<AccountStateBlob>;
 
@@ -71,6 +72,7 @@ type SparseMerkleProof = diem_types::proof::SparseMerkleProof<AccountStateBlob>;
 pub struct Executor<V> {
     db: DbReaderWriter,
     cache: SpeculationCache,
+    pow_handler: Arc<dyn PowInterface>,
     phantom: PhantomData<V>,
 }
 
@@ -82,7 +84,7 @@ where V: VMExecutor
     }
 
     /// Constructs an `Executor`.
-    pub fn new(db: DbReaderWriter) -> Self {
+    pub fn new(db: DbReaderWriter, pow_handler: Arc<dyn PowInterface>) -> Self {
         let startup_info = db
             .reader
             .get_startup_info()
@@ -92,6 +94,7 @@ where V: VMExecutor
         Self {
             db,
             cache: SpeculationCache::new_with_startup_info(startup_info),
+            pow_handler,
             phantom: PhantomData,
         }
     }
@@ -107,11 +110,12 @@ where V: VMExecutor
     }
 
     pub fn new_on_unbootstrapped_db(
-        db: DbReaderWriter, tree_state: TreeState,
+        db: DbReaderWriter, tree_state: TreeState, pow_handler: Arc<dyn PowInterface>
     ) -> Self {
         Self {
             db,
             cache: SpeculationCache::new_for_db_bootstrapping(tree_state),
+            pow_handler,
             phantom: PhantomData,
         }
     }
@@ -276,7 +280,7 @@ where V: VMExecutor
         mut account_to_state: HashMap<AccountAddress, AccountState>,
         account_to_proof: HashMap<HashValue, SparseMerkleProof>,
         transactions: &[Transaction], vm_outputs: Vec<TransactionOutput>,
-        parent_trees: &ExecutedTrees,
+        parent_trees: &ExecutedTrees, parent_pivot_decision: Option<PivotBlockDecision>
     ) -> Result<ProcessedVMOutput>
     {
         // The data of each individual transaction. For convenience purpose,
@@ -306,6 +310,9 @@ where V: VMExecutor
                     break;
                 }
             }
+        }
+        if pivot_decision.is_none() {
+            pivot_decision = parent_pivot_decision;
         }
 
         let new_epoch_marker = vm_outputs
@@ -551,6 +558,7 @@ where V: VMExecutor
             &transactions,
             vm_outputs,
             self.cache.synced_trees(),
+            None,
         )?;
 
         // Since we have verified the proofs, we just need to verify that each
@@ -816,10 +824,11 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 "reconfig_descendant_block_received"
             );
 
-            let output = ProcessedVMOutput::new(
+            let mut output = ProcessedVMOutput::new(
                 vec![],
                 parent_output.executed_trees().clone(),
                 parent_output.epoch_state().clone(),
+                // The block has no pivot decision transaction, so it's the same as the parent.
                 parent_output.pivot_block().clone(),
             );
 
@@ -875,14 +884,18 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
             }
 
             let (account_to_state, account_to_proof) = state_view.into();
+            // TODO(lpl): Decide if we store it in states.
+            let parent_pivot_decision = self.cache.get_block(&parent_block_id)?.lock().output().pivot_block().clone();
             let output = Self::process_vm_outputs(
                 account_to_state,
                 account_to_proof,
                 &transactions,
                 vm_outputs,
                 &parent_block_executed_trees,
+                parent_pivot_decision,
             )
             .map_err(|err| format_err!("Failed to execute block: {}", err))?;
+
 
             let parent_accu = parent_block_executed_trees.txn_accumulator();
 

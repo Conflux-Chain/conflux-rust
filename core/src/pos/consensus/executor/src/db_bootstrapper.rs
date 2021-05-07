@@ -26,6 +26,12 @@ use std::collections::btree_map::BTreeMap;
 use storage_interface::{
     state_view::VerifiedStateView, DbReaderWriter, TreeState,
 };
+use pow_types::PowInterface;
+use std::collections::HashMap;
+use diem_types::account_address::AccountAddress;
+use std::sync::Arc;
+use async_trait::async_trait;
+use cfx_types::H256;
 
 pub fn generate_waypoint<V: VMExecutor>(
     db: &DbReaderWriter, genesis_txn: &Transaction,
@@ -103,7 +109,7 @@ pub fn calculate_genesis<V: VMExecutor>(
     // quorum among validators, we refer to the second use case said above.
     let genesis_version = tree_state.num_transactions;
     let mut executor =
-        Executor::<V>::new_on_unbootstrapped_db(db.clone(), tree_state);
+        Executor::<V>::new_on_unbootstrapped_db(db.clone(), tree_state, Arc::new(FakePowInterface {}) as Arc<dyn PowInterface>);
 
     let block_id = HashValue::zero();
     let epoch = if genesis_version == 0 {
@@ -198,3 +204,19 @@ fn get_state_epoch(state_view: &VerifiedStateView) -> Result<u64> {
 }
 
 fn genesis_block_id() -> HashValue { HashValue::zero() }
+
+struct FakePowInterface {}
+#[async_trait]
+impl PowInterface for FakePowInterface {
+    async fn next_pivot_decision(&self, _parent_decision: H256) -> Option<H256> {
+        None
+    }
+
+    async fn validate_proposal_pivot_decision(&self, _parent_decision: H256, _me_decision: H256) -> bool {
+        true
+    }
+
+    async fn get_committee_candidates(&self) -> HashMap<AccountAddress, u64> {
+        todo!()
+    }
+}

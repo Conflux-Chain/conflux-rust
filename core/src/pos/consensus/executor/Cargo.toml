@@ -32,6 +32,9 @@ scratchpad = { path = "../../storage/scratchpad" }
 storage-interface = { path = "../../storage/storage-interface" }
 
 proptest = { version = "1.0.0", optional = true }
+pow-types = { path = "../../types/pow-types"}
+async-trait = "0.1"
+cfx-types = {path = "../../../../../cfx_types"}
 
 [dev-dependencies]
 proptest = "1.0.0"

@@ -29,6 +29,7 @@ use diem_types::{
 };
 use move_core_types::language_storage::TypeTag;
 use std::sync::Arc;
+use pow_types::PowInterface;
 
 #[cfg(test)]
 #[path = "proposal_generator_test.rs"]
@@ -59,7 +60,7 @@ pub struct ProposalGenerator {
     // Last round that a proposal was generated
     last_round_generated: Mutex<Round>,
     // Handle the interaction with PoW consensus.
-    pow_handler: Arc<PowHandler>,
+    pow_handler: Arc<dyn PowInterface>,
     // FIXME(lpl): Where to put them?
     private_key: Ed25519PrivateKey,
     public_key: Ed25519PublicKey,
@@ -69,7 +70,7 @@ impl ProposalGenerator {
     pub fn new(
         author: Author, block_store: Arc<dyn BlockReader + Send + Sync>,
         txn_manager: Arc<dyn TxnManager>, time_service: Arc<dyn TimeService>,
-        max_block_size: u64, pow_handler: Arc<PowHandler>,
+        max_block_size: u64, pow_handler: Arc<dyn PowInterface>,
         private_key: Ed25519PrivateKey, public_key: Ed25519PublicKey,
     ) -> Self
     {

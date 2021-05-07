@@ -836,6 +836,7 @@ dependencies = [
  "parity-crypto",
  "parity-util-mem",
  "parking_lot 0.11.1",
+ "pow-types",
  "primal",
  "primitives",
  "priority-send-queue",
@@ -2123,7 +2124,9 @@ name = "executor"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bcs",
+ "cfx-types",
  "consensus-types",
  "diem-crypto",
  "diem-infallible",
@@ -2137,6 +2140,7 @@ dependencies = [
  "itertools 0.10.0",
  "move-core-types",
  "once_cell",
+ "pow-types",
  "proptest",
  "rand 0.8.3",
  "scratchpad",
@@ -4335,6 +4339,15 @@ dependencies = [
  "cpuid-bool 0.2.0",
  "opaque-debug 0.3.0",
  "universal-hash",
+]
+
+[[package]]
+name = "pow-types"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "cfx-types",
+ "diem-types",
 ]
 
 [[package]]
