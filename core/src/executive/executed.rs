@@ -206,8 +206,7 @@ fn test_decode_result() {
          0000000000000000000000000000000000000000000000000000000000000018\
          e699bae59586e4b88de8b6b3efbc8ce8afb7e58585e580bc0000000000000000";
     assert_eq!(
-        "Reason provided by the contract: '智商不足，请充值'"
-            .to_string(),
+        "智商不足，请充值".to_string(),
         revert_reason_decode(&input_hex.from_hex().unwrap())
     );
 }

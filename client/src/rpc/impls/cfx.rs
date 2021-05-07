@@ -1132,9 +1132,9 @@ impl RpcImpl {
                 let errors = ErrorUnwind::from_traces(executed.trace).errors.iter()
                     .map(|(addr,error)| {
                         let cip37_addr = RpcAddress::try_from_h160(addr.clone(),network_type).unwrap().base32_address;
-                        format!("{} {}", cip37_addr, error)
+                        (cip37_addr, error)
                     })
-                    .collect::<Vec<String>>();
+                    .collect::<Vec<(String,String)>>();
 
                 // Decode revert error
                 let revert_error = revert_reason_decode(&executed.output);
@@ -1146,13 +1146,13 @@ impl RpcImpl {
 
                 // Try to fetch the innermost error.
                 let innermost_error = if errors.len()>0{
-                    format!("Triggered from {}.", errors[0])
+                    format!("{} at {}.", errors[0].1, errors[0].0)
                 }else{
                     String::default()
                 };
 
                 bail!(call_execution_error(
-                    format!("Estimation isn't accurate: transaction is reverted{}{}",
+                    format!("Estimation isn't accurate: transaction is reverted{} {}",
                         revert_error, innermost_error),
                     errors.join("\n").into_bytes(),
                 ))
