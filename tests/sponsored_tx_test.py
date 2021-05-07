@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 from eth_utils import decode_hex
+
+from conflux.address import hex_to_b32_address
 from conflux.rpc import RpcClient
 from conflux.transactions import CONTRACT_DEFAULT_GAS, COLLATERAL_UNIT_IN_DRIP, charged_of_huge_gas
 from conflux.utils import encode_hex, priv_to_addr, parse_as_int
@@ -91,8 +93,8 @@ class SponsoredTxTest(ConfluxTestFramework):
         control_contract = get_contract_instance(contract_dict=control_contract_dict)
 
         test_contract = get_contract_instance(
-            abi_file = os.path.join(file_dir, "contracts/commission_privilege_test_abi.json"),
-            bytecode_file = os.path.join(file_dir, "contracts/commission_privilege_test_bytecode.dat"),
+            abi_file=os.path.join(file_dir, "contracts/commission_privilege_test_abi.json"),
+            bytecode_file=os.path.join(file_dir, "contracts/commission_privilege_test_bytecode.dat"),
         )
 
         start_p2p_connection(self.nodes)
@@ -181,9 +183,71 @@ class SponsoredTxTest(ConfluxTestFramework):
             contract_addr=contract_addr,
             wait=True,
             check_status=True)
-        assert_equal(client.get_balance(addr1), 10 ** 6)
+        assert_equal(client.get_balance(addr1), b1)
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sb - charged_of_huge_gas(gas))
         assert_equal(self.wait_for_tx([transaction], True)[0]['gasCoveredBySponsor'], True)
+
+        # sponsor collateral for the contract succeed
+        b0 = client.get_balance(genesis_addr)
+        self.call_contract_function(
+            contract=control_contract,
+            name="setSponsorForCollateral",
+            args=[Web3.toChecksumAddress(contract_addr)],
+            value=10 ** 18,  # 1 CFX = 1KB
+            sender_key=self.genesis_priv_key,
+            contract_addr=sponsor_whitelist_contract_addr,
+            wait=True)
+        assert_equal(client.get_sponsor_balance_for_collateral(contract_addr), 10 ** 18)
+        assert_equal(client.get_sponsor_for_collateral(contract_addr), genesis_addr)
+        assert_equal(client.get_balance(genesis_addr), b0 - 10 ** 18 - charged_of_huge_gas(gas))
+
+        # addr1 call contract with privilege without enough cfx for storage
+        sb = client.get_sponsor_balance_for_gas(contract_addr)
+        b1 = client.get_balance(addr1)
+        transaction = self.call_contract_function(
+            contract=test_contract,
+            name="foo",
+            args=[],
+            sender_key=priv_key1,
+            contract_addr=contract_addr,
+            wait=True,
+            check_status=True,
+            storage_limit=1024)
+        assert_equal(client.get_balance(addr1), b1)
+        assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sb - charged_of_huge_gas(gas))
+        assert_equal(self.wait_for_tx([transaction], True)[0]['storageCoveredBySponsor'], True)
+
+        # addr1 call with larger storage limit, should not packed
+        transaction = self.call_contract_function(
+            contract=test_contract,
+            name="foo",
+            args=[],
+            sender_key=priv_key1,
+            contract_addr=contract_addr,
+            storage_limit=1025)
+        for _ in range(10):
+            client.generate_block()
+
+        tx_info = self.nodes[0].tx_inspect(transaction.hash_hex())
+        assert_equal(int(tx_info['local_nonce'], 16), 2)
+        assert_equal(tx_info['local_balance_enough'], False)
+        assert_equal(tx_info['packed'], False)
+
+        # send 1025 * 10 ** 18 // 1024 CFX to addr1
+        tx = client.new_tx(
+            sender=genesis_addr,
+            priv_key=genesis_key,
+            value=1025 * 10 ** 18 // 1024,
+            nonce=self.get_nonce(self.genesis_addr),
+            receiver=addr1)
+        client.send_tx(tx, True)
+        assert_equal(client.get_balance(addr1), 10 ** 6 + 1025 * 10 ** 18 // 1024)
+        for _ in range(10):
+            client.generate_block()
+        tx_info = self.nodes[0].tx_inspect(transaction.hash_hex())
+        assert_equal(self.wait_for_tx([transaction], True)[0]['storageCoveredBySponsor'], True)
+        assert_equal(int(tx_info['local_nonce'], 16), 3)
+        assert_equal(tx_info['packed'], True)
 
         self.log.info("Pass")
 
