@@ -51,8 +51,9 @@ use crate::{
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
-            sign_call, Account as RpcAccount, AccountPendingInfo, BlameInfo,
-            Block as RpcBlock, BlockHashOrEpochNumber, Bytes, CallRequest,
+            sign_call, Account as RpcAccount, AccountPendingInfo,
+            AccountPendingTransactions, BlameInfo, Block as RpcBlock,
+            BlockHashOrEpochNumber, Bytes, CallRequest,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
             EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
             LogFilter as RpcFilter, PackedOrExecuted, Receipt as RpcReceipt,
@@ -71,9 +72,11 @@ use cfxcore::{
     spec::genesis::{
         genesis_contract_address_four_year, genesis_contract_address_two_year,
     },
+    trace::ErrorUnwind,
 };
 use lazy_static::lazy_static;
 use metrics::{register_timer_with_group, ScopeTimer, Timer};
+use serde::Serialize;
 
 lazy_static! {
     static ref SEND_RAW_TX_TIMER: Arc<dyn Timer> =
@@ -558,6 +561,7 @@ impl RpcImpl {
         &self, address: RpcAddress,
     ) -> RpcResult<Option<AccountPendingInfo>> {
         info!("RPC Request: cfx_getAccountPendingInfo({:?})", address);
+        self.check_address_network(address.network)?;
 
         match self.tx_pool.get_account_pending_info(&(address.into())) {
             None => Ok(None),
@@ -573,6 +577,37 @@ impl RpcImpl {
                 next_pending_tx: next_pending_tx.into(),
             })),
         }
+    }
+
+    pub fn account_pending_transactions(
+        &self, address: RpcAddress, maybe_start_nonce: Option<U256>,
+        maybe_limit: Option<U64>,
+    ) -> RpcResult<AccountPendingTransactions>
+    {
+        info!("RPC Request: cfx_getAccountPendingTransactions(addr={:?}, start_nonce={:?}, limit={:?})",
+              address, maybe_start_nonce, maybe_limit);
+        self.check_address_network(address.network)?;
+
+        let (pending_txs, tx_status, pending_count) =
+            self.tx_pool.get_account_pending_transactions(
+                &(address.into()),
+                maybe_start_nonce,
+                maybe_limit.map(|limit| limit.as_usize()),
+            );
+        Ok(AccountPendingTransactions {
+            pending_transactions: pending_txs
+                .into_iter()
+                .map(|tx| {
+                    RpcTransaction::from_signed(
+                        &tx,
+                        None,
+                        *self.sync.network.get_network_type(),
+                    )
+                })
+                .collect::<Result<Vec<RpcTransaction>, String>>()?,
+            first_tx_status: tx_status,
+            pending_count: pending_count.into(),
+        })
     }
 
     pub fn transaction_by_hash(
@@ -1090,10 +1125,36 @@ impl RpcImpl {
                 ExecutionError::VmError(vm::Error::Reverted),
                 executed,
             ) => {
+                let network_type = *self.sync.network.get_network_type();
+
+                // When a revert exception happens, there is usually an error in the sub-calls.
+                // So we return the trace information for debugging contract.
+                let errors = ErrorUnwind::from_traces(executed.trace).errors.iter()
+                    .map(|(addr,error)| {
+                        let cip37_addr = RpcAddress::try_from_h160(addr.clone(),network_type).unwrap().base32_address;
+                        format!("{}: {}", cip37_addr, error)
+                    })
+                    .collect::<Vec<String>>();
+
+                // Decode revert error
+                let revert_error = revert_reason_decode(&executed.output);
+                let revert_error = if !revert_error.is_empty() {
+                    format!(": {}.",revert_error)
+                }else{
+                    format!(".")
+                };
+
+                // Try to fetch the innermost error.
+                let innermost_error = if errors.len()>0{
+                    format!(" Innermost error is at {}.", errors[0])
+                }else{
+                    String::default()
+                };
+
                 bail!(call_execution_error(
-                    format!("Estimation isn't accurate: transaction is reverted. Execution output {}",
-                        revert_reason_decode(&executed.output)),
-                    [b"Reverted. Execution output: ", &*executed.output].concat(),
+                    format!("Estimation isn't accurate: transaction is reverted{}{}",
+                        revert_error, innermost_error),
+                    errors.join("\n").into_bytes(),
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
@@ -1329,6 +1390,32 @@ impl RpcImpl {
         Ok(())
     }
 
+    // estimate response size, return error if it is too large
+    // note: this is a potentially expensive check
+    fn check_response_size<T: Serialize>(&self, response: &T) -> RpcResult<()> {
+        // account for the enclosing JSON object
+        // {"jsonrpc":"2.0","id":1,"result": ... }
+        // note: this is a rough estimation
+        let max_size = self.config.max_payload_bytes - 50;
+
+        let payload_size = serde_json::to_vec(&response)
+            .map_err(|_e| "Unexpected serialization error")?
+            .len();
+
+        if payload_size > max_size {
+            // TODO(thegaram): should we define a new error type?
+            bail!(invalid_params(
+                "epoch",
+                format!(
+                    "Oversized payload: size = {}, max = {}",
+                    payload_size, max_size
+                )
+            ));
+        }
+
+        Ok(())
+    }
+
     fn epoch_receipts(
         &self, epoch: EpochNumber,
     ) -> RpcResult<Option<Vec<Vec<RpcReceipt>>>> {
@@ -1350,6 +1437,10 @@ impl RpcImpl {
                 },
             );
         }
+
+        // TODO(thegaram): we should only do this on WS, not on HTTP
+        // how to treat these differently?
+        self.check_response_size(&epoch_receipts)?;
 
         Ok(Some(epoch_receipts))
     }
@@ -1420,6 +1511,7 @@ impl Cfx for CfxHandler {
                 -> BoxFuture<Option<H256>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<Option<AccountPendingInfo>>;
+            fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
             fn storage_root(&self, address: RpcAddress, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;

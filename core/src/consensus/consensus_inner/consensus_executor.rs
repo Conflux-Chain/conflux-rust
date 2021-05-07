@@ -38,7 +38,7 @@ use cfx_storage::{
     defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
     StorageManagerTrait,
 };
-use cfx_types::{BigEndianHash, H256, KECCAK_EMPTY_BLOOM, U256, U512};
+use cfx_types::{BigEndianHash, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512};
 use core::convert::TryFrom;
 use hash::KECCAK_EMPTY_LIST_RLP;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
@@ -1719,7 +1719,7 @@ impl ConsensusExecutionHandler {
 
         let env = Env {
             number: start_block_number,
-            author: Default::default(),
+            author: H160::from(rand::random::<[u8; 20]>()),
             timestamp: time_stamp,
             difficulty: Default::default(),
             accumulated_gas_used: U256::zero(),

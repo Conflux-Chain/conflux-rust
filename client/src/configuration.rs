@@ -156,6 +156,7 @@ build_config! {
         (jsonrpc_http_port, (Option<u16>), None)
         (jsonrpc_cors, (Option<String>), None)
         (jsonrpc_http_keep_alive, (bool), false)
+        (jsonrpc_ws_max_payload_bytes, (usize), 30 * 1024 * 1024)
         // The network_id, if unset, defaults to the chain_id.
         // Only override the network_id for local experiments,
         // when user would like to keep the existing blockchain data
@@ -887,6 +888,7 @@ impl Configuration {
             get_logs_filter_max_limit: self.raw_conf.get_logs_filter_max_limit,
             dev_pack_tx_immediately: self.is_dev_mode()
                 && self.raw_conf.dev_block_interval_ms.is_none(),
+            max_payload_bytes: self.raw_conf.jsonrpc_ws_max_payload_bytes,
         }
     }
 
@@ -913,7 +915,11 @@ impl Configuration {
     }
 
     pub fn ws_config(&self) -> WsConfiguration {
-        WsConfiguration::new(None, self.raw_conf.jsonrpc_ws_port)
+        WsConfiguration::new(
+            None,
+            self.raw_conf.jsonrpc_ws_port,
+            self.raw_conf.jsonrpc_ws_max_payload_bytes,
+        )
     }
 
     pub fn execution_config(&self) -> ConsensusExecutionConfiguration {

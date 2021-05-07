@@ -11,8 +11,11 @@ use crate::{
 };
 use cfx_types::{Address, U256};
 
+pub mod error_unwind;
 pub mod trace;
 pub mod trace_filter;
+
+pub use error_unwind::ErrorUnwind;
 
 /// This trait is used by executive to build traces.
 pub trait Tracer: Send {

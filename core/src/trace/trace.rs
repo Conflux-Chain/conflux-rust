@@ -129,10 +129,10 @@ impl From<&MessageCallResult> for CallResult {
                 gas_left: gas_left.clone(),
                 return_data: return_data.to_vec(),
             },
-            MessageCallResult::Failed => CallResult {
+            MessageCallResult::Failed(err) => CallResult {
                 outcome: Outcome::Fail,
                 gas_left: U256::zero(),
-                return_data: vec![],
+                return_data: format!("{:?}", err).into(),
             },
         }
     }
@@ -203,11 +203,11 @@ impl From<&ContractCreateResult> for CreateResult {
                     return_data: return_data.to_vec(),
                 }
             }
-            ContractCreateResult::Failed => CreateResult {
+            ContractCreateResult::Failed(err) => CreateResult {
                 outcome: Outcome::Fail,
                 addr: Address::zero(),
                 gas_left: U256::zero(),
-                return_data: vec![],
+                return_data: format!("{:?}", err).into(),
             },
         }
     }
