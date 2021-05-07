@@ -1,7 +1,12 @@
 # 1.1.4
 
-### Bug fix
+## Bug fixes
 - Fix a bug that causes repacking useless transactions.
+
+## Improvements
+
+### Configuration Improvements
+- Allow setting maximum WebSocket response payload size using `jsonrpc_ws_max_payload_bytes`. The default is 30MB.
 
 # 1.1.3
 
