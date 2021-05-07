@@ -12,7 +12,7 @@
 ### Configuration Improvements
 - Allow setting maximum WebSocket response payload size using `jsonrpc_ws_max_payload_bytes`. The default is 30MB.
 
-## Bug fix
+## Bug fixes
 - Fix a bug that causes repacking useless transactions.
 - Fix a bug that causes the configuration `sync_state_starting_epoch` not effective on archive nodes.
 - Fix a bug that may make `cfx_getStatus` return unexpected error.
