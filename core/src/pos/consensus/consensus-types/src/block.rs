@@ -10,15 +10,18 @@ use anyhow::{bail, ensure, format_err};
 use diem_crypto::{ed25519::Ed25519Signature, hash::CryptoHash, HashValue};
 use diem_infallible::duration_since_epoch;
 use diem_types::{
-    account_address::AccountAddress, block_info::BlockInfo,
-    block_metadata::BlockMetadata, epoch_state::EpochState,
-    ledger_info::LedgerInfo, transaction::Version,
-    validator_signer::ValidatorSigner, validator_verifier::ValidatorVerifier,
+    account_address::AccountAddress,
+    block_info::{BlockInfo, PivotBlockDecision},
+    block_metadata::BlockMetadata,
+    epoch_state::EpochState,
+    ledger_info::LedgerInfo,
+    transaction::Version,
+    validator_signer::ValidatorSigner,
+    validator_verifier::ValidatorVerifier,
 };
 use mirai_annotations::debug_checked_verify_eq;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt::{self, Display, Formatter};
-use diem_types::block_info::PivotBlockDecision;
 
 #[path = "block_test_utils.rs"]
 #[cfg(any(test, feature = "fuzzing"))]
@@ -93,7 +96,8 @@ impl Block {
 
     pub fn gen_block_info(
         &self, executed_state_id: HashValue, version: Version,
-        next_epoch_state: Option<EpochState>, pivot: Option<PivotBlockDecision>
+        next_epoch_state: Option<EpochState>,
+        pivot: Option<PivotBlockDecision>,
     ) -> BlockInfo
     {
         BlockInfo::new(

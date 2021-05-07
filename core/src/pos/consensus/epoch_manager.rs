@@ -30,6 +30,7 @@ use super::{
     state_replication::{StateComputer, TxnManager},
     util::time_service::TimeService,
 };
+use crate::pos::pow_handler::PowHandler;
 use anyhow::{bail, ensure, Context};
 use channel::diem_channel;
 use consensus_types::{
@@ -49,7 +50,6 @@ use diem_types::{
 use futures::{select, StreamExt};
 use safety_rules::SafetyRulesManager;
 use std::{cmp::Ordering, sync::Arc, time::Duration};
-use crate::pos::pow_handler::PowHandler;
 
 /// RecoveryManager is used to process events in order to sync up with peer if
 /// we can't recover from local consensusdb RoundManager is used for normal
@@ -126,7 +126,7 @@ impl EpochManager {
             safety_rules_manager,
             processor: None,
             reconfig_events,
-            pow_handler
+            pow_handler,
         }
     }
 
@@ -338,8 +338,20 @@ impl EpochManager {
 
         diem_info!(epoch = epoch, "Create ProposalGenerator");
         // TODO(lpl): Decide key management.
-        let public_key = epoch_state.verifier.get_public_key(&self.author).expect("public key exist");
-        let private_key = self.config.safety_rules.test.as_ref().expect("use privat key in test").consensus_key.as_ref().expect("private key exist").private_key();
+        let public_key = epoch_state
+            .verifier
+            .get_public_key(&self.author)
+            .expect("public key exist");
+        let private_key = self
+            .config
+            .safety_rules
+            .test
+            .as_ref()
+            .expect("use privat key in test")
+            .consensus_key
+            .as_ref()
+            .expect("private key exist")
+            .private_key();
         // txn manager is required both by proposal generator (to pull the
         // proposers) and by event processor (to update their status).
         let proposal_generator = ProposalGenerator::new(

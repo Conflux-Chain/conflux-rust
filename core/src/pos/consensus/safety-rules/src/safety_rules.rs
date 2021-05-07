@@ -28,12 +28,15 @@ use diem_crypto::{
 };
 use diem_logger::prelude::*;
 use diem_types::{
-    block_info::BlockInfo, epoch_change::EpochChangeProof,
-    epoch_state::EpochState, ledger_info::LedgerInfo, waypoint::Waypoint,
+    block_info::BlockInfo,
+    epoch_change::EpochChangeProof,
+    epoch_state::EpochState,
+    ledger_info::LedgerInfo,
+    transaction::{RawTransaction, SignedTransaction},
+    waypoint::Waypoint,
 };
 use serde::Serialize;
 use std::cmp::Ordering;
-use diem_types::transaction::{RawTransaction, SignedTransaction};
 
 /// @TODO consider a cache of verified QCs to cut down on verification costs
 pub struct SafetyRules {

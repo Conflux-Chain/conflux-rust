@@ -27,26 +27,35 @@ pub struct PowHandler {
 
 impl PowHandler {
     pub fn new(executor: Handle, pow_consensus: Arc<ConsensusGraph>) -> Self {
-        Self{
+        Self {
             executor,
-            pow_consensus
+            pow_consensus,
         }
     }
 
-    fn next_pivot_decision_impl(pow_consensus: Arc<ConsensusGraph>, parent_decision: &H256) -> Option<H256> {
-        pow_consensus.inner.read().get_next_pivot_decision(parent_decision)
+    fn next_pivot_decision_impl(
+        pow_consensus: Arc<ConsensusGraph>, parent_decision: &H256,
+    ) -> Option<H256> {
+        pow_consensus
+            .inner
+            .read()
+            .get_next_pivot_decision(parent_decision)
     }
 
     fn validate_proposal_pivot_decision_impl(
-        pow_consensus: Arc<ConsensusGraph>,parent_decision: &H256, me_decision: &H256,
-    ) -> bool {
+        pow_consensus: Arc<ConsensusGraph>, parent_decision: &H256,
+        me_decision: &H256,
+    ) -> bool
+    {
         pow_consensus
             .inner
             .read()
             .is_ancestor_of(parent_decision, me_decision)
     }
 
-    fn get_committee_candidates_impl(_pow_consensus: Arc<ConsensusGraph>) -> HashMap<AccountAddress, u64> {
+    fn get_committee_candidates_impl(
+        _pow_consensus: Arc<ConsensusGraph>,
+    ) -> HashMap<AccountAddress, u64> {
         todo!("Implement committee change later")
     }
 }
@@ -58,7 +67,8 @@ impl PowHandler {
         let (callback, cb_receiver) = oneshot::channel();
         let pow_consensus = self.pow_consensus.clone();
         self.executor.spawn(async move {
-            let r = Self::next_pivot_decision_impl(pow_consensus, &parent_decision);
+            let r =
+                Self::next_pivot_decision_impl(pow_consensus, &parent_decision);
             callback.send(r);
         });
         cb_receiver.await.expect("callback error")

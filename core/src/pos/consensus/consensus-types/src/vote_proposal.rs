@@ -6,13 +6,15 @@ use diem_crypto::{
     ed25519::Ed25519Signature, hash::TransactionAccumulatorHasher,
 };
 use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
-use diem_types::{epoch_state::EpochState, proof::AccumulatorExtensionProof};
+use diem_types::{
+    block_info::PivotBlockDecision, epoch_state::EpochState,
+    proof::AccumulatorExtensionProof,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Display, Formatter},
     ops::Deref,
 };
-use diem_types::block_info::PivotBlockDecision;
 
 /// This structure contains all the information needed by safety rules to
 /// evaluate a proposal / block for correctness / safety and to produce a Vote.
@@ -37,14 +39,14 @@ impl VoteProposal {
             TransactionAccumulatorHasher,
         >,
         block: Block, next_epoch_state: Option<EpochState>,
-        pivot_decision: Option<PivotBlockDecision>
+        pivot_decision: Option<PivotBlockDecision>,
     ) -> Self
     {
         Self {
             accumulator_extension_proof,
             block,
             next_epoch_state,
-            pivot_decision
+            pivot_decision,
         }
     }
 

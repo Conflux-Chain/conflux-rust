@@ -41,7 +41,7 @@ fn gen_ledger_info(block_id: HashValue, reconfig: bool) -> LedgerInfo {
 }
 
 fn create_cache() -> SpeculationCache {
-    // 
+    //
     //    * ---> 1 ---> 2
     //    |      |
     //    |      └----> 3 ---> 4

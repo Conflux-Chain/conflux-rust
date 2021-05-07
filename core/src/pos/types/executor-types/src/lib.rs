@@ -14,6 +14,7 @@ use diem_crypto::{
 };
 use diem_types::{
     account_state_blob::AccountStateBlob,
+    block_info::PivotBlockDecision,
     contract_event::ContractEvent,
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
@@ -27,7 +28,6 @@ use scratchpad::ProofRead;
 use serde::{Deserialize, Serialize};
 use std::{cmp::max, collections::HashMap, sync::Arc};
 use storage_interface::TreeState;
-use diem_types::block_info::PivotBlockDecision;
 
 type SparseMerkleProof = diem_types::proof::SparseMerkleProof<AccountStateBlob>;
 type SparseMerkleTree = scratchpad::SparseMerkleTree<AccountStateBlob>;
@@ -147,7 +147,7 @@ impl StateComputeResult {
         parent_num_leaves: u64, epoch_state: Option<EpochState>,
         compute_status: Vec<TransactionStatus>,
         transaction_info_hashes: Vec<HashValue>,
-        pivot_decision: Option<PivotBlockDecision>
+        pivot_decision: Option<PivotBlockDecision>,
     ) -> Self
     {
         Self {
@@ -160,7 +160,7 @@ impl StateComputeResult {
             compute_status,
             transaction_info_hashes,
             signature: None,
-            pivot_decision
+            pivot_decision,
         }
     }
 }

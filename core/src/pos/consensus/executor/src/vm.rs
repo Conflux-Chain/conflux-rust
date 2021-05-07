@@ -1,12 +1,13 @@
 use diem_state_view::StateView;
 use diem_types::{
-    transaction::{Transaction, TransactionOutput},
-    vm_status::VMStatus,
+    contract_event::ContractEvent,
+    transaction::{
+        Transaction, TransactionOutput, TransactionPayload, TransactionStatus,
+        WriteSetPayload,
+    },
+    vm_status::{KeptVMStatus, StatusCode, VMStatus},
+    write_set::WriteSet,
 };
-use diem_types::contract_event::ContractEvent;
-use diem_types::vm_status::{StatusCode, KeptVMStatus};
-use diem_types::transaction::{TransactionStatus, TransactionPayload, WriteSetPayload};
-use diem_types::write_set::WriteSet;
 
 /// This trait describes the VM's execution interface.
 pub trait VMExecutor: Send {
@@ -36,7 +37,9 @@ impl VMExecutor for FakeVM {
                 Transaction::BlockMetadata(_data) => {}
                 Transaction::UserTransaction(trans) => {
                     // TODO(lpl): Parallel verification.
-                    let trans = trans.check_signature().map_err(|_|VMStatus::Error(StatusCode::INVALID_SIGNATURE))?;
+                    let trans = trans.check_signature().map_err(|_| {
+                        VMStatus::Error(StatusCode::INVALID_SIGNATURE)
+                    })?;
                     /* TODO(lpl): Handle pos epoch change.
                     if verify_admin_transaction && trans.is_admin_type() {
                         info!("executing admin trans");
@@ -64,10 +67,14 @@ impl VMExecutor for FakeVM {
                     */
                     let payload = trans.payload();
                     let events = match payload {
-                        TransactionPayload::WriteSet(WriteSetPayload::Direct(change_set)) => {
-                            change_set.events().to_vec()
+                        TransactionPayload::WriteSet(
+                            WriteSetPayload::Direct(change_set),
+                        ) => change_set.events().to_vec(),
+                        _ => {
+                            return Err(VMStatus::Error(
+                                StatusCode::CFX_UNEXPECTED_TX,
+                            ))
                         }
-                        _ => return Err(VMStatus::Error(StatusCode::CFX_UNEXPECTED_TX)),
                     };
 
                     // ensure!(
@@ -80,8 +87,14 @@ impl VMExecutor for FakeVM {
                 }
                 Transaction::GenesisTransaction(change_set) => {
                     let events = match change_set {
-                        WriteSetPayload::Direct(change_set) => change_set.events().to_vec(),
-                        _ => return Err(VMStatus::Error(StatusCode::CFX_UNEXPECTED_TX)),
+                        WriteSetPayload::Direct(change_set) => {
+                            change_set.events().to_vec()
+                        }
+                        _ => {
+                            return Err(VMStatus::Error(
+                                StatusCode::CFX_UNEXPECTED_TX,
+                            ))
+                        }
                     };
                     // ensure!(
                     //     events.len() == 1,

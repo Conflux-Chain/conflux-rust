@@ -56,7 +56,8 @@ impl BlockInfo {
     pub fn new(
         epoch: u64, round: Round, id: HashValue, executed_state_id: HashValue,
         version: Version, timestamp_usecs: u64,
-        next_epoch_state: Option<EpochState>, pivot: Option<PivotBlockDecision>,
+        next_epoch_state: Option<EpochState>,
+        pivot: Option<PivotBlockDecision>,
     ) -> Self
     {
         Self {
@@ -67,7 +68,7 @@ impl BlockInfo {
             version,
             timestamp_usecs,
             next_epoch_state,
-            pivot
+            pivot,
         }
     }
 
@@ -80,7 +81,7 @@ impl BlockInfo {
             version: 0,
             timestamp_usecs: 0,
             next_epoch_state: None,
-            pivot: None
+            pivot: None,
         }
     }
 
@@ -94,7 +95,7 @@ impl BlockInfo {
             version: 0,
             timestamp_usecs: 0,
             next_epoch_state: None,
-            pivot: None
+            pivot: None,
         }
     }
 
@@ -124,7 +125,7 @@ impl BlockInfo {
                 epoch: 1,
                 verifier: (&validator_set).into(),
             }),
-            pivot: None
+            pivot: None,
         }
     }
 
@@ -161,7 +162,9 @@ impl BlockInfo {
 
     pub fn version(&self) -> Version { self.version }
 
-    pub fn pivot_decision(&self) -> Option<&PivotBlockDecision> { self.pivot.as_ref() }
+    pub fn pivot_decision(&self) -> Option<&PivotBlockDecision> {
+        self.pivot.as_ref()
+    }
 }
 
 impl Display for BlockInfo {

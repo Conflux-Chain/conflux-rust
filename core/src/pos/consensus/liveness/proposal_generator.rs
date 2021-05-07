@@ -14,17 +14,21 @@ use consensus_types::{
 };
 
 use crate::pos::pow_handler::PowHandler;
-use diem_infallible::Mutex;
-use std::sync::Arc;
 use cfx_types::H256;
-use diem_types::contract_event::ContractEvent;
-use diem_types::block_info::PivotBlockDecision;
-use diem_types::transaction::{ChangeSet, RawTransaction};
-use diem_types::write_set::WriteSet;
-use diem_types::chain_id::ChainId;
+use diem_crypto::{
+    ed25519::{Ed25519PrivateKey, Ed25519PublicKey},
+    PrivateKey,
+};
+use diem_infallible::Mutex;
+use diem_types::{
+    block_info::PivotBlockDecision,
+    chain_id::ChainId,
+    contract_event::ContractEvent,
+    transaction::{ChangeSet, RawTransaction},
+    write_set::WriteSet,
+};
 use move_core_types::language_storage::TypeTag;
-use diem_crypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};
-use diem_crypto::PrivateKey;
+use std::sync::Arc;
 
 #[cfg(test)]
 #[path = "proposal_generator_test.rs"]
@@ -65,8 +69,8 @@ impl ProposalGenerator {
     pub fn new(
         author: Author, block_store: Arc<dyn BlockReader + Send + Sync>,
         txn_manager: Arc<dyn TxnManager>, time_service: Arc<dyn TimeService>,
-        max_block_size: u64, pow_handler: Arc<PowHandler>, private_key: Ed25519PrivateKey,
-        public_key: Ed25519PublicKey,
+        max_block_size: u64, pow_handler: Arc<PowHandler>,
+        private_key: Ed25519PrivateKey, public_key: Ed25519PublicKey,
     ) -> Self
     {
         Self {
@@ -78,7 +82,7 @@ impl ProposalGenerator {
             last_round_generated: Mutex::new(0),
             pow_handler,
             private_key,
-            public_key
+            public_key,
         }
     }
 
@@ -166,8 +170,13 @@ impl ProposalGenerator {
                 self.block_store.root()
             };
 
-            let pivot_decision = if let Some(parent_decision) = parent_block.block_info().pivot_decision() {
-                match self.pow_handler.next_pivot_decision(parent_decision.block_hash).await
+            let pivot_decision = if let Some(parent_decision) =
+                parent_block.block_info().pivot_decision()
+            {
+                match self
+                    .pow_handler
+                    .next_pivot_decision(parent_decision.block_hash)
+                    .await
                 {
                     Some(res) => res,
                     None => {
@@ -183,7 +192,7 @@ impl ProposalGenerator {
             let event_data = bcs::to_bytes(&pivot_decision)?;
             let event = ContractEvent::new(
                 PivotBlockDecision::pivot_select_event_key(),
-                0, /* sequence_number */
+                0,                                      /* sequence_number */
                 TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
                 event_data,
             );

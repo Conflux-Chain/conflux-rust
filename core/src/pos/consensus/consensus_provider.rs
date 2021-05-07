@@ -16,12 +16,11 @@ use diem_types::on_chain_config::OnChainConfigPayload;
 //use execution_correctness::ExecutionCorrectnessManager;
 use futures::channel::mpsc;
 //use state_sync::client::StateSyncClient;
+use crate::{pos::pow_handler::PowHandler, ConsensusGraph};
 use executor_types::BlockExecutor;
 use std::sync::Arc;
 use storage_interface::DbReader;
 use tokio::runtime::{self, Runtime};
-use crate::ConsensusGraph;
-use crate::pos::pow_handler::PowHandler;
 
 /// Helper function to start consensus based on configuration and return the
 /// runtime
@@ -62,10 +61,8 @@ pub fn start_consensus(
         channel::new(1_024, &counters::PENDING_ROUND_TIMEOUTS);
     //let (self_sender, self_receiver) =
     //    channel::new(1_024, &counters::PENDING_SELF_MESSAGES);
-    let pow_handler = Arc::new(PowHandler::new(
-        runtime.handle().clone(),
-        pow_consensus,
-    ));
+    let pow_handler =
+        Arc::new(PowHandler::new(runtime.handle().clone(), pow_consensus));
 
     let epoch_mgr = EpochManager::new(
         node_config,

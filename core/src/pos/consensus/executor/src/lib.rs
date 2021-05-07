@@ -36,6 +36,7 @@ use diem_types::{
     account_address::{AccountAddress, HashAccountAddress},
     account_state::AccountState,
     account_state_blob::AccountStateBlob,
+    block_info::PivotBlockDecision,
     contract_event::ContractEvent,
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
@@ -62,7 +63,6 @@ use std::{
 use storage_interface::{
     state_view::VerifiedStateView, DbReaderWriter, TreeState,
 };
-use diem_types::block_info::PivotBlockDecision;
 
 type SparseMerkleProof = diem_types::proof::SparseMerkleProof<AccountStateBlob>;
 
