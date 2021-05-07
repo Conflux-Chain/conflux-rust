@@ -185,19 +185,12 @@ pub fn revert_reason_decode(output: &Bytes) -> String {
     match decode_result {
         Ok(str) => {
             if str.len() < MAX_LENGTH {
-                format!("Reason provided by the contract: '{}'", str)
+                str
             } else {
-                // FIXME: do we need a more efficient way for string
-                // concatenation.
-                format!(
-                    "Reason provided by the contract: '{}...'",
-                    str[..MAX_LENGTH].to_string()
-                )
+                format!("{}...", str[..MAX_LENGTH].to_string())
             }
-            .to_string()
         }
-        Err(_) if output.len() == 0 => "".to_string(),
-        Err(_) => "Unrecognized error message".to_string(),
+        Err(_) => "".to_string(),
     }
 }
 
@@ -213,8 +206,7 @@ fn test_decode_result() {
          0000000000000000000000000000000000000000000000000000000000000018\
          e699bae59586e4b88de8b6b3efbc8ce8afb7e58585e580bc0000000000000000";
     assert_eq!(
-        "Reason provided by the contract: '智商不足，请充值'"
-            .to_string(),
+        "智商不足，请充值".to_string(),
         revert_reason_decode(&input_hex.from_hex().unwrap())
     );
 }
