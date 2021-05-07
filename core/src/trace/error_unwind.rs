@@ -35,6 +35,9 @@ impl ErrorUnwind {
         errors
     }
 
+    // If contract A calls contract B, contract B returns with an exception (vm error or reverted),
+    // but contract A makes another sub-call, we think contract A catches this error and clear the
+    // error list.
     fn accept_call(&mut self, call: &Call) {
         self.callstack.push(call.to);
         self.errors.clear();
@@ -49,7 +52,13 @@ impl ErrorUnwind {
             .expect("trace call and their results must be matched");
 
         match Self::error_message(&result.outcome, &result.return_data) {
+            // If contract A calls contract B, contract B returns with an exception (vm error or reverted),
+            // and contract A then also returns with an exception, we think contract A is propagating out
+            // the exception.
             Some(message) => self.errors.push((address, message)),
+            // If contract A calls contract B, contract B returns with an exception (vm error or reverted),
+            // but contract A returns with success, we think contract A catches this error and clear the
+            // error list.
             None => self.errors.clear(),
         }
     }
@@ -58,7 +67,13 @@ impl ErrorUnwind {
         let address = result.addr;
 
         match Self::error_message(&result.outcome, &result.return_data) {
+            // If contract A calls contract B, contract B returns with an exception (vm error or reverted),
+            // and contract A then also returns with an exception, we think contract A is propagating out
+            // the exception.
             Some(message) => self.errors.push((address, message)),
+            // If contract A calls contract B, contract B returns with an exception (vm error or reverted),
+            // but contract A returns with success, we think contract A catches this error and clear the
+            // error list.
             None => self.errors.clear(),
         }
     }
