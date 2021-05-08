@@ -5,11 +5,14 @@
 
 use crate::{vm::VMExecutor, Executor};
 use anyhow::{ensure, format_err, Result};
+use async_trait::async_trait;
+use cfx_types::H256;
 use diem_crypto::{hash::PRE_GENESIS_BLOCK_ID, HashValue};
 use diem_logger::prelude::*;
 use diem_state_view::{StateView, StateViewId};
 use diem_types::{
     access_path::AccessPath,
+    account_address::AccountAddress,
     account_config::diem_root_address,
     block_info::{
         BlockInfo, GENESIS_EPOCH, GENESIS_ROUND, GENESIS_TIMESTAMP_USECS,
@@ -22,16 +25,14 @@ use diem_types::{
 };
 use executor_types::BlockExecutor;
 use move_core_types::move_resource::MoveResource;
-use std::collections::btree_map::BTreeMap;
+use pow_types::PowInterface;
+use std::{
+    collections::{btree_map::BTreeMap, HashMap},
+    sync::Arc,
+};
 use storage_interface::{
     state_view::VerifiedStateView, DbReaderWriter, TreeState,
 };
-use pow_types::PowInterface;
-use std::collections::HashMap;
-use diem_types::account_address::AccountAddress;
-use std::sync::Arc;
-use async_trait::async_trait;
-use cfx_types::H256;
 
 pub fn generate_waypoint<V: VMExecutor>(
     db: &DbReaderWriter, genesis_txn: &Transaction,
@@ -108,8 +109,11 @@ pub fn calculate_genesis<V: VMExecutor>(
     // existing block chain. In the very extreme and sad situation of losing
     // quorum among validators, we refer to the second use case said above.
     let genesis_version = tree_state.num_transactions;
-    let mut executor =
-        Executor::<V>::new_on_unbootstrapped_db(db.clone(), tree_state, Arc::new(FakePowInterface {}) as Arc<dyn PowInterface>);
+    let mut executor = Executor::<V>::new_on_unbootstrapped_db(
+        db.clone(),
+        tree_state,
+        Arc::new(FakePowInterface {}) as Arc<dyn PowInterface>,
+    );
 
     let block_id = HashValue::zero();
     let epoch = if genesis_version == 0 {
@@ -208,11 +212,15 @@ fn genesis_block_id() -> HashValue { HashValue::zero() }
 struct FakePowInterface {}
 #[async_trait]
 impl PowInterface for FakePowInterface {
-    async fn next_pivot_decision(&self, _parent_decision: H256) -> Option<H256> {
+    async fn next_pivot_decision(
+        &self, _parent_decision: H256,
+    ) -> Option<H256> {
         None
     }
 
-    async fn validate_proposal_pivot_decision(&self, _parent_decision: H256, _me_decision: H256) -> bool {
+    async fn validate_proposal_pivot_decision(
+        &self, _parent_decision: H256, _me_decision: H256,
+    ) -> bool {
         true
     }
 

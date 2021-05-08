@@ -54,6 +54,7 @@ use executor_types::{
     StateComputeResult, TransactionReplayer,
 };
 use fail::fail_point;
+use pow_types::PowInterface;
 use std::{
     collections::{hash_map, HashMap, HashSet},
     convert::TryFrom,
@@ -63,7 +64,6 @@ use std::{
 use storage_interface::{
     state_view::VerifiedStateView, DbReaderWriter, TreeState,
 };
-use pow_types::PowInterface;
 
 type SparseMerkleProof = diem_types::proof::SparseMerkleProof<AccountStateBlob>;
 
@@ -110,8 +110,10 @@ where V: VMExecutor
     }
 
     pub fn new_on_unbootstrapped_db(
-        db: DbReaderWriter, tree_state: TreeState, pow_handler: Arc<dyn PowInterface>
-    ) -> Self {
+        db: DbReaderWriter, tree_state: TreeState,
+        pow_handler: Arc<dyn PowInterface>,
+    ) -> Self
+    {
         Self {
             db,
             cache: SpeculationCache::new_for_db_bootstrapping(tree_state),
@@ -280,7 +282,8 @@ where V: VMExecutor
         mut account_to_state: HashMap<AccountAddress, AccountState>,
         account_to_proof: HashMap<HashValue, SparseMerkleProof>,
         transactions: &[Transaction], vm_outputs: Vec<TransactionOutput>,
-        parent_trees: &ExecutedTrees, parent_pivot_decision: Option<PivotBlockDecision>
+        parent_trees: &ExecutedTrees,
+        parent_pivot_decision: Option<PivotBlockDecision>,
     ) -> Result<ProcessedVMOutput>
     {
         // The data of each individual transaction. For convenience purpose,
@@ -828,7 +831,8 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 vec![],
                 parent_output.executed_trees().clone(),
                 parent_output.epoch_state().clone(),
-                // The block has no pivot decision transaction, so it's the same as the parent.
+                // The block has no pivot decision transaction, so it's the
+                // same as the parent.
                 parent_output.pivot_block().clone(),
             );
 
@@ -885,7 +889,13 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
 
             let (account_to_state, account_to_proof) = state_view.into();
             // TODO(lpl): Decide if we store it in states.
-            let parent_pivot_decision = self.cache.get_block(&parent_block_id)?.lock().output().pivot_block().clone();
+            let parent_pivot_decision = self
+                .cache
+                .get_block(&parent_block_id)?
+                .lock()
+                .output()
+                .pivot_block()
+                .clone();
             let output = Self::process_vm_outputs(
                 account_to_state,
                 account_to_proof,
@@ -895,7 +905,6 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 parent_pivot_decision,
             )
             .map_err(|err| format_err!("Failed to execute block: {}", err))?;
-
 
             let parent_accu = parent_block_executed_trees.txn_accumulator();
 

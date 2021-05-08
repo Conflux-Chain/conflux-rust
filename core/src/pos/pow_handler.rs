@@ -1,14 +1,13 @@
 use crate::ConsensusGraph;
+use async_trait::async_trait;
 use cfx_types::H256;
 use diem_types::account_address::AccountAddress;
 use futures::{channel::oneshot, executor::block_on};
+use pow_types::PowInterface;
 use std::{collections::HashMap, sync::Arc};
 use tokio::runtime::Handle;
-use async_trait::async_trait;
-use pow_types::PowInterface;
 
 pub const POS_TERM_EPOCHS: u64 = 60;
-
 
 pub struct PowHandler {
     executor: Handle,
@@ -52,9 +51,7 @@ impl PowHandler {
 
 #[async_trait]
 impl PowInterface for PowHandler {
-    async fn next_pivot_decision(
-        &self, parent_decision: H256,
-    ) -> Option<H256> {
+    async fn next_pivot_decision(&self, parent_decision: H256) -> Option<H256> {
         let (callback, cb_receiver) = oneshot::channel();
         let pow_consensus = self.pow_consensus.clone();
         self.executor.spawn(async move {

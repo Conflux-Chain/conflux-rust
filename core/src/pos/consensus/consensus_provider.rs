@@ -18,10 +18,10 @@ use futures::channel::mpsc;
 //use state_sync::client::StateSyncClient;
 use crate::{pos::pow_handler::PowHandler, ConsensusGraph};
 use executor_types::BlockExecutor;
+use pow_types::PowInterface;
 use std::sync::Arc;
 use storage_interface::DbReader;
 use tokio::runtime::{self, Runtime};
-use pow_types::PowInterface;
 
 /// Helper function to start consensus based on configuration and return the
 /// runtime

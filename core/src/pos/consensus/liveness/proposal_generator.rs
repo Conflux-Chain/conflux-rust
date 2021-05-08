@@ -28,8 +28,8 @@ use diem_types::{
     write_set::WriteSet,
 };
 use move_core_types::language_storage::TypeTag;
-use std::sync::Arc;
 use pow_types::PowInterface;
+use std::sync::Arc;
 
 #[cfg(test)]
 #[path = "proposal_generator_test.rs"]
