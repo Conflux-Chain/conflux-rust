@@ -370,7 +370,7 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         &self, address: &Address, current_block_number: u64,
     ) -> Result<U256> {
         let staking_balance = self.staking_balance(address)?;
-        match **self.get_vote_stake_list(address)?.as_ref() {
+        match self.get_vote_stake_list(address)?.as_ref().deref() {
             None => Ok(staking_balance),
             Some(vote_stake_list) => Ok(vote_stake_list
                 .withdrawable_staking_balance(
@@ -646,4 +646,4 @@ use keccak_hash::{keccak, KECCAK_EMPTY};
 use primitives::{
     CodeInfo, DepositList, EpochId, SponsorInfo, StorageLayout, VoteStakeList,
 };
-use std::{marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, ops::Deref, sync::Arc};
