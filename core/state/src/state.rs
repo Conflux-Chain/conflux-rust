@@ -472,12 +472,12 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     ) -> Result<()> {
         let staking_balance = self.staking_balance(address)?;
         if *amount > staking_balance {
-            ()
+            return Ok(());
         }
         self.modify_and_update_vote_stake_list(address, None)?
             .as_mut()
             .map_or_else(
-                || Ok(()),
+                || unreachable!(),
                 |vote_stake_list| {
                     vote_stake_list.vote_lock(*amount, unlock_block_number);
                     Ok(())
@@ -491,7 +491,7 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         self.modify_and_update_vote_stake_list(address, None)?
             .as_mut()
             .map_or_else(
-                || Ok(()),
+                || unreachable!(),
                 |vote_stake_list| {
                     vote_stake_list
                         .remove_expired_vote_stake_info(current_block_number);

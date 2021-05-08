@@ -347,7 +347,7 @@ impl StateObjectCache {
             &self.vote_stake_list_cache,
             &VoteStakeListAddress(*address),
             db,
-            |_addr| Ok(None),
+            |_addr| Ok(Some(VoteStakeList(vec![]))),
             debug_record,
         )
     }

@@ -155,7 +155,7 @@ impl VoteStakeList {
                     vote_info.unlock_block_number.cmp(&(block_number + 1))
                 })
                 .unwrap_or_else(|x| x);
-            *self = VoteStakeList(self.split_off(idx));
+            self.0 = self.split_off(idx)
         }
     }
 
