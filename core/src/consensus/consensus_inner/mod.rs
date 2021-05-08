@@ -18,7 +18,7 @@ use crate::{
         debug_recompute::log_invalid_state_root, pastset_cache::PastSetCache,
         MaybeExecutedTxExtraInfo, TransactionInfo,
     },
-    pos::pow_handler::POS_TERM_EPOCHS,
+    pos::pow_handler::{POS_TERM_EPOCHS, POW_CONFIRM_DELAY_EPOCH},
     pow::{target_difficulty, PowComputer, ProofOfWorkConfig},
     state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
     verification::VerificationConfig,
@@ -3773,7 +3773,12 @@ impl ConsensusGraphInner {
         &self, parent_decision_hash: &H256,
     ) -> Option<H256> {
         match self.hash_to_arena_indices.get(parent_decision_hash) {
-            None => todo!(),
+            None => {
+                // FIXME(lpl): Just return stable checkpoint as the first
+                // decision. This should be eventually handled
+                // as cross-checkpoint case.
+                Some(self.cur_era_stable_block_hash)
+            }
             Some(parent_decision) => {
                 let parent_decision_height =
                     self.arena[*parent_decision].height;
@@ -3781,10 +3786,14 @@ impl ConsensusGraphInner {
                 if self.get_pivot_block_arena_index(parent_decision_height)
                     == *parent_decision
                 {
-                    let new_decision_height = self.best_epoch_number()
+                    // FIXME(lpl): Use confirmed epoch with a delay in
+                    // pos-finality spec.
+                    let new_decision_height = (self
+                        .best_epoch_number()
+                        .saturating_sub(POW_CONFIRM_DELAY_EPOCH))
                         / POS_TERM_EPOCHS
                         * POS_TERM_EPOCHS;
-                    if new_decision_height == parent_decision_height {
+                    if new_decision_height <= parent_decision_height {
                         None
                     } else {
                         let new_decision_arena_index = self

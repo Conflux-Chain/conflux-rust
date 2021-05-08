@@ -829,7 +829,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 "reconfig_descendant_block_received"
             );
 
-            let mut output = ProcessedVMOutput::new(
+            let output = ProcessedVMOutput::new(
                 vec![],
                 parent_output.executed_trees().clone(),
                 parent_output.epoch_state().clone(),

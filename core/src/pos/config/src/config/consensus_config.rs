@@ -37,7 +37,9 @@ impl Default for ConsensusConfig {
             max_pruned_blocks_in_mem: 100,
             mempool_txn_pull_timeout_ms: 1000,
             mempool_executed_txn_timeout_ms: 1000,
-            round_initial_timeout_ms: 1000,
+            // TODO(lpl): Decide value.
+            // 60 epochs should have be generated in 4 minutes.
+            round_initial_timeout_ms: 240_000,
             proposer_type: ConsensusProposerType::LeaderReputation(
                 LeaderReputationConfig {
                     active_weights: 99,

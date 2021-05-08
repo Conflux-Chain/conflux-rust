@@ -8,6 +8,7 @@ use std::{collections::HashMap, sync::Arc};
 use tokio::runtime::Handle;
 
 pub const POS_TERM_EPOCHS: u64 = 60;
+pub const POW_CONFIRM_DELAY_EPOCH: u64 = 60;
 
 pub struct PowHandler {
     executor: Handle,

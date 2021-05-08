@@ -171,23 +171,28 @@ impl ProposalGenerator {
                 self.block_store.root()
             };
 
-            let pivot_decision = if let Some(parent_decision) =
-                parent_block.block_info().pivot_decision()
-            {
+            // FIXME(lpl): For now, sending default H256 will return the first
+            // pivot decision.
+            let parent_decision = parent_block
+                .block_info()
+                .pivot_decision()
+                .map(|d| d.block_hash)
+                .unwrap_or_default();
+            let pivot_decision = loop {
                 match self
                     .pow_handler
-                    .next_pivot_decision(parent_decision.block_hash)
+                    .next_pivot_decision(parent_decision)
                     .await
                 {
-                    Some(res) => res,
+                    Some(res) => break res,
                     None => {
                         // TODO(lpl): Handle the error from outside.
-                        bail!("No new pivot decision to propose");
+                        // FIXME(lpl): Wait with a deadline.
+                        let sleep_duration =
+                            std::time::Duration::from_millis(100);
+                        self.time_service.sleep(sleep_duration);
                     }
                 }
-            } else {
-                // FIXME(lpl): Return the first pow block.
-                H256::default()
             };
 
             let event_data = bcs::to_bytes(&pivot_decision)?;
