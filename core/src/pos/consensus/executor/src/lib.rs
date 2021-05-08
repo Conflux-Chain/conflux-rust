@@ -315,6 +315,8 @@ where V: VMExecutor
             }
         }
         if pivot_decision.is_none() {
+            // TODO(lpl): Verify blocks to ensure executed blocks have expected
+            // pivot decision tx.
             pivot_decision = parent_pivot_decision;
         }
 
@@ -889,6 +891,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
 
             let (account_to_state, account_to_proof) = state_view.into();
             // TODO(lpl): Decide if we store it in states.
+            // None for genesis for now.
             let parent_pivot_decision = self
                 .cache
                 .get_block(&parent_block_id)?
@@ -896,15 +899,30 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 .output()
                 .pivot_block()
                 .clone();
+
             let output = Self::process_vm_outputs(
                 account_to_state,
                 account_to_proof,
                 &transactions,
                 vm_outputs,
                 &parent_block_executed_trees,
-                parent_pivot_decision,
+                parent_pivot_decision.clone(),
             )
             .map_err(|err| format_err!("Failed to execute block: {}", err))?;
+
+            assert!(output.pivot_block().is_some());
+            if parent_pivot_decision.is_some()
+                && !futures::executor::block_on(
+                    self.pow_handler.validate_proposal_pivot_decision(
+                        parent_pivot_decision.unwrap().block_hash,
+                        output.pivot_block().as_ref().unwrap().block_hash,
+                    ),
+                )
+            {
+                return Err(Error::InternalError {
+                    error: format!("Invalid pivot decision for block"),
+                });
+            }
 
             let parent_accu = parent_block_executed_trees.txn_accumulator();
 

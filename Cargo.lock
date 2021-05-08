@@ -2137,6 +2137,7 @@ dependencies = [
  "diem-types",
  "executor-types",
  "fail",
+ "futures 0.3.13",
  "itertools 0.10.0",
  "move-core-types",
  "once_cell",
