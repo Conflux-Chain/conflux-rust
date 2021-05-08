@@ -12,9 +12,12 @@ pub mod vote;
 
 use super::HSB_PROTOCOL_VERSION;
 
-use crate::message::{
-    GetMaybeRequestId, Message, MessageProtocolVersionBound, MsgId, RequestId,
-    SetRequestId,
+use crate::{
+    message::{
+        GetMaybeRequestId, Message, MessageProtocolVersionBound, MsgId,
+        RequestId, SetRequestId,
+    },
+    pos::consensus::network_interface::ConsensusMsg,
 };
 
 use block_retrieval::BlockRetrievalRpcRequest;
@@ -36,6 +39,7 @@ build_msgid! {
     BLOCK_RETRIEVAL_RESPONSE = 0x54
     EPOCH_CHANGE = 0x55
     EPOCH_RETRIEVAL = 0x56
+    CONSENSUS_MSG = 0x57
     INVALID = 0xff
 }
 
@@ -115,6 +119,12 @@ mark_msg_version_bound!(SyncInfo, HSB_PROTOCOL_VERSION, HSB_PROTOCOL_VERSION);
 build_msg_impl_with_serde_serialization! {EpochChangeProof, msgid::EPOCH_CHANGE, "EpochChangeMessage"}
 mark_msg_version_bound!(
     EpochChangeProof,
+    HSB_PROTOCOL_VERSION,
+    HSB_PROTOCOL_VERSION
+);
+build_msg_impl_with_serde_serialization! {ConsensusMsg, msgid::CONSENSUS_MSG, "ConsensusMsg"}
+mark_msg_version_bound!(
+    ConsensusMsg,
     HSB_PROTOCOL_VERSION,
     HSB_PROTOCOL_VERSION
 );
