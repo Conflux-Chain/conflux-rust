@@ -280,7 +280,7 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         )?
         .as_mut()
         .map_or_else(
-            || Err(ErrorKind::IncompleteDatabase(contract_address).into()),
+            || unreachable!(),
             |value| {
                 value.add_privilege();
                 Ok(())
@@ -300,7 +300,7 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         )?
         .as_mut()
         .map_or_else(
-            || Err(ErrorKind::IncompleteDatabase(contract_address).into()),
+            || unreachable!(),
             |value| {
                 value.remove_privilege();
                 Ok(())
