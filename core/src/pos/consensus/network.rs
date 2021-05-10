@@ -82,6 +82,10 @@ impl NetworkSender {
         }
     }
 
+    pub fn network_sender(&self) -> &ConsensusNetworkSender {
+        &self.network_sender
+    }
+
     /// Tries to retrieve num of blocks backwards starting from id from the
     /// given peer: the function returns a future that is fulfilled with
     /// BlockRetrievalResponse.
@@ -92,7 +96,7 @@ impl NetworkSender {
     {
         ensure!(from != self.author, "Retrieve block from self");
 
-        let peer_hash = H256::from_slice(from.to_vec().as_slice());
+        let peer_hash = from.to_H256();
         let peer_state =
             self.network_sender.protocol_handler.peers.get(&peer_hash);
         if peer_state.is_none() {

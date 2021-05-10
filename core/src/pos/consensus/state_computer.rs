@@ -28,14 +28,7 @@ pub struct ExecutionProxy {
 }
 
 impl ExecutionProxy {
-    pub fn new(
-        /*execution_correctness_client: Box<
-            dyn ExecutionCorrectness + Send + Sync,
-        >,
-        synchronizer: StateSyncClient,*/
-        executor: Box<dyn BlockExecutor>,
-    ) -> Self
-    {
+    pub fn new(executor: Box<dyn BlockExecutor>) -> Self {
         Self {
             /*execution_correctness_client: Mutex::new(
                 execution_correctness_client,
@@ -84,11 +77,13 @@ impl StateComputer for ExecutionProxy {
         finality_proof: LedgerInfoWithSignatures,
     ) -> Result<(), ExecutionError>
     {
-        /*let (committed_txns, reconfig_events) = monitor!(
+        let (committed_txns, reconfig_events) = monitor!(
             "commit_block",
             self.executor
+                .lock()
                 .commit_blocks(block_ids, finality_proof)?
         );
+        /*
         if let Err(e) = monitor!(
             "notify_state_sync",
             self.synchronizer

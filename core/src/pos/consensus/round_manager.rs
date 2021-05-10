@@ -21,6 +21,7 @@ use super::{
     persistent_liveness_storage::{PersistentLivenessStorage, RecoveryData},
     state_replication::{StateComputer, TxnManager},
 };
+use crate::pos::protocol::message::block_retrieval_response::BlockRetrievalRpcResponse;
 use anyhow::{bail, ensure, Context, Result};
 use consensus_types::{
     block::Block,
@@ -770,16 +771,14 @@ impl RoundManager {
             status = BlockRetrievalStatus::IdNotFound;
         }
 
-        let response = Box::new(BlockRetrievalResponse::new(status, blocks));
-        bcs::to_bytes(&ConsensusMsg::BlockRetrievalResponse(response))
-            .and_then(|bytes| {
-                /*request
-                .response_sender
-                .send(Ok(bytes.into()))
-                .map_err(|e| bcs::Error::Custom(format!("{:?}", e)))*/
-                Ok(())
-            })
-            .context("[RoundManager] Failed to process block retrieval")
+        let response = BlockRetrievalRpcResponse {
+            request_id: request.request_id,
+            response: BlockRetrievalResponse::new(status, blocks),
+        };
+        self.network
+            .network_sender()
+            .send_message_with_peer_id(&request.peer_id, &response);
+        Ok(())
     }
 
     /// To jump start new round with the current certificates we have.
