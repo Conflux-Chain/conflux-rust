@@ -14,6 +14,9 @@ pub struct StateObjectCache {
         RwLock<HashMap<DepositListAddress, Option<DepositList>>>,
     vote_stake_list_cache:
         RwLock<HashMap<VoteStakeListAddress, Option<VoteStakeList>>>,
+    commission_privilege_cache: RwLock<
+        HashMap<CommissionPrivilegeAddress, Option<CachedCommissionPrivilege>>,
+    >,
     // TODO: etc.
 }
 
@@ -236,6 +239,30 @@ impl StateObjectCache {
         )
     }
 
+    pub fn require_or_set_code<'a, StateDb: StateDbOps>(
+        &'a self, address: Address, code_owner: Address, code: Vec<u8>,
+        db: &'a mut StateDb,
+        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
+    ) -> Result<()>
+    {
+        Self::require_or_set(
+            &self.code_cache,
+            &CodeAddress(address, keccak(&code)),
+            db,
+            |_addr| Ok(None),
+            debug_record,
+        )?
+        .as_mut()
+        .map_or_else(
+            || Err(ErrorKind::IncompleteDatabase(address).into()),
+            |value| {
+                value.owner = code_owner;
+                value.code = Arc::new(code);
+                Ok(())
+            },
+        )
+    }
+
     pub fn get_code<StateDb: StateDbOps>(
         &self, contract_address: &Address, db: &StateDb,
     ) -> Result<
@@ -303,22 +330,43 @@ impl StateObjectCache {
             db,
         )
     }
+
+    pub fn get_commission_privilege<StateDb: StateDbOps>(
+        &self, contract_address: &Address, user_address: &Address, db: &StateDb,
+    ) -> Result<
+        GuardedValue<
+            RwLockReadGuard<
+                HashMap<
+                    CommissionPrivilegeAddress,
+                    Option<CachedCommissionPrivilege>,
+                >,
+            >,
+            NonCopy<Option<&CachedCommissionPrivilege>>,
+        >,
+    > {
+        Self::ensure_loaded(
+            &self.commission_privilege_cache,
+            &CommissionPrivilegeAddress::new(*contract_address, *user_address),
+            db,
+        )
+    }
 }
 
 use crate::{
     cache_object::{
-        CachedAccount, CachedObject, CodeAddress, DepositListAddress,
-        ToHashKey, VoteStakeListAddress,
+        CachedAccount, CachedCommissionPrivilege, CachedObject, CodeAddress,
+        CommissionPrivilegeAddress, DepositListAddress, ToHashKey,
+        VoteStakeListAddress,
     },
     StateDbOps,
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
-use cfx_statedb::Result;
+use cfx_statedb::{ErrorKind, Result};
 use cfx_storage::utils::guarded_value::{GuardedValue, NonCopy};
 use cfx_types::Address;
-use keccak_hash::KECCAK_EMPTY;
+use keccak_hash::{keccak, KECCAK_EMPTY};
 use parking_lot::{
     RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
 use primitives::{CodeInfo, DepositList, VoteStakeList};
-use std::{borrow::Borrow, collections::HashMap, hash::Hash};
+use std::{borrow::Borrow, collections::HashMap, hash::Hash, sync::Arc};

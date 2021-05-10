@@ -118,6 +118,8 @@ pub enum Error {
     Reverted,
     /// Invalid address
     InvalidAddress(Address),
+    /// Create a contract on an address with existing contract
+    ConflictAddress(Address),
 }
 
 #[derive(Debug)]
@@ -189,6 +191,9 @@ impl fmt::Display for Error {
             OutOfBounds => write!(f, "Out of bounds"),
             Reverted => write!(f, "Reverted by bytecode"),
             InvalidAddress(ref addr) => write!(f, "InvalidAddress: {}", addr),
+            ConflictAddress(ref addr) => {
+                write!(f, "Contract creation on an existing address: {}", addr)
+            }
         }
     }
 }

@@ -260,9 +260,12 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     }
 
     fn check_commission_privilege(
-        &self, _contract_address: &Address, _user: &Address,
+        &self, contract_address: &Address, user_address: &Address,
     ) -> Result<bool> {
-        unimplemented!()
+        Ok(self
+            .get_commission_privilege(contract_address, user_address)?
+            .as_ref()
+            .map_or(false, |value| value.has_privilege()))
     }
 
     fn add_commission_privilege(
@@ -290,9 +293,23 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     }
 
     fn init_code(
-        &mut self, _address: &Address, _code: Vec<u8>, _owner: Address,
+        &mut self, address: &Address, code: Vec<u8>, owner: Address,
     ) -> Result<()> {
-        unimplemented!()
+        let code_hash = keccak(&code);
+
+        // Update the code hash.
+        self.modify_and_update_account(address, None)?
+            .as_mut()
+            .map_or_else(
+                || Err(ErrorKind::IncompleteDatabase(*address).into()),
+                |value| {
+                    value.code_hash = code_hash;
+                    Ok(())
+                },
+            )?;
+
+        // Set the code.
+        self.require_or_set_code(*address, owner, code, None)
     }
 
     fn code_hash(&self, contract_address: &Address) -> Result<Option<H256>> {
@@ -516,6 +533,16 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         self.cache.get_vote_stake_list(address, &self.db)
     }
 
+    fn get_commission_privilege(
+        &self, contract_address: &Address, user_address: &Address,
+    ) -> Result<impl AsRef<NonCopy<Option<&CachedCommissionPrivilege>>>> {
+        self.cache.get_commission_privilege(
+            contract_address,
+            user_address,
+            &self.db,
+        )
+    }
+
     fn modify_and_update_account<'a>(
         &'a mut self, address: &Address,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
@@ -534,10 +561,24 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
             debug_record,
         )
     }
+
+    fn require_or_set_code<'a>(
+        &'a mut self, address: Address, code_owner: Address, code: Vec<u8>,
+        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
+    ) -> Result<()>
+    {
+        self.cache.require_or_set_code(
+            address,
+            code_owner,
+            code,
+            &mut self.db,
+            debug_record,
+        )
+    }
 }
 
 use crate::{
-    cache_object::CachedAccount,
+    cache_object::{CachedAccount, CachedCommissionPrivilege},
     maybe_address,
     state_object_cache::{ModifyAndUpdate, StateObjectCache},
     state_trait::{CheckpointTrait, StateOpsTrait},
@@ -552,7 +593,7 @@ use cfx_statedb::{
 };
 use cfx_storage::{utils::guarded_value::NonCopy, StorageStateTrait};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
-use keccak_hash::KECCAK_EMPTY;
+use keccak_hash::{keccak, KECCAK_EMPTY};
 use primitives::{
     CodeInfo, DepositList, EpochId, SponsorInfo, StorageLayout, VoteStakeList,
 };

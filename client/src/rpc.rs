@@ -128,10 +128,15 @@ impl HttpConfiguration {
 pub struct WsConfiguration {
     pub enabled: bool,
     pub address: SocketAddr,
+    pub max_payload_bytes: usize,
 }
 
 impl WsConfiguration {
-    pub fn new(ip: Option<(u8, u8, u8, u8)>, port: Option<u16>) -> Self {
+    pub fn new(
+        ip: Option<(u8, u8, u8, u8)>, port: Option<u16>,
+        max_payload_bytes: usize,
+    ) -> Self
+    {
         let ipv4 = match ip {
             Some(ip) => Ipv4Addr::new(ip.0, ip.1, ip.2, ip.3),
             None => Ipv4Addr::new(0, 0, 0, 0),
@@ -139,6 +144,7 @@ impl WsConfiguration {
         WsConfiguration {
             enabled: port.is_some(),
             address: SocketAddr::V4(SocketAddrV4::new(ipv4, port.unwrap_or(0))),
+            max_payload_bytes,
         }
     }
 }
@@ -345,6 +351,7 @@ where
     }
 
     match WsServerBuilder::with_meta_extractor(handler, extractor)
+        .max_payload(conf.max_payload_bytes)
         .start(&conf.address)
     {
         Ok(server) => Ok(Some(server)),
