@@ -210,6 +210,13 @@ impl StateComputeResult {
         &self.pivot_decision
     }
 
+    pub fn update_pivot_decision(
+        &mut self, parent_pivot_decision: PivotBlockDecision,
+    ) {
+        debug_assert!(self.pivot_decision.is_none());
+        self.pivot_decision = Some(parent_pivot_decision);
+    }
+
     pub fn has_reconfiguration(&self) -> bool { self.epoch_state.is_some() }
 
     pub fn signature(&self) -> &Option<Ed25519Signature> { &self.signature }

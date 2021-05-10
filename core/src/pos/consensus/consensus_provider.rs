@@ -34,7 +34,6 @@ pub fn start_consensus(
     diem_db: Arc<dyn DbReader>,
     executor: Box<dyn BlockExecutor>,
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
-    pow_consensus: Arc<ConsensusGraph>,
 ) -> Runtime
 {
     let runtime = runtime::Builder::new()
@@ -62,8 +61,7 @@ pub fn start_consensus(
         channel::new(1_024, &counters::PENDING_ROUND_TIMEOUTS);
     //let (self_sender, self_receiver) =
     //    channel::new(1_024, &counters::PENDING_SELF_MESSAGES);
-    let pow_handler =
-        Arc::new(PowHandler::new(runtime.handle().clone(), pow_consensus));
+    let pow_handler = Arc::new(PowHandler::new(runtime.handle().clone()));
 
     let epoch_mgr = EpochManager::new(
         node_config,

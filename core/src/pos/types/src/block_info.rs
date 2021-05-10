@@ -49,6 +49,7 @@ pub struct BlockInfo {
     timestamp_usecs: u64,
     /// An optional field containing the next epoch info
     next_epoch_state: Option<EpochState>,
+    /// TODO(lpl): Remove Option?
     /// The last pivot block selection after executing this block.
     /// None means choosing TreeGraph genesis as the first pivot block.
     pivot: Option<PivotBlockDecision>,

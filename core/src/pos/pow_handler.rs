@@ -3,10 +3,10 @@ use async_trait::async_trait;
 use cfx_types::H256;
 use diem_types::account_address::AccountAddress;
 use futures::{channel::oneshot, executor::block_on};
+use parking_lot::RwLock;
 use pow_types::PowInterface;
 use std::{collections::HashMap, sync::Arc};
 use tokio::runtime::Handle;
-use parking_lot::RwLock;
 
 pub const POS_TERM_EPOCHS: u64 = 60;
 pub const POW_CONFIRM_DELAY_EPOCH: u64 = 60;
@@ -24,6 +24,9 @@ impl PowHandler {
         }
     }
 
+    pub fn initialize(&self, pow_consensus: Arc<ConsensusGraph>) {
+        *self.pow_consensus.write() = Some(pow_consensus);
+    }
 
     fn next_pivot_decision_impl(
         pow_consensus: Arc<ConsensusGraph>, parent_decision: &H256,
@@ -52,14 +55,12 @@ impl PowHandler {
     }
 }
 
+// FIXME(lpl): We should let the caller to decide if `pow_consensus` should be
+// `None`?
 #[async_trait]
 impl PowInterface for PowHandler {
-    fn initialize(&self, pow_consensus: Arc<ConsensusGraph>) {
-        *self.pow_consensus.write() = Some(pow_consensus);
-    }
-
     async fn next_pivot_decision(&self, parent_decision: H256) -> Option<H256> {
-        let pow_consensus = self.pow_consensus.read();
+        let pow_consensus = self.pow_consensus.read().clone();
         if pow_consensus.is_none() {
             return None;
         }
@@ -76,7 +77,7 @@ impl PowInterface for PowHandler {
     async fn validate_proposal_pivot_decision(
         &self, parent_decision: H256, me_decision: H256,
     ) -> bool {
-        let pow_consensus = self.pow_consensus.read();
+        let pow_consensus = self.pow_consensus.read().clone();
         if pow_consensus.is_none() {
             return true;
         }
@@ -94,7 +95,7 @@ impl PowInterface for PowHandler {
     }
 
     async fn get_committee_candidates(&self) -> HashMap<AccountAddress, u64> {
-        let pow_consensus = self.pow_consensus.read();
+        let pow_consensus = self.pow_consensus.read().clone();
         if pow_consensus.is_none() {
             return HashMap::new();
         }
