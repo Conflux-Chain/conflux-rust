@@ -28,6 +28,7 @@ use diem_types::{
     write_set::WriteSet,
 };
 use move_core_types::language_storage::TypeTag;
+use pow_types::PowInterface;
 use std::sync::Arc;
 
 #[cfg(test)]
@@ -59,7 +60,7 @@ pub struct ProposalGenerator {
     // Last round that a proposal was generated
     last_round_generated: Mutex<Round>,
     // Handle the interaction with PoW consensus.
-    pow_handler: Arc<PowHandler>,
+    pow_handler: Arc<dyn PowInterface>,
     // FIXME(lpl): Where to put them?
     private_key: Ed25519PrivateKey,
     public_key: Ed25519PublicKey,
@@ -69,7 +70,7 @@ impl ProposalGenerator {
     pub fn new(
         author: Author, block_store: Arc<dyn BlockReader + Send + Sync>,
         txn_manager: Arc<dyn TxnManager>, time_service: Arc<dyn TimeService>,
-        max_block_size: u64, pow_handler: Arc<PowHandler>,
+        max_block_size: u64, pow_handler: Arc<dyn PowInterface>,
         private_key: Ed25519PrivateKey, public_key: Ed25519PublicKey,
     ) -> Self
     {
@@ -170,23 +171,28 @@ impl ProposalGenerator {
                 self.block_store.root()
             };
 
-            let pivot_decision = if let Some(parent_decision) =
-                parent_block.block_info().pivot_decision()
-            {
+            // FIXME(lpl): For now, sending default H256 will return the first
+            // pivot decision.
+            let parent_decision = parent_block
+                .block_info()
+                .pivot_decision()
+                .map(|d| d.block_hash)
+                .unwrap_or_default();
+            let pivot_decision = loop {
                 match self
                     .pow_handler
-                    .next_pivot_decision(parent_decision.block_hash)
+                    .next_pivot_decision(parent_decision)
                     .await
                 {
-                    Some(res) => res,
+                    Some(res) => break res,
                     None => {
                         // TODO(lpl): Handle the error from outside.
-                        bail!("No new pivot decision to propose");
+                        // FIXME(lpl): Wait with a deadline.
+                        let sleep_duration =
+                            std::time::Duration::from_millis(100);
+                        self.time_service.sleep(sleep_duration);
                     }
                 }
-            } else {
-                // FIXME(lpl): Return the first pow block.
-                H256::default()
             };
 
             let event_data = bcs::to_bytes(&pivot_decision)?;

@@ -1,24 +1,14 @@
 use crate::ConsensusGraph;
+use async_trait::async_trait;
 use cfx_types::H256;
 use diem_types::account_address::AccountAddress;
 use futures::{channel::oneshot, executor::block_on};
+use pow_types::PowInterface;
 use std::{collections::HashMap, sync::Arc};
 use tokio::runtime::Handle;
 
 pub const POS_TERM_EPOCHS: u64 = 60;
-//
-// pub trait PowInterface {
-//     // TODO(lpl): Wait for new pivot decision.
-//     async fn next_pivot_decision(&self, parent_decision: &H256)
-//         -> Option<H256>;
-//
-//     async fn validate_proposal_pivot_decision(
-//         &self, parent_decision: &H256, me_decision: &H256,
-//     ) -> bool;
-//
-//     /// Return the map from committee addresses to their voting power.
-//     async fn get_committee_candidates(&self) -> HashMap<AccountAddress, u64>;
-// }
+pub const POW_CONFIRM_DELAY_EPOCH: u64 = 60;
 
 pub struct PowHandler {
     executor: Handle,
@@ -60,10 +50,9 @@ impl PowHandler {
     }
 }
 
-impl PowHandler {
-    pub async fn next_pivot_decision(
-        &self, parent_decision: H256,
-    ) -> Option<H256> {
+#[async_trait]
+impl PowInterface for PowHandler {
+    async fn next_pivot_decision(&self, parent_decision: H256) -> Option<H256> {
         let (callback, cb_receiver) = oneshot::channel();
         let pow_consensus = self.pow_consensus.clone();
         self.executor.spawn(async move {

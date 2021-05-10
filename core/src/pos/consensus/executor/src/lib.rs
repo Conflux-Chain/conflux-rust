@@ -54,6 +54,7 @@ use executor_types::{
     StateComputeResult, TransactionReplayer,
 };
 use fail::fail_point;
+use pow_types::PowInterface;
 use std::{
     collections::{hash_map, HashMap, HashSet},
     convert::TryFrom,
@@ -71,6 +72,7 @@ type SparseMerkleProof = diem_types::proof::SparseMerkleProof<AccountStateBlob>;
 pub struct Executor<V> {
     db: DbReaderWriter,
     cache: SpeculationCache,
+    pow_handler: Arc<dyn PowInterface>,
     phantom: PhantomData<V>,
 }
 
@@ -82,7 +84,7 @@ where V: VMExecutor
     }
 
     /// Constructs an `Executor`.
-    pub fn new(db: DbReaderWriter) -> Self {
+    pub fn new(db: DbReaderWriter, pow_handler: Arc<dyn PowInterface>) -> Self {
         let startup_info = db
             .reader
             .get_startup_info()
@@ -92,6 +94,7 @@ where V: VMExecutor
         Self {
             db,
             cache: SpeculationCache::new_with_startup_info(startup_info),
+            pow_handler,
             phantom: PhantomData,
         }
     }
@@ -108,10 +111,13 @@ where V: VMExecutor
 
     pub fn new_on_unbootstrapped_db(
         db: DbReaderWriter, tree_state: TreeState,
-    ) -> Self {
+        pow_handler: Arc<dyn PowInterface>,
+    ) -> Self
+    {
         Self {
             db,
             cache: SpeculationCache::new_for_db_bootstrapping(tree_state),
+            pow_handler,
             phantom: PhantomData,
         }
     }
@@ -277,6 +283,7 @@ where V: VMExecutor
         account_to_proof: HashMap<HashValue, SparseMerkleProof>,
         transactions: &[Transaction], vm_outputs: Vec<TransactionOutput>,
         parent_trees: &ExecutedTrees,
+        parent_pivot_decision: Option<PivotBlockDecision>,
     ) -> Result<ProcessedVMOutput>
     {
         // The data of each individual transaction. For convenience purpose,
@@ -306,6 +313,11 @@ where V: VMExecutor
                     break;
                 }
             }
+        }
+        if pivot_decision.is_none() {
+            // TODO(lpl): Verify blocks to ensure executed blocks have expected
+            // pivot decision tx.
+            pivot_decision = parent_pivot_decision;
         }
 
         let new_epoch_marker = vm_outputs
@@ -551,6 +563,7 @@ where V: VMExecutor
             &transactions,
             vm_outputs,
             self.cache.synced_trees(),
+            None,
         )?;
 
         // Since we have verified the proofs, we just need to verify that each
@@ -820,6 +833,8 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 vec![],
                 parent_output.executed_trees().clone(),
                 parent_output.epoch_state().clone(),
+                // The block has no pivot decision transaction, so it's the
+                // same as the parent.
                 parent_output.pivot_block().clone(),
             );
 
@@ -875,14 +890,39 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
             }
 
             let (account_to_state, account_to_proof) = state_view.into();
+            // TODO(lpl): Decide if we store it in states.
+            // None for genesis for now.
+            let parent_pivot_decision = self
+                .cache
+                .get_block(&parent_block_id)?
+                .lock()
+                .output()
+                .pivot_block()
+                .clone();
+
             let output = Self::process_vm_outputs(
                 account_to_state,
                 account_to_proof,
                 &transactions,
                 vm_outputs,
                 &parent_block_executed_trees,
+                parent_pivot_decision.clone(),
             )
             .map_err(|err| format_err!("Failed to execute block: {}", err))?;
+
+            assert!(output.pivot_block().is_some());
+            if parent_pivot_decision.is_some()
+                && !futures::executor::block_on(
+                    self.pow_handler.validate_proposal_pivot_decision(
+                        parent_pivot_decision.unwrap().block_hash,
+                        output.pivot_block().as_ref().unwrap().block_hash,
+                    ),
+                )
+            {
+                return Err(Error::InternalError {
+                    error: format!("Invalid pivot decision for block"),
+                });
+            }
 
             let parent_accu = parent_block_executed_trees.txn_accumulator();
 

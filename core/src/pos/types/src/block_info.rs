@@ -2,14 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    account_config, epoch_state::EpochState, event::EventKey,
-    on_chain_config::ValidatorSet, transaction::Version,
+    access_path::AccessPath, account_config, epoch_state::EpochState,
+    event::EventKey, on_chain_config::ValidatorSet, transaction::Version,
+    write_set::WriteSet,
 };
 use anyhow::Result;
 use cfx_types::H256;
 use diem_crypto::hash::HashValue;
 #[cfg(any(test, feature = "fuzzing"))]
 use diem_crypto::hash::ACCUMULATOR_PLACEHOLDER_HASH;
+use move_core_types::move_resource::MoveResource;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
@@ -197,7 +199,19 @@ impl PivotBlockDecision {
         )
     }
 
+    pub fn pivot_select_access_path() -> AccessPath {
+        AccessPath::new(
+            account_config::pivot_chain_select_address(),
+            Self::resource_path(),
+        )
+    }
+
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         bcs::from_bytes(bytes).map_err(Into::into)
     }
+}
+
+impl MoveResource for PivotBlockDecision {
+    const MODULE_NAME: &'static str = "pivot_decision";
+    const STRUCT_NAME: &'static str = "pivot_decision";
 }

@@ -18,6 +18,7 @@ use futures::channel::mpsc;
 //use state_sync::client::StateSyncClient;
 use crate::{pos::pow_handler::PowHandler, ConsensusGraph};
 use executor_types::BlockExecutor;
+use pow_types::PowInterface;
 use std::sync::Arc;
 use storage_interface::DbReader;
 use tokio::runtime::{self, Runtime};
@@ -74,7 +75,7 @@ pub fn start_consensus(
         state_computer,
         storage,
         reconfig_events,
-        pow_handler,
+        pow_handler as Arc<dyn PowInterface>,
     );
 
     let (network_task, network_receiver) = NetworkTask::new(

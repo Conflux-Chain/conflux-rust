@@ -48,6 +48,7 @@ use diem_types::{
     on_chain_config::{OnChainConfigPayload, ValidatorSet},
 };
 use futures::{select, StreamExt};
+use pow_types::PowInterface;
 use safety_rules::SafetyRulesManager;
 use std::{cmp::Ordering, sync::Arc, time::Duration};
 
@@ -92,7 +93,7 @@ pub struct EpochManager {
     processor: Option<RoundProcessor>,
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
     // Conflux PoW handler
-    pow_handler: Arc<PowHandler>,
+    pow_handler: Arc<dyn PowInterface>,
 }
 
 impl EpochManager {
@@ -106,7 +107,7 @@ impl EpochManager {
         state_computer: Arc<dyn StateComputer>,
         storage: Arc<dyn PersistentLivenessStorage>,
         reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
-        pow_handler: Arc<PowHandler>,
+        pow_handler: Arc<dyn PowInterface>,
     ) -> Self
     {
         let author = node_config.validator_network.as_ref().unwrap().peer_id();
