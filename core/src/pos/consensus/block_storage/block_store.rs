@@ -27,6 +27,7 @@ use diem_types::{
     ledger_info::LedgerInfoWithSignatures, transaction::TransactionStatus,
 };
 use executor_types::{Error, StateComputeResult};
+use pow_types::PowInterface;
 use short_hex_str::AsShortHexStr;
 use std::{collections::vec_deque::VecDeque, sync::Arc, time::Duration};
 
@@ -100,6 +101,8 @@ pub struct BlockStore {
     /// Used to ensure that any block stored will have a timestamp < the local
     /// time
     time_service: Arc<dyn TimeService>,
+    /// The interface used to verify block execution result.
+    pow_handler: Arc<dyn PowInterface>,
 }
 
 impl BlockStore {
@@ -107,6 +110,7 @@ impl BlockStore {
         storage: Arc<dyn PersistentLivenessStorage>,
         initial_data: RecoveryData, state_computer: Arc<dyn StateComputer>,
         max_pruned_blocks_in_mem: usize, time_service: Arc<dyn TimeService>,
+        pow_handler: Arc<dyn PowInterface>,
     ) -> Self
     {
         let highest_tc = initial_data.highest_timeout_certificate();
@@ -121,6 +125,7 @@ impl BlockStore {
             storage,
             max_pruned_blocks_in_mem,
             time_service,
+            pow_handler,
         )
     }
 
@@ -131,6 +136,7 @@ impl BlockStore {
         state_computer: Arc<dyn StateComputer>,
         storage: Arc<dyn PersistentLivenessStorage>,
         max_pruned_blocks_in_mem: usize, time_service: Arc<dyn TimeService>,
+        pow_handler: Arc<dyn PowInterface>,
     ) -> Self
     {
         let RootInfo(root_block, root_qc, root_li) = root;
@@ -182,6 +188,7 @@ impl BlockStore {
             state_computer,
             storage,
             time_service,
+            pow_handler,
         };
         for block in blocks {
             block_store
@@ -274,6 +281,7 @@ impl BlockStore {
             Arc::clone(&self.storage),
             max_pruned_blocks_in_mem,
             Arc::clone(&self.time_service),
+            self.pow_handler.clone(),
         );
         let to_remove = self.inner.read().get_all_block_id();
         if let Err(e) = self.storage.prune_tree(to_remove) {
@@ -357,8 +365,12 @@ impl BlockStore {
         // Although NIL blocks don't have a payload, we still send a
         // T::default() to compute because we may inject a block
         // prologue transaction.
-        let state_compute_result =
+        let mut state_compute_result =
             self.state_computer.compute(&block, block.parent_id())?;
+        self.post_process_state_compute_result(
+            &mut state_compute_result,
+            &block.parent_id(),
+        )?;
         observe_block(block.timestamp_usecs(), BlockStage::EXECUTED);
 
         Ok(ExecutedBlock::new(block, state_compute_result))
@@ -448,6 +460,53 @@ impl BlockStore {
             .write()
             .process_pruned_blocks(next_root_id, id_to_remove.clone());
         id_to_remove
+    }
+
+    fn post_process_state_compute_result(
+        &self, state_compute_result: &mut StateComputeResult,
+        parent_block_id: &HashValue,
+    ) -> anyhow::Result<(), Error>
+    {
+        // TODO(lpl): Decide if we store it in states.
+        // None for genesis for now.
+        let parent_pivot_decision = self
+            .get_block(*parent_block_id)
+            .ok_or(Error::InternalError {
+                error: format!(
+                    "Parent block not in BlockStore: parent={:?}",
+                    parent_block_id
+                ),
+            })?
+            .block_info()
+            .pivot_decision()
+            .cloned();
+
+        if state_compute_result.pivot_decision().is_none()
+            && parent_pivot_decision.is_some()
+        {
+            // TODO(lpl): Verify blocks to ensure executed blocks have expected
+            // pivot decision tx.
+            state_compute_result
+                .update_pivot_decision(parent_pivot_decision.clone().unwrap());
+        }
+
+        if parent_pivot_decision.is_some()
+            && !futures::executor::block_on(
+                self.pow_handler.validate_proposal_pivot_decision(
+                    parent_pivot_decision.unwrap().block_hash,
+                    state_compute_result
+                        .pivot_decision()
+                        .as_ref()
+                        .unwrap()
+                        .block_hash,
+                ),
+            )
+        {
+            return Err(Error::InternalError {
+                error: format!("Invalid pivot decision for block"),
+            });
+        }
+        Ok(())
     }
 }
 

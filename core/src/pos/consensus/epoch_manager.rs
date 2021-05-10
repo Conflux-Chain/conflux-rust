@@ -321,6 +321,7 @@ impl EpochManager {
             Arc::clone(&self.state_computer),
             self.config.max_pruned_blocks_in_mem,
             Arc::clone(&self.time_service),
+            self.pow_handler.clone(),
         ));
 
         diem_info!(epoch = epoch, "Update SafetyRules");
