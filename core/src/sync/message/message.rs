@@ -62,6 +62,8 @@ build_msgid! {
     INVALID = 0xff
     // This above not the last one because msg_id is u16,
     // U16_NEXT = 0x100
+
+    // TODO (linxi): add pos final decision message
 }
 
 // generate `impl Message for _` for each message type

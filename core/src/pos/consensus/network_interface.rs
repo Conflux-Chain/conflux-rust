@@ -15,7 +15,7 @@ use crate::{
     },
     sync::Error,
 };
-use anyhow::format_err;
+use anyhow::{format_err, Context};
 use cfx_types::H256;
 use channel::message_queues::QueueStyle;
 use consensus_types::{
@@ -81,8 +81,8 @@ impl ConsensusNetworkSender {
     /// `CONSENSUS_DIRECT_SEND_PROTOCOL` ProtocolId.
     pub fn send_to(
         &mut self, recipient: PeerId, msg: &dyn Message,
-    ) -> anyhow::Result<(), NetworkError> {
-        let peer_hash = H256::from_slice(recipient.to_vec().as_slice());
+    ) -> Result<(), anyhow::Error> {
+        let peer_hash = recipient.to_H256();
         if let Some(peer) = self.protocol_handler.peers.get(&peer_hash) {
             let peer_id = peer.read().get_id();
             self.send_message_with_peer_id(&peer_id, msg);
@@ -94,13 +94,9 @@ impl ConsensusNetworkSender {
     /// `CONSENSUS_DIRECT_SEND_PROTOCOL` ProtocolId.
     pub fn send_to_many(
         &mut self, recipients: impl Iterator<Item = PeerId>, msg: &dyn Message,
-    ) -> anyhow::Result<(), NetworkError> {
-        for peer_address in recipients {
-            let peer_hash = H256::from_slice(peer_address.to_vec().as_slice());
-            if let Some(peer) = self.protocol_handler.peers.get(&peer_hash) {
-                let peer_id = peer.read().get_id();
-                self.send_message_with_peer_id(&peer_id, msg);
-            }
+    ) -> Result<(), anyhow::Error> {
+        for recipient in recipients {
+            self.send_to(recipient, msg)?;
         }
         Ok(())
     }
@@ -109,7 +105,7 @@ impl ConsensusNetworkSender {
     /// ProtocolId.
     pub async fn send_rpc(
         &self, recipient: Option<NodeId>, mut request: Box<dyn Request>,
-    ) -> anyhow::Result<Box<dyn RpcResponse>, Error> {
+    ) -> Result<Box<dyn RpcResponse>, anyhow::Error> {
         let (res_tx, res_rx) = oneshot::channel();
         self.network
             .with_context(
@@ -122,8 +118,8 @@ impl ConsensusNetworkSender {
                         .request_with_delay(io, request, recipient, None)
                 },
             )
-            .map_err(|e| format_err!("send rpc failed"))?;
-        res_rx.await?
+            .map_err(|_| format_err!("send rpc failed"))?;
+        Ok(res_rx.await?.map_err(|_| format_err!("rpc call failed"))?)
     }
 
     /// Send msg to self
@@ -136,7 +132,10 @@ impl ConsensusNetworkSender {
             .push((self_author, discriminant(&msg)), (self_author, msg))
     }
 
-    fn send_message_with_peer_id(&self, peer_id: &NodeId, msg: &dyn Message) {
+    /// Send msg to peer
+    pub fn send_message_with_peer_id(
+        &self, peer_id: &NodeId, msg: &dyn Message,
+    ) {
         if self
             .network
             .with_context(

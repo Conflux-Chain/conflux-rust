@@ -1,6 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use cfx_types::H256;
 use hex::FromHex;
 use rand::{rngs::OsRng, Rng};
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
@@ -37,6 +38,9 @@ impl AccountAddress {
     pub fn to_vec(&self) -> Vec<u8> { self.0.to_vec() }
 
     pub fn to_u8(self) -> [u8; Self::LENGTH] { self.0 }
+
+    #[allow(non_snake_case)]
+    pub fn to_H256(&self) -> H256 { H256::from_slice(&self.0) }
 
     pub fn from_hex_literal(
         literal: &str,

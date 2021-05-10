@@ -3702,6 +3702,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
+ "cfx-types",
  "hex",
  "mirai-annotations",
  "once_cell",
