@@ -2,9 +2,12 @@ use async_trait::async_trait;
 use cfx_types::H256;
 use diem_types::account_address::AccountAddress;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[async_trait]
 pub trait PowInterface: Send + Sync {
+    fn initialize(&self, pow_consensus: Arc<ConsensusGraph>);
+
     // TODO(lpl): Wait for new pivot decision.
     async fn next_pivot_decision(&self, parent_decision: H256) -> Option<H256>;
 
