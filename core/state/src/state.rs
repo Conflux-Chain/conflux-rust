@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_types::U256;
+
 pub struct State<StateDbStorage, Substate: SubstateMngTrait> {
     db: StateDbGeneric<StateDbStorage>,
 
@@ -693,7 +695,7 @@ use cfx_statedb::{
     ErrorKind, Result, StateDbCheckpointMethods, StateDbGeneric,
 };
 use cfx_storage::{utils::guarded_value::NonCopy, StorageStateTrait};
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, H256};
 use keccak_hash::{keccak, KECCAK_EMPTY};
 use primitives::{
     CodeInfo, DepositList, EpochId, SponsorInfo, StorageLayout, StorageValue,
