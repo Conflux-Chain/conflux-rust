@@ -434,13 +434,29 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     }
 
     fn inc_nonce(
-        &mut self, _address: &Address, _account_start_nonce: &U256,
+        &mut self, address: &Address, account_start_nonce: &U256,
     ) -> Result<()> {
-        unimplemented!()
+        self.require_or_new_basic_account(address, account_start_nonce, None)?
+            .as_mut()
+            .map_or_else(
+                || unreachable!(),
+                |value| {
+                    value.nonce += U256::from(1u8);
+                    Ok(())
+                },
+            )
     }
 
-    fn set_nonce(&mut self, _address: &Address, _nonce: &U256) -> Result<()> {
-        unimplemented!()
+    fn set_nonce(&mut self, address: &Address, nonce: &U256) -> Result<()> {
+        self.require_or_new_basic_account(address, nonce, None)?
+            .as_mut()
+            .map_or_else(
+                || unreachable!(),
+                |value| {
+                    value.nonce = *nonce;
+                    Ok(())
+                },
+            )
     }
 
     fn sub_balance(
