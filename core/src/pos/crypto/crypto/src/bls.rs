@@ -4,7 +4,7 @@
 
 use crate::{
     hash::{CryptoHash, CryptoHasher},
-    CryptoMaterialError, PrivateKey, PublicKey, Signature, SigningKey,
+    CryptoMaterialError, PrivateKey, PublicKey, Signature, SigningKey, Uniform,
     ValidCryptoMaterial, ValidCryptoMaterialStringExt, VerifyingKey,
 };
 use anyhow::{anyhow, Result};
@@ -21,6 +21,9 @@ use std::convert::TryFrom;
 
 #[cfg(mirai)]
 use crate::tags::ValidatedPublicKeyTag;
+use proptest::prelude::RngCore;
+use rand::CryptoRng;
+
 #[cfg(not(mirai))]
 struct ValidatedPublicKeyTag {}
 
@@ -184,4 +187,11 @@ impl ValidCryptoMaterial for BLSPublicKey {
 
 impl ValidCryptoMaterial for BLSSignature {
     fn to_bytes(&self) -> Vec<u8> { self.0.as_bytes() }
+}
+
+impl Uniform for BLSPrivateKey {
+    fn generate<R>(rng: &mut R) -> Self
+    where R: RngCore + CryptoRng {
+        BLSPrivateKey(RawPrivateKey::generate(rng))
+    }
 }
