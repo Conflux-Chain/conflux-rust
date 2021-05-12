@@ -278,7 +278,7 @@ build_config! {
         // TreeGraph Section.
         (candidate_pivot_waiting_timeout_ms, (u64), 10_000)
         (is_consortium, (bool), false)
-        (tg_config_path, (Option<String>), Some("./tg_config/tg_config.toml".to_string()))
+        (pos_config_path, (Option<String>), Some("./pos_config/pos_config.toml".to_string()))
 
         // Light node section
         (ln_epoch_request_batch_size, (Option<usize>), None)

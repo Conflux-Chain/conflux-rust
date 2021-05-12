@@ -21,6 +21,7 @@ use runtime::Runtime;
 use std::sync::Arc;
 
 pub struct ArchiveClientExtraComponents {
+    pub pos_runtime: tokio::runtime::Runtime,
     pub consensus: Arc<ConsensusGraph>,
     pub debug_rpc_http_server: Option<HttpServer>,
     pub rpc_http_server: Option<HttpServer>,
@@ -65,11 +66,13 @@ impl ArchiveClient {
             rpc_tcp_server,
             rpc_ws_server,
             runtime,
+            pos_runtime,
         ) = initialize_not_light_node_modules(&conf, exit, NodeType::Archive)?;
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
             blockgen: Some(blockgen),
             other_components: ArchiveClientExtraComponents {
+                pos_runtime,
                 consensus,
                 debug_rpc_http_server,
                 rpc_http_server,

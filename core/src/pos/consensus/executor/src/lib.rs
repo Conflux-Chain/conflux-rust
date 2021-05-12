@@ -9,7 +9,7 @@ pub mod db_bootstrapper;
 mod logging;
 mod metrics;
 mod speculation_cache;
-mod vm;
+pub mod vm;
 
 use crate::{
     logging::{LogEntry, LogSchema},
@@ -54,7 +54,6 @@ use executor_types::{
     StateComputeResult, TransactionReplayer,
 };
 use fail::fail_point;
-use pow_types::PowInterface;
 use std::{
     collections::{hash_map, HashMap, HashSet},
     convert::TryFrom,
@@ -72,7 +71,6 @@ type SparseMerkleProof = diem_types::proof::SparseMerkleProof<AccountStateBlob>;
 pub struct Executor<V> {
     db: DbReaderWriter,
     cache: SpeculationCache,
-    pow_handler: Arc<dyn PowInterface>,
     phantom: PhantomData<V>,
 }
 
@@ -84,7 +82,7 @@ where V: VMExecutor
     }
 
     /// Constructs an `Executor`.
-    pub fn new(db: DbReaderWriter, pow_handler: Arc<dyn PowInterface>) -> Self {
+    pub fn new(db: DbReaderWriter) -> Self {
         let startup_info = db
             .reader
             .get_startup_info()
@@ -94,7 +92,6 @@ where V: VMExecutor
         Self {
             db,
             cache: SpeculationCache::new_with_startup_info(startup_info),
-            pow_handler,
             phantom: PhantomData,
         }
     }
@@ -111,13 +108,10 @@ where V: VMExecutor
 
     pub fn new_on_unbootstrapped_db(
         db: DbReaderWriter, tree_state: TreeState,
-        pow_handler: Arc<dyn PowInterface>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             db,
             cache: SpeculationCache::new_for_db_bootstrapping(tree_state),
-            pow_handler,
             phantom: PhantomData,
         }
     }

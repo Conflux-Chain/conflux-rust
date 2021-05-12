@@ -8,17 +8,20 @@ use super::{
     state_computer::ExecutionProxy, txn_manager::MempoolProxy,
     util::time_service::ClockTimeService,
 };
+use crate::{
+    pos::{
+        pow_handler::PowHandler,
+        protocol::sync_protocol::HotStuffSynchronizationProtocol,
+    },
+    sync::ProtocolConfiguration,
+};
+use cfx_types::H256;
 use channel::diem_channel;
 use diem_config::config::NodeConfig;
 use diem_logger::prelude::*;
-//use diem_mempool::ConsensusRequest;
 use diem_types::on_chain_config::OnChainConfigPayload;
-//use execution_correctness::ExecutionCorrectnessManager;
-use futures::channel::mpsc;
-//use state_sync::client::StateSyncClient;
-use crate::{pos::pow_handler::PowHandler, ConsensusGraph};
 use executor_types::BlockExecutor;
-use pow_types::PowInterface;
+use network::NetworkService;
 use std::sync::Arc;
 use storage_interface::DbReader;
 use tokio::runtime::{self, Runtime};
@@ -26,13 +29,9 @@ use tokio::runtime::{self, Runtime};
 /// Helper function to start consensus based on configuration and return the
 /// runtime
 pub fn start_consensus(
-    node_config: &NodeConfig,
-    network_sender: ConsensusNetworkSender,
-    //network_events: ConsensusNetworkEvents,
-    //state_sync_client: StateSyncClient,
-    //consensus_to_mempool_sender: mpsc::Sender<ConsensusRequest>,
-    diem_db: Arc<dyn DbReader>,
-    executor: Box<dyn BlockExecutor>,
+    node_config: &NodeConfig, network: Arc<NetworkService>,
+    own_node_hash: H256, protocol_config: ProtocolConfiguration,
+    diem_db: Arc<dyn DbReader>, executor: Box<dyn BlockExecutor>,
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
 ) -> Runtime
 {
@@ -43,45 +42,43 @@ pub fn start_consensus(
         .expect("Failed to create Tokio runtime!");
     let storage = Arc::new(StorageWriteProxy::new(node_config, diem_db));
     let txn_manager = Arc::new(MempoolProxy::new(
-        //consensus_to_mempool_sender,
         node_config.consensus.mempool_poll_count,
         node_config.consensus.mempool_txn_pull_timeout_ms,
         node_config.consensus.mempool_executed_txn_timeout_ms,
     ));
-    //let execution_correctness_manager =
-    //    ExecutionCorrectnessManager::new(node_config);
-    let state_computer = Arc::new(ExecutionProxy::new(
-        executor, /*execution_correctness_manager.client(),
-                  *state_sync_client, */
-    ));
+    let state_computer = Arc::new(ExecutionProxy::new(executor));
     let time_service =
         Arc::new(ClockTimeService::new(runtime.handle().clone()));
 
+    let (network_task, network_receiver) = NetworkTask::new();
+    let protocol_handler = Arc::new(HotStuffSynchronizationProtocol::new(
+        own_node_hash,
+        network_task,
+        protocol_config,
+    ));
+    protocol_handler.clone().register(network.clone()).unwrap();
+    network.start_network_poll().unwrap();
+    let network_sender = ConsensusNetworkSender {
+        network,
+        protocol_handler,
+    };
+
     let (timeout_sender, timeout_receiver) =
         channel::new(1_024, &counters::PENDING_ROUND_TIMEOUTS);
-    //let (self_sender, self_receiver) =
-    //    channel::new(1_024, &counters::PENDING_SELF_MESSAGES);
     let pow_handler = Arc::new(PowHandler::new(runtime.handle().clone()));
 
     let epoch_mgr = EpochManager::new(
         node_config,
         time_service,
-        //self_sender,
         network_sender,
         timeout_sender,
         txn_manager,
         state_computer,
         storage,
         reconfig_events,
-        pow_handler as Arc<dyn PowInterface>,
+        pow_handler,
     );
 
-    let (network_task, network_receiver) = NetworkTask::new(
-            //network_events,
-            //self_receiver
-        );
-
-    runtime.spawn(network_task.start());
     runtime.spawn(epoch_mgr.start(timeout_receiver, network_receiver));
 
     diem_debug!("Consensus started.");

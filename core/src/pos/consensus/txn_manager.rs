@@ -2,22 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{error::MempoolError, state_replication::TxnManager};
-use anyhow::{format_err, Result};
+use anyhow::Result;
 use consensus_types::{block::Block, common::Payload};
 use diem_logger::prelude::*;
-/*
-use diem_mempool::{
-    CommittedTransaction, ConsensusRequest, ConsensusResponse,
-    TransactionExclusion,
-};*/
-use diem_metrics::monitor;
 use diem_types::transaction::TransactionStatus;
 use executor_types::StateComputeResult;
 use fail::fail_point;
-use futures::channel::{mpsc, oneshot};
 use itertools::Itertools;
 use std::time::Duration;
-use tokio::time::timeout;
 
 const NO_TXN_DELAY: u64 = 30;
 

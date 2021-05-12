@@ -4,20 +4,14 @@
 //! Interface between Consensus and Network layers.
 
 use crate::{
-    message::{Message, NetworkError},
-    pos::{
-        consensus::counters,
-        protocol::{
-            request_manager::Request,
-            sync_protocol::{HotStuffSynchronizationProtocol, RpcResponse},
-            HSB_PROTOCOL_ID,
-        },
+    message::Message,
+    pos::protocol::{
+        request_manager::Request,
+        sync_protocol::{HotStuffSynchronizationProtocol, RpcResponse},
+        HSB_PROTOCOL_ID,
     },
-    sync::Error,
 };
 use anyhow::{format_err, Context};
-use cfx_types::H256;
-use channel::message_queues::QueueStyle;
 use consensus_types::{
     block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse},
     epoch_retrieval::EpochRetrievalRequest,
@@ -25,15 +19,13 @@ use consensus_types::{
     sync_info::SyncInfo,
     vote_msg::VoteMsg,
 };
-use diem_metrics::IntCounterVec;
 use diem_types::{
     account_address::AccountAddress, epoch_change::EpochChangeProof, PeerId,
 };
 use futures::channel::oneshot;
-use io::IoContext;
-use network::{node_table::NodeId, service::NetworkContext, NetworkService};
+use network::{node_table::NodeId, NetworkService};
 use serde::{Deserialize, Serialize};
-use std::{mem::discriminant, sync::Arc, time::Duration};
+use std::{mem::discriminant, sync::Arc};
 
 /// Network type for consensus
 #[derive(Clone, Debug, Deserialize, Serialize)]

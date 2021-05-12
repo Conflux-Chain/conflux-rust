@@ -8,7 +8,7 @@ const MSG_ID_MAX: u16 = 1 << 14;
 
 pub use cfx_bytes::Bytes;
 pub use priority_send_queue::SendQueuePriority;
-use rlp::{Decodable, Encodable, Rlp};
+use rlp::{Decodable, Rlp};
 
 use crate::sync::msg_sender::metric_message;
 use network::{
