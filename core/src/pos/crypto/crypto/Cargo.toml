@@ -37,6 +37,7 @@ bcs = "0.1.2"
 cfxkey = { path = "../../../../../accounts/cfxkey" }
 cfx-types = { path = "../../../../../cfx_types" }
 parity-secp256k1 = "0.7.0"
+bls-signatures = "0.9.0"
 
 [dev-dependencies]
 bitvec = "0.19.4"

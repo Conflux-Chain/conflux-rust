@@ -30,7 +30,6 @@ use super::{
     state_replication::{StateComputer, TxnManager},
     util::time_service::TimeService,
 };
-use crate::pos::pow_handler::PowHandler;
 use anyhow::{bail, ensure, Context};
 use channel::diem_channel;
 use consensus_types::{
