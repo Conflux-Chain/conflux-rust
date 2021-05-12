@@ -17,6 +17,7 @@ pub struct StateObjectCache {
     commission_privilege_cache: RwLock<
         HashMap<CommissionPrivilegeAddress, Option<CachedCommissionPrivilege>>,
     >,
+    storage_cache: RwLock<HashMap<StorageAddress, Option<U256>>>,
     // TODO: etc.
 }
 
@@ -371,20 +372,35 @@ impl StateObjectCache {
             db,
         )
     }
+
+    pub fn get_storage<StateDb: StateDbOps>(
+        &self, address: &Address, key: &[u8], db: &StateDb,
+    ) -> Result<
+        GuardedValue<
+            RwLockReadGuard<HashMap<StorageAddress, Option<U256>>>,
+            NonCopy<Option<&U256>>,
+        >,
+    > {
+        Self::ensure_loaded(
+            &self.storage_cache,
+            &StorageAddress(*address, key.to_vec()),
+            db,
+        )
+    }
 }
 
 use crate::{
     cache_object::{
         CachedAccount, CachedCommissionPrivilege, CachedObject, CodeAddress,
-        CommissionPrivilegeAddress, DepositListAddress, ToHashKey,
-        VoteStakeListAddress,
+        CommissionPrivilegeAddress, DepositListAddress, StorageAddress,
+        ToHashKey, VoteStakeListAddress,
     },
     StateDbOps,
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_statedb::{ErrorKind, Result};
 use cfx_storage::utils::guarded_value::{GuardedValue, NonCopy};
-use cfx_types::Address;
+use cfx_types::{Address, U256};
 use keccak_hash::{keccak, KECCAK_EMPTY};
 use parking_lot::{
     RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,

@@ -539,8 +539,11 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         }))
     }
 
-    fn storage_at(&self, _address: &Address, _key: &[u8]) -> Result<U256> {
-        unimplemented!()
+    fn storage_at(&self, address: &Address, key: &[u8]) -> Result<U256> {
+        Ok(self
+            .get_storage(address, key)?
+            .as_ref()
+            .map_or(U256::zero(), |a| *a))
     }
 
     fn set_storage(
@@ -587,6 +590,12 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
             user_address,
             &self.db,
         )
+    }
+
+    fn get_storage(
+        &self, address: &Address, key: &[u8],
+    ) -> Result<impl AsRef<NonCopy<Option<&U256>>>> {
+        self.cache.get_storage(address, key, &self.db)
     }
 
     fn modify_and_update_account<'a>(
