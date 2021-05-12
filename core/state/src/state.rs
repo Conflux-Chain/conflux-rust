@@ -367,15 +367,26 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     }
 
     fn withdrawable_staking_balance(
-        &self, _address: &Address, _current_block_number: u64,
+        &self, address: &Address, current_block_number: u64,
     ) -> Result<U256> {
-        unimplemented!()
+        let staking_balance = self.staking_balance(address)?;
+        match self.get_vote_stake_list(address)?.as_ref().deref() {
+            None => Ok(staking_balance),
+            Some(vote_stake_list) => Ok(vote_stake_list
+                .withdrawable_staking_balance(
+                    staking_balance,
+                    current_block_number,
+                )),
+        }
     }
 
     fn locked_staking_balance_at_block_number(
-        &self, _address: &Address, _block_number: u64,
+        &self, address: &Address, current_block_number: u64,
     ) -> Result<U256> {
-        unimplemented!()
+        let staking_balance = self.staking_balance(address)?;
+        let withdrawable_staking_balance =
+            self.withdrawable_staking_balance(address, current_block_number)?;
+        Ok(staking_balance - withdrawable_staking_balance)
     }
 
     fn deposit_list_length(&self, address: &Address) -> Result<usize> {
@@ -457,17 +468,36 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     }
 
     fn vote_lock(
-        &mut self, _address: &Address, _amount: &U256,
-        _unlock_block_number: u64,
-    ) -> Result<()>
-    {
-        unimplemented!()
+        &mut self, address: &Address, amount: &U256, unlock_block_number: u64,
+    ) -> Result<()> {
+        let staking_balance = self.staking_balance(address)?;
+        if *amount > staking_balance {
+            return Ok(());
+        }
+        self.modify_and_update_vote_stake_list(address, None)?
+            .as_mut()
+            .map_or_else(
+                || unreachable!(),
+                |vote_stake_list| {
+                    vote_stake_list.vote_lock(*amount, unlock_block_number);
+                    Ok(())
+                },
+            )
     }
 
     fn remove_expired_vote_stake_info(
-        &mut self, _address: &Address, _current_block_number: u64,
+        &mut self, address: &Address, current_block_number: u64,
     ) -> Result<()> {
-        unimplemented!()
+        self.modify_and_update_vote_stake_list(address, None)?
+            .as_mut()
+            .map_or_else(
+                || unreachable!(),
+                |vote_stake_list| {
+                    vote_stake_list
+                        .remove_expired_vote_stake_info(current_block_number);
+                    Ok(())
+                },
+            )
     }
 
     fn total_issued_tokens(&self) -> &U256 { unimplemented!() }
@@ -562,6 +592,25 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         )
     }
 
+    fn modify_and_update_vote_stake_list<'a>(
+        &'a mut self, address: &Address,
+        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
+    ) -> Result<
+        impl AsMut<
+            ModifyAndUpdate<
+                StateDbGeneric<StateDbStorage>,
+                /* TODO: Key, */ VoteStakeList,
+            >,
+        >,
+    >
+    {
+        self.cache.modify_and_update_vote_stake_list(
+            address,
+            &mut self.db,
+            debug_record,
+        )
+    }
+
     fn require_or_set_code<'a>(
         &'a mut self, address: Address, code_owner: Address, code: Vec<u8>,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
@@ -597,4 +646,4 @@ use keccak_hash::{keccak, KECCAK_EMPTY};
 use primitives::{
     CodeInfo, DepositList, EpochId, SponsorInfo, StorageLayout, VoteStakeList,
 };
-use std::{marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, ops::Deref, sync::Arc};
