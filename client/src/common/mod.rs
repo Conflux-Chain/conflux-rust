@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+mod pos;
+
 /// Hold all top-level components for a type of client.
 /// This struct implement ClientShutdownTrait.
 pub struct ClientComponents<BlockGenT, Rest> {
@@ -355,6 +357,7 @@ pub fn initialize_not_light_node_modules(
         Option<TcpServer>,
         Option<WSServer>,
         Runtime,
+        tokio::runtime::Runtime,
     ),
     String,
 >
@@ -494,6 +497,23 @@ pub fn initialize_not_light_node_modules(
         }
     }
 
+    // initialize pos
+    let pos_config_path = match conf.raw_conf.pos_config_path.as_ref() {
+        Some(path) => Some(PathBuf::from(path)),
+        None => None,
+    };
+    let pos_config =
+        NodeConfig::load(pos_config_path.expect("empty pos config path"))
+            .expect("Failed to load node config");
+    let own_node_hash =
+        keccak(network.net_key_pair().expect("Error node key").public());
+    let pos_runtime = start_pos_consensus(
+        &pos_config,
+        network.clone(),
+        own_node_hash,
+        conf.protocol_config(),
+    );
+
     let rpc_impl = Arc::new(RpcImpl::new(
         consensus.clone(),
         sync.clone(),
@@ -554,6 +574,7 @@ pub fn initialize_not_light_node_modules(
         rpc_tcp_server,
         rpc_ws_server,
         runtime,
+        pos_runtime,
     ))
 }
 
@@ -726,6 +747,7 @@ pub mod delegate_convert {
 pub use crate::configuration::Configuration;
 use crate::{
     accounts::{account_provider, keys_path},
+    common::pos::start_pos_consensus,
     configuration::parse_config_address_string,
     rpc::{
         extractor::RpcExtractor,
@@ -756,9 +778,11 @@ use cfxcore::{
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::public_to_address;
+use diem_config::config::NodeConfig;
 use jsonrpc_http_server::Server as HttpServer;
 use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WSServer;
+use keccak_hash::keccak;
 use keylib::KeyPair;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use network::NetworkService;
@@ -767,6 +791,7 @@ use runtime::Runtime;
 use secret_store::{SecretStore, SharedSecretStore};
 use std::{
     collections::HashMap,
+    path::PathBuf,
     str::FromStr,
     sync::{Arc, Weak},
     thread,

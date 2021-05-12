@@ -15,7 +15,7 @@ use executor_types::{
 use fail::fail_point;
 //use state_sync::client::StateSyncClient;
 use diem_types::transaction::Transaction;
-use std::{boxed::Box, sync::Arc};
+use std::boxed::Box;
 
 /// Basic communication with the Execution module;
 /// implements StateComputer traits.

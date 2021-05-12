@@ -4,7 +4,6 @@
 use crate::{
     access_path::AccessPath, account_config, epoch_state::EpochState,
     event::EventKey, on_chain_config::ValidatorSet, transaction::Version,
-    write_set::WriteSet,
 };
 use anyhow::Result;
 use cfx_types::H256;

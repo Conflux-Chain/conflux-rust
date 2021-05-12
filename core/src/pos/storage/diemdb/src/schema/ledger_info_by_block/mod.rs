@@ -13,9 +13,7 @@
 //! `epoch` is serialized in big endian so that records in RocksDB will be in
 //! order of their numeric value.
 
-use crate::schema::ensure_slice_len_eq;
 use anyhow::Result;
-use byteorder::{BigEndian, ReadBytesExt};
 use diem_crypto::hash::HashValue;
 use diem_types::ledger_info::LedgerInfoWithSignatures;
 use schemadb::{
@@ -23,7 +21,6 @@ use schemadb::{
     schema::{KeyCodec, ValueCodec},
     DEFAULT_CF_NAME,
 };
-use std::mem::size_of;
 
 define_schema!(
     LedgerInfoByBlockSchema,

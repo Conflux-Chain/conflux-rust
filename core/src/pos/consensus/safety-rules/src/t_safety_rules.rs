@@ -7,10 +7,7 @@ use consensus_types::{
     vote_proposal::MaybeSignedVoteProposal,
 };
 use diem_crypto::ed25519::Ed25519Signature;
-use diem_types::{
-    epoch_change::EpochChangeProof,
-    transaction::{RawTransaction, SignedTransaction},
-};
+use diem_types::epoch_change::EpochChangeProof;
 
 /// Interface for SafetyRules
 pub trait TSafetyRules {

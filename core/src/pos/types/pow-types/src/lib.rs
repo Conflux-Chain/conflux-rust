@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use cfx_types::H256;
 use diem_types::account_address::AccountAddress;
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 #[async_trait]
 pub trait PowInterface: Send + Sync {

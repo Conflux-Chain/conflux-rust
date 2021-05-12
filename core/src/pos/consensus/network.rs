@@ -3,16 +3,19 @@
 
 use super::{
     counters,
-    logging::LogEvent,
     network_interface::{ConsensusMsg, ConsensusNetworkSender},
 };
+use crate::{
+    message::RequestId,
+    pos::protocol::message::{
+        block_retrieval::BlockRetrievalRpcRequest,
+        block_retrieval_response::BlockRetrievalRpcResponse,
+    },
+};
 use anyhow::{anyhow, bail, ensure, format_err};
-use bytes::Bytes;
 use channel::{self, diem_channel, message_queues::QueueStyle};
 use consensus_types::{
-    block_retrieval::{
-        BlockRetrievalRequest, BlockRetrievalResponse, MAX_BLOCKS_PER_REQUEST,
-    },
+    block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse},
     common::Author,
     sync_info::SyncInfo,
     vote_msg::VoteMsg,
@@ -23,22 +26,9 @@ use diem_types::{
     account_address::AccountAddress, epoch_change::EpochChangeProof,
     validator_verifier::ValidatorVerifier,
 };
-use futures::{channel::oneshot, stream::select, SinkExt, Stream, StreamExt};
-//use network::protocols::{network::Event, rpc::error::RpcError};
-use crate::{
-    message::RequestId,
-    pos::protocol::message::{
-        block_retrieval::BlockRetrievalRpcRequest,
-        block_retrieval_response::BlockRetrievalRpcResponse,
-    },
-};
-use cfx_types::H256;
-use consensus_types::block_retrieval::BlockRetrievalStatus;
-use network::{node_table::NodeId, NetworkProtocolHandler};
-use std::{
-    mem::{discriminant, Discriminant},
-    time::Duration,
-};
+use futures::StreamExt;
+use network::node_table::NodeId;
+use std::{mem::Discriminant, time::Duration};
 
 /// The block retrieval request is used internally for implementing RPC: the
 /// callback is executed for carrying the response

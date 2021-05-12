@@ -12,7 +12,7 @@ use crate::{
 use diem_types::{
     account_address::AccountAddress, epoch_change::EpochChangeProof,
 };
-use std::{cmp::Ordering, mem::discriminant};
+use std::mem::discriminant;
 
 impl Handleable for EpochChangeProof {
     fn handle(self, ctx: &Context) -> Result<(), Error> {

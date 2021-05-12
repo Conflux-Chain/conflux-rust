@@ -28,12 +28,8 @@ use diem_crypto::{
 };
 use diem_logger::prelude::*;
 use diem_types::{
-    block_info::BlockInfo,
-    epoch_change::EpochChangeProof,
-    epoch_state::EpochState,
-    ledger_info::LedgerInfo,
-    transaction::{RawTransaction, SignedTransaction},
-    waypoint::Waypoint,
+    block_info::BlockInfo, epoch_change::EpochChangeProof,
+    epoch_state::EpochState, ledger_info::LedgerInfo, waypoint::Waypoint,
 };
 use serde::Serialize;
 use std::cmp::Ordering;
