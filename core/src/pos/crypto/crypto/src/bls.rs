@@ -3,20 +3,26 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    hash::CryptoHash, CryptoMaterialError, PrivateKey, PublicKey, Signature,
-    SigningKey, ValidCryptoMaterial, ValidCryptoMaterialStringExt,
-    VerifyingKey,
+    hash::{CryptoHash, CryptoHasher},
+    CryptoMaterialError, PrivateKey, PublicKey, Signature, SigningKey,
+    ValidCryptoMaterial, ValidCryptoMaterialStringExt, VerifyingKey,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use bls_signatures::{
-    PrivateKey as RawPrivateKey, PublicKey as RawPublicKey,
+    hash as bls_hash, PrivateKey as RawPrivateKey, PublicKey as RawPublicKey,
     Serialize as BLSSerialize, Signature as RawSignature,
 };
 use diem_crypto_derive::{
     DeserializeKey, SerializeKey, SilentDebug, SilentDisplay,
 };
+use mirai_annotations::*;
 use serde::Serialize;
 use std::convert::TryFrom;
+
+#[cfg(mirai)]
+use crate::tags::ValidatedPublicKeyTag;
+#[cfg(not(mirai))]
+struct ValidatedPublicKeyTag {}
 
 /// BLS signature private key
 #[derive(DeserializeKey, SerializeKey, SilentDebug, SilentDisplay)]
@@ -26,6 +32,7 @@ pub struct BLSPrivateKey(RawPrivateKey);
 #[derive(DeserializeKey, Clone, SerializeKey, Debug, PartialEq)]
 pub struct BLSPublicKey(RawPublicKey);
 
+// TODO(lpl): Signature aggregation.
 /// BLS signature wrapper
 #[derive(DeserializeKey, Clone, SerializeKey, Debug, PartialEq)]
 pub struct BLSSignature(RawSignature);
@@ -34,17 +41,23 @@ impl SigningKey for BLSPrivateKey {
     type SignatureMaterial = BLSSignature;
     type VerifyingKeyMaterial = BLSPublicKey;
 
+    // FIXME(lpl): Append public key or rely on a proof in ElectionTransaction
+    // to avoid attack?
     fn sign<T: CryptoHash + Serialize>(
         &self, message: &T,
     ) -> Self::SignatureMaterial {
-        todo!()
+        let mut bytes = <T::Hasher as CryptoHasher>::seed().to_vec();
+        bcs::serialize_into(&mut bytes, &message)
+            .map_err(|_| CryptoMaterialError::SerializationError)
+            .expect("Serialization of signable material should not fail.");
+        BLSSignature(self.0.sign(bytes))
     }
 
     #[cfg(any(test, feature = "fuzzing"))]
     fn sign_arbitrary_message(
         &self, message: &[u8],
     ) -> Self::SignatureMaterial {
-        todo!()
+        BLSSignature(self.0.sign(message))
     }
 }
 
@@ -64,16 +77,27 @@ impl Signature for BLSSignature {
     fn verify<T: CryptoHash + Serialize>(
         &self, message: &T, public_key: &Self::VerifyingKeyMaterial,
     ) -> Result<()> {
-        todo!()
+        let mut bytes = <T::Hasher as CryptoHasher>::seed().to_vec();
+        bcs::serialize_into(&mut bytes, &message)
+            .map_err(|_| CryptoMaterialError::SerializationError)?;
+        self.verify_arbitrary_msg(&bytes, public_key)
     }
 
     fn verify_arbitrary_msg(
         &self, message: &[u8], public_key: &Self::VerifyingKeyMaterial,
     ) -> Result<()> {
-        todo!()
+        precondition!(has_tag!(public_key, ValidatedPublicKeyTag));
+        match bls_signatures::verify(
+            &self.0,
+            std::slice::from_ref(&bls_hash(message)),
+            std::slice::from_ref(&public_key.0),
+        ) {
+            true => Ok(()),
+            false => Err(anyhow!("Invalid BLS signature!")),
+        }
     }
 
-    fn to_bytes(&self) -> Vec<u8> { todo!() }
+    fn to_bytes(&self) -> Vec<u8> { ValidCryptoMaterial::to_bytes(self) }
 }
 
 impl PublicKey for BLSPublicKey {
