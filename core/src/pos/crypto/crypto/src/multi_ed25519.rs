@@ -550,8 +550,6 @@ impl Signature for MultiEd25519Signature {
         }
         Ok(())
     }
-
-    fn to_bytes(&self) -> Vec<u8> { self.to_bytes() }
 }
 
 impl From<Ed25519Signature> for MultiEd25519Signature {

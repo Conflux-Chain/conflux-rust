@@ -7,7 +7,7 @@
 //! For examples on how to use these traits, see the implementations of the
 //! [`ed25519`] or [`bls12381`] modules.
 
-use crate::hash::CryptoHash;
+use crate::{hash::CryptoHash, HashValue};
 use anyhow::Result;
 use core::convert::{From, TryFrom};
 use rand::{rngs::StdRng, CryptoRng, RngCore, SeedableRng};
@@ -241,9 +241,6 @@ pub trait Signature:
         &self, message: &[u8], public_key: &Self::VerifyingKeyMaterial,
     ) -> Result<()>;
 
-    /// Convert the signature into a byte representation.
-    fn to_bytes(&self) -> Vec<u8>;
-
     /// The implementer can override a batch verification implementation
     /// that by default iterates over each signature. More efficient
     /// implementations exist and should be implemented for many schemes.
@@ -257,6 +254,70 @@ pub trait Signature:
         }
         Ok(())
     }
+}
+
+/// Public key for VRF
+pub trait VRFPublicKey:
+    PublicKey<PrivateKeyMaterial = <Self as VRFPublicKey>::PrivateKeyMaterial>
+    + ValidCryptoMaterial
+    + private::Sealed
+{
+    /// The associated private key type for this public key.
+    type PrivateKeyMaterial: VRFPrivateKey<PublicKeyMaterial = Self>;
+    /// The associated proof type for this public key.
+    type ProofMaterial: VRFProof<PublicKeyMaterial = Self>;
+
+    /// Verify if `proof` if generated from `seed` by the private key of this
+    /// public key.
+    ///
+    /// If successful, return the VRF hash output.
+    fn verify_proof(
+        &self, seed: &[u8], proof: &Self::ProofMaterial,
+    ) -> Result<HashValue> {
+        proof.verify(seed, &self)
+    }
+}
+
+/// Private key for VRF
+pub trait VRFPrivateKey:
+    PrivateKey<PublicKeyMaterial = <Self as VRFPrivateKey>::PublicKeyMaterial>
+    + ValidCryptoMaterial
+    + private::Sealed
+{
+    /// The associated public key type for this private key.
+    type PublicKeyMaterial: VRFPublicKey<PrivateKeyMaterial = Self>;
+    /// The associated proof type for this private key.
+    type ProofMaterial: VRFProof<PrivateKeyMaterial = Self>;
+
+    /// Generate a random number (hash) with a proof for verification.
+    fn compute(&self, seed: &[u8]) -> Result<Self::ProofMaterial>;
+}
+
+/// The proof of VRF
+pub trait VRFProof:
+    for<'a> TryFrom<&'a [u8], Error = CryptoMaterialError>
+    + Sized
+    + Debug
+    + Clone
+    + Eq
+    + Hash
+    + private::Sealed
+{
+    /// The associated public key type for this proof.
+    type PublicKeyMaterial: VRFPublicKey<ProofMaterial = Self>;
+    /// The associated private key type for this proof.
+    type PrivateKeyMaterial: VRFPrivateKey<ProofMaterial = Self>;
+
+    /// Convert the proof to a verifiable random number (hash).
+    fn to_hash(&self) -> Result<HashValue>;
+
+    /// Verify if the proof is generated from `seed` by the private key of
+    /// `public_key`.
+    ///
+    /// If successful, return the VRF hash output.
+    fn verify(
+        &self, seed: &[u8], public_key: &Self::PublicKeyMaterial,
+    ) -> Result<HashValue>;
 }
 
 /// A type family for schemes which know how to generate key material from
@@ -301,4 +362,12 @@ pub(crate) mod private {
     impl Sealed for crate::secp256k1::Secp256k1PublicKey {}
     impl Sealed for crate::secp256k1::Secp256k1PrivateKey {}
     impl Sealed for crate::secp256k1::Secp256k1Signature {}
+
+    impl Sealed for crate::bls::BLSPublicKey {}
+    impl Sealed for crate::bls::BLSPrivateKey {}
+    impl Sealed for crate::bls::BLSSignature {}
+
+    impl Sealed for crate::ec_vrf::EcVrfPublicKey {}
+    impl Sealed for crate::ec_vrf::EcVrfPrivateKey {}
+    impl Sealed for crate::ec_vrf::EcVrfProof {}
 }

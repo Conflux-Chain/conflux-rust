@@ -8,7 +8,12 @@
 #![cfg_attr(mirai, allow(incomplete_features), feature(const_generics))]
 
 //! A library supplying various cryptographic primitives
+
+/// A BLS signature wrapper
+pub mod bls;
 pub mod compat;
+/// A Elliptic Curve VRF wrapper
+pub mod ec_vrf;
 pub mod ed25519;
 pub mod error;
 pub mod hash;

@@ -193,6 +193,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06e97b4e522f9e55523001238ac59d13a8603af57f69980de5d8de4bbbe8ada6"
 
 [[package]]
+name = "arrayref"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4c527152e37cf757a3f78aae5a06fbeefdb07ccc535c980a3208ee3060dd544"
+
+[[package]]
 name = "arrayvec"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -400,6 +406,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "blake2b_simd"
+version = "0.5.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "afa748e348ad3be8263be728124b24a24f268266f6f5d58af9d75f6a40b5c587"
+dependencies = [
+ "arrayref",
+ "arrayvec",
+ "constant_time_eq",
+]
+
+[[package]]
 name = "block-buffer"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -477,6 +494,22 @@ dependencies = [
  "secret-store",
  "toml 0.4.10",
  "txgen",
+]
+
+[[package]]
+name = "bls-signatures"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b44c36726a8b4cae930903a96f3193b496664ed7c28f74f1c1b3feae0e212c3"
+dependencies = [
+ "fff",
+ "groupy",
+ "hkdf",
+ "paired",
+ "rand_core 0.5.1",
+ "rayon",
+ "sha2 0.9.3",
+ "thiserror",
 ]
 
 [[package]]
@@ -1188,6 +1221,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "constant_time_eq"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
+
+[[package]]
 name = "core-foundation"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1604,6 +1643,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "bitvec 0.19.5",
+ "bls-signatures",
  "byteorder",
  "bytes 1.0.1",
  "cfx-types",
@@ -1613,15 +1653,17 @@ dependencies = [
  "diem-crypto-derive",
  "digest 0.9.0",
  "ed25519-dalek-fiat",
- "hex",
+ "hex 0.4.3",
  "hkdf",
+ "lazy_static",
  "mirai-annotations",
  "once_cell",
  "parity-secp256k1",
+ "parking_lot 0.11.1",
  "proptest",
  "proptest-derive",
  "rand 0.8.3",
- "rand_core 0.6.2",
+ "rand_core 0.5.1",
  "ripemd160 0.9.1",
  "serde",
  "serde-name",
@@ -1633,6 +1675,7 @@ dependencies = [
  "thiserror",
  "tiny-keccak 2.0.2",
  "trybuild",
+ "vrf",
  "x25519-dalek-fiat",
 ]
 
@@ -1828,7 +1871,7 @@ dependencies = [
 name = "diem-temppath"
 version = "0.1.0"
 dependencies = [
- "hex",
+ "hex 0.4.3",
  "rand 0.8.3",
 ]
 
@@ -1857,7 +1900,7 @@ dependencies = [
  "chrono",
  "diem-crypto",
  "diem-crypto-derive",
- "hex",
+ "hex 0.4.3",
  "itertools 0.10.0",
  "mirai-annotations",
  "move-core-types",
@@ -2232,6 +2275,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
 
 [[package]]
+name = "fff"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2544d325b4870bd803d371a7df3c6845e84dcfcb6ebe7ffcae0eac6d5d676133"
+dependencies = [
+ "byteorder",
+ "cc",
+ "fff_derive",
+ "lazy_static",
+ "rand_core 0.5.1",
+]
+
+[[package]]
+name = "fff_derive"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "844b389fbe323d3b35ed1b3b119e75b11dca536d291d31342acea5b4c8984558"
+dependencies = [
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "proc-macro2 1.0.24",
+ "quote 1.0.9",
+ "syn 1.0.64",
+]
+
+[[package]]
 name = "fiat-crypto"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2580,6 +2650,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "groupy"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d38f1bec17d75a7c30b754cd74db6e7cb5927529021ced14fbd622411c04d8b"
+dependencies = [
+ "fff",
+ "rand 0.7.3",
+ "rand_xorshift 0.2.0",
+ "thiserror",
+]
+
+[[package]]
 name = "h2"
 version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2664,6 +2746,12 @@ dependencies = [
 
 [[package]]
 name = "hex"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "805026a5d0141ffc30abb3be3173848ad46a1b1664fe632428479619a3644d77"
+
+[[package]]
+name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
@@ -2708,6 +2796,12 @@ dependencies = [
  "crypto-mac 0.10.0",
  "digest 0.9.0",
 ]
+
+[[package]]
+name = "hmac-sha256"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bcdc571e566521512579aab40bf807c5066e1765fb36857f16ed7595c13567c6"
 
 [[package]]
 name = "home"
@@ -3717,7 +3811,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "cfx-types",
- "hex",
+ "hex 0.4.3",
  "mirai-annotations",
  "once_cell",
  "proptest",
@@ -4025,6 +4119,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "766f840da25490628d8e63e529cd21c014f6600c6b8517add12a6fa6167a6218"
 dependencies = [
  "num-traits",
+]
+
+[[package]]
+name = "paired"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42fc2daf8d5a8e22a9833f798e72c0d6862b5f0288f0a2d289b37cd03fa5e283"
+dependencies = [
+ "blake2b_simd",
+ "byteorder",
+ "digest 0.9.0",
+ "fff",
+ "groupy",
+ "hkdf",
+ "rand_core 0.5.1",
 ]
 
 [[package]]
@@ -5364,7 +5473,7 @@ checksum = "7fdf1b9db47230893d76faad238fd6097fd6d6a9245cd7a4d90dbd639536bbd2"
 name = "short-hex-str"
 version = "0.1.0"
 dependencies = [
- "hex",
+ "hex 0.4.3",
  "mirai-annotations",
  "proptest",
  "serde",
@@ -6420,6 +6529,18 @@ name = "version_check"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5fecdca9a5291cc2b8dcf7dc02453fee791a280f3743cb0905f8822ae463b3fe"
+
+[[package]]
+name = "vrf"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71327171f80b19c06263831d1c6aefb5629131c06dd7006d2865f108af656397"
+dependencies = [
+ "failure",
+ "hex 0.3.2",
+ "hmac-sha256",
+ "openssl",
+]
 
 [[package]]
 name = "wait-timeout"

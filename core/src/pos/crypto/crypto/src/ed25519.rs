@@ -448,8 +448,6 @@ impl Signature for Ed25519Signature {
             .and(Ok(()))
     }
 
-    fn to_bytes(&self) -> Vec<u8> { self.0.to_bytes().to_vec() }
-
     /// Batch signature verification as described in the original EdDSA article
     /// by Bernstein et al. "High-speed high-security signatures". Current
     /// implementation works for signatures on the same message and it
