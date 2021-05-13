@@ -220,6 +220,34 @@ impl StateObjectCache {
         Self::ensure_loaded(&self.account_cache, address, db)
     }
 
+    pub fn modify_and_update_commission_privilege<'a, StateDb: StateDbOps>(
+        &'a self, contract_address: &Address, user_address: &Address,
+        db: &'a mut StateDb,
+        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
+    ) -> Result<
+        GuardedValue<
+            RwLockWriteGuard<
+                HashMap<
+                    CommissionPrivilegeAddress,
+                    Option<CachedCommissionPrivilege>,
+                >,
+            >,
+            ModifyAndUpdate<
+                StateDb,
+                /* TODO: Key, */ CachedCommissionPrivilege,
+            >,
+        >,
+    >
+    {
+        Self::require_or_set(
+            &self.commission_privilege_cache,
+            &CommissionPrivilegeAddress::new(*contract_address, *user_address),
+            db,
+            |_addr| Ok(Some(CachedCommissionPrivilege::new(false))),
+            debug_record,
+        )
+    }
+
     pub fn modify_and_update_account<'a, StateDb: StateDbOps>(
         &'a self, address: &Address, db: &'a mut StateDb,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
