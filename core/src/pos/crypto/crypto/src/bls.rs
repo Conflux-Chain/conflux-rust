@@ -21,8 +21,6 @@ use std::convert::TryFrom;
 
 #[cfg(mirai)]
 use crate::tags::ValidatedPublicKeyTag;
-use proptest::prelude::RngCore;
-use rand::CryptoRng;
 
 #[cfg(not(mirai))]
 struct ValidatedPublicKeyTag {}
@@ -189,9 +187,10 @@ impl ValidCryptoMaterial for BLSSignature {
     fn to_bytes(&self) -> Vec<u8> { self.0.as_bytes() }
 }
 
-impl Uniform for BLSPrivateKey {
-    fn generate<R>(rng: &mut R) -> Self
-    where R: RngCore + CryptoRng {
-        BLSPrivateKey(RawPrivateKey::generate(rng))
-    }
-}
+// FIXME(lpl): `rand` used in bls_signatures is 0.5.1, lower than our used
+// 0.6.2. impl Uniform for BLSPrivateKey {
+//     fn generate<R>(rng: &mut R) -> Self
+//     where R: ::rand::RngCore + ::rand::CryptoRng {
+//         BLSPrivateKey(RawPrivateKey::generate(rng))
+//     }
+// }

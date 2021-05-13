@@ -365,4 +365,8 @@ pub(crate) mod private {
     impl Sealed for crate::bls::BLSPublicKey {}
     impl Sealed for crate::bls::BLSPrivateKey {}
     impl Sealed for crate::bls::BLSSignature {}
+
+    impl Sealed for crate::ec_vrf::EcVrfPublicKey {}
+    impl Sealed for crate::ec_vrf::EcVrfPrivateKey {}
+    impl Sealed for crate::ec_vrf::EcVrfProof {}
 }

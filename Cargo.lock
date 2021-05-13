@@ -1653,15 +1653,17 @@ dependencies = [
  "diem-crypto-derive",
  "digest 0.9.0",
  "ed25519-dalek-fiat",
- "hex",
+ "hex 0.4.3",
  "hkdf",
+ "lazy_static",
  "mirai-annotations",
  "once_cell",
  "parity-secp256k1",
+ "parking_lot 0.11.1",
  "proptest",
  "proptest-derive",
  "rand 0.8.3",
- "rand_core 0.6.2",
+ "rand_core 0.5.1",
  "ripemd160 0.9.1",
  "serde",
  "serde-name",
@@ -1673,6 +1675,7 @@ dependencies = [
  "thiserror",
  "tiny-keccak 2.0.2",
  "trybuild",
+ "vrf",
  "x25519-dalek-fiat",
 ]
 
@@ -1868,7 +1871,7 @@ dependencies = [
 name = "diem-temppath"
 version = "0.1.0"
 dependencies = [
- "hex",
+ "hex 0.4.3",
  "rand 0.8.3",
 ]
 
@@ -1897,7 +1900,7 @@ dependencies = [
  "chrono",
  "diem-crypto",
  "diem-crypto-derive",
- "hex",
+ "hex 0.4.3",
  "itertools 0.10.0",
  "mirai-annotations",
  "move-core-types",
@@ -2743,6 +2746,12 @@ dependencies = [
 
 [[package]]
 name = "hex"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "805026a5d0141ffc30abb3be3173848ad46a1b1664fe632428479619a3644d77"
+
+[[package]]
+name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
@@ -2787,6 +2796,12 @@ dependencies = [
  "crypto-mac 0.10.0",
  "digest 0.9.0",
 ]
+
+[[package]]
+name = "hmac-sha256"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bcdc571e566521512579aab40bf807c5066e1765fb36857f16ed7595c13567c6"
 
 [[package]]
 name = "home"
@@ -3796,7 +3811,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "cfx-types",
- "hex",
+ "hex 0.4.3",
  "mirai-annotations",
  "once_cell",
  "proptest",
@@ -5458,7 +5473,7 @@ checksum = "7fdf1b9db47230893d76faad238fd6097fd6d6a9245cd7a4d90dbd639536bbd2"
 name = "short-hex-str"
 version = "0.1.0"
 dependencies = [
- "hex",
+ "hex 0.4.3",
  "mirai-annotations",
  "proptest",
  "serde",
@@ -6514,6 +6529,18 @@ name = "version_check"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5fecdca9a5291cc2b8dcf7dc02453fee791a280f3743cb0905f8822ae463b3fe"
+
+[[package]]
+name = "vrf"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71327171f80b19c06263831d1c6aefb5629131c06dd7006d2865f108af656397"
+dependencies = [
+ "failure",
+ "hex 0.3.2",
+ "hmac-sha256",
+ "openssl",
+]
 
 [[package]]
 name = "wait-timeout"
