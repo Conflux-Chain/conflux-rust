@@ -241,9 +241,6 @@ pub trait Signature:
         &self, message: &[u8], public_key: &Self::VerifyingKeyMaterial,
     ) -> Result<()>;
 
-    /// Convert the signature into a byte representation.
-    fn to_bytes(&self) -> Vec<u8>;
-
     /// The implementer can override a batch verification implementation
     /// that by default iterates over each signature. More efficient
     /// implementations exist and should be implemented for many schemes.

@@ -4,6 +4,7 @@
 use crate::account_address::AccountAddress;
 use anyhow::{ensure, Error, Result};
 use diem_crypto::{
+    bls::{BLSPrivateKey, BLSPublicKey, BLSSignature},
     ed25519::{Ed25519PublicKey, Ed25519Signature},
     hash::CryptoHash,
     multi_ed25519::{MultiEd25519PublicKey, MultiEd25519Signature},
@@ -38,6 +39,7 @@ use std::{convert::TryFrom, fmt, str::FromStr};
 pub enum Scheme {
     Ed25519 = 0,
     MultiEd25519 = 1,
+    BLS = 2,
     // ... add more schemes here
 }
 
@@ -46,6 +48,7 @@ impl fmt::Display for Scheme {
         let display = match self {
             Scheme::Ed25519 => "Ed25519",
             Scheme::MultiEd25519 => "MultiEd25519",
+            Scheme::BLS => "bls",
         };
         write!(f, "Scheme::{}", display)
     }
@@ -63,7 +66,11 @@ pub enum TransactionAuthenticator {
         public_key: MultiEd25519PublicKey,
         signature: MultiEd25519Signature,
     },
-    // ... add more schemes here
+    /// BLS signature
+    BLS {
+        public_key: BLSPublicKey,
+        signature: BLSSignature,
+    }, // ... add more schemes here
 }
 
 impl TransactionAuthenticator {
@@ -72,6 +79,7 @@ impl TransactionAuthenticator {
         match self {
             Self::Ed25519 { .. } => Scheme::Ed25519,
             Self::MultiEd25519 { .. } => Scheme::MultiEd25519,
+            Self::BLS { .. } => Scheme::BLS,
         }
     }
 
@@ -95,6 +103,13 @@ impl TransactionAuthenticator {
         }
     }
 
+    pub fn bls(public_key: BLSPublicKey, signature: BLSSignature) -> Self {
+        Self::BLS {
+            public_key,
+            signature,
+        }
+    }
+
     /// Return Ok if the authenticator's public key matches its signature, Err
     /// otherwise
     pub fn verify<T: Serialize + CryptoHash>(&self, message: &T) -> Result<()> {
@@ -104,6 +119,10 @@ impl TransactionAuthenticator {
                 signature,
             } => signature.verify(message, public_key),
             Self::MultiEd25519 {
+                public_key,
+                signature,
+            } => signature.verify(message, public_key),
+            Self::BLS {
                 public_key,
                 signature,
             } => signature.verify(message, public_key),
@@ -117,6 +136,7 @@ impl TransactionAuthenticator {
             Self::MultiEd25519 { public_key, .. } => {
                 public_key.to_bytes().to_vec()
             }
+            Self::BLS { public_key, .. } => public_key.to_bytes().to_vec(),
         }
     }
 
@@ -127,6 +147,7 @@ impl TransactionAuthenticator {
             Self::MultiEd25519 { signature, .. } => {
                 signature.to_bytes().to_vec()
             }
+            Self::BLS { signature, .. } => signature.to_bytes().to_vec(),
         }
     }
 

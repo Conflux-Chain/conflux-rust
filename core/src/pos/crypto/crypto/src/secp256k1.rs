@@ -386,8 +386,6 @@ impl Signature for Secp256k1Signature {
     ) -> Result<()> {
         Secp256k1Signature::verify_arbitrary_msg(self, message, public_key)
     }
-
-    fn to_bytes(&self) -> Vec<u8> { self.to_bytes().to_vec() }
 }
 
 impl Length for Secp256k1Signature {

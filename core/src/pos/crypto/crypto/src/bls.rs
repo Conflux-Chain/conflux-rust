@@ -97,8 +97,6 @@ impl Signature for BLSSignature {
             false => Err(anyhow!("Invalid BLS signature!")),
         }
     }
-
-    fn to_bytes(&self) -> Vec<u8> { ValidCryptoMaterial::to_bytes(self) }
 }
 
 impl PublicKey for BLSPublicKey {
