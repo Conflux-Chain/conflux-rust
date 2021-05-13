@@ -2,7 +2,7 @@ use crate::{
     CryptoMaterialError, HashValue, PrivateKey, PublicKey, VRFPrivateKey,
     VRFProof, VRFPublicKey, ValidCryptoMaterial, ValidCryptoMaterialStringExt,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use diem_crypto_derive::{
     DeserializeKey, SerializeKey, SilentDebug, SilentDisplay,
 };
@@ -42,7 +42,12 @@ impl VRFPrivateKey for EcVrfPrivateKey {
     type ProofMaterial = EcVrfProof;
     type PublicKeyMaterial = EcVrfPublicKey;
 
-    fn compute(&self, seed: &[u8]) -> Result<Self::ProofMaterial> { todo!() }
+    fn compute(&self, seed: &[u8]) -> Result<Self::ProofMaterial> {
+        match VRF_CONTEXT.lock().prove(&self.0, seed) {
+            Ok(proof) => Ok(EcVrfProof(proof)),
+            Err(e) => Err(anyhow!(e)),
+        }
+    }
 }
 
 impl VRFPublicKey for EcVrfPublicKey {
@@ -54,12 +59,20 @@ impl VRFProof for EcVrfProof {
     type PrivateKeyMaterial = EcVrfPrivateKey;
     type PublicKeyMaterial = EcVrfPublicKey;
 
-    fn to_hash(&self) -> Result<HashValue> { todo!() }
+    fn to_hash(&self) -> Result<HashValue> {
+        match VRF_CONTEXT.lock().proof_to_hash(&self.0) {
+            Ok(h) => HashValue::from_slice(&h).map_err(|e| anyhow!(e)),
+            Err(e) => Err(anyhow!(e)),
+        }
+    }
 
     fn verify(
         &self, seed: &[u8], public_key: &Self::PublicKeyMaterial,
-    ) -> Result<()> {
-        todo!()
+    ) -> Result<HashValue> {
+        match VRF_CONTEXT.lock().verify(&public_key.0, &self.0, seed) {
+            Ok(h) => HashValue::from_slice(&h).map_err(|e| anyhow!(e)),
+            Err(e) => Err(anyhow!(e)),
+        }
     }
 }
 

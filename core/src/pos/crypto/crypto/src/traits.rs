@@ -272,9 +272,11 @@ pub trait VRFPublicKey:
 
     /// Verify if `proof` if generated from `seed` by the private key of this
     /// public key.
+    ///
+    /// If successful, return the VRF hash output.
     fn verify_proof(
         &self, seed: &[u8], proof: &Self::ProofMaterial,
-    ) -> Result<()> {
+    ) -> Result<HashValue> {
         proof.verify(seed, &self)
     }
 }
@@ -314,9 +316,11 @@ pub trait VRFProof:
 
     /// Verify if the proof is generated from `seed` by the private key of
     /// `public_key`.
+    ///
+    /// If successful, return the VRF hash output.
     fn verify(
         &self, seed: &[u8], public_key: &Self::PublicKeyMaterial,
-    ) -> Result<()>;
+    ) -> Result<HashValue>;
 }
 
 /// A type family for schemes which know how to generate key material from
