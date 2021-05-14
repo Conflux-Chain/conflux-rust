@@ -22,15 +22,17 @@ use consensus_types::{
     vote_proposal::{MaybeSignedVoteProposal, VoteProposal},
 };
 use diem_crypto::{
-    ed25519::Ed25519PublicKey,
     hash::{CryptoHash, HashValue},
     traits::Signature,
 };
 use diem_logger::prelude::*;
 use diem_types::{
-    block_info::BlockInfo, epoch_change::EpochChangeProof,
-    epoch_state::EpochState, ledger_info::LedgerInfo,
-    validator_config::ConsensusSignature, waypoint::Waypoint,
+    block_info::BlockInfo,
+    epoch_change::EpochChangeProof,
+    epoch_state::EpochState,
+    ledger_info::LedgerInfo,
+    validator_config::{ConsensusPublicKey, ConsensusSignature},
+    waypoint::Waypoint,
 };
 use serde::Serialize;
 use std::cmp::Ordering;
@@ -38,7 +40,7 @@ use std::cmp::Ordering;
 /// @TODO consider a cache of verified QCs to cut down on verification costs
 pub struct SafetyRules {
     persistent_storage: PersistentSafetyStorage,
-    execution_public_key: Option<Ed25519PublicKey>,
+    execution_public_key: Option<ConsensusPublicKey>,
     export_consensus_key: bool,
     validator_signer: Option<ConfigurableValidatorSigner>,
     epoch_state: Option<EpochState>,

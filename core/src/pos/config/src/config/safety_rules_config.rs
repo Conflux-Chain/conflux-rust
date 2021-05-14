@@ -5,7 +5,7 @@ use crate::{
     config::{LoggerConfig, SecureBackend},
     keys::ConfigKey,
 };
-use diem_crypto::{ed25519::Ed25519PrivateKey, Uniform};
+use diem_crypto::Uniform;
 use diem_types::{
     network_address::NetworkAddress, validator_config::ConsensusPrivateKey,
     waypoint::Waypoint, PeerId,
@@ -91,7 +91,7 @@ impl RemoteService {
 pub struct SafetyRulesTestConfig {
     pub author: PeerId,
     pub consensus_key: Option<ConfigKey<ConsensusPrivateKey>>,
-    pub execution_key: Option<ConfigKey<Ed25519PrivateKey>>,
+    pub execution_key: Option<ConfigKey<ConsensusPrivateKey>>,
     pub waypoint: Option<Waypoint>,
 }
 
@@ -109,7 +109,7 @@ impl SafetyRulesTestConfig {
         self.consensus_key = Some(ConfigKey::new(key));
     }
 
-    pub fn execution_key(&mut self, key: Ed25519PrivateKey) {
+    pub fn execution_key(&mut self, key: ConsensusPrivateKey) {
         self.execution_key = Some(ConfigKey::new(key));
     }
 
@@ -120,7 +120,8 @@ impl SafetyRulesTestConfig {
     }
 
     pub fn random_execution_key(&mut self, rng: &mut StdRng) {
-        let privkey = Ed25519PrivateKey::generate(rng);
-        self.execution_key = Some(ConfigKey::<Ed25519PrivateKey>::new(privkey));
+        let privkey = ConsensusPrivateKey::generate(rng);
+        self.execution_key =
+            Some(ConfigKey::<ConsensusPrivateKey>::new(privkey));
     }
 }

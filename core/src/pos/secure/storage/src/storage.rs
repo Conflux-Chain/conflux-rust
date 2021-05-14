@@ -5,9 +5,12 @@ use crate::{
     KVStorage, NamespacedStorage, OnDiskStorage, PublicKeyResponse,
     VaultStorage,
 };
+use diem_crypto::PrivateKey;
+use diem_types::validator_config::{
+    ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
+};
 use enum_dispatch::enum_dispatch;
 use serde::{de::DeserializeOwned, Serialize};
-use diem_types::validator_config::{ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature};
 
 /// This is the Diem interface into secure storage. Any storage engine
 /// implementing this trait should support both key/value operations (e.g., get,

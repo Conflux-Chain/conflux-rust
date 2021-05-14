@@ -6,7 +6,10 @@
 pub mod dev;
 
 use diem_crypto::{
-    PrivateKey, ValidCryptoMaterial
+    bls::BLS_PRIVATE_KEY_LENGTH, PrivateKey, ValidCryptoMaterial,
+};
+use diem_types::validator_config::{
+    ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -18,8 +21,6 @@ use std::{
 };
 use thiserror::Error;
 use ureq::Response;
-use diem_crypto::bls::BLS_PRIVATE_KEY_LENGTH;
-use diem_types::validator_config::{ConsensusSignature, ConsensusPublicKey, ConsensusPrivateKey};
 
 #[cfg(any(test, feature = "fuzzing"))]
 pub mod fuzzing;
@@ -318,7 +319,7 @@ impl Client {
         process_transit_export_response(name, version, resp)
     }
 
-    pub fn import_ed25519_key(
+    pub fn import_consensus_key(
         &self, name: &str, key: &ConsensusPrivateKey,
     ) -> Result<(), Error> {
         let backup =
@@ -342,7 +343,7 @@ impl Client {
         process_transit_list_response(resp)
     }
 
-    pub fn read_ed25519_key(
+    pub fn read_consensus_key(
         &self, name: &str,
     ) -> Result<Vec<ReadResponse<ConsensusPublicKey>>, Error> {
         let request = self
@@ -373,7 +374,7 @@ impl Client {
         &self, name: &str,
     ) -> Result<ConsensusPublicKey, Error> {
         // Read all keys and versions
-        let all_pub_keys = self.read_ed25519_key(name)?;
+        let all_pub_keys = self.read_consensus_key(name)?;
 
         // Find the maximum and minimum versions
         let max_version = all_pub_keys

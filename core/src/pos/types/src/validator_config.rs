@@ -5,11 +5,11 @@ use crate::{
     account_address::AccountAddress,
     network_address::{encrypted::EncNetworkAddress, NetworkAddress},
 };
+use diem_crypto::bls::{BLSPrivateKey, BLSPublicKey, BLSSignature};
 use move_core_types::move_resource::MoveResource;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
-use diem_crypto::bls::{BLSPublicKey, BLSPrivateKey, BLSSignature};
 
 #[derive(Debug, Deserialize, Serialize, Clone, Eq, PartialEq, Default)]
 pub struct ValidatorConfigResource {

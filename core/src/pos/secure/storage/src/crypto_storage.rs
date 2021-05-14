@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::Error;
+use diem_crypto::PrivateKey;
+use diem_types::validator_config::{
+    ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
+};
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
-use diem_types::validator_config::{ConsensusPublicKey, ConsensusPrivateKey, ConsensusSignature};
 
 /// CryptoStorage provides an abstraction for secure generation and handling of
 /// cryptographic keys.
@@ -41,8 +44,8 @@ pub trait CryptoStorage {
     /// Returns the Consensus public key stored at 'name'.
     fn get_public_key(&self, name: &str) -> Result<PublicKeyResponse, Error>;
 
-    /// Returns the previous version of the Consensus public key stored at 'name'.
-    /// For the most recent version, see 'get_public_key(..)' above.
+    /// Returns the previous version of the Consensus public key stored at
+    /// 'name'. For the most recent version, see 'get_public_key(..)' above.
     fn get_public_key_previous_version(
         &self, name: &str,
     ) -> Result<ConsensusPublicKey, Error>;

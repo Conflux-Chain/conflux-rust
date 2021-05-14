@@ -6,9 +6,7 @@ use crate::{
     PublicKeyResponse,
 };
 use chrono::DateTime;
-use diem_crypto::{
-    hash::CryptoHash,
-};
+use diem_crypto::{hash::CryptoHash, PrivateKey};
 use diem_infallible::RwLock;
 use diem_time_service::{TimeService, TimeServiceTrait};
 use diem_vault_client::{self as vault, Client};
@@ -18,9 +16,11 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
+use diem_types::validator_config::{
+    ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
+};
 #[cfg(any(test, feature = "testing"))]
 use diem_vault_client::ReadResponse;
-use diem_types::validator_config::{ConsensusPublicKey, ConsensusPrivateKey, ConsensusSignature};
 
 const DIEM_DEFAULT: &str = "diem_default";
 
@@ -143,7 +143,7 @@ impl VaultStorage {
     pub fn get_all_key_versions(
         &self, name: &str,
     ) -> Result<Vec<ReadResponse<ConsensusPublicKey>>, Error> {
-        Ok(self.client().read_ed25519_key(name)?)
+        Ok(self.client().read_consensus_key(name)?)
     }
 
     /// Creates a token but uses the namespace for policies
@@ -213,7 +213,7 @@ impl VaultStorage {
     fn key_version(
         &self, name: &str, version: &ConsensusPublicKey,
     ) -> Result<u32, Error> {
-        let pubkeys = self.client().read_ed25519_key(name)?;
+        let pubkeys = self.client().read_consensus_key(name)?;
         let pubkey = pubkeys.iter().find(|pubkey| version == &pubkey.value);
         Ok(pubkey
             .ok_or_else(|| {
@@ -349,13 +349,13 @@ impl CryptoStorage for VaultStorage {
         }
 
         self.client()
-            .import_ed25519_key(&ns_name, &key)
+            .import_consensus_key(&ns_name, &key)
             .map_err(|e| e.into())
     }
 
     fn get_public_key(&self, name: &str) -> Result<PublicKeyResponse, Error> {
         let name = self.crypto_name(name);
-        let resp = self.client().read_ed25519_key(&name)?;
+        let resp = self.client().read_consensus_key(&name)?;
         let mut last_key = resp.first().ok_or(Error::KeyNotSet(name))?;
         for key in &resp {
             last_key = if last_key.version > key.version {
@@ -376,7 +376,7 @@ impl CryptoStorage for VaultStorage {
         &self, name: &str,
     ) -> Result<ConsensusPublicKey, Error> {
         let name = self.crypto_name(name);
-        let pubkeys = self.client().read_ed25519_key(&name)?;
+        let pubkeys = self.client().read_consensus_key(&name)?;
         let highest_version = pubkeys.iter().map(|pubkey| pubkey.version).max();
         match highest_version {
             Some(version) => {

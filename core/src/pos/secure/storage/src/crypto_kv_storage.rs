@@ -22,7 +22,7 @@ pub trait CryptoKVStorage: KVStorage {}
 impl<T: CryptoKVStorage> CryptoStorage for T {
     fn create_key(&mut self, name: &str) -> Result<ConsensusPublicKey, Error> {
         // Generate and store the new named key pair
-        let (private_key, public_key) = new_key_pair();
+        let (private_key, public_key) = new_key_pair::<ConsensusPrivateKey>();
         self.import_private_key(name, private_key)?;
         Ok(public_key)
     }
@@ -90,7 +90,8 @@ impl<T: CryptoKVStorage> CryptoStorage for T {
 
     fn rotate_key(&mut self, name: &str) -> Result<ConsensusPublicKey, Error> {
         let private_key: ConsensusPrivateKey = self.get(name)?.value;
-        let (new_private_key, new_public_key) = new_key_pair::<ConsensusPrivateKey>();
+        let (new_private_key, new_public_key) =
+            new_key_pair::<ConsensusPrivateKey>();
         self.set(&get_previous_version_name(name), private_key)?;
         self.set(name, new_private_key)?;
         Ok(new_public_key)

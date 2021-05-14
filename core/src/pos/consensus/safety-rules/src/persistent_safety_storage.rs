@@ -7,10 +7,7 @@ use crate::{
     Error,
 };
 use consensus_types::{common::Author, safety_data::SafetyData};
-use diem_crypto::{
-    ed25519::{Ed25519PrivateKey, Ed25519PublicKey},
-    hash::CryptoHash,
-};
+use diem_crypto::hash::CryptoHash;
 use diem_global_constants::{
     CONSENSUS_KEY, EXECUTION_KEY, OWNER_ACCOUNT, SAFETY_DATA, WAYPOINT,
 };
@@ -46,7 +43,7 @@ impl PersistentSafetyStorage {
     pub fn initialize(
         mut internal_store: Storage, author: Author,
         consensus_private_key: ConsensusPrivateKey,
-        execution_private_key: Ed25519PrivateKey, waypoint: Waypoint,
+        execution_private_key: ConsensusPrivateKey, waypoint: Waypoint,
         enable_cached_safety_data: bool,
     ) -> Self
     {
@@ -70,7 +67,7 @@ impl PersistentSafetyStorage {
     fn initialize_(
         internal_store: &mut Storage, safety_data: SafetyData, author: Author,
         consensus_private_key: ConsensusPrivateKey,
-        execution_private_key: Ed25519PrivateKey, waypoint: Waypoint,
+        execution_private_key: ConsensusPrivateKey, waypoint: Waypoint,
     ) -> Result<(), Error>
     {
         let result = internal_store
@@ -120,7 +117,7 @@ impl PersistentSafetyStorage {
             .export_private_key_for_version(CONSENSUS_KEY, version)?)
     }
 
-    pub fn execution_public_key(&self) -> Result<Ed25519PublicKey, Error> {
+    pub fn execution_public_key(&self) -> Result<ConsensusPublicKey, Error> {
         let _timer = counters::start_timer("get", EXECUTION_KEY);
         Ok(self
             .internal_store
