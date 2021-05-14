@@ -21,6 +21,10 @@ use std::convert::TryFrom;
 
 #[cfg(mirai)]
 use crate::tags::ValidatedPublicKeyTag;
+use std::fmt::{self, Formatter};
+
+/// Private key length in bytes. The actual key length should be 255 bits.
+pub const BLS_PRIVATE_KEY_LENGTH: usize = 32;
 
 #[cfg(not(mirai))]
 struct ValidatedPublicKeyTag {}
@@ -30,12 +34,12 @@ struct ValidatedPublicKeyTag {}
 pub struct BLSPrivateKey(RawPrivateKey);
 
 /// BLS signature public key
-#[derive(DeserializeKey, Clone, SerializeKey, Debug, PartialEq)]
+#[derive(DeserializeKey, Clone, SerializeKey, PartialEq)]
 pub struct BLSPublicKey(RawPublicKey);
 
 // TODO(lpl): Signature aggregation.
 /// BLS signature wrapper
-#[derive(DeserializeKey, Clone, SerializeKey, Debug, PartialEq)]
+#[derive(DeserializeKey, Clone, SerializeKey, PartialEq)]
 pub struct BLSSignature(RawSignature);
 
 impl SigningKey for BLSPrivateKey {
@@ -185,11 +189,36 @@ impl ValidCryptoMaterial for BLSSignature {
     fn to_bytes(&self) -> Vec<u8> { self.0.as_bytes() }
 }
 
-// FIXME(lpl): `rand` used in bls_signatures is 0.5.1, lower than our used
-// 0.6.2.
-// impl Uniform for BLSPrivateKey {
-//     fn generate<R>(rng: &mut R) -> Self
-//     where R: ::rand::RngCore + ::rand::CryptoRng {
-//         BLSPrivateKey(RawPrivateKey::generate(rng))
-//     }
-// }
+impl fmt::Display for BLSPublicKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_encoded_string().map_err(|_| fmt::Error)?)
+    }
+}
+
+impl fmt::Debug for BLSPublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "BLSPublicKey({})", self)
+    }
+}
+
+impl fmt::Display for BLSSignature {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_encoded_string().map_err(|_| fmt::Error)?)
+    }
+}
+
+impl fmt::Debug for BLSSignature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "BLSSignature({})", self)
+    }
+}
+
+impl Uniform for BLSPrivateKey {
+    fn generate<R>(rng: &mut R) -> Self
+    where R: ::rand::RngCore + ::rand::CryptoRng {
+        // FIXME(lpl): `rand` used in bls_signatures is 0.5.1, lower than our
+        // used 0.6.2.
+        todo!()
+        // BLSPrivateKey(RawPrivateKey::generate(rng))
+    }
+}

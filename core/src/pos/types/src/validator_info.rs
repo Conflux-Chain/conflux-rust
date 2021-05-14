@@ -11,11 +11,11 @@ use crate::network_address::{
 use crate::{
     account_address::AccountAddress, validator_config::ValidatorConfig,
 };
-use diem_crypto::ed25519::Ed25519PublicKey;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use crate::validator_config::ConsensusPublicKey;
 
 /// After executing a special transaction indicates a change to the next epoch,
 /// consensus and networking get the new list of validators, their keys, and
@@ -66,7 +66,7 @@ impl ValidatorInfo {
     #[cfg(any(test, feature = "fuzzing"))]
     pub fn new_with_test_network_keys(
         account_address: AccountAddress,
-        consensus_public_key: Ed25519PublicKey, consensus_voting_power: u64,
+        consensus_public_key: ConsensusPublicKey, consensus_voting_power: u64,
     ) -> Self
     {
         let addr = NetworkAddress::mock();
@@ -96,7 +96,7 @@ impl ValidatorInfo {
     pub fn account_address(&self) -> &AccountAddress { &self.account_address }
 
     /// Returns the key for validating signed messages from this validator
-    pub fn consensus_public_key(&self) -> &Ed25519PublicKey {
+    pub fn consensus_public_key(&self) -> &ConsensusPublicKey {
         &self.config.consensus_public_key
     }
 

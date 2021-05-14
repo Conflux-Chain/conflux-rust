@@ -6,7 +6,10 @@ use crate::{
     keys::ConfigKey,
 };
 use diem_crypto::{ed25519::Ed25519PrivateKey, Uniform};
-use diem_types::{network_address::NetworkAddress, waypoint::Waypoint, PeerId};
+use diem_types::{
+    network_address::NetworkAddress, validator_config::ConsensusPrivateKey,
+    waypoint::Waypoint, PeerId,
+};
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -87,7 +90,7 @@ impl RemoteService {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct SafetyRulesTestConfig {
     pub author: PeerId,
-    pub consensus_key: Option<ConfigKey<Ed25519PrivateKey>>,
+    pub consensus_key: Option<ConfigKey<ConsensusPrivateKey>>,
     pub execution_key: Option<ConfigKey<Ed25519PrivateKey>>,
     pub waypoint: Option<Waypoint>,
 }
@@ -102,7 +105,7 @@ impl SafetyRulesTestConfig {
         }
     }
 
-    pub fn consensus_key(&mut self, key: Ed25519PrivateKey) {
+    pub fn consensus_key(&mut self, key: ConsensusPrivateKey) {
         self.consensus_key = Some(ConfigKey::new(key));
     }
 
@@ -111,8 +114,9 @@ impl SafetyRulesTestConfig {
     }
 
     pub fn random_consensus_key(&mut self, rng: &mut StdRng) {
-        let privkey = Ed25519PrivateKey::generate(rng);
-        self.consensus_key = Some(ConfigKey::<Ed25519PrivateKey>::new(privkey));
+        let privkey = ConsensusPrivateKey::generate(rng);
+        self.consensus_key =
+            Some(ConfigKey::<ConsensusPrivateKey>::new(privkey));
     }
 
     pub fn random_execution_key(&mut self, rng: &mut StdRng) {

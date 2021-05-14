@@ -9,9 +9,10 @@ use consensus_types::{
     block::Block, block_data::BlockData, timeout::Timeout, vote::Vote,
     vote_proposal::MaybeSignedVoteProposal,
 };
-use diem_crypto::ed25519::Ed25519Signature;
 use diem_infallible::RwLock;
-use diem_types::epoch_change::EpochChangeProof;
+use diem_types::{
+    epoch_change::EpochChangeProof, validator_config::ConsensusSignature,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -120,7 +121,7 @@ impl TSafetyRules for SerializerClient {
 
     fn sign_timeout(
         &mut self, timeout: &Timeout,
-    ) -> Result<Ed25519Signature, Error> {
+    ) -> Result<ConsensusSignature, Error> {
         let _timer =
             counters::start_timer("external", LogEntry::SignTimeout.as_str());
         let response = self.request(SafetyRulesInput::SignTimeout(
