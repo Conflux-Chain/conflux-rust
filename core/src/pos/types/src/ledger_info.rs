@@ -9,7 +9,7 @@ use crate::{
     transaction::Version,
     validator_verifier::{ValidatorVerifier, VerifyError},
 };
-use diem_crypto::{ed25519::Ed25519Signature, hash::HashValue};
+use diem_crypto::hash::HashValue;
 use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
@@ -141,11 +141,11 @@ impl Display for LedgerInfoWithSignatures {
     }
 }
 
-// proxy to create LedgerInfoWithEd25519
+// proxy to create LedgerInfoWithConsensus
 impl LedgerInfoWithSignatures {
     pub fn new(
         ledger_info: LedgerInfo,
-        signatures: BTreeMap<AccountAddress, Ed25519Signature>,
+        signatures: BTreeMap<AccountAddress, ConsensusSignature>,
     ) -> Self
     {
         LedgerInfoWithSignatures::V0(LedgerInfoWithV0::new(
@@ -195,7 +195,7 @@ pub struct LedgerInfoWithV0 {
     /// The validator is identified by its account address: in order to verify
     /// a signature one needs to retrieve the public key of the validator
     /// for the given epoch.
-    signatures: BTreeMap<AccountAddress, Ed25519Signature>,
+    signatures: BTreeMap<AccountAddress, ConsensusSignature>,
 }
 
 impl Display for LedgerInfoWithV0 {
@@ -207,7 +207,7 @@ impl Display for LedgerInfoWithV0 {
 impl LedgerInfoWithV0 {
     pub fn new(
         ledger_info: LedgerInfo,
-        signatures: BTreeMap<AccountAddress, Ed25519Signature>,
+        signatures: BTreeMap<AccountAddress, ConsensusSignature>,
     ) -> Self
     {
         LedgerInfoWithV0 {
@@ -216,12 +216,12 @@ impl LedgerInfoWithV0 {
         }
     }
 
-    /// Create a new `LedgerInfoWithEd25519` at genesis with the given genesis
+    /// Create a new `LedgerInfoWithConsensus` at genesis with the given genesis
     /// state and initial validator set.
     ///
-    /// Note that the genesis `LedgerInfoWithEd25519` is unsigned. Validators
+    /// Note that the genesis `LedgerInfoWithConsensus` is unsigned. Validators
     /// and FullNodes are configured with the same genesis transaction and
-    /// generate an identical genesis `LedgerInfoWithEd25519` independently.
+    /// generate an identical genesis `LedgerInfoWithConsensus` independently.
     /// In contrast, Clients will likely use a waypoint generated from the
     /// genesis `LedgerInfo`.
     pub fn genesis(
@@ -236,7 +236,7 @@ impl LedgerInfoWithV0 {
     pub fn ledger_info(&self) -> &LedgerInfo { &self.ledger_info }
 
     pub fn add_signature(
-        &mut self, validator: AccountAddress, signature: Ed25519Signature,
+        &mut self, validator: AccountAddress, signature: ConsensusSignature,
     ) {
         self.signatures.entry(validator).or_insert(signature);
     }
@@ -245,7 +245,7 @@ impl LedgerInfoWithV0 {
         self.signatures.remove(&validator);
     }
 
-    pub fn signatures(&self) -> &BTreeMap<AccountAddress, Ed25519Signature> {
+    pub fn signatures(&self) -> &BTreeMap<AccountAddress, ConsensusSignature> {
         &self.signatures
     }
 
@@ -263,6 +263,7 @@ impl LedgerInfoWithV0 {
 // Arbitrary implementation of LedgerInfoWithV0 (for fuzzing)
 //
 
+use crate::validator_config::ConsensusSignature;
 #[cfg(any(test, feature = "fuzzing"))]
 use ::proptest::prelude::*;
 
@@ -272,7 +273,7 @@ impl Arbitrary for LedgerInfoWithV0 {
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
-        let dummy_signature = Ed25519Signature::dummy_signature();
+        let dummy_signature = ConsensusSignature::dummy_signature();
         (
             proptest::arbitrary::any::<LedgerInfo>(),
             proptest::collection::vec(

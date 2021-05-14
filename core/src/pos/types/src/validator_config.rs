@@ -5,7 +5,9 @@ use crate::{
     account_address::AccountAddress,
     network_address::{encrypted::EncNetworkAddress, NetworkAddress},
 };
-use diem_crypto::ed25519::Ed25519PublicKey;
+use diem_crypto::ed25519::{
+    Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature,
+};
 use move_core_types::move_resource::MoveResource;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
@@ -69,3 +71,8 @@ impl ValidatorConfig {
         bcs::from_bytes(&self.validator_network_addresses)
     }
 }
+
+// TODO(lpl): Put this in a proper place.
+pub type ConsensusPublicKey = Ed25519PublicKey;
+pub type ConsensusPrivateKey = Ed25519PrivateKey;
+pub type ConsensusSignature = Ed25519Signature;

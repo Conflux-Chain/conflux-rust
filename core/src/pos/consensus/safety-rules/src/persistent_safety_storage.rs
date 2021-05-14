@@ -8,7 +8,7 @@ use crate::{
 };
 use consensus_types::{common::Author, safety_data::SafetyData};
 use diem_crypto::{
-    ed25519::{Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature},
+    ed25519::{Ed25519PrivateKey, Ed25519PublicKey},
     hash::CryptoHash,
 };
 use diem_global_constants::{
@@ -16,7 +16,12 @@ use diem_global_constants::{
 };
 use diem_logger::prelude::*;
 use diem_secure_storage::{CryptoStorage, KVStorage, Storage};
-use diem_types::waypoint::Waypoint;
+use diem_types::{
+    validator_config::{
+        ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
+    },
+    waypoint::Waypoint,
+};
 use serde::Serialize;
 
 /// SafetyRules needs an abstract storage interface to act as a common utility
@@ -40,7 +45,7 @@ impl PersistentSafetyStorage {
     /// that has no SafetyRules values set.
     pub fn initialize(
         mut internal_store: Storage, author: Author,
-        consensus_private_key: Ed25519PrivateKey,
+        consensus_private_key: ConsensusPrivateKey,
         execution_private_key: Ed25519PrivateKey, waypoint: Waypoint,
         enable_cached_safety_data: bool,
     ) -> Self
@@ -64,7 +69,7 @@ impl PersistentSafetyStorage {
 
     fn initialize_(
         internal_store: &mut Storage, safety_data: SafetyData, author: Author,
-        consensus_private_key: Ed25519PrivateKey,
+        consensus_private_key: ConsensusPrivateKey,
         execution_private_key: Ed25519PrivateKey, waypoint: Waypoint,
     ) -> Result<(), Error>
     {
@@ -107,8 +112,8 @@ impl PersistentSafetyStorage {
     }
 
     pub fn consensus_key_for_version(
-        &self, version: Ed25519PublicKey,
-    ) -> Result<Ed25519PrivateKey, Error> {
+        &self, version: ConsensusPublicKey,
+    ) -> Result<ConsensusPrivateKey, Error> {
         let _timer = counters::start_timer("get", CONSENSUS_KEY);
         Ok(self
             .internal_store
@@ -124,8 +129,8 @@ impl PersistentSafetyStorage {
     }
 
     pub fn sign<T: Serialize + CryptoHash>(
-        &self, key_name: String, key_version: Ed25519PublicKey, message: &T,
-    ) -> Result<Ed25519Signature, Error> {
+        &self, key_name: String, key_version: ConsensusPublicKey, message: &T,
+    ) -> Result<ConsensusSignature, Error> {
         Ok(self.internal_store.sign_using_version(
             &key_name,
             key_version,
@@ -195,7 +200,10 @@ mod tests {
     use super::*;
     use diem_crypto::Uniform;
     use diem_secure_storage::InMemoryStorage;
-    use diem_types::validator_signer::ValidatorSigner;
+    use diem_types::{
+        validator_config::ConsensusPrivateKey,
+        validator_signer::ValidatorSigner,
+    };
 
     #[test]
     fn test() {
@@ -206,7 +214,7 @@ mod tests {
             storage,
             Author::random(),
             consensus_private_key,
-            Ed25519PrivateKey::generate_for_testing(),
+            ConsensusPrivateKey::generate_for_testing(),
             Waypoint::default(),
             true,
         );

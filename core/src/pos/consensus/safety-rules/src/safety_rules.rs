@@ -22,14 +22,15 @@ use consensus_types::{
     vote_proposal::{MaybeSignedVoteProposal, VoteProposal},
 };
 use diem_crypto::{
-    ed25519::{Ed25519PublicKey, Ed25519Signature},
+    ed25519::Ed25519PublicKey,
     hash::{CryptoHash, HashValue},
     traits::Signature,
 };
 use diem_logger::prelude::*;
 use diem_types::{
     block_info::BlockInfo, epoch_change::EpochChangeProof,
-    epoch_state::EpochState, ledger_info::LedgerInfo, waypoint::Waypoint,
+    epoch_state::EpochState, ledger_info::LedgerInfo,
+    validator_config::ConsensusSignature, waypoint::Waypoint,
 };
 use serde::Serialize;
 use std::cmp::Ordering;
@@ -71,7 +72,7 @@ impl SafetyRules {
 
     fn sign<T: Serialize + CryptoHash>(
         &self, message: &T,
-    ) -> Result<Ed25519Signature, Error> {
+    ) -> Result<ConsensusSignature, Error> {
         let signer = self.signer()?;
         signer.sign(message, &self.persistent_storage)
     }
@@ -445,7 +446,7 @@ impl SafetyRules {
 
     fn guarded_sign_timeout(
         &mut self, timeout: &Timeout,
-    ) -> Result<Ed25519Signature, Error> {
+    ) -> Result<ConsensusSignature, Error> {
         self.signer()?;
 
         let mut safety_data = self.persistent_storage.safety_data()?;
@@ -504,7 +505,7 @@ impl TSafetyRules for SafetyRules {
 
     fn sign_timeout(
         &mut self, timeout: &Timeout,
-    ) -> Result<Ed25519Signature, Error> {
+    ) -> Result<ConsensusSignature, Error> {
         let cb = || self.guarded_sign_timeout(timeout);
         run_and_log(cb, |log| log.round(timeout.round()), LogEntry::SignTimeout)
     }

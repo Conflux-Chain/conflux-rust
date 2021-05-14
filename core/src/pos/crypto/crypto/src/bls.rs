@@ -186,7 +186,8 @@ impl ValidCryptoMaterial for BLSSignature {
 }
 
 // FIXME(lpl): `rand` used in bls_signatures is 0.5.1, lower than our used
-// 0.6.2. impl Uniform for BLSPrivateKey {
+// 0.6.2.
+// impl Uniform for BLSPrivateKey {
 //     fn generate<R>(rng: &mut R) -> Self
 //     where R: ::rand::RngCore + ::rand::CryptoRng {
 //         BLSPrivateKey(RawPrivateKey::generate(rng))

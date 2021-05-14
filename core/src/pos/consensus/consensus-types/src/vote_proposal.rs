@@ -8,7 +8,7 @@ use diem_crypto::{
 use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
 use diem_types::{
     block_info::PivotBlockDecision, epoch_state::EpochState,
-    proof::AccumulatorExtensionProof,
+    proof::AccumulatorExtensionProof, validator_config::ConsensusSignature,
 };
 use serde::{Deserialize, Serialize};
 use std::{

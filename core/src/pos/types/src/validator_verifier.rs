@@ -2,15 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{account_address::AccountAddress, on_chain_config::ValidatorSet};
-use diem_crypto::{
-    ed25519::{Ed25519PublicKey, Ed25519Signature},
-    hash::CryptoHash,
-    Signature, VerifyingKey,
-};
+use diem_crypto::{hash::CryptoHash, Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt};
 use thiserror::Error;
 
+use crate::validator_config::{ConsensusPublicKey, ConsensusSignature};
 #[cfg(any(test, feature = "fuzzing"))]
 use anyhow::{ensure, Result};
 #[cfg(any(test, feature = "fuzzing"))]
@@ -49,12 +46,12 @@ pub enum VerifyError {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct ValidatorConsensusInfo {
-    public_key: Ed25519PublicKey,
+    public_key: ConsensusPublicKey,
     voting_power: u64,
 }
 
 impl ValidatorConsensusInfo {
-    pub fn new(public_key: Ed25519PublicKey, voting_power: u64) -> Self {
+    pub fn new(public_key: ConsensusPublicKey, voting_power: u64) -> Self {
         ValidatorConsensusInfo {
             public_key,
             voting_power,
@@ -150,7 +147,7 @@ impl ValidatorVerifier {
     /// Helper method to initialize with a single author and public key with
     /// quorum voting power 1.
     pub fn new_single(
-        author: AccountAddress, public_key: Ed25519PublicKey,
+        author: AccountAddress, public_key: ConsensusPublicKey,
     ) -> Self {
         let mut author_to_validator_info = BTreeMap::new();
         author_to_validator_info
@@ -161,7 +158,7 @@ impl ValidatorVerifier {
     /// Verify the correctness of a signature of a message by a known author.
     pub fn verify<T: Serialize + CryptoHash>(
         &self, author: AccountAddress, message: &T,
-        signature: &Ed25519Signature,
+        signature: &ConsensusSignature,
     ) -> std::result::Result<(), VerifyError>
     {
         match self.get_public_key(&author) {
@@ -187,7 +184,7 @@ impl ValidatorVerifier {
     /// arbitrary content to the signature payload that would go unnoticed.
     pub fn verify_aggregated_struct_signature<T: CryptoHash + Serialize>(
         &self, message: &T,
-        aggregated_signature: &BTreeMap<AccountAddress, Ed25519Signature>,
+        aggregated_signature: &BTreeMap<AccountAddress, ConsensusSignature>,
     ) -> std::result::Result<(), VerifyError>
     {
         self.check_num_of_signatures(aggregated_signature)?;
@@ -202,12 +199,12 @@ impl ValidatorVerifier {
     /// normal iterated verification if batching fails.
     pub fn batch_verify_aggregated_signatures<T: CryptoHash + Serialize>(
         &self, message: &T,
-        aggregated_signature: &BTreeMap<AccountAddress, Ed25519Signature>,
+        aggregated_signature: &BTreeMap<AccountAddress, ConsensusSignature>,
     ) -> std::result::Result<(), VerifyError>
     {
         self.check_num_of_signatures(aggregated_signature)?;
         self.check_voting_power(aggregated_signature.keys())?;
-        let keys_and_signatures: Vec<(Ed25519PublicKey, Ed25519Signature)> =
+        let keys_and_signatures: Vec<(ConsensusPublicKey, ConsensusSignature)> =
             aggregated_signature
                 .iter()
                 .flat_map(|(address, signature)| {
@@ -217,7 +214,8 @@ impl ValidatorVerifier {
                 .collect();
         // Fallback is required to identify the source of the problem if
         // batching fails.
-        if Ed25519Signature::batch_verify(message, keys_and_signatures).is_err()
+        if ConsensusSignature::batch_verify(message, keys_and_signatures)
+            .is_err()
         {
             self.verify_aggregated_struct_signature(
                 message,
@@ -231,7 +229,7 @@ impl ValidatorVerifier {
     /// possible signatures).
     fn check_num_of_signatures(
         &self,
-        aggregated_signature: &BTreeMap<AccountAddress, Ed25519Signature>,
+        aggregated_signature: &BTreeMap<AccountAddress, ConsensusSignature>,
     ) -> std::result::Result<(), VerifyError>
     {
         let num_of_signatures = aggregated_signature.len();
@@ -272,7 +270,7 @@ impl ValidatorVerifier {
     /// Returns the public key for this address.
     pub fn get_public_key(
         &self, author: &AccountAddress,
-    ) -> Option<Ed25519PublicKey> {
+    ) -> Option<ConsensusPublicKey> {
         self.address_to_validator_info
             .get(&author)
             .map(|validator_info| validator_info.public_key.clone())

@@ -3,10 +3,10 @@
 
 use crate::{common::Author, timeout::Timeout, vote_data::VoteData};
 use anyhow::{ensure, Context};
-use diem_crypto::{ed25519::Ed25519Signature, hash::CryptoHash};
+use diem_crypto::hash::CryptoHash;
 use diem_types::{
-    ledger_info::LedgerInfo, validator_signer::ValidatorSigner,
-    validator_verifier::ValidatorVerifier,
+    ledger_info::LedgerInfo, validator_config::ConsensusSignature,
+    validator_signer::ValidatorSigner, validator_verifier::ValidatorVerifier,
 };
 use serde::{Deserialize, Serialize};
 use short_hex_str::AsShortHexStr;
@@ -27,10 +27,10 @@ pub struct Vote {
     /// gathers QC.
     ledger_info: LedgerInfo,
     /// Signature of the LedgerInfo
-    signature: Ed25519Signature,
+    signature: ConsensusSignature,
     /// The round signatures can be aggregated into a timeout certificate if
     /// present.
-    timeout_signature: Option<Ed25519Signature>,
+    timeout_signature: Option<ConsensusSignature>,
 }
 
 // this is required by structured log
@@ -75,7 +75,7 @@ impl Vote {
     /// Generates a new Vote using a signature over the specified ledger_info
     pub fn new_with_signature(
         vote_data: VoteData, author: Author, ledger_info: LedgerInfo,
-        signature: Ed25519Signature,
+        signature: ConsensusSignature,
     ) -> Self
     {
         Self {
@@ -90,7 +90,7 @@ impl Vote {
     /// Generates a round signature, which can then be used for aggregating a
     /// timeout certificate. Typically called for generating vote messages
     /// that are sent upon timeouts.
-    pub fn add_timeout_signature(&mut self, signature: Ed25519Signature) {
+    pub fn add_timeout_signature(&mut self, signature: ConsensusSignature) {
         if self.timeout_signature.is_some() {
             return; // round signature is already set
         }
@@ -107,7 +107,7 @@ impl Vote {
     pub fn ledger_info(&self) -> &LedgerInfo { &self.ledger_info }
 
     /// Return the signature of the vote
-    pub fn signature(&self) -> &Ed25519Signature { &self.signature }
+    pub fn signature(&self) -> &ConsensusSignature { &self.signature }
 
     /// Returns the hash of the data represent by a timeout proposal
     pub fn timeout(&self) -> Timeout {
@@ -122,7 +122,7 @@ impl Vote {
 
     /// Returns the signature for the vote_data().proposed().round() that can be
     /// aggregated for TimeoutCertificate.
-    pub fn timeout_signature(&self) -> Option<&Ed25519Signature> {
+    pub fn timeout_signature(&self) -> Option<&ConsensusSignature> {
         self.timeout_signature.as_ref()
     }
 

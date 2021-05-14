@@ -6,9 +6,10 @@ use consensus_types::{
     block::Block, block_data::BlockData, timeout::Timeout, vote::Vote,
     vote_proposal::MaybeSignedVoteProposal,
 };
-use diem_crypto::ed25519::Ed25519Signature;
 use diem_infallible::RwLock;
-use diem_types::epoch_change::EpochChangeProof;
+use diem_types::{
+    epoch_change::EpochChangeProof, validator_config::ConsensusSignature,
+};
 use std::sync::Arc;
 
 /// A local interface into SafetyRules. Constructed in such a way that the
@@ -44,7 +45,7 @@ impl TSafetyRules for LocalClient {
 
     fn sign_timeout(
         &mut self, timeout: &Timeout,
-    ) -> Result<Ed25519Signature, Error> {
+    ) -> Result<ConsensusSignature, Error> {
         self.internal.write().sign_timeout(timeout)
     }
 }
