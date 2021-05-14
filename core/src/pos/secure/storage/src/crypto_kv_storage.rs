@@ -90,7 +90,7 @@ impl<T: CryptoKVStorage> CryptoStorage for T {
 
     fn rotate_key(&mut self, name: &str) -> Result<ConsensusPublicKey, Error> {
         let private_key: ConsensusPrivateKey = self.get(name)?.value;
-        let (new_private_key, new_public_key) = new_ed25519_key_pair();
+        let (new_private_key, new_public_key) = new_key_pair::<ConsensusPrivateKey>();
         self.set(&get_previous_version_name(name), private_key)?;
         self.set(name, new_private_key)?;
         Ok(new_public_key)
