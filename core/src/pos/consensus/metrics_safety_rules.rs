@@ -6,9 +6,10 @@ use consensus_types::{
     block::Block, block_data::BlockData, timeout::Timeout, vote::Vote,
     vote_proposal::MaybeSignedVoteProposal,
 };
-use diem_crypto::ed25519::Ed25519Signature;
 use diem_metrics::monitor;
-use diem_types::epoch_change::EpochChangeProof;
+use diem_types::{
+    epoch_change::EpochChangeProof, validator_config::ConsensusSignature,
+};
 use safety_rules::{ConsensusState, Error, TSafetyRules};
 use std::sync::Arc;
 
@@ -85,7 +86,7 @@ impl TSafetyRules for MetricsSafetyRules {
 
     fn sign_timeout(
         &mut self, timeout: &Timeout,
-    ) -> Result<Ed25519Signature, Error> {
+    ) -> Result<ConsensusSignature, Error> {
         let mut result =
             monitor!("safety_rules", self.inner.sign_timeout(timeout));
         if let Err(Error::NotInitialized(_res)) = result {
