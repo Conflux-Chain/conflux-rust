@@ -17,6 +17,7 @@ pub struct StateObjectCache {
     commission_privilege_cache: RwLock<
         HashMap<CommissionPrivilegeAddress, Option<CachedCommissionPrivilege>>,
     >,
+    storage_cache: RwLock<HashMap<StorageAddress, Option<StorageValue>>>,
     // TODO: etc.
 }
 
@@ -399,13 +400,47 @@ impl StateObjectCache {
             db,
         )
     }
+
+    pub fn get_storage<StateDb: StateDbOps>(
+        &self, address: &Address, key: &[u8], db: &StateDb,
+    ) -> Result<
+        GuardedValue<
+            RwLockReadGuard<HashMap<StorageAddress, Option<StorageValue>>>,
+            NonCopy<Option<&StorageValue>>,
+        >,
+    > {
+        Self::ensure_loaded(
+            &self.storage_cache,
+            &StorageAddress(*address, key.to_vec()),
+            db,
+        )
+    }
+
+    pub fn modify_and_update_storage<'a, StateDb: StateDbOps>(
+        &'a self, address: &Address, key: &[u8], db: &'a mut StateDb,
+        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
+    ) -> Result<
+        GuardedValue<
+            RwLockWriteGuard<HashMap<StorageAddress, Option<StorageValue>>>,
+            ModifyAndUpdate<StateDb, StorageValue>,
+        >,
+    >
+    {
+        Self::require_or_set(
+            &self.storage_cache,
+            &StorageAddress(*address, key.to_vec()),
+            db,
+            |_addr| Ok(Some(Default::default())),
+            debug_record,
+        )
+    }
 }
 
 use crate::{
     cache_object::{
         CachedAccount, CachedCommissionPrivilege, CachedObject, CodeAddress,
-        CommissionPrivilegeAddress, DepositListAddress, ToHashKey,
-        VoteStakeListAddress,
+        CommissionPrivilegeAddress, DepositListAddress, StorageAddress,
+        ToHashKey, VoteStakeListAddress,
     },
     StateDbOps,
 };
@@ -417,5 +452,5 @@ use keccak_hash::{keccak, KECCAK_EMPTY};
 use parking_lot::{
     RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
-use primitives::{CodeInfo, DepositList, VoteStakeList};
+use primitives::{CodeInfo, DepositList, StorageValue, VoteStakeList};
 use std::{borrow::Borrow, collections::HashMap, hash::Hash, sync::Arc};

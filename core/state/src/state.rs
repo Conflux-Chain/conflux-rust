@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_types::U256;
+
 pub struct State<StateDbStorage, Substate: SubstateMngTrait> {
     db: StateDbGeneric<StateDbStorage>,
 
@@ -547,16 +549,30 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         }))
     }
 
-    fn storage_at(&self, _address: &Address, _key: &[u8]) -> Result<U256> {
-        unimplemented!()
+    fn storage_at(&self, address: &Address, key: &[u8]) -> Result<U256> {
+        Ok(self
+            .get_storage(address, key)?
+            .as_ref()
+            .map_or(U256::zero(), |a| a.value))
     }
 
     fn set_storage(
-        &mut self, _address: &Address, _key: Vec<u8>, _value: U256,
-        _owner: Address,
-    ) -> Result<()>
-    {
-        unimplemented!()
+        &mut self, address: &Address, key: Vec<u8>, value: U256, owner: Address,
+    ) -> Result<()> {
+        self.modify_and_update_storage(address, &*key, None)?
+            .as_mut()
+            .map_or_else(
+                || unreachable!(),
+                |entry| {
+                    entry.value = value;
+                    if owner == *address {
+                        entry.owner = None
+                    } else {
+                        entry.owner = Some(owner)
+                    }
+                    Ok(())
+                },
+            )
     }
 }
 
@@ -617,6 +633,12 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         )
     }
 
+    fn get_storage(
+        &self, address: &Address, key: &[u8],
+    ) -> Result<impl AsRef<NonCopy<Option<&StorageValue>>>> {
+        self.cache.get_storage(address, key, &self.db)
+    }
+
     fn modify_and_update_account<'a>(
         &'a mut self, address: &Address,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
@@ -655,6 +677,21 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         )
     }
 
+    fn modify_and_update_storage<'a>(
+        &'a mut self, address: &Address, key: &[u8],
+        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
+    ) -> Result<
+        impl AsMut<ModifyAndUpdate<StateDbGeneric<StateDbStorage>, StorageValue>>,
+    >
+    {
+        self.cache.modify_and_update_storage(
+            address,
+            key,
+            &mut self.db,
+            debug_record,
+        )
+    }
+
     fn require_or_set_code<'a>(
         &'a mut self, address: Address, code_owner: Address, code: Vec<u8>,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
@@ -685,9 +722,10 @@ use cfx_statedb::{
     ErrorKind, Result, StateDbCheckpointMethods, StateDbGeneric,
 };
 use cfx_storage::{utils::guarded_value::NonCopy, StorageStateTrait};
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, H256};
 use keccak_hash::{keccak, KECCAK_EMPTY};
 use primitives::{
-    CodeInfo, DepositList, EpochId, SponsorInfo, StorageLayout, VoteStakeList,
+    CodeInfo, DepositList, EpochId, SponsorInfo, StorageLayout, StorageValue,
+    VoteStakeList,
 };
 use std::{marker::PhantomData, ops::Deref, sync::Arc};
