@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_types::U256;
+
 pub struct State<StateDbStorage, Substate: SubstateMngTrait> {
     db: StateDbGeneric<StateDbStorage>,
 
@@ -269,43 +271,19 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     }
 
     fn add_commission_privilege(
-        &mut self, contract_address: Address, _contract_owner: Address,
-        user: Address,
+        &mut self, _contract_address: Address, _contract_owner: Address,
+        _user: Address,
     ) -> Result<()>
     {
-        self.modify_and_update_commission_privilege(
-            &contract_address,
-            &user,
-            None,
-        )?
-        .as_mut()
-        .map_or_else(
-            || unreachable!(),
-            |value| {
-                value.add_privilege();
-                Ok(())
-            },
-        )
+        unimplemented!()
     }
 
     fn remove_commission_privilege(
-        &mut self, contract_address: Address, _contract_owner: Address,
-        user: Address,
+        &mut self, _contract_address: Address, _contract_owner: Address,
+        _user: Address,
     ) -> Result<()>
     {
-        self.modify_and_update_commission_privilege(
-            &contract_address,
-            &user,
-            None,
-        )?
-        .as_mut()
-        .map_or_else(
-            || unreachable!(),
-            |value| {
-                value.remove_privilege();
-                Ok(())
-            },
-        )
+        unimplemented!()
     }
 
     fn nonce(&self, address: &Address) -> Result<U256> {
@@ -432,13 +410,29 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     }
 
     fn inc_nonce(
-        &mut self, _address: &Address, _account_start_nonce: &U256,
+        &mut self, address: &Address, account_start_nonce: &U256,
     ) -> Result<()> {
-        unimplemented!()
+        self.modify_and_update_account(address, None)?
+            .as_mut()
+            .map_or_else(
+                || Err(ErrorKind::IncompleteDatabase(*address).into()),
+                |value| {
+                    value.nonce = *account_start_nonce + U256::from(1u8);
+                    Ok(())
+                },
+            )
     }
 
-    fn set_nonce(&mut self, _address: &Address, _nonce: &U256) -> Result<()> {
-        unimplemented!()
+    fn set_nonce(&mut self, address: &Address, nonce: &U256) -> Result<()> {
+        self.modify_and_update_account(address, None)?
+            .as_mut()
+            .map_or_else(
+                || Err(ErrorKind::IncompleteDatabase(*address).into()),
+                |value| {
+                    value.nonce = *nonce;
+                    Ok(())
+                },
+            )
     }
 
     fn sub_balance(
@@ -547,16 +541,26 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         }))
     }
 
-    fn storage_at(&self, _address: &Address, _key: &[u8]) -> Result<U256> {
-        unimplemented!()
+    fn storage_at(&self, address: &Address, key: &[u8]) -> Result<U256> {
+        Ok(self
+            .get_storage(address, key)?
+            .as_ref()
+            .map_or(U256::zero(), |a| a.value))
     }
 
     fn set_storage(
-        &mut self, _address: &Address, _key: Vec<u8>, _value: U256,
-        _owner: Address,
-    ) -> Result<()>
-    {
-        unimplemented!()
+        &mut self, address: &Address, key: Vec<u8>, value: U256, owner: Address,
+    ) -> Result<()> {
+        self.modify_and_update_storage(address, &*key, None)?
+            .as_mut()
+            .map_or_else(
+                || unreachable!(),
+                |entity| {
+                    entity.value = value;
+                    entity.owner = Some(owner);
+                    Ok(())
+                },
+            )
     }
 }
 
@@ -597,24 +601,10 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         )
     }
 
-    fn modify_and_update_commission_privilege<'a>(
-        &'a mut self, contract_address: &Address, user_address: &Address,
-        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
-    ) -> Result<
-        impl AsMut<
-            ModifyAndUpdate<
-                StateDbGeneric<StateDbStorage>,
-                /* TODO: Key, */ CachedCommissionPrivilege,
-            >,
-        >,
-    >
-    {
-        self.cache.modify_and_update_commission_privilege(
-            contract_address,
-            user_address,
-            &mut self.db,
-            debug_record,
-        )
+    fn get_storage(
+        &self, address: &Address, key: &[u8],
+    ) -> Result<impl AsRef<NonCopy<Option<&StorageValue>>>> {
+        self.cache.get_storage(address, key, &self.db)
     }
 
     fn modify_and_update_account<'a>(
@@ -655,6 +645,26 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         )
     }
 
+    fn modify_and_update_storage<'a>(
+        &'a mut self, address: &Address, key: &[u8],
+        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
+    ) -> Result<
+        impl AsMut<
+            ModifyAndUpdate<
+                StateDbGeneric<StateDbStorage>,
+                /* TODO: Key, */ StorageValue,
+            >,
+        >,
+    >
+    {
+        self.cache.modify_and_update_storage(
+            address,
+            key,
+            &mut self.db,
+            debug_record,
+        )
+    }
+
     fn require_or_set_code<'a>(
         &'a mut self, address: Address, code_owner: Address, code: Vec<u8>,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
@@ -685,9 +695,10 @@ use cfx_statedb::{
     ErrorKind, Result, StateDbCheckpointMethods, StateDbGeneric,
 };
 use cfx_storage::{utils::guarded_value::NonCopy, StorageStateTrait};
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, H256};
 use keccak_hash::{keccak, KECCAK_EMPTY};
 use primitives::{
-    CodeInfo, DepositList, EpochId, SponsorInfo, StorageLayout, VoteStakeList,
+    CodeInfo, DepositList, EpochId, SponsorInfo, StorageLayout, StorageValue,
+    VoteStakeList,
 };
 use std::{marker::PhantomData, ops::Deref, sync::Arc};

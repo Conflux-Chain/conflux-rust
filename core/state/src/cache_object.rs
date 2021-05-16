@@ -68,16 +68,11 @@ pub struct CachedCommissionPrivilege {
 }
 
 impl CachedCommissionPrivilege {
-    pub fn new(has_privilege: bool) -> CachedCommissionPrivilege {
-        CachedCommissionPrivilege { has_privilege }
-    }
-
     pub fn has_privilege(&self) -> bool { self.has_privilege }
-
-    pub fn add_privilege(&mut self) { self.has_privilege = true; }
-
-    pub fn remove_privilege(&mut self) { self.has_privilege = false; }
 }
+
+#[derive(Clone, Eq, Hash, PartialEq)]
+pub struct StorageAddress(pub Address, pub Vec<u8>);
 
 pub trait ToHashKey<K> {
     fn to_hash_key(&self) -> K;
@@ -143,6 +138,19 @@ impl ToHashKey<VoteStakeListAddress> for VoteStakeListAddress {
     fn to_hash_key(&self) -> Self { self.clone() }
 }
 
+impl AsStorageKey for StorageAddress {
+    fn storage_key(&self) -> StorageKey {
+        StorageKey::StorageKey {
+            address_bytes: self.0.as_ref(),
+            storage_key: self.1.as_ref(),
+        }
+    }
+}
+
+impl ToHashKey<StorageAddress> for StorageAddress {
+    fn to_hash_key(&self) -> Self { self.clone() }
+}
+
 impl CachedObject for CachedAccount {
     type HashKeyType = Address;
 
@@ -185,6 +193,14 @@ impl CachedObject for VoteStakeList {
     type HashKeyType = VoteStakeListAddress;
 
     fn load_from_rlp(_key: &VoteStakeListAddress, rlp: &Rlp) -> Result<Self> {
+        Ok(Self::decode(rlp)?)
+    }
+}
+
+impl CachedObject for StorageValue {
+    type HashKeyType = StorageAddress;
+
+    fn load_from_rlp(_key: &StorageAddress, rlp: &Rlp) -> Result<Self> {
         Ok(Self::decode(rlp)?)
     }
 }
@@ -233,7 +249,7 @@ use cfx_statedb::Result;
 use cfx_types::{Address, H256};
 use primitives::{
     is_default::IsDefault, Account, CodeInfo, DepositList, StorageKey,
-    VoteStakeList,
+    StorageValue, VoteStakeList,
 };
 use rlp::{Decodable, Encodable, Rlp, RlpStream};
 use std::ops::{Deref, DerefMut};

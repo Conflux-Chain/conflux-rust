@@ -17,6 +17,7 @@ pub struct StateObjectCache {
     commission_privilege_cache: RwLock<
         HashMap<CommissionPrivilegeAddress, Option<CachedCommissionPrivilege>>,
     >,
+    storage_cache: RwLock<HashMap<StorageAddress, Option<StorageValue>>>,
     // TODO: etc.
 }
 
@@ -220,34 +221,6 @@ impl StateObjectCache {
         Self::ensure_loaded(&self.account_cache, address, db)
     }
 
-    pub fn modify_and_update_commission_privilege<'a, StateDb: StateDbOps>(
-        &'a self, contract_address: &Address, user_address: &Address,
-        db: &'a mut StateDb,
-        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
-    ) -> Result<
-        GuardedValue<
-            RwLockWriteGuard<
-                HashMap<
-                    CommissionPrivilegeAddress,
-                    Option<CachedCommissionPrivilege>,
-                >,
-            >,
-            ModifyAndUpdate<
-                StateDb,
-                /* TODO: Key, */ CachedCommissionPrivilege,
-            >,
-        >,
-    >
-    {
-        Self::require_or_set(
-            &self.commission_privilege_cache,
-            &CommissionPrivilegeAddress::new(*contract_address, *user_address),
-            db,
-            |_addr| Ok(Some(CachedCommissionPrivilege::new(false))),
-            debug_record,
-        )
-    }
-
     pub fn modify_and_update_account<'a, StateDb: StateDbOps>(
         &'a self, address: &Address, db: &'a mut StateDb,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
@@ -399,13 +372,47 @@ impl StateObjectCache {
             db,
         )
     }
+
+    pub fn get_storage<StateDb: StateDbOps>(
+        &self, address: &Address, key: &[u8], db: &StateDb,
+    ) -> Result<
+        GuardedValue<
+            RwLockReadGuard<HashMap<StorageAddress, Option<StorageValue>>>,
+            NonCopy<Option<&StorageValue>>,
+        >,
+    > {
+        Self::ensure_loaded(
+            &self.storage_cache,
+            &StorageAddress(*address, key.to_vec()),
+            db,
+        )
+    }
+
+    pub fn modify_and_update_storage<'a, StateDb: StateDbOps>(
+        &'a self, address: &Address, key: &[u8], db: &'a mut StateDb,
+        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
+    ) -> Result<
+        GuardedValue<
+            RwLockWriteGuard<HashMap<StorageAddress, Option<StorageValue>>>,
+            ModifyAndUpdate<StateDb, /* TODO: Key, */ StorageValue>,
+        >,
+    >
+    {
+        Self::require_or_set(
+            &self.storage_cache,
+            &StorageAddress(*address, key.to_vec()),
+            db,
+            |_addr| Ok(None),
+            debug_record,
+        )
+    }
 }
 
 use crate::{
     cache_object::{
         CachedAccount, CachedCommissionPrivilege, CachedObject, CodeAddress,
-        CommissionPrivilegeAddress, DepositListAddress, ToHashKey,
-        VoteStakeListAddress,
+        CommissionPrivilegeAddress, DepositListAddress, StorageAddress,
+        ToHashKey, VoteStakeListAddress,
     },
     StateDbOps,
 };
@@ -417,5 +424,5 @@ use keccak_hash::{keccak, KECCAK_EMPTY};
 use parking_lot::{
     RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
-use primitives::{CodeInfo, DepositList, VoteStakeList};
+use primitives::{CodeInfo, DepositList, StorageValue, VoteStakeList};
 use std::{borrow::Borrow, collections::HashMap, hash::Hash, sync::Arc};
