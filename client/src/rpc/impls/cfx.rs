@@ -1357,9 +1357,9 @@ impl RpcImpl {
     ) -> RpcResult<TokenSupplyInfo> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
         let state = self.consensus.get_state_by_epoch_number(epoch, "epoch")?;
-        let total_issued = *state.total_issued_tokens();
-        let total_staking = *state.total_staking_tokens();
-        let total_collateral = *state.total_storage_tokens();
+        let total_issued = state.total_issued_tokens();
+        let total_staking = state.total_staking_tokens();
+        let total_collateral = state.total_storage_tokens();
         let two_year_unlock_address = genesis_contract_address_two_year();
         let four_year_unlock_address = genesis_contract_address_four_year();
         let two_year_locked = state
