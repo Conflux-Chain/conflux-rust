@@ -796,16 +796,16 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         Ok(())
     }
 
-    fn total_issued_tokens(&self) -> &U256 {
-        &self.staking_state.total_issued_tokens
+    fn total_issued_tokens(&self) -> U256 {
+        self.staking_state.total_issued_tokens
     }
 
-    fn total_staking_tokens(&self) -> &U256 {
-        &self.staking_state.total_staking_tokens
+    fn total_staking_tokens(&self) -> U256 {
+        self.staking_state.total_staking_tokens
     }
 
-    fn total_storage_tokens(&self) -> &U256 {
-        &self.staking_state.total_storage_tokens
+    fn total_storage_tokens(&self) -> U256 {
+        self.staking_state.total_storage_tokens
     }
 
     fn remove_contract(&mut self, address: &Address) -> DbResult<()> {
