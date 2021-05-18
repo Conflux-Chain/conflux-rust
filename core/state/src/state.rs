@@ -269,19 +269,43 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     }
 
     fn add_commission_privilege(
-        &mut self, _contract_address: Address, _contract_owner: Address,
-        _user: Address,
+        &mut self, contract_address: Address, _contract_owner: Address,
+        user: Address,
     ) -> Result<()>
     {
-        unimplemented!()
+        self.modify_and_update_commission_privilege(
+            &contract_address,
+            &user,
+            None,
+        )?
+        .as_mut()
+        .map_or_else(
+            || unreachable!(),
+            |value| {
+                value.add_privilege();
+                Ok(())
+            },
+        )
     }
 
     fn remove_commission_privilege(
-        &mut self, _contract_address: Address, _contract_owner: Address,
-        _user: Address,
+        &mut self, contract_address: Address, _contract_owner: Address,
+        user: Address,
     ) -> Result<()>
     {
-        unimplemented!()
+        self.modify_and_update_commission_privilege(
+            &contract_address,
+            &user,
+            None,
+        )?
+        .as_mut()
+        .map_or_else(
+            || unreachable!(),
+            |value| {
+                value.remove_privilege();
+                Ok(())
+            },
+        )
     }
 
     fn nonce(&self, address: &Address) -> Result<U256> {
@@ -367,15 +391,26 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     }
 
     fn withdrawable_staking_balance(
-        &self, _address: &Address, _current_block_number: u64,
+        &self, address: &Address, current_block_number: u64,
     ) -> Result<U256> {
-        unimplemented!()
+        let staking_balance = self.staking_balance(address)?;
+        match self.get_vote_stake_list(address)?.as_ref().deref() {
+            None => Ok(staking_balance),
+            Some(vote_stake_list) => Ok(vote_stake_list
+                .withdrawable_staking_balance(
+                    staking_balance,
+                    current_block_number,
+                )),
+        }
     }
 
     fn locked_staking_balance_at_block_number(
-        &self, _address: &Address, _block_number: u64,
+        &self, address: &Address, current_block_number: u64,
     ) -> Result<U256> {
-        unimplemented!()
+        let staking_balance = self.staking_balance(address)?;
+        let withdrawable_staking_balance =
+            self.withdrawable_staking_balance(address, current_block_number)?;
+        Ok(staking_balance - withdrawable_staking_balance)
     }
 
     fn deposit_list_length(&self, address: &Address) -> Result<usize> {
@@ -457,17 +492,36 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     }
 
     fn vote_lock(
-        &mut self, _address: &Address, _amount: &U256,
-        _unlock_block_number: u64,
-    ) -> Result<()>
-    {
-        unimplemented!()
+        &mut self, address: &Address, amount: &U256, unlock_block_number: u64,
+    ) -> Result<()> {
+        let staking_balance = self.staking_balance(address)?;
+        if *amount > staking_balance {
+            return Ok(());
+        }
+        self.modify_and_update_vote_stake_list(address, None)?
+            .as_mut()
+            .map_or_else(
+                || unreachable!(),
+                |vote_stake_list| {
+                    vote_stake_list.vote_lock(*amount, unlock_block_number);
+                    Ok(())
+                },
+            )
     }
 
     fn remove_expired_vote_stake_info(
-        &mut self, _address: &Address, _current_block_number: u64,
+        &mut self, address: &Address, current_block_number: u64,
     ) -> Result<()> {
-        unimplemented!()
+        self.modify_and_update_vote_stake_list(address, None)?
+            .as_mut()
+            .map_or_else(
+                || unreachable!(),
+                |vote_stake_list| {
+                    vote_stake_list
+                        .remove_expired_vote_stake_info(current_block_number);
+                    Ok(())
+                },
+            )
     }
 
     fn total_issued_tokens(&self) -> &U256 { unimplemented!() }
@@ -543,6 +597,26 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         )
     }
 
+    fn modify_and_update_commission_privilege<'a>(
+        &'a mut self, contract_address: &Address, user_address: &Address,
+        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
+    ) -> Result<
+        impl AsMut<
+            ModifyAndUpdate<
+                StateDbGeneric<StateDbStorage>,
+                /* TODO: Key, */ CachedCommissionPrivilege,
+            >,
+        >,
+    >
+    {
+        self.cache.modify_and_update_commission_privilege(
+            contract_address,
+            user_address,
+            &mut self.db,
+            debug_record,
+        )
+    }
+
     fn modify_and_update_account<'a>(
         &'a mut self, address: &Address,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
@@ -556,6 +630,25 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     >
     {
         self.cache.modify_and_update_account(
+            address,
+            &mut self.db,
+            debug_record,
+        )
+    }
+
+    fn modify_and_update_vote_stake_list<'a>(
+        &'a mut self, address: &Address,
+        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
+    ) -> Result<
+        impl AsMut<
+            ModifyAndUpdate<
+                StateDbGeneric<StateDbStorage>,
+                /* TODO: Key, */ VoteStakeList,
+            >,
+        >,
+    >
+    {
+        self.cache.modify_and_update_vote_stake_list(
             address,
             &mut self.db,
             debug_record,
@@ -597,4 +690,4 @@ use keccak_hash::{keccak, KECCAK_EMPTY};
 use primitives::{
     CodeInfo, DepositList, EpochId, SponsorInfo, StorageLayout, VoteStakeList,
 };
-use std::{marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, ops::Deref, sync::Arc};
