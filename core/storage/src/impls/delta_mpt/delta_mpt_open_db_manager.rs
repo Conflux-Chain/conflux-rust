@@ -85,6 +85,7 @@ trait OnDemandOpenDeltaDbInnerTrait: Send + Sync {
     fn release(&mut self, mpt_id: DeltaMptId, destroy: bool);
 }
 
+// TODO: Allow pinning the DeltaDb for the latest state.
 pub trait OpenableOnDemandOpenDeltaDbTrait: Send + Sync {
     fn open(&self, mpt_id: DeltaMptId) -> Result<ArcDeltaDbWrapper>;
 }
