@@ -434,6 +434,20 @@ jsonrpc_local_http_port=12539
 # storage_delta_mpts_node_map_vec_size=80000000
 # storage_delta_mpts_slab_idle_size=200000
 
+# Configure the maximal open MPT count. Open MPTs are maintained as an LRU cache, and we will close the database handle
+# for the evicted MPT once its usage finishes. Every MPT contains the data written in 2000 epochs.
+# Accessing a state involves opening both its delta MPT and intermediate MPT,
+# so setting this to 4 allows to access two states at the same time. A full node always needs one latest state to
+# process new epochs, so with the default value we can frequently access one old state (by calling state-related RPCs)
+# efficiently without the overhead of opening/closing databases.
+#
+# Idealy, if the RPC working set involves accessing X state ranges frequently (each range has 2000 epochs),
+# this value should be set to 2+2X to avoid thrashing.
+# However, increasing the value may increase the system memory usage by opening more database instances at the same
+# time, and the memory usage of an MPT is affected by `rocksdb_cache_size`.
+#
+# storage_max_open_mpt_count = 4
+
 # Configure if we strictly check the tx index before garbage collection.
 # Setting it to `false` will improve the performance. But if the value is `false`, it's possible that although the
 # epoch where a tx is executed should not be garbage collected, the tx index of this tx is removed because it's packed
