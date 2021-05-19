@@ -24,6 +24,7 @@ use consensus_types::{
 use diem_crypto::{
     hash::{CryptoHash, HashValue},
     traits::Signature,
+    Uniform,
 };
 use diem_logger::prelude::*;
 use diem_types::{
@@ -31,7 +32,9 @@ use diem_types::{
     epoch_change::EpochChangeProof,
     epoch_state::EpochState,
     ledger_info::LedgerInfo,
-    validator_config::{ConsensusPublicKey, ConsensusSignature},
+    validator_config::{
+        ConsensusPublicKey, ConsensusSignature, ConsensusVRFPrivateKey,
+    },
     waypoint::Waypoint,
 };
 use serde::Serialize;
@@ -322,6 +325,8 @@ impl SafetyRules {
                                 Some(ConfigurableValidatorSigner::new_signer(
                                     author,
                                     consensus_key,
+                                    // FIXME: Setup vrf private key.
+                                    None,
                                 ));
                             Ok(())
                         }
