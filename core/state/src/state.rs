@@ -643,12 +643,7 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         &'a mut self, address: &Address,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
     ) -> Result<
-        impl AsMut<
-            ModifyAndUpdate<
-                StateDbGeneric<StateDbStorage>,
-                /* TODO: Key, */ CachedAccount,
-            >,
-        >,
+        impl AsMut<ModifyAndUpdate<StateDbGeneric<StateDbStorage>, CachedAccount>>,
     >
     {
         self.cache.modify_and_update_account(
@@ -662,12 +657,7 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         &'a mut self, address: &Address,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
     ) -> Result<
-        impl AsMut<
-            ModifyAndUpdate<
-                StateDbGeneric<StateDbStorage>,
-                /* TODO: Key, */ VoteStakeList,
-            >,
-        >,
+        impl AsMut<ModifyAndUpdate<StateDbGeneric<StateDbStorage>, VoteStakeList>>,
     >
     {
         self.cache.modify_and_update_vote_stake_list(
@@ -688,6 +678,22 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
             address,
             key,
             &mut self.db,
+            debug_record,
+        )
+    }
+
+    #[allow(dead_code)]
+    fn require_or_new_basic_account<'a>(
+        &'a mut self, address: &Address, account_start_nonce: &U256,
+        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
+    ) -> Result<
+        impl AsMut<ModifyAndUpdate<StateDbGeneric<StateDbStorage>, CachedAccount>>,
+    >
+    {
+        self.cache.require_or_new_basic_account(
+            address,
+            &mut self.db,
+            account_start_nonce,
             debug_record,
         )
     }
