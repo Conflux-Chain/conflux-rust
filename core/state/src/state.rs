@@ -81,9 +81,27 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         unimplemented!()
     }
 
-    fn add_total_issued(&mut self, _v: U256) { unimplemented!() }
+    fn add_total_issued(&mut self, v: U256) {
+        let new_total_issued = self.total_issued_tokens() + v;
+        self.set_storage(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            TOTAL_TOKENS_KEY.to_vec(),
+            new_total_issued,
+            *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+        )
+        .unwrap();
+    }
 
-    fn subtract_total_issued(&mut self, _v: U256) { unimplemented!() }
+    fn subtract_total_issued(&mut self, v: U256) {
+        let new_total_issued = self.total_issued_tokens() - v;
+        self.set_storage(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            TOTAL_TOKENS_KEY.to_vec(),
+            new_total_issued,
+            *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+        )
+        .unwrap();
+    }
 
     fn new_contract_with_admin(
         &mut self, _contract: &Address, _admin: &Address, _balance: U256,
@@ -526,11 +544,32 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
             )
     }
 
-    fn total_issued_tokens(&self) -> &U256 { unimplemented!() }
+    fn total_issued_tokens(&self) -> U256 {
+        return self
+            .storage_at(
+                &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+                TOTAL_TOKENS_KEY,
+            )
+            .unwrap_or(U256::zero());
+    }
 
-    fn total_staking_tokens(&self) -> &U256 { unimplemented!() }
+    fn total_staking_tokens(&self) -> U256 {
+        return self
+            .storage_at(
+                &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+                TOTAL_BANK_TOKENS_KEY,
+            )
+            .unwrap_or(U256::zero());
+    }
 
-    fn total_storage_tokens(&self) -> &U256 { unimplemented!() }
+    fn total_storage_tokens(&self) -> U256 {
+        return self
+            .storage_at(
+                &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+                TOTAL_STORAGE_TOKENS_KEY,
+            )
+            .unwrap_or(U256::zero());
+    }
 
     fn remove_contract(&mut self, _address: &Address) -> Result<()> {
         unimplemented!()
@@ -724,8 +763,10 @@ use crate::{
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };
+use cfx_parameters::internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS;
 use cfx_statedb::{
     ErrorKind, Result, StateDbCheckpointMethods, StateDbGeneric,
+    TOTAL_BANK_TOKENS_KEY, TOTAL_STORAGE_TOKENS_KEY, TOTAL_TOKENS_KEY,
 };
 use cfx_storage::{utils::guarded_value::NonCopy, StorageStateTrait};
 use cfx_types::{address_util::AddressUtil, Address, H256};
