@@ -122,6 +122,12 @@ impl BlockData {
         matches!(self.block_type, BlockType::NilBlock)
     }
 
+    pub fn vrf_round_seed(&self, seed: &[u8]) -> Vec<u8> {
+        let mut round_seed = seed.to_vec();
+        round_seed.extend_from_slice(&self.round.to_be_bytes());
+        round_seed
+    }
+
     pub fn new_genesis_from_ledger_info(ledger_info: &LedgerInfo) -> Self {
         assert!(ledger_info.ends_epoch());
         let ancestor = BlockInfo::new(

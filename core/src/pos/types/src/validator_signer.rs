@@ -5,11 +5,12 @@ use crate::{
     account_address::AccountAddress,
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
-        ConsensusVRFPrivateKey, ConsensusVRFPublicKey,
+        ConsensusVRFPrivateKey, ConsensusVRFProof, ConsensusVRFPublicKey,
     },
 };
 use diem_crypto::{
     hash::CryptoHash, test_utils::TEST_SEED, PrivateKey, SigningKey, Uniform,
+    VRFPrivateKey,
 };
 use rand::{rngs::StdRng, SeedableRng};
 use serde::ser::Serialize;
@@ -23,6 +24,7 @@ use std::convert::TryFrom;
 pub struct ValidatorSigner {
     author: AccountAddress,
     private_key: ConsensusPrivateKey,
+    // If it's `Some`, the generated block will also set `vrf_proof` to `Some`.
     vrf_private_key: Option<ConsensusVRFPrivateKey>,
 }
 
@@ -56,6 +58,12 @@ impl ValidatorSigner {
 
     pub fn vrf_public_key(&self) -> Option<ConsensusVRFPublicKey> {
         self.vrf_private_key.as_ref().map(|sk| sk.public_key())
+    }
+
+    pub fn gen_vrf_proof(&self, seed: &[u8]) -> Option<ConsensusVRFProof> {
+        self.vrf_private_key
+            .as_ref()
+            .map(|sk| sk.compute(seed).unwrap())
     }
 
     /// Returns the private key associated with this signer. Only available for
