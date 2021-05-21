@@ -16,3 +16,4 @@ mod rotating_proposer_test;
 mod round_proposer_test;
 #[cfg(test)]
 mod round_state_test;
+mod vrf_proposer_election;

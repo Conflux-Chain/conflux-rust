@@ -99,6 +99,10 @@ impl Block {
         self.signature.as_ref()
     }
 
+    pub fn vrf_proof(&self) -> Option<&ConsensusVRFProof> {
+        self.vrf_proof.as_ref()
+    }
+
     pub fn timestamp_usecs(&self) -> u64 { self.block_data.timestamp_usecs() }
 
     pub fn gen_block_info(

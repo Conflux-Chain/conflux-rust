@@ -30,6 +30,22 @@ pub trait ProposerElection {
             self.is_valid_proposer(author, block.round())
         })
     }
+
+    /// TODO(lpl): Find a better way to integrate VRF and deterministic leader
+    /// election. Return `true` if we use random leader election, which
+    /// means we can only choose proposal candidates to vote after waiting
+    /// for a fixed period of time, and `get_valid_proposer` returns meaningless
+    /// value.
+    fn is_random_election(&self) -> bool { false }
+
+    fn receive_proposal_candidate(&self, _block: Block) -> bool {
+        unreachable!()
+    }
+
+    /// Choose a proposal from all received proposal candidates to vote for.
+    fn choose_proposal_to_vote(&self) -> Option<Block> { unreachable!() }
+
+    fn next_round(&self, _round: Round) { unreachable!() }
 }
 
 // next continuously mutates a state and returns a u64-index
