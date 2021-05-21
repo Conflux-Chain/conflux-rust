@@ -17,8 +17,7 @@ use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use parking_lot::RwLock;
 use primitives::{
     account::AccountError, Account, CodeInfo, DepositInfo, DepositList,
-    SponsorInfo, StorageKey, StorageLayout, StorageValue, VoteStakeInfo,
-    VoteStakeList,
+    SponsorInfo, StorageKey, StorageLayout, StorageValue, VoteStakeList,
 };
 use std::{collections::HashMap, sync::Arc};
 
@@ -341,41 +340,14 @@ impl OverlayAccount {
     pub fn remove_expired_vote_stake_info(&mut self, block_number: u64) {
         assert!(self.vote_stake_list.is_some());
         let vote_stake_list = self.vote_stake_list.as_mut().unwrap();
-        if !vote_stake_list.is_empty()
-            && vote_stake_list[0].unlock_block_number <= block_number
-        {
-            // Find first index whose `unlock_block_number` is greater than
-            // timestamp and all entries before the index could be
-            // removed.
-            let idx = vote_stake_list
-                .binary_search_by(|vote_info| {
-                    vote_info.unlock_block_number.cmp(&(block_number + 1))
-                })
-                .unwrap_or_else(|x| x);
-            *vote_stake_list = VoteStakeList(vote_stake_list.split_off(idx));
-        }
+        vote_stake_list.remove_expired_vote_stake_info(block_number)
     }
 
     pub fn withdrawable_staking_balance(&self, block_number: u64) -> U256 {
         assert!(self.vote_stake_list.is_some());
         let vote_stake_list = self.vote_stake_list.as_ref().unwrap();
-        if !vote_stake_list.is_empty() {
-            // Find first index whose `unlock_block_number` is greater than
-            // timestamp and all entries before the index could be
-            // ignored.
-            let idx = vote_stake_list
-                .binary_search_by(|vote_info| {
-                    vote_info.unlock_block_number.cmp(&(block_number + 1))
-                })
-                .unwrap_or_else(|x| x);
-            if idx == vote_stake_list.len() {
-                self.staking_balance
-            } else {
-                self.staking_balance - vote_stake_list[idx].amount
-            }
-        } else {
-            self.staking_balance
-        }
+        return vote_stake_list
+            .withdrawable_staking_balance(self.staking_balance, block_number);
     }
 
     pub fn storage_value_write_cache(&self) -> &HashMap<Vec<u8>, U256> {
@@ -474,43 +446,7 @@ impl OverlayAccount {
         assert!(self.vote_stake_list.is_some());
         assert!(amount <= self.staking_balance);
         let vote_stake_list = self.vote_stake_list.as_mut().unwrap();
-        let mut updated = false;
-        let mut updated_index = 0;
-        match vote_stake_list.binary_search_by(|vote_info| {
-            vote_info.unlock_block_number.cmp(&unlock_block_number)
-        }) {
-            Ok(index) => {
-                if amount > vote_stake_list[index].amount {
-                    vote_stake_list[index].amount = amount;
-                    updated = true;
-                    updated_index = index;
-                }
-            }
-            Err(index) => {
-                if index >= vote_stake_list.len()
-                    || vote_stake_list[index].amount < amount
-                {
-                    vote_stake_list.insert(
-                        index,
-                        VoteStakeInfo {
-                            amount,
-                            unlock_block_number,
-                        },
-                    );
-                    updated = true;
-                    updated_index = index;
-                }
-            }
-        }
-        if updated {
-            let rest = vote_stake_list.split_off(updated_index);
-            while !vote_stake_list.is_empty()
-                && vote_stake_list.last().unwrap().amount <= rest[0].amount
-            {
-                vote_stake_list.pop();
-            }
-            vote_stake_list.extend_from_slice(&rest);
-        }
+        vote_stake_list.vote_lock(amount, unlock_block_number)
     }
 
     pub fn add_collateral_for_storage(&mut self, by: &U256) {

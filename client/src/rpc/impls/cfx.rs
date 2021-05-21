@@ -72,9 +72,11 @@ use cfxcore::{
     spec::genesis::{
         genesis_contract_address_four_year, genesis_contract_address_two_year,
     },
+    trace::ErrorUnwind,
 };
 use lazy_static::lazy_static;
 use metrics::{register_timer_with_group, ScopeTimer, Timer};
+use serde::Serialize;
 
 lazy_static! {
     static ref SEND_RAW_TX_TIMER: Arc<dyn Timer> =
@@ -1123,10 +1125,36 @@ impl RpcImpl {
                 ExecutionError::VmError(vm::Error::Reverted),
                 executed,
             ) => {
+                let network_type = *self.sync.network.get_network_type();
+
+                // When a revert exception happens, there is usually an error in the sub-calls.
+                // So we return the trace information for debugging contract.
+                let errors = ErrorUnwind::from_traces(executed.trace).errors.iter()
+                    .map(|(addr,error)| {
+                        let cip37_addr = RpcAddress::try_from_h160(addr.clone(),network_type).unwrap().base32_address;
+                        format!("{}: {}", cip37_addr, error)
+                    })
+                    .collect::<Vec<String>>();
+
+                // Decode revert error
+                let revert_error = revert_reason_decode(&executed.output);
+                let revert_error = if !revert_error.is_empty() {
+                    format!(": {}.",revert_error)
+                }else{
+                    format!(".")
+                };
+
+                // Try to fetch the innermost error.
+                let innermost_error = if errors.len()>0{
+                    format!(" Innermost error is at {}.", errors[0])
+                }else{
+                    String::default()
+                };
+
                 bail!(call_execution_error(
-                    format!("Estimation isn't accurate: transaction is reverted. Execution output {}",
-                        revert_reason_decode(&executed.output)),
-                    [b"Reverted. Execution output: ", &*executed.output].concat(),
+                    format!("Estimation isn't accurate: transaction is reverted{}{}",
+                        revert_error, innermost_error),
+                    errors.join("\n").into_bytes(),
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
@@ -1329,9 +1357,9 @@ impl RpcImpl {
     ) -> RpcResult<TokenSupplyInfo> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
         let state = self.consensus.get_state_by_epoch_number(epoch, "epoch")?;
-        let total_issued = *state.total_issued_tokens();
-        let total_staking = *state.total_staking_tokens();
-        let total_collateral = *state.total_storage_tokens();
+        let total_issued = state.total_issued_tokens();
+        let total_staking = state.total_staking_tokens();
+        let total_collateral = state.total_storage_tokens();
         let two_year_unlock_address = genesis_contract_address_two_year();
         let four_year_unlock_address = genesis_contract_address_four_year();
         let two_year_locked = state
@@ -1362,6 +1390,32 @@ impl RpcImpl {
         Ok(())
     }
 
+    // estimate response size, return error if it is too large
+    // note: this is a potentially expensive check
+    fn check_response_size<T: Serialize>(&self, response: &T) -> RpcResult<()> {
+        // account for the enclosing JSON object
+        // {"jsonrpc":"2.0","id":1,"result": ... }
+        // note: this is a rough estimation
+        let max_size = self.config.max_payload_bytes - 50;
+
+        let payload_size = serde_json::to_vec(&response)
+            .map_err(|_e| "Unexpected serialization error")?
+            .len();
+
+        if payload_size > max_size {
+            // TODO(thegaram): should we define a new error type?
+            bail!(invalid_params(
+                "epoch",
+                format!(
+                    "Oversized payload: size = {}, max = {}",
+                    payload_size, max_size
+                )
+            ));
+        }
+
+        Ok(())
+    }
+
     fn epoch_receipts(
         &self, epoch: EpochNumber,
     ) -> RpcResult<Option<Vec<Vec<RpcReceipt>>>> {
@@ -1383,6 +1437,10 @@ impl RpcImpl {
                 },
             );
         }
+
+        // TODO(thegaram): we should only do this on WS, not on HTTP
+        // how to treat these differently?
+        self.check_response_size(&epoch_receipts)?;
 
         Ok(Some(epoch_receipts))
     }

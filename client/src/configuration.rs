@@ -156,6 +156,7 @@ build_config! {
         (jsonrpc_http_port, (Option<u16>), None)
         (jsonrpc_cors, (Option<String>), None)
         (jsonrpc_http_keep_alive, (bool), false)
+        (jsonrpc_ws_max_payload_bytes, (usize), 30 * 1024 * 1024)
         // The network_id, if unset, defaults to the chain_id.
         // Only override the network_id for local experiments,
         // when user would like to keep the existing blockchain data
@@ -255,6 +256,7 @@ build_config! {
         (storage_delta_mpts_node_map_vec_size, (u32), cfx_storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
         (storage_delta_mpts_slab_idle_size, (u32), cfx_storage::defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE)
         (storage_max_open_snapshots, (u16), cfx_storage::defaults::DEFAULT_MAX_OPEN_SNAPSHOTS)
+        (storage_max_open_mpt_count, (u32), cfx_storage::defaults::DEFAULT_MAX_OPEN_MPT)
         (strict_tx_index_gc, (bool), true)
         (sync_state_starting_epoch, (Option<u64>), None)
         (sync_state_epoch_gap, (Option<u64>), None)
@@ -660,6 +662,7 @@ impl Configuration {
                 .raw_conf
                 .provide_more_snapshot_for_sync
                 .clone(),
+            max_open_mpt_count: self.raw_conf.storage_max_open_mpt_count,
         }
     }
 
@@ -887,6 +890,7 @@ impl Configuration {
             get_logs_filter_max_limit: self.raw_conf.get_logs_filter_max_limit,
             dev_pack_tx_immediately: self.is_dev_mode()
                 && self.raw_conf.dev_block_interval_ms.is_none(),
+            max_payload_bytes: self.raw_conf.jsonrpc_ws_max_payload_bytes,
         }
     }
 
@@ -913,7 +917,11 @@ impl Configuration {
     }
 
     pub fn ws_config(&self) -> WsConfiguration {
-        WsConfiguration::new(None, self.raw_conf.jsonrpc_ws_port)
+        WsConfiguration::new(
+            None,
+            self.raw_conf.jsonrpc_ws_port,
+            self.raw_conf.jsonrpc_ws_max_payload_bytes,
+        )
     }
 
     pub fn execution_config(&self) -> ConsensusExecutionConfiguration {

@@ -17,12 +17,18 @@ pub trait CachedObject: Encodable + IsDefault + Sized {
         }
     }
 
+    // This method also checks if the value IsDefault, if so map the update to a
+    // deletion.
     fn update<StateDb: StateDbOps>(
         &self, key: &Self::HashKeyType, db: &mut StateDb,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>
     {
-        db.set(key.storage_key(), self, debug_record)
+        if self.is_default() {
+            db.delete(key.storage_key(), debug_record)
+        } else {
+            db.set(key.storage_key(), self, debug_record)
+        }
     }
 
     fn delete<StateDb: StateDbOps>(
@@ -38,6 +44,21 @@ pub trait CachedObject: Encodable + IsDefault + Sized {
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub struct CodeAddress(pub Address, pub H256);
 
+/// Contract address and user address.
+#[derive(Clone, Eq, Hash, PartialEq)]
+pub struct CommissionPrivilegeAddress(pub Vec<u8>);
+
+impl CommissionPrivilegeAddress {
+    pub fn new(
+        contract_address: Address, user_address: Address,
+    ) -> CommissionPrivilegeAddress {
+        let mut key = Vec::with_capacity(Address::len_bytes() * 2);
+        key.extend_from_slice(contract_address.as_ref());
+        key.extend_from_slice(user_address.as_ref());
+        CommissionPrivilegeAddress(key)
+    }
+}
+
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub struct DepositListAddress(pub Address);
 
@@ -47,6 +68,35 @@ pub struct VoteStakeListAddress(pub Address);
 pub struct CachedAccount {
     object: Account,
 }
+
+impl CachedAccount {
+    pub fn new_basic(
+        address: &Address, balance: &U256, nonce: &U256,
+    ) -> Result<Self> {
+        Ok(Self {
+            object: Account::new_empty_with_balance(address, balance, nonce)?,
+        })
+    }
+}
+
+pub struct CachedCommissionPrivilege {
+    has_privilege: bool,
+}
+
+impl CachedCommissionPrivilege {
+    pub fn new(has_privilege: bool) -> CachedCommissionPrivilege {
+        CachedCommissionPrivilege { has_privilege }
+    }
+
+    pub fn has_privilege(&self) -> bool { self.has_privilege }
+
+    pub fn add_privilege(&mut self) { self.has_privilege = true; }
+
+    pub fn remove_privilege(&mut self) { self.has_privilege = false; }
+}
+
+#[derive(Clone, Eq, Hash, PartialEq)]
+pub struct StorageAddress(pub Address, pub Vec<u8>);
 
 pub trait ToHashKey<K> {
     fn to_hash_key(&self) -> K;
@@ -79,6 +129,19 @@ impl ToHashKey<CodeAddress> for CodeAddress {
     fn to_hash_key(&self) -> CodeAddress { self.clone() }
 }
 
+impl AsStorageKey for CommissionPrivilegeAddress {
+    fn storage_key(&self) -> StorageKey {
+        StorageKey::StorageKey {
+            address_bytes: SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS.as_ref(),
+            storage_key: self.0.as_ref(),
+        }
+    }
+}
+
+impl ToHashKey<CommissionPrivilegeAddress> for CommissionPrivilegeAddress {
+    fn to_hash_key(&self) -> Self { self.clone() }
+}
+
 impl AsStorageKey for DepositListAddress {
     fn storage_key(&self) -> StorageKey {
         StorageKey::DepositListKey(self.0.as_ref())
@@ -96,6 +159,19 @@ impl AsStorageKey for VoteStakeListAddress {
 }
 
 impl ToHashKey<VoteStakeListAddress> for VoteStakeListAddress {
+    fn to_hash_key(&self) -> Self { self.clone() }
+}
+
+impl AsStorageKey for StorageAddress {
+    fn storage_key(&self) -> StorageKey {
+        StorageKey::StorageKey {
+            address_bytes: self.0.as_ref(),
+            storage_key: self.1.as_ref(),
+        }
+    }
+}
+
+impl ToHashKey<StorageAddress> for StorageAddress {
     fn to_hash_key(&self) -> Self { self.clone() }
 }
 
@@ -117,6 +193,18 @@ impl CachedObject for CodeInfo {
     }
 }
 
+impl CachedObject for CachedCommissionPrivilege {
+    type HashKeyType = CommissionPrivilegeAddress;
+
+    fn load_from_rlp(
+        _key: &CommissionPrivilegeAddress, rlp: &Rlp,
+    ) -> Result<Self> {
+        Ok(Self {
+            has_privilege: bool::decode(rlp)?,
+        })
+    }
+}
+
 impl CachedObject for DepositList {
     type HashKeyType = DepositListAddress;
 
@@ -129,6 +217,14 @@ impl CachedObject for VoteStakeList {
     type HashKeyType = VoteStakeListAddress;
 
     fn load_from_rlp(_key: &VoteStakeListAddress, rlp: &Rlp) -> Result<Self> {
+        Ok(Self::decode(rlp)?)
+    }
+}
+
+impl CachedObject for StorageValue {
+    type HashKeyType = StorageAddress;
+
+    fn load_from_rlp(_key: &StorageAddress, rlp: &Rlp) -> Result<Self> {
         Ok(Self::decode(rlp)?)
     }
 }
@@ -151,13 +247,35 @@ impl IsDefault for CachedAccount {
     fn is_default(&self) -> bool { self.object.is_default() }
 }
 
+impl Deref for CachedCommissionPrivilege {
+    type Target = bool;
+
+    fn deref(&self) -> &Self::Target { &self.has_privilege }
+}
+
+impl DerefMut for CachedCommissionPrivilege {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.has_privilege }
+}
+
+impl Encodable for CachedCommissionPrivilege {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.append_internal(&self.has_privilege);
+    }
+}
+
+impl IsDefault for CachedCommissionPrivilege {
+    fn is_default(&self) -> bool { self.has_privilege.is_default() }
+}
+
 use crate::StateDbOps;
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_statedb::Result;
-use cfx_types::{Address, H256};
+use cfx_types::{Address, H256, U256};
 use primitives::{
     is_default::IsDefault, Account, CodeInfo, DepositList, StorageKey,
-    VoteStakeList,
+    StorageValue, VoteStakeList,
 };
 use rlp::{Decodable, Encodable, Rlp, RlpStream};
 use std::ops::{Deref, DerefMut};
+
+use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
