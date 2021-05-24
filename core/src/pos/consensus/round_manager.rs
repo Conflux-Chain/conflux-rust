@@ -262,6 +262,9 @@ impl RoundManager {
             self.new_log(LogEvent::NewRound),
             reason = new_round_event.reason
         );
+        if self.proposer_election.is_random_election() {
+            self.proposer_election.next_round(new_round_event.round);
+        }
         if self.proposer_election.is_valid_proposer(
             self.proposal_generator.author(),
             new_round_event.round,
@@ -548,24 +551,29 @@ impl RoundManager {
 
         observe_block(proposal.timestamp_usecs(), BlockStage::SYNCED);
 
-        let proposal_round = proposal.round();
-        let vote = self
-            .execute_and_vote(proposal)
-            .await
-            .context("[RoundManager] Process proposal")?;
+        if self.proposer_election.is_random_election() {
+            // Wait for all proposals.
+            // FIXME(lpl): Execute to check validity.
+            self.proposer_election.receive_proposal_candidate(proposal);
+        } else {
+            let proposal_round = proposal.round();
+            let vote = self
+                .execute_and_vote(proposal)
+                .await
+                .context("[RoundManager] Process proposal")?;
+            diem_debug!(
+                self.new_log(LogEvent::Vote).remote_peer(author),
+                "{}",
+                vote
+            );
 
-        let recipients = self
-            .proposer_election
-            .get_valid_proposer(proposal_round + 1);
-        diem_debug!(
-            self.new_log(LogEvent::Vote).remote_peer(author),
-            "{}",
-            vote
-        );
-
-        self.round_state.record_vote(vote.clone());
-        let vote_msg = VoteMsg::new(vote, self.block_store.sync_info());
-        self.network.send_vote(vote_msg, vec![recipients]).await;
+            self.round_state.record_vote(vote.clone());
+            let vote_msg = VoteMsg::new(vote, self.block_store.sync_info());
+            let recipients = self
+                .proposer_election
+                .get_valid_proposer(proposal_round + 1);
+            self.network.send_vote(vote_msg, vec![recipients]).await;
+        }
         Ok(())
     }
 
@@ -676,7 +684,7 @@ impl RoundManager {
             vote_state = vote.vote_data().proposed().executed_state_id(),
         );
 
-        if !vote.is_timeout() {
+        if !vote.is_timeout() && !self.proposer_election.is_random_election() {
             // Unlike timeout votes regular votes are sent to the leaders of the
             // next round only.
             let next_round = round + 1;

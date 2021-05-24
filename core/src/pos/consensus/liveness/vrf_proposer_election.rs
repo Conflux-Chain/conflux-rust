@@ -20,9 +20,9 @@ pub struct VrfProposer {
 }
 
 impl VrfProposer {
-    pub fn new(start_round: Round) -> Self {
+    pub fn new() -> Self {
         Self {
-            current_round: Mutex::new(start_round),
+            current_round: Mutex::new(0),
             proposal_candidates: Default::default(),
         }
     }
@@ -76,13 +76,7 @@ impl ProposerElection for VrfProposer {
     }
 
     fn next_round(&self, round: Round) {
-        let current_round = &mut *self.current_round.lock();
-        if round == *current_round + 1 {
-            *current_round = round;
-            self.proposal_candidates.lock().clear();
-        } else {
-            // TODO(lpl): Double check.
-            unreachable!()
-        }
+        *self.current_round.lock() = round;
+        self.proposal_candidates.lock().clear();
     }
 }

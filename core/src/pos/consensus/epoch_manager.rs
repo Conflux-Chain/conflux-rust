@@ -30,6 +30,7 @@ use super::{
     state_replication::{StateComputer, TxnManager},
     util::time_service::TimeService,
 };
+use crate::pos::consensus::liveness::vrf_proposer_election::VrfProposer;
 use anyhow::{bail, ensure, Context};
 use channel::diem_channel;
 use consensus_types::{
@@ -198,6 +199,7 @@ impl EpochManager {
                     *default_proposer,
                 ))
             }
+            ConsensusProposerType::VrfProposer => Box::new(VrfProposer::new()),
         }
     }
 

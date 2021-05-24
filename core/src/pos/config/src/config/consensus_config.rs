@@ -72,6 +72,8 @@ pub enum ConsensusProposerType {
     // or default proposer if round proposer not
     // specified
     RoundProposer(HashMap<Round, AccountAddress>),
+    // TODO(lpl): Add threshold?
+    VrfProposer,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
