@@ -250,6 +250,15 @@ pub static PENDING_ROUND_TIMEOUTS: Lazy<IntGauge> = Lazy::new(|| {
     .unwrap()
 });
 
+/// Count of the pending outbound round timeouts
+pub static PENDING_PROPOSAL_TIMEOUTS: Lazy<IntGauge> = Lazy::new(|| {
+    register_int_gauge!(
+        "diem_consensus_pending_proposal_timeouts",
+        "Count of the pending outbound proposal timeouts"
+    )
+    .unwrap()
+});
+
 /// Counter of pending network events to Consensus
 pub static PENDING_CONSENSUS_NETWORK_EVENTS: Lazy<IntCounterVec> = Lazy::new(
     || {

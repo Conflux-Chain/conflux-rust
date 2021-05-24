@@ -159,6 +159,9 @@ pub struct RoundState {
     time_service: Arc<dyn TimeService>,
     // To send local timeout events to the subscriber (e.g., SMR)
     timeout_sender: channel::Sender<Round>,
+    // To send timeout events for proposal selection to the subscriber (e.g.,
+    // SMR)
+    proposal_timeout_sender: channel::Sender<Round>,
     // Votes received fot the current round.
     pending_votes: PendingVotes,
     // Vote sent locally for the current round.
@@ -194,6 +197,7 @@ impl RoundState {
         time_interval: Box<dyn RoundTimeInterval>,
         time_service: Arc<dyn TimeService>,
         timeout_sender: channel::Sender<Round>,
+        proposal_timeout_sender: channel::Sender<Round>,
     ) -> Self
     {
         // Our counters are initialized lazily, so they're not going to appear
@@ -210,6 +214,7 @@ impl RoundState {
             current_round_deadline: time_service.get_current_timestamp(),
             time_service,
             timeout_sender,
+            proposal_timeout_sender,
             pending_votes: PendingVotes::new(),
             vote_sent: None,
         }
@@ -340,6 +345,48 @@ impl RoundState {
             timeout
         );
         self.current_round_deadline = now + timeout;
+        timeout
+    }
+
+    /// Setup the timeout task and return the duration of the current timeout
+    pub fn setup_proposal_timeout(&self) -> Duration {
+        let proposal_timeout_sender = self.proposal_timeout_sender.clone();
+        let timeout = self.setup_proposal_deadline();
+        diem_trace!(
+            "Scheduling proposal selection timeout of {} ms for round {}",
+            timeout.as_millis(),
+            self.current_round
+        );
+        self.time_service.run_after(
+            timeout,
+            SendTask::make(proposal_timeout_sender, self.current_round),
+        );
+        timeout
+    }
+
+    /// FIXME(lpl): Decide a proper timeout setting.
+    /// Currently it's set to half the round timeout.
+    fn setup_proposal_deadline(&self) -> Duration {
+        let round_index_after_committed_round = {
+            if self.highest_committed_round == 0 {
+                // Genesis doesn't require the 3-chain rule for commit, hence
+                // start the index at the round after genesis.
+                self.current_round - 1
+            } else if self.current_round < self.highest_committed_round + 3 {
+                0
+            } else {
+                self.current_round - self.highest_committed_round - 3
+            }
+        } as usize;
+        let timeout = self
+            .time_interval
+            .get_round_duration(round_index_after_committed_round)
+            / 2;
+        diem_debug!(
+            round = self.current_round,
+            "Set proposal selection deadline to {:?} from now",
+            timeout
+        );
         timeout
     }
 }

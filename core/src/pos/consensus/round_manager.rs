@@ -264,6 +264,7 @@ impl RoundManager {
         );
         if self.proposer_election.is_random_election() {
             self.proposer_election.next_round(new_round_event.round);
+            self.round_state.setup_proposal_timeout();
         }
         if self.proposer_election.is_valid_proposer(
             self.proposal_generator.author(),
@@ -500,6 +501,30 @@ impl RoundManager {
             event = LogEvent::Timeout,
         );
         bail!("Round {} timeout, broadcast to all peers", round);
+    }
+
+    pub async fn process_proposal_timeout(
+        &mut self, round: Round,
+    ) -> anyhow::Result<()> {
+        if let Some(proposal) = self.proposer_election.choose_proposal_to_vote()
+        {
+            // Vote for proposal
+            let vote = self
+                .execute_and_vote(proposal)
+                .await
+                .context("[RoundManager] Process proposal")?;
+            diem_debug!(self.new_log(LogEvent::Vote), "{}", vote);
+
+            self.round_state.record_vote(vote.clone());
+            let vote_msg = VoteMsg::new(vote, self.block_store.sync_info());
+            self.network
+                .broadcast(ConsensusMsg::VoteMsg(Box::new(vote_msg)))
+                .await;
+            Ok(())
+        } else {
+            // No proposal to vote. Send Timeout earlier.
+            self.process_local_timeout(round).await
+        }
     }
 
     /// This function is called only after all the dependencies of the given QC
