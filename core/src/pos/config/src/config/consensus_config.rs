@@ -40,12 +40,7 @@ impl Default for ConsensusConfig {
             // TODO(lpl): Decide value.
             // 60 epochs should have be generated in 4 minutes.
             round_initial_timeout_ms: 240_000,
-            proposer_type: ConsensusProposerType::LeaderReputation(
-                LeaderReputationConfig {
-                    active_weights: 99,
-                    inactive_weights: 1,
-                },
-            ),
+            proposer_type: ConsensusProposerType::VrfProposer,
             safety_rules: SafetyRulesConfig::default(),
             sync_only: false,
             mempool_poll_count: 1,
