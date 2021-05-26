@@ -92,12 +92,15 @@ pub struct HttpConfiguration {
     pub address: SocketAddr,
     pub cors_domains: DomainsValidation<AccessControlAllowOrigin>,
     pub keep_alive: bool,
+    // If it's Some, we will manually set the number of threads of HTTP RPC
+    // server
+    pub threads: Option<usize>,
 }
 
 impl HttpConfiguration {
     pub fn new(
         ip: Option<(u8, u8, u8, u8)>, port: Option<u16>, cors: Option<String>,
-        keep_alive: bool,
+        keep_alive: bool, threads: Option<usize>,
     ) -> Self
     {
         let ipv4 = match ip {
@@ -120,6 +123,7 @@ impl HttpConfiguration {
                 },
             },
             keep_alive,
+            threads,
         }
     }
 }
@@ -325,8 +329,12 @@ pub fn start_http(
     if !conf.enabled {
         return Ok(None);
     }
+    let mut builder = HttpServerBuilder::new(handler);
+    if let Some(threads) = conf.threads {
+        builder = builder.threads(threads);
+    }
 
-    match HttpServerBuilder::new(handler)
+    match builder
         .keep_alive(conf.keep_alive)
         .cors(conf.cors_domains.clone())
         .start_http(&conf.address)

@@ -154,6 +154,7 @@ build_config! {
         (jsonrpc_ws_port, (Option<u16>), None)
         (jsonrpc_tcp_port, (Option<u16>), None)
         (jsonrpc_http_port, (Option<u16>), None)
+        (jsonrpc_http_threads, (Option<usize>), None)
         (jsonrpc_cors, (Option<String>), None)
         (jsonrpc_http_keep_alive, (bool), false)
         (jsonrpc_ws_max_payload_bytes, (usize), 30 * 1024 * 1024)
@@ -900,6 +901,7 @@ impl Configuration {
             self.raw_conf.jsonrpc_local_http_port,
             self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
+            self.raw_conf.jsonrpc_http_threads,
         )
     }
 
@@ -909,6 +911,7 @@ impl Configuration {
             self.raw_conf.jsonrpc_http_port,
             self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
+            self.raw_conf.jsonrpc_http_threads,
         )
     }
 
