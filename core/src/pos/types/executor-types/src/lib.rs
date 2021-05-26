@@ -4,6 +4,8 @@
 #![forbid(unsafe_code)]
 
 mod error;
+mod term_state;
+
 pub use error::Error;
 
 use anyhow::Result;
@@ -13,7 +15,7 @@ use diem_crypto::{
 };
 use diem_types::{
     account_state_blob::AccountStateBlob,
-    block_info::PivotBlockDecision,
+    block_info::{PivotBlockDecision, Round},
     contract_event::ContractEvent,
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,

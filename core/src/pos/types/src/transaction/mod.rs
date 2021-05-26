@@ -24,7 +24,7 @@ use diem_crypto::{
     hash::{CryptoHash, EventAccumulatorHasher},
     multi_ed25519::{MultiEd25519PublicKey, MultiEd25519Signature},
     traits::SigningKey,
-    HashValue,
+    HashValue, VRFProof,
 };
 use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
 use move_core_types::transaction_argument::convert_txn_args;
@@ -52,8 +52,12 @@ pub use script::{
     TransactionScriptABI, TypeArgumentABI,
 };
 
-use crate::validator_config::{
-    ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
+use crate::{
+    block_info::Round,
+    validator_config::{
+        ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
+        ConsensusVRFProof,
+    },
 };
 use std::ops::Deref;
 pub use transaction_argument::{
@@ -309,6 +313,7 @@ impl RawTransaction {
             TransactionPayload::Module(_) => {
                 ("module publishing".to_string(), vec![])
             }
+            TransactionPayload::Election(_) => ("election".to_string(), vec![]),
         };
         let mut f_args: String = "".to_string();
         for arg in args {
@@ -357,6 +362,9 @@ pub enum TransactionPayload {
     /// A transaction that executes an existing script function published
     /// on-chain.
     ScriptFunction(ScriptFunction),
+
+    /// A transaction that add a node to committee candidates.
+    Election(ElectionPayload),
 }
 
 impl TransactionPayload {
@@ -365,9 +373,10 @@ impl TransactionPayload {
             Self::WriteSet(ws) => {
                 ws.should_trigger_reconfiguration_by_default()
             }
-            Self::Script(_) | Self::ScriptFunction(_) | Self::Module(_) => {
-                false
-            }
+            Self::Script(_)
+            | Self::ScriptFunction(_)
+            | Self::Module(_)
+            | Self::Election(_) => false,
         }
     }
 
@@ -380,6 +389,15 @@ impl TransactionPayload {
             ),
         }
     }
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ElectionPayload {
+    node_id: AccountAddress,
+    start_round: Round,
+    // FIXME(lpl): Add delay function.
+    // vdf_output: VDFOutput
+    vrf_output: ConsensusVRFProof,
 }
 
 /// Two different kinds of WriteSet transactions.
