@@ -123,6 +123,10 @@ log_conf="log.yaml"
 #
 # udp_port=32323
 
+# `jsonrpc_http_threads` is used to control how many threads to process HTTP rpc requests.
+#
+# jsonrpc_http_threads=1
+
 # `jsonrpc_http_keep_alive` is used to control whether to set KeepAlive for rpc HTTP connections.
 #
 # jsonrpc_http_keep_alive=false
