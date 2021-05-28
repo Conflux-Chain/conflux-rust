@@ -50,8 +50,8 @@ use diem_types::{
     write_set::{WriteOp, WriteSet},
 };
 use executor_types::{
-    BlockExecutor, ChunkExecutor, Error, ExecutedTrees, ProofReader,
-    StateComputeResult, TransactionReplayer,
+    term_state::ElectionEvent, BlockExecutor, ChunkExecutor, Error,
+    ExecutedTrees, ProofReader, StateComputeResult, TransactionReplayer,
 };
 use fail::fail_point;
 use std::{
@@ -293,9 +293,11 @@ where V: VMExecutor
         let new_epoch_event_key = on_chain_config::new_epoch_event_key();
         let pivot_select_event_key =
             PivotBlockDecision::pivot_select_event_key();
+        let election_event_key = ElectionEvent::election_event_key();
 
         // Find the next pivot block.
         let mut pivot_decision = None;
+        let mut new_pos_state = parent_trees.pos_state().clone();
         for vm_output in vm_outputs.clone().into_iter() {
             for event in vm_output.events() {
                 // check for pivot block selection.
@@ -304,9 +306,15 @@ where V: VMExecutor
                         event.event_data(),
                     )?);
                     break;
+                } else if *event.key() == election_event_key {
+                    let election_event =
+                        ElectionEvent::from_bytes(event.event_data())?;
+                    new_pos_state.new_node_elected(&election_event);
                 }
             }
         }
+        new_pos_state.next_round();
+
         let new_epoch_marker = vm_outputs
             .iter()
             .enumerate()
@@ -463,6 +471,7 @@ where V: VMExecutor
             ExecutedTrees::new_copy(
                 Arc::new(current_state_tree),
                 Arc::new(current_transaction_accumulator),
+                new_pos_state,
             ),
             next_epoch_state,
             // TODO(lpl): Check if we need to assert it's Some.

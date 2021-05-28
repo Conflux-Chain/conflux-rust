@@ -4,10 +4,11 @@
 #![forbid(unsafe_code)]
 
 mod error;
-mod term_state;
+pub mod term_state;
 
 pub use error::Error;
 
+use crate::term_state::PosState;
 use anyhow::Result;
 use diem_crypto::{
     hash::{TransactionAccumulatorHasher, SPARSE_MERKLE_PLACEHOLDER_HASH},
@@ -243,6 +244,8 @@ pub struct ExecutedTrees {
     /// consistent with the `state_tree`.
     transaction_accumulator:
         Arc<InMemoryAccumulator<TransactionAccumulatorHasher>>,
+
+    pos_state: PosState,
 }
 
 impl From<TreeState> for ExecutedTrees {
@@ -251,6 +254,8 @@ impl From<TreeState> for ExecutedTrees {
             tree_state.account_state_root_hash,
             tree_state.ledger_frozen_subtree_hashes,
             tree_state.num_transactions,
+            // FIXME(lpl): Persistent.
+            Default::default(),
         )
     }
 }
@@ -261,15 +266,19 @@ impl ExecutedTrees {
         transaction_accumulator: Arc<
             InMemoryAccumulator<TransactionAccumulatorHasher>,
         >,
+        pos_state: PosState,
     ) -> Self
     {
         Self {
             state_tree,
             transaction_accumulator,
+            pos_state,
         }
     }
 
     pub fn state_tree(&self) -> &Arc<SparseMerkleTree> { &self.state_tree }
+
+    pub fn pos_state(&self) -> &PosState { &self.pos_state }
 
     pub fn txn_accumulator(
         &self,
@@ -289,7 +298,7 @@ impl ExecutedTrees {
     pub fn new(
         state_root_hash: HashValue,
         frozen_subtrees_in_accumulator: Vec<HashValue>,
-        num_leaves_in_accumulator: u64,
+        num_leaves_in_accumulator: u64, pos_state: PosState,
     ) -> ExecutedTrees
     {
         ExecutedTrees {
@@ -301,11 +310,17 @@ impl ExecutedTrees {
                 )
                 .expect("The startup info read from storage should be valid."),
             ),
+            pos_state,
         }
     }
 
     pub fn new_empty() -> ExecutedTrees {
-        Self::new(*SPARSE_MERKLE_PLACEHOLDER_HASH, vec![], 0)
+        Self::new(
+            *SPARSE_MERKLE_PLACEHOLDER_HASH,
+            vec![],
+            0,
+            Default::default(),
+        )
     }
 }
 

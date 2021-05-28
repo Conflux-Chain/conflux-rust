@@ -393,11 +393,11 @@ impl TransactionPayload {
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ElectionPayload {
-    node_id: AccountAddress,
-    start_round: Round,
+    pub node_id: AccountAddress,
+    pub target_term: u64,
     // FIXME(lpl): Add delay function.
     // vdf_output: VDFOutput
-    vrf_output: ConsensusVRFProof,
+    pub vrf_proof: ConsensusVRFProof,
 }
 
 /// Two different kinds of WriteSet transactions.

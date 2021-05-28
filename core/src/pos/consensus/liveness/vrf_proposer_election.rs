@@ -40,9 +40,8 @@ impl ProposerElection for VrfProposer {
     }
 
     fn is_valid_proposal(&self, block: &Block) -> bool {
-        let vrf_number = U256::from_big_endian(
-            block.vrf_proof().unwrap().to_hash().unwrap().as_ref(),
-        );
+        let vrf_number =
+            block.vrf_proof().unwrap().to_hash().unwrap().to_u256();
         vrf_number <= PROPOSAL_THRESHOLD
     }
 
@@ -64,9 +63,8 @@ impl ProposerElection for VrfProposer {
         let mut chosen_proposal = None;
         let mut min_vrf_number = U256::MAX;
         for b in &*self.proposal_candidates.lock() {
-            let vrf_number = U256::from_big_endian(
-                b.vrf_proof().unwrap().to_hash().unwrap().as_ref(),
-            );
+            let vrf_number =
+                b.vrf_proof().unwrap().to_hash().unwrap().to_u256();
             if vrf_number < min_vrf_number {
                 chosen_proposal = Some(b.clone());
                 min_vrf_number = vrf_number

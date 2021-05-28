@@ -105,6 +105,7 @@
 //! ```
 #![allow(clippy::integer_arithmetic)]
 use bytes::Bytes;
+use cfx_types::U256;
 use hex::FromHex;
 use mirai_annotations::*;
 use once_cell::sync::{Lazy, OnceCell};
@@ -246,6 +247,9 @@ impl HashValue {
             .map_err(|_| HashValueParseError)
             .map(Self::new)
     }
+
+    /// Convert a hash to big int (U256).
+    pub fn to_u256(&self) -> U256 { U256::from_big_endian(self.as_ref()) }
 }
 
 impl ser::Serialize for HashValue {

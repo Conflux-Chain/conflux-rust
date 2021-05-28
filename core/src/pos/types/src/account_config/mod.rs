@@ -15,3 +15,8 @@ pub fn pivot_chain_select_address() -> AccountAddress {
     AccountAddress::from_hex_literal("0x1D9")
         .expect("Parsing valid hex literal should always succeed")
 }
+
+pub fn election_select_address() -> AccountAddress {
+    AccountAddress::from_hex_literal("0x1DA")
+        .expect("Parsing valid hex literal should always succeed")
+}
