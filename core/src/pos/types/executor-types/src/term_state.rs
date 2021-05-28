@@ -25,6 +25,8 @@ const ROUND_PER_TERM: Round = 60;
 const ELECTION_TERM_START_ROUND: Round = 120;
 const ELECTION_TERM_END_ROUND: Round = 30;
 
+const TERM_MAX_SIZE: usize = 16;
+
 #[derive(Copy, Clone)]
 pub enum NodeStatus {
     Accepted,
@@ -95,6 +97,11 @@ impl TermList {
         }
         let mut term = &mut self.term_list[term_offset];
         term.add_node(event.vrf_output, event.node_id);
+        if term.node_list.len() > TERM_MAX_SIZE {
+            // TODO: Decide if we want to keep the previously elected nodes to
+            // avoid duplicated election.
+            term.node_list.pop();
+        }
         Ok(())
     }
 
