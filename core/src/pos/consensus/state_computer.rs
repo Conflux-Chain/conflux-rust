@@ -15,6 +15,7 @@ use executor_types::{
 use fail::fail_point;
 //use state_sync::client::StateSyncClient;
 use diem_types::transaction::Transaction;
+use state_sync::client::StateSyncClient;
 use std::boxed::Box;
 
 /// Basic communication with the Execution module;
@@ -22,18 +23,20 @@ use std::boxed::Box;
 pub struct ExecutionProxy {
     //execution_correctness_client:
     //    Mutex<Box<dyn ExecutionCorrectness + Send + Sync>>,
-    //synchronizer: StateSyncClient,
+    synchronizer: StateSyncClient,
     // TODO(lpl): Use Mutex or Arc?
     executor: Mutex<Box<dyn BlockExecutor>>,
 }
 
 impl ExecutionProxy {
-    pub fn new(executor: Box<dyn BlockExecutor>) -> Self {
+    pub fn new(
+        executor: Box<dyn BlockExecutor>, synchronizer: StateSyncClient,
+    ) -> Self {
         Self {
             /*execution_correctness_client: Mutex::new(
                 execution_correctness_client,
-            ),
-            //synchronizer,*/
+            ),*/
+            synchronizer,
             executor: Mutex::new(executor),
         }
     }
@@ -83,7 +86,6 @@ impl StateComputer for ExecutionProxy {
                 .lock()
                 .commit_blocks(block_ids, finality_proof)?
         );
-        /*
         if let Err(e) = monitor!(
             "notify_state_sync",
             self.synchronizer
@@ -91,7 +93,7 @@ impl StateComputer for ExecutionProxy {
                 .await
         ) {
             diem_error!(error = ?e, "Failed to notify state synchronizer");
-        }*/
+        }
         Ok(())
     }
 
