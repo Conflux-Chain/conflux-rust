@@ -115,6 +115,8 @@ impl TermList {
     }
 }
 
+// FIXME(lpl): Blocks following a pending reconfiguration block should not have
+// transactions, and this may lead to an empty committee,
 #[derive(Clone)]
 pub struct PosState {
     /// All the nodes that have staked in PoW.
@@ -278,12 +280,22 @@ impl PosState {
 
     /// `get_new_committee` has been called before this to produce an
     /// EpochState.
-    pub fn next_round(&mut self) {
+    pub fn next_round(&mut self) -> Result<Option<EpochState>> {
         self.current_round += 1;
-        if self.current_round % ROUND_PER_TERM == 0 {
+        let epoch_state = if self.current_round % ROUND_PER_TERM == 0 {
             let new_term = self.current_round / ROUND_PER_TERM;
-            self.term_list.new_term(new_term)
-        }
+            self.term_list.new_term(new_term);
+            let verifier = self.get_new_committee()?;
+            Some(EpochState {
+                // TODO(lpl): If we allow epoch changes within a term, this
+                // should be updated.
+                epoch: new_term,
+                verifier,
+            })
+        } else {
+            None
+        };
+        Ok(epoch_state)
     }
 }
 

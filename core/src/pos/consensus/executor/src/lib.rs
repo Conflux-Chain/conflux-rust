@@ -313,7 +313,7 @@ where V: VMExecutor
                 }
             }
         }
-        new_pos_state.next_round();
+        let next_epoch_state = new_pos_state.next_round()?;
 
         let new_epoch_marker = vm_outputs
             .iter()
@@ -416,6 +416,8 @@ where V: VMExecutor
             ));
         }
 
+        /* TODO(lpl): Check if we still need this.
+           TODO(lpl): The validator set is not stored in state noq. Might be needed in state sync?
         // check for change in validator set
         let next_epoch_state = if new_epoch_marker.is_some() {
             // Pad the rest of transactions
@@ -462,6 +464,7 @@ where V: VMExecutor
         } else {
             None
         };
+         */
 
         let current_transaction_accumulator =
             parent_trees.txn_accumulator().append(&txn_info_hashes);
