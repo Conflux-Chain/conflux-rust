@@ -3,9 +3,12 @@
 
 use cfx_types::H256;
 use cfxcore::{
-    pos::consensus::{
-        consensus_provider::start_consensus,
-        gen_consensus_reconfig_subscription,
+    pos::{
+        consensus::{
+            consensus_provider::start_consensus,
+            gen_consensus_reconfig_subscription,
+        },
+        pow_handler::PowHandler,
     },
     sync::ProtocolConfiguration,
 };
@@ -15,23 +18,44 @@ use diem_metrics::metric_server;
 use diem_types::PeerId;
 use diemdb::DiemDB;
 use executor::{db_bootstrapper::maybe_bootstrap, vm::FakeVM, Executor};
-use executor_types::BlockExecutor;
+use executor_types::ChunkExecutor;
+use futures::executor::block_on;
 use network::NetworkService;
-use std::{boxed::Box, sync::Arc, thread, time::Instant};
+use state_sync::bootstrapper::StateSyncBootstrapper;
+use std::{boxed::Box, path::PathBuf, sync::Arc, thread, time::Instant};
 use storage_interface::DbReaderWriter;
 use tokio::runtime::Runtime;
 
+pub struct DiemHandle {
+    // pow handler
+    pub pow_handler: Arc<PowHandler>,
+    _state_sync_bootstrapper: StateSyncBootstrapper,
+    _consensus_runtime: Runtime,
+}
+
 pub fn start_pos_consensus(
-    config: &NodeConfig, network: Arc<NetworkService>, own_node_hash: H256,
+    config: &NodeConfig, log_file: Option<PathBuf>,
+    network: Arc<NetworkService>, own_node_hash: H256,
     protocol_config: ProtocolConfiguration,
-) -> Runtime
+) -> DiemHandle
 {
     crash_handler::setup_panic_handler();
+
+    let mut logger = diem_logger::Logger::new();
+    logger
+        .channel_size(config.logger.chan_size)
+        .is_async(config.logger.is_async)
+        .level(config.logger.level)
+        .read_env();
+    if let Some(log_file) = log_file {
+        logger.printer(Box::new(FileWriter::new(log_file)));
+    }
+    let _logger = Some(logger.build());
 
     // Let's now log some important information, since the logger is set up
     diem_info!(config = config, "Loaded DiemNode config");
 
-    if config.metrics.enabled {
+    /*if config.metrics.enabled {
         for network in &config.full_node_networks {
             let peer_id = network.peer_id();
             setup_metrics(peer_id, &config);
@@ -41,7 +65,7 @@ pub fn start_pos_consensus(
             let peer_id = network.peer_id();
             setup_metrics(peer_id, &config);
         }
-    }
+    }*/
     if fail::has_failpoints() {
         diem_warn!("Failpoints is enabled");
         if let Some(failpoints) = &config.failpoints {
@@ -65,14 +89,14 @@ fn setup_metrics(peer_id: PeerId, config: &NodeConfig) {
     );
 }
 
-fn setup_chunk_executor(db: DbReaderWriter) -> Box<dyn BlockExecutor> {
+fn setup_chunk_executor(db: DbReaderWriter) -> Box<dyn ChunkExecutor> {
     Box::new(Executor::<FakeVM>::new(db))
 }
 
 pub fn setup_pos_environment(
     node_config: &NodeConfig, network: Arc<NetworkService>,
     own_node_hash: H256, protocol_config: ProtocolConfiguration,
-) -> Runtime
+) -> DiemHandle
 {
     let metrics_port = node_config.debug_interface.metrics_server_port;
     let metric_host = node_config.debug_interface.address.clone();
@@ -107,7 +131,7 @@ pub fn setup_pos_environment(
         maybe_bootstrap::<FakeVM>(&db_rw, genesis, genesis_waypoint)
             .expect("Db-bootstrapper should not fail.");
     } else {
-        info!("Genesis txn not provided, it's fine if you don't expect to apply it otherwise please double check config");
+        panic!("Genesis txn not provided.");
     }
 
     debug!(
@@ -130,18 +154,45 @@ pub fn setup_pos_environment(
         reconfig_subscriptions.push(consensus_reconfig_subscription);
     }
 
+    let state_sync_bootstrapper = StateSyncBootstrapper::bootstrap(
+        //state_sync_network_handles,
+        Arc::clone(&db_rw.reader),
+        chunk_executor,
+        node_config,
+        genesis_waypoint,
+        reconfig_subscriptions,
+    );
+
+    let state_sync_client = state_sync_bootstrapper
+        .create_client(node_config.state_sync.client_commit_timeout_ms);
+
+    // Make sure that state synchronizer is caught up at least to its waypoint
+    // (in case it's present). There is no sense to start consensus prior to
+    // that. TODO: Note that we need the networking layer to be able to
+    // discover & connect to the peers with potentially outdated network
+    // identity public keys.
+    debug!("Wait until state sync is initialized");
+    block_on(state_sync_client.wait_until_initialized())
+        .expect("State sync initialization failure");
+    debug!("State sync initialization complete.");
+
     // Initialize and start consensus.
     instant = Instant::now();
-    let consensus_runtime = start_consensus(
+    let (consensus_runtime, pow_handler) = start_consensus(
         node_config,
         network,
         own_node_hash,
         protocol_config,
+        state_sync_client,
         diem_db,
-        chunk_executor,
+        db_rw,
         consensus_reconfig_events,
     );
     debug!("Consensus started in {} ms", instant.elapsed().as_millis());
 
-    consensus_runtime
+    DiemHandle {
+        pow_handler,
+        _consensus_runtime: consensus_runtime,
+        _state_sync_bootstrapper: state_sync_bootstrapper,
+    }
 }

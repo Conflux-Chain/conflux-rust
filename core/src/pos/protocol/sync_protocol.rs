@@ -426,7 +426,9 @@ where M: Deserialize<'a> + Handleable + Message {
 }
 
 impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
-    fn minimum_supported_version(&self) -> ProtocolVersion { todo!() }
+    fn minimum_supported_version(&self) -> ProtocolVersion {
+        ProtocolVersion(0)
+    }
 
     fn initialize(&self, io: &dyn NetworkContext) {
         io.register_timer(

@@ -67,11 +67,11 @@ impl fmt::Display for ConfigID {
 /// State sync will panic if the value of any config in this registry is
 /// uninitialized
 pub const ON_CHAIN_CONFIG_REGISTRY: &[ConfigID] = &[
-    VMConfig::CONFIG_ID,
-    VMPublishingOption::CONFIG_ID,
-    DiemVersion::CONFIG_ID,
+    //VMConfig::CONFIG_ID,
+    //VMPublishingOption::CONFIG_ID,
+    //DiemVersion::CONFIG_ID,
     ValidatorSet::CONFIG_ID,
-    RegisteredCurrencies::CONFIG_ID,
+    //RegisteredCurrencies::CONFIG_ID,
 ];
 
 #[derive(Clone, Debug, PartialEq)]

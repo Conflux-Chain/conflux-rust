@@ -10,12 +10,36 @@ extern crate serde;
 extern crate serde_derive;
 
 use cfxkey::{Error as EthkeyError, Generator, Public, Random};
+use diem_crypto::{
+    ed25519::{Ed25519PrivateKey, Ed25519PublicKey, ED25519_PUBLIC_KEY_LENGTH},
+    Uniform,
+};
+use diem_types::{
+    account_address::{from_public_key, AccountAddress},
+    contract_event::ContractEvent,
+    on_chain_config::{new_epoch_event_key, ValidatorSet},
+    transaction::{ChangeSet, Transaction, WriteSetPayload},
+    validator_config::ValidatorConfig,
+    validator_info::ValidatorInfo,
+    waypoint::Waypoint,
+    write_set::WriteSet,
+};
+use diemdb::DiemDB;
 use docopt::Docopt;
+use executor::{
+    db_bootstrapper::{calculate_genesis, generate_waypoint, maybe_bootstrap},
+    vm::FakeVM,
+    Executor,
+};
 use keccak_hash::keccak;
 use log::*;
-use rustc_hex::FromHexError;
+use move_core_types::language_storage::TypeTag;
+use primitives::account::AddressSpace::Contract;
+use rand::{rngs::StdRng, SeedableRng};
+use rustc_hex::{FromHexError, ToHex};
 use serde::Deserialize;
 use std::{
+    convert::TryFrom,
     env,
     fmt::{self, Write as FmtWrite},
     fs::File,
@@ -27,6 +51,8 @@ use std::{
     str::FromStr,
     writeln,
 };
+use storage_interface::DbReaderWriter;
+use tempdir::TempDir;
 
 const USAGE: &str = r#"
 Usage:
@@ -97,11 +123,6 @@ impl fmt::Display for Error {
     }
 }
 
-/// A struct that represents an account address.
-/// Currently Public Key is used.
-#[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Default, Clone, Copy)]
-pub struct AccountAddress([u8; 32]);
-
 fn main() {
     env_logger::try_init().expect("Logger initialized only once.");
 
@@ -113,6 +134,57 @@ fn main() {
             process::exit(1);
         }
     }
+}
+
+fn execute_genesis_transaction(genesis_txn: Transaction) -> Waypoint {
+    let tmp_dir = TempDir::new("example").unwrap();
+    let (_, db) = DbReaderWriter::wrap(
+        DiemDB::open(
+            tmp_dir.path(),
+            false, /* readonly */
+            Some(1_000_000),
+            Default::default(),
+        )
+        .expect("DB should open."),
+    );
+
+    generate_waypoint::<FakeVM>(&db, &genesis_txn).unwrap()
+}
+
+fn generate_genesis_from_public_keys(public_keys: Vec<Ed25519PublicKey>) {
+    let genesis_path = PathBuf::from("./genesis_file");
+    let waypoint_path = PathBuf::from("./waypoint_config");
+    let mut genesis_file = File::create(&genesis_path).unwrap();
+    let mut waypoint_file = File::create(&waypoint_path).unwrap();
+
+    let mut validators = Vec::new();
+    for public_key in public_keys {
+        let account_address = from_public_key(&public_key);
+        let validator_config = ValidatorConfig::new(public_key, vec![], vec![]);
+        validators.push(ValidatorInfo::new(
+            account_address,
+            1,
+            validator_config,
+        ));
+    }
+    let validator_set = ValidatorSet::new(validators);
+    let validator_set_bytes = bcs::to_bytes(&validator_set).unwrap();
+    let contract_event = ContractEvent::new(
+        new_epoch_event_key(),
+        0,
+        TypeTag::Address,
+        validator_set_bytes,
+    );
+    let change_set = ChangeSet::new(WriteSet::default(), vec![contract_event]);
+    let write_set_paylod = WriteSetPayload::Direct(change_set);
+    let genesis_transaction = Transaction::GenesisTransaction(write_set_paylod);
+    let genesis_bytes = bcs::to_bytes(&genesis_transaction).unwrap();
+    genesis_file.write_all(&genesis_bytes).unwrap();
+
+    let waypoint = execute_genesis_transaction(genesis_transaction);
+    waypoint_file
+        .write_all(waypoint.to_string().as_bytes())
+        .unwrap();
 }
 
 fn execute<S, I>(command: I) -> Result<String, Error>
@@ -136,45 +208,33 @@ where
         let mut private_key_file = File::create(&pivate_key_path)?;
         let public_key_path = PathBuf::from("./public_key");
         let mut public_key_file = File::create(&public_key_path)?;
-        let peer_config_path = PathBuf::from("./consensus_peers.config.toml");
-        let mut peer_config_file = File::create(&peer_config_path)?;
+        let mut rng = StdRng::from_seed([0u8; 32]);
+        let mut public_keys = Vec::new();
 
         for i in 0..num_validator {
-            let key_pair = Random.generate()?;
-            let private_key = key_pair.secret().clone();
-            let public_key = key_pair.public().clone();
-            let peer_hash = keccak(&public_key);
+            let private_key = Ed25519PrivateKey::generate(&mut rng);
+            let public_key = Ed25519PublicKey::from(&private_key);
+            public_keys.push(public_key.clone());
 
             let mut private_key_str = String::new();
-            writeln!(&mut private_key_str, "{:?}", private_key.to_hex())?;
+            writeln!(
+                &mut private_key_str,
+                "{:?}",
+                hex::encode(private_key.to_bytes())
+            )?;
             let private_key_str = private_key_str.replace("\"", "");
             private_key_file.write_all(private_key_str.as_str().as_bytes())?;
 
             let mut public_key_str = String::new();
-            writeln!(&mut public_key_str, "{:?}", public_key)?;
+            writeln!(
+                &mut public_key_str,
+                "{:?}",
+                hex::encode(public_key.to_bytes())
+            )?;
             let public_key_str = &public_key_str[2..];
             public_key_file.write_all(public_key_str.as_bytes())?;
-
-            if i > 0 {
-                writeln!(peer_config_file, "")?;
-            }
-
-            let mut peer_hash_str = String::new();
-            write!(&mut peer_hash_str, "{:?}", peer_hash)?;
-            let peer_str = &peer_hash_str[2..];
-            let mut peer_hash_str = String::new();
-            writeln!(&mut peer_hash_str, "{:?}", peer_str)?;
-            let peer_hash_str = peer_hash_str.replacen("\"", "[", 1);
-            let peer_hash_str = peer_hash_str.replacen("\"", "]", 1);
-            peer_config_file.write_all(peer_hash_str.as_str().as_bytes())?;
-
-            let mut pubkey_str = String::new();
-            write!(&mut pubkey_str, "{:?}", public_key)?;
-            let pubkey_str = &pubkey_str[2..];
-            let mut peer_pubkey_str = String::new();
-            writeln!(&mut peer_pubkey_str, "c = {:?}", pubkey_str)?;
-            peer_config_file.write_all(peer_pubkey_str.as_str().as_bytes())?;
         }
+        generate_genesis_from_public_keys(public_keys);
         Ok("Ok".into())
     } else if args.cmd_frompub {
         let public_key_path = PathBuf::from(args.arg_pkfile.as_str());
@@ -183,34 +243,16 @@ where
         public_key_file.read_to_string(&mut contents)?;
         let mut lines = contents.as_str().lines();
         let mut line_num = 0;
-        let peer_config_path = PathBuf::from("./consensus_peers.config.toml");
-        let mut peer_config_file = File::create(&peer_config_path)?;
-        while let Some(pubkey_str) = lines.next() {
-            let public_key = Public::from_str(pubkey_str).unwrap();
-            let peer_hash = keccak(&public_key);
 
-            if line_num > 0 {
-                writeln!(peer_config_file, "")?;
-            }
-
-            let mut peer_hash_str = String::new();
-            write!(&mut peer_hash_str, "{:?}", peer_hash)?;
-            let peer_str = &peer_hash_str[2..];
-            let mut peer_hash_str = String::new();
-            writeln!(&mut peer_hash_str, "{:?}", peer_str)?;
-            let peer_hash_str = peer_hash_str.replacen("\"", "[", 1);
-            let peer_hash_str = peer_hash_str.replacen("\"", "]", 1);
-            peer_config_file.write_all(peer_hash_str.as_str().as_bytes())?;
-
-            let mut pubkey_str = String::new();
-            write!(&mut pubkey_str, "{:?}", public_key)?;
-            let pubkey_str = &pubkey_str[2..];
-            let mut peer_pubkey_str = String::new();
-            writeln!(&mut peer_pubkey_str, "c = {:?}", pubkey_str)?;
-            peer_config_file.write_all(peer_pubkey_str.as_str().as_bytes())?;
-
-            line_num += 1;
+        let mut public_keys = Vec::new();
+        while let Some(public_key_str) = lines.next() {
+            let public_key_bytes = hex::decode(public_key_str).unwrap();
+            let public_key =
+                Ed25519PublicKey::try_from(public_key_bytes.as_slice())
+                    .unwrap();
+            public_keys.push(public_key);
         }
+        generate_genesis_from_public_keys(public_keys);
         Ok("Ok".into())
     } else {
         Ok(USAGE.to_string())
