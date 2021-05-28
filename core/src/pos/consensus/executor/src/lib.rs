@@ -313,7 +313,7 @@ where V: VMExecutor
                 }
             }
         }
-        let next_epoch_state = new_pos_state.next_round()?;
+        let next_epoch_state = new_pos_state.next_view()?;
 
         let new_epoch_marker = vm_outputs
             .iter()

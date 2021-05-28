@@ -122,9 +122,11 @@ pub struct PosState {
     /// All the nodes that have staked in PoW.
     /// Nodes are only inserted and will never be removed.
     node_map: HashMap<AccountAddress, NodeData>,
-    /// `current_round / TERM_LIST_LEN == term_list.current_term` is always
-    /// true.
-    current_round: Round,
+    /// `current_view / TERM_LIST_LEN == term_list.current_term` is always
+    /// true. This is not the same as `RoundState.current_round` because the
+    /// view does not increase for blocks following a pending
+    /// reconfiguration block.
+    current_view: Round,
     term_list: TermList,
 }
 
@@ -133,7 +135,7 @@ impl Debug for PosState {
         &self, f: &mut Formatter<'_>,
     ) -> std::result::Result<(), std::fmt::Error> {
         f.debug_struct("PosState")
-            .field("round", &self.current_round)
+            .field("round", &self.current_view)
             .finish()
     }
 }
@@ -182,7 +184,7 @@ impl PosState {
         }
         PosState {
             node_map,
-            current_round: 0,
+            current_view: 0,
             term_list: TermList {
                 current_term: 0,
                 term_list,
@@ -213,8 +215,8 @@ impl PosState {
             bail!("Election too soon after accepted");
         }
         let target_round = election_tx.target_term * ROUND_PER_TERM;
-        if target_round >= self.current_round + ELECTION_TERM_START_ROUND
-            || target_round < self.current_round + ELECTION_TERM_END_ROUND
+        if target_round >= self.current_view + ELECTION_TERM_START_ROUND
+            || target_round < self.current_view + ELECTION_TERM_END_ROUND
         {
             bail!("Target term is not open for election");
         }
@@ -279,11 +281,12 @@ impl PosState {
     }
 
     /// `get_new_committee` has been called before this to produce an
-    /// EpochState.
-    pub fn next_round(&mut self) -> Result<Option<EpochState>> {
-        self.current_round += 1;
-        let epoch_state = if self.current_round % ROUND_PER_TERM == 0 {
-            let new_term = self.current_round / ROUND_PER_TERM;
+    /// EpochState. And `next_view` will not be called for blocks following
+    /// a pending reconfiguration block.
+    pub fn next_view(&mut self) -> Result<Option<EpochState>> {
+        self.current_view += 1;
+        let epoch_state = if self.current_view % ROUND_PER_TERM == 0 {
+            let new_term = self.current_view / ROUND_PER_TERM;
             self.term_list.new_term(new_term);
             let verifier = self.get_new_committee()?;
             Some(EpochState {
@@ -303,7 +306,7 @@ impl Default for PosState {
     fn default() -> Self {
         Self {
             node_map: Default::default(),
-            current_round: 0,
+            current_view: 0,
             term_list: TermList {
                 current_term: 0,
                 term_list: Default::default(),
