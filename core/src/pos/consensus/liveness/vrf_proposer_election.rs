@@ -6,7 +6,8 @@ use consensus_types::common::{Author, Round};
 
 use cfx_types::U256;
 use consensus_types::block::{Block, VRF_SEED};
-use diem_crypto::VRFProof;
+use diem_crypto::{VRFPrivateKey, VRFProof};
+use diem_types::validator_config::ConsensusVRFPrivateKey;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 
@@ -16,15 +17,20 @@ pub const PROPOSAL_THRESHOLD: U256 = U256::MAX;
 /// The round proposer maps a round to author
 pub struct VrfProposer {
     author: Author,
+    vrf_private_key: ConsensusVRFPrivateKey,
+
     current_round: Mutex<Round>,
     current_seed: Mutex<Vec<u8>>,
     proposal_candidates: Mutex<Vec<Block>>,
 }
 
 impl VrfProposer {
-    pub fn new(author: Author) -> Self {
+    pub fn new(
+        author: Author, vrf_private_key: ConsensusVRFPrivateKey,
+    ) -> Self {
         Self {
             author,
+            vrf_private_key,
             current_round: Mutex::new(0),
             current_seed: Mutex::new(VRF_SEED.to_vec()),
             proposal_candidates: Default::default(),
@@ -40,8 +46,23 @@ impl ProposerElection for VrfProposer {
     }
 
     fn is_valid_proposer(&self, author: Author, round: Round) -> bool {
-        assert_eq!(author, self.author, "VRF election can not check proposer validity without vrf_proof");
-        let vrf_proof =
+        assert_eq!(
+            author, self.author,
+            "VRF election can not check proposer validity without vrf_proof"
+        );
+        assert_eq!(
+            round,
+            *self.current_round.lock(),
+            "VRF election can not generate vrf_proof for other rounds"
+        );
+        let vrf_output = self
+            .vrf_private_key
+            .compute(&*self.current_seed.lock())
+            .unwrap()
+            .to_hash()
+            .unwrap();
+        let vrf_number = U256::from_big_endian(vrf_output.as_ref());
+        vrf_number < PROPOSAL_THRESHOLD
     }
 
     fn is_valid_proposal(&self, block: &Block) -> bool {

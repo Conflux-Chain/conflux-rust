@@ -7,8 +7,10 @@ use crate::{
 };
 use diem_crypto::Uniform;
 use diem_types::{
-    network_address::NetworkAddress, validator_config::ConsensusPrivateKey,
-    waypoint::Waypoint, PeerId,
+    network_address::NetworkAddress,
+    validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
+    waypoint::Waypoint,
+    PeerId,
 };
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
@@ -29,6 +31,8 @@ pub struct SafetyRulesConfig {
     // Read/Write/Connect networking operation timeout in milliseconds.
     pub network_timeout_ms: u64,
     pub enable_cached_safety_data: bool,
+
+    pub vrf_private_key: Option<ConsensusVRFPrivateKey>,
 }
 
 impl Default for SafetyRulesConfig {
@@ -43,6 +47,7 @@ impl Default for SafetyRulesConfig {
             // Default value of 30 seconds for a timeout
             network_timeout_ms: 30_000,
             enable_cached_safety_data: true,
+            vrf_private_key: None,
         }
     }
 }

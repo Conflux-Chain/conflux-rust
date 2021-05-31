@@ -48,6 +48,7 @@ pub struct SafetyRules {
     export_consensus_key: bool,
     validator_signer: Option<ConfigurableValidatorSigner>,
     epoch_state: Option<EpochState>,
+    vrf_private_key: Option<ConsensusVRFPrivateKey>,
 }
 
 impl SafetyRules {
@@ -56,6 +57,7 @@ impl SafetyRules {
     pub fn new(
         persistent_storage: PersistentSafetyStorage,
         verify_vote_proposal_signature: bool, export_consensus_key: bool,
+        vrf_private_key: Option<ConsensusVRFPrivateKey>,
     ) -> Self
     {
         let execution_public_key = if verify_vote_proposal_signature {
@@ -75,6 +77,7 @@ impl SafetyRules {
             export_consensus_key,
             validator_signer: None,
             epoch_state: None,
+            vrf_private_key,
         }
     }
 
@@ -335,8 +338,7 @@ impl SafetyRules {
                                 Some(ConfigurableValidatorSigner::new_signer(
                                     author,
                                     consensus_key,
-                                    // FIXME: Setup vrf private key.
-                                    None,
+                                    self.vrf_private_key.clone(),
                                 ));
                             Ok(())
                         }

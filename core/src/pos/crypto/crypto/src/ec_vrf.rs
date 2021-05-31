@@ -29,7 +29,15 @@ lazy_static! {
 struct ValidatedPublicKeyTag {}
 
 /// Elliptic Curve VRF private key
-#[derive(DeserializeKey, SerializeKey, SilentDebug, SilentDisplay)]
+#[derive(
+    DeserializeKey,
+    Clone,
+    SerializeKey,
+    SilentDebug,
+    SilentDisplay,
+    Eq,
+    PartialEq,
+)]
 pub struct EcVrfPrivateKey(Vec<u8>);
 
 /// Elliptic Curve VRF public key

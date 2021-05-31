@@ -11,15 +11,18 @@ extern crate serde_derive;
 
 use cfxkey::{Error as EthkeyError, Generator, Public, Random};
 use diem_crypto::{
+    bls::BLSPrivateKey,
     ed25519::{Ed25519PrivateKey, Ed25519PublicKey, ED25519_PUBLIC_KEY_LENGTH},
-    Uniform,
+    Uniform, ValidCryptoMaterial,
 };
 use diem_types::{
-    account_address::{from_public_key, AccountAddress},
+    account_address::{
+        from_consensus_public_key, from_public_key, AccountAddress,
+    },
     contract_event::ContractEvent,
     on_chain_config::{new_epoch_event_key, ValidatorSet},
     transaction::{ChangeSet, Transaction, WriteSetPayload},
-    validator_config::ValidatorConfig,
+    validator_config::{ConsensusPublicKey, ValidatorConfig},
     validator_info::ValidatorInfo,
     waypoint::Waypoint,
     write_set::WriteSet,
@@ -151,7 +154,7 @@ fn execute_genesis_transaction(genesis_txn: Transaction) -> Waypoint {
     generate_waypoint::<FakeVM>(&db, &genesis_txn).unwrap()
 }
 
-fn generate_genesis_from_public_keys(public_keys: Vec<Ed25519PublicKey>) {
+fn generate_genesis_from_public_keys(public_keys: Vec<ConsensusPublicKey>) {
     let genesis_path = PathBuf::from("./genesis_file");
     let waypoint_path = PathBuf::from("./waypoint_config");
     let mut genesis_file = File::create(&genesis_path).unwrap();
@@ -159,8 +162,9 @@ fn generate_genesis_from_public_keys(public_keys: Vec<Ed25519PublicKey>) {
 
     let mut validators = Vec::new();
     for public_key in public_keys {
-        let account_address = from_public_key(&public_key);
-        let validator_config = ValidatorConfig::new(public_key, vec![], vec![]);
+        let account_address = from_consensus_public_key(&public_key);
+        let validator_config =
+            ValidatorConfig::new(public_key, None, vec![], vec![]);
         validators.push(ValidatorInfo::new(
             account_address,
             1,
@@ -212,8 +216,8 @@ where
         let mut public_keys = Vec::new();
 
         for i in 0..num_validator {
-            let private_key = Ed25519PrivateKey::generate(&mut rng);
-            let public_key = Ed25519PublicKey::from(&private_key);
+            let private_key = BLSPrivateKey::generate(&mut rng);
+            let public_key = ConsensusPublicKey::from(&private_key);
             public_keys.push(public_key.clone());
 
             let mut private_key_str = String::new();
@@ -248,7 +252,7 @@ where
         while let Some(public_key_str) = lines.next() {
             let public_key_bytes = hex::decode(public_key_str).unwrap();
             let public_key =
-                Ed25519PublicKey::try_from(public_key_bytes.as_slice())
+                ConsensusPublicKey::try_from(public_key_bytes.as_slice())
                     .unwrap();
             public_keys.push(public_key);
         }

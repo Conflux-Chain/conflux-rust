@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{account_address::AccountAddress, on_chain_config::ValidatorSet};
-use diem_crypto::{hash::CryptoHash, Signature, VerifyingKey, VRFPublicKey};
+use diem_crypto::{hash::CryptoHash, Signature, VRFPublicKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt};
 use thiserror::Error;
 
-use crate::validator_config::{ConsensusPublicKey, ConsensusSignature, ConsensusVRFPublicKey, ConsensusVRFProof};
+use crate::validator_config::{
+    ConsensusPublicKey, ConsensusSignature, ConsensusVRFProof,
+    ConsensusVRFPublicKey,
+};
 #[cfg(any(test, feature = "fuzzing"))]
 use anyhow::{ensure, Result};
 #[cfg(any(test, feature = "fuzzing"))]
@@ -191,16 +194,11 @@ impl ValidatorVerifier {
 
     /// Verify the correctness of a signature of a message by a known author.
     pub fn verify_vrf(
-        &self, author: AccountAddress, seed: &[u8],
-        proof: &ConsensusVRFProof,
-    ) -> std::result::Result<(), VerifyError>
-    {
+        &self, author: AccountAddress, seed: &[u8], proof: &ConsensusVRFProof,
+    ) -> std::result::Result<(), VerifyError> {
         match self.get_vrf_public_key(&author) {
             Some(Some(public_key)) => {
-                if public_key
-                    .verify_proof(seed, proof)
-                    .is_err()
-                {
+                if public_key.verify_proof(seed, proof).is_err() {
                     Err(VerifyError::InvalidVrfProof)
                 } else {
                     Ok(())
