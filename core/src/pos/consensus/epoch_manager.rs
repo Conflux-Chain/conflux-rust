@@ -112,7 +112,7 @@ impl EpochManager {
         pow_handler: Arc<dyn PowInterface>,
     ) -> Self
     {
-        let author = node_config.validator_network.as_ref().unwrap().peer_id();
+        let author = Author::random(); //node_config.validator_network.as_ref().unwrap().peer_id();
         let config = node_config.consensus.clone();
         let sr_config = &node_config.consensus.safety_rules;
         let safety_rules_manager = SafetyRulesManager::new(sr_config);

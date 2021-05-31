@@ -28,27 +28,27 @@ pub fn validator_swarm(
         let mut node =
             NodeConfig::random_with_template(index as u32, template, &mut rng);
         if randomize_ports {
-            node.randomize_ports();
+            //node.randomize_ports();
         }
 
         // For a validator node, any of its validator peers are considered an
         // upstream peer
-        let network = node.validator_network.as_mut().unwrap();
+        /*let network = node.validator_network.as_mut().unwrap();
         network.discovery_method = DiscoveryMethod::Onchain;
         network.mutual_authentication = true;
-        network.network_id = NetworkId::Validator;
+        network.network_id = NetworkId::Validator;*/
 
         nodes.push(node);
     }
 
     // set the first validator as every validators' initial configured seed
     // peer.
-    let seed_config = &nodes[0].validator_network.as_ref().unwrap();
+    /*let seed_config = &nodes[0].validator_network.as_ref().unwrap();
     let seeds = build_seed_for_network(&seed_config, PeerRole::Validator);
     for node in &mut nodes {
         let network = node.validator_network.as_mut().unwrap();
         network.seeds = seeds.clone();
-    }
+    }*/
 
     ValidatorSwarm { nodes }
 }

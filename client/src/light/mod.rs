@@ -12,7 +12,7 @@ use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WsServer;
 
 use crate::{
-    common::{initialize_common_modules, ClientComponents},
+    common::{initialize_common_modules, ClientComponents, DiemHandle},
     configuration::Configuration,
     rpc::{
         extractor::RpcExtractor, impls::light::RpcImpl,
@@ -38,6 +38,7 @@ pub struct LightClientExtraComponents {
     pub secret_store: Arc<SecretStore>,
     pub txpool: Arc<TransactionPool>,
     pub pow: Arc<PowComputer>,
+    pub diem_handler: DiemHandle,
 }
 
 impl MallocSizeOf for LightClientExtraComponents {
@@ -70,6 +71,7 @@ impl LightClient {
             notifications,
             pubsub,
             runtime,
+            diem_handler,
         ) = initialize_common_modules(&conf, exit.clone(), NodeType::Light)?;
 
         let light = Arc::new(LightQueryService::new(
@@ -145,6 +147,7 @@ impl LightClient {
                 secret_store,
                 txpool,
                 pow,
+                diem_handler,
             },
         }))
     }

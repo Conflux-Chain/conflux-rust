@@ -30,6 +30,7 @@ diem-types = { path = "../../types" }
 move-core-types = { path = "../../types/move-core-types" }
 scratchpad = { path = "../../storage/scratchpad" }
 storage-interface = { path = "../../storage/storage-interface" }
+subscription-service = { path = "../../common/subscription-service" }
 
 proptest = { version = "1.0.0", optional = true }
 pow-types = { path = "../../types/pow-types"}

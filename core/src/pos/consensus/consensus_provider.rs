@@ -20,10 +20,12 @@ use channel::diem_channel;
 use diem_config::config::NodeConfig;
 use diem_logger::prelude::*;
 use diem_types::on_chain_config::OnChainConfigPayload;
+use executor::{vm::FakeVM, Executor};
 use executor_types::BlockExecutor;
 use network::NetworkService;
+use state_sync::client::StateSyncClient;
 use std::sync::Arc;
-use storage_interface::DbReader;
+use storage_interface::{DbReader, DbReaderWriter};
 use tokio::runtime::{self, Runtime};
 
 /// Helper function to start consensus based on configuration and return the
@@ -31,11 +33,13 @@ use tokio::runtime::{self, Runtime};
 pub fn start_consensus(
     node_config: &NodeConfig, network: Arc<NetworkService>,
     own_node_hash: H256, protocol_config: ProtocolConfiguration,
-    diem_db: Arc<dyn DbReader>, executor: Box<dyn BlockExecutor>,
+    state_sync_client: StateSyncClient, diem_db: Arc<dyn DbReader>,
+    db_rw: DbReaderWriter,
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
-) -> Runtime
+) -> (Runtime, Arc<PowHandler>)
 {
     let runtime = runtime::Builder::new()
+        .basic_scheduler()
         .thread_name("consensus")
         .enable_all()
         .build()
@@ -46,7 +50,9 @@ pub fn start_consensus(
         node_config.consensus.mempool_txn_pull_timeout_ms,
         node_config.consensus.mempool_executed_txn_timeout_ms,
     ));
-    let state_computer = Arc::new(ExecutionProxy::new(executor));
+    let executor = Box::new(Executor::<FakeVM>::new(db_rw));
+    let state_computer =
+        Arc::new(ExecutionProxy::new(executor, state_sync_client));
     let time_service =
         Arc::new(ClockTimeService::new(runtime.handle().clone()));
 
@@ -79,7 +85,7 @@ pub fn start_consensus(
         state_computer,
         storage,
         reconfig_events,
-        pow_handler,
+        pow_handler.clone(),
     );
 
     runtime.spawn(epoch_mgr.start(
@@ -89,5 +95,5 @@ pub fn start_consensus(
     ));
 
     diem_debug!("Consensus started.");
-    runtime
+    (runtime, pow_handler)
 }

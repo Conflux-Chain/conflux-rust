@@ -85,6 +85,7 @@ diem-time-service = { path = "../core/src/pos/common/time-service" }
 diem-types = { path = "../core/src/pos/types" }
 executor-types = { path = "../core/src/pos/types/executor-types" }
 executor = { path = "../core/src/pos/consensus/executor" }
+state-sync = { path = "../core/src/pos/state-sync" }
 fail = "0.4.0"
 storage-interface = { path = "../core/src/pos/storage/storage-interface" }
 

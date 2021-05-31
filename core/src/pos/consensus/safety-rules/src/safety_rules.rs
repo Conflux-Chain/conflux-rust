@@ -59,11 +59,13 @@ impl SafetyRules {
     ) -> Self
     {
         let execution_public_key = if verify_vote_proposal_signature {
-            Some(
-                persistent_storage
-                    .execution_public_key()
-                    .expect("Unable to retrieve execution public key"),
-            )
+            None
+        /*
+        Some(
+            persistent_storage
+                .execution_public_key()
+                .expect("Unable to retrieve execution public key"),
+        )*/
         } else {
             None
         };

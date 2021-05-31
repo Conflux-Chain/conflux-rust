@@ -13,6 +13,7 @@ use crate::{
     },
 };
 use anyhow::{anyhow, bail, ensure, format_err};
+use cfx_types::H256;
 use channel::{self, diem_channel, message_queues::QueueStyle};
 use consensus_types::{
     block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse},
@@ -86,7 +87,7 @@ impl NetworkSender {
     {
         ensure!(from != self.author, "Retrieve block from self");
 
-        let peer_hash = from.to_H256();
+        let peer_hash = H256::from(from.to_u8());
         let peer_state =
             self.network_sender.protocol_handler.peers.get(&peer_hash);
         if peer_state.is_none() {

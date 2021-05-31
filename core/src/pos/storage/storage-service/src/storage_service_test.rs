@@ -14,19 +14,22 @@ use std::{
 };
 use storage_client::StorageClient;
 
-fn start_test_storage_with_client() -> (JoinHandle<()>, diem_temppath::TempPath, StorageClient) {
+fn start_test_storage_with_client(
+) -> (JoinHandle<()>, diem_temppath::TempPath, StorageClient) {
     let mut config = NodeConfig::random();
     let tmp_dir = diem_temppath::TempPath::new();
 
     let server_port = utils::get_available_port();
-    config.storage.address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), server_port);
+    config.storage.address =
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), server_port);
     // Test timeout of 5 seconds
     config.storage.timeout_ms = 5_000;
 
     let db = Arc::new(DiemDB::new_for_test(&tmp_dir));
     let storage_server_handle = start_storage_service_with_db(&config, db);
 
-    let client = StorageClient::new(&config.storage.address, config.storage.timeout_ms);
+    let client =
+        StorageClient::new(&config.storage.address, config.storage.timeout_ms);
     (storage_server_handle, tmp_dir, client)
 }
 
