@@ -579,6 +579,7 @@ impl RoundManager {
         if self.proposer_election.is_random_election() {
             // Wait for all proposals.
             // FIXME(lpl): Execute to check validity.
+            let vrf_public_key = self.
             self.proposer_election.receive_proposal_candidate(proposal);
         } else {
             let proposal_round = proposal.round();

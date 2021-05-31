@@ -2,14 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{account_address::AccountAddress, on_chain_config::ValidatorSet};
-use diem_crypto::{hash::CryptoHash, Signature, VerifyingKey};
+use diem_crypto::{hash::CryptoHash, Signature, VerifyingKey, VRFPublicKey};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt};
 use thiserror::Error;
 
-use crate::validator_config::{
-    ConsensusPublicKey, ConsensusSignature, ConsensusVRFPublicKey,
-};
+use crate::validator_config::{ConsensusPublicKey, ConsensusSignature, ConsensusVRFPublicKey, ConsensusVRFProof};
 #[cfg(any(test, feature = "fuzzing"))]
 use anyhow::{ensure, Result};
 #[cfg(any(test, feature = "fuzzing"))]
@@ -42,6 +40,8 @@ pub enum VerifyError {
     #[error("Signature is invalid")]
     /// The signature does not match the hash.
     InvalidSignature,
+    #[error("Invalid VRF proof")]
+    InvalidVrfProof,
 }
 
 /// Helper struct to manage validator information for validation
@@ -186,6 +186,27 @@ impl ValidatorVerifier {
                 }
             }
             None => Err(VerifyError::UnknownAuthor),
+        }
+    }
+
+    /// Verify the correctness of a signature of a message by a known author.
+    pub fn verify_vrf(
+        &self, author: AccountAddress, seed: &[u8],
+        proof: &ConsensusVRFProof,
+    ) -> std::result::Result<(), VerifyError>
+    {
+        match self.get_vrf_public_key(&author) {
+            Some(Some(public_key)) => {
+                if public_key
+                    .verify_proof(seed, proof)
+                    .is_err()
+                {
+                    Err(VerifyError::InvalidVrfProof)
+                } else {
+                    Ok(())
+                }
+            }
+            _ => Err(VerifyError::UnknownAuthor),
         }
     }
 

@@ -15,14 +15,18 @@ pub const PROPOSAL_THRESHOLD: U256 = U256::MAX;
 
 /// The round proposer maps a round to author
 pub struct VrfProposer {
+    author: Author,
     current_round: Mutex<Round>,
+    current_seed: Mutex<Vec<u8>>,
     proposal_candidates: Mutex<Vec<Block>>,
 }
 
 impl VrfProposer {
-    pub fn new() -> Self {
+    pub fn new(author: Author) -> Self {
         Self {
+            author,
             current_round: Mutex::new(0),
+            current_seed: Mutex::new(VRF_SEED.to_vec()),
             proposal_candidates: Default::default(),
         }
     }
@@ -35,8 +39,9 @@ impl ProposerElection for VrfProposer {
         )
     }
 
-    fn is_valid_proposer(&self, _author: Author, _round: Round) -> bool {
-        unreachable!("validity is only known after receiving the vrf proof")
+    fn is_valid_proposer(&self, author: Author, round: Round) -> bool {
+        assert_eq!(author, self.author, "VRF election can not check proposer validity without vrf_proof");
+        let vrf_proof =
     }
 
     fn is_valid_proposal(&self, block: &Block) -> bool {
