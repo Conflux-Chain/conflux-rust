@@ -1015,8 +1015,10 @@ impl<
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
     ) -> vm::Result<FinalizationResult>
     {
+        top_substate.push_callstack(self.get_recipient().clone());
         let mut last_res =
             Some((false, self.gas, self.exec(state, top_substate, tracer)));
+        top_substate.pop_callstack();
 
         let mut callstack: Vec<(
             Option<Address>,
@@ -1027,7 +1029,6 @@ impl<
             match last_res {
                 None => {
                     let current = callstack.pop();
-                    top_substate.pop_callstack();
                     match current {
                         Some((_, exec)) => {
                             let second_last = callstack.last_mut();
@@ -1040,10 +1041,10 @@ impl<
                         }
                         None => panic!("When callstack only had one item and it was executed, this function would return; callstack never reaches zero item; qed"),
                     }
+                    top_substate.pop_callstack();
                 }
                 Some((is_create, _gas, Ok(val))) => {
                     let current = callstack.pop();
-                    top_substate.pop_callstack();
 
                     match current {
                         Some((address, mut exec)) => {
@@ -1099,6 +1100,7 @@ impl<
                         }
                         None => return val,
                     }
+                    top_substate.pop_callstack();
                 }
                 Some((_, _, Err(TrapError::Call(subparams, mut resume)))) => {
                     tracer.prepare_trace_call(&subparams);
