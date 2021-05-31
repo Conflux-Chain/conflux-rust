@@ -7,7 +7,7 @@ use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WsServer;
 
 use crate::{
-    common::{initialize_not_light_node_modules, ClientComponents},
+    common::{initialize_not_light_node_modules, ClientComponents, DiemHandle},
     configuration::Configuration,
 };
 use blockgen::BlockGenerator;
@@ -21,7 +21,7 @@ use runtime::Runtime;
 use std::sync::Arc;
 
 pub struct FullClientExtraComponents {
-    pub pos_runtime: tokio::runtime::Runtime,
+    pub diem_handler: DiemHandle,
     pub consensus: Arc<ConsensusGraph>,
     pub debug_rpc_http_server: Option<HttpServer>,
     pub rpc_http_server: Option<HttpServer>,
@@ -59,13 +59,13 @@ impl FullClient {
             rpc_tcp_server,
             rpc_ws_server,
             runtime,
-            pos_runtime,
+            diem_handler,
         ) = initialize_not_light_node_modules(&conf, exit, NodeType::Full)?;
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
             blockgen: Some(blockgen),
             other_components: FullClientExtraComponents {
-                pos_runtime,
+                diem_handler,
                 consensus,
                 debug_rpc_http_server,
                 rpc_http_server,

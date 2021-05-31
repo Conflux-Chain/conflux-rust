@@ -119,7 +119,7 @@ impl PosConnection {
 }
 
 impl PosInterface for PosConnection {
-    fn initialize(&self) -> Result<(), String> { todo!() }
+    fn initialize(&self) -> Result<(), String> { Ok(()) }
 
     fn get_committed_block(&self, h: &PosBlockId) -> Option<PosBlock> {
         let ledger_info = self

@@ -12,6 +12,7 @@ use crate::{
     },
 };
 use anyhow::{format_err, Context};
+use cfx_types::H256;
 use consensus_types::{
     block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse},
     epoch_retrieval::EpochRetrievalRequest,
@@ -74,7 +75,7 @@ impl ConsensusNetworkSender {
     pub fn send_to(
         &mut self, recipient: PeerId, msg: &dyn Message,
     ) -> Result<(), anyhow::Error> {
-        let peer_hash = recipient.to_H256();
+        let peer_hash = H256::from(recipient.to_u8());
         if let Some(peer) = self.protocol_handler.peers.get(&peer_hash) {
             let peer_id = peer.read().get_id();
             self.send_message_with_peer_id(&peer_id, msg);

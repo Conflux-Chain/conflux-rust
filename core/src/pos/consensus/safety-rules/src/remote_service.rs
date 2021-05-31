@@ -11,6 +11,7 @@ use crate::{
 };
 use diem_logger::warn as diem_warn;
 use diem_secure_net::{NetworkClient, NetworkServer};
+use diem_types::validator_config::ConsensusVRFPrivateKey;
 use std::net::SocketAddr;
 
 pub trait RemoteService {
@@ -33,13 +34,14 @@ pub trait RemoteService {
 pub fn execute(
     storage: PersistentSafetyStorage, listen_addr: SocketAddr,
     verify_vote_proposal_signature: bool, export_consensus_key: bool,
-    network_timeout_ms: u64,
+    network_timeout_ms: u64, vrf_private_key: Option<ConsensusVRFPrivateKey>,
 )
 {
     let mut safety_rules = SafetyRules::new(
         storage,
         verify_vote_proposal_signature,
         export_consensus_key,
+        vrf_private_key,
     );
     if let Err(e) = safety_rules.consensus_state() {
         diem_warn!("Unable to print consensus state: {}", e);

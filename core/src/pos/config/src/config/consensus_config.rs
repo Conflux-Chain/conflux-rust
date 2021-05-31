@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::SafetyRulesConfig;
-use diem_types::{account_address::AccountAddress, block_info::Round};
+use diem_types::{
+    account_address::AccountAddress, block_info::Round,
+    validator_config::ConsensusVRFPrivateKey,
+};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
 

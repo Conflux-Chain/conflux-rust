@@ -264,7 +264,7 @@ def wait_until(predicate,
 ################
 
 def initialize_tg_config(dirname, nodes):
-    tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/tg_config_gen")
+    tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/pos-genesis-tool")
     check_call([tg_config_gen, "random", "--num-validator={}".format(nodes)], cwd=dirname)
     consensus_peers_config = open(os.path.join(dirname, "consensus_peers.config.toml")).readlines()
     private_keys = open(os.path.join(dirname, "private_key")).readlines()

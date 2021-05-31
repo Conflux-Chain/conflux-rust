@@ -64,8 +64,8 @@ pub struct NodeConfig {
     pub debug_interface: DebugInterfaceConfig,
     #[serde(default)]
     pub execution: ExecutionConfig,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub full_node_networks: Vec<NetworkConfig>,
+    //#[serde(default, skip_serializing_if = "Vec::is_empty")]
+    //pub full_node_networks: Vec<NetworkConfig>,
     #[serde(default)]
     pub logger: LoggerConfig,
     #[serde(default)]
@@ -82,8 +82,8 @@ pub struct NodeConfig {
     pub test: Option<TestConfig>,
     #[serde(default)]
     pub upstream: UpstreamConfig,
-    #[serde(default)]
-    pub validator_network: Option<NetworkConfig>,
+    //#[serde(default)]
+    //pub validator_network: Option<NetworkConfig>,
     #[serde(default)]
     pub failpoints: Option<HashMap<String, String>>,
 }
@@ -229,14 +229,14 @@ impl NodeConfig {
         let input_dir = RootPath::new(input_path);
         config.execution.load(&input_dir)?;
 
-        let mut config = config.validate_network_configs()?;
-        config.set_data_dir(config.data_dir().to_path_buf());
+        //let mut config = config.validate_network_configs()?;
+        //config.set_data_dir(config.data_dir().to_path_buf());
         Ok(config)
     }
 
     /// Checks `NetworkConfig` setups so that they exist on proper networks
     /// Additionally, handles any strange missing default cases
-    fn validate_network_configs(mut self) -> Result<NodeConfig, Error> {
+    /*fn validate_network_configs(mut self) -> Result<NodeConfig, Error> {
         if self.base.role.is_validator() {
             invariant(
                 self.validator_network.is_some(),
@@ -269,7 +269,7 @@ impl NodeConfig {
             network_ids.insert(network_id.clone());
         }
         Ok(self)
-    }
+    }*/
 
     pub fn save<P: AsRef<Path>>(
         &mut self, output_path: P,
@@ -282,7 +282,7 @@ impl NodeConfig {
         Ok(())
     }
 
-    pub fn randomize_ports(&mut self) {
+    /*pub fn randomize_ports(&mut self) {
         self.debug_interface.randomize_ports();
         self.json_rpc.randomize_ports();
         self.storage.randomize_ports();
@@ -296,7 +296,7 @@ impl NodeConfig {
             network.listen_address =
                 crate::utils::get_available_port_in_multiaddr(true);
         }
-    }
+    }*/
 
     pub fn random() -> Self {
         let mut rng = StdRng::from_seed([0u8; 32]);
@@ -320,14 +320,14 @@ impl NodeConfig {
                 idx.to_string().as_bytes(),
             );
 
-            if self.validator_network.is_none() {
+            /*if self.validator_network.is_none() {
                 let network_config =
                     NetworkConfig::network_with_id(NetworkId::Validator);
                 self.validator_network = Some(network_config);
             }
 
             let validator_network = self.validator_network.as_mut().unwrap();
-            validator_network.random_with_peer_id(rng, Some(peer_id));
+            validator_network.random_with_peer_id(rng, Some(peer_id));*/
             // We want to produce this key twice
             let mut cloned_rng = rng.clone();
             test.random_execution_key(rng);
@@ -338,7 +338,7 @@ impl NodeConfig {
             safety_rules_test_config.random_execution_key(&mut cloned_rng);
             self.consensus.safety_rules.test = Some(safety_rules_test_config);
         } else {
-            self.validator_network = None;
+            /*self.validator_network = None;
             if self.full_node_networks.is_empty() {
                 let network_config =
                     NetworkConfig::network_with_id(NetworkId::Public);
@@ -346,7 +346,7 @@ impl NodeConfig {
             }
             for network in &mut self.full_node_networks {
                 network.random(rng);
-            }
+            }*/
         }
         self.set_data_dir(test.temp_dir().unwrap().to_path_buf());
         self.test = Some(test);
@@ -356,8 +356,10 @@ impl NodeConfig {
         let config = Self::parse(serialized)
             .unwrap_or_else(|e| panic!("Error in {}: {}", path, e));
         config
+        /*
+        config
             .validate_network_configs()
-            .unwrap_or_else(|e| panic!("Error in {}: {}", path, e))
+            .unwrap_or_else(|e| panic!("Error in {}: {}", path, e))*/
     }
 
     pub fn default_for_public_full_node() -> Self {

@@ -139,6 +139,7 @@ pub fn initialize_common_modules(
         Arc<Notifications>,
         PubSubClient,
         Runtime,
+        DiemHandle,
     ),
     String,
 >
@@ -295,6 +296,25 @@ pub fn initialize_common_modules(
         Arc::new(network)
     };
 
+    // initialize pos
+    let pos_config_path = match conf.raw_conf.pos_config_path.as_ref() {
+        Some(path) => Some(PathBuf::from(path)),
+        None => None,
+    };
+    let pos_config =
+        NodeConfig::load(pos_config_path.expect("empty pos config path"))
+            .expect("Failed to load node config");
+    let own_node_hash =
+        keccak(network.net_key_pair().expect("Error node key").public());
+    let diem_handler = start_pos_consensus(
+        &pos_config,
+        None,
+        network.clone(),
+        own_node_hash,
+        conf.protocol_config(),
+    );
+    diem_handler.pow_handler.initialize(consensus.clone());
+
     let refresh_time =
         Duration::from_millis(conf.raw_conf.account_provider_refresh_time_ms);
 
@@ -338,6 +358,7 @@ pub fn initialize_common_modules(
         notifications,
         pubsub,
         runtime,
+        diem_handler,
     ))
 }
 
@@ -357,7 +378,7 @@ pub fn initialize_not_light_node_modules(
         Option<TcpServer>,
         Option<WSServer>,
         Runtime,
-        tokio::runtime::Runtime,
+        DiemHandle,
     ),
     String,
 >
@@ -378,6 +399,7 @@ pub fn initialize_not_light_node_modules(
         _notifications,
         pubsub,
         runtime,
+        diem_handler,
     ) = initialize_common_modules(&conf, exit.clone(), node_type)?;
 
     let light_provider = Arc::new(LightProvider::new(
@@ -497,23 +519,6 @@ pub fn initialize_not_light_node_modules(
         }
     }
 
-    // initialize pos
-    let pos_config_path = match conf.raw_conf.pos_config_path.as_ref() {
-        Some(path) => Some(PathBuf::from(path)),
-        None => None,
-    };
-    let pos_config =
-        NodeConfig::load(pos_config_path.expect("empty pos config path"))
-            .expect("Failed to load node config");
-    let own_node_hash =
-        keccak(network.net_key_pair().expect("Error node key").public());
-    let pos_runtime = start_pos_consensus(
-        &pos_config,
-        network.clone(),
-        own_node_hash,
-        conf.protocol_config(),
-    );
-
     let rpc_impl = Arc::new(RpcImpl::new(
         consensus.clone(),
         sync.clone(),
@@ -574,7 +579,7 @@ pub fn initialize_not_light_node_modules(
         rpc_tcp_server,
         rpc_ws_server,
         runtime,
-        pos_runtime,
+        diem_handler,
     ))
 }
 
@@ -744,7 +749,6 @@ pub mod delegate_convert {
     */
 }
 
-pub use crate::configuration::Configuration;
 use crate::{
     accounts::{account_provider, keys_path},
     common::pos::start_pos_consensus,
@@ -759,6 +763,7 @@ use crate::{
     },
     GENESIS_VERSION,
 };
+pub use crate::{common::pos::DiemHandle, configuration::Configuration};
 use blockgen::BlockGenerator;
 use cfx_parameters::sync::CATCH_UP_EPOCH_LAG_THRESHOLD;
 use cfx_storage::StorageManager;

@@ -40,7 +40,10 @@ use diem_types::{
     contract_event::ContractEvent,
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
-    on_chain_config,
+    move_resource::MoveStorage,
+    on_chain_config::{
+        self, config_address, OnChainConfigPayload, ON_CHAIN_CONFIG_REGISTRY,
+    },
     proof::accumulator::InMemoryAccumulator,
     transaction::{
         Transaction, TransactionInfo, TransactionListWithProof,
@@ -447,18 +450,18 @@ where V: VMExecutor
                 .ok_or_else(|| {
                     format_err!("ValidatorSet account does not exist")
                 })??;
-            let configuration = account_to_state
-                .get(&on_chain_config::config_address())
-                .map(|state| {
-                    state.get_configuration_resource()?.ok_or_else(|| {
-                        format_err!("Configuration does not exist")
-                    })
+            /*let configuration = account_to_state
+            .get(&on_chain_config::config_address())
+            .map(|state| {
+                state.get_configuration_resource()?.ok_or_else(|| {
+                    format_err!("Configuration does not exist")
                 })
-                .ok_or_else(|| {
-                    format_err!("Association account does not exist")
-                })??;
+            })
+            .ok_or_else(|| {
+                format_err!("Association account does not exist")
+            })??;*/
             Some(EpochState {
-                epoch: configuration.epoch(),
+                epoch: 0, //configuration.epoch(),
                 verifier: (&validator_set).into(),
             })
         } else {

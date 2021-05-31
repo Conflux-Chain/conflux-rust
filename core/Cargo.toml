@@ -110,6 +110,7 @@ schemadb = { path = "./src/pos/storage/schemadb" }
 storage-interface = { path = "./src/pos/storage/storage-interface" }
 short-hex-str = { path = "./src/pos/common/short-hex-str" }
 subscription-service = { path = "./src/pos/common/subscription-service" }
+state-sync = { path = "./src/pos/state-sync" }
 fail = "0.4.0"
 anyhow = "1.0.38"
 once_cell = "1.7.2"

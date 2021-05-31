@@ -16,7 +16,10 @@ use diem_types::{
     event::EventKey,
     ledger_info::LedgerInfoWithSignatures,
     proof::{AccumulatorConsistencyProof, SparseMerkleProof},
-    transaction::{TransactionListWithProof, TransactionToCommit, TransactionWithProof, Version},
+    transaction::{
+        TransactionListWithProof, TransactionToCommit, TransactionWithProof,
+        Version,
+    },
 };
 use serde::de::DeserializeOwned;
 use std::net::SocketAddr;
@@ -32,7 +35,11 @@ pub struct StorageClient {
 impl StorageClient {
     pub fn new(server_address: &SocketAddr, timeout: u64) -> Self {
         Self {
-            network_client: Mutex::new(NetworkClient::new("storage", *server_address, timeout)),
+            network_client: Mutex::new(NetworkClient::new(
+                "storage",
+                *server_address,
+                timeout,
+            )),
         }
     }
 
@@ -42,7 +49,9 @@ impl StorageClient {
         client.read().map_err(|e| e.into())
     }
 
-    fn request<T: DeserializeOwned>(&self, input: StorageRequest) -> std::result::Result<T, Error> {
+    fn request<T: DeserializeOwned>(
+        &self, input: StorageRequest,
+    ) -> std::result::Result<T, Error> {
         let input_message = bcs::to_bytes(&input)?;
         let result = loop {
             match self.process_one_message(&input_message) {
@@ -58,9 +67,7 @@ impl StorageClient {
     }
 
     pub fn get_account_state_with_proof_by_version(
-        &self,
-        address: AccountAddress,
-        version: Version,
+        &self, address: AccountAddress, version: Version,
     ) -> std::result::Result<
         (
             Option<AccountStateBlob>,
@@ -75,27 +82,31 @@ impl StorageClient {
         ))
     }
 
-    pub fn get_startup_info(&self) -> std::result::Result<Option<StartupInfo>, Error> {
+    pub fn get_startup_info(
+        &self,
+    ) -> std::result::Result<Option<StartupInfo>, Error> {
         self.request(StorageRequest::GetStartupInfoRequest)
     }
 
     pub fn save_transactions(
-        &self,
-        txns_to_commit: Vec<TransactionToCommit>,
+        &self, txns_to_commit: Vec<TransactionToCommit>,
         first_version: Version,
         ledger_info_with_sigs: Option<LedgerInfoWithSignatures>,
-    ) -> std::result::Result<(), Error> {
+    ) -> std::result::Result<(), Error>
+    {
         self.request(StorageRequest::SaveTransactionsRequest(Box::new(
-            SaveTransactionsRequest::new(txns_to_commit, first_version, ledger_info_with_sigs),
+            SaveTransactionsRequest::new(
+                txns_to_commit,
+                first_version,
+                ledger_info_with_sigs,
+            ),
         )))
     }
 }
 
 impl DbReader for StorageClient {
     fn get_account_state_with_proof_by_version(
-        &self,
-        address: AccountAddress,
-        version: u64,
+        &self, address: AccountAddress, version: u64,
     ) -> Result<(
         Option<AccountStateBlob>,
         SparseMerkleProof<AccountStateBlob>,
@@ -110,8 +121,7 @@ impl DbReader for StorageClient {
     }
 
     fn get_latest_account_state(
-        &self,
-        _address: AccountAddress,
+        &self, _address: AccountAddress,
     ) -> Result<Option<AccountStateBlob>> {
         unimplemented!()
     }
@@ -121,49 +131,37 @@ impl DbReader for StorageClient {
     }
 
     fn get_txn_by_account(
-        &self,
-        _address: AccountAddress,
-        _seq_num: u64,
-        _ledger_version: u64,
+        &self, _address: AccountAddress, _seq_num: u64, _ledger_version: u64,
         _fetch_events: bool,
-    ) -> Result<Option<TransactionWithProof>> {
+    ) -> Result<Option<TransactionWithProof>>
+    {
         unimplemented!()
     }
 
     fn get_transactions(
-        &self,
-        _start_version: u64,
-        _limit: u64,
-        _ledger_version: u64,
+        &self, _start_version: u64, _limit: u64, _ledger_version: u64,
         _fetch_events: bool,
-    ) -> Result<TransactionListWithProof> {
+    ) -> Result<TransactionListWithProof>
+    {
         unimplemented!()
     }
 
     fn get_events(
-        &self,
-        _key: &EventKey,
-        _start: u64,
-        _order: Order,
-        _limit: u64,
+        &self, _key: &EventKey, _start: u64, _order: Order, _limit: u64,
     ) -> Result<Vec<(u64, ContractEvent)>> {
         unimplemented!()
     }
 
     fn get_events_with_proofs(
-        &self,
-        _event_key: &EventKey,
-        _start: u64,
-        _order: Order,
-        _limit: u64,
+        &self, _event_key: &EventKey, _start: u64, _order: Order, _limit: u64,
         _known_version: Option<u64>,
-    ) -> Result<Vec<EventWithProof>> {
+    ) -> Result<Vec<EventWithProof>>
+    {
         unimplemented!();
     }
 
     fn get_state_proof(
-        &self,
-        _known_version: u64,
+        &self, _known_version: u64,
     ) -> Result<(
         LedgerInfoWithSignatures,
         EpochChangeProof,
@@ -173,19 +171,16 @@ impl DbReader for StorageClient {
     }
 
     fn get_state_proof_with_ledger_info(
-        &self,
-        _known_version: u64,
-        _ledger_info: LedgerInfoWithSignatures,
+        &self, _known_version: u64, _ledger_info: LedgerInfoWithSignatures,
     ) -> Result<(EpochChangeProof, AccumulatorConsistencyProof)> {
         unimplemented!()
     }
 
     fn get_account_state_with_proof(
-        &self,
-        _address: AccountAddress,
-        _version: Version,
+        &self, _address: AccountAddress, _version: Version,
         _ledger_version: Version,
-    ) -> Result<AccountStateWithProof> {
+    ) -> Result<AccountStateWithProof>
+    {
         unimplemented!()
     }
 
@@ -193,19 +188,17 @@ impl DbReader for StorageClient {
         unimplemented!()
     }
 
-    fn get_latest_tree_state(&self) -> Result<TreeState> {
-        unimplemented!()
-    }
+    fn get_latest_tree_state(&self) -> Result<TreeState> { unimplemented!() }
 
     fn get_epoch_ending_ledger_infos(
-        &self,
-        _start_epoch: u64,
-        _end_epoch: u64,
+        &self, _start_epoch: u64, _end_epoch: u64,
     ) -> Result<EpochChangeProof> {
         unimplemented!()
     }
 
-    fn get_epoch_ending_ledger_info(&self, _: u64) -> Result<LedgerInfoWithSignatures> {
+    fn get_epoch_ending_ledger_info(
+        &self, _: u64,
+    ) -> Result<LedgerInfoWithSignatures> {
         unimplemented!()
     }
 
@@ -216,11 +209,10 @@ impl DbReader for StorageClient {
 
 impl DbWriter for StorageClient {
     fn save_transactions(
-        &self,
-        txns_to_commit: &[TransactionToCommit],
-        first_version: Version,
+        &self, txns_to_commit: &[TransactionToCommit], first_version: Version,
         ledger_info_with_sigs: Option<&LedgerInfoWithSignatures>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         Ok(Self::save_transactions(
             self,
             txns_to_commit.to_vec(),
