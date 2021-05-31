@@ -25,7 +25,9 @@ pub struct CallStackInfo {
 
 impl CallStackInfo {
     fn push(&mut self, address: Address) {
-        if self.reentrancy_happens_when_push(&address) {
+        // We should still use the correct behaviour to check if reentrancy
+        // happens.
+        if self.last() != Some(address) && self.contains_key(&address) {
             self.first_reentrancy_depth
                 .get_or_insert(self.call_stack_recipient_addresses.len());
         }
