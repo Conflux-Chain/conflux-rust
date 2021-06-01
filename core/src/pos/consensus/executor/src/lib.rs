@@ -62,6 +62,7 @@ use crate::{
     types::{ProcessedVMOutput, TransactionData},
     vm::VMExecutor,
 };
+use diem_types::term_state::RetireEvent;
 
 mod types;
 
@@ -301,6 +302,7 @@ where V: VMExecutor
         let pivot_select_event_key =
             PivotBlockDecision::pivot_select_event_key();
         let election_event_key = ElectionEvent::election_event_key();
+        let retire_event_key = RetireEvent::retire_event_key();
 
         // Find the next pivot block.
         let mut pivot_decision = None;
@@ -309,14 +311,20 @@ where V: VMExecutor
             for event in vm_output.events() {
                 // check for pivot block selection.
                 if *event.key() == pivot_select_event_key {
+                    if pivot_decision.is_some() {
+                        bail!("Multiple pivot decisions in one block!");
+                    }
                     pivot_decision = Some(PivotBlockDecision::from_bytes(
                         event.event_data(),
                     )?);
-                    break;
                 } else if *event.key() == election_event_key {
                     let election_event =
                         ElectionEvent::from_bytes(event.event_data())?;
-                    new_pos_state.new_node_elected(&election_event);
+                    new_pos_state.new_node_elected(&election_event)?;
+                } else if *event.key() == retire_event_key {
+                    let retire_event =
+                        RetireEvent::from_bytes(event.event_data())?;
+                    new_pos_state.retire_node(&retire_event)?;
                 }
             }
         }

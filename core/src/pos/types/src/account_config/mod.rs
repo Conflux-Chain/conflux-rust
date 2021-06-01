@@ -20,3 +20,8 @@ pub fn election_select_address() -> AccountAddress {
     AccountAddress::from_hex_literal("0x1DA")
         .expect("Parsing valid hex literal should always succeed")
 }
+
+pub fn retire_address() -> AccountAddress {
+    AccountAddress::from_hex_literal("0x1DB")
+        .expect("Parsing valid hex literal should always succeed")
+}

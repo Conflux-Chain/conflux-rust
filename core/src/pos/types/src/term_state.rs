@@ -4,7 +4,7 @@ use crate::{
     block_info::Round,
     epoch_state::EpochState,
     event::EventKey,
-    transaction::ElectionPayload,
+    transaction::{ElectionPayload, RetirePayload},
     validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
 };
@@ -19,7 +19,7 @@ use std::{
 const TERM_LIST_LEN: usize = 6;
 const ELECTION_AFTER_ACCEPTED_ROUND: Round = 240;
 const ROUND_PER_TERM: Round = 60;
-/// A term `n` is open for election in the round range
+/// A term `n` is open for election in the view range
 /// `(n * ROUND_PER_TERM - ELECTION_TERM_START_ROUND, n * ROUND_PER_TERM -
 /// ELECTION_TERM_END_ROUND]`
 const ELECTION_TERM_START_ROUND: Round = 120;
@@ -39,13 +39,12 @@ pub struct NodeData {
     public_key: ConsensusPublicKey,
     vrf_public_key: Option<ConsensusVRFPublicKey>,
     status: NodeStatus,
-    status_start_round: Round,
-    serving_term: Option<u64>,
+    status_start_view: Round,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct TermData {
-    start_round: Round,
+    start_view: Round,
     seed: Vec<u8>,
     /// (VRF.val, NodeID)
     node_list: BinaryHeap<(HashValue, AccountAddress)>,
@@ -53,7 +52,7 @@ pub struct TermData {
 
 impl PartialEq for TermData {
     fn eq(&self, other: &Self) -> bool {
-        if self.start_round != other.start_round || self.seed != other.seed {
+        if self.start_view != other.start_view || self.seed != other.seed {
             return false;
         }
         let mut iter_self = self.node_list.iter();
@@ -79,7 +78,7 @@ impl TermData {
         &self, node_list: BinaryHeap<(HashValue, AccountAddress)>,
     ) -> Self {
         TermData {
-            start_round: self.start_round + ROUND_PER_TERM,
+            start_view: self.start_view + ROUND_PER_TERM,
             seed: HashValue::sha3_256_of(&self.seed).to_vec(),
             node_list,
         }
@@ -130,7 +129,7 @@ impl TermList {
 
     pub fn new_term(&mut self, new_term: u64) {
         // This double-check should always pass.
-        if self.term_list[1].start_round
+        if self.term_list[1].start_view
             == new_term.saturating_mul(ROUND_PER_TERM)
         {
             if new_term <= TERM_LIST_LEN as u64 {
@@ -152,7 +151,7 @@ pub struct PosState {
     /// Nodes are only inserted and will never be removed.
     node_map: HashMap<AccountAddress, NodeData>,
     /// `current_view / TERM_LIST_LEN == term_list.current_term` is always
-    /// true. This is not the same as `RoundState.current_round` because the
+    /// true. This is not the same as `RoundState.current_view` because the
     /// view does not increase for blocks following a pending
     /// reconfiguration block.
     current_view: Round,
@@ -164,7 +163,7 @@ impl Debug for PosState {
         &self, f: &mut Formatter<'_>,
     ) -> std::result::Result<(), std::fmt::Error> {
         f.debug_struct("PosState")
-            .field("round", &self.current_view)
+            .field("view", &self.current_view)
             .finish()
     }
 }
@@ -188,9 +187,7 @@ impl PosState {
                     public_key,
                     vrf_public_key,
                     status: NodeStatus::Accepted,
-                    status_start_round: 0,
-                    // This will not be used for initial terms.
-                    serving_term: None,
+                    status_start_view: 0,
                 },
             );
             // VRF output of initial terms will not be used, because these terms
@@ -199,7 +196,7 @@ impl PosState {
         }
         let mut term_list = Vec::new();
         let initial_term = TermData {
-            start_round: 0,
+            start_view: 0,
             seed: initial_seed,
             node_list,
         };
@@ -233,19 +230,19 @@ impl PosState {
         };
 
         if !matches!(node.status, NodeStatus::Accepted) {
-            bail!("Invalid node status");
+            bail!("Invalid node status for election");
         }
-        if node.status_start_round + ELECTION_AFTER_ACCEPTED_ROUND
+        if node.status_start_view + ELECTION_AFTER_ACCEPTED_ROUND
             > election_tx
                 .target_term
                 .checked_mul(ROUND_PER_TERM)
-                .ok_or(anyhow!("start round overflow"))?
+                .ok_or(anyhow!("start view overflow"))?
         {
             bail!("Election too soon after accepted");
         }
-        let target_round = election_tx.target_term * ROUND_PER_TERM;
-        if target_round >= self.current_view + ELECTION_TERM_START_ROUND
-            || target_round < self.current_view + ELECTION_TERM_END_ROUND
+        let target_view = election_tx.target_term * ROUND_PER_TERM;
+        if target_view >= self.current_view + ELECTION_TERM_START_ROUND
+            || target_view < self.current_view + ELECTION_TERM_END_ROUND
         {
             bail!("Target term is not open for election");
         }
@@ -267,13 +264,35 @@ impl PosState {
         // TODO(lpl): Optimize by adding hash set to each term or adding another
         // field to node_map.
         let start_term_offset = target_term_offset as usize - TERM_LIST_LEN;
-        // The checking of `target_round` ensures that this is in range of
+        // The checking of `target_view` ensures that this is in range of
         // `term_list`.
         for i in start_term_offset..=target_term_offset {
             let term = &self.term_list.term_list[i as usize];
             for (_, addr) in &term.node_list {
                 if *addr == election_tx.node_id {
                     bail!("Node in active term service cannot be elected");
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn validate_retire(
+        &self, retire_payload: &RetirePayload,
+    ) -> Result<()> {
+        let node = match self.node_map.get(&retire_payload.node_id) {
+            Some(node) => node,
+            None => return Err(anyhow!("Retirement for non-existent node.")),
+        };
+        if !matches!(node.status, NodeStatus::Accepted) {
+            bail!("Invalid node status for retiring");
+        }
+
+        // FIXME(lpl): Nodes in the current active term are not covered by this.
+        for term in &self.term_list.term_list {
+            for (_, addr) in &term.node_list {
+                if *addr == retire_payload.node_id {
+                    bail!("Node in active term service cannot retire");
                 }
             }
         }
@@ -314,6 +333,7 @@ impl PosState {
     /// a pending reconfiguration block.
     pub fn next_view(&mut self) -> Result<Option<EpochState>> {
         self.current_view += 1;
+
         let epoch_state = if self.current_view % ROUND_PER_TERM == 0 {
             let new_term = self.current_view / ROUND_PER_TERM;
             self.term_list.new_term(new_term);
@@ -328,6 +348,22 @@ impl PosState {
             None
         };
         Ok(epoch_state)
+    }
+
+    pub fn retire_node(&mut self, retire_event: &RetireEvent) -> Result<()> {
+        match self.node_map.get_mut(&retire_event.node_id) {
+            Some(node) => match node.status {
+                NodeStatus::Accepted => {
+                    node.status = NodeStatus::Retired;
+                    node.status_start_view = self.current_view;
+                    Ok(())
+                }
+                _ => Err(anyhow!(
+                    "Node retirement is processed in invalid status"
+                )),
+            },
+            None => Err(anyhow!("Retiring node does not exist")),
+        }
     }
 }
 
@@ -354,9 +390,24 @@ pub struct ElectionEvent {
 impl ElectionEvent {
     pub fn election_event_key() -> EventKey {
         EventKey::new_from_address(
-            &account_config::pivot_chain_select_address(),
+            &account_config::election_select_address(),
             3,
         )
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        bcs::from_bytes(bytes).map_err(Into::into)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct RetireEvent {
+    node_id: AccountAddress,
+}
+
+impl RetireEvent {
+    pub fn retire_event_key() -> EventKey {
+        EventKey::new_from_address(&account_config::retire_address(), 4)
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
