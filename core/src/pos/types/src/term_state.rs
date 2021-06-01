@@ -317,6 +317,21 @@ impl PosState {
                 );
             }
         }
+
+        // FIXME(lpl): Temporary solution before we have a running transaction
+        // pool to send election and retirement transactions.
+        if address_to_validator_info.is_empty() {
+            for (addr, node) in &self.node_map {
+                address_to_validator_info.insert(
+                    addr.clone(),
+                    ValidatorConsensusInfo::new(
+                        node.public_key.clone(),
+                        node.vrf_public_key.clone(),
+                        1,
+                    ),
+                );
+            }
+        }
         // TODO(lpl): Decide the ratio of voting power.
         Ok(ValidatorVerifier::new(address_to_validator_info))
     }

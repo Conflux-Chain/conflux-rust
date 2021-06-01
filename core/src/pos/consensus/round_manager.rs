@@ -577,8 +577,9 @@ impl RoundManager {
         observe_block(proposal.timestamp_usecs(), BlockStage::SYNCED);
 
         if self.proposer_election.is_random_election() {
-            // Wait for all proposals.
-            // FIXME(lpl): Execute to check validity.
+            self.block_store
+                .execute_and_insert_block(proposal.clone())?;
+            // Keep the proposal, and choose to vote after proposal timeout.
             self.proposer_election.receive_proposal_candidate(proposal);
         } else {
             let proposal_round = proposal.round();
