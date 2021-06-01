@@ -314,6 +314,9 @@ impl RawTransaction {
                 ("module publishing".to_string(), vec![])
             }
             TransactionPayload::Election(_) => ("election".to_string(), vec![]),
+            TransactionPayload::Retire(retire) => {
+                ("retire".to_string(), vec![retire.node_id.to_vec()])
+            }
         };
         let mut f_args: String = "".to_string();
         for arg in args {
@@ -365,6 +368,8 @@ pub enum TransactionPayload {
 
     /// A transaction that add a node to committee candidates.
     Election(ElectionPayload),
+
+    Retire(RetirePayload),
 }
 
 impl TransactionPayload {
@@ -376,7 +381,8 @@ impl TransactionPayload {
             Self::Script(_)
             | Self::ScriptFunction(_)
             | Self::Module(_)
-            | Self::Election(_) => false,
+            | Self::Election(_)
+            | Self::Retire(_) => false,
         }
     }
 
@@ -398,6 +404,11 @@ pub struct ElectionPayload {
     // FIXME(lpl): Add delay function.
     // vdf_output: VDFOutput
     pub vrf_proof: ConsensusVRFProof,
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub struct RetirePayload {
+    pub node_id: AccountAddress,
 }
 
 /// Two different kinds of WriteSet transactions.
