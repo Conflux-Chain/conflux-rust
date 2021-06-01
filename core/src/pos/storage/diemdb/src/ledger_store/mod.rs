@@ -10,6 +10,7 @@ use crate::{
     schema::{
         epoch_by_version::EpochByVersionSchema, ledger_info::LedgerInfoSchema,
         ledger_info_by_block::LedgerInfoByBlockSchema,
+        pos_state::PosStateSchema,
         transaction_accumulator::TransactionAccumulatorSchema,
         transaction_info::TransactionInfoSchema,
     },
@@ -29,6 +30,7 @@ use diem_types::{
         TransactionAccumulatorProof, TransactionAccumulatorRangeProof,
         TransactionInfoWithProof,
     },
+    term_state::PosState,
     transaction::{TransactionInfo, Version},
 };
 use itertools::Itertools;
@@ -176,6 +178,12 @@ impl LedgerStore {
         Ok(latest_epoch_state.clone())
     }
 
+    fn get_pos_state(&self, block_hash: &HashValue) -> Result<PosState> {
+        self.db.get::<PosStateSchema>(block_hash)?.ok_or_else(|| {
+            format_err!("PoS State is not found for block {}", block_hash)
+        })
+    }
+
     pub fn get_tree_state(
         &self, num_transactions: LeafCount, transaction_info: TransactionInfo,
     ) -> Result<TreeState> {
@@ -227,12 +235,16 @@ impl LedgerStore {
                 Some(self.get_tree_state(latest_version + 1, latest_txn_info)?),
             )
         };
+        let pos_state = self.get_pos_state(
+            &latest_ledger_info.ledger_info().consensus_block_id(),
+        )?;
 
         Ok(Some(StartupInfo::new(
             latest_ledger_info,
             latest_epoch_state_if_not_in_li,
             commited_tree_state,
             synced_tree_state,
+            pos_state,
         )))
     }
 
@@ -406,6 +418,14 @@ impl LedgerStore {
             &ledger_info.epoch(),
             ledger_info_with_sigs,
         )
+    }
+
+    pub fn put_pos_state(
+        &self, block_hash: &HashValue, pos_state: PosState,
+    ) -> Result<()> {
+        let mut cs = ChangeSet::new();
+        cs.batch.put::<PosStateSchema>(block_hash, &pos_state)?;
+        self.db.write_schemas(cs.batch)
     }
 
     /// Read LedgerInfo by block id from the database.

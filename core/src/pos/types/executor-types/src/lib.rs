@@ -3,13 +3,11 @@
 
 #![forbid(unsafe_code)]
 
-mod error;
-pub mod term_state;
+use std::{cmp::max, collections::HashMap, sync::Arc};
 
-pub use error::Error;
-
-use crate::term_state::PosState;
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
+
 use diem_crypto::{
     hash::{TransactionAccumulatorHasher, SPARSE_MERKLE_PLACEHOLDER_HASH},
     HashValue,
@@ -21,16 +19,18 @@ use diem_types::{
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
     proof::{accumulator::InMemoryAccumulator, AccumulatorExtensionProof},
+    term_state::PosState,
     transaction::{
         Transaction, TransactionInfo, TransactionListWithProof,
         TransactionStatus, Version,
     },
     validator_config::ConsensusSignature,
 };
+pub use error::Error;
 use scratchpad::ProofRead;
-use serde::{Deserialize, Serialize};
-use std::{cmp::max, collections::HashMap, sync::Arc};
 use storage_interface::TreeState;
+
+mod error;
 
 type SparseMerkleProof = diem_types::proof::SparseMerkleProof<AccountStateBlob>;
 type SparseMerkleTree = scratchpad::SparseMerkleTree<AccountStateBlob>;
@@ -254,13 +254,24 @@ impl From<TreeState> for ExecutedTrees {
             tree_state.account_state_root_hash,
             tree_state.ledger_frozen_subtree_hashes,
             tree_state.num_transactions,
-            // FIXME(lpl): Persistent.
+            // FIXME(lpl): Ensure this is not used.
             Default::default(),
         )
     }
 }
 
 impl ExecutedTrees {
+    pub fn new_with_pos_state(
+        tree_state: TreeState, pos_state: PosState,
+    ) -> Self {
+        ExecutedTrees::new(
+            tree_state.account_state_root_hash,
+            tree_state.ledger_frozen_subtree_hashes,
+            tree_state.num_transactions,
+            pos_state,
+        )
+    }
+
     pub fn new_copy(
         state_tree: Arc<SparseMerkleTree>,
         transaction_accumulator: Arc<

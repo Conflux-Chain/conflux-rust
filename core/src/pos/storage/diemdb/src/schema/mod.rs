@@ -16,6 +16,7 @@ pub(crate) mod jellyfish_merkle_node;
 pub(crate) mod ledger_counters;
 pub(crate) mod ledger_info;
 pub(crate) mod ledger_info_by_block;
+pub(crate) mod pos_state;
 pub(crate) mod stale_node_index;
 pub(crate) mod transaction;
 pub(crate) mod transaction_accumulator;

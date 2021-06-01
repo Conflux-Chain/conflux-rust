@@ -1,6 +1,4 @@
-use anyhow::{anyhow, bail, Result};
-use diem_crypto::{HashValue, VRFProof};
-use diem_types::{
+use crate::{
     account_address::AccountAddress,
     account_config,
     block_info::Round,
@@ -10,6 +8,8 @@ use diem_types::{
     validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
 };
+use anyhow::{anyhow, bail, Result};
+use diem_crypto::{HashValue, VRFProof};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BinaryHeap, HashMap},
@@ -27,14 +27,14 @@ const ELECTION_TERM_END_ROUND: Round = 30;
 
 const TERM_MAX_SIZE: usize = 16;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum NodeStatus {
     Accepted,
     Retired,
     Unlocked,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct NodeData {
     public_key: ConsensusPublicKey,
     vrf_public_key: Option<ConsensusVRFPublicKey>,
@@ -43,13 +43,36 @@ pub struct NodeData {
     serving_term: Option<u64>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TermData {
     start_round: Round,
     seed: Vec<u8>,
     /// (VRF.val, NodeID)
     node_list: BinaryHeap<(HashValue, AccountAddress)>,
 }
+
+impl PartialEq for TermData {
+    fn eq(&self, other: &Self) -> bool {
+        if self.start_round != other.start_round || self.seed != other.seed {
+            return false;
+        }
+        let mut iter_self = self.node_list.iter();
+        let mut iter_other = other.node_list.iter();
+        while let Some(node) = iter_self.next() {
+            match iter_other.next() {
+                None => return false,
+                Some(other_node) => {
+                    if node != other_node {
+                        return false;
+                    }
+                }
+            }
+        }
+        iter_other.next().is_none()
+    }
+}
+
+impl Eq for TermData {}
 
 impl TermData {
     fn next_term(
@@ -69,7 +92,7 @@ impl TermData {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TermList {
     /// The current active term.
     /// After the first `TERM_LIST_LEN` terms, it should be the term of
@@ -122,9 +145,8 @@ impl TermList {
     }
 }
 
-// FIXME(lpl): Blocks following a pending reconfiguration block should not have
-// transactions, and this may lead to an empty committee,
-#[derive(Clone)]
+// FIXME(lpl): Check if we only need the latest version persisted.
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PosState {
     /// All the nodes that have staked in PoW.
     /// Nodes are only inserted and will never be removed.

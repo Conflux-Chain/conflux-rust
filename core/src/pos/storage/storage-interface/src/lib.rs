@@ -17,6 +17,7 @@ use diem_types::{
     proof::{
         definition::LeafCount, AccumulatorConsistencyProof, SparseMerkleProof,
     },
+    term_state::PosState,
     transaction::{
         TransactionInfo, TransactionListWithProof, TransactionToCommit,
         TransactionWithProof, Version,
@@ -44,6 +45,8 @@ pub struct StartupInfo {
     pub latest_epoch_state: Option<EpochState>,
     pub committed_tree_state: TreeState,
     pub synced_tree_state: Option<TreeState>,
+
+    pub committed_pos_state: PosState,
 }
 
 impl StartupInfo {
@@ -51,6 +54,7 @@ impl StartupInfo {
         latest_ledger_info: LedgerInfoWithSignatures,
         latest_epoch_state: Option<EpochState>,
         committed_tree_state: TreeState, synced_tree_state: Option<TreeState>,
+        committed_pos_state: PosState,
     ) -> Self
     {
         Self {
@@ -58,6 +62,7 @@ impl StartupInfo {
             latest_epoch_state,
             committed_tree_state,
             synced_tree_state,
+            committed_pos_state,
         }
     }
 
@@ -409,6 +414,7 @@ pub trait DbWriter: Send + Sync {
     fn save_transactions(
         &self, txns_to_commit: &[TransactionToCommit], first_version: Version,
         ledger_info_with_sigs: Option<&LedgerInfoWithSignatures>,
+        pos_state: Option<PosState>,
     ) -> Result<()>;
 }
 

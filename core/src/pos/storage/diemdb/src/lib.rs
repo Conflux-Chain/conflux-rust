@@ -73,6 +73,7 @@ use diem_types::{
         AccountStateProof, AccumulatorConsistencyProof, EventProof,
         SparseMerkleProof, TransactionListProof,
     },
+    term_state::PosState,
     transaction::{
         TransactionInfo, TransactionListWithProof, TransactionToCommit,
         TransactionWithProof, Version, PRE_GENESIS_VERSION,
@@ -946,6 +947,7 @@ impl DbWriter for DiemDB {
     fn save_transactions(
         &self, txns_to_commit: &[TransactionToCommit], first_version: Version,
         ledger_info_with_sigs: Option<&LedgerInfoWithSignatures>,
+        pos_state: Option<PosState>,
     ) -> Result<()>
     {
         gauged_api("save_transactions", || {
@@ -991,6 +993,12 @@ impl DbWriter for DiemDB {
                 );
 
                 self.ledger_store.put_ledger_info(x, &mut cs)?;
+                if let Some(pos_state) = pos_state {
+                    self.ledger_store.put_pos_state(
+                        &x.ledger_info().consensus_block_id(),
+                        pos_state,
+                    );
+                }
             }
 
             // Persist.

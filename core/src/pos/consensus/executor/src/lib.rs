@@ -3,29 +3,16 @@
 
 #![forbid(unsafe_code)]
 
-mod types;
-
-pub mod db_bootstrapper;
-mod logging;
-mod metrics;
-mod speculation_cache;
-pub mod vm;
-
-use crate::{
-    logging::{LogEntry, LogSchema},
-    metrics::{
-        DIEM_EXECUTOR_COMMIT_BLOCKS_SECONDS, DIEM_EXECUTOR_ERRORS,
-        DIEM_EXECUTOR_EXECUTE_AND_COMMIT_CHUNK_SECONDS,
-        DIEM_EXECUTOR_EXECUTE_BLOCK_SECONDS,
-        DIEM_EXECUTOR_SAVE_TRANSACTIONS_SECONDS,
-        DIEM_EXECUTOR_TRANSACTIONS_SAVED,
-        DIEM_EXECUTOR_VM_EXECUTE_BLOCK_SECONDS,
-    },
-    speculation_cache::SpeculationCache,
-    types::{ProcessedVMOutput, TransactionData},
-    vm::VMExecutor,
+use std::{
+    collections::{hash_map, HashMap, HashSet},
+    convert::TryFrom,
+    marker::PhantomData,
+    sync::Arc,
 };
+
 use anyhow::{bail, ensure, format_err, Result};
+use fail::fail_point;
+
 use diem_crypto::{
     hash::{CryptoHash, EventAccumulatorHasher, TransactionAccumulatorHasher},
     HashValue,
@@ -45,6 +32,7 @@ use diem_types::{
         self, config_address, OnChainConfigPayload, ON_CHAIN_CONFIG_REGISTRY,
     },
     proof::accumulator::InMemoryAccumulator,
+    term_state::ElectionEvent,
     transaction::{
         Transaction, TransactionInfo, TransactionListWithProof,
         TransactionOutput, TransactionPayload, TransactionStatus,
@@ -53,19 +41,35 @@ use diem_types::{
     write_set::{WriteOp, WriteSet},
 };
 use executor_types::{
-    term_state::ElectionEvent, BlockExecutor, ChunkExecutor, Error,
-    ExecutedTrees, ProofReader, StateComputeResult, TransactionReplayer,
-};
-use fail::fail_point;
-use std::{
-    collections::{hash_map, HashMap, HashSet},
-    convert::TryFrom,
-    marker::PhantomData,
-    sync::Arc,
+    BlockExecutor, ChunkExecutor, Error, ExecutedTrees, ProofReader,
+    StateComputeResult, TransactionReplayer,
 };
 use storage_interface::{
     state_view::VerifiedStateView, DbReaderWriter, TreeState,
 };
+
+use crate::{
+    logging::{LogEntry, LogSchema},
+    metrics::{
+        DIEM_EXECUTOR_COMMIT_BLOCKS_SECONDS, DIEM_EXECUTOR_ERRORS,
+        DIEM_EXECUTOR_EXECUTE_AND_COMMIT_CHUNK_SECONDS,
+        DIEM_EXECUTOR_EXECUTE_BLOCK_SECONDS,
+        DIEM_EXECUTOR_SAVE_TRANSACTIONS_SECONDS,
+        DIEM_EXECUTOR_TRANSACTIONS_SAVED,
+        DIEM_EXECUTOR_VM_EXECUTE_BLOCK_SECONDS,
+    },
+    speculation_cache::SpeculationCache,
+    types::{ProcessedVMOutput, TransactionData},
+    vm::VMExecutor,
+};
+
+mod types;
+
+pub mod db_bootstrapper;
+mod logging;
+mod metrics;
+mod speculation_cache;
+pub mod vm;
 
 type SparseMerkleProof = diem_types::proof::SparseMerkleProof<AccountStateBlob>;
 
@@ -719,6 +723,7 @@ impl<V: VMExecutor> ChunkExecutor for Executor<V> {
             &txns_to_commit,
             first_version,
             ledger_info_to_commit.as_ref(),
+            None,
         )?;
 
         // 5. Cache maintenance.
@@ -774,6 +779,7 @@ impl<V: VMExecutor> TransactionReplayer for Executor<V> {
             self.db.writer.save_transactions(
                 &txns_to_commit,
                 first_version,
+                None,
                 None,
             )?;
 
@@ -1042,10 +1048,17 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     "Injected error in commit_blocks"
                 )))
             });
+            let pos_state_to_commit = self
+                .get_executed_trees(
+                    ledger_info_with_sigs.ledger_info().consensus_block_id(),
+                )?
+                .pos_state()
+                .clone();
             self.db.writer.save_transactions(
                 txns_to_commit,
                 first_version_to_commit,
                 Some(&ledger_info_with_sigs),
+                Some(pos_state_to_commit),
             )?;
         }
 

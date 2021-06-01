@@ -139,8 +139,10 @@ impl SpeculationCache {
     pub fn new_with_startup_info(startup_info: StartupInfo) -> Self {
         let mut cache = Self::new();
         let ledger_info = startup_info.latest_ledger_info.ledger_info();
-        let committed_trees =
-            ExecutedTrees::from(startup_info.committed_tree_state);
+        let committed_trees = ExecutedTrees::new_with_pos_state(
+            startup_info.committed_tree_state,
+            startup_info.committed_pos_state,
+        );
         cache.update_block_tree_root(
             committed_trees,
             ledger_info,
@@ -148,6 +150,8 @@ impl SpeculationCache {
             vec![], /* latest_reconfig_events */
         );
         if let Some(synced_tree_state) = startup_info.synced_tree_state {
+            // FIXME(lpl): synced_tree_state.pos_state is left unhandled since
+            // this is not used.
             cache.update_synced_trees(ExecutedTrees::from(synced_tree_state));
         }
         cache
