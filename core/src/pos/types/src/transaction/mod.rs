@@ -54,11 +54,13 @@ pub use script::{
 
 use crate::{
     block_info::Round,
+    term_state::{ElectionEvent, RetireEvent},
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
         ConsensusVRFProof,
     },
 };
+use move_core_types::language_storage::TypeTag;
 use std::ops::Deref;
 pub use transaction_argument::{
     parse_transaction_argument, TransactionArgument,
@@ -406,9 +408,37 @@ pub struct ElectionPayload {
     pub vrf_proof: ConsensusVRFProof,
 }
 
+impl ElectionPayload {
+    pub fn to_event(&self) -> ContractEvent {
+        let event = ElectionEvent::new(
+            self.node_id,
+            self.vrf_proof.to_hash().unwrap(),
+            self.target_term,
+        );
+        ContractEvent::new(
+            ElectionEvent::election_event_key(),
+            0,                                      /* sequence_number */
+            TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
+            bcs::to_bytes(&event).unwrap(),
+        )
+    }
+}
+
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RetirePayload {
     pub node_id: AccountAddress,
+}
+
+impl RetirePayload {
+    pub fn to_event(&self) -> ContractEvent {
+        let event = RetireEvent::new(self.node_id);
+        ContractEvent::new(
+            RetireEvent::retire_event_key(),
+            0,                                      /* sequence_number */
+            TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
+            bcs::to_bytes(&event).unwrap(),
+        )
+    }
 }
 
 /// Two different kinds of WriteSet transactions.

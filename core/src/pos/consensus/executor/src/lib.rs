@@ -62,7 +62,7 @@ use crate::{
     types::{ProcessedVMOutput, TransactionData},
     vm::VMExecutor,
 };
-use diem_types::term_state::RetireEvent;
+use diem_types::term_state::{PosState, RetireEvent};
 
 mod types;
 
@@ -533,6 +533,7 @@ where V: VMExecutor
             self.cache.committed_trees().version(),
             self.cache.committed_trees().state_root(),
             executed_trees.state_tree(),
+            executed_trees.pos_state().clone(),
         )
     }
 
@@ -554,6 +555,8 @@ where V: VMExecutor
             self.cache.synced_trees().version(),
             self.cache.synced_trees().state_root(),
             self.cache.synced_trees().state_tree(),
+            // FIXME(lpl): State sync not used yet.
+            PosState::default(),
         );
 
         fail_point!("executor::vm_execute_chunk", |_| {

@@ -1,3 +1,4 @@
+use diem_logger::error as diem_error;
 use diem_state_view::StateView;
 use diem_types::{
     access_path::AccessPath,
@@ -32,7 +33,7 @@ pub struct FakeVM;
 
 impl VMExecutor for FakeVM {
     fn execute_block(
-        transactions: Vec<Transaction>, _state_view: &dyn StateView,
+        transactions: Vec<Transaction>, state_view: &dyn StateView,
     ) -> Result<Vec<TransactionOutput>, VMStatus> {
         let mut vm_outputs = Vec::new();
         for transaction in transactions {
@@ -74,6 +75,26 @@ impl VMExecutor for FakeVM {
                         TransactionPayload::WriteSet(
                             WriteSetPayload::Direct(change_set),
                         ) => change_set.events().to_vec(),
+                        TransactionPayload::Election(election_payload) => {
+                            state_view
+                                .pos_state()
+                                .validate_election(election_payload)
+                                .map_err(|e| {
+                                    diem_error!("election tx error: {:?}", e);
+                                    VMStatus::Error(StatusCode::CFX_INVALID_TX)
+                                })?;
+                            vec![election_payload.to_event()]
+                        }
+                        TransactionPayload::Retire(retire_payload) => {
+                            state_view
+                                .pos_state()
+                                .validate_retire(retire_payload)
+                                .map_err(|e| {
+                                    diem_error!("retirement tx error: {:?}", e);
+                                    VMStatus::Error(StatusCode::CFX_INVALID_TX)
+                                })?;
+                            vec![retire_payload.to_event()]
+                        }
                         _ => {
                             return Err(VMStatus::Error(
                                 StatusCode::CFX_UNEXPECTED_TX,

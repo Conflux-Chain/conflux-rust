@@ -388,6 +388,18 @@ pub struct ElectionEvent {
 }
 
 impl ElectionEvent {
+    pub fn new(
+        node_id: AccountAddress, vrf_output: HashValue, start_term: u64,
+    ) -> Self {
+        Self {
+            node_id,
+            vrf_output,
+            start_term,
+        }
+    }
+}
+
+impl ElectionEvent {
     pub fn election_event_key() -> EventKey {
         EventKey::new_from_address(
             &account_config::election_select_address(),
@@ -406,6 +418,8 @@ pub struct RetireEvent {
 }
 
 impl RetireEvent {
+    pub fn new(node_id: AccountAddress) -> Self { RetireEvent { node_id } }
+
     pub fn retire_event_key() -> EventKey {
         EventKey::new_from_address(&account_config::retire_address(), 4)
     }
