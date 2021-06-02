@@ -1,6 +1,6 @@
 [package]
 description = "Conflux Stratum lib"
-homepage = "http://www.conflux-chain.io"
+homepage = "https://www.confluxnetwork.org"
 name = "cfx-stratum"
 version = "1.12.0"
 license = "GPL-3.0"
