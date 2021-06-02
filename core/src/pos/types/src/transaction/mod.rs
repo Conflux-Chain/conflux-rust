@@ -57,7 +57,7 @@ use crate::{
     term_state::{ElectionEvent, RetireEvent},
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
-        ConsensusVRFProof,
+        ConsensusVRFProof, ConsensusVRFPublicKey,
     },
 };
 use move_core_types::language_storage::TypeTag;
@@ -317,7 +317,7 @@ impl RawTransaction {
             }
             TransactionPayload::Election(_) => ("election".to_string(), vec![]),
             TransactionPayload::Retire(retire) => {
-                ("retire".to_string(), vec![retire.node_id.to_vec()])
+                ("retire".to_string(), vec![])
             }
         };
         let mut f_args: String = "".to_string();
@@ -401,7 +401,8 @@ impl TransactionPayload {
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ElectionPayload {
-    pub node_id: AccountAddress,
+    pub public_key: ConsensusPublicKey,
+    pub vrf_public_key: ConsensusVRFPublicKey,
     pub target_term: u64,
     // FIXME(lpl): Add delay function.
     // vdf_output: VDFOutput
@@ -411,7 +412,8 @@ pub struct ElectionPayload {
 impl ElectionPayload {
     pub fn to_event(&self) -> ContractEvent {
         let event = ElectionEvent::new(
-            self.node_id,
+            self.public_key.clone(),
+            self.vrf_public_key.clone(),
             self.vrf_proof.to_hash().unwrap(),
             self.target_term,
         );
@@ -426,12 +428,16 @@ impl ElectionPayload {
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RetirePayload {
-    pub node_id: AccountAddress,
+    pub public_key: ConsensusPublicKey,
+    pub vrf_public_key: ConsensusVRFPublicKey,
 }
 
 impl RetirePayload {
     pub fn to_event(&self) -> ContractEvent {
-        let event = RetireEvent::new(self.node_id);
+        let event = RetireEvent::new(
+            self.public_key.clone(),
+            self.vrf_public_key.clone(),
+        );
         ContractEvent::new(
             RetireEvent::retire_event_key(),
             0,                                      /* sequence_number */

@@ -5,13 +5,16 @@ use crate::{
     epoch_state::EpochState,
     event::EventKey,
     transaction::{ElectionPayload, RetirePayload},
-    validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
+    validator_config::{
+        ConsensusPublicKey, ConsensusVRFPrivateKey, ConsensusVRFPublicKey,
+    },
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
 };
 use anyhow::{anyhow, bail, Result};
-use diem_crypto::{HashValue, VRFProof};
+use diem_crypto::{HashValue, VRFProof, ValidCryptoMaterial};
 use serde::{Deserialize, Serialize};
 use std::{
+    cmp::Ordering,
     collections::{BTreeMap, BinaryHeap, HashMap},
     fmt::{Debug, Formatter},
 };
@@ -47,7 +50,7 @@ pub struct TermData {
     start_view: Round,
     seed: Vec<u8>,
     /// (VRF.val, NodeID)
-    node_list: BinaryHeap<(HashValue, AccountAddress)>,
+    node_list: BinaryHeap<(HashValue, NodeID)>,
 }
 
 impl PartialEq for TermData {
@@ -74,9 +77,7 @@ impl PartialEq for TermData {
 impl Eq for TermData {}
 
 impl TermData {
-    fn next_term(
-        &self, node_list: BinaryHeap<(HashValue, AccountAddress)>,
-    ) -> Self {
+    fn next_term(&self, node_list: BinaryHeap<(HashValue, NodeID)>) -> Self {
         TermData {
             start_view: self.start_view + ROUND_PER_TERM,
             seed: HashValue::sha3_256_of(&self.seed).to_vec(),
@@ -86,7 +87,7 @@ impl TermData {
 }
 
 impl TermData {
-    pub fn add_node(&mut self, vrf_output: HashValue, node_id: AccountAddress) {
+    pub fn add_node(&mut self, vrf_output: HashValue, node_id: NodeID) {
         self.node_list.push((vrf_output, node_id))
     }
 }
@@ -118,7 +119,7 @@ impl TermList {
             bail!("election start_term is too late");
         }
         let mut term = &mut self.term_list[term_offset];
-        term.add_node(event.vrf_output, event.node_id);
+        term.add_node(event.vrf_output, event.node_id.clone());
         if term.node_list.len() > TERM_MAX_SIZE {
             // TODO: Decide if we want to keep the previously elected nodes to
             // avoid duplicated election.
@@ -169,30 +170,22 @@ impl Debug for PosState {
 }
 
 impl PosState {
-    pub fn new(
-        initial_seed: Vec<u8>,
-        initial_nodes: Vec<(
-            AccountAddress,
-            ConsensusPublicKey,
-            Option<ConsensusVRFPublicKey>,
-        )>,
-    ) -> Self
-    {
+    pub fn new(initial_seed: Vec<u8>, initial_nodes: Vec<(NodeID)>) -> Self {
         let mut node_map = HashMap::new();
         let mut node_list = BinaryHeap::new();
-        for (addr, public_key, vrf_public_key) in initial_nodes {
+        for node_id in initial_nodes {
             node_map.insert(
-                addr.clone(),
+                node_id.addr.clone(),
                 NodeData {
-                    public_key,
-                    vrf_public_key,
+                    public_key: node_id.public_key.clone(),
+                    vrf_public_key: Some(node_id.vrf_public_key.clone()),
                     status: NodeStatus::Accepted,
                     status_start_view: 0,
                 },
             );
             // VRF output of initial terms will not be used, because these terms
             // are not open for election.
-            node_list.push((Default::default(), addr));
+            node_list.push((Default::default(), node_id));
         }
         let mut term_list = Vec::new();
         let initial_term = TermData {
@@ -224,7 +217,11 @@ impl PosState {
     pub fn validate_election(
         &self, election_tx: &ElectionPayload,
     ) -> Result<()> {
-        let node = match self.node_map.get(&election_tx.node_id) {
+        let node_id = NodeID::new(
+            election_tx.public_key.clone(),
+            election_tx.vrf_public_key.clone(),
+        );
+        let node = match self.node_map.get(&node_id.addr) {
             Some(node) => node,
             None => return Err(anyhow!("Election for non-existent node.")),
         };
@@ -269,7 +266,7 @@ impl PosState {
         for i in start_term_offset..=target_term_offset {
             let term = &self.term_list.term_list[i as usize];
             for (_, addr) in &term.node_list {
-                if *addr == election_tx.node_id {
+                if *addr == node_id {
                     bail!("Node in active term service cannot be elected");
                 }
             }
@@ -280,7 +277,11 @@ impl PosState {
     pub fn validate_retire(
         &self, retire_payload: &RetirePayload,
     ) -> Result<()> {
-        let node = match self.node_map.get(&retire_payload.node_id) {
+        let node_id = NodeID::new(
+            retire_payload.public_key.clone(),
+            retire_payload.vrf_public_key.clone(),
+        );
+        let node = match self.node_map.get(&node_id.addr) {
             Some(node) => node,
             None => return Err(anyhow!("Retirement for non-existent node.")),
         };
@@ -291,7 +292,7 @@ impl PosState {
         // FIXME(lpl): Nodes in the current active term are not covered by this.
         for term in &self.term_list.term_list {
             for (_, addr) in &term.node_list {
-                if *addr == retire_payload.node_id {
+                if *addr == node_id {
                     bail!("Node in active term service cannot retire");
                 }
             }
@@ -303,15 +304,12 @@ impl PosState {
         let mut address_to_validator_info = BTreeMap::new();
         for i in 0..TERM_LIST_LEN {
             let term = &self.term_list.term_list[i];
-            for (_, addr) in &term.node_list {
-                let node = self.node_map.get(addr).ok_or(anyhow!(
-                    "The node in active terms is missing in node_map"
-                ))?;
+            for (_, node_id) in &term.node_list {
                 address_to_validator_info.insert(
-                    addr.clone(),
+                    node_id.addr,
                     ValidatorConsensusInfo::new(
-                        node.public_key.clone(),
-                        node.vrf_public_key.clone(),
+                        node_id.public_key.clone(),
+                        Some(node_id.vrf_public_key.clone()),
                         1,
                     ),
                 );
@@ -366,7 +364,7 @@ impl PosState {
     }
 
     pub fn retire_node(&mut self, retire_event: &RetireEvent) -> Result<()> {
-        match self.node_map.get_mut(&retire_event.node_id) {
+        match self.node_map.get_mut(&retire_event.node_id.addr) {
             Some(node) => match node.status {
                 NodeStatus::Accepted => {
                     node.status = NodeStatus::Retired;
@@ -397,17 +395,19 @@ impl Default for PosState {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ElectionEvent {
-    node_id: AccountAddress,
+    node_id: NodeID,
     vrf_output: HashValue,
     start_term: u64,
 }
 
 impl ElectionEvent {
     pub fn new(
-        node_id: AccountAddress, vrf_output: HashValue, start_term: u64,
-    ) -> Self {
+        public_key: ConsensusPublicKey, vrf_public_key: ConsensusVRFPublicKey,
+        vrf_output: HashValue, start_term: u64,
+    ) -> Self
+    {
         Self {
-            node_id,
+            node_id: NodeID::new(public_key, vrf_public_key),
             vrf_output,
             start_term,
         }
@@ -429,11 +429,17 @@ impl ElectionEvent {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RetireEvent {
-    node_id: AccountAddress,
+    node_id: NodeID,
 }
 
 impl RetireEvent {
-    pub fn new(node_id: AccountAddress) -> Self { RetireEvent { node_id } }
+    pub fn new(
+        public_key: ConsensusPublicKey, vrf_public_key: ConsensusVRFPublicKey,
+    ) -> Self {
+        RetireEvent {
+            node_id: NodeID::new(public_key, vrf_public_key),
+        }
+    }
 
     pub fn retire_event_key() -> EventKey {
         EventKey::new_from_address(&account_config::retire_address(), 4)
@@ -441,5 +447,42 @@ impl RetireEvent {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         bcs::from_bytes(bytes).map_err(Into::into)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct NodeID {
+    public_key: ConsensusPublicKey,
+    vrf_public_key: ConsensusVRFPublicKey,
+
+    /// Computed based on other fields.
+    addr: AccountAddress,
+}
+
+impl NodeID {
+    pub fn new(
+        public_key: ConsensusPublicKey, vrf_public_key: ConsensusVRFPublicKey,
+    ) -> Self {
+        let mut raw = public_key.to_bytes();
+        raw.append(&mut vrf_public_key.to_bytes());
+        let h = *HashValue::sha3_256_of(&raw);
+        let mut array = [0u8; AccountAddress::LENGTH];
+        array.copy_from_slice(&h[h.len() - AccountAddress::LENGTH..]);
+        let addr = AccountAddress::new(array);
+        Self {
+            public_key,
+            vrf_public_key,
+            addr,
+        }
+    }
+}
+
+impl Ord for NodeID {
+    fn cmp(&self, other: &Self) -> Ordering { self.addr.cmp(&other.addr) }
+}
+
+impl PartialOrd for NodeID {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.addr.partial_cmp(&other.addr)
     }
 }
