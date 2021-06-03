@@ -8,9 +8,18 @@ use crate::pos::consensus::{
 };
 use consensus_types::{common::Round, sync_info::SyncInfo, vote::Vote};
 use diem_logger::{prelude::*, Schema};
-use diem_types::validator_verifier::ValidatorVerifier;
+use diem_types::{
+    account_address::AccountAddress, block_info::PivotBlockDecision,
+    validator_config::ConsensusSignature,
+    validator_verifier::ValidatorVerifier,
+};
 use serde::Serialize;
-use std::{fmt, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt,
+    sync::Arc,
+    time::Duration,
+};
 
 /// A reason for starting a new round: introduced for monitoring / debug
 /// purposes.
@@ -162,10 +171,15 @@ pub struct RoundState {
     // To send timeout events for proposal selection to the subscriber (e.g.,
     // SMR)
     proposal_timeout_sender: channel::Sender<Round>,
-    // Votes received fot the current round.
+    // Votes received for the current round.
     pending_votes: PendingVotes,
     // Vote sent locally for the current round.
     vote_sent: Option<Vote>,
+
+    received_pivot_decisions: HashMap<
+        PivotBlockDecision,
+        BTreeMap<AccountAddress, ConsensusSignature>,
+    >,
 }
 
 #[derive(Default, Schema)]
@@ -217,6 +231,7 @@ impl RoundState {
             proposal_timeout_sender,
             pending_votes: PendingVotes::new(),
             vote_sent: None,
+            received_pivot_decisions: HashMap::new(),
         }
     }
 

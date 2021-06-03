@@ -11,6 +11,7 @@ use cfx_types::H256;
 use diem_crypto::hash::HashValue;
 #[cfg(any(test, feature = "fuzzing"))]
 use diem_crypto::hash::ACCUMULATOR_PLACEHOLDER_HASH;
+use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
 use move_core_types::{language_storage::TypeTag, move_resource::MoveResource};
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
@@ -186,7 +187,17 @@ impl Display for BlockInfo {
     }
 }
 
-#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(
+    Clone,
+    Debug,
+    Hash,
+    Eq,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    BCSCryptoHash,
+    CryptoHasher,
+)]
 pub struct PivotBlockDecision {
     // pub height: u64,
     pub block_hash: H256,

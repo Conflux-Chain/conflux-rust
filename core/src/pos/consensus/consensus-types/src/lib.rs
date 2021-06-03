@@ -9,6 +9,7 @@ pub mod block_retrieval;
 pub mod common;
 pub mod epoch_retrieval;
 pub mod executed_block;
+pub mod pivot_decision_msg;
 pub mod proposal_msg;
 pub mod quorum_cert;
 pub mod safety_data;
