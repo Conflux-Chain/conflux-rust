@@ -10,7 +10,7 @@ pub trait PowInterface: Send + Sync {
         &self, parent_decision: H256,
     ) -> Option<(u64, H256)>;
 
-    async fn validate_proposal_pivot_decision(
+    fn validate_proposal_pivot_decision(
         &self, parent_decision: H256, me_decision: H256,
     ) -> bool;
 

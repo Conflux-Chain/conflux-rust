@@ -490,22 +490,22 @@ impl BlockStore {
                 .update_pivot_decision(parent_pivot_decision.clone().unwrap());
         }
 
+        diem_debug!("before validating pivot decision");
         if parent_pivot_decision.is_some()
-            && !futures::executor::block_on(
-                self.pow_handler.validate_proposal_pivot_decision(
-                    parent_pivot_decision.unwrap().block_hash,
-                    state_compute_result
-                        .pivot_decision()
-                        .as_ref()
-                        .unwrap()
-                        .block_hash,
-                ),
+            && !self.pow_handler.validate_proposal_pivot_decision(
+                parent_pivot_decision.unwrap().block_hash,
+                state_compute_result
+                    .pivot_decision()
+                    .as_ref()
+                    .unwrap()
+                    .block_hash,
             )
         {
             return Err(Error::InternalError {
                 error: format!("Invalid pivot decision for block"),
             });
         }
+        diem_debug!("after validating pivot decision");
         Ok(())
     }
 }

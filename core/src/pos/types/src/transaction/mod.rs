@@ -53,6 +53,7 @@ pub use script::{
     TransactionScriptABI, TypeArgumentABI,
 };
 
+use crate::block_info::PivotBlockDecision;
 use std::ops::Deref;
 pub use transaction_argument::{
     parse_transaction_argument, TransactionArgument,
@@ -261,6 +262,27 @@ impl RawTransaction {
         }
     }
 
+    pub fn new_pivot_decision(
+        sender: AccountAddress, sequence_number: u64,
+        pivot_decision: PivotBlockDecision, chain_id: ChainId,
+    ) -> Self
+    {
+        RawTransaction {
+            sender,
+            sequence_number,
+            payload: TransactionPayload::PivotDecision(pivot_decision),
+            // Since write-set transactions bypass the VM, these fields aren't
+            // relevant.
+            max_gas_amount: 0,
+            gas_unit_price: 0,
+            gas_currency_code: XUS_NAME.to_owned(),
+            // Write-set transactions are special and important and shouldn't
+            // expire.
+            expiration_timestamp_secs: u64::max_value(),
+            chain_id,
+        }
+    }
+
     /// Signs the given `RawTransaction`. Note that this consumes the
     /// `RawTransaction` and turns it into a `SignatureCheckedTransaction`.
     ///
@@ -306,6 +328,9 @@ impl RawTransaction {
             ),
             TransactionPayload::Module(_) => {
                 ("module publishing".to_string(), vec![])
+            }
+            TransactionPayload::PivotDecision(_) => {
+                ("pivot_decision".to_string(), vec![])
             }
         };
         let mut f_args: String = "".to_string();
@@ -355,6 +380,9 @@ pub enum TransactionPayload {
     /// A transaction that executes an existing script function published
     /// on-chain.
     ScriptFunction(ScriptFunction),
+    /// A transaction that sets a node to `Retire` status so the node will not
+    /// be elected.
+    PivotDecision(PivotBlockDecision),
 }
 
 impl TransactionPayload {
@@ -363,9 +391,10 @@ impl TransactionPayload {
             Self::WriteSet(ws) => {
                 ws.should_trigger_reconfiguration_by_default()
             }
-            Self::Script(_) | Self::ScriptFunction(_) | Self::Module(_) => {
-                false
-            }
+            Self::Script(_)
+            | Self::ScriptFunction(_)
+            | Self::Module(_)
+            | Self::PivotDecision(_) => false,
         }
     }
 

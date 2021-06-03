@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """An example functional test
 """
+import time
 
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
@@ -21,8 +22,10 @@ class ExampleTest(ConfluxTestFramework):
         self.nodes[0].generate_empty_blocks(1)
         assert (self.nodes[0].getblockcount() == 2)
 
-        self.nodes[0].generate_empty_blocks(6000)
-        assert (self.nodes[0].getblockcount() == 6002)
+        for _ in range(10):
+            self.nodes[0].generate_empty_blocks(6000)
+            time.sleep(1)
+        # assert (self.nodes[0].getblockcount() == 6002)
 
 
 if __name__ == '__main__':

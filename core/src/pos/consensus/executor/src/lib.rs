@@ -1096,14 +1096,15 @@ pub fn process_write_set(
                 match transaction {
                     Transaction::GenesisTransaction(_) => (),
                     Transaction::BlockMetadata(_) => {
-                        bail!("Write set should be a subset of read set.")
+                        bail!("BlockMetadata: Write set should be a subset of read set.")
                     }
                     Transaction::UserTransaction(txn) => match txn.payload() {
                         TransactionPayload::Module(_)
                         | TransactionPayload::Script(_)
                         | TransactionPayload::ScriptFunction(_) => {
-                            bail!("Write set should be a subset of read set.")
+                            bail!("Write set should be a subset of read set: {:?}.", txn)
                         }
+                        TransactionPayload::PivotDecision(_) => continue,
                         TransactionPayload::WriteSet(_) => (),
                     },
                 }

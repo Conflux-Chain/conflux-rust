@@ -44,6 +44,8 @@ pub fn start_consensus(
     let runtime = runtime::Builder::new_multi_thread()
         .thread_name("consensus")
         .enable_all()
+        // TODO(lpl): This is for debugging.
+        .worker_threads(4)
         .build()
         .expect("Failed to create Tokio runtime!");
     let storage = Arc::new(StorageWriteProxy::new(node_config, diem_db));

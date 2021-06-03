@@ -76,24 +76,22 @@ impl PowInterface for PowHandler {
         cb_receiver.await.expect("callback error")
     }
 
-    async fn validate_proposal_pivot_decision(
+    fn validate_proposal_pivot_decision(
         &self, parent_decision: H256, me_decision: H256,
     ) -> bool {
         let pow_consensus = self.pow_consensus.read().clone();
         if pow_consensus.is_none() {
             return true;
         }
-        let (callback, cb_receiver) = oneshot::channel();
         let pow_consensus = pow_consensus.unwrap();
-        self.executor.spawn(async move {
-            let r = Self::validate_proposal_pivot_decision_impl(
-                pow_consensus,
-                &parent_decision,
-                &me_decision,
-            );
-            callback.send(r);
-        });
-        cb_receiver.await.expect("callback error")
+        debug!("before spawn pivot_decision");
+        let r = Self::validate_proposal_pivot_decision_impl(
+            pow_consensus,
+            &parent_decision,
+            &me_decision,
+        );
+        debug!("after spawn pivot_decision");
+        r
     }
 
     async fn get_committee_candidates(&self) -> HashMap<AccountAddress, u64> {

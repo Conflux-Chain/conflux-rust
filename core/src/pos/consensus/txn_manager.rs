@@ -140,7 +140,9 @@ impl TxnManager for MempoolProxy {
         // skip the block metadata txn result
         for (txn, status) in txns
             .iter()
-            .zip_eq(compute_results.compute_status().iter().skip(1))
+            .zip_eq(compute_results.compute_status().iter()
+                // TODO(lpl): Skip block metadata.
+            )
         {
             if let TransactionStatus::Discard(_) = status {
                 /*

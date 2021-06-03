@@ -3814,6 +3814,7 @@ impl ConsensusGraphInner {
     }
 
     pub fn is_ancestor_of(&self, ancestor_hash: &H256, me_hash: &H256) -> bool {
+        debug!("is_ancestor_of: called");
         match (
             self.hash_to_arena_indices.get(ancestor_hash),
             self.hash_to_arena_indices.get(me_hash),
