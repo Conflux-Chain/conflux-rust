@@ -193,19 +193,12 @@ impl ProposalGenerator {
                 }
             };
 
-            let event_data = bcs::to_bytes(&pivot_decision)?;
-            let event = ContractEvent::new(
-                PivotBlockDecision::pivot_select_event_key(),
-                0,                                      /* sequence_number */
-                TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
-                event_data,
-            );
-
-            let change_set = ChangeSet::new(WriteSet::default(), vec![event]);
-            let raw_tx = RawTransaction::new_change_set(
+            let raw_tx = RawTransaction::new_pivot_decision(
                 self.author,
                 0,
-                change_set,
+                PivotBlockDecision {
+                    block_hash: pivot_decision,
+                },
                 ChainId::default(), // FIXME(lpl): Set chain id.
             );
             let signed_tx = raw_tx

@@ -53,7 +53,7 @@ pub use script::{
 };
 
 use crate::{
-    block_info::Round,
+    block_info::{PivotBlockDecision, Round},
     term_state::{ElectionEvent, RetireEvent},
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
@@ -269,6 +269,27 @@ impl RawTransaction {
         }
     }
 
+    pub fn new_pivot_decision(
+        sender: AccountAddress, sequence_number: u64,
+        pivot_decision: PivotBlockDecision, chain_id: ChainId,
+    ) -> Self
+    {
+        RawTransaction {
+            sender,
+            sequence_number,
+            payload: TransactionPayload::PivotDecision(pivot_decision),
+            // Since write-set transactions bypass the VM, these fields aren't
+            // relevant.
+            max_gas_amount: 0,
+            gas_unit_price: 0,
+            gas_currency_code: XUS_NAME.to_owned(),
+            // Write-set transactions are special and important and shouldn't
+            // expire.
+            expiration_timestamp_secs: u64::max_value(),
+            chain_id,
+        }
+    }
+
     /// Signs the given `RawTransaction`. Note that this consumes the
     /// `RawTransaction` and turns it into a `SignatureCheckedTransaction`.
     ///
@@ -316,8 +337,9 @@ impl RawTransaction {
                 ("module publishing".to_string(), vec![])
             }
             TransactionPayload::Election(_) => ("election".to_string(), vec![]),
-            TransactionPayload::Retire(retire) => {
-                ("retire".to_string(), vec![])
+            TransactionPayload::Retire(_) => ("retire".to_string(), vec![]),
+            TransactionPayload::PivotDecision(_) => {
+                ("pivot_decision".to_string(), vec![])
             }
         };
         let mut f_args: String = "".to_string();
@@ -371,7 +393,11 @@ pub enum TransactionPayload {
     /// A transaction that add a node to committee candidates.
     Election(ElectionPayload),
 
+    /// A transaction that sets a node to `Retire` status so the node will not
+    /// be elected.
     Retire(RetirePayload),
+
+    PivotDecision(PivotBlockDecision),
 }
 
 impl TransactionPayload {
@@ -384,7 +410,8 @@ impl TransactionPayload {
             | Self::ScriptFunction(_)
             | Self::Module(_)
             | Self::Election(_)
-            | Self::Retire(_) => false,
+            | Self::Retire(_)
+            | Self::PivotDecision(_) => false,
         }
     }
 

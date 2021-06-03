@@ -1136,7 +1136,8 @@ pub fn process_write_set(
                         | TransactionPayload::Script(_)
                         | TransactionPayload::ScriptFunction(_)
                         | TransactionPayload::Election(_)
-                        | TransactionPayload::Retire(_) => {
+                        | TransactionPayload::Retire(_)
+                        | TransactionPayload::PivotDecision(_) => {
                             bail!("Write set should be a subset of read set.")
                         }
                         TransactionPayload::WriteSet(_) => (),

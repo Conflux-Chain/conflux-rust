@@ -95,6 +95,11 @@ impl VMExecutor for FakeVM {
                                 })?;
                             vec![retire_payload.to_event()]
                         }
+                        TransactionPayload::PivotDecision(pivot_decision) => {
+                            // The validation is handled in
+                            // `post_process_state_compute_result`.
+                            vec![pivot_decision.to_event()]
+                        }
                         _ => {
                             return Err(VMStatus::Error(
                                 StatusCode::CFX_UNEXPECTED_TX,
