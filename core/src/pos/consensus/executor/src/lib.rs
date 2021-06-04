@@ -328,6 +328,9 @@ where V: VMExecutor
                 }
             }
         }
+        if pivot_decision.is_none() {
+            bail!("Missing pivot decision in normal blocks");
+        }
         let next_epoch_state = new_pos_state.next_view()?;
 
         let new_epoch_marker = vm_outputs

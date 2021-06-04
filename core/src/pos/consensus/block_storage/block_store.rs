@@ -102,7 +102,7 @@ pub struct BlockStore {
     /// time
     time_service: Arc<dyn TimeService>,
     /// The interface used to verify block execution result.
-    pow_handler: Arc<dyn PowInterface>,
+    pub pow_handler: Arc<dyn PowInterface>,
 }
 
 impl BlockStore {

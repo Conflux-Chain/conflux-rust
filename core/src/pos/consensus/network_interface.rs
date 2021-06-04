@@ -27,6 +27,7 @@ use futures::channel::oneshot;
 use network::{node_table::NodeId, NetworkService};
 use serde::{Deserialize, Serialize};
 use std::{mem::discriminant, sync::Arc};
+use consensus_types::pivot_decision_msg::PivotDecisionMsg;
 
 /// Network type for consensus
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -51,6 +52,9 @@ pub enum ConsensusMsg {
     /// VoteMsg is the struct that is ultimately sent by the voter in response
     /// for receiving a proposal.
     VoteMsg(Box<VoteMsg>),
+    /// Include the latest pivot decision for a new round with the sender's signature.
+    /// A proposer generates a proposal after receiving enough pivot decision signatures.
+    PivotDecisionMsg(Box<PivotDecisionMsg>),
 }
 
 /// The interface from Consensus to Networking layer.

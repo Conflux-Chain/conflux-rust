@@ -46,6 +46,9 @@ use safety_rules::TSafetyRules;
 use serde::Serialize;
 use std::{sync::Arc, time::Duration};
 use termion::color::*;
+use diem_types::transaction::RawTransaction;
+use diem_types::block_info::PivotBlockDecision;
+use diem_types::chain_id::ChainId;
 
 #[derive(Serialize, Clone)]
 pub enum UnverifiedEvent {
@@ -278,6 +281,58 @@ impl RoundManager {
             counters::PROPOSALS_COUNT.inc();
         }
         Ok(())
+    }
+
+    async fn broadcast_pivot_decision(&self) -> anyhow::Result<()> {
+        let parent_block = self.block_store.highest_quorum_cert().certified_block();
+        // TODO(lpl): Check if this may happen.
+        if self
+            .block_store
+            .path_from_root(parent_block.id())
+            .is_none() {
+                bail!(
+                        "HQC {} already pruned",
+                    parent_block
+                    );
+            }
+
+        // FIXME(lpl): For now, sending default H256 will return the first
+        // pivot decision.
+        let parent_decision = parent_block
+            .pivot_decision()
+            .map(|d| d.block_hash)
+            .unwrap_or_default();
+        let pivot_decision = loop {
+            match self
+                .block_store
+                .pow_handler
+                .next_pivot_decision(parent_decision)
+                .await
+            {
+                Some(res) => break res,
+                None => {
+                    // TODO(lpl): Handle the error from outside.
+                    // FIXME(lpl): Wait with a deadline.
+                    let sleep_duration =
+                        std::time::Duration::from_millis(100);
+                    self.time_service.sleep(sleep_duration);
+                }
+            }
+        };
+        self.safety_rules.sign_proposal()
+
+        let raw_tx = RawTransaction::new_pivot_decision(
+            self.author,
+            0,
+            PivotBlockDecision {
+                block_hash: pivot_decision,
+            },
+            ChainId::default(), // FIXME(lpl): Set chain id.
+        );
+        let signed_tx = raw_tx
+            .sign(&self.private_key, self.public_key.clone())?
+            .into_inner();
+        self.network.broadcast(ConsensusMsg::PivotDecisionMsg())
     }
 
     async fn generate_proposal(

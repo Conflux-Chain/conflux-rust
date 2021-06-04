@@ -163,49 +163,6 @@ impl ProposalGenerator {
                 .await
                 .context("Fail to retrieve txn")?;
 
-            let parent_block = if let Some(p) = pending_blocks.last() {
-                p.clone()
-            } else {
-                self.block_store.root()
-            };
-
-            // FIXME(lpl): For now, sending default H256 will return the first
-            // pivot decision.
-            let parent_decision = parent_block
-                .block_info()
-                .pivot_decision()
-                .map(|d| d.block_hash)
-                .unwrap_or_default();
-            let pivot_decision = loop {
-                match self
-                    .pow_handler
-                    .next_pivot_decision(parent_decision)
-                    .await
-                {
-                    Some(res) => break res,
-                    None => {
-                        // TODO(lpl): Handle the error from outside.
-                        // FIXME(lpl): Wait with a deadline.
-                        let sleep_duration =
-                            std::time::Duration::from_millis(100);
-                        self.time_service.sleep(sleep_duration);
-                    }
-                }
-            };
-
-            let raw_tx = RawTransaction::new_pivot_decision(
-                self.author,
-                0,
-                PivotBlockDecision {
-                    block_hash: pivot_decision,
-                },
-                ChainId::default(), // FIXME(lpl): Set chain id.
-            );
-            let signed_tx = raw_tx
-                .sign(&self.private_key, self.public_key.clone())?
-                .into_inner();
-            payload.push(signed_tx);
-
             (payload, timestamp.as_micros() as u64)
         };
 
