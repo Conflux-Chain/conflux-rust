@@ -17,8 +17,9 @@ use cfx_storage::{
 };
 use cfx_types::{BigEndianHash, H256, U256};
 use primitives::{
-    transaction::TransactionError, Action, Block, BlockHeader, BlockReceipts,
-    MerkleHash, Receipt, SignedTransaction, TransactionWithSignature,
+    transaction::{TransactionError, TransactionType},
+    Action, Block, BlockHeader, BlockReceipts, MerkleHash, Receipt,
+    SignedTransaction, TransactionWithSignature,
 };
 use rlp::Encodable;
 use std::{collections::HashSet, convert::TryInto, sync::Arc};
@@ -472,6 +473,10 @@ impl VerificationConfig {
         transaction_epoch_bound: u64,
     ) -> Result<(), TransactionError>
     {
+        // Ethereum-like transactions do not need to check epoch height.
+        if tx.transaction_type() == TransactionType::EthereumLike {
+            return Ok(());
+        }
         if Self::check_transaction_epoch_bound(
             tx,
             block_height,
@@ -534,6 +539,12 @@ impl VerificationConfig {
                 required: tx_intrinsic_gas.into(),
                 got: tx.gas
             });
+        }
+
+        if tx.transaction_type() == TransactionType::EthereumLike {
+            if tx.storage_limit != u64::MAX {
+                bail!(TransactionError::InvalidEthereumLike);
+            }
         }
 
         Ok(())

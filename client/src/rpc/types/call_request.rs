@@ -125,7 +125,7 @@ impl SendTxRequest {
 
         let password = password.map(Password::from);
         let sig = accounts
-            .sign(self.from.into(), password, tx.hash())
+            .sign(self.from.into(), password, tx.signature_hash())
             // TODO: sign error into secret store error codes.
             .map_err(|e| format!("failed to sign transaction: {:?}", e))?;
 
