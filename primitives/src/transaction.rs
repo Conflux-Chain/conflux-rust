@@ -95,6 +95,8 @@ pub enum TransactionError {
     /// Invalid RLP encoding
     InvalidRlp(String),
     ZeroGasPrice,
+    /// Ethereum-like transaction with invalid storage limit.
+    InvalidEthereumLike,
 }
 
 impl From<keylib::Error> for TransactionError {
@@ -156,6 +158,7 @@ impl fmt::Display for TransactionError {
                 format!("Transaction has invalid RLP structure: {}.", err)
             }
             ZeroGasPrice => "Zero gas price is not allowed".into(),
+            InvalidEthereumLike => "Ethereum like transaction should have u64::MAX storage limit".into()
         };
 
         f.write_fmt(format_args!("Transaction error ({})", msg))
@@ -232,15 +235,48 @@ pub struct Transaction {
     pub data: Bytes,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum TransactionType {
+    Normal,
+    EthereumLike,
+}
+
 impl Transaction {
-    pub fn hash(&self) -> H256 {
+    // This function returns the hash value used in transaction signature. It is
+    // different from transaction hash. The transaction hash also contains
+    // signatures.
+    pub fn signature_hash(&self) -> H256 {
         let mut s = RlpStream::new();
-        s.append(self);
+        match self.transaction_type() {
+            TransactionType::Normal => {
+                s.append(self);
+            }
+            TransactionType::EthereumLike => {
+                s.begin_list(9);
+                s.append(&self.nonce);
+                s.append(&self.gas_price);
+                s.append(&self.gas);
+                s.append(&self.action);
+                s.append(&self.value);
+                s.append(&self.data);
+                s.append(&self.chain_id);
+                s.append(&0u8);
+                s.append(&0u8);
+            }
+        }
         keccak(s.as_raw())
     }
 
+    pub fn transaction_type(&self) -> TransactionType {
+        if self.epoch_height == u64::MAX {
+            TransactionType::EthereumLike
+        } else {
+            TransactionType::Normal
+        }
+    }
+
     pub fn sign(self, secret: &Secret) -> SignedTransaction {
-        let sig = ::keylib::sign(secret, &self.hash())
+        let sig = ::keylib::sign(secret, &self.signature_hash())
             .expect("data is valid and context has signing capabilities; qed");
         let tx_with_sig = self.with_signature(sig);
         let public = tx_with_sig
@@ -406,7 +442,7 @@ impl TransactionWithSignature {
 
     /// Recovers the public key of the sender.
     pub fn recover_public(&self) -> Result<Public, keylib::Error> {
-        Ok(recover(&self.signature(), &self.unsigned.hash())?)
+        Ok(recover(&self.signature(), &self.unsigned.signature_hash())?)
     }
 
     pub fn rlp_size(&self) -> usize {
@@ -519,7 +555,7 @@ impl SignedTransaction {
             Ok(verify_public(
                 &public,
                 &self.signature(),
-                &self.unsigned.hash(),
+                &self.unsigned.signature_hash(),
             )?)
         } else {
             Ok(true)

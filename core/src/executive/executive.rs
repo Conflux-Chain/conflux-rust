@@ -35,8 +35,10 @@ use cfx_state::{
 use cfx_statedb::Result as DbResult;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256, U512, U64};
 use primitives::{
-    receipt::StorageChange, storage::STORAGE_LAYOUT_REGULAR_V0,
-    transaction::Action, SignedTransaction, StorageLayout,
+    receipt::StorageChange,
+    storage::STORAGE_LAYOUT_REGULAR_V0,
+    transaction::{Action, TransactionType},
+    SignedTransaction, StorageLayout,
 };
 use std::{
     collections::HashSet,
@@ -914,23 +916,27 @@ impl<
         }
 
         // Validate transaction epoch height.
-        match VerificationConfig::verify_transaction_epoch_height(
-            tx,
-            self.env.epoch_height,
-            self.env.transaction_epoch_bound,
-        ) {
-            Err(_) => {
-                return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
-                    ToRepackError::EpochHeightOutOfBound {
-                        block_height: self.env.epoch_height,
-                        set: tx.epoch_height,
-                        transaction_epoch_bound: self
-                            .env
-                            .transaction_epoch_bound,
-                    },
-                ));
+        if tx.transaction_type() == TransactionType::Normal {
+            match VerificationConfig::verify_transaction_epoch_height(
+                tx,
+                self.env.epoch_height,
+                self.env.transaction_epoch_bound,
+            ) {
+                Err(_) => {
+                    return Ok(
+                        ExecutionOutcome::NotExecutedToReconsiderPacking(
+                            ToRepackError::EpochHeightOutOfBound {
+                                block_height: self.env.epoch_height,
+                                set: tx.epoch_height,
+                                transaction_epoch_bound: self
+                                    .env
+                                    .transaction_epoch_bound,
+                            },
+                        ),
+                    );
+                }
+                Ok(()) => {}
             }
-            Ok(()) => {}
         }
 
         let base_gas_required =
@@ -991,8 +997,18 @@ impl<
             total_cost += gas_cost
         }
 
-        let tx_storage_limit_in_drip =
-            U256::from(tx.storage_limit) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+        // Since the Ethereum transactions do not contain storage limit. All the
+        // storage limit will be regarded as u64::MAX. The EthereumLike
+        // transaction should bypass the balance for storage check in
+        // pre-execution.
+        let minimum_drip_required_for_storage = match tx.transaction_type() {
+            TransactionType::Normal => {
+                U256::from(tx.storage_limit)
+                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+            }
+            TransactionType::EthereumLike => U256::zero(),
+        };
+
         let storage_sponsor_balance = if storage_sponsored {
             self.state.sponsor_balance_for_collateral(&code_address)?
         } else {
@@ -1001,17 +1017,17 @@ impl<
         // No matter who pays the collateral, we only focuses on the storage
         // limit of sender.
         let total_storage_limit = self.state.collateral_for_storage(&sender)?
-            + tx_storage_limit_in_drip;
+            + minimum_drip_required_for_storage;
         // Find the `storage_owner` in this execution.
         let storage_owner = {
             if storage_sponsored
-                && tx_storage_limit_in_drip <= storage_sponsor_balance
+                && minimum_drip_required_for_storage <= storage_sponsor_balance
             {
                 // sponsor will pay for collateral for storage
                 code_address
             } else {
                 // sender will pay for collateral for storage
-                total_cost += tx_storage_limit_in_drip.into();
+                total_cost += minimum_drip_required_for_storage.into();
                 sender
             }
         };
@@ -1022,7 +1038,7 @@ impl<
             sender_intended_cost += gas_cost
         }
         if !storage_sponsored {
-            sender_intended_cost += tx_storage_limit_in_drip.into()
+            sender_intended_cost += minimum_drip_required_for_storage.into()
         };
         // Sponsor is allowed however sender do not have enough balance to pay
         // for the extra gas because sponsor has run out of balance in
@@ -1035,7 +1051,7 @@ impl<
                 ToRepackError::NotEnoughCashFromSponsor {
                     required_gas_cost: gas_cost,
                     gas_sponsor_balance,
-                    required_storage_cost: tx_storage_limit_in_drip,
+                    required_storage_cost: minimum_drip_required_for_storage,
                     storage_sponsor_balance,
                 },
             ));
@@ -1078,7 +1094,7 @@ impl<
                     required: total_cost,
                     got: balance512,
                     actual_gas_cost: actual_gas_cost.clone(),
-                    max_storage_limit_cost: tx_storage_limit_in_drip,
+                    max_storage_limit_cost: minimum_drip_required_for_storage,
                 },
                 Executed::not_enough_balance_fee_charged(tx, &actual_gas_cost),
             ));
