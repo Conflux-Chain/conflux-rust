@@ -15,7 +15,7 @@ use crate::{
     },
     hash::keccak,
     machine::Machine,
-    state::{CallStackInfo, State, Substate},
+    state::{cleanup_mode, CallStackInfo, State, Substate},
     trace::{self, trace::ExecTrace, Tracer},
     verification::VerificationConfig,
     vm::{
@@ -127,7 +127,7 @@ pub fn into_message_call_result(
 
 /// Convert a finalization result into a VM contract create result.
 pub fn into_contract_create_result<
-    Substate: SubstateMngTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+    Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>,
 >(
     result: vm::Result<FinalizationResult>, address: &Address,
     substate: &mut Substate,
@@ -183,7 +183,7 @@ impl TransactOptions<trace::NoopTracer> {
 }
 
 enum CallCreateExecutiveKind<
-    Substate: SubstateMngTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+    Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>,
 > {
     Transfer(ActionParams),
     CallBuiltin(ActionParams),
@@ -199,11 +199,11 @@ enum CallCreateExecutiveKind<
 
 pub struct CallCreateExecutive<
     'a,
-    Substate: SubstateMngTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+    Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>,
 > {
     env: &'a Env,
     machine: &'a Machine,
-    spec: &'a Substate::Spec,
+    spec: &'a Spec,
     factory: &'a VmFactory,
     depth: usize,
     stack_depth: usize,
@@ -214,10 +214,8 @@ pub struct CallCreateExecutive<
     internal_contract_map: &'a InternalContractMap,
 }
 
-impl<
-        'a,
-        Substate: SubstateMngTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
-    > CallCreateExecutive<'a, Substate>
+impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
+    CallCreateExecutive<'a, Substate>
 {
     /// Create a new call executive using raw data.
     pub fn new_call_raw(
@@ -408,10 +406,7 @@ impl<
 
     fn transfer_exec_balance(
         params: &ActionParams, spec: &Spec, state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait<
-            CallStackInfo = CallStackInfo,
-            Spec = Spec,
-        >,
+        substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         account_start_nonce: U256,
     ) -> DbResult<()>
     {
@@ -420,7 +415,7 @@ impl<
                 &params.sender,
                 &params.address,
                 &val,
-                substate.to_cleanup_mode(&spec),
+                cleanup_mode(substate, &spec),
                 account_start_nonce,
             )?;
         }
@@ -430,10 +425,7 @@ impl<
 
     fn transfer_exec_balance_and_init_contract(
         params: &ActionParams, spec: &Spec, state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait<
-            CallStackInfo = CallStackInfo,
-            Spec = Spec,
-        >,
+        substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         storage_layout: Option<StorageLayout>, contract_start_nonce: U256,
     ) -> vm::Result<()>
     {
@@ -444,7 +436,7 @@ impl<
             state.sub_balance(
                 &params.sender,
                 &val,
-                &mut substate.to_cleanup_mode(&spec),
+                &mut cleanup_mode(substate, &spec),
             )?;
             state.new_contract_with_admin(
                 &params.address,
@@ -1179,7 +1171,7 @@ pub struct ExecutiveGeneric<
     pub state: &'a mut State,
     env: &'a Env,
     machine: &'a Machine,
-    spec: &'a Substate::Spec,
+    spec: &'a Spec,
     depth: usize,
     static_flag: bool,
     internal_contract_map: &'a InternalContractMap,
@@ -1187,7 +1179,7 @@ pub struct ExecutiveGeneric<
 
 impl<
         'a,
-        Substate: SubstateMngTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>,
         State: StateTrait<Substate = Substate>,
     > ExecutiveGeneric<'a, Substate, State>
 {
@@ -1511,7 +1503,7 @@ impl<
             self.state.sub_balance(
                 &sender,
                 &actual_gas_cost,
-                &mut tx_substate.to_cleanup_mode(&spec),
+                &mut cleanup_mode(&mut tx_substate, &spec),
             )?;
 
             return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
@@ -1539,7 +1531,7 @@ impl<
             self.state.sub_balance(
                 &sender,
                 &U256::try_from(gas_cost).unwrap(),
-                &mut tx_substate.to_cleanup_mode(&spec),
+                &mut cleanup_mode(&mut tx_substate, &spec),
             )?;
         } else {
             self.state.sub_sponsor_balance_for_gas(
@@ -1712,7 +1704,7 @@ impl<
                 self.state.add_balance(
                     sponsor_for_gas.as_ref().unwrap(),
                     &sponsor_balance_for_gas,
-                    substate.to_cleanup_mode(self.spec),
+                    cleanup_mode(&mut substate, self.spec),
                     self.spec.account_start_nonce(self.env.number),
                 )?;
                 self.state.sub_sponsor_balance_for_gas(
@@ -1724,7 +1716,7 @@ impl<
                 self.state.add_balance(
                     sponsor_for_collateral.as_ref().unwrap(),
                     &sponsor_balance_for_collateral,
-                    substate.to_cleanup_mode(self.spec),
+                    cleanup_mode(&mut substate, self.spec),
                     self.spec.account_start_nonce(self.env.number),
                 )?;
                 self.state.sub_sponsor_balance_for_collateral(
@@ -1780,7 +1772,7 @@ impl<
             self.state.add_balance(
                 &tx.sender(),
                 &refund_value,
-                substate.to_cleanup_mode(self.spec),
+                cleanup_mode(&mut substate, self.spec),
                 self.spec.account_start_nonce(self.env.number),
             )?;
         };

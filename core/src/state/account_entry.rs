@@ -698,10 +698,7 @@ impl OverlayAccount {
     /// account in current execution.
     pub fn commit_ownership_change<StateDbStorage: StorageStateTrait>(
         &mut self, db: &StateDbGeneric<StateDbStorage>,
-        substate: &mut dyn SubstateTrait<
-            CallStackInfo = CallStackInfo,
-            Spec = Spec,
-        >,
+        substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
     ) -> DbResult<()>
     {
         let storage_owner_lv1_write_cache: Vec<_> =

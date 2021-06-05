@@ -4,7 +4,6 @@
 
 pub trait SubstateTrait {
     type CallStackInfo;
-    type Spec;
 
     fn get_collateral_change(&self, address: &Address) -> (u64, u64);
 
@@ -23,7 +22,7 @@ pub trait SubstateTrait {
 
     fn record_storage_occupy(&mut self, address: &Address, collaterals: u64);
 
-    fn to_cleanup_mode(&mut self, spec: &Self::Spec) -> CleanupMode;
+    fn touched(&mut self) -> &mut HashSet<Address>;
 
     fn pop_callstack(&self);
 
@@ -72,7 +71,7 @@ pub trait SubstateMngTrait: SubstateTrait {
     ) -> Self;
 }
 
-use crate::{state_trait::StateOpsTrait, CleanupMode};
+use crate::state_trait::StateOpsTrait;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, U256};
 use primitives::LogEntry;

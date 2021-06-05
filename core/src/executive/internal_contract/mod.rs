@@ -39,10 +39,7 @@ pub trait InternalContractTrait {
     fn execute(
         &self, params: &ActionParams, env: &Env, spec: &Spec,
         state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait<
-            Spec = Spec,
-            CallStackInfo = CallStackInfo,
-        >,
+        substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>
     {
@@ -88,10 +85,7 @@ pub trait SolidityFunctionTrait: Send + Sync {
     fn execute(
         &self, input: &[u8], params: &ActionParams, env: &Env, spec: &Spec,
         state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait<
-            Spec = Spec,
-            CallStackInfo = CallStackInfo,
-        >,
+        substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>;
 

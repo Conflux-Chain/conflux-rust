@@ -35,10 +35,7 @@ impl<
     fn execute(
         &self, input: &[u8], params: &ActionParams, env: &Env, spec: &Spec,
         state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait<
-            Spec = Spec,
-            CallStackInfo = CallStackInfo,
-        >,
+        substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>
     {
@@ -88,10 +85,7 @@ pub trait InterfaceTrait {
 pub trait PreExecCheckTrait: Send + Sync {
     fn pre_execution_check(
         &self, params: &ActionParams,
-        substate: &dyn SubstateTrait<
-            Spec = Spec,
-            CallStackInfo = CallStackInfo,
-        >,
+        substate: &dyn SubstateTrait<CallStackInfo = CallStackInfo>,
     ) -> vm::Result<()>;
 }
 
@@ -99,10 +93,7 @@ pub trait ExecutionTrait: Send + Sync + InterfaceTrait {
     fn execute_inner(
         &self, input: Self::Input, params: &ActionParams, env: &Env,
         spec: &Spec, state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait<
-            Spec = Spec,
-            CallStackInfo = CallStackInfo,
-        >,
+        substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<<Self as InterfaceTrait>::Output>;
 }
@@ -124,10 +115,7 @@ pub trait PreExecCheckConfTrait: Send + Sync {
 impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
     fn pre_execution_check(
         &self, params: &ActionParams,
-        substate: &dyn SubstateTrait<
-            Spec = Spec,
-            CallStackInfo = CallStackInfo,
-        >,
+        substate: &dyn SubstateTrait<CallStackInfo = CallStackInfo>,
     ) -> vm::Result<()>
     {
         if !Self::PAYABLE && !params.value.value().is_zero() {

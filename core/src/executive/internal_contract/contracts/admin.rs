@@ -41,10 +41,7 @@ impl ExecutionTrait for SetAdmin {
     fn execute_inner(
         &self, inputs: (Address, Address), params: &ActionParams, _env: &Env,
         _spec: &Spec, state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait<
-            CallStackInfo = CallStackInfo,
-            Spec = Spec,
-        >,
+        substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -67,10 +64,7 @@ impl ExecutionTrait for Destroy {
     fn execute_inner(
         &self, input: Address, params: &ActionParams, env: &Env, spec: &Spec,
         state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait<
-            CallStackInfo = CallStackInfo,
-            Spec = Spec,
-        >,
+        substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -87,7 +81,7 @@ impl ExecutionTrait for GetAdmin {
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut dyn StateOpsTrait,
-        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<Address>
     {

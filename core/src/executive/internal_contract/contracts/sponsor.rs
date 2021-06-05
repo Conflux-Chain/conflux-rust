@@ -55,10 +55,7 @@ impl ExecutionTrait for SetSponsorForGas {
     fn execute_inner(
         &self, inputs: (Address, U256), params: &ActionParams, _env: &Env,
         spec: &Spec, state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait<
-            CallStackInfo = CallStackInfo,
-            Spec = Spec,
-        >,
+        substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -84,10 +81,7 @@ impl ExecutionTrait for SetSponsorForCollateral {
     fn execute_inner(
         &self, input: Address, params: &ActionParams, _env: &Env, spec: &Spec,
         state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait<
-            CallStackInfo = CallStackInfo,
-            Spec = Spec,
-        >,
+        substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -122,7 +116,7 @@ impl ExecutionTrait for AddPrivilege {
     fn execute_inner(
         &self, addresses: Vec<Address>, params: &ActionParams, _env: &Env,
         _: &Spec, state: &mut dyn StateOpsTrait,
-        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -154,7 +148,7 @@ impl ExecutionTrait for RemovePrivilege {
     fn execute_inner(
         &self, addresses: Vec<Address>, params: &ActionParams, _env: &Env,
         _: &Spec, state: &mut dyn StateOpsTrait,
-        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -177,7 +171,7 @@ impl ExecutionTrait for GetSponsorForGas {
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut dyn StateOpsTrait,
-        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<Address>
     {
@@ -194,7 +188,7 @@ impl ExecutionTrait for GetSponsoredBalanceForGas {
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut dyn StateOpsTrait,
-        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
@@ -211,7 +205,7 @@ impl ExecutionTrait for GetSponsoredGasFeeUpperBound {
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut dyn StateOpsTrait,
-        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
@@ -228,7 +222,7 @@ impl ExecutionTrait for GetSponsorForCollateral {
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut dyn StateOpsTrait,
-        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<Address>
     {
@@ -245,7 +239,7 @@ impl ExecutionTrait for GetSponsoredBalanceForCollateral {
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut dyn StateOpsTrait,
-        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
@@ -262,7 +256,7 @@ impl ExecutionTrait for IsWhitelisted {
     fn execute_inner(
         &self, (contract, user): (Address, Address), _: &ActionParams,
         _env: &Env, _: &Spec, state: &mut dyn StateOpsTrait,
-        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<bool>
     {
@@ -283,7 +277,7 @@ impl ExecutionTrait for IsAllWhitelisted {
     fn execute_inner(
         &self, contract: Address, _: &ActionParams, _env: &Env, _: &Spec,
         state: &mut dyn StateOpsTrait,
-        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<bool>
     {
@@ -318,7 +312,7 @@ impl ExecutionTrait for AddPrivilegeByAdmin {
         &self, (contract, addresses): (Address, Vec<Address>),
         params: &ActionParams, _env: &Env, _: &Spec,
         state: &mut dyn StateOpsTrait,
-        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -351,7 +345,7 @@ impl ExecutionTrait for RemovePrivilegeByAdmin {
         &self, (contract, addresses): (Address, Vec<Address>),
         params: &ActionParams, _env: &Env, _: &Spec,
         state: &mut dyn StateOpsTrait,
-        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {

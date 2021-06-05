@@ -79,7 +79,7 @@ pub struct Context<
     origin: &'a OriginInfo,
     substate: &'a mut Substate,
     machine: &'a Machine,
-    spec: &'a Substate::Spec,
+    spec: &'a Spec,
     output: OutputPolicy,
     static_flag: bool,
     internal_contract_map: &'a InternalContractMap,
@@ -87,14 +87,14 @@ pub struct Context<
 
 impl<
         'a,
-        Substate: SubstateTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        Substate: SubstateTrait<CallStackInfo = CallStackInfo>,
         State: StateTrait<Substate = Substate>,
     > Context<'a, Substate, State>
 {
     /// Basic `Context` constructor.
     pub fn new(
         state: &'a mut State, env: &'a Env, machine: &'a Machine,
-        spec: &'a Substate::Spec, depth: usize, stack_depth: usize,
+        spec: &'a Spec, depth: usize, stack_depth: usize,
         origin: &'a OriginInfo, substate: &'a mut Substate,
         output: OutputPolicy, static_flag: bool,
         internal_contract_map: &'a InternalContractMap,
@@ -118,7 +118,7 @@ impl<
 
 impl<
         'a,
-        Substate: SubstateMngTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>,
         State: StateTrait<Substate = Substate>,
     > ContextTrait for Context<'a, Substate, State>
 {

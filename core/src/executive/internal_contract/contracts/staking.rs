@@ -58,10 +58,7 @@ impl ExecutionTrait for Deposit {
     fn execute_inner(
         &self, input: U256, params: &ActionParams, env: &Env, _spec: &Spec,
         state: &mut dyn StateOpsTrait,
-        _substate: &mut dyn SubstateTrait<
-            CallStackInfo = CallStackInfo,
-            Spec = Spec,
-        >,
+        _substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -89,10 +86,7 @@ impl ExecutionTrait for Withdraw {
     fn execute_inner(
         &self, input: U256, params: &ActionParams, env: &Env, _spec: &Spec,
         state: &mut dyn StateOpsTrait,
-        _substate: &mut dyn SubstateTrait<
-            CallStackInfo = CallStackInfo,
-            Spec = Spec,
-        >,
+        _substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -120,10 +114,7 @@ impl ExecutionTrait for VoteLock {
     fn execute_inner(
         &self, inputs: (U256, U256), params: &ActionParams, env: &Env,
         _spec: &Spec, state: &mut dyn StateOpsTrait,
-        _substate: &mut dyn SubstateTrait<
-            CallStackInfo = CallStackInfo,
-            Spec = Spec,
-        >,
+        _substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -140,10 +131,7 @@ impl ExecutionTrait for GetStakingBalance {
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _env: &Env, _spec: &Spec,
         state: &mut dyn StateOpsTrait,
-        _substate: &mut dyn SubstateTrait<
-            CallStackInfo = CallStackInfo,
-            Spec = Spec,
-        >,
+        _substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
@@ -171,10 +159,7 @@ impl ExecutionTrait for GetLockedStakingBalance {
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
         env: &Env, _spec: &Spec, state: &mut dyn StateOpsTrait,
-        _substate: &mut dyn SubstateTrait<
-            CallStackInfo = CallStackInfo,
-            Spec = Spec,
-        >,
+        _substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
@@ -207,10 +192,7 @@ impl ExecutionTrait for GetVotePower {
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
         env: &Env, _spec: &Spec, state: &mut dyn StateOpsTrait,
-        _substate: &mut dyn SubstateTrait<
-            CallStackInfo = CallStackInfo,
-            Spec = Spec,
-        >,
+        _substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {

@@ -192,7 +192,6 @@ impl SubstateMngTrait for Substate {
 
 impl SubstateTrait for Substate {
     type CallStackInfo = CallStackInfo;
-    type Spec = Spec;
 
     fn get_collateral_change(&self, address: &Address) -> (u64, u64) {
         let inc = self
@@ -235,20 +234,7 @@ impl SubstateTrait for Substate {
             collaterals;
     }
 
-    /// Get the cleanup mode object from this.
-    fn to_cleanup_mode(&mut self, spec: &Spec) -> CleanupMode {
-        match (
-            spec.kill_dust != CleanDustMode::Off,
-            spec.no_empty,
-            spec.kill_empty,
-        ) {
-            (false, false, _) => CleanupMode::ForceCreate,
-            (false, true, false) => CleanupMode::NoEmpty,
-            (false, true, true) | (true, _, _) => {
-                CleanupMode::TrackTouched(&mut self.touched)
-            }
-        }
-    }
+    fn touched(&mut self) -> &mut HashSet<Address> { &mut self.touched }
 
     fn pop_callstack(&self) { self.contracts_in_callstack.borrow_mut().pop(); }
 
@@ -308,6 +294,25 @@ impl SubstateTrait for Substate {
     fn contract_in_creation(&self) -> Option<&Address> {
         debug!("contract_in_creation {:?}", self.contract_in_creation);
         self.contract_in_creation.as_ref()
+    }
+}
+
+/// Get the cleanup mode object from this.
+pub fn cleanup_mode<'a>(
+    substate: &'a mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
+    spec: &Spec,
+) -> CleanupMode<'a>
+{
+    match (
+        spec.kill_dust != CleanDustMode::Off,
+        spec.no_empty,
+        spec.kill_empty,
+    ) {
+        (false, false, _) => CleanupMode::ForceCreate,
+        (false, true, false) => CleanupMode::NoEmpty,
+        (false, true, true) | (true, _, _) => {
+            CleanupMode::TrackTouched(substate.touched())
+        }
     }
 }
 
