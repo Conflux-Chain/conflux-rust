@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    state::{cleanup_mode, CallStackInfo},
+    state::cleanup_mode,
     trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, Env, Spec},
 };
@@ -20,7 +20,7 @@ use cfx_types::{address_util::AddressUtil, Address, U256};
 pub fn suicide(
     contract_address: &Address, refund_address: &Address,
     state: &mut dyn StateOpsTrait, spec: &Spec,
-    substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
+    substate: &mut dyn SubstateTrait,
     tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
 ) -> vm::Result<()>
 {
@@ -97,7 +97,7 @@ pub fn set_admin(
 pub fn destroy(
     contract_address: Address, params: &ActionParams,
     state: &mut dyn StateOpsTrait, spec: &Spec,
-    substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
+    substate: &mut dyn SubstateTrait,
     tracer: &mut dyn Tracer<Output = ExecTrace>, env: &Env,
 ) -> vm::Result<()>
 {

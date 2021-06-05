@@ -987,8 +987,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
 
     /// Charges or refund storage collateral and update `total_storage_tokens`.
     fn settle_collateral_for_address(
-        &mut self, addr: &Address,
-        substate: &dyn SubstateTrait<CallStackInfo = CallStackInfo>,
+        &mut self, addr: &Address, substate: &dyn SubstateTrait,
         account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult>
     {

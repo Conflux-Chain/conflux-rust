@@ -13,7 +13,6 @@ use crate::{
     evm::{ActionParams, Spec},
     impl_function_type, make_function_table, make_solidity_contract,
     make_solidity_function,
-    state::CallStackInfo,
     trace::{trace::ExecTrace, Tracer},
     vm::{self, Env},
 };
@@ -57,8 +56,7 @@ impl UpfrontPaymentTrait for Deposit {
 impl ExecutionTrait for Deposit {
     fn execute_inner(
         &self, input: U256, params: &ActionParams, env: &Env, _spec: &Spec,
-        state: &mut dyn StateOpsTrait,
-        _substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
+        state: &mut dyn StateOpsTrait, _substate: &mut dyn SubstateTrait,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -85,8 +83,7 @@ impl UpfrontPaymentTrait for Withdraw {
 impl ExecutionTrait for Withdraw {
     fn execute_inner(
         &self, input: U256, params: &ActionParams, env: &Env, _spec: &Spec,
-        state: &mut dyn StateOpsTrait,
-        _substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
+        state: &mut dyn StateOpsTrait, _substate: &mut dyn SubstateTrait,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -114,7 +111,7 @@ impl ExecutionTrait for VoteLock {
     fn execute_inner(
         &self, inputs: (U256, U256), params: &ActionParams, env: &Env,
         _spec: &Spec, state: &mut dyn StateOpsTrait,
-        _substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
+        _substate: &mut dyn SubstateTrait,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -130,8 +127,7 @@ impl_function_type!(GetStakingBalance, "query_with_default_gas");
 impl ExecutionTrait for GetStakingBalance {
     fn execute_inner(
         &self, input: Address, _: &ActionParams, _env: &Env, _spec: &Spec,
-        state: &mut dyn StateOpsTrait,
-        _substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
+        state: &mut dyn StateOpsTrait, _substate: &mut dyn SubstateTrait,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
@@ -159,7 +155,7 @@ impl ExecutionTrait for GetLockedStakingBalance {
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
         env: &Env, _spec: &Spec, state: &mut dyn StateOpsTrait,
-        _substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
+        _substate: &mut dyn SubstateTrait,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
@@ -192,7 +188,7 @@ impl ExecutionTrait for GetVotePower {
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
         env: &Env, _spec: &Spec, state: &mut dyn StateOpsTrait,
-        _substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
+        _substate: &mut dyn SubstateTrait,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {

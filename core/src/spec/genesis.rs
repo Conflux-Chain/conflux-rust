@@ -8,7 +8,7 @@ use crate::{
         TransactOptions,
     },
     machine::Machine,
-    state::State,
+    state::{CallStackInfo, State},
     verification::{compute_receipts_root, compute_transaction_root},
     vm::{CreateContractAddress, Env},
 };
@@ -32,6 +32,7 @@ use primitives::{
 use rustc_hex::FromHex;
 use secret_store::SecretStore;
 use std::{
+    cell::RefCell,
     collections::HashMap,
     fs::File,
     io::{BufRead, BufReader, Read},
@@ -444,6 +445,7 @@ fn execute_genesis_transaction(
     let internal_contract_map = InternalContractMap::new();
 
     let options = TransactOptions::with_no_tracing();
+    let call_stack = RefCell::new(CallStackInfo::default());
     let r = {
         Executive::new(
             state,
@@ -451,6 +453,7 @@ fn execute_genesis_transaction(
             machine.as_ref(),
             &machine.spec(env.number),
             &internal_contract_map,
+            &call_stack,
         )
         .transact(transaction, options)
         .unwrap()

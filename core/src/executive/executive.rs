@@ -40,7 +40,6 @@ use std::{
     cell::RefCell,
     collections::HashSet,
     convert::{TryFrom, TryInto},
-    rc::Rc,
     sync::Arc,
 };
 
@@ -126,9 +125,7 @@ pub fn into_message_call_result(
 }
 
 /// Convert a finalization result into a VM contract create result.
-pub fn into_contract_create_result<
-    Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>,
->(
+pub fn into_contract_create_result<Substate: SubstateMngTrait>(
     result: vm::Result<FinalizationResult>, address: &Address,
     substate: &mut Substate,
 ) -> DbResult<vm::ContractCreateResult>
@@ -182,9 +179,7 @@ impl TransactOptions<trace::NoopTracer> {
     }
 }
 
-enum CallCreateExecutiveKind<
-    Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>,
-> {
+enum CallCreateExecutiveKind<Substate: SubstateMngTrait> {
     Transfer(ActionParams),
     CallBuiltin(ActionParams),
     CallInternalContract(ActionParams, Substate),
@@ -197,10 +192,7 @@ enum CallCreateExecutiveKind<
     Moved,
 }
 
-pub struct CallCreateExecutive<
-    'a,
-    Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>,
-> {
+pub struct CallCreateExecutive<'a, Substate: SubstateMngTrait> {
     env: &'a Env,
     machine: &'a Machine,
     spec: &'a Spec,
@@ -212,11 +204,10 @@ pub struct CallCreateExecutive<
     gas: U256,
     kind: CallCreateExecutiveKind<Substate>,
     internal_contract_map: &'a InternalContractMap,
+    call_stack: &'a RefCell<CallStackInfo>,
 }
 
-impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
-    CallCreateExecutive<'a, Substate>
-{
+impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// Create a new call executive using raw data.
     pub fn new_call_raw(
         params: ActionParams, env: &'a Env, machine: &'a Machine,
@@ -224,7 +215,7 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
         stack_depth: usize, parent_static_flag: bool,
         parent_contract_in_creation: Option<Address>,
         internal_contract_map: &'a InternalContractMap,
-        contracts_in_callstack: Rc<RefCell<Substate::CallStackInfo>>,
+        call_stack: &'a RefCell<CallStackInfo>,
     ) -> Self
     {
         trace!(
@@ -258,22 +249,20 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
             );
             CallCreateExecutiveKind::CallInternalContract(
                 params,
-                Substate::with_call_stack(contracts_in_callstack)
-                    .update_contract_in_creation_call(
-                        parent_contract_in_creation,
-                        /* is_internal_contract = */ true,
-                    ),
+                Substate::new().update_contract_in_creation_call(
+                    parent_contract_in_creation,
+                    /* is_internal_contract = */ true,
+                ),
             )
         } else {
             if params.code.is_some() {
                 trace!("ExecCall");
                 CallCreateExecutiveKind::ExecCall(
                     params,
-                    Substate::with_call_stack(contracts_in_callstack)
-                        .update_contract_in_creation_call(
-                            parent_contract_in_creation,
-                            /* is_internal_contract = */ false,
-                        ),
+                    Substate::new().update_contract_in_creation_call(
+                        parent_contract_in_creation,
+                        /* is_internal_contract = */ false,
+                    ),
                 )
             } else {
                 trace!("Transfer");
@@ -292,6 +281,7 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
             gas,
             is_create: false,
             internal_contract_map,
+            call_stack,
         }
     }
 
@@ -301,7 +291,7 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
         stack_depth: usize, static_flag: bool,
         internal_contract_map: &'a InternalContractMap,
-        contracts_in_callstack: Rc<RefCell<Substate::CallStackInfo>>,
+        call_stack: &'a RefCell<CallStackInfo>,
     ) -> Self
     {
         trace!(
@@ -316,7 +306,7 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
 
         let kind = CallCreateExecutiveKind::ExecCreate(
             params,
-            Substate::with_call_stack(contracts_in_callstack)
+            Substate::new()
                 .set_contract_in_creation_create(contract_in_creation),
         );
 
@@ -332,6 +322,7 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
             gas,
             is_create: true,
             internal_contract_map,
+            call_stack,
         }
     }
 
@@ -406,8 +397,7 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
 
     fn transfer_exec_balance(
         params: &ActionParams, spec: &Spec, state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
-        account_start_nonce: U256,
+        substate: &mut dyn SubstateTrait, account_start_nonce: U256,
     ) -> DbResult<()>
     {
         if let ActionValue::Transfer(val) = params.value {
@@ -425,7 +415,7 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
 
     fn transfer_exec_balance_and_init_contract(
         params: &ActionParams, spec: &Spec, state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
+        substate: &mut dyn SubstateTrait,
         storage_layout: Option<StorageLayout>, contract_start_nonce: U256,
     ) -> vm::Result<()>
     {
@@ -534,6 +524,7 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
         spec: &'any Spec, depth: usize, stack_depth: usize, static_flag: bool,
         origin: &'any OriginInfo, substate: &'any mut Substate,
         output: OutputPolicy, internal_contract_map: &'any InternalContractMap,
+        call_stack: &'any RefCell<CallStackInfo>,
     ) -> Context<'any, Substate, State>
     {
         Context::new(
@@ -548,6 +539,7 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
             output,
             static_flag,
             internal_contract_map,
+            call_stack,
         )
     }
 
@@ -693,6 +685,7 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
                         &params,
                         self.env,
                         &spec,
+                        self.call_stack,
                         state,
                         &mut unconfirmed_substate,
                         tracer,
@@ -714,6 +707,7 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
                     &mut unconfirmed_substate,
                     OutputPolicy::Return,
                     self.internal_contract_map,
+                    self.call_stack,
                 );
                 let out = Ok(result.finalize(context));
                 self.enact_output(
@@ -775,6 +769,7 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
                         &mut unconfirmed_substate,
                         OutputPolicy::Return,
                         self.internal_contract_map,
+                        self.call_stack,
                     );
                     match exec.exec(&mut context, tracer) {
                         Ok(val) => Ok(val.finalize(context)),
@@ -846,6 +841,7 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
                         &mut unconfirmed_substate,
                         OutputPolicy::InitContract,
                         self.internal_contract_map,
+                        self.call_stack,
                     );
                     match exec.exec(&mut context, tracer) {
                         Ok(val) => Ok(val.finalize(context)),
@@ -904,6 +900,7 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
                             OutputPolicy::Return
                         },
                         self.internal_contract_map,
+                        self.call_stack,
                     );
                     match exec.exec(&mut context, tracer) {
                         Ok(val) => Ok(val.finalize(context)),
@@ -967,6 +964,7 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
                             OutputPolicy::Return
                         },
                         self.internal_contract_map,
+                        self.call_stack
                     );
                     match exec.exec(&mut context, tracer) {
                         Ok(val) => Ok(val.finalize(context)),
@@ -1007,10 +1005,15 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
     ) -> vm::Result<FinalizationResult>
     {
-        top_substate.push_callstack(self.get_recipient().clone());
+        let address_stack = self.call_stack;
+        address_stack
+            .borrow_mut()
+            .push(self.get_recipient().clone());
         let mut last_res =
             Some((false, self.gas, self.exec(state, top_substate, tracer)));
-        top_substate.pop_callstack();
+        if let Some((_, _, Ok(_))) = &last_res {
+            address_stack.borrow_mut().pop();
+        }
 
         let mut callstack: Vec<(
             Option<Address>,
@@ -1029,11 +1032,14 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
                                 None => top_substate,
                             };
 
+                            address_stack.borrow_mut().push(exec.get_recipient().clone());
                             last_res = Some((exec.is_create, exec.gas, exec.exec(state, parent_substate, tracer)));
+                            if let Some((_,_,Ok(_))) = &last_res {
+                                address_stack.borrow_mut().pop();
+                            }
                         }
                         None => panic!("When callstack only had one item and it was executed, this function would return; callstack never reaches zero item; qed"),
                     }
-                    top_substate.pop_callstack();
                 }
                 Some((is_create, _gas, Ok(val))) => {
                     let current = callstack.pop();
@@ -1065,6 +1071,9 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
                                         tracer,
                                     ),
                                 ));
+                                if let Some((_, _, Ok(_))) = &last_res {
+                                    address_stack.borrow_mut().pop();
+                                }
                             } else {
                                 let second_last = callstack.last_mut();
                                 let parent_substate = match second_last {
@@ -1088,11 +1097,13 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
                                         tracer,
                                     ),
                                 ));
+                                if let Some((_, _, Ok(_))) = &last_res {
+                                    address_stack.borrow_mut().pop();
+                                }
                             }
                         }
                         None => return val,
                     }
-                    top_substate.pop_callstack();
                 }
                 Some((_, _, Err(TrapError::Call(subparams, mut resume)))) => {
                     tracer.prepare_trace_call(&subparams);
@@ -1112,13 +1123,10 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
                         resume.static_flag,
                         maybe_parent_contract_in_creation,
                         resume.internal_contract_map,
-                        top_substate.contracts_in_callstack().clone(),
+                        &address_stack,
                     );
 
-                    top_substate.push_callstack(resume.get_recipient().clone());
                     callstack.push((None, resume));
-                    top_substate
-                        .push_callstack(sub_exec.get_recipient().clone());
                     callstack.push((None, sub_exec));
                     last_res = None;
                 }
@@ -1138,13 +1146,10 @@ impl<'a, Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>>
                         resume.stack_depth,
                         resume.static_flag,
                         resume.internal_contract_map,
-                        top_substate.contracts_in_callstack().clone(),
+                        &address_stack,
                     );
 
-                    top_substate.push_callstack(resume.get_recipient().clone());
                     callstack.push((Some(address), resume));
-                    top_substate
-                        .push_callstack(sub_exec.get_recipient().clone());
                     callstack.push((None, sub_exec));
                     last_res = None;
                 }
@@ -1175,11 +1180,12 @@ pub struct ExecutiveGeneric<
     depth: usize,
     static_flag: bool,
     internal_contract_map: &'a InternalContractMap,
+    call_stack: &'a RefCell<CallStackInfo>,
 }
 
 impl<
         'a,
-        Substate: SubstateMngTrait<CallStackInfo = CallStackInfo>,
+        Substate: SubstateMngTrait,
         State: StateTrait<Substate = Substate>,
     > ExecutiveGeneric<'a, Substate, State>
 {
@@ -1187,6 +1193,7 @@ impl<
     pub fn new(
         state: &'a mut State, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, internal_contract_map: &'a InternalContractMap,
+        call_stack: &'a RefCell<CallStackInfo>,
     ) -> Self
     {
         ExecutiveGeneric {
@@ -1197,6 +1204,7 @@ impl<
             depth: 0,
             static_flag: false,
             internal_contract_map,
+            call_stack,
         }
     }
 
@@ -1205,6 +1213,7 @@ impl<
         state: &'a mut State, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, parent_depth: usize, static_flag: bool,
         internal_contract_map: &'a InternalContractMap,
+        call_stack: &'a RefCell<CallStackInfo>,
     ) -> Self
     {
         ExecutiveGeneric {
@@ -1215,6 +1224,7 @@ impl<
             depth: parent_depth + 1,
             static_flag,
             internal_contract_map,
+            call_stack,
         }
     }
 
@@ -1255,7 +1265,7 @@ impl<
             stack_depth,
             self.static_flag,
             self.internal_contract_map,
-            substate.contracts_in_callstack().clone(),
+            self.call_stack,
         )
         .consume(self.state, substate, tracer);
 
@@ -1289,7 +1299,7 @@ impl<
             self.static_flag,
             None,
             self.internal_contract_map,
-            substate.contracts_in_callstack().clone(),
+            self.call_stack,
         )
         .consume(self.state, substate, tracer);
 

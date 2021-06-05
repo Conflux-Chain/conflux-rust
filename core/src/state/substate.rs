@@ -10,11 +10,7 @@ use cfx_state::{
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, U256};
 use primitives::LogEntry;
-use std::{
-    cell::RefCell,
-    collections::{HashMap, HashSet},
-    rc::Rc,
-};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Default)]
 pub struct CallStackInfo {
@@ -24,7 +20,7 @@ pub struct CallStackInfo {
 }
 
 impl CallStackInfo {
-    fn push(&mut self, address: Address) {
+    pub fn push(&mut self, address: Address) {
         // We should still use the correct behaviour to check if reentrancy
         // happens.
         if self.last() != Some(&address) && self.contains_key(&address) {
@@ -36,7 +32,7 @@ impl CallStackInfo {
         *self.address_counter.entry(address).or_insert(0) += 1;
     }
 
-    fn pop(&mut self) -> Option<Address> {
+    pub fn pop(&mut self) -> Option<Address> {
         let maybe_address = self.call_stack_recipient_addresses.pop();
         if let Some(address) = &maybe_address {
             let poped_address_cnt = self
@@ -124,12 +120,6 @@ pub struct Substate {
     /// So they are not considered in accruing substate and
     /// must be maintained carefully.
 
-    /// Contracts called in call stack.
-    /// Used to detect reentrancy.
-    /// Passed from caller to callee when calling happens
-    /// and passed back to caller when callee returns,
-    /// through mem::swap.
-    pub contracts_in_callstack: Rc<RefCell<CallStackInfo>>,
     /// The contract which is being constructed. The contract address is set at
     /// the beginning of the constructor. When an internal contract is called
     /// from the contract constructor, the contract_in_creation is inherited
@@ -141,12 +131,6 @@ pub struct Substate {
 }
 
 impl SubstateMngTrait for Substate {
-    fn with_call_stack(callstack: Rc<RefCell<Self::CallStackInfo>>) -> Self {
-        let mut substate = Substate::default();
-        substate.contracts_in_callstack = callstack;
-        substate
-    }
-
     fn accrue(&mut self, s: Self) {
         self.suicides.extend(s.suicides);
         self.touched.extend(s.touched);
@@ -191,8 +175,6 @@ impl SubstateMngTrait for Substate {
 }
 
 impl SubstateTrait for Substate {
-    type CallStackInfo = CallStackInfo;
-
     fn get_collateral_change(&self, address: &Address) -> (u64, u64) {
         let inc = self
             .storage_collateralized
@@ -236,20 +218,6 @@ impl SubstateTrait for Substate {
 
     fn touched(&mut self) -> &mut HashSet<Address> { &mut self.touched }
 
-    fn pop_callstack(&self) { self.contracts_in_callstack.borrow_mut().pop(); }
-
-    fn push_callstack(&self, contract: Address) {
-        self.contracts_in_callstack.borrow_mut().push(contract);
-    }
-
-    fn contracts_in_callstack(&self) -> &Rc<RefCell<CallStackInfo>> {
-        &self.contracts_in_callstack
-    }
-
-    fn in_reentrancy(&self) -> bool {
-        self.contracts_in_callstack.borrow().in_reentrancy()
-    }
-
     fn sstore_clears_refund(&self) -> i128 { self.sstore_clears_refund }
 
     fn sstore_clears_refund_mut(&mut self) -> &mut i128 {
@@ -260,12 +228,6 @@ impl SubstateTrait for Substate {
 
     fn contracts_created_mut(&mut self) -> &mut Vec<Address> {
         &mut self.contracts_created
-    }
-
-    fn reentrancy_happens_when_push(&self, address: &Address) -> bool {
-        self.contracts_in_callstack
-            .borrow()
-            .reentrancy_happens_when_push(address)
     }
 
     fn record_storage_release(&mut self, address: &Address, collaterals: u64) {
@@ -283,10 +245,6 @@ impl SubstateTrait for Substate {
             .collect()
     }
 
-    fn contains_key(&self, key: &Address) -> bool {
-        self.contracts_in_callstack.borrow().contains_key(key)
-    }
-
     fn suicides(&self) -> &HashSet<Address> { &self.suicides }
 
     fn suicides_mut(&mut self) -> &mut HashSet<Address> { &mut self.suicides }
@@ -299,10 +257,8 @@ impl SubstateTrait for Substate {
 
 /// Get the cleanup mode object from this.
 pub fn cleanup_mode<'a>(
-    substate: &'a mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
-    spec: &Spec,
-) -> CleanupMode<'a>
-{
+    substate: &'a mut dyn SubstateTrait, spec: &Spec,
+) -> CleanupMode<'a> {
     match (
         spec.kill_dust != CleanDustMode::Off,
         spec.no_empty,

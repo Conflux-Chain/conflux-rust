@@ -3,8 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 pub trait SubstateTrait {
-    type CallStackInfo;
-
     fn get_collateral_change(&self, address: &Address) -> (u64, u64);
 
     fn logs(&self) -> &[LogEntry];
@@ -24,14 +22,6 @@ pub trait SubstateTrait {
 
     fn touched(&mut self) -> &mut HashSet<Address>;
 
-    fn pop_callstack(&self);
-
-    fn push_callstack(&self, contract: Address);
-
-    fn contracts_in_callstack(&self) -> &Rc<RefCell<Self::CallStackInfo>>;
-
-    fn in_reentrancy(&self) -> bool;
-
     fn sstore_clears_refund(&self) -> i128;
 
     fn sstore_clears_refund_mut(&mut self) -> &mut i128;
@@ -39,13 +29,9 @@ pub trait SubstateTrait {
     fn contracts_created(&self) -> &[Address];
     fn contracts_created_mut(&mut self) -> &mut Vec<Address>;
 
-    fn reentrancy_happens_when_push(&self, address: &Address) -> bool;
-
     fn record_storage_release(&mut self, address: &Address, collaterals: u64);
 
     fn keys_for_collateral_changed(&self) -> HashSet<&Address>;
-
-    fn contains_key(&self, key: &Address) -> bool;
 
     fn suicides(&self) -> &HashSet<Address>;
 
@@ -55,8 +41,6 @@ pub trait SubstateTrait {
 }
 
 pub trait SubstateMngTrait: SubstateTrait {
-    fn with_call_stack(callstack: Rc<RefCell<Self::CallStackInfo>>) -> Self;
-
     fn accrue(&mut self, s: Self);
 
     fn new() -> Self;
@@ -75,4 +59,4 @@ use crate::state_trait::StateOpsTrait;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, U256};
 use primitives::LogEntry;
-use std::{cell::RefCell, collections::HashSet, rc::Rc};
+use std::collections::HashSet;

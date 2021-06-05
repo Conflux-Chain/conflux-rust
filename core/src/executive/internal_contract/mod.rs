@@ -19,7 +19,7 @@ use crate::{
 };
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{Address, H256};
-use std::sync::Arc;
+use std::{cell::RefCell, sync::Arc};
 
 lazy_static! {
     static ref INTERNAL_CONTRACT_CODE: Arc<Bytes> =
@@ -38,8 +38,8 @@ pub trait InternalContractTrait {
     /// execute this internal contract on the given parameters.
     fn execute(
         &self, params: &ActionParams, env: &Env, spec: &Spec,
-        state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
+        call_stack: &RefCell<CallStackInfo>, state: &mut dyn StateOpsTrait,
+        substate: &mut dyn SubstateTrait,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>
     {
@@ -67,6 +67,7 @@ pub trait InternalContractTrait {
             params,
             env,
             spec,
+            call_stack,
             state,
             substate,
             tracer,
@@ -82,10 +83,13 @@ pub trait InternalContractTrait {
 
 /// Native implementation of a solidity-interface function.
 pub trait SolidityFunctionTrait: Send + Sync {
+    // TODO: there are too many parameters here. It should use context instead.
+    // However, context can not support all the requirements in internal
+    // contracts.
     fn execute(
         &self, input: &[u8], params: &ActionParams, env: &Env, spec: &Spec,
-        state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo>,
+        call_stack: &RefCell<CallStackInfo>, state: &mut dyn StateOpsTrait,
+        substate: &mut dyn SubstateTrait,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>;
 
