@@ -21,7 +21,7 @@ use crate::{
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
         ExecTrapResult, GasLeft, ResumeCall, ResumeCreate, ReturnData, Spec,
-        TrapError,
+        TrapError, TrapResult,
     },
     vm_factory::VmFactory,
 };
@@ -453,9 +453,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         // You should avoid calling functions for self here, since `self.kind`
         // is moved temporally.
 
-        // TODO: `ExecTrapResult` is a nested `Result`. It is ambiguous to deal
-        // with result like `Ok(Err(e))`. I plan to rename it in a separated PR.
-
         // In case the execution is done and the state will be reverted, there
         // will be no need be collect ownership.
 
@@ -464,47 +461,48 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         // don't want to execute heavy function collect_ownership_changed if it
         // is unnecessary.
         let need_collect_ownership = match &output {
-            Ok(Err(_))
-            | Ok(Ok(FinalizationResult {
-                apply_state: false, ..
+            TrapResult::Return(Err(_))
+            | TrapResult::Return(Ok(FinalizationResult {
+                apply_state: false,
+                ..
             })) => false,
             _ => true,
         };
         let output = if need_collect_ownership {
             match state.collect_ownership_changed(&mut unconfirmed_substate) {
                 Ok(_) => output,
-                Err(db_err) => Ok(Err(db_err.into())),
+                Err(db_err) => TrapResult::Return(Err(db_err.into())),
             }
         } else {
             output
         };
 
         match output {
-            Ok(result) => match result {
+            TrapResult::Return(result) => match result {
                 // The whole epoch execution fails. No need to revert state.
-                Err(vm::Error::StateDbError(_)) => Ok(result),
+                Err(vm::Error::StateDbError(_)) => TrapResult::Return(result),
                 Err(_)
                 | Ok(FinalizationResult {
                     apply_state: false, ..
                 }) => {
                     state.revert_to_checkpoint();
-                    Ok(result)
+                    TrapResult::Return(result)
                 }
                 Ok(_) => {
                     state.discard_checkpoint();
                     substate.accrue(unconfirmed_substate);
 
-                    Ok(result)
+                    TrapResult::Return(result)
                 }
             },
-            Err(trap_err) => match trap_err {
+            TrapResult::SubCallCreate(trap_err) => match trap_err {
                 TrapError::Call(subparams, resume) => {
                     self.kind = CallCreateExecutiveKind::ResumeCall(
                         origin,
                         resume,
                         unconfirmed_substate,
                     );
-                    Err(TrapError::Call(subparams, self))
+                    TrapResult::SubCallCreate(TrapError::Call(subparams, self))
                 }
                 TrapError::Create(subparams, address, resume) => {
                     self.kind = CallCreateExecutiveKind::ResumeCreate(
@@ -512,7 +510,9 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                         resume,
                         unconfirmed_substate,
                     );
-                    Err(TrapError::Create(subparams, address, self))
+                    TrapResult::SubCallCreate(TrapError::Create(
+                        subparams, address, self,
+                    ))
                 }
             },
         }
@@ -578,7 +578,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                     })
                 };
 
-                Ok(inner())
+                TrapResult::Return(inner())
             }
 
             CallCreateExecutiveKind::CallBuiltin(ref params) => {
@@ -640,7 +640,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                     }
                 };
 
-                Ok(inner())
+                TrapResult::Return(inner())
             }
 
             CallCreateExecutiveKind::CallInternalContract(
@@ -669,7 +669,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
 
                 match pre_inner() {
                     Ok(()) => (),
-                    Err(err) => return Ok(Err(err)),
+                    Err(err) => return TrapResult::Return(Err(err)),
                 }
 
                 let origin = OriginInfo::from(&params);
@@ -709,7 +709,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                     self.internal_contract_map,
                     self.call_stack,
                 );
-                let out = Ok(result.finalize(context));
+                let out = TrapResult::Return(result.finalize(context));
                 self.enact_output(
                     out,
                     origin,
@@ -749,7 +749,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
 
                     match pre_inner() {
                         Ok(()) => (),
-                        Err(err) => return Ok(Err(err)),
+                        Err(err) => return TrapResult::Return(Err(err)),
                     }
                 }
 
@@ -772,8 +772,8 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                         self.call_stack,
                     );
                     match exec.exec(&mut context, tracer) {
-                        Ok(val) => Ok(val.finalize(context)),
-                        Err(err) => Err(err),
+                        TrapResult::Return(val) => TrapResult::Return(val.finalize(context)),
+                        TrapResult::SubCallCreate(err) => TrapResult::SubCallCreate(err),
                     }
                 };
 
@@ -821,7 +821,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
 
                     match pre_inner() {
                         Ok(()) => (),
-                        Err(err) => return Ok(Err(err)),
+                        Err(err) => return TrapResult::Return(Err(err)),
                     }
                 }
 
@@ -844,8 +844,8 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                         self.call_stack,
                     );
                     match exec.exec(&mut context, tracer) {
-                        Ok(val) => Ok(val.finalize(context)),
-                        Err(err) => Err(err),
+                        TrapResult::Return(val) => TrapResult::Return(val.finalize(context)),
+                        TrapResult::SubCallCreate(err) => TrapResult::SubCallCreate(err),
                     }
                 };
 
@@ -903,8 +903,8 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                         self.call_stack,
                     );
                     match exec.exec(&mut context, tracer) {
-                        Ok(val) => Ok(val.finalize(context)),
-                        Err(err) => Err(err),
+                        TrapResult::Return(val) => TrapResult::Return(val.finalize(context)),
+                        TrapResult::SubCallCreate(err) => TrapResult::SubCallCreate(err),
                     }
                 };
 
@@ -967,8 +967,8 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                         self.call_stack
                     );
                     match exec.exec(&mut context, tracer) {
-                        Ok(val) => Ok(val.finalize(context)),
-                        Err(err) => Err(err),
+                        TrapResult::Return(val) => TrapResult::Return(val.finalize(context)),
+                        TrapResult::SubCallCreate(err) => TrapResult::SubCallCreate(err),
                     }
                 };
 
@@ -1011,7 +1011,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
             .push(self.get_recipient().clone());
         let mut last_res =
             Some((false, self.gas, self.exec(state, top_substate, tracer)));
-        if let Some((_, _, Ok(_))) = &last_res {
+        if let Some((_, _, TrapResult::Return(_))) = &last_res {
             address_stack.borrow_mut().pop();
         }
 
@@ -1034,14 +1034,14 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
 
                             address_stack.borrow_mut().push(exec.get_recipient().clone());
                             last_res = Some((exec.is_create, exec.gas, exec.exec(state, parent_substate, tracer)));
-                            if let Some((_,_,Ok(_))) = &last_res {
+                            if let Some((_,_,TrapResult::Return(_))) = &last_res {
                                 address_stack.borrow_mut().pop();
                             }
                         }
                         None => panic!("When callstack only had one item and it was executed, this function would return; callstack never reaches zero item; qed"),
                     }
                 }
-                Some((is_create, _gas, Ok(val))) => {
+                Some((is_create, _gas, TrapResult::Return(val))) => {
                     let current = callstack.pop();
 
                     match current {
@@ -1071,7 +1071,9 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                                         tracer,
                                     ),
                                 ));
-                                if let Some((_, _, Ok(_))) = &last_res {
+                                if let Some((_, _, TrapResult::Return(_))) =
+                                    &last_res
+                                {
                                     address_stack.borrow_mut().pop();
                                 }
                             } else {
@@ -1097,7 +1099,9 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                                         tracer,
                                     ),
                                 ));
-                                if let Some((_, _, Ok(_))) = &last_res {
+                                if let Some((_, _, TrapResult::Return(_))) =
+                                    &last_res
+                                {
                                     address_stack.borrow_mut().pop();
                                 }
                             }
@@ -1105,7 +1109,14 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                         None => return val,
                     }
                 }
-                Some((_, _, Err(TrapError::Call(subparams, mut resume)))) => {
+                Some((
+                    _,
+                    _,
+                    TrapResult::SubCallCreate(TrapError::Call(
+                        subparams,
+                        mut resume,
+                    )),
+                )) => {
                     tracer.prepare_trace_call(&subparams);
                     let maybe_parent_contract_in_creation = resume
                         .unconfirmed_substate()
@@ -1133,7 +1144,11 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                 Some((
                     _,
                     _,
-                    Err(TrapError::Create(subparams, address, resume)),
+                    TrapResult::SubCallCreate(TrapError::Create(
+                        subparams,
+                        address,
+                        resume,
+                    )),
                 )) => {
                     tracer.prepare_trace_create(&subparams);
                     let sub_exec = CallCreateExecutive::new_create_raw(

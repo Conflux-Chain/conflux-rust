@@ -199,8 +199,22 @@ impl fmt::Display for Error {
 }
 
 pub type Result<T> = ::std::result::Result<T, Error>;
-pub type TrapResult<T, Call, Create> =
-    ::std::result::Result<Result<T>, TrapError<Call, Create>>;
+
+pub enum TrapResult<T, Call, Create> {
+    Return(Result<T>),
+    SubCallCreate(TrapError<Call, Create>),
+}
+
+impl<T, Call, Create> TrapResult<T, Call, Create> {
+    #[cfg(test)]
+    pub fn ok(self) -> Option<Result<T>> {
+        if let TrapResult::Return(result) = self {
+            Some(result)
+        } else {
+            None
+        }
+    }
+}
 
 pub type ExecTrapResult<T> =
     TrapResult<T, Box<dyn ResumeCall>, Box<dyn ResumeCreate>>;
