@@ -7,7 +7,9 @@ use consensus_types::common::{Author, Round};
 use cfx_types::U256;
 use consensus_types::block::{Block, VRF_SEED};
 use diem_crypto::{VRFPrivateKey, VRFProof};
-use diem_types::validator_config::ConsensusVRFPrivateKey;
+use diem_types::{
+    account_address::AccountAddress, validator_config::ConsensusVRFPrivateKey,
+};
 use parking_lot::Mutex;
 use std::collections::HashMap;
 
@@ -21,7 +23,7 @@ pub struct VrfProposer {
 
     current_round: Mutex<Round>,
     current_seed: Mutex<Vec<u8>>,
-    proposal_candidates: Mutex<Vec<Block>>,
+    proposal_candidates: Mutex<HashMap<AccountAddress, Block>>,
 }
 
 impl VrfProposer {
@@ -78,8 +80,10 @@ impl ProposerElection for VrfProposer {
         if self.is_valid_proposal(&block)
             && block.round() == *self.current_round.lock()
         {
-            self.proposal_candidates.lock().push(block);
-            true
+            self.proposal_candidates
+                .lock()
+                .insert(block.author().unwrap(), block)
+                .is_none()
         } else {
             false
         }
@@ -89,7 +93,7 @@ impl ProposerElection for VrfProposer {
     fn choose_proposal_to_vote(&self) -> Option<Block> {
         let mut chosen_proposal = None;
         let mut min_vrf_number = U256::MAX;
-        for b in &*self.proposal_candidates.lock() {
+        for (_, b) in &*self.proposal_candidates.lock() {
             let vrf_number = U256::from_big_endian(
                 b.vrf_proof().unwrap().to_hash().unwrap().as_ref(),
             );

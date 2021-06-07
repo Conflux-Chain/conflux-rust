@@ -579,7 +579,11 @@ impl RoundManager {
         if self.proposer_election.is_random_election() {
             // Wait for all proposals.
             // FIXME(lpl): Execute to check validity.
-            self.proposer_election.receive_proposal_candidate(proposal);
+            ensure!(
+                self.proposer_election.receive_proposal_candidate(proposal),
+                "Receive invalid or duplicate proposal from {}",
+                author,
+            );
         } else {
             let proposal_round = proposal.round();
             let vote = self
