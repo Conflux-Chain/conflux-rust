@@ -691,6 +691,8 @@ impl RoundManager {
             self.process_vote(vote_msg.vote())
                 .await
                 .context("[RoundManager] Add a new vote")?;
+            self.network
+                .broadcast(ConsensusMsg::VoteMsg(Box::new(vote_msg)));
         }
         Ok(())
     }
@@ -744,7 +746,10 @@ impl RoundManager {
             VoteReceptionResult::NewTimeoutCertificate(tc) => {
                 self.new_tc_aggregated(tc).await
             }
-            _ => Ok(()),
+            VoteReceptionResult::VoteAdded(_) => Ok(()),
+            // Return error so that duplicate or invalid votes will not be
+            // broadcast to others.
+            _ => bail!("vote not added"),
         }
     }
 
