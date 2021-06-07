@@ -1,6 +1,6 @@
 [package]
 description = "Conflux core parameters library"
-homepage = "http://www.conflux-chain.org"
+homepage = "https://www.confluxnetwork.org"
 license = "GPL-3.0"
 name = "cfx-parameters"
 version = "1.0.0"
