@@ -366,12 +366,31 @@ impl RoundManager {
                     );
                     VerifyError::from(e)
                 })?;
+            /*
             let result = self
                 .block_store
                 .add_certs(&sync_info, self.create_block_retriever(author))
                 .await;
-            self.process_certificates().await?;
-            result
+             */
+            // TODO(lpl): Ensure this does not cause OOM.
+            let mut retriever = self.create_block_retriever(author);
+            self.block_store
+                .insert_quorum_cert(
+                    &sync_info.highest_commit_cert(),
+                    &mut retriever,
+                )
+                .await?;
+            self.block_store
+                .insert_quorum_cert(
+                    &sync_info.highest_quorum_cert(),
+                    &mut retriever,
+                )
+                .await?;
+            if let Some(tc) = sync_info.highest_timeout_certificate() {
+                self.block_store
+                    .insert_timeout_certificate(Arc::new(tc.clone()))?;
+            }
+            self.process_certificates().await
         } else {
             Ok(())
         }
