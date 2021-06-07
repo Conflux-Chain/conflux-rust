@@ -319,7 +319,24 @@ impl RoundManager {
             .await
             .context("[RoundManager] Process proposal")?
         {
-            self.process_proposal(proposal_msg.take_proposal()).await
+            self.process_proposal(proposal_msg.clone().take_proposal())
+                .await?;
+            // If a proposal has been received and voted, it will return error.
+            //
+            // 1. For old leader elections where there is only one leader and we
+            // vote after receiving the first proposal, the error is
+            // returned in `execute_and_vote` because `vote_sent.
+            // is_none()` is false. 2. For VRF leader election, we
+            // return error when we insert a proposal from the same
+            // author to proposal_candidates.
+            //
+            // This ensures that there is no broadcast storm
+            // because we only broadcast a proposal when we receive it for the
+            // first time.
+            // TODO(lpl): Do not send to the sender and the original author.
+            self.network
+                .broadcast(ConsensusMsg::ProposalMsg(Box::new(proposal_msg)));
+            Ok(())
         } else {
             bail!(
                 "Stale proposal {}, current round {}",
