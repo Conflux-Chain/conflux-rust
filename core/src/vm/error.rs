@@ -21,7 +21,7 @@
 //! VM errors module
 
 use super::{action_params::ActionParams, ResumeCall, ResumeCreate};
-use cfx_statedb::Error as DbError;
+use cfx_statedb::{Error as DbError, Result as DbResult};
 use cfx_types::{Address, U256};
 use solidity_abi::ABIDecodeError;
 use std::fmt;
@@ -199,6 +199,13 @@ impl fmt::Display for Error {
 }
 
 pub type Result<T> = ::std::result::Result<T, Error>;
+
+pub fn separate_out_db_error<T>(result: Result<T>) -> DbResult<Result<T>> {
+    match result {
+        Err(Error::StateDbError(err)) => Err(err.0),
+        x => Ok(x),
+    }
+}
 
 pub enum TrapResult<T, Call, Create> {
     Return(Result<T>),

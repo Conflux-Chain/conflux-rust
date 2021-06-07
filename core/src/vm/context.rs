@@ -28,10 +28,14 @@ use super::{
     spec::Spec,
     Error,
 };
-use crate::trace::{trace::ExecTrace, Tracer};
+use crate::{
+    state::CallStackInfo,
+    trace::{trace::ExecTrace, Tracer},
+};
 use cfx_bytes::Bytes;
+use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{Address, H256, U256};
-use std::sync::Arc;
+use std::{cell::RefCell, sync::Arc};
 
 #[derive(Debug)]
 /// Result of externalities create function.
@@ -193,4 +197,15 @@ pub trait Context {
     /// The call stack doesn't have the current executive, so the caller address
     /// should be passed.
     fn is_reentrancy(&self, caller: &Address, callee: &Address) -> bool;
+
+    // TODO: Separate this interface to another trait maybe.
+    fn internal_input(
+        &mut self,
+    ) -> (
+        &Env,
+        &Spec,
+        &RefCell<CallStackInfo>,
+        &mut dyn StateOpsTrait,
+        &mut dyn SubstateTrait,
+    );
 }

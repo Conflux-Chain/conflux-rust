@@ -23,11 +23,16 @@ use super::{
     CreateContractAddress, Env, Error, GasLeft, MessageCallResult, Result,
     ReturnData, Spec,
 };
-use crate::trace::{trace::ExecTrace, Tracer};
+use crate::{
+    state::CallStackInfo,
+    trace::{trace::ExecTrace, Tracer},
+};
 use cfx_bytes::Bytes;
+use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use hash::keccak;
 use std::{
+    cell::RefCell,
     collections::{HashMap, HashSet},
     sync::Arc,
 };
@@ -248,5 +253,17 @@ impl Context for MockContext {
     fn is_reentrancy(&self, _: &Address, _: &Address) -> bool {
         // The MockContext doesn't have message call
         false
+    }
+
+    fn internal_input(
+        &mut self,
+    ) -> (
+        &Env,
+        &Spec,
+        &RefCell<CallStackInfo>,
+        &mut dyn StateOpsTrait,
+        &mut dyn SubstateTrait,
+    ) {
+        unimplemented!()
     }
 }

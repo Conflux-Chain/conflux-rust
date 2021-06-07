@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+mod builtin;
 mod context;
 mod executed;
 mod executive;
@@ -31,7 +32,8 @@ impl CollateralCheckResultToVmResult for CollateralCheckResult {
 pub use self::{
     executed::*,
     executive::{
-        contract_address, Executive, ExecutiveGeneric, TransactOptions,
+        contract_address, Executive, ExecutiveGeneric, ExecutiveResult,
+        TransactOptions,
     },
     internal_contract::{
         function, suicide, ABIDecodeError, InternalContractMap,

@@ -30,6 +30,13 @@ class TestTrace(RpcClient):
                         'value': '0x64'
                     },
                     'type': 'call'
+                },{
+                    "action": {
+                        "gasLeft": "0x0",
+                        "outcome": "success",
+                        "returnData": []
+                    },
+                    "type": "call_result"
                 }],
                 'transactionHash': tx.hash_hex(),
                 'transactionPosition': '0x0'
@@ -48,7 +55,7 @@ class TestTrace(RpcClient):
 
         trace3 = self.get_block_trace(b2)
         assert_equal(len(trace3["transactionTraces"]), 1)
-        assert_equal(len(trace3["transactionTraces"][0]["traces"]), 1)
+        assert_equal(len(trace3["transactionTraces"][0]["traces"]), 2)
         trace2 = self.get_block_trace(b1)
         assert_equal(len(trace2["transactionTraces"]), 1)
         assert_equal(len(trace2["transactionTraces"][0]["traces"]), 0)
@@ -60,7 +67,7 @@ class TestTrace(RpcClient):
 
         trace4 = self.get_block_trace(b1)
         assert_equal(len(trace4["transactionTraces"]), 1)
-        assert_equal(len(trace4["transactionTraces"][0]["traces"]), 1)
+        assert_equal(len(trace4["transactionTraces"][0]["traces"]), 2)
         trace5 = self.get_block_trace(b2)
         assert_equal(len(trace5["transactionTraces"]), 1)
         assert_equal(len(trace5["transactionTraces"][0]["traces"]), 0)
@@ -85,6 +92,18 @@ class TestTrace(RpcClient):
             'epochNumber': receipt["epochNumber"],
             'transactionHash': tx_hash,
             'transactionPosition': '0x0',
+        },{
+            "action": {
+                "gasLeft": "0x0",
+                "outcome": "success",
+                "returnData": []
+            },
+            "blockHash": receipt["blockHash"],
+            "epochHash": receipt["blockHash"],
+            "epochNumber": receipt["epochNumber"],
+            "transactionHash": tx_hash,
+            "transactionPosition": "0x0",
+            "type": "call_result"
         }]
         assert_equal(self.get_transaction_trace(tx_hash), expected_trace)
 
@@ -110,5 +129,17 @@ class TestTrace(RpcClient):
             'transactionHash': tx_hash,
             'transactionPosition': '0x0',
             'type': 'call'
+        },{
+            "action": {
+                "gasLeft": "0x0",
+                "outcome": "success",
+                "returnData": []
+            },
+            "blockHash": block_hash,
+            "epochHash": block_hash,
+            "epochNumber": receipt["epochNumber"],
+            "transactionHash": tx_hash,
+            "transactionPosition": "0x0",
+            "type": "call_result"
         }]
         assert_equal(trace, expected_trace)

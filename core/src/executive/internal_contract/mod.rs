@@ -28,7 +28,7 @@ lazy_static! {
 }
 
 /// Native implementation of an internal contract.
-pub trait InternalContractTrait {
+pub trait InternalContractTrait: Send + Sync {
     /// Address of the internal contract
     fn address(&self) -> &Address;
 

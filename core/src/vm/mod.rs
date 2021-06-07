@@ -21,8 +21,8 @@ pub use self::{
     },
     env::Env,
     error::{
-        Error, ExecTrapError, ExecTrapResult, Result, TrapError, TrapKind,
-        TrapResult,
+        separate_out_db_error, Error, ExecTrapError, ExecTrapResult, Result,
+        TrapError, TrapKind, TrapResult,
     },
     return_data::{GasLeft, ReturnData},
     spec::{CleanDustMode, Spec, WasmCosts},

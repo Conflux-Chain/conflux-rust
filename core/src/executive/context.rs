@@ -18,7 +18,9 @@ use crate::{
 use cfx_parameters::staking::{
     code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
-use cfx_state::{StateTrait, SubstateMngTrait, SubstateTrait};
+use cfx_state::{
+    state_trait::StateOpsTrait, StateTrait, SubstateMngTrait, SubstateTrait,
+};
 use cfx_types::{Address, H256, U256};
 use primitives::transaction::UNSIGNED_SENDER;
 use std::{cell::RefCell, sync::Arc};
@@ -114,8 +116,6 @@ impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
             local_part: self,
         }
     }
-
-    pub fn is_create(&self) -> bool { self.is_create }
 }
 
 impl<
@@ -470,6 +470,24 @@ impl<
             .call_stack
             .borrow()
             .reentrancy_happens_when_push(callee)
+    }
+
+    fn internal_input(
+        &mut self,
+    ) -> (
+        &Env,
+        &Spec,
+        &RefCell<CallStackInfo>,
+        &mut dyn StateOpsTrait,
+        &mut dyn SubstateTrait,
+    ) {
+        (
+            self.local_part.env,
+            self.local_part.spec,
+            self.local_part.call_stack,
+            self.state,
+            &mut self.local_part.substate,
+        )
     }
 }
 
