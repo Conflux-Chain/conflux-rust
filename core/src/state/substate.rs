@@ -102,6 +102,7 @@ pub struct Substate {
     /// Any accounts that have suicided.
     pub suicides: HashSet<Address>,
     /// Any accounts that are touched.
+    // touched is never used and it is not maintained properly.
     pub touched: HashSet<Address>,
     /// Any accounts that occupy some storage.
     pub storage_collateralized: HashMap<Address, u64>,
@@ -109,8 +110,6 @@ pub struct Substate {
     pub storage_released: HashMap<Address, u64>,
     /// Any logs.
     pub logs: Vec<LogEntry>,
-    /// Refund counter of SSTORE.
-    pub sstore_clears_refund: i128,
     /// Created contracts.
     pub contracts_created: Vec<Address>,
 
@@ -135,7 +134,6 @@ impl SubstateMngTrait for Substate {
         self.suicides.extend(s.suicides);
         self.touched.extend(s.touched);
         self.logs.extend(s.logs);
-        self.sstore_clears_refund += s.sstore_clears_refund;
         self.contracts_created.extend(s.contracts_created);
         for (address, amount) in s.storage_collateralized {
             *self.storage_collateralized.entry(address).or_insert(0) += amount;
@@ -218,12 +216,6 @@ impl SubstateTrait for Substate {
 
     fn touched(&mut self) -> &mut HashSet<Address> { &mut self.touched }
 
-    fn sstore_clears_refund(&self) -> i128 { self.sstore_clears_refund }
-
-    fn sstore_clears_refund_mut(&mut self) -> &mut i128 {
-        &mut self.sstore_clears_refund
-    }
-
     fn contracts_created(&self) -> &[Address] { &self.contracts_created }
 
     fn contracts_created_mut(&mut self) -> &mut Vec<Address> {
@@ -297,7 +289,6 @@ mod tests {
             topics: vec![],
             data: vec![],
         });
-        sub_state.sstore_clears_refund = (15000 * 5).into();
         sub_state.suicides.insert(Address::from_low_u64_be(10));
 
         let mut sub_state_2 = Substate::new();
@@ -309,11 +300,9 @@ mod tests {
             topics: vec![],
             data: vec![],
         });
-        sub_state_2.sstore_clears_refund = (15000 * 7).into();
 
         sub_state.accrue(sub_state_2);
         assert_eq!(sub_state.contracts_created.len(), 2);
-        assert_eq!(sub_state.sstore_clears_refund, (15000 * 12).into());
         assert_eq!(sub_state.suicides.len(), 1);
     }
 

@@ -23,16 +23,6 @@ use cfx_types::{Address, H256, U256};
 use primitives::transaction::UNSIGNED_SENDER;
 use std::{cell::RefCell, sync::Arc};
 
-/// Policy for handling output data on `RETURN` opcode.
-#[derive(Eq, PartialEq)]
-pub enum OutputPolicy {
-    /// Return reference to fixed sized output.
-    /// Used for message calls.
-    Return,
-    /// Init new contract as soon as `RETURN` is called.
-    InitContract,
-}
-
 /// Transaction properties that externalities need to know about.
 #[derive(Debug)]
 pub struct OriginInfo {
@@ -82,11 +72,11 @@ pub struct LocalContext<'a, Substate: SubstateTrait> {
     pub depth: usize,
     // The stack_depth is never read in context, even before this commit.
     pub stack_depth: usize,
+    pub is_create: bool,
     pub origin: OriginInfo,
     pub substate: Substate,
     pub machine: &'a Machine,
     pub spec: &'a Spec,
-    pub output: OutputPolicy,
     pub static_flag: bool,
     pub internal_contract_map: &'a InternalContractMap,
     pub call_stack: &'a RefCell<CallStackInfo>,
@@ -96,7 +86,7 @@ impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
     pub fn new(
         env: &'a Env, machine: &'a Machine, spec: &'a Spec, depth: usize,
         stack_depth: usize, origin: OriginInfo, substate: Substate,
-        output: OutputPolicy, static_flag: bool,
+        is_create: bool, static_flag: bool,
         internal_contract_map: &'a InternalContractMap,
         call_stack: &'a RefCell<CallStackInfo>,
     ) -> Self
@@ -109,7 +99,7 @@ impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
             substate,
             machine,
             spec,
-            output,
+            is_create,
             static_flag,
             internal_contract_map,
             call_stack,
@@ -125,9 +115,7 @@ impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
         }
     }
 
-    pub fn is_create(&self) -> bool {
-        self.output == OutputPolicy::InitContract
-    }
+    pub fn is_create(&self) -> bool { self.is_create }
 }
 
 impl<
@@ -374,9 +362,9 @@ impl<
         self, gas: &U256, data: &ReturnData, apply_state: bool,
     ) -> vm::Result<U256>
     where Self: Sized {
-        match self.local_part.output {
-            OutputPolicy::Return => Ok(*gas),
-            OutputPolicy::InitContract if apply_state => {
+        match self.local_part.is_create {
+            false => Ok(*gas),
+            true if apply_state => {
                 let return_cost = U256::from(data.len())
                     * U256::from(self.local_part.spec.create_data_gas);
                 if return_cost > *gas
@@ -409,7 +397,7 @@ impl<
 
                 Ok(*gas - return_cost)
             }
-            OutputPolicy::InitContract => Ok(*gas),
+            true => Ok(*gas),
         }
     }
 
@@ -447,14 +435,6 @@ impl<
     }
 
     fn depth(&self) -> usize { self.local_part.depth }
-
-    fn add_sstore_refund(&mut self, value: usize) {
-        *self.local_part.substate.sstore_clears_refund_mut() += value as i128;
-    }
-
-    fn sub_sstore_refund(&mut self, value: usize) {
-        *self.local_part.substate.sstore_clears_refund_mut() -= value as i128;
-    }
 
     fn trace_next_instruction(
         &mut self, _pc: usize, _instruction: u8, _current_gas: U256,
@@ -495,7 +475,7 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    use super::{InternalContractMap, LocalContext, OriginInfo, OutputPolicy};
+    use super::{InternalContractMap, LocalContext, OriginInfo};
     use crate::{
         machine::{new_machine_with_builtin, Machine},
         state::{CallStackInfo, State, Substate},
@@ -604,7 +584,7 @@ mod tests {
             0, /* stack_depth */
             origin,
             setup.substate,
-            OutputPolicy::InitContract,
+            true,  /* is_create */
             false, /* static_flag */
             &setup.internal_contract_map,
             &call_stack,
@@ -629,7 +609,7 @@ mod tests {
             0, /* stack_depth */
             origin,
             setup.substate,
-            OutputPolicy::InitContract,
+            true,  /* is_create */
             false, /* static_flag */
             &setup.internal_contract_map,
             &call_stack,
@@ -703,7 +683,7 @@ mod tests {
             0, /* stack_depth */
             origin,
             setup.substate,
-            OutputPolicy::InitContract,
+            true,  /* is_create */
             false, /* static_flag */
             &setup.internal_contract_map,
             &call_stack,
@@ -753,7 +733,7 @@ mod tests {
                 0, /* stack_depth */
                 origin,
                 setup.substate,
-                OutputPolicy::InitContract,
+                true,  /* is_create */
                 false, /* static_flag */
                 &setup.internal_contract_map,
                 &call_stack,
@@ -799,7 +779,7 @@ mod tests {
                 0, /* stack_depth */
                 origin,
                 setup.substate,
-                OutputPolicy::InitContract,
+                true,  /* is_create */
                 false, /* static_flag */
                 &setup.internal_contract_map,
                 &call_stack,
@@ -837,7 +817,7 @@ mod tests {
                 0, /* stack_depth */
                 origin,
                 setup.substate,
-                OutputPolicy::InitContract,
+                true,  /* is_create */
                 false, /* static_flag */
                 &setup.internal_contract_map,
                 &call_stack,
@@ -885,7 +865,7 @@ mod tests {
                 0, /* stack_depth */
                 origin,
                 setup.substate,
-                OutputPolicy::InitContract,
+                true,  /* is_create */
                 false, /* static_flag */
                 &setup.internal_contract_map,
                 &call_stack,

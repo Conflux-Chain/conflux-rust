@@ -22,10 +22,6 @@ pub trait SubstateTrait {
 
     fn touched(&mut self) -> &mut HashSet<Address>;
 
-    fn sstore_clears_refund(&self) -> i128;
-
-    fn sstore_clears_refund_mut(&mut self) -> &mut i128;
-
     fn contracts_created(&self) -> &[Address];
     fn contracts_created_mut(&mut self) -> &mut Vec<Address>;
 

@@ -239,14 +239,6 @@ impl Context for MockContext {
     // reentrancy check.
     fn is_static_or_reentrancy(&self) -> bool { self.is_static }
 
-    fn add_sstore_refund(&mut self, value: usize) {
-        self.sstore_clears += value as i128;
-    }
-
-    fn sub_sstore_refund(&mut self, value: usize) {
-        self.sstore_clears -= value as i128;
-    }
-
     fn trace_next_instruction(
         &mut self, _pc: usize, _instruction: u8, _gas: U256,
     ) -> bool {

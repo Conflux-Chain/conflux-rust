@@ -160,12 +160,6 @@ pub trait Context {
     /// then A depth is 0, B is 1, C is 2 and so on.
     fn depth(&self) -> usize;
 
-    /// Increments sstore refunds counter.
-    fn add_sstore_refund(&mut self, value: usize);
-
-    /// Decrements sstore refunds counter.
-    fn sub_sstore_refund(&mut self, value: usize);
-
     /// Decide if any more operations should be traced. Passthrough for the VM
     /// trace.
     fn trace_next_instruction(

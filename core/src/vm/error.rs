@@ -218,4 +218,5 @@ impl<T, Call, Create> TrapResult<T, Call, Create> {
 
 pub type ExecTrapResult<T> =
     TrapResult<T, Box<dyn ResumeCall>, Box<dyn ResumeCreate>>;
-//pub type ExecTrapError = TrapError<Box<ResumeCall>, Box<ResumeCreate>>;
+
+pub type ExecTrapError = TrapError<Box<dyn ResumeCall>, Box<dyn ResumeCreate>>;
