@@ -34,7 +34,7 @@ pub enum TrapKind {
 
 pub enum TrapError<Call, Create> {
     Call(ActionParams, Call),
-    Create(ActionParams, Address, Create),
+    Create(ActionParams, Create),
 }
 
 /// VM errors.

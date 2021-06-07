@@ -259,7 +259,7 @@ impl<
             self.local_part.stack_depth + 1,
             &mut tracer,
         );
-        Ok(Ok(into_contract_create_result(
+        Ok(Ok(into_contract_create_result_old(
             out,
             &address,
             &mut self.local_part.substate,
