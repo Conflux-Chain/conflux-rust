@@ -147,7 +147,7 @@ impl Context for MockContext {
 
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
-        address: CreateContractAddress, _trap: bool,
+        address: CreateContractAddress,
     ) -> cfx_statedb::Result<
         ::std::result::Result<ContractCreateResult, TrapKind>,
     >
@@ -171,7 +171,7 @@ impl Context for MockContext {
     fn call(
         &mut self, gas: &U256, sender_address: &Address,
         receive_address: &Address, value: Option<U256>, data: &[u8],
-        code_address: &Address, _call_type: CallType, _trap: bool,
+        code_address: &Address, _call_type: CallType,
     ) -> cfx_statedb::Result<::std::result::Result<MessageCallResult, TrapKind>>
     {
         self.calls.insert(MockCall {
