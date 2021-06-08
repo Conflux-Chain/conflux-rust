@@ -50,7 +50,6 @@ pub struct PosHandler<PoS: PosInterface> {
 
 impl<PoS: PosInterface> PosHandler<PoS> {
     pub fn new(pos: PoS, enable_height: u64) -> Self {
-        // TODO(lpl): Check if we want to wait here.
         pos.initialize().expect("PoS handler initialization error");
         Self { pos, enable_height }
     }
@@ -131,9 +130,7 @@ impl PosInterface for PosConnection {
                 &ledger_info.ledger_info().consensus_block_id(),
             ),
             round: ledger_info.ledger_info().round(),
-            pivot_decision: Default::default(), /* TODO(lpl):
-                                                 * ledger_info.
-                                                 * pivot_decision(), */
+            pivot_decision: ledger_info.ledger_info().pivot_decision().unwrap().block_hash,
             unlock_txs: Default::default(), /* TODO(lpl):
                                              * ledger_info.unlock_txs, */
         })
