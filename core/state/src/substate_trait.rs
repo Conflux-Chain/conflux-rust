@@ -32,23 +32,12 @@ pub trait SubstateTrait {
     fn suicides(&self) -> &HashSet<Address>;
 
     fn suicides_mut(&mut self) -> &mut HashSet<Address>;
-
-    fn contract_in_creation(&self) -> Option<&Address>;
 }
 
 pub trait SubstateMngTrait: SubstateTrait {
     fn accrue(&mut self, s: Self);
 
     fn new() -> Self;
-
-    fn update_contract_in_creation_call(
-        self, parent_contract_in_creation: Option<Address>,
-        is_internal_contract: bool,
-    ) -> Self;
-
-    fn set_contract_in_creation_create(
-        self, contract_in_creation: Address,
-    ) -> Self;
 }
 
 use crate::state_trait::StateOpsTrait;

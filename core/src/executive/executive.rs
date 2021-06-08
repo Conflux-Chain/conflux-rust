@@ -271,7 +271,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
         stack_depth: usize, parent_static_flag: bool,
-        parent_contract_in_creation: Option<Address>,
         internal_contract_map: &'a InternalContractMap,
     ) -> Self
     {
@@ -285,7 +284,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         let static_flag =
             parent_static_flag || params.call_type == CallType::StaticCall;
 
-        let mut substate = Substate::new();
+        let substate = Substate::new();
         let origin = OriginInfo::from(&params);
 
         // if destination is builtin, try to execute it
@@ -306,18 +305,10 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                 "CallInternalContract: address={:?} data={:?}",
                 params.code_address, params.data
             );
-            substate = substate.update_contract_in_creation_call(
-                parent_contract_in_creation,
-                /* is_internal_contract = */ true,
-            );
             CallCreateExecutiveKind::CallInternalContract
         } else {
             if params.code.is_some() {
                 trace!("ExecCall");
-                substate = substate.update_contract_in_creation_call(
-                    parent_contract_in_creation,
-                    /* is_internal_contract = */ false,
-                );
                 CallCreateExecutiveKind::ExecCall
             } else {
                 trace!("Transfer");
@@ -363,8 +354,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         let contract_in_creation = params.code_address;
         let origin = OriginInfo::from(&params);
 
-        let substate = Substate::new()
-            .set_contract_in_creation_create(contract_in_creation);
+        let substate = Substate::new();
 
         let kind = CallCreateExecutiveKind::ExecCreate;
 
@@ -565,7 +555,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
             .expect("check_static_flag should always success here");
 
         state.checkpoint();
-        callstack.push(self.get_recipient().clone());
+        callstack.push(self.get_recipient().clone(), is_create);
 
         // Pre Execution
         let db_result = if is_create {
@@ -715,11 +705,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                 TrapResult::SubCallCreate(trap_err) => {
                     let sub_exec = match trap_err {
                         TrapError::Call(subparams, resume) => {
-                            let maybe_parent_contract_in_creation = resume
-                                .context
-                                .substate
-                                .contract_in_creation()
-                                .cloned();
                             let sub_exec = CallCreateExecutive::new_call_raw(
                                 subparams,
                                 resume.context.env,
@@ -729,7 +714,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                                 resume.context.depth + 1,
                                 resume.context.stack_depth,
                                 resume.context.static_flag,
-                                maybe_parent_contract_in_creation,
                                 resume.context.internal_contract_map,
                             );
 
@@ -906,7 +890,6 @@ impl<
             self.depth,
             stack_depth,
             self.static_flag,
-            None,
             self.internal_contract_map,
         )
         .consume(self.state, substate, tracer);

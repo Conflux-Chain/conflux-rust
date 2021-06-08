@@ -47,7 +47,7 @@ impl ExecutionTrait for SetAdmin {
         set_admin(
             inputs.0,
             inputs.1,
-            context.substate.contract_in_creation(),
+            context.callstack.contract_in_creation(),
             params,
             context.state,
         )
