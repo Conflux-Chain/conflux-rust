@@ -12,12 +12,11 @@ pub use solidity_abi::ABIDecodeError;
 use self::contracts::SolFnTable;
 use crate::{
     bytes::Bytes,
+    executive::InternalRefContext,
     hash::keccak,
-    state::CallStackInfo,
     trace::{trace::ExecTrace, Tracer},
-    vm::{self, ActionParams, Env, GasLeft, Spec},
+    vm::{self, ActionParams, GasLeft},
 };
-use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{Address, H256};
 use std::sync::Arc;
 
@@ -37,9 +36,7 @@ pub trait InternalContractTrait: Send + Sync {
 
     /// execute this internal contract on the given parameters.
     fn execute(
-        &self, params: &ActionParams, env: &Env, spec: &Spec,
-        callstack: &mut CallStackInfo, state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait,
+        &self, params: &ActionParams, context: &mut InternalRefContext,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>
     {
@@ -62,16 +59,7 @@ pub trait InternalContractTrait: Send + Sync {
             .get(&fn_sig)
             .ok_or(vm::Error::InternalContract("unsupported function"))?;
 
-        solidity_fn.execute(
-            call_params,
-            params,
-            env,
-            spec,
-            callstack,
-            state,
-            substate,
-            tracer,
-        )
+        solidity_fn.execute(call_params, params, context, tracer)
     }
 
     fn code(&self) -> Arc<Bytes> { INTERNAL_CONTRACT_CODE.clone() }
@@ -83,13 +71,9 @@ pub trait InternalContractTrait: Send + Sync {
 
 /// Native implementation of a solidity-interface function.
 pub trait SolidityFunctionTrait: Send + Sync {
-    // TODO: there are too many parameters here. It should use context instead.
-    // However, context can not support all the requirements in internal
-    // contracts.
     fn execute(
-        &self, input: &[u8], params: &ActionParams, env: &Env, spec: &Spec,
-        call_stack: &mut CallStackInfo, state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait,
+        &self, input: &[u8], params: &ActionParams,
+        context: &mut InternalRefContext,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>;
 

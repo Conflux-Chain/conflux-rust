@@ -70,6 +70,14 @@ pub struct Context<
     local_part: &'b mut LocalContext<'a, Substate>,
 }
 
+pub struct InternalRefContext<'a> {
+    pub env: &'a Env,
+    pub spec: &'a Spec,
+    pub callstack: &'a mut CallStackInfo,
+    pub state: &'a mut dyn StateOpsTrait,
+    pub substate: &'a mut dyn SubstateTrait,
+}
+
 pub struct LocalContext<'a, Substate: SubstateTrait> {
     pub env: &'a Env,
     pub depth: usize,
@@ -466,22 +474,14 @@ impl<
         self.callstack.reentrancy_happens_when_push(callee)
     }
 
-    fn internal_input(
-        &mut self,
-    ) -> (
-        &Env,
-        &Spec,
-        &mut CallStackInfo,
-        &mut dyn StateOpsTrait,
-        &mut dyn SubstateTrait,
-    ) {
-        (
-            self.local_part.env,
-            self.local_part.spec,
-            self.callstack,
-            self.state,
-            &mut self.local_part.substate,
-        )
+    fn internal_ref(&mut self) -> InternalRefContext {
+        InternalRefContext {
+            env: self.local_part.env,
+            spec: self.local_part.spec,
+            callstack: self.callstack,
+            state: self.state,
+            substate: &mut self.local_part.substate,
+        }
     }
 }
 

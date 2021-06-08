@@ -81,17 +81,8 @@ impl<'a> Exec for InternalContractExec<'a> {
         {
             Err(VmError::InternalContract("Incorrect call type."))
         } else {
-            let (env, spec, callstack, state, substate) =
-                context.internal_input();
-            self.contract.execute(
-                &self.params,
-                env,
-                spec,
-                callstack,
-                state,
-                substate,
-                tracer,
-            )
+            let mut context = context.internal_ref();
+            self.contract.execute(&self.params, &mut context, tracer)
         };
         debug!("Internal Call Result: {:?}", result);
         TrapResult::Return(result)

@@ -24,11 +24,10 @@ use super::{
     ReturnData, Spec,
 };
 use crate::{
-    state::CallStackInfo,
+    executive::InternalRefContext,
     trace::{trace::ExecTrace, Tracer},
 };
 use cfx_bytes::Bytes;
-use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use hash::keccak;
 use std::{
@@ -254,15 +253,5 @@ impl Context for MockContext {
         false
     }
 
-    fn internal_input(
-        &mut self,
-    ) -> (
-        &Env,
-        &Spec,
-        &mut CallStackInfo,
-        &mut dyn StateOpsTrait,
-        &mut dyn SubstateTrait,
-    ) {
-        unimplemented!()
-    }
+    fn internal_ref(&mut self) -> InternalRefContext { unimplemented!() }
 }

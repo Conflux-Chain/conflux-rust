@@ -29,11 +29,10 @@ use super::{
     Error,
 };
 use crate::{
-    state::CallStackInfo,
+    executive::InternalRefContext,
     trace::{trace::ExecTrace, Tracer},
 };
 use cfx_bytes::Bytes;
-use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{Address, H256, U256};
 use std::sync::Arc;
 
@@ -199,13 +198,5 @@ pub trait Context {
     fn is_reentrancy(&self, caller: &Address, callee: &Address) -> bool;
 
     // TODO: Separate this interface to another trait maybe.
-    fn internal_input(
-        &mut self,
-    ) -> (
-        &Env,
-        &Spec,
-        &mut CallStackInfo,
-        &mut dyn StateOpsTrait,
-        &mut dyn SubstateTrait,
-    );
+    fn internal_ref(&mut self) -> InternalRefContext;
 }

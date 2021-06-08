@@ -13,12 +13,13 @@ use super::{
 use crate::check_signature;
 use crate::{
     evm::{ActionParams, Spec},
+    executive::InternalRefContext,
     impl_function_type, make_function_table, make_solidity_contract,
     make_solidity_function,
     trace::{trace::ExecTrace, Tracer},
-    vm::{self, Env},
+    vm,
 };
-use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
+use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 #[cfg(test)]
 use rustc_hex::FromHex;
@@ -52,9 +53,8 @@ impl_function_type!(SetSponsorForGas, "payable_write", gas: |spec: &Spec| 2 * sp
 
 impl ExecutionTrait for SetSponsorForGas {
     fn execute_inner(
-        &self, inputs: (Address, U256), params: &ActionParams, _env: &Env,
-        spec: &Spec, state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait,
+        &self, inputs: (Address, U256), params: &ActionParams,
+        context: &mut InternalRefContext,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -62,11 +62,11 @@ impl ExecutionTrait for SetSponsorForGas {
             inputs.0,
             inputs.1,
             params,
-            spec,
-            state,
-            substate,
+            context.spec,
+            context.state,
+            context.substate,
             tracer,
-            spec.account_start_nonce(_env.number),
+            context.spec.account_start_nonce(context.env.number),
         )
     }
 }
@@ -78,19 +78,19 @@ impl_function_type!(SetSponsorForCollateral, "payable_write", gas: |spec: &Spec|
 
 impl ExecutionTrait for SetSponsorForCollateral {
     fn execute_inner(
-        &self, input: Address, params: &ActionParams, _env: &Env, spec: &Spec,
-        state: &mut dyn StateOpsTrait, substate: &mut dyn SubstateTrait,
+        &self, input: Address, params: &ActionParams,
+        context: &mut InternalRefContext,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
         set_sponsor_for_collateral(
             input,
             params,
-            spec,
-            state,
-            substate,
+            context.spec,
+            context.state,
+            context.substate,
             tracer,
-            spec.account_start_nonce(_env.number),
+            context.spec.account_start_nonce(context.env.number),
         )
     }
 }
@@ -112,8 +112,8 @@ impl UpfrontPaymentTrait for AddPrivilege {
 
 impl ExecutionTrait for AddPrivilege {
     fn execute_inner(
-        &self, addresses: Vec<Address>, params: &ActionParams, _env: &Env,
-        _: &Spec, state: &mut dyn StateOpsTrait, _: &mut dyn SubstateTrait,
+        &self, addresses: Vec<Address>, params: &ActionParams,
+        context: &mut InternalRefContext,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -122,7 +122,7 @@ impl ExecutionTrait for AddPrivilege {
                 "normal account is not allowed to set commission_privilege",
             ));
         }
-        add_privilege(params.sender, addresses, params, state)
+        add_privilege(params.sender, addresses, params, context.state)
     }
 }
 
@@ -143,8 +143,8 @@ impl UpfrontPaymentTrait for RemovePrivilege {
 
 impl ExecutionTrait for RemovePrivilege {
     fn execute_inner(
-        &self, addresses: Vec<Address>, params: &ActionParams, _env: &Env,
-        _: &Spec, state: &mut dyn StateOpsTrait, _: &mut dyn SubstateTrait,
+        &self, addresses: Vec<Address>, params: &ActionParams,
+        context: &mut InternalRefContext,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
@@ -154,7 +154,7 @@ impl ExecutionTrait for RemovePrivilege {
             ));
         }
 
-        remove_privilege(params.sender, addresses, params, state)
+        remove_privilege(params.sender, addresses, params, context.state)
     }
 }
 
@@ -165,12 +165,12 @@ impl_function_type!(GetSponsorForGas, "query_with_default_gas");
 
 impl ExecutionTrait for GetSponsorForGas {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
-        state: &mut dyn StateOpsTrait, _: &mut dyn SubstateTrait,
+        &self, input: Address, _: &ActionParams,
+        context: &mut InternalRefContext,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<Address>
     {
-        Ok(state.sponsor_for_gas(&input)?.unwrap_or_default())
+        Ok(context.state.sponsor_for_gas(&input)?.unwrap_or_default())
     }
 }
 
@@ -181,12 +181,12 @@ impl_function_type!(GetSponsoredBalanceForGas, "query_with_default_gas");
 
 impl ExecutionTrait for GetSponsoredBalanceForGas {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
-        state: &mut dyn StateOpsTrait, _: &mut dyn SubstateTrait,
+        &self, input: Address, _: &ActionParams,
+        context: &mut InternalRefContext,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
-        Ok(state.sponsor_balance_for_gas(&input)?)
+        Ok(context.state.sponsor_balance_for_gas(&input)?)
     }
 }
 
@@ -197,12 +197,12 @@ impl_function_type!(GetSponsoredGasFeeUpperBound, "query_with_default_gas");
 
 impl ExecutionTrait for GetSponsoredGasFeeUpperBound {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
-        state: &mut dyn StateOpsTrait, _: &mut dyn SubstateTrait,
+        &self, input: Address, _: &ActionParams,
+        context: &mut InternalRefContext,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
-        Ok(state.sponsor_gas_bound(&input)?)
+        Ok(context.state.sponsor_gas_bound(&input)?)
     }
 }
 
@@ -213,12 +213,15 @@ impl_function_type!(GetSponsorForCollateral, "query_with_default_gas");
 
 impl ExecutionTrait for GetSponsorForCollateral {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
-        state: &mut dyn StateOpsTrait, _: &mut dyn SubstateTrait,
+        &self, input: Address, _: &ActionParams,
+        context: &mut InternalRefContext,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<Address>
     {
-        Ok(state.sponsor_for_collateral(&input)?.unwrap_or_default())
+        Ok(context
+            .state
+            .sponsor_for_collateral(&input)?
+            .unwrap_or_default())
     }
 }
 
@@ -229,12 +232,12 @@ impl_function_type!(GetSponsoredBalanceForCollateral, "query_with_default_gas");
 
 impl ExecutionTrait for GetSponsoredBalanceForCollateral {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
-        state: &mut dyn StateOpsTrait, _: &mut dyn SubstateTrait,
+        &self, input: Address, _: &ActionParams,
+        context: &mut InternalRefContext,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
-        Ok(state.sponsor_balance_for_collateral(&input)?)
+        Ok(context.state.sponsor_balance_for_collateral(&input)?)
     }
 }
 
@@ -246,12 +249,12 @@ impl_function_type!(IsWhitelisted, "query", gas: |spec: &Spec| spec.sload_gas);
 impl ExecutionTrait for IsWhitelisted {
     fn execute_inner(
         &self, (contract, user): (Address, Address), _: &ActionParams,
-        _env: &Env, _: &Spec, state: &mut dyn StateOpsTrait,
-        _: &mut dyn SubstateTrait, _: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext,
+        _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<bool>
     {
         if contract.is_contract_address() {
-            Ok(state.check_commission_privilege(&contract, &user)?)
+            Ok(context.state.check_commission_privilege(&contract, &user)?)
         } else {
             Ok(false)
         }
@@ -265,16 +268,15 @@ impl_function_type!(IsAllWhitelisted, "query", gas: |spec: &Spec| spec.sload_gas
 
 impl ExecutionTrait for IsAllWhitelisted {
     fn execute_inner(
-        &self, contract: Address, _: &ActionParams, _env: &Env, _: &Spec,
-        state: &mut dyn StateOpsTrait, _: &mut dyn SubstateTrait,
+        &self, contract: Address, _: &ActionParams,
+        context: &mut InternalRefContext,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<bool>
     {
         if contract.is_contract_address() {
-            Ok(
-                state
-                    .check_commission_privilege(&contract, &Address::zero())?,
-            )
+            Ok(context
+                .state
+                .check_commission_privilege(&contract, &Address::zero())?)
         } else {
             Ok(false)
         }
@@ -299,15 +301,14 @@ impl UpfrontPaymentTrait for AddPrivilegeByAdmin {
 impl ExecutionTrait for AddPrivilegeByAdmin {
     fn execute_inner(
         &self, (contract, addresses): (Address, Vec<Address>),
-        params: &ActionParams, _env: &Env, _: &Spec,
-        state: &mut dyn StateOpsTrait, _: &mut dyn SubstateTrait,
+        params: &ActionParams, context: &mut InternalRefContext,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
         if contract.is_contract_address()
-            && &params.sender == &state.admin(&contract)?
+            && &params.sender == &context.state.admin(&contract)?
         {
-            add_privilege(contract, addresses, params, state)?
+            add_privilege(contract, addresses, params, context.state)?
         }
         Ok(())
     }
@@ -331,15 +332,14 @@ impl UpfrontPaymentTrait for RemovePrivilegeByAdmin {
 impl ExecutionTrait for RemovePrivilegeByAdmin {
     fn execute_inner(
         &self, (contract, addresses): (Address, Vec<Address>),
-        params: &ActionParams, _env: &Env, _: &Spec,
-        state: &mut dyn StateOpsTrait, _: &mut dyn SubstateTrait,
+        params: &ActionParams, context: &mut InternalRefContext,
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
         if contract.is_contract_address()
-            && &params.sender == &state.admin(&contract)?
+            && &params.sender == &context.state.admin(&contract)?
         {
-            remove_privilege(contract, addresses, params, state)?
+            remove_privilege(contract, addresses, params, context.state)?
         }
         Ok(())
     }

@@ -4,11 +4,12 @@
 
 use super::SolidityFunctionTrait;
 use crate::{
+    executive::InternalRefContext,
     state::CallStackInfo,
     trace::{trace::ExecTrace, Tracer},
-    vm::{self, ActionParams, CallType, Env, GasLeft, ReturnData, Spec},
+    vm::{self, ActionParams, CallType, GasLeft, ReturnData, Spec},
 };
-use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
+use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::U256;
 use solidity_abi::{ABIDecodable, ABIEncodable};
 
@@ -33,44 +34,39 @@ impl<
     > SolidityFunctionTrait for T
 {
     fn execute(
-        &self, input: &[u8], params: &ActionParams, env: &Env, spec: &Spec,
-        call_stack: &mut CallStackInfo, state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait,
+        &self, input: &[u8], params: &ActionParams,
+        context: &mut InternalRefContext,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>
     {
-        self.pre_execution_check(params, call_stack)?;
+        self.pre_execution_check(params, context.callstack)?;
         let solidity_params = <T::Input as ABIDecodable>::abi_decode(&input)?;
 
-        let cost =
-            self.upfront_gas_payment(&solidity_params, params, spec, state);
+        let cost = self.upfront_gas_payment(
+            &solidity_params,
+            params,
+            context.spec,
+            context.state,
+        );
         if cost > params.gas {
             return Err(vm::Error::OutOfGas);
         }
 
-        self.execute_inner(
-            solidity_params,
-            params,
-            env,
-            spec,
-            state,
-            substate,
-            tracer,
-        )
-        .and_then(|output| {
-            let output = output.abi_encode();
-            let length = output.len();
-            let return_cost = (length + 31) / 32 * spec.memory_gas;
-            if params.gas < cost + return_cost {
-                Err(vm::Error::OutOfGas)
-            } else {
-                Ok(GasLeft::NeedsReturn {
-                    gas_left: params.gas - cost - return_cost,
-                    data: ReturnData::new(output, 0, length),
-                    apply_state: true,
-                })
-            }
-        })
+        self.execute_inner(solidity_params, params, context, tracer)
+            .and_then(|output| {
+                let output = output.abi_encode();
+                let length = output.len();
+                let return_cost = (length + 31) / 32 * context.spec.memory_gas;
+                if params.gas < cost + return_cost {
+                    Err(vm::Error::OutOfGas)
+                } else {
+                    Ok(GasLeft::NeedsReturn {
+                        gas_left: params.gas - cost - return_cost,
+                        data: ReturnData::new(output, 0, length),
+                        apply_state: true,
+                    })
+                }
+            })
     }
 
     fn name(&self) -> &'static str { return Self::NAME_AND_PARAMS; }
@@ -90,9 +86,8 @@ pub trait PreExecCheckTrait: Send + Sync {
 
 pub trait ExecutionTrait: Send + Sync + InterfaceTrait {
     fn execute_inner(
-        &self, input: Self::Input, params: &ActionParams, env: &Env,
-        spec: &Spec, state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait,
+        &self, input: Self::Input, params: &ActionParams,
+        context: &mut InternalRefContext,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<<Self as InterfaceTrait>::Output>;
 }

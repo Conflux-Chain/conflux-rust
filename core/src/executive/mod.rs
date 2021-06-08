@@ -30,6 +30,7 @@ impl CollateralCheckResultToVmResult for CollateralCheckResult {
 }
 
 pub use self::{
+    context::InternalRefContext,
     executed::*,
     executive::{
         contract_address, Executive, ExecutiveGeneric, ExecutiveResult,
