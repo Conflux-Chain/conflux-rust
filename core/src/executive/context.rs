@@ -8,7 +8,7 @@ use crate::{
     bytes::Bytes,
     machine::Machine,
     state::CallStackInfo,
-    trace::{self, trace::ExecTrace, Tracer},
+    trace::{trace::ExecTrace, Tracer},
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
         ContractCreateResult, CreateContractAddress, Env, Error,
@@ -81,8 +81,6 @@ pub struct InternalRefContext<'a> {
 pub struct LocalContext<'a, Substate: SubstateTrait> {
     pub env: &'a Env,
     pub depth: usize,
-    // The stack_depth is never read in context, even before this commit.
-    pub stack_depth: usize,
     pub is_create: bool,
     pub origin: OriginInfo,
     pub substate: Substate,
@@ -95,15 +93,13 @@ pub struct LocalContext<'a, Substate: SubstateTrait> {
 impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
     pub fn new(
         env: &'a Env, machine: &'a Machine, spec: &'a Spec, depth: usize,
-        stack_depth: usize, origin: OriginInfo, substate: Substate,
-        is_create: bool, static_flag: bool,
-        internal_contract_map: &'a InternalContractMap,
+        origin: OriginInfo, substate: Substate, is_create: bool,
+        static_flag: bool, internal_contract_map: &'a InternalContractMap,
     ) -> Self
     {
         LocalContext {
             env,
             depth,
-            stack_depth,
             origin,
             substate,
             machine,
@@ -185,7 +181,7 @@ impl<
 
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
-        address_scheme: CreateContractAddress, trap: bool,
+        address_scheme: CreateContractAddress,
     ) -> cfx_statedb::Result<
         ::std::result::Result<ContractCreateResult, TrapKind>,
     >
@@ -244,43 +240,16 @@ impl<
             }
         }
 
-        if trap {
-            return Ok(Err(TrapKind::Create(params, address)));
-        }
-
-        // The following code is only reachable in test mode.
-        let mut ex = ExecutiveGeneric::from_parent(
-            self.state,
-            self.local_part.env,
-            self.local_part.machine,
-            self.local_part.spec,
-            self.local_part.depth,
-            self.local_part.static_flag,
-            self.local_part.internal_contract_map,
-        );
-        let mut tracer = trace::NoopTracer;
-        let out = ex.create_with_stack_depth(
-            params,
-            &mut self.local_part.substate,
-            self.local_part.stack_depth + 1,
-            &mut tracer,
-        );
-        Ok(Ok(into_contract_create_result_old(
-            out,
-            &address,
-            &mut self.local_part.substate,
-        )?))
+        return Ok(Err(TrapKind::Create(params, address)));
     }
 
     fn call(
         &mut self, gas: &U256, sender_address: &Address,
         receive_address: &Address, value: Option<U256>, data: &[u8],
-        code_address: &Address, call_type: CallType, trap: bool,
+        code_address: &Address, call_type: CallType,
     ) -> cfx_statedb::Result<::std::result::Result<MessageCallResult, TrapKind>>
     {
         trace!(target: "context", "call");
-
-        assert!(trap);
 
         let (code, code_hash) = if let Some(contract) =
             self.local_part.internal_contract_map.contract(code_address)
@@ -493,10 +462,7 @@ mod tests {
         state::{CallStackInfo, State, Substate},
         test_helpers::get_state_for_genesis_write,
         trace,
-        vm::{
-            CallType, Context as ContextTrait, ContractCreateResult,
-            CreateContractAddress, Env, Spec,
-        },
+        vm::{Context as ContextTrait, Env, Spec},
     };
     use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
     use cfx_state::{
@@ -593,7 +559,6 @@ mod tests {
             &setup.machine,
             &setup.spec,
             0, /* depth */
-            0, /* stack_depth */
             origin,
             setup.substate,
             true,  /* is_create */
@@ -617,7 +582,6 @@ mod tests {
             &setup.machine,
             &setup.spec,
             0, /* depth */
-            0, /* stack_depth */
             origin,
             setup.substate,
             true,  /* is_create */
@@ -677,48 +641,48 @@ mod tests {
     //        assert_eq!(test_hash, hash);
     //    }
 
-    #[test]
-    #[should_panic]
-    fn can_call_fail_empty() {
-        let mut setup = TestSetup::new();
-        let state = &mut setup.state;
-        let origin = get_test_origin();
-        let mut callstack = CallStackInfo::default();
-
-        let mut lctx = LocalContext::new(
-            &setup.env,
-            &setup.machine,
-            &setup.spec,
-            0, /* depth */
-            0, /* stack_depth */
-            origin,
-            setup.substate,
-            true,  /* is_create */
-            false, /* static_flag */
-            &setup.internal_contract_map,
-        );
-        let mut ctx = lctx.activate(state, &mut callstack);
-
-        // this should panic because we have no balance on any account
-        ctx.call(
-        &"0000000000000000000000000000000000000000000000000000000000120000"
-            .parse::<U256>()
-            .unwrap(),
-        &Address::zero(),
-        &Address::zero(),
-        Some(
-            "0000000000000000000000000000000000000000000000000000000000150000"
-                .parse::<U256>()
-                .unwrap(),
-        ),
-        &[],
-        &Address::zero(),
-        CallType::Call,
-        false,
-    )
-            .unwrap()
-    .unwrap();
-    }
+    // #[test]
+    // #[should_panic]
+    // fn can_call_fail_empty() {
+    //     let mut setup = TestSetup::new();
+    //     let state = &mut setup.state;
+    //     let origin = get_test_origin();
+    //     let mut callstack = CallStackInfo::default();
+    //
+    //     let mut lctx = LocalContext::new(
+    //         &setup.env,
+    //         &setup.machine,
+    //         &setup.spec,
+    //         0, /* depth */
+    //         0, /* stack_depth */
+    //         origin,
+    //         setup.substate,
+    //         true,  /* is_create */
+    //         false, /* static_flag */
+    //         &setup.internal_contract_map,
+    //     );
+    //     let mut ctx = lctx.activate(state, &mut callstack);
+    //
+    //     // this should panic because we have no balance on any account
+    //     ctx.call(
+    //     &"0000000000000000000000000000000000000000000000000000000000120000"
+    //         .parse::<U256>()
+    //         .unwrap(),
+    //     &Address::zero(),
+    //     &Address::zero(),
+    //     Some(
+    //         "0000000000000000000000000000000000000000000000000000000000150000"
+    //             .parse::<U256>()
+    //             .unwrap(),
+    //     ),
+    //     &[],
+    //     &Address::zero(),
+    //     CallType::Call,
+    //     false,
+    // )
+    //         .unwrap()
+    // .unwrap();
+    // }
 
     #[test]
     fn can_log() {
@@ -739,7 +703,6 @@ mod tests {
                 &setup.machine,
                 &setup.spec,
                 0, /* depth */
-                0, /* stack_depth */
                 origin,
                 setup.substate,
                 true,  /* is_create */
@@ -784,7 +747,6 @@ mod tests {
                 &setup.machine,
                 &setup.spec,
                 0, /* depth */
-                0, /* stack_depth */
                 origin,
                 setup.substate,
                 true,  /* is_create */
@@ -806,6 +768,9 @@ mod tests {
         }
     }
 
+    //TODO: It seems create function only has non-trapped call in test. We
+    // remove non-trapped call.
+    /*
     #[test]
     fn can_create() {
         use std::str::FromStr;
@@ -901,5 +866,5 @@ mod tests {
             Address::from_str("84c100a15081f02b9efae8267a69f73bf15e75fa")
                 .unwrap()
         );
-    }
+    }*/
 }

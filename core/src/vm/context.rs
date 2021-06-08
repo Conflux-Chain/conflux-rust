@@ -107,7 +107,7 @@ pub trait Context {
     /// succesfull.
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
-        address: CreateContractAddress, trap: bool,
+        address: CreateContractAddress,
     ) -> cfx_statedb::Result<
         ::std::result::Result<ContractCreateResult, TrapKind>,
     >;
@@ -120,7 +120,7 @@ pub trait Context {
     fn call(
         &mut self, gas: &U256, sender_address: &Address,
         receive_address: &Address, value: Option<U256>, data: &[u8],
-        code_address: &Address, call_type: CallType, trap: bool,
+        code_address: &Address, call_type: CallType,
     ) -> cfx_statedb::Result<::std::result::Result<MessageCallResult, TrapKind>>;
 
     /// Returns code at given address

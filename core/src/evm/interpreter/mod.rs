@@ -794,7 +794,6 @@ impl<Cost: CostType> Interpreter<Cost> {
                     &endowment,
                     contract_code,
                     address_scheme,
-                    true,
                 )?;
                 return match create_result {
                     Ok(ContractCreateResult::Created(address, gas_left)) => {
@@ -938,7 +937,6 @@ impl<Cost: CostType> Interpreter<Cost> {
                         input,
                         &code_address,
                         call_type,
-                        true,
                     )?
                 };
 
