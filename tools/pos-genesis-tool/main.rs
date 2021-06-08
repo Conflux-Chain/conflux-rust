@@ -12,7 +12,7 @@ extern crate serde_derive;
 use cfxkey::{Error as EthkeyError, Generator, Public, Random};
 use diem_crypto::{
     ed25519::{Ed25519PrivateKey, Ed25519PublicKey, ED25519_PUBLIC_KEY_LENGTH},
-    Uniform,
+    Uniform, ValidCryptoMaterialStringExt,
 };
 use diem_types::{
     account_address::{from_public_key, AccountAddress},
@@ -216,22 +216,9 @@ where
             let public_key = Ed25519PublicKey::from(&private_key);
             public_keys.push(public_key.clone());
 
-            let mut private_key_str = String::new();
-            writeln!(
-                &mut private_key_str,
-                "{:?}",
-                hex::encode(private_key.to_bytes())
-            )?;
-            let private_key_str = private_key_str.replace("\"", "");
-            private_key_file.write_all(private_key_str.as_str().as_bytes())?;
-
-            let mut public_key_str = String::new();
-            writeln!(
-                &mut public_key_str,
-                "{:?}",
-                hex::encode(public_key.to_bytes())
-            )?;
-            let public_key_str = &public_key_str[2..];
+            let private_key_str = private_key.to_encoded_string().unwrap();
+            private_key_file.write_all(private_key_str.as_bytes())?;
+            let public_key_str = public_key.to_encoded_string().unwrap();
             public_key_file.write_all(public_key_str.as_bytes())?;
         }
         generate_genesis_from_public_keys(public_keys);
@@ -242,14 +229,11 @@ where
         let mut contents = String::new();
         public_key_file.read_to_string(&mut contents)?;
         let mut lines = contents.as_str().lines();
-        let mut line_num = 0;
 
         let mut public_keys = Vec::new();
         while let Some(public_key_str) = lines.next() {
-            let public_key_bytes = hex::decode(public_key_str).unwrap();
             let public_key =
-                Ed25519PublicKey::try_from(public_key_bytes.as_slice())
-                    .unwrap();
+                Ed25519PublicKey::from_encoded_string(public_key_str).unwrap();
             public_keys.push(public_key);
         }
         generate_genesis_from_public_keys(public_keys);

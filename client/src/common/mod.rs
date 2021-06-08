@@ -273,6 +273,32 @@ pub fn initialize_common_modules(
     // FIXME(lpl): Set CIP height.
     let pos_verifier = Arc::new(PosVerifier::new(pos_connection, 0));
 
+    let network = {
+        let mut network = NetworkService::new(network_config);
+        network.start().unwrap();
+        Arc::new(network)
+    };
+
+    // initialize pos
+    let pos_config_path = match conf.raw_conf.pos_config_path.as_ref() {
+        Some(path) => Some(PathBuf::from(path)),
+        None => None,
+    };
+    let pos_config =
+        NodeConfig::load(pos_config_path.expect("empty pos config path"))
+            .expect("Failed to load node config");
+    let own_node_hash =
+        keccak(network.net_key_pair().expect("Error node key").public());
+    let self_pos_public_key = network.pos_public_key();
+    let diem_handler = start_pos_consensus(
+        &pos_config,
+        None,
+        network.clone(),
+        own_node_hash,
+        conf.protocol_config(),
+        self_pos_public_key,
+    );
+
     let verification_config =
         conf.verification_config(machine.clone(), pos_verifier.clone());
     let txpool = Arc::new(TransactionPool::new(
@@ -298,6 +324,7 @@ pub fn initialize_common_modules(
         node_type,
         pos_verifier.clone(),
     ));
+    diem_handler.pow_handler.initialize(consensus.clone());
 
     let sync_config = conf.sync_graph_config();
 
@@ -311,9 +338,6 @@ pub fn initialize_common_modules(
         machine.clone(),
         pos_verifier.clone(),
     ));
-
-    diem_handler.pow_handler.initialize(consensus.clone());
-
     let refresh_time =
         Duration::from_millis(conf.raw_conf.account_provider_refresh_time_ms);
 

@@ -19,7 +19,9 @@ use cfx_types::H256;
 use channel::diem_channel;
 use diem_config::config::NodeConfig;
 use diem_logger::prelude::*;
-use diem_types::on_chain_config::OnChainConfigPayload;
+use diem_types::{
+    account_address::AccountAddress, on_chain_config::OnChainConfigPayload,
+};
 use executor::{vm::FakeVM, Executor};
 use executor_types::BlockExecutor;
 use network::NetworkService;
@@ -36,6 +38,7 @@ pub fn start_consensus(
     state_sync_client: StateSyncClient, diem_db: Arc<dyn DbReader>,
     db_rw: DbReaderWriter,
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
+    author: AccountAddress,
 ) -> (Runtime, Arc<PowHandler>)
 {
     let runtime = runtime::Builder::new()
@@ -83,6 +86,7 @@ pub fn start_consensus(
         storage,
         reconfig_events,
         pow_handler.clone(),
+        author,
     );
 
     runtime.spawn(epoch_mgr.start(timeout_receiver, network_receiver));

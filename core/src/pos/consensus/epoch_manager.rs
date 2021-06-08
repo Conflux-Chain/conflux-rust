@@ -107,9 +107,9 @@ impl EpochManager {
         storage: Arc<dyn PersistentLivenessStorage>,
         reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
         pow_handler: Arc<dyn PowInterface>,
+        author: AccountAddress,
     ) -> Self
     {
-        let author = Author::random(); //node_config.validator_network.as_ref().unwrap().peer_id();
         let config = node_config.consensus.clone();
         let sr_config = &node_config.consensus.safety_rules;
         let safety_rules_manager = SafetyRulesManager::new(sr_config);
@@ -221,10 +221,17 @@ impl EpochManager {
             .map_err(DbError::from)
             .context("[EpochManager] Failed to get epoch proof")?;
         let msg = ConsensusMsg::EpochChangeProof(Box::new(proof));
-        self.network_sender.send_to(peer_id, &msg).context(format!(
-            "[EpochManager] Failed to send epoch proof to {}",
-            peer_id
-        ))
+        let pos_public_key = self
+            .epoch_state()
+            .verifier
+            .get_public_key(&peer_id)
+            .unwrap();
+        self.network_sender
+            .send_to(pos_public_key, &msg)
+            .context(format!(
+                "[EpochManager] Failed to send epoch proof to {}",
+                peer_id
+            ))
     }
 
     async fn process_different_epoch(
@@ -256,10 +263,17 @@ impl EpochManager {
                 };
                 let msg =
                     ConsensusMsg::EpochRetrievalRequest(Box::new(request));
-                self.network_sender.send_to(peer_id, &msg).context(format!(
-                    "[EpochManager] Failed to send epoch retrieval to {}",
-                    peer_id
-                ))
+                let pos_public_key = self
+                    .epoch_state()
+                    .verifier
+                    .get_public_key(&peer_id)
+                    .unwrap();
+                self.network_sender.send_to(pos_public_key, &msg).context(
+                    format!(
+                        "[EpochManager] Failed to send epoch retrieval to {}",
+                        peer_id
+                    ),
+                )
             }
             Ordering::Equal => {
                 bail!("[EpochManager] Same epoch should not come to process_different_epoch");
