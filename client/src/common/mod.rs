@@ -243,9 +243,31 @@ pub fn initialize_common_modules(
         pow.clone(),
     ));
 
-    // FIXME(lpl): Pass in DiemDB.
+    let network = {
+        let mut network = NetworkService::new(network_config);
+        network.start().unwrap();
+        Arc::new(network)
+    };
+
+    // initialize pos
+    let pos_config_path = match conf.raw_conf.pos_config_path.as_ref() {
+        Some(path) => Some(PathBuf::from(path)),
+        None => None,
+    };
+    let pos_config =
+        NodeConfig::load(pos_config_path.expect("empty pos config path"))
+            .expect("Failed to load node config");
+    let own_node_hash =
+        keccak(network.net_key_pair().expect("Error node key").public());
+    let diem_handler = start_pos_consensus(
+        &pos_config,
+        None,
+        network.clone(),
+        own_node_hash,
+        conf.protocol_config(),
+    );
     let pos_connection = PosConnection::new(
-        Arc::new(FakeDiemDB {}) as Arc<dyn DBReaderForPoW>,
+        diem_handler.diem_db.clone() as Arc<dyn DBReaderForPoW>,
         conf.pos_config(),
     );
     // FIXME(lpl): Set CIP height.
@@ -290,29 +312,6 @@ pub fn initialize_common_modules(
         pos_verifier.clone(),
     ));
 
-    let network = {
-        let mut network = NetworkService::new(network_config);
-        network.start().unwrap();
-        Arc::new(network)
-    };
-
-    // initialize pos
-    let pos_config_path = match conf.raw_conf.pos_config_path.as_ref() {
-        Some(path) => Some(PathBuf::from(path)),
-        None => None,
-    };
-    let pos_config =
-        NodeConfig::load(pos_config_path.expect("empty pos config path"))
-            .expect("Failed to load node config");
-    let own_node_hash =
-        keccak(network.net_key_pair().expect("Error node key").public());
-    let diem_handler = start_pos_consensus(
-        &pos_config,
-        None,
-        network.clone(),
-        own_node_hash,
-        conf.protocol_config(),
-    );
     diem_handler.pow_handler.initialize(consensus.clone());
 
     let refresh_time =
