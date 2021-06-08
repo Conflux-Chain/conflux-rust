@@ -32,7 +32,6 @@ use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use hash::keccak;
 use std::{
-    cell::RefCell,
     collections::{HashMap, HashSet},
     sync::Arc,
 };
@@ -260,7 +259,7 @@ impl Context for MockContext {
     ) -> (
         &Env,
         &Spec,
-        &RefCell<CallStackInfo>,
+        &mut CallStackInfo,
         &mut dyn StateOpsTrait,
         &mut dyn SubstateTrait,
     ) {

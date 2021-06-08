@@ -21,7 +21,7 @@ use crate::{
         prefetcher::{
             prefetch_accounts, ExecutionStatePrefetcher, PrefetchTaskHandle,
         },
-        CallStackInfo, State,
+        State,
     },
     trace::trace::{ExecTrace, TransactionExecTraces},
     verification::{compute_receipts_root, VerificationConfig},
@@ -55,7 +55,6 @@ use primitives::{
 };
 use rustc_hex::ToHex;
 use std::{
-    cell::RefCell,
     collections::{BTreeMap, BTreeSet, HashMap},
     convert::From,
     fmt::{Debug, Formatter},
@@ -1129,7 +1128,6 @@ impl ConsensusExecutionHandler {
                     .verification_config
                     .transaction_epoch_bound,
             };
-            let call_stack = RefCell::new(CallStackInfo::default());
             let spec = self.machine.spec(env.number);
             let secondary_reward =
                 state.bump_block_number_accumulate_interest();
@@ -1152,7 +1150,6 @@ impl ConsensusExecutionHandler {
                         self.machine.as_ref(),
                         &spec,
                         &internal_contract_map,
-                        &call_stack,
                     )
                     .transact(transaction, options)?
                 } else {
@@ -1163,7 +1160,6 @@ impl ConsensusExecutionHandler {
                         self.machine.as_ref(),
                         &spec,
                         &internal_contract_map,
-                        &call_stack,
                     )
                     .transact(transaction, options)?
                 };
@@ -1735,14 +1731,12 @@ impl ConsensusExecutionHandler {
                 .transaction_epoch_bound,
         };
         let spec = self.machine.spec(env.number);
-        let call_stack = RefCell::new(CallStackInfo::default());
         let mut ex = Executive::new(
             &mut state,
             &env,
             self.machine.as_ref(),
             &spec,
             &internal_contract_map,
-            &call_stack,
         );
         let r = ex.transact_virtual(tx);
         trace!("Execution result {:?}", r);

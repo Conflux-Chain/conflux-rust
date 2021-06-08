@@ -23,7 +23,7 @@ use cfx_state::{
 };
 use cfx_types::{Address, H256, U256};
 use primitives::transaction::UNSIGNED_SENDER;
-use std::{cell::RefCell, sync::Arc};
+use std::sync::Arc;
 
 /// Transaction properties that externalities need to know about.
 #[derive(Debug)]
@@ -66,6 +66,7 @@ pub struct Context<
     State: StateTrait<Substate = Substate>,
 > {
     state: &'b mut State,
+    callstack: &'b mut CallStackInfo,
     local_part: &'b mut LocalContext<'a, Substate>,
 }
 
@@ -81,7 +82,6 @@ pub struct LocalContext<'a, Substate: SubstateTrait> {
     pub spec: &'a Spec,
     pub static_flag: bool,
     pub internal_contract_map: &'a InternalContractMap,
-    pub call_stack: &'a RefCell<CallStackInfo>,
 }
 
 impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
@@ -90,7 +90,6 @@ impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
         stack_depth: usize, origin: OriginInfo, substate: Substate,
         is_create: bool, static_flag: bool,
         internal_contract_map: &'a InternalContractMap,
-        call_stack: &'a RefCell<CallStackInfo>,
     ) -> Self
     {
         LocalContext {
@@ -104,16 +103,16 @@ impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
             is_create,
             static_flag,
             internal_contract_map,
-            call_stack,
         }
     }
 
     pub fn activate<State: StateTrait<Substate = Substate>>(
-        &'b mut self, state: &'b mut State,
+        &'b mut self, state: &'b mut State, callstack: &'b mut CallStackInfo,
     ) -> Context<'a, 'b, Substate, State> {
         Context {
             state,
             local_part: self,
+            callstack,
         }
     }
 }
@@ -250,7 +249,6 @@ impl<
             self.local_part.depth,
             self.local_part.static_flag,
             self.local_part.internal_contract_map,
-            self.local_part.call_stack,
         );
         let mut tracer = trace::NoopTracer;
         let out = ex.create_with_stack_depth(
@@ -461,15 +459,11 @@ impl<
     fn is_static(&self) -> bool { self.local_part.static_flag }
 
     fn is_static_or_reentrancy(&self) -> bool {
-        self.local_part.static_flag
-            || self.local_part.call_stack.borrow().in_reentrancy()
+        self.local_part.static_flag || self.callstack.in_reentrancy()
     }
 
     fn is_reentrancy(&self, _caller: &Address, callee: &Address) -> bool {
-        self.local_part
-            .call_stack
-            .borrow()
-            .reentrancy_happens_when_push(callee)
+        self.callstack.reentrancy_happens_when_push(callee)
     }
 
     fn internal_input(
@@ -477,14 +471,14 @@ impl<
     ) -> (
         &Env,
         &Spec,
-        &RefCell<CallStackInfo>,
+        &mut CallStackInfo,
         &mut dyn StateOpsTrait,
         &mut dyn SubstateTrait,
     ) {
         (
             self.local_part.env,
             self.local_part.spec,
-            self.local_part.call_stack,
+            self.callstack,
             self.state,
             &mut self.local_part.substate,
         )
@@ -512,7 +506,7 @@ mod tests {
         new_storage_manager_for_testing, tests::FakeStateManager,
     };
     use cfx_types::{address_util::AddressUtil, Address, H256, U256};
-    use std::{cell::RefCell, str::FromStr};
+    use std::str::FromStr;
 
     fn get_test_origin() -> OriginInfo {
         let mut sender = Address::zero();
@@ -552,7 +546,7 @@ mod tests {
         spec: Spec,
         substate: Substate,
         env: Env,
-        call_stack: RefCell<CallStackInfo>,
+        callstack: CallStackInfo,
     }
 
     impl TestSetup {
@@ -565,7 +559,7 @@ mod tests {
             );
             let env = get_test_env();
             let spec = machine.spec(env.number);
-            let call_stack = RefCell::new(CallStackInfo::default());
+            let callstack = CallStackInfo::default();
             let internal_contract_map = InternalContractMap::new();
 
             let mut setup = Self {
@@ -576,7 +570,7 @@ mod tests {
                 spec,
                 substate: Substate::new(),
                 env,
-                call_stack,
+                callstack,
             };
             setup
                 .state
@@ -592,7 +586,7 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
-        let call_stack = RefCell::new(CallStackInfo::default());
+        let mut callstack = CallStackInfo::default();
 
         let mut lctx = LocalContext::new(
             &setup.env,
@@ -605,9 +599,8 @@ mod tests {
             true,  /* is_create */
             false, /* static_flag */
             &setup.internal_contract_map,
-            &call_stack,
         );
-        let ctx = lctx.activate(state);
+        let ctx = lctx.activate(state, &mut callstack);
 
         assert_eq!(ctx.env().number, 100);
     }
@@ -617,7 +610,7 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
-        let call_stack = RefCell::new(CallStackInfo::default());
+        let mut callstack = CallStackInfo::default();
 
         let mut lctx = LocalContext::new(
             &setup.env,
@@ -630,9 +623,8 @@ mod tests {
             true,  /* is_create */
             false, /* static_flag */
             &setup.internal_contract_map,
-            &call_stack,
         );
-        let mut ctx = lctx.activate(state);
+        let mut ctx = lctx.activate(state, &mut callstack);
 
         let hash = ctx.blockhash(
             &"0000000000000000000000000000000000000000000000000000000000120000"
@@ -691,7 +683,7 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
-        let call_stack = RefCell::new(CallStackInfo::default());
+        let mut callstack = CallStackInfo::default();
 
         let mut lctx = LocalContext::new(
             &setup.env,
@@ -704,9 +696,8 @@ mod tests {
             true,  /* is_create */
             false, /* static_flag */
             &setup.internal_contract_map,
-            &call_stack,
         );
-        let mut ctx = lctx.activate(state);
+        let mut ctx = lctx.activate(state, &mut callstack);
 
         // this should panic because we have no balance on any account
         ctx.call(
@@ -740,7 +731,7 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
-        let call_stack = RefCell::new(CallStackInfo::default());
+        let mut callstack = CallStackInfo::default();
 
         {
             let mut lctx = LocalContext::new(
@@ -754,9 +745,8 @@ mod tests {
                 true,  /* is_create */
                 false, /* static_flag */
                 &setup.internal_contract_map,
-                &call_stack,
             );
-            let mut ctx = lctx.activate(state);
+            let mut ctx = lctx.activate(state, &mut callstack);
             ctx.log(log_topics, &log_data).unwrap();
             assert_eq!(lctx.substate.logs.len(), 1);
         }
@@ -770,7 +760,7 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let mut origin = get_test_origin();
-        let call_stack = RefCell::new(CallStackInfo::default());
+        let mut callstack = CallStackInfo::default();
 
         let mut contract_address = Address::zero();
         contract_address.set_contract_type_bits();
@@ -800,9 +790,8 @@ mod tests {
                 true,  /* is_create */
                 false, /* static_flag */
                 &setup.internal_contract_map,
-                &call_stack,
             );
-            let mut ctx = lctx.activate(state);
+            let mut ctx = lctx.activate(state, &mut callstack);
             let mut tracer = trace::NoopTracer;
             ctx.suicide(
                 &refund_account,
@@ -824,7 +813,7 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
-        let call_stack = RefCell::new(CallStackInfo::default());
+        let mut callstack = CallStackInfo::default();
 
         let address = {
             let mut lctx = LocalContext::new(
@@ -838,9 +827,8 @@ mod tests {
                 true,  /* is_create */
                 false, /* static_flag */
                 &setup.internal_contract_map,
-                &call_stack,
             );
-            let mut ctx = lctx.activate(state);
+            let mut ctx = lctx.activate(state, &mut callstack);
             match ctx
                 .create(
                     &U256::max_value(),
@@ -872,7 +860,7 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
-        let call_stack = RefCell::new(CallStackInfo::default());
+        let mut callstack = CallStackInfo::default();
 
         let address = {
             let mut lctx = LocalContext::new(
@@ -886,9 +874,8 @@ mod tests {
                 true,  /* is_create */
                 false, /* static_flag */
                 &setup.internal_contract_map,
-                &call_stack,
             );
-            let mut ctx = lctx.activate(state);
+            let mut ctx = lctx.activate(state, &mut callstack);
 
             match ctx
                 .create(

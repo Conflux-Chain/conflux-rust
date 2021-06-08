@@ -11,7 +11,6 @@ use crate::{
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::U256;
 use solidity_abi::{ABIDecodable, ABIEncodable};
-use std::cell::RefCell;
 
 /// The standard implementation of the solidity function trait. The developer of
 /// new functions should implement the following traits.
@@ -35,7 +34,7 @@ impl<
 {
     fn execute(
         &self, input: &[u8], params: &ActionParams, env: &Env, spec: &Spec,
-        call_stack: &RefCell<CallStackInfo>, state: &mut dyn StateOpsTrait,
+        call_stack: &mut CallStackInfo, state: &mut dyn StateOpsTrait,
         substate: &mut dyn SubstateTrait,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>
@@ -85,7 +84,7 @@ pub trait InterfaceTrait {
 
 pub trait PreExecCheckTrait: Send + Sync {
     fn pre_execution_check(
-        &self, params: &ActionParams, call_stack: &RefCell<CallStackInfo>,
+        &self, params: &ActionParams, call_stack: &mut CallStackInfo,
     ) -> vm::Result<()>;
 }
 
@@ -114,7 +113,7 @@ pub trait PreExecCheckConfTrait: Send + Sync {
 
 impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
     fn pre_execution_check(
-        &self, params: &ActionParams, call_stack: &RefCell<CallStackInfo>,
+        &self, params: &ActionParams, call_stack: &mut CallStackInfo,
     ) -> vm::Result<()> {
         if !Self::PAYABLE && !params.value.value().is_zero() {
             return Err(vm::Error::InternalContract(
@@ -123,7 +122,7 @@ impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
         }
 
         if Self::HAS_WRITE_OP
-            && (call_stack.borrow().in_reentrancy()
+            && (call_stack.in_reentrancy()
                 || params.call_type == CallType::StaticCall)
         {
             return Err(vm::Error::MutableCallInStaticContext);

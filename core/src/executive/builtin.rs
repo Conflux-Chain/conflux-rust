@@ -81,13 +81,13 @@ impl<'a> Exec for InternalContractExec<'a> {
         {
             Err(VmError::InternalContract("Incorrect call type."))
         } else {
-            let (env, spec, call_stack, state, substate) =
+            let (env, spec, callstack, state, substate) =
                 context.internal_input();
             self.contract.execute(
                 &self.params,
                 env,
                 spec,
-                call_stack,
+                callstack,
                 state,
                 substate,
                 tracer,

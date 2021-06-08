@@ -7,7 +7,7 @@ use crate::{
     evm::FinalizationResult,
     executive::{CollateralCheckResultToVmResult, ExecutionOutcome},
     machine::Machine,
-    state::{CallStackInfo, State, Substate},
+    state::{State, Substate},
     test_helpers::get_state_for_genesis_write,
     trace,
     vm::{
@@ -44,7 +44,6 @@ use primitives::{
 };
 use rustc_hex::FromHex;
 use std::{
-    cell::RefCell,
     cmp::{self, min},
     str::FromStr,
     sync::Arc,
@@ -125,7 +124,6 @@ fn test_sender_balance() {
     let machine = make_byzantium_machine(0);
     let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
-    let call_stack = RefCell::new(CallStackInfo::default());
     let mut substate = Substate::new();
 
     let FinalizationResult { gas_left, .. } = {
@@ -136,7 +134,6 @@ fn test_sender_balance() {
             &machine,
             &spec,
             &internal_contract_map,
-            &call_stack,
         );
         let mut tracer = trace::NoopTracer;
         let res = ex
@@ -226,7 +223,6 @@ fn test_create_contract_out_of_depth() {
     let machine = make_byzantium_machine(0);
     let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
-    let call_stack = RefCell::new(CallStackInfo::default());
 
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
@@ -247,7 +243,6 @@ fn test_create_contract_out_of_depth() {
             &machine,
             &spec,
             &internal_contract_map,
-            &call_stack,
         );
         let mut tracer = trace::NoopTracer;
         ex.create(params, &mut substate, &mut tracer).unwrap()
@@ -292,7 +287,6 @@ fn test_suicide_when_creation() {
     let machine = make_byzantium_machine(0);
     let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
-    let call_stack = RefCell::new(CallStackInfo::default());
 
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
@@ -312,7 +306,6 @@ fn test_suicide_when_creation() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     );
     let mut tracer = trace::NoopTracer;
     let FinalizationResult {
@@ -388,7 +381,6 @@ fn test_call_to_create() {
     let machine = make_byzantium_machine(5);
     let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
-    let call_stack = RefCell::new(CallStackInfo::default());
 
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
@@ -418,7 +410,6 @@ fn test_call_to_create() {
             &machine,
             &spec,
             &internal_contract_map,
-            &call_stack,
         );
         let mut tracer = trace::NoopTracer;
         let res = ex.call(params.clone(), &mut substate, &mut tracer).unwrap();
@@ -459,7 +450,6 @@ fn test_revert() {
     let machine = make_byzantium_machine(0);
     let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
-    let call_stack = RefCell::new(CallStackInfo::default());
     let mut substate = Substate::new();
 
     let storage_manager = new_state_manager_for_unit_test();
@@ -499,7 +489,6 @@ fn test_revert() {
             &machine,
             &spec,
             &internal_contract_map,
-            &call_stack,
         );
         let mut tracer = trace::NoopTracer;
         ex.call(params, &mut substate, &mut tracer).unwrap()
@@ -545,7 +534,6 @@ fn test_keccak() {
     let machine = make_byzantium_machine(0);
     let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
-    let call_stack = RefCell::new(CallStackInfo::default());
 
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
@@ -567,7 +555,6 @@ fn test_keccak() {
             &machine,
             &spec,
             &internal_contract_map,
-            &call_stack,
         );
         ex.create(params, &mut substate, &mut tracer)
     };
@@ -600,7 +587,6 @@ fn test_not_enough_cash() {
     let machine = make_byzantium_machine(0);
     let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
-    let call_stack = RefCell::new(CallStackInfo::default());
 
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
@@ -621,7 +607,6 @@ fn test_not_enough_cash() {
             &machine,
             &spec,
             &internal_contract_map,
-            &call_stack,
         );
         let options = TransactOptions::with_no_tracing();
         ex.transact(&t, options).unwrap()
@@ -657,7 +642,6 @@ fn test_deposit_withdraw_lock() {
     let machine = make_byzantium_machine(0);
     let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
-    let call_stack = RefCell::new(CallStackInfo::default());
     let mut substate = Substate::new();
     state
         .add_balance(
@@ -697,7 +681,6 @@ fn test_deposit_withdraw_lock() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_err());
@@ -726,7 +709,6 @@ fn test_deposit_withdraw_lock() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_err());
@@ -744,7 +726,6 @@ fn test_deposit_withdraw_lock() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_ok());
@@ -774,7 +755,6 @@ fn test_deposit_withdraw_lock() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_err());
@@ -808,7 +788,6 @@ fn test_deposit_withdraw_lock() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_err());
@@ -842,7 +821,6 @@ fn test_deposit_withdraw_lock() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_ok());
@@ -871,7 +849,6 @@ fn test_deposit_withdraw_lock() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_err());
@@ -907,7 +884,6 @@ fn test_deposit_withdraw_lock() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_err());
@@ -946,7 +922,6 @@ fn test_deposit_withdraw_lock() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_ok());
@@ -981,7 +956,6 @@ fn test_deposit_withdraw_lock() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_ok());
@@ -1016,7 +990,6 @@ fn test_deposit_withdraw_lock() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_err());
@@ -1058,7 +1031,6 @@ fn test_deposit_withdraw_lock() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .call(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_ok());
@@ -1259,7 +1231,6 @@ fn test_commission_privilege() {
     let machine = make_byzantium_machine(0);
     let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
-    let call_stack = RefCell::new(CallStackInfo::default());
 
     let sender = Random.generate().unwrap();
     let caller1 = Random.generate().unwrap();
@@ -1313,7 +1284,6 @@ fn test_commission_privilege() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .transact(&tx, options)
     .unwrap()
@@ -1410,7 +1380,6 @@ fn test_commission_privilege() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .transact(&tx, options)
     .unwrap()
@@ -1453,7 +1422,6 @@ fn test_commission_privilege() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .transact(&tx, options)
     .unwrap()
@@ -1496,7 +1464,6 @@ fn test_commission_privilege() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .transact(&tx, options)
     .unwrap()
@@ -1553,7 +1520,6 @@ fn test_commission_privilege() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .transact(&tx, options)
     .unwrap()
@@ -1603,7 +1569,6 @@ fn test_commission_privilege() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .transact(&tx, options)
     .unwrap()
@@ -1643,7 +1608,6 @@ fn test_storage_commission_privilege() {
     let machine = make_byzantium_machine(0);
     let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
-    let call_stack = RefCell::new(CallStackInfo::default());
 
     let sender = Random.generate().unwrap();
     let caller1 = Random.generate().unwrap();
@@ -1704,7 +1668,6 @@ fn test_storage_commission_privilege() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .transact(&tx, options)
     .unwrap()
@@ -1854,7 +1817,6 @@ fn test_storage_commission_privilege() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .transact(&tx, options)
     .unwrap()
@@ -1937,7 +1899,6 @@ fn test_storage_commission_privilege() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .transact(&tx, options)
     .unwrap()
@@ -2038,7 +1999,6 @@ fn test_storage_commission_privilege() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .transact(&tx, options)
     .unwrap()
@@ -2173,7 +2133,6 @@ fn test_storage_commission_privilege() {
         &machine,
         &spec,
         &internal_contract_map,
-        &call_stack,
     )
     .transact(&tx, options)
     .unwrap()

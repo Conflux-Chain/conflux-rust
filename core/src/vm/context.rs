@@ -35,7 +35,7 @@ use crate::{
 use cfx_bytes::Bytes;
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{Address, H256, U256};
-use std::{cell::RefCell, sync::Arc};
+use std::sync::Arc;
 
 #[derive(Debug)]
 /// Result of externalities create function.
@@ -204,7 +204,7 @@ pub trait Context {
     ) -> (
         &Env,
         &Spec,
-        &RefCell<CallStackInfo>,
+        &mut CallStackInfo,
         &mut dyn StateOpsTrait,
         &mut dyn SubstateTrait,
     );

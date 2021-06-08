@@ -10,7 +10,7 @@ use cfx_types::{H256, U256};
 use cfxcore::{
     executive::{Executive, InternalContractMap, TransactOptions},
     machine::new_machine_with_builtin,
-    state::{CallStackInfo, State},
+    state::State,
     vm::Env,
     vm_factory::VmFactory,
 };
@@ -19,7 +19,7 @@ use client::{archive::ArchiveClient, configuration::Configuration};
 use criterion::{criterion_group, criterion_main, Benchmark, Criterion};
 use parking_lot::{Condvar, Mutex};
 use primitives::{Action, Transaction};
-use std::{cell::RefCell, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 fn txexe_benchmark(c: &mut Criterion) {
     let mut conf = Configuration::default();
@@ -84,14 +84,12 @@ fn txexe_benchmark(c: &mut Criterion) {
             .expect("Failed to initialize state");
 
             let spec = machine.spec(env.number);
-            let call_stack = RefCell::new(CallStackInfo::default());
             let mut ex = Executive::new(
                 &mut state,
                 &env,
                 &machine,
                 &spec,
                 &internal_contract_map,
-                &call_stack,
             );
 
             b.iter(|| {

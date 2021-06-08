@@ -38,7 +38,6 @@ use primitives::{
     transaction::Action, SignedTransaction, StorageLayout,
 };
 use std::{
-    cell::RefCell,
     collections::HashSet,
     convert::{TryFrom, TryInto},
     sync::Arc,
@@ -274,7 +273,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         stack_depth: usize, parent_static_flag: bool,
         parent_contract_in_creation: Option<Address>,
         internal_contract_map: &'a InternalContractMap,
-        call_stack: &'a RefCell<CallStackInfo>,
     ) -> Self
     {
         trace!(
@@ -337,7 +335,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
             /* is_create */ false,
             static_flag,
             internal_contract_map,
-            call_stack,
         );
         Self {
             context,
@@ -354,7 +351,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
         stack_depth: usize, static_flag: bool,
         internal_contract_map: &'a InternalContractMap,
-        call_stack: &'a RefCell<CallStackInfo>,
     ) -> Self
     {
         trace!(
@@ -383,7 +379,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
             /* is_create */ true,
             static_flag,
             internal_contract_map,
-            call_stack,
         );
 
         Self {
@@ -500,11 +495,11 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     // Seperated from enact_output
     fn process_return<State: StateTrait<Substate = Substate>>(
         mut self, result: vm::Result<GasLeft>, state: &mut State,
-        substate: &mut Substate,
+        substate: &mut Substate, callstack: &mut CallStackInfo,
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
     ) -> vm::Result<ExecutiveResult>
     {
-        let context = self.context.activate(state);
+        let context = self.context.activate(state, callstack);
         let finalized_result = result.finalize(context);
         let executive_result = finalized_result
             .map(|result| ExecutiveResult::new(result, self.create_address));
@@ -541,7 +536,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         } else {
             state.revert_to_checkpoint();
         }
-        self.context.call_stack.borrow_mut().pop();
+        callstack.pop();
 
         executive_result
     }
@@ -551,6 +546,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// `resume_call` or `resume_create` to continue the execution.
     pub fn exec<State: StateTrait<Substate = Substate>>(
         mut self, state: &mut State, substate: &mut Substate,
+        callstack: &mut CallStackInfo,
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
     ) -> ExecutiveTrapResult<'a, ExecutiveResult, Substate>
     {
@@ -569,10 +565,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
             .expect("check_static_flag should always success here");
 
         state.checkpoint();
-        self.context
-            .call_stack
-            .borrow_mut()
-            .push(self.get_recipient().clone());
+        callstack.push(self.get_recipient().clone());
 
         // Pre Execution
         let db_result = if is_create {
@@ -631,10 +624,10 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
             }
         };
 
-        let mut context = self.context.activate(state);
+        let mut context = self.context.activate(state, callstack);
         match exec.exec(&mut context, tracer) {
             TrapResult::Return(result) => TrapResult::Return(
-                self.process_return(result, state, substate, tracer),
+                self.process_return(result, state, substate, callstack, tracer),
             ),
             TrapResult::SubCallCreate(trap_err) => TrapResult::SubCallCreate(
                 self.handle_trap_err(trap_err, tracer),
@@ -644,7 +637,8 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
 
     pub fn resume<State: StateTrait<Substate = Substate>>(
         mut self, result: vm::Result<ExecutiveResult>, state: &mut State,
-        substate: &mut Substate, tracer: &mut dyn Tracer<Output = ExecTrace>,
+        substate: &mut Substate, callstack: &mut CallStackInfo,
+        tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> ExecutiveTrapResult<'a, ExecutiveResult, Substate>
     {
         let status =
@@ -665,11 +659,11 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
             }
         };
 
-        let mut context = self.context.activate(state);
+        let mut context = self.context.activate(state, callstack);
 
         match exec.exec(&mut context, tracer) {
             TrapResult::Return(result) => TrapResult::Return(
-                self.process_return(result, state, substate, tracer),
+                self.process_return(result, state, substate, callstack, tracer),
             ),
             TrapResult::SubCallCreate(trap_err) => TrapResult::SubCallCreate(
                 self.handle_trap_err(trap_err, tracer),
@@ -685,8 +679,9 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
     ) -> vm::Result<FinalizationResult>
     {
-        let address_stack = self.context.call_stack;
-        let mut last_res = self.exec(state, top_substate, tracer);
+        let mut address_stack = CallStackInfo::default();
+        let mut last_res =
+            self.exec(state, top_substate, &mut address_stack, tracer);
 
         let mut executive_stack: Vec<CallCreateExecutive<'a, Substate>> =
             Vec::new();
@@ -709,8 +704,13 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                             parent.unconfirmed_substate()
                         });
 
-                    last_res =
-                        exec.resume(result, state, parent_substate, tracer);
+                    last_res = exec.resume(
+                        result,
+                        state,
+                        parent_substate,
+                        &mut address_stack,
+                        tracer,
+                    );
                 }
                 TrapResult::SubCallCreate(trap_err) => {
                     let sub_exec = match trap_err {
@@ -731,7 +731,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                                 resume.context.static_flag,
                                 maybe_parent_contract_in_creation,
                                 resume.context.internal_contract_map,
-                                &address_stack,
                             );
 
                             executive_stack.push(resume);
@@ -748,7 +747,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                                 resume.context.stack_depth,
                                 resume.context.static_flag,
                                 resume.context.internal_contract_map,
-                                &address_stack,
                             );
 
                             executive_stack.push(resume);
@@ -760,7 +758,12 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                         .map_or(&mut *top_substate, |parent| {
                             parent.unconfirmed_substate()
                         });
-                    last_res = sub_exec.exec(state, parent_substate, tracer);
+                    last_res = sub_exec.exec(
+                        state,
+                        parent_substate,
+                        &mut address_stack,
+                        tracer,
+                    );
                 }
             }
         }
@@ -794,7 +797,6 @@ pub struct ExecutiveGeneric<
     depth: usize,
     static_flag: bool,
     internal_contract_map: &'a InternalContractMap,
-    call_stack: &'a RefCell<CallStackInfo>,
 }
 
 impl<
@@ -807,7 +809,6 @@ impl<
     pub fn new(
         state: &'a mut State, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, internal_contract_map: &'a InternalContractMap,
-        call_stack: &'a RefCell<CallStackInfo>,
     ) -> Self
     {
         ExecutiveGeneric {
@@ -818,7 +819,6 @@ impl<
             depth: 0,
             static_flag: false,
             internal_contract_map,
-            call_stack,
         }
     }
 
@@ -827,7 +827,6 @@ impl<
         state: &'a mut State, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, parent_depth: usize, static_flag: bool,
         internal_contract_map: &'a InternalContractMap,
-        call_stack: &'a RefCell<CallStackInfo>,
     ) -> Self
     {
         ExecutiveGeneric {
@@ -838,7 +837,6 @@ impl<
             depth: parent_depth + 1,
             static_flag,
             internal_contract_map,
-            call_stack,
         }
     }
 
@@ -878,7 +876,6 @@ impl<
             stack_depth,
             self.static_flag,
             self.internal_contract_map,
-            self.call_stack,
         )
         .consume(self.state, substate, tracer);
 
@@ -911,7 +908,6 @@ impl<
             self.static_flag,
             None,
             self.internal_contract_map,
-            self.call_stack,
         )
         .consume(self.state, substate, tracer);
 

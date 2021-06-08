@@ -19,7 +19,7 @@ use crate::{
 };
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{Address, H256};
-use std::{cell::RefCell, sync::Arc};
+use std::sync::Arc;
 
 lazy_static! {
     static ref INTERNAL_CONTRACT_CODE: Arc<Bytes> =
@@ -38,7 +38,7 @@ pub trait InternalContractTrait: Send + Sync {
     /// execute this internal contract on the given parameters.
     fn execute(
         &self, params: &ActionParams, env: &Env, spec: &Spec,
-        call_stack: &RefCell<CallStackInfo>, state: &mut dyn StateOpsTrait,
+        callstack: &mut CallStackInfo, state: &mut dyn StateOpsTrait,
         substate: &mut dyn SubstateTrait,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>
@@ -67,7 +67,7 @@ pub trait InternalContractTrait: Send + Sync {
             params,
             env,
             spec,
-            call_stack,
+            callstack,
             state,
             substate,
             tracer,
@@ -88,7 +88,7 @@ pub trait SolidityFunctionTrait: Send + Sync {
     // contracts.
     fn execute(
         &self, input: &[u8], params: &ActionParams, env: &Env, spec: &Spec,
-        call_stack: &RefCell<CallStackInfo>, state: &mut dyn StateOpsTrait,
+        call_stack: &mut CallStackInfo, state: &mut dyn StateOpsTrait,
         substate: &mut dyn SubstateTrait,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>;
