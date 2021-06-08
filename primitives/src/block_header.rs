@@ -222,7 +222,8 @@ impl BlockHeader {
             .append(&self.difficulty)
             .append(&adaptive_n)
             .append(&self.gas_limit)
-            .append_list(&self.referee_hashes);
+            .append_list(&self.referee_hashes)
+            .append(&self.pos_reference);
 
         if list_len > 14 {
             for b in &self.custom {
@@ -255,7 +256,8 @@ impl BlockHeader {
             .append(&adaptive_n)
             .append(&self.gas_limit)
             .append_list(&self.referee_hashes)
-            .append(&self.nonce);
+            .append(&self.nonce)
+            .append(&self.pos_reference);
         if list_len > 15 {
             for b in &self.custom {
                 stream.append_raw(b, 1);
@@ -288,6 +290,7 @@ impl BlockHeader {
             .append(&self.gas_limit)
             .append_list(&self.referee_hashes)
             .append(&self.nonce)
+            .append(&self.pos_reference)
             // Just encode the Option for future compatibility.
             // It should always be Some when it is being inserted to db.
             .append(&self.pow_hash);
@@ -317,11 +320,11 @@ impl BlockHeader {
             referee_hashes: r.list_at(12)?,
             custom: vec![],
             nonce: r.val_at(13)?,
-            // FIXME(peilun): Handle decoding.
-            pos_reference: None,
+            pos_reference: r.val_at(14)?,
         };
-        let pow_hash = r.val_at(14)?;
-        for i in 15..r.item_count()? {
+        let pow_hash = r.val_at(15)?;
+
+        for i in 16..r.item_count()? {
             rlp_part.custom.push(r.at(i)?.as_raw().to_vec())
         }
 
@@ -575,7 +578,6 @@ impl Decodable for BlockHeader {
             referee_hashes: r.list_at(12)?,
             custom: vec![],
             nonce: r.val_at(13)?,
-            // FIXME(lpl): Handle hard fork.
             pos_reference: r.val_at(14)?,
         };
         for i in 15..r.item_count()? {

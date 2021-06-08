@@ -35,6 +35,7 @@ use cfx_parameters::light::{
     CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, HEARTBEAT_PERIOD, SYNC_PERIOD,
 };
 use cfx_types::H256;
+use diem_crypto::ed25519::Ed25519PublicKey;
 use io::TimerToken;
 use network::{
     node_table::NodeId, service::ProtocolVersion, NetworkContext,
@@ -988,6 +989,7 @@ impl NetworkProtocolHandler for Handler {
     fn on_peer_connected(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         peer_protocol_version: ProtocolVersion,
+        _pos_public_key: Option<Ed25519PublicKey>,
     )
     {
         debug!("on_peer_connected: peer={:?}", peer);

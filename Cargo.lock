@@ -3897,6 +3897,7 @@ dependencies = [
  "cfx-bytes",
  "cfx-types",
  "cfxkey",
+ "diem-crypto",
  "enum-map",
  "enum-map-derive",
  "error-chain",

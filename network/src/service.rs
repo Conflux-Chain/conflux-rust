@@ -20,6 +20,10 @@ use crate::{
 };
 use cfx_addr::Network;
 use cfx_bytes::Bytes;
+use diem_crypto::{
+    ed25519::{Ed25519PrivateKey, Ed25519PublicKey},
+    ValidCryptoMaterialStringExt,
+};
 use keccak_hash::keccak;
 use keylib::{sign, Generator, KeyPair, Random, Secret};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
@@ -340,6 +344,14 @@ impl NetworkService {
         }
     }
 
+    pub fn pos_public_key(&self) -> Option<Ed25519PublicKey> {
+        if let Some(ref inner) = self.inner {
+            inner.sessions.self_pos_public_key.clone()
+        } else {
+            None
+        }
+    }
+
     pub fn add_latency(
         &self, id: NodeId, latency_ms: f64,
     ) -> Result<(), Error> {
@@ -540,6 +552,11 @@ impl NetworkServiceInner {
                     },
                 )
         };
+        let pos_public_key = config
+            .config_path
+            .clone()
+            .and_then(|ref p| load_pos_private_key(Path::new(&p)))
+            .map(|private_key| Ed25519PublicKey::from(&private_key));
 
         info!("Self node id: {:?}", *keys.public());
 
@@ -625,6 +642,7 @@ impl NetworkServiceInner {
                 MAX_SESSIONS,
                 config.max_incoming_peers,
                 &config.session_ip_limit_config,
+                pos_public_key,
             ),
             handlers: RwLock::new(HashMap::new()),
             timers: RwLock::new(HashMap::new()),
@@ -1054,6 +1072,7 @@ impl NetworkServiceInner {
             // We check dropped_nodes first to make sure we stop processing
             // communications from any dropped peers
             let mut session_node_id = session.read().id().map(|id| *id);
+            let mut pos_public_key_opt = None;
             if let Some(node_id) = session_node_id {
                 let to_drop = self.dropped_nodes.read().contains(&node_id);
                 self.drop_peers(io);
@@ -1073,9 +1092,10 @@ impl NetworkServiceInner {
                                 session_data.token_to_disconnect;
                         }
                         match session_data.session_data {
-                            SessionData::Ready => {
+                            SessionData::Ready { pos_public_key } => {
                                 handshake_done = true;
                                 session_node_id = Some(*sess.id().unwrap());
+                                pos_public_key_opt = pos_public_key;
                             }
                             SessionData::Message { data, protocol } => {
                                 match self.handlers.read().get(&protocol) {
@@ -1147,6 +1167,7 @@ impl NetworkServiceInner {
                                     &network_context,
                                     session_node_id.as_ref().unwrap(),
                                     protocol.version,
+                                    pos_public_key_opt.clone(),
                                 );
                         }
                     }
@@ -2088,6 +2109,33 @@ fn load_key(path: &Path) -> Option<Secret> {
         }
     }
     match Secret::from_str(&buf) {
+        Ok(key) => Some(key),
+        Err(e) => {
+            warn!("Error parsing key file: {:?}", e);
+            None
+        }
+    }
+}
+
+fn load_pos_private_key(path: &Path) -> Option<Ed25519PrivateKey> {
+    let mut path_buf = PathBuf::from(path);
+    path_buf.push("pos_key");
+    let mut file = match fs::File::open(path_buf.as_path()) {
+        Ok(file) => file,
+        Err(e) => {
+            debug!("failed to open key file: {:?}", e);
+            return None;
+        }
+    };
+    let mut buf = String::new();
+    match file.read_to_string(&mut buf) {
+        Ok(_) => {}
+        Err(e) => {
+            warn!("Error reading key file: {:?}", e);
+            return None;
+        }
+    }
+    match Ed25519PrivateKey::from_encoded_string(&buf) {
         Ok(key) => Some(key),
         Err(e) => {
             warn!("Error parsing key file: {:?}", e);

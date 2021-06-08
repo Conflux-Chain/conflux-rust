@@ -259,12 +259,14 @@ pub fn initialize_common_modules(
             .expect("Failed to load node config");
     let own_node_hash =
         keccak(network.net_key_pair().expect("Error node key").public());
+    let self_pos_public_key = network.pos_public_key();
     let diem_handler = start_pos_consensus(
         &pos_config,
         None,
         network.clone(),
         own_node_hash,
         conf.protocol_config(),
+        self_pos_public_key,
     );
     let pos_connection = PosConnection::new(
         diem_handler.diem_db.clone() as Arc<dyn DBReaderForPoW>,
@@ -298,6 +300,7 @@ pub fn initialize_common_modules(
         node_type,
         pos_verifier.clone(),
     ));
+    diem_handler.pow_handler.initialize(consensus.clone());
 
     let sync_config = conf.sync_graph_config();
 
@@ -311,9 +314,6 @@ pub fn initialize_common_modules(
         machine.clone(),
         pos_verifier.clone(),
     ));
-
-    diem_handler.pow_handler.initialize(consensus.clone());
-
     let refresh_time =
         Duration::from_millis(conf.raw_conf.account_provider_refresh_time_ms);
 

@@ -13,9 +13,13 @@ use cfxcore::{
     sync::ProtocolConfiguration,
 };
 use diem_config::{config::NodeConfig, utils::get_genesis_txn};
+use diem_crypto::ed25519::Ed25519PublicKey;
 use diem_logger::prelude::*;
 use diem_metrics::metric_server;
-use diem_types::PeerId;
+use diem_types::{
+    account_address::{from_public_key, AccountAddress},
+    PeerId,
+};
 use diemdb::DiemDB;
 use executor::{db_bootstrapper::maybe_bootstrap, vm::FakeVM, Executor};
 use executor_types::ChunkExecutor;
@@ -38,6 +42,7 @@ pub fn start_pos_consensus(
     config: &NodeConfig, log_file: Option<PathBuf>,
     network: Arc<NetworkService>, own_node_hash: H256,
     protocol_config: ProtocolConfiguration,
+    own_pos_public_key: Option<Ed25519PublicKey>,
 ) -> DiemHandle
 {
     crash_handler::setup_panic_handler();
@@ -79,7 +84,13 @@ pub fn start_pos_consensus(
         diem_warn!("failpoints is set in config, but the binary doesn't compile with this feature");
     }
 
-    setup_pos_environment(&config, network, own_node_hash, protocol_config)
+    setup_pos_environment(
+        &config,
+        network,
+        own_node_hash,
+        protocol_config,
+        own_pos_public_key,
+    )
 }
 
 fn setup_metrics(peer_id: PeerId, config: &NodeConfig) {
@@ -97,6 +108,7 @@ fn setup_chunk_executor(db: DbReaderWriter) -> Box<dyn ChunkExecutor> {
 pub fn setup_pos_environment(
     node_config: &NodeConfig, network: Arc<NetworkService>,
     own_node_hash: H256, protocol_config: ProtocolConfiguration,
+    own_pos_public_key: Option<Ed25519PublicKey>,
 ) -> DiemHandle
 {
     let metrics_port = node_config.debug_interface.metrics_server_port;
@@ -188,6 +200,10 @@ pub fn setup_pos_environment(
         diem_db.clone(),
         db_rw,
         consensus_reconfig_events,
+        own_pos_public_key.map_or_else(
+            || AccountAddress::random(),
+            |public_key| from_public_key(&public_key),
+        ),
     );
     debug!("Consensus started in {} ms", instant.elapsed().as_millis());
 

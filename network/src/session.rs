@@ -12,6 +12,7 @@ use crate::{
     SessionMetadata, UpdateNodeOperation, PROTOCOL_ID_SIZE,
 };
 use bytes::Bytes;
+use diem_crypto::ed25519::Ed25519PublicKey;
 use io::*;
 use mio::{tcp::*, *};
 use priority_send_queue::SendQueuePriority;
@@ -51,6 +52,7 @@ pub struct Session {
     // statistics for read/write
     last_read: Instant,
     last_write: (Instant, WriteStatus),
+    pos_public_key: Option<Ed25519PublicKey>,
 }
 
 /// Session state.
@@ -68,7 +70,9 @@ pub enum SessionData {
     /// No packet read from socket.
     None,
     /// Session is ready to send or receive protocol packets.
-    Ready,
+    Ready {
+        pos_public_key: Option<Ed25519PublicKey>,
+    },
     /// A protocol packet has been received, and delegate to the corresponding
     /// protocol handler to handle the packet.
     Message { data: Vec<u8>, protocol: ProtocolId },
@@ -99,7 +103,7 @@ impl Session {
     pub fn new<Message: Send + Sync + Clone + 'static>(
         io: &IoContext<Message>, socket: TcpStream, address: SocketAddr,
         id: Option<&NodeId>, peer_header_version: u8, token: StreamToken,
-        host: &NetworkServiceInner,
+        host: &NetworkServiceInner, pos_public_key: Option<Ed25519PublicKey>,
     ) -> Result<Session, Error>
     {
         let originated = id.is_some();
@@ -121,6 +125,7 @@ impl Session {
             expired: None,
             last_read: Instant::now(),
             last_write: (Instant::now(), WriteStatus::Complete),
+            pos_public_key,
         })
     }
 
@@ -303,7 +308,9 @@ impl Session {
                 let rlp = Rlp::new(&packet.data);
                 self.read_hello(&rlp, host)?;
                 Ok(SessionDataWithDisconnectInfo {
-                    session_data: SessionData::Ready,
+                    session_data: SessionData::Ready {
+                        pos_public_key: self.pos_public_key.clone(),
+                    },
                     token_to_disconnect,
                 })
             }

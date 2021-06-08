@@ -303,9 +303,9 @@ class ConfluxTestFramework:
             connect_nodes(self.nodes, i, i + 1)
         sync_blocks(self.nodes)
 
-    def setup_nodes(self, binary=None):
+    def setup_nodes(self, binary=None, is_consortium=False):
         """Override this method to customize test node setup"""
-        self.add_nodes(self.num_nodes, binary=binary)
+        self.add_nodes(self.num_nodes, binary=binary, is_consortium=is_consortium)
         self.start_nodes()
 
     def add_nodes(self, num_nodes, rpchost=None, binary=None, auto_recovery=False, recovery_timeout=30, is_consortium=False):

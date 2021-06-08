@@ -8,10 +8,10 @@ from test_framework.util import *
 
 class ExampleTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.num_nodes = 2
+        self.num_nodes = 1
 
     def setup_network(self):
-        self.setup_nodes()
+        self.setup_nodes(is_consortium=True)
 
     def run_test(self):
         time.sleep(7)
@@ -20,20 +20,9 @@ class ExampleTest(ConfluxTestFramework):
 
         self.nodes[0].generate_empty_blocks(1)
         assert (self.nodes[0].getblockcount() == 2)
-        besthash = self.nodes[0].best_block_hash()
-
-        self.nodes[1].generate_empty_blocks(2)
-        assert (self.nodes[1].getblockcount() == 3)
-
-        connect_nodes(self.nodes, 0, 1)
-        sync_blocks(self.nodes[0:2])
-        assert (self.nodes[0].getblockcount() == 4)
 
         self.nodes[0].generate_empty_blocks(1)
-        self.nodes[1].generate_empty_blocks(1)
-        sync_blocks(self.nodes[0:2])
-        assert (self.nodes[0].getblockcount() == 6)
-        assert (self.nodes[1].getblockcount() == 6)
+        assert (self.nodes[0].getblockcount() == 3)
 
 
 if __name__ == '__main__':

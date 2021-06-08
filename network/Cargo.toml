@@ -37,3 +37,4 @@ metrics = { path = "../util/metrics" }
 throttling = { path = "../util/throttling" }
 natpmp = "0.2"
 malloc_size_of = { path = "../util/malloc_size_of" }
+diem-crypto = { path="../core/src/pos/crypto/crypto" }
