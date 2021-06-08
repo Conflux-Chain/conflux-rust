@@ -29,6 +29,7 @@ use tokio::runtime::Runtime;
 pub struct DiemHandle {
     // pow handler
     pub pow_handler: Arc<PowHandler>,
+    pub diem_db: Arc<DiemDB>,
     _state_sync_bootstrapper: StateSyncBootstrapper,
     _consensus_runtime: Runtime,
 }
@@ -184,7 +185,7 @@ pub fn setup_pos_environment(
         own_node_hash,
         protocol_config,
         state_sync_client,
-        diem_db,
+        diem_db.clone(),
         db_rw,
         consensus_reconfig_events,
     );
@@ -194,5 +195,6 @@ pub fn setup_pos_environment(
         pow_handler,
         _consensus_runtime: consensus_runtime,
         _state_sync_bootstrapper: state_sync_bootstrapper,
+        diem_db,
     }
 }
