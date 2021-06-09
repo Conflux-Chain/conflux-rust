@@ -18,6 +18,7 @@ use diem_logger::prelude::*;
 use diem_metrics::metric_server;
 use diem_types::{
     account_address::{from_public_key, AccountAddress},
+    block_info::PivotBlockDecision,
     PeerId,
 };
 use diemdb::DiemDB;
@@ -141,8 +142,16 @@ pub fn setup_pos_environment(
     let genesis_waypoint = node_config.base.waypoint.genesis_waypoint();
     // if there's genesis txn and waypoint, commit it if the result matches.
     if let Some(genesis) = get_genesis_txn(&node_config) {
-        maybe_bootstrap::<FakeVM>(&db_rw, genesis, genesis_waypoint)
-            .expect("Db-bootstrapper should not fail.");
+        maybe_bootstrap::<FakeVM>(
+            &db_rw,
+            genesis,
+            genesis_waypoint,
+            Some(PivotBlockDecision {
+                block_hash: protocol_config.pos_genesis_pivot_decision,
+                height: 0,
+            }),
+        )
+        .expect("Db-bootstrapper should not fail.");
     } else {
         panic!("Genesis txn not provided.");
     }

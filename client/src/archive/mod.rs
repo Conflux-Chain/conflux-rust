@@ -67,7 +67,11 @@ impl ArchiveClient {
             rpc_ws_server,
             runtime,
             diem_handler,
-        ) = initialize_not_light_node_modules(&conf, exit, NodeType::Archive)?;
+        ) = initialize_not_light_node_modules(
+            &mut conf,
+            exit,
+            NodeType::Archive,
+        )?;
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
             blockgen: Some(blockgen),

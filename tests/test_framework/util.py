@@ -292,6 +292,9 @@ def initialize_tg_config(dirname, nodes):
         validator_config['storage'] = {
             'dir': os.path.join(datadir, 'diemdb', 'db'),
         }
+        validator_config['logger'] = {
+            'level': "DEBUG",
+        }
         with open(os.path.join(datadir, 'validator_full_node.yaml'), 'w') as f:
             f.write(yaml.dump(validator_config, default_flow_style=False))
         with open(os.path.join(datadir, 'net_config', 'pos_key'), 'w') as f:

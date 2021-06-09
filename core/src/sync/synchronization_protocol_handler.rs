@@ -414,6 +414,7 @@ pub struct ProtocolConfiguration {
     pub max_unprocessed_block_size: usize,
     pub max_chunk_number_in_manifest: usize,
     pub allow_phase_change_without_peer: bool,
+    pub pos_genesis_pivot_decision: H256,
 }
 
 impl SynchronizationProtocolHandler {

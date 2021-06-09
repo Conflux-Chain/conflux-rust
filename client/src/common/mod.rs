@@ -120,7 +120,7 @@ pub mod client_methods {
 }
 
 pub fn initialize_common_modules(
-    conf: &Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
+    conf: &mut Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     node_type: NodeType,
 ) -> Result<
     (
@@ -229,6 +229,9 @@ pub fn initialize_common_modules(
         conf.raw_conf.chain_id,
     );
     debug!("Initialize genesis_block={:?}", genesis_block);
+    if conf.raw_conf.pos_genesis_pivot_decision.is_none() {
+        conf.raw_conf.pos_genesis_pivot_decision = Some(genesis_block.hash());
+    }
 
     let pow_config = conf.pow_config();
     let pow = Arc::new(PowComputer::new(pow_config.use_octopus()));
@@ -268,6 +271,7 @@ pub fn initialize_common_modules(
         conf.protocol_config(),
         self_pos_public_key,
     );
+    debug!("PoS initialized");
     let pos_connection = PosConnection::new(
         diem_handler.diem_db.clone() as Arc<dyn DBReaderForPoW>,
         conf.pos_config(),
@@ -362,7 +366,7 @@ pub fn initialize_common_modules(
 }
 
 pub fn initialize_not_light_node_modules(
-    conf: &Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
+    conf: &mut Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     node_type: NodeType,
 ) -> Result<
     (
@@ -399,7 +403,7 @@ pub fn initialize_not_light_node_modules(
         pubsub,
         runtime,
         diem_handler,
-    ) = initialize_common_modules(&conf, exit.clone(), node_type)?;
+    ) = initialize_common_modules(conf, exit.clone(), node_type)?;
 
     let light_provider = Arc::new(LightProvider::new(
         consensus.clone(),

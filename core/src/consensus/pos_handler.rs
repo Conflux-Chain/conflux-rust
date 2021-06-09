@@ -130,7 +130,11 @@ impl PosInterface for PosConnection {
                 &ledger_info.ledger_info().consensus_block_id(),
             ),
             round: ledger_info.ledger_info().round(),
-            pivot_decision: ledger_info.ledger_info().pivot_decision().unwrap().block_hash,
+            pivot_decision: ledger_info
+                .ledger_info()
+                .pivot_decision()
+                .unwrap()
+                .block_hash,
             unlock_txs: Default::default(), /* TODO(lpl):
                                              * ledger_info.unlock_txs, */
         })

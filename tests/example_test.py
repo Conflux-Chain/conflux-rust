@@ -14,15 +14,15 @@ class ExampleTest(ConfluxTestFramework):
         self.setup_nodes(is_consortium=True)
 
     def run_test(self):
-        time.sleep(7)
+        time.sleep(2)
         genesis = self.nodes[0].best_block_hash()
         self.log.info(genesis)
 
         self.nodes[0].generate_empty_blocks(1)
         assert (self.nodes[0].getblockcount() == 2)
 
-        self.nodes[0].generate_empty_blocks(1)
-        assert (self.nodes[0].getblockcount() == 3)
+        self.nodes[0].generate_empty_blocks(6000)
+        assert (self.nodes[0].getblockcount() == 6002)
 
 
 if __name__ == '__main__':

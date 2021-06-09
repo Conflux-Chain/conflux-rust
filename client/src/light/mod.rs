@@ -50,7 +50,7 @@ pub struct LightClient {}
 impl LightClient {
     // Start all key components of Conflux and pass out their handles
     pub fn start(
-        conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
+        mut conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     ) -> Result<
         Box<ClientComponents<BlockGenerator, LightClientExtraComponents>>,
         String,
@@ -72,7 +72,11 @@ impl LightClient {
             pubsub,
             runtime,
             diem_handler,
-        ) = initialize_common_modules(&conf, exit.clone(), NodeType::Light)?;
+        ) = initialize_common_modules(
+            &mut conf,
+            exit.clone(),
+            NodeType::Light,
+        )?;
 
         let light = Arc::new(LightQueryService::new(
             consensus.clone(),
