@@ -3771,13 +3771,16 @@ impl ConsensusGraphInner {
 
     pub fn get_next_pivot_decision(
         &self, parent_decision_hash: &H256,
-    ) -> Option<H256> {
+    ) -> Option<(u64, H256)> {
         match self.hash_to_arena_indices.get(parent_decision_hash) {
             None => {
                 // FIXME(lpl): Just return stable checkpoint as the first
                 // decision. This should be eventually handled
                 // as cross-checkpoint case.
-                Some(self.cur_era_stable_block_hash)
+                Some((
+                    self.cur_era_stable_height,
+                    self.cur_era_stable_block_hash,
+                ))
             }
             Some(parent_decision) => {
                 let parent_decision_height =
@@ -3798,7 +3801,10 @@ impl ConsensusGraphInner {
                     } else {
                         let new_decision_arena_index = self
                             .get_pivot_block_arena_index(new_decision_height);
-                        Some(self.arena[new_decision_arena_index].hash)
+                        Some((
+                            self.arena[new_decision_arena_index].height,
+                            self.arena[new_decision_arena_index].hash,
+                        ))
                     }
                 } else {
                     None

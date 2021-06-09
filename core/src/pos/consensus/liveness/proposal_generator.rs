@@ -184,7 +184,9 @@ impl ProposalGenerator {
                     .next_pivot_decision(parent_decision)
                     .await
                 {
-                    Some(res) => break res,
+                    Some((height, block_hash)) => {
+                        break PivotBlockDecision { height, block_hash }
+                    }
                     None => {
                         // TODO(lpl): Handle the error from outside.
                         // FIXME(lpl): Wait with a deadline.

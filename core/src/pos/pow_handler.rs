@@ -30,7 +30,7 @@ impl PowHandler {
 
     fn next_pivot_decision_impl(
         pow_consensus: Arc<ConsensusGraph>, parent_decision: &H256,
-    ) -> Option<H256> {
+    ) -> Option<(u64, H256)> {
         pow_consensus
             .inner
             .read()
@@ -59,7 +59,9 @@ impl PowHandler {
 // `None`?
 #[async_trait]
 impl PowInterface for PowHandler {
-    async fn next_pivot_decision(&self, parent_decision: H256) -> Option<H256> {
+    async fn next_pivot_decision(
+        &self, parent_decision: H256,
+    ) -> Option<(u64, H256)> {
         let pow_consensus = self.pow_consensus.read().clone();
         if pow_consensus.is_none() {
             return None;
