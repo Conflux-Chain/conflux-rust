@@ -451,7 +451,10 @@ where V: VMExecutor
                 format_err!("Association account does not exist")
             })??;*/
             Some(EpochState {
-                epoch: 0, //configuration.epoch(),
+                // TODO(lpl): This is only used for genesis, and after executing
+                // the genesis block, the epoch number should be
+                // increased from 0 to 1.
+                epoch: 1, //configuration.epoch(),
                 verifier: (&validator_set).into(),
             })
         } else {

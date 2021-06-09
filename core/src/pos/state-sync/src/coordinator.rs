@@ -245,6 +245,7 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
                 }
             }
         }
+        diem_error!("Coordinator stops");
     }
 
     /*fn process_new_peer(

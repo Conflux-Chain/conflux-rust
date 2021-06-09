@@ -42,7 +42,7 @@ pub fn start_consensus(
 ) -> (Runtime, Arc<PowHandler>)
 {
     let runtime = runtime::Builder::new()
-        .basic_scheduler()
+        .threaded_scheduler()
         .thread_name("consensus")
         .enable_all()
         .build()

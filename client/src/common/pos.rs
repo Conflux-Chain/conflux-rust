@@ -200,6 +200,7 @@ pub fn setup_pos_environment(
 
     // Initialize and start consensus.
     instant = Instant::now();
+    debug!("own_pos_public_key: {:?}", own_pos_public_key);
     let (consensus_runtime, pow_handler) = start_consensus(
         node_config,
         network,

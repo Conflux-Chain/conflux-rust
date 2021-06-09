@@ -557,6 +557,7 @@ impl NetworkServiceInner {
             .clone()
             .and_then(|ref p| load_pos_private_key(Path::new(&p)))
             .map(|private_key| Ed25519PublicKey::from(&private_key));
+        info!("Self pos public key: {:?}", pos_public_key);
 
         info!("Self node id: {:?}", *keys.public());
 
@@ -2117,7 +2118,7 @@ fn load_key(path: &Path) -> Option<Secret> {
     }
 }
 
-fn load_pos_private_key(path: &Path) -> Option<Ed25519PrivateKey> {
+pub fn load_pos_private_key(path: &Path) -> Option<Ed25519PrivateKey> {
     let mut path_buf = PathBuf::from(path);
     path_buf.push("pos_key");
     let mut file = match fs::File::open(path_buf.as_path()) {

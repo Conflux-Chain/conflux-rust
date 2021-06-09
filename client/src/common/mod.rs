@@ -247,7 +247,7 @@ pub fn initialize_common_modules(
     ));
 
     let network = {
-        let mut network = NetworkService::new(network_config);
+        let mut network = NetworkService::new(network_config.clone());
         network.start().unwrap();
         Arc::new(network)
     };
@@ -257,12 +257,23 @@ pub fn initialize_common_modules(
         Some(path) => Some(PathBuf::from(path)),
         None => None,
     };
-    let pos_config =
+    let mut pos_config =
         NodeConfig::load(pos_config_path.expect("empty pos config path"))
             .expect("Failed to load node config");
     let own_node_hash =
         keccak(network.net_key_pair().expect("Error node key").public());
     let self_pos_public_key = network.pos_public_key();
+    // TODO(lpl): Keep it properly.
+    let self_pos_private_key =
+        network_config.config_path.clone().map(|ref p| {
+            ConfigKey::new(load_pos_private_key(Path::new(&p)).unwrap())
+        });
+    pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
+        author: from_public_key(self_pos_public_key.as_ref().unwrap()),
+        consensus_key: self_pos_private_key.clone(),
+        execution_key: self_pos_private_key,
+        waypoint: Some(pos_config.base.waypoint.waypoint()),
+    });
     let diem_handler = start_pos_consensus(
         &pos_config,
         None,
@@ -786,20 +797,24 @@ use cfxcore::{
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::public_to_address;
-use diem_config::config::NodeConfig;
+use diem_config::{
+    config::{NodeConfig, SafetyRulesTestConfig, TestConfig},
+    keys::ConfigKey,
+};
+use diem_types::account_address::from_public_key;
 use jsonrpc_http_server::Server as HttpServer;
 use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WSServer;
 use keccak_hash::keccak;
 use keylib::KeyPair;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
-use network::NetworkService;
+use network::{service::load_pos_private_key, NetworkService};
 use parking_lot::{Condvar, Mutex};
 use runtime::Runtime;
 use secret_store::{SecretStore, SharedSecretStore};
 use std::{
     collections::HashMap,
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::FromStr,
     sync::{Arc, Weak},
     thread,

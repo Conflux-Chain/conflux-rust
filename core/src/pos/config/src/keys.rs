@@ -29,7 +29,7 @@ pub struct ConfigKey<T: PrivateKey + Serialize> {
 }
 
 impl<T: DeserializeOwned + PrivateKey + Serialize> ConfigKey<T> {
-    pub(crate) fn new(key: T) -> Self { Self { key } }
+    pub fn new(key: T) -> Self { Self { key } }
 
     pub fn private_key(&self) -> T { self.clone().key }
 

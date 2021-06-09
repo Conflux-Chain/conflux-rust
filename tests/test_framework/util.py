@@ -276,12 +276,13 @@ def initialize_tg_config(dirname, nodes):
         datadir = get_datadir_path(dirname, n)
         if not os.path.isdir(datadir):
             os.makedirs(datadir)
-        os.makedirs(os.path.join(datadir, 'net_config'))
+        net_config_dir = os.path.join(datadir, 'blockchain_data', 'net_config')
+        os.makedirs(net_config_dir)
         os.makedirs(os.path.join(datadir, 'diemdb'))
         validator_config = {}
         validator_config['base'] = {
             'data_dir': os.path.join(datadir, 'diemdb'),
-            'role': 'full_node',
+            'role': 'validator',
             'waypoint': {
                 'from_config': waypoint,
             }
@@ -292,12 +293,20 @@ def initialize_tg_config(dirname, nodes):
         validator_config['storage'] = {
             'dir': os.path.join(datadir, 'diemdb', 'db'),
         }
+        validator_config['consensus'] = {
+            'safety_rules': {
+                'service': {
+                    'type': "local",
+                }
+            },
+            'round_initial_timeout_ms': 1000,
+        }
         validator_config['logger'] = {
             'level': "DEBUG",
         }
         with open(os.path.join(datadir, 'validator_full_node.yaml'), 'w') as f:
             f.write(yaml.dump(validator_config, default_flow_style=False))
-        with open(os.path.join(datadir, 'net_config', 'pos_key'), 'w') as f:
+        with open(os.path.join(net_config_dir, 'pos_key'), 'w') as f:
             f.write(private_keys[n])
 
 
