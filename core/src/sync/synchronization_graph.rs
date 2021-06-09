@@ -40,7 +40,7 @@ use std::{
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use tokio::sync::mpsc::error::TryRecvError;
+use tokio02::sync::mpsc::error::TryRecvError;
 use unexpected::{Mismatch, OutOfBounds};
 
 lazy_static! {

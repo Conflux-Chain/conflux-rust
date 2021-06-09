@@ -41,8 +41,7 @@ pub fn start_consensus(
     author: AccountAddress,
 ) -> (Runtime, Arc<PowHandler>)
 {
-    let runtime = runtime::Builder::new()
-        .threaded_scheduler()
+    let runtime = runtime::Builder::new_multi_thread()
         .thread_name("consensus")
         .enable_all()
         .build()
