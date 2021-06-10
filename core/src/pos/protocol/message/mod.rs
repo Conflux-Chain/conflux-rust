@@ -4,12 +4,12 @@
 
 pub mod block_retrieval;
 pub mod block_retrieval_response;
+pub mod consensus_msg;
 pub mod epoch_change;
 pub mod epoch_retrieval;
 pub mod proposal;
 pub mod sync_info;
 pub mod vote;
-pub mod consensus_msg;
 
 use super::HSB_PROTOCOL_VERSION;
 

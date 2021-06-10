@@ -18,7 +18,10 @@ use crate::{
 };
 
 use crate::{
-    pos::protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
+    pos::{
+        consensus::network_interface::ConsensusMsg,
+        protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
+    },
     sync::ProtocolConfiguration,
 };
 use cfx_types::H256;
@@ -37,7 +40,6 @@ use network::{
 use parking_lot::{Mutex, RwLock};
 use serde::Deserialize;
 use std::{cmp::Eq, collections::HashMap, fmt::Debug, hash::Hash, sync::Arc};
-use crate::pos::consensus::network_interface::ConsensusMsg;
 
 #[derive(Default)]
 pub struct PeerState {

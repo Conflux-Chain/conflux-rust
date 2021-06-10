@@ -38,7 +38,6 @@ pub struct LightClientExtraComponents {
     pub secret_store: Arc<SecretStore>,
     pub txpool: Arc<TransactionPool>,
     pub pow: Arc<PowComputer>,
-    pub diem_handler: DiemHandle,
 }
 
 impl MallocSizeOf for LightClientExtraComponents {
@@ -139,6 +138,7 @@ impl LightClient {
 
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
+            diem_handler,
             blockgen: None,
             other_components: LightClientExtraComponents {
                 consensus,
@@ -151,7 +151,6 @@ impl LightClient {
                 secret_store,
                 txpool,
                 pow,
-                diem_handler,
             },
         }))
     }

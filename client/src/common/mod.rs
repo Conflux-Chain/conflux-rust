@@ -8,6 +8,7 @@ mod pos;
 /// This struct implement ClientShutdownTrait.
 pub struct ClientComponents<BlockGenT, Rest> {
     pub data_manager_weak_ptr: Weak<BlockDataManager>,
+    pub diem_handler: DiemHandle,
     pub blockgen: Option<Arc<BlockGenT>>,
     pub other_components: Rest,
 }
@@ -32,21 +33,33 @@ impl<BlockGenT: 'static + Stopable, Rest> ClientTrait
 {
     fn take_out_components_for_shutdown(
         &self,
-    ) -> (Weak<BlockDataManager>, Option<Arc<dyn Stopable>>) {
+    ) -> (
+        Weak<BlockDataManager>,
+        Arc<PowHandler>,
+        Option<Arc<dyn Stopable>>,
+    ) {
         let data_manager_weak_ptr = self.data_manager_weak_ptr.clone();
         let blockgen: Option<Arc<dyn Stopable>> = match self.blockgen.clone() {
             Some(blockgen) => Some(blockgen),
             None => None,
         };
 
-        (data_manager_weak_ptr, blockgen)
+        (
+            data_manager_weak_ptr,
+            self.diem_handler.pow_handler.clone(),
+            blockgen,
+        )
     }
 }
 
 pub trait ClientTrait {
     fn take_out_components_for_shutdown(
         &self,
-    ) -> (Weak<BlockDataManager>, Option<Arc<dyn Stopable>>);
+    ) -> (
+        Weak<BlockDataManager>,
+        Arc<PowHandler>,
+        Option<Arc<dyn Stopable>>,
+    );
 }
 
 pub mod client_methods {
@@ -71,13 +84,15 @@ pub mod client_methods {
 
     /// Returns whether the shutdown is considered clean.
     pub fn shutdown(this: Box<dyn ClientTrait>) -> bool {
-        let (ledger_db, maybe_blockgen) =
+        let (ledger_db, pow_handler, maybe_blockgen) =
             this.take_out_components_for_shutdown();
         drop(this);
         if let Some(blockgen) = maybe_blockgen {
             blockgen.stop();
             drop(blockgen);
         }
+        pow_handler.stop();
+        drop(pow_handler);
 
         // Make sure ledger_db is properly dropped, so rocksdb can be closed
         // cleanly
@@ -786,6 +801,7 @@ use cfxcore::{
     block_data_manager::BlockDataManager,
     consensus::pos_handler::{FakeDiemDB, PosConnection, PosVerifier},
     machine::{new_machine_with_builtin, Machine},
+    pos::pow_handler::PowHandler,
     pow::PowComputer,
     spec::genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
     statistics::Statistics,

@@ -28,6 +28,8 @@ impl PowHandler {
         *self.pow_consensus.write() = Some(pow_consensus);
     }
 
+    pub fn stop(&self) { *self.pow_consensus.write() = None; }
+
     fn next_pivot_decision_impl(
         pow_consensus: Arc<ConsensusGraph>, parent_decision: &H256,
     ) -> Option<(u64, H256)> {
