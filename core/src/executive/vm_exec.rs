@@ -27,6 +27,7 @@ pub struct BuiltinExec<'a> {
 }
 
 impl<'a> Exec for BuiltinExec<'a> {
+    // Copied from exec function of CallCreateExecutive.
     fn exec(
         self: Box<Self>, _: &mut dyn Context,
         _: &mut dyn Tracer<Output = ExecTrace>,
