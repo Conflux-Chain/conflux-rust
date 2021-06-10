@@ -19,6 +19,7 @@ use priority_send_queue::SendQueuePriority;
 use rlp::{Rlp, RlpStream};
 use serde_derive::Serialize;
 use std::{
+    convert::TryInto,
     fmt,
     net::SocketAddr,
     str,
@@ -306,11 +307,13 @@ impl Session {
 
                 // Handle Hello packet to exchange protocols
                 let rlp = Rlp::new(&packet.data);
-                self.read_hello(&rlp, host)?;
+                let pos_public_key = self.read_hello(&rlp, host)?;
+                debug!(
+                    "Send Ready with pos_public_key={:?}",
+                    self.pos_public_key
+                );
                 Ok(SessionDataWithDisconnectInfo {
-                    session_data: SessionData::Ready {
-                        pos_public_key: self.pos_public_key.clone(),
-                    },
+                    session_data: SessionData::Ready { pos_public_key },
                     token_to_disconnect,
                 })
             }
@@ -376,7 +379,7 @@ impl Session {
     /// node database, which is used to establish outgoing connections.
     fn read_hello(
         &mut self, rlp: &Rlp, host: &NetworkServiceInner,
-    ) -> Result<(), Error> {
+    ) -> Result<Option<Ed25519PublicKey>, Error> {
         let remote_network_id: u64 = rlp.val_at(0)?;
         if remote_network_id != host.metadata.network_id {
             debug!(
@@ -454,8 +457,9 @@ impl Session {
         }
 
         self.had_hello = Some(Instant::now());
+        let pos_public_key_bytes: Vec<u8> = rlp.val_at(3)?;
 
-        Ok(())
+        Ok(pos_public_key_bytes.as_slice().try_into().ok())
     }
 
     /// Assemble a packet with specified protocol id, packet id and data.
@@ -566,10 +570,11 @@ impl Session {
         &mut self, io: &IoContext<Message>, host: &NetworkServiceInner,
     ) -> Result<(), Error> {
         debug!("Sending Hello, session = {:?}", self);
-        let mut rlp = RlpStream::new_list(3);
+        let mut rlp = RlpStream::new_list(4);
         rlp.append(&host.metadata.network_id);
         rlp.append_list(&*host.metadata.protocols.read());
         host.metadata.public_endpoint.to_rlp_list(&mut rlp);
+        rlp.append(&self.pos_public_key.as_ref().unwrap().to_bytes().to_vec());
         self.send_packet(
             io,
             None,

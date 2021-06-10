@@ -543,7 +543,17 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
                 .insert(public_key.clone(), peer_hash);
             if let Some(state) = self.peers.get(&peer_hash) {
                 state.write().set_pos_public_key(Some(public_key));
+            } else {
+                warn!(
+                    "PeerState is missing for peer: peer_hash={:?}",
+                    peer_hash
+                );
             }
+        } else {
+            info!(
+                "pos public key is not provided for peerL peer_hash={:?}",
+                peer_hash
+            );
         }
 
         info!(

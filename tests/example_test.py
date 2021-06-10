@@ -13,6 +13,8 @@ class ExampleTest(ConfluxTestFramework):
 
     def setup_network(self):
         self.setup_nodes(is_consortium=True)
+        connect_sample_nodes(self.nodes, self.log)
+        sync_blocks(self.nodes)
 
     def run_test(self):
         time.sleep(2)

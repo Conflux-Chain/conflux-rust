@@ -1094,6 +1094,10 @@ impl NetworkServiceInner {
                         }
                         match session_data.session_data {
                             SessionData::Ready { pos_public_key } => {
+                                debug!(
+                                    "receive Ready with pos_public_key={:?}",
+                                    pos_public_key
+                                );
                                 handshake_done = true;
                                 session_node_id = Some(*sess.id().unwrap());
                                 pos_public_key_opt = pos_public_key;
@@ -1113,8 +1117,8 @@ impl NetworkServiceInner {
                             SessionData::Continue => {}
                         }
                     }
-                    Err(Error(kind, _)) => {
-                        debug!("Failed to read session data, error kind = {:?}, session = {:?}", kind, *sess);
+                    Err(e) => {
+                        debug!("Failed to read session data, error = {:?}, session = {:?}", e, *sess);
                         kill = true;
                         break;
                     }
@@ -1748,6 +1752,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 ref node_id,
                 ref data,
             } => {
+                debug!("Receive ProtocolMsg {:?}", protocol);
                 if let Some(handler) =
                     self.handlers.read().get(protocol).cloned()
                 {
