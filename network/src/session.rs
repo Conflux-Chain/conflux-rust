@@ -293,6 +293,7 @@ impl Session {
 
         match packet.id {
             PACKET_HELLO => {
+                debug!("Read HELLO in session {:?}", self);
                 self.metadata.peer_header_version = packet.header_version;
                 // For ingress session, update the node id in `SessionManager`
                 let token_to_disconnect = self.update_ingress_node_id(host)?;
@@ -308,10 +309,6 @@ impl Session {
                 // Handle Hello packet to exchange protocols
                 let rlp = Rlp::new(&packet.data);
                 let pos_public_key = self.read_hello(&rlp, host)?;
-                debug!(
-                    "Send Ready with pos_public_key={:?}",
-                    self.pos_public_key
-                );
                 Ok(SessionDataWithDisconnectInfo {
                     session_data: SessionData::Ready { pos_public_key },
                     token_to_disconnect,

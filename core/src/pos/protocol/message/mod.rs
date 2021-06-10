@@ -9,6 +9,7 @@ pub mod epoch_retrieval;
 pub mod proposal;
 pub mod sync_info;
 pub mod vote;
+pub mod consensus_msg;
 
 use super::HSB_PROTOCOL_VERSION;
 

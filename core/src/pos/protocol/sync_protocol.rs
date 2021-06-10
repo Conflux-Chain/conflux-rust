@@ -37,6 +37,7 @@ use network::{
 use parking_lot::{Mutex, RwLock};
 use serde::Deserialize;
 use std::{cmp::Eq, collections::HashMap, fmt::Debug, hash::Hash, sync::Arc};
+use crate::pos::consensus::network_interface::ConsensusMsg;
 
 #[derive(Default)]
 pub struct PeerState {
@@ -410,6 +411,7 @@ pub fn handle_serialized_message(
             handle_message::<EpochRetrievalRequest>(ctx, msg)?
         }
         msgid::EPOCH_CHANGE => handle_message::<EpochChangeProof>(ctx, msg)?,
+        msgid::CONSENSUS_MSG => handle_message::<ConsensusMsg>(ctx, msg)?,
         _ => return Ok(false),
     }
     Ok(true)
@@ -557,9 +559,9 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
         }
 
         info!(
-            "hsb on_peer_connected: peer {}, {}, peer count {}",
+            "hsb on_peer_connected: peer {:?}, peer_hash {:?}, peer count {}",
             peer,
-            peer,
+            peer_hash,
             self.peers.len()
         );
     }
