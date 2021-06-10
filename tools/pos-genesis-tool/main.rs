@@ -217,8 +217,10 @@ where
             public_keys.push(public_key.clone());
 
             let private_key_str = private_key.to_encoded_string().unwrap();
+            let private_key_str = private_key_str + "\n";
             private_key_file.write_all(private_key_str.as_bytes())?;
             let public_key_str = public_key.to_encoded_string().unwrap();
+            let public_key_str = public_key_str + "\n";
             public_key_file.write_all(public_key_str.as_bytes())?;
         }
         generate_genesis_from_public_keys(public_keys);

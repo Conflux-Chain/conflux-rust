@@ -307,7 +307,7 @@ def initialize_tg_config(dirname, nodes):
         with open(os.path.join(datadir, 'validator_full_node.yaml'), 'w') as f:
             f.write(yaml.dump(validator_config, default_flow_style=False))
         with open(os.path.join(net_config_dir, 'pos_key'), 'w') as f:
-            f.write(private_keys[n])
+            f.write(private_keys[n][:-1])
 
 
 def initialize_datadir(dirname, n, port_min, conf_parameters, extra_files: dict = {}):
