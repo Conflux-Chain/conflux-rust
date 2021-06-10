@@ -4,18 +4,20 @@
 
 use super::{context::OriginInfo, InternalContractMap};
 use crate::{
+    builtin::Builtin,
     evm::{FinalizationResult, Finalize},
     executive::{
         context::LocalContext,
         vm_exec::{BuiltinExec, InternalContractExec, NoopExec},
+        InternalContractTrait,
     },
     machine::Machine,
     state::{cleanup_mode, CallStackInfo},
     trace::{self, trace::ExecTrace, Tracer},
     vm::{
         self, ActionParams, ActionValue, CallType, Env, Exec, ExecTrapError,
-        GasLeft, ResumeCall, ResumeCreate, ReturnData, Spec, TrapError,
-        TrapResult,
+        ExecTrapResult, GasLeft, ResumeCall, ResumeCreate, ReturnData, Spec,
+        TrapError, TrapResult,
     },
     vm_factory::VmFactory,
 };
@@ -32,13 +34,13 @@ pub struct CallCreateExecutive<'a, Substate: SubstateMngTrait> {
     factory: &'a VmFactory,
     status: ExecutiveStatus,
     create_address: Option<Address>,
-    kind: CallCreateExecutiveKind,
+    kind: CallCreateExecutiveKind<'a>,
 }
 
-enum CallCreateExecutiveKind {
+enum CallCreateExecutiveKind<'a> {
     Transfer,
-    CallBuiltin,
-    CallInternalContract,
+    CallBuiltin(&'a Builtin),
+    CallInternalContract(&'a Box<dyn InternalContractTrait>),
     ExecCall,
     ExecCreate,
 }
@@ -77,21 +79,16 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         let kind = if let Some(builtin) =
             machine.builtin(&params.code_address, env.number)
         {
-            // Engines aren't supposed to return builtins until activation, but
-            // prefer to fail rather than silently break consensus.
-            if !builtin.is_active(env.number) {
-                panic!("Consensus failure: engine implementation prematurely enabled built-in at {}", params.code_address);
-            }
             trace!("CallBuiltin");
-            CallCreateExecutiveKind::CallBuiltin
-        } else if let Some(_) =
+            CallCreateExecutiveKind::CallBuiltin(builtin)
+        } else if let Some(internal) =
             internal_contract_map.contract(&params.code_address)
         {
             debug!(
                 "CallInternalContract: address={:?} data={:?}",
                 params.code_address, params.data
             );
-            CallCreateExecutiveKind::CallInternalContract
+            CallCreateExecutiveKind::CallInternalContract(internal)
         } else {
             if params.code.is_some() {
                 trace!("ExecCall");
@@ -135,7 +132,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
             static_flag
         );
 
-        let contract_in_creation = params.code_address;
         let origin = OriginInfo::from(&params);
 
         let substate = Substate::new();
@@ -156,9 +152,9 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
 
         Self {
             context,
+            create_address: Some(params.code_address),
             status: ExecutiveStatus::Input(params),
             factory,
-            create_address: Some(contract_in_creation),
             kind,
         }
     }
@@ -282,75 +278,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         Ok(())
     }
 
-    /// If the executive triggers an sub-call during execution, this function
-    /// will put return point and out put a trap error.
-    fn handle_trap_err(
-        mut self, trap_err: ExecTrapError,
-        _tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
-    ) -> ExecutiveTrapError<'a, Substate>
-    {
-        match trap_err {
-            TrapError::Call(subparams, resume) => {
-                self.status = ExecutiveStatus::ResumeCall(resume);
-                TrapError::Call(subparams, self)
-            }
-            TrapError::Create(subparams, resume) => {
-                self.status = ExecutiveStatus::ResumeCreate(resume);
-                TrapError::Create(subparams, self)
-            }
-        }
-    }
-
-    /// If the executive triggers an return during execution, this function will
-    /// put return point and out put a trap error.
-    fn process_return<State: StateTrait<Substate = Substate>>(
-        mut self, result: vm::Result<GasLeft>, state: &mut State,
-        substate: &mut Substate, callstack: &mut CallStackInfo,
-        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
-    ) -> vm::Result<ExecutiveResult>
-    {
-        let context = self.context.activate(state, callstack);
-        let finalized_result = result.finalize(context);
-        let executive_result = finalized_result
-            .map(|result| ExecutiveResult::new(result, self.create_address));
-
-        self.status = ExecutiveStatus::Done;
-
-        let executive_result = vm::separate_out_db_error(executive_result)?;
-
-        if self.context.is_create {
-            tracer.prepare_trace_create_result(&executive_result);
-        } else {
-            tracer.prepare_trace_call_result(&executive_result);
-        }
-
-        let apply_state = match &executive_result {
-            Ok(ExecutiveResult {
-                apply_state: true, ..
-            }) => true,
-            _ => false,
-        };
-
-        if apply_state {
-            // The following line will only fail for db error.
-            state.collect_ownership_changed(&mut self.context.substate)?;
-            if let Some(create_address) = self.create_address {
-                self.context
-                    .substate
-                    .contracts_created_mut()
-                    .push(create_address);
-            }
-
-            state.discard_checkpoint();
-            substate.accrue(self.context.substate);
-        } else {
-            state.revert_to_checkpoint();
-        }
-        callstack.pop();
-
-        executive_result
-    }
-
     /// Execute the executive. If a sub-call/create action is required, a
     /// resume trap error is returned. The caller is then expected to call
     /// `resume_call` or `resume_create` to continue the execution.
@@ -374,13 +301,25 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         Self::check_static_flag(&params, self.context.static_flag, is_create)
             .expect("check_static_flag should always success here");
 
+        // Trace task
+        if is_create {
+            debug!(
+                "CallCreateExecutiveKind::ExecCreate: contract_addr = {:?}",
+                params.address
+            );
+            tracer.prepare_trace_create(&params);
+        } else {
+            tracer.prepare_trace_call(&params);
+        }
+
+        // Make checkpoint for this executive, callstack is always maintained
+        // with checkpoint.
         state.checkpoint();
         callstack.push(self.get_recipient().clone(), is_create);
 
-        // Pre Execution
+        // Pre execution: transfer value and init contract.
         let spec = self.context.spec;
         let db_result = if is_create {
-            tracer.prepare_trace_create(&params);
             Self::transfer_exec_balance_and_init_contract(
                 &params,
                 spec,
@@ -390,7 +329,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                 spec.contract_start_nonce(self.context.env.number),
             )
         } else {
-            tracer.prepare_trace_call(&params);
             Self::transfer_exec_balance(
                 &params,
                 spec,
@@ -399,63 +337,56 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                 spec.account_start_nonce(self.context.env.number),
             )
         };
-
         if let Err(err) = db_result {
             return TrapResult::Return(Err(err.into()));
         }
 
+        // Fetch execution model and execute
         let exec: Box<dyn Exec> = match self.kind {
             CallCreateExecutiveKind::Transfer => {
                 Box::new(NoopExec { gas: params.gas })
             }
-            CallCreateExecutiveKind::CallBuiltin => {
-                let builtin = self.context.machine.builtin(&params.code_address, self.context.env.number).expect("Builtin is_some is checked when creating this kind in new_call_raw; qed");
+            CallCreateExecutiveKind::CallBuiltin(builtin) => {
                 Box::new(BuiltinExec { builtin, params })
             }
-            CallCreateExecutiveKind::CallInternalContract => {
-                let contract =  self.context.internal_contract_map.contract(&params.code_address).expect("InternalContract is_some is checked when creating this kind in new_call_raw; qed");
-                Box::new(InternalContractExec { contract, params })
+            CallCreateExecutiveKind::CallInternalContract(internal) => {
+                Box::new(InternalContractExec { internal, params })
             }
-            CallCreateExecutiveKind::ExecCall => {
-                let factory = self.context.machine.vm_factory();
-                factory.create(params, self.context.spec, self.context.depth)
-            }
-            CallCreateExecutiveKind::ExecCreate => {
-                debug!(
-                    "CallCreateExecutiveKind::ExecCreate: contract_addr = {:?}",
-                    params.address
-                );
-
+            CallCreateExecutiveKind::ExecCall
+            | CallCreateExecutiveKind::ExecCreate => {
                 let factory = self.context.machine.vm_factory();
                 factory.create(params, self.context.spec, self.context.depth)
             }
         };
-
         let mut context = self.context.activate(state, callstack);
-        match exec.exec(&mut context, tracer) {
-            TrapResult::Return(result) => {
-                TrapResult::Return(self.process_return(
-                    result,
-                    state,
-                    parent_substate,
-                    callstack,
-                    tracer,
-                ))
-            }
-            TrapResult::SubCallCreate(trap_err) => TrapResult::SubCallCreate(
-                self.handle_trap_err(trap_err, tracer),
-            ),
-        }
+        let output = exec.exec(&mut context, tracer);
+
+        // Post execution.
+        self.process_output(output, state, parent_substate, callstack, tracer)
     }
 
     pub fn resume<State: StateTrait<Substate = Substate>>(
         mut self, result: vm::Result<ExecutiveResult>, state: &mut State,
-        substate: &mut Substate, callstack: &mut CallStackInfo,
+        parent_substate: &mut Substate, callstack: &mut CallStackInfo,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> ExecutiveTrapResult<'a, ExecutiveResult, Substate>
     {
         let status =
             std::mem::replace(&mut self.status, ExecutiveStatus::Running);
+
+        // TODO: Substate from sub-call should have been merged here by
+        // specification. But we have merged it in process_return of
+        // sub-call. If we put `substate.accrue` back to here, we can
+        // save the maintenance for `parent_substate` in `exec`,
+        // `resume` and `consume`, and make this logic consistent with
+        // specification: substate is in return value. However,
+        //  Substate is a trait currently, such change will
+        // make more functions has generic parameters or trait parameter. So I
+        // put off this plan until substate is no longer a trait. Otherwise such
+        // logic won't be changed.
+
+        // Process resume tasks, which is defined in Instruction Set
+        // Specification of tech-specification.
         let exec = match status {
             ExecutiveStatus::ResumeCreate(resume) => {
                 let result = into_contract_create_result(result);
@@ -473,14 +404,96 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         };
 
         let mut context = self.context.activate(state, callstack);
-        match exec.exec(&mut context, tracer) {
-            TrapResult::Return(result) => TrapResult::Return(
-                self.process_return(result, state, substate, callstack, tracer),
-            ),
-            TrapResult::SubCallCreate(trap_err) => TrapResult::SubCallCreate(
-                self.handle_trap_err(trap_err, tracer),
-            ),
+        let output = exec.exec(&mut context, tracer);
+
+        // Post execution.
+        self.process_output(output, state, parent_substate, callstack, tracer)
+    }
+
+    #[inline]
+    fn process_output<State: StateTrait<Substate = Substate>>(
+        self, output: ExecTrapResult<GasLeft>, state: &mut State,
+        parent_substate: &mut Substate, callstack: &mut CallStackInfo,
+        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
+    ) -> ExecutiveTrapResult<'a, ExecutiveResult, Substate>
+    {
+        // Convert the `ExecTrapResult` (result of evm) to `ExecutiveTrapResult`
+        // (result of self).
+        match output {
+            TrapResult::Return(result) => {
+                TrapResult::Return(self.process_return(
+                    result,
+                    state,
+                    parent_substate,
+                    callstack,
+                    tracer,
+                ))
+            }
+            TrapResult::SubCallCreate(trap_err) => {
+                TrapResult::SubCallCreate(self.process_trap(trap_err))
+            }
         }
+    }
+
+    /// If the executive triggers an sub-call during execution, this function
+    /// will put return point and out put a trap error.
+    fn process_trap(
+        mut self, trap_err: ExecTrapError,
+    ) -> ExecutiveTrapError<'a, Substate> {
+        match trap_err {
+            TrapError::Call(subparams, resume) => {
+                self.status = ExecutiveStatus::ResumeCall(resume);
+                TrapError::Call(subparams, self)
+            }
+            TrapError::Create(subparams, resume) => {
+                self.status = ExecutiveStatus::ResumeCreate(resume);
+                TrapError::Create(subparams, self)
+            }
+        }
+    }
+
+    /// If the executive triggers an return during execution, this function will
+    /// put return point and out put a trap error.
+    fn process_return<State: StateTrait<Substate = Substate>>(
+        mut self, result: vm::Result<GasLeft>, state: &mut State,
+        parent_substate: &mut Substate, callstack: &mut CallStackInfo,
+        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
+    ) -> vm::Result<ExecutiveResult>
+    {
+        let context = self.context.activate(state, callstack);
+        // The post execution task in spec is completed here.
+        let finalized_result = result.finalize(context);
+        let executive_result = finalized_result
+            .map(|result| ExecutiveResult::new(result, self.create_address));
+
+        self.status = ExecutiveStatus::Done;
+
+        let executive_result = vm::separate_out_db_error(executive_result)?;
+
+        if self.context.is_create {
+            tracer.prepare_trace_create_result(&executive_result);
+        } else {
+            tracer.prepare_trace_call_result(&executive_result);
+        }
+
+        let apply_state =
+            executive_result.as_ref().map_or(false, |r| r.apply_state);
+        if apply_state {
+            let mut substate = self.context.substate;
+            state.collect_ownership_changed(&mut substate)?; /* only fail for db error. */
+            if let Some(create_address) = self.create_address {
+                substate.contracts_created_mut().push(create_address);
+            }
+
+            state.discard_checkpoint();
+            // See my comments in resume function.
+            parent_substate.accrue(substate);
+        } else {
+            state.revert_to_checkpoint();
+        }
+        callstack.pop();
+
+        executive_result
     }
 
     /// Execute and consume the current executive. This function handles resume
@@ -491,12 +504,11 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
     ) -> vm::Result<FinalizationResult>
     {
-        let mut address_stack = CallStackInfo::default();
-        let mut last_res =
-            self.exec(state, top_substate, &mut address_stack, tracer);
+        let mut callstack = CallStackInfo::default();
+        let mut executive_stack: Vec<Self> = Vec::new();
 
-        let mut executive_stack: Vec<CallCreateExecutive<'a, Substate>> =
-            Vec::new();
+        let mut last_res =
+            self.exec(state, top_substate, &mut callstack, tracer);
 
         loop {
             match last_res {
@@ -520,7 +532,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                         result,
                         state,
                         parent_substate,
-                        &mut address_stack,
+                        &mut callstack,
                         tracer,
                     );
                 }
@@ -529,11 +541,16 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                     executive_stack.push(caller);
 
                     let parent_substate = executive_stack
-                        .last_mut().expect("Last executive is `caller`, it will neven be empty").unconfirmed_substate();
+                        .last_mut()
+                        .expect(
+                            "Last executive is `caller`, it will never be None",
+                        )
+                        .unconfirmed_substate();
+
                     last_res = callee.exec(
                         state,
                         parent_substate,
-                        &mut address_stack,
+                        &mut callstack,
                         tracer,
                     );
                 }

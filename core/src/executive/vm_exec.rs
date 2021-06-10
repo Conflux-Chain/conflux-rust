@@ -66,7 +66,7 @@ impl<'a> Exec for BuiltinExec<'a> {
 }
 
 pub struct InternalContractExec<'a> {
-    pub contract: &'a Box<dyn InternalContractTrait>,
+    pub internal: &'a Box<dyn InternalContractTrait>,
     pub params: ActionParams,
 }
 
@@ -82,7 +82,7 @@ impl<'a> Exec for InternalContractExec<'a> {
             Err(VmError::InternalContract("Incorrect call type."))
         } else {
             let mut context = context.internal_ref();
-            self.contract.execute(&self.params, &mut context, tracer)
+            self.internal.execute(&self.params, &mut context, tracer)
         };
         debug!("Internal Call Result: {:?}", result);
         TrapResult::Return(result)
