@@ -67,7 +67,7 @@ pub fn start_consensus(
         protocol_config,
     ));
     protocol_handler.clone().register(network.clone()).unwrap();
-    network.start_network_poll().unwrap();
+    // network.start_network_poll().unwrap();
     let network_sender = ConsensusNetworkSender {
         network,
         protocol_handler,
