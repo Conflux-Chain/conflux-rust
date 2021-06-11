@@ -5,29 +5,46 @@
 mod admin;
 mod sponsor;
 mod staking;
+mod macros {
+    #[cfg(test)]
+    pub use crate::check_signature;
 
-use super::{
-    function::{
-        ExecutionTrait, InterfaceTrait, PreExecCheckConfTrait,
-        UpfrontPaymentTrait,
-    },
-    InternalContractTrait, SolidityFunctionTrait,
-};
-use std::collections::{BTreeMap, HashMap};
+    pub use crate::{
+        group_impl_activate_at, impl_activate_at, impl_function_type,
+        make_function_table, make_solidity_contract, make_solidity_function,
+    };
+
+    pub use super::super::{
+        activate_at::{ActivateAtTrait, BlockNumber},
+        function::{
+            ExecutionTrait, InterfaceTrait, PreExecCheckConfTrait,
+            UpfrontPaymentTrait,
+        },
+        InternalContractTrait, SolidityFunctionTrait,
+    };
+}
 
 pub use self::{
     admin::AdminControl, sponsor::SponsorWhitelistControl, staking::Staking,
 };
 
+use super::{
+    function::ExecutionTrait, InternalContractTrait, SolidityFunctionTrait,
+};
+use crate::evm::Spec;
 use cfx_types::Address;
-use std::sync::Arc;
+use primitives::BlockNumber;
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 pub(super) type SolFnTable = HashMap<[u8; 4], Box<dyn SolidityFunctionTrait>>;
 
 /// A marco to implement an internal contract.
 #[macro_export]
 macro_rules! make_solidity_contract {
-    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr,$gen_table:ident); ) => {
+    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr, $gen_table:ident, activate_at: $desc:tt); ) => {
         $(#[$attr])*
         #[derive(Copy, Clone)]
         $visibility struct $name {
@@ -43,6 +60,8 @@ macro_rules! make_solidity_contract {
             fn address(&self) -> &Address { &$addr }
             fn get_func_table(&self) -> SolFnTable { $gen_table() }
         }
+
+        impl_activate_at!($name, $desc);
     };
 }
 
@@ -95,9 +114,11 @@ impl InternalContractMap {
     }
 
     pub fn contract(
-        &self, address: &Address,
+        &self, address: &Address, block_number: BlockNumber, spec: &Spec,
     ) -> Option<&Box<dyn InternalContractTrait>> {
-        self.builtin.get(address)
+        self.builtin
+            .get(address)
+            .filter(|&func| func.activate_at(block_number, spec))
     }
 }
 

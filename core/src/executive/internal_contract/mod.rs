@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+mod activate_at;
 mod contracts;
 pub mod function;
 mod impls;
@@ -9,7 +10,7 @@ mod impls;
 pub use self::{contracts::InternalContractMap, impls::suicide};
 pub use solidity_abi::ABIDecodeError;
 
-use self::contracts::SolFnTable;
+use self::{activate_at::ActivateAtTrait, contracts::SolFnTable};
 use crate::{
     bytes::Bytes,
     executive::InternalRefContext,
@@ -27,7 +28,7 @@ lazy_static! {
 }
 
 /// Native implementation of an internal contract.
-pub trait InternalContractTrait: Send + Sync {
+pub trait InternalContractTrait: Send + Sync + ActivateAtTrait {
     /// Address of the internal contract
     fn address(&self) -> &Address;
 
@@ -57,6 +58,7 @@ pub trait InternalContractTrait: Send + Sync {
 
         let solidity_fn = func_table
             .get(&fn_sig)
+            .filter(|&func| func.activate_at(context.env.number, context.spec))
             .ok_or(vm::Error::InternalContract("unsupported function"))?;
 
         solidity_fn.execute(call_params, params, context, tracer)
@@ -70,7 +72,7 @@ pub trait InternalContractTrait: Send + Sync {
 }
 
 /// Native implementation of a solidity-interface function.
-pub trait SolidityFunctionTrait: Send + Sync {
+pub trait SolidityFunctionTrait: Send + Sync + ActivateAtTrait {
     fn execute(
         &self, input: &[u8], params: &ActionParams,
         context: &mut InternalRefContext,
