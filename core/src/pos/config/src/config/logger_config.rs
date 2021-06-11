@@ -3,6 +3,7 @@
 
 use diem_logger::{Level, CHANNEL_SIZE};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default, deny_unknown_fields)]
@@ -13,6 +14,7 @@ pub struct LoggerConfig {
     pub is_async: bool,
     // The default logging level for slog.
     pub level: Level,
+    pub file: Option<PathBuf>,
 }
 
 impl Default for LoggerConfig {
@@ -21,6 +23,7 @@ impl Default for LoggerConfig {
             chan_size: CHANNEL_SIZE,
             is_async: true,
             level: Level::Info,
+            file: None,
         }
     }
 }

@@ -38,7 +38,6 @@ pub struct LightClientExtraComponents {
     pub secret_store: Arc<SecretStore>,
     pub txpool: Arc<TransactionPool>,
     pub pow: Arc<PowComputer>,
-    pub diem_handler: DiemHandle,
 }
 
 impl MallocSizeOf for LightClientExtraComponents {
@@ -50,7 +49,7 @@ pub struct LightClient {}
 impl LightClient {
     // Start all key components of Conflux and pass out their handles
     pub fn start(
-        conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
+        mut conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     ) -> Result<
         Box<ClientComponents<BlockGenerator, LightClientExtraComponents>>,
         String,
@@ -72,7 +71,11 @@ impl LightClient {
             pubsub,
             runtime,
             diem_handler,
-        ) = initialize_common_modules(&conf, exit.clone(), NodeType::Light)?;
+        ) = initialize_common_modules(
+            &mut conf,
+            exit.clone(),
+            NodeType::Light,
+        )?;
 
         let light = Arc::new(LightQueryService::new(
             consensus.clone(),
@@ -135,6 +138,7 @@ impl LightClient {
 
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
+            diem_handler,
             blockgen: None,
             other_components: LightClientExtraComponents {
                 consensus,
@@ -147,7 +151,6 @@ impl LightClient {
                 secret_store,
                 txpool,
                 pow,
-                diem_handler,
             },
         }))
     }

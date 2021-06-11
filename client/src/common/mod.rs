@@ -8,6 +8,7 @@ mod pos;
 /// This struct implement ClientShutdownTrait.
 pub struct ClientComponents<BlockGenT, Rest> {
     pub data_manager_weak_ptr: Weak<BlockDataManager>,
+    pub diem_handler: DiemHandle,
     pub blockgen: Option<Arc<BlockGenT>>,
     pub other_components: Rest,
 }
@@ -32,21 +33,33 @@ impl<BlockGenT: 'static + Stopable, Rest> ClientTrait
 {
     fn take_out_components_for_shutdown(
         &self,
-    ) -> (Weak<BlockDataManager>, Option<Arc<dyn Stopable>>) {
+    ) -> (
+        Weak<BlockDataManager>,
+        Arc<PowHandler>,
+        Option<Arc<dyn Stopable>>,
+    ) {
         let data_manager_weak_ptr = self.data_manager_weak_ptr.clone();
         let blockgen: Option<Arc<dyn Stopable>> = match self.blockgen.clone() {
             Some(blockgen) => Some(blockgen),
             None => None,
         };
 
-        (data_manager_weak_ptr, blockgen)
+        (
+            data_manager_weak_ptr,
+            self.diem_handler.pow_handler.clone(),
+            blockgen,
+        )
     }
 }
 
 pub trait ClientTrait {
     fn take_out_components_for_shutdown(
         &self,
-    ) -> (Weak<BlockDataManager>, Option<Arc<dyn Stopable>>);
+    ) -> (
+        Weak<BlockDataManager>,
+        Arc<PowHandler>,
+        Option<Arc<dyn Stopable>>,
+    );
 }
 
 pub mod client_methods {
@@ -71,13 +84,15 @@ pub mod client_methods {
 
     /// Returns whether the shutdown is considered clean.
     pub fn shutdown(this: Box<dyn ClientTrait>) -> bool {
-        let (ledger_db, maybe_blockgen) =
+        let (ledger_db, pow_handler, maybe_blockgen) =
             this.take_out_components_for_shutdown();
         drop(this);
         if let Some(blockgen) = maybe_blockgen {
             blockgen.stop();
             drop(blockgen);
         }
+        pow_handler.stop();
+        drop(pow_handler);
 
         // Make sure ledger_db is properly dropped, so rocksdb can be closed
         // cleanly
@@ -120,7 +135,7 @@ pub mod client_methods {
 }
 
 pub fn initialize_common_modules(
-    conf: &Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
+    conf: &mut Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     node_type: NodeType,
 ) -> Result<
     (
@@ -229,6 +244,9 @@ pub fn initialize_common_modules(
         conf.raw_conf.chain_id,
     );
     debug!("Initialize genesis_block={:?}", genesis_block);
+    if conf.raw_conf.pos_genesis_pivot_decision.is_none() {
+        conf.raw_conf.pos_genesis_pivot_decision = Some(genesis_block.hash());
+    }
 
     let pow_config = conf.pow_config();
     let pow = Arc::new(PowComputer::new(pow_config.use_octopus()));
@@ -244,7 +262,7 @@ pub fn initialize_common_modules(
     ));
 
     let network = {
-        let mut network = NetworkService::new(network_config);
+        let mut network = NetworkService::new(network_config.clone());
         network.start().unwrap();
         Arc::new(network)
     };
@@ -254,20 +272,31 @@ pub fn initialize_common_modules(
         Some(path) => Some(PathBuf::from(path)),
         None => None,
     };
-    let pos_config =
+    let mut pos_config =
         NodeConfig::load(pos_config_path.expect("empty pos config path"))
             .expect("Failed to load node config");
     let own_node_hash =
         keccak(network.net_key_pair().expect("Error node key").public());
     let self_pos_public_key = network.pos_public_key();
+    // TODO(lpl): Keep it properly.
+    let self_pos_private_key =
+        network_config.config_path.clone().map(|ref p| {
+            ConfigKey::new(load_pos_private_key(Path::new(&p)).unwrap())
+        });
+    pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
+        author: from_public_key(self_pos_public_key.as_ref().unwrap()),
+        consensus_key: self_pos_private_key.clone(),
+        execution_key: self_pos_private_key,
+        waypoint: Some(pos_config.base.waypoint.waypoint()),
+    });
     let diem_handler = start_pos_consensus(
         &pos_config,
-        None,
         network.clone(),
         own_node_hash,
         conf.protocol_config(),
         self_pos_public_key,
     );
+    debug!("PoS initialized");
     let pos_connection = PosConnection::new(
         diem_handler.diem_db.clone() as Arc<dyn DBReaderForPoW>,
         conf.pos_config(),
@@ -362,7 +391,7 @@ pub fn initialize_common_modules(
 }
 
 pub fn initialize_not_light_node_modules(
-    conf: &Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
+    conf: &mut Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     node_type: NodeType,
 ) -> Result<
     (
@@ -399,7 +428,7 @@ pub fn initialize_not_light_node_modules(
         pubsub,
         runtime,
         diem_handler,
-    ) = initialize_common_modules(&conf, exit.clone(), node_type)?;
+    ) = initialize_common_modules(conf, exit.clone(), node_type)?;
 
     let light_provider = Arc::new(LightProvider::new(
         consensus.clone(),
@@ -771,6 +800,7 @@ use cfxcore::{
     block_data_manager::BlockDataManager,
     consensus::pos_handler::{FakeDiemDB, PosConnection, PosVerifier},
     machine::{new_machine_with_builtin, Machine},
+    pos::pow_handler::PowHandler,
     pow::PowComputer,
     spec::genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
     statistics::Statistics,
@@ -782,20 +812,24 @@ use cfxcore::{
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::public_to_address;
-use diem_config::config::NodeConfig;
+use diem_config::{
+    config::{NodeConfig, SafetyRulesTestConfig, TestConfig},
+    keys::ConfigKey,
+};
+use diem_types::account_address::from_public_key;
 use jsonrpc_http_server::Server as HttpServer;
 use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WSServer;
 use keccak_hash::keccak;
 use keylib::KeyPair;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
-use network::NetworkService;
+use network::{service::load_pos_private_key, NetworkService};
 use parking_lot::{Condvar, Mutex};
 use runtime::Runtime;
 use secret_store::{SecretStore, SharedSecretStore};
 use std::{
     collections::HashMap,
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::FromStr,
     sync::{Arc, Weak},
     thread,

@@ -557,6 +557,7 @@ impl NetworkServiceInner {
             .clone()
             .and_then(|ref p| load_pos_private_key(Path::new(&p)))
             .map(|private_key| Ed25519PublicKey::from(&private_key));
+        info!("Self pos public key: {:?}", pos_public_key);
 
         info!("Self node id: {:?}", *keys.public());
 
@@ -1093,6 +1094,10 @@ impl NetworkServiceInner {
                         }
                         match session_data.session_data {
                             SessionData::Ready { pos_public_key } => {
+                                debug!(
+                                    "receive Ready with pos_public_key={:?}",
+                                    pos_public_key
+                                );
                                 handshake_done = true;
                                 session_node_id = Some(*sess.id().unwrap());
                                 pos_public_key_opt = pos_public_key;
@@ -1112,8 +1117,8 @@ impl NetworkServiceInner {
                             SessionData::Continue => {}
                         }
                     }
-                    Err(Error(kind, _)) => {
-                        debug!("Failed to read session data, error kind = {:?}, session = {:?}", kind, *sess);
+                    Err(e) => {
+                        debug!("Failed to read session data, error = {:?}, session = {:?}", e, *sess);
                         kill = true;
                         break;
                     }
@@ -1268,7 +1273,7 @@ impl NetworkServiceInner {
                 deregister = remote || sess.done();
                 failure_id = sess.id().cloned();
                 debug!(
-                    "kill connection, deregister = {}, reason = {:?}, session = {:?}, op = {:?}",
+                    "kill connection by token, deregister = {}, reason = {:?}, session = {:?}, op = {:?}",
                     deregister, reason, *sess, op
                 );
             }
@@ -1747,6 +1752,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 ref node_id,
                 ref data,
             } => {
+                debug!("Receive ProtocolMsg {:?}", protocol);
                 if let Some(handler) =
                     self.handlers.read().get(protocol).cloned()
                 {
@@ -2117,7 +2123,7 @@ fn load_key(path: &Path) -> Option<Secret> {
     }
 }
 
-fn load_pos_private_key(path: &Path) -> Option<Ed25519PrivateKey> {
+pub fn load_pos_private_key(path: &Path) -> Option<Ed25519PrivateKey> {
     let mut path_buf = PathBuf::from(path);
     path_buf.push("pos_key");
     let mut file = match fs::File::open(path_buf.as_path()) {

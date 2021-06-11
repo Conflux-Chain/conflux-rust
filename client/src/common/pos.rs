@@ -18,6 +18,7 @@ use diem_logger::prelude::*;
 use diem_metrics::metric_server;
 use diem_types::{
     account_address::{from_public_key, AccountAddress},
+    block_info::PivotBlockDecision,
     PeerId,
 };
 use diemdb::DiemDB;
@@ -39,8 +40,7 @@ pub struct DiemHandle {
 }
 
 pub fn start_pos_consensus(
-    config: &NodeConfig, log_file: Option<PathBuf>,
-    network: Arc<NetworkService>, own_node_hash: H256,
+    config: &NodeConfig, network: Arc<NetworkService>, own_node_hash: H256,
     protocol_config: ProtocolConfiguration,
     own_pos_public_key: Option<Ed25519PublicKey>,
 ) -> DiemHandle
@@ -53,7 +53,7 @@ pub fn start_pos_consensus(
         .is_async(config.logger.is_async)
         .level(config.logger.level)
         .read_env();
-    if let Some(log_file) = log_file {
+    if let Some(log_file) = config.logger.file.clone() {
         logger.printer(Box::new(FileWriter::new(log_file)));
     }
     let _logger = Some(logger.build());
@@ -111,21 +111,22 @@ pub fn setup_pos_environment(
     own_pos_public_key: Option<Ed25519PublicKey>,
 ) -> DiemHandle
 {
-    let metrics_port = node_config.debug_interface.metrics_server_port;
-    let metric_host = node_config.debug_interface.address.clone();
-    thread::spawn(move || {
-        metric_server::start_server(metric_host, metrics_port, false)
-    });
-    let public_metrics_port =
-        node_config.debug_interface.public_metrics_server_port;
-    let public_metric_host = node_config.debug_interface.address.clone();
-    thread::spawn(move || {
-        metric_server::start_server(
-            public_metric_host,
-            public_metrics_port,
-            true,
-        )
-    });
+    // TODO(lpl): Handle port conflict.
+    // let metrics_port = node_config.debug_interface.metrics_server_port;
+    // let metric_host = node_config.debug_interface.address.clone();
+    // thread::spawn(move || {
+    //     metric_server::start_server(metric_host, metrics_port, false)
+    // });
+    // let public_metrics_port =
+    //     node_config.debug_interface.public_metrics_server_port;
+    // let public_metric_host = node_config.debug_interface.address.clone();
+    // thread::spawn(move || {
+    //     metric_server::start_server(
+    //         public_metric_host,
+    //         public_metrics_port,
+    //         true,
+    //     )
+    // });
 
     let mut instant = Instant::now();
     let (diem_db, db_rw) = DbReaderWriter::wrap(
@@ -141,8 +142,16 @@ pub fn setup_pos_environment(
     let genesis_waypoint = node_config.base.waypoint.genesis_waypoint();
     // if there's genesis txn and waypoint, commit it if the result matches.
     if let Some(genesis) = get_genesis_txn(&node_config) {
-        maybe_bootstrap::<FakeVM>(&db_rw, genesis, genesis_waypoint)
-            .expect("Db-bootstrapper should not fail.");
+        maybe_bootstrap::<FakeVM>(
+            &db_rw,
+            genesis,
+            genesis_waypoint,
+            Some(PivotBlockDecision {
+                block_hash: protocol_config.pos_genesis_pivot_decision,
+                height: 0,
+            }),
+        )
+        .expect("Db-bootstrapper should not fail.");
     } else {
         panic!("Genesis txn not provided.");
     }
@@ -191,6 +200,7 @@ pub fn setup_pos_environment(
 
     // Initialize and start consensus.
     instant = Instant::now();
+    debug!("own_pos_public_key: {:?}", own_pos_public_key);
     let (consensus_runtime, pow_handler) = start_consensus(
         node_config,
         network,

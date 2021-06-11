@@ -85,7 +85,11 @@ impl ConsensusNetworkSender {
             if let Some(peer) = self.protocol_handler.peers.get(peer_hash) {
                 let peer_id = peer.read().get_id();
                 self.send_message_with_peer_id(&peer_id, msg);
+            } else {
+                warn!("peer_hash {:?} does not exist", peer_hash);
             }
+        } else {
+            warn!("recipient {:?} has been removed", recipient)
         }
         Ok(())
     }

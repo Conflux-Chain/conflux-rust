@@ -20,6 +20,7 @@ use diem_crypto::{
     PrivateKey,
 };
 use diem_infallible::Mutex;
+use diem_logger::debug as diem_debug;
 use diem_types::{
     block_info::PivotBlockDecision,
     chain_id::ChainId,
@@ -164,6 +165,10 @@ impl ProposalGenerator {
                 .pull_txns(self.max_block_size, exclude_payload)
                 .await
                 .context("Fail to retrieve txn")?;
+            diem_debug!(
+                "generate_proposal: Pull {} transactions",
+                payload.len()
+            );
 
             let parent_block = if let Some(p) = pending_blocks.last() {
                 p.clone()
@@ -184,7 +189,9 @@ impl ProposalGenerator {
                     .next_pivot_decision(parent_decision)
                     .await
                 {
-                    Some(res) => break res,
+                    Some((height, block_hash)) => {
+                        break PivotBlockDecision { height, block_hash }
+                    }
                     None => {
                         // TODO(lpl): Handle the error from outside.
                         // FIXME(lpl): Wait with a deadline.
@@ -195,19 +202,10 @@ impl ProposalGenerator {
                 }
             };
 
-            let event_data = bcs::to_bytes(&pivot_decision)?;
-            let event = ContractEvent::new(
-                PivotBlockDecision::pivot_select_event_key(),
-                0,                                      /* sequence_number */
-                TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
-                event_data,
-            );
-
-            let change_set = ChangeSet::new(WriteSet::default(), vec![event]);
-            let raw_tx = RawTransaction::new_change_set(
+            let raw_tx = RawTransaction::new_pivot_decision(
                 self.author,
                 0,
-                change_set,
+                pivot_decision,
                 ChainId::default(), // FIXME(lpl): Set chain id.
             );
             let signed_tx = raw_tx

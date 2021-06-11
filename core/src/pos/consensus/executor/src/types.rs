@@ -149,7 +149,11 @@ impl ProcessedVMOutput {
         // TODO: The VM will support a special transaction to set the validators
         // for the next epoch that is part of a block execution.
         StateComputeResult::new(
-            self.accu_root(),
+            if parent_num_leaves == 0 {
+                self.accu_root()
+            } else {
+                Default::default()
+            },
             txn_accu.frozen_subtree_roots().clone(),
             txn_accu.num_leaves(),
             parent_frozen_subtree_roots,

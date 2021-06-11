@@ -151,7 +151,7 @@ impl ExecutorProxy {
         })?;*/
 
         Ok(OnChainConfigPayload::new(
-            0, /* epoch */
+            1, /* The epoch number after executing genesis block */
             Arc::new(
                 ON_CHAIN_CONFIG_REGISTRY
                     .iter()

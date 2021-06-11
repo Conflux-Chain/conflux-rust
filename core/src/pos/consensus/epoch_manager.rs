@@ -113,6 +113,7 @@ impl EpochManager {
         let config = node_config.consensus.clone();
         let sr_config = &node_config.consensus.safety_rules;
         let safety_rules_manager = SafetyRulesManager::new(sr_config);
+        diem_debug!("EpochManager.author={:?}", author);
         Self {
             author,
             config,
@@ -359,10 +360,10 @@ impl EpochManager {
             .safety_rules
             .test
             .as_ref()
-            .expect("use privat key in test")
+            .expect("test config set")
             .consensus_key
             .as_ref()
-            .expect("private key exist")
+            .expect("private key set in pos")
             .private_key();
         // txn manager is required both by proposal generator (to pull the
         // proposers) and by event processor (to update their status).
@@ -605,8 +606,11 @@ impl EpochManager {
     }
 
     async fn expect_new_epoch(&mut self) {
+        diem_debug!("expect_new_epoch: start");
         if let Some(payload) = self.reconfig_events.next().await {
+            diem_debug!("expect_new_epoch: receive event!");
             self.start_processor(payload).await;
+            diem_debug!("expect_new_epoch: processor started!");
         } else {
             panic!("Reconfig sender dropped, unable to start new epoch.");
         }
@@ -619,6 +623,7 @@ impl EpochManager {
     {
         // initial start of the processor
         self.expect_new_epoch().await;
+        diem_debug!("EpochManager main_loop starts");
         loop {
             let result = monitor!(
                 "main_loop",

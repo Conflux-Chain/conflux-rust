@@ -41,10 +41,11 @@ pub fn start_consensus(
     author: AccountAddress,
 ) -> (Runtime, Arc<PowHandler>)
 {
-    let runtime = runtime::Builder::new()
-        .basic_scheduler()
+    let runtime = runtime::Builder::new_multi_thread()
         .thread_name("consensus")
         .enable_all()
+        // TODO(lpl): This is for debugging.
+        .worker_threads(4)
         .build()
         .expect("Failed to create Tokio runtime!");
     let storage = Arc::new(StorageWriteProxy::new(node_config, diem_db));
@@ -66,7 +67,7 @@ pub fn start_consensus(
         protocol_config,
     ));
     protocol_handler.clone().register(network.clone()).unwrap();
-    network.start_network_poll().unwrap();
+    // network.start_network_poll().unwrap();
     let network_sender = ConsensusNetworkSender {
         network,
         protocol_handler,

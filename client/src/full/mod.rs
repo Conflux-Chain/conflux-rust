@@ -21,7 +21,6 @@ use runtime::Runtime;
 use std::sync::Arc;
 
 pub struct FullClientExtraComponents {
-    pub diem_handler: DiemHandle,
     pub consensus: Arc<ConsensusGraph>,
     pub debug_rpc_http_server: Option<HttpServer>,
     pub rpc_http_server: Option<HttpServer>,
@@ -42,7 +41,7 @@ pub struct FullClient {}
 impl FullClient {
     // Start all key components of Conflux and pass out their handles
     pub fn start(
-        conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
+        mut conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     ) -> Result<
         Box<ClientComponents<BlockGenerator, FullClientExtraComponents>>,
         String,
@@ -60,12 +59,12 @@ impl FullClient {
             rpc_ws_server,
             runtime,
             diem_handler,
-        ) = initialize_not_light_node_modules(&conf, exit, NodeType::Full)?;
+        ) = initialize_not_light_node_modules(&mut conf, exit, NodeType::Full)?;
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
+            diem_handler,
             blockgen: Some(blockgen),
             other_components: FullClientExtraComponents {
-                diem_handler,
                 consensus,
                 debug_rpc_http_server,
                 rpc_http_server,

@@ -279,6 +279,7 @@ build_config! {
         (candidate_pivot_waiting_timeout_ms, (u64), 10_000)
         (is_consortium, (bool), false)
         (pos_config_path, (Option<String>), Some("./pos_config/pos_config.toml".to_string()))
+        (pos_genesis_pivot_decision, (Option<H256>), None)
 
         // Light node section
         (ln_epoch_request_batch_size, (Option<usize>), None)
@@ -750,6 +751,10 @@ impl Configuration {
             allow_phase_change_without_peer: self
                 .raw_conf
                 .dev_allow_phase_change_without_peer,
+            pos_genesis_pivot_decision: self
+                .raw_conf
+                .pos_genesis_pivot_decision
+                .expect("set to genesis if none"),
         }
     }
 

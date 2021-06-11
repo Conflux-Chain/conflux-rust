@@ -18,7 +18,10 @@ use crate::{
 };
 
 use crate::{
-    pos::protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
+    pos::{
+        consensus::network_interface::ConsensusMsg,
+        protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
+    },
     sync::ProtocolConfiguration,
 };
 use cfx_types::H256;
@@ -410,6 +413,7 @@ pub fn handle_serialized_message(
             handle_message::<EpochRetrievalRequest>(ctx, msg)?
         }
         msgid::EPOCH_CHANGE => handle_message::<EpochChangeProof>(ctx, msg)?,
+        msgid::CONSENSUS_MSG => handle_message::<ConsensusMsg>(ctx, msg)?,
         _ => return Ok(false),
     }
     Ok(true)
@@ -543,20 +547,34 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
                 .insert(public_key.clone(), peer_hash);
             if let Some(state) = self.peers.get(&peer_hash) {
                 state.write().set_pos_public_key(Some(public_key));
+            } else {
+                warn!(
+                    "PeerState is missing for peer: peer_hash={:?}",
+                    peer_hash
+                );
             }
+        } else {
+            info!(
+                "pos public key is not provided for peerL peer_hash={:?}",
+                peer_hash
+            );
         }
 
         info!(
-            "hsb on_peer_connected: peer {}, {}, peer count {}",
+            "hsb on_peer_connected: peer {:?}, peer_hash {:?}, peer count {}",
             peer,
-            peer,
+            peer_hash,
             self.peers.len()
         );
     }
 
     fn on_peer_disconnected(&self, io: &dyn NetworkContext, peer: &NodeId) {
         let peer_hash = keccak(*peer);
-        self.peers.remove(&peer_hash);
+        if let Some(peer_state) = self.peers.remove(&peer_hash) {
+            if let Some(pos_public_key) = &peer_state.read().pos_public_key {
+                self.pos_peer_mapping.write().remove(pos_public_key);
+            }
+        }
         self.request_manager.on_peer_disconnected(io, peer);
         info!(
             "hsb on_peer_disconnected: peer={}, peer count {}",

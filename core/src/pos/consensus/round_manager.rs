@@ -749,7 +749,7 @@ impl RoundManager {
             VoteReceptionResult::VoteAdded(_) => Ok(()),
             // Return error so that duplicate or invalid votes will not be
             // broadcast to others.
-            _ => bail!("vote not added"),
+            r => bail!("vote not added with result {:?}", r),
         }
     }
 
