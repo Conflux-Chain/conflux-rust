@@ -73,15 +73,24 @@ impl<PoS: PosInterface> PosHandler<PoS> {
         &self, me: &PosBlockId, preds: &Vec<PosBlockId>,
     ) -> bool {
         let me_round = match self.pos.get_committed_block(me) {
-            None => return false,
+            None => {
+                warn!("No pos block for me={:?}", me);
+                return false;
+            },
             Some(b) => b.round,
         };
         for p in preds {
             let p_round = match self.pos.get_committed_block(p) {
-                None => return false,
+                None => {
+                    warn!("No pos block for pred={:?}", p);
+                    return false;
+                },
                 Some(b) => b.round,
             };
-            if me_round < p_round || me_round > p_round + 1 {
+            // FIXME(lpl): Decide if we want to allow pos blocks to be skipped.
+            // || me_round > p_round + 1
+            if me_round < p_round  {
+                warn!("Incorrect round: me={}, pred={}", me_round, p_round);
                 return false;
             }
         }
@@ -121,10 +130,16 @@ impl PosInterface for PosConnection {
     fn initialize(&self) -> Result<(), String> { Ok(()) }
 
     fn get_committed_block(&self, h: &PosBlockId) -> Option<PosBlock> {
+        debug!("get_committed_block: {:?}", h);
         let ledger_info = self
             .pos_storage
             .get_block_ledger_info(&h256_to_diem_hash(h))
+            .map_err(|e| {
+                warn!("get_committed_block: err={:?}", e);
+                e
+            } )
             .ok()?;
+        debug!("pos_handler gets ledger_info={:?}", ledger_info);
         Some(PosBlock {
             hash: diem_hash_to_h256(
                 &ledger_info.ledger_info().consensus_block_id(),

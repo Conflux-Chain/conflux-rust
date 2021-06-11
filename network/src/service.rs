@@ -1273,7 +1273,7 @@ impl NetworkServiceInner {
                 deregister = remote || sess.done();
                 failure_id = sess.id().cloned();
                 debug!(
-                    "kill connection, deregister = {}, reason = {:?}, session = {:?}, op = {:?}",
+                    "kill connection by token, deregister = {}, reason = {:?}, session = {:?}, op = {:?}",
                     deregister, reason, *sess, op
                 );
             }

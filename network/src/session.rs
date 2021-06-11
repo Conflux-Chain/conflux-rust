@@ -247,14 +247,12 @@ impl Session {
             State::Handshake(ref mut h) => {
                 let h = h.get_mut();
 
-                debug!("start session {} state: {:?}", self.token(), h.state);
                 if !h.readable(io, &host.metadata)? {
                     return Ok(SessionDataWithDisconnectInfo {
                         session_data: SessionData::None,
                         token_to_disconnect: None,
                     });
                 }
-                debug!("end session {} state: {:?}", self.token() ,h.state);
 
                 if h.done() {
                     self.complete_handshake(io, host)?;
