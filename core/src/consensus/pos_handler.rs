@@ -76,7 +76,7 @@ impl<PoS: PosInterface> PosHandler<PoS> {
             None => {
                 warn!("No pos block for me={:?}", me);
                 return false;
-            },
+            }
             Some(b) => b.round,
         };
         for p in preds {
@@ -84,12 +84,12 @@ impl<PoS: PosInterface> PosHandler<PoS> {
                 None => {
                     warn!("No pos block for pred={:?}", p);
                     return false;
-                },
+                }
                 Some(b) => b.round,
             };
             // FIXME(lpl): Decide if we want to allow pos blocks to be skipped.
             // || me_round > p_round + 1
-            if me_round < p_round  {
+            if me_round < p_round {
                 warn!("Incorrect round: me={}, pred={}", me_round, p_round);
                 return false;
             }
@@ -137,7 +137,7 @@ impl PosInterface for PosConnection {
             .map_err(|e| {
                 warn!("get_committed_block: err={:?}", e);
                 e
-            } )
+            })
             .ok()?;
         debug!("pos_handler gets ledger_info={:?}", ledger_info);
         Some(PosBlock {

@@ -3811,12 +3811,20 @@ impl ConsensusGraphInner {
                 }
             }
         };
-        debug!("next_pivot_decision: parent={:?} return={:?}", parent_decision_hash, r);
+        debug!(
+            "next_pivot_decision: parent={:?} return={:?}",
+            parent_decision_hash, r
+        );
         r
     }
 
-    pub fn validate_pivot_decision(&self, ancestor_hash: &H256, me_hash: &H256) -> bool {
-        debug!("validate_pivot_decision: ancestor={:?}, me={:?}", ancestor_hash, me_hash);
+    pub fn validate_pivot_decision(
+        &self, ancestor_hash: &H256, me_hash: &H256,
+    ) -> bool {
+        debug!(
+            "validate_pivot_decision: ancestor={:?}, me={:?}",
+            ancestor_hash, me_hash
+        );
         match (
             self.hash_to_arena_indices.get(ancestor_hash),
             self.hash_to_arena_indices.get(me_hash),

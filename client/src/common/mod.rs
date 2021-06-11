@@ -291,7 +291,6 @@ pub fn initialize_common_modules(
     });
     let diem_handler = start_pos_consensus(
         &pos_config,
-        None,
         network.clone(),
         own_node_hash,
         conf.protocol_config(),

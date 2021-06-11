@@ -40,8 +40,7 @@ pub struct DiemHandle {
 }
 
 pub fn start_pos_consensus(
-    config: &NodeConfig, log_file: Option<PathBuf>,
-    network: Arc<NetworkService>, own_node_hash: H256,
+    config: &NodeConfig, network: Arc<NetworkService>, own_node_hash: H256,
     protocol_config: ProtocolConfiguration,
     own_pos_public_key: Option<Ed25519PublicKey>,
 ) -> DiemHandle
@@ -54,7 +53,7 @@ pub fn start_pos_consensus(
         .is_async(config.logger.is_async)
         .level(config.logger.level)
         .read_env();
-    if let Some(log_file) = log_file {
+    if let Some(log_file) = config.logger.file.clone() {
         logger.printer(Box::new(FileWriter::new(log_file)));
     }
     let _logger = Some(logger.build());

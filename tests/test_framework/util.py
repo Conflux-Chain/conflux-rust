@@ -303,6 +303,7 @@ def initialize_tg_config(dirname, nodes):
         }
         validator_config['logger'] = {
             'level': "TRACE",
+            'file': os.path.join(datadir, "diem.log")
         }
         with open(os.path.join(datadir, 'validator_full_node.yaml'), 'w') as f:
             f.write(yaml.dump(validator_config, default_flow_style=False))
