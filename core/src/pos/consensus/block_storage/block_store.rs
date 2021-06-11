@@ -484,8 +484,7 @@ impl BlockStore {
         if state_compute_result.pivot_decision().is_none()
             && parent_pivot_decision.is_some()
         {
-            // TODO(lpl): Verify blocks to ensure executed blocks have expected
-            // pivot decision tx.
+            // No pivot decision tx is included.
             state_compute_result
                 .update_pivot_decision(parent_pivot_decision.clone().unwrap());
         }

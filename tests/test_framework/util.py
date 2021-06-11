@@ -302,7 +302,7 @@ def initialize_tg_config(dirname, nodes):
             'round_initial_timeout_ms': 1000,
         }
         validator_config['logger'] = {
-            'level': "DEBUG",
+            'level': "TRACE",
         }
         with open(os.path.join(datadir, 'validator_full_node.yaml'), 'w') as f:
             f.write(yaml.dump(validator_config, default_flow_style=False))

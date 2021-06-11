@@ -570,7 +570,11 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
 
     fn on_peer_disconnected(&self, io: &dyn NetworkContext, peer: &NodeId) {
         let peer_hash = keccak(*peer);
-        self.peers.remove(&peer_hash);
+        if let Some(peer_state) = self.peers.remove(&peer_hash) {
+            if let Some(pos_public_key) = &peer_state.read().pos_public_key {
+                self.pos_peer_mapping.write().remove(pos_public_key);
+            }
+        }
         self.request_manager.on_peer_disconnected(io, peer);
         info!(
             "hsb on_peer_disconnected: peer={}, peer count {}",

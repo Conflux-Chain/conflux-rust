@@ -47,7 +47,7 @@ impl PowHandler {
         pow_consensus
             .inner
             .read()
-            .is_ancestor_of(parent_decision, me_decision)
+            .validate_pivot_decision(parent_decision, me_decision)
     }
 
     fn get_committee_candidates_impl(

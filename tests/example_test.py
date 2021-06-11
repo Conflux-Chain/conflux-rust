@@ -10,6 +10,7 @@ from test_framework.util import *
 class ExampleTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
+        self.conf_parameters["log_level"] = '"trace"'
 
     def setup_network(self):
         self.setup_nodes(is_consortium=True)
