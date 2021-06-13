@@ -320,7 +320,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         &mut self.context.substate
     }
 
-    /// Get the recipient of this executive. The receipent is the address whose
+    /// Get the recipient of this executive. The recipient is the address whose
     /// state will change.
     pub fn get_recipient(&self) -> &Address { &self.context.origin.recipient() }
 
@@ -400,8 +400,11 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         Ok(())
     }
 
-    /// If the executive triggers an return during execution, this function will
-    /// put return point and out put a trap error.
+    /// When the executive (the inner EVM) returns, this function will process
+    /// the rest tasks: If the execution successes, this function collects
+    /// storage collateral change from the cache to substate, merge substate to
+    /// its parent and settles down bytecode for newly created contract. If the
+    /// execution fails, this function reverts state and drops substate.
     fn process_return<State: StateTrait<Substate = Substate>>(
         mut self, result: vm::Result<GasLeft>, state: &mut State,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
@@ -444,8 +447,8 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         executive_result
     }
 
-    /// If the executive triggers an sub-call during execution, this function
-    /// will put return point and out put a trap error.
+    /// If the executive triggers a sub-call during execution, this function
+    /// outputs a trap error with sub-call parameters and return point.
     fn process_trap(
         mut self, trap_err: ExecTrapError,
     ) -> ExecutiveTrapError<'a, Substate> {
@@ -463,7 +466,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
 
     /// Execute the executive. If a sub-call/create action is required, a
     /// resume trap error is returned. The caller is then expected to call
-    /// `resume_call` or `resume_create` to continue the execution.
+    /// `resume` to continue the execution.
     pub fn exec<State: StateTrait<Substate = Substate>>(
         mut self, state: &mut State, parent_substate: &mut Substate,
         callstack: &mut CallStackInfo,
@@ -481,8 +484,10 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         let is_create = self.create_address.is_some();
         assert_eq!(is_create, self.context.is_create);
 
+        // By technical specification and current implementation, the EVM should
+        // guarantee the current executive satisfies static_flag.
         Self::check_static_flag(&params, self.context.static_flag, is_create)
-            .expect("check_static_flag should always success here");
+            .expect("check_static_flag should always success because EVM has checked it.");
 
         // Trace task
         if is_create {
@@ -559,15 +564,15 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
             std::mem::replace(&mut self.status, ExecutiveStatus::Running);
 
         // TODO: Substate from sub-call should have been merged here by
-        // specification. But we have merged it in process_return of
-        // sub-call. If we put `substate.accrue` back to here, we can
-        // save the maintenance for `parent_substate` in `exec`,
-        // `resume` and `consume`, and make this logic consistent with
-        // specification: substate is in return value. However,
-        //  Substate is a trait currently, such change will
-        // make more functions has generic parameters or trait parameter. So I
-        // put off this plan until substate is no longer a trait. Otherwise such
-        // logic won't be changed.
+        // specification. But we have merged it in function `process_return`.
+        // If we put `substate.accrue` back to here, we can save the maintenance
+        // for `parent_substate` in `exec`, `resume`, `process_return` and
+        // `consume`. It will also make the implementation with
+        // specification: substate is in return value and its caller's duty to
+        // merge callee's substate. However, Substate is a trait
+        // currently, such change will make too many functions has generic
+        // parameters or trait parameter. So I put off this plan until
+        // substate is no longer a trait.
 
         // Process resume tasks, which is defined in Instruction Set
         // Specification of tech-specification.
@@ -619,7 +624,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         }
     }
 
-    /// Execute and consume the current executive. This function handles resume
+    /// Execute the top call-create executive. This function handles resume
     /// traps and sub-level tracing. The caller is expected to handle
     /// current-level tracing.
     pub fn consume<State: StateTrait<Substate = Substate>>(
@@ -687,6 +692,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     ) -> (Self, Self) {
         match trap_err {
             TrapError::Call(params, parent) => (
+                /* callee */
                 CallCreateExecutive::new_call_raw(
                     params,
                     parent.context.env,
@@ -697,9 +703,10 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                     parent.context.static_flag,
                     parent.context.internal_contract_map,
                 ),
-                parent,
+                /* caller */ parent,
             ),
             TrapError::Create(params, parent) => (
+                /* callee */
                 CallCreateExecutive::new_create_raw(
                     params,
                     parent.context.env,
@@ -710,7 +717,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                     parent.context.static_flag,
                     parent.context.internal_contract_map,
                 ),
-                parent,
+                /* callee */ parent,
             ),
         }
     }

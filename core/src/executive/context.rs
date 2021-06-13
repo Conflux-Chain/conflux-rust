@@ -58,10 +58,10 @@ impl OriginInfo {
     pub fn recipient(&self) -> &Address { &self.address }
 }
 
-/// Implementation of evm context.
+/// Implementation of EVM context.
 pub struct Context<
-    'a,
-    'b,
+    'a, /* Lifetime of transaction executive. */
+    'b, /* Lifetime of call-create executive. */
     Substate: SubstateTrait,
     State: StateTrait<Substate = Substate>,
 > {
@@ -70,6 +70,10 @@ pub struct Context<
     local_part: &'b mut LocalContext<'a, Substate>,
 }
 
+/// The internal contracts need to access the context parameter directly, e.g.,
+/// `foo(env, spec)`. But `foo(context.env(), context.spec())` will incur
+/// lifetime issue. The `InternalRefContext` contains the parameters required by
+/// the internal contracts.
 pub struct InternalRefContext<'a> {
     pub env: &'a Env,
     pub spec: &'a Spec,
@@ -78,6 +82,9 @@ pub struct InternalRefContext<'a> {
     pub substate: &'a mut dyn SubstateTrait,
 }
 
+/// The `LocalContext` only contains the parameters can be owned by an
+/// executive. It will be never change during the lifetime of its corresponding
+/// executive.
 pub struct LocalContext<'a, Substate: SubstateTrait> {
     pub env: &'a Env,
     pub depth: usize,
@@ -110,6 +117,10 @@ impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
         }
     }
 
+    /// The `LocalContext` only contains the parameters can be owned by an
+    /// executive. For the parameters shared between executives (like `&mut
+    /// State`), the executive should activate `LocalContext` by passing in
+    /// these parameters.
     pub fn activate<State: StateTrait<Substate = Substate>>(
         &'b mut self, state: &'b mut State, callstack: &'b mut CallStackInfo,
     ) -> Context<'a, 'b, Substate, State> {
@@ -454,6 +465,8 @@ impl<
     }
 }
 
+/// TODO: Move this code to a seperated file. So we can distinguish function
+/// calls from test.
 #[cfg(test)]
 mod tests {
     use super::{InternalContractMap, LocalContext, OriginInfo};
