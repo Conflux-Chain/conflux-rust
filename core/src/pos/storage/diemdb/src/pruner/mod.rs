@@ -125,6 +125,7 @@ impl Pruner {
 
 impl Drop for Pruner {
     fn drop(&mut self) {
+        diem_debug!("Dropping Pruner");
         self.command_sender
             .lock()
             .send(Command::Quit)
@@ -134,6 +135,7 @@ impl Drop for Pruner {
             .expect("Worker thread must exist.")
             .join()
             .expect("Worker thread should join peacefully.");
+        diem_debug!("Pruner dropped");
     }
 }
 

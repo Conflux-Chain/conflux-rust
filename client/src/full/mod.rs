@@ -78,3 +78,9 @@ impl FullClient {
         }))
     }
 }
+
+impl Drop for FullClientExtraComponents {
+    fn drop(&mut self) {
+        debug!("Drop FullClientExtraComponents");
+    }
+}

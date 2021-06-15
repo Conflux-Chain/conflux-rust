@@ -38,6 +38,7 @@ impl<BlockGenT: 'static + Stopable, Rest> ClientTrait
         Arc<PowHandler>,
         Option<Arc<dyn Stopable>>,
     ) {
+        debug!("take_out_components_for_shutdown");
         let data_manager_weak_ptr = self.data_manager_weak_ptr.clone();
         let blockgen: Option<Arc<dyn Stopable>> = match self.blockgen.clone() {
             Some(blockgen) => Some(blockgen),
@@ -87,10 +88,12 @@ pub mod client_methods {
         let (ledger_db, pow_handler, maybe_blockgen) =
             this.take_out_components_for_shutdown();
         drop(this);
+        debug!("Dropped ClientComponent");
         if let Some(blockgen) = maybe_blockgen {
             blockgen.stop();
             drop(blockgen);
         }
+        debug!("Dropped blockgen");
         pow_handler.stop();
         drop(pow_handler);
 

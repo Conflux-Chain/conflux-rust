@@ -36,7 +36,7 @@ pub struct DiemHandle {
     pub pow_handler: Arc<PowHandler>,
     pub diem_db: Arc<DiemDB>,
     _state_sync_bootstrapper: StateSyncBootstrapper,
-    _consensus_runtime: Runtime,
+    consensus_runtime: Runtime,
 }
 
 pub fn start_pos_consensus(
@@ -219,8 +219,16 @@ pub fn setup_pos_environment(
 
     DiemHandle {
         pow_handler,
-        _consensus_runtime: consensus_runtime,
+        consensus_runtime,
         _state_sync_bootstrapper: state_sync_bootstrapper,
         diem_db,
+    }
+}
+
+impl Drop for DiemHandle {
+    fn drop(&mut self) {
+        let runtime = std::mem::replace(&mut self.consensus_runtime, Runtime::new().unwrap());
+        runtime.shutdown_background();
+        debug!("Drop DiemHandle");
     }
 }
