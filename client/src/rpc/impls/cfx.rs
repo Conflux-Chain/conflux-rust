@@ -1426,7 +1426,11 @@ impl RpcImpl {
                 self.consensus.get_block_hashes_by_epoch(e.into())?
             }
             BlockHashOrEpochNumber::BlockHash(h) => {
-                let e = self.consensus.get_block_epoch_number(&h).unwrap();
+                let e = match self.consensus.get_block_epoch_number(&h) {
+                    Some(e) => e,
+                    None => return Ok(None),
+                };
+
                 let hashes = self.consensus.get_block_hashes_by_epoch(
                     primitives::EpochNumber::Number(e),
                 )?;
