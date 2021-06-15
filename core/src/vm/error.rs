@@ -21,7 +21,7 @@
 //! VM errors module
 
 use super::{action_params::ActionParams, ResumeCall, ResumeCreate};
-use cfx_statedb::Error as DbError;
+use cfx_statedb::{Error as DbError, Result as DbResult};
 use cfx_types::{Address, U256};
 use solidity_abi::ABIDecodeError;
 use std::fmt;
@@ -34,7 +34,7 @@ pub enum TrapKind {
 
 pub enum TrapError<Call, Create> {
     Call(ActionParams, Call),
-    Create(ActionParams, Address, Create),
+    Create(ActionParams, Create),
 }
 
 /// VM errors.
@@ -199,9 +199,31 @@ impl fmt::Display for Error {
 }
 
 pub type Result<T> = ::std::result::Result<T, Error>;
-pub type TrapResult<T, Call, Create> =
-    ::std::result::Result<Result<T>, TrapError<Call, Create>>;
+
+pub fn separate_out_db_error<T>(result: Result<T>) -> DbResult<Result<T>> {
+    match result {
+        Err(Error::StateDbError(err)) => Err(err.0),
+        x => Ok(x),
+    }
+}
+
+pub enum TrapResult<T, Call, Create> {
+    Return(Result<T>),
+    SubCallCreate(TrapError<Call, Create>),
+}
+
+impl<T, Call, Create> TrapResult<T, Call, Create> {
+    #[cfg(test)]
+    pub fn ok(self) -> Option<Result<T>> {
+        if let TrapResult::Return(result) = self {
+            Some(result)
+        } else {
+            None
+        }
+    }
+}
 
 pub type ExecTrapResult<T> =
     TrapResult<T, Box<dyn ResumeCall>, Box<dyn ResumeCreate>>;
-//pub type ExecTrapError = TrapError<Box<ResumeCall>, Box<ResumeCreate>>;
+
+pub type ExecTrapError = TrapError<Box<dyn ResumeCall>, Box<dyn ResumeCreate>>;
