@@ -555,7 +555,7 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
             }
         } else {
             info!(
-                "pos public key is not provided for peerL peer_hash={:?}",
+                "pos public key is not provided for peer peer_hash={:?}",
                 peer_hash
             );
         }
