@@ -34,7 +34,7 @@ class TestTrace(RpcClient):
                     "action": {
                         "gasLeft": "0x0",
                         "outcome": "success",
-                        "returnData": []
+                        "returnData": "0x"
                     },
                     "type": "call_result"
                 }],
@@ -96,7 +96,7 @@ class TestTrace(RpcClient):
             "action": {
                 "gasLeft": "0x0",
                 "outcome": "success",
-                "returnData": []
+                "returnData": "0x"
             },
             "blockHash": receipt["blockHash"],
             "epochHash": receipt["blockHash"],
@@ -133,7 +133,7 @@ class TestTrace(RpcClient):
             "action": {
                 "gasLeft": "0x0",
                 "outcome": "success",
-                "returnData": []
+                "returnData": "0x"
             },
             "blockHash": block_hash,
             "epochHash": block_hash,
