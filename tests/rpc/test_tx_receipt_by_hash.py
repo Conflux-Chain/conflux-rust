@@ -112,3 +112,10 @@ class TestGetTxReceiptByHash(RpcClient):
         assert_equal(len(receipts), 2)
         assert_equal(len(receipts[0]), NUM_TXS//2)
         assert_equal(len(receipts[1]), NUM_TXS//2)
+
+        # retrieve epoch receipts by pivot hash
+        receipts2 = self.node.cfx_getEpochReceipts(f'hash:{block_d}')
+        assert_equal(receipts2, receipts)
+
+        receipts3 = self.node.cfx_getEpochReceipts(f'hash:{block_b}')
+        assert_equal(receipts3, None)
