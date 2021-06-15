@@ -459,10 +459,6 @@ impl<
         self.local_part.static_flag || self.callstack.in_reentrancy()
     }
 
-    fn is_reentrancy(&self, _caller: &Address, callee: &Address) -> bool {
-        self.callstack.reentrancy_happens_when_push(callee)
-    }
-
     fn internal_ref(&mut self) -> InternalRefContext {
         InternalRefContext {
             env: self.local_part.env,

@@ -3,8 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 mod admin;
+mod reentrancy;
 mod sponsor;
 mod staking;
+
 mod macros {
     #[cfg(test)]
     pub use crate::check_signature;
@@ -31,7 +33,10 @@ pub use self::{
 use super::{
     function::ExecutionTrait, InternalContractTrait, SolidityFunctionTrait,
 };
-use crate::evm::Spec;
+use crate::{
+    evm::Spec,
+    executive::internal_contract::contracts::reentrancy::AntiReentrancyConfig,
+};
 use cfx_types::Address;
 use primitives::BlockNumber;
 use std::{
@@ -105,9 +110,12 @@ impl InternalContractMap {
         let admin = internal_contract_factory("admin");
         let sponsor = internal_contract_factory("sponsor");
         let staking = internal_contract_factory("staking");
+        let reentrancy = internal_contract_factory("reentrancy");
+
         builtin.insert(*admin.address(), admin);
         builtin.insert(*sponsor.address(), sponsor);
         builtin.insert(*staking.address(), staking);
+        builtin.insert(*reentrancy.address(), reentrancy);
         Self {
             builtin: Arc::new(builtin),
         }
@@ -128,6 +136,7 @@ pub fn internal_contract_factory(name: &str) -> Box<dyn InternalContractTrait> {
         "admin" => Box::new(AdminControl::instance()),
         "staking" => Box::new(Staking::instance()),
         "sponsor" => Box::new(SponsorWhitelistControl::instance()),
+        "reentrancy" => Box::new(AntiReentrancyConfig::instance()),
         _ => panic!("invalid internal contract name: {}", name),
     }
 }

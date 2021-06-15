@@ -12,6 +12,11 @@ macro_rules! impl_activate_at {
             fn activate_at(&self, _: BlockNumber, _: &Spec) -> bool { true }
         }
     };
+    ($name:ident,"21Q2-hardfork") => {
+        impl ActivateAtTrait for $name {
+            fn activate_at(&self, _: BlockNumber, _: &Spec) -> bool { false }
+        }
+    };
 }
 
 #[macro_export]

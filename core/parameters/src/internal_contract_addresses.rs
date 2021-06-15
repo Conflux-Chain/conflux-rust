@@ -12,4 +12,6 @@ lazy_static! {
         Address::from_str("0888000000000000000000000000000000000001").unwrap();
     pub static ref STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS: Address =
         Address::from_str("0888000000000000000000000000000000000002").unwrap();
+    pub static ref ANTI_REENTRANCY_CONTRACT_ADDRESS: Address =
+        Address::from_str("0888000000000000000000000000000000000003").unwrap();
 }
