@@ -301,12 +301,23 @@ impl RpcImpl {
             block_hash, pivot_hash, epoch_number
         );
 
-        if consensus_graph.get_block_epoch_number(&block_hash)
-            != epoch_number.into()
+        let genesis = self.consensus.get_data_manager().true_genesis.hash();
+
+        // for genesis, check criteria directly
+        if block_hash == genesis && (pivot_hash != genesis || epoch_number != 0)
         {
             bail!(RpcError::invalid_params("pivot chain assumption failed"));
         }
 
+        // `block_hash` must match `epoch_number`
+        if block_hash != genesis
+            && (consensus_graph.get_block_epoch_number(&block_hash)
+                != epoch_number.into())
+        {
+            bail!(RpcError::invalid_params("pivot chain assumption failed"));
+        }
+
+        // `pivot_hash` must match `epoch_number`
         inner
             .check_block_pivot_assumption(&pivot_hash, epoch_number)
             .map_err(RpcError::invalid_params)?;
