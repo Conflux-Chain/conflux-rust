@@ -7,7 +7,10 @@ mod contracts;
 pub mod function;
 mod impls;
 
-pub use self::{contracts::InternalContractMap, impls::suicide};
+pub use self::{
+    contracts::InternalContractMap,
+    impls::{get_reentrancy_allowance, suicide},
+};
 pub use solidity_abi::ABIDecodeError;
 
 use self::{activate_at::IsActive, contracts::SolFnTable};

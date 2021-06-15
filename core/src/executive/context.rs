@@ -449,11 +449,8 @@ impl<
     fn is_static(&self) -> bool { self.local_part.static_flag }
 
     fn is_static_or_reentrancy(&self) -> bool {
-        self.local_part.static_flag || self.callstack.in_reentrancy()
-    }
-
-    fn is_reentrancy(&self, _caller: &Address, callee: &Address) -> bool {
-        self.callstack.reentrancy_happens_when_push(callee)
+        self.local_part.static_flag
+            || self.callstack.in_reentrancy(self.local_part.spec)
     }
 
     fn internal_ref(&mut self) -> InternalRefContext {
