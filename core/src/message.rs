@@ -130,7 +130,7 @@ pub trait Message:
 pub fn decode_rlp_and_check_deprecation<T: Message + Decodable>(
     rlp: &Rlp, min_supported_version: ProtocolVersion, protocol: ProtocolId,
 ) -> Result<T, NetworkError> {
-    let msg: T = rlp.as_val()?;
+    let msg: T = rlp.as_val().unwrap();
 
     if min_supported_version > msg.version_valid_till() {
         bail!(NetworkErrorKind::MessageDeprecated {
