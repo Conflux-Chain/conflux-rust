@@ -301,6 +301,12 @@ impl RpcImpl {
             block_hash, pivot_hash, epoch_number
         );
 
+        if consensus_graph.get_block_epoch_number(&block_hash)
+            != epoch_number.into()
+        {
+            bail!(RpcError::invalid_params("pivot chain assumption failed"));
+        }
+
         inner
             .check_block_pivot_assumption(&pivot_hash, epoch_number)
             .map_err(RpcError::invalid_params)?;
