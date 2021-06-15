@@ -4,8 +4,6 @@
 `P2PConnection: A low-level connection object to a node's P2P interface
 P2PInterface: A high-level interface object for communicating to a node over P2P
 """
-from eth_utils import big_endian_to_int, encode_hex
-
 from conflux import utils
 from conflux.config import DEFAULT_PY_TEST_CHAIN_ID
 from conflux.messages import *
@@ -313,9 +311,7 @@ class P2PInterface(P2PConnection):
         self.peer_pubkey = None
         self.priv_key, self.pub_key = ec_random_keys()
         x, y = self.pub_key
-        print(int_to_32bytearray(x), int_to_32bytearray(y))
-        print(encode_hex(bytes(int_to_32bytearray(x))), encode_hex(bytes(int_to_32bytearray(y))))
-        self.key = "0x" + encode_hex(bytes(int_to_32bytearray(x)))[2:] + encode_hex(bytes(int_to_32bytearray(y)))[2:]
+        self.key = "0x" + utils.encode_hex(bytes(int_to_32bytearray(x))) + utils.encode_hex(bytes(int_to_32bytearray(y)))
         self.had_status = False
         self.on_packet_func = {}
         self.remote = remote
@@ -545,8 +541,6 @@ class Handshake:
 
     def write_auth(self):
         node_id = utils.decode_hex(self.peer.key)
-        print(self.peer.key)
-        print(node_id)
         self.peer.send_data(node_id)
         self.state = "ReadingAck"
 
