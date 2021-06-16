@@ -84,8 +84,7 @@ impl QuorumCert {
             ledger_info.version(),
             ledger_info.timestamp_usecs(),
             None,
-            // TODO(lpl): Check if it's None.
-            None,
+            ledger_info.pivot_decision().cloned(),
         );
         let vote_data = VoteData::new(ancestor.clone(), ancestor.clone());
         let li = LedgerInfo::new(ancestor, vote_data.hash());

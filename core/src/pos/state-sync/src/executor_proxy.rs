@@ -97,36 +97,35 @@ impl ExecutorProxy {
             .iter()
             .map(|config_id| config_id.access_path())
             .collect();
-        let configs =
-            storage
-                .batch_fetch_resources(access_paths)
-                .map_err(|error| {
-                    Error::UnexpectedError(format!(
-                        "Failed batch fetch of resources: {}",
-                        error
-                    ))
-                })?;
-        let synced_version =
-            storage.fetch_synced_version().map_err(|error| {
+        let configs = storage
+            .batch_fetch_resources_by_version(access_paths, 0)
+            .map_err(|error| {
                 Error::UnexpectedError(format!(
-                    "Failed to fetch storage synced version: {}",
+                    "Failed batch fetch of resources: {}",
                     error
                 ))
             })?;
-
-        let account_state_blob = storage
-            .get_account_state_with_proof_by_version(
-                config_address(),
-                synced_version,
-            )
-            .map_err(|error| {
-                Error::UnexpectedError(format!(
-                    "Failed to fetch account state with proof {}",
-                    error
-                ))
-            })?
-            .0;
         // TODO(linxi): get correct epoch
+        // let synced_version =
+        //     storage.fetch_synced_version().map_err(|error| {
+        //         Error::UnexpectedError(format!(
+        //             "Failed to fetch storage synced version: {}",
+        //             error
+        //         ))
+        //     })?;
+        //
+        // let account_state_blob = storage
+        //     .get_account_state_with_proof_by_version(
+        //         config_address(),
+        //         synced_version,
+        //     )
+        //     .map_err(|error| {
+        //         Error::UnexpectedError(format!(
+        //             "Failed to fetch account state with proof {}",
+        //             error
+        //         ))
+        //     })?
+        //     .0;
         /*let epoch = account_state_blob
         .map(|blob| {
             AccountState::try_from(&blob).and_then(|state| {
