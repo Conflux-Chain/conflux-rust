@@ -1511,6 +1511,10 @@ impl SynchronizationProtocolHandler {
 
     pub fn propagate_new_transactions(&self, io: &dyn NetworkContext) {
         if self.syn.peers.read().is_empty() || self.catch_up_mode() {
+            if self.protocol_config.dev_mode {
+                // In single-node dev mode, just clear to_propagate_trans.
+                self.get_to_propagate_trans();
+            }
             return;
         }
 
