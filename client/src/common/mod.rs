@@ -88,12 +88,10 @@ pub mod client_methods {
         let (ledger_db, pow_handler, maybe_blockgen) =
             this.take_out_components_for_shutdown();
         drop(this);
-        debug!("Dropped ClientComponent");
         if let Some(blockgen) = maybe_blockgen {
             blockgen.stop();
             drop(blockgen);
         }
-        debug!("Dropped blockgen");
         pow_handler.stop();
         drop(pow_handler);
 

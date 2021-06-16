@@ -6,6 +6,7 @@ use crate::{
     executor_proxy::{ExecutorProxy, ExecutorProxyTrait},
 };
 use diem_config::{config::NodeConfig, network_id::NodeNetworkId};
+use diem_logger::debug as diem_debug;
 use diem_types::waypoint::Waypoint;
 use executor_types::ChunkExecutor;
 use futures::channel::mpsc;
@@ -13,7 +14,6 @@ use std::{boxed::Box, collections::HashMap, sync::Arc};
 use storage_interface::DbReader;
 use subscription_service::ReconfigSubscription;
 use tokio::runtime::{Builder, Runtime};
-use diem_logger::{debug as diem_debug};
 
 /// Creates and bootstraps new state syncs and creates clients for
 /// communicating with those state syncs.
@@ -94,12 +94,5 @@ impl StateSyncBootstrapper {
             self.coordinator_sender.clone(),
             commit_timeout_secs,
         )
-    }
-}
-
-
-impl Drop for StateSyncBootstrapper {
-    fn drop(&mut self) {
-        diem_debug!("Drop StateSyncBootstrapper");
     }
 }

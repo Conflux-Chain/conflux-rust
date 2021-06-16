@@ -30,7 +30,10 @@ impl PowHandler {
 
     pub fn stop(&self) {
         let mut pow_consensus = &mut *self.pow_consensus.write();
-        info!("Stop PowHandler: current consensus strong_count={}", Arc::strong_count(pow_consensus.as_ref().unwrap()));
+        info!(
+            "Stop PowHandler: current consensus strong_count={}",
+            Arc::strong_count(pow_consensus.as_ref().unwrap())
+        );
         *pow_consensus = None;
     }
 

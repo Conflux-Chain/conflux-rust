@@ -198,7 +198,6 @@ impl RocksdbPropertyReporter {
 
 impl Drop for RocksdbPropertyReporter {
     fn drop(&mut self) {
-        diem_debug!("Dropping RocksdbPropertyReporter");
         // Notify the property reporting thread to exit
         self.sender.lock().unwrap().send(()).unwrap();
         self.join_handle
@@ -208,7 +207,6 @@ impl Drop for RocksdbPropertyReporter {
             .expect(
                 "Rocksdb property reporting thread should join peacefully.",
             );
-        diem_debug!("RocksdbPropertyReporter dropped");
     }
 }
 
@@ -1120,10 +1118,4 @@ where F: FnOnce() -> Result<T> {
         .observe(timer.elapsed().as_secs_f64());
 
     res
-}
-
-impl Drop for DiemDB {
-    fn drop(&mut self) {
-        diem_debug!("Drop DiemDB");
-    }
 }

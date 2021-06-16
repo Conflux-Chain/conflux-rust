@@ -49,7 +49,14 @@ use diem_types::{
 use futures::{select, StreamExt};
 use pow_types::PowInterface;
 use safety_rules::SafetyRulesManager;
-use std::{cmp::Ordering, sync::Arc, time::Duration};
+use std::{
+    cmp::Ordering,
+    sync::{
+        atomic::{AtomicBool, Ordering as AtomicOrdering},
+        Arc,
+    },
+    time::Duration,
+};
 
 /// RecoveryManager is used to process events in order to sync up with peer if
 /// we can't recover from local consensusdb RoundManager is used for normal
@@ -618,13 +625,16 @@ impl EpochManager {
 
     pub async fn start(
         mut self, mut round_timeout_sender_rx: channel::Receiver<Round>,
-        mut network_receivers: NetworkReceivers,
+        mut network_receivers: NetworkReceivers, stopped: Arc<AtomicBool>,
     )
     {
         // initial start of the processor
         self.expect_new_epoch().await;
         diem_debug!("EpochManager main_loop starts");
         loop {
+            if stopped.load(AtomicOrdering::SeqCst) {
+                break;
+            }
             let result = monitor!(
                 "main_loop",
                 select! {
