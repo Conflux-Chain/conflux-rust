@@ -16,7 +16,7 @@ use std::{cmp::Ordering, mem::discriminant};
 impl Handleable for ConsensusMsg {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_consensus_msg, msg={:?}", &self);
-        let peer_address = AccountAddress::new(ctx.peer_hash.into());
+        let peer_address = ctx.get_peer_account_address();
         ctx.manager
             .network_task
             .consensus_messages_tx
