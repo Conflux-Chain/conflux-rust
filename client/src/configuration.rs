@@ -151,6 +151,7 @@ build_config! {
         // Network section.
         (jsonrpc_local_tcp_port, (Option<u16>), None)
         (jsonrpc_local_http_port, (Option<u16>), None)
+        (jsonrpc_local_ws_port, (Option<u16>), None)
         (jsonrpc_ws_port, (Option<u16>), None)
         (jsonrpc_tcp_port, (Option<u16>), None)
         (jsonrpc_http_port, (Option<u16>), None)
@@ -915,8 +916,23 @@ impl Configuration {
         )
     }
 
+    pub fn local_tcp_config(&self) -> TcpConfiguration {
+        TcpConfiguration::new(
+            Some((127, 0, 0, 1)),
+            self.raw_conf.jsonrpc_local_tcp_port,
+        )
+    }
+
     pub fn tcp_config(&self) -> TcpConfiguration {
         TcpConfiguration::new(None, self.raw_conf.jsonrpc_tcp_port)
+    }
+
+    pub fn local_ws_config(&self) -> WsConfiguration {
+        WsConfiguration::new(
+            Some((127, 0, 0, 1)),
+            self.raw_conf.jsonrpc_local_ws_port,
+            self.raw_conf.jsonrpc_ws_max_payload_bytes,
+        )
     }
 
     pub fn ws_config(&self) -> WsConfiguration {
