@@ -8,7 +8,7 @@ use crate::{
     bytes::Bytes,
     machine::Machine,
     state::CallStackInfo,
-    trace::{self, trace::ExecTrace, Tracer},
+    trace::{trace::ExecTrace, Tracer},
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
         ContractCreateResult, CreateContractAddress, Env, Error,
@@ -18,19 +18,12 @@ use crate::{
 use cfx_parameters::staking::{
     code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
-use cfx_state::{StateTrait, SubstateMngTrait, SubstateTrait};
+use cfx_state::{
+    state_trait::StateOpsTrait, StateTrait, SubstateMngTrait, SubstateTrait,
+};
 use cfx_types::{Address, H256, U256};
 use primitives::transaction::UNSIGNED_SENDER;
 use std::sync::Arc;
-
-/// Policy for handling output data on `RETURN` opcode.
-pub enum OutputPolicy {
-    /// Return reference to fixed sized output.
-    /// Used for message calls.
-    Return,
-    /// Init new contract as soon as `RETURN` is called.
-    InitContract,
-}
 
 /// Transaction properties that externalities need to know about.
 #[derive(Debug)]
@@ -65,66 +58,91 @@ impl OriginInfo {
     pub fn recipient(&self) -> &Address { &self.address }
 }
 
-/// Implementation of evm context.
+/// Implementation of EVM context.
 pub struct Context<
-    'a,
+    'a, /* Lifetime of transaction executive. */
+    'b, /* Lifetime of call-create executive. */
     Substate: SubstateTrait,
     State: StateTrait<Substate = Substate>,
 > {
-    state: &'a mut State,
-    env: &'a Env,
-    depth: usize,
-    // The stack_depth is never read in context, even before this commit.
-    stack_depth: usize,
-    origin: &'a OriginInfo,
-    substate: &'a mut Substate,
-    machine: &'a Machine,
-    spec: &'a Substate::Spec,
-    output: OutputPolicy,
-    static_flag: bool,
-    internal_contract_map: &'a InternalContractMap,
+    state: &'b mut State,
+    callstack: &'b mut CallStackInfo,
+    local_part: &'b mut LocalContext<'a, Substate>,
 }
 
-impl<
-        'a,
-        Substate: SubstateTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
-        State: StateTrait<Substate = Substate>,
-    > Context<'a, Substate, State>
-{
-    /// Basic `Context` constructor.
+/// The internal contracts need to access the context parameter directly, e.g.,
+/// `foo(env, spec)`. But `foo(context.env(), context.spec())` will incur
+/// lifetime issue. The `InternalRefContext` contains the parameters required by
+/// the internal contracts.
+pub struct InternalRefContext<'a> {
+    pub env: &'a Env,
+    pub spec: &'a Spec,
+    pub callstack: &'a mut CallStackInfo,
+    pub state: &'a mut dyn StateOpsTrait,
+    pub substate: &'a mut dyn SubstateTrait,
+}
+
+/// The `LocalContext` only contains the parameters can be owned by an
+/// executive. It will be never change during the lifetime of its corresponding
+/// executive.
+pub struct LocalContext<'a, Substate: SubstateTrait> {
+    pub env: &'a Env,
+    pub depth: usize,
+    pub is_create: bool,
+    pub origin: OriginInfo,
+    pub substate: Substate,
+    pub machine: &'a Machine,
+    pub spec: &'a Spec,
+    pub static_flag: bool,
+    pub internal_contract_map: &'a InternalContractMap,
+}
+
+impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
     pub fn new(
-        state: &'a mut State, env: &'a Env, machine: &'a Machine,
-        spec: &'a Substate::Spec, depth: usize, stack_depth: usize,
-        origin: &'a OriginInfo, substate: &'a mut Substate,
-        output: OutputPolicy, static_flag: bool,
-        internal_contract_map: &'a InternalContractMap,
+        env: &'a Env, machine: &'a Machine, spec: &'a Spec, depth: usize,
+        origin: OriginInfo, substate: Substate, is_create: bool,
+        static_flag: bool, internal_contract_map: &'a InternalContractMap,
     ) -> Self
     {
-        Context {
-            state,
+        LocalContext {
             env,
             depth,
-            stack_depth,
             origin,
             substate,
             machine,
             spec,
-            output,
+            is_create,
             static_flag,
             internal_contract_map,
+        }
+    }
+
+    /// The `LocalContext` only contains the parameters can be owned by an
+    /// executive. For the parameters shared between executives (like `&mut
+    /// State`), the executive should activate `LocalContext` by passing in
+    /// these parameters.
+    pub fn activate<State: StateTrait<Substate = Substate>>(
+        &'b mut self, state: &'b mut State, callstack: &'b mut CallStackInfo,
+    ) -> Context<'a, 'b, Substate, State> {
+        Context {
+            state,
+            local_part: self,
+            callstack,
         }
     }
 }
 
 impl<
         'a,
-        Substate: SubstateMngTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        'b,
+        Substate: SubstateMngTrait,
         State: StateTrait<Substate = Substate>,
-    > ContextTrait for Context<'a, Substate, State>
+    > ContextTrait for Context<'a, 'b, Substate, State>
 {
     fn storage_at(&self, key: &Vec<u8>) -> vm::Result<U256> {
-        self.substate
-            .storage_at(self.state, &self.origin.address, key)
+        self.local_part
+            .substate
+            .storage_at(self.state, &self.local_part.origin.address, key)
             .map_err(Into::into)
     }
 
@@ -132,23 +150,18 @@ impl<
         if self.is_static_or_reentrancy() {
             Err(vm::Error::MutableCallInStaticContext)
         } else {
-            self.substate
+            self.local_part
+                .substate
                 .set_storage(
                     self.state,
-                    &self.origin.address,
+                    &self.local_part.origin.address,
                     key,
                     value,
-                    self.origin.storage_owner,
+                    self.local_part.origin.storage_owner,
                 )
                 .map_err(Into::into)
         }
     }
-
-    fn is_static_or_reentrancy(&self) -> bool {
-        self.static_flag || self.substate.in_reentrancy()
-    }
-
-    fn is_static(&self) -> bool { self.static_flag }
 
     fn exists(&self, address: &Address) -> vm::Result<bool> {
         self.state.exists(address).map_err(Into::into)
@@ -159,7 +172,8 @@ impl<
     }
 
     fn origin_balance(&self) -> vm::Result<U256> {
-        self.balance(&self.origin.address).map_err(Into::into)
+        self.balance(&self.local_part.origin.address)
+            .map_err(Into::into)
     }
 
     fn balance(&self, address: &Address) -> vm::Result<U256> {
@@ -178,7 +192,7 @@ impl<
 
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
-        address_scheme: CreateContractAddress, trap: bool,
+        address_scheme: CreateContractAddress,
     ) -> cfx_statedb::Result<
         ::std::result::Result<ContractCreateResult, TrapKind>,
     >
@@ -186,9 +200,9 @@ impl<
         // create new contract address
         let (address, code_hash) = self::contract_address(
             address_scheme,
-            self.env.number.into(),
-            &self.origin.address,
-            &self.state.nonce(&self.origin.address)?,
+            self.local_part.env.number.into(),
+            &self.local_part.origin.address,
+            &self.state.nonce(&self.local_part.origin.address)?,
             &code,
         );
 
@@ -206,12 +220,12 @@ impl<
         let params = ActionParams {
             code_address: address.clone(),
             address: address.clone(),
-            sender: self.origin.address.clone(),
-            original_sender: self.origin.original_sender,
-            storage_owner: self.origin.storage_owner,
-            storage_limit_in_drip: self.origin.storage_limit_in_drip,
+            sender: self.local_part.origin.address.clone(),
+            original_sender: self.local_part.origin.original_sender,
+            storage_owner: self.local_part.origin.storage_owner,
+            storage_limit_in_drip: self.local_part.origin.storage_limit_in_drip,
             gas: *gas,
-            gas_price: self.origin.gas_price,
+            gas_price: self.local_part.origin.gas_price,
             value: ActionValue::Transfer(*value),
             code: Some(Arc::new(code.to_vec())),
             code_hash,
@@ -221,59 +235,35 @@ impl<
         };
 
         if !self.is_static_or_reentrancy() {
-            if !self.spec.keep_unsigned_nonce
+            if !self.local_part.spec.keep_unsigned_nonce
                 || params.sender != UNSIGNED_SENDER
             {
                 self.state.inc_nonce(
-                    &self.origin.address,
+                    &self.local_part.origin.address,
                     // The sender of a CREATE call is guaranteed to exist,
                     // therefore the start_nonce below
                     // doesn't matter.
-                    &self.spec.contract_start_nonce(self.env.number),
+                    &self
+                        .local_part
+                        .spec
+                        .contract_start_nonce(self.local_part.env.number),
                 )?;
             }
         }
 
-        if trap {
-            return Ok(Err(TrapKind::Create(params, address)));
-        }
-
-        // The following code is only reachable in test mode.
-        let mut ex = ExecutiveGeneric::from_parent(
-            self.state,
-            self.env,
-            self.machine,
-            self.spec,
-            self.depth,
-            self.static_flag,
-            self.internal_contract_map,
-        );
-        let mut tracer = trace::NoopTracer;
-        let out = ex.create_with_stack_depth(
-            params,
-            self.substate,
-            self.stack_depth + 1,
-            &mut tracer,
-        );
-        Ok(Ok(into_contract_create_result(
-            out,
-            &address,
-            self.substate,
-        )?))
+        return Ok(Err(TrapKind::Create(params, address)));
     }
 
     fn call(
         &mut self, gas: &U256, sender_address: &Address,
         receive_address: &Address, value: Option<U256>, data: &[u8],
-        code_address: &Address, call_type: CallType, trap: bool,
+        code_address: &Address, call_type: CallType,
     ) -> cfx_statedb::Result<::std::result::Result<MessageCallResult, TrapKind>>
     {
         trace!(target: "context", "call");
 
-        assert!(trap);
-
         let (code, code_hash) = if let Some(contract) =
-            self.internal_contract_map.contract(code_address)
+            self.local_part.internal_contract_map.contract(code_address)
         {
             (Some(contract.code()), Some(contract.code_hash()))
         } else {
@@ -286,13 +276,13 @@ impl<
         let mut params = ActionParams {
             sender: *sender_address,
             address: *receive_address,
-            value: ActionValue::Apparent(self.origin.value),
+            value: ActionValue::Apparent(self.local_part.origin.value),
             code_address: *code_address,
-            original_sender: self.origin.original_sender,
-            storage_owner: self.origin.storage_owner,
-            storage_limit_in_drip: self.origin.storage_limit_in_drip,
+            original_sender: self.local_part.origin.original_sender,
+            storage_owner: self.local_part.origin.storage_owner,
+            storage_limit_in_drip: self.local_part.origin.storage_limit_in_drip,
             gas: *gas,
-            gas_price: self.origin.gas_price,
+            gas_price: self.local_part.origin.gas_price,
             code,
             code_hash,
             data: Some(data.to_vec()),
@@ -308,7 +298,9 @@ impl<
     }
 
     fn extcode(&self, address: &Address) -> vm::Result<Option<Arc<Bytes>>> {
-        if let Some(contract) = self.internal_contract_map.contract(address) {
+        if let Some(contract) =
+            self.local_part.internal_contract_map.contract(address)
+        {
             Ok(Some(contract.code()))
         } else {
             Ok(self.state.code(address)?)
@@ -316,7 +308,9 @@ impl<
     }
 
     fn extcodehash(&self, address: &Address) -> vm::Result<Option<H256>> {
-        if let Some(contract) = self.internal_contract_map.contract(address) {
+        if let Some(contract) =
+            self.local_part.internal_contract_map.contract(address)
+        {
             Ok(Some(contract.code_hash()))
         } else {
             Ok(self.state.code_hash(address)?)
@@ -324,49 +318,12 @@ impl<
     }
 
     fn extcodesize(&self, address: &Address) -> vm::Result<Option<usize>> {
-        if let Some(contract) = self.internal_contract_map.contract(address) {
+        if let Some(contract) =
+            self.local_part.internal_contract_map.contract(address)
+        {
             Ok(Some(contract.code_size()))
         } else {
             Ok(self.state.code_size(address)?)
-        }
-    }
-
-    fn ret(
-        self, gas: &U256, data: &ReturnData, apply_state: bool,
-    ) -> vm::Result<U256>
-    where Self: Sized {
-        match self.output {
-            OutputPolicy::Return => Ok(*gas),
-            OutputPolicy::InitContract if apply_state => {
-                let return_cost = U256::from(data.len())
-                    * U256::from(self.spec.create_data_gas);
-                if return_cost > *gas
-                    || data.len() > self.spec.create_data_limit
-                {
-                    return match self.spec.exceptional_failed_code_deposit {
-                        true => Err(vm::Error::OutOfGas),
-                        false => Ok(*gas),
-                    };
-                }
-                let collateral_units_for_code =
-                    code_collateral_units(data.len());
-                let collateral_in_drips = U256::from(collateral_units_for_code)
-                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-                debug!("ret()  collateral_for_code={:?}", collateral_in_drips);
-                self.substate.record_storage_occupy(
-                    &self.origin.storage_owner,
-                    collateral_units_for_code,
-                );
-
-                self.state.init_code(
-                    &self.origin.address,
-                    data.to_vec(),
-                    self.origin.storage_owner,
-                )?;
-
-                Ok(*gas - return_cost)
-            }
-            OutputPolicy::InitContract => Ok(*gas),
         }
     }
 
@@ -377,14 +334,57 @@ impl<
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
-        let address = self.origin.address.clone();
-        self.substate.logs_mut().push(LogEntry {
+        let address = self.local_part.origin.address.clone();
+        self.local_part.substate.logs_mut().push(LogEntry {
             address,
             topics,
             data: data.to_vec(),
         });
 
         Ok(())
+    }
+
+    fn ret(
+        self, gas: &U256, data: &ReturnData, apply_state: bool,
+    ) -> vm::Result<U256>
+    where Self: Sized {
+        match self.local_part.is_create {
+            false => Ok(*gas),
+            true if apply_state => {
+                let return_cost = U256::from(data.len())
+                    * U256::from(self.local_part.spec.create_data_gas);
+                if return_cost > *gas
+                    || data.len() > self.local_part.spec.create_data_limit
+                {
+                    return match self
+                        .local_part
+                        .spec
+                        .exceptional_failed_code_deposit
+                    {
+                        true => Err(vm::Error::OutOfGas),
+                        false => Ok(*gas),
+                    };
+                }
+                let collateral_units_for_code =
+                    code_collateral_units(data.len());
+                let collateral_in_drips = U256::from(collateral_units_for_code)
+                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+                debug!("ret()  collateral_for_code={:?}", collateral_in_drips);
+                self.local_part.substate.record_storage_occupy(
+                    &self.local_part.origin.storage_owner,
+                    collateral_units_for_code,
+                );
+
+                self.state.init_code(
+                    &self.local_part.origin.address,
+                    data.to_vec(),
+                    self.local_part.origin.storage_owner,
+                )?;
+
+                Ok(*gas - return_cost)
+            }
+            true => Ok(*gas),
+        }
     }
 
     fn suicide(
@@ -397,37 +397,30 @@ impl<
         }
 
         suicide_impl(
-            &self.origin.address,
+            &self.local_part.origin.address,
             refund_address,
             self.state,
-            &self.spec,
-            &mut *self.substate,
+            &self.local_part.spec,
+            &mut self.local_part.substate,
             tracer,
             account_start_nonce,
         )
     }
 
-    fn spec(&self) -> &Spec { &self.spec }
+    fn spec(&self) -> &Spec { &self.local_part.spec }
 
-    fn env(&self) -> &Env { &self.env }
+    fn env(&self) -> &Env { &self.local_part.env }
 
     fn chain_id(&self) -> u64 {
-        self.machine
+        self.local_part
+            .machine
             .params()
             .chain_id
             .read()
-            .get_chain_id(self.env.epoch_height) as u64
+            .get_chain_id(self.local_part.env.epoch_height) as u64
     }
 
-    fn depth(&self) -> usize { self.depth }
-
-    fn add_sstore_refund(&mut self, value: usize) {
-        *self.substate.sstore_clears_refund_mut() += value as i128;
-    }
-
-    fn sub_sstore_refund(&mut self, value: usize) {
-        *self.substate.sstore_clears_refund_mut() -= value as i128;
-    }
+    fn depth(&self) -> usize { self.local_part.depth }
 
     fn trace_next_instruction(
         &mut self, _pc: usize, _instruction: u8, _current_gas: U256,
@@ -451,23 +444,38 @@ impl<
         // TODO
     }
 
+    fn is_static(&self) -> bool { self.local_part.static_flag }
+
+    fn is_static_or_reentrancy(&self) -> bool {
+        self.local_part.static_flag || self.callstack.in_reentrancy()
+    }
+
     fn is_reentrancy(&self, _caller: &Address, callee: &Address) -> bool {
-        self.substate.reentrancy_happens_when_push(callee)
+        self.callstack.reentrancy_happens_when_push(callee)
+    }
+
+    fn internal_ref(&mut self) -> InternalRefContext {
+        InternalRefContext {
+            env: self.local_part.env,
+            spec: self.local_part.spec,
+            callstack: self.callstack,
+            state: self.state,
+            substate: &mut self.local_part.substate,
+        }
     }
 }
 
+/// TODO: Move this code to a seperated file. So we can distinguish function
+/// calls from test.
 #[cfg(test)]
 mod tests {
-    use super::{Context, InternalContractMap, OriginInfo, OutputPolicy};
+    use super::{InternalContractMap, LocalContext, OriginInfo};
     use crate::{
         machine::{new_machine_with_builtin, Machine},
-        state::{State, Substate},
+        state::{CallStackInfo, State, Substate},
         test_helpers::get_state_for_genesis_write,
         trace,
-        vm::{
-            CallType, Context as ContextTrait, ContractCreateResult,
-            CreateContractAddress, Env, Spec,
-        },
+        vm::{Context as ContextTrait, Env, Spec},
     };
     use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
     use cfx_state::{
@@ -517,6 +525,7 @@ mod tests {
         spec: Spec,
         substate: Substate,
         env: Env,
+        callstack: CallStackInfo,
     }
 
     impl TestSetup {
@@ -529,6 +538,7 @@ mod tests {
             );
             let env = get_test_env();
             let spec = machine.spec(env.number);
+            let callstack = CallStackInfo::default();
             let internal_contract_map = InternalContractMap::new();
 
             let mut setup = Self {
@@ -539,6 +549,7 @@ mod tests {
                 spec,
                 substate: Substate::new(),
                 env,
+                callstack,
             };
             setup
                 .state
@@ -554,20 +565,20 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
+        let mut callstack = CallStackInfo::default();
 
-        let ctx = Context::new(
-            state,
+        let mut lctx = LocalContext::new(
             &setup.env,
             &setup.machine,
             &setup.spec,
             0, /* depth */
-            0, /* stack_depth */
-            &origin,
-            &mut setup.substate,
-            OutputPolicy::InitContract,
+            origin,
+            setup.substate,
+            true,  /* is_create */
             false, /* static_flag */
             &setup.internal_contract_map,
         );
+        let ctx = lctx.activate(state, &mut callstack);
 
         assert_eq!(ctx.env().number, 100);
     }
@@ -577,20 +588,20 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
+        let mut callstack = CallStackInfo::default();
 
-        let mut ctx = Context::new(
-            state,
+        let mut lctx = LocalContext::new(
             &setup.env,
             &setup.machine,
             &setup.spec,
             0, /* depth */
-            0, /* stack_depth */
-            &origin,
-            &mut setup.substate,
-            OutputPolicy::InitContract,
+            origin,
+            setup.substate,
+            true,  /* is_create */
             false, /* static_flag */
             &setup.internal_contract_map,
         );
+        let mut ctx = lctx.activate(state, &mut callstack);
 
         let hash = ctx.blockhash(
             &"0000000000000000000000000000000000000000000000000000000000120000"
@@ -643,47 +654,48 @@ mod tests {
     //        assert_eq!(test_hash, hash);
     //    }
 
-    #[test]
-    #[should_panic]
-    fn can_call_fail_empty() {
-        let mut setup = TestSetup::new();
-        let state = &mut setup.state;
-        let origin = get_test_origin();
-
-        let mut ctx = Context::new(
-            state,
-            &setup.env,
-            &setup.machine,
-            &setup.spec,
-            0, /* depth */
-            0, /* stack_depth */
-            &origin,
-            &mut setup.substate,
-            OutputPolicy::InitContract,
-            false, /* static_flag */
-            &setup.internal_contract_map,
-        );
-
-        // this should panic because we have no balance on any account
-        ctx.call(
-        &"0000000000000000000000000000000000000000000000000000000000120000"
-            .parse::<U256>()
-            .unwrap(),
-        &Address::zero(),
-        &Address::zero(),
-        Some(
-            "0000000000000000000000000000000000000000000000000000000000150000"
-                .parse::<U256>()
-                .unwrap(),
-        ),
-        &[],
-        &Address::zero(),
-        CallType::Call,
-        false,
-    )
-            .unwrap()
-    .unwrap();
-    }
+    // #[test]
+    // #[should_panic]
+    // fn can_call_fail_empty() {
+    //     let mut setup = TestSetup::new();
+    //     let state = &mut setup.state;
+    //     let origin = get_test_origin();
+    //     let mut callstack = CallStackInfo::default();
+    //
+    //     let mut lctx = LocalContext::new(
+    //         &setup.env,
+    //         &setup.machine,
+    //         &setup.spec,
+    //         0, /* depth */
+    //         0, /* stack_depth */
+    //         origin,
+    //         setup.substate,
+    //         true,  /* is_create */
+    //         false, /* static_flag */
+    //         &setup.internal_contract_map,
+    //     );
+    //     let mut ctx = lctx.activate(state, &mut callstack);
+    //
+    //     // this should panic because we have no balance on any account
+    //     ctx.call(
+    //     &"0000000000000000000000000000000000000000000000000000000000120000"
+    //         .parse::<U256>()
+    //         .unwrap(),
+    //     &Address::zero(),
+    //     &Address::zero(),
+    //     Some(
+    //         "0000000000000000000000000000000000000000000000000000000000150000"
+    //             .parse::<U256>()
+    //             .unwrap(),
+    //     ),
+    //     &[],
+    //     &Address::zero(),
+    //     CallType::Call,
+    //     false,
+    // )
+    //         .unwrap()
+    // .unwrap();
+    // }
 
     #[test]
     fn can_log() {
@@ -696,25 +708,24 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
+        let mut callstack = CallStackInfo::default();
 
         {
-            let mut ctx = Context::new(
-                state,
+            let mut lctx = LocalContext::new(
                 &setup.env,
                 &setup.machine,
                 &setup.spec,
                 0, /* depth */
-                0, /* stack_depth */
-                &origin,
-                &mut setup.substate,
-                OutputPolicy::InitContract,
+                origin,
+                setup.substate,
+                true,  /* is_create */
                 false, /* static_flag */
                 &setup.internal_contract_map,
             );
+            let mut ctx = lctx.activate(state, &mut callstack);
             ctx.log(log_topics, &log_data).unwrap();
+            assert_eq!(lctx.substate.logs.len(), 1);
         }
-
-        assert_eq!(setup.substate.logs.len(), 1);
     }
 
     #[test]
@@ -725,6 +736,7 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let mut origin = get_test_origin();
+        let mut callstack = CallStackInfo::default();
 
         let mut contract_address = Address::zero();
         contract_address.set_contract_type_bits();
@@ -743,19 +755,18 @@ mod tests {
             .expect(&concat!(file!(), ":", line!(), ":", column!()));
 
         {
-            let mut ctx = Context::new(
-                state,
+            let mut lctx = LocalContext::new(
                 &setup.env,
                 &setup.machine,
                 &setup.spec,
                 0, /* depth */
-                0, /* stack_depth */
-                &origin,
-                &mut setup.substate,
-                OutputPolicy::InitContract,
+                origin,
+                setup.substate,
+                true,  /* is_create */
                 false, /* static_flag */
                 &setup.internal_contract_map,
             );
+            let mut ctx = lctx.activate(state, &mut callstack);
             let mut tracer = trace::NoopTracer;
             ctx.suicide(
                 &refund_account,
@@ -766,11 +777,13 @@ mod tests {
                     .account_start_nonce(setup.env.number),
             )
             .unwrap();
+            assert_eq!(lctx.substate.suicides.len(), 1);
         }
-
-        assert_eq!(setup.substate.suicides.len(), 1);
     }
 
+    //TODO: It seems create function only has non-trapped call in test. We
+    // remove non-trapped call.
+    /*
     #[test]
     fn can_create() {
         use std::str::FromStr;
@@ -778,21 +791,22 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
+        let mut callstack = CallStackInfo::default();
 
         let address = {
-            let mut ctx = Context::new(
-                state,
+            let mut lctx = LocalContext::new(
                 &setup.env,
                 &setup.machine,
                 &setup.spec,
                 0, /* depth */
                 0, /* stack_depth */
-                &origin,
-                &mut setup.substate,
-                OutputPolicy::InitContract,
+                origin,
+                setup.substate,
+                true,  /* is_create */
                 false, /* static_flag */
                 &setup.internal_contract_map,
             );
+            let mut ctx = lctx.activate(state, &mut callstack);
             match ctx
                 .create(
                     &U256::max_value(),
@@ -824,21 +838,22 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
+        let mut callstack = CallStackInfo::default();
 
         let address = {
-            let mut ctx = Context::new(
-                state,
+            let mut lctx = LocalContext::new(
                 &setup.env,
                 &setup.machine,
                 &setup.spec,
                 0, /* depth */
                 0, /* stack_depth */
-                &origin,
-                &mut setup.substate,
-                OutputPolicy::InitContract,
+                origin,
+                setup.substate,
+                true,  /* is_create */
                 false, /* static_flag */
                 &setup.internal_contract_map,
             );
+            let mut ctx = lctx.activate(state, &mut callstack);
 
             match ctx
                 .create(
@@ -864,5 +879,5 @@ mod tests {
             Address::from_str("84c100a15081f02b9efae8267a69f73bf15e75fa")
                 .unwrap()
         );
-    }
+    }*/
 }

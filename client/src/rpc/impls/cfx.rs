@@ -1417,13 +1417,34 @@ impl RpcImpl {
     }
 
     fn epoch_receipts(
-        &self, epoch: EpochNumber,
+        &self, epoch: BlockHashOrEpochNumber,
     ) -> RpcResult<Option<Vec<Vec<RpcReceipt>>>> {
         info!("RPC Request: cfx_getEpochReceipts({:?})", epoch);
 
-        let hashes = self.consensus.get_block_hashes_by_epoch(epoch.into())?;
-        let pivot_hash = *hashes.last().ok_or("Inconsistent state")?;
+        let hashes = match epoch {
+            BlockHashOrEpochNumber::EpochNumber(e) => {
+                self.consensus.get_block_hashes_by_epoch(e.into())?
+            }
+            BlockHashOrEpochNumber::BlockHash(h) => {
+                let e = match self.consensus.get_block_epoch_number(&h) {
+                    Some(e) => e,
+                    None => return Ok(None),
+                };
 
+                let hashes = self.consensus.get_block_hashes_by_epoch(
+                    primitives::EpochNumber::Number(e),
+                )?;
+
+                // if the provided hash is not a pivot hash, return null
+                if hashes.last() != Some(&h) {
+                    return Ok(None);
+                }
+
+                hashes
+            }
+        };
+
+        let pivot_hash = *hashes.last().ok_or("Inconsistent state")?;
         let mut epoch_receipts = vec![];
 
         for h in hashes {
@@ -1619,7 +1640,7 @@ impl LocalRpc for LocalRpcImpl {
         to self.rpc_impl {
             fn current_sync_phase(&self) -> JsonRpcResult<String>;
             fn consensus_graph_state(&self) -> JsonRpcResult<ConsensusGraphStates>;
-            fn epoch_receipts(&self, epoch: EpochNumber) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
+            fn epoch_receipts(&self, epoch: BlockHashOrEpochNumber) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
             fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
             fn send_transaction(
                 &self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<H256>;
