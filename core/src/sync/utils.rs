@@ -170,7 +170,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         Arc::new(FakeDiemDB {}) as Arc<dyn DBReaderForPoW>,
         PosConfiguration {},
     );
-    let pos_verifier = Arc::new(PosVerifier::new(pos_connection, 0));
+    let pos_verifier = Arc::new(PosVerifier::new(pos_connection, u64::MAX));
 
     let verification_config = VerificationConfig::new(
         true, /* test_mode */
