@@ -168,9 +168,7 @@ fn test_sender_balance() {
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(state.balance(&address).unwrap(), U256::from(0x7));
-    // We create a contract successfully, the substate contracts_created length
-    // should be 1?
-    assert_eq!(substate.contracts_created.len(), 1);
+    assert_eq!(substate.contracts_created.len(), 0);
 }
 
 #[test]
@@ -249,9 +247,7 @@ fn test_create_contract_out_of_depth() {
     };
 
     assert_eq!(gas_left, U256::from(62_970));
-    // We create a contract successfully, the substate contracts_created length
-    // should be 1?
-    assert_eq!(substate.contracts_created.len(), 1);
+    assert_eq!(substate.contracts_created.len(), 0);
 }
 
 #[test]

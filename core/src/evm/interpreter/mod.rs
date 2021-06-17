@@ -216,19 +216,13 @@ impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
             let result = self.step(context, tracer);
             match result {
                 InterpreterResult::Continue => {}
-                InterpreterResult::Done(value) => {
-                    return vm::TrapResult::Return(value)
-                }
+                InterpreterResult::Done(value) => return Ok(value),
                 InterpreterResult::Trap(trap) => match trap {
                     TrapKind::Call(params) => {
-                        return vm::TrapResult::SubCallCreate(TrapError::Call(
-                            params, self,
-                        ));
+                        return Err(TrapError::Call(params, self));
                     }
-                    TrapKind::Create(params, _) => {
-                        return vm::TrapResult::SubCallCreate(
-                            TrapError::Create(params, self),
-                        );
+                    TrapKind::Create(params, address) => {
+                        return Err(TrapError::Create(params, address, self));
                     }
                 },
                 InterpreterResult::Stopped => {
@@ -794,6 +788,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                     &endowment,
                     contract_code,
                     address_scheme,
+                    true,
                 )?;
                 return match create_result {
                     Ok(ContractCreateResult::Created(address, gas_left)) => {
@@ -937,6 +932,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                         input,
                         &code_address,
                         call_type,
+                        true,
                     )?
                 };
 

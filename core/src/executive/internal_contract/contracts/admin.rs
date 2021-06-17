@@ -13,13 +13,13 @@ use super::{
 use crate::check_signature;
 use crate::{
     evm::{ActionParams, Spec},
-    executive::InternalRefContext,
     impl_function_type, make_function_table, make_solidity_contract,
     make_solidity_function,
+    state::CallStackInfo,
     trace::{trace::ExecTrace, Tracer},
-    vm,
+    vm::{self, Env},
 };
-use cfx_state::state_trait::StateOpsTrait;
+use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{Address, U256};
 #[cfg(test)]
 use rustc_hex::FromHex;
@@ -39,17 +39,21 @@ impl_function_type!(SetAdmin, "non_payable_write", gas: |spec: &Spec| spec.sstor
 
 impl ExecutionTrait for SetAdmin {
     fn execute_inner(
-        &self, inputs: (Address, Address), params: &ActionParams,
-        context: &mut InternalRefContext,
+        &self, inputs: (Address, Address), params: &ActionParams, _env: &Env,
+        _spec: &Spec, state: &mut dyn StateOpsTrait,
+        substate: &mut dyn SubstateTrait<
+            CallStackInfo = CallStackInfo,
+            Spec = Spec,
+        >,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
         set_admin(
             inputs.0,
             inputs.1,
-            context.callstack.contract_in_creation(),
+            substate.contract_in_creation(),
             params,
-            context.state,
+            state,
         )
     }
 }
@@ -61,20 +65,16 @@ impl_function_type!(Destroy, "non_payable_write", gas: |spec: &Spec| spec.sstore
 
 impl ExecutionTrait for Destroy {
     fn execute_inner(
-        &self, input: Address, params: &ActionParams,
-        context: &mut InternalRefContext,
+        &self, input: Address, params: &ActionParams, env: &Env, spec: &Spec,
+        state: &mut dyn StateOpsTrait,
+        substate: &mut dyn SubstateTrait<
+            CallStackInfo = CallStackInfo,
+            Spec = Spec,
+        >,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        destroy(
-            input,
-            params,
-            context.state,
-            context.spec,
-            context.substate,
-            tracer,
-            context.env,
-        )
+        destroy(input, params, state, spec, substate, tracer, env)
     }
 }
 
@@ -85,12 +85,13 @@ impl_function_type!(GetAdmin, "query_with_default_gas");
 
 impl ExecutionTrait for GetAdmin {
     fn execute_inner(
-        &self, input: Address, _params: &ActionParams,
-        context: &mut InternalRefContext,
+        &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
+        state: &mut dyn StateOpsTrait,
+        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<Address>
     {
-        Ok(context.state.admin(&input)?)
+        Ok(state.admin(&input)?)
     }
 }
 

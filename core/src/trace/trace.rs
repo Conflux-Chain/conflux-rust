@@ -4,8 +4,7 @@
 
 use crate::{
     bytes::Bytes,
-    executive::ExecutiveResult,
-    vm::{ActionParams, CallType, Result as vmResult},
+    vm::{ActionParams, CallType, ContractCreateResult, MessageCallResult},
 };
 use cfx_internal_common::{DatabaseDecodable, DatabaseEncodable};
 use cfx_types::{Address, Bloom, BloomInput, H256, U256, U64};
@@ -117,30 +116,20 @@ pub struct CallResult {
     pub return_data: Bytes,
 }
 
-impl From<&vmResult<ExecutiveResult>> for CallResult {
-    fn from(r: &vmResult<ExecutiveResult>) -> Self {
+impl From<&MessageCallResult> for CallResult {
+    fn from(r: &MessageCallResult) -> Self {
         match r {
-            Ok(ExecutiveResult {
-                gas_left,
-                return_data,
-                apply_state: true,
-                ..
-            }) => CallResult {
+            MessageCallResult::Success(gas_left, return_data) => CallResult {
                 outcome: Outcome::Success,
                 gas_left: gas_left.clone(),
                 return_data: return_data.to_vec(),
             },
-            Ok(ExecutiveResult {
-                gas_left,
-                return_data,
-                apply_state: false,
-                ..
-            }) => CallResult {
+            MessageCallResult::Reverted(gas_left, return_data) => CallResult {
                 outcome: Outcome::Reverted,
                 gas_left: gas_left.clone(),
                 return_data: return_data.to_vec(),
             },
-            Err(err) => CallResult {
+            MessageCallResult::Failed(err) => CallResult {
                 outcome: Outcome::Fail,
                 gas_left: U256::zero(),
                 return_data: format!("{:?}", err).into(),
@@ -197,34 +186,24 @@ pub struct CreateResult {
     pub return_data: Bytes,
 }
 
-impl From<&vmResult<ExecutiveResult>> for CreateResult {
-    fn from(r: &vmResult<ExecutiveResult>) -> Self {
+impl From<&ContractCreateResult> for CreateResult {
+    fn from(r: &ContractCreateResult) -> Self {
         match r {
-            Ok(ExecutiveResult {
-                gas_left,
-                return_data,
-                apply_state: true,
-                create_address,
-            }) => CreateResult {
+            ContractCreateResult::Created(addr, gas_left) => CreateResult {
                 outcome: Outcome::Success,
-                addr: create_address.expect(
-                    "Address should not be none in executive result of create",
-                ),
+                addr: addr.clone(),
                 gas_left: gas_left.clone(),
-                return_data: return_data.to_vec(),
+                return_data: vec![],
             },
-            Ok(ExecutiveResult {
-                gas_left,
-                return_data,
-                apply_state: false,
-                ..
-            }) => CreateResult {
-                outcome: Outcome::Reverted,
-                addr: Address::zero(),
-                gas_left: gas_left.clone(),
-                return_data: return_data.to_vec(),
-            },
-            Err(err) => CreateResult {
+            ContractCreateResult::Reverted(gas_left, return_data) => {
+                CreateResult {
+                    outcome: Outcome::Reverted,
+                    addr: Address::zero(),
+                    gas_left: gas_left.clone(),
+                    return_data: return_data.to_vec(),
+                }
+            }
+            ContractCreateResult::Failed(err) => CreateResult {
                 outcome: Outcome::Fail,
                 addr: Address::zero(),
                 gas_left: U256::zero(),

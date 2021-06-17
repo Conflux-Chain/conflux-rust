@@ -12,11 +12,12 @@ pub use solidity_abi::ABIDecodeError;
 use self::contracts::SolFnTable;
 use crate::{
     bytes::Bytes,
-    executive::InternalRefContext,
     hash::keccak,
+    state::CallStackInfo,
     trace::{trace::ExecTrace, Tracer},
-    vm::{self, ActionParams, GasLeft},
+    vm::{self, ActionParams, Env, GasLeft, Spec},
 };
+use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{Address, H256};
 use std::sync::Arc;
 
@@ -27,7 +28,7 @@ lazy_static! {
 }
 
 /// Native implementation of an internal contract.
-pub trait InternalContractTrait: Send + Sync {
+pub trait InternalContractTrait {
     /// Address of the internal contract
     fn address(&self) -> &Address;
 
@@ -36,7 +37,12 @@ pub trait InternalContractTrait: Send + Sync {
 
     /// execute this internal contract on the given parameters.
     fn execute(
-        &self, params: &ActionParams, context: &mut InternalRefContext,
+        &self, params: &ActionParams, env: &Env, spec: &Spec,
+        state: &mut dyn StateOpsTrait,
+        substate: &mut dyn SubstateTrait<
+            Spec = Spec,
+            CallStackInfo = CallStackInfo,
+        >,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>
     {
@@ -59,7 +65,15 @@ pub trait InternalContractTrait: Send + Sync {
             .get(&fn_sig)
             .ok_or(vm::Error::InternalContract("unsupported function"))?;
 
-        solidity_fn.execute(call_params, params, context, tracer)
+        solidity_fn.execute(
+            call_params,
+            params,
+            env,
+            spec,
+            state,
+            substate,
+            tracer,
+        )
     }
 
     fn code(&self) -> Arc<Bytes> { INTERNAL_CONTRACT_CODE.clone() }
@@ -72,8 +86,12 @@ pub trait InternalContractTrait: Send + Sync {
 /// Native implementation of a solidity-interface function.
 pub trait SolidityFunctionTrait: Send + Sync {
     fn execute(
-        &self, input: &[u8], params: &ActionParams,
-        context: &mut InternalRefContext,
+        &self, input: &[u8], params: &ActionParams, env: &Env, spec: &Spec,
+        state: &mut dyn StateOpsTrait,
+        substate: &mut dyn SubstateTrait<
+            Spec = Spec,
+            CallStackInfo = CallStackInfo,
+        >,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>;
 

@@ -5,7 +5,8 @@
 use crate::{
     bytes::Bytes,
     hash::{keccak, KECCAK_EMPTY},
-    state::{AccountEntryProtectedMethods, StateGeneric},
+    state::{AccountEntryProtectedMethods, CallStackInfo, StateGeneric},
+    vm::Spec,
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::staking::COLLATERAL_UNITS_PER_STORAGE_KEY;
@@ -697,7 +698,10 @@ impl OverlayAccount {
     /// account in current execution.
     pub fn commit_ownership_change<StateDbStorage: StorageStateTrait>(
         &mut self, db: &StateDbGeneric<StateDbStorage>,
-        substate: &mut dyn SubstateTrait,
+        substate: &mut dyn SubstateTrait<
+            CallStackInfo = CallStackInfo,
+            Spec = Spec,
+        >,
     ) -> DbResult<()>
     {
         let storage_owner_lv1_write_cache: Vec<_> =

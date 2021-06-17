@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    state::cleanup_mode,
+    state::CallStackInfo,
     trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, Spec},
 };
@@ -15,7 +15,10 @@ use cfx_types::{address_util::AddressUtil, Address, U256};
 pub fn set_sponsor_for_gas(
     contract_address: Address, upper_bound: U256, params: &ActionParams,
     spec: &Spec, state: &mut dyn StateOpsTrait,
-    substate: &mut dyn SubstateTrait,
+    substate: &mut dyn SubstateTrait<
+        Spec = Spec,
+        CallStackInfo = CallStackInfo,
+    >,
     tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
 ) -> vm::Result<()>
 {
@@ -77,14 +80,14 @@ pub fn set_sponsor_for_gas(
             state.add_balance(
                 prev_sponsor.as_ref().unwrap(),
                 &prev_sponsor_balance,
-                cleanup_mode(substate, &spec),
+                substate.to_cleanup_mode(&spec),
                 account_start_nonce,
             )?;
         }
         state.sub_balance(
             &params.address,
             &sponsor_balance,
-            &mut cleanup_mode(substate, &spec),
+            &mut substate.to_cleanup_mode(&spec),
         )?;
         state.set_sponsor_for_gas(
             &contract_address,
@@ -106,7 +109,7 @@ pub fn set_sponsor_for_gas(
         state.sub_balance(
             &params.address,
             &sponsor_balance,
-            &mut cleanup_mode(substate, &spec),
+            &mut substate.to_cleanup_mode(&spec),
         )?;
         state.set_sponsor_for_gas(
             &contract_address,
@@ -122,7 +125,11 @@ pub fn set_sponsor_for_gas(
 /// Implementation of `set_sponsor_for_collateral(address)`.
 pub fn set_sponsor_for_collateral(
     contract_address: Address, params: &ActionParams, spec: &Spec,
-    state: &mut dyn StateOpsTrait, substate: &mut dyn SubstateTrait,
+    state: &mut dyn StateOpsTrait,
+    substate: &mut dyn SubstateTrait<
+        Spec = Spec,
+        CallStackInfo = CallStackInfo,
+    >,
     tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
 ) -> vm::Result<()>
 {
@@ -175,14 +182,14 @@ pub fn set_sponsor_for_collateral(
             state.add_balance(
                 prev_sponsor.as_ref().unwrap(),
                 &(prev_sponsor_balance + collateral_for_storage),
-                cleanup_mode(substate, &spec),
+                substate.to_cleanup_mode(&spec),
                 account_start_nonce,
             )?;
         }
         state.sub_balance(
             &params.address,
             &sponsor_balance,
-            &mut cleanup_mode(substate, &spec),
+            &mut substate.to_cleanup_mode(&spec),
         )?;
         state.set_sponsor_for_collateral(
             &contract_address,
@@ -193,7 +200,7 @@ pub fn set_sponsor_for_collateral(
         state.sub_balance(
             &params.address,
             &sponsor_balance,
-            &mut cleanup_mode(substate, &spec),
+            &mut substate.to_cleanup_mode(&spec),
         )?;
         state.set_sponsor_for_collateral(
             &contract_address,

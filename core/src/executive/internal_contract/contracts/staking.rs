@@ -11,14 +11,14 @@ use super::{
 use crate::check_signature;
 use crate::{
     evm::{ActionParams, Spec},
-    executive::InternalRefContext,
     impl_function_type, make_function_table, make_solidity_contract,
     make_solidity_function,
+    state::CallStackInfo,
     trace::{trace::ExecTrace, Tracer},
-    vm,
+    vm::{self, Env},
 };
 use cfx_parameters::internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS;
-use cfx_state::state_trait::StateOpsTrait;
+use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{Address, U256};
 #[cfg(test)]
 use rustc_hex::FromHex;
@@ -56,12 +56,16 @@ impl UpfrontPaymentTrait for Deposit {
 
 impl ExecutionTrait for Deposit {
     fn execute_inner(
-        &self, input: U256, params: &ActionParams,
-        context: &mut InternalRefContext,
+        &self, input: U256, params: &ActionParams, env: &Env, _spec: &Spec,
+        state: &mut dyn StateOpsTrait,
+        _substate: &mut dyn SubstateTrait<
+            CallStackInfo = CallStackInfo,
+            Spec = Spec,
+        >,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        deposit(input, params, context.env, context.state, tracer)
+        deposit(input, params, env, state, tracer)
     }
 }
 
@@ -83,12 +87,16 @@ impl UpfrontPaymentTrait for Withdraw {
 
 impl ExecutionTrait for Withdraw {
     fn execute_inner(
-        &self, input: U256, params: &ActionParams,
-        context: &mut InternalRefContext,
+        &self, input: U256, params: &ActionParams, env: &Env, _spec: &Spec,
+        state: &mut dyn StateOpsTrait,
+        _substate: &mut dyn SubstateTrait<
+            CallStackInfo = CallStackInfo,
+            Spec = Spec,
+        >,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        withdraw(input, params, context.env, context.state, tracer)
+        withdraw(input, params, env, state, tracer)
     }
 }
 
@@ -110,12 +118,16 @@ impl UpfrontPaymentTrait for VoteLock {
 
 impl ExecutionTrait for VoteLock {
     fn execute_inner(
-        &self, inputs: (U256, U256), params: &ActionParams,
-        context: &mut InternalRefContext,
+        &self, inputs: (U256, U256), params: &ActionParams, env: &Env,
+        _spec: &Spec, state: &mut dyn StateOpsTrait,
+        _substate: &mut dyn SubstateTrait<
+            CallStackInfo = CallStackInfo,
+            Spec = Spec,
+        >,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        vote_lock(inputs.0, inputs.1, params, context.env, context.state)
+        vote_lock(inputs.0, inputs.1, params, env, state)
     }
 }
 
@@ -126,12 +138,16 @@ impl_function_type!(GetStakingBalance, "query_with_default_gas");
 
 impl ExecutionTrait for GetStakingBalance {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams,
-        context: &mut InternalRefContext,
+        &self, input: Address, _: &ActionParams, _env: &Env, _spec: &Spec,
+        state: &mut dyn StateOpsTrait,
+        _substate: &mut dyn SubstateTrait<
+            CallStackInfo = CallStackInfo,
+            Spec = Spec,
+        >,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
-        Ok(context.state.staking_balance(&input)?)
+        Ok(state.staking_balance(&input)?)
     }
 }
 
@@ -154,15 +170,19 @@ impl UpfrontPaymentTrait for GetLockedStakingBalance {
 impl ExecutionTrait for GetLockedStakingBalance {
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
-        context: &mut InternalRefContext,
+        env: &Env, _spec: &Spec, state: &mut dyn StateOpsTrait,
+        _substate: &mut dyn SubstateTrait<
+            CallStackInfo = CallStackInfo,
+            Spec = Spec,
+        >,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
         Ok(get_locked_staking(
             address,
             block_number,
-            context.env.number,
-            context.state,
+            env.number,
+            state,
         )?)
     }
 }
@@ -186,16 +206,15 @@ impl UpfrontPaymentTrait for GetVotePower {
 impl ExecutionTrait for GetVotePower {
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
-        context: &mut InternalRefContext,
+        env: &Env, _spec: &Spec, state: &mut dyn StateOpsTrait,
+        _substate: &mut dyn SubstateTrait<
+            CallStackInfo = CallStackInfo,
+            Spec = Spec,
+        >,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<U256>
     {
-        Ok(get_vote_power(
-            address,
-            block_number,
-            context.env.number,
-            context.state,
-        )?)
+        Ok(get_vote_power(address, block_number, env.number, state)?)
     }
 }
 
