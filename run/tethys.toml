@@ -150,6 +150,7 @@ log_conf="log.yaml"
 # jsonrpc_http_port=12537
 # jsonrpc_local_tcp_port=12538
 jsonrpc_local_http_port=12539
+# jsonrpc_local_ws_port=12540
 
 # Specify the APIs available through the public JSON-RPC interfaces (HTTP, TCP, WebSocket)
 # using a comma-delimited list of API names.
