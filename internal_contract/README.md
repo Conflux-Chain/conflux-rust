@@ -212,7 +212,7 @@ Conflux introduces the staking mechanism for two reasons: first, staking mechani
 
 At a high level, Conflux implements a built-in **Staking** contract to record the staking information of all accounts, for both normal addresses and smart contracts. By sending a transaction to this contract, users (both external users and smart contracts) can deposit/withdraw funds, which is also called stakes in the contract. The interest of staked funds is issued at withdrawal, and depends on both the amount and staking period of the fund being withdrawn.
 
-A user (or a contract) can deposit balance for staking by calling `deposit(uint amount)` and then `amount` Drip will be moved from its `balance` to `stakingBalance`. Notice that this function is non-payable, the user only needs to specify the amount to be staked without transferring any funds to internal contract.
+A user (or a contract) can deposit balance for staking by calling `deposit(uint amount)` and then `amount` Drip will be moved from its `balance` to `stakingBalance`. Notice that this function is non-payable, the user only needs to specify the amount to be staked without transferring any funds to internal contract and the minimum deposit amount is `1 CFX`.
 
 The user can also withdraw balance by `withdraw(uint amount)`. The caller can call this function to withdraw some tokens from the Conflux Internal Staking Contract. This will also trigger interest settlement. The staking capital and staking interest will be transferred to the user's balance in time. All the withdrawal applications will be processed on a first-come-first-served basis according to the sequence of staking orders.
 
