@@ -25,9 +25,7 @@ pub struct CallStackInfo {
 
 impl CallStackInfo {
     fn push(&mut self, address: Address) {
-        // We should still use the correct behaviour to check if reentrancy
-        // happens.
-        if self.last() != Some(&address) && self.contains_key(&address) {
+        if self.reentrancy_happens_when_push(&address) {
             self.first_reentrancy_depth
                 .get_or_insert(self.call_stack_recipient_addresses.len());
         }
@@ -57,23 +55,7 @@ impl CallStackInfo {
     }
 
     pub fn reentrancy_happens_when_push(&self, address: &Address) -> bool {
-        // Consistent with old behaviour.
-        // The old (unexpected) behaviour is equivalent to the top element is
-        // lost.
-        let self_call = if let [.., second_last, _last] =
-            self.call_stack_recipient_addresses.as_slice()
-        {
-            second_last == address
-        } else {
-            false
-        };
-        // Check if the call stack except the last one contains key.
-        let contains_key = self.contains_key(address)
-            && (self.last() != Some(address)
-                || self.address_counter[address] > 1);
-        !self_call && contains_key
-        // Expected behaviour
-        // self.last() != Some(address) && self.contains_key(address)
+        self.last() != Some(address) && self.contains_key(address)
     }
 
     pub fn last(&self) -> Option<&Address> {
@@ -85,15 +67,7 @@ impl CallStackInfo {
     }
 
     pub fn in_reentrancy(&self) -> bool {
-        // Consistent with old behaviour
-        // The old (unexpected) behaviour is equivalent to the top element is
-        // lost.
-        self.first_reentrancy_depth.map_or(false, |depth| {
-            (depth as isize)
-                < self.call_stack_recipient_addresses.len() as isize - 1
-        })
-        // Expected behaviour
-        // self.first_reentrancy_depth.is_some()
+        self.first_reentrancy_depth.is_some()
     }
 }
 
@@ -261,7 +235,10 @@ impl SubstateTrait for Substate {
     }
 
     fn in_reentrancy(&self) -> bool {
-        self.contracts_in_callstack.borrow().in_reentrancy()
+        self.contracts_in_callstack
+            .borrow()
+            .first_reentrancy_depth
+            .is_some()
     }
 
     fn sstore_clears_refund(&self) -> i128 { self.sstore_clears_refund }
@@ -279,7 +256,10 @@ impl SubstateTrait for Substate {
     fn reentrancy_happens_when_push(&self, address: &Address) -> bool {
         self.contracts_in_callstack
             .borrow()
-            .reentrancy_happens_when_push(address)
+            .call_stack_recipient_addresses
+            .last()
+            != Some(address)
+            && self.contains_key(address)
     }
 
     fn record_storage_release(&mut self, address: &Address, collaterals: u64) {
@@ -298,7 +278,10 @@ impl SubstateTrait for Substate {
     }
 
     fn contains_key(&self, key: &Address) -> bool {
-        self.contracts_in_callstack.borrow().contains_key(key)
+        self.contracts_in_callstack
+            .borrow()
+            .address_counter
+            .contains_key(key)
     }
 
     fn suicides(&self) -> &HashSet<Address> { &self.suicides }
