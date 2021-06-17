@@ -87,7 +87,9 @@ impl NetworkSender {
     {
         ensure!(from != self.author, "Retrieve block from self");
 
-        let public_key = self.validators.get_public_key(&from).unwrap();
+        let public_key = self.validators.get_public_key(&from).ok_or(
+            anyhow!("request_block: from {:?} is not a validator", from),
+        )?;
         let peer_hash = self
             .network_sender
             .protocol_handler
@@ -95,7 +97,10 @@ impl NetworkSender {
             .read()
             .get(&public_key)
             .cloned()
-            .unwrap();
+            .ok_or(anyhow!(
+                "request_block: recipient {:?} has been removed",
+                public_key
+            ))?;
         let peer_state =
             self.network_sender.protocol_handler.peers.get(&peer_hash);
         if peer_state.is_none() {

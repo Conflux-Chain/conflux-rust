@@ -24,6 +24,7 @@ use diem_crypto::{
     ed25519::{Ed25519PrivateKey, Ed25519PublicKey},
     ValidCryptoMaterialStringExt,
 };
+use diem_types::account_address::from_public_key;
 use keccak_hash::keccak;
 use keylib::{sign, Generator, KeyPair, Random, Secret};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
@@ -1095,8 +1096,9 @@ impl NetworkServiceInner {
                         match session_data.session_data {
                             SessionData::Ready { pos_public_key } => {
                                 debug!(
-                                    "receive Ready with pos_public_key={:?}",
-                                    pos_public_key
+                                    "receive Ready with pos_public_key={:?} account={:?}",
+                                    pos_public_key,
+                                    pos_public_key.as_ref().map(|k| from_public_key(k)),
                                 );
                                 handshake_done = true;
                                 session_node_id = Some(*sess.id().unwrap());
