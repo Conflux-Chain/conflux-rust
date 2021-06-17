@@ -151,9 +151,11 @@ build_config! {
         // Network section.
         (jsonrpc_local_tcp_port, (Option<u16>), None)
         (jsonrpc_local_http_port, (Option<u16>), None)
+        (jsonrpc_local_ws_port, (Option<u16>), None)
         (jsonrpc_ws_port, (Option<u16>), None)
         (jsonrpc_tcp_port, (Option<u16>), None)
         (jsonrpc_http_port, (Option<u16>), None)
+        (jsonrpc_http_threads, (Option<usize>), None)
         (jsonrpc_cors, (Option<String>), None)
         (jsonrpc_http_keep_alive, (bool), false)
         (jsonrpc_ws_max_payload_bytes, (usize), 30 * 1024 * 1024)
@@ -256,6 +258,7 @@ build_config! {
         (storage_delta_mpts_node_map_vec_size, (u32), cfx_storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
         (storage_delta_mpts_slab_idle_size, (u32), cfx_storage::defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE)
         (storage_max_open_snapshots, (u16), cfx_storage::defaults::DEFAULT_MAX_OPEN_SNAPSHOTS)
+        (storage_max_open_mpt_count, (u32), cfx_storage::defaults::DEFAULT_MAX_OPEN_MPT)
         (strict_tx_index_gc, (bool), true)
         (sync_state_starting_epoch, (Option<u64>), None)
         (sync_state_epoch_gap, (Option<u64>), None)
@@ -661,6 +664,7 @@ impl Configuration {
                 .raw_conf
                 .provide_more_snapshot_for_sync
                 .clone(),
+            max_open_mpt_count: self.raw_conf.storage_max_open_mpt_count,
         }
     }
 
@@ -898,6 +902,7 @@ impl Configuration {
             self.raw_conf.jsonrpc_local_http_port,
             self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
+            self.raw_conf.jsonrpc_http_threads,
         )
     }
 
@@ -907,11 +912,27 @@ impl Configuration {
             self.raw_conf.jsonrpc_http_port,
             self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
+            self.raw_conf.jsonrpc_http_threads,
+        )
+    }
+
+    pub fn local_tcp_config(&self) -> TcpConfiguration {
+        TcpConfiguration::new(
+            Some((127, 0, 0, 1)),
+            self.raw_conf.jsonrpc_local_tcp_port,
         )
     }
 
     pub fn tcp_config(&self) -> TcpConfiguration {
         TcpConfiguration::new(None, self.raw_conf.jsonrpc_tcp_port)
+    }
+
+    pub fn local_ws_config(&self) -> WsConfiguration {
+        WsConfiguration::new(
+            Some((127, 0, 0, 1)),
+            self.raw_conf.jsonrpc_local_ws_port,
+            self.raw_conf.jsonrpc_ws_max_payload_bytes,
+        )
     }
 
     pub fn ws_config(&self) -> WsConfiguration {

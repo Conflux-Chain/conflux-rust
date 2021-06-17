@@ -20,7 +20,10 @@ pub use self::{
         Context, ContractCreateResult, CreateContractAddress, MessageCallResult,
     },
     env::Env,
-    error::{Error, ExecTrapResult, Result, TrapError, TrapKind, TrapResult},
+    error::{
+        separate_out_db_error, Error, ExecTrapError, ExecTrapResult, Result,
+        TrapError, TrapKind, TrapResult,
+    },
     return_data::{GasLeft, ReturnData},
     spec::{CleanDustMode, Spec, WasmCosts},
 };

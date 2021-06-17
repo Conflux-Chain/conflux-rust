@@ -1357,9 +1357,9 @@ impl RpcImpl {
     ) -> RpcResult<TokenSupplyInfo> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
         let state = self.consensus.get_state_by_epoch_number(epoch, "epoch")?;
-        let total_issued = *state.total_issued_tokens();
-        let total_staking = *state.total_staking_tokens();
-        let total_collateral = *state.total_storage_tokens();
+        let total_issued = state.total_issued_tokens();
+        let total_staking = state.total_staking_tokens();
+        let total_collateral = state.total_storage_tokens();
         let two_year_unlock_address = genesis_contract_address_two_year();
         let four_year_unlock_address = genesis_contract_address_four_year();
         let two_year_locked = state
@@ -1417,13 +1417,34 @@ impl RpcImpl {
     }
 
     fn epoch_receipts(
-        &self, epoch: EpochNumber,
+        &self, epoch: BlockHashOrEpochNumber,
     ) -> RpcResult<Option<Vec<Vec<RpcReceipt>>>> {
         info!("RPC Request: cfx_getEpochReceipts({:?})", epoch);
 
-        let hashes = self.consensus.get_block_hashes_by_epoch(epoch.into())?;
-        let pivot_hash = *hashes.last().ok_or("Inconsistent state")?;
+        let hashes = match epoch {
+            BlockHashOrEpochNumber::EpochNumber(e) => {
+                self.consensus.get_block_hashes_by_epoch(e.into())?
+            }
+            BlockHashOrEpochNumber::BlockHash(h) => {
+                let e = match self.consensus.get_block_epoch_number(&h) {
+                    Some(e) => e,
+                    None => return Ok(None),
+                };
 
+                let hashes = self.consensus.get_block_hashes_by_epoch(
+                    primitives::EpochNumber::Number(e),
+                )?;
+
+                // if the provided hash is not a pivot hash, return null
+                if hashes.last() != Some(&h) {
+                    return Ok(None);
+                }
+
+                hashes
+            }
+        };
+
+        let pivot_hash = *hashes.last().ok_or("Inconsistent state")?;
         let mut epoch_receipts = vec![];
 
         for h in hashes {
@@ -1619,7 +1640,7 @@ impl LocalRpc for LocalRpcImpl {
         to self.rpc_impl {
             fn current_sync_phase(&self) -> JsonRpcResult<String>;
             fn consensus_graph_state(&self) -> JsonRpcResult<ConsensusGraphStates>;
-            fn epoch_receipts(&self, epoch: EpochNumber) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
+            fn epoch_receipts(&self, epoch: BlockHashOrEpochNumber) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
             fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
             fn send_transaction(
                 &self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<H256>;

@@ -28,7 +28,10 @@ use super::{
     spec::Spec,
     Error,
 };
-use crate::trace::{trace::ExecTrace, Tracer};
+use crate::{
+    executive::InternalRefContext,
+    trace::{trace::ExecTrace, Tracer},
+};
 use cfx_bytes::Bytes;
 use cfx_types::{Address, H256, U256};
 use std::sync::Arc;
@@ -104,7 +107,7 @@ pub trait Context {
     /// succesfull.
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
-        address: CreateContractAddress, trap: bool,
+        address: CreateContractAddress,
     ) -> cfx_statedb::Result<
         ::std::result::Result<ContractCreateResult, TrapKind>,
     >;
@@ -117,7 +120,7 @@ pub trait Context {
     fn call(
         &mut self, gas: &U256, sender_address: &Address,
         receive_address: &Address, value: Option<U256>, data: &[u8],
-        code_address: &Address, call_type: CallType, trap: bool,
+        code_address: &Address, call_type: CallType,
     ) -> cfx_statedb::Result<::std::result::Result<MessageCallResult, TrapKind>>;
 
     /// Returns code at given address
@@ -160,12 +163,6 @@ pub trait Context {
     /// then A depth is 0, B is 1, C is 2 and so on.
     fn depth(&self) -> usize;
 
-    /// Increments sstore refunds counter.
-    fn add_sstore_refund(&mut self, value: usize);
-
-    /// Decrements sstore refunds counter.
-    fn sub_sstore_refund(&mut self, value: usize);
-
     /// Decide if any more operations should be traced. Passthrough for the VM
     /// trace.
     fn trace_next_instruction(
@@ -199,4 +196,7 @@ pub trait Context {
     /// The call stack doesn't have the current executive, so the caller address
     /// should be passed.
     fn is_reentrancy(&self, caller: &Address, callee: &Address) -> bool;
+
+    // TODO: Separate this interface to another trait maybe.
+    fn internal_ref(&mut self) -> InternalRefContext;
 }

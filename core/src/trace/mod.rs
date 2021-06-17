@@ -3,11 +3,12 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    executive::ExecutiveResult,
     trace::trace::{
         Action, Call, CallResult, Create, CreateResult, ExecTrace,
         InternalTransferAction,
     },
-    vm::{ActionParams, ContractCreateResult, MessageCallResult},
+    vm::{ActionParams, Result as VmResult},
 };
 use cfx_types::{Address, U256};
 
@@ -26,13 +27,15 @@ pub trait Tracer: Send {
     fn prepare_trace_call(&mut self, params: &ActionParams);
 
     /// Prepares call result trace
-    fn prepare_trace_call_result(&mut self, result: &MessageCallResult);
+    fn prepare_trace_call_result(&mut self, result: &VmResult<ExecutiveResult>);
 
     /// Prepares create trace for given params.
     fn prepare_trace_create(&mut self, params: &ActionParams);
 
     /// Prepares create result trace
-    fn prepare_trace_create_result(&mut self, result: &ContractCreateResult);
+    fn prepare_trace_create_result(
+        &mut self, result: &VmResult<ExecutiveResult>,
+    );
 
     /// Prepares internal transfer action
     fn prepare_internal_transfer_action(
@@ -51,11 +54,11 @@ impl Tracer for NoopTracer {
 
     fn prepare_trace_call(&mut self, _: &ActionParams) {}
 
-    fn prepare_trace_call_result(&mut self, _: &MessageCallResult) {}
+    fn prepare_trace_call_result(&mut self, _: &VmResult<ExecutiveResult>) {}
 
     fn prepare_trace_create(&mut self, _: &ActionParams) {}
 
-    fn prepare_trace_create_result(&mut self, _: &ContractCreateResult) {}
+    fn prepare_trace_create_result(&mut self, _: &VmResult<ExecutiveResult>) {}
 
     fn prepare_internal_transfer_action(
         &mut self, _: Address, _: Address, _: U256,
@@ -81,7 +84,9 @@ impl Tracer for ExecutiveTracer {
         self.traces.push(trace);
     }
 
-    fn prepare_trace_call_result(&mut self, result: &MessageCallResult) {
+    fn prepare_trace_call_result(
+        &mut self, result: &VmResult<ExecutiveResult>,
+    ) {
         let trace = ExecTrace {
             action: Action::CallResult(CallResult::from(result)),
         };
@@ -95,7 +100,9 @@ impl Tracer for ExecutiveTracer {
         self.traces.push(trace);
     }
 
-    fn prepare_trace_create_result(&mut self, result: &ContractCreateResult) {
+    fn prepare_trace_create_result(
+        &mut self, result: &VmResult<ExecutiveResult>,
+    ) {
         let trace = ExecTrace {
             action: Action::CreateResult(CreateResult::from(result)),
         };

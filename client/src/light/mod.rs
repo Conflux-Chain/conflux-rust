@@ -30,6 +30,8 @@ use runtime::Runtime;
 pub struct LightClientExtraComponents {
     pub consensus: Arc<ConsensusGraph>,
     pub debug_rpc_http_server: Option<HttpServer>,
+    pub debug_rpc_tcp_server: Option<TcpServer>,
+    pub debug_rpc_ws_server: Option<WsServer>,
     pub light: Arc<LightQueryService>,
     pub rpc_http_server: Option<HttpServer>,
     pub rpc_tcp_server: Option<TcpServer>,
@@ -88,6 +90,7 @@ impl LightClient {
             consensus.clone(),
             data_man.clone(),
         ));
+
         let debug_rpc_http_server = super::rpc::start_http(
             conf.local_http_config(),
             setup_debug_rpc_apis_light(
@@ -98,8 +101,30 @@ impl LightClient {
             ),
         )?;
 
+        let debug_rpc_tcp_server = super::rpc::start_tcp(
+            conf.local_tcp_config(),
+            setup_debug_rpc_apis_light(
+                common_impl.clone(),
+                rpc_impl.clone(),
+                pubsub.clone(),
+                &conf,
+            ),
+            RpcExtractor,
+        )?;
+
         let rpc_tcp_server = super::rpc::start_tcp(
             conf.tcp_config(),
+            setup_public_rpc_apis_light(
+                common_impl.clone(),
+                rpc_impl.clone(),
+                pubsub.clone(),
+                &conf,
+            ),
+            RpcExtractor,
+        )?;
+
+        let debug_rpc_ws_server = super::rpc::start_ws(
+            conf.local_ws_config(),
             setup_public_rpc_apis_light(
                 common_impl.clone(),
                 rpc_impl.clone(),
@@ -136,6 +161,8 @@ impl LightClient {
             other_components: LightClientExtraComponents {
                 consensus,
                 debug_rpc_http_server,
+                debug_rpc_tcp_server,
+                debug_rpc_ws_server,
                 light,
                 rpc_http_server,
                 rpc_tcp_server,
