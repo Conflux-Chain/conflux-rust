@@ -12,8 +12,6 @@ use crate::{
 use cfx_parameters::internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{Address, U256};
-#[cfg(test)]
-use rustc_hex::FromHex;
 
 // Definitions for the whole contract.
 make_solidity_contract! {

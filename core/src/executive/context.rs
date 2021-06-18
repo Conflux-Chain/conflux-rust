@@ -543,7 +543,7 @@ mod tests {
             );
             let env = get_test_env();
             let spec = machine.spec(env.number);
-            let callstack = CallStackInfo::default();
+            let callstack = CallStackInfo::new(&spec);
             let internal_contract_map = InternalContractMap::new();
 
             let mut setup = Self {
@@ -570,7 +570,7 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
-        let mut callstack = CallStackInfo::default();
+        let mut callstack = CallStackInfo::new(&setup.spec);
 
         let mut lctx = LocalContext::new(
             &setup.env,
@@ -593,7 +593,7 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
-        let mut callstack = CallStackInfo::default();
+        let mut callstack = CallStackInfo::new(&setup.spec);
 
         let mut lctx = LocalContext::new(
             &setup.env,
@@ -713,7 +713,7 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
-        let mut callstack = CallStackInfo::default();
+        let mut callstack = CallStackInfo::new(&setup.spec);
 
         {
             let mut lctx = LocalContext::new(
@@ -741,7 +741,7 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let mut origin = get_test_origin();
-        let mut callstack = CallStackInfo::default();
+        let mut callstack = CallStackInfo::new(&setup.spec);
 
         let mut contract_address = Address::zero();
         contract_address.set_contract_type_bits();

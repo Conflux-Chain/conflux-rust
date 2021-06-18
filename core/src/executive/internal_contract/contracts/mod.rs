@@ -10,6 +10,8 @@ mod staking;
 mod macros {
     #[cfg(test)]
     pub use crate::check_signature;
+    #[cfg(test)]
+    pub use rustc_hex::FromHex;
 
     pub use crate::{
         group_impl_activate_at, impl_activate_at, impl_function_type,
