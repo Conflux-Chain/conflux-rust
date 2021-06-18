@@ -1912,6 +1912,48 @@ impl SynchronizationGraph {
         self.consensus.construct_pivot_state();
         true
     }
+
+    /// TODO(lpl): Only triggered when pos commits new blocks?
+    /// Check if not_ready_frontier blocks become ready now.
+    /// Blocks that are not ready because of missing pos references only become
+    /// ready here.
+    pub fn check_not_ready_frontier(&self, is_light_node: bool) {
+        debug!("check_not_ready_frontier starts");
+        let mut inner = self.inner.write();
+        if is_light_node {
+            for b in inner.not_ready_blocks_frontier.get_frontier().clone() {
+                debug!(
+                    "check_not_ready_frontier: check {:?}",
+                    inner.arena[b].block_header.hash()
+                );
+                if inner.new_to_be_header_graph_ready(b) {
+                    self.propagate_header_graph_status(
+                        &mut *inner,
+                        vec![b],
+                        true, /* need_to_verify */
+                        b,
+                        true, /* insert_to_consensus */
+                        true, /* persistent */
+                    );
+                }
+            }
+        } else {
+            let mut new_ready_blocks = Vec::new();
+            for b in inner.not_ready_blocks_frontier.get_frontier().clone() {
+                debug!(
+                    "check_not_ready_frontier: check {:?}",
+                    inner.arena[b].block_header.hash()
+                );
+                if inner.new_to_be_block_graph_ready(b) {
+                    debug!("new graph ready found");
+                    new_ready_blocks.push(b);
+                }
+            }
+            // This will not introduce new invalid blocks, so we do not need to
+            // process the return value.
+            self.propagate_graph_status(&mut *inner, new_ready_blocks);
+        }
+    }
 }
 
 impl Graph for SynchronizationGraphInner {

@@ -1868,6 +1868,8 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             CHECK_FUTURE_BLOCK_TIMER => {
                 self.check_future_blocks(io);
+                self.graph
+                    .check_not_ready_frontier(false /* is_light_node */);
             }
             CHECK_REQUEST_TIMER => {
                 self.remove_expired_flying_request(io);
