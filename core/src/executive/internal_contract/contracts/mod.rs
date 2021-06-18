@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 mod admin;
+mod context;
 mod sponsor;
 mod staking;
 mod macros {
@@ -25,7 +26,8 @@ mod macros {
 }
 
 pub use self::{
-    admin::AdminControl, sponsor::SponsorWhitelistControl, staking::Staking,
+    admin::AdminControl, context::Context, sponsor::SponsorWhitelistControl,
+    staking::Staking,
 };
 
 use super::{
@@ -105,9 +107,13 @@ impl InternalContractMap {
         let admin = internal_contract_factory("admin");
         let sponsor = internal_contract_factory("sponsor");
         let staking = internal_contract_factory("staking");
+        let context = internal_contract_factory("context");
+
         builtin.insert(*admin.address(), admin);
         builtin.insert(*sponsor.address(), sponsor);
         builtin.insert(*staking.address(), staking);
+        builtin.insert(*context.address(), context);
+
         Self {
             builtin: Arc::new(builtin),
         }
@@ -128,6 +134,7 @@ pub fn internal_contract_factory(name: &str) -> Box<dyn InternalContractTrait> {
         "admin" => Box::new(AdminControl::instance()),
         "staking" => Box::new(Staking::instance()),
         "sponsor" => Box::new(SponsorWhitelistControl::instance()),
+        "context" => Box::new(Context::instance()),
         _ => panic!("invalid internal contract name: {}", name),
     }
 }
