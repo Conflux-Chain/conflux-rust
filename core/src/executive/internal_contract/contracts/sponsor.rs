@@ -2,28 +2,22 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
-
-use super::{
-    super::impls::sponsor::*, ExecutionTrait, InterfaceTrait,
-    InternalContractTrait, PreExecCheckConfTrait, SolFnTable,
-    SolidityFunctionTrait, UpfrontPaymentTrait,
-};
-#[cfg(test)]
-use crate::check_signature;
+use super::{super::impls::sponsor::*, macros::*, ExecutionTrait, SolFnTable};
 use crate::{
     evm::{ActionParams, Spec},
     executive::InternalRefContext,
-    impl_function_type, make_function_table, make_solidity_contract,
-    make_solidity_function,
     trace::{trace::ExecTrace, Tracer},
     vm,
 };
+use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 #[cfg(test)]
 use rustc_hex::FromHex;
 
+make_solidity_contract! {
+    pub struct SponsorWhitelistControl(SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, generate_fn_table, activate_at: "genesis");
+}
 fn generate_fn_table() -> SolFnTable {
     make_function_table!(
         SetSponsorForGas,
@@ -41,10 +35,22 @@ fn generate_fn_table() -> SolFnTable {
         RemovePrivilegeByAdmin
     )
 }
-
-make_solidity_contract! {
-    pub struct SponsorWhitelistControl(SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, generate_fn_table);
-}
+group_impl_activate_at!(
+    "genesis",
+    SetSponsorForGas,
+    SetSponsorForCollateral,
+    AddPrivilege,
+    RemovePrivilege,
+    GetSponsorForGas,
+    GetSponsoredBalanceForGas,
+    GetSponsoredGasFeeUpperBound,
+    GetSponsorForCollateral,
+    GetSponsoredBalanceForCollateral,
+    IsWhitelisted,
+    IsAllWhitelisted,
+    AddPrivilegeByAdmin,
+    RemovePrivilegeByAdmin,
+);
 
 make_solidity_function! {
     struct SetSponsorForGas((Address, U256), "setSponsorForGas(address,uint256)");

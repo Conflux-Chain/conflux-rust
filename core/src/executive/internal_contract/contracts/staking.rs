@@ -2,18 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{
-    super::impls::staking::*, ExecutionTrait, InterfaceTrait,
-    InternalContractTrait, PreExecCheckConfTrait, SolFnTable,
-    SolidityFunctionTrait, UpfrontPaymentTrait,
-};
-#[cfg(test)]
-use crate::check_signature;
+use super::{super::impls::staking::*, macros::*, ExecutionTrait, SolFnTable};
 use crate::{
     evm::{ActionParams, Spec},
     executive::InternalRefContext,
-    impl_function_type, make_function_table, make_solidity_contract,
-    make_solidity_function,
     trace::{trace::ExecTrace, Tracer},
     vm,
 };
@@ -23,6 +15,10 @@ use cfx_types::{Address, U256};
 #[cfg(test)]
 use rustc_hex::FromHex;
 
+// Definitions for the whole contract.
+make_solidity_contract! {
+    pub struct Staking(STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS, generate_fn_table, activate_at: "genesis");
+}
 fn generate_fn_table() -> SolFnTable {
     make_function_table!(
         Deposit,
@@ -33,10 +29,15 @@ fn generate_fn_table() -> SolFnTable {
         GetVotePower
     )
 }
-
-make_solidity_contract! {
-    pub struct Staking(STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS, generate_fn_table);
-}
+group_impl_activate_at!(
+    "genesis",
+    Deposit,
+    Withdraw,
+    VoteLock,
+    GetStakingBalance,
+    GetLockedStakingBalance,
+    GetVotePower
+);
 
 make_solidity_function! {
     struct Deposit(U256,"deposit(uint256)");
