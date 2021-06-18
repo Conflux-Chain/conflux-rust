@@ -13,15 +13,22 @@ use cfx_types::{Address, U256};
 use primitives::LogEntry;
 use std::collections::{HashMap, HashSet};
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct CallStackInfo {
     call_stack_recipient_addresses: Vec<(Address, bool)>,
     address_counter: HashMap<Address, u32>,
     first_reentrancy_depth: Option<usize>,
 }
 
-// TODO: new function to read backward from spec
 impl CallStackInfo {
+    pub fn new() -> Self {
+        CallStackInfo {
+            call_stack_recipient_addresses: Vec::default(),
+            address_counter: HashMap::default(),
+            first_reentrancy_depth: None,
+        }
+    }
+
     pub fn push(
         &mut self, address: Address, is_create: bool, allow_reentrancy: bool,
     ) {
@@ -271,7 +278,7 @@ mod tests {
 
     #[test]
     fn test_callstack_info() {
-        let mut call_stack = CallStackInfo::default();
+        let mut call_stack = CallStackInfo::new();
         call_stack.push(get_test_address(1), false, false);
         call_stack.push(get_test_address(2), false, false);
         assert_eq!(call_stack.pop(), Some((get_test_address(2), false)));

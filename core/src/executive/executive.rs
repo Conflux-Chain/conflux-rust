@@ -636,7 +636,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
     ) -> DbResult<vm::Result<FinalizationResult>>
     {
-        let mut callstack = CallStackInfo::default();
+        let mut callstack = CallStackInfo::new();
         let mut executive_stack: Vec<Self> = Vec::new();
 
         let mut last_res =

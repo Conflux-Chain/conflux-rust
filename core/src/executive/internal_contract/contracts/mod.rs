@@ -12,6 +12,8 @@ mod staking;
 mod macros {
     #[cfg(test)]
     pub use crate::check_signature;
+    #[cfg(test)]
+    pub use rustc_hex::FromHex;
 
     pub use crate::{
         group_impl_is_active, impl_function_type, make_function_table,
