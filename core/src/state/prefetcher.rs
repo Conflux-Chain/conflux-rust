@@ -87,6 +87,10 @@ impl PrefetcherThreadWorker {
 
     /// Unsafe because we only want the Prefetcher to stop the thread.
     unsafe fn stop(&self) {
+        // we pass a "null reference" as the state here because with these
+        // parameters `task_queue_sender` will stop and not use state.
+        // FIXME: `&*null()` is undefined behavior, we should remove it.
+        #[allow(deref_nullptr)]
         self.task_queue_sender
             .lock()
             .send((Default::default(), 0, &*null(), &[]))
