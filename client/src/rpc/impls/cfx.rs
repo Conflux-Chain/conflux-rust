@@ -1439,6 +1439,15 @@ impl RpcImpl {
                 self.consensus.get_block_hashes_by_epoch(e.into())?
             }
             BlockHashOrEpochNumber::BlockHash(h) => {
+                if self
+                    .consensus
+                    .get_data_manager()
+                    .block_header_by_hash(&h)
+                    .is_none()
+                {
+                    bail!(invalid_params("block_hash", "block not found"));
+                }
+
                 let e = match self.get_block_epoch_number(&h) {
                     Some(e) => e,
                     None => return Ok(None), // not executed
@@ -1452,7 +1461,6 @@ impl RpcImpl {
                 let pivot_hash = *hashes.last().ok_or("Inconsistent state")?;
 
                 if h != pivot_hash {
-                    // assume client provided a known pivot hash
                     bail!(pivot_assumption_failed(h, pivot_hash));
                 }
 
