@@ -123,3 +123,6 @@ class TestGetTxReceiptByHash(RpcClient):
 
         # request with non-pivot block hash should fail
         assert_raises_rpc_error(None, None, self.node.cfx_getEpochReceipts, f'hash:{block_b}')
+
+        # request with nonexistent block hash should fail
+        assert_raises_rpc_error(None, None, self.node.cfx_getEpochReceipts, f'hash:0x66e365b5bbd53bc26fd306fd7c65290b2b13c165d7cae816b651e7fcf2646f37')
