@@ -230,6 +230,7 @@ impl BlockGenerator {
                 &parent_hash,
                 &referees,
                 &expected_difficulty,
+                maybe_pos_reference,
             )
         };
 

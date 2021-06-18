@@ -68,6 +68,7 @@ use primitives::{
     epoch::BlockHashOrEpochNumber,
     filter::{FilterError, LogFilter},
     log_entry::LocalizedLogEntry,
+    pos::PosBlockId,
     receipt::Receipt,
     EpochId, EpochNumber, SignedTransaction, TransactionIndex,
 };
@@ -239,6 +240,7 @@ impl ConsensusGraph {
             Arc::new(RwLock::new(ConsensusGraphInner::with_era_genesis(
                 pow_config,
                 pow.clone(),
+                pos_verifier.clone(),
                 data_man.clone(),
                 conf.inner_conf.clone(),
                 era_genesis_block_hash,
@@ -342,6 +344,7 @@ impl ConsensusGraph {
     pub fn check_mining_adaptive_block(
         &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
         referees: &Vec<H256>, difficulty: &U256,
+        pos_reference: Option<PosBlockId>,
     ) -> bool
     {
         let parent_index =
@@ -362,6 +365,7 @@ impl ConsensusGraph {
             parent_index,
             referee_indices,
             *difficulty,
+            pos_reference,
         )
     }
 
@@ -1619,6 +1623,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
         let new_consensus_inner = ConsensusGraphInner::with_era_genesis(
             old_consensus_inner.pow_config.clone(),
             old_consensus_inner.pow.clone(),
+            old_consensus_inner.pos_verifier.clone(),
             self.data_man.clone(),
             old_consensus_inner.inner_conf.clone(),
             &cur_era_genesis_hash,
