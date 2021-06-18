@@ -459,6 +459,11 @@ impl VerificationConfig {
         transaction_epoch_bound: u64,
     ) -> i8
     {
+        if tx.transaction.unsigned.transaction_type()
+            == TransactionType::EthereumLike
+        {
+            return 0;
+        };
         if tx.epoch_height + transaction_epoch_bound < block_height {
             -1
         } else if tx.epoch_height > block_height + transaction_epoch_bound {

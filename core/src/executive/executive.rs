@@ -916,27 +916,23 @@ impl<
         }
 
         // Validate transaction epoch height.
-        if tx.transaction_type() == TransactionType::Normal {
-            match VerificationConfig::verify_transaction_epoch_height(
-                tx,
-                self.env.epoch_height,
-                self.env.transaction_epoch_bound,
-            ) {
-                Err(_) => {
-                    return Ok(
-                        ExecutionOutcome::NotExecutedToReconsiderPacking(
-                            ToRepackError::EpochHeightOutOfBound {
-                                block_height: self.env.epoch_height,
-                                set: tx.epoch_height,
-                                transaction_epoch_bound: self
-                                    .env
-                                    .transaction_epoch_bound,
-                            },
-                        ),
-                    );
-                }
-                Ok(()) => {}
+        match VerificationConfig::verify_transaction_epoch_height(
+            tx,
+            self.env.epoch_height,
+            self.env.transaction_epoch_bound,
+        ) {
+            Err(_) => {
+                return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
+                    ToRepackError::EpochHeightOutOfBound {
+                        block_height: self.env.epoch_height,
+                        set: tx.epoch_height,
+                        transaction_epoch_bound: self
+                            .env
+                            .transaction_epoch_bound,
+                    },
+                ));
             }
+            Ok(()) => {}
         }
 
         let base_gas_required =
@@ -1008,16 +1004,22 @@ impl<
             }
             TransactionType::EthereumLike => U256::zero(),
         };
+        // No matter who pays the collateral, we only focuses on the storage
+        // limit of sender.
+        let total_storage_limit = match tx.transaction_type() {
+            TransactionType::Normal => {
+                self.state.collateral_for_storage(&sender)?
+                    + minimum_drip_required_for_storage
+            }
+            TransactionType::EthereumLike => U256::MAX,
+        };
 
         let storage_sponsor_balance = if storage_sponsored {
             self.state.sponsor_balance_for_collateral(&code_address)?
         } else {
             0.into()
         };
-        // No matter who pays the collateral, we only focuses on the storage
-        // limit of sender.
-        let total_storage_limit = self.state.collateral_for_storage(&sender)?
-            + minimum_drip_required_for_storage;
+
         // Find the `storage_owner` in this execution.
         let storage_owner = {
             if storage_sponsored
@@ -1165,7 +1167,6 @@ impl<
                     data: None,
                     call_type: CallType::None,
                     params_type: vm::ParamsType::Embedded,
-                    storage_limit_in_drip: total_storage_limit,
                 };
                 self.create(params, &mut substate, &mut options.tracer)
             }
@@ -1184,7 +1185,6 @@ impl<
                     data: Some(tx.data.clone()),
                     call_type: CallType::Call,
                     params_type: vm::ParamsType::Separate,
-                    storage_limit_in_drip: total_storage_limit,
                 };
                 self.call(params, &mut substate, &mut options.tracer)
             }

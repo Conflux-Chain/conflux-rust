@@ -98,6 +98,7 @@ fn test_sender_balance() {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new("3331600055".from_hex().unwrap()));
     params.value = ActionValue::Transfer(U256::from(0x7));
+    let storage_limit_in_drip = U256::MAX;
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
     state
@@ -142,7 +143,7 @@ fn test_sender_balance() {
         state
             .collect_and_settle_collateral(
                 &params.storage_owner,
-                &params.storage_limit_in_drip,
+                &storage_limit_in_drip,
                 &mut substate,
                 spec.account_start_nonce(env.number),
             )
@@ -373,7 +374,7 @@ fn test_call_to_create() {
     params.code = Some(Arc::new(code));
     params.value = ActionValue::Transfer(U256::from(100));
     params.call_type = CallType::Call;
-    params.storage_limit_in_drip = *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+    let storage_limit_in_drip = *DRIPS_PER_STORAGE_COLLATERAL_UNIT
         * code_collateral_units(code_len)
         + *COLLATERAL_DRIPS_PER_STORAGE_KEY;
 
@@ -390,7 +391,7 @@ fn test_call_to_create() {
     state
         .add_balance(
             &sender,
-            &(U256::from(100) + params.storage_limit_in_drip),
+            &(U256::from(100) + storage_limit_in_drip),
             CleanupMode::NoEmpty,
             spec.account_start_nonce(env.number),
         )
@@ -416,7 +417,7 @@ fn test_call_to_create() {
         state
             .collect_and_settle_collateral(
                 &params.storage_owner,
-                &params.storage_limit_in_drip,
+                &storage_limit_in_drip,
                 &mut substate,
                 spec.account_start_nonce(env.number),
             )
@@ -429,9 +430,9 @@ fn test_call_to_create() {
     assert_eq!(state.balance(&sender).unwrap(), U256::from(0));
     assert_eq!(
         state.collateral_for_storage(&sender).unwrap(),
-        params.storage_limit_in_drip
+        storage_limit_in_drip
     );
-    assert_eq!(state.total_storage_tokens(), params.storage_limit_in_drip);
+    assert_eq!(state.total_storage_tokens(), storage_limit_in_drip);
 
     assert_eq!(gas_left, U256::from(59_746));
 }
