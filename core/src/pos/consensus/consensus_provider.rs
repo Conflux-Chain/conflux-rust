@@ -26,7 +26,7 @@ use executor::{vm::FakeVM, Executor};
 use executor_types::BlockExecutor;
 use network::NetworkService;
 use state_sync::client::StateSyncClient;
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, Arc};
 use storage_interface::{DbReader, DbReaderWriter};
 use tokio::runtime::{self, Runtime};
 
@@ -39,8 +39,9 @@ pub fn start_consensus(
     db_rw: DbReaderWriter,
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
     author: AccountAddress,
-) -> (Runtime, Arc<PowHandler>)
+) -> (Runtime, Arc<PowHandler>, Arc<AtomicBool>)
 {
+    let stopped = Arc::new(AtomicBool::new(false));
     let runtime = runtime::Builder::new_multi_thread()
         .thread_name("consensus")
         .enable_all()
@@ -90,8 +91,12 @@ pub fn start_consensus(
         author,
     );
 
-    runtime.spawn(epoch_mgr.start(timeout_receiver, network_receiver));
+    runtime.spawn(epoch_mgr.start(
+        timeout_receiver,
+        network_receiver,
+        stopped.clone(),
+    ));
 
     diem_debug!("Consensus started.");
-    (runtime, pow_handler)
+    (runtime, pow_handler, stopped)
 }

@@ -240,6 +240,7 @@ impl DiemDB {
             TRANSACTION_ACCUMULATOR_CF_NAME,
             TRANSACTION_BY_ACCOUNT_CF_NAME,
             TRANSACTION_INFO_CF_NAME,
+            LEDGER_INFO_BY_BLOCK_CF_NAME,
         ]
     }
 
@@ -996,14 +997,14 @@ impl DbWriter for DiemDB {
             // If expected ledger info is provided, verify result root hash and
             // save the ledger info.
             if let Some(x) = ledger_info_with_sigs {
-                let expected_root_hash =
-                    x.ledger_info().transaction_accumulator_hash();
-                ensure!(
-                    new_root_hash == expected_root_hash,
-                    "Root hash calculated doesn't match expected. {:?} vs {:?}",
-                    new_root_hash,
-                    expected_root_hash,
-                );
+                // let expected_root_hash =
+                //     x.ledger_info().transaction_accumulator_hash();
+                // ensure!(
+                //     new_root_hash == expected_root_hash,
+                //     "Root hash calculated doesn't match expected. {:?} vs
+                // {:?}",     new_root_hash,
+                //     expected_root_hash,
+                // );
 
                 self.ledger_store.put_ledger_info(x, &mut cs)?;
             }

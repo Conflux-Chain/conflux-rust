@@ -27,7 +27,16 @@ use executor_types::ChunkExecutor;
 use futures::executor::block_on;
 use network::NetworkService;
 use state_sync::bootstrapper::StateSyncBootstrapper;
-use std::{boxed::Box, path::PathBuf, sync::Arc, thread, time::Instant};
+use std::{
+    boxed::Box,
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread,
+    time::Instant,
+};
 use storage_interface::DbReaderWriter;
 use tokio::runtime::Runtime;
 
@@ -35,8 +44,9 @@ pub struct DiemHandle {
     // pow handler
     pub pow_handler: Arc<PowHandler>,
     pub diem_db: Arc<DiemDB>,
+    pub stopped: Arc<AtomicBool>,
     _state_sync_bootstrapper: StateSyncBootstrapper,
-    _consensus_runtime: Runtime,
+    consensus_runtime: Runtime,
 }
 
 pub fn start_pos_consensus(
@@ -201,7 +211,7 @@ pub fn setup_pos_environment(
     // Initialize and start consensus.
     instant = Instant::now();
     debug!("own_pos_public_key: {:?}", own_pos_public_key);
-    let (consensus_runtime, pow_handler) = start_consensus(
+    let (consensus_runtime, pow_handler, stopped) = start_consensus(
         node_config,
         network,
         own_node_hash,
@@ -219,8 +229,13 @@ pub fn setup_pos_environment(
 
     DiemHandle {
         pow_handler,
-        _consensus_runtime: consensus_runtime,
+        consensus_runtime,
+        stopped,
         _state_sync_bootstrapper: state_sync_bootstrapper,
         diem_db,
     }
+}
+
+impl Drop for DiemHandle {
+    fn drop(&mut self) { self.stopped.store(true, Ordering::SeqCst); }
 }

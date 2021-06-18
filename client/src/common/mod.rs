@@ -38,6 +38,7 @@ impl<BlockGenT: 'static + Stopable, Rest> ClientTrait
         Arc<PowHandler>,
         Option<Arc<dyn Stopable>>,
     ) {
+        debug!("take_out_components_for_shutdown");
         let data_manager_weak_ptr = self.data_manager_weak_ptr.clone();
         let blockgen: Option<Arc<dyn Stopable>> = match self.blockgen.clone() {
             Some(blockgen) => Some(blockgen),

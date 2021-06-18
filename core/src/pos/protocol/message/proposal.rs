@@ -18,7 +18,7 @@ impl Handleable for ProposalMsg {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_proposal, msg={:?}", &self);
 
-        let peer_address = AccountAddress::new(ctx.peer_hash.into());
+        let peer_address = ctx.get_peer_account_address();
 
         /*ensure!(
             self.author() == Some(peer_address),

@@ -67,7 +67,8 @@ impl BlockInfo {
             epoch,
             round,
             id,
-            executed_state_id,
+            // TODO(lpl): Cleanup.
+            executed_state_id: Default::default(),
             version,
             timestamp_usecs,
             next_epoch_state,

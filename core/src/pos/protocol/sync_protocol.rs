@@ -30,7 +30,10 @@ use consensus_types::{
     sync_info::SyncInfo, vote_msg::VoteMsg,
 };
 use diem_crypto::ed25519::Ed25519PublicKey;
-use diem_types::epoch_change::EpochChangeProof;
+use diem_types::{
+    account_address::{from_public_key, AccountAddress},
+    epoch_change::EpochChangeProof,
+};
 use io::TimerToken;
 use keccak_hash::keccak;
 use network::{
@@ -138,6 +141,21 @@ impl<'a> Context<'a> {
     pub fn send_response(&self, response: &dyn Message) -> Result<(), Error> {
         response.send(self.io, &self.peer)?;
         Ok(())
+    }
+
+    pub fn get_peer_account_address(&self) -> AccountAddress {
+        from_public_key(
+            &self
+                .manager
+                .peers
+                .get(&self.peer_hash)
+                .as_ref()
+                .unwrap()
+                .read()
+                .pos_public_key
+                .as_ref()
+                .expect("has public key"),
+        )
     }
 }
 
@@ -299,7 +317,7 @@ impl HotStuffSynchronizationProtocol {
                     op = Some(UpdateNodeOperation::Remove)
                 }
                 network::ErrorKind::BadAddr => disconnect = false,
-                network::ErrorKind::Decoder => {
+                network::ErrorKind::Decoder(_) => {
                     op = Some(UpdateNodeOperation::Remove)
                 }
                 network::ErrorKind::Expired => disconnect = false,
@@ -555,7 +573,7 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
             }
         } else {
             info!(
-                "pos public key is not provided for peerL peer_hash={:?}",
+                "pos public key is not provided for peer peer_hash={:?}",
                 peer_hash
             );
         }

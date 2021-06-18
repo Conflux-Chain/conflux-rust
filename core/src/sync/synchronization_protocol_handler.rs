@@ -665,7 +665,7 @@ impl SynchronizationProtocolHandler {
                     op = Some(UpdateNodeOperation::Remove)
                 }
                 network::ErrorKind::BadAddr => disconnect = false,
-                network::ErrorKind::Decoder => {
+                network::ErrorKind::Decoder(_) => {
                     op = Some(UpdateNodeOperation::Remove)
                 }
                 network::ErrorKind::Expired => disconnect = false,
@@ -1868,6 +1868,8 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             CHECK_FUTURE_BLOCK_TIMER => {
                 self.check_future_blocks(io);
+                self.graph
+                    .check_not_ready_frontier(false /* is_light_node */);
             }
             CHECK_REQUEST_TIMER => {
                 self.remove_expired_flying_request(io);

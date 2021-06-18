@@ -16,7 +16,7 @@ use std::mem::discriminant;
 impl Handleable for EpochRetrievalRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_epoch_retrieval, msg={:?}", &self);
-        let peer_address = AccountAddress::new(ctx.peer_hash.into());
+        let peer_address = ctx.get_peer_account_address();
         debug!(
             "Received epoch retrieval from peer {}, start epoch {}, end epoch {}",
             peer_address, self.start_epoch, self.end_epoch

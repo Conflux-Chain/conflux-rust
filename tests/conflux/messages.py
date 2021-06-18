@@ -22,7 +22,7 @@ import threading
 from conflux import trie
 from conflux.config import default_config
 from conflux.transactions import Transaction
-from conflux.utils import hash32, hash20, sha3, bytes_to_int
+from conflux.utils import hash32, hash20, sha3, bytes_to_int, encode_hex
 from test_framework.util import wait_until
 
 logger = logging.getLogger("TestFramework.mininode")
@@ -108,7 +108,8 @@ class Hello(rlp.Serializable):
     fields = [
         ("network_id", big_endian_int),
         ("capabilities", CountableList(Capability)),
-        ("node_endpoint", NodeEndpoint)
+        ("node_endpoint", NodeEndpoint),
+        ("pos_public_key", binary)
     ]
 
 
@@ -241,6 +242,7 @@ class BlockHeader(rlp.Serializable):
         ("gas_limit", big_endian_int),
         ("referee_hashes", CountableList(binary)),
         ("nonce", big_endian_int),
+        ("pos_reference", CountableList(binary))
     ]
 
     def __init__(self,
@@ -257,7 +259,8 @@ class BlockHeader(rlp.Serializable):
                  gas_limit=0,
                  referee_hashes=[],
                  adaptive=0,
-                 nonce=0):
+                 nonce=0,
+                 pos_reference=[]):
         # at the beginning of a method, locals() is a dict of all arguments
         fields = {k: v for k, v in locals().items() if
                   k not in ['self', '__class__']}

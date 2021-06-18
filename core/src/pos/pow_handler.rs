@@ -8,8 +8,9 @@ use pow_types::PowInterface;
 use std::{collections::HashMap, sync::Arc};
 use tokio::runtime::Handle;
 
-pub const POS_TERM_EPOCHS: u64 = 60;
-pub const POW_CONFIRM_DELAY_EPOCH: u64 = 60;
+// FIXME(lpl): Decide the value.
+pub const POS_TERM_EPOCHS: u64 = 50;
+pub const POW_CONFIRM_DELAY_EPOCH: u64 = 50;
 
 pub struct PowHandler {
     executor: Handle,
@@ -28,7 +29,14 @@ impl PowHandler {
         *self.pow_consensus.write() = Some(pow_consensus);
     }
 
-    pub fn stop(&self) { *self.pow_consensus.write() = None; }
+    pub fn stop(&self) {
+        let mut pow_consensus = &mut *self.pow_consensus.write();
+        info!(
+            "Stop PowHandler: current consensus strong_count={}",
+            Arc::strong_count(pow_consensus.as_ref().unwrap())
+        );
+        *pow_consensus = None;
+    }
 
     fn next_pivot_decision_impl(
         pow_consensus: Arc<ConsensusGraph>, parent_decision: &H256,

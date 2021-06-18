@@ -40,6 +40,8 @@ pub const TRANSACTION_ACCUMULATOR_CF_NAME: ColumnFamilyName =
 pub const TRANSACTION_BY_ACCOUNT_CF_NAME: ColumnFamilyName =
     "transaction_by_account";
 pub const TRANSACTION_INFO_CF_NAME: ColumnFamilyName = "transaction_info";
+pub const LEDGER_INFO_BY_BLOCK_CF_NAME: ColumnFamilyName =
+    "ledger_info_by_block";
 
 fn ensure_slice_len_eq(data: &[u8], len: usize) -> Result<()> {
     ensure!(
