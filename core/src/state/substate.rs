@@ -13,7 +13,7 @@ use cfx_types::{Address, U256};
 use primitives::LogEntry;
 use std::collections::{HashMap, HashSet};
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct CallStackInfo {
     call_stack_recipient_addresses: Vec<(Address, bool)>,
     address_counter: HashMap<Address, u32>,
@@ -21,8 +21,17 @@ pub struct CallStackInfo {
     backward_competitive: bool,
 }
 
-// TODO: new function to read backward from spec
 impl CallStackInfo {
+    pub fn new(_spec: &Spec) -> Self {
+        CallStackInfo {
+            call_stack_recipient_addresses: Vec::default(),
+            address_counter: HashMap::default(),
+            first_reentrancy_depth: None,
+            // FIXME: Make decision by spec later.
+            backward_competitive: true,
+        }
+    }
+
     pub fn push(
         &mut self, address: Address, is_create: bool, allow_reentrancy: bool,
     ) {
@@ -229,7 +238,7 @@ pub fn cleanup_mode<'a>(
 #[cfg(test)]
 mod tests {
     use super::CallStackInfo;
-    use crate::state::Substate;
+    use crate::{state::Substate, vm::Spec};
     use cfx_state::substate_trait::SubstateMngTrait;
     use cfx_types::Address;
     use primitives::LogEntry;
@@ -272,7 +281,8 @@ mod tests {
 
     #[test]
     fn test_callstack_info() {
-        let mut call_stack = CallStackInfo::default();
+        let spec = Spec::new_spec();
+        let mut call_stack = CallStackInfo::new(&spec);
         call_stack.push(get_test_address(1), false, false);
         call_stack.push(get_test_address(2), false, false);
         assert_eq!(call_stack.pop(), Some((get_test_address(2), false)));

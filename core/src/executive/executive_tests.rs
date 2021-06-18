@@ -568,6 +568,7 @@ fn test_keccak() {
             &internal_contract_map,
         );
         ex.create(params, &mut substate, &mut tracer)
+            .expect("no db error")
     };
 
     match result {
