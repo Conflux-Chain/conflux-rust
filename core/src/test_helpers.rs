@@ -15,10 +15,7 @@ pub fn get_state_for_genesis_write(
         State::new(StateDb::new(storage_manager.get_state_for_genesis_write()))
             .expect("Failed to initialize state");
 
-    initialize_internal_contract_accounts(
-        &mut state,
-        Spec::new_spec().contract_start_nonce(/* block_number = */ 0),
-    );
+    initialize_internal_contract_accounts(&mut state, &Spec::new_spec());
     let genesis_epoch_id = EpochId::default();
     state
         .commit(genesis_epoch_id, /* debug_record = */ None)

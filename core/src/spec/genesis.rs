@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    evm::Spec,
     executive::{
         contract_address, ExecutionOutcome, Executive, InternalContractMap,
         TransactOptions,
@@ -27,7 +28,7 @@ use cfx_types::{address_util::AddressUtil, Address, U256};
 use keylib::KeyPair;
 use primitives::{
     storage::STORAGE_LAYOUT_REGULAR_V0, Action, Block, BlockHeaderBuilder,
-    BlockReceipts, SignedTransaction, Transaction,
+    BlockNumber, BlockReceipts, SignedTransaction, Transaction,
 };
 use rustc_hex::FromHex;
 use secret_store::SecretStore;
@@ -102,18 +103,23 @@ pub fn load_secrets_file(
 }
 
 pub fn initialize_internal_contract_accounts(
-    state: &mut dyn StateOpsTrait, contract_start_nonce: U256,
+    state: &mut dyn StateOpsTrait, spec: &Spec,
 ) {
     || -> DbResult<()> {
         {
-            for address in InternalContractMap::new().keys() {
-                state.new_contract_with_admin(
-                    address,
-                    /* No admin; admin = */ &Address::zero(),
-                    /* balance = */ U256::zero(),
-                    contract_start_nonce,
-                    Some(STORAGE_LAYOUT_REGULAR_V0),
-                )?;
+            const GENESIS_BLOCK_NUMBER: BlockNumber = 0;
+            for (address, internal_contract) in
+                InternalContractMap::new().iter()
+            {
+                if internal_contract.activate_at(GENESIS_BLOCK_NUMBER, spec) {
+                    state.new_contract_with_admin(
+                        address,
+                        /* No admin; admin = */ &Address::zero(),
+                        /* balance = */ U256::zero(),
+                        spec.contract_start_nonce(GENESIS_BLOCK_NUMBER),
+                        Some(STORAGE_LAYOUT_REGULAR_V0),
+                    )?
+                }
             }
             Ok(())
         }
@@ -171,9 +177,7 @@ pub fn genesis_block(
     let mut total_balance = U256::from(0);
     initialize_internal_contract_accounts(
         &mut state,
-        machine
-            .spec(/* block_number = */ 0)
-            .contract_start_nonce(/* block_number = */ 0),
+        &machine.spec(/* block_number = */ 0),
     );
     for (addr, balance) in genesis_accounts {
         state

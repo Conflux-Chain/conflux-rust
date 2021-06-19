@@ -1128,6 +1128,7 @@ impl ConsensusExecutionHandler {
                     .verification_config
                     .transaction_epoch_bound,
             };
+            // TODO: add new internal contract when it is activated.
             let spec = self.machine.spec(env.number);
             let secondary_reward =
                 state.bump_block_number_accumulate_interest();
