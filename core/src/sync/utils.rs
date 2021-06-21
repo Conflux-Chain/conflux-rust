@@ -3,6 +3,9 @@ use crate::{
     cache_config::CacheConfig,
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
+        pos_handler::{
+            FakeDiemDB, PosConfiguration, PosConnection, PosVerifier,
+        },
         ConsensusConfig, ConsensusInnerConfig,
     },
     db::NUM_COLUMNS,
@@ -28,6 +31,7 @@ use core::str::FromStr;
 use parking_lot::Mutex;
 use primitives::{Block, BlockHeaderBuilder};
 use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
+use storage_interface::DBReaderForPoW;
 use threadpool::ThreadPool;
 
 pub fn create_simple_block_impl(
@@ -162,12 +166,19 @@ pub fn initialize_synchronization_graph_with_data_manager(
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
 {
     let machine = Arc::new(new_machine_with_builtin(Default::default(), vm));
+    let pos_connection = PosConnection::new(
+        Arc::new(FakeDiemDB {}) as Arc<dyn DBReaderForPoW>,
+        PosConfiguration {},
+    );
+    let pos_verifier = Arc::new(PosVerifier::new(pos_connection, u64::MAX));
+
     let verification_config = VerificationConfig::new(
         true, /* test_mode */
         REFEREE_DEFAULT_BOUND,
         MAX_BLOCK_SIZE_IN_BYTES,
         TRANSACTION_DEFAULT_EPOCH_BOUND,
         machine.clone(),
+        pos_verifier.clone(),
     );
 
     let txpool = Arc::new(TransactionPool::new(
@@ -228,6 +239,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         },
         verification_config.clone(),
         NodeType::Archive,
+        pos_verifier.clone(),
     ));
 
     let sync = Arc::new(SynchronizationGraph::new(
@@ -238,6 +250,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         sync_config,
         notifications,
         machine,
+        pos_verifier.clone(),
     ));
 
     (sync, consensus)

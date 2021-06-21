@@ -1,0 +1,25 @@
+[package]
+name = "storage-client"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Diem storage client"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.38"
+serde = "1.0.124"
+
+bcs = "0.1.2"
+diem-crypto = { path = "../../crypto/crypto" }
+diem-logger = { path = "../../common/logger" }
+diem-infallible = { path = "../../common/infallible" }
+diem-secure-net = { path = "../../secure/net" }
+diem-types = { path = "../../types" }
+storage-interface = { path = "../storage-interface" }
+
+[features]
+default = []

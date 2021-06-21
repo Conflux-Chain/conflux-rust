@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    consensus::pos_handler::PosVerifier,
     error::{BlockError, Error},
     executive::Executive,
     machine::Machine,
@@ -32,6 +33,7 @@ pub struct VerificationConfig {
     pub transaction_epoch_bound: u64,
     vm_spec: vm::Spec,
     machine: Arc<Machine>,
+    pos_verifier: Arc<PosVerifier>,
 }
 
 /// Create an MPT from the ordered list of block transactions.
@@ -202,6 +204,7 @@ impl VerificationConfig {
     pub fn new(
         test_mode: bool, referee_bound: usize, max_block_size_in_bytes: usize,
         transaction_epoch_bound: u64, machine: Arc<Machine>,
+        pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         if test_mode {
@@ -212,6 +215,7 @@ impl VerificationConfig {
                 transaction_epoch_bound,
                 vm_spec: vm::Spec::new_spec(),
                 machine,
+                pos_verifier,
             }
         } else {
             VerificationConfig {
@@ -221,6 +225,7 @@ impl VerificationConfig {
                 transaction_epoch_bound,
                 vm_spec: vm::Spec::new_spec(),
                 machine,
+                pos_verifier,
             }
         }
     }
@@ -328,6 +333,16 @@ impl VerificationConfig {
                     found: custom_len,
                 },
             )));
+        }
+
+        if self.pos_verifier.is_enabled_at_height(header.height()) {
+            if header.pos_reference().is_none() {
+                bail!(BlockError::MissingPosReference);
+            }
+        } else {
+            if header.pos_reference().is_some() {
+                bail!(BlockError::UnexpectedPosReference);
+            }
         }
 
         // Note that this is just used to rule out deprecated blocks, so the

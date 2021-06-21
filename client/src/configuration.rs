@@ -24,12 +24,14 @@ use cfxcore::{
     },
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
+        pos_handler::{PosConfiguration, PosVerifier},
         ConsensusConfig, ConsensusInnerConfig,
     },
     consensus_internal_parameters::*,
     consensus_parameters::*,
     light_protocol::LightNodeConfiguration,
     machine::Machine,
+    pos::pow_handler::POS_TERM_EPOCHS,
     spec::CommonParams,
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
@@ -281,7 +283,8 @@ build_config! {
         // TreeGraph Section.
         (candidate_pivot_waiting_timeout_ms, (u64), 10_000)
         (is_consortium, (bool), false)
-        (tg_config_path, (Option<String>), Some("./tg_config/tg_config.toml".to_string()))
+        (pos_config_path, (Option<String>), Some("./pos_config/pos_config.toml".to_string()))
+        (pos_genesis_pivot_decision, (Option<H256>), None)
 
         // Light node section
         (ln_epoch_request_batch_size, (Option<usize>), None)
@@ -507,6 +510,9 @@ impl Configuration {
         } else {
             self.raw_conf.enable_optimistic_execution
         };
+        // FIXME(lpl): This is needed to return a valid cross-checkpoint pivot
+        // decision for now.
+        assert_eq!(self.raw_conf.era_epoch_count % POS_TERM_EPOCHS, 0);
         let mut conf = ConsensusConfig {
             chain_id: self.chain_id_params(),
             inner_conf: ConsensusInnerConfig {
@@ -597,7 +603,7 @@ impl Configuration {
     }
 
     pub fn verification_config(
-        &self, machine: Arc<Machine>,
+        &self, machine: Arc<Machine>, pos_verifier: Arc<PosVerifier>,
     ) -> VerificationConfig {
         VerificationConfig::new(
             self.is_test_mode(),
@@ -605,6 +611,7 @@ impl Configuration {
             self.raw_conf.max_block_size_in_bytes,
             self.raw_conf.transaction_epoch_bound,
             machine,
+            pos_verifier,
         )
     }
 
@@ -755,6 +762,10 @@ impl Configuration {
             } else {
                 self.raw_conf.dev_allow_phase_change_without_peer
             },
+            pos_genesis_pivot_decision: self
+                .raw_conf
+                .pos_genesis_pivot_decision
+                .expect("set to genesis if none"),
         }
     }
 
@@ -1021,6 +1032,8 @@ impl Configuration {
                 .ln_num_waiting_headers_threshold,
         }
     }
+
+    pub fn pos_config(&self) -> PosConfiguration { PosConfiguration {} }
 
     pub fn common_params(&self) -> CommonParams {
         let mut params = CommonParams::common_params(

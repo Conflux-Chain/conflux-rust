@@ -9,6 +9,7 @@ use crate::{
             consensus_new_block_handler::ConsensusNewBlockHandler,
             StateBlameInfo,
         },
+        pos_handler::PosVerifier,
         ConsensusGraphInner,
     },
     executive::{
@@ -182,6 +183,7 @@ impl ConsensusExecutor {
         consensus_inner: Arc<RwLock<ConsensusGraphInner>>,
         config: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, bench_mode: bool,
+        pos_verifier: Arc<PosVerifier>,
     ) -> Arc<Self>
     {
         let machine = tx_pool.machine();
@@ -191,6 +193,7 @@ impl ConsensusExecutor {
             config,
             verification_config,
             machine,
+            pos_verifier,
         ));
         let (sender, receiver) = channel();
 
@@ -791,6 +794,7 @@ pub struct ConsensusExecutionHandler {
     config: ConsensusExecutionConfiguration,
     verification_config: VerificationConfig,
     machine: Arc<Machine>,
+    pos_verifier: Arc<PosVerifier>,
     execution_state_prefetcher: Option<Arc<ExecutionStatePrefetcher>>,
 }
 
@@ -799,6 +803,7 @@ impl ConsensusExecutionHandler {
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
         config: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, machine: Arc<Machine>,
+        pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         ConsensusExecutionHandler {
@@ -807,6 +812,7 @@ impl ConsensusExecutionHandler {
             config,
             verification_config,
             machine,
+            pos_verifier,
             execution_state_prefetcher: if DEFAULT_EXECUTION_PREFETCH_THREADS
                 > 0
             {
@@ -1014,6 +1020,37 @@ impl ConsensusExecutionHandler {
                     .spec(start_block_number)
                     .account_start_nonce(start_block_number),
             );
+        }
+
+        // TODO(peilun): Specify if we unlock before or after executing the
+        // transactions.
+        if self
+            .pos_verifier
+            .is_enabled_at_height(pivot_block.block_header.height())
+            && *pivot_block.block_header.pos_reference()
+                != self
+                    .data_man
+                    .block_header_by_hash(
+                        &pivot_block.block_header.parent_hash(),
+                    ) // `None` only for genesis.
+                    .and_then(|parent| parent.pos_reference().clone())
+        {
+            // The pos_reference is continuous, so after seeing a new
+            // pos_reference, we only need to process the new
+            // unlock_txs in it.
+            for _unlock_tx in self
+                .pos_verifier
+                .get_unlock_transactions(
+                    pivot_block
+                        .block_header
+                        .pos_reference()
+                        .as_ref()
+                        .expect("checked before sync graph insertion"),
+                )
+                .expect("checked in sync graph")
+            {
+                // FIXME(peilun): Process unlock transactions.
+            }
         }
 
         // FIXME: We may want to propagate the error up.
