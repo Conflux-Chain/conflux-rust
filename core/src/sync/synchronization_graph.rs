@@ -558,35 +558,8 @@ impl SynchronizationGraphInner {
             }
         }
 
-        // Check if the pos reference is committed.
-        if let Some(pos_reference) =
-            self.arena[index].block_header.pos_reference()
-        {
-            // TODO(lpl): Should we check if the pos reference will never be
-            // committed?
-            match self.pos_verifier.get_pivot_decision(pos_reference) {
-                // The pos reference has not been committed.
-                None => return false,
-                Some(pivot_decision) => {
-                    // Check if this pivot_decision is graph_ready.
-                    match self.hash_to_arena_indices.get(&pivot_decision) {
-                        None => {
-                            if !self.is_graph_ready_in_db(
-                                &pivot_decision,
-                                genesis_seq_num,
-                            ) {
-                                return false;
-                            }
-                        }
-                        Some(index) => {
-                            if self.arena[*index].graph_status < minimal_status
-                            {
-                                return false;
-                            }
-                        }
-                    }
-                }
-            }
+        if !self.is_pos_reference_graph_ready(index) {
+            return false;
         }
 
         // parent and referees are all header graph ready.
@@ -600,6 +573,35 @@ impl SynchronizationGraphInner {
     fn new_to_be_block_graph_ready(&mut self, index: usize) -> bool {
         self.new_to_be_graph_ready(index, BLOCK_GRAPH_READY)
             && self.arena[index].block_ready
+    }
+
+    fn is_pos_reference_graph_ready(&self, index: usize) -> bool {
+        // Check if the pos reference is committed.
+        match self.arena[index].block_header.pos_reference()
+        {
+            // TODO(lpl): Should we check if the pos reference will never be
+            // committed?
+            Some(pos_reference) => {
+                match self.pos_verifier.get_pivot_decision(pos_reference) {
+                    // The pos reference has not been committed.
+                    None => false,
+                    Some(pivot_decision) => {
+                        // Check if this pivot_decision is graph_ready.
+                        match self.hash_to_arena_indices.get(&pivot_decision) {
+                            None =>
+                                self.is_graph_ready_in_db(
+                                    &pivot_decision,
+                                    genesis_seq_num,
+                                ),
+                            Some(index) => {
+                                self.arena[*index].graph_status >= minimal_status
+                            }
+                        }
+                    }
+                }
+            }
+            None => true,
+        }
     }
 
     // Get parent (height, timestamp, gas_limit, difficulty,
@@ -1525,12 +1527,15 @@ impl SynchronizationGraph {
             // parent block is `BLOCK_GRAPH_READY`.
             //   3. We are in `Catch Up Headers Phase` and the graph status of
             // parent block is `BLOCK_HEADER_GRAPH_READY`.
+            //   4. The block is not graph ready because of not-ready pos_reference, and parent
+            // is not in the frontier.
             if inner.arena[me].parent == NULL
                 || inner.arena[inner.arena[me].parent].graph_status
                     == BLOCK_GRAPH_READY
                 || (insert_to_consensus
                     && inner.arena[inner.arena[me].parent].graph_status
                         == BLOCK_HEADER_GRAPH_READY)
+                || (!inner.is_pos_reference_graph_ready(me) && !inner.not_ready_blocks_frontier.contains(parent))
             {
                 inner.not_ready_blocks_frontier.insert(me);
             }
