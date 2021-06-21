@@ -374,7 +374,8 @@ impl ConsensusGraph {
     /// referee choices with `pos_reference` provided.
     pub fn choose_correct_parent(
         &self, inner: &mut ConsensusGraphInner, parent_hash: &mut H256,
-        referees: &mut Vec<H256>, pos_reference: Option<PosBlockId>,
+        referees: &mut Vec<H256>, blame_info: &mut StateBlameInfo,
+        pos_reference: Option<PosBlockId>,
     )
     {
         let parent_index =
@@ -412,6 +413,13 @@ impl ConsensusGraph {
                 referees.push(*parent_hash);
             }
 
+            // correct_parent may not be on the pivot chain, so recompute
+            // blame_info if needed.
+            *blame_info = self
+                .force_compute_blame_and_deferred_state_for_generation(
+                    parent_hash,
+                )
+                .expect("blame info computation error");
             *parent_hash = correct_parent_hash;
         }
     }

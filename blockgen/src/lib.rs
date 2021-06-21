@@ -201,7 +201,7 @@ impl BlockGenerator {
     // TODO: should not hold and pass write lock to consensus.
     fn assemble_new_block_impl(
         &self, mut parent_hash: H256, mut referees: Vec<H256>,
-        blame_info: StateBlameInfo, block_gas_limit: U256,
+        mut blame_info: StateBlameInfo, block_gas_limit: U256,
         transactions: Vec<Arc<SignedTransaction>>, difficulty: u64,
         adaptive_opt: Option<bool>, maybe_pos_reference: Option<PosBlockId>,
     ) -> Block
@@ -218,6 +218,7 @@ impl BlockGenerator {
             &mut *consensus_inner,
             &mut parent_hash,
             &mut referees,
+            &mut blame_info,
             maybe_pos_reference,
         );
         let mut expected_difficulty =
