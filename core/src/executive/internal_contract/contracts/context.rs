@@ -6,7 +6,7 @@ use super::{macros::*, ExecutionTrait, SolFnTable};
 #[cfg(test)]
 use crate::check_signature;
 use crate::{
-    evm::{instructions::GasPriceTier, ActionParams, Spec},
+    evm::{ActionParams, GasPriceTier, Spec},
     executive::InternalRefContext,
     impl_function_type, make_function_table, make_solidity_contract,
     make_solidity_function,
