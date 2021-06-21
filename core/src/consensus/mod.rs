@@ -369,6 +369,53 @@ impl ConsensusGraph {
         )
     }
 
+    /// After considering the latest `pos_reference`, `parent_hash` may become
+    /// an invalid choice, so this function tries to update the parent and
+    /// referee choices with `pos_reference` provided.
+    pub fn choose_correct_parent(
+        &self, inner: &mut ConsensusGraphInner, parent_hash: &mut H256,
+        referees: &mut Vec<H256>, pos_reference: Option<PosBlockId>,
+    )
+    {
+        let parent_index =
+            *inner.hash_to_arena_indices.get(parent_hash).expect(
+                "parent_hash is the pivot chain tip,\
+                 so should still exist in ConsensusInner",
+            );
+        let referee_indices: Vec<_> = referees
+            .iter()
+            .map(|h| {
+                *inner
+                    .hash_to_arena_indices
+                    .get(h)
+                    .expect("Checked by the caller")
+            })
+            .collect();
+        let correct_parent = inner.choose_correct_parent(
+            parent_index,
+            referee_indices,
+            pos_reference,
+        );
+        let correct_parent_hash = inner.arena[correct_parent].hash;
+
+        if correct_parent_hash != *parent_hash {
+            debug!(
+                "Change parent from {:?} to {:?}",
+                parent_hash, correct_parent_hash
+            );
+
+            // correct_parent may be among referees, so check and remove it.
+            referees.retain(|i| *i != correct_parent_hash);
+
+            // Old parent is a valid block terminal to refer to.
+            if referees.len() < self.config.referee_bound {
+                referees.push(*parent_hash);
+            }
+
+            *parent_hash = correct_parent_hash;
+        }
+    }
+
     /// Convert EpochNumber to height based on the current ConsensusGraph
     pub fn get_height_from_epoch_number(
         &self, epoch_number: EpochNumber,

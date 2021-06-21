@@ -3918,6 +3918,133 @@ impl ConsensusGraphInner {
                 (pivot_decision, pivot_decision_height);
         }
     }
+
+    // FIXME(lpl): Copied from `check_mining_adaptive_block`.
+    /// Return possibly new parent.
+    pub fn choose_correct_parent(
+        &mut self, parent_arena_index: usize, referee_indices: Vec<usize>,
+        pos_reference: Option<PosBlockId>,
+    ) -> usize
+    {
+        // We first compute anticone barrier for newly mined block
+        let parent_anticone_opt = self.anticone_cache.get(parent_arena_index);
+        let mut anticone;
+        if parent_anticone_opt.is_none() {
+            anticone = consensus_new_block_handler::ConsensusNewBlockHandler::compute_anticone_bruteforce(
+                self, parent_arena_index,
+            );
+            for i in self.compute_future_bitset(parent_arena_index) {
+                anticone.add(i);
+            }
+        } else {
+            anticone = self.compute_future_bitset(parent_arena_index);
+            for index in parent_anticone_opt.unwrap() {
+                anticone.add(*index as u32);
+            }
+        }
+        let mut my_past = BitSet::new();
+        let mut queue: VecDeque<usize> = VecDeque::new();
+        for index in &referee_indices {
+            queue.push_back(*index);
+        }
+        while let Some(index) = queue.pop_front() {
+            if my_past.contains(index as u32) {
+                continue;
+            }
+            my_past.add(index as u32);
+            let idx_parent = self.arena[index].parent;
+            if idx_parent != NULL {
+                if anticone.contains(idx_parent as u32)
+                    || self.arena[idx_parent].era_block == NULL
+                {
+                    queue.push_back(idx_parent);
+                }
+            }
+            for referee in &self.arena[index].referees {
+                if anticone.contains(*referee as u32)
+                    || self.arena[idx_parent].era_block == NULL
+                {
+                    queue.push_back(*referee);
+                }
+            }
+        }
+        for index in my_past.drain() {
+            anticone.remove(index);
+        }
+
+        let mut anticone_barrier = BitSet::new();
+        for index in (&anticone).iter() {
+            let parent = self.arena[index as usize].parent as u32;
+            if self.arena[index as usize].era_block != NULL
+                && !anticone.contains(parent)
+            {
+                anticone_barrier.add(index);
+            }
+        }
+
+        let timer_chain_tuple = self.compute_timer_chain_tuple(
+            parent_arena_index,
+            &referee_indices,
+            Some(&anticone),
+        );
+
+        self.choose_correct_parent_impl(
+            parent_arena_index,
+            &anticone_barrier,
+            &timer_chain_tuple,
+            pos_reference,
+        )
+    }
+
+    fn choose_correct_parent_impl(
+        &mut self, parent: usize, anticone_barrier: &BitSet,
+        timer_chain_tuple: &(u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>),
+        pos_reference: Option<PosBlockId>,
+    ) -> usize
+    {
+        let force_confirm =
+            self.compute_block_force_confirm(timer_chain_tuple, pos_reference);
+        let force_confirm_height = self.arena[force_confirm].height;
+
+        if self.ancestor_at(parent, force_confirm_height) == force_confirm {
+            // `parent` is the correct parent.
+            return parent;
+        }
+
+        let mut weight_delta = HashMap::new();
+
+        for index in anticone_barrier.iter() {
+            assert!(!self.is_legacy_block(index as usize));
+            weight_delta
+                .insert(index as usize, self.weight_tree.get(index as usize));
+        }
+
+        for (index, delta) in &weight_delta {
+            self.weight_tree.path_apply(*index, -*delta);
+        }
+
+        let mut new_parent = force_confirm;
+        // Recursively find the correct pivot chain with the heaviest subtree weight.
+        while !self.arena[new_parent].children.is_empty() {
+            let mut children = self.arena[new_parent].children.clone();
+            let mut pivot = children.pop().expect("non-empty");
+            for child in children {
+                if ConsensusGraphInner::is_heavier(
+                    (self.weight_tree.get(child), &self.arena[child].hash),
+                    (self.weight_tree.get(pivot), &self.arena[pivot].hash),
+                ) {
+                    pivot = child;
+                }
+            }
+            new_parent = pivot;
+        }
+
+        for (index, delta) in &weight_delta {
+            self.weight_tree.path_apply(*index, *delta);
+        }
+
+        new_parent
+    }
 }
 
 impl Graph for ConsensusGraphInner {

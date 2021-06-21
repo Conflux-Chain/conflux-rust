@@ -200,18 +200,12 @@ impl BlockGenerator {
 
     // TODO: should not hold and pass write lock to consensus.
     fn assemble_new_block_impl(
-        &self, parent_hash: H256, mut referees: Vec<H256>,
+        &self, mut parent_hash: H256, mut referees: Vec<H256>,
         blame_info: StateBlameInfo, block_gas_limit: U256,
         transactions: Vec<Arc<SignedTransaction>>, difficulty: u64,
         adaptive_opt: Option<bool>, maybe_pos_reference: Option<PosBlockId>,
     ) -> Block
     {
-        let parent_height =
-            self.graph.block_height_by_hash(&parent_hash).unwrap();
-
-        let parent_timestamp =
-            self.graph.block_timestamp_by_hash(&parent_hash).unwrap();
-
         trace!("{} txs packed", transactions.len());
         let consensus_graph = self.consensus_graph();
         let mut consensus_inner = consensus_graph.inner.write();
@@ -220,6 +214,12 @@ impl BlockGenerator {
         // checkpoint making that happens before we acquire the inner lock
         referees
             .retain(|h| consensus_inner.hash_to_arena_indices.contains_key(h));
+        consensus_graph.choose_correct_parent(
+            &mut *consensus_inner,
+            &mut parent_hash,
+            &mut referees,
+            maybe_pos_reference,
+        );
         let mut expected_difficulty =
             consensus_inner.expected_difficulty(&parent_hash);
         let adaptive = if let Some(x) = adaptive_opt {
@@ -232,6 +232,14 @@ impl BlockGenerator {
                 &expected_difficulty,
                 maybe_pos_reference,
             )
+        };
+
+        let (parent_height, parent_timestamp) = {
+            let parent_header = consensus_inner
+                .data_man
+                .block_header_by_hash(&parent_hash)
+                .unwrap();
+            (parent_header.height(), parent_header.timestamp())
         };
 
         if U256::from(difficulty) > expected_difficulty {
