@@ -34,7 +34,7 @@ pub trait ABIEncodable: Sized {
     fn abi_encode(&self) -> Vec<u8>;
 }
 
-pub trait ABIVariable: Sized + Default {
+pub trait ABIVariable: Sized {
     const STATIC_LENGTH: Option<usize>;
     fn from_abi(data: &[u8]) -> Result<Self, ABIDecodeError>;
     fn to_abi(&self) -> LinkedBytes;
