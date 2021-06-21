@@ -564,8 +564,28 @@ impl SynchronizationGraphInner {
         {
             // TODO(lpl): Should we check if the pos reference will never be
             // committed?
-            if !self.pos_verifier.is_committed(pos_reference) {
-                return false;
+            match self.pos_verifier.get_pivot_decision(pos_reference) {
+                // The pos reference has not been committed.
+                None => return false,
+                Some(pivot_decision) => {
+                    // Check if this pivot_decision is graph_ready.
+                    match self.hash_to_arena_indices.get(&pivot_decision) {
+                        None => {
+                            if !self.is_graph_ready_in_db(
+                                &pivot_decision,
+                                genesis_seq_num,
+                            ) {
+                                return false;
+                            }
+                        }
+                        Some(index) => {
+                            if self.arena[*index].graph_status < minimal_status
+                            {
+                                return false;
+                            }
+                        }
+                    }
+                }
             }
         }
 

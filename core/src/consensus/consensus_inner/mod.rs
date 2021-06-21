@@ -4024,7 +4024,8 @@ impl ConsensusGraphInner {
         }
 
         let mut new_parent = force_confirm;
-        // Recursively find the correct pivot chain with the heaviest subtree weight.
+        // Recursively find the correct pivot chain with the heaviest subtree
+        // weight.
         while !self.arena[new_parent].children.is_empty() {
             let mut children = self.arena[new_parent].children.clone();
             let mut pivot = children.pop().expect("non-empty");
