@@ -2,35 +2,26 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_parameters::internal_contract_addresses::ADMIN_CONTROL_CONTRACT_ADDRESS;
-
-use super::{
-    super::impls::admin::*, ExecutionTrait, InterfaceTrait,
-    InternalContractTrait, PreExecCheckConfTrait, SolFnTable,
-    SolidityFunctionTrait, UpfrontPaymentTrait,
-};
-#[cfg(test)]
-use crate::check_signature;
+use super::{super::impls::admin::*, macros::*, ExecutionTrait, SolFnTable};
 use crate::{
     evm::{ActionParams, Spec},
-    impl_function_type, make_function_table, make_solidity_contract,
-    make_solidity_function,
-    state::CallStackInfo,
+    executive::InternalRefContext,
     trace::{trace::ExecTrace, Tracer},
-    vm::{self, Env},
+    vm,
 };
-use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
+use cfx_parameters::internal_contract_addresses::ADMIN_CONTROL_CONTRACT_ADDRESS;
+use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{Address, U256};
 #[cfg(test)]
 use rustc_hex::FromHex;
 
+make_solidity_contract! {
+    pub struct AdminControl(ADMIN_CONTROL_CONTRACT_ADDRESS, generate_fn_table, activate_at: "genesis");
+}
 fn generate_fn_table() -> SolFnTable {
     make_function_table!(SetAdmin, Destroy, GetAdmin)
 }
-
-make_solidity_contract! {
-    pub struct AdminControl(ADMIN_CONTROL_CONTRACT_ADDRESS, generate_fn_table);
-}
+group_impl_activate_at!("genesis", SetAdmin, Destroy, GetAdmin);
 
 make_solidity_function! {
     struct SetAdmin((Address, Address), "setAdmin(address,address)");
@@ -39,21 +30,17 @@ impl_function_type!(SetAdmin, "non_payable_write", gas: |spec: &Spec| spec.sstor
 
 impl ExecutionTrait for SetAdmin {
     fn execute_inner(
-        &self, inputs: (Address, Address), params: &ActionParams, _env: &Env,
-        _spec: &Spec, state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait<
-            CallStackInfo = CallStackInfo,
-            Spec = Spec,
-        >,
+        &self, inputs: (Address, Address), params: &ActionParams,
+        context: &mut InternalRefContext,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
         set_admin(
             inputs.0,
             inputs.1,
-            substate.contract_in_creation(),
+            context.callstack.contract_in_creation(),
             params,
-            state,
+            context.state,
         )
     }
 }
@@ -65,16 +52,20 @@ impl_function_type!(Destroy, "non_payable_write", gas: |spec: &Spec| spec.sstore
 
 impl ExecutionTrait for Destroy {
     fn execute_inner(
-        &self, input: Address, params: &ActionParams, env: &Env, spec: &Spec,
-        state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait<
-            CallStackInfo = CallStackInfo,
-            Spec = Spec,
-        >,
+        &self, input: Address, params: &ActionParams,
+        context: &mut InternalRefContext,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        destroy(input, params, state, spec, substate, tracer, env)
+        destroy(
+            input,
+            params,
+            context.state,
+            context.spec,
+            context.substate,
+            tracer,
+            context.env,
+        )
     }
 }
 
@@ -85,13 +76,12 @@ impl_function_type!(GetAdmin, "query_with_default_gas");
 
 impl ExecutionTrait for GetAdmin {
     fn execute_inner(
-        &self, input: Address, _: &ActionParams, _env: &Env, _: &Spec,
-        state: &mut dyn StateOpsTrait,
-        _: &mut dyn SubstateTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        &self, input: Address, _params: &ActionParams,
+        context: &mut InternalRefContext,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<Address>
     {
-        Ok(state.admin(&input)?)
+        Ok(context.state.admin(&input)?)
     }
 }
 

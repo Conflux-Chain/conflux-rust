@@ -1,6 +1,6 @@
 [package]
 description = "Conflux utilities library"
-homepage = "http://www.conflux-chain.org"
+homepage = "https://www.confluxnetwork.org"
 license = "GPL-3.0"
 name = "cfx-utils"
 version = "0.6.0"

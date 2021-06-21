@@ -221,17 +221,7 @@ pub fn initialize_common_modules(
         }
     };
 
-    let mut consensus_conf = conf.consensus_config();
-    match node_type {
-        NodeType::Archive => {
-            consensus_conf.sync_state_starting_epoch = Some(0);
-        }
-        NodeType::Full | NodeType::Light => {
-            consensus_conf.sync_state_epoch_gap =
-                Some(CATCH_UP_EPOCH_LAG_THRESHOLD);
-        }
-        NodeType::Unknown => {}
-    }
+    let consensus_conf = conf.consensus_config();
     let vm = VmFactory::new(1024 * 32);
     let machine = Arc::new(new_machine_with_builtin(conf.common_params(), vm));
 
@@ -405,6 +395,8 @@ pub fn initialize_not_light_node_modules(
         Option<HttpServer>,
         Option<HttpServer>,
         Option<TcpServer>,
+        Option<TcpServer>,
+        Option<WSServer>,
         Option<WSServer>,
         Runtime,
         DiemHandle,
@@ -569,8 +561,30 @@ pub fn initialize_not_light_node_modules(
         ),
     )?;
 
+    let debug_rpc_tcp_server = super::rpc::start_tcp(
+        conf.local_tcp_config(),
+        setup_debug_rpc_apis(
+            common_impl.clone(),
+            rpc_impl.clone(),
+            pubsub.clone(),
+            &conf,
+        ),
+        RpcExtractor,
+    )?;
+
     let rpc_tcp_server = super::rpc::start_tcp(
         conf.tcp_config(),
+        setup_public_rpc_apis(
+            common_impl.clone(),
+            rpc_impl.clone(),
+            pubsub.clone(),
+            &conf,
+        ),
+        RpcExtractor,
+    )?;
+
+    let debug_rpc_ws_server = super::rpc::start_ws(
+        conf.local_ws_config(),
         setup_public_rpc_apis(
             common_impl.clone(),
             rpc_impl.clone(),
@@ -605,7 +619,9 @@ pub fn initialize_not_light_node_modules(
         blockgen,
         debug_rpc_http_server,
         rpc_http_server,
+        debug_rpc_tcp_server,
         rpc_tcp_server,
+        debug_rpc_ws_server,
         rpc_ws_server,
         runtime,
         diem_handler,
@@ -794,7 +810,6 @@ use crate::{
 };
 pub use crate::{common::pos::DiemHandle, configuration::Configuration};
 use blockgen::BlockGenerator;
-use cfx_parameters::sync::CATCH_UP_EPOCH_LAG_THRESHOLD;
 use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use cfxcore::{

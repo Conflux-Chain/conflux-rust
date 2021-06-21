@@ -4,13 +4,11 @@
 
 pub use self::{
     account_entry::{OverlayAccount, COMMISSION_PRIVILEGE_SPECIAL_KEY},
-    substate::{CallStackInfo, Substate},
+    substate::{cleanup_mode, CallStackInfo, Substate},
 };
 
 use self::account_entry::{AccountEntry, AccountState};
-use crate::{
-    hash::KECCAK_EMPTY, transaction_pool::SharedTransactionPool, vm::Spec,
-};
+use crate::{hash::KECCAK_EMPTY, transaction_pool::SharedTransactionPool};
 use cfx_bytes::Bytes;
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
@@ -796,16 +794,16 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         Ok(())
     }
 
-    fn total_issued_tokens(&self) -> &U256 {
-        &self.staking_state.total_issued_tokens
+    fn total_issued_tokens(&self) -> U256 {
+        self.staking_state.total_issued_tokens
     }
 
-    fn total_staking_tokens(&self) -> &U256 {
-        &self.staking_state.total_staking_tokens
+    fn total_staking_tokens(&self) -> U256 {
+        self.staking_state.total_staking_tokens
     }
 
-    fn total_storage_tokens(&self) -> &U256 {
-        &self.staking_state.total_storage_tokens
+    fn total_storage_tokens(&self) -> U256 {
+        self.staking_state.total_storage_tokens
     }
 
     fn remove_contract(&mut self, address: &Address) -> DbResult<()> {
@@ -989,11 +987,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
 
     /// Charges or refund storage collateral and update `total_storage_tokens`.
     fn settle_collateral_for_address(
-        &mut self, addr: &Address,
-        substate: &dyn SubstateTrait<
-            CallStackInfo = CallStackInfo,
-            Spec = Spec,
-        >,
+        &mut self, addr: &Address, substate: &dyn SubstateTrait,
         account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult>
     {

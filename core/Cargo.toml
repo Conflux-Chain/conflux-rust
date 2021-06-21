@@ -1,9 +1,9 @@
 [package]
 description = "Conflux core library"
-homepage = "http://www.conflux-chain.org"
+homepage = "https://www.confluxnetwork.org"
 license = "GPL-3.0"
 name = "cfxcore"
-version = "1.1.2"
+version = "1.1.4"
 edition = "2018"
 
 [dependencies]
@@ -121,7 +121,7 @@ pow-types = {path = "./src/pos/types/pow-types"}
 [dev-dependencies]
 criterion = "0.2"
 cfx-storage = { path = "storage", features = ["testonly_code"] }
-tokio = { version = "0.2.11", features = ["time"] }
+#tokio = { version = "0.2.11", features = ["time"] }
 
 [dependencies.parity-util-mem]
 version = "0.5"
