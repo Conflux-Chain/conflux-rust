@@ -6,7 +6,7 @@ use super::{macros::*, ExecutionTrait, SolFnTable};
 #[cfg(test)]
 use crate::check_signature;
 use crate::{
-    evm::{ActionParams, Spec},
+    evm::{instructions::GasPriceTier, ActionParams, Spec},
     executive::InternalRefContext,
     impl_function_type, make_function_table, make_solidity_contract,
     make_solidity_function,
@@ -32,7 +32,7 @@ make_solidity_function! {
 }
 
 // same gas cost as the `NUMBER` opcode
-impl_function_type!(EpochNumber, "query", gas: |_| U256::from(2));
+impl_function_type!(EpochNumber, "query", gas: |spec: &Spec| spec.tier_step_gas[(GasPriceTier::Base).idx()]);
 
 impl ExecutionTrait for EpochNumber {
     fn execute_inner(
