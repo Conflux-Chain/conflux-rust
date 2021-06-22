@@ -85,7 +85,7 @@ impl SafetyRulesManager {
                 storage,
                 verify_vote_proposal_signature,
                 export_consensus_key,
-                config.vrf_private_key.clone(),
+                config.vrf_private_key.as_ref().map(|key| key.private_key()),
             ),
             SafetyRulesService::Serializer => Self::new_serializer(
                 storage,

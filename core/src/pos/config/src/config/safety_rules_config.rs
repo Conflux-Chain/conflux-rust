@@ -32,7 +32,7 @@ pub struct SafetyRulesConfig {
     pub network_timeout_ms: u64,
     pub enable_cached_safety_data: bool,
 
-    pub vrf_private_key: Option<ConsensusVRFPrivateKey>,
+    pub vrf_private_key: Option<ConfigKey<ConsensusVRFPrivateKey>>,
 }
 
 impl Default for SafetyRulesConfig {

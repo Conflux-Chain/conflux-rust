@@ -218,9 +218,14 @@ impl EpochManager {
             }
             ConsensusProposerType::VrfProposer => Box::new(VrfProposer::new(
                 self.author,
-                self.config.safety_rules.vrf_private_key.clone().expect(
-                    "VRF private key mush be set for VRF leader election",
-                ),
+                self.config
+                    .safety_rules
+                    .vrf_private_key
+                    .as_ref()
+                    .expect(
+                        "VRF private key mush be set for VRF leader election",
+                    )
+                    .private_key(),
             )),
         }
     }

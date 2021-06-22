@@ -23,7 +23,8 @@ use diem_types::{
     on_chain_config::{new_epoch_event_key, ValidatorSet},
     transaction::{ChangeSet, Transaction, WriteSetPayload},
     validator_config::{
-        ConsensusPrivateKey, ConsensusPublicKey, ValidatorConfig,
+        ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
+        ConsensusVRFPublicKey, ValidatorConfig,
     },
     validator_info::ValidatorInfo,
     waypoint::Waypoint,
@@ -156,17 +157,23 @@ fn execute_genesis_transaction(genesis_txn: Transaction) -> Waypoint {
     generate_waypoint::<FakeVM>(&db, &genesis_txn).unwrap()
 }
 
-fn generate_genesis_from_public_keys(public_keys: Vec<ConsensusPublicKey>) {
+fn generate_genesis_from_public_keys(
+    public_keys: Vec<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
+) {
     let genesis_path = PathBuf::from("./genesis_file");
     let waypoint_path = PathBuf::from("./waypoint_config");
     let mut genesis_file = File::create(&genesis_path).unwrap();
     let mut waypoint_file = File::create(&waypoint_path).unwrap();
 
     let mut validators = Vec::new();
-    for public_key in public_keys {
+    for (public_key, vrf_public_key) in public_keys {
         let account_address = from_consensus_public_key(&public_key);
-        let validator_config =
-            ValidatorConfig::new(public_key, None, vec![], vec![]);
+        let validator_config = ValidatorConfig::new(
+            public_key,
+            Some(vrf_public_key),
+            vec![],
+            vec![],
+        );
         validators.push(ValidatorInfo::new(
             account_address,
             1,
@@ -220,13 +227,21 @@ where
         for i in 0..num_validator {
             let private_key = ConsensusPrivateKey::generate(&mut rng);
             let public_key = ConsensusPublicKey::from(&private_key);
-            public_keys.push(public_key.clone());
+            let vrf_private_key = ConsensusVRFPrivateKey::generate(&mut rng);
+            let vrf_public_key = ConsensusVRFPublicKey::from(&vrf_private_key);
+            public_keys.push((public_key.clone(), vrf_public_key.clone()));
 
             let private_key_str = private_key.to_encoded_string().unwrap();
-            let private_key_str = private_key_str + "\n";
+            let vrf_private_key_str =
+                vrf_private_key.to_encoded_string().unwrap();
+            let private_key_str =
+                format!("{},{}\n", private_key_str, vrf_private_key_str);
             private_key_file.write_all(private_key_str.as_bytes())?;
             let public_key_str = public_key.to_encoded_string().unwrap();
-            let public_key_str = public_key_str + "\n";
+            let vrf_public_key_str =
+                vrf_public_key.to_encoded_string().unwrap();
+            let public_key_str =
+                format!("{},{}\n", public_key_str, vrf_public_key_str);
             public_key_file.write_all(public_key_str.as_bytes())?;
         }
         generate_genesis_from_public_keys(public_keys);
@@ -239,11 +254,14 @@ where
         let mut lines = contents.as_str().lines();
 
         let mut public_keys = Vec::new();
-        while let Some(public_key_str) = lines.next() {
+        while let Some(key_str) = lines.next() {
+            let key_array: Vec<_> = key_str.split(",").collect();
             let public_key =
-                ConsensusPublicKey::from_encoded_string(public_key_str)
+                ConsensusPublicKey::from_encoded_string(key_array[0]).unwrap();
+            let vrf_public_key =
+                ConsensusVRFPublicKey::from_encoded_string(key_array[1])
                     .unwrap();
-            public_keys.push(public_key);
+            public_keys.push((public_key, vrf_public_key));
         }
         generate_genesis_from_public_keys(public_keys);
         Ok("Ok".into())

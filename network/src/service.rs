@@ -26,7 +26,9 @@ use diem_crypto::{
 };
 use diem_types::{
     account_address::{from_consensus_public_key, from_public_key},
-    validator_config::{ConsensusPrivateKey, ConsensusPublicKey},
+    validator_config::{
+        ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
+    },
 };
 use keccak_hash::keccak;
 use keylib::{sign, Generator, KeyPair, Random, Secret};
@@ -560,7 +562,8 @@ impl NetworkServiceInner {
             .config_path
             .clone()
             .and_then(|ref p| load_pos_private_key(Path::new(&p)))
-            .map(|private_key| ConsensusPublicKey::from(&private_key));
+            // FIXME(lpl): Use both public keys.
+            .map(|(private_key, _)| ConsensusPublicKey::from(&private_key));
         info!("Self pos public key: {:?}", pos_public_key);
 
         info!("Self node id: {:?}", *keys.public());
@@ -2128,7 +2131,9 @@ fn load_key(path: &Path) -> Option<Secret> {
     }
 }
 
-pub fn load_pos_private_key(path: &Path) -> Option<ConsensusPrivateKey> {
+pub fn load_pos_private_key(
+    path: &Path,
+) -> Option<(ConsensusPrivateKey, Option<ConsensusVRFPrivateKey>)> {
     let mut path_buf = PathBuf::from(path);
     path_buf.push("pos_key");
     let mut file = match fs::File::open(path_buf.as_path()) {
@@ -2146,13 +2151,27 @@ pub fn load_pos_private_key(path: &Path) -> Option<ConsensusPrivateKey> {
             return None;
         }
     }
-    match ConsensusPrivateKey::from_encoded_string(&buf) {
-        Ok(key) => Some(key),
-        Err(e) => {
-            warn!("Error parsing key file: {:?}", e);
-            None
-        }
+    let key_str: Vec<_> = buf.split(",").collect();
+    let private_key =
+        match ConsensusPrivateKey::from_encoded_string(&key_str[0]) {
+            Ok(key) => Some(key),
+            Err(e) => {
+                warn!("Error parsing key file: {:?}", e);
+                None
+            }
+        }?;
+    if key_str.len() <= 1 {
+        return Some((private_key, None));
     }
+    let vrf_private_key =
+        match ConsensusVRFPrivateKey::from_encoded_string(&key_str[1]) {
+            Ok(key) => Some(key),
+            Err(e) => {
+                warn!("Error parsing key file: {:?}", e);
+                None
+            }
+        }?;
+    Some((private_key, Some(vrf_private_key)))
 }
 
 impl std::fmt::Display for ProtocolVersion {

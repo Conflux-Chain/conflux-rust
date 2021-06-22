@@ -269,19 +269,24 @@ pub fn initialize_common_modules(
     let own_node_hash =
         keccak(network.net_key_pair().expect("Error node key").public());
     let self_pos_public_key = network.pos_public_key();
-    // TODO(lpl): Keep it properly.
-    let self_pos_private_key =
-        network_config.config_path.clone().map(|ref p| {
-            ConfigKey::new(load_pos_private_key(Path::new(&p)).unwrap())
-        });
+    // TODO(lpl): Keep it properly and allow not running pos.
+    let (self_pos_private_key, self_vrf_private_key) = network_config
+        .config_path
+        .clone()
+        .map(|ref p| {
+            let (sk, vrf_sk) = load_pos_private_key(Path::new(&p)).unwrap();
+            (ConfigKey::new(sk), vrf_sk.map(|key| ConfigKey::new(key)))
+        })
+        .unwrap();
     pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
         author: from_consensus_public_key(
             self_pos_public_key.as_ref().unwrap(),
         ),
-        consensus_key: self_pos_private_key.clone(),
-        execution_key: self_pos_private_key,
+        consensus_key: Some(self_pos_private_key.clone()),
+        execution_key: Some(self_pos_private_key),
         waypoint: Some(pos_config.base.waypoint.waypoint()),
     });
+    pos_config.consensus.safety_rules.vrf_private_key = self_vrf_private_key;
     let diem_handler = start_pos_consensus(
         &pos_config,
         network.clone(),
