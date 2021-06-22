@@ -29,7 +29,6 @@ impl CollateralCheckResultToVmResult for CollateralCheckResult {
 }
 
 pub use self::{
-    context::InternalRefContext,
     executed::*,
     executive::{
         contract_address, Executive, ExecutiveGeneric, ExecutiveResult,
@@ -37,7 +36,7 @@ pub use self::{
     },
     internal_contract::{
         function, suicide, ABIDecodeError, InternalContractMap,
-        InternalContractTrait, SolidityFunctionTrait,
+        InternalContractTrait, InternalRefContext, SolidityFunctionTrait,
     },
 };
 use crate::vm::Error as vmError;

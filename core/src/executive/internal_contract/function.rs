@@ -216,3 +216,22 @@ macro_rules! impl_function_type {
         }
     };
 }
+
+#[macro_export]
+macro_rules! make_solidity_event {
+    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($interface:expr, $indexed:ty, $non_indexed:ty); ) => {
+        $(#[$attr])*
+        #[derive(Copy, Clone)]
+        $visibility struct $name {
+        }
+
+        impl InterfaceTrait for $name {
+            type Indexed = $indexed;
+            type NonIndexed = $non_indexed;
+
+            fn name(&self) -> &'static str {
+                $interface
+            }
+        }
+    };
+}
