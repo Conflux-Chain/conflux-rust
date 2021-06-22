@@ -532,7 +532,6 @@ impl RoundManager {
         self.network.broadcast(timeout_vote_msg).await;
         diem_error!(
             round = round,
-            remote_peer = self.proposer_election.get_valid_proposer(round),
             voted = use_last_vote,
             event = LogEvent::Timeout,
         );
