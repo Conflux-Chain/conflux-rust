@@ -3906,16 +3906,15 @@ impl ConsensusGraphInner {
 
     fn update_pos_pivot_decision(&mut self, me: usize) {
         let h = self.arena[me].hash;
-        let pivot_decision = self
-            .get_pos_reference_pivot_decision(&h)
-            .expect("pos reference checked");
-        let pivot_decision_height = self
-            .data_man
-            .block_height_by_hash(&pivot_decision)
-            .expect("pos_reference checked");
-        if pivot_decision_height > self.best_pos_pivot_decision.1 {
-            self.best_pos_pivot_decision =
-                (pivot_decision, pivot_decision_height);
+        if let Ok(pivot_decision) = self.get_pos_reference_pivot_decision(&h) {
+            let pivot_decision_height = self
+                .data_man
+                .block_height_by_hash(&pivot_decision)
+                .expect("pos_reference checked");
+            if pivot_decision_height > self.best_pos_pivot_decision.1 {
+                self.best_pos_pivot_decision =
+                    (pivot_decision, pivot_decision_height);
+            }
         }
     }
 

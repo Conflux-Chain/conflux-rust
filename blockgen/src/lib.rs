@@ -208,19 +208,18 @@ impl BlockGenerator {
     {
         trace!("{} txs packed", transactions.len());
         let consensus_graph = self.consensus_graph();
+        consensus_graph.choose_correct_parent(
+            &mut parent_hash,
+            &mut referees,
+            &mut blame_info,
+            maybe_pos_reference,
+        );
         let mut consensus_inner = consensus_graph.inner.write();
         // referees are retrieved before locking inner, so we need to
         // filter out the blocks that should be removed by possible
         // checkpoint making that happens before we acquire the inner lock
         referees
             .retain(|h| consensus_inner.hash_to_arena_indices.contains_key(h));
-        consensus_graph.choose_correct_parent(
-            &mut *consensus_inner,
-            &mut parent_hash,
-            &mut referees,
-            &mut blame_info,
-            maybe_pos_reference,
-        );
         let mut expected_difficulty =
             consensus_inner.expected_difficulty(&parent_hash);
         let adaptive = if let Some(x) = adaptive_opt {

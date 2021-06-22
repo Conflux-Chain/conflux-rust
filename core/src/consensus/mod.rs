@@ -373,31 +373,36 @@ impl ConsensusGraph {
     /// an invalid choice, so this function tries to update the parent and
     /// referee choices with `pos_reference` provided.
     pub fn choose_correct_parent(
-        &self, inner: &mut ConsensusGraphInner, parent_hash: &mut H256,
-        referees: &mut Vec<H256>, blame_info: &mut StateBlameInfo,
-        pos_reference: Option<PosBlockId>,
+        &self, parent_hash: &mut H256, referees: &mut Vec<H256>,
+        blame_info: &mut StateBlameInfo, pos_reference: Option<PosBlockId>,
     )
     {
-        let parent_index =
-            *inner.hash_to_arena_indices.get(parent_hash).expect(
-                "parent_hash is the pivot chain tip,\
-                 so should still exist in ConsensusInner",
+        let correct_parent_hash = {
+            // recompute `blame_info` needs locking `self.inner`, so we limit
+            // the lock scope here.
+            let mut inner = self.inner.write();
+            referees.retain(|h| inner.hash_to_arena_indices.contains_key(h));
+            let parent_index =
+                *inner.hash_to_arena_indices.get(parent_hash).expect(
+                    "parent_hash is the pivot chain tip,\
+                     so should still exist in ConsensusInner",
+                );
+            let referee_indices: Vec<_> = referees
+                .iter()
+                .map(|h| {
+                    *inner
+                        .hash_to_arena_indices
+                        .get(h)
+                        .expect("Checked by the caller")
+                })
+                .collect();
+            let correct_parent = inner.choose_correct_parent(
+                parent_index,
+                referee_indices,
+                pos_reference,
             );
-        let referee_indices: Vec<_> = referees
-            .iter()
-            .map(|h| {
-                *inner
-                    .hash_to_arena_indices
-                    .get(h)
-                    .expect("Checked by the caller")
-            })
-            .collect();
-        let correct_parent = inner.choose_correct_parent(
-            parent_index,
-            referee_indices,
-            pos_reference,
-        );
-        let correct_parent_hash = inner.arena[correct_parent].hash;
+            inner.arena[correct_parent].hash
+        };
 
         if correct_parent_hash != *parent_hash {
             debug!(
