@@ -208,12 +208,15 @@ impl BlockGenerator {
     {
         trace!("{} txs packed", transactions.len());
         let consensus_graph = self.consensus_graph();
-        consensus_graph.choose_correct_parent(
-            &mut parent_hash,
-            &mut referees,
-            &mut blame_info,
-            maybe_pos_reference,
-        );
+        if adaptive_opt.is_none() {
+            // This is the normal case for mining.
+            consensus_graph.choose_correct_parent(
+                &mut parent_hash,
+                &mut referees,
+                &mut blame_info,
+                maybe_pos_reference,
+            );
+        }
         let mut consensus_inner = consensus_graph.inner.write();
         // referees are retrieved before locking inner, so we need to
         // filter out the blocks that should be removed by possible
