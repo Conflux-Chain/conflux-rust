@@ -287,6 +287,7 @@ pub fn initialize_common_modules(
         waypoint: Some(pos_config.base.waypoint.waypoint()),
     });
     pos_config.consensus.safety_rules.vrf_private_key = self_vrf_private_key;
+    pos_config.consensus.safety_rules.export_consensus_key = true;
     let diem_handler = start_pos_consensus(
         &pos_config,
         network.clone(),
