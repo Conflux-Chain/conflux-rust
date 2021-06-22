@@ -229,6 +229,7 @@ impl StorageManager {
             delta_db_manager: delta_db_manager.clone(),
             delta_mpt_open_db_lru: Arc::new(OpenDeltaDbLru::new(
                 delta_db_manager.clone(),
+                storage_conf.max_open_mpt_count,
             )?),
             snapshot_manager: Box::new(SnapshotManager::<SnapshotDbManager> {
                 snapshot_db_manager: SnapshotDbManager::new(

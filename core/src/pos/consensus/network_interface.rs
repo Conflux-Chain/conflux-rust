@@ -12,6 +12,7 @@ use crate::{
     },
 };
 use anyhow::{format_err, Context};
+use cfx_types::H256;
 use consensus_types::{
     block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse},
     epoch_retrieval::EpochRetrievalRequest,
@@ -19,6 +20,7 @@ use consensus_types::{
     sync_info::SyncInfo,
     vote_msg::VoteMsg,
 };
+use diem_crypto::ed25519::Ed25519PublicKey;
 use diem_types::{
     account_address::AccountAddress, epoch_change::EpochChangeProof, PeerId,
 };
@@ -72,12 +74,22 @@ impl ConsensusNetworkSender {
     /// Send a single message to the destination peer using the
     /// `CONSENSUS_DIRECT_SEND_PROTOCOL` ProtocolId.
     pub fn send_to(
-        &mut self, recipient: PeerId, msg: &dyn Message,
+        &mut self, recipient: Ed25519PublicKey, msg: &dyn Message,
     ) -> Result<(), anyhow::Error> {
-        let peer_hash = recipient.to_H256();
-        if let Some(peer) = self.protocol_handler.peers.get(&peer_hash) {
-            let peer_id = peer.read().get_id();
-            self.send_message_with_peer_id(&peer_id, msg);
+        if let Some(peer_hash) = self
+            .protocol_handler
+            .pos_peer_mapping
+            .read()
+            .get(&recipient)
+        {
+            if let Some(peer) = self.protocol_handler.peers.get(peer_hash) {
+                let peer_id = peer.read().get_id();
+                self.send_message_with_peer_id(&peer_id, msg);
+            } else {
+                warn!("peer_hash {:?} does not exist", peer_hash);
+            }
+        } else {
+            warn!("recipient {:?} has been removed", recipient)
         }
         Ok(())
     }
@@ -85,8 +97,10 @@ impl ConsensusNetworkSender {
     /// Send a single message to the destination peers using the
     /// `CONSENSUS_DIRECT_SEND_PROTOCOL` ProtocolId.
     pub fn send_to_many(
-        &mut self, recipients: impl Iterator<Item = PeerId>, msg: &dyn Message,
-    ) -> Result<(), anyhow::Error> {
+        &mut self, recipients: impl Iterator<Item = Ed25519PublicKey>,
+        msg: &dyn Message,
+    ) -> Result<(), anyhow::Error>
+    {
         for recipient in recipients {
             self.send_to(recipient, msg)?;
         }

@@ -19,11 +19,15 @@ use cfx_types::H256;
 use channel::diem_channel;
 use diem_config::config::NodeConfig;
 use diem_logger::prelude::*;
-use diem_types::on_chain_config::OnChainConfigPayload;
+use diem_types::{
+    account_address::AccountAddress, on_chain_config::OnChainConfigPayload,
+};
+use executor::{vm::FakeVM, Executor};
 use executor_types::BlockExecutor;
 use network::NetworkService;
-use std::sync::Arc;
-use storage_interface::DbReader;
+use state_sync::client::StateSyncClient;
+use std::sync::{atomic::AtomicBool, Arc};
+use storage_interface::{DbReader, DbReaderWriter};
 use tokio::runtime::{self, Runtime};
 
 /// Helper function to start consensus based on configuration and return the
@@ -31,13 +35,18 @@ use tokio::runtime::{self, Runtime};
 pub fn start_consensus(
     node_config: &NodeConfig, network: Arc<NetworkService>,
     own_node_hash: H256, protocol_config: ProtocolConfiguration,
-    diem_db: Arc<dyn DbReader>, executor: Box<dyn BlockExecutor>,
+    state_sync_client: StateSyncClient, diem_db: Arc<dyn DbReader>,
+    db_rw: DbReaderWriter,
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
-) -> Runtime
+    author: AccountAddress,
+) -> (Runtime, Arc<PowHandler>, Arc<AtomicBool>)
 {
-    let runtime = runtime::Builder::new()
+    let stopped = Arc::new(AtomicBool::new(false));
+    let runtime = runtime::Builder::new_multi_thread()
         .thread_name("consensus")
         .enable_all()
+        // TODO(lpl): This is for debugging.
+        .worker_threads(4)
         .build()
         .expect("Failed to create Tokio runtime!");
     let storage = Arc::new(StorageWriteProxy::new(node_config, diem_db));
@@ -46,7 +55,9 @@ pub fn start_consensus(
         node_config.consensus.mempool_txn_pull_timeout_ms,
         node_config.consensus.mempool_executed_txn_timeout_ms,
     ));
-    let state_computer = Arc::new(ExecutionProxy::new(executor));
+    let executor = Box::new(Executor::<FakeVM>::new(db_rw));
+    let state_computer =
+        Arc::new(ExecutionProxy::new(executor, state_sync_client));
     let time_service =
         Arc::new(ClockTimeService::new(runtime.handle().clone()));
 
@@ -57,7 +68,7 @@ pub fn start_consensus(
         protocol_config,
     ));
     protocol_handler.clone().register(network.clone()).unwrap();
-    network.start_network_poll().unwrap();
+    // network.start_network_poll().unwrap();
     let network_sender = ConsensusNetworkSender {
         network,
         protocol_handler,
@@ -76,11 +87,16 @@ pub fn start_consensus(
         state_computer,
         storage,
         reconfig_events,
-        pow_handler,
+        pow_handler.clone(),
+        author,
     );
 
-    runtime.spawn(epoch_mgr.start(timeout_receiver, network_receiver));
+    runtime.spawn(epoch_mgr.start(
+        timeout_receiver,
+        network_receiver,
+        stopped.clone(),
+    ));
 
     diem_debug!("Consensus started.");
-    runtime
+    (runtime, pow_handler, stopped)
 }

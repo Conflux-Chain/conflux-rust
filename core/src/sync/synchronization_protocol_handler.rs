@@ -29,6 +29,7 @@ use crate::{
 use cfx_internal_common::ChainIdParamsDeprecated;
 use cfx_parameters::{block::MAX_BLOCK_SIZE_IN_BYTES, sync::*};
 use cfx_types::H256;
+use diem_crypto::ed25519::Ed25519PublicKey;
 use io::TimerToken;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -413,6 +414,7 @@ pub struct ProtocolConfiguration {
     pub max_unprocessed_block_size: usize,
     pub max_chunk_number_in_manifest: usize,
     pub allow_phase_change_without_peer: bool,
+    pub pos_genesis_pivot_decision: H256,
 }
 
 impl SynchronizationProtocolHandler {
@@ -663,7 +665,7 @@ impl SynchronizationProtocolHandler {
                     op = Some(UpdateNodeOperation::Remove)
                 }
                 network::ErrorKind::BadAddr => disconnect = false,
-                network::ErrorKind::Decoder => {
+                network::ErrorKind::Decoder(_) => {
                     op = Some(UpdateNodeOperation::Remove)
                 }
                 network::ErrorKind::Expired => disconnect = false,
@@ -1511,6 +1513,10 @@ impl SynchronizationProtocolHandler {
 
     pub fn propagate_new_transactions(&self, io: &dyn NetworkContext) {
         if self.syn.peers.read().is_empty() || self.catch_up_mode() {
+            if self.protocol_config.dev_mode {
+                // In single-node dev mode, just clear to_propagate_trans.
+                self.get_to_propagate_trans();
+            }
             return;
         }
 
@@ -1828,6 +1834,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
     fn on_peer_connected(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         peer_protocol_version: ProtocolVersion,
+        _pos_public_key: Option<Ed25519PublicKey>,
     )
     {
         debug!(
@@ -1865,6 +1872,8 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             CHECK_FUTURE_BLOCK_TIMER => {
                 self.check_future_blocks(io);
+                self.graph
+                    .check_not_ready_frontier(false /* is_light_node */);
             }
             CHECK_REQUEST_TIMER => {
                 self.remove_expired_flying_request(io);

@@ -1,6 +1,6 @@
 [package]
 name = "client"
-version = "1.1.2"
+version = "1.1.4"
 edition = "2018"
 
 [dependencies]
@@ -65,7 +65,7 @@ futures01 = "0.1"
 futures = { version = "0.3.3", features = ["compat"] }
 rayon = "1.2.0"
 throttling = { path = "../util/throttling" }
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "1.6", features = ["full"] }
 tokio-stream = "0.1.4"
 tokio-timer = "0.2.13"
 malloc_size_of = {path = "../util/malloc_size_of"}
@@ -85,6 +85,7 @@ diem-time-service = { path = "../core/src/pos/common/time-service" }
 diem-types = { path = "../core/src/pos/types" }
 executor-types = { path = "../core/src/pos/types/executor-types" }
 executor = { path = "../core/src/pos/consensus/executor" }
+state-sync = { path = "../core/src/pos/state-sync" }
 fail = "0.4.0"
 storage-interface = { path = "../core/src/pos/storage/storage-interface" }
 

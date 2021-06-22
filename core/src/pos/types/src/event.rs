@@ -23,8 +23,7 @@ pub struct EventKey([u8; EventKey::LENGTH]);
 
 impl EventKey {
     /// The number of bytes in an EventKey.
-    /// TODO: the length should be fixed as `AccountAddress::LENGTH + 8`
-    pub const LENGTH: usize = AccountAddress::LENGTH;
+    pub const LENGTH: usize = AccountAddress::LENGTH + 8;
 
     /// Construct a new EventKey from a byte array slice.
     pub fn new(key: [u8; Self::LENGTH]) -> Self { EventKey(key) }
@@ -60,7 +59,7 @@ impl EventKey {
     /// Create a unique handle by using an AccountAddress and a counter.
     pub fn new_from_address(addr: &AccountAddress, salt: u64) -> Self {
         let mut output_bytes = [0; Self::LENGTH];
-        let (lhs, rhs) = output_bytes.split_at_mut(0);
+        let (lhs, rhs) = output_bytes.split_at_mut(8);
         lhs.copy_from_slice(&salt.to_le_bytes());
         rhs.copy_from_slice(addr.as_ref());
         EventKey(output_bytes)
@@ -224,7 +223,7 @@ mod tests {
 
     #[test]
     fn test_display_impls() {
-        let hex = "100000000000000000000000000000000000000000000000ca843279e3427144cead5e4d5999a3d0";
+        let hex = "1000000000000000ca843279e3427144cead5e4d5999a3d0";
 
         let key = EventKey::from_hex(hex).unwrap();
 
@@ -250,8 +249,8 @@ mod tests {
 
     #[test]
     fn test_serde_json() {
-        let hex = "100000000000000000000000000000000000000000000000ca843279e3427144cead5e4d5999a3d0";
-        let json_hex = "\"100000000000000000000000000000000000000000000000ca843279e3427144cead5e4d5999a3d0\"";
+        let hex = "1000000000000000ca843279e3427144cead5e4d5999a3d0";
+        let json_hex = "\"1000000000000000ca843279e3427144cead5e4d5999a3d0\"";
 
         let key = EventKey::from_hex(hex).unwrap();
 

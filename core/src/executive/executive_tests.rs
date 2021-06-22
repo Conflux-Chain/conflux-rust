@@ -164,11 +164,13 @@ fn test_sender_balance() {
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(state.balance(&address).unwrap(), U256::from(0x7));
-    assert_eq!(substate.contracts_created.len(), 0);
+    // We create a contract successfully, the substate contracts_created length
+    // should be 1?
+    assert_eq!(substate.contracts_created.len(), 1);
 }
 
 #[test]
@@ -247,7 +249,9 @@ fn test_create_contract_out_of_depth() {
     };
 
     assert_eq!(gas_left, U256::from(62_970));
-    assert_eq!(substate.contracts_created.len(), 0);
+    // We create a contract successfully, the substate contracts_created length
+    // should be 1?
+    assert_eq!(substate.contracts_created.len(), 1);
 }
 
 #[test]
@@ -395,7 +399,7 @@ fn test_call_to_create() {
         state.collateral_for_storage(&sender).unwrap(),
         U256::from(0)
     );
-    assert_eq!(*state.total_storage_tokens(), U256::from(0));
+    assert_eq!(state.total_storage_tokens(), U256::from(0));
     let mut substate = Substate::new();
 
     let FinalizationResult { gas_left, .. } = {
@@ -427,7 +431,7 @@ fn test_call_to_create() {
         state.collateral_for_storage(&sender).unwrap(),
         params.storage_limit_in_drip
     );
-    assert_eq!(*state.total_storage_tokens(), params.storage_limit_in_drip);
+    assert_eq!(state.total_storage_tokens(), params.storage_limit_in_drip);
 
     assert_eq!(gas_left, U256::from(59_746));
 }
@@ -653,9 +657,9 @@ fn test_deposit_withdraw_lock() {
         U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(state.staking_balance(&sender).unwrap(), U256::zero());
-    assert_eq!(*state.total_staking_tokens(), U256::zero());
+    assert_eq!(state.total_staking_tokens(), U256::zero());
     assert_eq!(
-        *state.total_issued_tokens(),
+        state.total_issued_tokens(),
         U256::from(2_000_000_000_000_000_000u64)
     );
 
@@ -690,10 +694,10 @@ fn test_deposit_withdraw_lock() {
     );
     assert_eq!(state.staking_balance(&sender).unwrap(), U256::zero());
     assert_eq!(
-        *state.total_issued_tokens(),
+        state.total_issued_tokens(),
         U256::from(2_000_000_000_000_000_000u64)
     );
-    assert_eq!(*state.total_staking_tokens(), U256::zero());
+    assert_eq!(state.total_staking_tokens(), U256::zero());
 
     // deposit 10^18 - 1, not enough
     params.call_type = CallType::Call;
@@ -734,11 +738,11 @@ fn test_deposit_withdraw_lock() {
         U256::from(1_000_000_000_000_000_000u64)
     );
     assert_eq!(
-        *state.total_issued_tokens(),
+        state.total_issued_tokens(),
         U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(
-        *state.total_staking_tokens(),
+        state.total_staking_tokens(),
         U256::from(1_000_000_000_000_000_000u64)
     );
 
@@ -767,11 +771,11 @@ fn test_deposit_withdraw_lock() {
         U256::from(1_000_000_000_000_000_000u64)
     );
     assert_eq!(
-        *state.total_issued_tokens(),
+        state.total_issued_tokens(),
         U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(
-        *state.total_staking_tokens(),
+        state.total_staking_tokens(),
         U256::from(1_000_000_000_000_000_000u64)
     );
 
@@ -800,11 +804,11 @@ fn test_deposit_withdraw_lock() {
         U256::from(1_000_000_000_000_000_000u64)
     );
     assert_eq!(
-        *state.total_issued_tokens(),
+        state.total_issued_tokens(),
         U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(
-        *state.total_staking_tokens(),
+        state.total_staking_tokens(),
         U256::from(1_000_000_000_000_000_000u64)
     );
 
@@ -829,11 +833,11 @@ fn test_deposit_withdraw_lock() {
         U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
-        *state.total_issued_tokens(),
+        state.total_issued_tokens(),
         U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(
-        *state.total_staking_tokens(),
+        state.total_staking_tokens(),
         U256::from(999_999_950_000_000_000u64)
     );
     // withdraw more than staking balance
@@ -863,11 +867,11 @@ fn test_deposit_withdraw_lock() {
         U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
-        *state.total_issued_tokens(),
+        state.total_issued_tokens(),
         U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(
-        *state.total_staking_tokens(),
+        state.total_staking_tokens(),
         U256::from(999_999_950_000_000_000u64)
     );
 
@@ -896,11 +900,11 @@ fn test_deposit_withdraw_lock() {
         U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
-        *state.total_staking_tokens(),
+        state.total_staking_tokens(),
         U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
-        *state.total_issued_tokens(),
+        state.total_issued_tokens(),
         U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(
@@ -930,11 +934,11 @@ fn test_deposit_withdraw_lock() {
         U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
-        *state.total_issued_tokens(),
+        state.total_issued_tokens(),
         U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(
-        *state.total_staking_tokens(),
+        state.total_staking_tokens(),
         U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
@@ -964,11 +968,11 @@ fn test_deposit_withdraw_lock() {
         U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
-        *state.total_issued_tokens(),
+        state.total_issued_tokens(),
         U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(
-        *state.total_staking_tokens(),
+        state.total_staking_tokens(),
         U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
@@ -1004,11 +1008,11 @@ fn test_deposit_withdraw_lock() {
         U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
-        *state.total_issued_tokens(),
+        state.total_issued_tokens(),
         U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(
-        *state.total_staking_tokens(),
+        state.total_staking_tokens(),
         U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
@@ -1036,10 +1040,10 @@ fn test_deposit_withdraw_lock() {
     );
     assert_eq!(state.staking_balance(&sender).unwrap(), U256::from(2));
     assert_eq!(
-        *state.total_issued_tokens(),
+        state.total_issued_tokens(),
         U256::from(2_000_000_000_000_000_000u64)
     );
-    assert_eq!(*state.total_staking_tokens(), U256::from(2));
+    assert_eq!(state.total_staking_tokens(), U256::from(2));
     assert_eq!(
         state
             .withdrawable_staking_balance(&sender, env.number)
@@ -1702,7 +1706,7 @@ fn test_storage_commission_privilege() {
         *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
 
@@ -1758,7 +1762,7 @@ fn test_storage_commission_privilege() {
         2 * COLLATERAL_UNITS_PER_STORAGE_KEY
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(3)
     );
     assert_eq!(
@@ -1849,7 +1853,7 @@ fn test_storage_commission_privilege() {
         *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(3)
     );
     assert_eq!(
@@ -1952,7 +1956,7 @@ fn test_storage_commission_privilege() {
         U256::zero()
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(3)
     );
     assert_eq!(
@@ -2040,7 +2044,7 @@ fn test_storage_commission_privilege() {
         U256::from(0),
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(3)
     );
     assert_eq!(
@@ -2088,7 +2092,7 @@ fn test_storage_commission_privilege() {
         COLLATERAL_UNITS_PER_STORAGE_KEY
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
     assert_eq!(
@@ -2178,7 +2182,7 @@ fn test_storage_commission_privilege() {
         U256::zero()
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
 }

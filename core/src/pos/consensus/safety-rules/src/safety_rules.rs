@@ -55,11 +55,13 @@ impl SafetyRules {
     ) -> Self
     {
         let execution_public_key = if verify_vote_proposal_signature {
-            Some(
-                persistent_storage
-                    .execution_public_key()
-                    .expect("Unable to retrieve execution public key"),
-            )
+            None
+        /*
+        Some(
+            persistent_storage
+                .execution_public_key()
+                .expect("Unable to retrieve execution public key"),
+        )*/
         } else {
             None
         };
@@ -107,7 +109,8 @@ impl SafetyRules {
             .map_err(|e| Error::InvalidAccumulatorExtension(e.to_string()))?;
         Ok(VoteData::new(
             proposed_block.gen_block_info(
-                new_tree.root_hash(),
+                // TODO(lpl): Remove state tree.
+                Default::default(),
                 new_tree.version(),
                 vote_proposal.next_epoch_state().cloned(),
                 vote_proposal.pivot_decision().clone(),

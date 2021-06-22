@@ -4,8 +4,6 @@
 `P2PConnection: A low-level connection object to a node's P2P interface
 P2PInterface: A high-level interface object for communicating to a node over P2P
 """
-from eth_utils import big_endian_to_int, encode_hex
-
 from conflux import utils
 from conflux.config import DEFAULT_PY_TEST_CHAIN_ID
 from conflux.messages import *
@@ -13,7 +11,7 @@ import asyncore
 from collections import defaultdict
 from io import BytesIO
 import rlp
-from rlp.sedes import binary, big_endian_int, CountableList, boolean
+from rlp.sedes import big_endian_int, CountableList, boolean
 import logging
 import socket
 import struct
@@ -67,7 +65,8 @@ class P2PConnection(asyncore.dispatcher):
 
         try:
             self.connect((dstaddr, dstport))
-        except:
+        except Exception as e:
+            logger.debug("network connect error" + str(e))
             self.handle_close()
 
     def peer_disconnect(self):
@@ -312,7 +311,7 @@ class P2PInterface(P2PConnection):
         self.peer_pubkey = None
         self.priv_key, self.pub_key = ec_random_keys()
         x, y = self.pub_key
-        self.key = "0x" + encode_hex(bytes(int_to_32bytearray(x)))[2:] + encode_hex(bytes(int_to_32bytearray(y)))[2:]
+        self.key = "0x" + utils.encode_hex(bytes(int_to_32bytearray(x))) + utils.encode_hex(bytes(int_to_32bytearray(y)))
         self.had_status = False
         self.on_packet_func = {}
         self.remote = remote
@@ -420,7 +419,8 @@ class P2PInterface(P2PConnection):
         if self.remote:
             ip = get_ip_address()
         endpoint = NodeEndpoint(address=bytes(ip), tcp_port=32325, udp_port=32325)
-        hello = Hello(DEFAULT_PY_TEST_CHAIN_ID, [Capability(self.protocol, self.protocol_version)], endpoint)
+        # FIXME: Use a valid pos_public_key.
+        hello = Hello(DEFAULT_PY_TEST_CHAIN_ID, [Capability(self.protocol, self.protocol_version)], endpoint, self.priv_key)
 
         self.send_packet(PACKET_HELLO, rlp.encode(hello, Hello))
         self.had_hello = True

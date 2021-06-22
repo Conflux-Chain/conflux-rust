@@ -7,7 +7,7 @@ use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WsServer;
 
 use crate::{
-    common::{initialize_not_light_node_modules, ClientComponents},
+    common::{initialize_not_light_node_modules, ClientComponents, DiemHandle},
     configuration::Configuration,
 };
 use blockgen::BlockGenerator;
@@ -21,11 +21,12 @@ use runtime::Runtime;
 use std::sync::Arc;
 
 pub struct ArchiveClientExtraComponents {
-    pub pos_runtime: tokio::runtime::Runtime,
     pub consensus: Arc<ConsensusGraph>,
     pub debug_rpc_http_server: Option<HttpServer>,
     pub rpc_http_server: Option<HttpServer>,
+    pub debug_rpc_tpc_server: Option<TcpServer>,
     pub rpc_tcp_server: Option<TcpServer>,
+    pub debug_rpc_ws_server: Option<WsServer>,
     pub rpc_ws_server: Option<WsServer>,
     pub runtime: Runtime,
     pub sync: Arc<SynchronizationService>,
@@ -63,20 +64,28 @@ impl ArchiveClient {
             blockgen,
             debug_rpc_http_server,
             rpc_http_server,
+            debug_rpc_tpc_server,
             rpc_tcp_server,
+            debug_rpc_ws_server,
             rpc_ws_server,
             runtime,
-            pos_runtime,
-        ) = initialize_not_light_node_modules(&conf, exit, NodeType::Archive)?;
+            diem_handler,
+        ) = initialize_not_light_node_modules(
+            &mut conf,
+            exit,
+            NodeType::Archive,
+        )?;
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
+            diem_handler,
             blockgen: Some(blockgen),
             other_components: ArchiveClientExtraComponents {
-                pos_runtime,
                 consensus,
                 debug_rpc_http_server,
                 rpc_http_server,
+                debug_rpc_tpc_server,
                 rpc_tcp_server,
+                debug_rpc_ws_server,
                 rpc_ws_server,
                 runtime,
                 sync,

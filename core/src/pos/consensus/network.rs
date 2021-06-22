@@ -13,6 +13,7 @@ use crate::{
     },
 };
 use anyhow::{anyhow, bail, ensure, format_err};
+use cfx_types::H256;
 use channel::{self, diem_channel, message_queues::QueueStyle};
 use consensus_types::{
     block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse},
@@ -86,7 +87,20 @@ impl NetworkSender {
     {
         ensure!(from != self.author, "Retrieve block from self");
 
-        let peer_hash = from.to_H256();
+        let public_key = self.validators.get_public_key(&from).ok_or(
+            anyhow!("request_block: from {:?} is not a validator", from),
+        )?;
+        let peer_hash = self
+            .network_sender
+            .protocol_handler
+            .pos_peer_mapping
+            .read()
+            .get(&public_key)
+            .cloned()
+            .ok_or(anyhow!(
+                "request_block: recipient {:?} has been removed",
+                public_key
+            ))?;
         let peer_state =
             self.network_sender.protocol_handler.peers.get(&peer_hash);
         if peer_state.is_none() {
@@ -161,10 +175,15 @@ impl NetworkSender {
             .validators
             .get_ordered_account_addresses_iter()
             .filter(|author| author != &self_author);
+        let mut public_keys = vec![];
+        for account in other_validators {
+            public_keys.push(self.validators.get_public_key(&account).unwrap());
+        }
 
         // Broadcast message over direct-send to all other validators.
-        if let Err(err) =
-            self.network_sender.send_to_many(other_validators, &msg)
+        if let Err(err) = self
+            .network_sender
+            .send_to_many(public_keys.into_iter(), &msg)
         {
             diem_error!(error = ?err, "Error broadcasting message");
         }
@@ -192,7 +211,8 @@ impl NetworkSender {
                 }
                 continue;
             }
-            if let Err(e) = network_sender.send_to(peer, &msg) {
+            let public_key = self.validators.get_public_key(&peer).unwrap();
+            if let Err(e) = network_sender.send_to(public_key, &msg) {
                 diem_error!(
                     remote_peer = peer,
                     error = ?e, "Failed to send a vote to peer",
@@ -208,7 +228,8 @@ impl NetworkSender {
     pub fn send_sync_info(&self, sync_info: SyncInfo, recipient: Author) {
         let msg = ConsensusMsg::SyncInfo(Box::new(sync_info));
         let mut network_sender = self.network_sender.clone();
-        if let Err(e) = network_sender.send_to(recipient, &msg) {
+        let public_key = self.validators.get_public_key(&recipient).unwrap();
+        if let Err(e) = network_sender.send_to(public_key, &msg) {
             diem_warn!(
                 remote_peer = recipient,
                 error = "Failed to send a sync info msg to peer {:?}",

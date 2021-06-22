@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+mod activate_at;
 mod contracts;
 pub mod function;
 mod impls;
@@ -9,15 +10,14 @@ mod impls;
 pub use self::{contracts::InternalContractMap, impls::suicide};
 pub use solidity_abi::ABIDecodeError;
 
-use self::contracts::SolFnTable;
+use self::{activate_at::ActivateAtTrait, contracts::SolFnTable};
 use crate::{
     bytes::Bytes,
+    executive::InternalRefContext,
     hash::keccak,
-    state::CallStackInfo,
     trace::{trace::ExecTrace, Tracer},
-    vm::{self, ActionParams, Env, GasLeft, Spec},
+    vm::{self, ActionParams, GasLeft},
 };
-use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{Address, H256};
 use std::sync::Arc;
 
@@ -28,7 +28,7 @@ lazy_static! {
 }
 
 /// Native implementation of an internal contract.
-pub trait InternalContractTrait {
+pub trait InternalContractTrait: Send + Sync + ActivateAtTrait {
     /// Address of the internal contract
     fn address(&self) -> &Address;
 
@@ -37,12 +37,7 @@ pub trait InternalContractTrait {
 
     /// execute this internal contract on the given parameters.
     fn execute(
-        &self, params: &ActionParams, env: &Env, spec: &Spec,
-        state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait<
-            Spec = Spec,
-            CallStackInfo = CallStackInfo,
-        >,
+        &self, params: &ActionParams, context: &mut InternalRefContext,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>
     {
@@ -63,17 +58,10 @@ pub trait InternalContractTrait {
 
         let solidity_fn = func_table
             .get(&fn_sig)
+            .filter(|&func| func.activate_at(context.env.number, context.spec))
             .ok_or(vm::Error::InternalContract("unsupported function"))?;
 
-        solidity_fn.execute(
-            call_params,
-            params,
-            env,
-            spec,
-            state,
-            substate,
-            tracer,
-        )
+        solidity_fn.execute(call_params, params, context, tracer)
     }
 
     fn code(&self) -> Arc<Bytes> { INTERNAL_CONTRACT_CODE.clone() }
@@ -84,14 +72,10 @@ pub trait InternalContractTrait {
 }
 
 /// Native implementation of a solidity-interface function.
-pub trait SolidityFunctionTrait: Send + Sync {
+pub trait SolidityFunctionTrait: Send + Sync + ActivateAtTrait {
     fn execute(
-        &self, input: &[u8], params: &ActionParams, env: &Env, spec: &Spec,
-        state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait<
-            Spec = Spec,
-            CallStackInfo = CallStackInfo,
-        >,
+        &self, input: &[u8], params: &ActionParams,
+        context: &mut InternalRefContext,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>;
 

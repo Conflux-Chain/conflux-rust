@@ -1,6 +1,6 @@
 [package]
 description = "Conflux internal common library"
-homepage = "http://www.conflux-chain.org"
+homepage = "https://www.confluxnetwork.org"
 license = "GPL-3.0"
 name = "cfx-internal-common"
 version = "1.0.0"

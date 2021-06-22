@@ -1,12 +1,16 @@
 use diem_state_view::StateView;
 use diem_types::{
+    access_path::AccessPath,
+    account_config::pivot_chain_select_address,
+    block_info::PivotBlockDecision,
     contract_event::ContractEvent,
+    on_chain_config::{self, config_address, OnChainConfig, ValidatorSet},
     transaction::{
         Transaction, TransactionOutput, TransactionPayload, TransactionStatus,
         WriteSetPayload,
     },
     vm_status::{KeptVMStatus, StatusCode, VMStatus},
-    write_set::WriteSet,
+    write_set::{WriteOp, WriteSet, WriteSetMut},
 };
 
 /// This trait describes the VM's execution interface.
@@ -70,6 +74,11 @@ impl VMExecutor for FakeVM {
                         TransactionPayload::WriteSet(
                             WriteSetPayload::Direct(change_set),
                         ) => change_set.events().to_vec(),
+                        TransactionPayload::PivotDecision(pivot_decision) => {
+                            // The validation is handled in
+                            // `post_process_state_compute_result`.
+                            vec![pivot_decision.to_event()]
+                        }
                         _ => {
                             return Err(VMStatus::Error(
                                 StatusCode::CFX_UNEXPECTED_TX,
@@ -113,8 +122,32 @@ impl VMExecutor for FakeVM {
 
 impl FakeVM {
     fn gen_output(events: Vec<ContractEvent>) -> TransactionOutput {
+        let new_epoch_event_key = on_chain_config::new_epoch_event_key();
+        let pivot_select_event_key =
+            PivotBlockDecision::pivot_select_event_key();
         let status = TransactionStatus::Keep(KeptVMStatus::Executed);
+        let mut write_set = WriteSetMut::default();
 
-        TransactionOutput::new(WriteSet::default(), events, 0, status)
+        // TODO(linxi): support other event key
+        for event in &events {
+            if *event.key() == new_epoch_event_key {
+                write_set.push((
+                    ValidatorSet::CONFIG_ID.access_path(),
+                    WriteOp::Value(event.event_data().to_vec()),
+                ));
+            } else if *event.key() == pivot_select_event_key {
+                write_set.push((
+                    AccessPath {
+                        address: pivot_chain_select_address(),
+                        path: pivot_select_event_key.to_vec(),
+                    },
+                    WriteOp::Value(event.event_data().to_vec()),
+                ));
+            } else {
+                todo!()
+            }
+        }
+
+        TransactionOutput::new(write_set.freeze().unwrap(), events, 0, status)
     }
 }

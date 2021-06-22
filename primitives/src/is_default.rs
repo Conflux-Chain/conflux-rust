@@ -50,3 +50,7 @@ impl IsDefault for StorageValue {
 impl IsDefault for U256 {
     fn is_default(&self) -> bool { self.is_zero() }
 }
+
+impl IsDefault for bool {
+    fn is_default(&self) -> bool { !self }
+}

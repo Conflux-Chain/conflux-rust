@@ -121,6 +121,10 @@ impl LedgerInfo {
     /// Returns hash of consensus voting data in this `LedgerInfo`.
     pub fn consensus_data_hash(&self) -> HashValue { self.consensus_data_hash }
 
+    pub fn pivot_decision(&self) -> Option<&PivotBlockDecision> {
+        self.commit_info.pivot_decision()
+    }
+
     pub fn set_consensus_data_hash(&mut self, consensus_data_hash: HashValue) {
         self.consensus_data_hash = consensus_data_hash;
     }
@@ -263,7 +267,9 @@ impl LedgerInfoWithV0 {
 // Arbitrary implementation of LedgerInfoWithV0 (for fuzzing)
 //
 
-use crate::validator_config::ConsensusSignature;
+use crate::{
+    block_info::PivotBlockDecision, validator_config::ConsensusSignature,
+};
 #[cfg(any(test, feature = "fuzzing"))]
 use ::proptest::prelude::*;
 

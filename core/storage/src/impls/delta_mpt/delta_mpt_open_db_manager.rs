@@ -85,6 +85,7 @@ trait OnDemandOpenDeltaDbInnerTrait: Send + Sync {
     fn release(&mut self, mpt_id: DeltaMptId, destroy: bool);
 }
 
+// TODO: Allow pinning the DeltaDb for the latest state.
 pub trait OpenableOnDemandOpenDeltaDbTrait: Send + Sync {
     fn open(&self, mpt_id: DeltaMptId) -> Result<ArcDeltaDbWrapper>;
 }
@@ -97,10 +98,11 @@ pub struct OpenDeltaDbLru<DeltaDbManager: DeltaDbManagerTrait> {
 impl<T: 'static + DeltaDbManagerTrait + Send + Sync> OpenDeltaDbLru<T>
 where T::DeltaDb: 'static + Send + Sync + DeltaDbTrait
 {
-    pub fn new(delta_db_manager: Arc<T>) -> Result<Self> {
+    pub fn new(delta_db_manager: Arc<T>, capacity: u32) -> Result<Self> {
         Ok(Self {
             inner: Arc::new(Mutex::new(OpenDeltaDbLruInner::new(
                 delta_db_manager,
+                capacity,
             )?)),
             phantom: PhantomData,
         })
@@ -158,14 +160,14 @@ pub struct OpenDeltaDbLruInner<DeltaDbManager: DeltaDbManagerTrait> {
 impl<T: DeltaDbManagerTrait + Send + Sync> OpenDeltaDbLruInner<T>
 where T::DeltaDb: 'static + Send + Sync + DeltaDbTrait
 {
-    pub fn new(delta_db_manager: Arc<T>) -> Result<Self> {
+    pub fn new(delta_db_manager: Arc<T>, capacity: u32) -> Result<Self> {
         Ok(Self {
             delta_db_manager,
             mpt_id_to_snapshot_epoch_id: HashMap::new(),
             cache_util: CacheUtil {
                 cache_data: HashMap::new(),
             },
-            lru: LRU::<u32, DeltaMptId>::new(3),
+            lru: LRU::<u32, DeltaMptId>::new(capacity),
         })
     }
 

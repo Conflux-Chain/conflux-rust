@@ -18,7 +18,10 @@ use crate::{
 };
 
 use crate::{
-    pos::protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
+    pos::{
+        consensus::network_interface::ConsensusMsg,
+        protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
+    },
     sync::ProtocolConfiguration,
 };
 use cfx_types::H256;
@@ -26,14 +29,18 @@ use consensus_types::{
     epoch_retrieval::EpochRetrievalRequest, proposal_msg::ProposalMsg,
     sync_info::SyncInfo, vote_msg::VoteMsg,
 };
-use diem_types::epoch_change::EpochChangeProof;
+use diem_crypto::ed25519::Ed25519PublicKey;
+use diem_types::{
+    account_address::{from_public_key, AccountAddress},
+    epoch_change::EpochChangeProof,
+};
 use io::TimerToken;
 use keccak_hash::keccak;
 use network::{
     node_table::NodeId, service::ProtocolVersion, NetworkContext,
     NetworkProtocolHandler, NetworkService, UpdateNodeOperation,
 };
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use serde::Deserialize;
 use std::{cmp::Eq, collections::HashMap, fmt::Debug, hash::Hash, sync::Arc};
 
@@ -41,49 +48,61 @@ use std::{cmp::Eq, collections::HashMap, fmt::Debug, hash::Hash, sync::Arc};
 pub struct PeerState {
     id: NodeId,
     peer_hash: H256,
+    pos_public_key: Option<Ed25519PublicKey>,
 }
 
 impl PeerState {
+    pub fn new(
+        id: NodeId, peer_hash: H256, pos_public_key: Option<Ed25519PublicKey>,
+    ) -> Self {
+        Self {
+            id,
+            peer_hash,
+            pos_public_key,
+        }
+    }
+
+    pub fn set_pos_public_key(
+        &mut self, pos_public_key: Option<Ed25519PublicKey>,
+    ) {
+        self.pos_public_key = pos_public_key
+    }
+
     pub fn get_id(&self) -> NodeId { self.id }
 }
 
 #[derive(Default)]
-pub struct Peers<T: Default, K: Eq + Hash + Default + Copy>(
-    RwLock<HashMap<K, Arc<RwLock<T>>>>,
-);
+pub struct Peers(RwLock<HashMap<H256, Arc<RwLock<PeerState>>>>);
 
-impl<T, K> Peers<T, K>
-where
-    T: Default,
-    K: Eq + Hash + Default + Copy,
-{
-    pub fn new() -> Peers<T, K> { Self::default() }
+impl Peers {
+    pub fn new() -> Peers { Self::default() }
 
-    pub fn get(&self, peer: &K) -> Option<Arc<RwLock<T>>> {
+    pub fn get(&self, peer: &H256) -> Option<Arc<RwLock<PeerState>>> {
         self.0.read().get(peer).cloned()
     }
 
-    pub fn insert(&self, peer: K) {
-        self.0
-            .write()
-            .entry(peer)
-            .or_insert(Arc::new(RwLock::new(T::default())));
+    pub fn insert(
+        &self, peer: H256, id: NodeId, pos_public_key: Option<Ed25519PublicKey>,
+    ) {
+        self.0.write().entry(peer).or_insert(Arc::new(RwLock::new(
+            PeerState::new(id, peer, pos_public_key),
+        )));
     }
 
     pub fn len(&self) -> usize { self.0.read().len() }
 
     pub fn is_empty(&self) -> bool { self.0.read().is_empty() }
 
-    pub fn contains(&self, peer: &K) -> bool {
+    pub fn contains(&self, peer: &H256) -> bool {
         self.0.read().contains_key(peer)
     }
 
-    pub fn remove(&self, peer: &K) -> Option<Arc<RwLock<T>>> {
+    pub fn remove(&self, peer: &H256) -> Option<Arc<RwLock<PeerState>>> {
         self.0.write().remove(peer)
     }
 
-    pub fn all_peers_satisfying<F>(&self, mut predicate: F) -> Vec<K>
-    where F: FnMut(&mut T) -> bool {
+    pub fn all_peers_satisfying<F>(&self, mut predicate: F) -> Vec<H256>
+    where F: FnMut(&mut PeerState) -> bool {
         self.0
             .read()
             .iter()
@@ -98,7 +117,7 @@ where
     }
 
     pub fn fold<B, F>(&self, init: B, f: F) -> B
-    where F: FnMut(B, &Arc<RwLock<T>>) -> B {
+    where F: FnMut(B, &Arc<RwLock<PeerState>>) -> B {
         self.0.write().values().fold(init, f)
     }
 }
@@ -123,14 +142,30 @@ impl<'a> Context<'a> {
         response.send(self.io, &self.peer)?;
         Ok(())
     }
+
+    pub fn get_peer_account_address(&self) -> AccountAddress {
+        from_public_key(
+            &self
+                .manager
+                .peers
+                .get(&self.peer_hash)
+                .as_ref()
+                .unwrap()
+                .read()
+                .pos_public_key
+                .as_ref()
+                .expect("has public key"),
+        )
+    }
 }
 
 pub struct HotStuffSynchronizationProtocol {
     pub protocol_config: ProtocolConfiguration,
     pub own_node_hash: H256,
-    pub peers: Arc<Peers<PeerState, H256>>,
+    pub peers: Arc<Peers>,
     pub request_manager: Arc<RequestManager>,
     pub network_task: NetworkTask,
+    pub pos_peer_mapping: RwLock<HashMap<Ed25519PublicKey, H256>>,
 }
 
 impl HotStuffSynchronizationProtocol {
@@ -146,12 +181,13 @@ impl HotStuffSynchronizationProtocol {
             peers: Arc::new(Peers::new()),
             request_manager,
             network_task,
+            pos_peer_mapping: RwLock::new(Default::default()),
         }
     }
 
     pub fn with_peers(
         protocol_config: ProtocolConfiguration, own_node_hash: H256,
-        network_task: NetworkTask, peers: Arc<Peers<PeerState, H256>>,
+        network_task: NetworkTask, peers: Arc<Peers>,
     ) -> Self
     {
         let request_manager = Arc::new(RequestManager::new(&protocol_config));
@@ -161,6 +197,7 @@ impl HotStuffSynchronizationProtocol {
             peers,
             request_manager,
             network_task,
+            pos_peer_mapping: RwLock::new(Default::default()),
         }
     }
 
@@ -280,7 +317,7 @@ impl HotStuffSynchronizationProtocol {
                     op = Some(UpdateNodeOperation::Remove)
                 }
                 network::ErrorKind::BadAddr => disconnect = false,
-                network::ErrorKind::Decoder => {
+                network::ErrorKind::Decoder(_) => {
                     op = Some(UpdateNodeOperation::Remove)
                 }
                 network::ErrorKind::Expired => disconnect = false,
@@ -394,6 +431,7 @@ pub fn handle_serialized_message(
             handle_message::<EpochRetrievalRequest>(ctx, msg)?
         }
         msgid::EPOCH_CHANGE => handle_message::<EpochChangeProof>(ctx, msg)?,
+        msgid::CONSENSUS_MSG => handle_message::<ConsensusMsg>(ctx, msg)?,
         _ => return Ok(false),
     }
     Ok(true)
@@ -426,7 +464,9 @@ where M: Deserialize<'a> + Handleable + Message {
 }
 
 impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
-    fn minimum_supported_version(&self) -> ProtocolVersion { todo!() }
+    fn minimum_supported_version(&self) -> ProtocolVersion {
+        ProtocolVersion(0)
+    }
 
     fn initialize(&self, io: &dyn NetworkContext) {
         io.register_timer(
@@ -458,10 +498,11 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
 
     fn on_peer_connected(
         &self, io: &dyn NetworkContext, peer: &NodeId,
-        peer_protocol_version: ProtocolVersion,
+        _peer_protocol_version: ProtocolVersion,
+        pos_public_key: Option<Ed25519PublicKey>,
     )
     {
-        // TODO: maintain peer protocol version
+        // TODO(linxi): maintain peer protocol version
         let new_originated = io.get_peer_connection_origin(peer);
         if new_originated.is_none() {
             debug!("Peer does not exist when just connected");
@@ -503,7 +544,7 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
         };
 
         if add_new_peer {
-            self.peers.insert(peer_hash.clone());
+            self.peers.insert(peer_hash.clone(), *peer, None);
             let peer_state =
                 self.peers.get(&peer_hash).expect("peer not found");
             let mut peer_state = peer_state.write();
@@ -518,17 +559,40 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
             );
         }
 
+        if let Some(public_key) = pos_public_key {
+            self.pos_peer_mapping
+                .write()
+                .insert(public_key.clone(), peer_hash);
+            if let Some(state) = self.peers.get(&peer_hash) {
+                state.write().set_pos_public_key(Some(public_key));
+            } else {
+                warn!(
+                    "PeerState is missing for peer: peer_hash={:?}",
+                    peer_hash
+                );
+            }
+        } else {
+            info!(
+                "pos public key is not provided for peer peer_hash={:?}",
+                peer_hash
+            );
+        }
+
         info!(
-            "hsb on_peer_connected: peer {}, {}, peer count {}",
+            "hsb on_peer_connected: peer {:?}, peer_hash {:?}, peer count {}",
             peer,
-            peer,
+            peer_hash,
             self.peers.len()
         );
     }
 
     fn on_peer_disconnected(&self, io: &dyn NetworkContext, peer: &NodeId) {
         let peer_hash = keccak(*peer);
-        self.peers.remove(&peer_hash);
+        if let Some(peer_state) = self.peers.remove(&peer_hash) {
+            if let Some(pos_public_key) = &peer_state.read().pos_public_key {
+                self.pos_peer_mapping.write().remove(pos_public_key);
+            }
+        }
         self.request_manager.on_peer_disconnected(io, peer);
         info!(
             "hsb on_peer_disconnected: peer={}, peer count {}",

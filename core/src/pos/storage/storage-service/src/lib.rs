@@ -12,7 +12,9 @@ use anyhow::Result;
 use diem_config::config::NodeConfig;
 use diem_logger::prelude::*;
 use diem_secure_net::NetworkServer;
-use diem_types::{account_state_blob::AccountStateBlob, proof::SparseMerkleProof};
+use diem_types::{
+    account_state_blob::AccountStateBlob, proof::SparseMerkleProof,
+};
 use diemdb::DiemDB;
 use std::{
     sync::Arc,
@@ -21,7 +23,9 @@ use std::{
 use storage_interface::{DbReader, DbWriter, Error, StartupInfo};
 
 /// Starts storage service with a given DiemDB
-pub fn start_storage_service_with_db(config: &NodeConfig, diem_db: Arc<DiemDB>) -> JoinHandle<()> {
+pub fn start_storage_service_with_db(
+    config: &NodeConfig, diem_db: Arc<DiemDB>,
+) -> JoinHandle<()> {
     let storage_service = StorageService { db: diem_db };
     storage_service.run(config)
 }
@@ -57,10 +61,12 @@ impl StorageService {
             SparseMerkleProof<AccountStateBlob>,
         ),
         Error,
-    > {
-        Ok(self
-            .db
-            .get_account_state_with_proof_by_version(req.address, req.version)?)
+    >
+    {
+        Ok(self.db.get_account_state_with_proof_by_version(
+            req.address,
+            req.version,
+        )?)
     }
 
     fn get_startup_info(&self) -> Result<Option<StartupInfo>, Error> {
@@ -68,8 +74,7 @@ impl StorageService {
     }
 
     fn save_transactions(
-        &self,
-        req: &storage_interface::SaveTransactionsRequest,
+        &self, req: &storage_interface::SaveTransactionsRequest,
     ) -> Result<(), Error> {
         Ok(self.db.save_transactions(
             &req.txns_to_commit,
@@ -79,8 +84,11 @@ impl StorageService {
     }
 
     fn run(self, config: &NodeConfig) -> JoinHandle<()> {
-        let mut network_server =
-            NetworkServer::new("storage", config.storage.address, config.storage.timeout_ms);
+        let mut network_server = NetworkServer::new(
+            "storage",
+            config.storage.address,
+            config.storage.timeout_ms,
+        );
         let ret = thread::spawn(move || loop {
             if let Err(e) = self.process_one_message(&mut network_server) {
                 diem_warn!(
@@ -93,7 +101,9 @@ impl StorageService {
         ret
     }
 
-    fn process_one_message(&self, network_server: &mut NetworkServer) -> Result<(), Error> {
+    fn process_one_message(
+        &self, network_server: &mut NetworkServer,
+    ) -> Result<(), Error> {
         let request = network_server.read()?;
         let response = self.handle_message(request)?;
         network_server.write(&response)?;

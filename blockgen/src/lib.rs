@@ -200,20 +200,20 @@ impl BlockGenerator {
 
     // TODO: should not hold and pass write lock to consensus.
     fn assemble_new_block_impl(
-        &self, parent_hash: H256, mut referees: Vec<H256>,
-        blame_info: StateBlameInfo, block_gas_limit: U256,
+        &self, mut parent_hash: H256, mut referees: Vec<H256>,
+        mut blame_info: StateBlameInfo, block_gas_limit: U256,
         transactions: Vec<Arc<SignedTransaction>>, difficulty: u64,
         adaptive_opt: Option<bool>, maybe_pos_reference: Option<PosBlockId>,
     ) -> Block
     {
-        let parent_height =
-            self.graph.block_height_by_hash(&parent_hash).unwrap();
-
-        let parent_timestamp =
-            self.graph.block_timestamp_by_hash(&parent_hash).unwrap();
-
         trace!("{} txs packed", transactions.len());
         let consensus_graph = self.consensus_graph();
+        consensus_graph.choose_correct_parent(
+            &mut parent_hash,
+            &mut referees,
+            &mut blame_info,
+            maybe_pos_reference,
+        );
         let mut consensus_inner = consensus_graph.inner.write();
         // referees are retrieved before locking inner, so we need to
         // filter out the blocks that should be removed by possible
@@ -230,7 +230,16 @@ impl BlockGenerator {
                 &parent_hash,
                 &referees,
                 &expected_difficulty,
+                maybe_pos_reference,
             )
+        };
+
+        let (parent_height, parent_timestamp) = {
+            let parent_header = consensus_inner
+                .data_man
+                .block_header_by_hash(&parent_hash)
+                .unwrap();
+            (parent_header.height(), parent_header.timestamp())
         };
 
         if U256::from(difficulty) > expected_difficulty {

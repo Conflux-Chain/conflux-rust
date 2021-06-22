@@ -5,6 +5,7 @@
 
 use crate::{vm::VMExecutor, Executor};
 use anyhow::{ensure, format_err, Result};
+use cfx_types::H256;
 use diem_crypto::{hash::PRE_GENESIS_BLOCK_ID, HashValue};
 use diem_logger::prelude::*;
 use diem_state_view::{StateView, StateViewId};
@@ -12,7 +13,8 @@ use diem_types::{
     access_path::AccessPath,
     account_config::diem_root_address,
     block_info::{
-        BlockInfo, GENESIS_EPOCH, GENESIS_ROUND, GENESIS_TIMESTAMP_USECS,
+        BlockInfo, PivotBlockDecision, GENESIS_EPOCH, GENESIS_ROUND,
+        GENESIS_TIMESTAMP_USECS,
     },
     diem_timestamp::DiemTimestampResource,
     ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
@@ -32,7 +34,8 @@ pub fn generate_waypoint<V: VMExecutor>(
 ) -> Result<Waypoint> {
     let tree_state = db.reader.get_latest_tree_state()?;
 
-    let committer = calculate_genesis::<V>(db, tree_state, genesis_txn)?;
+    // genesis ledger info (including pivot decision) is not used.
+    let committer = calculate_genesis::<V>(db, tree_state, genesis_txn, None)?;
     Ok(committer.waypoint)
 }
 
@@ -41,7 +44,9 @@ pub fn generate_waypoint<V: VMExecutor>(
 /// matches the waypoint. Returns Ok(true) if committed otherwise Err.
 pub fn maybe_bootstrap<V: VMExecutor>(
     db: &DbReaderWriter, genesis_txn: &Transaction, waypoint: Waypoint,
-) -> Result<bool> {
+    genesis_pivot_decision: Option<PivotBlockDecision>,
+) -> Result<bool>
+{
     let tree_state = db.reader.get_latest_tree_state()?;
     // if the waypoint is not targeted with the genesis txn, it may be either
     // already bootstrapped, or aiming for state sync to catch up.
@@ -50,7 +55,12 @@ pub fn maybe_bootstrap<V: VMExecutor>(
         return Ok(false);
     }
 
-    let committer = calculate_genesis::<V>(db, tree_state, genesis_txn)?;
+    let committer = calculate_genesis::<V>(
+        db,
+        tree_state,
+        genesis_txn,
+        genesis_pivot_decision,
+    )?;
     ensure!(
         waypoint == committer.waypoint(),
         "Waypoint verification failed. Expected {:?}, got {:?}.",
@@ -97,7 +107,9 @@ impl<V: VMExecutor> GenesisCommitter<V> {
 
 pub fn calculate_genesis<V: VMExecutor>(
     db: &DbReaderWriter, tree_state: TreeState, genesis_txn: &Transaction,
-) -> Result<GenesisCommitter<V>> {
+    genesis_pivot_decision: Option<PivotBlockDecision>,
+) -> Result<GenesisCommitter<V>>
+{
     // DB bootstrapper works on either an empty transaction accumulator or an
     // existing block chain. In the very extreme and sad situation of losing
     // quorum among validators, we refer to the second use case said above.
@@ -158,8 +170,7 @@ pub fn calculate_genesis<V: VMExecutor>(
                 genesis_version,
                 timestamp_usecs,
                 Some(next_epoch_state.clone()),
-                // TODO(lpl): Check genesis pivot decision
-                None,
+                genesis_pivot_decision,
             ),
             HashValue::zero(), /* consensus_data_hash */
         ),

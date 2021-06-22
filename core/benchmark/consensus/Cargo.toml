@@ -1,6 +1,6 @@
 [package]
 description = "Conflux consensus benchmark"
-homepage = "http://www.conflux-chain.org"
+homepage = "https://www.confluxnetwork.org"
 license = "GPL-3.0"
 name = "consensus_bench"
 version = "0.1.0"
