@@ -45,6 +45,8 @@ use cfx_parameters::light::{
     MAX_TXS_TO_SEND, MAX_WITNESSES_TO_SEND,
 };
 use cfx_types::H256;
+use diem_crypto::ed25519::Ed25519PublicKey;
+use diem_types::validator_config::ConsensusPublicKey;
 use io::TimerToken;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{
@@ -1006,6 +1008,7 @@ impl NetworkProtocolHandler for Provider {
     fn on_peer_connected(
         &self, _io: &dyn NetworkContext, peer: &NodeId,
         peer_protocol_version: ProtocolVersion,
+        _pos_public_key: Option<ConsensusPublicKey>,
     )
     {
         debug!(

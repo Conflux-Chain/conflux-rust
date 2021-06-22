@@ -4,8 +4,9 @@ use super::{
     impls::TreapMap,
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
 };
+use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_statedb::Result as StateDbResult;
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, H256, U128, U256, U512};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
@@ -14,6 +15,7 @@ use primitives::{
     Account, Action, SignedTransaction, TransactionWithSignature,
 };
 use rlp::*;
+use serde::Serialize;
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -136,6 +138,27 @@ impl DeferredPool {
         }
     }
 
+    fn get_pending_transactions(
+        &self, addr: &Address, start_nonce: &U256, local_nonce: &U256,
+        local_balance: &U256,
+    ) -> (Vec<Arc<SignedTransaction>>, Option<PendingReason>)
+    {
+        match self.buckets.get(addr) {
+            Some(bucket) => {
+                let pending_txs = bucket.get_pending_transactions(start_nonce);
+                let pending_reason = pending_txs.first().and_then(|tx| {
+                    bucket.check_pending_reason_with_local_info(
+                        *local_nonce,
+                        *local_balance,
+                        tx.as_ref(),
+                    )
+                });
+                (pending_txs, pending_reason)
+            }
+            None => (Vec::new(), None),
+        }
+    }
+
     fn check_tx_packed(&self, addr: Address, nonce: U256) -> bool {
         if let Some(bucket) = self.buckets.get(&addr) {
             if let Some(tx_with_ready_info) = bucket.get_tx_by_nonce(nonce) {
@@ -235,17 +258,43 @@ impl ReadyAccountPool {
     }
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TransactionStatus {
+    Packed,
+    Ready,
+    Pending(PendingReason),
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PendingReason {
+    FutureNonce,
+    NotEnoughCash,
+}
+
 #[derive(DeriveMallocSizeOf)]
 pub struct TransactionPoolInner {
     capacity: usize,
     total_received_count: usize,
     unpacked_transaction_count: usize,
+    /// Tracks all transactions in the transaction pool by account and nonce.
+    /// Packed and executed transactions will eventually be garbage collected.
     deferred_pool: DeferredPool,
+    /// Tracks the first unpacked ready transaction for accounts.
+    /// Updated together with `ready_nonces_and_balances`.
+    /// Also updated after transaction packing.
     ready_account_pool: ReadyAccountPool,
+    /// The cache of the latest nonce and balance in the state.
+    /// Updated with the storage data after a block is processed in consensus
+    /// (set_tx_packed), after epoch execution, or during transaction
+    /// insertion.
     ready_nonces_and_balances: HashMap<Address, (U256, U256)>,
     garbage_collector: GarbageCollector,
+    /// Keeps all transactions in the transaction pool.
+    /// It should contain the same transaction set as `deferred_pool`.
     txs: HashMap<H256, Arc<SignedTransaction>>,
-    tx_sponsored_gas_map: HashMap<H256, U256>,
+    tx_sponsored_gas_map: HashMap<H256, (U256, u64)>,
 }
 
 impl TransactionPoolInner {
@@ -408,7 +457,7 @@ impl TransactionPoolInner {
     fn insert_transaction_without_readiness_check(
         &mut self, transaction: Arc<SignedTransaction>, packed: bool,
         force: bool, state_nonce_and_balance: Option<(U256, U256)>,
-        sponsored_gas: U256,
+        (sponsored_gas, sponsored_storage): (U256, u64),
     ) -> InsertResult
     {
         let _timer = MeterTimer::time_func(
@@ -431,6 +480,7 @@ impl TransactionPoolInner {
                     transaction: transaction.clone(),
                     packed,
                     sponsored_gas,
+                    sponsored_storage,
                 },
                 force,
             )
@@ -461,8 +511,10 @@ impl TransactionPoolInner {
                     timestamp,
                 );
                 self.txs.insert(transaction.hash(), transaction.clone());
-                self.tx_sponsored_gas_map
-                    .insert(transaction.hash(), sponsored_gas);
+                self.tx_sponsored_gas_map.insert(
+                    transaction.hash(),
+                    (sponsored_gas, sponsored_storage),
+                );
                 if !packed {
                     self.unpacked_transaction_count += 1;
                 }
@@ -475,8 +527,10 @@ impl TransactionPoolInner {
                 self.txs.remove(&replaced_tx.hash());
                 self.txs.insert(transaction.hash(), transaction.clone());
                 self.tx_sponsored_gas_map.remove(&replaced_tx.hash());
-                self.tx_sponsored_gas_map
-                    .insert(transaction.hash(), sponsored_gas);
+                self.tx_sponsored_gas_map.insert(
+                    transaction.hash(),
+                    (sponsored_gas, sponsored_storage),
+                );
                 if !packed {
                     self.unpacked_transaction_count += 1;
                 }
@@ -489,29 +543,73 @@ impl TransactionPoolInner {
     pub fn get_account_pending_info(
         &self, address: &Address,
     ) -> Option<(U256, U256, U256, H256)> {
-        match self.deferred_pool.contain_address(address) {
-            true => {
-                let (local_nonce, _local_balance) = self
-                    .get_local_nonce_and_balance(address)
-                    .unwrap_or((U256::from(0), U256::from(0)));
-                match self.deferred_pool.get_pending_info(address, &local_nonce)
-                {
-                    Some((pending_count, pending_tx)) => Some((
-                        local_nonce,
-                        U256::from(pending_count),
-                        pending_tx.nonce(),
-                        pending_tx.hash(),
-                    )),
-                    None => Some((
-                        local_nonce,
-                        U256::from(0),
-                        U256::from(0),
-                        H256::zero(),
-                    )),
-                }
+        let (local_nonce, _local_balance) = self
+            .get_local_nonce_and_balance(address)
+            .unwrap_or((U256::from(0), U256::from(0)));
+        match self.deferred_pool.get_pending_info(address, &local_nonce) {
+            Some((pending_count, pending_tx)) => Some((
+                local_nonce,
+                U256::from(pending_count),
+                pending_tx.nonce(),
+                pending_tx.hash(),
+            )),
+            None => {
+                Some((local_nonce, U256::from(0), U256::from(0), H256::zero()))
             }
-            false => None,
         }
+    }
+
+    pub fn get_account_pending_transactions(
+        &self, address: &Address, maybe_start_nonce: Option<U256>,
+        maybe_limit: Option<usize>,
+    ) -> (
+        Vec<Arc<SignedTransaction>>,
+        Option<TransactionStatus>,
+        usize,
+    )
+    {
+        let (local_nonce, local_balance) = self
+            .get_local_nonce_and_balance(address)
+            .unwrap_or((U256::from(0), U256::from(0)));
+        let start_nonce = maybe_start_nonce.unwrap_or(local_nonce);
+        let (pending_txs, pending_reason) =
+            self.deferred_pool.get_pending_transactions(
+                address,
+                &start_nonce,
+                &local_nonce,
+                &local_balance,
+            );
+        if pending_txs.is_empty() {
+            return (Vec::new(), None, 0);
+        }
+        let first_tx_status = match pending_reason {
+            None => {
+                // Sanity check with `ready_account_pool`.
+                match self.ready_account_pool.get(address) {
+                    None => {
+                        error!(
+                            "Ready tx not in ready_account_pool: tx={:?}",
+                            pending_txs.first()
+                        );
+                    }
+                    Some(ready_tx) => {
+                        let first_tx = pending_txs.first().expect("not empty");
+                        if ready_tx.hash() != first_tx.hash() {
+                            error!("ready_account_pool and deferred_pool are inconsistent! ready_tx={:?} first_pending={:?}", ready_tx.hash(), first_tx.hash());
+                        }
+                    }
+                }
+                TransactionStatus::Ready
+            }
+            Some(reason) => TransactionStatus::Pending(reason),
+        };
+        let pending_count = pending_txs.len();
+        let limit = maybe_limit.unwrap_or(usize::MAX);
+        (
+            pending_txs.into_iter().take(limit).collect(),
+            Some(first_tx_status),
+            pending_count,
+        )
     }
 
     pub fn get_local_nonce_and_balance(
@@ -668,7 +766,7 @@ impl TransactionPoolInner {
                 self.tx_sponsored_gas_map
                     .get(&tx.hash())
                     .map(|x| x.clone())
-                    .unwrap_or(U256::from(0)),
+                    .unwrap_or((U256::from(0), 0)),
             );
             self.recalculate_readiness_with_local_info(&tx.sender());
 
@@ -692,7 +790,7 @@ impl TransactionPoolInner {
                 self.tx_sponsored_gas_map
                     .get(&tx.hash())
                     .map(|x| x.clone())
-                    .unwrap_or(U256::from(0)),
+                    .unwrap_or((U256::from(0), 0)),
             );
             self.recalculate_readiness_with_local_info(&tx.sender());
         }
@@ -758,6 +856,7 @@ impl TransactionPoolInner {
     {
         let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
         let mut sponsored_gas = U256::from(0);
+        let mut sponsored_storage = 0;
 
         // Compute sponsored_gas for `transaction`
         if let Action::Call(callee) = &transaction.action {
@@ -783,13 +882,29 @@ impl TransactionPoolInner {
                             )
                         })?
                     {
-                        let estimated_gas =
-                            transaction.gas * transaction.gas_price;
+                        let estimated_gas_u512 =
+                            transaction.gas.full_mul(transaction.gas_price);
+                        // Normally, it is less than 2^128
+                        let estimated_gas = if estimated_gas_u512
+                            > U512::from(U128::max_value())
+                        {
+                            U256::from(U128::max_value())
+                        } else {
+                            transaction.gas * transaction.gas_price
+                        };
                         if estimated_gas <= sponsor_info.sponsor_gas_bound
                             && estimated_gas
                                 <= sponsor_info.sponsor_balance_for_gas
                         {
                             sponsored_gas = transaction.gas;
+                        }
+                        let estimated_collateral =
+                            U256::from(transaction.storage_limit)
+                                * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+                        if estimated_collateral
+                            <= sponsor_info.sponsor_balance_for_collateral
+                        {
+                            sponsored_storage = transaction.storage_limit;
                         }
                     }
                 }
@@ -838,7 +953,7 @@ impl TransactionPoolInner {
             packed,
             force,
             Some((state_nonce, state_balance)),
-            sponsored_gas,
+            (sponsored_gas, sponsored_storage),
         );
         if let InsertResult::Failed(info) = result {
             return Err(format!("Failed imported to deferred pool: {}", info));
@@ -893,6 +1008,7 @@ mod test_transaction_pool_inner {
             transaction,
             packed,
             sponsored_gas: U256::from(0),
+            sponsored_storage: 0,
         }
     }
 

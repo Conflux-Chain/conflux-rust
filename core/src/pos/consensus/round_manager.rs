@@ -323,7 +323,24 @@ impl RoundManager {
             .await
             .context("[RoundManager] Process proposal")?
         {
-            self.process_proposal(proposal_msg.take_proposal()).await
+            self.process_proposal(proposal_msg.clone().take_proposal())
+                .await?;
+            // If a proposal has been received and voted, it will return error.
+            //
+            // 1. For old leader elections where there is only one leader and we
+            // vote after receiving the first proposal, the error is
+            // returned in `execute_and_vote` because `vote_sent.
+            // is_none()` is false. 2. For VRF leader election, we
+            // return error when we insert a proposal from the same
+            // author to proposal_candidates.
+            //
+            // This ensures that there is no broadcast storm
+            // because we only broadcast a proposal when we receive it for the
+            // first time.
+            // TODO(lpl): Do not send to the sender and the original author.
+            self.network
+                .broadcast(ConsensusMsg::ProposalMsg(Box::new(proposal_msg)));
+            Ok(())
         } else {
             bail!(
                 "Stale proposal {}, current round {}",
@@ -370,12 +387,31 @@ impl RoundManager {
                     );
                     VerifyError::from(e)
                 })?;
+            /*
             let result = self
                 .block_store
                 .add_certs(&sync_info, self.create_block_retriever(author))
                 .await;
-            self.process_certificates().await?;
-            result
+             */
+            // TODO(lpl): Ensure this does not cause OOM.
+            let mut retriever = self.create_block_retriever(author);
+            self.block_store
+                .insert_quorum_cert(
+                    &sync_info.highest_commit_cert(),
+                    &mut retriever,
+                )
+                .await?;
+            self.block_store
+                .insert_quorum_cert(
+                    &sync_info.highest_quorum_cert(),
+                    &mut retriever,
+                )
+                .await?;
+            if let Some(tc) = sync_info.highest_timeout_certificate() {
+                self.block_store
+                    .insert_timeout_certificate(Arc::new(tc.clone()))?;
+            }
+            self.process_certificates().await
         } else {
             Ok(())
         }
@@ -692,6 +728,8 @@ impl RoundManager {
             self.process_vote(vote_msg.vote())
                 .await
                 .context("[RoundManager] Add a new vote")?;
+            self.network
+                .broadcast(ConsensusMsg::VoteMsg(Box::new(vote_msg)));
         }
         Ok(())
     }
@@ -745,7 +783,10 @@ impl RoundManager {
             VoteReceptionResult::NewTimeoutCertificate(tc) => {
                 self.new_tc_aggregated(tc).await
             }
-            _ => Ok(()),
+            VoteReceptionResult::VoteAdded(_) => Ok(()),
+            // Return error so that duplicate or invalid votes will not be
+            // broadcast to others.
+            r => bail!("vote not added with result {:?}", r),
         }
     }
 

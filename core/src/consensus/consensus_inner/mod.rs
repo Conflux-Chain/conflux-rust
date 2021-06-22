@@ -16,7 +16,7 @@ use crate::{
         anticone_cache::AnticoneCache,
         consensus_inner::consensus_executor::ConsensusExecutor,
         debug_recompute::log_invalid_state_root, pastset_cache::PastSetCache,
-        MaybeExecutedTxExtraInfo, TransactionInfo,
+        pos_handler::PosVerifier, MaybeExecutedTxExtraInfo, TransactionInfo,
     },
     pos::pow_handler::{POS_TERM_EPOCHS, POW_CONFIRM_DELAY_EPOCH},
     pow::{target_difficulty, PowComputer, ProofOfWorkConfig},
@@ -37,7 +37,9 @@ use link_cut_tree::{CaterpillarMinLinkCutTree, SizeMinLinkCutTree};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{Counter, CounterUsize};
-use primitives::{Block, BlockHeader, BlockHeaderBuilder, EpochId};
+use primitives::{
+    pos::PosBlockId, Block, BlockHeader, BlockHeaderBuilder, EpochId,
+};
 use slab::Slab;
 use std::{
     cmp::{max, min},
@@ -427,6 +429,7 @@ impl Default for ConsensusGraphPivotData {
 pub struct ConsensusGraphInner {
     /// data_man is the handle to access raw block data
     pub data_man: Arc<BlockDataManager>,
+    pub pos_verifier: Arc<PosVerifier>,
     pub inner_conf: ConsensusInnerConfig,
     pub pow_config: ProofOfWorkConfig,
     pub pow: Arc<PowComputer>,
@@ -469,6 +472,12 @@ pub struct ConsensusGraphInner {
     /// The best timer chain difficulty and hash in the current graph
     best_timer_chain_difficulty: i128,
     best_timer_chain_hash: H256,
+
+    // FIXME(lpl): This is initialized as cur_era_genesis for now.
+    /// The pivot decision of the best (the round is the largest) pos
+    /// reference.
+    best_pos_pivot_decision: (H256, u64),
+
     /// weight_tree maintains the subtree weight of each node in the TreeGraph
     weight_tree: SizeMinLinkCutTree,
     /// adaptive_tree maintains 2 * SubStableTW(B, x) - SubTW(B, P(x)) +
@@ -565,8 +574,9 @@ impl ConsensusGraphNode {
 impl ConsensusGraphInner {
     pub fn with_era_genesis(
         pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
-        data_man: Arc<BlockDataManager>, inner_conf: ConsensusInnerConfig,
-        cur_era_genesis_block_hash: &H256, cur_era_stable_block_hash: &H256,
+        pos_verifier: Arc<PosVerifier>, data_man: Arc<BlockDataManager>,
+        inner_conf: ConsensusInnerConfig, cur_era_genesis_block_hash: &H256,
+        cur_era_stable_block_hash: &H256,
     ) -> Self
     {
         let genesis_block_header = data_man
@@ -596,6 +606,10 @@ impl ConsensusGraphInner {
             cur_era_genesis_timer_chain_height: 0,
             best_timer_chain_difficulty: 0,
             best_timer_chain_hash: Default::default(),
+            best_pos_pivot_decision: (
+                *cur_era_genesis_block_hash,
+                cur_era_genesis_height,
+            ),
             weight_tree: SizeMinLinkCutTree::new(),
             adaptive_tree: CaterpillarMinLinkCutTree::new(),
             invalid_block_queue: BinaryHeap::new(),
@@ -603,6 +617,7 @@ impl ConsensusGraphInner {
             pow,
             current_difficulty: initial_difficulty.into(),
             data_man: data_man.clone(),
+            pos_verifier,
             inner_conf,
             anticone_cache: AnticoneCache::new(),
             pastset_cache: Default::default(),
@@ -1162,7 +1177,7 @@ impl ConsensusGraphInner {
 
     pub fn check_mining_adaptive_block(
         &mut self, parent_arena_index: usize, referee_indices: Vec<usize>,
-        difficulty: U256,
+        difficulty: U256, pos_reference: Option<PosBlockId>,
     ) -> bool
     {
         // We first compute anticone barrier for newly mined block
@@ -1231,8 +1246,9 @@ impl ConsensusGraphInner {
             parent_arena_index,
             &anticone_barrier,
             None,
-            Some(&timer_chain_tuple),
+            &timer_chain_tuple,
             i128::try_from(difficulty.low_u128()).unwrap(),
+            pos_reference,
         )
     }
 
@@ -1287,53 +1303,32 @@ impl ConsensusGraphInner {
 
     fn get_best_timer_tick(
         &self,
-        timer_chain_tuple: Option<&(
-            u64,
-            HashMap<usize, u64>,
-            Vec<usize>,
-            Vec<usize>,
-        )>,
+        timer_chain_tuple: &(u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>),
     ) -> u64
     {
-        if let Some((fork_at, _, _, c)) = timer_chain_tuple {
-            *fork_at + c.len() as u64
-        } else {
-            self.cur_era_genesis_timer_chain_height
-                + self.timer_chain.len() as u64
-        }
+        let (fork_at, _, _, c) = timer_chain_tuple;
+        *fork_at + c.len() as u64
     }
 
     fn get_timer_tick(
         &self, me: usize,
-        timer_chain_tuple: Option<&(
-            u64,
-            HashMap<usize, u64>,
-            Vec<usize>,
-            Vec<usize>,
-        )>,
+        timer_chain_tuple: &(u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>),
     ) -> u64
     {
-        if let Some((fork_at, m, _, _)) = timer_chain_tuple {
-            if let Some(t) = m.get(&me) {
-                return *t;
-            } else {
-                assert!(
-                    self.arena[me].data.ledger_view_timer_chain_height
-                        <= *fork_at
-                );
-            }
+        let (fork_at, m, _, _) = timer_chain_tuple;
+        if let Some(t) = m.get(&me) {
+            return *t;
+        } else {
+            assert!(
+                self.arena[me].data.ledger_view_timer_chain_height <= *fork_at
+            );
         }
         return self.arena[me].data.ledger_view_timer_chain_height;
     }
 
     fn adaptive_weight_impl_brutal(
         &self, parent_0: usize, subtree_weight: &Vec<i128>,
-        timer_chain_tuple: Option<&(
-            u64,
-            HashMap<usize, u64>,
-            Vec<usize>,
-            Vec<usize>,
-        )>,
+        timer_chain_tuple: &(u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>),
         force_confirm: usize, difficulty: i128,
     ) -> bool
     {
@@ -1368,17 +1363,13 @@ impl ConsensusGraphInner {
     fn adaptive_weight_impl(
         &mut self, parent_0: usize, anticone_barrier: &BitSet,
         weight_tuple: Option<&Vec<i128>>,
-        timer_chain_tuple: Option<&(
-            u64,
-            HashMap<usize, u64>,
-            Vec<usize>,
-            Vec<usize>,
-        )>,
-        difficulty: i128,
+        timer_chain_tuple: &(u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>),
+        difficulty: i128, pos_reference: Option<PosBlockId>,
     ) -> bool
     {
         let mut parent = parent_0;
-        let force_confirm = self.compute_force_confirm(timer_chain_tuple);
+        let force_confirm =
+            self.compute_block_force_confirm(timer_chain_tuple, pos_reference);
         let force_confirm_height = self.arena[force_confirm].height;
         // This may happen if we are forced to generate at a position choosing
         // incorrect parent. We should return false here.
@@ -1484,8 +1475,11 @@ impl ConsensusGraphInner {
             parent,
             anticone_barrier,
             weight_tuple,
-            Some(timer_chain_tuple),
+            timer_chain_tuple,
             difficulty,
+            self.data_man
+                .pos_reference_by_hash(&self.arena[me].hash)
+                .expect("header exist"),
         )
     }
 
@@ -1650,38 +1644,78 @@ impl ConsensusGraphInner {
         }
     }
 
-    fn compute_force_confirm(
-        &self,
-        timer_chain_tuple_opt: Option<&(
-            u64,
-            HashMap<usize, u64>,
-            Vec<usize>,
-            Vec<usize>,
-        )>,
-    ) -> usize
-    {
-        if let Some((fork_at, _, extra_lca, tmp_chain)) = timer_chain_tuple_opt
-        {
-            let fork_end_index =
-                (*fork_at - self.cur_era_genesis_timer_chain_height) as usize
-                    + tmp_chain.len();
-            let acc_lca_ref = extra_lca;
-            if let Some(x) = acc_lca_ref.last() {
-                *x
-            } else if fork_end_index > self.inner_conf.timer_chain_beta as usize
-            {
-                self.timer_chain_accumulative_lca[fork_end_index
-                    - self.inner_conf.timer_chain_beta as usize
-                    - 1]
-            } else {
-                self.cur_era_genesis_block_arena_index
-            }
-        } else {
+    fn compute_global_force_confirm(&self) -> usize {
+        let timer_chain_choice =
             if let Some(x) = self.timer_chain_accumulative_lca.last() {
                 *x
             } else {
                 self.cur_era_genesis_block_arena_index
+            };
+        self.compute_force_confirm(
+            timer_chain_choice,
+            &self.best_pos_pivot_decision,
+        )
+    }
+
+    fn compute_block_force_confirm(
+        &self,
+        timer_chain_tuple: &(u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>),
+        pos_reference: Option<PosBlockId>,
+    ) -> usize
+    {
+        let (fork_at, _, extra_lca, tmp_chain) = timer_chain_tuple;
+        let fork_end_index =
+            (*fork_at - self.cur_era_genesis_timer_chain_height) as usize
+                + tmp_chain.len();
+        let acc_lca_ref = extra_lca;
+        let timer_chain_choice = if let Some(x) = acc_lca_ref.last() {
+            *x
+        } else if fork_end_index > self.inner_conf.timer_chain_beta as usize {
+            self.timer_chain_accumulative_lca
+                [fork_end_index - self.inner_conf.timer_chain_beta as usize - 1]
+        } else {
+            self.cur_era_genesis_block_arena_index
+        };
+        match pos_reference {
+            None => timer_chain_choice,
+            Some(pos_reference) => {
+                let pos_pivot_decision = self
+                    .pos_verifier
+                    .get_pivot_decision(&pos_reference)
+                    .expect("pos_reference checked");
+                self.compute_force_confirm(
+                    timer_chain_choice,
+                    &(
+                        pos_pivot_decision,
+                        self.data_man
+                            .block_height_by_hash(&pos_pivot_decision)
+                            .expect("pos pivot decision checked"),
+                    ),
+                )
             }
+        }
+    }
+
+    fn compute_force_confirm(
+        &self, timer_chain_choice: usize, pos_pivot_decision: &(H256, u64),
+    ) -> usize {
+        // FIXME(lpl): Check cross checkpoint case.
+        if let Some(arena_index) =
+            self.hash_to_arena_indices.get(&pos_pivot_decision.0)
+        {
+            if self.arena[timer_chain_choice].height > pos_pivot_decision.1
+                && self.lca(timer_chain_choice, *arena_index) == *arena_index
+            {
+                // timer chain force confirm is newer and following pos
+                // reference.
+                timer_chain_choice
+            } else {
+                // timer chain force confirm should be overwritten by a conflict
+                // pos reference.
+                *arena_index
+            }
+        } else {
+            timer_chain_choice
         }
     }
 
@@ -3771,13 +3805,16 @@ impl ConsensusGraphInner {
 
     pub fn get_next_pivot_decision(
         &self, parent_decision_hash: &H256,
-    ) -> Option<H256> {
-        match self.hash_to_arena_indices.get(parent_decision_hash) {
+    ) -> Option<(u64, H256)> {
+        let r = match self.hash_to_arena_indices.get(parent_decision_hash) {
             None => {
                 // FIXME(lpl): Just return stable checkpoint as the first
                 // decision. This should be eventually handled
                 // as cross-checkpoint case.
-                Some(self.cur_era_stable_block_hash)
+                Some((
+                    self.cur_era_stable_height,
+                    self.cur_era_stable_block_hash,
+                ))
             }
             Some(parent_decision) => {
                 let parent_decision_height =
@@ -3798,35 +3835,215 @@ impl ConsensusGraphInner {
                     } else {
                         let new_decision_arena_index = self
                             .get_pivot_block_arena_index(new_decision_height);
-                        Some(self.arena[new_decision_arena_index].hash)
+                        Some((
+                            self.arena[new_decision_arena_index].height,
+                            self.arena[new_decision_arena_index].hash,
+                        ))
                     }
                 } else {
                     None
                 }
             }
-        }
+        };
+        debug!(
+            "next_pivot_decision: parent={:?} return={:?}",
+            parent_decision_hash, r
+        );
+        r
     }
 
-    pub fn is_ancestor_of(&self, ancestor_hash: &H256, me_hash: &H256) -> bool {
+    pub fn validate_pivot_decision(
+        &self, ancestor_hash: &H256, me_hash: &H256,
+    ) -> bool {
+        debug!(
+            "validate_pivot_decision: ancestor={:?}, me={:?}",
+            ancestor_hash, me_hash
+        );
         match (
             self.hash_to_arena_indices.get(ancestor_hash),
             self.hash_to_arena_indices.get(me_hash),
         ) {
             (Some(ancestor), Some(me)) => {
+                if self.arena[*me].height % POS_TERM_EPOCHS != 0 {
+                    return false;
+                }
                 // Both in memory. Just use Link-Cut-Tree.
                 self.ancestor_at(*me, self.arena[*ancestor].height) == *ancestor
             }
-            // TODO(lpl): Check if it's possible to go beyond checkpoint.
-            (_, Some(me)) => {
+            // FIXME(lpl): Check if it's possible to go beyond checkpoint.
+            // FIXME(lpl): If we want to check ancestor and me are both on pivot
+            // chain, we might need to always persist
+            // block_execution_result for full nodes. Or include
+            // height in the validation?
+            (_, Some(_me)) => {
                 // Only `me` is in memory. Use in-memory data first, then loop
                 // with header parent.
-                todo!()
+                warn!("ancestor not in consensus graph");
+                true
             }
             (_, _) => {
                 // Even `me` is not in memory. Have to loop with parent.
-                todo!()
+                warn!("ancestor and me are both not in consensus graph");
+                true
             }
         }
+    }
+
+    /// Return error if the header does not exist or the header does not have
+    /// pos_reference or the pos_reference does not exist.
+    fn get_pos_reference_pivot_decision(
+        &self, block_hash: &H256,
+    ) -> Result<H256, String> {
+        let pos_reference = self
+            .data_man
+            .pos_reference_by_hash(block_hash)
+            .ok_or("header exist".to_string())?
+            .ok_or("pos reference checked in sync graph".to_string())?;
+        self.pos_verifier
+            .get_pivot_decision(&pos_reference)
+            .ok_or("pos validity checked in sync graph".to_string())
+    }
+
+    fn update_pos_pivot_decision(&mut self, me: usize) {
+        let h = self.arena[me].hash;
+        if let Ok(pivot_decision) = self.get_pos_reference_pivot_decision(&h) {
+            let pivot_decision_height = self
+                .data_man
+                .block_height_by_hash(&pivot_decision)
+                .expect("pos_reference checked");
+            if pivot_decision_height > self.best_pos_pivot_decision.1 {
+                self.best_pos_pivot_decision =
+                    (pivot_decision, pivot_decision_height);
+            }
+        }
+    }
+
+    // FIXME(lpl): Copied from `check_mining_adaptive_block`.
+    /// Return possibly new parent.
+    pub fn choose_correct_parent(
+        &mut self, parent_arena_index: usize, referee_indices: Vec<usize>,
+        pos_reference: Option<PosBlockId>,
+    ) -> usize
+    {
+        // We first compute anticone barrier for newly mined block
+        let parent_anticone_opt = self.anticone_cache.get(parent_arena_index);
+        let mut anticone;
+        if parent_anticone_opt.is_none() {
+            anticone = consensus_new_block_handler::ConsensusNewBlockHandler::compute_anticone_bruteforce(
+                self, parent_arena_index,
+            );
+            for i in self.compute_future_bitset(parent_arena_index) {
+                anticone.add(i);
+            }
+        } else {
+            anticone = self.compute_future_bitset(parent_arena_index);
+            for index in parent_anticone_opt.unwrap() {
+                anticone.add(*index as u32);
+            }
+        }
+        let mut my_past = BitSet::new();
+        let mut queue: VecDeque<usize> = VecDeque::new();
+        for index in &referee_indices {
+            queue.push_back(*index);
+        }
+        while let Some(index) = queue.pop_front() {
+            if my_past.contains(index as u32) {
+                continue;
+            }
+            my_past.add(index as u32);
+            let idx_parent = self.arena[index].parent;
+            if idx_parent != NULL {
+                if anticone.contains(idx_parent as u32)
+                    || self.arena[idx_parent].era_block == NULL
+                {
+                    queue.push_back(idx_parent);
+                }
+            }
+            for referee in &self.arena[index].referees {
+                if anticone.contains(*referee as u32)
+                    || self.arena[idx_parent].era_block == NULL
+                {
+                    queue.push_back(*referee);
+                }
+            }
+        }
+        for index in my_past.drain() {
+            anticone.remove(index);
+        }
+
+        let mut anticone_barrier = BitSet::new();
+        for index in (&anticone).iter() {
+            let parent = self.arena[index as usize].parent as u32;
+            if self.arena[index as usize].era_block != NULL
+                && !anticone.contains(parent)
+            {
+                anticone_barrier.add(index);
+            }
+        }
+
+        let timer_chain_tuple = self.compute_timer_chain_tuple(
+            parent_arena_index,
+            &referee_indices,
+            Some(&anticone),
+        );
+
+        self.choose_correct_parent_impl(
+            parent_arena_index,
+            &anticone_barrier,
+            &timer_chain_tuple,
+            pos_reference,
+        )
+    }
+
+    fn choose_correct_parent_impl(
+        &mut self, parent: usize, anticone_barrier: &BitSet,
+        timer_chain_tuple: &(u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>),
+        pos_reference: Option<PosBlockId>,
+    ) -> usize
+    {
+        let force_confirm =
+            self.compute_block_force_confirm(timer_chain_tuple, pos_reference);
+        let force_confirm_height = self.arena[force_confirm].height;
+
+        if self.ancestor_at(parent, force_confirm_height) == force_confirm {
+            // `parent` is the correct parent.
+            return parent;
+        }
+
+        let mut weight_delta = HashMap::new();
+
+        for index in anticone_barrier.iter() {
+            assert!(!self.is_legacy_block(index as usize));
+            weight_delta
+                .insert(index as usize, self.weight_tree.get(index as usize));
+        }
+
+        for (index, delta) in &weight_delta {
+            self.weight_tree.path_apply(*index, -*delta);
+        }
+
+        let mut new_parent = force_confirm;
+        // Recursively find the correct pivot chain with the heaviest subtree
+        // weight.
+        while !self.arena[new_parent].children.is_empty() {
+            let mut children = self.arena[new_parent].children.clone();
+            let mut pivot = children.pop().expect("non-empty");
+            for child in children {
+                if ConsensusGraphInner::is_heavier(
+                    (self.weight_tree.get(child), &self.arena[child].hash),
+                    (self.weight_tree.get(pivot), &self.arena[pivot].hash),
+                ) {
+                    pivot = child;
+                }
+            }
+            new_parent = pivot;
+        }
+
+        for (index, delta) in &weight_delta {
+            self.weight_tree.path_apply(*index, *delta);
+        }
+
+        new_parent
     }
 }
 

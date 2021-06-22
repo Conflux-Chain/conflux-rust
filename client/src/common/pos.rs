@@ -13,30 +13,49 @@ use cfxcore::{
     sync::ProtocolConfiguration,
 };
 use diem_config::{config::NodeConfig, utils::get_genesis_txn};
+use diem_crypto::ed25519::Ed25519PublicKey;
 use diem_logger::prelude::*;
 use diem_metrics::metric_server;
-use diem_types::PeerId;
+use diem_types::{
+    account_address::{
+        from_consensus_public_key, from_public_key, AccountAddress,
+    },
+    block_info::PivotBlockDecision,
+    validator_config::ConsensusPublicKey,
+    PeerId,
+};
 use diemdb::DiemDB;
 use executor::{db_bootstrapper::maybe_bootstrap, vm::FakeVM, Executor};
 use executor_types::ChunkExecutor;
 use futures::executor::block_on;
 use network::NetworkService;
 use state_sync::bootstrapper::StateSyncBootstrapper;
-use std::{boxed::Box, path::PathBuf, sync::Arc, thread, time::Instant};
+use std::{
+    boxed::Box,
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread,
+    time::Instant,
+};
 use storage_interface::DbReaderWriter;
 use tokio::runtime::Runtime;
 
 pub struct DiemHandle {
     // pow handler
     pub pow_handler: Arc<PowHandler>,
+    pub diem_db: Arc<DiemDB>,
+    pub stopped: Arc<AtomicBool>,
     _state_sync_bootstrapper: StateSyncBootstrapper,
-    _consensus_runtime: Runtime,
+    consensus_runtime: Runtime,
 }
 
 pub fn start_pos_consensus(
-    config: &NodeConfig, log_file: Option<PathBuf>,
-    network: Arc<NetworkService>, own_node_hash: H256,
+    config: &NodeConfig, network: Arc<NetworkService>, own_node_hash: H256,
     protocol_config: ProtocolConfiguration,
+    own_pos_public_key: Option<ConsensusPublicKey>,
 ) -> DiemHandle
 {
     crash_handler::setup_panic_handler();
@@ -47,7 +66,7 @@ pub fn start_pos_consensus(
         .is_async(config.logger.is_async)
         .level(config.logger.level)
         .read_env();
-    if let Some(log_file) = log_file {
+    if let Some(log_file) = config.logger.file.clone() {
         logger.printer(Box::new(FileWriter::new(log_file)));
     }
     let _logger = Some(logger.build());
@@ -78,7 +97,13 @@ pub fn start_pos_consensus(
         diem_warn!("failpoints is set in config, but the binary doesn't compile with this feature");
     }
 
-    setup_pos_environment(&config, network, own_node_hash, protocol_config)
+    setup_pos_environment(
+        &config,
+        network,
+        own_node_hash,
+        protocol_config,
+        own_pos_public_key,
+    )
 }
 
 fn setup_metrics(peer_id: PeerId, config: &NodeConfig) {
@@ -96,23 +121,25 @@ fn setup_chunk_executor(db: DbReaderWriter) -> Box<dyn ChunkExecutor> {
 pub fn setup_pos_environment(
     node_config: &NodeConfig, network: Arc<NetworkService>,
     own_node_hash: H256, protocol_config: ProtocolConfiguration,
+    own_pos_public_key: Option<ConsensusPublicKey>,
 ) -> DiemHandle
 {
-    let metrics_port = node_config.debug_interface.metrics_server_port;
-    let metric_host = node_config.debug_interface.address.clone();
-    thread::spawn(move || {
-        metric_server::start_server(metric_host, metrics_port, false)
-    });
-    let public_metrics_port =
-        node_config.debug_interface.public_metrics_server_port;
-    let public_metric_host = node_config.debug_interface.address.clone();
-    thread::spawn(move || {
-        metric_server::start_server(
-            public_metric_host,
-            public_metrics_port,
-            true,
-        )
-    });
+    // TODO(lpl): Handle port conflict.
+    // let metrics_port = node_config.debug_interface.metrics_server_port;
+    // let metric_host = node_config.debug_interface.address.clone();
+    // thread::spawn(move || {
+    //     metric_server::start_server(metric_host, metrics_port, false)
+    // });
+    // let public_metrics_port =
+    //     node_config.debug_interface.public_metrics_server_port;
+    // let public_metric_host = node_config.debug_interface.address.clone();
+    // thread::spawn(move || {
+    //     metric_server::start_server(
+    //         public_metric_host,
+    //         public_metrics_port,
+    //         true,
+    //     )
+    // });
 
     let mut instant = Instant::now();
     let (diem_db, db_rw) = DbReaderWriter::wrap(
@@ -128,8 +155,16 @@ pub fn setup_pos_environment(
     let genesis_waypoint = node_config.base.waypoint.genesis_waypoint();
     // if there's genesis txn and waypoint, commit it if the result matches.
     if let Some(genesis) = get_genesis_txn(&node_config) {
-        maybe_bootstrap::<FakeVM>(&db_rw, genesis, genesis_waypoint)
-            .expect("Db-bootstrapper should not fail.");
+        maybe_bootstrap::<FakeVM>(
+            &db_rw,
+            genesis,
+            genesis_waypoint,
+            Some(PivotBlockDecision {
+                block_hash: protocol_config.pos_genesis_pivot_decision,
+                height: 0,
+            }),
+        )
+        .expect("Db-bootstrapper should not fail.");
     } else {
         panic!("Genesis txn not provided.");
     }
@@ -178,21 +213,32 @@ pub fn setup_pos_environment(
 
     // Initialize and start consensus.
     instant = Instant::now();
-    let (consensus_runtime, pow_handler) = start_consensus(
+    debug!("own_pos_public_key: {:?}", own_pos_public_key);
+    let (consensus_runtime, pow_handler, stopped) = start_consensus(
         node_config,
         network,
         own_node_hash,
         protocol_config,
         state_sync_client,
-        diem_db,
+        diem_db.clone(),
         db_rw,
         consensus_reconfig_events,
+        own_pos_public_key.map_or_else(
+            || AccountAddress::random(),
+            |public_key| from_consensus_public_key(&public_key),
+        ),
     );
     debug!("Consensus started in {} ms", instant.elapsed().as_millis());
 
     DiemHandle {
         pow_handler,
-        _consensus_runtime: consensus_runtime,
+        consensus_runtime,
+        stopped,
         _state_sync_bootstrapper: state_sync_bootstrapper,
+        diem_db,
     }
+}
+
+impl Drop for DiemHandle {
+    fn drop(&mut self) { self.stopped.store(true, Ordering::SeqCst); }
 }

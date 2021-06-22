@@ -195,6 +195,13 @@ impl fmt::Display for BLSPublicKey {
     }
 }
 
+impl Uniform for BLSPrivateKey {
+    fn generate<R>(rng: &mut R) -> Self
+    where R: ::rand::RngCore + ::rand::CryptoRng {
+        BLSPrivateKey(RawPrivateKey::generate(rng))
+    }
+}
+
 impl fmt::Debug for BLSPublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "BLSPublicKey({})", self)
@@ -210,15 +217,5 @@ impl fmt::Display for BLSSignature {
 impl fmt::Debug for BLSSignature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "BLSSignature({})", self)
-    }
-}
-
-impl Uniform for BLSPrivateKey {
-    fn generate<R>(rng: &mut R) -> Self
-    where R: ::rand::RngCore + ::rand::CryptoRng {
-        // FIXME(lpl): `rand` used in bls_signatures is 0.5.1, lower than our
-        // used 0.6.2.
-        todo!()
-        // BLSPrivateKey(RawPrivateKey::generate(rng))
     }
 }

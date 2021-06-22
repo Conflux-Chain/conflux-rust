@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::types::{
-    Bytes as RpcBytes, ConsensusGraphStates, EpochNumber,
+    BlockHashOrEpochNumber, Bytes as RpcBytes, ConsensusGraphStates,
     Receipt as RpcReceipt, RpcAddress, SyncGraphStates,
     Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
 };
@@ -117,6 +117,6 @@ pub trait LocalRpc {
 
     #[rpc(name = "cfx_getEpochReceipts")]
     fn epoch_receipts(
-        &self, epoch: EpochNumber,
+        &self, epoch: BlockHashOrEpochNumber,
     ) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
 }

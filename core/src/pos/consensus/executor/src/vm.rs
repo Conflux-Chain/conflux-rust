@@ -74,6 +74,11 @@ impl VMExecutor for FakeVM {
                         TransactionPayload::WriteSet(
                             WriteSetPayload::Direct(change_set),
                         ) => change_set.events().to_vec(),
+                        TransactionPayload::PivotDecision(pivot_decision) => {
+                            // The validation is handled in
+                            // `post_process_state_compute_result`.
+                            vec![pivot_decision.to_event()]
+                        }
                         _ => {
                             return Err(VMStatus::Error(
                                 StatusCode::CFX_UNEXPECTED_TX,

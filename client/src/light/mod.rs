@@ -30,6 +30,8 @@ use runtime::Runtime;
 pub struct LightClientExtraComponents {
     pub consensus: Arc<ConsensusGraph>,
     pub debug_rpc_http_server: Option<HttpServer>,
+    pub debug_rpc_tcp_server: Option<TcpServer>,
+    pub debug_rpc_ws_server: Option<WsServer>,
     pub light: Arc<LightQueryService>,
     pub rpc_http_server: Option<HttpServer>,
     pub rpc_tcp_server: Option<TcpServer>,
@@ -38,7 +40,6 @@ pub struct LightClientExtraComponents {
     pub secret_store: Arc<SecretStore>,
     pub txpool: Arc<TransactionPool>,
     pub pow: Arc<PowComputer>,
-    pub diem_handler: DiemHandle,
 }
 
 impl MallocSizeOf for LightClientExtraComponents {
@@ -50,7 +51,7 @@ pub struct LightClient {}
 impl LightClient {
     // Start all key components of Conflux and pass out their handles
     pub fn start(
-        conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
+        mut conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     ) -> Result<
         Box<ClientComponents<BlockGenerator, LightClientExtraComponents>>,
         String,
@@ -72,7 +73,11 @@ impl LightClient {
             pubsub,
             runtime,
             diem_handler,
-        ) = initialize_common_modules(&conf, exit.clone(), NodeType::Light)?;
+        ) = initialize_common_modules(
+            &mut conf,
+            exit.clone(),
+            NodeType::Light,
+        )?;
 
         let light = Arc::new(LightQueryService::new(
             consensus.clone(),
@@ -91,6 +96,7 @@ impl LightClient {
             consensus.clone(),
             data_man.clone(),
         ));
+
         let debug_rpc_http_server = super::rpc::start_http(
             conf.local_http_config(),
             setup_debug_rpc_apis_light(
@@ -101,8 +107,30 @@ impl LightClient {
             ),
         )?;
 
+        let debug_rpc_tcp_server = super::rpc::start_tcp(
+            conf.local_tcp_config(),
+            setup_debug_rpc_apis_light(
+                common_impl.clone(),
+                rpc_impl.clone(),
+                pubsub.clone(),
+                &conf,
+            ),
+            RpcExtractor,
+        )?;
+
         let rpc_tcp_server = super::rpc::start_tcp(
             conf.tcp_config(),
+            setup_public_rpc_apis_light(
+                common_impl.clone(),
+                rpc_impl.clone(),
+                pubsub.clone(),
+                &conf,
+            ),
+            RpcExtractor,
+        )?;
+
+        let debug_rpc_ws_server = super::rpc::start_ws(
+            conf.local_ws_config(),
             setup_public_rpc_apis_light(
                 common_impl.clone(),
                 rpc_impl.clone(),
@@ -135,10 +163,13 @@ impl LightClient {
 
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
+            diem_handler,
             blockgen: None,
             other_components: LightClientExtraComponents {
                 consensus,
                 debug_rpc_http_server,
+                debug_rpc_tcp_server,
+                debug_rpc_ws_server,
                 light,
                 rpc_http_server,
                 rpc_tcp_server,
@@ -147,7 +178,6 @@ impl LightClient {
                 secret_store,
                 txpool,
                 pow,
-                diem_handler,
             },
         }))
     }

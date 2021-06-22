@@ -216,13 +216,19 @@ impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
             let result = self.step(context, tracer);
             match result {
                 InterpreterResult::Continue => {}
-                InterpreterResult::Done(value) => return Ok(value),
+                InterpreterResult::Done(value) => {
+                    return vm::TrapResult::Return(value)
+                }
                 InterpreterResult::Trap(trap) => match trap {
                     TrapKind::Call(params) => {
-                        return Err(TrapError::Call(params, self));
+                        return vm::TrapResult::SubCallCreate(TrapError::Call(
+                            params, self,
+                        ));
                     }
-                    TrapKind::Create(params, address) => {
-                        return Err(TrapError::Create(params, address, self));
+                    TrapKind::Create(params, _) => {
+                        return vm::TrapResult::SubCallCreate(
+                            TrapError::Create(params, self),
+                        );
                     }
                 },
                 InterpreterResult::Stopped => {
@@ -268,7 +274,7 @@ impl<Cost: 'static + CostType> vm::ResumeCall for Interpreter<Cost> {
                         ),
                     ));
                 }
-                MessageCallResult::Failed => {
+                MessageCallResult::Failed(_) => {
                     this.stack.push(U256::zero());
                     this.resume_result = Some(InstructionResult::Ok);
                 }
@@ -298,7 +304,7 @@ impl<Cost: 'static + CostType> vm::ResumeCreate for Interpreter<Cost> {
                         .expect("Gas left cannot be greater."),
                 ));
             }
-            ContractCreateResult::Failed => {
+            ContractCreateResult::Failed(_) => {
                 self.stack.push(U256::zero());
                 self.resume_result = Some(InstructionResult::Ok);
             }
@@ -788,7 +794,6 @@ impl<Cost: CostType> Interpreter<Cost> {
                     &endowment,
                     contract_code,
                     address_scheme,
-                    true,
                 )?;
                 return match create_result {
                     Ok(ContractCreateResult::Created(address, gas_left)) => {
@@ -809,7 +814,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                                 .expect("Gas left cannot be greater."),
                         ))
                     }
-                    Ok(ContractCreateResult::Failed) => {
+                    Ok(ContractCreateResult::Failed(_)) => {
                         self.stack.push(U256::zero());
                         Ok(InstructionResult::Ok)
                     }
@@ -932,7 +937,6 @@ impl<Cost: CostType> Interpreter<Cost> {
                         input,
                         &code_address,
                         call_type,
-                        true,
                     )?
                 };
 
@@ -967,7 +971,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                             ),
                         ))
                     }
-                    Ok(MessageCallResult::Failed) => {
+                    Ok(MessageCallResult::Failed(_)) => {
                         self.stack.push(U256::zero());
                         Ok(InstructionResult::Ok)
                     }

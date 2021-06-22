@@ -17,6 +17,7 @@ use crate::pos::pow_handler::PowHandler;
 use cfx_types::H256;
 use diem_crypto::PrivateKey;
 use diem_infallible::Mutex;
+use diem_logger::debug as diem_debug;
 use diem_types::{
     block_info::PivotBlockDecision,
     chain_id::ChainId,
@@ -162,6 +163,10 @@ impl ProposalGenerator {
                 .pull_txns(self.max_block_size, exclude_payload)
                 .await
                 .context("Fail to retrieve txn")?;
+            diem_debug!(
+                "generate_proposal: Pull {} transactions",
+                payload.len()
+            );
 
             let parent_block = if let Some(p) = pending_blocks.last() {
                 p.clone()
@@ -176,42 +181,25 @@ impl ProposalGenerator {
                 .pivot_decision()
                 .map(|d| d.block_hash)
                 .unwrap_or_default();
-            let pivot_decision = loop {
-                match self
-                    .pow_handler
-                    .next_pivot_decision(parent_decision)
-                    .await
-                {
-                    Some(res) => break res,
-                    None => {
-                        // TODO(lpl): Handle the error from outside.
-                        // FIXME(lpl): Wait with a deadline.
-                        let sleep_duration =
-                            std::time::Duration::from_millis(100);
-                        self.time_service.sleep(sleep_duration);
-                    }
+            match self.pow_handler.next_pivot_decision(parent_decision).await {
+                Some((height, block_hash)) => {
+                    let pivot_decision =
+                        PivotBlockDecision { height, block_hash };
+                    let raw_tx = RawTransaction::new_pivot_decision(
+                        self.author,
+                        0,
+                        pivot_decision,
+                        ChainId::default(), // FIXME(lpl): Set chain id.
+                    );
+                    let signed_tx = raw_tx
+                        .sign(&self.private_key, self.public_key.clone())?
+                        .into_inner();
+                    payload.push(signed_tx);
                 }
-            };
-
-            let event_data = bcs::to_bytes(&pivot_decision)?;
-            let event = ContractEvent::new(
-                PivotBlockDecision::pivot_select_event_key(),
-                0,                                      /* sequence_number */
-                TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
-                event_data,
-            );
-
-            let change_set = ChangeSet::new(WriteSet::default(), vec![event]);
-            let raw_tx = RawTransaction::new_change_set(
-                self.author,
-                0,
-                change_set,
-                ChainId::default(), // FIXME(lpl): Set chain id.
-            );
-            let signed_tx = raw_tx
-                .sign(&self.private_key, self.public_key.clone())?
-                .into_inner();
-            payload.push(signed_tx);
+                None => {
+                    warn!("pos progress without new pivot decision");
+                }
+            }
 
             (payload, timestamp.as_micros() as u64)
         };

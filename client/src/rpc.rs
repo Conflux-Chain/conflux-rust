@@ -92,12 +92,15 @@ pub struct HttpConfiguration {
     pub address: SocketAddr,
     pub cors_domains: DomainsValidation<AccessControlAllowOrigin>,
     pub keep_alive: bool,
+    // If it's Some, we will manually set the number of threads of HTTP RPC
+    // server
+    pub threads: Option<usize>,
 }
 
 impl HttpConfiguration {
     pub fn new(
         ip: Option<(u8, u8, u8, u8)>, port: Option<u16>, cors: Option<String>,
-        keep_alive: bool,
+        keep_alive: bool, threads: Option<usize>,
     ) -> Self
     {
         let ipv4 = match ip {
@@ -120,6 +123,7 @@ impl HttpConfiguration {
                 },
             },
             keep_alive,
+            threads,
         }
     }
 }
@@ -128,10 +132,15 @@ impl HttpConfiguration {
 pub struct WsConfiguration {
     pub enabled: bool,
     pub address: SocketAddr,
+    pub max_payload_bytes: usize,
 }
 
 impl WsConfiguration {
-    pub fn new(ip: Option<(u8, u8, u8, u8)>, port: Option<u16>) -> Self {
+    pub fn new(
+        ip: Option<(u8, u8, u8, u8)>, port: Option<u16>,
+        max_payload_bytes: usize,
+    ) -> Self
+    {
         let ipv4 = match ip {
             Some(ip) => Ipv4Addr::new(ip.0, ip.1, ip.2, ip.3),
             None => Ipv4Addr::new(0, 0, 0, 0),
@@ -139,6 +148,7 @@ impl WsConfiguration {
         WsConfiguration {
             enabled: port.is_some(),
             address: SocketAddr::V4(SocketAddrV4::new(ipv4, port.unwrap_or(0))),
+            max_payload_bytes,
         }
     }
 }
@@ -319,8 +329,12 @@ pub fn start_http(
     if !conf.enabled {
         return Ok(None);
     }
+    let mut builder = HttpServerBuilder::new(handler);
+    if let Some(threads) = conf.threads {
+        builder = builder.threads(threads);
+    }
 
-    match HttpServerBuilder::new(handler)
+    match builder
         .keep_alive(conf.keep_alive)
         .cors(conf.cors_domains.clone())
         .start_http(&conf.address)
@@ -345,6 +359,7 @@ where
     }
 
     match WsServerBuilder::with_meta_extractor(handler, extractor)
+        .max_payload(conf.max_payload_bytes)
         .start(&conf.address)
     {
         Ok(server) => Ok(Some(server)),

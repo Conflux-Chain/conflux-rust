@@ -50,7 +50,14 @@ use diem_types::{
 use futures::{select, StreamExt};
 use pow_types::PowInterface;
 use safety_rules::SafetyRulesManager;
-use std::{cmp::Ordering, sync::Arc, time::Duration};
+use std::{
+    cmp::Ordering,
+    sync::{
+        atomic::{AtomicBool, Ordering as AtomicOrdering},
+        Arc,
+    },
+    time::Duration,
+};
 
 /// RecoveryManager is used to process events in order to sync up with peer if
 /// we can't recover from local consensusdb RoundManager is used for normal
@@ -110,12 +117,13 @@ impl EpochManager {
         storage: Arc<dyn PersistentLivenessStorage>,
         reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
         pow_handler: Arc<dyn PowInterface>,
+        author: AccountAddress,
     ) -> Self
     {
-        let author = Author::random(); //node_config.validator_network.as_ref().unwrap().peer_id();
         let config = node_config.consensus.clone();
         let sr_config = &node_config.consensus.safety_rules;
         let safety_rules_manager = SafetyRulesManager::new(sr_config);
+        diem_debug!("EpochManager.author={:?}", author);
         Self {
             author,
             config,
@@ -237,10 +245,17 @@ impl EpochManager {
             .map_err(DbError::from)
             .context("[EpochManager] Failed to get epoch proof")?;
         let msg = ConsensusMsg::EpochChangeProof(Box::new(proof));
-        self.network_sender.send_to(peer_id, &msg).context(format!(
-            "[EpochManager] Failed to send epoch proof to {}",
-            peer_id
-        ))
+        let pos_public_key = self
+            .epoch_state()
+            .verifier
+            .get_public_key(&peer_id)
+            .unwrap();
+        self.network_sender
+            .send_to(pos_public_key, &msg)
+            .context(format!(
+                "[EpochManager] Failed to send epoch proof to {}",
+                peer_id
+            ))
     }
 
     async fn process_different_epoch(
@@ -272,10 +287,17 @@ impl EpochManager {
                 };
                 let msg =
                     ConsensusMsg::EpochRetrievalRequest(Box::new(request));
-                self.network_sender.send_to(peer_id, &msg).context(format!(
-                    "[EpochManager] Failed to send epoch retrieval to {}",
-                    peer_id
-                ))
+                let pos_public_key = self
+                    .epoch_state()
+                    .verifier
+                    .get_public_key(&peer_id)
+                    .unwrap();
+                self.network_sender.send_to(pos_public_key, &msg).context(
+                    format!(
+                        "[EpochManager] Failed to send epoch retrieval to {}",
+                        peer_id
+                    ),
+                )
             }
             Ordering::Equal => {
                 bail!("[EpochManager] Same epoch should not come to process_different_epoch");
@@ -361,10 +383,10 @@ impl EpochManager {
             .safety_rules
             .test
             .as_ref()
-            .expect("use privat key in test")
+            .expect("test config set")
             .consensus_key
             .as_ref()
-            .expect("private key exist")
+            .expect("private key set in pos")
             .private_key();
         // txn manager is required both by proposal generator (to pull the
         // proposers) and by event processor (to update their status).
@@ -619,8 +641,11 @@ impl EpochManager {
     }
 
     async fn expect_new_epoch(&mut self) {
+        diem_debug!("expect_new_epoch: start");
         if let Some(payload) = self.reconfig_events.next().await {
+            diem_debug!("expect_new_epoch: receive event!");
             self.start_processor(payload).await;
+            diem_debug!("expect_new_epoch: processor started!");
         } else {
             panic!("Reconfig sender dropped, unable to start new epoch.");
         }
@@ -629,12 +654,16 @@ impl EpochManager {
     pub async fn start(
         mut self, mut round_timeout_sender_rx: channel::Receiver<Round>,
         mut proposal_timeout_sender_rx: channel::Receiver<Round>,
-        mut network_receivers: NetworkReceivers,
+        mut network_receivers: NetworkReceivers, stopped: Arc<AtomicBool>,
     )
     {
         // initial start of the processor
         self.expect_new_epoch().await;
+        diem_debug!("EpochManager main_loop starts");
         loop {
+            if stopped.load(AtomicOrdering::SeqCst) {
+                break;
+            }
             let result = monitor!(
                 "main_loop",
                 select! {

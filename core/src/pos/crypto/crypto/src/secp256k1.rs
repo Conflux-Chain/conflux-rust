@@ -19,6 +19,7 @@ use diem_crypto_derive::{
     DeserializeKey, SerializeKey, SilentDebug, SilentDisplay,
 };
 use mirai_annotations::*;
+use rand::SeedableRng;
 use secp256k1::key;
 use serde::Serialize;
 

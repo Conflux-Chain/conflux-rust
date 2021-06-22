@@ -13,7 +13,7 @@ use cfxkey::{Error as EthkeyError, Generator, Public, Random};
 use diem_crypto::{
     bls::BLSPrivateKey,
     ed25519::{Ed25519PrivateKey, Ed25519PublicKey, ED25519_PUBLIC_KEY_LENGTH},
-    Uniform, ValidCryptoMaterial,
+    Uniform, ValidCryptoMaterialStringExt,
 };
 use diem_types::{
     account_address::{
@@ -22,7 +22,9 @@ use diem_types::{
     contract_event::ContractEvent,
     on_chain_config::{new_epoch_event_key, ValidatorSet},
     transaction::{ChangeSet, Transaction, WriteSetPayload},
-    validator_config::{ConsensusPublicKey, ValidatorConfig},
+    validator_config::{
+        ConsensusPrivateKey, ConsensusPublicKey, ValidatorConfig,
+    },
     validator_info::ValidatorInfo,
     waypoint::Waypoint,
     write_set::WriteSet,
@@ -216,26 +218,15 @@ where
         let mut public_keys = Vec::new();
 
         for i in 0..num_validator {
-            let private_key = BLSPrivateKey::generate(&mut rng);
+            let private_key = ConsensusPrivateKey::generate(&mut rng);
             let public_key = ConsensusPublicKey::from(&private_key);
             public_keys.push(public_key.clone());
 
-            let mut private_key_str = String::new();
-            writeln!(
-                &mut private_key_str,
-                "{:?}",
-                hex::encode(private_key.to_bytes())
-            )?;
-            let private_key_str = private_key_str.replace("\"", "");
-            private_key_file.write_all(private_key_str.as_str().as_bytes())?;
-
-            let mut public_key_str = String::new();
-            writeln!(
-                &mut public_key_str,
-                "{:?}",
-                hex::encode(public_key.to_bytes())
-            )?;
-            let public_key_str = &public_key_str[2..];
+            let private_key_str = private_key.to_encoded_string().unwrap();
+            let private_key_str = private_key_str + "\n";
+            private_key_file.write_all(private_key_str.as_bytes())?;
+            let public_key_str = public_key.to_encoded_string().unwrap();
+            let public_key_str = public_key_str + "\n";
             public_key_file.write_all(public_key_str.as_bytes())?;
         }
         generate_genesis_from_public_keys(public_keys);
@@ -246,13 +237,11 @@ where
         let mut contents = String::new();
         public_key_file.read_to_string(&mut contents)?;
         let mut lines = contents.as_str().lines();
-        let mut line_num = 0;
 
         let mut public_keys = Vec::new();
         while let Some(public_key_str) = lines.next() {
-            let public_key_bytes = hex::decode(public_key_str).unwrap();
             let public_key =
-                ConsensusPublicKey::try_from(public_key_bytes.as_slice())
+                ConsensusPublicKey::from_encoded_string(public_key_str)
                     .unwrap();
             public_keys.push(public_key);
         }

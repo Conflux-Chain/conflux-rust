@@ -156,8 +156,17 @@ impl BlockStore {
         // insert the qc <- block pair
         while let Some(block) = pending.pop() {
             let block_qc = block.quorum_cert().clone();
-            self.insert_single_quorum_cert(block_qc)?;
+            self.insert_single_quorum_cert(block_qc.clone())?;
             self.execute_and_insert_block(block)?;
+            match self.commit(block_qc.ledger_info().clone()).await {
+                Ok(()) => {}
+                Err(e) => {
+                    // TODO(lpl): Blocks not committed before crash should be
+                    // committed here? Make sure they are
+                    // recovered to BlockStore during start.
+                    diem_warn!("fetch_quorum_cert: commit error={:?}", e);
+                }
+            }
         }
         self.insert_single_quorum_cert(qc)
     }

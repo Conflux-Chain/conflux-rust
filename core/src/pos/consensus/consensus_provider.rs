@@ -19,12 +19,14 @@ use cfx_types::H256;
 use channel::diem_channel;
 use diem_config::config::NodeConfig;
 use diem_logger::prelude::*;
-use diem_types::on_chain_config::OnChainConfigPayload;
+use diem_types::{
+    account_address::AccountAddress, on_chain_config::OnChainConfigPayload,
+};
 use executor::{vm::FakeVM, Executor};
 use executor_types::BlockExecutor;
 use network::NetworkService;
 use state_sync::client::StateSyncClient;
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, Arc};
 use storage_interface::{DbReader, DbReaderWriter};
 use tokio::runtime::{self, Runtime};
 
@@ -36,12 +38,15 @@ pub fn start_consensus(
     state_sync_client: StateSyncClient, diem_db: Arc<dyn DbReader>,
     db_rw: DbReaderWriter,
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
-) -> (Runtime, Arc<PowHandler>)
+    author: AccountAddress,
+) -> (Runtime, Arc<PowHandler>, Arc<AtomicBool>)
 {
-    let runtime = runtime::Builder::new()
-        .basic_scheduler()
+    let stopped = Arc::new(AtomicBool::new(false));
+    let runtime = runtime::Builder::new_multi_thread()
         .thread_name("consensus")
         .enable_all()
+        // TODO(lpl): This is for debugging.
+        .worker_threads(4)
         .build()
         .expect("Failed to create Tokio runtime!");
     let storage = Arc::new(StorageWriteProxy::new(node_config, diem_db));
@@ -63,7 +68,7 @@ pub fn start_consensus(
         protocol_config,
     ));
     protocol_handler.clone().register(network.clone()).unwrap();
-    network.start_network_poll().unwrap();
+    // network.start_network_poll().unwrap();
     let network_sender = ConsensusNetworkSender {
         network,
         protocol_handler,
@@ -86,14 +91,16 @@ pub fn start_consensus(
         storage,
         reconfig_events,
         pow_handler.clone(),
+        author,
     );
 
     runtime.spawn(epoch_mgr.start(
         timeout_receiver,
         proposal_timeout_receiver,
         network_receiver,
+        stopped.clone(),
     ));
 
     diem_debug!("Consensus started.");
-    (runtime, pow_handler)
+    (runtime, pow_handler, stopped)
 }
