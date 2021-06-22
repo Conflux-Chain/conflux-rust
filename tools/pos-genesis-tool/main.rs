@@ -15,11 +15,15 @@ use diem_crypto::{
     Uniform, ValidCryptoMaterialStringExt,
 };
 use diem_types::{
-    account_address::{from_public_key, AccountAddress},
+    account_address::{
+        from_consensus_public_key, from_public_key, AccountAddress,
+    },
     contract_event::ContractEvent,
     on_chain_config::{new_epoch_event_key, ValidatorSet},
     transaction::{ChangeSet, Transaction, WriteSetPayload},
-    validator_config::ValidatorConfig,
+    validator_config::{
+        ConsensusPrivateKey, ConsensusPublicKey, ValidatorConfig,
+    },
     validator_info::ValidatorInfo,
     waypoint::Waypoint,
     write_set::WriteSet,
@@ -151,7 +155,7 @@ fn execute_genesis_transaction(genesis_txn: Transaction) -> Waypoint {
     generate_waypoint::<FakeVM>(&db, &genesis_txn).unwrap()
 }
 
-fn generate_genesis_from_public_keys(public_keys: Vec<Ed25519PublicKey>) {
+fn generate_genesis_from_public_keys(public_keys: Vec<ConsensusPublicKey>) {
     let genesis_path = PathBuf::from("./genesis_file");
     let waypoint_path = PathBuf::from("./waypoint_config");
     let mut genesis_file = File::create(&genesis_path).unwrap();
@@ -159,7 +163,7 @@ fn generate_genesis_from_public_keys(public_keys: Vec<Ed25519PublicKey>) {
 
     let mut validators = Vec::new();
     for public_key in public_keys {
-        let account_address = from_public_key(&public_key);
+        let account_address = from_consensus_public_key(&public_key);
         let validator_config = ValidatorConfig::new(public_key, vec![], vec![]);
         validators.push(ValidatorInfo::new(
             account_address,
@@ -212,8 +216,8 @@ where
         let mut public_keys = Vec::new();
 
         for i in 0..num_validator {
-            let private_key = Ed25519PrivateKey::generate(&mut rng);
-            let public_key = Ed25519PublicKey::from(&private_key);
+            let private_key = ConsensusPrivateKey::generate(&mut rng);
+            let public_key = ConsensusPublicKey::from(&private_key);
             public_keys.push(public_key.clone());
 
             let private_key_str = private_key.to_encoded_string().unwrap();
@@ -235,7 +239,8 @@ where
         let mut public_keys = Vec::new();
         while let Some(public_key_str) = lines.next() {
             let public_key =
-                Ed25519PublicKey::from_encoded_string(public_key_str).unwrap();
+                ConsensusPublicKey::from_encoded_string(public_key_str)
+                    .unwrap();
             public_keys.push(public_key);
         }
         generate_genesis_from_public_keys(public_keys);

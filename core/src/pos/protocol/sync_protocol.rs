@@ -31,8 +31,11 @@ use consensus_types::{
 };
 use diem_crypto::ed25519::Ed25519PublicKey;
 use diem_types::{
-    account_address::{from_public_key, AccountAddress},
+    account_address::{
+        from_consensus_public_key, from_public_key, AccountAddress,
+    },
     epoch_change::EpochChangeProof,
+    validator_config::ConsensusPublicKey,
 };
 use io::TimerToken;
 use keccak_hash::keccak;
@@ -48,12 +51,12 @@ use std::{cmp::Eq, collections::HashMap, fmt::Debug, hash::Hash, sync::Arc};
 pub struct PeerState {
     id: NodeId,
     peer_hash: H256,
-    pos_public_key: Option<Ed25519PublicKey>,
+    pos_public_key: Option<ConsensusPublicKey>,
 }
 
 impl PeerState {
     pub fn new(
-        id: NodeId, peer_hash: H256, pos_public_key: Option<Ed25519PublicKey>,
+        id: NodeId, peer_hash: H256, pos_public_key: Option<ConsensusPublicKey>,
     ) -> Self {
         Self {
             id,
@@ -63,7 +66,7 @@ impl PeerState {
     }
 
     pub fn set_pos_public_key(
-        &mut self, pos_public_key: Option<Ed25519PublicKey>,
+        &mut self, pos_public_key: Option<ConsensusPublicKey>,
     ) {
         self.pos_public_key = pos_public_key
     }
@@ -82,8 +85,10 @@ impl Peers {
     }
 
     pub fn insert(
-        &self, peer: H256, id: NodeId, pos_public_key: Option<Ed25519PublicKey>,
-    ) {
+        &self, peer: H256, id: NodeId,
+        pos_public_key: Option<ConsensusPublicKey>,
+    )
+    {
         self.0.write().entry(peer).or_insert(Arc::new(RwLock::new(
             PeerState::new(id, peer, pos_public_key),
         )));
@@ -144,7 +149,7 @@ impl<'a> Context<'a> {
     }
 
     pub fn get_peer_account_address(&self) -> AccountAddress {
-        from_public_key(
+        from_consensus_public_key(
             &self
                 .manager
                 .peers
@@ -165,7 +170,7 @@ pub struct HotStuffSynchronizationProtocol {
     pub peers: Arc<Peers>,
     pub request_manager: Arc<RequestManager>,
     pub network_task: NetworkTask,
-    pub pos_peer_mapping: RwLock<HashMap<Ed25519PublicKey, H256>>,
+    pub pos_peer_mapping: RwLock<HashMap<ConsensusPublicKey, H256>>,
 }
 
 impl HotStuffSynchronizationProtocol {
@@ -499,7 +504,7 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
     fn on_peer_connected(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         _peer_protocol_version: ProtocolVersion,
-        pos_public_key: Option<Ed25519PublicKey>,
+        pos_public_key: Option<ConsensusPublicKey>,
     )
     {
         // TODO(linxi): maintain peer protocol version

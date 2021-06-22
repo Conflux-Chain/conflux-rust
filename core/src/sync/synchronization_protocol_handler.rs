@@ -30,6 +30,7 @@ use cfx_internal_common::ChainIdParamsDeprecated;
 use cfx_parameters::{block::MAX_BLOCK_SIZE_IN_BYTES, sync::*};
 use cfx_types::H256;
 use diem_crypto::ed25519::Ed25519PublicKey;
+use diem_types::validator_config::ConsensusPublicKey;
 use io::TimerToken;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -1834,7 +1835,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
     fn on_peer_connected(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         peer_protocol_version: ProtocolVersion,
-        _pos_public_key: Option<Ed25519PublicKey>,
+        _pos_public_key: Option<ConsensusPublicKey>,
     )
     {
         debug!(

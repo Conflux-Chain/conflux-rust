@@ -12,7 +12,8 @@ use crate::{
     SessionMetadata, UpdateNodeOperation, PROTOCOL_ID_SIZE,
 };
 use bytes::Bytes;
-use diem_crypto::ed25519::Ed25519PublicKey;
+use diem_crypto::{ed25519::Ed25519PublicKey, ValidCryptoMaterial};
+use diem_types::validator_config::ConsensusPublicKey;
 use io::*;
 use mio::{tcp::*, *};
 use priority_send_queue::SendQueuePriority;
@@ -53,7 +54,7 @@ pub struct Session {
     // statistics for read/write
     last_read: Instant,
     last_write: (Instant, WriteStatus),
-    pos_public_key: Option<Ed25519PublicKey>,
+    pos_public_key: Option<ConsensusPublicKey>,
 }
 
 /// Session state.
@@ -72,7 +73,7 @@ pub enum SessionData {
     None,
     /// Session is ready to send or receive protocol packets.
     Ready {
-        pos_public_key: Option<Ed25519PublicKey>,
+        pos_public_key: Option<ConsensusPublicKey>,
     },
     /// A protocol packet has been received, and delegate to the corresponding
     /// protocol handler to handle the packet.
@@ -104,7 +105,7 @@ impl Session {
     pub fn new<Message: Send + Sync + Clone + 'static>(
         io: &IoContext<Message>, socket: TcpStream, address: SocketAddr,
         id: Option<&NodeId>, peer_header_version: u8, token: StreamToken,
-        host: &NetworkServiceInner, pos_public_key: Option<Ed25519PublicKey>,
+        host: &NetworkServiceInner, pos_public_key: Option<ConsensusPublicKey>,
     ) -> Result<Session, Error>
     {
         let originated = id.is_some();
@@ -376,7 +377,7 @@ impl Session {
     /// node database, which is used to establish outgoing connections.
     fn read_hello(
         &mut self, rlp: &Rlp, host: &NetworkServiceInner,
-    ) -> Result<Option<Ed25519PublicKey>, Error> {
+    ) -> Result<Option<ConsensusPublicKey>, Error> {
         let remote_network_id: u64 = rlp.val_at(0)?;
         if remote_network_id != host.metadata.network_id {
             debug!(

@@ -10,6 +10,7 @@ use crate::{
     NetworkIoMessage,
 };
 use diem_crypto::ed25519::Ed25519PublicKey;
+use diem_types::validator_config::ConsensusPublicKey;
 use io::IoContext;
 use mio::net::TcpStream;
 use parking_lot::RwLock;
@@ -50,7 +51,7 @@ pub struct SessionManager {
     ip_limit: RwLock<Box<dyn SessionIpLimit>>,
     tag_index: RwLock<SessionTagIndex>,
     /// pos public key
-    pub self_pos_public_key: Option<Ed25519PublicKey>,
+    pub self_pos_public_key: Option<ConsensusPublicKey>,
 }
 
 impl SessionManager {
@@ -58,7 +59,7 @@ impl SessionManager {
     pub fn new(
         offset: usize, capacity: usize, max_ingress_sessions: usize,
         ip_limit_config: &SessionIpLimitConfig,
-        self_pos_public_key: Option<Ed25519PublicKey>,
+        self_pos_public_key: Option<ConsensusPublicKey>,
     ) -> Self
     {
         SessionManager {

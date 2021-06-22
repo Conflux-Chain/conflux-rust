@@ -24,7 +24,10 @@ use diem_crypto::{
     ed25519::{Ed25519PrivateKey, Ed25519PublicKey},
     ValidCryptoMaterialStringExt,
 };
-use diem_types::account_address::from_public_key;
+use diem_types::{
+    account_address::{from_consensus_public_key, from_public_key},
+    validator_config::{ConsensusPrivateKey, ConsensusPublicKey},
+};
 use keccak_hash::keccak;
 use keylib::{sign, Generator, KeyPair, Random, Secret};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
@@ -345,7 +348,7 @@ impl NetworkService {
         }
     }
 
-    pub fn pos_public_key(&self) -> Option<Ed25519PublicKey> {
+    pub fn pos_public_key(&self) -> Option<ConsensusPublicKey> {
         if let Some(ref inner) = self.inner {
             inner.sessions.self_pos_public_key.clone()
         } else {
@@ -557,7 +560,7 @@ impl NetworkServiceInner {
             .config_path
             .clone()
             .and_then(|ref p| load_pos_private_key(Path::new(&p)))
-            .map(|private_key| Ed25519PublicKey::from(&private_key));
+            .map(|private_key| ConsensusPublicKey::from(&private_key));
         info!("Self pos public key: {:?}", pos_public_key);
 
         info!("Self node id: {:?}", *keys.public());
@@ -1098,7 +1101,7 @@ impl NetworkServiceInner {
                                 debug!(
                                     "receive Ready with pos_public_key={:?} account={:?}",
                                     pos_public_key,
-                                    pos_public_key.as_ref().map(|k| from_public_key(k)),
+                                    pos_public_key.as_ref().map(|k| from_consensus_public_key(k)),
                                 );
                                 handshake_done = true;
                                 session_node_id = Some(*sess.id().unwrap());
@@ -2125,7 +2128,7 @@ fn load_key(path: &Path) -> Option<Secret> {
     }
 }
 
-pub fn load_pos_private_key(path: &Path) -> Option<Ed25519PrivateKey> {
+pub fn load_pos_private_key(path: &Path) -> Option<ConsensusPrivateKey> {
     let mut path_buf = PathBuf::from(path);
     path_buf.push("pos_key");
     let mut file = match fs::File::open(path_buf.as_path()) {
@@ -2143,7 +2146,7 @@ pub fn load_pos_private_key(path: &Path) -> Option<Ed25519PrivateKey> {
             return None;
         }
     }
-    match Ed25519PrivateKey::from_encoded_string(&buf) {
+    match ConsensusPrivateKey::from_encoded_string(&buf) {
         Ok(key) => Some(key),
         Err(e) => {
             warn!("Error parsing key file: {:?}", e);
