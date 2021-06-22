@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::{ABIDecodable, ABIDecodeError, ABIEncodable};
+use crate::ABIPackedEncodable;
 use cfx_types::{Address, U256};
 use lazy_static;
 use rustc_hex::{FromHex, ToHex};
@@ -372,4 +373,17 @@ fn test_long_string() {
          3000000000000000000000000000000000000000000000000000000000000000"
     );
     assert_eq!(String::abi_decode(encoded.as_slice()).unwrap(), msg);
+}
+
+#[test]
+fn test_packed_string() {
+    let msg: (Address, Vec<bool>, String) =
+        (ADDR1.clone(), vec![false, true, true], "hello".into());
+    let encoded = msg.abi_packed_encode();
+    assert_eq!(
+        encoded.to_hex::<String>(),
+        "176c45928d7c26b0175dec8bf6051108563c62c5\
+         000101\
+         68656c6c6f"
+    );
 }

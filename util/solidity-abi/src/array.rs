@@ -13,6 +13,7 @@ use cfx_types::U256;
 use std::{convert::TryFrom, fmt::Debug};
 
 impl<T: ABIVariable> ABIVariable for Vec<T> {
+    const BASIC_TYPE: bool = false;
     const STATIC_LENGTH: Option<usize> = None;
 
     fn from_abi(data: &[u8]) -> Result<Self, ABIDecodeError> {
@@ -46,9 +47,19 @@ impl<T: ABIVariable> ABIVariable for Vec<T> {
         answer.append(&mut recorder.into_linked_bytes());
         answer
     }
+
+    fn to_packed_abi(&self) -> LinkedBytes {
+        let mut record = LinkedBytes::new();
+
+        for item in self {
+            record.append(&mut item.to_packed_abi())
+        }
+        record
+    }
 }
 
 impl<T: ABIVariable + Debug, const N: usize> ABIVariable for [T; N] {
+    const BASIC_TYPE: bool = false;
     const STATIC_LENGTH: Option<usize> = if let Some(length) = T::STATIC_LENGTH
     {
         Some(length * N)
@@ -78,5 +89,14 @@ impl<T: ABIVariable + Debug, const N: usize> ABIVariable for [T; N] {
             recorder.write_down(item);
         }
         recorder.into_linked_bytes()
+    }
+
+    fn to_packed_abi(&self) -> LinkedBytes {
+        let mut record = LinkedBytes::new();
+
+        for item in self {
+            record.append(&mut item.to_packed_abi())
+        }
+        record
     }
 }

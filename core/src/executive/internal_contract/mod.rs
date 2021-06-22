@@ -6,19 +6,23 @@ mod activate_at;
 mod contracts;
 pub mod function;
 mod impls;
+mod internal_context;
 
-pub use self::{contracts::InternalContractMap, impls::suicide};
+pub use self::{
+    contracts::InternalContractMap, impls::suicide,
+    internal_context::InternalRefContext,
+};
 pub use solidity_abi::ABIDecodeError;
 
 use self::{activate_at::ActivateAtTrait, contracts::SolFnTable};
 use crate::{
     bytes::Bytes,
-    executive::InternalRefContext,
     hash::keccak,
     trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, GasLeft},
 };
 use cfx_types::{Address, H256};
+use solidity_abi::{ABIEncodable, EventIndexEncodable};
 use std::sync::Arc;
 
 lazy_static! {
@@ -88,4 +92,30 @@ pub trait SolidityFunctionTrait: Send + Sync + ActivateAtTrait {
         answer.clone_from_slice(&keccak(self.name()).as_ref()[0..4]);
         answer
     }
+}
+
+/// Native implementation of a solidity-interface function.
+pub trait SolidityEventTrait: Send + Sync + ActivateAtTrait {
+    type IndexedType: EventIndexEncodable;
+    type NonIndexedType: ABIEncodable;
+
+    fn log(
+        &self, indexed: Self::IndexedType, non_indexed: Self::NonIndexedType,
+        param: &ActionParams, context: &mut InternalRefContext,
+        _tracer: &mut dyn Tracer<Output = ExecTrace>,
+    ) -> vm::Result<()>
+    {
+        let mut topics = vec![self.event_sig()];
+        topics.extend_from_slice(&indexed.indexed_event_encode());
+
+        let data = non_indexed.abi_encode();
+
+        context.log(param, topics, data)
+    }
+
+    /// The string for function sig
+    fn name(&self) -> &'static str;
+
+    /// The event signature
+    fn event_sig(&self) -> H256 { keccak(self.name()) }
 }
