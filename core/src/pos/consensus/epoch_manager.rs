@@ -226,6 +226,7 @@ impl EpochManager {
                         "VRF private key mush be set for VRF leader election",
                     )
                     .private_key(),
+                self.config.safety_rules.vrf_proposal_threshold,
             )),
         }
     }

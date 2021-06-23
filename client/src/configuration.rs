@@ -285,6 +285,7 @@ build_config! {
         (is_consortium, (bool), false)
         (pos_config_path, (Option<String>), Some("./pos_config/pos_config.toml".to_string()))
         (pos_genesis_pivot_decision, (Option<H256>), None)
+        (vrf_proposal_threshold, (U256), U256::MAX)
 
         // Light node section
         (ln_epoch_request_batch_size, (Option<usize>), None)

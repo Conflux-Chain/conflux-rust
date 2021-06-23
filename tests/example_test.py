@@ -3,6 +3,7 @@
 """
 import time
 
+from conflux.utils import int_to_hex
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 
@@ -10,6 +11,7 @@ from test_framework.util import *
 class ExampleTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
+        self.conf_parameters["vrf_proposal_threshold"] = '"{}"'.format(int_to_hex(int(2 ** 256 / 2)))
         # self.conf_parameters["log_level"] = '"trace"'
 
     def setup_network(self):

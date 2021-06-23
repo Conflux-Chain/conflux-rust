@@ -288,6 +288,8 @@ pub fn initialize_common_modules(
     });
     pos_config.consensus.safety_rules.vrf_private_key = self_vrf_private_key;
     pos_config.consensus.safety_rules.export_consensus_key = true;
+    pos_config.consensus.safety_rules.vrf_proposal_threshold =
+        conf.raw_conf.vrf_proposal_threshold;
     let diem_handler = start_pos_consensus(
         &pos_config,
         network.clone(),
