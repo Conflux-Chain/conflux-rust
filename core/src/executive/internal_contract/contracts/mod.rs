@@ -4,6 +4,8 @@
 
 mod admin;
 mod future;
+#[allow(unused)]
+mod pos;
 mod sponsor;
 mod staking;
 
